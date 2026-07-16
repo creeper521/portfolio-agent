@@ -104,10 +104,18 @@ function Remove-JavaCommentsAndLiterals([string]$Source) {
 
         if ($state -eq 'text-block') {
             if ($current -eq '"' -and $next -eq '"' -and $third -eq '"') {
-                [void]$builder.Append('   ')
-                $state = 'code'
-                $index += 3
-                continue
+                $backslashCount = 0
+                $backslashIndex = $index - 1
+                while ($backslashIndex -ge 0 -and $Source[$backslashIndex] -eq '\') {
+                    $backslashCount++
+                    $backslashIndex--
+                }
+                if ($backslashCount % 2 -eq 0) {
+                    [void]$builder.Append('   ')
+                    $state = 'code'
+                    $index += 3
+                    continue
+                }
             }
             if ($current -eq "`r" -or $current -eq "`n") {
                 [void]$builder.Append($current)

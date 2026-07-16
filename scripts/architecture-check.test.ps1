@@ -189,6 +189,11 @@ public final class AllowedAdapter {
             package com.portfolio.agent.answer.infrastructure;
             import static com.portfolio.agent.answer.application.LegacyFactory.create;
             """;
+    private String escapedDelimiterText = """
+            escaped delimiter: \"""
+            package com.portfolio.agent.answer.infrastructure;
+            import static com.portfolio.agent.answer.application.LegacyFactory.create;
+            """;
 }
 '@
 
