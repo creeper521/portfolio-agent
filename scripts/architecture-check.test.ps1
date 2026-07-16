@@ -123,6 +123,51 @@ import com.portfolio.agent.portfolio.application.LegacyPortfolioService;
 public final class LegacyImport {}
 '@
         Rule = 'legacy-package'
+    },
+    @{
+        Name = 'legacy-commented-multiline-static-import'
+        File = 'com\portfolio\agent\common\web\CommentedLegacyStaticImport.java'
+        Source = @'
+package com.portfolio.agent.common.web;
+import /* static legacy member */ static
+    com.portfolio.agent.answer.infrastructure
+    . LegacyAnswerFactory
+    . create
+    ;
+public final class CommentedLegacyStaticImport {}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 2
+        ExpectedStatement = 'import static com.portfolio.agent.answer.infrastructure.LegacyAnswerFactory.create;'
+    },
+    @{
+        Name = 'legacy-commented-multiline-import'
+        File = 'com\portfolio\agent\portfolio\service\CommentedLegacyImport.java'
+        Source = @'
+package com.portfolio.agent.portfolio.service;
+import com.portfolio.agent.portfolio
+    // legacy layer follows on the next line
+    . application
+    . LegacyPortfolioService
+    ;
+public final class CommentedLegacyImport {}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.application.LegacyPortfolioService;'
+    },
+    @{
+        Name = 'legacy-commented-multiline-package'
+        File = 'com\portfolio\agent\answer\application\CommentedLegacyPackage.java'
+        Source = @'
+package
+    com.portfolio.agent.answer./* legacy layer */application
+    ;
+public final class CommentedLegacyPackage {}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 1
+        ExpectedStatement = 'package com.portfolio.agent.answer.application;'
     }
 )
 
@@ -138,6 +183,12 @@ public final class AllowedAdapter {
     private PortfolioKnowledgeGateway gateway;
     private PortfolioSnapshot snapshot;
     private PublicPortfolioRepository repository;
+    private String legacyImportText =
+            "import com.portfolio.agent.portfolio.application.LegacyService;";
+    private String legacyPackageText = """
+            package com.portfolio.agent.answer.infrastructure;
+            import static com.portfolio.agent.answer.application.LegacyFactory.create;
+            """;
 }
 '@
 
@@ -167,16 +218,21 @@ try {
             throw "Expected unsafe fixture '$($case.Name)' to exit 1. Exit: $($result.ExitCode). Output: $($result.Output)"
         }
 
-        $sourceLines = @($case.Source -split '\r?\n')
-        $expectedSourceLine = $sourceLines | Where-Object {
-            $_ -match '^\s*import\s+' -or
-            $_ -match '^\s*package\s+com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.model|domain\.repository)(\.|;)'
-        } | Select-Object -First 1
-        if ($null -eq $expectedSourceLine) {
-            throw "Expected unsafe fixture '$($case.Name)' to contain an import or legacy package declaration."
+        if ($case.ContainsKey('ExpectedStatement')) {
+            $expectedMatch = $case.ExpectedStatement
+            $expectedLineNumber = $case.ExpectedLine
+        } else {
+            $sourceLines = @($case.Source -split '\r?\n')
+            $expectedSourceLine = $sourceLines | Where-Object {
+                $_ -match '^\s*import\s+' -or
+                $_ -match '^\s*package\s+com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.model|domain\.repository)(\.|;)'
+            } | Select-Object -First 1
+            if ($null -eq $expectedSourceLine) {
+                throw "Expected unsafe fixture '$($case.Name)' to contain an import or legacy package declaration."
+            }
+            $expectedMatch = $expectedSourceLine.Trim()
+            $expectedLineNumber = [array]::IndexOf($sourceLines, $expectedSourceLine) + 1
         }
-        $expectedMatch = $expectedSourceLine.Trim()
-        $expectedLineNumber = [array]::IndexOf($sourceLines, $expectedSourceLine) + 1
         $expectedViolation = "$($case.Rule):$samplePath`:$expectedLineNumber`:$expectedMatch"
         $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
         if ($expectedViolation -notin $outputLines) {

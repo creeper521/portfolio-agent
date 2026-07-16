@@ -17,16 +17,159 @@ function Add-Violation(
     )
 }
 
+function Add-StatementViolation(
+    [string]$Rule,
+    [System.IO.FileInfo]$File,
+    [int]$LineNumber,
+    [string]$Statement
+) {
+    $violations.Add(
+        "$Rule`:$($File.FullName)`:$LineNumber`:$Statement"
+    )
+}
+
+function Remove-JavaCommentsAndLiterals([string]$Source) {
+    $builder = New-Object System.Text.StringBuilder
+    $state = 'code'
+    $index = 0
+
+    while ($index -lt $Source.Length) {
+        $current = $Source[$index]
+        $next = if ($index + 1 -lt $Source.Length) { $Source[$index + 1] } else { [char]0 }
+        $third = if ($index + 2 -lt $Source.Length) { $Source[$index + 2] } else { [char]0 }
+
+        if ($state -eq 'code') {
+            if ($current -eq '/' -and $next -eq '/') {
+                [void]$builder.Append('  ')
+                $state = 'line-comment'
+                $index += 2
+                continue
+            }
+            if ($current -eq '/' -and $next -eq '*') {
+                [void]$builder.Append('  ')
+                $state = 'block-comment'
+                $index += 2
+                continue
+            }
+            if ($current -eq '"' -and $next -eq '"' -and $third -eq '"') {
+                [void]$builder.Append('   ')
+                $state = 'text-block'
+                $index += 3
+                continue
+            }
+            if ($current -eq '"') {
+                [void]$builder.Append(' ')
+                $state = 'string'
+                $index++
+                continue
+            }
+            if ($current -eq "'") {
+                [void]$builder.Append(' ')
+                $state = 'character'
+                $index++
+                continue
+            }
+
+            [void]$builder.Append($current)
+            $index++
+            continue
+        }
+
+        if ($state -eq 'line-comment') {
+            if ($current -eq "`r" -or $current -eq "`n") {
+                [void]$builder.Append($current)
+                $state = 'code'
+            } else {
+                [void]$builder.Append(' ')
+            }
+            $index++
+            continue
+        }
+
+        if ($state -eq 'block-comment') {
+            if ($current -eq '*' -and $next -eq '/') {
+                [void]$builder.Append('  ')
+                $state = 'code'
+                $index += 2
+                continue
+            }
+            if ($current -eq "`r" -or $current -eq "`n") {
+                [void]$builder.Append($current)
+            } else {
+                [void]$builder.Append(' ')
+            }
+            $index++
+            continue
+        }
+
+        if ($state -eq 'text-block') {
+            if ($current -eq '"' -and $next -eq '"' -and $third -eq '"') {
+                [void]$builder.Append('   ')
+                $state = 'code'
+                $index += 3
+                continue
+            }
+            if ($current -eq "`r" -or $current -eq "`n") {
+                [void]$builder.Append($current)
+            } else {
+                [void]$builder.Append(' ')
+            }
+            $index++
+            continue
+        }
+
+        if ($current -eq '\') {
+            [void]$builder.Append(' ')
+            if ($index + 1 -lt $Source.Length) {
+                if ($next -eq "`r" -or $next -eq "`n") {
+                    [void]$builder.Append($next)
+                } else {
+                    [void]$builder.Append(' ')
+                }
+                $index += 2
+            } else {
+                $index++
+            }
+            continue
+        }
+
+        $terminator = if ($state -eq 'string') { '"' } else { "'" }
+        if ($current -eq $terminator) {
+            [void]$builder.Append(' ')
+            $state = 'code'
+        } elseif ($current -eq "`r" -or $current -eq "`n") {
+            [void]$builder.Append($current)
+        } else {
+            [void]$builder.Append(' ')
+        }
+        $index++
+    }
+
+    return $builder.ToString()
+}
+
 $javaFiles = Get-ChildItem -LiteralPath $resolvedPath -Recurse -File -Filter '*.java'
 foreach ($file in $javaFiles) {
     $relative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
     $relative = $relative -replace '^(main|test)\\java\\', ''
-    $packageMatches = Select-String -LiteralPath $file.FullName `
-        -Pattern '^\s*package\s+com\.portfolio\.agent\.[^;]+;'
+    $source = [System.IO.File]::ReadAllText($file.FullName)
+    $lexicalSource = Remove-JavaCommentsAndLiterals $source
+    $statementMatches = [regex]::Matches(
+        $lexicalSource,
+        '^[ \t]*(?:package|import)\s+[^;]+;',
+        [System.Text.RegularExpressions.RegexOptions]::Multiline
+    )
 
-    foreach ($packageMatch in $packageMatches) {
-        if ($packageMatch.Line -match 'com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))(\.|;)') {
-            Add-Violation 'legacy-package' $file $packageMatch
+    foreach ($statementMatch in $statementMatches) {
+        $statement = [regex]::Replace($statementMatch.Value.Trim(), '\s+', ' ')
+        $statement = [regex]::Replace($statement, '\s*\.\s*', '.')
+        $statement = [regex]::Replace($statement, '\s*;\s*$', ';')
+        $isLegacyPackage = $statement -match '^package com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))(\.|;)'
+        $isLegacyImport = $statement -match '^import (?:static )?com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))\.'
+        if ($isLegacyPackage -or $isLegacyImport) {
+            $prefix = $lexicalSource.Substring(0, $statementMatch.Index)
+            $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
+            Add-StatementViolation 'legacy-package' $file $lineNumber $statement
         }
     }
 
@@ -35,10 +178,6 @@ foreach ($file in $javaFiles) {
 
     foreach ($import in $imports) {
         $line = $import.Line
-
-        if ($line -match 'com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))\.') {
-            Add-Violation 'legacy-package' $file $import
-        }
 
         if ($relative -match '^com\\portfolio\\agent\\common\\' -and
                 $line -match 'com\.portfolio\.agent\.(portfolio|answer)\.') {
