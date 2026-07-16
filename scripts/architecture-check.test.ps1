@@ -168,6 +168,29 @@ public final class CommentedLegacyPackage {}
         Rule = 'legacy-package'
         ExpectedLine = 1
         ExpectedStatement = 'package com.portfolio.agent.answer.application;'
+    },
+    @{
+        Name = 'legacy-unicode-escaped-package'
+        File = 'com\portfolio\agent\answer\application\UnicodeLegacyPackage.java'
+        Source = @'
+package com.portfolio.agent.answer.\uuuu0061pplication;
+public final class UnicodeLegacyPackage {}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 1
+        ExpectedStatement = 'package com.portfolio.agent.answer.application;'
+    },
+    @{
+        Name = 'legacy-unicode-escaped-static-import'
+        File = 'com\portfolio\agent\common\web\UnicodeLegacyImport.java'
+        Source = @'
+package com.portfolio.agent.common.web;
+import static com.portfolio.agent.answer.\uu0069nfrastructure.LegacyFactory.create;
+public final class UnicodeLegacyImport {}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 2
+        ExpectedStatement = 'import static com.portfolio.agent.answer.infrastructure.LegacyFactory.create;'
     }
 )
 
@@ -193,6 +216,10 @@ public final class AllowedAdapter {
             escaped delimiter: \"""
             package com.portfolio.agent.answer.infrastructure;
             import static com.portfolio.agent.answer.application.LegacyFactory.create;
+            """;
+    private String unicodeEscapedDelimiterText = """
+            unicode escaped delimiter: \u005c"""
+            package com.portfolio.agent.answer.infrastructure;
             """;
 }
 '@

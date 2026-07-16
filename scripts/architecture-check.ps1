@@ -28,6 +28,22 @@ function Add-StatementViolation(
     )
 }
 
+function Convert-JavaUnicodeEscapes([string]$Source) {
+    $evaluator = [System.Text.RegularExpressions.MatchEvaluator] {
+        param([System.Text.RegularExpressions.Match]$Match)
+
+        $hex = $Match.Value.Substring($Match.Value.Length - 4)
+        $codeUnit = [Convert]::ToUInt16($hex, 16)
+        return [char]$codeUnit
+    }
+
+    return [regex]::Replace(
+        $Source,
+        '\\u+[0-9A-Fa-f]{4}',
+        $evaluator
+    )
+}
+
 function Remove-JavaCommentsAndLiterals([string]$Source) {
     $builder = New-Object System.Text.StringBuilder
     $state = 'code'
@@ -161,7 +177,8 @@ foreach ($file in $javaFiles) {
     $relative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
     $relative = $relative -replace '^(main|test)\\java\\', ''
     $source = [System.IO.File]::ReadAllText($file.FullName)
-    $lexicalSource = Remove-JavaCommentsAndLiterals $source
+    $unicodeSource = Convert-JavaUnicodeEscapes $source
+    $lexicalSource = Remove-JavaCommentsAndLiterals $unicodeSource
     $statementMatches = [regex]::Matches(
         $lexicalSource,
         '^[ \t]*(?:package|import)\s+[^;]+;',
