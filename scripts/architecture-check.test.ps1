@@ -54,6 +54,26 @@ import com.portfolio.agent.answer.domain.AnswerResult;
 public final class BadCommon {}
 '@
         Rule = 'common-business'
+    },
+    @{
+        Name = 'portfolio-to-answer'
+        File = 'com\portfolio\agent\portfolio\domain\BadPortfolio.java'
+        Source = @'
+package com.portfolio.agent.portfolio.domain;
+import com.portfolio.agent.answer.domain.AnswerResult;
+public final class BadPortfolio {}
+'@
+        Rule = 'portfolio-answer'
+    },
+    @{
+        Name = 'common-static-to-business'
+        File = 'com\portfolio\agent\common\web\BadStaticCommon.java'
+        Source = @'
+package com.portfolio.agent.common.web;
+import static com.portfolio.agent.answer.domain.AnswerResult.create;
+public final class BadStaticCommon {}
+'@
+        Rule = 'common-business'
     }
 )
 

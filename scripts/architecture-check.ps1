@@ -22,7 +22,7 @@ foreach ($file in $javaFiles) {
     $relative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
     $relative = $relative -replace '^(main|test)\\java\\', ''
     $imports = Select-String -LiteralPath $file.FullName `
-        -Pattern '^\s*import\s+com\.portfolio\.agent\.[^;]+;'
+        -Pattern '^\s*import\s+(?:static\s+)?com\.portfolio\.agent\.[^;]+;'
 
     foreach ($import in $imports) {
         $line = $import.Line
