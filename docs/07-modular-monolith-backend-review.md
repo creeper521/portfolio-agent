@@ -149,12 +149,14 @@ PortfolioKnowledgeGateway
 - Answer Service、Domain、Engine、Gateway 依赖 Portfolio；
 - `answer.adapter.portfolio` 之外的 Answer 代码依赖 Portfolio；
 - 本地 Portfolio Adapter 越过允许的 Portfolio Domain 与 Repository 接口；
-- Answer Engine 依赖 Answer 的 Service、Controller、DTO、Gateway、Adapter、Exception 或 Repository；
+- Answer Engine 依赖 `answer.engine`、`answer.domain` 之外的任何项目内部包；
 - Portfolio/Answer Controller 依赖 Repository、Adapter、Engine 或 Validation；
 - Portfolio 依赖 Answer；
 - 旧 `api / application / infrastructure / domain.model / domain.repository` 包重新出现。
 
 脚本会先处理 Java Unicode escape，并忽略注释、字符串、字符字面量和 text block；随后提取完整的 package/import 语句，并从剩余代码体提取全限定引用。两类引用都统一归一化空白与点号，package/import 已处理区域会从代码体扫描中排除，避免重复报告。这样既能阻断多行 import、静态 import、Unicode 转义和代码体全限定类名绕过，也不会把示例文本误判为真实依赖。代码体全限定引用的违规输出为 `rule:file:line:normalized-reference`。
+
+`answer-engine-boundary` 对项目内部引用采用白名单：`answer.engine` 只允许依赖 `answer.engine` 与 `answer.domain`。JDK、Spring 注解等非 `com.portfolio.agent` 引用不属于该规则的检查范围。
 
 该架构检查当前作为独立后端门禁运行；把它接入 `verify-release.ps1` 的完整发布流水线明确延期。
 

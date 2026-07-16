@@ -59,7 +59,8 @@ function Add-ReferenceViolations(
     }
 
     if ($Relative -match '^com\\portfolio\\agent\\answer\\engine\\' -and
-            $Reference -match '^com\.portfolio\.agent\.answer\.(service|controller|dto|gateway|adapter|exception|repository)(\.|$)') {
+            $Reference -match '^com\.portfolio\.agent\.' -and
+            $Reference -notmatch '^com\.portfolio\.agent\.answer\.(engine|domain)(\.|$)') {
         Add-StatementViolation 'answer-engine-boundary' $File $LineNumber $Display
     }
 

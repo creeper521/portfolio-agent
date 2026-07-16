@@ -54,6 +54,24 @@ public final class AnswerService {}
         }
     },
     @{
+        Name = 'answer-engine-to-mapper'
+        File = 'com\portfolio\agent\answer\engine\BadMapperEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+import com.portfolio.agent.answer.mapper.AnswerResponseMapper;
+public final class BadMapperEngine {
+    private AnswerResponseMapper mapper;
+}
+'@
+        Rule = 'answer-engine-boundary'
+        Stubs = @{
+            'com\portfolio\agent\answer\mapper\AnswerResponseMapper.java' = @'
+package com.portfolio.agent.answer.mapper;
+public final class AnswerResponseMapper {}
+'@
+        }
+    },
+    @{
         Name = 'answer-dto-to-portfolio-dto'
         File = 'com\portfolio\agent\answer\dto\response\BadResponse.java'
         Source = @'
@@ -365,6 +383,25 @@ public final class FqnAnswerService {
             'com\portfolio\agent\portfolio\domain\ProjectProfile.java' = @'
 package com.portfolio.agent.portfolio.domain;
 public final class ProjectProfile {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-answer-engine-to-mapper'
+        File = 'com\portfolio\agent\answer\engine\FqnMapperEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+public final class FqnMapperEngine {
+    private com.portfolio.agent.answer.mapper.AnswerResponseMapper mapper;
+}
+'@
+        Rule = 'answer-engine-boundary'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.answer.mapper.AnswerResponseMapper'
+        Stubs = @{
+            'com\portfolio\agent\answer\mapper\AnswerResponseMapper.java' = @'
+package com.portfolio.agent.answer.mapper;
+public final class AnswerResponseMapper {}
 '@
         }
     },
