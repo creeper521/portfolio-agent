@@ -29,19 +29,58 @@ function Add-StatementViolation(
 }
 
 function Convert-JavaUnicodeEscapes([string]$Source) {
-    $evaluator = [System.Text.RegularExpressions.MatchEvaluator] {
-        param([System.Text.RegularExpressions.Match]$Match)
+    $builder = New-Object System.Text.StringBuilder
+    $consecutiveBackslashes = 0
+    $lastBackslashFromUnicodeEscape = $false
+    $index = 0
 
-        $hex = $Match.Value.Substring($Match.Value.Length - 4)
-        $codeUnit = [Convert]::ToUInt16($hex, 16)
-        return [char]$codeUnit
+    while ($index -lt $Source.Length) {
+        $current = $Source[$index]
+        if ($current -eq '\') {
+            $eligible = $lastBackslashFromUnicodeEscape -or
+                ($consecutiveBackslashes % 2 -eq 0)
+            $unicodeIndex = $index + 1
+
+            if ($eligible -and
+                    $unicodeIndex -lt $Source.Length -and
+                    $Source[$unicodeIndex] -eq 'u') {
+                while ($unicodeIndex -lt $Source.Length -and
+                        $Source[$unicodeIndex] -eq 'u') {
+                    $unicodeIndex++
+                }
+
+                if ($unicodeIndex + 4 -le $Source.Length) {
+                    $hex = $Source.Substring($unicodeIndex, 4)
+                    if ($hex -match '^[0-9A-Fa-f]{4}$') {
+                        $translated = [char][Convert]::ToUInt16($hex, 16)
+                        [void]$builder.Append($translated)
+                        if ($translated -eq '\') {
+                            $consecutiveBackslashes++
+                            $lastBackslashFromUnicodeEscape = $true
+                        } else {
+                            $consecutiveBackslashes = 0
+                            $lastBackslashFromUnicodeEscape = $false
+                        }
+                        $index = $unicodeIndex + 4
+                        continue
+                    }
+                }
+            }
+
+            [void]$builder.Append($current)
+            $consecutiveBackslashes++
+            $lastBackslashFromUnicodeEscape = $false
+            $index++
+            continue
+        }
+
+        [void]$builder.Append($current)
+        $consecutiveBackslashes = 0
+        $lastBackslashFromUnicodeEscape = $false
+        $index++
     }
 
-    return [regex]::Replace(
-        $Source,
-        '\\u+[0-9A-Fa-f]{4}',
-        $evaluator
-    )
+    return $builder.ToString()
 }
 
 function Remove-JavaCommentsAndLiterals([string]$Source) {

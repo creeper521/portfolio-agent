@@ -221,8 +221,63 @@ public final class AllowedAdapter {
             unicode escaped delimiter: \u005c"""
             package com.portfolio.agent.answer.infrastructure;
             """;
+    // \\u000apackage com.portfolio.agent.answer.application;
 }
 '@
+
+$unicodeEligibilityCases = @(
+    @{
+        Name = 'one-raw-backslash'
+        ClassName = 'SlashOne'
+        Slashes = '\'
+        ExpectedUnsafe = $true
+    },
+    @{
+        Name = 'two-raw-backslashes'
+        ClassName = 'SlashTwo'
+        Slashes = '\\'
+        ExpectedUnsafe = $false
+    },
+    @{
+        Name = 'three-raw-backslashes'
+        ClassName = 'SlashThree'
+        Slashes = '\\\'
+        ExpectedUnsafe = $true
+    },
+    @{
+        Name = 'four-raw-backslashes'
+        ClassName = 'SlashFour'
+        Slashes = '\\\\'
+        ExpectedUnsafe = $false
+    }
+)
+
+$unicodeGeneratedBackslashCases = @(
+    @{
+        Name = 'generated-plus-one-raw-backslash'
+        ClassName = 'GeneratedSlashOne'
+        Slashes = '\'
+        ExpectedUnsafe = $true
+    },
+    @{
+        Name = 'generated-plus-two-raw-backslashes'
+        ClassName = 'GeneratedSlashTwo'
+        Slashes = '\\'
+        ExpectedUnsafe = $true
+    },
+    @{
+        Name = 'generated-plus-three-raw-backslashes'
+        ClassName = 'GeneratedSlashThree'
+        Slashes = '\\\'
+        ExpectedUnsafe = $false
+    },
+    @{
+        Name = 'generated-plus-four-raw-backslashes'
+        ClassName = 'GeneratedSlashFour'
+        Slashes = '\\\\'
+        ExpectedUnsafe = $true
+    }
+)
 
 function Invoke-Checker([string]$SourcePath) {
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker -Path $SourcePath 2>&1 | Out-String)
@@ -269,6 +324,66 @@ try {
         $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
         if ($expectedViolation -notin $outputLines) {
             throw "Expected unsafe fixture '$($case.Name)' output to include '$expectedViolation'. Output: $($result.Output)"
+        }
+    }
+
+    foreach ($eligibilityCase in $unicodeEligibilityCases) {
+        $caseRoot = Join-Path $fixtureRoot ('unicode-eligibility-' + $eligibilityCase.Name)
+        $samplePath = Join-Path $caseRoot ($eligibilityCase.ClassName + '.java')
+        New-Item -ItemType Directory -Path $caseRoot -Force | Out-Null
+        $source = @(
+            "// $($eligibilityCase.Slashes)u000apackage com.portfolio.agent.answer.application;"
+            "public final class $($eligibilityCase.ClassName) {}"
+        ) -join "`r`n"
+        Set-Content -LiteralPath $samplePath -Value $source -Encoding Ascii
+
+        $javacOutput = (& javac -d $caseRoot $samplePath 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Expected Unicode eligibility fixture '$($eligibilityCase.Name)' to compile. Output: $javacOutput"
+        }
+
+        $result = Invoke-Checker $caseRoot
+        if ($eligibilityCase.ExpectedUnsafe) {
+            if ($result.ExitCode -ne 1) {
+                throw "Expected Unicode eligibility fixture '$($eligibilityCase.Name)' to exit 1. Output: $($result.Output)"
+            }
+            $expectedViolation = "legacy-package:$samplePath`:2:package com.portfolio.agent.answer.application;"
+            $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
+            if ($expectedViolation -notin $outputLines) {
+                throw "Expected Unicode eligibility fixture '$($eligibilityCase.Name)' output to include '$expectedViolation'. Output: $($result.Output)"
+            }
+        } elseif ($result.ExitCode -ne 0) {
+            throw "Expected Unicode eligibility fixture '$($eligibilityCase.Name)' to pass. Output: $($result.Output)"
+        }
+    }
+
+    foreach ($eligibilityCase in $unicodeGeneratedBackslashCases) {
+        $caseRoot = Join-Path $fixtureRoot ('unicode-generated-backslash-' + $eligibilityCase.Name)
+        $samplePath = Join-Path $caseRoot ($eligibilityCase.ClassName + '.java')
+        New-Item -ItemType Directory -Path $caseRoot -Force | Out-Null
+        $source = @(
+            "// \u005c$($eligibilityCase.Slashes)u000apackage com.portfolio.agent.answer.application;"
+            "public final class $($eligibilityCase.ClassName) {}"
+        ) -join "`r`n"
+        Set-Content -LiteralPath $samplePath -Value $source -Encoding Ascii
+
+        $javacOutput = (& javac -d $caseRoot $samplePath 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Expected generated-backslash fixture '$($eligibilityCase.Name)' to compile. Output: $javacOutput"
+        }
+
+        $result = Invoke-Checker $caseRoot
+        if ($eligibilityCase.ExpectedUnsafe) {
+            if ($result.ExitCode -ne 1) {
+                throw "Expected generated-backslash fixture '$($eligibilityCase.Name)' to exit 1. Output: $($result.Output)"
+            }
+            $expectedViolation = "legacy-package:$samplePath`:2:package com.portfolio.agent.answer.application;"
+            $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
+            if ($expectedViolation -notin $outputLines) {
+                throw "Expected generated-backslash fixture '$($eligibilityCase.Name)' output to include '$expectedViolation'. Output: $($result.Output)"
+            }
+        } elseif ($result.ExitCode -ne 0) {
+            throw "Expected generated-backslash fixture '$($eligibilityCase.Name)' to pass. Output: $($result.Output)"
         }
     }
 
