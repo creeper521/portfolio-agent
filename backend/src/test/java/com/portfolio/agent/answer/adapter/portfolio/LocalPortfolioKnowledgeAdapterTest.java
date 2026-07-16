@@ -12,12 +12,11 @@ import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
-import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
-import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -89,15 +88,18 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     @Test
-    void mapsReviewedUtf8QuestionAndEvidenceContractFromPublicSnapshot() {
-        JsonPublicPortfolioRepository repository = new JsonPublicPortfolioRepository(
-                new ObjectMapper().findAndRegisterModules(),
-                new ClassPathResource("public-data/public-portfolio.v1.json"),
-                new PortfolioSnapshotValidator()
-        );
-        PortfolioSnapshot snapshot = repository.getSnapshot();
+    void mapsReviewedUtf8QuestionAndEvidenceContractFromPublicSnapshot() throws Exception {
+        ClassPathResource resource =
+                new ClassPathResource("public-data/public-portfolio.v1.json");
+        PortfolioSnapshot snapshot;
+        try (InputStream inputStream = resource.getInputStream()) {
+            snapshot = new ObjectMapper()
+                    .findAndRegisterModules()
+                    .readValue(inputStream, PortfolioSnapshot.class);
+        }
         QuestionDefinition publishedQuestion = snapshot.getQuestions().getFirst();
-        LocalPortfolioKnowledgeAdapter adapter = new LocalPortfolioKnowledgeAdapter(repository);
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
 
         AnswerKnowledge knowledge = adapter.findBySlug("sql-audit").orElseThrow();
 

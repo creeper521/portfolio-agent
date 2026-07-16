@@ -46,6 +46,26 @@ public final class BadResponse {}
         Rule = 'answer-portfolio-boundary'
     },
     @{
+        Name = 'answer-portfolio-adapter-to-controller'
+        File = 'com\portfolio\agent\answer\adapter\portfolio\BadControllerAdapter.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.portfolio;
+import com.portfolio.agent.portfolio.controller.PortfolioController;
+public final class BadControllerAdapter {}
+'@
+        Rule = 'answer-portfolio-adapter-boundary'
+    },
+    @{
+        Name = 'answer-portfolio-adapter-to-file-repository'
+        File = 'com\portfolio\agent\answer\adapter\portfolio\BadFileRepositoryAdapter.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.portfolio;
+import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
+public final class BadFileRepositoryAdapter {}
+'@
+        Rule = 'answer-portfolio-adapter-boundary'
+    },
+    @{
         Name = 'controller-to-file-repository'
         File = 'com\portfolio\agent\portfolio\controller\BadController.java'
         Source = @'
@@ -92,10 +112,12 @@ $allowedSource = @'
 package com.portfolio.agent.answer.adapter.portfolio;
 
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 
 public final class AllowedAdapter {
     private PortfolioKnowledgeGateway gateway;
+    private PortfolioSnapshot snapshot;
     private PublicPortfolioRepository repository;
 }
 '@
