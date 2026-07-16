@@ -18,6 +18,62 @@ function Add-StatementViolation(
     )
 }
 
+function Add-ReferenceViolations(
+    [System.IO.FileInfo]$File,
+    [string]$Relative,
+    [int]$LineNumber,
+    [string]$Reference,
+    [string]$Display
+) {
+    $isLegacyReference = $Reference -match '^com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))(\.|$)'
+    if ($isLegacyReference) {
+        Add-StatementViolation 'legacy-package' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\common\\' -and
+            $Reference -match '^com\.portfolio\.agent\.(portfolio|answer)\.') {
+        Add-StatementViolation 'common-business' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\portfolio\\service\\' -and
+            $Reference -match '^com\.portfolio\.agent\.portfolio\.(controller|dto)\.') {
+        Add-StatementViolation 'portfolio-service-controller' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\answer\\(service|domain|engine|gateway)\\' -and
+            $Reference -match '^com\.portfolio\.agent\.portfolio\.') {
+        Add-StatementViolation 'answer-core-portfolio' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\answer\\' -and
+            $Relative -notmatch '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
+            $Reference -match '^com\.portfolio\.agent\.portfolio\.') {
+        Add-StatementViolation 'answer-portfolio-boundary' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
+            $Reference -match '^com\.portfolio\.agent\.portfolio\.' -and
+            $Reference -notmatch '^com\.portfolio\.agent\.portfolio\.domain\.' -and
+            $Reference -ne 'com.portfolio.agent.portfolio.repository.PublicPortfolioRepository') {
+        Add-StatementViolation 'answer-portfolio-adapter-boundary' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\answer\\engine\\' -and
+            $Reference -match '^com\.portfolio\.agent\.answer\.(service|controller|dto|gateway|adapter|exception|repository)(\.|$)') {
+        Add-StatementViolation 'answer-engine-boundary' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\(portfolio|answer)\\controller\\' -and
+            $Reference -match '^com\.portfolio\.agent\.(portfolio|answer)\.(repository|adapter|engine|validation)(\.|$)') {
+        Add-StatementViolation 'controller-layer-boundary' $File $LineNumber $Display
+    }
+
+    if ($Relative -match '^com\\portfolio\\agent\\portfolio\\' -and
+            $Reference -match '^com\.portfolio\.agent\.answer\.') {
+        Add-StatementViolation 'portfolio-answer' $File $LineNumber $Display
+    }
+}
+
 function Convert-JavaUnicodeEscapes([string]$Source) {
     $builder = New-Object System.Text.StringBuilder
     $consecutiveBackslashes = 0
@@ -213,6 +269,7 @@ foreach ($file in $javaFiles) {
         '^[ \t]*(?:package|import)\s+[^;]+;',
         [System.Text.RegularExpressions.RegexOptions]::Multiline
     )
+    $bodyBuilder = New-Object System.Text.StringBuilder $lexicalSource
 
     foreach ($statementMatch in $statementMatches) {
         $statement = [regex]::Replace($statementMatch.Value.Trim(), '\s+', ' ')
@@ -221,52 +278,35 @@ foreach ($file in $javaFiles) {
         $prefix = $lexicalSource.Substring(0, $statementMatch.Index)
         $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
         $isLegacyPackage = $statement -match '^package com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))(\.|;)'
-        $isLegacyImport = $statement -match '^import (?:static )?com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))\.'
-        if ($isLegacyPackage -or $isLegacyImport) {
+        if ($isLegacyPackage) {
             Add-StatementViolation 'legacy-package' $file $lineNumber $statement
         }
 
-        if ($statement -notmatch '^import ') {
-            continue
+        if ($statement -match '^import ') {
+            $reference = $statement -replace '^import (?:static )?', ''
+            $reference = $reference -replace ';$', ''
+            Add-ReferenceViolations $file $relative $lineNumber $reference $statement
         }
 
-        if ($relative -match '^com\\portfolio\\agent\\common\\' -and
-                $statement -match 'com\.portfolio\.agent\.(portfolio|answer)\.') {
-            Add-StatementViolation 'common-business' $file $lineNumber $statement
+        for ($offset = 0; $offset -lt $statementMatch.Length; $offset++) {
+            $position = $statementMatch.Index + $offset
+            $character = $bodyBuilder[$position]
+            if ($character -ne "`r" -and $character -ne "`n") {
+                $bodyBuilder[$position] = ' '
+            }
         }
+    }
 
-        if ($relative -match '^com\\portfolio\\agent\\portfolio\\service\\' -and
-                $statement -match 'com\.portfolio\.agent\.portfolio\.(controller|dto)\.') {
-            Add-StatementViolation 'portfolio-service-controller' $file $lineNumber $statement
-        }
-
-        if ($relative -match '^com\\portfolio\\agent\\answer\\(service|domain|engine|gateway)\\' -and
-                $statement -match 'com\.portfolio\.agent\.portfolio\.') {
-            Add-StatementViolation 'answer-core-portfolio' $file $lineNumber $statement
-        }
-
-        if ($relative -match '^com\\portfolio\\agent\\answer\\' -and
-                $relative -notmatch '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
-                $statement -match 'com\.portfolio\.agent\.portfolio\.') {
-            Add-StatementViolation 'answer-portfolio-boundary' $file $lineNumber $statement
-        }
-
-        if ($relative -match '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
-                $statement -match 'com\.portfolio\.agent\.portfolio\.' -and
-                $statement -notmatch 'com\.portfolio\.agent\.portfolio\.domain\.[^;]+;' -and
-                $statement -notmatch 'com\.portfolio\.agent\.portfolio\.repository\.PublicPortfolioRepository;') {
-            Add-StatementViolation 'answer-portfolio-adapter-boundary' $file $lineNumber $statement
-        }
-
-        if ($relative -match '\\controller\\' -and
-                $statement -match '\.(repository\.file|adapter|engine\.deterministic)\.') {
-            Add-StatementViolation 'controller-infrastructure' $file $lineNumber $statement
-        }
-
-        if ($relative -match '^com\\portfolio\\agent\\portfolio\\' -and
-                $statement -match 'com\.portfolio\.agent\.answer\.') {
-            Add-StatementViolation 'portfolio-answer' $file $lineNumber $statement
-        }
+    $bodySource = $bodyBuilder.ToString()
+    $qualifiedMatches = [regex]::Matches(
+        $bodySource,
+        '\bcom\s*\.\s*portfolio\s*\.\s*agent(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)+'
+    )
+    foreach ($qualifiedMatch in $qualifiedMatches) {
+        $reference = [regex]::Replace($qualifiedMatch.Value, '\s*\.\s*', '.')
+        $prefix = $bodySource.Substring(0, $qualifiedMatch.Index)
+        $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
+        Add-ReferenceViolations $file $relative $lineNumber $reference $reference
     }
 }
 

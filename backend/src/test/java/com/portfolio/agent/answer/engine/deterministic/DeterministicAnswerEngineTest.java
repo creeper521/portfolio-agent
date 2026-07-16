@@ -7,7 +7,7 @@ import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.answer.domain.AnswerSection;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.service.QuestionNormalizer;
+import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

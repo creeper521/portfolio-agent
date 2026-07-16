@@ -7,7 +7,7 @@ import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.answer.domain.AnswerSection;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.engine.AnswerEngine;
-import com.portfolio.agent.answer.service.QuestionNormalizer;
+import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

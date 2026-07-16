@@ -44,9 +44,9 @@ com.portfolio.agent
    ├─ controller       回答 HTTP 路由与请求校验
    ├─ dto.request      回答请求 DTO
    ├─ dto.response     Answer 自有响应 DTO
-   ├─ service          回答用例编排与问题归一化
+   ├─ service          回答用例编排
    ├─ domain           Answer 自有知识、结果与 Evidence
-   ├─ engine           回答引擎接口
+   ├─ engine           回答引擎接口与 QuestionNormalizer
    │  └─ deterministic 当前确定性实现
    ├─ gateway          Answer 所需的作品集知识端口
    ├─ adapter
@@ -91,7 +91,7 @@ AnswerController
 
 `AnswerService`、Answer Domain、Engine 和 Gateway 都不 import Portfolio 包。`LocalPortfolioKnowledgeAdapter` 是唯一同时 import Portfolio 与 Answer 类型的位置；它从一个快照筛选已批准 Evidence，并把 Portfolio 类型转换为 `AnswerKnowledge / AnswerQuestion / AnswerEvidence`。
 
-`DeterministicAnswerEngine` 只接收 `AnswerKnowledge`，不读取 Repository，也不知道 Portfolio 类型。`AnswerResult` 持有 Answer 自己的 `AnswerEvidence`，HTTP 层再映射为 `AnswerEvidenceResponse`。
+`QuestionNormalizer` 位于 `answer.engine`，供确定性引擎直接使用，避免 Engine 反向依赖 Service。`DeterministicAnswerEngine` 只接收 `AnswerKnowledge`，不读取 Repository，也不知道 Portfolio 类型。`AnswerResult` 持有 Answer 自己的 `AnswerEvidence`，HTTP 层再映射为 `AnswerEvidenceResponse`。
 
 ## 4. 当前为什么不用 Feign
 
@@ -135,24 +135,26 @@ PortfolioKnowledgeGateway
 | Answer 知识端口 | `answer.gateway.PortfolioKnowledgeGateway` |
 | 本地跨模块适配 | `answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter` |
 | 引擎契约 | `answer.engine.AnswerEngine` |
+| 问题归一化 | `answer.engine.QuestionNormalizer` |
 | 确定性引擎 | `answer.engine.deterministic.DeterministicAnswerEngine` |
 | Answer 响应映射 | `answer.mapper.AnswerResponseMapper` |
 | 共享错误转换 | `common.web.GlobalExceptionHandler` |
 
 ## 6. 架构门禁
 
-`scripts/architecture-check.ps1` 扫描生产与测试 Java 的 package/import 语句，并阻断：
+`scripts/architecture-check.ps1` 扫描生产与测试 Java 的 package/import 语句及代码体中的 `com.portfolio.agent...` 全限定引用，并阻断：
 
-- `common` import Portfolio 或 Answer；
-- Portfolio Service import Controller 或 DTO；
-- Answer Service、Domain、Engine、Gateway import Portfolio；
-- `answer.adapter.portfolio` 之外的 Answer 代码 import Portfolio；
+- `common` 依赖 Portfolio 或 Answer；
+- Portfolio Service 依赖 Controller 或 DTO；
+- Answer Service、Domain、Engine、Gateway 依赖 Portfolio；
+- `answer.adapter.portfolio` 之外的 Answer 代码依赖 Portfolio；
 - 本地 Portfolio Adapter 越过允许的 Portfolio Domain 与 Repository 接口；
-- Controller import 文件仓储实现、Adapter 或确定性 Engine 实现；
-- Portfolio import Answer；
+- Answer Engine 依赖 Answer 的 Service、Controller、DTO、Gateway、Adapter、Exception 或 Repository；
+- Portfolio/Answer Controller 依赖 Repository、Adapter、Engine 或 Validation；
+- Portfolio 依赖 Answer；
 - 旧 `api / application / infrastructure / domain.model / domain.repository` 包重新出现。
 
-脚本会先处理 Java Unicode escape，并忽略注释、字符串、字符字面量和 text block；随后提取完整的 package/import 语句，统一归一化空白与点号，再让旧包检查和全部依赖规则检查同一份 normalized statement。这样既能阻断多行 import、静态 import 和 Unicode 转义绕过，也不会把示例文本误判为真实依赖。
+脚本会先处理 Java Unicode escape，并忽略注释、字符串、字符字面量和 text block；随后提取完整的 package/import 语句，并从剩余代码体提取全限定引用。两类引用都统一归一化空白与点号，package/import 已处理区域会从代码体扫描中排除，避免重复报告。这样既能阻断多行 import、静态 import、Unicode 转义和代码体全限定类名绕过，也不会把示例文本误判为真实依赖。代码体全限定引用的违规输出为 `rule:file:line:normalized-reference`。
 
 该架构检查当前作为独立后端门禁运行；把它接入 `verify-release.ps1` 的完整发布流水线明确延期。
 
@@ -166,7 +168,7 @@ PortfolioKnowledgeGateway
 | 后端源码质量扫描 | `scripts/code-quality-check.ps1 -Path backend/src` | 通过，exit 0 |
 | 架构脚本自测 | `scripts/architecture-check.test.ps1` | 通过，exit 0 |
 | 后端架构扫描 | `scripts/architecture-check.ps1 -Path backend/src` | 通过，exit 0 |
-| 聚焦 HTTP 契约 | 指定 4 个 Controller/Handler 测试 | `BUILD SUCCESS`，15/15 通过 |
+| 聚焦 Normalizer/Engine/Controller | 指定 4 个 Normalizer、Engine、Controller 测试类 | `BUILD SUCCESS`，17/17 通过 |
 | 后端全量 JUnit | `mvn.cmd -f backend/pom.xml test` | `BUILD SUCCESS`，51/51 通过 |
 | 后端编译 | `mvn.cmd -f backend/pom.xml -DskipTests compile` | `BUILD SUCCESS` |
 | 隐私脚本自测 | `scripts/privacy-check.test.ps1` | 通过，exit 0 |

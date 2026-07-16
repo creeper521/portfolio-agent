@@ -36,6 +36,24 @@ public final class BadEngine {}
         Rule = 'answer-core-portfolio'
     },
     @{
+        Name = 'answer-engine-to-service'
+        File = 'com\portfolio\agent\answer\engine\BadServiceEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+import com.portfolio.agent.answer.service.AnswerService;
+public final class BadServiceEngine {
+    private AnswerService service;
+}
+'@
+        Rule = 'answer-engine-boundary'
+        Stubs = @{
+            'com\portfolio\agent\answer\service\AnswerService.java' = @'
+package com.portfolio.agent.answer.service;
+public final class AnswerService {}
+'@
+        }
+    },
+    @{
         Name = 'answer-dto-to-portfolio-dto'
         File = 'com\portfolio\agent\answer\dto\response\BadResponse.java'
         Source = @'
@@ -73,7 +91,43 @@ package com.portfolio.agent.portfolio.controller;
 import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
 public final class BadController {}
 '@
-        Rule = 'controller-infrastructure'
+        Rule = 'controller-layer-boundary'
+    },
+    @{
+        Name = 'portfolio-controller-to-repository'
+        File = 'com\portfolio\agent\portfolio\controller\RepositoryController.java'
+        Source = @'
+package com.portfolio.agent.portfolio.controller;
+import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
+public final class RepositoryController {
+    private PublicPortfolioRepository repository;
+}
+'@
+        Rule = 'controller-layer-boundary'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\repository\PublicPortfolioRepository.java' = @'
+package com.portfolio.agent.portfolio.repository;
+public interface PublicPortfolioRepository {}
+'@
+        }
+    },
+    @{
+        Name = 'answer-controller-to-engine'
+        File = 'com\portfolio\agent\answer\controller\EngineController.java'
+        Source = @'
+package com.portfolio.agent.answer.controller;
+import com.portfolio.agent.answer.engine.AnswerEngine;
+public final class EngineController {
+    private AnswerEngine engine;
+}
+'@
+        Rule = 'controller-layer-boundary'
+        Stubs = @{
+            'com\portfolio\agent\answer\engine\AnswerEngine.java' = @'
+package com.portfolio.agent.answer.engine;
+public interface AnswerEngine {}
+'@
+        }
     },
     @{
         Name = 'common-to-business'
@@ -276,7 +330,7 @@ import com.portfolio.agent.portfolio.repository
     . JsonPublicPortfolioRepository;
 public final class MultilineController {}
 '@
-        Rule = 'controller-infrastructure'
+        Rule = 'controller-layer-boundary'
         ExpectedLine = 2
         ExpectedStatement = 'import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;'
     },
@@ -294,6 +348,159 @@ public final class MultilinePortfolio {}
         Rule = 'portfolio-answer'
         ExpectedLine = 2
         ExpectedStatement = 'import com.portfolio.agent.answer.domain.AnswerResult;'
+    },
+    @{
+        Name = 'fqn-answer-service-to-portfolio-domain'
+        File = 'com\portfolio\agent\answer\service\FqnAnswerService.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+public final class FqnAnswerService {
+    private com.portfolio.agent.portfolio.domain.ProjectProfile profile;
+}
+'@
+        Rule = 'answer-core-portfolio'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.portfolio.domain.ProjectProfile'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\domain\ProjectProfile.java' = @'
+package com.portfolio.agent.portfolio.domain;
+public final class ProjectProfile {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-common-to-business'
+        File = 'com\portfolio\agent\common\web\FqnCommon.java'
+        Source = @'
+package com.portfolio.agent.common.web;
+public final class FqnCommon {
+    private com.portfolio.agent.answer.domain.AnswerResult result;
+}
+'@
+        Rule = 'common-business'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.answer.domain.AnswerResult'
+        Stubs = @{
+            'com\portfolio\agent\answer\domain\AnswerResult.java' = @'
+package com.portfolio.agent.answer.domain;
+public final class AnswerResult {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-portfolio-service-to-controller'
+        File = 'com\portfolio\agent\portfolio\service\FqnPortfolioService.java'
+        Source = @'
+package com.portfolio.agent.portfolio.service;
+public final class FqnPortfolioService {
+    private com.portfolio.agent.portfolio.controller.PortfolioController controller;
+}
+'@
+        Rule = 'portfolio-service-controller'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.portfolio.controller.PortfolioController'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\controller\PortfolioController.java' = @'
+package com.portfolio.agent.portfolio.controller;
+public final class PortfolioController {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-answer-boundary-to-portfolio'
+        File = 'com\portfolio\agent\answer\dto\response\FqnAnswerResponse.java'
+        Source = @'
+package com.portfolio.agent.answer.dto.response;
+public final class FqnAnswerResponse {
+    private com.portfolio.agent.portfolio
+            . dto . response . EvidenceResponse evidence;
+}
+'@
+        Rule = 'answer-portfolio-boundary'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.portfolio.dto.response.EvidenceResponse'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\dto\response\EvidenceResponse.java' = @'
+package com.portfolio.agent.portfolio.dto.response;
+public final class EvidenceResponse {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-adapter-boundary'
+        File = 'com\portfolio\agent\answer\adapter\portfolio\FqnAdapter.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.portfolio;
+public final class FqnAdapter {
+    private com.portfolio.agent.portfolio.controller.PortfolioController controller;
+}
+'@
+        Rule = 'answer-portfolio-adapter-boundary'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.portfolio.controller.PortfolioController'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\controller\PortfolioController.java' = @'
+package com.portfolio.agent.portfolio.controller;
+public final class PortfolioController {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-portfolio-to-answer'
+        File = 'com\portfolio\agent\portfolio\domain\FqnPortfolio.java'
+        Source = @'
+package com.portfolio.agent.portfolio.domain;
+public final class FqnPortfolio {
+    private com.portfolio.agent.answer.domain.AnswerResult result;
+}
+'@
+        Rule = 'portfolio-answer'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.answer.domain.AnswerResult'
+        Stubs = @{
+            'com\portfolio\agent\answer\domain\AnswerResult.java' = @'
+package com.portfolio.agent.answer.domain;
+public final class AnswerResult {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-legacy-package'
+        File = 'com\portfolio\agent\answer\service\FqnLegacyService.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+public final class FqnLegacyService {
+    private com.portfolio.agent.answer.application.LegacyAnswerService legacy;
+}
+'@
+        Rule = 'legacy-package'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.answer.application.LegacyAnswerService'
+        Stubs = @{
+            'com\portfolio\agent\answer\application\LegacyAnswerService.java' = @'
+package com.portfolio.agent.answer.application;
+public final class LegacyAnswerService {}
+'@
+        }
+    },
+    @{
+        Name = 'fqn-controller-to-repository'
+        File = 'com\portfolio\agent\portfolio\controller\FqnRepositoryController.java'
+        Source = @'
+package com.portfolio.agent.portfolio.controller;
+public final class FqnRepositoryController {
+    private com.portfolio.agent.portfolio.repository.PublicPortfolioRepository repository;
+}
+'@
+        Rule = 'controller-layer-boundary'
+        ExpectedLine = 3
+        ExpectedStatement = 'com.portfolio.agent.portfolio.repository.PublicPortfolioRepository'
+        Stubs = @{
+            'com\portfolio\agent\portfolio\repository\PublicPortfolioRepository.java' = @'
+package com.portfolio.agent.portfolio.repository;
+public interface PublicPortfolioRepository {}
+'@
+        }
     }
 )
 
@@ -309,6 +516,8 @@ public final class AllowedAdapter {
     private PortfolioKnowledgeGateway gateway;
     private PortfolioSnapshot snapshot;
     private PublicPortfolioRepository repository;
+    private com.portfolio.agent.portfolio.domain.PortfolioSnapshot qualifiedSnapshot;
+    private com.portfolio.agent.portfolio.repository.PublicPortfolioRepository qualifiedRepository;
     private String legacyImportText =
             "import com.portfolio.agent.portfolio.application.LegacyService;";
     private String legacyPackageText = """
@@ -324,6 +533,13 @@ public final class AllowedAdapter {
             unicode escaped delimiter: \u005c"""
             package com.portfolio.agent.answer.infrastructure;
             """;
+    private String qualifiedReferenceText =
+            "com.portfolio.agent.answer.service.AnswerService";
+    private String qualifiedReferenceTextBlock = """
+            com.portfolio.agent.portfolio.repository.PublicPortfolioRepository
+            """;
+    // com.portfolio.agent.answer.engine.AnswerEngine
+    /* com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator */
     // \\u000apackage com.portfolio.agent.answer.application;
 }
 '@
@@ -401,7 +617,31 @@ try {
         $caseRoot = Join-Path $fixtureRoot $case.Name
         $samplePath = Join-Path (Join-Path $caseRoot 'main\java') $case.File
         New-Item -ItemType Directory -Path (Split-Path -Parent $samplePath) -Force | Out-Null
-        Set-Content -LiteralPath $samplePath -Value $case.Source -Encoding UTF8
+        [System.IO.File]::WriteAllText(
+            $samplePath,
+            $case.Source,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        if ($case.ContainsKey('Stubs')) {
+            foreach ($stubEntry in $case.Stubs.GetEnumerator()) {
+                $stubPath = Join-Path (Join-Path $caseRoot 'main\java') $stubEntry.Key
+                New-Item -ItemType Directory -Path (Split-Path -Parent $stubPath) -Force | Out-Null
+                [System.IO.File]::WriteAllText(
+                    $stubPath,
+                    $stubEntry.Value,
+                    [System.Text.UTF8Encoding]::new($false)
+                )
+            }
+
+            $javaSources = Get-ChildItem -LiteralPath (Join-Path $caseRoot 'main\java') -Recurse -File -Filter '*.java' |
+                    ForEach-Object { $_.FullName }
+            $classesPath = Join-Path $caseRoot 'classes'
+            New-Item -ItemType Directory -Path $classesPath | Out-Null
+            $javacOutput = (& javac -d $classesPath $javaSources 2>&1 | Out-String)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Expected unsafe fixture '$($case.Name)' to compile. Output: $javacOutput"
+            }
+        }
 
         $result = Invoke-Checker $caseRoot
         if ($result.ExitCode -ne 1) {
