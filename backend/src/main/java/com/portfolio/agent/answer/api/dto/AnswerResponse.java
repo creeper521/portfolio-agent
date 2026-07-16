@@ -2,7 +2,7 @@ package com.portfolio.agent.answer.api.dto;
 
 import com.portfolio.agent.answer.domain.model.AnswerMode;
 import com.portfolio.agent.answer.domain.model.AnswerResult;
-import com.portfolio.agent.portfolio.api.dto.EvidenceResponse;
+import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
 
 import java.util.List;
 import java.util.Objects;

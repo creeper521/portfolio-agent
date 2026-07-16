@@ -1,6 +1,6 @@
 package com.portfolio.agent.answer.domain.model;
 
-import com.portfolio.agent.portfolio.domain.model.EvidenceRecord;
+import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 
 import java.util.List;
 import java.util.Objects;

@@ -1,7 +1,7 @@
 package com.portfolio.agent.portfolio.api;
 
-import com.portfolio.agent.portfolio.api.dto.PortfolioHomeResponse;
-import com.portfolio.agent.portfolio.api.dto.ProjectDetailResponse;
+import com.portfolio.agent.portfolio.dto.response.PortfolioHomeResponse;
+import com.portfolio.agent.portfolio.dto.response.ProjectDetailResponse;
 import com.portfolio.agent.portfolio.application.PortfolioQueryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

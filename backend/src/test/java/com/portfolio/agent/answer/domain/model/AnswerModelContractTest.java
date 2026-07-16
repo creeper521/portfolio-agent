@@ -1,8 +1,8 @@
 package com.portfolio.agent.answer.domain.model;
 
-import com.portfolio.agent.portfolio.domain.model.EvidenceRecord;
-import com.portfolio.agent.portfolio.domain.model.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.model.EvidenceType;
+import com.portfolio.agent.portfolio.domain.EvidenceRecord;
+import com.portfolio.agent.portfolio.domain.EvidenceStatus;
+import com.portfolio.agent.portfolio.domain.EvidenceType;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

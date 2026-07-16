@@ -1,16 +1,16 @@
 package com.portfolio.agent.portfolio.application;
 
-import com.portfolio.agent.portfolio.api.dto.EvidenceResponse;
-import com.portfolio.agent.portfolio.api.dto.OwnerResponse;
-import com.portfolio.agent.portfolio.api.dto.PortfolioHomeResponse;
-import com.portfolio.agent.portfolio.api.dto.ProjectDetailResponse;
-import com.portfolio.agent.portfolio.api.dto.ProjectSummaryResponse;
-import com.portfolio.agent.portfolio.application.exception.ProjectNotFoundException;
-import com.portfolio.agent.portfolio.domain.model.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.model.PortfolioSnapshot;
-import com.portfolio.agent.portfolio.domain.model.ProjectProfile;
-import com.portfolio.agent.portfolio.domain.model.QuestionDefinition;
-import com.portfolio.agent.portfolio.domain.repository.PublicPortfolioRepository;
+import com.portfolio.agent.portfolio.domain.EvidenceStatus;
+import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
+import com.portfolio.agent.portfolio.dto.response.OwnerResponse;
+import com.portfolio.agent.portfolio.dto.response.PortfolioHomeResponse;
+import com.portfolio.agent.portfolio.dto.response.ProjectDetailResponse;
+import com.portfolio.agent.portfolio.dto.response.ProjectSummaryResponse;
+import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
+import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

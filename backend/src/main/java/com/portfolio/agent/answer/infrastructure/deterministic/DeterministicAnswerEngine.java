@@ -6,12 +6,12 @@ import com.portfolio.agent.answer.domain.model.AnswerMode;
 import com.portfolio.agent.answer.domain.model.AnswerResult;
 import com.portfolio.agent.answer.domain.model.AnswerSection;
 import com.portfolio.agent.answer.domain.model.AnswerSectionType;
-import com.portfolio.agent.portfolio.domain.model.EvidenceRecord;
-import com.portfolio.agent.portfolio.domain.model.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.model.PortfolioSnapshot;
-import com.portfolio.agent.portfolio.domain.model.ProjectProfile;
-import com.portfolio.agent.portfolio.domain.model.QuestionDefinition;
-import com.portfolio.agent.portfolio.domain.repository.PublicPortfolioRepository;
+import com.portfolio.agent.portfolio.domain.EvidenceRecord;
+import com.portfolio.agent.portfolio.domain.EvidenceStatus;
+import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

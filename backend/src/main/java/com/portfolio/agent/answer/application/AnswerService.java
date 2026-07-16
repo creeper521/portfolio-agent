@@ -1,8 +1,8 @@
 package com.portfolio.agent.answer.application;
 
 import com.portfolio.agent.answer.domain.model.AnswerResult;
-import com.portfolio.agent.portfolio.application.exception.ProjectNotFoundException;
-import com.portfolio.agent.portfolio.domain.repository.PublicPortfolioRepository;
+import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
+import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Service;
 
 @Service
