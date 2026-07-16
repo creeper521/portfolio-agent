@@ -42,6 +42,12 @@ foreach ($file in $javaFiles) {
             Add-Violation 'answer-core-portfolio' $file $import
         }
 
+        if ($relative -match '^com\\portfolio\\agent\\answer\\' -and
+                $relative -notmatch '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
+                $line -match 'com\.portfolio\.agent\.portfolio\.') {
+            Add-Violation 'answer-portfolio-boundary' $file $import
+        }
+
         if ($relative -match '\\controller\\' -and
                 $line -match '\.(repository\.file|adapter|engine\.deterministic)\.') {
             Add-Violation 'controller-infrastructure' $file $import

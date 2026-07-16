@@ -1,7 +1,6 @@
 package com.portfolio.agent.answer.dto.response;
 
 import com.portfolio.agent.answer.domain.AnswerMode;
-import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,7 +12,7 @@ public final class AnswerResponse {
     private final boolean matched;
     private final boolean fallback;
     private final AnswerPayload answer;
-    private final List<EvidenceResponse> evidence;
+    private final List<AnswerEvidenceResponse> evidence;
     private final List<String> suggestedQuestions;
 
     public AnswerResponse(
@@ -22,7 +21,7 @@ public final class AnswerResponse {
             boolean matched,
             boolean fallback,
             AnswerPayload answer,
-            List<EvidenceResponse> evidence,
+            List<AnswerEvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
         this.requestId = requestId;
@@ -54,7 +53,7 @@ public final class AnswerResponse {
         return answer;
     }
 
-    public List<EvidenceResponse> getEvidence() {
+    public List<AnswerEvidenceResponse> getEvidence() {
         return evidence;
     }
 

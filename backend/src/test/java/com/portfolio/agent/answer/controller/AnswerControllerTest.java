@@ -38,7 +38,24 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.answer.sections.length()").value(5))
                 .andExpect(jsonPath("$.answer.sections[0].type").value("BACKGROUND"))
                 .andExpect(jsonPath("$.answer.sections[4].type").value("STATUS"))
-                .andExpect(jsonPath("$.evidence[0].title").value("SQL 审计工具交付证据集"));
+                .andExpect(jsonPath("$.evidence.length()").value(1))
+                .andExpect(jsonPath("$.evidence[0].id").value("sql-audit-delivery-set"))
+                .andExpect(jsonPath("$.evidence[0].title").value("SQL 审计工具交付证据集"))
+                .andExpect(jsonPath("$.evidence[0].type").value("COLLECTION"))
+                .andExpect(jsonPath("$.evidence[0].periodStart").value("2026-06-02"))
+                .andExpect(jsonPath("$.evidence[0].periodEnd").value("2026-07-10"))
+                .andExpect(jsonPath("$.evidence[0].sourceCount").value(7))
+                .andExpect(jsonPath("$.evidence[0].summary").value(
+                        "由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。"))
+                .andExpect(jsonPath("$.evidence[0].supportedClaims.length()").value(3))
+                .andExpect(jsonPath("$.evidence[0].supportedClaims[0]")
+                        .value("核心版本已部署并形成使用文档。"))
+                .andExpect(jsonPath("$.evidence[0].supportedClaims[1]")
+                        .value("本人主导核心功能及多轮迭代。"))
+                .andExpect(jsonPath("$.evidence[0].supportedClaims[2]")
+                        .value("后续部分优化由同事继续接手。"))
+                .andExpect(jsonPath("$.evidence[0].publicStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.evidence[0].rawContentPublic").value(false));
     }
 
     @Test

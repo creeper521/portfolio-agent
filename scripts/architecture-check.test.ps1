@@ -36,6 +36,16 @@ public final class BadEngine {}
         Rule = 'answer-core-portfolio'
     },
     @{
+        Name = 'answer-dto-to-portfolio-dto'
+        File = 'com\portfolio\agent\answer\dto\response\BadResponse.java'
+        Source = @'
+package com.portfolio.agent.answer.dto.response;
+import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
+public final class BadResponse {}
+'@
+        Rule = 'answer-portfolio-boundary'
+    },
+    @{
         Name = 'controller-to-file-repository'
         File = 'com\portfolio\agent\portfolio\controller\BadController.java'
         Source = @'

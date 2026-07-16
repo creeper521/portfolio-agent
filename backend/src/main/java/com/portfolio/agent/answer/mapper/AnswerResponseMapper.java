@@ -2,10 +2,10 @@ package com.portfolio.agent.answer.mapper;
 
 import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerResult;
+import com.portfolio.agent.answer.dto.response.AnswerEvidenceResponse;
 import com.portfolio.agent.answer.dto.response.AnswerPayload;
 import com.portfolio.agent.answer.dto.response.AnswerResponse;
 import com.portfolio.agent.answer.dto.response.AnswerSectionResponse;
-import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -21,7 +21,7 @@ public class AnswerResponseMapper {
                 ))
                 .toList();
 
-        List<EvidenceResponse> evidence = result.getEvidence().stream()
+        List<AnswerEvidenceResponse> evidence = result.getEvidence().stream()
                 .map(this::toEvidenceResponse)
                 .toList();
 
@@ -36,8 +36,8 @@ public class AnswerResponseMapper {
         );
     }
 
-    private EvidenceResponse toEvidenceResponse(AnswerEvidence evidence) {
-        return new EvidenceResponse(
+    private AnswerEvidenceResponse toEvidenceResponse(AnswerEvidence evidence) {
+        return new AnswerEvidenceResponse(
                 evidence.getId(),
                 evidence.getTitle(),
                 evidence.getType(),
