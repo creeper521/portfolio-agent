@@ -1,4 +1,4 @@
-package com.portfolio.agent.portfolio.repository.file;
+package com.portfolio.agent.portfolio.exception;
 
 public class InvalidPortfolioSnapshotException extends RuntimeException {
 

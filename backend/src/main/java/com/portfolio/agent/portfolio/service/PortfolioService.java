@@ -7,8 +7,8 @@ import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
-import com.portfolio.agent.portfolio.service.model.PortfolioOverview;
-import com.portfolio.agent.portfolio.service.model.ProjectDetails;
+import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
+import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

@@ -33,7 +33,7 @@ com.portfolio.agent
 │  ├─ controller       作品集 HTTP 路由
 │  ├─ dto.response     作品集公开响应 DTO
 │  ├─ service          作品集查询用例
-│  │  └─ model         Service 自有查询结果
+│  │  └─ result        Service 自有查询结果
 │  ├─ domain           公开作品集事实模型
 │  ├─ repository       作品集仓储接口
 │  │  └─ file          classpath JSON 仓储实现
@@ -125,7 +125,7 @@ PortfolioKnowledgeGateway
 |---|---|
 | 作品集 HTTP 边界 | `portfolio.controller.PortfolioController` |
 | 作品集查询用例 | `portfolio.service.PortfolioService` |
-| Service 查询结果 | `portfolio.service.model.PortfolioOverview`、`ProjectDetails` |
+| Service 查询结果 | `portfolio.service.result.PortfolioOverview`、`ProjectDetails` |
 | 作品集仓储端口 | `portfolio.repository.PublicPortfolioRepository` |
 | JSON 文件仓储 | `portfolio.repository.file.JsonPublicPortfolioRepository` |
 | 快照校验 | `portfolio.validation.PortfolioSnapshotValidator` |

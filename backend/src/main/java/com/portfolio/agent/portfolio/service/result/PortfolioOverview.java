@@ -1,4 +1,4 @@
-package com.portfolio.agent.portfolio.service.model;
+package com.portfolio.agent.portfolio.service.result;
 
 import com.portfolio.agent.portfolio.domain.OwnerProfile;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;

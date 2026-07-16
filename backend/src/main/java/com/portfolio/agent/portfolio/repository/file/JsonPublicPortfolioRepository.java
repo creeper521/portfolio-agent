@@ -2,6 +2,7 @@ package com.portfolio.agent.portfolio.repository.file;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import org.springframework.beans.factory.annotation.Value;

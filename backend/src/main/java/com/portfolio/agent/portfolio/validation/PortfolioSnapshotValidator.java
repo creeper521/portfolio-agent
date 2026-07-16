@@ -5,7 +5,7 @@ import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
-import com.portfolio.agent.portfolio.repository.file.InvalidPortfolioSnapshotException;
+import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;

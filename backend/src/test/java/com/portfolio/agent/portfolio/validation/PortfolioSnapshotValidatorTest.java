@@ -1,7 +1,7 @@
 package com.portfolio.agent.portfolio.validation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.portfolio.repository.file.InvalidPortfolioSnapshotException;
+import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;

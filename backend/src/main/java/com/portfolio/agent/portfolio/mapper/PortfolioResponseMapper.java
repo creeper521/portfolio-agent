@@ -5,8 +5,8 @@ import com.portfolio.agent.portfolio.dto.response.OwnerResponse;
 import com.portfolio.agent.portfolio.dto.response.PortfolioHomeResponse;
 import com.portfolio.agent.portfolio.dto.response.ProjectDetailResponse;
 import com.portfolio.agent.portfolio.dto.response.ProjectSummaryResponse;
-import com.portfolio.agent.portfolio.service.model.PortfolioOverview;
-import com.portfolio.agent.portfolio.service.model.ProjectDetails;
+import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
+import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.springframework.stereotype.Component;
 
 @Component

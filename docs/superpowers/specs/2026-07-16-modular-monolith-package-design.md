@@ -30,6 +30,7 @@ com.portfolio.agent
 │  ├─ dto
 │  │  └─ response
 │  ├─ service
+│  │  └─ result
 │  ├─ domain
 │  ├─ repository
 │  │  └─ file
@@ -95,7 +96,7 @@ Controller 只能调用 Service 和响应 Mapper，不得直接访问 Repository
 PortfolioService
 ```
 
-Service 返回 Portfolio 自有的查询结果或 Domain 对象，不返回 Web Response DTO。
+Service 返回 `portfolio.service.result` 中的自有查询结果或 Domain 对象，不返回 Web Response DTO。
 
 一次查询只能读取一次内容快照。同一请求中的 Project、Claim、Evidence、Timeline 和版本信息必须来自同一个不可变内容版本。
 
@@ -159,6 +160,8 @@ portfolio.repository.database.mapper
 - Domain/Service：与查询用例直接相关的业务规则。
 
 第一阶段可以保留统一校验入口，但内部规则必须按上述类别组织。
+
+快照校验和文件加载失败统一使用 `portfolio.exception.InvalidPortfolioSnapshotException`，Validation 不依赖具体 Repository 实现包。
 
 ## 5. Answer 模块
 
@@ -264,6 +267,12 @@ portfolio.controller
 portfolio.repository.file
   → portfolio.repository
   → portfolio.domain
+  → portfolio.validation
+  → portfolio.exception
+
+portfolio.validation
+  → portfolio.domain
+  → portfolio.exception
 
 portfolio.controller
   → portfolio.mapper
