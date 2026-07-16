@@ -1,0 +1,35 @@
+# Build output
+backend/target/
+frontend/dist/
+frontend/node_modules/
+playwright-report/
+test-results/
+output/playwright/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+
+# Private content pipeline artifacts
+private-kb/
+candidate-snapshots/
+raw-evidence/
+unreviewed-screenshots/
+privacy-reports/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs and runtime files
+*.log
+*.pid

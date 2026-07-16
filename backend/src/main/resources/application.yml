@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: portfolio-agent
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
