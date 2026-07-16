@@ -1,8 +1,6 @@
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
-import com.portfolio.agent.portfolio.domain.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.EvidenceType;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -12,25 +10,25 @@ public final class EvidenceResponse {
 
     private final String id;
     private final String title;
-    private final EvidenceType type;
+    private final String type;
     private final LocalDate periodStart;
     private final LocalDate periodEnd;
     private final int sourceCount;
     private final String summary;
     private final List<String> supportedClaims;
-    private final EvidenceStatus publicStatus;
+    private final String publicStatus;
     private final boolean rawContentPublic;
 
     public EvidenceResponse(
             String id,
             String title,
-            EvidenceType type,
+            String type,
             LocalDate periodStart,
             LocalDate periodEnd,
             int sourceCount,
             String summary,
             List<String> supportedClaims,
-            EvidenceStatus publicStatus,
+            String publicStatus,
             boolean rawContentPublic
     ) {
         this.id = id;
@@ -49,13 +47,13 @@ public final class EvidenceResponse {
         return new EvidenceResponse(
                 evidence.getId(),
                 evidence.getTitle(),
-                evidence.getType(),
+                evidence.getType().name(),
                 evidence.getPeriodStart(),
                 evidence.getPeriodEnd(),
                 evidence.getSourceCount(),
                 evidence.getSummary(),
                 evidence.getSupportedClaims(),
-                evidence.getPublicStatus(),
+                evidence.getPublicStatus().name(),
                 evidence.getRawContentPublic()
         );
     }
@@ -68,7 +66,7 @@ public final class EvidenceResponse {
         return title;
     }
 
-    public EvidenceType getType() {
+    public String getType() {
         return type;
     }
 
@@ -92,7 +90,7 @@ public final class EvidenceResponse {
         return supportedClaims;
     }
 
-    public EvidenceStatus getPublicStatus() {
+    public String getPublicStatus() {
         return publicStatus;
     }
 
@@ -112,12 +110,12 @@ public final class EvidenceResponse {
                 && rawContentPublic == that.rawContentPublic
                 && Objects.equals(id, that.id)
                 && Objects.equals(title, that.title)
-                && type == that.type
+                && Objects.equals(type, that.type)
                 && Objects.equals(periodStart, that.periodStart)
                 && Objects.equals(periodEnd, that.periodEnd)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(supportedClaims, that.supportedClaims)
-                && publicStatus == that.publicStatus;
+                && Objects.equals(publicStatus, that.publicStatus);
     }
 
     @Override

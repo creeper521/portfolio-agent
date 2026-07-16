@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.api.dto;
+package com.portfolio.agent.answer.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.api.dto;
+package com.portfolio.agent.answer.dto.response;
 
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 

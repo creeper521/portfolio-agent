@@ -1,11 +1,7 @@
-package com.portfolio.agent.answer.api.dto;
+package com.portfolio.agent.answer.dto.response;
 
-import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerMode;
-import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
-import com.portfolio.agent.portfolio.domain.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.EvidenceType;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,40 +32,6 @@ public final class AnswerResponse {
         this.answer = answer;
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
-    }
-
-    public static AnswerResponse from(String requestId, AnswerResult result) {
-        List<AnswerSectionResponse> sections = result.getSections().stream()
-                .map(section -> new AnswerSectionResponse(section.getType(), section.getContent()))
-                .toList();
-        List<EvidenceResponse> evidence = result.getEvidence().stream()
-                .map(AnswerResponse::toEvidenceResponse)
-                .toList();
-
-        return new AnswerResponse(
-                requestId,
-                result.getAnswerMode(),
-                result.isMatched(),
-                result.isFallback(),
-                new AnswerPayload(result.getTitle(), sections),
-                evidence,
-                result.getSuggestedQuestions()
-        );
-    }
-
-    private static EvidenceResponse toEvidenceResponse(AnswerEvidence evidence) {
-        return new EvidenceResponse(
-                evidence.getId(),
-                evidence.getTitle(),
-                EvidenceType.valueOf(evidence.getType()),
-                evidence.getPeriodStart(),
-                evidence.getPeriodEnd(),
-                evidence.getSourceCount(),
-                evidence.getSummary(),
-                evidence.getSupportedClaims(),
-                EvidenceStatus.valueOf(evidence.getPublicStatus()),
-                evidence.isRawContentPublic()
-        );
     }
 
     public String getRequestId() {
