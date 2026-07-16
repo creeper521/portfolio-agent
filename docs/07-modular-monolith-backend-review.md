@@ -225,6 +225,9 @@ PortfolioKnowledgeGateway
 | `274ae54` | 重排 Answer 核心并隔离确定性引擎 |
 | `c32b29d`、`93d0f5d`、`5c3a255` | 移动 Answer Web 边界、增加 Answer Evidence DTO、收紧 Adapter 例外 |
 | `93f2da7` 至 `5b86d51` | 删除旧包，并加固多行 package/import、静态 import、text block、注释与 Unicode escape 检查；全部依赖规则统一使用完整 normalized statement |
+| `e34df41` | 覆盖代码体全限定引用，强化 Controller/Engine 依赖方向，并将 `QuestionNormalizer` 移入 Engine 边界 |
+| `7c8d904` | 将 Answer Engine 的项目内部依赖改为 `answer.engine / answer.domain` 白名单 |
+| `8a6bdf9` | 使用声明 package 分类依赖规则，并阻断 package 与 Maven 源码目录不一致 |
 
 Task 8 文档建议提交信息：
 
