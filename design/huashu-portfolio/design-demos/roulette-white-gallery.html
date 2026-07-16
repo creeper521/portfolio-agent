@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[ 姓名 ] — 实习数字分身 · 公开 Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&family=Noto+Sans+SC:wght@300;400&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+/* ————————————————————————————————
+   WHITE GALLERY — Kenya Hara × Swiss Grid
+   ———————————————————————————————— */
+:root{
+  --paper:#FAFAFA;
+  --ink:#0A0A0A;
+  --hair:#EFEFEF;
+  --hair-2:#E4E4E4;
+  --mist:#8A8A8A;
+  --mist-2:#B5B5B5;
+  --accent:#5E7472; /* 淡墨青 — 全页唯一点缀 */
+  --mono:'IBM Plex Mono','Inter',monospace;
+  --sans:'Inter','Noto Sans SC',sans-serif;
+  --sc:'Noto Sans SC','Inter',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sc);
+  font-weight:300;
+  font-size:15px;
+  line-height:1.9;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+::selection{background:var(--ink);color:var(--paper);}
+a{color:inherit;text-decoration:none;}
+
+/* —— shared —— */
+.wrap{max-width:1200px;margin:0 auto;padding:0 60px;}
+.hairline{border:none;border-top:1px solid var(--hair);}
+.label{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:400;
+  letter-spacing:.32em;
+  text-transform:uppercase;
+  color:var(--mist);
+}
+.num{
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:300;
+  letter-spacing:.2em;
+  color:var(--mist-2);
+}
+section{position:relative;}
+.section-head{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  gap:40px;
+  padding:96px 0 72px;
+  align-items:baseline;
+}
+.section-head .sec-num{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.3em;
+  color:var(--mist-2);
+}
+.section-head .sec-num::after{
+  content:"";
+  display:inline-block;
+  width:48px;
+  height:1px;
+  background:var(--hair-2);
+  margin-left:20px;
+  vertical-align:middle;
+}
+.section-head h2{
+  font-weight:300;
+  font-size:26px;
+  letter-spacing:.28em;
+}
+.section-head .sec-sub{
+  grid-column:2;
+  margin-top:14px;
+  font-size:12.5px;
+  letter-spacing:.08em;
+  color:var(--mist);
+  max-width:560px;
+}
+
+/* —— header —— */
+header{
+  position:sticky;top:0;z-index:40;
+  background:rgba(250,250,250,.92);
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--hair);
+}
+.nav{
+  display:flex;justify-content:space-between;align-items:center;
+  height:64px;
+}
+.nav .brand{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.34em;
+  text-transform:uppercase;
+}
+.nav .brand span{color:var(--mist-2);}
+.nav ul{display:flex;gap:44px;list-style:none;}
+.nav ul a{
+  font-size:11px;
+  letter-spacing:.22em;
+  color:var(--mist);
+  transition:color .3s;
+}
+.nav ul a:hover{color:var(--ink);}
+
+/* —— hero —— */
+.hero{padding:150px 0 120px;}
+.hero-grid{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  gap:40px;
+}
+.hero-meta{padding-top:14px;}
+.hero-meta .row{margin-bottom:34px;}
+.hero-meta .row .label{display:block;margin-bottom:8px;}
+.hero-meta .row .val{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--ink);
+}
+.hero h1{
+  font-weight:300;
+  font-size:44px;
+  line-height:1.6;
+  letter-spacing:.12em;
+  max-width:860px;
+  white-space:nowrap;
+}
+.hero h1 em{
+  font-style:normal;
+  border-bottom:1px solid var(--ink);
+  padding-bottom:2px;
+}
+.hero .hero-sub{
+  margin-top:44px;
+  font-size:14px;
+  letter-spacing:.1em;
+  color:var(--mist);
+  max-width:600px;
+}
+.hero-links{
+  margin-top:64px;
+  display:flex;
+  gap:0;
+  border-top:1px solid var(--hair);
+  border-bottom:1px solid var(--hair);
+}
+.hero-links a{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  padding:20px 44px 20px 0;
+  margin-right:44px;
+  color:var(--ink);
+  position:relative;
+  transition:color .3s;
+}
+.hero-links a::after{
+  content:"→";
+  margin-left:12px;
+  color:var(--mist-2);
+  transition:transform .3s,color .3s;
+  display:inline-block;
+}
+.hero-links a:hover::after{transform:translateX(6px);color:var(--accent);}
+.hero-note{
+  margin-top:40px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.hero-note .dot{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--accent);
+  flex:none;
+}
+.hero-note p{
+  font-size:11.5px;
+  letter-spacing:.14em;
+  color:var(--mist);
+}
+
+/* —— tracks (三条经历线) —— */
+.tracks{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  border-top:1px solid var(--hair);
+}
+.track{
+  padding:56px 44px 72px 0;
+  border-right:1px solid var(--hair);
+}
+.track:last-child{border-right:none;padding-right:0;}
+.track + .track{padding-left:44px;}
+.track .num{display:block;margin-bottom:28px;}
+.track h3{
+  font-weight:400;
+  font-size:17px;
+  letter-spacing:.22em;
+  margin-bottom:18px;
+}
+.track p{
+  font-size:12.5px;
+  letter-spacing:.06em;
+  color:var(--mist);
+  line-height:2.1;
+}
+
+/* —— works (project gallery) —— */
+.work{
+  display:grid;
+  grid-template-columns:220px 1fr 300px;
+  gap:40px;
+  padding:72px 0;
+  border-top:1px solid var(--hair);
+  transition:background .4s;
+}
+.work:hover{background:#FFFFFF;}
+.work:last-of-type{border-bottom:1px solid var(--hair);}
+.work-left .num{display:block;font-size:24px;letter-spacing:.14em;color:var(--hair-2);font-weight:300;margin-bottom:22px;}
+.work-left .w-date{
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.18em;
+  color:var(--mist);
+  display:block;
+  margin-bottom:6px;
+}
+.work-mid h3{
+  font-weight:400;
+  font-size:21px;
+  letter-spacing:.16em;
+  margin-bottom:22px;
+}
+.work-mid p{
+  font-size:13px;
+  letter-spacing:.05em;
+  color:#4A4A4A;
+  max-width:560px;
+  line-height:2.1;
+}
+.work-mid .tags{
+  margin-top:30px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:0;
+}
+.work-mid .tags span{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+  color:var(--mist);
+  padding-right:18px;
+  margin-right:18px;
+  border-right:1px solid var(--hair-2);
+}
+.work-mid .tags span:last-child{border-right:none;}
+.work-right{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:26px;
+  padding-top:6px;
+}
+.badge{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  padding:8px 16px;
+  border:1px solid var(--ink);
+  color:var(--ink);
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+}
+.badge::before{
+  content:"";
+  width:5px;height:5px;border-radius:50%;
+  background:var(--ink);
+}
+.badge.tested{
+  border-color:var(--hair-2);
+  color:var(--mist);
+}
+.badge.tested::before{background:var(--mist-2);}
+.work-right .evi{
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.18em;
+  color:var(--mist);
+}
+.work-right .evi b{
+  font-weight:400;
+  color:var(--ink);
+  font-size:15px;
+  letter-spacing:.05em;
+  margin-right:6px;
+}
+.work-right .caveat{
+  font-size:11px;
+  letter-spacing:.08em;
+  color:var(--accent);
+  line-height:1.9;
+  border-left:1px solid var(--accent);
+  padding-left:14px;
+}
+
+/* —— status system —— */
+.status-strip{
+  border-top:1px solid var(--hair);
+  border-bottom:1px solid var(--hair);
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+}
+.status-cell{
+  padding:48px 22px 56px;
+  border-right:1px solid var(--hair);
+  position:relative;
+}
+.status-cell:last-child{border-right:none;}
+.status-cell .s-mark{
+  height:34px;
+  display:flex;
+  align-items:center;
+  margin-bottom:26px;
+}
+.status-cell .s-mark svg{display:block;}
+.status-cell .s-key{
+  font-family:var(--mono);
+  font-size:9.5px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:block;
+  margin-bottom:10px;
+  color:var(--ink);
+}
+.status-cell .s-cn{
+  font-size:12px;
+  letter-spacing:.1em;
+  color:var(--ink);
+  display:block;
+  margin-bottom:8px;
+}
+.status-cell .s-desc{
+  font-size:11px;
+  letter-spacing:.04em;
+  color:var(--mist);
+  line-height:1.9;
+}
+.status-cell.dim .s-key,.status-cell.dim .s-cn{color:var(--mist);}
+.status-note{
+  padding:32px 0 0;
+  font-size:12px;
+  letter-spacing:.1em;
+  color:var(--mist);
+}
+.status-note em{font-style:normal;color:var(--ink);border-bottom:1px solid var(--hair-2);}
+
+/* —— timeline —— */
+.timeline{border-top:1px solid var(--hair);}
+.t-row{
+  display:grid;
+  grid-template-columns:220px 200px 1fr;
+  gap:40px;
+  padding:44px 0;
+  border-bottom:1px solid var(--hair);
+  align-items:baseline;
+}
+.t-row .t-date{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.2em;
+  color:var(--ink);
+}
+.t-row .t-types{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+}
+.t-row .t-types span{
+  font-family:var(--mono);
+  font-size:9.5px;
+  letter-spacing:.2em;
+  color:var(--mist);
+  text-transform:uppercase;
+}
+.t-row .t-types span::before{
+  content:"·";
+  margin-right:6px;
+  color:var(--mist-2);
+}
+.t-row .t-body{
+  font-size:13px;
+  letter-spacing:.06em;
+  color:#4A4A4A;
+  max-width:640px;
+}
+.t-row.milestone .t-date{color:var(--accent);}
+.t-row.milestone .t-body{color:var(--ink);}
+.t-legend{
+  padding:28px 0 0;
+  display:flex;
+  gap:32px;
+  flex-wrap:wrap;
+}
+.t-legend span{
+  font-family:var(--mono);
+  font-size:9.5px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--mist);
+}
+.t-legend span::before{content:"·";margin-right:8px;color:var(--mist-2);}
+
+/* —— skills —— */
+.skills{border-top:1px solid var(--hair);}
+.skill-row{
+  display:grid;
+  grid-template-columns:220px 340px 1fr;
+  gap:40px;
+  padding:34px 0;
+  border-bottom:1px solid var(--hair);
+  align-items:baseline;
+}
+.skill-row .s-name{
+  font-size:14px;
+  font-weight:400;
+  letter-spacing:.12em;
+}
+.skill-row .s-basis{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.24em;
+  text-transform:uppercase;
+  color:var(--accent);
+}
+.skill-row .s-detail{
+  font-size:12.5px;
+  letter-spacing:.05em;
+  color:var(--mist);
+}
+.skills-note{
+  padding:28px 0 0;
+  font-size:11.5px;
+  letter-spacing:.1em;
+  color:var(--mist-2);
+}
+
+/* —— diagnose chain —— */
+.chain-wrap{
+  border-top:1px solid var(--hair);
+  border-bottom:1px solid var(--hair);
+  padding:72px 0;
+}
+.chain{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  position:relative;
+}
+.chain::before{
+  content:"";
+  position:absolute;
+  left:0;right:0;top:5px;
+  height:1px;
+  background:var(--hair-2);
+}
+.chain-step{padding-right:26px;position:relative;}
+.chain-step .c-dot{
+  width:11px;height:11px;
+  border-radius:50%;
+  background:var(--paper);
+  border:1px solid var(--ink);
+  position:relative;
+  z-index:1;
+  margin-bottom:26px;
+}
+.chain-step:last-child .c-dot{background:var(--ink);}
+.chain-step .c-num{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.2em;
+  color:var(--mist-2);
+  display:block;
+  margin-bottom:10px;
+}
+.chain-step .c-name{
+  font-size:12px;
+  letter-spacing:.08em;
+  line-height:1.8;
+  color:var(--ink);
+}
+.chain-cap{
+  margin-top:56px;
+  font-size:12px;
+  letter-spacing:.1em;
+  color:var(--mist);
+  max-width:620px;
+}
+
+/* —— agent —— */
+.agent{
+  border-top:1px solid var(--hair);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+}
+.agent-left{
+  padding:80px 60px 96px 0;
+  border-right:1px solid var(--hair);
+}
+.agent-right{padding:80px 0 96px 60px;}
+.agent h3{
+  font-weight:300;
+  font-size:22px;
+  letter-spacing:.22em;
+  margin:22px 0 40px;
+}
+.persona{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  border:1px solid var(--hair-2);
+}
+.persona button{
+  appearance:none;
+  background:transparent;
+  border:none;
+  border-right:1px solid var(--hair-2);
+  border-bottom:1px solid var(--hair-2);
+  padding:22px 18px;
+  font-family:var(--sc);
+  font-weight:300;
+  font-size:12.5px;
+  letter-spacing:.18em;
+  color:var(--mist);
+  cursor:pointer;
+  transition:all .3s;
+  text-align:left;
+  position:relative;
+}
+.persona button:nth-child(2n){border-right:none;}
+.persona button:nth-child(n+3){border-bottom:none;}
+.persona button .p-tag{
+  display:block;
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  color:var(--mist-2);
+  margin-bottom:6px;
+}
+.persona button.active{
+  background:var(--ink);
+  color:var(--paper);
+}
+.persona button.active .p-tag{color:rgba(250,250,250,.5);}
+.persona-hint{
+  margin-top:26px;
+  font-size:11.5px;
+  letter-spacing:.08em;
+  color:var(--mist);
+  min-height:44px;
+}
+.q-list{list-style:none;}
+.q-list li{
+  border-bottom:1px solid var(--hair);
+}
+.q-list li:first-child{border-top:1px solid var(--hair);}
+.q-list button{
+  appearance:none;
+  background:transparent;
+  border:none;
+  width:100%;
+  text-align:left;
+  padding:24px 4px;
+  font-family:var(--sc);
+  font-weight:300;
+  font-size:14px;
+  letter-spacing:.1em;
+  color:var(--ink);
+  cursor:pointer;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:20px;
+  transition:padding-left .3s;
+}
+.q-list button:hover{padding-left:14px;}
+.q-list button .q-i{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.2em;
+  color:var(--mist-2);
+  flex:none;
+}
+.q-list button .arrow{
+  color:var(--mist-2);
+  font-family:var(--mono);
+  transition:color .3s;
+  flex:none;
+}
+.q-list button:hover .arrow{color:var(--accent);}
+.q-list li.asked button{color:var(--mist-2);}
+.q-list li.asked .q-i::after{content:" — 已选";letter-spacing:.1em;}
+.agent-fallback{
+  margin-top:36px;
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--mist-2);
+  line-height:2;
+}
+
+/* —— evidence —— */
+.evi-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0;
+  border-top:1px solid var(--hair);
+  border-bottom:1px solid var(--hair);
+}
+.evi-card{
+  padding:60px 60px 68px 0;
+  border-right:1px solid var(--hair);
+}
+.evi-card:last-child{border-right:none;padding-left:60px;padding-right:0;}
+.evi-card .e-type{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.28em;
+  text-transform:uppercase;
+  color:var(--accent);
+  display:block;
+  margin-bottom:24px;
+}
+.evi-card h4{
+  font-weight:400;
+  font-size:17px;
+  letter-spacing:.12em;
+  margin-bottom:20px;
+}
+.evi-card .e-meta{
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.16em;
+  color:var(--mist);
+  display:block;
+  margin-bottom:22px;
+}
+.evi-card p{
+  font-size:12.5px;
+  letter-spacing:.05em;
+  color:var(--mist);
+  line-height:2.1;
+  max-width:440px;
+}
+.evi-note{
+  padding:30px 0 0;
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--mist);
+}
+
+/* —— footer —— */
+footer{
+  margin-top:140px;
+  border-top:1px solid var(--hair);
+  background:#F6F6F6;
+}
+.foot-grid{
+  display:grid;
+  grid-template-columns:220px 1fr 260px;
+  gap:40px;
+  padding:80px 0 90px;
+}
+.foot-grid h5{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:400;
+  letter-spacing:.3em;
+  text-transform:uppercase;
+  color:var(--mist);
+  margin-bottom:24px;
+}
+.foot-grid p{
+  font-size:12px;
+  letter-spacing:.06em;
+  color:var(--mist);
+  line-height:2.2;
+  max-width:560px;
+}
+.foot-links{list-style:none;}
+.foot-links li{margin-bottom:12px;}
+.foot-links a{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.2em;
+  color:var(--ink);
+}
+.foot-links a:hover{color:var(--accent);}
+.foot-base{
+  border-top:1px solid var(--hair-2);
+  padding:26px 0;
+  display:flex;
+  justify-content:space-between;
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.24em;
+  text-transform:uppercase;
+  color:var(--mist-2);
+}
+
+@media (max-width:1100px){
+  .wrap{padding:0 32px;}
+  .hero h1{font-size:34px;white-space:normal;}
+  .work{grid-template-columns:120px 1fr;}
+  .work-right{grid-column:2;flex-direction:row;flex-wrap:wrap;align-items:center;}
+  .status-strip{grid-template-columns:repeat(4,1fr);}
+  .status-cell:nth-child(4n){border-right:none;}
+  .chain{grid-template-columns:repeat(4,1fr);row-gap:48px;}
+  .agent{grid-template-columns:1fr;}
+  .agent-left{border-right:none;border-bottom:1px solid var(--hair);padding-right:0;}
+  .agent-right{padding-left:0;}
+  .tracks{grid-template-columns:1fr;}
+  .track{border-right:none;border-bottom:1px solid var(--hair);padding-left:0!important;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top">[ 姓名 ]&nbsp;<span>/ PORTFOLIO AGENT</span></a>
+    <ul>
+      <li><a href="#works">项目</a></li>
+      <li><a href="#status">完成状态</a></li>
+      <li><a href="#timeline">时间线</a></li>
+      <li><a href="#skills">能力</a></li>
+      <li><a href="#agent">对话</a></li>
+      <li><a href="#evidence">证据</a></li>
+    </ul>
+  </div>
+</header>
+
+<!-- ———————— 01 HERO ———————— -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-grid">
+      <aside class="hero-meta">
+        <div class="row">
+          <span class="label">Intern Period</span>
+          <span class="val">2026.04 — 2026.07</span>
+        </div>
+        <div class="row">
+          <span class="label">Role</span>
+          <span class="val">Java 游戏服务端实习生</span>
+        </div>
+        <div class="row">
+          <span class="label">Format</span>
+          <span class="val">证据导向 · 可对话</span>
+        </div>
+      </aside>
+      <div>
+        <p class="label" style="margin-bottom:36px;">A Public Portfolio Agent — Facts Before Words</p>
+        <h1>四个月的 Java 游戏服务端实习，<br>不用形容词陈述，<br>用<em>证据</em>陈列。</h1>
+        <p class="hero-sub">每一项成果都附带完成状态与可公开证据；未完成的事，如实标注为未完成。这里没有把计划当成果的空间。</p>
+        <div class="hero-links">
+          <a href="mailto:#">Email</a>
+          <a href="#" onclick="return false;">GitHub</a>
+          <a href="#" onclick="return false;">简历 PDF</a>
+          <a href="#agent">与分身对话</a>
+        </div>
+        <div class="hero-note">
+          <span class="dot"></span>
+          <p>内容来自个人记录并经人工审核，AI 负责查询与表达。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————— 02 三条经历线 ———————— -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">01</span>
+      <h2>三条经历线</h2>
+      <p class="sec-sub">实习期的工作沿三条线索展开——交付、保障、研究。三者的证据强度不同，展示时也不混为一谈。</p>
+    </div>
+    <div class="tracks">
+      <div class="track">
+        <span class="num">LINE — A</span>
+        <h3>工程交付</h3>
+        <p>从需求到验收的完整交付：SQL 审计/排查工具、运营后台多语言传图修复、内部测试工具角色清理、操作日志原型。</p>
+      </div>
+      <div class="track">
+        <span class="num">LINE — B</span>
+        <h3>业务保障</h3>
+        <p>线上问题排查与保障值守。沿八步排查链路定位活动配置、缓存与资源问题，形成可复用的排查方法。</p>
+      </div>
+      <div class="track">
+        <span class="num">LINE — C</span>
+        <h3>技术研究</h3>
+        <p>AI 工程（Spring AI / MCP）、网络同步（KCP / Netty 帧同步）、容器化（Docker / Jenkins / Compose）的学习与实验，标注为研究而非成果。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————— 03 项目展品 ———————— -->
+<section id="works">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">02</span>
+      <h2>核心项目</h2>
+      <p class="sec-sub">四件展品。名称、时间、状态与证据数并列陈列——状态徽章的措辞与事实严格一致。</p>
+    </div>
+
+    <article class="work">
+      <div class="work-left">
+        <span class="num">01</span>
+        <span class="w-date">ITERATION</span>
+        <span class="w-date">2026-05-29 → 06-05</span>
+      </div>
+      <div class="work-mid">
+        <h3>SQL 审计 / 排查工具</h3>
+        <p>远程 SQL 日志查询与异步任务执行，支持 Excel 导出；多目标、多来源的配置化路由；WebSocket 推送 + 轮询兜底的结果通道；查询结果归档复用与软删除。一次从需求、实现到验收、打包的完整迭代。</p>
+        <div class="tags">
+          <span>Java</span><span>Spring Boot</span><span>WebSocket</span><span>MySQL</span>
+        </div>
+      </div>
+      <div class="work-right">
+        <span class="badge">Completed</span>
+        <span class="evi"><b>5</b>份可公开证据</span>
+      </div>
+    </article>
+
+    <article class="work">
+      <div class="work-left">
+        <span class="num">02</span>
+        <span class="w-date">2026-06</span>
+      </div>
+      <div class="work-mid">
+        <h3>运营后台活动模板 · 多语言传图修复</h3>
+        <p>根因定位：历史语言被本次上传覆盖。修复取「数据库历史语言 ∪ 本次真实上传语言」的最小改动方案，不修改前端接口与表结构；完成连续上传不同语言的自测验证。</p>
+        <div class="tags">
+          <span>根因分析</span><span>最小改动</span><span>回归自测</span>
+        </div>
+      </div>
+      <div class="work-right">
+        <span class="badge">Completed</span>
+        <span class="evi"><b>3</b>份可公开证据</span>
+      </div>
+    </article>
+
+    <article class="work">
+      <div class="work-left">
+        <span class="num">03</span>
+        <span class="w-date">2026-06</span>
+      </div>
+      <div class="work-mid">
+        <h3>内部测试工具 · 角色信息清理</h3>
+        <p>按环境查询角色信息，二次确认后执行清除，原账号可重新进入创角流程；以真实账号完成验证，并撰写使用说明交付团队。</p>
+        <div class="tags">
+          <span>工具开发</span><span>二次确认</span><span>使用文档</span>
+        </div>
+      </div>
+      <div class="work-right">
+        <span class="badge">Completed</span>
+        <span class="evi"><b>3</b>份可公开证据</span>
+      </div>
+    </article>
+
+    <article class="work">
+      <div class="work-left">
+        <span class="num">04</span>
+        <span class="w-date">2026-07</span>
+      </div>
+      <div class="work-mid">
+        <h3>运营后台 · 图片上传操作日志原型</h3>
+        <p>包含数据模型设计、异常隔离机制与验收标准设计。已完成实现与自测。</p>
+        <div class="tags">
+          <span>数据模型</span><span>异常隔离</span><span>验收标准</span>
+        </div>
+      </div>
+      <div class="work-right">
+        <span class="badge tested">Implemented · Tested</span>
+        <span class="evi"><b>2</b>份可公开证据</span>
+        <span class="caveat">实现并自测完成，暂未正式提交——不作为已交付成果表述。</span>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ———————— 04 完成状态体系 ———————— -->
+<section id="status">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">03</span>
+      <h2>完成状态体系</h2>
+      <p class="sec-sub">本站的差异化灵魂：七级状态，由实到虚。只有 COMPLETED 附有验收或提交证据；PLANNED 与 UNKNOWN 永不列入成果。</p>
+    </div>
+    <div class="status-strip">
+      <div class="status-cell">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#0A0A0A"/></svg></div>
+        <span class="s-key">Completed</span>
+        <span class="s-cn">完成</span>
+        <span class="s-desc">有验收 / 提交证据</span>
+      </div>
+      <div class="status-cell">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="none" stroke="#0A0A0A" stroke-width="1"/><path d="M11 2.5 A8.5 8.5 0 0 1 11 19.5 Z" fill="#0A0A0A"/></svg></div>
+        <span class="s-key">Implemented Tested</span>
+        <span class="s-cn">实现并自测</span>
+        <span class="s-desc">未确认上线</span>
+      </div>
+      <div class="status-cell">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="none" stroke="#0A0A0A" stroke-width="1"/><circle cx="11" cy="11" r="3" fill="#0A0A0A"/></svg></div>
+        <span class="s-key">Prototype</span>
+        <span class="s-cn">原型</span>
+        <span class="s-desc">可运行的原型验证</span>
+      </div>
+      <div class="status-cell">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="none" stroke="#0A0A0A" stroke-width="1"/></svg></div>
+        <span class="s-key">Designed</span>
+        <span class="s-cn">完成设计</span>
+        <span class="s-desc">方案成形，未实现</span>
+      </div>
+      <div class="status-cell dim">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="none" stroke="#8A8A8A" stroke-width="1" stroke-dasharray="3 3"/></svg></div>
+        <span class="s-key">Learning</span>
+        <span class="s-cn">学习研究</span>
+        <span class="s-desc">投入过学习与实验</span>
+      </div>
+      <div class="status-cell dim">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.5" fill="none" stroke="#B5B5B5" stroke-width="1" stroke-dasharray="1.5 4"/></svg></div>
+        <span class="s-key">Planned</span>
+        <span class="s-cn">计划</span>
+        <span class="s-desc">不列入成果</span>
+      </div>
+      <div class="status-cell dim">
+        <div class="s-mark"><svg width="22" height="22" viewBox="0 0 22 22"><line x1="4" y1="11" x2="18" y2="11" stroke="#B5B5B5" stroke-width="1"/></svg></div>
+        <span class="s-key">Unknown</span>
+        <span class="s-cn">证据不足</span>
+        <span class="s-desc">不作任何陈述</span>
+      </div>
+    </div>
+    <p class="status-note">状态由左向右，证据由实到虚。本页所有陈述均可回溯到对应状态与证据；<em>不把计划当成果</em>。</p>
+  </div>
+</section>
+
+<!-- ———————— 05 成长时间线 ———————— -->
+<section id="timeline">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">04</span>
+      <h2>成长时间线</h2>
+      <p class="sec-sub">2026 年 4 月至 7 月的路径。每段标注事件类型：学习 / 设计 / 实现 / 测试 / 提交 / 复盘。</p>
+    </div>
+    <div class="timeline">
+      <div class="t-row">
+        <span class="t-date">2026 / 04</span>
+        <div class="t-types"><span>学习</span></div>
+        <p class="t-body">入职。活动框架与项目源码学习，建立对服务端架构的整体认知。</p>
+      </div>
+      <div class="t-row">
+        <span class="t-date">2026 / 05</span>
+        <div class="t-types"><span>学习</span><span>设计</span><span>复盘</span></div>
+        <p class="t-body">参与线上问题保障；SQL 工具需求分析与开发启动。</p>
+      </div>
+      <div class="t-row milestone">
+        <span class="t-date">05·29 — 06·05</span>
+        <div class="t-types"><span>设计</span><span>实现</span><span>测试</span><span>提交</span></div>
+        <p class="t-body">SQL 审计/排查工具完整迭代：需求 → 实现 → 验收 → 打包。八天走完一次交付闭环。</p>
+      </div>
+      <div class="t-row">
+        <span class="t-date">2026 / 06</span>
+        <div class="t-types"><span>实现</span><span>测试</span><span>提交</span></div>
+        <p class="t-body">多语言传图问题根因修复；内部测试工具角色清理功能交付并撰写使用说明。</p>
+      </div>
+      <div class="t-row">
+        <span class="t-date">2026 / 07</span>
+        <div class="t-types"><span>实现</span><span>测试</span><span>学习</span></div>
+        <p class="t-body">图片上传操作日志原型（实现并自测，未正式提交）；Spring AI 与容器化研究。</p>
+      </div>
+    </div>
+    <div class="t-legend">
+      <span>学习 Learning</span><span>设计 Design</span><span>实现 Build</span><span>测试 Test</span><span>提交 Ship</span><span>复盘 Retro</span>
+    </div>
+  </div>
+</section>
+
+<!-- ———————— 06 技术能力 ———————— -->
+<section id="skills">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">05</span>
+      <h2>技术能力</h2>
+      <p class="sec-sub">不用进度条与百分比。每项能力只陈述它的证据来源——用于实际任务、独立完成、实战排查，还是学习研究。</p>
+    </div>
+    <div class="skills">
+      <div class="skill-row">
+        <span class="s-name">Java / Spring Boot</span>
+        <span class="s-basis">用于实际任务</span>
+        <span class="s-detail">SQL 工具、修复与清理功能的主要实现语言与框架</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">MySQL / Redis</span>
+        <span class="s-basis">排查实战</span>
+        <span class="s-detail">线上问题保障中的数据与缓存排查</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">WebSocket / SSE</span>
+        <span class="s-basis">独立完成相关功能</span>
+        <span class="s-detail">SQL 工具的结果推送通道，含轮询兜底</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">Spring AI / MCP</span>
+        <span class="s-basis">完成实验</span>
+        <span class="s-detail">AI 工程方向的动手实验</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">KCP / Netty 帧同步</span>
+        <span class="s-basis">学习研究</span>
+        <span class="s-detail">网络同步方向的学习，未用于生产</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">Docker / Jenkins / Compose</span>
+        <span class="s-basis">学习 + 实操</span>
+        <span class="s-detail">容器化与流水线的学习与实际操作</span>
+      </div>
+      <div class="skill-row">
+        <span class="s-name">EventBus / 线程池 / 活动框架</span>
+        <span class="s-basis">源码学习 + 排查实战</span>
+        <span class="s-detail">框架源码阅读，并在排查中实际运用</span>
+      </div>
+    </div>
+    <p class="skills-note">「用于实际任务」与「学习研究」是两种不同强度的陈述，本页不将其混同。</p>
+  </div>
+</section>
+
+<!-- ———————— 07 排查链路 ———————— -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">06</span>
+      <h2>排查链路</h2>
+      <p class="sec-sub">业务保障能力的方法证据：一条从客户端到资源的八步定位路径，来自真实线上问题的复盘沉淀。</p>
+    </div>
+    <div class="chain-wrap">
+      <div class="chain">
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 01</span><span class="c-name">客户端包能力</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 02</span><span class="c-name">活动状态 / 时间 / type</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 03</span><span class="c-name">规则表与多语言配置</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 04</span><span class="c-name">玩家限制与历史状态</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 05</span><span class="c-name">规则表 version 热加载</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 06</span><span class="c-name">Redis 缓存</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 07</span><span class="c-name">服务端包与日志</span></div>
+        <div class="chain-step"><div class="c-dot"></div><span class="c-num">STEP 08</span><span class="c-name">前端 skin 与资源</span></div>
+      </div>
+      <p class="chain-cap">从外到内、从配置到缓存再到资源，逐层收缩问题域——多数活动类线上问题可沿此链路在前六步内定位。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ———————— 08 Agent 对话 ———————— -->
+<section id="agent">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">07</span>
+      <h2>与数字分身对话</h2>
+      <p class="sec-sub">对话是浏览之外的增强入口。选择你的身份，分身将以对应视角组织回答——但事实本身不因视角而改变。</p>
+    </div>
+    <div class="agent">
+      <div class="agent-left">
+        <span class="label">Select Your Role</span>
+        <h3>你是谁？</h3>
+        <div class="persona" id="persona">
+          <button class="active" data-hint="默认视角。回答侧重技术方案、取舍与实现细节，每条结论标注完成状态与证据。">
+            <span class="p-tag">Default</span>技术面试官
+          </button>
+          <button data-hint="回答侧重工作过程、协作方式与成长轨迹，可对照时间线核实。">
+            <span class="p-tag">Mentor</span>实习导师
+          </button>
+          <button data-hint="回答侧重经历概要、时间投入与可验证的交付清单。">
+            <span class="p-tag">HR</span>HR
+          </button>
+          <button data-hint="用更通俗的语言解释这份实习做了什么，不使用内部术语。">
+            <span class="p-tag">Guest</span>访客
+          </button>
+        </div>
+        <p class="persona-hint" id="personaHint">默认视角。回答侧重技术方案、取舍与实现细节，每条结论标注完成状态与证据。</p>
+      </div>
+      <div class="agent-right">
+        <span class="label">Suggested Questions</span>
+        <h3>推荐问题</h3>
+        <ul class="q-list" id="qlist">
+          <li><button><span class="q-i">Q·01</span>介绍 SQL 审计工具的完整迭代<span class="arrow">→</span></button></li>
+          <li><button><span class="q-i">Q·02</span>查询为什么要做成异步？<span class="arrow">→</span></button></li>
+          <li><button><span class="q-i">Q·03</span>多语言传图问题的根因是什么？<span class="arrow">→</span></button></li>
+          <li><button><span class="q-i">Q·04</span>哪些是完成交付，哪些只是学习？<span class="arrow">→</span></button></li>
+        </ul>
+        <p class="agent-fallback">生成模型不可用时，仍由结构化事实与 FAQ 提供完整回答（稳定模式）。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ———————— 09 证据卡 ———————— -->
+<section id="evidence">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="sec-num">08</span>
+      <h2>证据样本</h2>
+      <p class="sec-sub">回答可追溯：每条成果背后是这样的证据条目——标题、日期、类型、关联项目与脱敏摘要。</p>
+    </div>
+    <div class="evi-grid">
+      <div class="evi-card">
+        <span class="e-type">验收文档</span>
+        <h4>SQL 工具验收文档</h4>
+        <span class="e-meta">2026-06-05 · 关联：SQL 审计/排查工具</span>
+        <p>记录功能验收范围与结论：远程查询、异步任务、Excel 导出、多目标路由与结果归档的逐项验收。内部数据源与库表名已脱敏。</p>
+      </div>
+      <div class="evi-card">
+        <span class="e-type">自测记录</span>
+        <h4>多语言连续上传自测记录</h4>
+        <span class="e-meta">2026-06 · 关联：多语言传图修复</span>
+        <p>连续上传不同语言图片的自测过程与结果，验证「历史语言 ∪ 本次上传语言」合并策略在覆盖场景下的正确性。</p>
+      </div>
+    </div>
+    <p class="evi-note">共 13 份可公开证据，按项目归档。对话中的每条事实性回答均可展开其证据来源。</p>
+  </div>
+</section>
+
+<!-- ———————— FOOTER ———————— -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <h5>Colophon</h5>
+        <p>[ 姓名 ]<br>Java 游戏服务端实习生<br>2026.04 — 2026.07</p>
+      </div>
+      <div>
+        <h5>数据来源与隐私</h5>
+        <p>本站公开内容来自个人工作记录，经人工审核与脱敏处理，不含内部服务器地址、账号信息与未公开业务信息；涉及的业务与内部系统均使用公开化名。AI 仅负责查询与表达，事实由结构化记录与人工审核保证。</p>
+      </div>
+      <div>
+        <h5>Contact</h5>
+        <ul class="foot-links">
+          <li><a href="mailto:#">Email →</a></li>
+          <li><a href="#" onclick="return false;">GitHub →</a></li>
+          <li><a href="#" onclick="return false;">Resume PDF →</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>Facts Before Words</span>
+      <span>© 2026 · Portfolio Agent</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// 身份切换
+(function(){
+  var wrap=document.getElementById('persona');
+  var hint=document.getElementById('personaHint');
+  wrap.addEventListener('click',function(e){
+    var btn=e.target.closest('button');
+    if(!btn)return;
+    wrap.querySelectorAll('button').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    hint.textContent=btn.dataset.hint;
+  });
+})();
+// 推荐问题点击反馈
+(function(){
+  var list=document.getElementById('qlist');
+  list.addEventListener('click',function(e){
+    var btn=e.target.closest('button');
+    if(!btn)return;
+    var li=btn.parentElement;
+    li.classList.add('asked');
+    setTimeout(function(){li.classList.remove('asked');},1600);
+  });
+})();
+</script>
+</body>
+</html>

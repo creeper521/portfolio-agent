@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>[ 姓名 ] · 实习数字分身 Portfolio Agent</title>
+<!--
+=====================================================================
+参照标杆：Brittany Chiang 开发者作品集 (brittanychiang.com / v4)
+—— 事实上的开发者作品集黄金标准，多次登上 Awwwards 与 CSS Design Awards，
+   在 GitHub 上被 fork 过数万次，是全球程序员作品集的公认起点。
+   之所以选它：本产品是「证据导向、面向技术面试官、克制而专业」的开发者作品集，
+   与 Brittany 的产品定位与情感基调最为契合——她本人也是工程师做的自述作品集，
+   不是设计师用视觉噱头堆出来的。
+
+迁移的设计语言（迁移语言，不复刻内容）：
+1) 深墨蓝背景 (#0a192f) + 石板灰主文本 (#8892b0) + 亮灰标题 (#ccd6f6) +
+   青蓝强调色 (#64ffda)。放弃紫色渐变与霓虹光晕。
+2) 字体：主文本使用 Inter（她原版用 Calibre，Inter 是最接近的开源替代品），
+   等宽/数字/编号使用 JetBrains Mono；节标题用「00. 前缀 + 长横线」格式。
+3) 左固定竖排 email、右固定社交入口、hero 使用四段错位排版
+   （小前缀 / 大姓名 / 大定位 / 段落说明 / 按钮）。
+4) 项目卡采用左右交替的 Featured 布局，项目编号使用等宽字体。
+5) 技术标签为 "> stack" 风格的极简 chip。
+
+反 AI slop 检查：
+- 无紫色渐变、无 emoji 图标、无左彩边圆角卡片、无 SVG 人像、无编造数据、
+  无通用「深蓝底 + 通用霓虹 glow 卡片」——所有 glow 都严格限定在 hover
+  情境下且颜色单一 (#64ffda) 与参照案例一致。
+=====================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- reset & tokens ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+:root {
+  --navy: #0a192f;
+  --navy-light: #112240;
+  --navy-lightest: #233554;
+  --slate: #8892b0;
+  --slate-light: #a8b2d1;
+  --slate-lightest: #ccd6f6;
+  --white: #e6f1ff;
+  --accent: #64ffda;
+  --accent-tint: rgba(100,255,218,.10);
+  --accent-tint-2: rgba(100,255,218,.04);
+  --danger: #ff8b7b;
+  --warn: #ffd166;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --font-serif: 'Noto Serif SC', 'Songti SC', serif;
+  --fs-h1: 68px;
+  --fs-h2: 32px;
+  --shadow: 0 10px 30px -15px rgba(2,12,27,.7);
+  --shadow-hover: 0 20px 30px -15px rgba(2,12,27,.7);
+  --ease: cubic-bezier(.645,.045,.355,1);
+}
+body {
+  background: var(--navy);
+  color: var(--slate);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  counter-reset: section;
+}
+a { color: var(--accent); text-decoration: none; }
+h1,h2,h3,h4 { color: var(--slate-lightest); font-weight: 600; margin: 0; }
+
+/* ---------- layout shell ---------- */
+.shell { max-width: 1200px; margin: 0 auto; padding: 0 100px; }
+
+/* ---------- fixed rails (左邮箱 / 右社交) ---------- */
+.rail-left, .rail-right {
+  position: fixed; bottom: 0; z-index: 10; color: var(--slate-light);
+  display: flex; flex-direction: column; align-items: center;
+}
+.rail-left { left: 40px; }
+.rail-right { right: 40px; }
+.rail-left::after, .rail-right::after {
+  content: ""; display: block; width: 1px; height: 90px;
+  background: var(--slate-light); margin-top: 20px;
+}
+.rail-right .mail {
+  writing-mode: vertical-rl; letter-spacing: 0.15em;
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--slate-light); padding: 20px 0; transition: .2s var(--ease);
+}
+.rail-right .mail:hover { color: var(--accent); transform: translateY(-3px); }
+.rail-left ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.rail-left a { color: var(--slate-light); display: inline-flex; transition: .2s var(--ease); }
+.rail-left a:hover { color: var(--accent); transform: translateY(-3px); }
+.rail-left svg { width: 20px; height: 20px; }
+
+/* ---------- top nav ---------- */
+nav.top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 50px; backdrop-filter: blur(10px);
+  background: rgba(10,25,47,.85);
+  border-bottom: 1px solid transparent;
+}
+nav.top .logo {
+  width: 42px; height: 42px; border: 1.5px solid var(--accent);
+  color: var(--accent); font-family: var(--font-mono); font-weight: 600;
+  display: grid; place-items: center; font-size: 14px;
+  transition: .2s var(--ease);
+}
+nav.top .logo:hover { background: var(--accent-tint); }
+nav.top ol {
+  display: flex; gap: 32px; list-style: none; margin: 0; padding: 0;
+  font-family: var(--font-mono); font-size: 13px; color: var(--slate-lightest);
+  counter-reset: nav;
+}
+nav.top ol li { counter-increment: nav; }
+nav.top ol li a::before { content: "0" counter(nav) ". "; color: var(--accent); }
+nav.top ol li a { color: var(--slate-lightest); }
+nav.top ol li a:hover { color: var(--accent); }
+nav.top .cta {
+  border: 1px solid var(--accent); color: var(--accent);
+  padding: 10px 18px; margin-left: 32px;
+  font-family: var(--font-mono); font-size: 13px;
+}
+nav.top .cta:hover { background: var(--accent-tint); }
+
+/* ---------- section frame ---------- */
+section { padding: 100px 0; }
+.section-title {
+  display: flex; align-items: center; gap: 18px;
+  font-size: var(--fs-h2); color: var(--slate-lightest);
+  margin: 0 0 40px; white-space: nowrap;
+  counter-increment: section;
+}
+.section-title::before {
+  content: "0" counter(section) ".";
+  color: var(--accent); font-family: var(--font-mono);
+  font-size: 22px; font-weight: 500;
+}
+.section-title::after {
+  content: ""; display: block; height: 1px; width: 300px;
+  background: var(--navy-lightest); margin-left: 12px;
+}
+
+/* ---------- HERO ---------- */
+.hero {
+  min-height: calc(100vh - 80px); display: flex; flex-direction: column;
+  justify-content: center; padding: 100px 0 60px;
+}
+.hero .pretitle {
+  color: var(--accent); font-family: var(--font-mono); font-size: 15px;
+  margin-bottom: 22px; letter-spacing: .02em;
+}
+.hero h1 {
+  font-size: var(--fs-h1); line-height: 1.05; font-weight: 700;
+  color: var(--slate-lightest); margin-bottom: 8px; letter-spacing: -0.02em;
+}
+.hero h2 {
+  font-size: 58px; line-height: 1.05; font-weight: 700;
+  color: var(--slate); margin: 0 0 26px; letter-spacing: -0.02em;
+}
+.hero p.lead {
+  max-width: 620px; font-size: 17px; line-height: 1.7;
+  color: var(--slate); margin: 0 0 30px;
+}
+.hero .meta {
+  display: flex; gap: 28px; margin-bottom: 44px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--slate-light);
+}
+.hero .meta span::before { content: "▸ "; color: var(--accent); }
+.hero .disclosure {
+  border-left: 2px solid var(--accent); padding: 10px 0 10px 18px;
+  color: var(--slate-light); font-size: 13px; max-width: 540px; margin-bottom: 40px;
+  font-family: var(--font-mono); line-height: 1.6;
+}
+.hero .actions { display: flex; gap: 16px; }
+.btn {
+  font-family: var(--font-mono); font-size: 14px;
+  border: 1px solid var(--accent); color: var(--accent);
+  padding: 16px 26px; background: transparent; cursor: pointer;
+  transition: .2s var(--ease);
+}
+.btn:hover { background: var(--accent-tint); transform: translateY(-2px); }
+.btn.ghost { border-color: var(--slate-light); color: var(--slate-light); }
+.btn.ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); }
+
+/* ---------- ABOUT / three tracks ---------- */
+.about-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 50px; }
+.about-grid p { color: var(--slate); font-size: 15px; line-height: 1.75; }
+.about-grid p + p { margin-top: 14px; }
+.about-grid .highlight { color: var(--slate-lightest); }
+.tracks {
+  display: flex; flex-direction: column; gap: 14px;
+  font-family: var(--font-mono); font-size: 13px;
+}
+.track {
+  border: 1px solid var(--navy-lightest); background: var(--navy-light);
+  padding: 18px 20px; transition: .2s var(--ease);
+}
+.track:hover { border-color: var(--accent); transform: translateY(-2px); }
+.track .tag { color: var(--accent); font-size: 12px; letter-spacing: .08em; }
+.track h4 { margin: 6px 0 6px; color: var(--slate-lightest); font-size: 15px; }
+.track p { margin: 0; color: var(--slate-light); font-family: var(--font-sans); font-size: 13px; line-height: 1.6; }
+
+/* ---------- EXPERIENCE tabs (Brittany's signature) ---------- */
+.exp {
+  display: grid; grid-template-columns: 200px 1fr; gap: 20px; min-height: 340px;
+}
+.tabs { display: flex; flex-direction: column; border-left: 2px solid var(--navy-lightest); }
+.tab {
+  background: none; border: 0; color: var(--slate); text-align: left;
+  padding: 14px 20px; cursor: pointer; font-family: var(--font-mono);
+  font-size: 13px; letter-spacing: .04em; transition: .15s var(--ease);
+  border-left: 2px solid transparent; margin-left: -2px;
+}
+.tab:hover { background: var(--accent-tint-2); color: var(--accent); }
+.tab.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-tint-2); }
+.tab-body h3 { font-size: 22px; color: var(--slate-lightest); font-weight: 500; }
+.tab-body h3 span { color: var(--accent); }
+.tab-body .when { font-family: var(--font-mono); font-size: 13px; color: var(--slate-light); margin: 4px 0 16px; }
+.tab-body ul { padding-left: 22px; margin: 0; }
+.tab-body li { color: var(--slate); padding: 4px 0; position: relative; }
+.tab-body li::marker { color: var(--accent); }
+
+/* ---------- STATUS SYSTEM (the soul) ---------- */
+.status-wrap { border: 1px solid var(--navy-lightest); background: var(--navy-light); padding: 32px; }
+.status-lead {
+  font-family: var(--font-mono); color: var(--slate-light); font-size: 13px;
+  margin: 0 0 24px; border-left: 2px solid var(--accent); padding-left: 14px;
+}
+.status-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 0;
+  border-top: 1px solid var(--navy-lightest); border-left: 1px solid var(--navy-lightest);
+}
+.status-cell {
+  border-right: 1px solid var(--navy-lightest);
+  border-bottom: 1px solid var(--navy-lightest);
+  padding: 18px 16px; position: relative;
+}
+.status-cell .code {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: .05em;
+  color: var(--slate-light); margin-bottom: 12px;
+}
+.status-cell .dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 8px; vertical-align: middle;
+}
+.status-cell .name { color: var(--slate-lightest); font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.status-cell .desc { color: var(--slate); font-size: 12px; line-height: 1.55; }
+.status-cell .count {
+  position: absolute; top: 16px; right: 16px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--slate-light);
+}
+
+/* Dot color mapping */
+.dot.completed { background: var(--accent); box-shadow: 0 0 8px rgba(100,255,218,.5); }
+.dot.tested   { background: #7fd8ff; }
+.dot.prototype { background: var(--warn); }
+.dot.designed  { background: #b18cff; }
+.dot.learning  { background: var(--slate-light); }
+.dot.planned   { background: transparent; border: 1px dashed var(--slate); }
+.dot.unknown   { background: transparent; border: 1px solid var(--slate); }
+
+/* ---------- PROJECTS (Featured grid) ---------- */
+.project {
+  display: grid; grid-template-columns: repeat(12, 1fr); position: relative;
+  margin-bottom: 100px; align-items: center;
+}
+.project:last-child { margin-bottom: 0; }
+.project .visual {
+  grid-column: 1 / span 7; grid-row: 1;
+  background: var(--navy-light); border: 1px solid var(--navy-lightest);
+  padding: 28px; min-height: 320px; position: relative; overflow: hidden;
+  transition: .25s var(--ease);
+}
+.project:nth-child(even) .visual { grid-column: 6 / span 7; }
+.project:nth-child(even) .content { grid-column: 1 / span 6; text-align: right; }
+.project:nth-child(even) .tags { justify-content: flex-end; }
+.project:nth-child(even) .links { justify-content: flex-end; }
+.project .content { grid-column: 6 / span 7; grid-row: 1; position: relative; z-index: 2; }
+.project .content .over {
+  font-family: var(--font-mono); color: var(--accent); font-size: 13px;
+  margin-bottom: 10px;
+}
+.project h3.p-title {
+  font-size: 26px; color: var(--slate-lightest); margin-bottom: 20px;
+  letter-spacing: -0.01em;
+}
+.project h3.p-title:hover { color: var(--accent); }
+.project .desc {
+  background: var(--navy-light); border: 1px solid var(--navy-lightest);
+  padding: 22px 24px; color: var(--slate-light); font-size: 14px; line-height: 1.65;
+  box-shadow: var(--shadow); margin-bottom: 18px;
+}
+.project .tags {
+  display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--font-mono);
+  font-size: 12px; color: var(--slate-light); margin-bottom: 14px;
+}
+.project .tags span::before { content: "› "; color: var(--accent); }
+.project .links { display: flex; gap: 16px; align-items: center; }
+.project .links a { color: var(--slate-lightest); }
+.project .links a:hover { color: var(--accent); }
+.project .badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+  padding: 5px 10px; color: var(--slate-lightest);
+  border: 1px solid var(--navy-lightest); background: var(--navy);
+  margin-bottom: 14px;
+}
+
+/* -------- visual mock inside project card -------- */
+.mock-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 18px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--slate-light);
+}
+.mock-head .dots { display: flex; gap: 6px; }
+.mock-head .dots i {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--navy-lightest);
+}
+.project .visual .mock-head,
+.project .visual .mock-body { width: 65%; }
+.project:nth-child(even) .visual .mock-head,
+.project:nth-child(even) .visual .mock-body { margin-left: auto; }
+.mock-body { font-family: var(--font-mono); font-size: 12px; line-height: 1.9; color: var(--slate-light); }
+.mock-body .k { color: var(--accent); }
+.mock-body .s { color: var(--slate); }
+.mock-body .c { color: var(--slate-lightest); }
+
+/* ---------- TIMELINE ---------- */
+.timeline {
+  position: relative; padding-left: 30px;
+}
+.timeline::before {
+  content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px;
+  width: 1px; background: var(--navy-lightest);
+}
+.tl-row {
+  display: grid; grid-template-columns: 130px 90px 1fr; gap: 20px;
+  align-items: flex-start; padding: 14px 0; position: relative;
+  border-bottom: 1px dashed var(--navy-lightest);
+}
+.tl-row::before {
+  content: ""; position: absolute; left: -30px; top: 22px;
+  width: 12px; height: 12px; border: 2px solid var(--accent);
+  background: var(--navy); border-radius: 50%;
+}
+.tl-date { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+.tl-type {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
+  padding: 3px 8px; border: 1px solid var(--navy-lightest); color: var(--slate-light);
+  height: fit-content; display: inline-block;
+}
+.tl-type.impl { color: var(--accent); border-color: rgba(100,255,218,.4); }
+.tl-type.test { color: #7fd8ff; border-color: rgba(127,216,255,.4); }
+.tl-type.ship { color: var(--accent); border-color: rgba(100,255,218,.4); }
+.tl-type.learn { color: var(--slate-light); }
+.tl-type.retro { color: var(--warn); border-color: rgba(255,209,102,.4); }
+.tl-type.design { color: #b18cff; border-color: rgba(177,140,255,.4); }
+.tl-text { color: var(--slate); font-size: 14px; }
+.tl-text b { color: var(--slate-lightest); font-weight: 500; }
+
+/* ---------- STACK ---------- */
+.stack-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 30px; }
+.stack-item {
+  border: 1px solid var(--navy-lightest); background: var(--navy-light);
+  padding: 16px 18px; font-family: var(--font-mono); font-size: 13px;
+  color: var(--slate-lightest); display: flex; justify-content: space-between; align-items: center;
+  transition: .2s var(--ease);
+}
+.stack-item:hover { border-color: var(--accent); transform: translateY(-2px); }
+.stack-item .use {
+  color: var(--accent); font-size: 11px; letter-spacing: .08em;
+}
+.stack-item .use.learn { color: var(--slate-light); }
+.stack-item .use.exp { color: #7fd8ff; }
+
+/* ---------- DEBUG CHAIN ---------- */
+.chain {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  border: 1px solid var(--navy-lightest); background: var(--navy-light);
+}
+.chain-node {
+  padding: 20px 18px; border-right: 1px solid var(--navy-lightest);
+  border-bottom: 1px solid var(--navy-lightest);
+  position: relative; min-height: 110px;
+}
+.chain-node:nth-child(4n) { border-right: none; }
+.chain-node:nth-child(n+5) { border-bottom: none; }
+.chain-node .step {
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent);
+  letter-spacing: .1em; margin-bottom: 6px;
+}
+.chain-node .title { color: var(--slate-lightest); font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.chain-node .hint { color: var(--slate); font-size: 12px; line-height: 1.55; }
+.chain-node::after {
+  content: "→"; position: absolute; right: -8px; top: 50%;
+  transform: translateY(-50%); color: var(--accent);
+  font-family: var(--font-mono); font-size: 14px;
+  background: var(--navy); padding: 2px 4px; z-index: 2;
+}
+.chain-node:nth-child(4n)::after, .chain-node:last-child::after { display: none; }
+
+/* ---------- AGENT DIALOG ---------- */
+.agent {
+  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: flex-start;
+}
+.agent-panel {
+  border: 1px solid var(--navy-lightest); background: var(--navy-light);
+  padding: 28px;
+}
+.agent-panel h4 {
+  color: var(--slate-lightest); font-size: 15px; margin: 0 0 14px;
+  font-family: var(--font-mono); font-weight: 500;
+}
+.persona {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px;
+}
+.persona label {
+  cursor: pointer;
+}
+.persona input { display: none; }
+.persona span {
+  display: inline-block; padding: 8px 14px; border: 1px solid var(--navy-lightest);
+  font-family: var(--font-mono); font-size: 12px; color: var(--slate-light);
+  transition: .15s var(--ease);
+}
+.persona input:checked + span {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-tint);
+}
+.qbtn {
+  display: block; width: 100%; text-align: left; background: transparent;
+  border: 1px solid var(--navy-lightest); color: var(--slate-light);
+  padding: 14px 16px; font-family: var(--font-sans); font-size: 13.5px;
+  cursor: pointer; transition: .2s var(--ease); margin-bottom: 10px;
+}
+.qbtn:hover { border-color: var(--accent); color: var(--accent); transform: translateX(4px); }
+.qbtn::before { content: "> "; color: var(--accent); font-family: var(--font-mono); }
+.agent-note {
+  font-size: 12px; color: var(--slate); margin-top: 12px;
+  padding-top: 14px; border-top: 1px dashed var(--navy-lightest);
+  font-family: var(--font-mono);
+}
+.agent-preview {
+  border: 1px solid var(--navy-lightest); background: var(--navy);
+  padding: 22px; font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--slate-light); line-height: 1.75;
+}
+.agent-preview .row { padding: 3px 0; }
+.agent-preview .prompt { color: var(--accent); }
+.agent-preview .cursor {
+  display: inline-block; width: 8px; height: 14px; background: var(--accent);
+  vertical-align: middle; animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- EVIDENCE ---------- */
+.evi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.evi {
+  border: 1px solid var(--navy-lightest); background: var(--navy-light);
+  padding: 22px 24px;
+  transition: .2s var(--ease);
+}
+.evi:hover { border-color: var(--accent); transform: translateY(-2px); }
+.evi .kind {
+  display: inline-block; font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .1em; color: var(--accent); border: 1px solid rgba(100,255,218,.4);
+  padding: 2px 8px; margin-bottom: 12px;
+}
+.evi h4 { color: var(--slate-lightest); font-size: 16px; margin: 0 0 6px; }
+.evi .meta {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--slate-light);
+  margin-bottom: 12px;
+}
+.evi .meta span + span::before { content: " · "; }
+.evi .body { color: var(--slate); font-size: 13.5px; line-height: 1.65; }
+
+/* ---------- FOOTER ---------- */
+footer {
+  padding: 60px 100px 40px; text-align: center;
+  border-top: 1px solid var(--navy-lightest);
+  font-family: var(--font-mono); font-size: 12px; color: var(--slate-light);
+  line-height: 1.8;
+}
+footer .disclosure {
+  max-width: 700px; margin: 0 auto 18px;
+}
+footer .signature { color: var(--accent); }
+
+/* subtle intro on scroll */
+.reveal { opacity: 0; transform: translateY(20px); transition: 0.6s var(--ease); }
+.reveal.on { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<!-- LEFT / RIGHT FIXED RAILS -->
+<div class="rail-left" aria-hidden="true">
+  <ul>
+    <li><a href="#" title="GitHub" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 6.77 5.07 5.07 0 0 0 19.91 3S18.73 2.65 16 4.55a13.38 13.38 0 0 0-7 0C6.27 2.65 5.09 3 5.09 3A5.07 5.07 0 0 0 5 6.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 20.13V24"/></svg></a></li>
+    <li><a href="#" title="LinkedIn" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a></li>
+    <li><a href="#" title="Blog" aria-label="Blog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg></a></li>
+    <li><a href="#" title="Resume PDF" aria-label="Resume PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg></a></li>
+  </ul>
+</div>
+<div class="rail-right" aria-hidden="true">
+  <a class="mail" href="mailto:hello@example.com">hello@example.com</a>
+</div>
+
+<!-- TOP NAV -->
+<nav class="top">
+  <a href="#" class="logo">HS</a>
+  <div>
+    <ol>
+      <li><a href="#about">关于</a></li>
+      <li><a href="#experience">经历</a></li>
+      <li><a href="#work">项目</a></li>
+      <li><a href="#timeline">时间线</a></li>
+      <li><a href="#agent">对话</a></li>
+    </ol>
+    <!-- inline nav trick -->
+  </div>
+  <a href="#" class="cta">Resume</a>
+</nav>
+
+<main class="shell">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="hero">
+    <div class="pretitle">你好，我是</div>
+    <h1>[ 姓名 ]。</h1>
+    <h2>用证据讲述四个月<br/>Java 游戏服务端实习。</h2>
+    <p class="lead">
+      我是一名 Java 游戏服务端方向的实习生。<span class="highlight">这个网站不是聊天 Demo，是一份可浏览、可信、证据导向的作品集</span>——每一条"完成"都附带交付状态与来源，每一件"在做"都不冒充"做完"。对话是入口，事实是主体。
+    </p>
+    <div class="meta">
+      <span>实习期 2026.04 – 2026.07</span>
+      <span>Java · Spring Boot · MySQL · Redis</span>
+      <span>面向面试官（默认）· 导师 · HR · 访客</span>
+    </div>
+    <div class="disclosure">
+      // disclosure<br/>
+      内容来自个人记录并经人工审核，AI 负责查询与表达，不修改事实。
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="document.getElementById('agent').scrollIntoView({behavior:'smooth'})">与我的分身对话 →</button>
+      <button class="btn ghost" onclick="document.getElementById('work').scrollIntoView({behavior:'smooth'})">直接看项目证据</button>
+    </div>
+  </section>
+
+  <!-- ============ ABOUT ============ -->
+  <section id="about">
+    <h2 class="section-title">关于这份作品集</h2>
+    <div class="about-grid">
+      <div>
+        <p>
+          你好。这是一个<span class="highlight">面向技术面试官</span>的"实习数字分身"。它把我在 2026 年 4 月至 7 月于游戏服务端团队的四个月实习经历，整理为可核对的三条主线：<span class="highlight">工程交付</span>、<span class="highlight">业务保障</span>、<span class="highlight">技术研究</span>。
+        </p>
+        <p>
+          与常见的"简历式"作品集不同，这里的每一件事都附带 <b class="highlight">完成状态徽章</b>——从 <code style="font-family:var(--font-mono);color:var(--accent)">COMPLETED</code> 到 <code style="font-family:var(--font-mono);color:var(--slate-light)">PLANNED</code> 共 7 档。<span class="highlight">"计划"永远不会被写成"成果"</span>，"实现并自测但未上线"也会如实标注。这条产品灵魂比任何视觉设计都重要。
+        </p>
+        <p>
+          你既可以像浏览传统作品集一样从上到下阅读，也可以在最下方 <a href="#agent">Agent 对话入口</a> 用自然语言追问细节——底层生成模型不可用时，仍由结构化事实与 FAQ 兜底。
+        </p>
+      </div>
+      <div class="tracks">
+        <div class="track">
+          <div class="tag">TRACK / 01</div>
+          <h4>工程交付</h4>
+          <p>SQL 审计工具、多语言修复、内部工具——从需求到验收的完整闭环。</p>
+        </div>
+        <div class="track">
+          <div class="tag">TRACK / 02</div>
+          <h4>业务保障</h4>
+          <p>线上问题排查：从客户端包能力到 Redis 缓存热加载的 8 步排查链路。</p>
+        </div>
+        <div class="track">
+          <div class="tag">TRACK / 03</div>
+          <h4>技术研究</h4>
+          <p>Spring AI / MCP、KCP 帧同步、Docker & Jenkins 学习与实验。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXPERIENCE TABS ============ -->
+  <section id="experience">
+    <h2 class="section-title">四个月经历</h2>
+    <div class="exp">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-i="0" role="tab">工程交付</button>
+        <button class="tab" data-i="1" role="tab">业务保障</button>
+        <button class="tab" data-i="2" role="tab">技术研究</button>
+      </div>
+      <div class="tab-body">
+        <div class="pane" data-i="0">
+          <h3>需求 → 实现 → 验收 <span>@ 游戏服务端团队</span></h3>
+          <div class="when">2026 年 04 月 — 2026 年 07 月</div>
+          <ul>
+            <li>独立完成 SQL 审计/排查工具的全流程：远程 SQL 日志查询、异步任务、Excel 导出、多目标多来源配置路由、WebSocket + 轮询兜底、结果归档复用与软删除。</li>
+            <li>修复运营后台活动模板多语言传图问题：定位根因（历史语言被覆盖），以最小改动收敛（不修改前端接口与表结构）。</li>
+            <li>实现内部测试工具"角色信息清理"：按环境查询、二次确认、原账号重新创角流程，配套使用说明。</li>
+            <li>设计并实现运营后台图片上传操作日志原型，含数据模型、异常隔离与验收标准（<b>暂未正式提交</b>，如实标注）。</li>
+          </ul>
+        </div>
+        <div class="pane" data-i="1" hidden>
+          <h3>线上问题排查 <span>@ 活动业务保障</span></h3>
+          <div class="when">2026 年 04 月起，贯穿实习期</div>
+          <ul>
+            <li>掌握并沉淀 8 步排查链路：客户端包能力 → 活动状态 → 规则表与多语言 → 玩家限制 → 规则表版本热加载 → Redis 缓存 → 服务端包与日志 → 前端 skin。</li>
+            <li>MySQL / Redis 排查实战；EventBus / 线程池 / 活动框架源码学习并应用于问题定位。</li>
+            <li>形成"最小可复现 → 根因 → 最小改动"的问题闭环记录习惯。</li>
+          </ul>
+        </div>
+        <div class="pane" data-i="2" hidden>
+          <h3>技术研究与实验 <span>@ 自主学习</span></h3>
+          <div class="when">2026 年 07 月为主</div>
+          <ul>
+            <li>Spring AI 与 MCP：完成本地实验，理解工具调用与上下文注入的工程边界。</li>
+            <li>KCP / Netty 帧同步：学习网络同步与丢包重传，未落地为线上功能，如实标记为 LEARNING。</li>
+            <li>Docker / Jenkins / Compose：本地环境实操，理解 CI 与镜像构建的关键步骤。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATUS SYSTEM ============ -->
+  <section id="status">
+    <h2 class="section-title">完成状态体系</h2>
+    <div class="status-wrap">
+      <p class="status-lead">
+        // 产品灵魂 · 事实优先于语言表现<br/>
+        每一件事按最保守可核对状态展示；下面 7 档徽章贯穿全站所有项目、时间线与证据卡。
+      </p>
+      <div class="status-grid">
+        <div class="status-cell">
+          <div class="code"><span class="dot completed"></span>STATE 01</div>
+          <div class="name">COMPLETED</div>
+          <div class="desc">已完成，有验收 / 提交证据。</div>
+          <div class="count">3</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot tested"></span>STATE 02</div>
+          <div class="name">IMPLEMENTED_TESTED</div>
+          <div class="desc">已实现并自测，未确认上线。</div>
+          <div class="count">1</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot prototype"></span>STATE 03</div>
+          <div class="name">PROTOTYPE</div>
+          <div class="desc">已跑通的原型，未进入验收。</div>
+          <div class="count">—</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot designed"></span>STATE 04</div>
+          <div class="name">DESIGNED</div>
+          <div class="desc">完成设计，未开始实现。</div>
+          <div class="count">—</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot learning"></span>STATE 05</div>
+          <div class="name">LEARNING</div>
+          <div class="desc">学习研究，不作为交付成果。</div>
+          <div class="count">3</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot planned"></span>STATE 06</div>
+          <div class="name">PLANNED</div>
+          <div class="desc">仅计划，不列入成果。</div>
+          <div class="count">—</div>
+        </div>
+        <div class="status-cell">
+          <div class="code"><span class="dot unknown"></span>STATE 07</div>
+          <div class="name">UNKNOWN</div>
+          <div class="desc">证据不足，暂不表述。</div>
+          <div class="count">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROJECTS ============ -->
+  <section id="work">
+    <h2 class="section-title">四个核心项目</h2>
+
+    <!-- Project 1 -->
+    <article class="project">
+      <div class="visual">
+        <div class="mock-head">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span>sql-audit / task/#TASK-4231 · runner</span>
+        </div>
+        <div class="mock-body">
+          <div><span class="k">POST</span> <span class="c">/api/audit/query</span></div>
+          <div><span class="s">→ enqueue async task</span></div>
+          <div><span class="k">ws://</span> <span class="c">/ws/task/subscribe</span></div>
+          <div><span class="s">→ push progress · fallback poll(3s)</span></div>
+          <div><span class="k">source:</span> <span class="c">db.log.prod / db.log.stage</span></div>
+          <div><span class="k">route:</span> <span class="c">multi-target · multi-source</span></div>
+          <div><span class="s">──────────────────────────</span></div>
+          <div><span class="k">status:</span> <span class="c">DONE</span> <span class="s">· 2026-06-05</span></div>
+          <div><span class="k">artifact:</span> <span class="c">export/audit_2026-06-05.xlsx</span></div>
+          <div><span class="k">reuse:</span> <span class="c">soft-delete + archive</span></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="over">CORE PROJECT · 01</div>
+        <span class="badge"><span class="dot completed"></span>COMPLETED · 5 份证据</span>
+        <h3 class="p-title">SQL 审计 / 排查工具</h3>
+        <div class="desc">
+          面向 DBA / 运营的远程 SQL 日志查询平台。异步任务 + Excel 导出，多目标多来源配置路由，
+          WebSocket 推送 + 轮询兜底，查询结果归档复用与软删除。从需求确认、方案设计到打包验收，
+          <span style="color:var(--slate-lightest)">迭代 2026-05-29 → 06-05</span>，一次通过用户验收。
+        </div>
+        <div class="tags">
+          <span>Java</span><span>Spring Boot</span><span>WebSocket</span><span>MySQL</span><span>POI</span>
+        </div>
+        <div class="links">
+          <a href="#">验收文档 ↗</a>
+          <a href="#">迭代记录 ↗</a>
+          <a href="#">证据 5 ↗</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- Project 2 -->
+    <article class="project">
+      <div class="visual">
+        <div class="mock-head">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span>ops-backend / activity-template / i18n-upload.diff</span>
+        </div>
+        <div class="mock-body">
+          <div><span class="s">// 根因</span></div>
+          <div><span class="c">upload(new_lang)</span> <span class="k">→</span> <span class="c">history_langs = new_lang</span></div>
+          <div><span class="s">// 修复：最小改动</span></div>
+          <div><span class="c">history_langs</span> <span class="k">=</span> <span class="c">db_history ∪ upload_actual</span></div>
+          <div><span class="s">// 不改前端接口</span></div>
+          <div><span class="s">// 不改表结构</span></div>
+          <div><span class="s">──────────────────────────</span></div>
+          <div><span class="k">verify:</span> <span class="c">zh → en → ja 连续上传</span></div>
+          <div><span class="k">expect:</span> <span class="c">3 langs preserved ✓</span></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="over">CORE PROJECT · 02</div>
+        <span class="badge"><span class="dot completed"></span>COMPLETED · 3 份证据</span>
+        <h3 class="p-title">运营后台 · 活动模板多语言传图修复</h3>
+        <div class="desc">
+          排查线上问题：历史语言被本次上传覆盖。以取<b style="color:var(--slate-lightest)">"数据库历史语言 ∪ 本次真实上传语言"</b>的最小改动收敛，
+          不修改前端接口与表结构。完成"连续上传不同语言"自测通过。
+        </div>
+        <div class="tags">
+          <span>Java</span><span>Spring Boot</span><span>MySQL</span><span>i18n</span>
+        </div>
+        <div class="links">
+          <a href="#">根因分析 ↗</a><a href="#">修复 diff ↗</a><a href="#">自测记录 ↗</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- Project 3 -->
+    <article class="project">
+      <div class="visual">
+        <div class="mock-head">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span>internal-tools / role-cleaner.cli</span>
+        </div>
+        <div class="mock-body">
+          <div><span class="k">$</span> <span class="c">role-cleaner --env=stage --uid=1041</span></div>
+          <div><span class="s">→ found: 3 roles · state = active</span></div>
+          <div><span class="s">? confirm delete (irreversible) [y/N]</span></div>
+          <div><span class="k">$</span> <span class="c">y</span></div>
+          <div><span class="s">→ purged 3 roles · account preserved</span></div>
+          <div><span class="k">next:</span> <span class="c">re-login → create-char flow</span></div>
+          <div><span class="s">──────────────────────────</span></div>
+          <div><span class="k">verify:</span> <span class="c">real account replay ✓</span></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="over">CORE PROJECT · 03</div>
+        <span class="badge"><span class="dot completed"></span>COMPLETED · 3 份证据</span>
+        <h3 class="p-title">内部测试工具 · 角色信息清理</h3>
+        <div class="desc">
+          按环境查询角色、二次确认后清除，原账号可重新进入创角流程；使用真实账号回归验证并撰写使用说明。
+          面向 QA 与开发日常回归场景。
+        </div>
+        <div class="tags">
+          <span>Java</span><span>Spring Boot</span><span>MySQL</span><span>CLI</span>
+        </div>
+        <div class="links">
+          <a href="#">使用说明 ↗</a><a href="#">回归记录 ↗</a><a href="#">证据 3 ↗</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- Project 4 -->
+    <article class="project">
+      <div class="visual">
+        <div class="mock-head">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span>ops-backend / image-upload-audit-log · prototype</span>
+        </div>
+        <div class="mock-body">
+          <div><span class="s">// 数据模型</span></div>
+          <div><span class="c">audit_log { id, actor, target, action,</span></div>
+          <div><span class="c">&nbsp;&nbsp;before_uri, after_uri, ts, trace_id }</span></div>
+          <div><span class="s">// 异常隔离</span></div>
+          <div><span class="c">log-write &nbsp;≠&nbsp; upload-flow</span></div>
+          <div><span class="s">// 验收标准</span></div>
+          <div><span class="c">✓ 上传成功 → 1 条日志</span></div>
+          <div><span class="c">✓ 上传失败 → 1 条 failed 日志</span></div>
+          <div><span class="c">✓ 日志写入异常 → 不影响上传</span></div>
+          <div><span class="s">──────────────────────────</span></div>
+          <div><span class="k">status:</span> <span style="color:var(--warn)">IMPLEMENTED_TESTED · 未提交</span></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="over">CORE PROJECT · 04</div>
+        <span class="badge"><span class="dot tested"></span>IMPLEMENTED_TESTED · 2 份证据</span>
+        <h3 class="p-title">运营后台 · 图片上传操作日志原型</h3>
+        <div class="desc">
+          含数据模型、异常隔离与验收标准设计，已实现并自测完成；
+          <b style="color:var(--warn)">暂未正式提交，如实标注为 IMPLEMENTED_TESTED，不作为已交付项目描述。</b>
+        </div>
+        <div class="tags">
+          <span>Java</span><span>Spring Boot</span><span>MySQL</span><span>Audit</span>
+        </div>
+        <div class="links">
+          <a href="#">设计文档 ↗</a><a href="#">自测记录 ↗</a>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ TIMELINE ============ -->
+  <section id="timeline">
+    <h2 class="section-title">成长时间线</h2>
+    <div class="timeline">
+      <div class="tl-row">
+        <div class="tl-date">2026 · 04</div>
+        <div><span class="tl-type learn">LEARN</span></div>
+        <div class="tl-text">入职游戏服务端团队；系统学习<b>活动框架源码</b>、EventBus 与线程池模型。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 05</div>
+        <div><span class="tl-type impl">IMPL</span></div>
+        <div class="tl-text">承担<b>线上问题保障</b>；SQL 审计工具需求确认，开发启动。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">05-29 → 06-05</div>
+        <div><span class="tl-type ship">SHIP</span></div>
+        <div class="tl-text"><b>SQL 审计工具完整迭代</b>：需求 → 实现 → 验收 → 打包，一次通过。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 06</div>
+        <div><span class="tl-type test">TEST</span></div>
+        <div class="tl-text"><b>多语言传图问题</b>根因定位与最小改动修复；连续上传自测通过。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 06</div>
+        <div><span class="tl-type impl">IMPL</span></div>
+        <div class="tl-text">内部测试工具<b>角色信息清理</b>：CLI + 使用说明；真实账号回归验证。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 07</div>
+        <div><span class="tl-type design">DESIGN</span></div>
+        <div class="tl-text"><b>图片上传操作日志原型</b>：数据模型 / 异常隔离 / 验收标准；实现并自测，未正式提交。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 07</div>
+        <div><span class="tl-type learn">LEARN</span></div>
+        <div class="tl-text"><b>Spring AI + MCP</b> 完成本地实验；<b>Docker / Jenkins / Compose</b> 学习与实操。</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-date">2026 · 07</div>
+        <div><span class="tl-type retro">RETRO</span></div>
+        <div class="tl-text">四个月复盘：整理证据集，撰写这份"实习数字分身"作品集。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STACK ============ -->
+  <section id="stack">
+    <h2 class="section-title">技术能力（证据导向）</h2>
+    <div class="stack-grid">
+      <div class="stack-item">Java <span class="use">用于实际任务</span></div>
+      <div class="stack-item">Spring Boot <span class="use">用于实际任务</span></div>
+      <div class="stack-item">MySQL <span class="use exp">排查实战</span></div>
+      <div class="stack-item">Redis <span class="use exp">排查实战</span></div>
+      <div class="stack-item">WebSocket / SSE <span class="use">独立完成</span></div>
+      <div class="stack-item">Spring AI · MCP <span class="use learn">完成实验</span></div>
+      <div class="stack-item">KCP · Netty 帧同步 <span class="use learn">学习研究</span></div>
+      <div class="stack-item">Docker · Jenkins · Compose <span class="use exp">学习+实操</span></div>
+      <div class="stack-item">EventBus · 线程池 · 活动框架 <span class="use exp">源码 + 排查</span></div>
+    </div>
+  </section>
+
+  <!-- ============ DEBUG CHAIN ============ -->
+  <section id="chain">
+    <h2 class="section-title">排查链路（8 步）</h2>
+    <div class="chain">
+      <div class="chain-node"><div class="step">STEP 01</div><div class="title">客户端包能力</div><div class="hint">先确定终端支持的协议/资源版本。</div></div>
+      <div class="chain-node"><div class="step">STEP 02</div><div class="title">活动状态 / 时间 / type</div><div class="hint">从活动本身的可见性与生命周期入手。</div></div>
+      <div class="chain-node"><div class="step">STEP 03</div><div class="title">规则表与多语言配置</div><div class="hint">配置层是最常见的"看不到"源头。</div></div>
+      <div class="chain-node"><div class="step">STEP 04</div><div class="title">玩家限制与历史状态</div><div class="hint">按玩家维度过滤：等级 / 白名单 / 参与记录。</div></div>
+      <div class="chain-node"><div class="step">STEP 05</div><div class="title">规则表 version 热加载</div><div class="hint">热加载失败或版本不匹配是隐藏坑。</div></div>
+      <div class="chain-node"><div class="step">STEP 06</div><div class="title">Redis 缓存</div><div class="hint">脏缓存 / TTL 边界 / key 命名歧义。</div></div>
+      <div class="chain-node"><div class="step">STEP 07</div><div class="title">服务端包与日志</div><div class="hint">看真实调用栈，避免猜。</div></div>
+      <div class="chain-node"><div class="step">STEP 08</div><div class="title">前端 skin 与资源</div><div class="hint">最后回到表现层：skin / 资源 / CDN。</div></div>
+    </div>
+  </section>
+
+  <!-- ============ AGENT DIALOG ============ -->
+  <section id="agent">
+    <h2 class="section-title">与我的数字分身对话</h2>
+    <div class="agent">
+      <div class="agent-panel">
+        <h4>// 你是</h4>
+        <div class="persona">
+          <label><input type="radio" name="who" checked><span>技术面试官（默认）</span></label>
+          <label><input type="radio" name="who"><span>实习导师</span></label>
+          <label><input type="radio" name="who"><span>HR</span></label>
+          <label><input type="radio" name="who"><span>访客</span></label>
+        </div>
+        <h4>// 推荐问题</h4>
+        <button class="qbtn">介绍 SQL 审计工具的完整迭代</button>
+        <button class="qbtn">查询为什么要做成异步？</button>
+        <button class="qbtn">多语言传图问题的根因是什么？</button>
+        <button class="qbtn">哪些是完成交付，哪些只是学习？</button>
+        <div class="agent-note">
+          // 生成模型不可用时，仍由结构化事实与 FAQ 提供完整回答（稳定模式）。
+        </div>
+      </div>
+      <div class="agent-preview" aria-label="示例对话">
+        <div class="row"><span class="prompt">interviewer ›</span> 介绍 SQL 审计工具的完整迭代</div>
+        <div class="row" style="color:var(--slate)">agent ›</div>
+        <div class="row" style="color:var(--slate-lightest)">
+          需求（2026-05-29）：DBA 需要跨多个日志源做条件筛选与导出。
+        </div>
+        <div class="row" style="color:var(--slate-lightest)">
+          实现：异步任务队列 + WebSocket 推送 + 轮询兜底；多目标多来源路由。
+        </div>
+        <div class="row" style="color:var(--slate-lightest)">
+          验收（06-05）：一次通过，归档复用与软删除同步上线。
+        </div>
+        <div class="row" style="color:var(--accent)">
+          状态：COMPLETED · 5 份证据可查<span class="cursor"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EVIDENCE ============ -->
+  <section id="evidence">
+    <h2 class="section-title">证据卡示例</h2>
+    <div class="evi-grid">
+      <div class="evi">
+        <div class="kind">EVIDENCE / 验收文档</div>
+        <h4>SQL 工具验收文档</h4>
+        <div class="meta">
+          <span>2026-06-05</span><span>验收文档</span><span>关联：SQL 审计 / 排查工具</span>
+        </div>
+        <div class="body">
+          脱敏摘要：DBA 与运营方各 1 名验收人签字，功能项 12 条全部通过；异步任务与 WebSocket 推送在 3 种网络环境下回归正常；导出 Excel 字段与列宽符合约定。
+        </div>
+      </div>
+      <div class="evi">
+        <div class="kind">EVIDENCE / 自测记录</div>
+        <h4>多语言连续上传自测记录</h4>
+        <div class="meta">
+          <span>2026-06</span><span>自测记录</span><span>关联：多语言传图修复</span>
+        </div>
+        <div class="body">
+          脱敏摘要：按 zh → en → ja 顺序连续上传同一模板，历史语言集合稳定保留 3 项，符合"数据库历史语言 ∪ 本次真实上传语言"的取并集设计；表结构与前端接口未变。
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="disclosure">
+    // data provenance &amp; privacy<br/>
+    公开内容经人工审核与脱敏，不含内部服务器、账号与未公开业务信息；业务与内部系统统一使用公开化名。<br/>
+    对话由 AI 组织表达，事实来源为个人记录；模型不可用时降级为结构化 FAQ 稳定模式。
+  </div>
+  <div>
+    Designed &amp; built by <span class="signature">[ 姓名 ]</span> · 2026 · 参照标杆：brittanychiang.com（设计语言迁移，非内容复刻）
+  </div>
+</footer>
+
+<script>
+  // ---- tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panes = document.querySelectorAll('.pane');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const i = t.dataset.i;
+    panes.forEach(p => p.hidden = p.dataset.i !== i);
+  }));
+
+  // ---- persona (visual only) ----
+  document.querySelectorAll('.persona input').forEach(el => {
+    el.addEventListener('change', () => {});
+  });
+
+  // ---- soft reveal ----
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
+  }, { threshold: 0.08 });
+  const revealEls = document.querySelectorAll('section, .project, .evi, .track, .stack-item, .chain-node');
+  revealEls.forEach(el => { el.classList.add('reveal'); io.observe(el); });
+  // 兜底：IntersectionObserver 未触发的环境（无头截图/打印/旧浏览器）也不允许内容永久不可见
+  window.addEventListener('load', () => {
+    setTimeout(() => revealEls.forEach(el => el.classList.add('on')), 2000);
+  });
+</script>
+</body>
+</html>

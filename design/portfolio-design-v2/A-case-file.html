@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>实习作品集 · 卷宗 / Case File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============ Tokens: Case File ============ */
+  :root{
+    --paper:#EDE6D6;          /* aged paper */
+    --paper-2:#E4DCC8;        /* darker fold */
+    --ink:#1A1714;            /* ink black */
+    --ink-soft:#4A433B;
+    --redact:#0B0B0B;         /* redaction bar */
+    --stamp:#2E5D3B;          /* verified green */
+    --warn:#B23A2E;           /* warning vermilion */
+    --pending:#A8731B;        /* pending amber */
+    --rule:#C9BFA6;           /* hairline */
+    --maxw:1080px;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --mono:"JetBrains Mono",ui-monospace,"Courier New",monospace;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--serif);
+    line-height:1.55;
+    /* faint paper grain */
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(0,0,0,.025) 0 1px, transparent 1px),
+      radial-gradient(circle at 78% 62%, rgba(0,0,0,.02) 0 1px, transparent 1px),
+      radial-gradient(circle at 45% 88%, rgba(0,0,0,.018) 0 1px, transparent 1px);
+    background-size:7px 7px,11px 11px,9px 9px;
+  }
+  ::selection{background:#0B0B0B;color:var(--paper)}
+
+  a{color:inherit}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+  /* ============ Top strip ============ */
+  .topbar{
+    border-bottom:1px solid var(--ink);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
+  .topbar .row{
+    display:flex;justify-content:space-between;gap:16px;
+    padding:10px 0;flex-wrap:wrap;
+  }
+  .topbar .left b{letter-spacing:.2em}
+  .topbar .right{color:var(--ink-soft)}
+  .topbar .right span.red{color:var(--warn);font-weight:700}
+
+  /* ============ Hero ============ */
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--rule)}
+  .hero .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.32em;
+    text-transform:uppercase;color:var(--ink-soft);
+    display:flex;gap:14px;align-items:center;margin:0 0 26px;
+  }
+  .hero .eyebrow .dot{width:7px;height:7px;background:var(--stamp);border-radius:50%}
+  .hero h1{
+    font-family:var(--serif);font-weight:600;
+    font-size:clamp(40px,7vw,84px);line-height:.98;
+    letter-spacing:-.02em;margin:0 0 22px;
+  }
+  .hero h1 em{font-style:italic;color:var(--stamp)}
+  .hero .lede{
+    max-width:62ch;font-size:clamp(17px,2vw,21px);color:var(--ink-soft);
+    margin:0 0 30px;
+  }
+  .hero .lede .blk{  /* inline redacted name handled separately */
+    background:var(--redact);color:var(--redact);
+    border-radius:1px;user-select:none;
+  }
+  .hero .lede .blk:hover{cursor:help}
+
+  .meta-line{
+    display:flex;flex-wrap:wrap;gap:10px 34px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .meta-line b{color:var(--ink);font-weight:700}
+
+  /* ============ Audience switch ============ */
+  .audience{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:22px 0;border-bottom:1px solid var(--rule);
+    font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  }
+  .audience .lbl{color:var(--ink-soft)}
+  .seg{display:inline-flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden}
+  .seg button{
+    appearance:none;border:0;background:transparent;color:var(--ink);
+    font:inherit;padding:8px 14px;cursor:pointer;letter-spacing:.1em;
+    border-right:1px solid var(--ink);transition:background .15s,color .15s;
+  }
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+  .audience .note{color:var(--ink-soft);font-size:11px}
+
+  /* ============ Section heads ============ */
+  section{padding:56px 0;border-bottom:1px solid var(--rule)}
+  .shead{display:flex;align-items:baseline;gap:18px;margin-bottom:34px;flex-wrap:wrap}
+  .shead .num{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--pending)}
+  .shead h2{
+    margin:0;font-family:var(--serif);font-weight:600;
+    font-size:clamp(26px,3.4vw,38px);letter-spacing:-.01em;
+  }
+  .shead .hint{
+    margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+
+  /* ============ Projects ============ */
+  .case{
+    position:relative;border:1px solid var(--ink);background:#F2ECDD;
+    margin-bottom:26px;
+  }
+  .case-head{
+    display:grid;grid-template-columns:46px 1fr auto;gap:18px;align-items:start;
+    padding:22px 24px 18px;border-bottom:1px dashed var(--rule);
+  }
+  .case-head .idx{font-family:var(--mono);font-size:13px;color:var(--ink-soft);letter-spacing:.1em}
+  .case-head h3{margin:0;font-family:var(--serif);font-weight:600;font-size:clamp(20px,2.6vw,27px);letter-spacing:-.01em}
+  .case-head .sub{margin:6px 0 0;color:var(--ink-soft);font-size:15px}
+  .stamp{position:relative;width:104px;height:104px;flex-shrink:0}
+
+  .case-body{padding:6px 24px 24px}
+  .case-body p{margin:0 0 12px;max-width:70ch;font-size:16px}
+  .kv{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:0;
+    border-top:1px solid var(--rule);margin-top:8px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.04em;
+  }
+  .kv > div{padding:9px 0;border-bottom:1px solid var(--rule);display:flex;gap:10px}
+  .kv > div:nth-child(odd){padding-right:16px;border-right:1px solid var(--rule)}
+  .kv > div:nth-child(even){padding-left:16px}
+  .kv .k{color:var(--ink-soft);text-transform:uppercase;letter-spacing:.1em;width:96px;flex-shrink:0}
+  .kv .v{color:var(--ink)}
+
+  /* tags */
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .tag{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:3px 8px;border:1px solid var(--ink-soft);color:var(--ink-soft);border-radius:2px;
+  }
+
+  /* status badges */
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:2px;font-weight:700;
+  }
+  .b-completed{background:var(--stamp);color:#fff}
+  .b-implemented{background:transparent;color:var(--stamp);border:1px solid var(--stamp)}
+  .b-prototype{background:var(--pending);color:#fff}
+  .b-designed{background:transparent;color:var(--pending);border:1px solid var(--pending)}
+  .b-learning{background:var(--ink-soft);color:var(--paper)}
+
+  .ver{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+  .ver::before{content:"";width:8px;height:8px;border-radius:50%;display:inline-block}
+  .v-verified::before{background:var(--stamp)}
+  .v-supported::before{background:var(--stamp);opacity:.55}
+  .v-self::before{background:var(--pending)}
+  .v-inferred::before{background:var(--pending);opacity:.5}
+  .v-unverified::before{background:var(--warn)}
+
+  /* ============ Verification stamp (SVG-like with CSS) ============ */
+  .stamp svg{width:100%;height:100%;transform:rotate(-9deg)}
+  .stamp .ring{fill:none;stroke:var(--stamp);stroke-width:2}
+  .stamp .ring-2{stroke:var(--stamp);stroke-width:1;opacity:.6}
+  .stamp text{fill:var(--stamp);font-family:var(--mono);font-weight:700;text-transform:uppercase}
+  .stamp.warn .ring,.stamp.warn .ring-2{stroke:var(--pending)}
+  .stamp.warn text{fill:var(--pending)}
+  .stamp.draft .ring,.stamp.draft .ring-2{stroke:var(--warn);stroke-dasharray:3 3}
+  .stamp.draft text{fill:var(--warn)}
+
+  /* ============ Evidence / redaction ============ */
+  .evidence-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+  .ecard{
+    border:1px solid var(--rule);background:#F2ECDD;padding:18px 20px;position:relative;
+  }
+  .ecard .etop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+  .ecard h4{margin:0;font-family:var(--serif);font-weight:600;font-size:17px}
+  .ecard .edate{font-family:var(--mono);font-size:11px;color:var(--ink-soft);letter-spacing:.08em}
+  .ecard p{margin:0;font-size:14.5px;color:var(--ink-soft)}
+
+  .redacted{
+    display:inline;background:var(--redact);color:var(--redact);
+    border-radius:1px;padding:0 2px;margin:0 1px;cursor:pointer;
+    transition:color .18s,background .18s;
+    box-shadow:0 0 0 1px #000 inset;
+  }
+  .redacted.revealed{background:#2E5D3B;color:#EDE6D6;box-shadow:none}
+  .redacted:hover{box-shadow:0 0 0 1px var(--pending) inset}
+  .reveal-hint{
+    font-family:var(--mono);font-size:11px;color:var(--pending);
+    letter-spacing:.08em;margin-top:12px;display:flex;gap:8px;align-items:center;
+  }
+  .reveal-hint::before{content:"⬑";font-size:13px}
+
+  /* ============ Fallback notice ============ */
+  .fallback{
+    border:1px dashed var(--warn);background:#F6EFE0;
+    padding:20px 22px;margin-top:8px;display:flex;gap:16px;align-items:flex-start;
+  }
+  .fallback .mk{
+    font-family:var(--mono);font-weight:700;color:var(--warn);
+    border:1px solid var(--warn);padding:2px 8px;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;flex-shrink:0;
+  }
+  .fallback p{margin:0;font-size:14.5px;color:var(--ink-soft);max-width:64ch}
+  .fallback p b{color:var(--ink)}
+
+  /* ============ Timeline ============ */
+  .tl{position:relative;padding-left:28px}
+  .tl::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:1px;background:var(--ink-soft)}
+  .tl-item{position:relative;padding:0 0 26px}
+  .tl-item::before{
+    content:"";position:absolute;left:-27px;top:5px;width:17px;height:17px;
+    border:1px solid var(--ink);background:var(--paper);border-radius:50%;
+  }
+  .tl-item.done::before{background:var(--stamp);border-color:var(--stamp)}
+  .tl-item.proto::before{background:var(--pending);border-color:var(--pending)}
+  .tl-item .d{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink-soft);text-transform:uppercase}
+  .tl-item h4{margin:3px 0 4px;font-family:var(--serif);font-weight:600;font-size:18px}
+  .tl-item p{margin:0;font-size:14.5px;color:var(--ink-soft);max-width:62ch}
+
+  /* ============ Ask / FAQ ============ */
+  .ask-bar{
+    display:flex;align-items:center;gap:0;border:1px solid var(--ink);background:#F2ECDD;
+  }
+  .ask-bar .pre{
+    font-family:var(--mono);padding:14px 16px;color:var(--stamp);font-weight:700;
+    border-right:1px solid var(--ink);
+  }
+  .ask-bar input{
+    flex:1;border:0;background:transparent;font-family:var(--serif);font-size:16px;
+    padding:14px 16px;color:var(--ink);outline:none;
+  }
+  .ask-bar input::placeholder{color:var(--ink-soft)}
+  .ask-bar button{
+    appearance:none;border:0;background:var(--ink);color:var(--paper);
+    font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    padding:14px 22px;cursor:pointer;
+  }
+
+  .suggested{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .sq{
+    font-family:var(--serif);font-size:14.5px;color:var(--ink);
+    background:transparent;border:1px solid var(--ink-soft);border-radius:2px;
+    padding:7px 13px;cursor:pointer;transition:background .15s,color .15s;
+  }
+  .sq:hover{background:var(--ink);color:var(--paper)}
+
+  /* ============ Footer ============ */
+  footer{padding:54px 0 80px}
+  .foot-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:40px}
+  .disc{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--ink-soft);
+    line-height:1.7;border-left:2px solid var(--stamp);padding-left:16px;
+  }
+  .links{display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+  .links a{text-decoration:none;border-bottom:1px solid var(--rule);padding-bottom:8px;display:flex;justify-content:space-between}
+  .links a:hover{border-color:var(--stamp)}
+  .links a::after{content:"↗";color:var(--ink-soft)}
+
+  /* focus + reduced motion */
+  :focus-visible{outline:2px solid var(--pending);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+  }
+  @media (max-width:680px){
+    .case-head{grid-template-columns:1fr;gap:10px}
+    .stamp{width:84px;height:84px;position:absolute;right:18px;top:18px}
+    .kv > div:nth-child(odd){border-right:0}
+    .kv{grid-template-columns:1fr}
+    .foot-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- Top strip -->
+<div class="topbar">
+  <div class="wrap row">
+    <div class="left"><b>FILE NO. IP-2026-0414</b> · 实习作品集 · 公开卷宗</div>
+    <div class="right">保密审查 <span class="red">SAFE_GENERALIZED</span> · 快照 v0 · <span id="clock">--:--</span></div>
+  </div>
+</div>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span> DECLASSIFIED FOR PUBLIC REVIEW · 仅供公开评审</p>
+    <h1>一份可以<em>核验</em>的<br/>实习记录。</h1>
+    <p class="lede">
+      这里不是聊天框。每一条结论都对应一个项目、一个完成状态、一份证据等级与一次保密审查——
+      <span class="blk" title="按隐私约束，公司实名暂未公开">██████</span>
+      实习期间的真实产出，被归档为可逐条追溯的卷宗。读到一个「完成」，你能看到它为什么算完成。
+    </p>
+    <div class="meta-line">
+      <span><b>区间</b> 2026.04 — 2026.07</span>
+      <span><b>角色</b> Java 游戏服务端实习</span>
+      <span><b>归档主题</b> 4</span>
+      <span><b>默认受众</b> 技术面试官</span>
+    </div>
+  </div>
+</header>
+
+<!-- Audience -->
+<div class="wrap">
+  <div class="audience" role="group" aria-label="选择访问者身份">
+    <span class="lbl">阅读视角 ▸</span>
+    <div class="seg" id="seg">
+      <button aria-pressed="true" data-a="interviewer">技术面试官</button>
+      <button aria-pressed="false" data-a="mentor">导师 / 答辩</button>
+      <button aria-pressed="false" data-a="hr">HR</button>
+      <button aria-pressed="false" data-a="guest">普通访客</button>
+    </div>
+    <span class="note" id="audNote">身份只改变表达方式，不改变可访问的数据范围。</span>
+  </div>
+</div>
+
+<!-- Projects -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="num">§ 01</span>
+      <h2>归档主题</h2>
+      <span class="hint">STATUS 为唯一权威来源 · 不由模型推导</span>
+    </div>
+
+    <!-- Case 01 -->
+    <article class="case">
+      <div class="case-head">
+        <span class="idx">01</span>
+        <div>
+          <h3>SQL 审计 / 排查工具 <span style="font-weight:400;color:var(--ink-soft);font-size:.7em">（公开化名）</span></h3>
+          <p class="sub">远程 SQL 日志的查询、归档与导出工具。异步任务、时间倒序、多目标路由。</p>
+          <div class="tags">
+            <span class="tag">Java</span><span class="tag">WebSocket</span><span class="tag">异步任务</span>
+            <span class="tag">Excel 导出</span><span class="tag">归档复用</span>
+          </div>
+        </div>
+        <div class="stamp" title="VERIFIED">
+          <svg viewBox="0 0 100 100">
+            <circle class="ring" cx="50" cy="50" r="44"/>
+            <circle class="ring-2" cx="50" cy="50" r="38"/>
+            <path id="circ1" d="M50,50 m-34,0 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0" fill="none"/>
+            <text font-size="9" letter-spacing="3"><textPath href="#circ1" startOffset="0">VERIFIED · 已核验 · VERIFIED · 已核验 ·</textPath></text>
+            <text x="50" y="48" text-anchor="middle" font-size="13">CASE</text>
+            <text x="50" y="62" text-anchor="middle" font-size="13">01</text>
+          </svg>
+        </div>
+      </div>
+      <div class="case-body">
+        <p>把「远程 SQL 日志查询」从一次性脚本，做成一个带异步任务队列、时间倒序、Excel 导出、多目标/多来源配置路由、完整命中 SQL 展示、查询结果归档复用与软删除的工具，并配套使用说明与验收文档。</p>
+        <div class="kv">
+          <div><span class="k">Status</span><span class="v"><span class="badge b-completed">COMPLETED</span></span></div>
+          <div><span class="k">Contribution</span><span class="v">INDEPENDENT · 独立完成</span></div>
+          <div><span class="k">Verification</span><span class="v"><span class="ver v-verified">VERIFIED</span></span></div>
+          <div><span class="k">Confidentiality</span><span class="v">SAFE_GENERALIZED</span></div>
+          <div><span class="k">Period</span><span class="v">2026.05 — 2026.06</span></div>
+          <div><span class="k">Evidence</span><span class="v">验收文档 · 使用说明 · 打包记录</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Case 02 -->
+    <article class="case">
+      <div class="case-head">
+        <span class="idx">02</span>
+        <div>
+          <h3>运营后台 · 活动模板多语言传图修复 <span style="font-weight:400;color:var(--ink-soft);font-size:.7em">（公开化名）</span></h3>
+          <p class="sub">修复历史语言被本次上传覆盖的问题，最小改动、不动表结构与前端接口。</p>
+          <div class="tags"><span class="tag">缺陷修复</span><span class="tag">多语言</span><span class="tag">运营后台</span></div>
+        </div>
+        <div class="stamp" title="SUPPORTED">
+          <svg viewBox="0 0 100 100">
+            <circle class="ring" cx="50" cy="50" r="44" style="opacity:.6"/>
+            <circle class="ring-2" cx="50" cy="50" r="38" style="opacity:.5"/>
+            <path id="circ2" d="M50,50 m-34,0 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0" fill="none"/>
+            <text font-size="9" letter-spacing="3"><textPath href="#circ2" startOffset="0">SUPPORTED · 多源印证 · SUPPORTED · </textPath></text>
+            <text x="50" y="48" text-anchor="middle" font-size="13">CASE</text>
+            <text x="50" y="62" text-anchor="middle" font-size="13">02</text>
+          </svg>
+        </div>
+      </div>
+      <div class="case-body">
+        <p>定位到根因是「历史语言被本次上传覆盖」，采用「数据库历史语言 ∪ 本次真实上传语言」的并集策略，不修改前端接口和数据库表结构，并完成连续上传不同语言的核心场景自测。</p>
+        <div class="kv">
+          <div><span class="k">Status</span><span class="v"><span class="badge b-implemented">IMPLEMENTED_TESTED</span></span></div>
+          <div><span class="k">Contribution</span><span class="v">PRIMARY · 主要负责</span></div>
+          <div><span class="k">Verification</span><span class="v"><span class="ver v-supported">SUPPORTED</span></span></div>
+          <div><span class="k">Confidentiality</span><span class="v">SAFE_GENERALIZED</span></div>
+          <div><span class="k">Note</span><span class="v">实现并自测，非「已正式交付」</span></div>
+          <div><span class="k">Evidence</span><span class="v">场景自测记录</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Case 03 -->
+    <article class="case">
+      <div class="case-head">
+        <span class="idx">03</span>
+        <div>
+          <h3>内部测试工具 · 角色信息清理 <span style="font-weight:400;color:var(--ink-soft);font-size:.7em">（公开化名）</span></h3>
+          <p class="sub">按环境查询角色、二次确认后清除，让原账号重新进入创角流程。</p>
+          <div class="tags"><span class="tag">测试工具</span><span class="tag">二次确认</span><span class="tag">角色数据</span></div>
+        </div>
+        <div class="stamp" title="VERIFIED">
+          <svg viewBox="0 0 100 100">
+            <circle class="ring" cx="50" cy="50" r="44"/>
+            <circle class="ring-2" cx="50" cy="50" r="38"/>
+            <path id="circ3" d="M50,50 m-34,0 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0" fill="none"/>
+            <text font-size="9" letter-spacing="3"><textPath href="#circ3" startOffset="0">VERIFIED · 已核验 · VERIFIED · 已核验 ·</textPath></text>
+            <text x="50" y="48" text-anchor="middle" font-size="13">CASE</text>
+            <text x="50" y="62" text-anchor="middle" font-size="13">03</text>
+          </svg>
+        </div>
+      </div>
+      <div class="case-body">
+        <p>支持按环境查询角色、二次确认后清除角色记录，使原账号可重新进入创角流程，并完成实际账号验证与面向测试人员的使用说明。</p>
+        <div class="kv">
+          <div><span class="k">Status</span><span class="v"><span class="badge b-completed">COMPLETED</span></span></div>
+          <div><span class="k">Contribution</span><span class="v">INDEPENDENT · 独立完成</span></div>
+          <div><span class="k">Verification</span><span class="v"><span class="ver v-verified">VERIFIED</span></span></div>
+          <div><span class="k">Confidentiality</span><span class="v">SAFE_GENERALIZED</span></div>
+          <div><span class="k">Evidence</span><span class="v">账号验证 · 使用说明</span></div>
+          <div><span class="k">Reviewer</span><span class="v">面向测试人员交付</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Case 04 — THE RED LINE -->
+    <article class="case">
+      <div class="case-head">
+        <span class="idx">04</span>
+        <div>
+          <h3>运营后台 · 图片上传操作日志原型 <span style="font-weight:400;color:var(--ink-soft);font-size:.7em">（公开化名）</span></h3>
+          <p class="sub">完成数据模型、代码范围、异常隔离与验收标准的设计与实现。<strong style="color:var(--warn)">原始记录明确：暂未正式提交。</strong></p>
+          <div class="tags"><span class="tag">原型</span><span class="tag">操作日志</span><span class="tag">数据模型设计</span></div>
+        </div>
+        <div class="stamp draft" title="PROTOTYPE / SELF-REPORTED">
+          <svg viewBox="0 0 100 100">
+            <circle class="ring" cx="50" cy="50" r="44"/>
+            <circle class="ring-2" cx="50" cy="50" r="38"/>
+            <path id="circ4" d="M50,50 m-34,0 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0" fill="none"/>
+            <text font-size="8.5" letter-spacing="2.5"><textPath href="#circ4" startOffset="0">PROTOTYPE · 原型 · NOT SHIPPED · </textPath></text>
+            <text x="50" y="48" text-anchor="middle" font-size="13">CASE</text>
+            <text x="50" y="62" text-anchor="middle" font-size="13">04</text>
+          </svg>
+        </div>
+      </div>
+      <div class="case-body">
+        <p>完成了数据模型、代码范围、异常隔离和验收标准的设计，并完成实现与自测。<strong>但原始记录明确说明暂未正式提交，因此不得表述为正式交付 / 已上线。</strong></p>
+        <div class="kv">
+          <div><span class="k">Status</span><span class="v"><span class="badge b-prototype">PROTOTYPE</span></span></div>
+          <div><span class="k">Contribution</span><span class="v">PRIMARY · 主要负责</span></div>
+          <div><span class="k">Verification</span><span class="v"><span class="ver v-self">SELF_REPORTED</span></span></div>
+          <div><span class="k">Confidentiality</span><span class="v">SAFE_GENERALIZED</span></div>
+          <div><span class="k">表达边界</span><span class="v" style="color:var(--warn)">仅可说「原型 / 已实现自测」</span></div>
+          <div><span class="k">Evidence</span><span class="v">设计文档 · 自测记录</span></div>
+        </div>
+        <div class="fallback">
+          <span class="mk">红线</span>
+          <p>本卷宗的验收红线之一：<b>不得把 Case 04 表述为「已上线 / 已正式交付」</b>。它停留在 PROTOTYPE / SELF_REPORTED，是有意保留的诚实缺口。</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- Evidence + redaction -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="num">§ 02</span>
+      <h2>脱敏证据</h2>
+      <span class="hint">仅展示人工审核后的脱敏摘要 · 不含日报原文</span>
+    </div>
+    <div class="evidence-grid">
+      <div class="ecard">
+        <div class="etop"><h4>查询结果归档复用</h4><span class="edate">2026.06</span></div>
+        <p>命中 SQL 经 <span class="redacted" data-sum="时间倒序归档，支持软删除与复用，避免重复查询远程日志">████████████</span> 后入库，支持软删除与复用，降低对远程日志的重复请求。</p>
+        <div class="reveal-hint">悬停黑条 · 查看脱敏摘要</div>
+      </div>
+      <div class="ecard">
+        <div class="etop"><h4>异步任务 + WebSocket 兜底</h4><span class="edate">2026.06</span></div>
+        <p>查询走异步任务，前端通过 <span class="redacted" data-sum="WebSocket 实时推送进度，断连时自动降级为轮询">████████████</span> 推送进度，断连自动降级为轮询。</p>
+        <div class="reveal-hint">悬停黑条 · 查看脱敏摘要</div>
+      </div>
+      <div class="ecard">
+        <div class="etop"><h4>多语言传图并集策略</h4><span class="edate">2026.06</span></div>
+        <p>写入语言 = <span class="redacted" data-sum="数据库历史语言 ∪ 本次真实上传语言，取并集，不覆盖">████████████████</span>，连续上传不同语言的核心场景通过自测。</p>
+        <div class="reveal-hint">悬停黑条 · 查看脱敏摘要</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Timeline -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="num">§ 03</span>
+      <h2>时间线</h2>
+      <span class="hint">事件类型区分学习 / 设计 / 实现 / 测试 / 提交 / 复盘</span>
+    </div>
+    <div class="tl">
+      <div class="tl-item"><div class="d">2026.04 · LEARNING</div><h4>进入实习，建立日报与排查链路</h4><p>从客户端包能力 → 活动配置 → 规则表 → 玩家限制 → 热加载 → 缓存 → 服务端包 → 前端资源的完整排障链路。</p></div>
+      <div class="tl-item done"><div class="d">2026.05 — 06 · DESIGN → IMPLEMENTATION → TEST</div><h4>SQL 审计/排查工具从脚本演进为工具</h4><p>异步任务、倒序、Excel 导出、多目标路由、归档复用、WebSocket + 轮询兜底。</p></div>
+      <div class="tl-item done"><div class="d">2026.06 · DEBUG → TEST</div><h4>多语言传图修复 + 测试工具角色清理</h4><p>定位根因并完成自测；角色清理功能交付测试人员使用。</p></div>
+      <div class="tl-item proto"><div class="d">2026.07 · DESIGN → IMPLEMENTATION</div><h4>操作日志原型（暂未提交）</h4><p>完成设计与自测，停留在原型阶段——这是有意保留的边界。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Ask -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="num">§ 04</span>
+      <h2>向卷宗提问</h2>
+      <span class="hint">默认先给结论 · 可继续追问</span>
+    </div>
+    <div class="ask-bar">
+      <span class="pre">▌QUERY</span>
+      <input id="q" type="text" placeholder="例如：SQL 审计工具为什么需要异步？" aria-label="提问" />
+      <button id="ask">提交</button>
+    </div>
+    <div class="suggested" id="sug">
+      <button class="sq">SQL 审计工具为什么需要异步？</button>
+      <button class="sq">为什么 WebSocket 还要轮询？</button>
+      <button class="sq">哪些项目真正完成，哪些只是学习？</button>
+      <button class="sq">操作日志原型最后上线了吗？</button>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap foot-grid">
+    <p class="disc">
+      内容来自个人记录并经人工审核，AI 负责查询与表达。<br/>
+      公开快照仅含 PUBLIC / PUBLIC_SANITIZED 且 SAFE_GENERALIZED 的内容。<br/>
+      不展示日报原文、本地路径、内部链接与未脱敏证据。
+    </p>
+    <nav class="links">
+      <a href="#">求职邮箱</a>
+      <a href="#">GitHub</a>
+      <a href="#">简历入口</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  // audience switch — only changes phrasing note, not data
+  const notes={
+    interviewer:"身份只改变表达方式，不改变可访问的数据范围。",
+    mentor:"导师视角：会同时强调成长点与完成边界。",
+    hr:"HR 视角：减少内部术语，突出背景—行动—结果。",
+    guest:"访客视角：提供推荐问题与浏览入口。"
+  };
+  document.querySelectorAll("#seg button").forEach(b=>{
+    b.addEventListener("click",()=>{
+      document.querySelectorAll("#seg button").forEach(x=>x.setAttribute("aria-pressed","false"));
+      b.setAttribute("aria-pressed","true");
+      document.getElementById("audNote").textContent=notes[b.dataset.a];
+    });
+  });
+  // reveal redactions
+  document.querySelectorAll(".redacted").forEach(r=>{
+    r.title=r.dataset.sum||"脱敏摘要";
+    r.addEventListener("click",()=>r.classList.toggle("revealed"));
+  });
+  // suggested -> input
+  const q=document.getElementById("q");
+  document.querySelectorAll(".sq").forEach(s=>s.addEventListener("click",()=>{q.value=s.textContent;q.focus();}));
+  document.getElementById("ask").addEventListener("click",()=>{
+    if(!q.value.trim())return;
+    alert("（演示稿）这是静态设计稿，未接 Agent。\n你的问题：\n"+q.value);
+  });
+  // clock
+  function tick(){const d=new Date();document.getElementById("clock").textContent=d.toTimeString().slice(0,5);}
+  tick();setInterval(tick,30000);
+</script>
+</body>
+</html>

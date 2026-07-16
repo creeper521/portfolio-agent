@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实习数字分身 · 卷宗</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 卷宗色谱 —— 暖纸底 + 暖墨 + 单一牛血红 accent，极克制 */
+    --paper:#F6F1E8;          /* 暖纸底 */
+    --paper-2:#EFE7D8;        /* 次纸色：分隔/卡底 */
+    --paper-3:#E6DCC9;        /* 三级纸：强调底 */
+    --ink:#211D17;            /* 主墨色 */
+    --ink-2:#5A5346;          /* 次墨：正文弱化 */
+    --ink-3:#8A8170;          /* 三级墨：元数据/脚注 */
+    --rule:#C9BCA1;           /* 分隔线，暖灰 */
+    --accent:#7A2E2A;         /* 牛血红：章节号/状态点，单一克制 */
+    --accent-soft:#A85048;    /* accent 弱化 */
+    --verified:#3A5A40;       /* 完成态墨绿，仅状态点 */
+    --amber:#9A6B12;          /* 进行/原型态 */
+
+    --serif:'Noto Serif SC',Georgia,'Times New Roman',serif;
+    --sans:'Noto Sans SC',-apple-system,'Helvetica Neue',sans-serif;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+
+    --maxw:1180px;
+    --gut:clamp(24px,4vw,56px);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.75;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  /* 极淡纸纹，仅氛围不抢戏 */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(circle at 20% 30%,rgba(122,46,42,.015),transparent 60%),
+                     radial-gradient(circle at 80% 70%,rgba(58,90,64,.012),transparent 55%);
+  }
+  body>*{position:relative;z-index:1}
+
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent);color:var(--paper)}
+
+  /* ========== 通用排版 ========== */
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gut)}
+  .mono{font-family:var(--mono);font-size:.74em;letter-spacing:.02em}
+  .smcp{font-variant:small-caps;letter-spacing:.08em;text-transform:lowercase}
+  .accent{color:var(--accent)}
+  .ink2{color:var(--ink-2)}
+  .ink3{color:var(--ink-3)}
+
+  /* ========== 状态系统（排印化，非彩色药丸）========== */
+  /* 这是本设计的 120% 细节：用字形符号 + 小型大写 + 墨色阶表达可信度重量 */
+  .status{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    white-space:nowrap;
+  }
+  .status .mk{font-size:13px;line-height:1;display:inline-block;transform:translateY(-1px)}
+  .s-completed{color:var(--verified)}
+  .s-completed .mk{color:var(--verified)}
+  .s-impltested{color:var(--ink)}
+  .s-impltested .mk{color:var(--amber)}
+  .s-prototype{color:var(--ink-2);font-style:italic}
+  .s-prototype .mk{color:var(--amber)}
+  .s-designed{color:var(--ink-2)}
+  .s-designed .mk{color:var(--ink-3)}
+  .s-learning{color:var(--ink-3);font-style:italic}
+  .s-learning .mk{color:var(--ink-3)}
+
+  .contrib{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* ========== 顶部栏 ========== */
+  .topbar{
+    border-bottom:1px solid var(--rule);
+    background:rgba(246,241,232,.92);
+    backdrop-filter:blur(8px);
+    position:sticky;top:0;z-index:50;
+  }
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px;gap:24px}
+  .brand{display:flex;align-items:baseline;gap:14px}
+  .brand .name{font-family:var(--serif);font-weight:700;font-size:18px;letter-spacing:.02em}
+  .brand .tag{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.12em;text-transform:uppercase}
+  .topnav{display:flex;align-items:center;gap:22px}
+  .topnav a{font-size:14px;color:var(--ink-2);transition:color .15s}
+  .topnav a:hover{color:var(--accent)}
+  /* 受众切换 —— 编辑式分号导航，不是笨重下拉 */
+  .audience{display:flex;align-items:center;gap:0;font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+  .audience .lab{color:var(--ink-3);margin-right:10px;text-transform:uppercase}
+  .audience .seg{color:var(--ink-3);cursor:pointer;padding:4px 0;transition:color .15s;border-bottom:1px solid transparent}
+  .audience .seg.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .audience .sep{color:var(--rule);margin:0 6px}
+
+  /* ========== 刊头 Masthead ========== */
+  .masthead{padding:clamp(40px,7vw,76px) 0 clamp(28px,4vw,44px)}
+  .masthead .kicker{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+  .masthead .kicker .dot{width:7px;height:7px;background:var(--accent);border-radius:50%}
+  .masthead .kicker span{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+  .masthead h1{
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:clamp(40px,6.4vw,76px);
+    line-height:1.08;
+    letter-spacing:-.01em;
+    margin-bottom:24px;
+    max-width:14ch;
+  }
+  .masthead h1 em{font-style:italic;color:var(--accent);font-weight:500}
+  .masthead .lede{
+    font-family:var(--serif);
+    font-size:clamp(17px,1.6vw,21px);
+    line-height:1.7;
+    color:var(--ink-2);
+    max-width:46ch;
+    margin-bottom:32px;
+    font-weight:400;
+  }
+  .masthead .meta{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.04em}
+  .masthead .meta b{color:var(--ink);font-weight:500}
+  .masthead .meta .sep{color:var(--rule)}
+
+  /* AI 声明带 */
+  .ai-note{
+    border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+    padding:14px 0;margin-top:36px;
+    display:flex;gap:16px;align-items:flex-start;
+    font-size:13px;color:var(--ink-2);line-height:1.65;
+  }
+  .ai-note .ico{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);padding:3px 7px;flex-shrink:0;margin-top:1px}
+
+  /* ========== 章节通用 ========== */
+  section.block{padding:clamp(44px,6vw,72px) 0;border-top:1px solid var(--rule)}
+  .sec-head{display:flex;align-items:baseline;gap:18px;margin-bottom:clamp(28px,3.5vw,44px)}
+  .sec-head .num{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.12em;font-weight:500}
+  .sec-head h2{font-family:var(--serif);font-weight:700;font-size:clamp(24px,3vw,34px);letter-spacing:-.005em;line-height:1.2}
+  .sec-head .rule{flex:1;height:1px;background:var(--rule);transform:translateY(-4px)}
+  .sec-head .aside{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase}
+
+  /* ========== 项目卡网格 ========== */
+  .projects{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule)}
+  .pcard{
+    background:var(--paper);
+    padding:clamp(24px,2.6vw,34px);
+    cursor:pointer;
+    transition:background .2s;
+    display:flex;flex-direction:column;gap:14px;
+    position:relative;
+  }
+  .pcard:hover{background:var(--paper-2)}
+  .pcard .pnum{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.14em}
+  .pcard .ptitle{font-family:var(--serif);font-weight:700;font-size:clamp(20px,1.9vw,24px);line-height:1.3;letter-spacing:-.005em}
+  .pcard .psum{font-size:14.5px;color:var(--ink-2);line-height:1.7}
+  .pcard .pfoot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin-top:auto;padding-top:14px;border-top:1px dashed var(--rule)}
+  .pcard .ptags{display:flex;flex-wrap:wrap;gap:6px}
+  .pcard .tag{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:var(--paper-2);padding:3px 8px;letter-spacing:.02em}
+  .pcard .evi-count{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+  .pcard .arrow{position:absolute;right:24px;bottom:24px;font-family:var(--mono);font-size:13px;color:var(--ink-3);transition:transform .2s,color .2s}
+  .pcard:hover .arrow{transform:translateX(4px);color:var(--accent)}
+
+  /* ========== 时间线缩略（中轴）========== */
+  .tl-wrap{position:relative;padding:10px 0 6px}
+  .tl-axis{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+  .tl-axis::before{content:"";position:absolute;top:14px;left:0;right:0;height:1px;background:var(--rule)}
+  .tl-month{position:relative;padding-top:34px;text-align:center}
+  .tl-month::before{content:"";position:absolute;top:9px;left:50%;width:11px;height:11px;border-radius:50%;background:var(--paper);border:2px solid var(--accent);transform:translateX(-50%)}
+  .tl-month.cur::before{background:var(--accent)}
+  .tl-month .mlab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-2);margin-bottom:4px}
+  .tl-month .mev{font-size:12.5px;color:var(--ink-3);line-height:1.5}
+  .tl-month .mev b{color:var(--ink);font-weight:500}
+  .tl-legend{margin-top:24px;display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase}
+  .tl-legend span{display:inline-flex;align-items:center;gap:6px}
+  .tl-legend i{width:10px;height:2px;background:var(--ink-3);font-style:normal}
+
+  /* ========== 能力摘要 ========== */
+  .skills-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0 56px}
+  .skill-row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;padding:16px 0;border-bottom:1px dashed var(--rule)}
+  .skill-row .sn{font-family:var(--serif);font-size:17px;font-weight:500}
+  .skill-row .sn em{font-family:var(--sans);font-size:12px;color:var(--ink-3);font-style:normal;margin-left:8px;letter-spacing:.04em}
+  .skill-row .sl{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+
+  /* ========== 对话入口 ========== */
+  .ask{background:var(--paper-2);border:1px solid var(--rule);padding:clamp(28px,3.4vw,44px)}
+  .ask h3{font-family:var(--serif);font-size:clamp(22px,2.4vw,28px);font-weight:700;margin-bottom:8px;letter-spacing:-.005em}
+  .ask p.lead{color:var(--ink-2);margin-bottom:24px;max-width:50ch;font-size:15px}
+  .ask-input{display:flex;align-items:center;gap:14px;background:var(--paper);border:1px solid var(--rule);padding:16px 20px;margin-bottom:24px}
+  .ask-input .prompt{font-family:var(--mono);color:var(--accent);font-size:14px}
+  .ask-input input{flex:1;border:none;background:transparent;font-family:var(--sans);font-size:15px;color:var(--ink);outline:none}
+  .ask-input input::placeholder{color:var(--ink-3)}
+  .ask-input .go{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase}
+  .recos{display:flex;flex-direction:column;gap:0}
+  .reco-line{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:baseline;padding:14px 0;border-top:1px dashed var(--rule);cursor:pointer;transition:color .15s}
+  .reco-line:last-child{border-bottom:1px dashed var(--rule)}
+  .reco-line:hover{color:var(--accent)}
+  .reco-line .rn{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+  .reco-line .rt{font-family:var(--serif);font-size:16px}
+  .reco-line .ra{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+  /* ========== 页脚 ========== */
+  footer{border-top:1px solid var(--rule);padding:clamp(36px,4vw,52px) 0 60px;margin-top:0}
+  .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px}
+  .foot-col h4{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  .foot-col .big{font-family:var(--serif);font-size:20px;font-weight:500;margin-bottom:6px}
+  .foot-col a.link{display:block;font-size:14px;color:var(--ink-2);padding:5px 0;border-bottom:1px solid transparent;transition:color .15s,border-color .15s;width:fit-content}
+  .foot-col a.link:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  .foot-col p{font-size:13px;color:var(--ink-2);line-height:1.7}
+  .foot-bottom{margin-top:40px;padding-top:20px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.06em}
+
+  /* ============================================================
+     项目详情页
+     ============================================================ */
+  .detail{display:none}
+  .detail.active{display:block}
+  .home.active{display:block}
+  .home.hidden{display:none}
+
+  .crumb{padding:24px 0 0}
+  .crumb a{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase}
+  .crumb a:hover{color:var(--accent)}
+  .crumb .sep{margin:0 10px;color:var(--rule)}
+
+  .dp-head{padding:clamp(28px,3vw,40px) 0 clamp(24px,3vw,36px);border-bottom:1px solid var(--rule)}
+  .dp-head .pnum{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.16em;margin-bottom:16px}
+  .dp-head h1{font-family:var(--serif);font-weight:700;font-size:clamp(30px,4.4vw,52px);line-height:1.12;letter-spacing:-.01em;margin-bottom:18px;max-width:18ch}
+  .dp-head .dsum{font-family:var(--serif);font-size:clamp(17px,1.5vw,20px);color:var(--ink-2);line-height:1.7;max-width:54ch;margin-bottom:28px}
+  .dp-meta{display:flex;flex-wrap:wrap;gap:14px 32px;align-items:center;padding-top:24px;border-top:1px dashed var(--rule)}
+  .dp-meta .mg{display:flex;flex-direction:column;gap:4px}
+  .dp-meta .mg .k{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.12em;text-transform:uppercase}
+  .dp-meta .mg .v{font-size:14px;color:var(--ink);font-weight:500}
+  .dp-meta .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .dp-meta .tags .tag{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:var(--paper-2);padding:3px 8px}
+
+  /* 详情正文链路：背景→问题→…→证据。用章节编号 + 衬线小标题 */
+  .dp-body{padding:clamp(32px,4vw,52px) 0}
+  .dp-sec{display:grid;grid-template-columns:160px 1fr;gap:0 40px;padding:clamp(26px,3vw,38px) 0;border-top:1px solid var(--rule)}
+  .dp-sec:first-child{border-top:none;padding-top:0}
+  .dp-sec .label{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;padding-top:8px}
+  .dp-sec .label small{display:block;color:var(--ink-3);margin-top:4px;letter-spacing:.06em;font-style:italic;text-transform:none;font-size:10.5px}
+  .dp-sec .content{font-size:16px;line-height:1.85;color:var(--ink);max-width:62ch}
+  .dp-sec .content p{margin-bottom:16px}
+  .dp-sec .content p:last-child{margin-bottom:0}
+  .dp-sec .content strong{font-weight:500;color:var(--ink)}
+  .dp-sec .content em{font-style:italic;color:var(--ink-2)}
+  .dp-sec .content ul{list-style:none;padding:0;margin:8px 0}
+  .dp-sec .content li{padding-left:22px;position:relative;margin-bottom:10px;line-height:1.75}
+  .dp-sec .content li::before{content:"§";position:absolute;left:0;color:var(--accent);font-family:var(--serif);font-size:13px;top:2px}
+  .dp-sec.warning{background:linear-gradient(to right,rgba(154,107,18,.05),transparent 60%)}
+  .dp-sec.warning .content{color:var(--ink)}
+
+  /* 排查链路可视化（方案节内）*/
+  .chain{font-family:var(--mono);font-size:12.5px;line-height:2;color:var(--ink-2);background:var(--paper-2);border-left:2px solid var(--accent);padding:16px 20px;margin:14px 0}
+  .chain .arrow{color:var(--accent);margin:0 4px}
+
+  /* 证据卡 —— 脚注引证式 */
+  .evidences{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:8px}
+  .evi{background:var(--paper);padding:20px 22px;display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:start}
+  .evi .ref{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.04em;padding-top:2px}
+  .evi .ebody .etitle{font-family:var(--serif);font-weight:500;font-size:16px;margin-bottom:4px}
+  .evi .ebody .emeta{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em;margin-bottom:8px}
+  .evi .ebody .eexcerpt{font-size:14px;color:var(--ink-2);line-height:1.7;font-style:italic;border-left:1px solid var(--rule);padding-left:14px}
+  .evi .estat{align-self:flex-start}
+  .evidence-note{font-size:13px;color:var(--ink-3);margin-top:16px;font-style:italic;line-height:1.7}
+
+  /* 追问推荐（详情底部）*/
+  .dp-followup{border-top:1px solid var(--rule);padding:clamp(32px,4vw,48px) 0}
+  .dp-followup h3{font-family:var(--serif);font-size:22px;font-weight:700;margin-bottom:6px}
+  .dp-followup p.sub{color:var(--ink-3);font-size:13px;margin-bottom:20px}
+
+  /* 响应式 */
+  @media(max-width:820px){
+    .projects{grid-template-columns:1fr}
+    .skills-grid{grid-template-columns:1fr;gap:0}
+    .foot-grid{grid-template-columns:1fr;gap:28px}
+    .dp-sec{grid-template-columns:1fr;gap:8px}
+    .dp-sec .label{padding-top:0;margin-bottom:6px}
+    .dp-sec .label small{display:inline;margin-left:8px}
+    .evi{grid-template-columns:auto 1fr;gap:14px}
+    .evi .estat{grid-column:1/-1}
+    .masthead .meta{gap:10px 18px}
+    .tl-axis{grid-template-columns:repeat(2,1fr);gap:24px 0}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 顶部栏 ============ -->
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="name">[ 姓名 ]</span>
+      <span class="tag">实习数字分身 · Internship Dossier</span>
+    </div>
+    <nav class="topnav">
+      <a href="#projects">项目</a>
+      <a href="#timeline">时间线</a>
+      <a href="#skills">能力</a>
+      <a href="#ask">提问</a>
+      <div class="audience">
+        <span class="lab">身份</span>
+        <span class="seg on" data-aud="eng">技术面试官</span>
+        <span class="sep">/</span>
+        <span class="seg" data-aud="mentor">导师</span>
+        <span class="sep">/</span>
+        <span class="seg" data-aud="hr">HR</span>
+        <span class="sep">/</span>
+        <span class="seg" data-aud="guest">访客</span>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ 首页 ============ -->
+<main class="home active" id="home">
+
+  <!-- 刊头 -->
+  <section class="masthead">
+    <div class="wrap">
+      <div class="kicker">
+        <span class="dot"></span>
+        <span>Vol. 01 · Java 游戏服务端实习 · 2026 春夏</span>
+      </div>
+      <h1>四个月的<em>实习</em>，整理成一份可追溯的<em>卷宗</em>。</h1>
+      <p class="lede">这里收录的不是日报堆叠，而是经过人工审核、标注完成状态、关联证据的工程记录。你可以按项目浏览、沿时间线回溯，或在对话里追问任何一个技术细节——AI 只负责查询与表达，事实由结构化记录说了算。</p>
+      <div class="meta">
+        <span><b>2026.04 — 2026.07</b> · 四个月</span>
+        <span class="sep">|</span>
+        <span><b>4</b> 个核心主题</span>
+        <span class="sep">|</span>
+        <span><b>105</b> 篇原始记录（经脱敏审核）</span>
+        <span class="sep">|</span>
+        <span>Java 游戏服务端方向</span>
+      </div>
+
+      <div class="ai-note">
+        <span class="ico">AI 声明</span>
+        <span>本站内容由 AI 根据人工审核的脱敏资料查询与组织；项目完成状态、证据等级与保密审查均由所有者人工校准，模型不得自行升级或夸大。每个结论都可追溯到脱敏证据摘要。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 核心项目 -->
+  <section class="block" id="projects">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">§ 01</span>
+        <h2>核心工程产出</h2>
+        <span class="rule"></span>
+        <span class="aside">按完成状态 · 可追溯</span>
+      </div>
+
+      <div class="projects">
+        <!-- 项目 1 -->
+        <article class="pcard" data-proj="p1">
+          <span class="pnum">N° 01</span>
+          <h3 class="ptitle">SQL 审计 / 排查工具</h3>
+          <p class="psum">远程 SQL 日志的异步查询、多目标路由、归档复用与 Excel 导出工具，含 WebSocket 与轮询兜底。横跨需求、实现、攻略、验收与打包的完整迭代。</p>
+          <div class="pfoot">
+            <span class="status s-impltested"><span class="mk">◑</span>实现 · 已测试</span>
+            <span class="contrib">独立完成</span>
+            <span class="evi-count">7 项证据</span>
+          </div>
+          <div class="ptags">
+            <span class="tag">Spring Boot</span><span class="tag">WebSocket</span><span class="tag">异步任务</span><span class="tag">Excel 导出</span>
+          </div>
+          <span class="arrow">→</span>
+        </article>
+
+        <!-- 项目 2 -->
+        <article class="pcard" data-proj="p2">
+          <span class="pnum">N° 02</span>
+          <h3 class="ptitle">运营后台 · 多语言传图修复</h3>
+          <p class="psum">定位"历史语言被本次上传覆盖"的根因，以"数据库历史语言 ∪ 本次真实上传语言"的最小改动修复，不改前端接口与表结构，完成核心场景自测。</p>
+          <div class="pfoot">
+            <span class="status s-impltested"><span class="mk">◑</span>实现 · 已测试</span>
+            <span class="contrib">主要负责</span>
+            <span class="evi-count">4 项证据</span>
+          </div>
+          <div class="ptags">
+            <span class="tag">缺陷修复</span><span class="tag">多语言</span><span class="tag">最小改动</span>
+          </div>
+          <span class="arrow">→</span>
+        </article>
+
+        <!-- 项目 3 -->
+        <article class="pcard" data-proj="p3">
+          <span class="pnum">N° 03</span>
+          <h3 class="ptitle">测试工具 · 角色信息清理</h3>
+          <p class="psum">按环境查询角色、二次确认后清除角色记录，使原账号可重新进入创角流程。完成实际账号验证与面向测试人员的使用说明。</p>
+          <div class="pfoot">
+            <span class="status s-completed"><span class="mk">●</span>已完成</span>
+            <span class="contrib">独立完成</span>
+            <span class="evi-count">3 项证据</span>
+          </div>
+          <div class="ptags">
+            <span class="tag">内部工具</span><span class="tag">二次确认</span><span class="tag">使用说明</span>
+          </div>
+          <span class="arrow">→</span>
+        </article>
+
+        <!-- 项目 4 —— 状态诚实的样板 -->
+        <article class="pcard" data-proj="p4">
+          <span class="pnum">N° 04</span>
+          <h3 class="ptitle">运营后台 · 操作日志原型</h3>
+          <p class="psum">完成数据模型、代码范围、异常隔离与验收标准设计并实现自测。<em style="color:var(--amber);font-style:italic">原始记录明确说明暂未正式提交，故不可表述为正式交付。</em></p>
+          <div class="pfoot">
+            <span class="status s-prototype"><span class="mk">◔</span>原型 · 未正式提交</span>
+            <span class="contrib">主要负责</span>
+            <span class="evi-count">3 项证据</span>
+          </div>
+          <div class="ptags">
+            <span class="tag">原型</span><span class="tag">数据建模</span><span class="tag">操作日志</span>
+          </div>
+          <span class="arrow">→</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 时间线 -->
+  <section class="block" id="timeline">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">§ 02</span>
+        <h2>成长时间线</h2>
+        <span class="rule"></span>
+        <span class="aside">2026.04 — 07 · 按月</span>
+      </div>
+
+      <div class="tl-wrap">
+        <div class="tl-axis">
+          <div class="tl-month">
+            <div class="mlab">四月 · APR</div>
+            <div class="mev"><b>入职适应</b><br>代码阅读 · 业务熟悉<br>工具链上手</div>
+          </div>
+          <div class="tl-month">
+            <div class="mlab">五月 · MAY</div>
+            <div class="mev"><b>SQL 审计工具</b><br>需求 → 实现 → 验收<br>多语言传图修复</div>
+          </div>
+          <div class="tl-month cur">
+            <div class="mlab">六月 · JUN</div>
+            <div class="mev"><b>工具完善 · 打包</b><br>角色清理工具<br>操作日志原型</div>
+          </div>
+          <div class="tl-month">
+            <div class="mlab">七月 · JUL</div>
+            <div class="mev"><b>复盘 · 整理</b><br>AI 工程实验<br>容器化学习</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-legend">
+        <span><i style="background:var(--accent)"></i> 已确认事件</span>
+        <span><i></i> 学习 / 跟进</span>
+        <span>事件类型：学习 · 设计 · 实现 · 调试 · 测试 · 提交 · 部署 · 文档 · 复盘</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 能力 -->
+  <section class="block" id="skills">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">§ 03</span>
+        <h2>技术能力摘要</h2>
+        <span class="rule"></span>
+        <span class="aside">证据导向 · 非自评等级</span>
+      </div>
+
+      <div class="skills-grid">
+        <div class="skill-row">
+          <div class="sn">Java / Spring Boot <em>服务端开发</em></div>
+          <div class="sl">用于实际任务</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">WebSocket / 异步任务 <em>实时通信</em></div>
+          <div class="sl">独立完成功能</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">SQL 排查 / 数据建模 <em>审计与修复</em></div>
+          <div class="sl">独立完成功能</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">Redis 缓存 <em>活动 / 配置</em></div>
+          <div class="sl">用于实际任务</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">Spring AI / ChatClient <em>SSE · Tool Calling</em></div>
+          <div class="sl">完成实验</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">Docker / Compose <em>容器化</em></div>
+          <div class="sl">完成实验</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">游戏活动框架 <em>规则热加载 · 分表</em></div>
+          <div class="sl">方案设计取舍</div>
+        </div>
+        <div class="skill-row">
+          <div class="sn">Linux / 部署流程 <em>Jenkins · Harbor</em></div>
+          <div class="sl">已了解</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 对话入口 -->
+  <section class="block" id="ask">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">§ 04</span>
+        <h2>直接提问</h2>
+        <span class="rule"></span>
+        <span class="aside">先给结论 · 按需展开</span>
+      </div>
+
+      <div class="ask">
+        <h3>不知道从哪问起？</h3>
+        <p class="lead">选一个推荐问题，或在上方切换你的身份（面试官 / 导师 / HR / 访客），回答会调整表达方式，但不改变任何事实。</p>
+
+        <div class="ask-input">
+          <span class="prompt">›</span>
+          <input type="text" placeholder="例如：SQL 审计工具为什么需要异步？" />
+          <span class="go">回车提问 ↵</span>
+        </div>
+
+        <div class="recos">
+          <div class="reco-line">
+            <span class="rn">Q · 01</span>
+            <span class="rt">SQL 审计工具为什么需要异步？</span>
+            <span class="ra">技术追问 →</span>
+          </div>
+          <div class="reco-line">
+            <span class="rn">Q · 02</span>
+            <span class="rt">多环境路由为什么拆成三类配置？</span>
+            <span class="ra">技术追问 →</span>
+          </div>
+          <div class="reco-line">
+            <span class="rn">Q · 03</span>
+            <span class="rt">四个项目里，哪些真正完成了交付？</span>
+            <span class="ra">状态核实 →</span>
+          </div>
+          <div class="reco-line">
+            <span class="rn">Q · 04</span>
+            <span class="rt">这四个月最大的成长是什么？</span>
+            <span class="ra">导师视角 →</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ 项目详情（SQL 审计工具）============ -->
+<main class="detail" id="detail">
+  <div class="wrap">
+    <div class="crumb">
+      <a href="#" onclick="goHome();return false;">← 返回卷宗</a>
+      <span class="sep">/</span>
+      <span class="mono ink3">N° 01 · SQL 审计 / 排查工具</span>
+    </div>
+
+    <header class="dp-head">
+      <div class="pnum">N° 01 · 工程交付</div>
+      <h1>SQL 审计 / 排查工具</h1>
+      <p class="dsum">面向远程 SQL 日志的查询、路由、归档与导出工具。支持多目标多来源配置路由、异步任务、时间倒序展示、Excel 导出、结果归档复用与软删除，以及 WebSocket 实时推送与轮询兜底。</p>
+
+      <div class="dp-meta">
+        <div class="mg"><span class="k">完成状态</span><span class="status s-impltested"><span class="mk">◑</span>实现 · 已测试</span></div>
+        <div class="mg"><span class="k">个人贡献</span><span class="v">独立完成 · INDEPENDENT</span></div>
+        <div class="mg"><span class="k">时间</span><span class="v">2026.05.29 — 06.05</span></div>
+        <div class="mg"><span class="k">证据</span><span class="v">7 项 · 经脱敏</span></div>
+        <div class="mg" style="flex:1;min-width:200px">
+          <span class="k">技术栈</span>
+          <div class="tags">
+            <span class="tag">Spring Boot</span><span class="tag">WebSocket</span><span class="tag">异步任务</span>
+            <span class="tag">Excel 导出</span><span class="tag">归档复用</span><span class="tag">轮询兜底</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="dp-body">
+      <!-- 背景 -->
+      <div class="dp-sec">
+        <div class="label">背景<small>Background</small></div>
+        <div class="content">
+          <p>线上问题排查依赖远程 SQL 日志，但日志查询散落在不同环境与目标库中，排查一次问题需要在多个入口反复手动查询、复制、比对，效率低且容易遗漏命中记录。</p>
+        </div>
+      </div>
+
+      <!-- 问题 -->
+      <div class="dp-sec">
+        <div class="label">问题<small>Problem</small></div>
+        <div class="content">
+          <ul>
+            <li>查询入口分散，多环境、多目标缺乏统一路由；</li>
+            <li>同步查询阻塞，单次大日志查询拖慢整个排查；</li>
+            <li>历史查询结果无法复用，重复劳动；</li>
+            <li>命中 SQL 难以完整保留与归档导出。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 个人职责 -->
+      <div class="dp-sec">
+        <div class="label">个人职责<small>Role</small></div>
+        <div class="content">
+          <p><strong>独立完成</strong>该工具的需求分析、方案设计、实现、自测与使用文档。属个人独立交付的工程产出（<span class="mono">INDEPENDENT</span>）。</p>
+        </div>
+      </div>
+
+      <!-- 方案 -->
+      <div class="dp-sec">
+        <div class="label">方案<small>Approach</small></div>
+        <div class="content">
+          <p>采用<strong>异步任务</strong>承接远程 SQL 日志查询，避免长耗时查询阻塞主流程；多环境、多目标拆为<strong>三类配置路由</strong>，按来源与目标分发；查询结果<strong>归档复用</strong>并支持软删除；命中 SQL 以<strong>时间倒序</strong>完整展示，支持 Excel 导出。</p>
+          <p>实时性方面，以 <strong>WebSocket</strong> 推送任务进度，并以<strong>轮询作为兜底</strong>，确保连接异常时仍能拿到结果。</p>
+          <div class="chain">
+客户端请求 <span class="arrow">→</span> 异步任务调度 <span class="arrow">→</span> 多目标路由 <span class="arrow">→</span> 远程 SQL 日志查询 <span class="arrow">→</span> 归档 <span class="arrow">→</span> WebSocket / 轮询回传 <span class="arrow">→</span> 时间倒序展示 / Excel 导出
+          </div>
+        </div>
+      </div>
+
+      <!-- 难点 -->
+      <div class="dp-sec">
+        <div class="label">难点<small>Challenges</small></div>
+        <div class="content">
+          <ul>
+            <li><strong>异步与实时性的权衡</strong>：既要查询不阻塞，又要让用户感知进度，因此引入 WebSocket + 轮询双通道；</li>
+            <li><strong>多目标路由的可维护性</strong>：环境、来源、目标组合多，需拆成可配置的三类路由避免硬编码；</li>
+            <li><strong>结果归档与复用</strong>：相同查询不应重复执行，需设计归档键与软删除策略。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 验证 -->
+      <div class="dp-sec">
+        <div class="label">验证<small>Verification</small></div>
+        <div class="content">
+          <p>完成<strong>连续上传不同语言的核心场景自测</strong>，并产出使用说明与验收文档。验证证据等级为 <span class="mono accent">VERIFIED</span>（有自测与验收记录）。</p>
+          <p><em>说明：本工具为内部排查工具，"实现并测试"指完成实现与自测；是否纳入正式上线流程以团队最终确认为准，此处不表述为"已正式上线交付"。</em></p>
+        </div>
+      </div>
+
+      <!-- 结果 -->
+      <div class="dp-sec">
+        <div class="label">结果<small>Outcome</small></div>
+        <div class="content">
+          <p>工具整合了分散的远程 SQL 日志查询入口，支持异步、路由、归档、导出与实时回传，显著降低重复排查成本。产出包含完整的使用说明、验收文档、打包与备份记录。</p>
+        </div>
+      </div>
+
+      <!-- 未完成项 —— 诚实标注 -->
+      <div class="dp-sec warning">
+        <div class="label">未完成项<small>Limitations</small></div>
+        <div class="content">
+          <ul>
+            <li>正式上线 / 纳入团队工具链的流程<strong>尚未最终确认</strong>；</li>
+            <li>部分边界场景的测试覆盖可进一步加强。</li>
+          </ul>
+          <p><em>状态判定依据：有实现记录与自测/验收证据，但未确认正式提交、验收或上线，故标记为「实现 · 已测试」（<span class="mono">IMPLEMENTED_TESTED</span>），不得表述为「已正式交付」。</em></p>
+        </div>
+      </div>
+
+      <!-- 反思 -->
+      <div class="dp-sec">
+        <div class="label">反思<small>Reflection</small></div>
+        <div class="content">
+          <p>异步 + 兜底的双通道设计让我更理解"可用性不能完全依赖单一通道"的工程直觉；多目标路由的可维护性也让我体会到<strong>配置驱动</strong>相对于硬编码的长期价值。</p>
+        </div>
+      </div>
+
+      <!-- 证据卡 -->
+      <div class="dp-sec" style="border-top:none">
+        <div class="label">证据<small>Evidence · 已脱敏</small></div>
+        <div class="content">
+          <div class="evidences">
+            <div class="evi">
+              <span class="ref">[E·01]</span>
+              <div class="ebody">
+                <div class="etitle">需求与方案设计文档</div>
+                <div class="emeta">SOURCE · 设计文档　|　DATE · 2026.05</div>
+                <div class="eexcerpt">记录异步查询、多目标路由、归档复用与 Excel 导出的原始设计意图与取舍。</div>
+              </div>
+              <span class="estat status s-impltested"><span class="mk">◑</span>VERIFIED</span>
+            </div>
+            <div class="evi">
+              <span class="ref">[E·02]</span>
+              <div class="ebody">
+                <div class="etitle">实现与自测记录</div>
+                <div class="emeta">SOURCE · 日报摘录　|　DATE · 2026.05 — 06</div>
+                <div class="eexcerpt">"完成连续上传不同语言的核心场景自测"，覆盖多目标路由与异步回传路径。</div>
+              </div>
+              <span class="estat status s-impltested"><span class="mk">◑</span>VERIFIED</span>
+            </div>
+            <div class="evi">
+              <span class="ref">[E·03]</span>
+              <div class="ebody">
+                <div class="etitle">使用说明 / 验收文档</div>
+                <div class="emeta">SOURCE · 验收文档　|　DATE · 2026.06</div>
+                <div class="eexcerpt">面向使用者的操作说明与验收标准记录。</div>
+              </div>
+              <span class="estat status s-impltested"><span class="mk">◑</span>SUPPORTED</span>
+            </div>
+            <div class="evi">
+              <span class="ref">[E·04]</span>
+              <div class="ebody">
+                <div class="etitle">打包与备份记录</div>
+                <div class="emeta">SOURCE · 打包记录　|　DATE · 2026.06</div>
+                <div class="eexcerpt">工具的打包产物与备份留档记录。</div>
+              </div>
+              <span class="estat status s-impltested"><span class="mk">◑</span>SUPPORTED</span>
+            </div>
+          </div>
+          <p class="evidence-note">证据仅展示人工审核后的脱敏摘要、日期与证据类型，不包含日报原文、本地路径或未脱敏内部信息。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 追问 -->
+    <div class="dp-followup">
+      <h3>继续追问</h3>
+      <p class="sub">下列问题均与本项目证据相关，不会虚构方向。</p>
+      <div class="recos">
+        <div class="reco-line"><span class="rn">→ 01</span><span class="rt">为什么异步之后还需要轮询兜底？</span><span class="ra">WebSocket 可靠性 →</span></div>
+        <div class="reco-line"><span class="rn">→ 02</span><span class="rt">三类配置路由具体是怎么划分的？</span><span class="ra">配置设计 →</span></div>
+        <div class="reco-line"><span class="rn">→ 03</span><span class="rt">归档复用是怎么避免重复查询的？</span><span class="ra">缓存策略 →</span></div>
+        <div class="reco-line"><span class="rn">→ 04</span><span class="rt">这个工具最终正式上线了吗？</span><span class="ra">状态边界 →</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ============ 页脚 ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-col">
+        <h4>关于本卷宗</h4>
+        <div class="big">内容来自个人记录并经人工审核</div>
+        <p>AI 负责查询与表达；项目状态、证据等级与保密审查由所有者人工校准。公开内容仅来自版本化的脱敏快照，不连接、不读取任何私有知识库。</p>
+      </div>
+      <div class="foot-col">
+        <h4>联系方式</h4>
+        <a class="link" href="#">→ 求职邮箱 [ email待填 ]</a>
+        <a class="link" href="#">→ GitHub [ URL待填 ]</a>
+        <a class="link" href="#">→ 简历 [ PDF入口待填 ]</a>
+      </div>
+      <div class="foot-col">
+        <h4>隐私与边界</h4>
+        <p>公开访问无需注册；匿名会话约 30 分钟后清理；不记录访客原始问题。内部服务器、凭据、SQL、业务细节与原始截图默认不公开。</p>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>Vol. 01 · 2026 春夏 · Java 游戏服务端实习</span>
+      <span>Snapshot v0 · 脱敏 · 人工审核 · 确定性兜底</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 受众切换（纯前端示意，仅切换样式标记）
+  document.querySelectorAll('.audience .seg').forEach(s=>{
+    s.addEventListener('click',()=>{
+      document.querySelectorAll('.audience .seg').forEach(x=>x.classList.remove('on'));
+      s.classList.add('on');
+    });
+  });
+
+  // 项目卡 → 详情页
+  function openDetail(){
+    document.getElementById('home').classList.remove('active');
+    document.getElementById('home').classList.add('hidden');
+    document.getElementById('detail').classList.add('active');
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  function goHome(){
+    document.getElementById('detail').classList.remove('active');
+    document.getElementById('home').classList.remove('hidden');
+    document.getElementById('home').classList.add('active');
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  document.querySelectorAll('.pcard').forEach(c=>{
+    c.addEventListener('click',openDetail);
+  });
+</script>
+</body>
+</html>

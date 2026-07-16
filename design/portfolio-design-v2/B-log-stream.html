@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>实习作品集 · Log Stream</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============ Tokens: Log Stream ============
+     DELIBERATELY amber, not the default terminal-green. */
+  :root{
+    --bg:#0A0E0D;           /* warm near-black, not zinc */
+    --bg-2:#0E1413;
+    --bg-3:#121A18;
+    --line:#1E2A27;
+    --line-2:#2A3935;
+    --text:#C8D4C8;         /* phosphor text */
+    --text-dim:#6F8079;
+    --text-faint:#485650;
+    --amber:#E0A526;        /* SIGNAL — the only saturated color */
+    --ok:#3A8A7B;           /* verified teal */
+    --warn:#C24A3A;         /* alert red */
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+    --sans:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--mono);font-size:14px;line-height:1.6;
+    /* faint scanline + vignette, very subtle */
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at 50% 0%, rgba(224,165,38,.04), transparent 55%);
+  }
+  ::selection{background:var(--amber);color:var(--bg)}
+  a{color:var(--amber);text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px}
+
+  /* ============ Status bar ============ */
+  .statusbar{
+    position:sticky;top:0;z-index:40;
+    background:rgba(10,14,13,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+    font-size:11.5px;letter-spacing:.04em;
+  }
+  .statusbar .row{display:flex;align-items:center;gap:18px;padding:9px 0;flex-wrap:wrap}
+  .statusbar .pid{color:var(--text-dim)}
+  .statusbar .pid b{color:var(--text)}
+  .statusbar .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);display:inline-block;margin-right:6px;vertical-align:middle}
+  .statusbar .sp{flex:1}
+  /* the fallback toggle — the signature interaction */
+  .engine{
+    display:inline-flex;align-items:center;gap:0;
+    border:1px solid var(--line-2);border-radius:3px;overflow:hidden;
+  }
+  .engine button{
+    appearance:none;background:transparent;color:var(--text-dim);
+    border:0;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    padding:6px 11px;cursor:pointer;border-right:1px solid var(--line-2);
+  }
+  .engine button:last-child{border-right:0}
+  .engine button[aria-pressed="true"]{background:var(--amber);color:var(--bg);font-weight:700}
+  .engine button.fb[aria-pressed="true"]{background:var(--warn);color:var(--text)}
+
+  /* ============ Hero feed ============ */
+  .hero{padding:54px 0 34px;border-bottom:1px solid var(--line)}
+  .hero .pre{color:var(--amber);font-size:12px;letter-spacing:.16em;margin:0 0 18px}
+  .hero h1{
+    font-family:var(--sans);font-weight:700;
+    font-size:clamp(34px,6vw,68px);line-height:1.02;letter-spacing:-.02em;
+    margin:0 0 22px;color:#E8EFE8;
+  }
+  .hero h1 .am{color:var(--amber)}
+  .hero .lede{
+    font-family:var(--sans);max-width:62ch;font-size:clamp(16px,1.8vw,19px);
+    color:var(--text-dim);margin:0 0 30px;line-height:1.55;
+  }
+
+  /* the live feed */
+  .feed{
+    background:var(--bg-2);border:1px solid var(--line);border-radius:4px;
+    padding:14px 16px;font-size:13px;max-height:230px;overflow:hidden;position:relative;
+  }
+  .feed::after{content:"";position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,var(--bg-2))}
+  .feed .ln{display:flex;gap:10px;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .feed .ts{color:var(--text-faint)}
+  .feed .lv{font-weight:700;width:74px;flex-shrink:0}
+  .feed .lv-info{color:var(--text-dim)}
+  .feed .lv-ok{color:var(--ok)}
+  .feed .lv-warn{color:var(--amber)}
+  .feed .lv-err{color:var(--warn)}
+  .feed .msg{color:var(--text);overflow:hidden;text-overflow:ellipsis}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--amber);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .hero-meta{display:flex;flex-wrap:wrap;gap:10px 30px;margin-top:22px;font-size:12px;color:var(--text-dim)}
+  .hero-meta b{color:var(--text)}
+
+  /* ============ Audience ============ */
+  .aud{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px 0;border-bottom:1px solid var(--line)}
+  .aud .l{color:var(--text-faint)}
+  .seg{display:inline-flex;border:1px solid var(--line-2);border-radius:3px;overflow:hidden}
+  .seg button{appearance:none;background:transparent;color:var(--text-dim);border:0;font:inherit;font-size:12px;padding:7px 13px;cursor:pointer;border-right:1px solid var(--line-2)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+
+  /* ============ Sections ============ */
+  section{padding:48px 0;border-bottom:1px solid var(--line)}
+  .shead{display:flex;align-items:baseline;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+  .shead .tag{color:var(--amber);font-size:11px;letter-spacing:.12em}
+  .shead h2{margin:0;font-family:var(--sans);font-weight:600;font-size:clamp(22px,3vw,32px);color:#E8EFE8;letter-spacing:-.01em}
+  .shead .n{margin-left:auto;color:var(--text-faint);font-size:11px}
+
+  /* log entries (projects) */
+  .log{border:1px solid var(--line);background:var(--bg-2);border-radius:4px;margin-bottom:14px;overflow:hidden}
+  .log-head{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line);background:var(--bg-3)}
+  .log-head .sev{font-weight:700;font-size:11px;letter-spacing:.08em;padding:3px 9px;border-radius:2px;width:fit-content}
+  .sev-ok{background:rgba(58,138,123,.18);color:var(--ok);border:1px solid var(--ok)}
+  .sev-info{background:rgba(224,165,38,.14);color:var(--amber);border:1px solid var(--amber)}
+  .sev-warn{background:rgba(194,74,58,.16);color:var(--warn);border:1px solid var(--warn)}
+  .log-head h3{margin:0;font-family:var(--sans);font-weight:600;font-size:18px;color:#E8EFE8}
+  .log-head .id{color:var(--text-faint);font-size:11px}
+  .log-head .ts{color:var(--text-dim);font-size:11px;text-align:right}
+  .log-body{padding:14px 18px}
+  .log-body .desc{font-family:var(--sans);color:var(--text);font-size:14.5px;margin:0 0 14px;max-width:70ch;line-height:1.55}
+
+  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line)}
+  .fields .f{background:var(--bg-2);padding:10px 14px}
+  .fields .fk{color:var(--text-faint);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+  .fields .fv{color:var(--text);font-size:13px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:2px;letter-spacing:.04em}
+  .p-completed{background:rgba(58,138,123,.2);color:var(--ok)}
+  .p-implemented{color:var(--ok);border:1px solid var(--ok)}
+  .p-prototype{background:rgba(224,165,38,.18);color:var(--amber)}
+  .vtag{display:inline-flex;align-items:center;gap:5px}
+  .vtag::before{content:"";width:7px;height:7px;border-radius:50%}
+  .vt-verified::before{background:var(--ok)}
+  .vt-supported::before{background:var(--ok);opacity:.5}
+  .vt-self::before{background:var(--amber)}
+
+  .stack{display:flex;flex-wrap:wrap;gap:5px}
+  .tk{font-size:10.5px;color:var(--text-dim);border:1px solid var(--line-2);padding:2px 7px;border-radius:2px}
+
+  /* fallback banner inside log */
+  .fb-banner{margin-top:12px;border-left:2px solid var(--warn);background:rgba(194,74,58,.08);padding:10px 14px;font-size:12.5px;color:var(--text-dim)}
+  .fb-banner b{color:var(--warn)}
+
+  /* ============ Fallback engine section (the signature) ============ */
+  .fbx{border:1px solid var(--line);background:var(--bg-2);border-radius:4px;padding:22px 24px}
+  .fbx p.top{margin:0 0 16px;color:var(--text);font-family:var(--sans);font-size:15.5px;max-width:64ch}
+  .fbchain{display:flex;flex-direction:column;gap:0;font-size:13px}
+  .fbchain .step{display:flex;gap:14px;padding:10px 0;border-top:1px dashed var(--line-2);align-items:baseline}
+  .fbchain .step:first-child{border-top:0}
+  .fbchain .step .n{color:var(--amber);font-weight:700;width:22px;flex-shrink:0}
+  .fbchain .step .t{color:var(--text)}
+  .fbchain .step .h{color:var(--text-faint);font-size:11.5px;margin-left:auto}
+  .mode-note{margin-top:16px;padding:12px 14px;border:1px dashed var(--amber);border-radius:3px;font-size:12.5px;color:var(--text-dim)}
+  .mode-note b{color:var(--amber)}
+  body.is-fallback .mode-note{background:rgba(194,74,58,.08);border-color:var(--warn)}
+  body.is-fallback .mode-note b{color:var(--warn)}
+
+  /* ============ Timeline ============ */
+  .timeline{position:relative;padding-left:24px}
+  .timeline::before{content:"";position:absolute;left:7px;top:4px;bottom:4px;width:1px;background:var(--line-2)}
+  .tl-row{position:relative;padding:0 0 22px}
+  .tl-row::before{content:"";position:absolute;left:-23px;top:4px;width:13px;height:13px;border-radius:50%;background:var(--bg);border:1px solid var(--text-faint)}
+  .tl-row.ok::before{background:var(--ok);border-color:var(--ok)}
+  .tl-row.am::before{background:var(--amber);border-color:var(--amber)}
+  .tl-row .m{font-size:11px;color:var(--text-faint);letter-spacing:.08em}
+  .tl-row h4{margin:2px 0 4px;font-family:var(--sans);font-weight:600;font-size:16px;color:#E8EFE8}
+  .tl-row p{margin:0;color:var(--text-dim);font-family:var(--sans);font-size:14px;max-width:62ch}
+
+  /* ============ Query ============ */
+  .qbar{display:flex;border:1px solid var(--line-2);border-radius:4px;background:var(--bg-2);overflow:hidden}
+  .qbar .pfx{color:var(--amber);padding:13px 14px;font-weight:700}
+  .qbar input{flex:1;background:transparent;border:0;color:var(--text);font-family:var(--mono);font-size:13.5px;padding:13px 8px;outline:none}
+  .qbar input::placeholder{color:var(--text-faint)}
+  .qbar button{appearance:none;background:var(--amber);color:var(--bg);border:0;font-weight:700;font-size:12px;letter-spacing:.06em;padding:0 20px;cursor:pointer}
+  .sug{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .sug button{background:transparent;border:1px solid var(--line-2);color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:3px;cursor:pointer}
+  .sug button:hover{border-color:var(--amber);color:var(--amber)}
+
+  /* footer */
+  footer{padding:46px 0 70px}
+  .fg{display:grid;grid-template-columns:1.5fr 1fr;gap:36px}
+  .disc{font-size:11.5px;color:var(--text-faint);line-height:1.8;border-left:2px solid var(--amber);padding-left:14px}
+  .links{display:flex;flex-direction:column;gap:6px;font-size:12px}
+  .links a{color:var(--text-dim);border-bottom:1px solid var(--line);padding-bottom:7px;display:flex;justify-content:space-between}
+  .links a:hover{color:var(--amber)}
+
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.cursor{animation:none!important;opacity:1}}
+  @media (max-width:680px){
+    .log-head{grid-template-columns:1fr;gap:8px}
+    .log-head .ts{text-align:left}
+    .fg{grid-template-columns:1fr}
+    .feed{max-height:170px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Status bar -->
+<div class="statusbar">
+  <div class="wrap row">
+    <span class="pid"><span class="dot" id="sbDot"></span>SERVICE <b>portfolio-agent</b></span>
+    <span class="pid">SNAP <b>v0</b></span>
+    <span class="pid" id="modeTag">ENGINE <b style="color:var(--amber)">DEEPSEEK</b></span>
+    <span class="sp"></span>
+    <span class="pid">视图 ▸</span>
+    <div class="seg" id="vseg">
+      <button aria-pressed="true">面试官</button>
+      <button aria-pressed="false">导师</button>
+      <button aria-pressed="false">HR</button>
+    </div>
+    <div class="engine" role="group" aria-label="引擎模式">
+      <button aria-pressed="true" id="engDeep">DEEPSEEK</button>
+      <button aria-pressed="false" class="fb" id="engFb">FALLBACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="wrap">
+    <p class="pre">› tail -f /var/log/internship/portfolio.stream</p>
+    <h1>作品集是一条<br/><span class="am">正在运行</span>的操作日志。</h1>
+    <p class="lede">
+      不是聊天框。每条产出按真实顺序流入，<b style="color:var(--amber)">严重级别即证据等级</b>。
+      模型挂了？右上角切到 FALLBACK——整页会诚实地切换到确定性兜底引擎，回答照常，标记照常。
+    </p>
+
+    <div class="feed" id="feed" aria-label="实时日志流">
+      <div class="ln"><span class="ts">04-12 09:03</span><span class="lv lv-info">[INFO]</span><span class="msg">LEARNING · 建立日报与客户端→服务端排障链路</span></div>
+      <div class="ln"><span class="ts">05-29 14:21</span><span class="lv lv-ok">[OK]</span><span class="msg">DESIGN · SQL 审计工具：异步任务 + 倒序 + 多目标路由</span></div>
+      <div class="ln"><span class="ts">06-02 10:48</span><span class="lv lv-ok">[OK]</span><span class="msg">IMPLEMENTATION · WebSocket 实时推送 + 轮询兜底</span></div>
+      <div class="ln"><span class="ts">06-04 16:30</span><span class="lv lv-warn">[TEST]</span><span class="msg">TEST · 多语言传图并集策略 · 连续上传自测通过</span></div>
+      <div class="ln"><span class="ts">06-05 11:02</span><span class="lv lv-ok">[OK]</span><span class="msg">SUBMIT · 角色清理功能交付测试人员</span></div>
+      <div class="ln"><span class="ts">07-08 15:40</span><span class="lv lv-err">[WARN]</span><span class="msg">PROTOTYPE · 操作日志原型已实现自测 · 未提交</span></div>
+      <div class="ln"><span class="ts">--:--:--</span><span class="lv lv-info">[...]</span><span class="msg">stream open<span class="cursor"></span></span></div>
+    </div>
+
+    <div class="hero-meta">
+      <span><b>UP</b> 2026.04 — 07</span>
+      <span><b>NODE</b> java-game-backend-intern</span>
+      <span><b>ENTRIES</b> 4 archived</span>
+      <span><b>LATENCY</b> 查询 &lt; 1s · SSE 首 token &lt; 3s</span>
+    </div>
+  </div>
+</header>
+
+<!-- Projects as log -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="tag">§ ENTRIES</span>
+      <h2>归档条目</h2>
+      <span class="n">严重级别 = 证据等级 · 状态为唯一权威</span>
+    </div>
+
+    <div class="log">
+      <div class="log-head">
+        <span class="sev sev-ok">VERIFIED</span>
+        <div><h3>SQL 审计 / 排查工具 <span class="id">· case-01 · COMPLETED</span></h3></div>
+        <span class="ts">2026.05—06</span>
+      </div>
+      <div class="log-body">
+        <p class="desc">把远程 SQL 日志查询从一次性脚本做成工具：异步任务、时间倒序、Excel 导出、多目标/多来源路由、完整命中 SQL 展示、查询结果归档复用与软删除。</p>
+        <div class="fields">
+          <div class="f"><div class="fk">status</div><div class="fv"><span class="pill p-completed">COMPLETED</span></div></div>
+          <div class="f"><div class="fk">contribution</div><div class="fv">INDEPENDENT</div></div>
+          <div class="f"><div class="fk">verification</div><div class="fv"><span class="vtag vt-verified">VERIFIED</span></div></div>
+          <div class="f"><div class="fk">confidentiality</div><div class="fv">SAFE_GENERALIZED</div></div>
+          <div class="f"><div class="fk">evidence</div><div class="fv">验收文档 · 使用说明</div></div>
+          <div class="f"><div class="fk">stack</div><div class="fv"><span class="stack"><span class="tk">Java</span><span class="tk">WebSocket</span><span class="tk">Async</span></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="log">
+      <div class="log-head">
+        <span class="sev sev-info">SUPPORTED</span>
+        <div><h3>运营后台 · 多语言传图修复 <span class="id">· case-02 · IMPLEMENTED_TESTED</span></h3></div>
+        <span class="ts">2026.06</span>
+      </div>
+      <div class="log-body">
+        <p class="desc">根因是历史语言被本次上传覆盖。采用「数据库历史语言 ∪ 本次真实上传语言」并集，不改前端接口与表结构，连续上传不同语言核心场景自测通过。</p>
+        <div class="fields">
+          <div class="f"><div class="fk">status</div><div class="fv"><span class="pill p-implemented">IMPLEMENTED_TESTED</span></div></div>
+          <div class="f"><div class="fk">contribution</div><div class="fv">PRIMARY</div></div>
+          <div class="f"><div class="fk">verification</div><div class="fv"><span class="vtag vt-supported">SUPPORTED</span></div></div>
+          <div class="f"><div class="fk">note</div><div class="fv" style="color:var(--amber)">非「已正式交付」</div></div>
+          <div class="f"><div class="fk">evidence</div><div class="fv">场景自测记录</div></div>
+          <div class="f"><div class="fk">stack</div><div class="fv"><span class="stack"><span class="tk">运营后台</span><span class="tk">多语言</span></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="log">
+      <div class="log-head">
+        <span class="sev sev-ok">VERIFIED</span>
+        <div><h3>内部测试工具 · 角色信息清理 <span class="id">· case-03 · COMPLETED</span></h3></div>
+        <span class="ts">2026.06</span>
+      </div>
+      <div class="log-body">
+        <p class="desc">按环境查询角色、二次确认后清除角色记录，使原账号可重新进入创角流程；完成实际账号验证与面向测试人员的使用说明。</p>
+        <div class="fields">
+          <div class="f"><div class="fk">status</div><div class="fv"><span class="pill p-completed">COMPLETED</span></div></div>
+          <div class="f"><div class="fk">contribution</div><div class="fv">INDEPENDENT</div></div>
+          <div class="f"><div class="fk">verification</div><div class="fv"><span class="vtag vt-verified">VERIFIED</span></div></div>
+          <div class="f"><div class="fk">confidentiality</div><div class="fv">SAFE_GENERALIZED</div></div>
+          <div class="f"><div class="fk">evidence</div><div class="fv">账号验证 · 使用说明</div></div>
+          <div class="f"><div class="fk">delivered</div><div class="fv">面向测试人员</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="log">
+      <div class="log-head">
+        <span class="sev sev-warn">SELF_REPORTED</span>
+        <div><h3>运营后台 · 操作日志原型 <span class="id">· case-04 · PROTOTYPE</span></h3></div>
+        <span class="ts">2026.07</span>
+      </div>
+      <div class="log-body">
+        <p class="desc">完成数据模型、代码范围、异常隔离与验收标准的设计与实现并自测。但原始记录明确：<b style="color:var(--warn)">暂未正式提交</b>。</p>
+        <div class="fields">
+          <div class="f"><div class="fk">status</div><div class="fv"><span class="pill p-prototype">PROTOTYPE</span></div></div>
+          <div class="f"><div class="fk">contribution</div><div class="fv">PRIMARY</div></div>
+          <div class="f"><div class="fk">verification</div><div class="fv"><span class="vtag vt-self">SELF_REPORTED</span></div></div>
+          <div class="f"><div class="fk">boundary</div><div class="fv" style="color:var(--warn)">仅原型 · 未上线</div></div>
+          <div class="f"><div class="fk">evidence</div><div class="fv">设计文档 · 自测</div></div>
+          <div class="f"><div class="fk">stack</div><div class="fv"><span class="stack"><span class="tk">操作日志</span><span class="tk">数据建模</span></span></div></div>
+        </div>
+        <div class="fb-banner"><b>[FALLBACK GUARD]</b> 本条触发验收红线：禁止被表述为「已上线 / 已正式交付」。即使模型被绕过，兜底引擎也会强制保留这条边界。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Fallback engine (signature) -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="tag">§ RELIABILITY</span>
+      <h2>兜底引擎</h2>
+      <span class="n">试着切右上角的 FALLBACK →</span>
+    </div>
+    <div class="fbx">
+      <p class="top">DeepSeek 超时 / 429 / 5xx / Tool Calling 失败 / SSE 中断时，公开端必须切换到确定性兜底。下面的链路是<b>写死在代码里</b>的，不依赖模型。</p>
+      <div class="fbchain">
+        <div class="step"><span class="n">1</span><span class="t">FAQ 规范问题与别名匹配</span><span class="h">~0ms</span></div>
+        <div class="step"><span class="n">2</span><span class="t">Project 名称 / 技术标签 / 状态 / 时间匹配</span><span class="h">结构化查询</span></div>
+        <div class="step"><span class="n">3</span><span class="t">Claim · TimelineEvent · Evidence 关联查询</span><span class="h">证据链</span></div>
+        <div class="step"><span class="n">4</span><span class="t">按受众选择固定模板生成回答</span><span class="h">确定性</span></div>
+        <div class="step"><span class="n">5</span><span class="t">返回证据卡 + 推荐追问，并标记「稳定模式」</span><span class="h">诚实标记</span></div>
+      </div>
+      <div class="mode-note" id="modeNote"><b>当前：DEEPSEEK 生成模式。</b>回答由模型组织表达，但事实仍来自公开快照。模型不可用时请切到 FALLBACK。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Timeline -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="tag">§ TIMELINE</span>
+      <h2>事件流</h2>
+      <span class="n">按月份 · 可跳转条目</span>
+    </div>
+    <div class="timeline">
+      <div class="tl-row"><div class="m">2026.04 · LEARNING</div><h4>建立排障链路与日报习惯</h4><p>客户端包能力 → 活动配置 → 规则表 → 玩家限制 → 热加载 → 缓存 → 服务端包 → 前端资源。</p></div>
+      <div class="tl-row ok"><div class="m">2026.05—06 · DESIGN → IMPL → TEST</div><h4>SQL 审计工具完成并归档</h4><p>异步、倒序、Excel 导出、多目标路由、WebSocket + 轮询兜底。</p></div>
+      <div class="tl-row ok"><div class="m">2026.06 · DEBUG → TEST</div><h4>多语言修复 + 角色清理</h4><p>定位根因并自测；角色清理交付测试人员。</p></div>
+      <div class="tl-row am"><div class="m">2026.07 · DESIGN → IMPL</div><h4>操作日志原型（未提交）</h4><p>设计与自测完成，停留在原型——有意保留的边界。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Query -->
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <span class="tag">§ QUERY</span>
+      <h2>查询这条流</h2>
+      <span class="n">默认先给结论</span>
+    </div>
+    <div class="qbar">
+      <span class="pfx">›</span>
+      <input id="q" type="text" placeholder="ask portfolio-agent ... 例如：为什么 WebSocket 还要轮询？" aria-label="提问" />
+      <button id="ask">EXEC</button>
+    </div>
+    <div class="sug" id="sug">
+      <button>SQL 审计工具为什么需要异步？</button>
+      <button>为什么 WebSocket 还要轮询？</button>
+      <button>哪些真正完成，哪些只是学习？</button>
+      <button>操作日志原型最后上线了吗？</button>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap fg">
+    <p class="disc">
+      // 内容来自个人记录并经人工审核，AI 负责查询与表达<br/>
+      // 公开快照仅含 PUBLIC/PUBLIC_SANITIZED 且 SAFE_GENERALIZED<br/>
+      // 不记录访客问题 · 不展示日报原文 · 不暴露本地路径与凭据
+    </p>
+    <nav class="links">
+      <a href="#">求职邮箱 <span>↗</span></a>
+      <a href="#">GitHub <span>↗</span></a>
+      <a href="#">简历入口 <span>↗</span></a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  // Engine toggle — the signature interaction. Materializes the doc's fallback requirement.
+  const engDeep=document.getElementById("engDeep");
+  const engFb=document.getElementById("engFb");
+  const modeTag=document.getElementById("modeTag");
+  const modeNote=document.getElementById("modeNote");
+  const sbDot=document.getElementById("sbDot");
+  function setEngine(fb){
+    engDeep.setAttribute("aria-pressed",fb?"false":"true");
+    engFb.setAttribute("aria-pressed",fb?"true":"false");
+    document.body.classList.toggle("is-fallback",fb);
+    if(fb){
+      modeTag.innerHTML='ENGINE <b style="color:var(--warn)">FALLBACK · 稳定模式</b>';
+      sbDot.style.background="var(--warn)";sbDot.style.boxShadow="0 0 8px var(--warn)";
+      modeNote.innerHTML='<b>当前：FALLBACK 稳定模式。</b>回答由确定性模板 + 公开快照生成，已标记为「稳定模式」，不与模型半成品拼接。';
+    }else{
+      modeTag.innerHTML='ENGINE <b style="color:var(--amber)">DEEPSEEK</b>';
+      sbDot.style.background="var(--ok)";sbDot.style.boxShadow="0 0 8px var(--ok)";
+      modeNote.innerHTML='<b>当前：DEEPSEEK 生成模式。</b>回答由模型组织表达，但事实仍来自公开快照。模型不可用时请切到 FALLBACK。';
+    }
+  }
+  engDeep.addEventListener("click",()=>setEngine(false));
+  engFb.addEventListener("click",()=>setEngine(true));
+
+  // audience (view) only changes label, not data
+  document.querySelectorAll("#vseg button").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("#vseg button").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true");
+  }));
+
+  // query
+  const q=document.getElementById("q");
+  document.querySelectorAll("#sug button").forEach(s=>s.addEventListener("click",()=>{q.value=s.textContent;q.focus();}));
+  document.getElementById("ask").addEventListener("click",()=>{
+    if(!q.value.trim())return;
+    const fb=document.body.classList.contains("is-fallback");
+    alert("（静态设计稿，未接 Agent）\n模式： "+(fb?"FALLBACK 稳定模式":"DEEPSEEK")+"\n问题： "+q.value);
+  });
+</script>
+</body>
+</html>

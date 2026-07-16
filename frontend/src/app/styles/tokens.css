@@ -1,0 +1,19 @@
+:root {
+  --paper: #f4eee4;
+  --paper-hi: #fbf7ef;
+  --paper-low: #e9dfd0;
+  --ink: #201c17;
+  --ink-2: #34302a;
+  --muted: #746b5e;
+  --faint: #9c9182;
+  --rule: #cdbfa9;
+  --red: #7a2e2a;
+  --red-hi: #b65d53;
+  --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+  --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --header-height: 66px;
+  --content-width: 1180px;
+  --page-gutter: clamp(22px, 4vw, 48px);
+  --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+}
