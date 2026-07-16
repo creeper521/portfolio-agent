@@ -191,6 +191,109 @@ public final class UnicodeLegacyImport {}
         Rule = 'legacy-package'
         ExpectedLine = 2
         ExpectedStatement = 'import static com.portfolio.agent.answer.infrastructure.LegacyFactory.create;'
+    },
+    @{
+        Name = 'multiline-common-static-to-business'
+        File = 'com\portfolio\agent\common\web\MultilineCommon.java'
+        Source = @'
+package com.portfolio.agent.common.web;
+import /* cross-module */ static
+    com.portfolio.agent.answer.domain.AnswerResult
+    . create
+    ;
+public final class MultilineCommon {}
+'@
+        Rule = 'common-business'
+        ExpectedLine = 2
+        ExpectedStatement = 'import static com.portfolio.agent.answer.domain.AnswerResult.create;'
+    },
+    @{
+        Name = 'multiline-portfolio-service-to-controller'
+        File = 'com\portfolio\agent\portfolio\service\MultilineService.java'
+        Source = @'
+package com.portfolio.agent.portfolio.service;
+import com.portfolio.agent.portfolio
+    . /* forbidden web dependency */ controller
+    . PortfolioController;
+public final class MultilineService {}
+'@
+        Rule = 'portfolio-service-controller'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.controller.PortfolioController;'
+    },
+    @{
+        Name = 'multiline-answer-core-to-portfolio'
+        File = 'com\portfolio\agent\answer\service\MultilineAnswerService.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+import com.portfolio.agent
+    . portfolio
+    . domain
+    . ProjectProfile;
+public final class MultilineAnswerService {}
+'@
+        Rule = 'answer-core-portfolio'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.domain.ProjectProfile;'
+    },
+    @{
+        Name = 'multiline-answer-boundary-to-portfolio'
+        File = 'com\portfolio\agent\answer\dto\response\MultilineAnswerResponse.java'
+        Source = @'
+package com.portfolio.agent.answer.dto.response;
+import com.portfolio.agent.portfolio
+    // response types cannot cross the boundary
+    . dto
+    . response
+    . EvidenceResponse;
+public final class MultilineAnswerResponse {}
+'@
+        Rule = 'answer-portfolio-boundary'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;'
+    },
+    @{
+        Name = 'multiline-adapter-boundary'
+        File = 'com\portfolio\agent\answer\adapter\portfolio\MultilineAdapter.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.portfolio;
+import com.portfolio.agent.portfolio.repository
+    . /* concrete file repository */ file
+    . JsonPublicPortfolioRepository;
+public final class MultilineAdapter {}
+'@
+        Rule = 'answer-portfolio-adapter-boundary'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;'
+    },
+    @{
+        Name = 'multiline-controller-to-infrastructure'
+        File = 'com\portfolio\agent\portfolio\controller\MultilineController.java'
+        Source = @'
+package com.portfolio.agent.portfolio.controller;
+import com.portfolio.agent.portfolio.repository
+    . file
+    . JsonPublicPortfolioRepository;
+public final class MultilineController {}
+'@
+        Rule = 'controller-infrastructure'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;'
+    },
+    @{
+        Name = 'multiline-portfolio-to-answer'
+        File = 'com\portfolio\agent\portfolio\domain\MultilinePortfolio.java'
+        Source = @'
+package com.portfolio.agent.portfolio.domain;
+import com.portfolio.agent
+    . /* reverse dependency */ answer
+    . domain
+    . AnswerResult;
+public final class MultilinePortfolio {}
+'@
+        Rule = 'portfolio-answer'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.answer.domain.AnswerResult;'
     }
 )
 
