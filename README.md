@@ -123,7 +123,36 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 - `scripts/`：隐私扫描器及其测试
 - `docs/`：背景、需求、技术选型和 Superpowers 设计计划
 
+后端 Java 代码采用模块化单体结构：
+
+```text
+com.portfolio.agent
+├─ common       仅保存跨模块共享机制
+├─ portfolio    公开事实、作品集查询与文件仓储
+└─ answer       知识转换、回答编排与确定性引擎
+```
+
+模块内部使用常见 Spring Boot 命名：
+
+```text
+portfolio/controller|service|domain|repository|mapper|validation
+answer/controller|service|domain|engine|gateway|adapter|mapper
+```
+
+当前模块通信通过 Java Gateway 接口在同一进程内完成：
+
+```text
+AnswerService
+→ PortfolioKnowledgeGateway
+→ LocalPortfolioKnowledgeAdapter
+→ PublicPortfolioRepository
+```
+
+项目当前不使用 Feign，也不通过 HTTP 或 localhost 对自身模块发起远程调用。
+
 ## 设计文档
 
 - `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`
 - `docs/superpowers/plans/2026-07-14-internship-portfolio-v0.md`
+- `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`
+- `docs/07-modular-monolith-backend-review.md`
