@@ -89,7 +89,9 @@ class AnswerControllerTest {
                                 {"projectSlug": "missing-project", "question": "介绍项目"}
                                 """))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message")
+                        .value("公开项目不存在: missing-project"));
     }
 
     @Test

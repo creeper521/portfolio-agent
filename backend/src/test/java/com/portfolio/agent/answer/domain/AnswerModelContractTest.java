@@ -1,8 +1,4 @@
-package com.portfolio.agent.answer.domain.model;
-
-import com.portfolio.agent.portfolio.domain.EvidenceRecord;
-import com.portfolio.agent.portfolio.domain.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.EvidenceType;
+package com.portfolio.agent.answer.domain;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -40,7 +36,7 @@ class AnswerModelContractTest {
 
     @Test
     void answerResultDefensivelyCopiesEvidenceAndSuggestedQuestions() {
-        List<EvidenceRecord> evidence = new ArrayList<>();
+        List<AnswerEvidence> evidence = new ArrayList<>();
         List<String> suggestedQuestions = new ArrayList<>(List.of("推荐问题"));
         AnswerResult result = new AnswerResult(
                 AnswerMode.DETERMINISTIC, true, false, "标题",
@@ -104,17 +100,17 @@ class AnswerModelContractTest {
                 AnswerMode.DETERMINISTIC, true, false, "标题", sections, List.of(), List.of("其他")));
     }
 
-    private EvidenceRecord evidence(String id) {
-        return new EvidenceRecord(
+    private AnswerEvidence evidence(String id) {
+        return new AnswerEvidence(
                 id,
                 "证据",
-                EvidenceType.DOCUMENT,
+                "DOCUMENT",
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 1, 2),
                 1,
                 "摘要",
                 List.of("事实"),
-                EvidenceStatus.APPROVED,
+                "APPROVED",
                 false
         );
     }

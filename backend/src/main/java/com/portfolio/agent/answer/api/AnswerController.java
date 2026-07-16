@@ -2,8 +2,8 @@ package com.portfolio.agent.answer.api;
 
 import com.portfolio.agent.answer.api.dto.AnswerRequest;
 import com.portfolio.agent.answer.api.dto.AnswerResponse;
-import com.portfolio.agent.answer.application.AnswerService;
-import com.portfolio.agent.answer.domain.model.AnswerResult;
+import com.portfolio.agent.answer.domain.AnswerResult;
+import com.portfolio.agent.answer.service.AnswerService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

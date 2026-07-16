@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.application;
+package com.portfolio.agent.answer.service;
 
 import org.springframework.stereotype.Component;
 

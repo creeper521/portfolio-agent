@@ -1,6 +1,4 @@
-package com.portfolio.agent.answer.domain.model;
-
-import com.portfolio.agent.portfolio.domain.EvidenceRecord;
+package com.portfolio.agent.answer.domain;
 
 import java.util.List;
 import java.util.Objects;
@@ -12,7 +10,7 @@ public final class AnswerResult {
     private final boolean fallback;
     private final String title;
     private final List<AnswerSection> sections;
-    private final List<EvidenceRecord> evidence;
+    private final List<AnswerEvidence> evidence;
     private final List<String> suggestedQuestions;
 
     public AnswerResult(
@@ -21,7 +19,7 @@ public final class AnswerResult {
             boolean fallback,
             String title,
             List<AnswerSection> sections,
-            List<EvidenceRecord> evidence,
+            List<AnswerEvidence> evidence,
             List<String> suggestedQuestions
     ) {
         this.answerMode = answerMode;
@@ -53,7 +51,7 @@ public final class AnswerResult {
         return sections;
     }
 
-    public List<EvidenceRecord> getEvidence() {
+    public List<AnswerEvidence> getEvidence() {
         return evidence;
     }
 

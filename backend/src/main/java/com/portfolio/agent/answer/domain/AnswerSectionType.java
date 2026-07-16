@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.domain.model;
+package com.portfolio.agent.answer.domain;
 
 public enum AnswerSectionType {
     BACKGROUND,

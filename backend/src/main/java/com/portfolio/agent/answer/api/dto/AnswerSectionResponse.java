@@ -1,6 +1,6 @@
 package com.portfolio.agent.answer.api.dto;
 
-import com.portfolio.agent.answer.domain.model.AnswerSectionType;
+import com.portfolio.agent.answer.domain.AnswerSectionType;
 
 import java.util.Objects;
 
