@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.ContributionType;
+import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 
 import java.util.List;
@@ -56,6 +57,30 @@ public final class ProjectDetailResponse {
         this.contributionType = contributionType;
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
+    }
+
+    public static ProjectDetailResponse from(
+            ProjectProfile project,
+            List<EvidenceResponse> evidence,
+            List<String> suggestedQuestions
+    ) {
+        return new ProjectDetailResponse(
+                project.getSlug(),
+                project.getTitle(),
+                project.getSummary(),
+                project.getBackground(),
+                project.getResponsibilities(),
+                project.getSolution(),
+                project.getKeyDecisions(),
+                project.getTechnologies(),
+                project.getVerification(),
+                project.getOutcome(),
+                project.getHandoff(),
+                project.getStatus(),
+                project.getContributionType(),
+                evidence,
+                suggestedQuestions
+        );
     }
 
     public String getSlug() {

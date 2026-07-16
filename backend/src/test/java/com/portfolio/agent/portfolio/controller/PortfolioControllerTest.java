@@ -1,4 +1,4 @@
-package com.portfolio.agent.portfolio.api;
+package com.portfolio.agent.portfolio.controller;
 
 import com.portfolio.agent.PortfolioAgentApplication;
 import org.junit.jupiter.api.Test;
