@@ -152,9 +152,10 @@ PortfolioKnowledgeGateway
 - Answer Engine 依赖 `answer.engine`、`answer.domain` 之外的任何项目内部包；
 - Portfolio/Answer Controller 依赖 Repository、Adapter、Engine 或 Validation；
 - Portfolio 依赖 Answer；
+- Java 声明的 package 与 Maven source-set 内的文件目录不一致；
 - 旧 `api / application / infrastructure / domain.model / domain.repository` 包重新出现。
 
-脚本会先处理 Java Unicode escape，并忽略注释、字符串、字符字面量和 text block；随后提取完整的 package/import 语句，并从剩余代码体提取全限定引用。两类引用都统一归一化空白与点号，package/import 已处理区域会从代码体扫描中排除，避免重复报告。这样既能阻断多行 import、静态 import、Unicode 转义和代码体全限定类名绕过，也不会把示例文本误判为真实依赖。代码体全限定引用的违规输出为 `rule:file:line:normalized-reference`。
+脚本会先处理 Java Unicode escape，并忽略注释、字符串、字符字面量和 text block；随后提取 normalized package、完整 package/import 语句，并从剩余代码体提取全限定引用。全部依赖规则都以声明 package 判断来源模块与层，不使用文件路径分类。Maven `main/java` 与 `test/java` 下的文件目录必须与 package path 一致，默认 package 也会被拒绝；不一致输出 `package-path-mismatch:file:line:package ...;`。两类依赖引用都统一归一化空白与点号，package/import 已处理区域会从代码体扫描中排除，避免重复报告。这样既能阻断错放源码、多行 import、静态 import、Unicode 转义和代码体全限定类名绕过，也不会把示例文本误判为真实依赖。代码体全限定引用的违规输出为 `rule:file:line:normalized-reference`。
 
 `answer-engine-boundary` 对项目内部引用采用白名单：`answer.engine` 只允许依赖 `answer.engine` 与 `answer.domain`。JDK、Spring 注解等非 `com.portfolio.agent` 引用不属于该规则的检查范围。
 

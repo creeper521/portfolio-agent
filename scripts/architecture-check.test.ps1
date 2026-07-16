@@ -72,6 +72,54 @@ public final class AnswerResponseMapper {}
         }
     },
     @{
+        Name = 'misplaced-answer-engine-to-mapper'
+        File = 'misplaced\MapperEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+import com.portfolio.agent.answer.mapper.AnswerResponseMapper;
+public final class MapperEngine {
+    private AnswerResponseMapper importedMapper;
+    private com.portfolio.agent.answer.mapper.AnswerResponseMapper qualifiedMapper;
+}
+'@
+        Rule = 'answer-engine-boundary'
+        ExpectedLine = 2
+        ExpectedStatement = 'import com.portfolio.agent.answer.mapper.AnswerResponseMapper;'
+        AdditionalExpectedViolations = @(
+            @{
+                Rule = 'answer-engine-boundary'
+                Line = 5
+                Statement = 'com.portfolio.agent.answer.mapper.AnswerResponseMapper'
+            }
+        )
+        Stubs = @{
+            'com\portfolio\agent\answer\mapper\AnswerResponseMapper.java' = @'
+package com.portfolio.agent.answer.mapper;
+public final class AnswerResponseMapper {}
+'@
+        }
+    },
+    @{
+        Name = 'package-path-mismatch'
+        File = 'misplaced\AllowedEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+import com.portfolio.agent.answer.domain.AnswerResult;
+public final class AllowedEngine {
+    private AnswerResult result;
+}
+'@
+        Rule = 'package-path-mismatch'
+        ExpectedLine = 1
+        ExpectedStatement = 'package com.portfolio.agent.answer.engine;'
+        Stubs = @{
+            'com\portfolio\agent\answer\domain\AnswerResult.java' = @'
+package com.portfolio.agent.answer.domain;
+public final class AnswerResult {}
+'@
+        }
+    },
+    @{
         Name = 'answer-dto-to-portfolio-dto'
         File = 'com\portfolio\agent\answer\dto\response\BadResponse.java'
         Source = @'
@@ -704,6 +752,14 @@ try {
         $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
         if ($expectedViolation -notin $outputLines) {
             throw "Expected unsafe fixture '$($case.Name)' output to include '$expectedViolation'. Output: $($result.Output)"
+        }
+        if ($case.ContainsKey('AdditionalExpectedViolations')) {
+            foreach ($additional in $case.AdditionalExpectedViolations) {
+                $additionalViolation = "$($additional.Rule):$samplePath`:$($additional.Line):$($additional.Statement)"
+                if ($additionalViolation -notin $outputLines) {
+                    throw "Expected unsafe fixture '$($case.Name)' output to include '$additionalViolation'. Output: $($result.Output)"
+                }
+            }
         }
     }
 

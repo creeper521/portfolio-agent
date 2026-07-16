@@ -20,7 +20,7 @@ function Add-StatementViolation(
 
 function Add-ReferenceViolations(
     [System.IO.FileInfo]$File,
-    [string]$Relative,
+    [string]$SourcePackage,
     [int]$LineNumber,
     [string]$Reference,
     [string]$Display
@@ -30,46 +30,46 @@ function Add-ReferenceViolations(
         Add-StatementViolation 'legacy-package' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\common\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.common(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.(portfolio|answer)\.') {
         Add-StatementViolation 'common-business' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\portfolio\\service\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.portfolio\.service(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.portfolio\.(controller|dto)\.') {
         Add-StatementViolation 'portfolio-service-controller' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\answer\\(service|domain|engine|gateway)\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer\.(service|domain|engine|gateway)(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.portfolio\.') {
         Add-StatementViolation 'answer-core-portfolio' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\answer\\' -and
-            $Relative -notmatch '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer(\.|$)' -and
+            $SourcePackage -notmatch '^com\.portfolio\.agent\.answer\.adapter\.portfolio(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.portfolio\.') {
         Add-StatementViolation 'answer-portfolio-boundary' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\answer\\adapter\\portfolio\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer\.adapter\.portfolio(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.portfolio\.' -and
             $Reference -notmatch '^com\.portfolio\.agent\.portfolio\.domain\.' -and
             $Reference -ne 'com.portfolio.agent.portfolio.repository.PublicPortfolioRepository') {
         Add-StatementViolation 'answer-portfolio-adapter-boundary' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\answer\\engine\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer\.engine(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.' -and
             $Reference -notmatch '^com\.portfolio\.agent\.answer\.(engine|domain)(\.|$)') {
         Add-StatementViolation 'answer-engine-boundary' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\(portfolio|answer)\\controller\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.(portfolio|answer)\.controller(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.(portfolio|answer)\.(repository|adapter|engine|validation)(\.|$)') {
         Add-StatementViolation 'controller-layer-boundary' $File $LineNumber $Display
     }
 
-    if ($Relative -match '^com\\portfolio\\agent\\portfolio\\' -and
+    if ($SourcePackage -match '^com\.portfolio\.agent\.portfolio(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.answer\.') {
         Add-StatementViolation 'portfolio-answer' $File $LineNumber $Display
     }
@@ -260,7 +260,9 @@ function Remove-JavaCommentsAndLiterals([string]$Source) {
 
 $javaFiles = Get-ChildItem -LiteralPath $resolvedPath -Recurse -File -Filter '*.java'
 foreach ($file in $javaFiles) {
-    $relative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
+    $rawRelative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
+    $isMavenSourceFile = $rawRelative -match '^(main|test)\\java\\'
+    $relative = $rawRelative
     $relative = $relative -replace '^(main|test)\\java\\', ''
     $source = [System.IO.File]::ReadAllText($file.FullName)
     $unicodeSource = Convert-JavaUnicodeEscapes $source
@@ -271,6 +273,27 @@ foreach ($file in $javaFiles) {
         [System.Text.RegularExpressions.RegexOptions]::Multiline
     )
     $bodyBuilder = New-Object System.Text.StringBuilder $lexicalSource
+    $sourcePackage = ''
+
+    $packageMatch = $statementMatches | Where-Object {
+        $_.Value -match '^[ \t]*package\s+'
+    } | Select-Object -First 1
+    if ($null -ne $packageMatch) {
+        $packageStatement = [regex]::Replace($packageMatch.Value.Trim(), '\s+', ' ')
+        $packageStatement = [regex]::Replace($packageStatement, '\s*\.\s*', '.')
+        $packageStatement = [regex]::Replace($packageStatement, '\s*;\s*$', ';')
+        $sourcePackage = $packageStatement -replace '^package ', ''
+        $sourcePackage = $sourcePackage -replace ';$', ''
+        $packagePrefix = $lexicalSource.Substring(0, $packageMatch.Index)
+        $packageLineNumber = ([regex]::Matches($packagePrefix, "`n")).Count + 1
+        $relativeDirectory = Split-Path -Parent $relative
+        $expectedDirectory = $sourcePackage -replace '\.', '\'
+        if ($relativeDirectory -ne $expectedDirectory) {
+            Add-StatementViolation 'package-path-mismatch' $file $packageLineNumber $packageStatement
+        }
+    } elseif ($isMavenSourceFile) {
+        Add-StatementViolation 'package-path-mismatch' $file 1 'package <default>;'
+    }
 
     foreach ($statementMatch in $statementMatches) {
         $statement = [regex]::Replace($statementMatch.Value.Trim(), '\s+', ' ')
@@ -286,7 +309,7 @@ foreach ($file in $javaFiles) {
         if ($statement -match '^import ') {
             $reference = $statement -replace '^import (?:static )?', ''
             $reference = $reference -replace ';$', ''
-            Add-ReferenceViolations $file $relative $lineNumber $reference $statement
+            Add-ReferenceViolations $file $sourcePackage $lineNumber $reference $statement
         }
 
         for ($offset = 0; $offset -lt $statementMatch.Length; $offset++) {
@@ -307,7 +330,7 @@ foreach ($file in $javaFiles) {
         $reference = [regex]::Replace($qualifiedMatch.Value, '\s*\.\s*', '.')
         $prefix = $bodySource.Substring(0, $qualifiedMatch.Index)
         $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
-        Add-ReferenceViolations $file $relative $lineNumber $reference $reference
+        Add-ReferenceViolations $file $sourcePackage $lineNumber $reference $reference
     }
 }
 
