@@ -104,6 +104,25 @@ import static com.portfolio.agent.answer.domain.AnswerResult.create;
 public final class BadStaticCommon {}
 '@
         Rule = 'common-business'
+    },
+    @{
+        Name = 'legacy-package-declaration'
+        File = 'com\portfolio\agent\answer\application\LegacyAnswerService.java'
+        Source = @'
+package com.portfolio.agent.answer.application;
+public final class LegacyAnswerService {}
+'@
+        Rule = 'legacy-package'
+    },
+    @{
+        Name = 'legacy-package-import'
+        File = 'com\portfolio\agent\portfolio\service\LegacyImport.java'
+        Source = @'
+package com.portfolio.agent.portfolio.service;
+import com.portfolio.agent.portfolio.application.LegacyPortfolioService;
+public final class LegacyImport {}
+'@
+        Rule = 'legacy-package'
     }
 )
 
@@ -148,8 +167,17 @@ try {
             throw "Expected unsafe fixture '$($case.Name)' to exit 1. Exit: $($result.ExitCode). Output: $($result.Output)"
         }
 
-        $expectedImport = @($case.Source -split '\r?\n' | Where-Object { $_ -match '^\s*import\s+' })[0].Trim()
-        $expectedViolation = "$($case.Rule):$samplePath`:2:$expectedImport"
+        $sourceLines = @($case.Source -split '\r?\n')
+        $expectedSourceLine = $sourceLines | Where-Object {
+            $_ -match '^\s*import\s+' -or
+            $_ -match '^\s*package\s+com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.model|domain\.repository)(\.|;)'
+        } | Select-Object -First 1
+        if ($null -eq $expectedSourceLine) {
+            throw "Expected unsafe fixture '$($case.Name)' to contain an import or legacy package declaration."
+        }
+        $expectedMatch = $expectedSourceLine.Trim()
+        $expectedLineNumber = [array]::IndexOf($sourceLines, $expectedSourceLine) + 1
+        $expectedViolation = "$($case.Rule):$samplePath`:$expectedLineNumber`:$expectedMatch"
         $outputLines = @($result.Output -split '\r?\n' | Where-Object { $_.Length -gt 0 })
         if ($expectedViolation -notin $outputLines) {
             throw "Expected unsafe fixture '$($case.Name)' output to include '$expectedViolation'. Output: $($result.Output)"

@@ -21,11 +21,24 @@ $javaFiles = Get-ChildItem -LiteralPath $resolvedPath -Recurse -File -Filter '*.
 foreach ($file in $javaFiles) {
     $relative = $file.FullName.Substring($resolvedPath.Length).TrimStart('\')
     $relative = $relative -replace '^(main|test)\\java\\', ''
+    $packageMatches = Select-String -LiteralPath $file.FullName `
+        -Pattern '^\s*package\s+com\.portfolio\.agent\.[^;]+;'
+
+    foreach ($packageMatch in $packageMatches) {
+        if ($packageMatch.Line -match 'com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))(\.|;)') {
+            Add-Violation 'legacy-package' $file $packageMatch
+        }
+    }
+
     $imports = Select-String -LiteralPath $file.FullName `
         -Pattern '^\s*import\s+(?:static\s+)?com\.portfolio\.agent\.[^;]+;'
 
     foreach ($import in $imports) {
         $line = $import.Line
+
+        if ($line -match 'com\.portfolio\.agent\.(portfolio|answer)\.(api|application|infrastructure|domain\.(model|repository))\.') {
+            Add-Violation 'legacy-package' $file $import
+        }
 
         if ($relative -match '^com\\portfolio\\agent\\common\\' -and
                 $line -match 'com\.portfolio\.agent\.(portfolio|answer)\.') {
