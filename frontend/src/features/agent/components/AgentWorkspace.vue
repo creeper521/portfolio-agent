@@ -6,7 +6,7 @@ import type {
   PublicPortfolio,
 } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
-import { createPreviewAnswer } from '../data/previewAnswers'
+import { askQuestion } from '../api/answerApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import {
   WORKSPACE_LIMITS,
@@ -14,6 +14,7 @@ import {
   type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed } from '../model/sessionTypes'
+import { mapAnswerResponse } from '../model/mapAnswerResponse'
 import ConversationThread from './ConversationThread.vue'
 import EvidenceDesk from './EvidenceDesk.vue'
 import LocalSessionRail from './LocalSessionRail.vue'
@@ -44,6 +45,9 @@ const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 980px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1219.98px)')
 const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
+const pending = ref(false)
+const answerError = ref('')
+const failedQuestion = ref('')
 
 const activeProject = computed(
   () =>
@@ -62,27 +66,37 @@ function createSession() {
   })
 }
 
-function submit(question: string) {
+async function requestAnswer(question: string, appendUser: boolean) {
   const session = sessions.activeSession.value
   const project = activeProject.value
-  if (!session || !project) return
+  if (!session || !project || pending.value) return
 
-  sessions.appendMessage(session.id, {
-    role: 'USER',
-    content: question,
-    evidenceIds: [],
-  })
-  const answer = createPreviewAnswer(
-    question,
-    session.role,
-    project,
-    props.portfolio.evidence,
-  )
-  sessions.appendMessage(session.id, {
-    role: 'AGENT',
-    content: answer.content,
-    evidenceIds: answer.evidenceIds,
-  })
+  if (appendUser) {
+    sessions.appendMessage(session.id, {
+      role: 'USER',
+      content: question,
+      evidenceIds: [],
+    })
+  }
+  pending.value = true
+  answerError.value = ''
+  failedQuestion.value = question
+  try {
+    const mapped = mapAnswerResponse(await askQuestion(project.slug, question))
+    sessions.appendMessage(session.id, {
+      role: 'AGENT',
+      content: mapped.content,
+      evidenceIds: mapped.evidenceIds,
+    })
+  } catch {
+    answerError.value = 'Agent 暂时无法回答，请稍后重试'
+  } finally {
+    pending.value = false
+  }
+}
+
+function submit(question: string) {
+  void requestAnswer(question, true)
 }
 
 function previewSplit(key: keyof WorkspaceSplit, value: number) {
@@ -189,7 +203,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
       :seed-question="initialQuestion"
       :sessions-open="sessionDrawerOpen"
       :evidence-open="evidenceDrawerOpen"
+      :pending="pending"
+      :error="answerError"
       @submit="submit"
+      @retry="requestAnswer(failedQuestion, false)"
       @evidence="openEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"

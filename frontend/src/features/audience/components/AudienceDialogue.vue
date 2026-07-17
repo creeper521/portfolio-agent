@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { createPreviewAnswer } from '../../agent/data/previewAnswers'
+import { askQuestion } from '../../agent/api/answerApi'
+import { mapAnswerResponse } from '../../agent/model/mapAnswerResponse'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { audienceProfiles } from '../data/audienceProfiles'
 import type { AudienceProfile, HomeAnswerState } from '../model/audienceTypes'
@@ -13,6 +14,9 @@ const selectedRole = ref<AudienceProfile>(audienceProfiles[0])
 const answer = ref<HomeAnswerState | null>(null)
 const customQuestion = ref('')
 const round = ref(0)
+const pending = ref(false)
+const answerError = ref('')
+const failedQuestion = ref('')
 
 const primaryProject = computed(() => props.portfolio.projects[0] ?? null)
 
@@ -23,26 +27,30 @@ function chooseRole(profile: AudienceProfile) {
   round.value = 0
 }
 
-function ask(question: string) {
+async function ask(question: string) {
   const normalized = question.trim()
   const project = primaryProject.value
-  if (!normalized || !project) return
+  if (!normalized || !project || pending.value) return
 
-  const result = createPreviewAnswer(
-    normalized,
-    selectedRole.value.id,
-    project,
-    props.portfolio.evidence,
-  )
-  round.value = Math.min(round.value + 1, 3)
-  answer.value = {
-    round: round.value,
-    question: normalized,
-    answer: result.content,
-    projectSlug: project.slug,
-    evidenceIds: result.evidenceIds,
+  pending.value = true
+  answerError.value = ''
+  failedQuestion.value = normalized
+  try {
+    const mapped = mapAnswerResponse(await askQuestion(project.slug, normalized))
+    round.value = Math.min(round.value + 1, 3)
+    answer.value = {
+      round: round.value,
+      question: normalized,
+      answer: mapped.content,
+      projectSlug: project.slug,
+      evidenceIds: mapped.evidenceIds,
+    }
+    customQuestion.value = ''
+  } catch {
+    answerError.value = 'Agent 暂时无法回答，请稍后重试'
+  } finally {
+    pending.value = false
   }
-  customQuestion.value = ''
 }
 
 function focusCustomQuestion() {
@@ -95,6 +103,7 @@ function focusCustomQuestion() {
             :key="item"
             type="button"
             data-question
+            :disabled="pending"
             @click="ask(item)"
           >
             <b>Q·{{ String(index + 1).padStart(2, '0') }}</b>
@@ -107,11 +116,19 @@ function focusCustomQuestion() {
           <input
             v-model="customQuestion"
             data-custom-question
+            :disabled="pending"
             aria-label="输入自己的问题"
             placeholder="也可以输入自己的问题"
           />
-          <button type="submit">发送 ↵</button>
+          <button data-question-submit type="submit" :disabled="pending">发送 ↵</button>
         </form>
+        <p v-if="pending" class="answer-feedback" role="status">
+          正在核对公开事实…
+        </p>
+        <div v-else-if="answerError" class="answer-feedback answer-feedback--error" role="alert">
+          <p>{{ answerError }}</p>
+          <button data-answer-retry type="button" @click="ask(failedQuestion)">重新回答</button>
+        </div>
       </section>
 
       <LightAnswerPanel
@@ -309,6 +326,39 @@ h3 {
   background: transparent;
   font: 9px var(--mono);
   letter-spacing: 0.12em;
+}
+
+.question-list button:disabled,
+.question-form input:disabled,
+.question-form button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.answer-feedback {
+  margin: 18px 0 0;
+  color: var(--ink-2);
+  font: 12px/1.6 var(--mono);
+}
+
+.answer-feedback--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--red);
+}
+
+.answer-feedback--error p {
+  margin: 0;
+}
+
+.answer-feedback--error button {
+  padding: 7px 10px;
+  color: var(--red);
+  border: 1px solid currentcolor;
+  background: transparent;
+  font: 10px var(--mono);
 }
 
 @media (max-width: 900px) {

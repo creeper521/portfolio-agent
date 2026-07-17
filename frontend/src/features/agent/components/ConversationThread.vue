@@ -11,6 +11,8 @@ const props = defineProps<{
   seedQuestion?: string
   sessionsOpen?: boolean
   evidenceOpen?: boolean
+  pending: boolean
+  error: string
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +20,7 @@ const emit = defineEmits<{
   evidence: [id: string]
   toggleSessions: []
   toggleEvidence: []
+  retry: []
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -36,7 +39,7 @@ watch(
 
 function submit() {
   const value = question.value.trim()
-  if (!value) return
+  if (!value || props.pending) return
   emit('submit', value)
   question.value = ''
 }
@@ -81,6 +84,7 @@ function submit() {
             v-for="item in project.suggestedQuestions"
             :key="item"
             type="button"
+            :disabled="pending"
             @click="question = item"
           >
             <span>↳</span>{{ item }}
@@ -106,6 +110,14 @@ function submit() {
             </button>
           </footer>
         </article>
+
+        <div v-if="pending" class="answer-state" role="status">
+          正在核对公开事实…
+        </div>
+        <div v-else-if="error" class="answer-state answer-state--error" role="alert">
+          <p>{{ error }}</p>
+          <button data-answer-retry type="button" @click="$emit('retry')">重新回答</button>
+        </div>
       </div>
     </div>
 
@@ -115,11 +127,12 @@ function submit() {
         ref="input"
         v-model="question"
         rows="1"
+        :disabled="pending"
         aria-label="你的问题"
         placeholder="继续追问方案取舍、验证过程或证据"
         @keydown.ctrl.enter.prevent="submit"
       ></textarea>
-      <button type="submit">发送 ↵</button>
+      <button data-agent-submit type="submit" :disabled="pending">发送 ↵</button>
     </form>
   </section>
 </template>
@@ -257,6 +270,35 @@ function submit() {
   font: 8px var(--mono);
 }
 
+.answer-state {
+  max-width: 760px;
+  margin-bottom: 34px;
+  padding: 14px 18px;
+  color: #b1a596;
+  border-left: 1px solid #5a5248;
+  font: 11px/1.7 var(--mono);
+}
+
+.answer-state--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #e1948b;
+}
+
+.answer-state--error p {
+  margin: 0;
+}
+
+.answer-state--error button {
+  padding: 7px 10px;
+  color: inherit;
+  border: 1px solid currentcolor;
+  background: transparent;
+  font: 9px var(--mono);
+}
+
 .composer {
   position: absolute;
   right: 35px;
@@ -299,6 +341,13 @@ textarea::placeholder {
   background: var(--paper);
   font: 9px var(--mono);
   letter-spacing: 0.1em;
+}
+
+.thread-empty button:disabled,
+textarea:disabled,
+.composer button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 @media (max-width: 1220px) {
