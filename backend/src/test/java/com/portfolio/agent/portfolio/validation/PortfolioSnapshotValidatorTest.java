@@ -126,7 +126,8 @@ class PortfolioSnapshotValidatorTest {
                     "supportedClaims": ["核心版本已部署并形成使用文档"],
                     "publicStatus": "APPROVED",
                     "rawContentPublic": false
-                  }]
+                  }],
+                  "timeline": []
                 }
                 """.formatted(projectJson());
     }

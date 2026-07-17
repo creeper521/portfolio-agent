@@ -10,6 +10,7 @@ import java.util.Objects;
 public final class EvidenceRecord {
 
     private final String id;
+    private final String code;
     private final String title;
     private final EvidenceType type;
     private final LocalDate periodStart;
@@ -23,6 +24,7 @@ public final class EvidenceRecord {
     @JsonCreator
     public EvidenceRecord(
             @JsonProperty("id") String id,
+            @JsonProperty("code") String code,
             @JsonProperty("title") String title,
             @JsonProperty("type") EvidenceType type,
             @JsonProperty("periodStart") LocalDate periodStart,
@@ -34,6 +36,7 @@ public final class EvidenceRecord {
             @JsonProperty("rawContentPublic") Boolean rawContentPublic
     ) {
         this.id = id;
+        this.code = code;
         this.title = title;
         this.type = type;
         this.periodStart = periodStart;
@@ -47,6 +50,10 @@ public final class EvidenceRecord {
 
     public String getId() {
         return id;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getTitle() {
@@ -95,6 +102,7 @@ public final class EvidenceRecord {
         }
         return sourceCount == that.sourceCount
                 && Objects.equals(id, that.id)
+                && Objects.equals(code, that.code)
                 && Objects.equals(title, that.title)
                 && Objects.equals(type, that.type)
                 && Objects.equals(periodStart, that.periodStart)
@@ -107,7 +115,7 @@ public final class EvidenceRecord {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, title, type, periodStart, periodEnd, sourceCount, summary,
+        return Objects.hash(id, code, title, type, periodStart, periodEnd, sourceCount, summary,
                 supportedClaims, publicStatus, rawContentPublic);
     }
 
@@ -115,6 +123,7 @@ public final class EvidenceRecord {
     public String toString() {
         return "EvidenceRecord{" +
                 "id='" + id + '\'' +
+                ", code='" + code + '\'' +
                 ", title='" + title + '\'' +
                 ", type=" + type +
                 ", periodStart=" + periodStart +

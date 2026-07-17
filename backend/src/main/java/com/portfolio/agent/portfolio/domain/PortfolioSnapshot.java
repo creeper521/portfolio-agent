@@ -16,6 +16,7 @@ public final class PortfolioSnapshot {
     private final List<ProjectProfile> projects;
     private final List<QuestionDefinition> questions;
     private final List<EvidenceRecord> evidence;
+    private final List<TimelineEvent> timeline;
 
     @JsonCreator
     public PortfolioSnapshot(
@@ -25,7 +26,8 @@ public final class PortfolioSnapshot {
             @JsonProperty("owner") OwnerProfile owner,
             @JsonProperty("projects") List<ProjectProfile> projects,
             @JsonProperty("questions") List<QuestionDefinition> questions,
-            @JsonProperty("evidence") List<EvidenceRecord> evidence
+            @JsonProperty("evidence") List<EvidenceRecord> evidence,
+            @JsonProperty("timeline") List<TimelineEvent> timeline
     ) {
         this.schemaVersion = schemaVersion;
         this.contentVersion = contentVersion;
@@ -34,6 +36,7 @@ public final class PortfolioSnapshot {
         this.projects = List.copyOf(projects);
         this.questions = List.copyOf(questions);
         this.evidence = List.copyOf(evidence);
+        this.timeline = List.copyOf(timeline);
     }
 
     public String getSchemaVersion() {
@@ -64,6 +67,10 @@ public final class PortfolioSnapshot {
         return evidence;
     }
 
+    public List<TimelineEvent> getTimeline() {
+        return timeline;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -78,12 +85,13 @@ public final class PortfolioSnapshot {
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
                 && Objects.equals(questions, that.questions)
-                && Objects.equals(evidence, that.evidence);
+                && Objects.equals(evidence, that.evidence)
+                && Objects.equals(timeline, that.timeline);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schemaVersion, contentVersion, publishedAt, owner, projects, questions, evidence);
+        return Objects.hash(schemaVersion, contentVersion, publishedAt, owner, projects, questions, evidence, timeline);
     }
 
     @Override
@@ -96,6 +104,7 @@ public final class PortfolioSnapshot {
                 ", projects=" + projects +
                 ", questions=" + questions +
                 ", evidence=" + evidence +
+                ", timeline=" + timeline +
                 '}';
     }
 }

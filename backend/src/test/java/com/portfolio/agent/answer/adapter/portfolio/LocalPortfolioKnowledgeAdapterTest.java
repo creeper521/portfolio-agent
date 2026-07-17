@@ -357,7 +357,8 @@ class LocalPortfolioKnowledgeAdapterTest {
                 null,
                 projects,
                 questions,
-                evidence
+                evidence,
+                List.of()
         );
     }
 
@@ -369,6 +370,7 @@ class LocalPortfolioKnowledgeAdapterTest {
     ) {
         return new ProjectProfile(
                 id,
+                "P-01",
                 slug,
                 "SQL Audit",
                 "Summary",
@@ -404,6 +406,7 @@ class LocalPortfolioKnowledgeAdapterTest {
     ) {
         return new EvidenceRecord(
                 id,
+                "E-01",
                 "Evidence " + id,
                 EvidenceType.DOCUMENT,
                 LocalDate.parse("2026-07-01"),

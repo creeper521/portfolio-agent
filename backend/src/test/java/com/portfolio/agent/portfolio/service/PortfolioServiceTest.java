@@ -9,6 +9,7 @@ import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
@@ -54,6 +55,7 @@ class PortfolioServiceTest {
         );
         ProjectProfile project = new ProjectProfile(
                 "project-1",
+                "P-01",
                 "sql-audit",
                 "SQL Audit",
                 "Summary",
@@ -79,6 +81,7 @@ class PortfolioServiceTest {
         );
         EvidenceRecord evidence = new EvidenceRecord(
                 "evidence-1",
+                "E-01",
                 "Delivery evidence",
                 EvidenceType.DOCUMENT,
                 LocalDate.parse("2026-07-01"),
@@ -89,6 +92,16 @@ class PortfolioServiceTest {
                 EvidenceStatus.APPROVED,
                 false
         );
+        TimelineEvent timeline = new TimelineEvent(
+                "timeline-1",
+                "2026.06–07",
+                "Delivery loop",
+                "Hard-coded paths",
+                "Completed multi-target routing",
+                "Created a deliverable version",
+                List.of("sql-audit"),
+                List.of("evidence-1")
+        );
         return new PortfolioSnapshot(
                 "1.0",
                 "2026-07-14.1",
@@ -96,7 +109,8 @@ class PortfolioServiceTest {
                 owner,
                 List.of(project),
                 List.of(question),
-                List.of(evidence)
+                List.of(evidence),
+                List.of(timeline)
         );
     }
 

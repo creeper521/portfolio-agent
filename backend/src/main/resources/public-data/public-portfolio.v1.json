@@ -13,6 +13,7 @@
   "projects": [
     {
       "id": "sql-audit-project",
+      "code": "P-01",
       "slug": "sql-audit",
       "title": "SQL 审计与故障排查工具",
       "summary": "把分散在远程服务器上的 SQL 日志检索、结果追溯和归档流程整合为可复用的内部工具。",
@@ -74,6 +75,7 @@
   "evidence": [
     {
       "id": "sql-audit-delivery-set",
+      "code": "E-01",
       "title": "SQL 审计工具交付证据集",
       "type": "COLLECTION",
       "periodStart": "2026-06-02",
@@ -87,6 +89,18 @@
       ],
       "publicStatus": "APPROVED",
       "rawContentPublic": false
+    }
+  ],
+  "timeline": [
+    {
+      "id": "timeline-sql-audit-delivery",
+      "dateLabel": "2026.06–07",
+      "title": "从固定路径查询到可交付工具",
+      "problem": "查询目标和目录被写死，任务过程、结果复用和交付说明缺少完整闭环。",
+      "action": "围绕多目标路由、异步任务、进度降级、动态结果、导出归档和安全边界完成连续迭代与验证。",
+      "impact": "形成已部署的核心版本、使用文档和一组经过脱敏审核的交付证据。",
+      "projectSlugs": ["sql-audit"],
+      "evidenceIds": ["sql-audit-delivery-set"]
     }
   ]
 }

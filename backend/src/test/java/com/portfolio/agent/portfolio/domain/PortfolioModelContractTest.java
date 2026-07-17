@@ -2,6 +2,7 @@ package com.portfolio.agent.portfolio.domain;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,6 +42,7 @@ class PortfolioModelContractTest {
 
         ProjectProfile profile = new ProjectProfile(
                 "project-1",
+                "P-01",
                 "project-one",
                 "项目一",
                 "项目摘要",
@@ -82,6 +84,50 @@ class PortfolioModelContractTest {
         assertThatThrownBy(() -> profile.getQuestionIds().add("禁止修改"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> profile.getEvidenceIds().add("禁止修改"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void timelineEventDefensivelyCopiesReferencesAndKeepsValueSemantics() {
+        List<String> projectSlugs = new ArrayList<>(List.of("sql-audit"));
+        List<String> evidenceIds = new ArrayList<>(List.of("evidence-1"));
+        TimelineEvent first = new TimelineEvent(
+                "timeline-1", "2026.06–07", "交付闭环", "路径硬编码",
+                "完成多目标路由", "形成可交付版本", projectSlugs, evidenceIds
+        );
+        TimelineEvent second = new TimelineEvent(
+                "timeline-1", "2026.06–07", "交付闭环", "路径硬编码",
+                "完成多目标路由", "形成可交付版本",
+                List.of("sql-audit"), List.of("evidence-1")
+        );
+
+        projectSlugs.add("private-project");
+        evidenceIds.add("private-evidence");
+
+        assertThat(first.getProjectSlugs()).containsExactly("sql-audit");
+        assertThat(first.getEvidenceIds()).containsExactly("evidence-1");
+        assertThatThrownBy(() -> first.getProjectSlugs().add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(first).isEqualTo(second);
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+        assertThat(first.toString()).contains("timeline-1", "交付闭环");
+    }
+
+    @Test
+    void snapshotDefensivelyCopiesTimeline() {
+        List<TimelineEvent> timeline = new ArrayList<>(List.of(new TimelineEvent(
+                "timeline-1", "2026.06–07", "交付闭环", "问题", "行动", "影响",
+                List.of("sql-audit"), List.of("evidence-1")
+        )));
+        PortfolioSnapshot snapshot = new PortfolioSnapshot(
+                "1.0", "version-1", OffsetDateTime.parse("2026-07-17T00:00:00+08:00"),
+                null, List.of(), List.of(), List.of(), timeline
+        );
+
+        timeline.clear();
+
+        assertThat(snapshot.getTimeline()).hasSize(1);
+        assertThatThrownBy(() -> snapshot.getTimeline().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 }

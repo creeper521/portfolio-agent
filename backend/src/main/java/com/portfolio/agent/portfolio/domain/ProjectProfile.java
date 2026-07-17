@@ -9,6 +9,7 @@ import java.util.Objects;
 public final class ProjectProfile {
 
     private final String id;
+    private final String code;
     private final String slug;
     private final String title;
     private final String summary;
@@ -28,6 +29,7 @@ public final class ProjectProfile {
     @JsonCreator
     public ProjectProfile(
             @JsonProperty("id") String id,
+            @JsonProperty("code") String code,
             @JsonProperty("slug") String slug,
             @JsonProperty("title") String title,
             @JsonProperty("summary") String summary,
@@ -45,6 +47,7 @@ public final class ProjectProfile {
             @JsonProperty("evidenceIds") List<String> evidenceIds
     ) {
         this.id = id;
+        this.code = code;
         this.slug = slug;
         this.title = title;
         this.summary = summary;
@@ -64,6 +67,10 @@ public final class ProjectProfile {
 
     public String getId() {
         return id;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getSlug() {
@@ -135,6 +142,7 @@ public final class ProjectProfile {
             return false;
         }
         return Objects.equals(id, that.id)
+                && Objects.equals(code, that.code)
                 && Objects.equals(slug, that.slug)
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
@@ -154,7 +162,7 @@ public final class ProjectProfile {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, slug, title, summary, background, responsibilities, solution,
+        return Objects.hash(id, code, slug, title, summary, background, responsibilities, solution,
                 keyDecisions, technologies, verification, outcome, handoff, status,
                 contributionType, questionIds, evidenceIds);
     }
@@ -163,6 +171,7 @@ public final class ProjectProfile {
     public String toString() {
         return "ProjectProfile{" +
                 "id='" + id + '\'' +
+                ", code='" + code + '\'' +
                 ", slug='" + slug + '\'' +
                 ", title='" + title + '\'' +
                 ", summary='" + summary + '\'' +

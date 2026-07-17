@@ -5,6 +5,7 @@ import com.portfolio.agent.portfolio.domain.ContributionType;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
+import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -25,8 +26,13 @@ class JsonPublicPortfolioRepositoryTest {
         ProjectProfile project = snapshot.getProjects().getFirst();
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("1.0");
+        assertThat(project.getCode()).isEqualTo("P-01");
         assertThat(project.getSlug()).isEqualTo("sql-audit");
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.DELIVERED);
         assertThat(project.getContributionType()).isEqualTo(ContributionType.PRIMARY);
+        assertThat(snapshot.getEvidence().getFirst().getCode()).isEqualTo("E-01");
+        assertThat(snapshot.getTimeline()).singleElement()
+                .extracting(TimelineEvent::getId)
+                .isEqualTo("timeline-sql-audit-delivery");
     }
 }
