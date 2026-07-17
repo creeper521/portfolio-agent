@@ -5,6 +5,7 @@ import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +36,7 @@ public class PortfolioSnapshotValidator {
         List<ProjectProfile> projects = requiredList(snapshot.getProjects(), "projects");
         List<QuestionDefinition> questions = requiredList(snapshot.getQuestions(), "questions");
         List<EvidenceRecord> evidence = requiredList(snapshot.getEvidence(), "evidence");
+        List<TimelineEvent> timeline = requiredList(snapshot.getTimeline(), "timeline");
 
         Map<String, ProjectProfile> projectsById = uniqueById(projects, ProjectProfile::getId, "project");
         Map<String, ProjectProfile> projectsBySlug = uniqueById(projects, ProjectProfile::getSlug,
@@ -43,6 +45,9 @@ public class PortfolioSnapshotValidator {
                 QuestionDefinition::getId, "question");
         Map<String, EvidenceRecord> evidenceById = uniqueById(evidence, EvidenceRecord::getId,
                 "evidence");
+        uniqueById(projects, ProjectProfile::getCode, "project code");
+        uniqueById(evidence, EvidenceRecord::getCode, "evidence code");
+        uniqueById(timeline, TimelineEvent::getId, "timeline");
 
         require(!projectsBySlug.isEmpty(), "at least one project is required");
 
@@ -55,6 +60,7 @@ public class PortfolioSnapshotValidator {
         }
 
         for (EvidenceRecord item : evidence) {
+            require(hasText(item.getCode()), "evidence code is required: " + item.getId());
             require(hasText(item.getTitle()), "evidence title is required: " + item.getId());
             require(item.getType() != null, "evidence type is required: " + item.getId());
             require(item.getPeriodStart() != null && item.getPeriodEnd() != null,
@@ -74,6 +80,7 @@ public class PortfolioSnapshotValidator {
         }
 
         for (ProjectProfile project : projects) {
+            require(hasText(project.getCode()), "project code is required: " + project.getId());
             require(hasText(project.getSlug()), "project slug is required");
             require(SLUG_PATTERN.matcher(project.getSlug()).matches(),
                     "project slug format is invalid: " + project.getSlug());
@@ -105,6 +112,28 @@ public class PortfolioSnapshotValidator {
                     project.getEvidenceIds(), "project evidenceIds")) {
                 require(evidenceById.containsKey(evidenceId),
                         "project evidence reference does not exist: " + evidenceId);
+            }
+        }
+
+        for (TimelineEvent event : timeline) {
+            require(hasText(event.getDateLabel()),
+                    "timeline dateLabel is required: " + event.getId());
+            require(hasText(event.getTitle()), "timeline title is required: " + event.getId());
+            require(hasText(event.getProblem()), "timeline problem is required: " + event.getId());
+            require(hasText(event.getAction()), "timeline action is required: " + event.getId());
+            require(hasText(event.getImpact()), "timeline impact is required: " + event.getId());
+            for (String slug : requiredNonBlankList(
+                    event.getProjectSlugs(), "timeline projectSlugs")) {
+                require(projectsBySlug.containsKey(slug),
+                        "timeline project reference does not exist: " + slug);
+            }
+            for (String evidenceId : requiredNonBlankList(
+                    event.getEvidenceIds(), "timeline evidenceIds")) {
+                EvidenceRecord referenced = evidenceById.get(evidenceId);
+                require(referenced != null,
+                        "timeline evidence reference does not exist: " + evidenceId);
+                require(referenced.getPublicStatus() == EvidenceStatus.APPROVED,
+                        "timeline evidence must be APPROVED: " + evidenceId);
             }
         }
     }

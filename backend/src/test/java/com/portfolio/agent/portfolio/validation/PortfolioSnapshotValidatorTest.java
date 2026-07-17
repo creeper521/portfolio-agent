@@ -31,6 +31,15 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsDuplicateProjectCodes() {
+        String second = projectJson()
+                .replace("\"id\": \"sql-audit-project\"", "\"id\": \"copy-project\"")
+                .replace("\"slug\": \"sql-audit\"", "\"slug\": \"sql-audit-copy\"");
+        assertInvalid(validJson().replace(projectJson(), projectJson() + "," + second),
+                "duplicate project code");
+    }
+
+    @Test
     void rejectsDanglingQuestionReference() {
         assertInvalid(validJson().replace("\"questionIds\": [\"sql-audit-overview\"]",
                 "\"questionIds\": [\"missing-question\"]"), "question reference");
@@ -56,6 +65,12 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsBlankEvidenceCode() {
+        assertInvalid(validJson().replace("\"code\": \"E-01\"", "\"code\": \" \""),
+                "evidence code");
+    }
+
+    @Test
     void rejectsBlankProjectContent() {
         assertInvalid(validJson().replace("\"title\": \"SQL 审计与故障排查工具\"",
                 "\"title\": \"  \""), "project title");
@@ -77,6 +92,28 @@ class PortfolioSnapshotValidatorTest {
     void rejectsQuestionWithoutSuggestion() {
         assertInvalid(validJson().replace("\"suggestion\": \"详细介绍 SQL 审计项目\"",
                 "\"suggestion\": \"\""), "suggestion");
+    }
+
+    @Test
+    void rejectsTimelineWithMissingProject() {
+        assertInvalid(validJson().replace("\"projectSlugs\": [\"sql-audit\"]",
+                "\"projectSlugs\": [\"missing-project\"]"), "timeline project reference");
+    }
+
+    @Test
+    void rejectsTimelineWithMissingEvidence() {
+        String invalidTimeline = timelineJson().replace(
+                "\"evidenceIds\": [\"sql-audit-delivery-set\"]",
+                "\"evidenceIds\": [\"missing-evidence\"]"
+        );
+        assertInvalid(validJson().replace(timelineJson(), invalidTimeline),
+                "timeline evidence reference");
+    }
+
+    @Test
+    void rejectsBlankTimelineNarrative() {
+        assertInvalid(validJson().replace("\"impact\": \"形成公开交付闭环\"",
+                "\"impact\": \" \""), "timeline impact");
     }
 
     private void assertInvalid(String json, String expectedMessage) {
@@ -117,6 +154,7 @@ class PortfolioSnapshotValidatorTest {
                   }],
                   "evidence": [{
                     "id": "sql-audit-delivery-set",
+                    "code": "E-01",
                     "title": "SQL 审计工具交付证据集",
                     "type": "COLLECTION",
                     "periodStart": "2026-06-02",
@@ -127,15 +165,16 @@ class PortfolioSnapshotValidatorTest {
                     "publicStatus": "APPROVED",
                     "rawContentPublic": false
                   }],
-                  "timeline": []
+                  "timeline": [%s]
                 }
-                """.formatted(projectJson());
+                """.formatted(projectJson(), timelineJson());
     }
 
     private String projectJson() {
         return """
                 {
                   "id": "sql-audit-project",
+                  "code": "P-01",
                   "slug": "sql-audit",
                   "title": "SQL 审计与故障排查工具",
                   "summary": "面向远程 SQL 日志检索和追溯的内部工具",
@@ -150,6 +189,21 @@ class PortfolioSnapshotValidatorTest {
                   "status": "DELIVERED",
                   "contributionType": "PRIMARY",
                   "questionIds": ["sql-audit-overview"],
+                  "evidenceIds": ["sql-audit-delivery-set"]
+                }
+                """;
+    }
+
+    private String timelineJson() {
+        return """
+                {
+                  "id": "timeline-sql-audit-delivery",
+                  "dateLabel": "2026.06–07",
+                  "title": "从固定路径查询到可交付工具",
+                  "problem": "查询路径被写死",
+                  "action": "完成多目标路由和验证",
+                  "impact": "形成公开交付闭环",
+                  "projectSlugs": ["sql-audit"],
                   "evidenceIds": ["sql-audit-delivery-set"]
                 }
                 """;
