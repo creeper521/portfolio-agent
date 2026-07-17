@@ -4,9 +4,10 @@ import type {
   PublicProject,
   TimelineEvent,
 } from '../model/publicContentTypes'
-import { previewPublicContentRepository } from './previewPublicContentRepository'
+import { apiPublicContentRepository } from './apiPublicContentRepository'
 
 export interface PublicContentRepository {
+  invalidate(): void
   getPortfolio(): Promise<PublicPortfolio>
   getProjects(): Promise<PublicProject[]>
   getProject(slug: string): Promise<PublicProject | null>
@@ -14,4 +15,4 @@ export interface PublicContentRepository {
   getEvidence(): Promise<PublicEvidence[]>
 }
 
-export const publicContentRepository: PublicContentRepository = previewPublicContentRepository
+export const publicContentRepository: PublicContentRepository = apiPublicContentRepository

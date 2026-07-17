@@ -1,4 +1,5 @@
 import type { PortfolioHome, ProjectDetail } from '../model/portfolioTypes'
+import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 
 interface ApiErrorBody {
   message?: string
@@ -58,4 +59,8 @@ export function getPortfolio(): Promise<PortfolioHome> {
 
 export function getProject(slug: string): Promise<ProjectDetail> {
   return request<ProjectDetail>(`/api/v1/projects/${encodeURIComponent(slug)}`, { method: 'GET' })
+}
+
+export function getPublicContent(): Promise<PublicPortfolio> {
+  return request<PublicPortfolio>('/api/v1/public-content', { method: 'GET' })
 }
