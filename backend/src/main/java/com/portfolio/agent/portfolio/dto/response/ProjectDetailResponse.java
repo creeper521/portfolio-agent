@@ -10,6 +10,7 @@ import java.util.Objects;
 public final class ProjectDetailResponse {
 
     private final String slug;
+    private final String code;
     private final String title;
     private final String summary;
     private final String background;
@@ -22,11 +23,13 @@ public final class ProjectDetailResponse {
     private final String handoff;
     private final ProjectStatus status;
     private final ContributionType contributionType;
+    private final List<String> evidenceIds;
     private final List<EvidenceResponse> evidence;
     private final List<String> suggestedQuestions;
 
     public ProjectDetailResponse(
             String slug,
+            String code,
             String title,
             String summary,
             String background,
@@ -39,10 +42,12 @@ public final class ProjectDetailResponse {
             String handoff,
             ProjectStatus status,
             ContributionType contributionType,
+            List<String> evidenceIds,
             List<EvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
         this.slug = slug;
+        this.code = code;
         this.title = title;
         this.summary = summary;
         this.background = background;
@@ -55,6 +60,7 @@ public final class ProjectDetailResponse {
         this.handoff = handoff;
         this.status = status;
         this.contributionType = contributionType;
+        this.evidenceIds = List.copyOf(evidenceIds);
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
     }
@@ -66,6 +72,7 @@ public final class ProjectDetailResponse {
     ) {
         return new ProjectDetailResponse(
                 project.getSlug(),
+                project.getCode(),
                 project.getTitle(),
                 project.getSummary(),
                 project.getBackground(),
@@ -78,6 +85,7 @@ public final class ProjectDetailResponse {
                 project.getHandoff(),
                 project.getStatus(),
                 project.getContributionType(),
+                project.getEvidenceIds(),
                 evidence,
                 suggestedQuestions
         );
@@ -85,6 +93,10 @@ public final class ProjectDetailResponse {
 
     public String getSlug() {
         return slug;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getTitle() {
@@ -135,6 +147,10 @@ public final class ProjectDetailResponse {
         return contributionType;
     }
 
+    public List<String> getEvidenceIds() {
+        return evidenceIds;
+    }
+
     public List<EvidenceResponse> getEvidence() {
         return evidence;
     }
@@ -152,6 +168,7 @@ public final class ProjectDetailResponse {
             return false;
         }
         return Objects.equals(slug, that.slug)
+                && Objects.equals(code, that.code)
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(background, that.background)
@@ -164,21 +181,23 @@ public final class ProjectDetailResponse {
                 && Objects.equals(handoff, that.handoff)
                 && status == that.status
                 && contributionType == that.contributionType
+                && Objects.equals(evidenceIds, that.evidenceIds)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(suggestedQuestions, that.suggestedQuestions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(slug, title, summary, background, responsibilities, solution,
+        return Objects.hash(slug, code, title, summary, background, responsibilities, solution,
                 keyDecisions, technologies, verification, outcome, handoff, status,
-                contributionType, evidence, suggestedQuestions);
+                contributionType, evidenceIds, evidence, suggestedQuestions);
     }
 
     @Override
     public String toString() {
         return "ProjectDetailResponse{" +
                 "slug='" + slug + '\'' +
+                ", code='" + code + '\'' +
                 ", title='" + title + '\'' +
                 ", summary='" + summary + '\'' +
                 ", background='" + background + '\'' +
@@ -191,6 +210,7 @@ public final class ProjectDetailResponse {
                 ", handoff='" + handoff + '\'' +
                 ", status=" + status +
                 ", contributionType=" + contributionType +
+                ", evidenceIds=" + evidenceIds +
                 ", evidence=" + evidence +
                 ", suggestedQuestions=" + suggestedQuestions +
                 '}';

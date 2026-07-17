@@ -46,4 +46,20 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
+
+    @Test
+    void returnsCompleteReviewedPublicContent() throws Exception {
+        mockMvc.perform(get("/api/v1/public-content"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-14.1"))
+                .andExpect(jsonPath("$.projects[0].code").value("P-01"))
+                .andExpect(jsonPath("$.projects[0].evidenceIds[0]")
+                        .value("sql-audit-delivery-set"))
+                .andExpect(jsonPath("$.projects[0].suggestedQuestions.length()").value(1))
+                .andExpect(jsonPath("$.evidence[0].code").value("E-01"))
+                .andExpect(jsonPath("$.evidence[0].publicStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.evidence[0].projectSlugs[0]").value("sql-audit"))
+                .andExpect(jsonPath("$.timeline[0].id")
+                        .value("timeline-sql-audit-delivery"));
+    }
 }

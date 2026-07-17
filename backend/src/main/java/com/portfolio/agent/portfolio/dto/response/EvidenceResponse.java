@@ -9,6 +9,7 @@ import java.util.Objects;
 public final class EvidenceResponse {
 
     private final String id;
+    private final String code;
     private final String title;
     private final String type;
     private final LocalDate periodStart;
@@ -18,9 +19,11 @@ public final class EvidenceResponse {
     private final List<String> supportedClaims;
     private final String publicStatus;
     private final boolean rawContentPublic;
+    private final List<String> projectSlugs;
 
     public EvidenceResponse(
             String id,
+            String code,
             String title,
             String type,
             LocalDate periodStart,
@@ -29,9 +32,11 @@ public final class EvidenceResponse {
             String summary,
             List<String> supportedClaims,
             String publicStatus,
-            boolean rawContentPublic
+            boolean rawContentPublic,
+            List<String> projectSlugs
     ) {
         this.id = id;
+        this.code = code;
         this.title = title;
         this.type = type;
         this.periodStart = periodStart;
@@ -41,11 +46,17 @@ public final class EvidenceResponse {
         this.supportedClaims = List.copyOf(supportedClaims);
         this.publicStatus = publicStatus;
         this.rawContentPublic = rawContentPublic;
+        this.projectSlugs = List.copyOf(projectSlugs);
     }
 
     public static EvidenceResponse from(EvidenceRecord evidence) {
+        return from(evidence, List.of());
+    }
+
+    public static EvidenceResponse from(EvidenceRecord evidence, List<String> projectSlugs) {
         return new EvidenceResponse(
                 evidence.getId(),
+                evidence.getCode(),
                 evidence.getTitle(),
                 evidence.getType().name(),
                 evidence.getPeriodStart(),
@@ -54,12 +65,17 @@ public final class EvidenceResponse {
                 evidence.getSummary(),
                 evidence.getSupportedClaims(),
                 evidence.getPublicStatus().name(),
-                evidence.getRawContentPublic()
+                evidence.getRawContentPublic(),
+                projectSlugs
         );
     }
 
     public String getId() {
         return id;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getTitle() {
@@ -98,6 +114,10 @@ public final class EvidenceResponse {
         return rawContentPublic;
     }
 
+    public List<String> getProjectSlugs() {
+        return projectSlugs;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -109,25 +129,28 @@ public final class EvidenceResponse {
         return sourceCount == that.sourceCount
                 && rawContentPublic == that.rawContentPublic
                 && Objects.equals(id, that.id)
+                && Objects.equals(code, that.code)
                 && Objects.equals(title, that.title)
                 && Objects.equals(type, that.type)
                 && Objects.equals(periodStart, that.periodStart)
                 && Objects.equals(periodEnd, that.periodEnd)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(supportedClaims, that.supportedClaims)
-                && Objects.equals(publicStatus, that.publicStatus);
+                && Objects.equals(publicStatus, that.publicStatus)
+                && Objects.equals(projectSlugs, that.projectSlugs);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, title, type, periodStart, periodEnd, sourceCount, summary,
-                supportedClaims, publicStatus, rawContentPublic);
+        return Objects.hash(id, code, title, type, periodStart, periodEnd, sourceCount, summary,
+                supportedClaims, publicStatus, rawContentPublic, projectSlugs);
     }
 
     @Override
     public String toString() {
         return "EvidenceResponse{" +
                 "id='" + id + '\'' +
+                ", code='" + code + '\'' +
                 ", title='" + title + '\'' +
                 ", type=" + type +
                 ", periodStart=" + periodStart +
@@ -137,6 +160,7 @@ public final class EvidenceResponse {
                 ", supportedClaims=" + supportedClaims +
                 ", publicStatus=" + publicStatus +
                 ", rawContentPublic=" + rawContentPublic +
+                ", projectSlugs=" + projectSlugs +
                 '}';
     }
 }

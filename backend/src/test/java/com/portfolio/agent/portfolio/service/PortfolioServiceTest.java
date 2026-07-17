@@ -12,6 +12,7 @@ import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
+import com.portfolio.agent.portfolio.service.result.PublicContent;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,25 @@ class PortfolioServiceTest {
 
         assertThat(overview.getContentVersion()).isEqualTo("2026-07-14.1");
         assertThat(overview.getProjects()).hasSize(1);
+    }
+
+    @Test
+    void getPublicContentReadsOneSnapshotAndBuildsReverseEvidenceLinks() {
+        CountingRepository repository = new CountingRepository(snapshot());
+        PortfolioService service = new PortfolioService(repository);
+
+        PublicContent content = service.getPublicContent();
+
+        assertThat(repository.reads).isEqualTo(1);
+        assertThat(content.getProjects()).singleElement()
+                .satisfies(project -> assertThat(project.getSuggestedQuestions())
+                        .containsExactly("What did you build?"));
+        assertThat(content.getEvidence()).extracting(EvidenceRecord::getId)
+                .containsExactly("evidence-1");
+        assertThat(content.getProjectSlugsByEvidenceId().get("evidence-1"))
+                .containsExactly("sql-audit");
+        assertThat(content.getTimeline()).extracting(TimelineEvent::getId)
+                .containsExactly("timeline-1");
     }
 
     private static PortfolioSnapshot snapshot() {

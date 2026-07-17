@@ -8,10 +8,14 @@ import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
+import com.portfolio.agent.portfolio.service.result.PublicContent;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -36,6 +40,42 @@ public class PortfolioService {
     public ProjectDetails getProject(String slug) {
         PortfolioSnapshot snapshot = repository.getSnapshot();
         ProjectProfile project = findProject(snapshot, slug);
+        return toProjectDetails(snapshot, project);
+    }
+
+    public PublicContent getPublicContent() {
+        PortfolioSnapshot snapshot = repository.getSnapshot();
+        List<ProjectDetails> projects = snapshot.getProjects().stream()
+                .map(project -> toProjectDetails(snapshot, project))
+                .toList();
+        List<EvidenceRecord> evidence = snapshot.getEvidence().stream()
+                .filter(item -> item.getPublicStatus() == EvidenceStatus.APPROVED)
+                .filter(item -> Boolean.FALSE.equals(item.getRawContentPublic()))
+                .toList();
+        Map<String, List<String>> projectSlugsByEvidenceId = new LinkedHashMap<>();
+        for (ProjectDetails projectDetails : projects) {
+            String projectSlug = projectDetails.getProject().getSlug();
+            for (EvidenceRecord evidenceRecord : projectDetails.getEvidence()) {
+                projectSlugsByEvidenceId
+                        .computeIfAbsent(evidenceRecord.getId(), ignored -> new ArrayList<>())
+                        .add(projectSlug);
+            }
+        }
+        return new PublicContent(
+                snapshot.getContentVersion(),
+                snapshot.getPublishedAt(),
+                snapshot.getOwner(),
+                projects,
+                evidence,
+                snapshot.getTimeline(),
+                projectSlugsByEvidenceId
+        );
+    }
+
+    private ProjectDetails toProjectDetails(
+            PortfolioSnapshot snapshot,
+            ProjectProfile project
+    ) {
         Set<String> evidenceIds = Set.copyOf(project.getEvidenceIds());
 
         List<EvidenceRecord> evidence = snapshot.getEvidence().stream()
