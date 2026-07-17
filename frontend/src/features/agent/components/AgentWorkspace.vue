@@ -20,6 +20,12 @@ import EvidenceDesk from './EvidenceDesk.vue'
 import LocalSessionRail from './LocalSessionRail.vue'
 import PaneResizer from './PaneResizer.vue'
 
+interface AnswerRequestContext {
+  sessionId: string
+  projectSlug: string
+  question: string
+}
+
 const props = withDefaults(
   defineProps<{
     portfolio: PublicPortfolio
@@ -47,7 +53,10 @@ const evidenceIsDrawer = useMediaQuery('(max-width: 1219.98px)')
 const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
 const pending = ref(false)
 const answerError = ref('')
-const failedQuestion = ref('')
+const failedRequest = ref<AnswerRequestContext | null>(null)
+let activeRequest: AnswerRequestContext | null = null
+let requestVersion = 0
+let disposed = false
 
 const activeProject = computed(
   () =>
@@ -66,37 +75,84 @@ function createSession() {
   })
 }
 
-async function requestAnswer(question: string, appendUser: boolean) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project || pending.value) return
+function clearAnswerFailure() {
+  answerError.value = ''
+  failedRequest.value = null
+}
+
+function invalidatePendingRequest() {
+  requestVersion += 1
+  activeRequest = null
+  pending.value = false
+}
+
+async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
+  const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
+  const project = props.portfolio.projects.find((item) => item.slug === context.projectSlug)
+  if (!session || !project || pending.value || disposed) {
+    if (!session || !project) clearAnswerFailure()
+    return
+  }
 
   if (appendUser) {
     sessions.appendMessage(session.id, {
       role: 'USER',
-      content: question,
+      content: context.question,
       evidenceIds: [],
     })
   }
+  const request = ++requestVersion
+  activeRequest = context
   pending.value = true
-  answerError.value = ''
-  failedQuestion.value = question
+  clearAnswerFailure()
   try {
-    const mapped = mapAnswerResponse(await askQuestion(project.slug, question))
+    const mapped = mapAnswerResponse(
+      await askQuestion(context.projectSlug, context.question),
+    )
+    if (disposed || request !== requestVersion) return
     sessions.appendMessage(session.id, {
       role: 'AGENT',
       content: mapped.content,
       evidenceIds: mapped.evidenceIds,
     })
   } catch {
+    if (disposed || request !== requestVersion) return
+    failedRequest.value = context
     answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
-    pending.value = false
+    if (!disposed && request === requestVersion) {
+      activeRequest = null
+      pending.value = false
+    }
   }
 }
 
 function submit(question: string) {
-  void requestAnswer(question, true)
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  if (!session || !project) return
+  void requestAnswer(
+    {
+      sessionId: session.id,
+      projectSlug: project.slug,
+      question,
+    },
+    true,
+  )
+}
+
+function retryAnswer() {
+  const context = failedRequest.value
+  if (!context) return
+  const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
+  const projectExists = props.portfolio.projects.some(
+    (item) => item.slug === context.projectSlug,
+  )
+  if (!sessionExists || !projectExists) {
+    clearAnswerFailure()
+    return
+  }
+  void requestAnswer(context, false)
 }
 
 function previewSplit(key: keyof WorkspaceSplit, value: number) {
@@ -120,11 +176,19 @@ function toggleEvidence() {
 }
 
 function clearAllSessions() {
+  invalidatePendingRequest()
+  clearAnswerFailure()
   sessions.clearSessions()
   createSession()
 }
 
 function removeSession(sessionId: string) {
+  if (activeRequest?.sessionId === sessionId) {
+    invalidatePendingRequest()
+  }
+  if (failedRequest.value?.sessionId === sessionId) {
+    clearAnswerFailure()
+  }
   sessions.removeSession(sessionId)
   if (!sessions.activeSession.value) {
     createSession()
@@ -156,7 +220,11 @@ if (props.initialSeed) {
 }
 
 onMounted(() => window.addEventListener('keydown', onWindowKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => {
+  disposed = true
+  invalidatePendingRequest()
+  window.removeEventListener('keydown', onWindowKeydown)
+})
 </script>
 
 <template>
@@ -206,7 +274,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
       :pending="pending"
       :error="answerError"
       @submit="submit"
-      @retry="requestAnswer(failedQuestion, false)"
+      @retry="retryAnswer"
       @evidence="openEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"

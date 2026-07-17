@@ -41,10 +41,13 @@ const seedError = ref('')
 let seedRequest = 0
 
 async function loadRouteSeed() {
+  const request = ++seedRequest
   const content = portfolio.value
   const project = selectedProject.value
   const question = queryString('question').trim()
   if (status.value !== 'ready' || !content) {
+    initialSeed.value = null
+    seedError.value = ''
     seedStatus.value = 'idle'
     return
   }
@@ -55,7 +58,6 @@ async function loadRouteSeed() {
     return
   }
 
-  const request = ++seedRequest
   seedStatus.value = 'loading'
   seedError.value = ''
   try {

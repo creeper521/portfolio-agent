@@ -54,8 +54,11 @@ function mountWorkspace() {
 }
 
 function storedMessages() {
-  const sessions = JSON.parse(localStorage.getItem(SESSION_KEY) ?? '[]')
-  return sessions[0]?.messages ?? []
+  return storedSessions()[0]?.messages ?? []
+}
+
+function storedSessions() {
+  return JSON.parse(localStorage.getItem(SESSION_KEY) ?? '[]')
 }
 
 describe('AgentWorkspace', () => {
@@ -176,5 +179,98 @@ describe('AgentWorkspace', () => {
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
     expect(wrapper.findAll('.message--agent')).toHaveLength(1)
     expect(storedMessages()).toHaveLength(2)
+  })
+
+  it('retries against the failed session after the user switches sessions', async () => {
+    askQuestionMock
+      .mockRejectedValueOnce(new Error('first request failed'))
+      .mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('textarea').setValue('保留原会话上下文')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const failedSessionId = storedSessions()[0].id
+    const otherSessionId = storedSessions()[1].id
+    await wrapper.findAll('.session-select')[1].trigger('click')
+    expect(wrapper.get('.session-list article.active .session-select').text()).not.toContain(
+      '保留原会话上下文',
+    )
+
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    const sessions = storedSessions()
+    const failedSession = sessions.find((session: { id: string }) => session.id === failedSessionId)
+    const otherSession = sessions.find((session: { id: string }) => session.id === otherSessionId)
+    expect(failedSession.messages.map((message: { role: string }) => message.role)).toEqual([
+      'USER',
+      'AGENT',
+    ])
+    expect(otherSession.messages).toEqual([])
+    expect(askQuestionMock).toHaveBeenNthCalledWith(
+      2,
+      'sql-audit',
+      '保留原会话上下文',
+    )
+  })
+
+  it('clears retry safely when the failed session is deleted', async () => {
+    askQuestionMock.mockRejectedValueOnce(new Error('first request failed'))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('删除失败会话')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(true)
+
+    await wrapper.get('[aria-label^="删除会话："]').trigger('click')
+
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(storedSessions()).toHaveLength(1)
+    expect(storedSessions()[0].messages).toEqual([])
+  })
+
+  it('does not persist a late resolved answer after unmount', async () => {
+    let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
+    askQuestionMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAnswer = resolve
+      }),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('卸载后成功')
+    await wrapper.get('.composer').trigger('submit')
+    const storedBeforeUnmount = localStorage.getItem(SESSION_KEY)
+    wrapper.unmount()
+
+    resolveAnswer(answerResponse())
+    await flushPromises()
+
+    expect(localStorage.getItem(SESSION_KEY)).toBe(storedBeforeUnmount)
+  })
+
+  it('does not overwrite state when a request rejects after unmount', async () => {
+    let rejectAnswer!: (reason: Error) => void
+    askQuestionMock.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectAnswer = reject
+      }),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('卸载后失败')
+    await wrapper.get('.composer').trigger('submit')
+    const storedBeforeUnmount = localStorage.getItem(SESSION_KEY)
+    wrapper.unmount()
+
+    rejectAnswer(new Error('POST https://internal.example/api failed'))
+    await flushPromises()
+
+    expect(localStorage.getItem(SESSION_KEY)).toBe(storedBeforeUnmount)
   })
 })

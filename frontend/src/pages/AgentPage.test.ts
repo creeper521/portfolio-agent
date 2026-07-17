@@ -155,4 +155,59 @@ describe('AgentPage', () => {
     expect(sessions[0].role).toBe('MENTOR')
     expect(sessions[0].messages).toHaveLength(2)
   })
+
+  it('invalidates a pending route seed when the question is removed', async () => {
+    let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
+    askQuestionMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAnswer = resolve
+      }),
+    )
+    const { wrapper, router } = await mountAgentPage(
+      readyPublicContentState(),
+      '/agent?question=即将移除的问题&project=sql-audit',
+    )
+
+    await router.push('/agent?project=sql-audit')
+    await flushPromises()
+    expect(wrapper.find('.agent-workspace').exists()).toBe(true)
+    expect(
+      (wrapper.vm as unknown as { initialSeed: unknown }).initialSeed,
+    ).toBeNull()
+
+    resolveAnswer(answerResponse())
+    await flushPromises()
+
+    expect(
+      (wrapper.vm as unknown as { initialSeed: unknown }).initialSeed,
+    ).toBeNull()
+    expect(wrapper.find('.message--user').exists()).toBe(false)
+  })
+
+  it('invalidates a pending route seed when public content leaves ready', async () => {
+    let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
+    askQuestionMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAnswer = resolve
+      }),
+    )
+    const state = readyPublicContentState()
+    const { wrapper } = await mountAgentPage(
+      state,
+      '/agent?question=状态变化中的问题&project=sql-audit',
+    )
+
+    state.status.value = 'loading'
+    await flushPromises()
+    resolveAnswer(answerResponse())
+    await flushPromises()
+
+    expect(wrapper.find('.agent-workspace').exists()).toBe(false)
+    expect(
+      (wrapper.vm as unknown as { initialSeed: unknown }).initialSeed,
+    ).toBeNull()
+    expect(
+      (wrapper.vm as unknown as { seedStatus: string }).seedStatus,
+    ).toBe('idle')
+  })
 })

@@ -36,4 +36,46 @@ describe('mapAnswerResponse', () => {
     expect(mapped.content).toBe('项目说明\n\n背景内容\n\n验证内容')
     expect(mapped.evidenceIds).toEqual(['evidence-1'])
   })
+
+  it('rejects an answer whose title and sections are all blank', () => {
+    expect(() =>
+      mapAnswerResponse({
+        requestId: 'request-blank',
+        answerMode: 'DETERMINISTIC',
+        matched: true,
+        fallback: false,
+        answer: {
+          title: '  ',
+          sections: [
+            { type: 'BACKGROUND', content: '\n' },
+            { type: 'VERIFICATION', content: '\t' },
+          ],
+        },
+        evidence: [],
+        suggestedQuestions: [],
+      }),
+    ).toThrowError('Answer response has no content')
+  })
+
+  it('preserves a nonblank boundary answer when matched is false', () => {
+    const mapped = mapAnswerResponse({
+      requestId: 'request-boundary',
+      answerMode: 'DETERMINISTIC',
+      matched: false,
+      fallback: false,
+      answer: {
+        title: '项目说明',
+        sections: [
+          { type: 'BOUNDARY', content: '当前版本仅支持推荐问题。' },
+        ],
+      },
+      evidence: [],
+      suggestedQuestions: ['请介绍项目'],
+    })
+
+    expect(mapped).toEqual({
+      content: '项目说明\n\n当前版本仅支持推荐问题。',
+      evidenceIds: [],
+    })
+  })
 })
