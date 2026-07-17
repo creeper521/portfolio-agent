@@ -1,6 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import { publicContentStateKey } from '../features/public-content/composables/usePublicContent'
+import { readyPublicContentState } from '../test/publicContentStateFixture'
 import HomePage from './HomePage.vue'
 
 const RouterLinkStub = {
@@ -11,7 +13,10 @@ const RouterLinkStub = {
 describe('HomePage', () => {
   it('renders exactly four home layers from approved public content', async () => {
     const wrapper = mount(HomePage, {
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: {
+        provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
+        stubs: { RouterLink: RouterLinkStub },
+      },
     })
     await flushPromises()
 
@@ -32,11 +37,30 @@ describe('HomePage', () => {
 
   it('hides a missing owner name instead of rendering a placeholder', async () => {
     const wrapper = mount(HomePage, {
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: {
+        provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
+        stubs: { RouterLink: RouterLinkStub },
+      },
     })
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('[姓名]')
     expect(wrapper.text()).not.toContain('待填写')
+  })
+
+  it('shows a safe retry action when public content fails', async () => {
+    const state = readyPublicContentState()
+    state.portfolio.value = null
+    state.status.value = 'error'
+    state.error.value = '公开内容暂时无法加载，请稍后重试'
+    const wrapper = mount(HomePage, {
+      global: { provide: { [publicContentStateKey as symbol]: state } },
+    })
+
+    await wrapper.get('[data-public-content-retry]').trigger('click')
+
+    expect(state.retry).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('公开内容暂时无法加载，请稍后重试')
+    expect(wrapper.text()).not.toContain('/api/v1/public-content')
   })
 })

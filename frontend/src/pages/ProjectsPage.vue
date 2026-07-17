@@ -1,21 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed } from 'vue'
 
-import type { PublicProject } from '../features/public-content/model/publicContentTypes'
-import { publicContentRepository } from '../features/public-content/repository/publicContentRepository'
+import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
+import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
 
-const projects = ref<PublicProject[]>([])
-
-onMounted(async () => {
-  projects.value = await publicContentRepository.getProjects()
-})
+const { portfolio, status, error, retry } = usePublicContent()
+const projects = computed(() => portfolio.value?.projects ?? [])
 </script>
 
 <template>
-  <main>
+  <main v-if="status === 'ready'">
     <PageLead
       code="01 / PROJECT DOSSIERS"
       title="工程案卷目录"
@@ -51,6 +48,12 @@ onMounted(async () => {
       <EmptyDossier title="项目资料准备中" description="目前还没有可以公开的项目案卷。" />
     </div>
   </main>
+  <PublicContentFeedback
+    v-else-if="status === 'loading' || status === 'error'"
+    :status="status"
+    :message="error"
+    @retry="retry"
+  />
 </template>
 
 <style scoped>

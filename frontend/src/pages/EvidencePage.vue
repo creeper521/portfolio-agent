@@ -1,29 +1,25 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
-import type { PublicEvidence } from '../features/public-content/model/publicContentTypes'
-import { publicContentRepository } from '../features/public-content/repository/publicContentRepository'
+import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
+import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
 
 const route = useRoute()
-const evidence = ref<PublicEvidence[]>([])
-const selectedId = ref('')
+const { portfolio, status, error, retry } = usePublicContent()
+const evidence = computed(() => portfolio.value?.evidence ?? [])
+const selectedId = ref(typeof route.query.evidence === 'string' ? route.query.evidence : '')
 
 const selected = computed(
   () => evidence.value.find((item) => item.id === selectedId.value) ?? evidence.value[0] ?? null,
 )
-
-onMounted(async () => {
-  evidence.value = await publicContentRepository.getEvidence()
-  selectedId.value = typeof route.query.evidence === 'string' ? route.query.evidence : ''
-})
 </script>
 
 <template>
-  <main>
+  <main v-if="status === 'ready'">
     <PageLead
       code="03 / EVIDENCE DESK"
       title="证据中心"
@@ -90,6 +86,12 @@ onMounted(async () => {
       <EmptyDossier title="证明材料尚未公开" description="公开审查完成后，证据索引会出现在这里。" />
     </div>
   </main>
+  <PublicContentFeedback
+    v-else-if="status === 'loading' || status === 'error'"
+    :status="status"
+    :message="error"
+    @retry="retry"
+  />
 </template>
 
 <style scoped>

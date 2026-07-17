@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed } from 'vue'
 
-import type { TimelineEvent } from '../features/public-content/model/publicContentTypes'
-import { publicContentRepository } from '../features/public-content/repository/publicContentRepository'
+import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
+import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 
-const events = ref<TimelineEvent[]>([])
-
-onMounted(async () => {
-  events.value = await publicContentRepository.getTimeline()
-})
+const { portfolio, status, error, retry } = usePublicContent()
+const events = computed(() => portfolio.value?.timeline ?? [])
 </script>
 
 <template>
-  <main>
+  <main v-if="status === 'ready'">
     <PageLead
       code="02 / GROWTH LEDGER"
       title="公开成长时间线"
@@ -54,6 +51,12 @@ onMounted(async () => {
       <EmptyDossier title="公开时间线正在整理" description="已有项目仍可从项目目录和完整 Agent 中查看。" />
     </div>
   </main>
+  <PublicContentFeedback
+    v-else-if="status === 'loading' || status === 'error'"
+    :status="status"
+    :message="error"
+    @retry="retry"
+  />
 </template>
 
 <style scoped>

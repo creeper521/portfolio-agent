@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AgentWorkspace from '../features/agent/components/AgentWorkspace.vue'
 import { createPreviewAnswer } from '../features/agent/data/previewAnswers'
 import type { AgentRouteSeed } from '../features/agent/model/sessionTypes'
-import type {
-  AudienceRole,
-  PublicPortfolio,
-} from '../features/public-content/model/publicContentTypes'
-import { publicContentRepository } from '../features/public-content/repository/publicContentRepository'
+import { usePublicContent } from '../features/public-content/composables/usePublicContent'
+import type { AudienceRole } from '../features/public-content/model/publicContentTypes'
+import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 
 const route = useRoute()
-const portfolio = ref<PublicPortfolio | null>(null)
+const { portfolio, status, error, retry } = usePublicContent()
 
 function queryString(key: string) {
   const value = route.query[key]
@@ -61,19 +59,21 @@ const initialSeed = computed<AgentRouteSeed | null>(() => {
         : 'HOME',
   }
 })
-
-onMounted(async () => {
-  portfolio.value = await publicContentRepository.getPortfolio()
-})
 </script>
 
 <template>
   <AgentWorkspace
-    v-if="portfolio"
+    v-if="status === 'ready' && portfolio"
     :portfolio="portfolio"
     :initial-role="initialRole()"
     :initial-project="queryString('project')"
     :initial-evidence="queryString('evidence')"
     :initial-seed="initialSeed"
+  />
+  <PublicContentFeedback
+    v-else-if="status === 'loading' || status === 'error'"
+    :status="status"
+    :message="error"
+    @retry="retry"
   />
 </template>

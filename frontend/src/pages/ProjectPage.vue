@@ -1,33 +1,25 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
-import type { PublicProject } from '../features/public-content/model/publicContentTypes'
-import { publicContentRepository } from '../features/public-content/repository/publicContentRepository'
+import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
+import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
 
 const props = defineProps<{ slug: string }>()
-const project = ref<PublicProject | null>(null)
-const loaded = ref(false)
+const { portfolio, status, error, retry } = usePublicContent()
+const project = computed(
+  () => portfolio.value?.projects.find((item) => item.slug === props.slug) ?? null,
+)
 
 const evidenceTarget = computed(() => ({
   path: '/evidence',
   query: { project: project.value?.slug },
 }))
-
-watch(
-  () => props.slug,
-  async (slug) => {
-    loaded.value = false
-    project.value = await publicContentRepository.getProject(slug)
-    loaded.value = true
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
-  <main v-if="project" class="project-dossier">
+  <main v-if="status === 'ready' && project" class="project-dossier">
     <header class="project-cover">
       <div class="page-shell project-cover__grid">
         <div class="project-cover__code">
@@ -105,7 +97,14 @@ watch(
     </div>
   </main>
 
-  <main v-else-if="loaded" class="page-shell">
+  <PublicContentFeedback
+    v-else-if="status === 'loading' || status === 'error'"
+    :status="status"
+    :message="error"
+    @retry="retry"
+  />
+
+  <main v-else-if="status === 'ready' && !project" class="page-shell">
     <EmptyDossier
       code="UNPUBLISHED"
       title="该项目尚未公开"
