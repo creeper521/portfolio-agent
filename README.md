@@ -106,7 +106,7 @@ docker run --rm -p 8080:8080 internship-portfolio-agent
 
 ## 完整发布验证
 
-从项目根目录运行原子化发布门禁。它会依次执行代码质量与架构检查、前端测试与构建、后端 `clean package`、隐私扫描、JAR 内容检查，并启动该 JAR 完成真实 Playwright 联调，避免验证旧的前端或 JAR。默认也会在 Docker CLI 可用时运行 Dockerfile 检查。
+从项目根目录运行原子化发布门禁。它会依次执行代码质量、架构与静态 bundle 校验器自测，完成前端测试与构建、后端 `clean package`、隐私扫描、JAR 解包检查、区分大小写的静态路径及逐文件 SHA-256 对比，再启动该 JAR 完成真实 Playwright 联调，避免验证旧的前端或 JAR。默认也会在 Docker CLI 可用时运行 Dockerfile 检查。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1

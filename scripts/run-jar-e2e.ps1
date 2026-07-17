@@ -1,10 +1,27 @@
+param(
+    [string]$JarPath,
+    [string]$JavaExecutable = 'java.exe',
+    [string]$NpmExecutable = 'npm.cmd',
+    [ValidateRange(1, 65535)]
+    [int]$Port = 4173
+)
+
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$jar = Join-Path $root 'backend\target\portfolio-agent.jar'
-$baseUrl = 'http://127.0.0.1:4173'
+$jar = if ([string]::IsNullOrWhiteSpace($JarPath)) {
+    Join-Path $root 'backend\target\portfolio-agent.jar'
+}
+else {
+    [System.IO.Path]::GetFullPath($JarPath)
+}
+$baseUrl = "http://127.0.0.1:$Port"
 
 if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
     throw 'Packaged JAR is missing. Build the frontend and run Maven clean package first.'
+}
+$jar = (Resolve-Path -LiteralPath $jar).Path
+if ($jar.Contains('"')) {
+    throw 'Packaged JAR path contains an unsupported quote character.'
 }
 
 function Get-EnvironmentSnapshot([string]$Name) {
@@ -24,18 +41,36 @@ function Restore-EnvironmentVariable([string]$Name, [hashtable]$Snapshot) {
     }
 }
 
+function Assert-EnvironmentRestored([string]$Name, [hashtable]$Snapshot) {
+    $current = Get-EnvironmentSnapshot $Name
+    if (
+        $current.Exists -ne $Snapshot.Exists -or
+        (
+            $current.Exists -and
+            -not [System.StringComparer]::Ordinal.Equals(
+                [string]$current.Value,
+                [string]$Snapshot.Value
+            )
+        )
+    ) {
+        throw "Environment variable $Name was not restored."
+    }
+}
+
 $environment = @{
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
 }
 
-$process = Start-Process -FilePath 'java.exe' `
-    -ArgumentList @('-jar', $jar, '--server.port=4173') `
+$quotedJar = '"' + $jar + '"'
+$process = Start-Process -FilePath $JavaExecutable `
+    -ArgumentList @('-jar', $quotedJar, "--server.port=$Port") `
     -PassThru -WindowStyle Hidden
 
 Write-Output "Started packaged application process $($process.Id)."
 
+$playwrightExitCode = 0
 try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -66,10 +101,27 @@ try {
                 throw "Readiness endpoint returned unexpected Content-Type '$contentType'."
             }
 
-            $ownedListeners = @(Get-NetTCPConnection -LocalPort 4173 -State Listen `
+            try {
+                $publicContent = $response.Content | ConvertFrom-Json
+            }
+            catch {
+                throw 'Readiness endpoint did not return valid public-content JSON.'
+            }
+            $requiredFields = @('contentVersion', 'owner', 'projects', 'evidence', 'timeline')
+            foreach ($field in $requiredFields) {
+                $property = $publicContent.PSObject.Properties[$field]
+                if ($null -eq $property -or $null -eq $property.Value) {
+                    throw "Readiness public-content JSON is missing required field '$field'."
+                }
+            }
+            if ([string]::IsNullOrWhiteSpace([string]$publicContent.contentVersion)) {
+                throw "Readiness public-content JSON has a blank contentVersion."
+            }
+
+            $ownedListeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen `
                 -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $process.Id })
             if ($ownedListeners.Count -eq 0) {
-                throw "Port 4173 is not owned by packaged application process $($process.Id)."
+                throw "Port $Port is not owned by packaged application process $($process.Id)."
             }
 
             $ready = $true
@@ -83,27 +135,37 @@ try {
         throw 'Packaged application did not become ready.'
     }
 
-    Write-Output "Packaged application process $($process.Id) owns port 4173; readiness returned application/json."
+    Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
     $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
     $env:PLAYWRIGHT_REAL_API = '1'
     $env:PLAYWRIGHT_BASE_URL = $baseUrl
 
-    & npm.cmd --prefix (Join-Path $root 'frontend') run test:e2e
-    if ($LASTEXITCODE -ne 0) {
-        throw "Playwright failed with exit code $LASTEXITCODE."
-    }
+    & $NpmExecutable --prefix (Join-Path $root 'frontend') run test:e2e
+    $playwrightExitCode = $LASTEXITCODE
 }
 finally {
-    Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
-    Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-    Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
-
-    $process.Refresh()
-    if (-not $process.HasExited) {
-        Stop-Process -Id $process.Id -Force
-        if (-not $process.WaitForExit(10000)) {
-            throw "Packaged application process $($process.Id) did not stop."
-        }
+    try {
+        Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Write-Output 'Playwright environment restored.'
     }
-    Write-Output "Packaged application process $($process.Id) is stopped."
+    finally {
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force
+            if (-not $process.WaitForExit(10000)) {
+                throw "Packaged application process $($process.Id) did not stop."
+            }
+        }
+        Write-Output "Packaged application process $($process.Id) is stopped."
+    }
+}
+
+if ($playwrightExitCode -ne 0) {
+    Write-Output "Playwright failed with exit code $playwrightExitCode."
+    exit $playwrightExitCode
 }

@@ -25,6 +25,7 @@ try {
 
     $codeChecker = Join-Path $root 'scripts\code-quality-check.ps1'
     $architectureChecker = Join-Path $root 'scripts\architecture-check.ps1'
+    $staticBundleChecker = Join-Path $root 'scripts\verify-static-bundle.ps1'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\code-quality-check.test.ps1')
@@ -41,6 +42,10 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $architectureChecker `
         -Path (Join-Path $root 'backend\src')
     Assert-ExitCode 'Backend architecture check'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
+    Assert-ExitCode 'Static bundle checker tests'
 
     if (-not $SkipInstall) {
         & npm.cmd --prefix frontend ci
@@ -67,23 +72,6 @@ try {
 
     $entries = @(& jar.exe tf $jarPath)
     Assert-ExitCode 'JAR listing'
-    $staticFiles = @($entries | Where-Object {
-        $_ -like 'BOOT-INF/classes/static/*' -and -not $_.EndsWith('/')
-    } | Sort-Object)
-    $distRoot = (Resolve-Path -LiteralPath (Join-Path $root 'frontend\dist')).Path
-    $distFiles = @(Get-ChildItem -LiteralPath $distRoot -Recurse -File | ForEach-Object {
-        $relativePath = $_.FullName.Substring($distRoot.Length + 1).Replace('\', '/')
-        "BOOT-INF/classes/static/$relativePath"
-    } | Sort-Object)
-    $missingStaticFiles = @($distFiles | Where-Object { $_ -notin $staticFiles })
-    $unexpectedStaticFiles = @($staticFiles | Where-Object { $_ -notin $distFiles })
-    if (
-        'BOOT-INF/classes/static/index.html' -notin $staticFiles -or
-        $missingStaticFiles.Count -gt 0 -or
-        $unexpectedStaticFiles.Count -gt 0
-    ) {
-        throw "JAR static resources differ from frontend/dist. Missing: $($missingStaticFiles -join ', '). Unexpected: $($unexpectedStaticFiles -join ', ')."
-    }
     $forbiddenEntries = @($entries | Where-Object {
         $_ -match '(?i)(private-kb|candidate-snapshot|raw-evidence|unreviewed-screenshot|privacy-report)'
     })
@@ -100,6 +88,11 @@ try {
     finally {
         Pop-Location
     }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $staticBundleChecker `
+        -DistPath (Join-Path $root 'frontend\dist') `
+        -PackagedStaticPath (Join-Path $scanRoot 'BOOT-INF\classes\static')
+    Assert-ExitCode 'Packaged static bundle verification'
+
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $scanRoot 'BOOT-INF\classes\public-data')
     Assert-ExitCode 'Packaged public data privacy scan'
