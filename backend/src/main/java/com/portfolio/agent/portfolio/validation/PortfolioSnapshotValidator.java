@@ -45,9 +45,6 @@ public class PortfolioSnapshotValidator {
                 QuestionDefinition::getId, "question");
         Map<String, EvidenceRecord> evidenceById = uniqueById(evidence, EvidenceRecord::getId,
                 "evidence");
-        uniqueById(projects, ProjectProfile::getCode, "project code");
-        uniqueById(evidence, EvidenceRecord::getCode, "evidence code");
-        uniqueById(timeline, TimelineEvent::getId, "timeline");
 
         require(!projectsBySlug.isEmpty(), "at least one project is required");
 
@@ -114,6 +111,10 @@ public class PortfolioSnapshotValidator {
                         "project evidence reference does not exist: " + evidenceId);
             }
         }
+
+        uniqueById(projects, ProjectProfile::getCode, "project code");
+        uniqueById(evidence, EvidenceRecord::getCode, "evidence code");
+        uniqueById(timeline, TimelineEvent::getId, "timeline");
 
         for (TimelineEvent event : timeline) {
             require(hasText(event.getDateLabel()),

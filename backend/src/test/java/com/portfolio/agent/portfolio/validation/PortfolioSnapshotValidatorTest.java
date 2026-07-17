@@ -32,11 +32,20 @@ class PortfolioSnapshotValidatorTest {
 
     @Test
     void rejectsDuplicateProjectCodes() {
-        String second = projectJson()
+        String secondProject = projectJson()
                 .replace("\"id\": \"sql-audit-project\"", "\"id\": \"copy-project\"")
-                .replace("\"slug\": \"sql-audit\"", "\"slug\": \"sql-audit-copy\"");
-        assertInvalid(validJson().replace(projectJson(), projectJson() + "," + second),
-                "duplicate project code");
+                .replace("\"slug\": \"sql-audit\"", "\"slug\": \"sql-audit-copy\"")
+                .replace("\"questionIds\": [\"sql-audit-overview\"]",
+                        "\"questionIds\": [\"copy-overview\"]");
+        String secondQuestion = questionJson()
+                .replace("\"id\": \"sql-audit-overview\"", "\"id\": \"copy-overview\"")
+                .replace("\"projectId\": \"sql-audit-project\"",
+                        "\"projectId\": \"copy-project\"");
+        String json = validJson()
+                .replace(projectJson(), projectJson() + "," + secondProject)
+                .replace(questionJson(), questionJson() + "," + secondQuestion);
+
+        assertInvalid(json, "duplicate project code");
     }
 
     @Test
@@ -78,8 +87,21 @@ class PortfolioSnapshotValidatorTest {
 
     @Test
     void rejectsProjectWithoutEvidenceAssociation() {
-        assertInvalid(validJson().replace("\"evidenceIds\": [\"sql-audit-delivery-set\"]",
-                "\"evidenceIds\": []"), "project evidenceIds");
+        String invalidProject = projectJson().replace(
+                "\"evidenceIds\": [\"sql-audit-delivery-set\"]", "\"evidenceIds\": []");
+
+        assertInvalid(validJson().replace(projectJson(), invalidProject), "project evidenceIds");
+    }
+
+    @Test
+    void rejectsProjectContentBeforeDuplicateTimelineIds() {
+        String invalidProject = projectJson().replace(
+                "\"evidenceIds\": [\"sql-audit-delivery-set\"]", "\"evidenceIds\": []");
+        String json = validJson()
+                .replace(projectJson(), invalidProject)
+                .replace(timelineJson(), timelineJson() + "," + timelineJson());
+
+        assertInvalid(json, "project evidenceIds");
     }
 
     @Test
@@ -145,13 +167,7 @@ class PortfolioSnapshotValidatorTest {
                     "resumeUrl": null
                   },
                   "projects": [%s],
-                  "questions": [{
-                    "id": "sql-audit-overview",
-                    "projectId": "sql-audit-project",
-                    "canonicalQuestion": "请详细介绍 SQL 审计与故障排查工具项目",
-                    "aliases": ["介绍 SQL 审计项目"],
-                    "suggestion": "详细介绍 SQL 审计项目"
-                  }],
+                  "questions": [%s],
                   "evidence": [{
                     "id": "sql-audit-delivery-set",
                     "code": "E-01",
@@ -167,7 +183,7 @@ class PortfolioSnapshotValidatorTest {
                   }],
                   "timeline": [%s]
                 }
-                """.formatted(projectJson(), timelineJson());
+                """.formatted(projectJson(), questionJson(), timelineJson());
     }
 
     private String projectJson() {
@@ -190,6 +206,18 @@ class PortfolioSnapshotValidatorTest {
                   "contributionType": "PRIMARY",
                   "questionIds": ["sql-audit-overview"],
                   "evidenceIds": ["sql-audit-delivery-set"]
+                }
+                """;
+    }
+
+    private String questionJson() {
+        return """
+                {
+                  "id": "sql-audit-overview",
+                  "projectId": "sql-audit-project",
+                  "canonicalQuestion": "请详细介绍 SQL 审计与故障排查工具项目",
+                  "aliases": ["介绍 SQL 审计项目"],
+                  "suggestion": "详细介绍 SQL 审计项目"
                 }
                 """;
     }
