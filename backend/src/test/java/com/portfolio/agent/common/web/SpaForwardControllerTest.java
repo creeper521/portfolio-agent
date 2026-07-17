@@ -2,6 +2,8 @@ package com.portfolio.agent.common.web;
 
 import com.portfolio.agent.PortfolioAgentApplication;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,9 +21,21 @@ class SpaForwardControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @Test
-    void forwardsAProjectRouteToTheVueEntryPoint() throws Exception {
-        mockMvc.perform(get("/projects/sql-audit"))
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/projects",
+            "/projects/",
+            "/projects/sql-audit",
+            "/projects/sql-audit/",
+            "/timeline",
+            "/timeline/",
+            "/evidence",
+            "/evidence/",
+            "/agent",
+            "/agent/"
+    })
+    void forwardsEveryPublicSpaRouteToTheVueEntryPoint(String route) throws Exception {
+        mockMvc.perform(get(route))
                 .andExpect(status().isOk())
                 .andExpect(forwardedUrl("/index.html"));
     }
@@ -31,5 +45,12 @@ class SpaForwardControllerTest {
         mockMvc.perform(get("/api/v1/portfolio"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.projects[0].slug").value("sql-audit"));
+    }
+
+    @Test
+    void doesNotCaptureStaticAssetRoutes() throws Exception {
+        mockMvc.perform(get("/assets/missing.js"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 }

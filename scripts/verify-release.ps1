@@ -24,6 +24,7 @@ try {
     }
 
     $codeChecker = Join-Path $root 'scripts\code-quality-check.ps1'
+    $architectureChecker = Join-Path $root 'scripts\architecture-check.ps1'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\code-quality-check.test.ps1')
@@ -32,6 +33,14 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $codeChecker `
         -Path (Join-Path $root 'backend\src')
     Assert-ExitCode 'Java code quality check'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\architecture-check.test.ps1')
+    Assert-ExitCode 'Architecture checker tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $architectureChecker `
+        -Path (Join-Path $root 'backend\src')
+    Assert-ExitCode 'Backend architecture check'
 
     if (-not $SkipInstall) {
         & npm.cmd --prefix frontend ci
@@ -60,9 +69,20 @@ try {
     Assert-ExitCode 'JAR listing'
     $staticFiles = @($entries | Where-Object {
         $_ -like 'BOOT-INF/classes/static/*' -and -not $_.EndsWith('/')
-    })
-    if ($staticFiles.Count -ne 3 -or 'BOOT-INF/classes/static/index.html' -notin $staticFiles) {
-        throw 'JAR static resources do not match the expected V0 frontend artifact.'
+    } | Sort-Object)
+    $distRoot = (Resolve-Path -LiteralPath (Join-Path $root 'frontend\dist')).Path
+    $distFiles = @(Get-ChildItem -LiteralPath $distRoot -Recurse -File | ForEach-Object {
+        $relativePath = $_.FullName.Substring($distRoot.Length + 1).Replace('\', '/')
+        "BOOT-INF/classes/static/$relativePath"
+    } | Sort-Object)
+    $missingStaticFiles = @($distFiles | Where-Object { $_ -notin $staticFiles })
+    $unexpectedStaticFiles = @($staticFiles | Where-Object { $_ -notin $distFiles })
+    if (
+        'BOOT-INF/classes/static/index.html' -notin $staticFiles -or
+        $missingStaticFiles.Count -gt 0 -or
+        $unexpectedStaticFiles.Count -gt 0
+    ) {
+        throw "JAR static resources differ from frontend/dist. Missing: $($missingStaticFiles -join ', '). Unexpected: $($unexpectedStaticFiles -join ', ')."
     }
     $forbiddenEntries = @($entries | Where-Object {
         $_ -match '(?i)(private-kb|candidate-snapshot|raw-evidence|unreviewed-screenshot|privacy-report)'
@@ -87,8 +107,9 @@ try {
         -Path (Join-Path $scanRoot 'BOOT-INF\classes\static')
     Assert-ExitCode 'Packaged static resources privacy scan'
 
-    & npm.cmd --prefix frontend run test:e2e
-    Assert-ExitCode 'Playwright end-to-end tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\run-jar-e2e.ps1')
+    Assert-ExitCode 'Packaged JAR Playwright integration tests'
 
     if (-not $SkipDockerCheck) {
         if (Get-Command docker -ErrorAction SilentlyContinue) {

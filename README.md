@@ -57,11 +57,17 @@ mvn.cmd -f backend/pom.xml test
 npm.cmd --prefix frontend test -- --run
 ```
 
-Playwright 端到端测试会启动已经构建好的单 JAR：
+Playwright 分成两种拓扑。前端独立验收由 Vite 启动页面，并且只对公开内容与问答两个 API 使用浏览器内 mock；完整联调则启动已打包 JAR，访问其中的生产前端资源与真实 Spring Boot API：
 
 ```powershell
+# Frontend-only visual/interaction acceptance with API mocks
 npm.cmd --prefix frontend run test:e2e
+
+# Full packaged-JAR frontend/backend integration
+powershell -ExecutionPolicy Bypass -File scripts/run-jar-e2e.ps1
 ```
+
+完整联调命令要求先完成一次新的前端构建和 Maven 打包，不能复用来源不明的旧制品。
 
 ## 构建并运行单 JAR
 
@@ -100,7 +106,7 @@ docker run --rm -p 8080:8080 internship-portfolio-agent
 
 ## 完整发布验证
 
-从项目根目录运行原子化发布门禁。它会依次执行前端测试与构建、后端 `clean package`、隐私扫描、JAR 内容检查和 Playwright E2E，避免验证旧的前端或 JAR。默认也会在 Docker CLI 可用时运行 Dockerfile 检查。
+从项目根目录运行原子化发布门禁。它会依次执行代码质量与架构检查、前端测试与构建、后端 `clean package`、隐私扫描、JAR 内容检查，并启动该 JAR 完成真实 Playwright 联调，避免验证旧的前端或 JAR。默认也会在 Docker CLI 可用时运行 Dockerfile 检查。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
@@ -110,6 +116,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 
 ## 公开 API
 
+- `GET /api/v1/public-content`：正式页面使用的审核公开内容聚合
 - `GET /api/v1/portfolio`：首页公开快照
 - `GET /api/v1/projects/{slug}`：项目详情
 - `POST /api/v1/answers`：确定性问答

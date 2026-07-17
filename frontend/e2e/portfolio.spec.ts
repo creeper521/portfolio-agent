@@ -1,13 +1,39 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+import { installPublicApiMocks } from './support/publicApiMocks'
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.clear())
+  await page.addInitScript(() => {
+    const initializedKey = 'portfolio.playwright.initialized'
+    if (sessionStorage.getItem(initializedKey) !== '1') {
+      localStorage.clear()
+      sessionStorage.setItem(initializedKey, '1')
+    }
+  })
+  if (process.env.PLAYWRIGHT_REAL_API !== '1') {
+    await installPublicApiMocks(page)
+  }
 })
+
+async function gotoWithPublicContent(page: Page, path: string) {
+  const publicContentResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/public-content' &&
+      response.request().method() === 'GET',
+  )
+  await page.goto(path)
+  expect((await publicContentResponse).ok()).toBe(true)
+}
+
+async function openAgentDeepLink(page: Page) {
+  await page.goto('/agent')
+  await expect(page).toHaveURL(/\/agent$/)
+}
 
 test('home preserves the four-layer experience and hands a role question to Agent', async ({
   page,
 }) => {
-  await page.goto('/')
+  await gotoWithPublicContent(page, '/')
 
   await expect(page.locator('[data-home-layer]')).toHaveCount(4)
   await expect(page.locator('[data-home-layer="hero"]')).toHaveCSS(
@@ -25,14 +51,22 @@ test('home preserves the four-layer experience and hands a role question to Agen
     'rgb(32, 28, 23)',
   )
   await expect(page.getByText('你如何复盘这个项目？')).toBeVisible()
+  const answerResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/answers' &&
+      response.request().method() === 'POST',
+  )
   await page.getByText('你如何复盘这个项目？').click()
+  expect((await answerResponse).ok()).toBe(true)
   await expect(page.locator('[data-light-answer]')).toBeVisible()
   await expect(page.locator('[data-answer-action]')).toHaveCount(3)
   await page.getByRole('link', { name: /带着上下文进入 Agent/ }).click()
 
   await expect(page).toHaveURL(/\/agent\?.*source=HOME/)
   await expect(page.locator('.message--user')).toContainText('你如何复盘这个项目？')
-  await expect(page.locator('.message--agent')).toContainText('边界明确')
+  await expect(page.locator('.message--agent')).toContainText(
+    '当前版本只稳定支持项目完整介绍问题',
+  )
   await expect(page.getByLabel('你的问题')).toHaveValue('')
 })
 
@@ -47,15 +81,36 @@ test('visitor can move from a project dossier to its approved evidence', async (
   await expect(page.getByText('已通过公开审查')).toBeVisible()
 })
 
-test('local Agent conversation survives reload and can be cleared', async ({ page }) => {
-  await page.goto('/agent')
+test('visitor can follow timeline links to the related project and evidence', async ({ page }) => {
+  await page.goto('/timeline')
 
-  await page.getByLabel('你的问题').fill('你如何验证查询、进度和归档链路？')
+  await page.getByRole('link', { name: '查看关联项目 →' }).click()
+  await expect(page).toHaveURL(/\/projects\/sql-audit$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('SQL 审计与故障排查工具')
+
+  await page.getByRole('link', { name: '查看成长时间线' }).click()
+  await page.getByRole('link', { name: '查看关联证据 →' }).click()
+  await expect(page).toHaveURL(/\/evidence\?evidence=sql-audit-delivery-set/)
+  await expect(page.getByRole('heading', { name: 'SQL 审计工具交付证据集' })).toBeVisible()
+})
+
+test('local Agent conversation survives reload and can be cleared', async ({ page }) => {
+  await openAgentDeepLink(page)
+
+  const question =
+    '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？'
+  await page.getByLabel('你的问题').fill(question)
+  const answerResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/answers' &&
+      response.request().method() === 'POST',
+  )
   await page.getByRole('button', { name: /发送/ }).click()
-  await expect(page.getByText(/验证覆盖时间排序/)).toBeVisible()
+  expect((await answerResponse).ok()).toBe(true)
+  await expect(page.getByText(/逐项验证时间排序/)).toBeVisible()
 
   await page.reload()
-  await expect(page.getByText('你如何验证查询、进度和归档链路？')).toBeVisible()
+  await expect(page.getByText(question)).toBeVisible()
 
   if (await page.getByRole('button', { name: '会话', exact: true }).isVisible()) {
     await page.getByRole('button', { name: '会话', exact: true }).click()
@@ -67,7 +122,7 @@ test('local Agent conversation survives reload and can be cleared', async ({ pag
 
 test('workspace separators support keyboard adjustment and reset', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/agent')
+  await openAgentDeepLink(page)
 
   const handle = page.getByRole('separator', { name: '调整历史会话宽度' })
   const before = Number(await handle.getAttribute('aria-valuenow'))
@@ -82,7 +137,7 @@ test('responsive Agent uses evidence and session drawers without horizontal over
   page,
 }) => {
   await page.setViewportSize({ width: 1219, height: 900 })
-  await page.goto('/agent')
+  await openAgentDeepLink(page)
   await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'true')
   await page.getByRole('button', { name: '证据', exact: true }).click()
   await expect(page.locator('.agent-workspace')).toHaveClass(/evidence-open/)
