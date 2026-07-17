@@ -8,34 +8,58 @@ import {
 
 export type PublicContentStatus = 'idle' | 'loading' | 'ready' | 'error'
 
+const PUBLIC_CONTENT_LOAD_ERROR = '公开内容暂时无法加载，请稍后重试'
+
 export function createPublicContentState(repository: PublicContentRepository) {
   const portfolio = ref<PublicPortfolio | null>(null)
   const status = ref<PublicContentStatus>('idle')
   const error = ref('')
+  let inFlight: Promise<void> | null = null
 
-  async function load(): Promise<void> {
-    if (status.value === 'loading' || status.value === 'ready') {
-      return
+  function load(): Promise<void> {
+    if (inFlight) {
+      return inFlight
+    }
+    if (status.value === 'ready') {
+      return Promise.resolve()
     }
 
     status.value = 'loading'
     error.value = ''
 
+    let portfolioRequest: Promise<PublicPortfolio>
     try {
-      portfolio.value = await repository.getPortfolio()
-      status.value = 'ready'
-    } catch (cause) {
-      status.value = 'error'
-      error.value = cause instanceof Error
-        ? cause.message
-        : '公开内容暂时无法加载，请稍后重试'
+      portfolioRequest = repository.getPortfolio()
+    } catch {
+      portfolioRequest = Promise.reject()
     }
+
+    const request = portfolioRequest
+      .then((loadedPortfolio) => {
+        portfolio.value = loadedPortfolio
+        status.value = 'ready'
+      })
+      .catch(() => {
+        status.value = 'error'
+        error.value = PUBLIC_CONTENT_LOAD_ERROR
+      })
+
+    const trackedRequest = request.finally(() => {
+      if (inFlight === trackedRequest) {
+        inFlight = null
+      }
+    })
+    inFlight = trackedRequest
+    return trackedRequest
   }
 
-  async function retry(): Promise<void> {
+  function retry(): Promise<void> {
+    if (inFlight) {
+      return inFlight
+    }
     repository.invalidate()
     status.value = 'idle'
-    await load()
+    return load()
   }
 
   return { portfolio, status, error, load, retry }
