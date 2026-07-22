@@ -1,7 +1,6 @@
 package com.portfolio.agent.answer.domain;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Objects;
 
 public final class AnswerEvidence {
@@ -13,7 +12,6 @@ public final class AnswerEvidence {
     private final LocalDate periodEnd;
     private final int sourceCount;
     private final String summary;
-    private final List<String> supportedClaims;
     private final String publicStatus;
     private final boolean rawContentPublic;
 
@@ -25,7 +23,6 @@ public final class AnswerEvidence {
             LocalDate periodEnd,
             int sourceCount,
             String summary,
-            List<String> supportedClaims,
             String publicStatus,
             boolean rawContentPublic
     ) {
@@ -36,7 +33,6 @@ public final class AnswerEvidence {
         this.periodEnd = periodEnd;
         this.sourceCount = sourceCount;
         this.summary = summary;
-        this.supportedClaims = List.copyOf(supportedClaims);
         this.publicStatus = publicStatus;
         this.rawContentPublic = rawContentPublic;
     }
@@ -69,10 +65,6 @@ public final class AnswerEvidence {
         return summary;
     }
 
-    public List<String> getSupportedClaims() {
-        return supportedClaims;
-    }
-
     public String getPublicStatus() {
         return publicStatus;
     }
@@ -97,14 +89,13 @@ public final class AnswerEvidence {
                 && Objects.equals(periodStart, that.periodStart)
                 && Objects.equals(periodEnd, that.periodEnd)
                 && Objects.equals(summary, that.summary)
-                && Objects.equals(supportedClaims, that.supportedClaims)
                 && Objects.equals(publicStatus, that.publicStatus);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, title, type, periodStart, periodEnd, sourceCount, summary,
-                supportedClaims, publicStatus, rawContentPublic);
+                publicStatus, rawContentPublic);
     }
 
     @Override
@@ -117,7 +108,6 @@ public final class AnswerEvidence {
                 ", periodEnd=" + periodEnd +
                 ", sourceCount=" + sourceCount +
                 ", summary='" + summary + '\'' +
-                ", supportedClaims=" + supportedClaims +
                 ", publicStatus='" + publicStatus + '\'' +
                 ", rawContentPublic=" + rawContentPublic +
                 '}';

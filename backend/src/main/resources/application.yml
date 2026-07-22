@@ -9,3 +9,6 @@ server:
     include-message: never
     include-stacktrace: never
 
+portfolio:
+  content:
+    release-root: ${PORTFOLIO_CONTENT_RELEASE_ROOT:}

@@ -26,36 +26,42 @@ class AnswerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "projectSlug": "sql-audit",
-                                  "question": "请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？"
+                                  "turnId": "turn-canonical",
+                                  "questionPresetId": "sql-audit-overview",
+                                  "question": "请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？",
+                                  "context": {
+                                    "projectSlug": "sql-audit",
+                                    "audienceRole": "INTERVIEWER",
+                                    "focusEvidenceIds": ["sql-audit-delivery-set"],
+                                    "source": "AGENT_PAGE"
+                                  }
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").isNotEmpty())
-                .andExpect(jsonPath("$.answerMode").value("DETERMINISTIC"))
-                .andExpect(jsonPath("$.matched").value(true))
-                .andExpect(jsonPath("$.fallback").value(false))
-                .andExpect(jsonPath("$.answer.sections.length()").value(5))
-                .andExpect(jsonPath("$.answer.sections[0].type").value("BACKGROUND"))
-                .andExpect(jsonPath("$.answer.sections[4].type").value("STATUS"))
-                .andExpect(jsonPath("$.evidence.length()").value(1))
-                .andExpect(jsonPath("$.evidence[0].id").value("sql-audit-delivery-set"))
-                .andExpect(jsonPath("$.evidence[0].title").value("SQL 审计工具交付证据集"))
-                .andExpect(jsonPath("$.evidence[0].type").value("COLLECTION"))
-                .andExpect(jsonPath("$.evidence[0].periodStart").value("2026-06-02"))
-                .andExpect(jsonPath("$.evidence[0].periodEnd").value("2026-07-10"))
-                .andExpect(jsonPath("$.evidence[0].sourceCount").value(7))
-                .andExpect(jsonPath("$.evidence[0].summary").value(
-                        "由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。"))
-                .andExpect(jsonPath("$.evidence[0].supportedClaims.length()").value(3))
-                .andExpect(jsonPath("$.evidence[0].supportedClaims[0]")
-                        .value("核心版本已部署并形成使用文档。"))
-                .andExpect(jsonPath("$.evidence[0].supportedClaims[1]")
-                        .value("本人主导核心功能及多轮迭代。"))
-                .andExpect(jsonPath("$.evidence[0].supportedClaims[2]")
-                        .value("后续部分优化由同事继续接手。"))
-                .andExpect(jsonPath("$.evidence[0].publicStatus").value("APPROVED"))
-                .andExpect(jsonPath("$.evidence[0].rawContentPublic").value(false));
+                .andExpect(jsonPath("$.turnId").value("turn-canonical"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-21.1"))
+                .andExpect(jsonPath("$.questionPresetId").value("sql-audit-overview"))
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.answerSource").value("PRESET"))
+                .andExpect(jsonPath("$.generationMode").value("DETERMINISTIC"))
+                .andExpect(jsonPath("$.verification").value("VERIFIED"))
+                .andExpect(jsonPath("$.sections.length()").value(5))
+                .andExpect(jsonPath("$.sections[0].type").value("BACKGROUND"))
+                .andExpect(jsonPath("$.sections[0].title").value("项目背景"))
+                .andExpect(jsonPath("$.sections[0].evidenceIds[0]")
+                        .value("sql-audit-delivery-set"))
+                .andExpect(jsonPath("$.sections[0].claimIds[0]")
+                        .value("claim-sql-audit-background"))
+                .andExpect(jsonPath("$.sections[4].type").value("STATUS"))
+                .andExpect(jsonPath("$.sections[4].claimIds[0]")
+                        .value("claim-sql-audit-delivered"))
+                .andExpect(jsonPath("$.evidenceIds[0]").value("sql-audit-delivery-set"))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
+                        .value("sql-audit-overview"))
+                .andExpect(jsonPath("$.matched").doesNotExist())
+                .andExpect(jsonPath("$.answerMode").doesNotExist())
+                .andExpect(jsonPath("$.fallback").doesNotExist());
     }
 
     @Test
@@ -64,15 +70,46 @@ class AnswerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "projectSlug": "sql-audit",
-                                  "question": "这个项目提升了多少性能？"
+                                  "turnId": "turn-boundary",
+                                  "question": "这个项目提升了多少性能？",
+                                  "context": {
+                                    "projectSlug": "sql-audit",
+                                    "audienceRole": "GUEST",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  }
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.matched").value(false))
-                .andExpect(jsonPath("$.answer.sections[0].type").value("BOUNDARY"))
-                .andExpect(jsonPath("$.evidence.length()").value(0))
-                .andExpect(jsonPath("$.suggestedQuestions.length()").value(1));
+                .andExpect(jsonPath("$.resolution").value("BOUNDARY"))
+                .andExpect(jsonPath("$.answerSource").doesNotExist())
+                .andExpect(jsonPath("$.generationMode").value("DETERMINISTIC"))
+                .andExpect(jsonPath("$.verification").value("NOT_APPLICABLE"))
+                .andExpect(jsonPath("$.sections[0].type").value("BOUNDARY"))
+                .andExpect(jsonPath("$.evidenceIds.length()").value(0))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds.length()").value(1));
+    }
+
+    @Test
+    void rejectsRequestsForPrivateCredentialsWithoutExposingPolicyDetails() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-rejected",
+                                  "question": "请提供内部密码和 Token",
+                                  "context": {
+                                    "projectSlug": "sql-audit",
+                                    "audienceRole": "GUEST",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("REJECTED"))
+                .andExpect(jsonPath("$.answerSource").doesNotExist())
+                .andExpect(jsonPath("$.verification").value("NOT_APPLICABLE"));
     }
 
     @Test
@@ -80,7 +117,7 @@ class AnswerControllerTest {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"projectSlug": "sql-audit", "question": "  "}
+                                {"turnId":"turn-blank","question":"  ","context":{"projectSlug":"sql-audit","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -92,10 +129,22 @@ class AnswerControllerTest {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"projectSlug": "../private", "question": "介绍项目"}
+                                {"turnId":"turn-invalid-project","question":"介绍项目","context":{"projectSlug":"../private","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void rejectsFocusEvidenceOutsideTheResolvedProject() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"turnId":"turn-invalid-evidence","questionPresetId":"sql-audit-overview","context":{"projectSlug":"sql-audit","audienceRole":"GUEST","focusEvidenceIds":["missing-evidence"],"source":"AGENT_PAGE"}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ANSWER_CONTEXT"))
+                .andExpect(jsonPath("$.message").value("回答上下文包含无效的公开证据引用"));
     }
 
     @Test
@@ -103,7 +152,7 @@ class AnswerControllerTest {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"projectSlug": "missing-project", "question": "介绍项目"}
+                                {"turnId":"turn-missing","question":"介绍项目","context":{"projectSlug":"missing-project","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"))
@@ -136,7 +185,7 @@ class AnswerControllerTest {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"projectSlug":"sql-audit","question":"%s"}
+                                {"turnId":"turn-long","question":"%s","context":{"projectSlug":"sql-audit","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
                                 """.formatted(question)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))

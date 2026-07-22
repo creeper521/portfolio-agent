@@ -19,6 +19,12 @@ const answerError = ref('')
 const failedQuestion = ref('')
 
 const primaryProject = computed(() => props.portfolio.projects[0] ?? null)
+const supportedQuestions = computed(() =>
+  props.portfolio.questionPresets.filter(
+    (preset) => preset.audiences.includes(selectedRole.value.id) &&
+      preset.placements.includes('HOME'),
+  ),
+)
 
 function chooseRole(profile: AudienceProfile) {
   selectedRole.value = profile
@@ -27,7 +33,7 @@ function chooseRole(profile: AudienceProfile) {
   round.value = 0
 }
 
-async function ask(question: string) {
+async function ask(question: string, questionPresetId?: string) {
   const normalized = question.trim()
   const project = primaryProject.value
   if (!normalized || !project || pending.value) return
@@ -36,12 +42,19 @@ async function ask(question: string) {
   answerError.value = ''
   failedQuestion.value = normalized
   try {
-    const mapped = mapAnswerResponse(await askQuestion(project.slug, normalized))
+    const mapped = mapAnswerResponse(await askQuestion({
+      turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+      projectSlug: project.slug,
+      audienceRole: selectedRole.value.id,
+      source: 'HOME',
+      questionPresetId,
+      question: questionPresetId ? undefined : normalized,
+    }))
     round.value = Math.min(round.value + 1, 3)
     answer.value = {
       round: round.value,
       question: normalized,
-      answer: mapped.content,
+      answer: mapped,
       projectSlug: project.slug,
       evidenceIds: mapped.evidenceIds,
     }
@@ -99,15 +112,15 @@ function focusCustomQuestion() {
         <h3>推荐问题</h3>
         <div class="question-list">
           <button
-            v-for="(item, index) in selectedRole.questions"
-            :key="item"
+            v-for="(item, index) in supportedQuestions"
+            :key="item.id"
             type="button"
             data-question
             :disabled="pending"
-            @click="ask(item)"
+            @click="ask(item.text, item.id)"
           >
             <b>Q·{{ String(index + 1).padStart(2, '0') }}</b>
-            <span>{{ item }}</span>
+            <span>{{ item.text }}</span>
             <i aria-hidden="true">→</i>
           </button>
         </div>

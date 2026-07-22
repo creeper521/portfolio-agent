@@ -9,6 +9,9 @@ $unsafeCases = [ordered]@{
     'internal-linux-path' = 'path=/data/server/private/report.md'
     'credential-assignment' = 'password=secret'
     'internal-hostname' = 'service=https://sql-audit.private.corp/api'
+    'private-key-material' = '-----BEGIN PRIVATE KEY-----'
+    'visitor-session-storage-key' = 'portfolio.agent.sessions.v1'
+    'question-in-url' = '/agent?question=private-visitor-question'
 }
 
 try {

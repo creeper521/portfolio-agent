@@ -11,13 +11,16 @@ if (-not (Test-Path -LiteralPath $Path)) {
 }
 
 $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
-$allowedExtensions = @('.json', '.js', '.css', '.html', '.yml', '.yaml', '.properties', '.txt', '.md')
+$allowedExtensions = @('.json', '.js', '.css', '.html', '.yml', '.yaml', '.properties', '.txt', '.md', '.map', '.svg', '.csv', '.log', '.conf', '.env')
 $patterns = @(
     @{ Name = 'ipv4-address'; Regex = '(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)' },
     @{ Name = 'windows-absolute-path'; Regex = '(?i)[a-z]:\\(?:users|code|work|workspace)\\' },
     @{ Name = 'internal-linux-path'; Regex = '(?i)/(?:data|home|opt|srv)/(?:server|internal|company|private|prod)(?:/|\b)' },
     @{ Name = 'credential-assignment'; Regex = '(?i)(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*[^\s,;]+' },
-    @{ Name = 'internal-hostname'; Regex = '(?i)(?:https?://)?(?:[a-z0-9-]+\.)+(?:internal|corp|private|local)(?::\d+)?(?:/|\b)' }
+    @{ Name = 'internal-hostname'; Regex = '(?i)(?:https?://)?(?:[a-z0-9-]+\.)+(?:internal|corp|private|local)(?::\d+)?(?:/|\b)' },
+    @{ Name = 'private-key-material'; Regex = '(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----' },
+    @{ Name = 'visitor-session-storage-key'; Regex = '(?i)portfolio\.agent\.sessions(?:\.|\b)' },
+    @{ Name = 'question-in-url'; Regex = '(?i)[?&]question=' }
 )
 
 $item = Get-Item -LiteralPath $resolvedPath

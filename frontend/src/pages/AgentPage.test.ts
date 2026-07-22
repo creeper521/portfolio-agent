@@ -2,10 +2,13 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import { SESSION_KEY } from '../features/agent/composables/useLocalSessions'
 import { publicContentStateKey } from '../features/public-content/composables/usePublicContent'
+import { clearAgentHandoffsForTest, createAgentHandoff } from '../features/agent/model/handoffStore'
+import { mapAnswerResponse } from '../features/agent/model/mapAnswerResponse'
 import { readyPublicContentState } from '../test/publicContentStateFixture'
 import AgentPage from './AgentPage.vue'
+
+const SESSION_KEY = 'forbidden-session-key'
 
 const { askQuestionMock } = vi.hoisted(() => ({
   askQuestionMock: vi.fn(),
@@ -18,31 +21,21 @@ vi.mock('../features/agent/api/answerApi', () => ({
 function answerResponse() {
   return {
     requestId: 'request-1',
-    answerMode: 'DETERMINISTIC' as const,
-    matched: true,
-    fallback: false,
-    answer: {
-      title: '项目说明',
-      sections: [
-        { type: 'BACKGROUND' as const, content: '背景内容' },
-        { type: 'VERIFICATION' as const, content: '验证内容' },
-      ],
-    },
-    evidence: [
-      {
-        id: 'sql-audit-delivery-set',
-        title: '证据',
-        type: 'COLLECTION' as const,
-        periodStart: '2026-07-01',
-        periodEnd: '2026-07-10',
-        sourceCount: 1,
-        summary: '摘要',
-        supportedClaims: ['已验证'],
-        publicStatus: 'APPROVED' as const,
-        rawContentPublic: false as const,
-      },
+    turnId: 'turn-1',
+    contentVersion: '2026-07-21',
+    questionPresetId: 'sql-audit-overview',
+    resolution: 'ANSWERED' as const,
+    answerSource: 'PRESET' as const,
+    generationMode: 'DETERMINISTIC' as const,
+    verification: 'VERIFIED' as const,
+    title: '项目说明',
+    summary: '公开摘要',
+    sections: [
+      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] },
+      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'] },
     ],
-    suggestedQuestions: [],
+    evidenceIds: ['sql-audit-delivery-set'],
+    suggestedQuestionPresetIds: ['sql-audit-overview'],
   }
 }
 
@@ -70,6 +63,7 @@ async function mountAgentPage(
 describe('AgentPage', () => {
   beforeEach(() => {
     localStorage.clear()
+    clearAgentHandoffsForTest()
     askQuestionMock.mockReset()
     askQuestionMock.mockResolvedValue(answerResponse())
     vi.stubGlobal(
@@ -101,59 +95,46 @@ describe('AgentPage', () => {
     expect(wrapper.find('.agent-workspace').exists()).toBe(false)
   })
 
-  it('waits for the route seed API answer before mounting the workspace', async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
-    askQuestionMock.mockReturnValue(
-      new Promise((resolve) => {
-        resolveAnswer = resolve
-      }),
+  it('consumes a homepage handoff once and removes it from the URL', async () => {
+    const handoffId = createAgentHandoff({
+      role: 'INTERVIEWER',
+      question: '如何验证结果？',
+      answer: mapAnswerResponse(answerResponse()),
+      projectSlug: 'sql-audit',
+      evidenceIds: ['sql-audit-delivery-set'],
+      source: 'HOME',
+    })
+    const { wrapper, router } = await mountAgentPage(
+      readyPublicContentState(), `/agent?handoffId=${handoffId}`,
     )
-    const { wrapper } = await mountAgentPage(
-      readyPublicContentState(),
-      '/agent?question=如何验证结果？&project=sql-audit&source=HOME',
-    )
-
-    expect(askQuestionMock).toHaveBeenCalledWith('sql-audit', '如何验证结果？')
-    expect(wrapper.find('.agent-workspace').exists()).toBe(false)
-    expect(wrapper.get('[role="status"]').text()).toContain('正在核对公开事实')
-    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
-
-    resolveAnswer(answerResponse())
     await flushPromises()
 
-    expect(wrapper.find('.agent-workspace').exists()).toBe(true)
+    expect(askQuestionMock).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/agent')
     expect(wrapper.get('.message--user').text()).toContain('如何验证结果？')
-    expect(wrapper.get('.message--agent').text()).toContain('项目说明')
+    expect(wrapper.get('.message--agent').text()).toContain('背景内容')
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+
+    wrapper.unmount()
+    const consumed = await mountAgentPage(
+      readyPublicContentState(), `/agent?handoffId=${handoffId}`,
+    )
+    await flushPromises()
+    expect(consumed.wrapper.find('[data-invalid-handoff]').exists()).toBe(true)
+    expect(consumed.wrapper.text()).toContain('已失效或已被使用')
   })
 
-  it('retries a route seed safely without changing URL or creating a session before success', async () => {
-    askQuestionMock
-      .mockRejectedValueOnce(new Error('POST https://internal.example/api failed'))
-      .mockResolvedValueOnce(answerResponse())
-    const location =
-      '/agent?question=失败后重试的问题&project=sql-audit&source=PROJECT&role=MENTOR'
-    const { wrapper, router } = await mountAgentPage(readyPublicContentState(), location)
-    const originalUrl = router.currentRoute.value.fullPath
+  it('drops a legacy question query without submitting or retaining it', async () => {
+    const { wrapper, router } = await mountAgentPage(
+      readyPublicContentState(), '/agent?question=不得进入历史的问题&project=sql-audit',
+    )
     await flushPromises()
 
-    expect(wrapper.find('.agent-workspace').exists()).toBe(false)
-    expect(wrapper.get('[role="alert"]').text()).toContain('Agent 暂时无法回答，请稍后重试')
-    expect(wrapper.text()).not.toContain('internal.example')
-    expect(router.currentRoute.value.fullPath).toBe(originalUrl)
-    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
-
-    await wrapper.get('[data-answer-retry]').trigger('click')
-    await flushPromises()
-
-    expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(1, 'sql-audit', '失败后重试的问题')
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, 'sql-audit', '失败后重试的问题')
-    expect(router.currentRoute.value.fullPath).toBe(originalUrl)
+    expect(askQuestionMock).not.toHaveBeenCalled()
     expect(wrapper.find('.agent-workspace').exists()).toBe(true)
-    const sessions = JSON.parse(localStorage.getItem(SESSION_KEY) ?? '[]')
-    expect(sessions).toHaveLength(1)
-    expect(sessions[0].role).toBe('MENTOR')
-    expect(sessions[0].messages).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('不得进入历史的问题')
+    expect(router.currentRoute.value.fullPath).toBe('/agent')
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
   it('invalidates a pending route seed when the question is removed', async () => {
@@ -206,8 +187,6 @@ describe('AgentPage', () => {
     expect(
       (wrapper.vm as unknown as { initialSeed: unknown }).initialSeed,
     ).toBeNull()
-    expect(
-      (wrapper.vm as unknown as { seedStatus: string }).seedStatus,
-    ).toBe('idle')
+    expect(wrapper.text()).toContain('正在装订公开档案')
   })
 })

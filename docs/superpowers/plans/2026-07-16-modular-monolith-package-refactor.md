@@ -1,6 +1,8 @@
 # Modular Monolith Package Refactor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行状态（2026-07-20）：** 已完成。当前 `common / portfolio / answer` 包结构和架构门禁来自本计划；检查项同步为已执行，保留原命令作为历史证据。
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Reorganize the backend into a boundary-clean `common / portfolio / answer` modular monolith with familiar Spring Boot package names, while preserving all public API behavior and avoiding Feign or other remote-call infrastructure.
 
@@ -84,7 +86,7 @@ backend/src/main/java/com/portfolio/agent/
 - Consumes: existing Java package tree under `backend/src/main/java` and `backend/src/test/java`.
 - Produces: `architecture-check.ps1 -Path <backend/src>` returning exit code 0 for allowed dependencies and 1 with `rule:file:line:import` output for violations.
 
-- [ ] **Step 1: Record the current baseline**
+- [x] **Step 1: Record the current baseline**
 
 Run:
 
@@ -104,7 +106,7 @@ Java code quality check: Code quality check passed
 
 If the test count differs because the workspace has changed, record the new passing count in the task report before continuing.
 
-- [ ] **Step 2: Write failing architecture checker tests**
+- [x] **Step 2: Write failing architecture checker tests**
 
 Create fixtures inside the test script's temporary directory and assert these forbidden dependencies fail:
 
@@ -177,7 +179,7 @@ public final class AllowedAdapter {
 }
 ```
 
-- [ ] **Step 3: Run the checker tests and verify RED**
+- [x] **Step 3: Run the checker tests and verify RED**
 
 Run:
 
@@ -187,7 +189,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/architecture-che
 
 Expected: FAIL because `scripts/architecture-check.ps1` does not exist.
 
-- [ ] **Step 4: Implement the architecture checker**
+- [x] **Step 4: Implement the architecture checker**
 
 Implement rules over Java import statements:
 
@@ -255,7 +257,7 @@ if ($violations.Count -gt 0) {
 Write-Output "Architecture check passed for $resolvedPath."
 ```
 
-- [ ] **Step 5: Run checker tests and verify GREEN**
+- [x] **Step 5: Run checker tests and verify GREEN**
 
 Run:
 
@@ -265,7 +267,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/architecture-che
 
 Expected: all unsafe fixtures return exit 1 with the expected rule, and the allowed adapter fixture returns exit 0.
 
-- [ ] **Step 6: Record the integration deferral**
+- [x] **Step 6: Record the integration deferral**
 
 Record in the task report:
 
@@ -277,7 +279,7 @@ refactored frontend and the full release pipeline are ready for integration.
 
 The checker is expected to fail against the current production package tree until Tasks 2–5 finish.
 
-- [ ] **Step 7: Record the suggested checkpoint**
+- [x] **Step 7: Record the suggested checkpoint**
 
 Suggested commit after user resolves the pre-existing staged `.idea` files:
 
@@ -305,7 +307,7 @@ Do not run `git commit` while unrelated staged files remain.
 - Consumes: unchanged JSON resource schema and current public API DTO fields.
 - Produces: `portfolio.domain.*`, `portfolio.repository.PublicPortfolioRepository`, `portfolio.repository.file.JsonPublicPortfolioRepository`, `portfolio.validation.PortfolioSnapshotValidator`, `portfolio.exception.*`, and `portfolio.dto.response.*`.
 
-- [ ] **Step 1: Run focused baseline tests**
+- [x] **Step 1: Run focused baseline tests**
 
 Run:
 
@@ -317,7 +319,7 @@ mvn.cmd -f backend/pom.xml `
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 2: Mechanically move domain and enum files**
+- [x] **Step 2: Mechanically move domain and enum files**
 
 Use `Move-Item` only after verifying source and target paths are under `D:\code\agent`:
 
@@ -347,7 +349,7 @@ package com.portfolio.agent.portfolio.domain;
 
 Update imports throughout production and test Java.
 
-- [ ] **Step 3: Move repository and file implementation**
+- [x] **Step 3: Move repository and file implementation**
 
 Final declarations:
 
@@ -404,7 +406,7 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
 }
 ```
 
-- [ ] **Step 4: Move validator and exception packages without changing behavior**
+- [x] **Step 4: Move validator and exception packages without changing behavior**
 
 Final packages:
 
@@ -418,7 +420,7 @@ package com.portfolio.agent.portfolio.repository.file;
 
 Update Validator imports to `com.portfolio.agent.portfolio.domain.*`. Do not alter validation messages or rules in this task.
 
-- [ ] **Step 5: Move Portfolio exceptions**
+- [x] **Step 5: Move Portfolio exceptions**
 
 Final declarations:
 
@@ -428,7 +430,7 @@ package com.portfolio.agent.portfolio.exception;
 
 Keep `PROJECT_NOT_FOUND`, public message, HTTP 404, and exception message unchanged.
 
-- [ ] **Step 6: Move response DTOs**
+- [x] **Step 6: Move response DTOs**
 
 Final package:
 
@@ -438,7 +440,7 @@ package com.portfolio.agent.portfolio.dto.response;
 
 Update their Domain imports to `com.portfolio.agent.portfolio.domain.*`. Preserve constructors, getters, field order, value semantics, and JSON names.
 
-- [ ] **Step 7: Move mirrored tests and verify**
+- [x] **Step 7: Move mirrored tests and verify**
 
 Target tests:
 
@@ -458,7 +460,7 @@ mvn.cmd -f backend/pom.xml `
 
 Expected: BUILD SUCCESS with the same test count and assertions as baseline.
 
-- [ ] **Step 8: Record the suggested checkpoint**
+- [x] **Step 8: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -489,7 +491,7 @@ Do not commit while unrelated staged files remain.
   - `PortfolioHomeResponse PortfolioResponseMapper#toPortfolioResponse(PortfolioOverview overview)`
   - `ProjectDetailResponse PortfolioResponseMapper#toProjectResponse(ProjectDetails details)`
 
-- [ ] **Step 1: Write failing PortfolioService tests**
+- [x] **Step 1: Write failing PortfolioService tests**
 
 Use a counting repository:
 
@@ -535,7 +537,7 @@ void getPortfolioReturnsApplicationModelInsteadOfResponseDto() {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -545,7 +547,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest test
 
 Expected: test compilation fails because `PortfolioService`, `PortfolioOverview`, and `ProjectDetails` do not exist.
 
-- [ ] **Step 3: Implement application result models**
+- [x] **Step 3: Implement application result models**
 
 `PortfolioOverview` fields:
 
@@ -580,7 +582,7 @@ this.suggestedQuestions = List.copyOf(suggestedQuestions);
 
 Implement explicit getters plus complete `equals`, `hashCode`, and `toString`.
 
-- [ ] **Step 4: Implement PortfolioService**
+- [x] **Step 4: Implement PortfolioService**
 
 ```java
 package com.portfolio.agent.portfolio.service;
@@ -647,7 +649,7 @@ public class PortfolioService {
 }
 ```
 
-- [ ] **Step 5: Run PortfolioService tests and verify GREEN**
+- [x] **Step 5: Run PortfolioService tests and verify GREEN**
 
 Run:
 
@@ -657,7 +659,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest test
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 6: Implement PortfolioResponseMapper**
+- [x] **Step 6: Implement PortfolioResponseMapper**
 
 ```java
 package com.portfolio.agent.portfolio.mapper;
@@ -723,7 +725,7 @@ public static ProjectDetailResponse from(
 }
 ```
 
-- [ ] **Step 7: Move and update PortfolioController**
+- [x] **Step 7: Move and update PortfolioController**
 
 ```java
 package com.portfolio.agent.portfolio.controller;
@@ -764,7 +766,7 @@ public class PortfolioController {
 }
 ```
 
-- [ ] **Step 8: Move Controller test and verify API compatibility**
+- [x] **Step 8: Move Controller test and verify API compatibility**
 
 Run:
 
@@ -780,7 +782,7 @@ GET /api/v1/projects/sql-audit remains 200 with the same fields and Evidence.
 Unknown project remains 404 PROJECT_NOT_FOUND.
 ```
 
-- [ ] **Step 9: Run architecture checker for Portfolio**
+- [x] **Step 9: Run architecture checker for Portfolio**
 
 Run:
 
@@ -791,7 +793,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 Expected: it may still fail on Answer legacy packages, but there must be no `portfolio-service-controller` violation.
 
-- [ ] **Step 10: Record the suggested checkpoint**
+- [x] **Step 10: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -819,7 +821,7 @@ refactor: close portfolio service boundary
 Optional<AnswerKnowledge> PortfolioKnowledgeGateway#findBySlug(String projectSlug);
 ```
 
-- [ ] **Step 1: Write failing adapter tests**
+- [x] **Step 1: Write failing adapter tests**
 
 Test these behaviors:
 
@@ -856,7 +858,7 @@ assertThat(result.orElseThrow().getEvidence())
         .containsExactly("sql-audit-delivery-set");
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -866,7 +868,7 @@ mvn.cmd -f backend/pom.xml -Dtest=LocalPortfolioKnowledgeAdapterTest test
 
 Expected: test compilation fails because Gateway, Adapter, and Answer knowledge types do not exist.
 
-- [ ] **Step 3: Implement AnswerQuestion**
+- [x] **Step 3: Implement AnswerQuestion**
 
 Fields:
 
@@ -878,7 +880,7 @@ private final String suggestion;
 
 Use `List.copyOf(aliases)` and implement explicit getters plus complete value semantics.
 
-- [ ] **Step 4: Implement AnswerEvidence**
+- [x] **Step 4: Implement AnswerEvidence**
 
 Fields:
 
@@ -897,7 +899,7 @@ private final boolean rawContentPublic;
 
 Use strings for `type` and `publicStatus` so Answer Domain does not import Portfolio enums.
 
-- [ ] **Step 5: Implement AnswerKnowledge**
+- [x] **Step 5: Implement AnswerKnowledge**
 
 Fields:
 
@@ -918,7 +920,7 @@ private final List<AnswerEvidence> evidence;
 
 Use defensive copies and complete value semantics.
 
-- [ ] **Step 6: Implement Gateway**
+- [x] **Step 6: Implement Gateway**
 
 ```java
 package com.portfolio.agent.answer.gateway;
@@ -932,7 +934,7 @@ public interface PortfolioKnowledgeGateway {
 }
 ```
 
-- [ ] **Step 7: Implement LocalPortfolioKnowledgeAdapter**
+- [x] **Step 7: Implement LocalPortfolioKnowledgeAdapter**
 
 ```java
 package com.portfolio.agent.answer.adapter.portfolio;
@@ -1031,7 +1033,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
 }
 ```
 
-- [ ] **Step 8: Run adapter tests and verify GREEN**
+- [x] **Step 8: Run adapter tests and verify GREEN**
 
 Run:
 
@@ -1041,7 +1043,7 @@ mvn.cmd -f backend/pom.xml -Dtest=LocalPortfolioKnowledgeAdapterTest test
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 9: Run import scan**
+- [x] **Step 9: Run import scan**
 
 Run:
 
@@ -1054,7 +1056,7 @@ Get-ChildItem -Recurse -File `
 
 Expected: no output.
 
-- [ ] **Step 10: Record the suggested checkpoint**
+- [x] **Step 10: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -1091,7 +1093,7 @@ AnswerResult AnswerEngine#answer(AnswerKnowledge knowledge, String question)
 AnswerResult AnswerService#answer(String projectSlug, String question)
 ```
 
-- [ ] **Step 1: Rewrite engine tests against AnswerKnowledge and verify RED**
+- [x] **Step 1: Rewrite engine tests against AnswerKnowledge and verify RED**
 
 Construct `AnswerKnowledge` directly in `DeterministicAnswerEngineTest` and call:
 
@@ -1115,7 +1117,7 @@ mvn.cmd -f backend/pom.xml -Dtest=DeterministicAnswerEngineTest test
 
 Expected: test compilation fails because `AnswerEngine` still accepts slug and the engine still requires Repository.
 
-- [ ] **Step 2: Move Answer Domain package**
+- [x] **Step 2: Move Answer Domain package**
 
 Change:
 
@@ -1131,7 +1133,7 @@ package com.portfolio.agent.answer.domain;
 
 Move tests to `backend/src/test/java/com/portfolio/agent/answer/domain/`.
 
-- [ ] **Step 3: Change AnswerResult Evidence ownership**
+- [x] **Step 3: Change AnswerResult Evidence ownership**
 
 Replace:
 
@@ -1147,7 +1149,7 @@ private final List<AnswerEvidence> evidence;
 
 Update constructor and getter accordingly. Preserve field order, defensive copies, equals/hashCode/toString, and JSON output values through the response mapper in Task 6.
 
-- [ ] **Step 4: Move and change AnswerEngine**
+- [x] **Step 4: Move and change AnswerEngine**
 
 ```java
 package com.portfolio.agent.answer.engine;
@@ -1160,7 +1162,7 @@ public interface AnswerEngine {
 }
 ```
 
-- [ ] **Step 5: Move QuestionNormalizer**
+- [x] **Step 5: Move QuestionNormalizer**
 
 Final package:
 
@@ -1170,7 +1172,7 @@ package com.portfolio.agent.answer.service;
 
 Do not change normalization behavior.
 
-- [ ] **Step 6: Implement pure DeterministicAnswerEngine**
+- [x] **Step 6: Implement pure DeterministicAnswerEngine**
 
 The constructor accepts only:
 
@@ -1235,7 +1237,7 @@ return List.of(
 
 Boundary wording remains unchanged.
 
-- [ ] **Step 7: Run engine and domain tests**
+- [x] **Step 7: Run engine and domain tests**
 
 Run:
 
@@ -1247,7 +1249,7 @@ mvn.cmd -f backend/pom.xml `
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 8: Add Answer-owned not-found error**
+- [x] **Step 8: Add Answer-owned not-found error**
 
 ```java
 package com.portfolio.agent.answer.exception;
@@ -1298,7 +1300,7 @@ public final class AnswerProjectNotFoundException extends ApplicationException {
 }
 ```
 
-- [ ] **Step 9: Rewrite AnswerService**
+- [x] **Step 9: Rewrite AnswerService**
 
 ```java
 package com.portfolio.agent.answer.service;
@@ -1332,7 +1334,7 @@ public class AnswerService {
 }
 ```
 
-- [ ] **Step 10: Add AnswerService tests**
+- [x] **Step 10: Add AnswerService tests**
 
 Verify:
 
@@ -1346,7 +1348,7 @@ void throwsAnswerOwnedNotFoundExceptionWhenGatewayReturnsEmpty() { ... }
 
 Use handwritten fakes, not Mockito, to keep the contract explicit.
 
-- [ ] **Step 11: Run Answer core tests**
+- [x] **Step 11: Run Answer core tests**
 
 Run:
 
@@ -1358,7 +1360,7 @@ mvn.cmd -f backend/pom.xml `
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 12: Verify forbidden imports are gone**
+- [x] **Step 12: Verify forbidden imports are gone**
 
 Run:
 
@@ -1373,7 +1375,7 @@ Get-ChildItem -Recurse -File `
 
 Expected: no output.
 
-- [ ] **Step 13: Record the suggested checkpoint**
+- [x] **Step 13: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -1397,7 +1399,7 @@ refactor: isolate answer engine from portfolio
 - Consumes: `AnswerResult`.
 - Produces: unchanged Answer HTTP JSON.
 
-- [ ] **Step 1: Add mapper test and verify RED**
+- [x] **Step 1: Add mapper test and verify RED**
 
 Create `AnswerResponseMapperTest` asserting an `AnswerEvidence` maps to the same JSON-ready fields:
 
@@ -1418,7 +1420,7 @@ mvn.cmd -f backend/pom.xml -Dtest=AnswerResponseMapperTest test
 
 Expected: test compilation fails because Mapper does not exist and EvidenceResponse still uses Portfolio enums.
 
-- [ ] **Step 2: Make EvidenceResponse API-native**
+- [x] **Step 2: Make EvidenceResponse API-native**
 
 Change fields:
 
@@ -1438,7 +1440,7 @@ evidence.getPublicStatus().name()
 
 This preserves JSON values while removing Portfolio enum types from the public constructor.
 
-- [ ] **Step 3: Move Answer DTOs**
+- [x] **Step 3: Move Answer DTOs**
 
 Final packages:
 
@@ -1449,7 +1451,7 @@ package com.portfolio.agent.answer.dto.response;
 
 Do not change request validation annotations, messages, field names, or response field order.
 
-- [ ] **Step 4: Implement AnswerResponseMapper**
+- [x] **Step 4: Implement AnswerResponseMapper**
 
 ```java
 package com.portfolio.agent.answer.mapper;
@@ -1509,7 +1511,7 @@ public class AnswerResponseMapper {
 
 Remove the static `AnswerResponse.from` method so mapping ownership is unambiguous.
 
-- [ ] **Step 5: Move and update AnswerController**
+- [x] **Step 5: Move and update AnswerController**
 
 ```java
 package com.portfolio.agent.answer.controller;
@@ -1554,7 +1556,7 @@ public class AnswerController {
 }
 ```
 
-- [ ] **Step 6: Run mapper and Controller tests**
+- [x] **Step 6: Run mapper and Controller tests**
 
 Run:
 
@@ -1573,7 +1575,7 @@ Expected:
 - missing project remains 404 `PROJECT_NOT_FOUND`;
 - validation, 405, and 415 contracts remain unchanged.
 
-- [ ] **Step 7: Record the suggested checkpoint**
+- [x] **Step 7: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -1604,7 +1606,7 @@ refactor: rename answer web boundary
 - Consumes: final package tree from Tasks 2–6.
 - Produces: no legacy imports or duplicate Spring beans/routes.
 
-- [ ] **Step 1: Search for old packages**
+- [x] **Step 1: Search for old packages**
 
 Run:
 
@@ -1626,7 +1628,7 @@ Get-ChildItem -Recurse -File backend -Filter '*.java' |
 
 Expected: no output before deletion. If output exists, update the import or package declaration first.
 
-- [ ] **Step 2: Verify and remove obsolete directories**
+- [x] **Step 2: Verify and remove obsolete directories**
 
 Resolve every target and verify it remains under:
 
@@ -1636,7 +1638,7 @@ D:\code\agent\backend\src
 
 Then remove only empty or confirmed-obsolete trees with native PowerShell `Remove-Item -LiteralPath ... -Recurse`.
 
-- [ ] **Step 3: Strengthen architecture checker final rules**
+- [x] **Step 3: Strengthen architecture checker final rules**
 
 Add exact bans for legacy package declarations/imports:
 
@@ -1655,7 +1657,7 @@ $packageMatches = Select-String -LiteralPath $file.FullName `
 
 Reject any legacy package segment in the declaration.
 
-- [ ] **Step 4: Run architecture checker**
+- [x] **Step 4: Run architecture checker**
 
 Run:
 
@@ -1671,7 +1673,7 @@ Architecture checker tests passed.
 Architecture check passed for ...\backend\src.
 ```
 
-- [ ] **Step 5: Run full backend tests**
+- [x] **Step 5: Run full backend tests**
 
 Run:
 
@@ -1681,7 +1683,7 @@ mvn.cmd -f backend/pom.xml test
 
 Expected: BUILD SUCCESS; all original tests plus new service, adapter, mapper, and architecture tests pass.
 
-- [ ] **Step 6: Inspect Spring route uniqueness**
+- [x] **Step 6: Inspect Spring route uniqueness**
 
 Run:
 
@@ -1696,7 +1698,7 @@ Expected:
 - one Answer controller with one POST route;
 - no duplicate old controllers.
 
-- [ ] **Step 7: Record the suggested checkpoint**
+- [x] **Step 7: Record the suggested checkpoint**
 
 Suggested commit:
 
@@ -1718,7 +1720,7 @@ refactor: remove legacy backend packages
 - Consumes: completed modular monolith refactor.
 - Produces: documentation matching the implemented package names and fresh backend-only verification evidence.
 
-- [ ] **Step 1: Update README directory description**
+- [x] **Step 1: Update README directory description**
 
 Document:
 
@@ -1735,7 +1737,7 @@ Current module communication is in-process through Java Gateway interfaces.
 The project does not use Feign or remote calls.
 ```
 
-- [ ] **Step 2: Update code constraints**
+- [x] **Step 2: Update code constraints**
 
 Replace old package examples with:
 
@@ -1754,7 +1756,7 @@ Only answer.adapter.portfolio may translate Portfolio types into Answer types.
 Feign and HTTP clients are not allowed in the modular monolith.
 ```
 
-- [ ] **Step 3: Align dynamic-content design terminology**
+- [x] **Step 3: Align dynamic-content design terminology**
 
 Update only package references in the dynamic-content design:
 
@@ -1766,7 +1768,7 @@ infrastructure adapter → adapter/repository implementation
 
 Do not change the approved dynamic publishing, Claim, RAG, model, or database decisions.
 
-- [ ] **Step 4: Run code and architecture gates**
+- [x] **Step 4: Run code and architecture gates**
 
 Run:
 
@@ -1779,7 +1781,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/architecture-che
 
 Expected: all pass.
 
-- [ ] **Step 5: Run focused backend contract tests**
+- [x] **Step 5: Run focused backend contract tests**
 
 Run:
 
@@ -1791,7 +1793,7 @@ mvn.cmd -f backend/pom.xml `
 
 Expected: BUILD SUCCESS with unchanged HTTP contracts.
 
-- [ ] **Step 6: Run all backend tests**
+- [x] **Step 6: Run all backend tests**
 
 Run:
 
@@ -1801,7 +1803,7 @@ mvn.cmd -f backend/pom.xml test
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 7: Run backend compilation without frontend packaging**
+- [x] **Step 7: Run backend compilation without frontend packaging**
 
 Run:
 
@@ -1817,7 +1819,7 @@ BUILD SUCCESS
 
 Do not run `mvn package`, because the current Maven packaging phase requires `frontend/dist/index.html` and would couple this backend refactor to the independently changing frontend.
 
-- [ ] **Step 8: Run public snapshot privacy checks**
+- [x] **Step 8: Run public snapshot privacy checks**
 
 Run:
 
@@ -1830,7 +1832,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 Expected: privacy checker tests and public snapshot scan pass.
 
-- [ ] **Step 9: Explicitly skip frontend and integration verification**
+- [x] **Step 9: Explicitly skip frontend and integration verification**
 
 Record in the implementation report:
 
@@ -1841,7 +1843,7 @@ the frontend is undergoing an independent large refactor. This task claims backe
 verification, not release readiness.
 ```
 
-- [ ] **Step 10: Inspect the final package tree**
+- [x] **Step 10: Inspect the final package tree**
 
 Run:
 
@@ -1861,7 +1863,7 @@ answer
 
 Expected no `api`, `application`, or `infrastructure` directories under Portfolio or Answer.
 
-- [ ] **Step 11: Inspect dependency direction**
+- [x] **Step 11: Inspect dependency direction**
 
 Run:
 
@@ -1880,7 +1882,7 @@ Get-ChildItem -Recurse -File `
 
 Expected: no output.
 
-- [ ] **Step 12: Record final suggested commit**
+- [x] **Step 12: Record final suggested commit**
 
 After the user explicitly resolves the pre-existing staged `.idea` files, suggested commit:
 
@@ -1901,17 +1903,17 @@ Do not commit if unrelated staged files remain.
 
 ## Final Completion Checklist
 
-- [ ] Public API URLs, JSON fields, status codes, and messages are unchanged.
-- [ ] Portfolio Service returns application/domain results, not response DTOs.
-- [ ] A Portfolio project query reads exactly one snapshot.
-- [ ] Answer Service uses `PortfolioKnowledgeGateway`.
-- [ ] Only `LocalPortfolioKnowledgeAdapter` imports both Portfolio and Answer types.
-- [ ] DeterministicAnswerEngine does not access Repository or Portfolio types.
-- [ ] AnswerResult owns `AnswerEvidence`, not `EvidenceRecord`.
-- [ ] No Feign, Spring Cloud, HTTP Service Client, or remote self-call is added.
-- [ ] Legacy `api/application/infrastructure/domain.model/domain.repository` packages are removed.
-- [ ] Architecture checker passes as a standalone backend gate; full release-pipeline wiring is explicitly deferred.
-- [ ] Code-quality, architecture, backend JUnit, backend compilation, and public snapshot privacy verification all pass.
-- [ ] Frontend tests/build, Maven package, JAR, Playwright, Docker, and browser integration are explicitly deferred and are not claimed as passing.
-- [ ] Documentation matches the implemented package names.
-- [ ] No unrelated staged or untracked user files are modified or committed.
+- [x] Public API URLs, JSON fields, status codes, and messages are unchanged.
+- [x] Portfolio Service returns application/domain results, not response DTOs.
+- [x] A Portfolio project query reads exactly one snapshot.
+- [x] Answer Service uses `PortfolioKnowledgeGateway`.
+- [x] Only `LocalPortfolioKnowledgeAdapter` imports both Portfolio and Answer types.
+- [x] DeterministicAnswerEngine does not access Repository or Portfolio types.
+- [x] AnswerResult owns `AnswerEvidence`, not `EvidenceRecord`.
+- [x] No Feign, Spring Cloud, HTTP Service Client, or remote self-call is added.
+- [x] Legacy `api/application/infrastructure/domain.model/domain.repository` packages are removed.
+- [x] Architecture checker passes as a standalone backend gate; full release-pipeline wiring is explicitly deferred.
+- [x] Code-quality, architecture, backend JUnit, backend compilation, and public snapshot privacy verification all pass.
+- [x] Frontend tests/build, Maven package, JAR, Playwright, Docker, and browser integration are explicitly deferred and are not claimed as passing.
+- [x] Documentation matches the implemented package names.
+- [x] No unrelated staged or untracked user files are modified or committed.

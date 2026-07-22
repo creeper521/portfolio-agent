@@ -1,5 +1,7 @@
 # Benchmark Project Card Overlap Design
 
+> **状态（2026-07-20）：** 已完成，属于历史设计探索原型修复；当前生产前端由后续 Vue 重构设计接管。
+
 ## Problem
 
 The featured project layout intentionally overlaps `.visual` and `.content` by two grid columns. The terminal mock currently fills the visual card, so exposed content elements such as the status badge, title, tags, and links render directly over terminal text.

@@ -23,8 +23,9 @@ public final class ProjectProfile {
     private final String handoff;
     private final ProjectStatus status;
     private final ContributionType contributionType;
-    private final List<String> questionIds;
+    private final List<String> claimIds;
     private final List<String> evidenceIds;
+    private final List<String> timelineEventIds;
 
     @JsonCreator
     public ProjectProfile(
@@ -43,8 +44,9 @@ public final class ProjectProfile {
             @JsonProperty("handoff") String handoff,
             @JsonProperty("status") ProjectStatus status,
             @JsonProperty("contributionType") ContributionType contributionType,
-            @JsonProperty("questionIds") List<String> questionIds,
-            @JsonProperty("evidenceIds") List<String> evidenceIds
+            @JsonProperty("claimIds") List<String> claimIds,
+            @JsonProperty("evidenceIds") List<String> evidenceIds,
+            @JsonProperty("timelineEventIds") List<String> timelineEventIds
     ) {
         this.id = id;
         this.code = code;
@@ -61,8 +63,9 @@ public final class ProjectProfile {
         this.handoff = handoff;
         this.status = status;
         this.contributionType = contributionType;
-        this.questionIds = List.copyOf(questionIds);
+        this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
+        this.timelineEventIds = List.copyOf(timelineEventIds);
     }
 
     public String getId() {
@@ -125,12 +128,16 @@ public final class ProjectProfile {
         return contributionType;
     }
 
-    public List<String> getQuestionIds() {
-        return questionIds;
+    public List<String> getClaimIds() {
+        return claimIds;
     }
 
     public List<String> getEvidenceIds() {
         return evidenceIds;
+    }
+
+    public List<String> getTimelineEventIds() {
+        return timelineEventIds;
     }
 
     @Override
@@ -156,15 +163,16 @@ public final class ProjectProfile {
                 && Objects.equals(handoff, that.handoff)
                 && Objects.equals(status, that.status)
                 && Objects.equals(contributionType, that.contributionType)
-                && Objects.equals(questionIds, that.questionIds)
-                && Objects.equals(evidenceIds, that.evidenceIds);
+                && Objects.equals(claimIds, that.claimIds)
+                && Objects.equals(evidenceIds, that.evidenceIds)
+                && Objects.equals(timelineEventIds, that.timelineEventIds);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, code, slug, title, summary, background, responsibilities, solution,
                 keyDecisions, technologies, verification, outcome, handoff, status,
-                contributionType, questionIds, evidenceIds);
+                contributionType, claimIds, evidenceIds, timelineEventIds);
     }
 
     @Override
@@ -185,8 +193,9 @@ public final class ProjectProfile {
                 ", handoff='" + handoff + '\'' +
                 ", status=" + status +
                 ", contributionType=" + contributionType +
-                ", questionIds=" + questionIds +
+                ", claimIds=" + claimIds +
                 ", evidenceIds=" + evidenceIds +
+                ", timelineEventIds=" + timelineEventIds +
                 '}';
     }
 }

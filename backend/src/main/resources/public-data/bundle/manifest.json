@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "2.0",
+  "contentVersion": "2026-07-21.1",
+  "publishedAt": "2026-07-21T00:00:00+08:00",
+  "builtAt": "2026-07-21T00:00:00+08:00",
+  "minimumApplicationVersion": "0.1.0",
+  "factsFile": "portfolio.json",
+  "presentationFile": "presentation.json",
+  "approvalId": "APR-2026-07-21-BOOTSTRAP",
+  "approvalDigest": "sha256:38f31917cb4ce7d33cb371565751fb1be7fb3cd850659a01102ce7e3087c67ce",
+  "candidatePayloadHash": "sha256:c73a8169a7c0148eb0f32721f95c0d63dc8c8ad1f1f89b3890d5417a1c3478a1",
+  "checksumsFile": "checksums.json",
+  "counts": {
+    "projects": 1,
+    "claims": 5,
+    "evidence": 1,
+    "claimEvidenceLinks": 5,
+    "timelineEvents": 1,
+    "questionPresets": 1
+  }
+}

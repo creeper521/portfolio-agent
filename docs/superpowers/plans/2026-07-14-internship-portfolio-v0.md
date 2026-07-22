@@ -1,5 +1,7 @@
 # 实习作品集 Agent V0 实施计划
 
+> **执行状态（2026-07-20）：** 已完成，保留为 V0 纵向切片的历史实施记录。后续六路由前端与聚合 API 由新的设计和计划扩展。
+
 > **For Codex:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task by task. Every business behavior follows `test-driven-development`; completion claims follow `verification-before-completion`.
 
 **Goal:** 交付一个可运行的端到端纵向切片，让访问者从首页进入 SQL 审计项目，通过确定性问答获得五段式回答和一张脱敏 Evidence 卡片。

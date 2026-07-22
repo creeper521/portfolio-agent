@@ -1,6 +1,8 @@
 # Portfolio Result and Validation Boundary Refactor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行状态（2026-07-20）：** 已完成，对应提交 `a5d13fe`。检查项同步为已执行。
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Remove the Validation-to-file-Repository reverse dependency and rename Portfolio service query models from `service.model` to `service.result`.
 
@@ -33,13 +35,13 @@
   - `InvalidPortfolioSnapshotException(String message)`
   - `InvalidPortfolioSnapshotException(String message, Throwable cause)`
 
-- [ ] **Step 1: Change the validator test to import the module-level exception**
+- [x] **Step 1: Change the validator test to import the module-level exception**
 
 ```java
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -49,7 +51,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioSnapshotValidatorTest test
 
 Expected: compilation fails because `portfolio.exception.InvalidPortfolioSnapshotException` does not exist.
 
-- [ ] **Step 3: Move the exception and update production imports**
+- [x] **Step 3: Move the exception and update production imports**
 
 The moved class keeps the same implementation and changes only its package:
 
@@ -70,7 +72,7 @@ public class InvalidPortfolioSnapshotException extends RuntimeException {
 
 Both `PortfolioSnapshotValidator` and `JsonPublicPortfolioRepository` import this package.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run:
 
@@ -101,14 +103,14 @@ Expected: both test classes pass.
   - `com.portfolio.agent.portfolio.service.result.ProjectDetails`
 - Preserves all constructors, getters, equality, hash code, and string representations.
 
-- [ ] **Step 1: Change the Service test imports to `service.result`**
+- [x] **Step 1: Change the Service test imports to `service.result`**
 
 ```java
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -118,7 +120,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest test
 
 Expected: compilation fails because the `service.result` classes do not exist.
 
-- [ ] **Step 3: Move both immutable result classes and update imports**
+- [x] **Step 3: Move both immutable result classes and update imports**
 
 Change each package declaration from:
 
@@ -134,7 +136,7 @@ package com.portfolio.agent.portfolio.service.result;
 
 Update `PortfolioService`, `PortfolioResponseMapper`, and documentation references.
 
-- [ ] **Step 4: Run focused Portfolio tests and verify GREEN**
+- [x] **Step 4: Run focused Portfolio tests and verify GREEN**
 
 Run:
 
@@ -155,7 +157,7 @@ Expected: both test classes pass.
 - Confirms no `portfolio.service.model` package remains.
 - Confirms Validation no longer imports `portfolio.repository.file`.
 
-- [ ] **Step 1: Run code-quality and architecture checks**
+- [x] **Step 1: Run code-quality and architecture checks**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/code-quality-check.ps1 -Path backend/src
@@ -164,7 +166,7 @@ powershell -ExecutionPolicy Bypass -File scripts/architecture-check.ps1 -Path ba
 
 Expected: both commands exit 0.
 
-- [ ] **Step 2: Run all backend tests**
+- [x] **Step 2: Run all backend tests**
 
 ```powershell
 mvn.cmd -f backend/pom.xml test
@@ -172,7 +174,7 @@ mvn.cmd -f backend/pom.xml test
 
 Expected: Maven reports `BUILD SUCCESS` with zero test failures.
 
-- [ ] **Step 3: Verify package cleanup and staged diff quality**
+- [x] **Step 3: Verify package cleanup and staged diff quality**
 
 ```powershell
 rg -n "portfolio\.service\.model|portfolio\.repository\.file\.InvalidPortfolioSnapshotException" backend/src docs
@@ -182,7 +184,7 @@ git status --short
 
 Expected: the obsolete package references produce no output; diff check exits 0; status contains only intentional backend refactor files plus pre-existing local tool files.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add backend/src docs/07-modular-monolith-backend-review.md docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md docs/superpowers/plans/2026-07-16-portfolio-result-validation-boundary-refactor.md

@@ -33,7 +33,7 @@ export interface Evidence {
   periodEnd: string
   sourceCount: number
   summary: string
-  supportedClaims: string[]
+  claimIds: string[]
   publicStatus: 'APPROVED'
   rawContentPublic: false
 }

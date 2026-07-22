@@ -1,10 +1,11 @@
 package com.portfolio.agent.portfolio.service;
 
+import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
@@ -28,7 +29,7 @@ public class PortfolioService {
     }
 
     public PortfolioOverview getPortfolio() {
-        PortfolioSnapshot snapshot = repository.getSnapshot();
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
         return new PortfolioOverview(
                 snapshot.getContentVersion(),
                 snapshot.getPublishedAt(),
@@ -38,13 +39,13 @@ public class PortfolioService {
     }
 
     public ProjectDetails getProject(String slug) {
-        PortfolioSnapshot snapshot = repository.getSnapshot();
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
         ProjectProfile project = findProject(snapshot, slug);
         return toProjectDetails(snapshot, project);
     }
 
     public PublicContent getPublicContent() {
-        PortfolioSnapshot snapshot = repository.getSnapshot();
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
         List<ProjectDetails> projects = snapshot.getProjects().stream()
                 .map(project -> toProjectDetails(snapshot, project))
                 .toList();
@@ -53,6 +54,7 @@ public class PortfolioService {
                 .filter(item -> Boolean.FALSE.equals(item.getRawContentPublic()))
                 .toList();
         Map<String, List<String>> projectSlugsByEvidenceId = new LinkedHashMap<>();
+        Map<String, List<String>> claimIdsByEvidenceId = new LinkedHashMap<>();
         for (ProjectDetails projectDetails : projects) {
             String projectSlug = projectDetails.getProject().getSlug();
             for (EvidenceRecord evidenceRecord : projectDetails.getEvidence()) {
@@ -61,19 +63,29 @@ public class PortfolioService {
                         .add(projectSlug);
             }
         }
+        for (ClaimEvidenceLink link : snapshot.getClaimEvidenceLinks()) {
+            claimIdsByEvidenceId
+                    .computeIfAbsent(link.getEvidenceId(), ignored -> new ArrayList<>())
+                    .add(link.getClaimId());
+        }
         return new PublicContent(
                 snapshot.getContentVersion(),
+                snapshot.getRuntimeBundleHash(),
                 snapshot.getPublishedAt(),
                 snapshot.getOwner(),
                 projects,
+                snapshot.getClaims(),
+                snapshot.getClaimEvidenceLinks(),
                 evidence,
                 snapshot.getTimeline(),
-                projectSlugsByEvidenceId
+                projectSlugsByEvidenceId,
+                claimIdsByEvidenceId,
+                snapshot.getQuestionPresets()
         );
     }
 
     private ProjectDetails toProjectDetails(
-            PortfolioSnapshot snapshot,
+            RuntimeContentSnapshot snapshot,
             ProjectProfile project
     ) {
         Set<String> evidenceIds = Set.copyOf(project.getEvidenceIds());
@@ -85,15 +97,14 @@ public class PortfolioService {
                 .toList();
 
         List<String> suggestedQuestions = snapshot.getQuestions().stream()
-                .filter(question -> project.getId().equals(question.getProjectId()))
-                .filter(question -> project.getQuestionIds().contains(question.getId()))
-                .map(QuestionDefinition::getSuggestion)
+                .filter(question -> question.getProjectIds().contains(project.getId()))
+                .map(QuestionDefinition::getText)
                 .toList();
 
         return new ProjectDetails(project, evidence, suggestedQuestions);
     }
 
-    private ProjectProfile findProject(PortfolioSnapshot snapshot, String slug) {
+    private ProjectProfile findProject(RuntimeContentSnapshot snapshot, String slug) {
         return snapshot.getProjects().stream()
                 .filter(project -> project.getSlug().equals(slug))
                 .findFirst()

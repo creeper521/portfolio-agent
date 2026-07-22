@@ -6,6 +6,7 @@ import type {
   PublicEvidence,
 } from '../../public-content/model/publicContentTypes'
 import type { HomeAnswerState } from '../model/audienceTypes'
+import { createAgentHandoff } from '../../agent/model/handoffStore'
 
 const props = defineProps<{
   role: AudienceRole
@@ -30,13 +31,24 @@ const projectTarget = computed(() =>
 const agentTarget = computed(() => ({
   path: '/agent',
   query: {
-    role: props.role,
-    question: props.answer.question,
-    project: props.answer.projectSlug ?? undefined,
-    evidence: props.answer.evidenceIds[0] ?? undefined,
-    source: 'HOME',
+    handoffId: createAgentHandoff({
+      role: props.role,
+      question: props.answer.question,
+      answer: props.answer.answer,
+      projectSlug: props.answer.projectSlug,
+      evidenceIds: props.answer.evidenceIds,
+      source: 'HOME',
+    }),
   },
 }))
+
+const answerStatus = computed(() => {
+  if (props.answer.answer.resolution === 'BOUNDARY') return '当前能力边界'
+  if (props.answer.answer.resolution === 'REJECTED') return '无法处理该请求'
+  if (props.answer.answer.verification === 'VERIFIED') return '已核验回答'
+  if (props.answer.answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
+  return '尚未核验'
+})
 
 function stopTyping() {
   if (typingTimer) clearInterval(typingTimer)
@@ -49,7 +61,7 @@ function startTyping() {
     typeof window.matchMedia !== 'function' ||
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (reduced) {
-    visibleAnswer.value = props.answer.answer
+    visibleAnswer.value = props.answer.answer.summary
     complete.value = true
     return
   }
@@ -59,8 +71,8 @@ function startTyping() {
   let index = 0
   typingTimer = setInterval(() => {
     index += 2
-    visibleAnswer.value = props.answer.answer.slice(0, index)
-    if (index >= props.answer.answer.length) {
+    visibleAnswer.value = props.answer.answer.summary.slice(0, index)
+    if (index >= props.answer.answer.summary.length) {
       stopTyping()
       complete.value = true
     }
@@ -76,14 +88,24 @@ onBeforeUnmount(stopTyping)
     <aside>
       <b>{{ role }}</b>
       <span>ROUND {{ String(answer.round).padStart(2, '0') }} / 03</span>
-      <span>MODE<br />VERIFIED SUMMARY</span>
+      <span>RESOLUTION<br />{{ answer.answer.resolution }}</span>
+      <span>SOURCE<br />{{ answer.answer.answerSource ?? 'NOT_APPLICABLE' }}</span>
+      <span>GENERATION<br />{{ answer.answer.generationMode }}</span>
+      <span>VERIFICATION<br />{{ answer.answer.verification }}</span>
     </aside>
     <div class="light-answer__content">
       <p class="light-answer__speaker">YOU · {{ answer.question }}</p>
-      <div class="light-answer__text">
+      <h2 class="light-answer__title">{{ answer.answer.title }}</h2>
+      <div class="light-answer__text" aria-live="polite">
         {{ visibleAnswer }}<i v-if="!complete" aria-hidden="true"></i>
       </div>
-      <p v-if="complete" class="light-answer__status">◆ STRUCTURED FACTS CHECKED</p>
+      <div v-if="complete" class="light-answer__sections">
+        <section v-for="section in answer.answer.sections" :key="section.type">
+          <h3>{{ section.title }}</h3>
+          <p>{{ section.content }}</p>
+        </section>
+      </div>
+      <p v-if="complete" class="light-answer__status">{{ answerStatus }}</p>
       <div v-if="complete" class="light-answer__cites">
         <RouterLink
           v-for="item in citedEvidence"

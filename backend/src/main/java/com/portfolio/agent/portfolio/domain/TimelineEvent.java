@@ -14,7 +14,8 @@ public final class TimelineEvent {
     private final String problem;
     private final String action;
     private final String impact;
-    private final List<String> projectSlugs;
+    private final List<String> projectIds;
+    private final List<String> claimIds;
     private final List<String> evidenceIds;
 
     @JsonCreator
@@ -25,7 +26,8 @@ public final class TimelineEvent {
             @JsonProperty("problem") String problem,
             @JsonProperty("action") String action,
             @JsonProperty("impact") String impact,
-            @JsonProperty("projectSlugs") List<String> projectSlugs,
+            @JsonProperty("projectIds") List<String> projectIds,
+            @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("evidenceIds") List<String> evidenceIds
     ) {
         this.id = id;
@@ -34,7 +36,8 @@ public final class TimelineEvent {
         this.problem = problem;
         this.action = action;
         this.impact = impact;
-        this.projectSlugs = List.copyOf(projectSlugs);
+        this.projectIds = List.copyOf(projectIds);
+        this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
     }
 
@@ -62,8 +65,12 @@ public final class TimelineEvent {
         return impact;
     }
 
-    public List<String> getProjectSlugs() {
-        return projectSlugs;
+    public List<String> getProjectIds() {
+        return projectIds;
+    }
+
+    public List<String> getClaimIds() {
+        return claimIds;
     }
 
     public List<String> getEvidenceIds() {
@@ -84,13 +91,15 @@ public final class TimelineEvent {
                 && Objects.equals(problem, that.problem)
                 && Objects.equals(action, that.action)
                 && Objects.equals(impact, that.impact)
-                && Objects.equals(projectSlugs, that.projectSlugs)
+                && Objects.equals(projectIds, that.projectIds)
+                && Objects.equals(claimIds, that.claimIds)
                 && Objects.equals(evidenceIds, that.evidenceIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, dateLabel, title, problem, action, impact, projectSlugs, evidenceIds);
+        return Objects.hash(id, dateLabel, title, problem, action, impact, projectIds, claimIds,
+                evidenceIds);
     }
 
     @Override
@@ -102,7 +111,8 @@ public final class TimelineEvent {
                 ", problem='" + problem + '\'' +
                 ", action='" + action + '\'' +
                 ", impact='" + impact + '\'' +
-                ", projectSlugs=" + projectSlugs +
+                ", projectIds=" + projectIds +
+                ", claimIds=" + claimIds +
                 ", evidenceIds=" + evidenceIds +
                 '}';
     }

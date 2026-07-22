@@ -1,11 +1,19 @@
 package com.portfolio.agent.portfolio.validation;
 
+import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.Claim;
+import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
+import com.portfolio.agent.portfolio.domain.ClaimVerificationStatus;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.ReviewStatus;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
+import com.portfolio.agent.portfolio.domain.SupportType;
+import com.portfolio.agent.portfolio.domain.VerificationBasis;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +28,7 @@ import java.util.regex.Pattern;
 @Component
 public class PortfolioSnapshotValidator {
 
-    private static final String SUPPORTED_SCHEMA_VERSION = "1.0";
+    private static final String SUPPORTED_SCHEMA_VERSION = "2.0";
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9-]{1,64}");
 
     public void validate(PortfolioSnapshot snapshot) {
@@ -34,6 +42,9 @@ public class PortfolioSnapshotValidator {
         require(hasText(snapshot.getOwner().getSummary()), "owner summary is required");
 
         List<ProjectProfile> projects = requiredList(snapshot.getProjects(), "projects");
+        List<Claim> claims = requiredList(snapshot.getClaims(), "claims");
+        List<ClaimEvidenceLink> links = requiredList(
+                snapshot.getClaimEvidenceLinks(), "claimEvidenceLinks");
         List<QuestionDefinition> questions = requiredList(snapshot.getQuestions(), "questions");
         List<EvidenceRecord> evidence = requiredList(snapshot.getEvidence(), "evidence");
         List<TimelineEvent> timeline = requiredList(snapshot.getTimeline(), "timeline");
@@ -41,19 +52,68 @@ public class PortfolioSnapshotValidator {
         Map<String, ProjectProfile> projectsById = uniqueById(projects, ProjectProfile::getId, "project");
         Map<String, ProjectProfile> projectsBySlug = uniqueById(projects, ProjectProfile::getSlug,
                 "project slug");
+        uniqueById(projects, ProjectProfile::getCode, "project code");
+        Map<String, Claim> claimsById = uniqueById(claims, Claim::getId, "claim");
         Map<String, QuestionDefinition> questionsById = uniqueById(questions,
                 QuestionDefinition::getId, "question");
         Map<String, EvidenceRecord> evidenceById = uniqueById(evidence, EvidenceRecord::getId,
                 "evidence");
+        uniqueById(links, ClaimEvidenceLink::getId, "claim evidence link");
+        Map<String, TimelineEvent> timelineById = uniqueById(
+                timeline, TimelineEvent::getId, "timeline");
 
         require(!projectsBySlug.isEmpty(), "at least one project is required");
 
+        Map<String, List<ClaimEvidenceLink>> linksByClaimId = links.stream()
+                .collect(java.util.stream.Collectors.groupingBy(ClaimEvidenceLink::getClaimId));
+        for (ClaimEvidenceLink link : links) {
+            require(claimsById.containsKey(link.getClaimId()),
+                    "claim evidence link reference does not exist: " + link.getClaimId());
+            require(evidenceById.containsKey(link.getEvidenceId()),
+                    "claim evidence link reference does not exist: " + link.getEvidenceId());
+            require(link.getSupportType() != null,
+                    "claim evidence link supportType is required: " + link.getId());
+            require(hasText(link.getScope()),
+                    "claim evidence link scope is required: " + link.getId());
+            require(link.getReviewStatus() == ReviewStatus.APPROVED,
+                    "claim evidence link must be APPROVED: " + link.getId());
+        }
+
+        for (Claim claim : claims) {
+            require(claim.getSubjectType() != null, "claim subjectType is required: " + claim.getId());
+            require(hasText(claim.getSubjectId()), "claim subjectId is required: " + claim.getId());
+            if (claim.getSubjectType() == ClaimSubjectType.PROJECT) {
+                require(projectsById.containsKey(claim.getSubjectId()),
+                        "claim subject reference does not exist: " + claim.getSubjectId());
+            }
+            require(claim.getCategory() != null, "claim category is required: " + claim.getId());
+            require(hasText(claim.getStatement()), "claim statement is required: " + claim.getId());
+            require(claim.getAchievementStatus() != null,
+                    "claim achievementStatus is required: " + claim.getId());
+            require(claim.getVerificationBasis() != null,
+                    "claim verificationBasis is required: " + claim.getId());
+            require(claim.getVerificationStatus() != null,
+                    "claim verificationStatus is required: " + claim.getId());
+            require(claim.getMateriality() != null, "claim materiality is required: " + claim.getId());
+            requiredNonBlankList(claim.getTopics(), "claim topics");
+            validateVerification(claim, linksByClaimId.getOrDefault(claim.getId(), List.of()));
+        }
+
         for (QuestionDefinition question : questions) {
-            require(projectsById.containsKey(question.getProjectId()),
-                    "question project reference does not exist: " + question.getProjectId());
-            require(hasText(question.getCanonicalQuestion()), "canonicalQuestion is required");
+            for (String projectId : requiredNonBlankList(
+                    question.getProjectIds(), "question projectIds")) {
+                require(projectsById.containsKey(projectId),
+                        "question project reference does not exist: " + projectId);
+            }
+            require(hasText(question.getText()), "question text is required");
             requiredNonBlankList(question.getAliases(), "question aliases");
-            require(hasText(question.getSuggestion()), "question suggestion is required");
+            requiredNonBlankList(question.getAudiences(), "question audiences");
+            requiredNonBlankList(question.getTopics(), "question topics");
+            require(!question.getPreferredClaimCategories().isEmpty(),
+                    "question preferredClaimCategories must not be empty");
+            requiredNonBlankList(question.getPlacements(), "question placements");
+            require(question.isDeterministicEntry(),
+                    "published question must be a deterministic entry");
         }
 
         for (EvidenceRecord item : evidence) {
@@ -73,7 +133,6 @@ public class PortfolioSnapshotValidator {
             require(item.getSourceCount() > 0,
                     "evidence sourceCount must be positive: " + item.getId());
             require(hasText(item.getSummary()), "evidence summary is required: " + item.getId());
-            requiredNonBlankList(item.getSupportedClaims(), "evidence supportedClaims");
         }
 
         for (ProjectProfile project : projects) {
@@ -96,13 +155,11 @@ public class PortfolioSnapshotValidator {
             require(project.getContributionType() != null,
                     "project contributionType is required: " + project.getId());
 
-            for (String questionId : requiredNonBlankList(
-                    project.getQuestionIds(), "project questionIds")) {
-                QuestionDefinition question = questionsById.get(questionId);
-                require(question != null,
-                        "project question reference does not exist: " + questionId);
-                require(project.getId().equals(question.getProjectId()),
-                        "question reference belongs to a different project: " + questionId);
+            for (String claimId : requiredNonBlankList(project.getClaimIds(), "project claimIds")) {
+                Claim claim = claimsById.get(claimId);
+                require(claim != null, "project claim reference does not exist: " + claimId);
+                require(project.getId().equals(claim.getSubjectId()),
+                        "claim reference belongs to a different project: " + claimId);
             }
 
             for (String evidenceId : requiredNonBlankList(
@@ -110,12 +167,14 @@ public class PortfolioSnapshotValidator {
                 require(evidenceById.containsKey(evidenceId),
                         "project evidence reference does not exist: " + evidenceId);
             }
+            for (String timelineEventId : requiredNonBlankList(
+                    project.getTimelineEventIds(), "project timelineEventIds")) {
+                require(timelineById.containsKey(timelineEventId),
+                        "project timeline reference does not exist: " + timelineEventId);
+            }
         }
 
-        uniqueById(projects, ProjectProfile::getCode, "project code");
         uniqueById(evidence, EvidenceRecord::getCode, "evidence code");
-        uniqueById(timeline, TimelineEvent::getId, "timeline");
-
         for (TimelineEvent event : timeline) {
             require(hasText(event.getDateLabel()),
                     "timeline dateLabel is required: " + event.getId());
@@ -123,10 +182,15 @@ public class PortfolioSnapshotValidator {
             require(hasText(event.getProblem()), "timeline problem is required: " + event.getId());
             require(hasText(event.getAction()), "timeline action is required: " + event.getId());
             require(hasText(event.getImpact()), "timeline impact is required: " + event.getId());
-            for (String slug : requiredNonBlankList(
-                    event.getProjectSlugs(), "timeline projectSlugs")) {
-                require(projectsBySlug.containsKey(slug),
-                        "timeline project reference does not exist: " + slug);
+            for (String projectId : requiredNonBlankList(
+                    event.getProjectIds(), "timeline projectIds")) {
+                require(projectsById.containsKey(projectId),
+                        "timeline project reference does not exist: " + projectId);
+            }
+            for (String claimId : requiredNonBlankList(
+                    event.getClaimIds(), "timeline claimIds")) {
+                require(claimsById.containsKey(claimId),
+                        "timeline claim reference does not exist: " + claimId);
             }
             for (String evidenceId : requiredNonBlankList(
                     event.getEvidenceIds(), "timeline evidenceIds")) {
@@ -137,6 +201,31 @@ public class PortfolioSnapshotValidator {
                         "timeline evidence must be APPROVED: " + evidenceId);
             }
         }
+    }
+
+    private static void validateVerification(Claim claim, List<ClaimEvidenceLink> links) {
+        boolean hasDirect = links.stream().anyMatch(link -> link.getSupportType() == SupportType.DIRECT);
+        if (isAchievement(claim.getAchievementStatus())) {
+            require(hasDirect, "achievement claim requires an APPROVED DIRECT link: " + claim.getId());
+        }
+        if (claim.getVerificationBasis() == VerificationBasis.EVIDENCE_SUPPORTED) {
+            require(hasDirect && claim.getVerificationStatus() == ClaimVerificationStatus.VERIFIED,
+                    "claim verificationStatus does not match DIRECT evidence: " + claim.getId());
+        } else if (claim.getVerificationBasis() == VerificationBasis.SELF_DECLARED
+                || claim.getVerificationBasis() == VerificationBasis.INFERRED) {
+            require(claim.getVerificationStatus() != ClaimVerificationStatus.VERIFIED,
+                    "claim verificationStatus exceeds verificationBasis: " + claim.getId());
+        } else if (claim.getVerificationBasis() == VerificationBasis.UNSUPPORTED) {
+            require(claim.getVerificationStatus() == ClaimVerificationStatus.UNVERIFIED,
+                    "claim verificationStatus exceeds unsupported basis: " + claim.getId());
+        }
+    }
+
+    private static boolean isAchievement(AchievementStatus status) {
+        return status == AchievementStatus.DELIVERED
+                || status == AchievementStatus.IMPLEMENTED_TESTED
+                || status == AchievementStatus.PROTOTYPE
+                || status == AchievementStatus.DESIGNED;
     }
 
     private static <T> List<T> requiredList(List<T> value, String field) {

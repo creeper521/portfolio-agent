@@ -18,92 +18,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AnswerServiceTest {
 
     @Test
-    void delegatesResolvedKnowledgeToEngine() {
-        AnswerKnowledge knowledge = knowledge();
-        AnswerResult expected = new AnswerResult(
-                AnswerMode.DETERMINISTIC,
-                true,
-                false,
-                "SQL Audit",
-                List.of(),
-                List.of(),
-                List.of()
-        );
-        FakeKnowledgeGateway gateway = new FakeKnowledgeGateway(Optional.of(knowledge));
-        CapturingAnswerEngine engine = new CapturingAnswerEngine(expected);
-        AnswerService service = new AnswerService(gateway, engine);
+    void delegatesTheTypedRequestToPortfolioAgentRuntime() {
+        PortfolioAgentRuntime runtime = org.mockito.Mockito.mock(PortfolioAgentRuntime.class);
+        com.portfolio.agent.answer.dto.request.AnswerRequest request =
+                org.mockito.Mockito.mock(com.portfolio.agent.answer.dto.request.AnswerRequest.class);
+        AnswerResult expected = org.mockito.Mockito.mock(AnswerResult.class);
+        org.mockito.Mockito.when(runtime.answer(request)).thenReturn(expected);
+        AnswerService service = new AnswerService(runtime);
 
-        AnswerResult result = service.answer("sql-audit", "介绍项目");
+        AnswerResult result = service.answer(request);
 
         assertThat(result).isSameAs(expected);
-        assertThat(gateway.requestedSlug).isEqualTo("sql-audit");
-        assertThat(engine.knowledge).isSameAs(knowledge);
-        assertThat(engine.question).isEqualTo("介绍项目");
-    }
-
-    @Test
-    void throwsAnswerOwnedNotFoundExceptionWhenGatewayReturnsEmpty() {
-        FakeKnowledgeGateway gateway = new FakeKnowledgeGateway(Optional.empty());
-        CapturingAnswerEngine engine = new CapturingAnswerEngine(null);
-        AnswerService service = new AnswerService(gateway, engine);
-
-        assertThatThrownBy(() -> service.answer("missing-project", "介绍项目"))
-                .isInstanceOf(AnswerProjectNotFoundException.class)
-                .hasMessage("公开项目不存在: missing-project")
-                .extracting(exception -> ((AnswerProjectNotFoundException) exception)
-                        .getErrorCode())
-                .isEqualTo(AnswerErrorCode.PROJECT_NOT_FOUND);
-        assertThat(engine.knowledge).isNull();
-    }
-
-    private AnswerKnowledge knowledge() {
-        return new AnswerKnowledge(
-                "sql-audit",
-                "SQL Audit",
-                "Background",
-                List.of(),
-                "Solution",
-                List.of(),
-                List.of(),
-                "Outcome",
-                "Handoff",
-                "DELIVERED",
-                List.of(),
-                List.of()
-        );
-    }
-
-    private static final class FakeKnowledgeGateway implements PortfolioKnowledgeGateway {
-
-        private final Optional<AnswerKnowledge> result;
-        private String requestedSlug;
-
-        private FakeKnowledgeGateway(Optional<AnswerKnowledge> result) {
-            this.result = result;
-        }
-
-        @Override
-        public Optional<AnswerKnowledge> findBySlug(String projectSlug) {
-            requestedSlug = projectSlug;
-            return result;
-        }
-    }
-
-    private static final class CapturingAnswerEngine implements AnswerEngine {
-
-        private final AnswerResult result;
-        private AnswerKnowledge knowledge;
-        private String question;
-
-        private CapturingAnswerEngine(AnswerResult result) {
-            this.result = result;
-        }
-
-        @Override
-        public AnswerResult answer(AnswerKnowledge knowledge, String question) {
-            this.knowledge = knowledge;
-            this.question = question;
-            return result;
-        }
+        org.mockito.Mockito.verify(runtime).answer(request);
     }
 }

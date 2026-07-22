@@ -11,6 +11,7 @@ import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import org.springframework.core.io.ClassPathResource;
 
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,13 +35,11 @@ class LocalPortfolioKnowledgeAdapterTest {
         ProjectProfile requested = project(
                 "project-1",
                 "sql-audit",
-                List.of("question-1", "listed-for-wrong-project"),
                 List.of("evidence-1")
         );
         ProjectProfile other = project(
                 "project-2",
                 "other-project",
-                List.of("question-2"),
                 List.of("evidence-2")
         );
         PortfolioSnapshot snapshot = snapshot(
@@ -47,7 +47,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(
                         question("question-2", "project-2"),
                         question("listed-for-wrong-project", "project-2"),
-                        question("owned-but-not-listed", "project-1"),
                         question("question-1", "project-1")
                 ),
                 List.of(
@@ -78,7 +77,7 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(knowledge.getQuestions().get(0).getAliases())
                 .containsExactly("Alias question-1");
         assertThat(knowledge.getQuestions().get(0).getSuggestion())
-                .isEqualTo("Suggestion question-1");
+                .isEqualTo("Canonical question-1");
         assertThat(knowledge.getEvidence())
                 .extracting(AnswerEvidence::getId)
                 .containsExactly("evidence-1");
@@ -106,13 +105,18 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(knowledge.getQuestions()).hasSize(1);
         AnswerQuestion mappedQuestion = knowledge.getQuestions().getFirst();
         assertThat(mappedQuestion.getCanonicalQuestion())
-                .isEqualTo(publishedQuestion.getCanonicalQuestion());
+                .isEqualTo(publishedQuestion.getText());
         assertThat(mappedQuestion.getAliases()).containsExactlyElementsOf(
                 publishedQuestion.getAliases()
         );
-        assertThat(mappedQuestion.getSuggestion()).isEqualTo(publishedQuestion.getSuggestion());
+        assertThat(mappedQuestion.getSuggestion()).isEqualTo(publishedQuestion.getText());
         assertThat(knowledge.getEvidence())
                 .extracting(AnswerEvidence::getId)
+                .containsExactly("sql-audit-delivery-set");
+        assertThat(knowledge.getClaims()).hasSize(1);
+        assertThat(knowledge.getClaims().getFirst().getId())
+                .isEqualTo("claim-sql-audit-delivered");
+        assertThat(knowledge.getClaims().getFirst().getDirectEvidenceIds())
                 .containsExactly("sql-audit-delivery-set");
     }
 
@@ -121,7 +125,6 @@ class LocalPortfolioKnowledgeAdapterTest {
         ProjectProfile requested = project(
                 "project-1",
                 "sql-audit",
-                List.of("question-1", "question-2"),
                 List.of("evidence-1", "evidence-2")
         );
         PortfolioSnapshot snapshot = snapshot(
@@ -155,7 +158,6 @@ class LocalPortfolioKnowledgeAdapterTest {
         ProjectProfile requested = project(
                 "project-1",
                 "sql-audit",
-                List.of(),
                 List.of(
                         "approved-safe",
                         "approved-raw",
@@ -188,7 +190,7 @@ class LocalPortfolioKnowledgeAdapterTest {
     @Test
     void returnsEmptyForUnknownProject() {
         PortfolioSnapshot snapshot = snapshot(
-                List.of(project("project-1", "sql-audit", List.of(), List.of())),
+                List.of(project("project-1", "sql-audit", List.of())),
                 List.of(),
                 List.of()
         );
@@ -207,7 +209,6 @@ class LocalPortfolioKnowledgeAdapterTest {
         AnswerQuestion equalQuestion =
                 new AnswerQuestion("Canonical", List.of("Alias"), "Suggestion");
 
-        List<String> supportedClaims = new ArrayList<>(List.of("Claim"));
         AnswerEvidence evidence = new AnswerEvidence(
                 "evidence-1",
                 "Evidence",
@@ -216,7 +217,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 LocalDate.parse("2026-07-14"),
                 2,
                 "Summary",
-                supportedClaims,
                 "APPROVED",
                 false
         );
@@ -228,7 +228,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 LocalDate.parse("2026-07-14"),
                 2,
                 "Summary",
-                List.of("Claim"),
                 "APPROVED",
                 false
         );
@@ -268,7 +267,6 @@ class LocalPortfolioKnowledgeAdapterTest {
         );
 
         aliases.add("Later alias");
-        supportedClaims.add("Later claim");
         responsibilities.add("Later responsibility");
         keyDecisions.add("Later decision");
         verification.add("Later verification");
@@ -276,15 +274,12 @@ class LocalPortfolioKnowledgeAdapterTest {
         evidenceList.clear();
 
         assertThat(question.getAliases()).containsExactly("Alias");
-        assertThat(evidence.getSupportedClaims()).containsExactly("Claim");
         assertThat(knowledge.getResponsibilities()).containsExactly("Responsibility");
         assertThat(knowledge.getKeyDecisions()).containsExactly("Decision");
         assertThat(knowledge.getVerification()).containsExactly("Verified");
         assertThat(knowledge.getQuestions()).containsExactly(question);
         assertThat(knowledge.getEvidence()).containsExactly(evidence);
         assertThatThrownBy(() -> question.getAliases().add("Forbidden"))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> evidence.getSupportedClaims().add("Forbidden"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> knowledge.getResponsibilities().add("Forbidden"))
                 .isInstanceOf(UnsupportedOperationException.class);
@@ -313,7 +308,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 LocalDate.parse("2026-07-14"),
                 2,
                 "Summary",
-                List.of("Claim"),
                 "APPROVED",
                 true
         ));
@@ -339,8 +333,12 @@ class LocalPortfolioKnowledgeAdapterTest {
     private static PublicPortfolioRepository repository(PortfolioSnapshot snapshot) {
         return new PublicPortfolioRepository() {
             @Override
-            public PortfolioSnapshot getSnapshot() {
-                return snapshot;
+            public RuntimeContentSnapshot getSnapshot() {
+                return new RuntimeContentSnapshot(
+                        snapshot,
+                        "sha256:test-runtime-bundle",
+                        Instant.parse("2026-07-21T00:00:00Z")
+                );
             }
         };
     }
@@ -356,6 +354,8 @@ class LocalPortfolioKnowledgeAdapterTest {
                 OffsetDateTime.parse("2026-07-14T12:00:00+08:00"),
                 null,
                 projects,
+                List.of(),
+                List.of(),
                 questions,
                 evidence,
                 List.of()
@@ -365,7 +365,6 @@ class LocalPortfolioKnowledgeAdapterTest {
     private static ProjectProfile project(
             String id,
             String slug,
-            List<String> questionIds,
             List<String> evidenceIds
     ) {
         return new ProjectProfile(
@@ -384,18 +383,24 @@ class LocalPortfolioKnowledgeAdapterTest {
                 "Handoff",
                 ProjectStatus.DELIVERED,
                 ContributionType.PRIMARY,
-                questionIds,
-                evidenceIds
+                List.of(),
+                evidenceIds,
+                List.of()
         );
     }
 
     private static QuestionDefinition question(String id, String projectId) {
         return new QuestionDefinition(
                 id,
-                projectId,
                 "Canonical " + id,
                 List.of("Alias " + id),
-                "Suggestion " + id
+                List.of("INTERVIEWER"),
+                List.of(projectId),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10
         );
     }
 
@@ -413,7 +418,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 LocalDate.parse("2026-07-14"),
                 2,
                 "Summary " + id,
-                List.of("Claim " + id),
                 status,
                 rawContentPublic
         );

@@ -47,28 +47,39 @@ try {
         -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
     Assert-ExitCode 'Static bundle checker tests'
 
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\privacy-check.test.ps1')
+    Assert-ExitCode 'Privacy checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\portfolio-governance.test.ps1')
+    Assert-ExitCode 'Portfolio governance CLI tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
+        -Path (Join-Path $root '.agents\skills\portfolio-governance')
+    Assert-ExitCode 'Public governance skill privacy scan'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
+        -Path (Join-Path $root 'backend\src\main\resources\public-data')
+    Assert-ExitCode 'Pre-package public snapshot privacy scan'
+
     if (-not $SkipInstall) {
         & npm.cmd --prefix frontend ci
         Assert-ExitCode 'Frontend dependency installation'
     }
 
+    & npm.cmd --prefix frontend run check
+    Assert-ExitCode 'Frontend type check'
+    & npm.cmd --prefix frontend run lint
+    Assert-ExitCode 'Frontend lint'
     & npm.cmd --prefix frontend test -- --run
     Assert-ExitCode 'Frontend tests'
     & npm.cmd --prefix frontend run build
     Assert-ExitCode 'Frontend build'
 
-    & mvn.cmd -f backend/pom.xml clean package
-    Assert-ExitCode 'Backend clean package'
-
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File (Join-Path $root 'scripts\privacy-check.test.ps1')
-    Assert-ExitCode 'Privacy checker tests'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
-        -Path (Join-Path $root 'backend\src\main\resources\public-data')
-    Assert-ExitCode 'Public snapshot privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root 'frontend\dist')
-    Assert-ExitCode 'Frontend dist privacy scan'
+    Assert-ExitCode 'Pre-package frontend dist privacy scan'
+
+    & mvn.cmd -f backend/pom.xml clean package
+    Assert-ExitCode 'Backend clean package'
 
     $entries = @(& jar.exe tf $jarPath)
     Assert-ExitCode 'JAR listing'

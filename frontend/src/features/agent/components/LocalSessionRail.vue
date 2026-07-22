@@ -24,8 +24,8 @@ function timeLabel(timestamp: number) {
 </script>
 
 <template>
-  <aside id="local-session-rail" class="session-rail" aria-label="本地会话">
-    <p class="session-rail__label">本地会话</p>
+  <aside id="local-session-rail" class="session-rail" aria-label="当前页面会话">
+    <p class="session-rail__label">当前页面会话</p>
     <button class="session-rail__new" type="button" @click="$emit('create')">
       ＋ 新对话
     </button>
@@ -49,12 +49,12 @@ function timeLabel(timestamp: number) {
           ×
         </button>
       </article>
-      <p v-if="!sessions.length" class="session-empty">还没有本地会话。</p>
+      <p v-if="!sessions.length" class="session-empty">当前页面还没有会话。</p>
     </div>
 
     <footer>
-      <p>会话保存在当前浏览器<br />7 天后自动过期</p>
-      <button v-if="sessions.length" type="button" @click="$emit('clear')">清除本地记录</button>
+      <p>当前对话未保存<br />刷新后记录会消失</p>
+      <button v-if="sessions.length" type="button" @click="$emit('clear')">清除当前对话</button>
     </footer>
   </aside>
 </template>

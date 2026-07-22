@@ -6,5 +6,6 @@ public enum AnswerSectionType {
     SOLUTION,
     VERIFICATION,
     STATUS,
-    BOUNDARY
+    BOUNDARY,
+    REJECTED
 }

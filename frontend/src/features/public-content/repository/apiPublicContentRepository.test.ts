@@ -17,7 +17,7 @@ describe('ApiPublicContentRepository', () => {
     ])
 
     expect(loader).toHaveBeenCalledTimes(1)
-    expect(portfolio.contentVersion).toBe('2026-07-14.1')
+    expect(portfolio.contentVersion).toBe('2026-07-21.1')
     expect(projects).toHaveLength(1)
     expect(project?.code).toBe('P-01')
     expect(timeline).toHaveLength(1)

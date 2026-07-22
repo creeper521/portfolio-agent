@@ -3,18 +3,25 @@ package com.portfolio.agent.answer.adapter.portfolio;
 import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
-import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway {
@@ -26,23 +33,23 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
     }
 
     @Override
-    public Optional<AnswerKnowledge> findBySlug(String projectSlug) {
-        PortfolioSnapshot snapshot = repository.getSnapshot();
-        Optional<ProjectProfile> project = snapshot.getProjects().stream()
-                .filter(candidate -> candidate.getSlug().equals(projectSlug))
-                .findFirst();
+    public RuntimeAnswerContent getContent() {
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
+        List<AnswerKnowledge> projects = snapshot.getProjects().stream()
+                .map(project -> toKnowledge(snapshot, project))
+                .toList();
+        return new RuntimeAnswerContent(
+                snapshot.getContentVersion(),
+                snapshot.getRuntimeBundleHash(),
+                projects
+        );
+    }
 
-        if (project.isEmpty()) {
-            return Optional.empty();
-        }
-
-        ProjectProfile value = project.orElseThrow();
-        Set<String> questionIds = Set.copyOf(value.getQuestionIds());
+    private AnswerKnowledge toKnowledge(RuntimeContentSnapshot snapshot, ProjectProfile value) {
         Set<String> evidenceIds = Set.copyOf(value.getEvidenceIds());
 
         List<AnswerQuestion> questions = snapshot.getQuestions().stream()
-                .filter(candidate -> value.getId().equals(candidate.getProjectId()))
-                .filter(candidate -> questionIds.contains(candidate.getId()))
+                .filter(candidate -> candidate.getProjectIds().contains(value.getId()))
                 .map(this::toQuestion)
                 .toList();
 
@@ -52,10 +59,35 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .filter(candidate -> Boolean.FALSE.equals(candidate.getRawContentPublic()))
                 .map(this::toEvidence)
                 .toList();
+        Set<String> approvedEvidenceIds = evidence.stream()
+                .map(AnswerEvidence::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        Map<String, List<String>> directEvidenceByClaimId = snapshot.getClaimEvidenceLinks().stream()
+                .filter(link -> link.getSupportType()
+                        == com.portfolio.agent.portfolio.domain.SupportType.DIRECT)
+                .filter(link -> link.getReviewStatus()
+                        == com.portfolio.agent.portfolio.domain.ReviewStatus.APPROVED)
+                .filter(link -> approvedEvidenceIds.contains(link.getEvidenceId()))
+                .collect(Collectors.groupingBy(
+                        com.portfolio.agent.portfolio.domain.ClaimEvidenceLink::getClaimId,
+                        Collectors.mapping(
+                                com.portfolio.agent.portfolio.domain.ClaimEvidenceLink::getEvidenceId,
+                                Collectors.toUnmodifiableList())));
+        List<AnswerClaimProjection> claims = snapshot.getClaims().stream()
+                .filter(claim -> value.getId().equals(claim.getSubjectId()))
+                .map(claim -> new AnswerClaimProjection(
+                        claim.getId(),
+                        AnswerClaimCategory.valueOf(claim.getCategory().name()),
+                        AnswerVerificationBasis.valueOf(claim.getVerificationBasis().name()),
+                        AnswerClaimVerificationStatus.valueOf(claim.getVerificationStatus().name()),
+                        AnswerMateriality.valueOf(claim.getMateriality().name()),
+                        directEvidenceByClaimId.getOrDefault(claim.getId(), List.of())))
+                .toList();
 
-        return Optional.of(new AnswerKnowledge(
+        return new AnswerKnowledge(
                 value.getSlug(),
                 value.getTitle(),
+                value.getSummary(),
                 value.getBackground(),
                 value.getResponsibilities(),
                 value.getSolution(),
@@ -65,15 +97,17 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 value.getHandoff(),
                 value.getStatus().name(),
                 questions,
-                evidence
-        ));
+                evidence,
+                claims
+        );
     }
 
     private AnswerQuestion toQuestion(QuestionDefinition question) {
         return new AnswerQuestion(
-                question.getCanonicalQuestion(),
+                question.getId(),
+                question.getText(),
                 question.getAliases(),
-                question.getSuggestion()
+                question.getText()
         );
     }
 
@@ -86,7 +120,6 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 evidence.getPeriodEnd(),
                 evidence.getSourceCount(),
                 evidence.getSummary(),
-                evidence.getSupportedClaims(),
                 evidence.getPublicStatus().name(),
                 false
         );

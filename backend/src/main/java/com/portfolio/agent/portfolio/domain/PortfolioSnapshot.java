@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.OffsetDateTime;
@@ -14,6 +15,8 @@ public final class PortfolioSnapshot {
     private final OffsetDateTime publishedAt;
     private final OwnerProfile owner;
     private final List<ProjectProfile> projects;
+    private final List<Claim> claims;
+    private final List<ClaimEvidenceLink> claimEvidenceLinks;
     private final List<QuestionDefinition> questions;
     private final List<EvidenceRecord> evidence;
     private final List<TimelineEvent> timeline;
@@ -25,15 +28,19 @@ public final class PortfolioSnapshot {
             @JsonProperty("publishedAt") OffsetDateTime publishedAt,
             @JsonProperty("owner") OwnerProfile owner,
             @JsonProperty("projects") List<ProjectProfile> projects,
-            @JsonProperty("questions") List<QuestionDefinition> questions,
+            @JsonProperty("claims") List<Claim> claims,
+            @JsonProperty("claimEvidenceLinks") List<ClaimEvidenceLink> claimEvidenceLinks,
+            @JsonProperty("questionPresets") @JsonAlias("questions") List<QuestionDefinition> questions,
             @JsonProperty("evidence") List<EvidenceRecord> evidence,
-            @JsonProperty("timeline") List<TimelineEvent> timeline
+            @JsonProperty("timelineEvents") @JsonAlias("timeline") List<TimelineEvent> timeline
     ) {
         this.schemaVersion = schemaVersion;
         this.contentVersion = contentVersion;
         this.publishedAt = publishedAt;
         this.owner = owner;
         this.projects = List.copyOf(projects);
+        this.claims = List.copyOf(claims);
+        this.claimEvidenceLinks = List.copyOf(claimEvidenceLinks);
         this.questions = List.copyOf(questions);
         this.evidence = List.copyOf(evidence);
         this.timeline = List.copyOf(timeline);
@@ -59,6 +66,14 @@ public final class PortfolioSnapshot {
         return projects;
     }
 
+    public List<Claim> getClaims() {
+        return claims;
+    }
+
+    public List<ClaimEvidenceLink> getClaimEvidenceLinks() {
+        return claimEvidenceLinks;
+    }
+
     public List<QuestionDefinition> getQuestions() {
         return questions;
     }
@@ -69,6 +84,21 @@ public final class PortfolioSnapshot {
 
     public List<TimelineEvent> getTimeline() {
         return timeline;
+    }
+
+    public PortfolioSnapshot withPublishedAt(OffsetDateTime value) {
+        return new PortfolioSnapshot(
+                schemaVersion,
+                contentVersion,
+                value,
+                owner,
+                projects,
+                claims,
+                claimEvidenceLinks,
+                questions,
+                evidence,
+                timeline
+        );
     }
 
     @Override
@@ -84,6 +114,8 @@ public final class PortfolioSnapshot {
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
+                && Objects.equals(claims, that.claims)
+                && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(questions, that.questions)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(timeline, that.timeline);
@@ -91,7 +123,8 @@ public final class PortfolioSnapshot {
 
     @Override
     public int hashCode() {
-        return Objects.hash(schemaVersion, contentVersion, publishedAt, owner, projects, questions, evidence, timeline);
+        return Objects.hash(schemaVersion, contentVersion, publishedAt, owner, projects, claims,
+                claimEvidenceLinks, questions, evidence, timeline);
     }
 
     @Override
@@ -102,6 +135,8 @@ public final class PortfolioSnapshot {
                 ", publishedAt=" + publishedAt +
                 ", owner=" + owner +
                 ", projects=" + projects +
+                ", claims=" + claims +
+                ", claimEvidenceLinks=" + claimEvidenceLinks +
                 ", questions=" + questions +
                 ", evidence=" + evidence +
                 ", timeline=" + timeline +

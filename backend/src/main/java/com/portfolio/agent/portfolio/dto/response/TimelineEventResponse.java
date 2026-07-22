@@ -36,7 +36,10 @@ public final class TimelineEventResponse {
         this.evidenceIds = List.copyOf(evidenceIds);
     }
 
-    public static TimelineEventResponse from(TimelineEvent timelineEvent) {
+    public static TimelineEventResponse from(
+            TimelineEvent timelineEvent,
+            List<String> projectSlugs
+    ) {
         return new TimelineEventResponse(
                 timelineEvent.getId(),
                 timelineEvent.getDateLabel(),
@@ -44,7 +47,7 @@ public final class TimelineEventResponse {
                 timelineEvent.getProblem(),
                 timelineEvent.getAction(),
                 timelineEvent.getImpact(),
-                timelineEvent.getProjectSlugs(),
+                projectSlugs,
                 timelineEvent.getEvidenceIds()
         );
     }

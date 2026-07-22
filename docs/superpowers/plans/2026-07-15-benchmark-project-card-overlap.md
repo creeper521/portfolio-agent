@@ -1,5 +1,7 @@
 # Benchmark Project Card Overlap Implementation Plan
 
+> **执行状态（2026-07-20）：** 已完成。该计划只作用于历史设计探索原型，不是当前生产前端待办。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prevent terminal mock text from colliding with exposed project metadata while preserving the alternating featured-card layout.

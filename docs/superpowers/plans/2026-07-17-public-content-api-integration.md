@@ -1,6 +1,8 @@
 # Portfolio Public Content API Integration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行状态（2026-07-20）：** 已完成并通过当时的完整发布验证，对应提交 `574d6f0` 至 `d696511`。检查项同步为已执行。
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the rebuilt frontend's preview runtime with one validated Spring Boot public-content aggregate and the existing deterministic Answer API, then prove the integration through the packaged JAR.
 
@@ -72,7 +74,7 @@
 - Produces: `PortfolioSnapshot#getTimeline(): List<TimelineEvent>`
 - Produces: `TimelineEvent(String id, String dateLabel, String title, String problem, String action, String impact, List<String> projectSlugs, List<String> evidenceIds)` with getters and value semantics.
 
-- [ ] **Step 1: Add failing domain contract tests**
+- [x] **Step 1: Add failing domain contract tests**
 
 Add these tests and update existing constructor calls with `"P-01"`, `"E-01"`, and `List.of(timeline)`:
 
@@ -122,7 +124,7 @@ void snapshotDefensivelyCopiesTimeline() {
 }
 ```
 
-- [ ] **Step 2: Run the domain test and verify RED**
+- [x] **Step 2: Run the domain test and verify RED**
 
 Run:
 
@@ -132,7 +134,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioModelContractTest test
 
 Expected: compilation fails because `TimelineEvent`, the `code` constructor parameters, and `PortfolioSnapshot#getTimeline()` do not exist.
 
-- [ ] **Step 3: Implement the immutable model additions**
+- [x] **Step 3: Implement the immutable model additions**
 
 Create `TimelineEvent.java` with the exact constructor shown in Interfaces, Jackson `@JsonCreator`/`@JsonProperty` annotations, `List.copyOf` for both reference lists, getters, and explicit `equals`, `hashCode`, and `toString`.
 
@@ -195,7 +197,7 @@ rg -n "new (ProjectProfile|EvidenceRecord|PortfolioSnapshot)\(" backend/src
 
 Use stable fixture codes (`P-01`, `E-01`) and pass an explicit timeline list. `PortfolioServiceTest` uses one `TimelineEvent`; `LocalPortfolioKnowledgeAdapterTest` may use `List.of()` because that test does not exercise timeline behavior.
 
-- [ ] **Step 4: Add reviewed JSON fields and repository assertions**
+- [x] **Step 4: Add reviewed JSON fields and repository assertions**
 
 Add `"code": "P-01"` to the existing project, `"code": "E-01"` to the existing Evidence, and this reviewed top-level timeline entry:
 
@@ -224,7 +226,7 @@ assertThat(snapshot.getTimeline()).singleElement()
         .isEqualTo("timeline-sql-audit-delivery");
 ```
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run:
 
@@ -234,7 +236,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioModelContractTest,JsonPublicPortfolio
 
 Expected: both classes pass with zero failures.
 
-- [ ] **Step 6: Conditional commit after explicit authorization**
+- [x] **Step 6: Conditional commit after explicit authorization**
 
 ```powershell
 git add backend/src/main/java/com/portfolio/agent/portfolio/domain backend/src/main/resources/public-data/public-portfolio.v1.json backend/src/test/java/com/portfolio/agent/portfolio/domain/PortfolioModelContractTest.java backend/src/test/java/com/portfolio/agent/portfolio/repository/file/JsonPublicPortfolioRepositoryTest.java backend/src/test/java/com/portfolio/agent/portfolio/service/PortfolioServiceTest.java backend/src/test/java/com/portfolio/agent/answer/adapter/portfolio/LocalPortfolioKnowledgeAdapterTest.java
@@ -251,7 +253,7 @@ git commit -m "feat: add reviewed public timeline facts"
 - Consumes: `ProjectProfile#getCode`, `EvidenceRecord#getCode`, `PortfolioSnapshot#getTimeline`.
 - Produces: startup rejection through `InvalidPortfolioSnapshotException` for blank/duplicate codes, blank timeline content, duplicate timeline IDs, dangling project slugs, dangling Evidence IDs, and non-public Evidence references.
 
-- [ ] **Step 1: Update the valid JSON fixture and add failing validation cases**
+- [x] **Step 1: Update the valid JSON fixture and add failing validation cases**
 
 Add project/evidence codes to the existing fixture. Extract the timeline JSON into this exact helper and interpolate it into `validJson()` as `"timeline": [%s]` so timeline-only mutations cannot accidentally change Project references:
 
@@ -313,7 +315,7 @@ void rejectsBlankTimelineNarrative() {
 }
 ```
 
-- [ ] **Step 2: Run the validator test and verify RED**
+- [x] **Step 2: Run the validator test and verify RED**
 
 Run:
 
@@ -323,7 +325,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioSnapshotValidatorTest test
 
 Expected: new cases fail because code and timeline validation are absent.
 
-- [ ] **Step 3: Add the minimal validation rules**
+- [x] **Step 3: Add the minimal validation rules**
 
 After building the existing ID maps, add unique code maps and timeline validation:
 
@@ -355,7 +357,7 @@ for (TimelineEvent event : timeline) {
 
 Also explicitly validate `hasText(project.getCode())` and `hasText(item.getCode())` before their remaining field rules so error messages are stable.
 
-- [ ] **Step 4: Run validator and repository tests and verify GREEN**
+- [x] **Step 4: Run validator and repository tests and verify GREEN**
 
 Run:
 
@@ -365,7 +367,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioSnapshotValidatorTest,JsonPublicPortf
 
 Expected: all cases pass.
 
-- [ ] **Step 5: Run backend quality boundaries**
+- [x] **Step 5: Run backend quality boundaries**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/code-quality-check.ps1 -Path backend/src
@@ -374,7 +376,7 @@ powershell -ExecutionPolicy Bypass -File scripts/architecture-check.ps1 -Path ba
 
 Expected: both scripts exit 0.
 
-- [ ] **Step 6: Conditional commit after explicit authorization**
+- [x] **Step 6: Conditional commit after explicit authorization**
 
 ```powershell
 git add backend/src/main/java/com/portfolio/agent/portfolio/validation/PortfolioSnapshotValidator.java backend/src/test/java/com/portfolio/agent/portfolio/validation/PortfolioSnapshotValidatorTest.java
@@ -401,7 +403,7 @@ git commit -m "feat: validate public timeline references"
 - Produces: `GET /api/v1/public-content` with `contentVersion`, `publishedAt`, `owner`, complete `projects`, approved `evidence`, and `timeline` arrays.
 - Preserves: existing controller methods and response assertions.
 
-- [ ] **Step 1: Add failing Service and MockMvc tests**
+- [x] **Step 1: Add failing Service and MockMvc tests**
 
 Add to `PortfolioServiceTest`:
 
@@ -446,7 +448,7 @@ void returnsCompleteReviewedPublicContent() throws Exception {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest,PortfolioControllerTest test
@@ -454,7 +456,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest,PortfolioControllerTest t
 
 Expected: compilation fails because `PublicContent` and the endpoint do not exist.
 
-- [ ] **Step 3: Implement the application result and one-snapshot assembly**
+- [x] **Step 3: Implement the application result and one-snapshot assembly**
 
 Implement `PublicContent` with these immutable fields and getters:
 
@@ -491,7 +493,7 @@ private ProjectDetails toProjectDetails(PortfolioSnapshot snapshot, ProjectProfi
 
 `getPublicContent()` must read the Repository once, map every project with this method, filter approved/non-raw Evidence, build a deterministic `LinkedHashMap<String, List<String>>` by project order, and return the snapshot timeline unchanged.
 
-- [ ] **Step 4: Implement additive response DTO fields and aggregate mapping**
+- [x] **Step 4: Implement additive response DTO fields and aggregate mapping**
 
 Add `code` and `evidenceIds` to `ProjectDetailResponse`. Add `code` and `projectSlugs` to `EvidenceResponse`, with this factory:
 
@@ -542,7 +544,7 @@ public PublicContentResponse toPublicContentResponse(PublicContent content) {
 }
 ```
 
-- [ ] **Step 5: Add the controller and verify GREEN**
+- [x] **Step 5: Add the controller and verify GREEN**
 
 ```java
 @RestController
@@ -575,7 +577,7 @@ mvn.cmd -f backend/pom.xml -Dtest=PortfolioServiceTest,PortfolioControllerTest t
 
 Expected: both test classes pass, including all old endpoint assertions.
 
-- [ ] **Step 6: Run the complete backend suite and boundaries**
+- [x] **Step 6: Run the complete backend suite and boundaries**
 
 ```powershell
 mvn.cmd -f backend/pom.xml test
@@ -585,7 +587,7 @@ powershell -ExecutionPolicy Bypass -File scripts/architecture-check.ps1 -Path ba
 
 Expected: Maven reports `BUILD SUCCESS`; both scripts exit 0.
 
-- [ ] **Step 7: Conditional commit after explicit authorization**
+- [x] **Step 7: Conditional commit after explicit authorization**
 
 ```powershell
 git add backend/src/main/java/com/portfolio/agent/portfolio backend/src/test/java/com/portfolio/agent/portfolio
@@ -609,7 +611,7 @@ git commit -m "feat: expose reviewed public content aggregate"
 - Produces: `ApiPublicContentRepository` with one in-flight/resolved Promise per load cycle.
 - Produces: `createPublicContentState(repository)` and `usePublicContent()` exposing `portfolio`, `status`, `error`, `load()`, and `retry()`.
 
-- [ ] **Step 1: Add failing API Repository tests**
+- [x] **Step 1: Add failing API Repository tests**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest'
@@ -645,7 +647,7 @@ describe('ApiPublicContentRepository', () => {
 })
 ```
 
-- [ ] **Step 2: Run the Repository test and verify RED**
+- [x] **Step 2: Run the Repository test and verify RED**
 
 ```powershell
 npm.cmd --prefix frontend test -- --run src/features/public-content/repository/apiPublicContentRepository.test.ts
@@ -653,7 +655,7 @@ npm.cmd --prefix frontend test -- --run src/features/public-content/repository/a
 
 Expected: test compilation fails because the API Repository does not exist.
 
-- [ ] **Step 3: Implement the aggregate API and Repository**
+- [x] **Step 3: Implement the aggregate API and Repository**
 
 Add to `portfolioApi.ts`:
 
@@ -697,7 +699,7 @@ Change the production export to:
 export const publicContentRepository: PublicContentRepository = apiPublicContentRepository
 ```
 
-- [ ] **Step 4: Add failing shared-state tests**
+- [x] **Step 4: Add failing shared-state tests**
 
 ```ts
 it('moves from loading to ready', async () => {
@@ -725,7 +727,7 @@ it('clears a failed cache before retrying', async () => {
 })
 ```
 
-- [ ] **Step 5: Implement shared state with a test injection key**
+- [x] **Step 5: Implement shared state with a test injection key**
 
 ```ts
 export type PublicContentStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -768,7 +770,7 @@ export function usePublicContent(): PublicContentState {
 }
 ```
 
-- [ ] **Step 6: Run focused and existing API tests**
+- [x] **Step 6: Run focused and existing API tests**
 
 ```powershell
 npm.cmd --prefix frontend test -- --run src/features/public-content src/features/portfolio/api/portfolioApi.test.ts
@@ -776,7 +778,7 @@ npm.cmd --prefix frontend test -- --run src/features/public-content src/features
 
 Expected: all selected tests pass.
 
-- [ ] **Step 7: Conditional commit after explicit authorization**
+- [x] **Step 7: Conditional commit after explicit authorization**
 
 ```powershell
 git add frontend/src/features/portfolio/api frontend/src/features/public-content
@@ -801,7 +803,7 @@ git commit -m "feat: load public content through api repository"
 - Produces: `PublicContentFeedback` props `status: 'loading' | 'error'`, `message?: string`; emits `retry`.
 - Preserves: existing page success and unpublished/empty views.
 
-- [ ] **Step 1: Create a deterministic ready-state fixture and update page tests to inject it**
+- [x] **Step 1: Create a deterministic ready-state fixture and update page tests to inject it**
 
 ```ts
 import { ref } from 'vue'
@@ -847,7 +849,7 @@ it('shows a safe retry action when public content fails', async () => {
 })
 ```
 
-- [ ] **Step 2: Run page tests and verify RED**
+- [x] **Step 2: Run page tests and verify RED**
 
 ```powershell
 npm.cmd --prefix frontend test -- --run src/pages
@@ -855,7 +857,7 @@ npm.cmd --prefix frontend test -- --run src/pages
 
 Expected: compilation/rendering fails because the shared feedback and page integration do not exist.
 
-- [ ] **Step 3: Implement the feedback component**
+- [x] **Step 3: Implement the feedback component**
 
 ```vue
 <script setup lang="ts">
@@ -876,7 +878,7 @@ defineEmits<{ retry: [] }>()
 
 Style it only with existing paper, ink, rule, muted, red, serif, and mono tokens; do not introduce a new color or generic card treatment.
 
-- [ ] **Step 4: Replace direct Repository calls in all six pages**
+- [x] **Step 4: Replace direct Repository calls in all six pages**
 
 Each page uses:
 
@@ -910,7 +912,7 @@ For `ProjectPage`, render the unpublished view only when `status === 'ready' && 
 
 For `AgentPage`, wait for public content readiness before rendering `AgentWorkspace`; Task 6 adds route-seed Answer loading.
 
-- [ ] **Step 5: Run page tests and the production build**
+- [x] **Step 5: Run page tests and the production build**
 
 ```powershell
 npm.cmd --prefix frontend test -- --run src/pages src/shared/components
@@ -919,7 +921,7 @@ npm.cmd --prefix frontend run build
 
 Expected: page tests pass; TypeScript and Vite build succeed.
 
-- [ ] **Step 6: Conditional commit after explicit authorization**
+- [x] **Step 6: Conditional commit after explicit authorization**
 
 ```powershell
 git add frontend/src/pages frontend/src/shared/components/PublicContentFeedback.vue frontend/src/test/publicContentStateFixture.ts
@@ -945,7 +947,7 @@ git commit -m "feat: add public content loading and retry states"
 - Produces: `ConversationThread` props `pending: boolean`, `error: string`; emits `retry`.
 - Preserves: only completed Agent answers are persisted in local sessions.
 
-- [ ] **Step 1: Add the failing Answer mapping test**
+- [x] **Step 1: Add the failing Answer mapping test**
 
 ```ts
 it('maps structured sections and evidence ids without inventing content', () => {
@@ -971,7 +973,7 @@ it('maps structured sections and evidence ids without inventing content', () => 
 })
 ```
 
-- [ ] **Step 2: Run the mapping test and verify RED**
+- [x] **Step 2: Run the mapping test and verify RED**
 
 ```powershell
 npm.cmd --prefix frontend test -- --run src/features/agent/model/mapAnswerResponse.test.ts
@@ -979,7 +981,7 @@ npm.cmd --prefix frontend test -- --run src/features/agent/model/mapAnswerRespon
 
 Expected: module-not-found failure.
 
-- [ ] **Step 3: Implement the pure mapper**
+- [x] **Step 3: Implement the pure mapper**
 
 ```ts
 export function mapAnswerResponse(response: AnswerResponse) {
@@ -993,7 +995,7 @@ export function mapAnswerResponse(response: AnswerResponse) {
 }
 ```
 
-- [ ] **Step 4: Change homepage dialogue tests to mock `askQuestion` and verify pending/error behavior**
+- [x] **Step 4: Change homepage dialogue tests to mock `askQuestion` and verify pending/error behavior**
 
 Use `vi.hoisted` for `askQuestionMock`, return a complete `AnswerResponse`, then assert:
 
@@ -1004,7 +1006,7 @@ expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
 
 Add a deferred Promise test that asserts the submit button is disabled while pending, and a rejected Promise test that asserts `[data-answer-retry]` appears and invokes the same question. Because `round` changes only after a successful response, the retry uses the normal `ask(failedQuestion)` path and increments exactly once on success.
 
-- [ ] **Step 5: Implement async homepage answers**
+- [x] **Step 5: Implement async homepage answers**
 
 Replace `createPreviewAnswer` with `askQuestion` and `mapAnswerResponse`. Track:
 
@@ -1038,11 +1040,11 @@ async function ask(question: string) {
 
 Render a polite pending state, a safe error, and `<button data-answer-retry @click="ask(failedQuestion)">重新回答</button>`. Disable question buttons, input, and submit while pending.
 
-- [ ] **Step 6: Add failing Agent workspace tests for real API success and retry**
+- [x] **Step 6: Add failing Agent workspace tests for real API success and retry**
 
 Mock `askQuestion`. Submit through `ConversationThread`, then assert the user message appears immediately, the composer is disabled while deferred, the mapped Agent message appears after resolution, and a rejection shows a retry action without appending a second user message.
 
-- [ ] **Step 7: Implement async Agent submission and ConversationThread state**
+- [x] **Step 7: Implement async Agent submission and ConversationThread state**
 
 In `AgentWorkspace.vue`, replace the synchronous generator with:
 
@@ -1078,11 +1080,11 @@ Pass `:pending="pending"`, `:error="answerError"`, and `@retry="requestAnswer(fa
 
 In `ConversationThread`, disable textarea/submit during pending, render `role="status"` for “正在核对公开事实…”, render `role="alert"` plus `data-answer-retry` for errors, and never append transient states to `AgentSession.messages`.
 
-- [ ] **Step 8: Load route-seed answers through the API in `AgentPage`**
+- [x] **Step 8: Load route-seed answers through the API in `AgentPage`**
 
 After public content becomes ready, when `queryString('question')` is nonblank, call `askQuestion(selectedProject.slug, question)`, map the response, and construct `AgentRouteSeed`. Do not mount `AgentWorkspace` until the seed request succeeds or no seed question exists. On failure, show the same safe retry feedback; retry must not change the URL or create a server session.
 
-- [ ] **Step 9: Remove preview answer runtime and run focused tests**
+- [x] **Step 9: Remove preview answer runtime and run focused tests**
 
 ```powershell
 rg -n "createPreviewAnswer|previewAnswers" frontend/src
@@ -1092,7 +1094,7 @@ npm.cmd --prefix frontend run build
 
 Expected: `rg` has no production references; tests and build pass. Delete `previewAnswers.ts` only after the reference search is empty.
 
-- [ ] **Step 10: Conditional commit after explicit authorization**
+- [x] **Step 10: Conditional commit after explicit authorization**
 
 ```powershell
 git add frontend/src/features/agent frontend/src/features/audience frontend/src/pages/AgentPage.vue frontend/src/pages/AgentPage.test.ts
@@ -1116,7 +1118,7 @@ git commit -m "feat: connect portfolio conversations to answer api"
 - Produces: `powershell -ExecutionPolicy Bypass -File scripts/run-jar-e2e.ps1` as real packaged-JAR integration.
 - Produces: `PLAYWRIGHT_EXTERNAL_SERVER=1` and `PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173` configuration seam.
 
-- [ ] **Step 1: Add request assertions to Playwright before changing the topology**
+- [x] **Step 1: Add request assertions to Playwright before changing the topology**
 
 For the homepage flow, wait for `/api/v1/public-content` and `/api/v1/answers`, then assert both responses succeed. Add timeline-to-project/evidence navigation. Keep existing local-session, separator, and responsive tests.
 
@@ -1129,11 +1131,11 @@ test.beforeEach(async ({ page }) => {
 })
 ```
 
-- [ ] **Step 2: Implement public API mocks with the real response shapes**
+- [x] **Step 2: Implement public API mocks with the real response shapes**
 
 `installPublicApiMocks(page)` must route only `/api/v1/public-content` and `/api/v1/answers`, returning `previewPublicContent` and a structured Answer response. It must not intercept navigation, static assets, or unknown `/api` URLs.
 
-- [ ] **Step 3: Make Playwright accept an external packaged server**
+- [x] **Step 3: Make Playwright accept an external packaged server**
 
 ```ts
 const externalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === '1'
@@ -1151,7 +1153,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Create the packaged-JAR runner**
+- [x] **Step 4: Create the packaged-JAR runner**
 
 `scripts/run-jar-e2e.ps1` must:
 
@@ -1187,7 +1189,7 @@ finally {
 }
 ```
 
-- [ ] **Step 5: Wire release verification and documentation**
+- [x] **Step 5: Wire release verification and documentation**
 
 In `verify-release.ps1`, run both `architecture-check.ps1` and `run-jar-e2e.ps1`; replace the current direct `npm.cmd --prefix frontend run test:e2e` release step with the JAR runner. Preserve the frontend-only mock E2E command as a separate stage when desired.
 
@@ -1203,7 +1205,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run-jar-e2e.ps1
 
 Document that the integration command requires a fresh frontend build and Maven package.
 
-- [ ] **Step 6: Run mock E2E, package, and real integration E2E**
+- [x] **Step 6: Run mock E2E, package, and real integration E2E**
 
 ```powershell
 npm.cmd --prefix frontend run test:e2e
@@ -1214,7 +1216,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run-jar-e2e.ps1
 
 Expected: mock E2E passes without Java; package succeeds; real E2E observes successful public-content and Answer API responses from the JAR.
 
-- [ ] **Step 7: Conditional commit after explicit authorization**
+- [x] **Step 7: Conditional commit after explicit authorization**
 
 ```powershell
 git add frontend/e2e frontend/playwright.config.ts frontend/package.json scripts/run-jar-e2e.ps1 scripts/verify-release.ps1 README.md docs/04-项目代码约束.md
@@ -1231,7 +1233,7 @@ git commit -m "test: verify packaged portfolio integration"
 - Confirms: production frontend has no preview runtime dependencies.
 - Confirms: package/privacy/architecture contracts and real browser integration all pass.
 
-- [ ] **Step 1: Run static reference and diff checks**
+- [x] **Step 1: Run static reference and diff checks**
 
 ```powershell
 rg -n "previewPublicContentRepository|createPreviewAnswer|previewAnswers" frontend/src --glob "!**/*.test.ts" --glob "!**/test/**"
@@ -1241,7 +1243,7 @@ git diff --check
 
 Expected: first search has no production matches; second shows the intended public-boundary implementation; diff check exits 0.
 
-- [ ] **Step 2: Run the atomic release verifier**
+- [x] **Step 2: Run the atomic release verifier**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -SkipInstall -SkipDockerCheck
@@ -1249,7 +1251,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -SkipInstall
 
 Expected: code-quality, architecture, frontend tests/build, backend clean package, privacy checks, JAR inspection, packaged-JAR HTTP readiness, and Playwright integration all pass.
 
-- [ ] **Step 3: Inspect Git scope without changing it**
+- [x] **Step 3: Inspect Git scope without changing it**
 
 ```powershell
 git status --short
@@ -1260,7 +1262,7 @@ Get-Content -Raw docs/superpowers/plans/2026-07-17-public-content-api-integratio
 
 Expected: only intentional integration files plus the user's pre-existing untracked local-tool files appear.
 
-- [ ] **Step 4: Conditional final commit after explicit authorization**
+- [x] **Step 4: Conditional final commit after explicit authorization**
 
 If Tasks 1–7 were not committed individually and the user explicitly authorizes one final commit:
 

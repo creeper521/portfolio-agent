@@ -10,12 +10,24 @@ import StatusMark from '../shared/components/StatusMark.vue'
 
 const route = useRoute()
 const { portfolio, status, error, retry } = usePublicContent()
-const evidence = computed(() => portfolio.value?.evidence ?? [])
+const projectFilter = computed(() =>
+  typeof route.query.project === 'string' ? route.query.project : '',
+)
+const evidence = computed(() => (portfolio.value?.evidence ?? []).filter(
+  (item) => !projectFilter.value || item.projectSlugs.includes(projectFilter.value),
+))
 const selectedId = ref(typeof route.query.evidence === 'string' ? route.query.evidence : '')
 
 const selected = computed(
-  () => evidence.value.find((item) => item.id === selectedId.value) ?? evidence.value[0] ?? null,
+  () => selectedId.value
+    ? evidence.value.find((item) => item.id === selectedId.value) ?? null
+    : evidence.value[0] ?? null,
 )
+const selectedClaims = computed(() => selected.value
+  ? selected.value.claimIds
+      .map((claimId) => portfolio.value?.claims.find((claim) => claim.id === claimId))
+      .filter((claim) => claim !== undefined)
+  : [])
 </script>
 
 <template>
@@ -63,7 +75,7 @@ const selected = computed(
         <section>
           <p>SUPPORTED CLAIMS</p>
           <ol>
-            <li v-for="claim in selected.supportedClaims" :key="claim">{{ claim }}</li>
+            <li v-for="claim in selectedClaims" :key="claim.id">{{ claim.statement }}</li>
           </ol>
         </section>
 
@@ -80,6 +92,9 @@ const selected = computed(
           </RouterLink>
         </footer>
       </article>
+      <div v-else class="evidence-preview" data-invalid-evidence role="status">
+        <EmptyDossier title="未找到该公开证据" description="该引用无效，或不属于当前项目筛选范围。" />
+      </div>
     </section>
 
     <div v-else class="page-shell">

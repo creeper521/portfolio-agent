@@ -11,107 +11,74 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AnswerModelContractTest {
 
     @Test
-    void answerResultDefensivelyCopiesCollectionsAndKeepsValueSemantics() {
+    void answerResultDefensivelyCopiesStructuredCollections() {
         List<AnswerSection> sections = new ArrayList<>(List.of(
-                new AnswerSection(AnswerSectionType.BACKGROUND, "背景")
+                new AnswerSection(
+                        AnswerSectionType.BACKGROUND,
+                        "项目背景",
+                        "背景",
+                        List.of("evidence-1")
+                )
         ));
-        AnswerResult first = new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题",
-                sections, List.of(), List.of("推荐问题")
-        );
-        AnswerResult second = new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题",
-                List.of(new AnswerSection(AnswerSectionType.BACKGROUND, "背景")),
-                List.of(), List.of("推荐问题")
+        List<String> evidenceIds = new ArrayList<>(List.of("evidence-1"));
+        List<String> suggestions = new ArrayList<>(List.of("preset-1"));
+        AnswerResult result = new AnswerResult(
+                turn(), AnswerResolution.ANSWERED, AnswerSource.PRESET,
+                GenerationMode.DETERMINISTIC, VerificationStatus.VERIFIED,
+                "标题", "摘要", sections, evidenceIds, suggestions
         );
 
         sections.clear();
+        evidenceIds.clear();
+        suggestions.clear();
 
-        assertThat(first.getSections()).hasSize(1);
-        assertThatThrownBy(() -> first.getSections().clear())
+        assertThat(result.getSections()).hasSize(1);
+        assertThat(result.getEvidenceIds()).containsExactly("evidence-1");
+        assertThat(result.getSuggestedQuestionPresetIds()).containsExactly("preset-1");
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.ANSWERED);
+        assertThat(result.getAnswerSource()).isEqualTo(AnswerSource.PRESET);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getVerification()).isEqualTo(VerificationStatus.VERIFIED);
+        assertThatThrownBy(() -> result.getSections().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
-        assertThat(first).isEqualTo(second);
-        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+        assertThatThrownBy(() -> result.getEvidenceIds().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> result.getSuggestedQuestionPresetIds().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
-    void answerResultDefensivelyCopiesEvidenceAndSuggestedQuestions() {
-        List<AnswerEvidence> evidence = new ArrayList<>();
-        List<String> suggestedQuestions = new ArrayList<>(List.of("推荐问题"));
-        AnswerResult result = new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题",
-                List.of(), evidence, suggestedQuestions
+    void answerSectionPreservesLocalEvidenceReferences() {
+        AnswerSection first = new AnswerSection(
+                AnswerSectionType.SOLUTION,
+                "技术方案",
+                "方案",
+                List.of("evidence-1"),
+                List.of("claim-1")
         );
-
-        evidence.add(null);
-        suggestedQuestions.clear();
-
-        assertThat(result.getEvidence()).isEmpty();
-        assertThat(result.getSuggestedQuestions()).containsExactly("推荐问题");
-        assertThatThrownBy(() -> result.getEvidence().clear())
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> result.getSuggestedQuestions().clear())
-                .isInstanceOf(UnsupportedOperationException.class);
-    }
-
-    @Test
-    void answerSectionExposesFieldsAndKeepsValueSemantics() {
-        AnswerSection first = new AnswerSection(AnswerSectionType.SOLUTION, "方案");
-        AnswerSection second = new AnswerSection(AnswerSectionType.SOLUTION, "方案");
 
         assertThat(first.getType()).isEqualTo(AnswerSectionType.SOLUTION);
+        assertThat(first.getTitle()).isEqualTo("技术方案");
         assertThat(first.getContent()).isEqualTo("方案");
-        assertThat(first).isEqualTo(second);
-        assertThat(first.hashCode()).isEqualTo(second.hashCode());
-        assertThat(first.toString()).contains("SOLUTION", "方案");
-        assertThat(first).isNotEqualTo(new AnswerSection(AnswerSectionType.STATUS, "方案"));
-        assertThat(first).isNotEqualTo(new AnswerSection(AnswerSectionType.SOLUTION, "其他"));
+        assertThat(first.getEvidenceIds()).containsExactly("evidence-1");
+        assertThat(first.getClaimIds()).containsExactly("claim-1");
+        assertThatThrownBy(() -> first.getEvidenceIds().add("evidence-2"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> first.getClaimIds().add("claim-2"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
-    @Test
-    void answerResultExposesFieldsAndUsesEveryFieldForValueSemantics() {
-        List<AnswerSection> sections = List.of(
-                new AnswerSection(AnswerSectionType.BACKGROUND, "背景")
-        );
-        AnswerResult baseline = new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题",
-                sections, List.of(), List.of("推荐问题")
-        );
-
-        assertThat(baseline.getAnswerMode()).isEqualTo(AnswerMode.DETERMINISTIC);
-        assertThat(baseline.isMatched()).isTrue();
-        assertThat(baseline.isFallback()).isFalse();
-        assertThat(baseline.getTitle()).isEqualTo("标题");
-        assertThat(baseline.toString()).contains("DETERMINISTIC", "标题", "推荐问题");
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.MODEL, true, false, "标题", sections, List.of(), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, false, false, "标题", sections, List.of(), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, true, "标题", sections, List.of(), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "其他", sections, List.of(), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题", List.of(), List.of(), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题", sections,
-                List.of(evidence("evidence-1")), List.of("推荐问题")));
-        assertThat(baseline).isNotEqualTo(new AnswerResult(
-                AnswerMode.DETERMINISTIC, true, false, "标题", sections, List.of(), List.of("其他")));
-    }
-
-    private AnswerEvidence evidence(String id) {
-        return new AnswerEvidence(
-                id,
-                "证据",
-                "DOCUMENT",
-                LocalDate.of(2026, 1, 1),
-                LocalDate.of(2026, 1, 2),
-                1,
-                "摘要",
-                List.of("事实"),
-                "APPROVED",
-                false
+    private AnswerTurnSnapshot turn() {
+        return new AnswerTurnSnapshot(
+                "turn-1",
+                "request-1",
+                "version-1",
+                "sha256:bundle",
+                "sql-audit",
+                "preset-1",
+                List.of("evidence-1"),
+                com.portfolio.agent.answer.dto.request.AudienceRole.INTERVIEWER,
+                com.portfolio.agent.answer.dto.request.AnswerRequestSource.AGENT_PAGE
         );
     }
 }

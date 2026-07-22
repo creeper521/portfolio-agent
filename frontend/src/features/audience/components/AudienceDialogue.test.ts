@@ -15,31 +15,21 @@ vi.mock('../../agent/api/answerApi', () => ({
 function answerResponse() {
   return {
     requestId: 'request-1',
-    answerMode: 'DETERMINISTIC' as const,
-    matched: true,
-    fallback: false,
-    answer: {
-      title: '项目说明',
-      sections: [
-        { type: 'BACKGROUND' as const, content: '背景内容' },
-        { type: 'VERIFICATION' as const, content: '验证内容' },
-      ],
-    },
-    evidence: [
-      {
-        id: 'sql-audit-delivery-set',
-        title: '证据',
-        type: 'COLLECTION' as const,
-        periodStart: '2026-07-01',
-        periodEnd: '2026-07-10',
-        sourceCount: 1,
-        summary: '摘要',
-        supportedClaims: ['已验证'],
-        publicStatus: 'APPROVED' as const,
-        rawContentPublic: false as const,
-      },
+    turnId: 'turn-1',
+    contentVersion: '2026-07-21',
+    questionPresetId: 'sql-audit-overview',
+    resolution: 'ANSWERED' as const,
+    answerSource: 'PRESET' as const,
+    generationMode: 'DETERMINISTIC' as const,
+    verification: 'VERIFIED' as const,
+    title: '项目说明',
+    summary: '公开摘要',
+    sections: [
+      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] },
+      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'] },
     ],
-    suggestedQuestions: [],
+    evidenceIds: ['sql-audit-delivery-set'],
+    suggestedQuestionPresetIds: ['sql-audit-overview'],
   }
 }
 
@@ -66,23 +56,24 @@ describe('AudienceDialogue', () => {
     await wrapper.get('[data-role="MENTOR"]').trigger('click')
 
     expect(wrapper.get('[data-current-role]').attributes('data-current-role')).toBe('MENTOR')
-    expect(wrapper.findAll('[data-question]')).toHaveLength(4)
+    expect(wrapper.findAll('[data-question]')).toHaveLength(1)
   })
 
   it('shows an API-backed summary after choosing a question', async () => {
     const wrapper = mountDialogue()
 
-    expect(wrapper.findAll('[data-question]')).toHaveLength(4)
+    expect(wrapper.findAll('[data-question]')).toHaveLength(1)
     expect(wrapper.get('[data-role="INTERVIEWER"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-role="INTERVIEWER"]').classes()).toContain('role-button--active')
 
     await wrapper.get('[data-question]').trigger('click')
     await flushPromises()
 
-    expect(askQuestionMock).toHaveBeenCalledWith(
-      'sql-audit',
-      wrapper.get('[data-question] span').text(),
-    )
+    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
+      projectSlug: 'sql-audit',
+      questionPresetId: 'sql-audit-overview',
+      source: 'HOME',
+    }))
     expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
     expect(wrapper.get('[data-light-answer]').text()).toContain('E-01')
     expect(wrapper.findAll('[data-answer-action]')).toHaveLength(3)
@@ -95,7 +86,11 @@ describe('AudienceDialogue', () => {
     await wrapper.get('[data-question-form]').trigger('submit')
     await flushPromises()
 
-    expect(askQuestionMock).toHaveBeenCalledWith('sql-audit', '如何处理连接异常？')
+    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
+      projectSlug: 'sql-audit',
+      question: '如何处理连接异常？',
+      source: 'HOME',
+    }))
     expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
   })
 
@@ -139,8 +134,8 @@ describe('AudienceDialogue', () => {
     await flushPromises()
 
     expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(1, 'sql-audit', '失败后重试的问题')
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, 'sql-audit', '失败后重试的问题')
+    expect(askQuestionMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ question: '失败后重试的问题' }))
+    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ question: '失败后重试的问题' }))
     expect(wrapper.text()).toContain('ROUND 01 / 03')
   })
 })

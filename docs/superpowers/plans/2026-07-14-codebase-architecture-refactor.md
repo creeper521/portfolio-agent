@@ -1,5 +1,7 @@
 # 实习作品集 Agent 代码架构重构实施计划
 
+> **执行状态（2026-07-20）：** 已被 `2026-07-16-modular-monolith-package-refactor.md` 取代，不再作为可执行计划。下列未勾选项保留原始计划历史，不属于当前待办。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在不改变 API、UI、公开数据和运行行为的前提下，把后端重构为业务模块优先的分层结构，把 16 个 `record` 转为普通不可变类，清除全部 Java `var` 和 Lombok，并把前端迁移到轻量 feature-first 目录。

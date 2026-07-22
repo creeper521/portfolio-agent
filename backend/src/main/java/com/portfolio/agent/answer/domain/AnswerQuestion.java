@@ -5,18 +5,29 @@ import java.util.Objects;
 
 public final class AnswerQuestion {
 
+    private final String id;
     private final String canonicalQuestion;
     private final List<String> aliases;
     private final String suggestion;
 
     public AnswerQuestion(
+            String id,
             String canonicalQuestion,
             List<String> aliases,
             String suggestion
     ) {
+        this.id = id;
         this.canonicalQuestion = canonicalQuestion;
         this.aliases = List.copyOf(aliases);
         this.suggestion = suggestion;
+    }
+
+    public AnswerQuestion(String canonicalQuestion, List<String> aliases, String suggestion) {
+        this("legacy-preset", canonicalQuestion, aliases, suggestion);
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getCanonicalQuestion() {
@@ -39,20 +50,22 @@ public final class AnswerQuestion {
         if (!(other instanceof AnswerQuestion that)) {
             return false;
         }
-        return Objects.equals(canonicalQuestion, that.canonicalQuestion)
+        return Objects.equals(id, that.id)
+                && Objects.equals(canonicalQuestion, that.canonicalQuestion)
                 && Objects.equals(aliases, that.aliases)
                 && Objects.equals(suggestion, that.suggestion);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(canonicalQuestion, aliases, suggestion);
+        return Objects.hash(id, canonicalQuestion, aliases, suggestion);
     }
 
     @Override
     public String toString() {
         return "AnswerQuestion{" +
-                "canonicalQuestion='" + canonicalQuestion + '\'' +
+                "id='" + id + '\'' +
+                ", canonicalQuestion='" + canonicalQuestion + '\'' +
                 ", aliases=" + aliases +
                 ", suggestion='" + suggestion + '\'' +
                 '}';

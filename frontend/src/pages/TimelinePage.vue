@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
@@ -7,7 +8,13 @@ import PageLead from '../shared/components/PageLead.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 
 const { portfolio, status, error, retry } = usePublicContent()
-const events = computed(() => portfolio.value?.timeline ?? [])
+const route = useRoute()
+const events = computed(() => {
+  const project = typeof route.query.project === 'string' ? route.query.project : ''
+  return (portfolio.value?.timeline ?? []).filter(
+    (event) => !project || event.projectSlugs.includes(project),
+  )
+})
 </script>
 
 <template>

@@ -1,97 +1,52 @@
 package com.portfolio.agent.answer.domain;
 
 import java.util.List;
-import java.util.Objects;
 
 public final class AnswerResult {
 
-    private final AnswerMode answerMode;
-    private final boolean matched;
-    private final boolean fallback;
+    private final AnswerTurnSnapshot turnSnapshot;
+    private final AnswerResolution resolution;
+    private final AnswerSource answerSource;
+    private final GenerationMode generationMode;
+    private final VerificationStatus verification;
     private final String title;
+    private final String summary;
     private final List<AnswerSection> sections;
-    private final List<AnswerEvidence> evidence;
-    private final List<String> suggestedQuestions;
+    private final List<String> evidenceIds;
+    private final List<String> suggestedQuestionPresetIds;
 
     public AnswerResult(
-            AnswerMode answerMode,
-            boolean matched,
-            boolean fallback,
+            AnswerTurnSnapshot turnSnapshot,
+            AnswerResolution resolution,
+            AnswerSource answerSource,
+            GenerationMode generationMode,
+            VerificationStatus verification,
             String title,
+            String summary,
             List<AnswerSection> sections,
-            List<AnswerEvidence> evidence,
-            List<String> suggestedQuestions
+            List<String> evidenceIds,
+            List<String> suggestedQuestionPresetIds
     ) {
-        this.answerMode = answerMode;
-        this.matched = matched;
-        this.fallback = fallback;
+        this.turnSnapshot = turnSnapshot;
+        this.resolution = resolution;
+        this.answerSource = answerSource;
+        this.generationMode = generationMode;
+        this.verification = verification;
         this.title = title;
+        this.summary = summary;
         this.sections = List.copyOf(sections);
-        this.evidence = List.copyOf(evidence);
-        this.suggestedQuestions = List.copyOf(suggestedQuestions);
+        this.evidenceIds = List.copyOf(evidenceIds);
+        this.suggestedQuestionPresetIds = List.copyOf(suggestedQuestionPresetIds);
     }
 
-    public AnswerMode getAnswerMode() {
-        return answerMode;
-    }
-
-    public boolean isMatched() {
-        return matched;
-    }
-
-    public boolean isFallback() {
-        return fallback;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public List<AnswerSection> getSections() {
-        return sections;
-    }
-
-    public List<AnswerEvidence> getEvidence() {
-        return evidence;
-    }
-
-    public List<String> getSuggestedQuestions() {
-        return suggestedQuestions;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        if (this == other) {
-            return true;
-        }
-        if (!(other instanceof AnswerResult that)) {
-            return false;
-        }
-        return matched == that.matched
-                && fallback == that.fallback
-                && Objects.equals(answerMode, that.answerMode)
-                && Objects.equals(title, that.title)
-                && Objects.equals(sections, that.sections)
-                && Objects.equals(evidence, that.evidence)
-                && Objects.equals(suggestedQuestions, that.suggestedQuestions);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(answerMode, matched, fallback, title, sections, evidence,
-                suggestedQuestions);
-    }
-
-    @Override
-    public String toString() {
-        return "AnswerResult{" +
-                "answerMode=" + answerMode +
-                ", matched=" + matched +
-                ", fallback=" + fallback +
-                ", title='" + title + '\'' +
-                ", sections=" + sections +
-                ", evidence=" + evidence +
-                ", suggestedQuestions=" + suggestedQuestions +
-                '}';
-    }
+    public AnswerTurnSnapshot getTurnSnapshot() { return turnSnapshot; }
+    public AnswerResolution getResolution() { return resolution; }
+    public AnswerSource getAnswerSource() { return answerSource; }
+    public GenerationMode getGenerationMode() { return generationMode; }
+    public VerificationStatus getVerification() { return verification; }
+    public String getTitle() { return title; }
+    public String getSummary() { return summary; }
+    public List<AnswerSection> getSections() { return sections; }
+    public List<String> getEvidenceIds() { return evidenceIds; }
+    public List<String> getSuggestedQuestionPresetIds() { return suggestedQuestionPresetIds; }
 }

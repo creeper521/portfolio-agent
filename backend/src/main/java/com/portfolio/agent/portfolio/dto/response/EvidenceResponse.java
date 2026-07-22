@@ -16,10 +16,10 @@ public final class EvidenceResponse {
     private final LocalDate periodEnd;
     private final int sourceCount;
     private final String summary;
-    private final List<String> supportedClaims;
     private final String publicStatus;
     private final boolean rawContentPublic;
     private final List<String> projectSlugs;
+    private final List<String> claimIds;
 
     public EvidenceResponse(
             String id,
@@ -30,10 +30,10 @@ public final class EvidenceResponse {
             LocalDate periodEnd,
             int sourceCount,
             String summary,
-            List<String> supportedClaims,
             String publicStatus,
             boolean rawContentPublic,
-            List<String> projectSlugs
+            List<String> projectSlugs,
+            List<String> claimIds
     ) {
         this.id = id;
         this.code = code;
@@ -43,17 +43,25 @@ public final class EvidenceResponse {
         this.periodEnd = periodEnd;
         this.sourceCount = sourceCount;
         this.summary = summary;
-        this.supportedClaims = List.copyOf(supportedClaims);
         this.publicStatus = publicStatus;
         this.rawContentPublic = rawContentPublic;
         this.projectSlugs = List.copyOf(projectSlugs);
+        this.claimIds = List.copyOf(claimIds);
     }
 
     public static EvidenceResponse from(EvidenceRecord evidence) {
-        return from(evidence, List.of());
+        return from(evidence, List.of(), List.of());
     }
 
     public static EvidenceResponse from(EvidenceRecord evidence, List<String> projectSlugs) {
+        return from(evidence, projectSlugs, List.of());
+    }
+
+    public static EvidenceResponse from(
+            EvidenceRecord evidence,
+            List<String> projectSlugs,
+            List<String> claimIds
+    ) {
         return new EvidenceResponse(
                 evidence.getId(),
                 evidence.getCode(),
@@ -63,10 +71,10 @@ public final class EvidenceResponse {
                 evidence.getPeriodEnd(),
                 evidence.getSourceCount(),
                 evidence.getSummary(),
-                evidence.getSupportedClaims(),
                 evidence.getPublicStatus().name(),
                 evidence.getRawContentPublic(),
-                projectSlugs
+                projectSlugs,
+                claimIds
         );
     }
 
@@ -102,10 +110,6 @@ public final class EvidenceResponse {
         return summary;
     }
 
-    public List<String> getSupportedClaims() {
-        return supportedClaims;
-    }
-
     public String getPublicStatus() {
         return publicStatus;
     }
@@ -116,6 +120,10 @@ public final class EvidenceResponse {
 
     public List<String> getProjectSlugs() {
         return projectSlugs;
+    }
+
+    public List<String> getClaimIds() {
+        return claimIds;
     }
 
     @Override
@@ -135,15 +143,15 @@ public final class EvidenceResponse {
                 && Objects.equals(periodStart, that.periodStart)
                 && Objects.equals(periodEnd, that.periodEnd)
                 && Objects.equals(summary, that.summary)
-                && Objects.equals(supportedClaims, that.supportedClaims)
                 && Objects.equals(publicStatus, that.publicStatus)
-                && Objects.equals(projectSlugs, that.projectSlugs);
+                && Objects.equals(projectSlugs, that.projectSlugs)
+                && Objects.equals(claimIds, that.claimIds);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, code, title, type, periodStart, periodEnd, sourceCount, summary,
-                supportedClaims, publicStatus, rawContentPublic, projectSlugs);
+                publicStatus, rawContentPublic, projectSlugs, claimIds);
     }
 
     @Override
@@ -157,10 +165,10 @@ public final class EvidenceResponse {
                 ", periodEnd=" + periodEnd +
                 ", sourceCount=" + sourceCount +
                 ", summary='" + summary + '\'' +
-                ", supportedClaims=" + supportedClaims +
                 ", publicStatus=" + publicStatus +
                 ", rawContentPublic=" + rawContentPublic +
                 ", projectSlugs=" + projectSlugs +
+                ", claimIds=" + claimIds +
                 '}';
     }
 }

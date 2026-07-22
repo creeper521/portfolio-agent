@@ -7,48 +7,14 @@ import type {
   SessionSeed,
 } from '../model/sessionTypes'
 
-export const SESSION_KEY = 'portfolio.agent.sessions.v1'
-export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
-
 function makeId(prefix: string) {
   const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
   return `${prefix}-${random}`
 }
 
-function readSessions(now: number): AgentSession[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SESSION_KEY) ?? '[]') as AgentSession[]
-    return Array.isArray(parsed)
-      ? parsed
-          .filter((session) => session.expiresAt > now)
-          .map((session) => ({
-            ...session,
-            seedFingerprint: session.seedFingerprint ?? null,
-          }))
-      : []
-  } catch {
-    return []
-  }
-}
-
 export function useLocalSessions() {
-  const now = Date.now()
-  const sessions = ref<AgentSession[]>(readSessions(now))
-  const activeSessionId = ref(sessions.value[0]?.id ?? '')
-  const storageWarning = ref('')
-
-  function persist() {
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions.value))
-      storageWarning.value = ''
-    } catch {
-      storageWarning.value = '当前浏览器无法保存会话，本次对话仍可继续。'
-    }
-  }
-
-  if (localStorage.getItem(SESSION_KEY) !== JSON.stringify(sessions.value)) {
-    persist()
-  }
+  const sessions = ref<AgentSession[]>([])
+  const activeSessionId = ref('')
 
   const activeSession = computed(
     () => sessions.value.find((session) => session.id === activeSessionId.value) ?? null,
@@ -65,12 +31,10 @@ export function useLocalSessions() {
       seedFingerprint: null,
       createdAt,
       updatedAt: createdAt,
-      expiresAt: createdAt + SESSION_TTL_MS,
       messages: [],
     }
     sessions.value = [session, ...sessions.value]
     activeSessionId.value = session.id
-    persist()
     return session
   }
 
@@ -91,12 +55,10 @@ export function useLocalSessions() {
       createdAt: timestamp,
     })
     session.updatedAt = timestamp
-    session.expiresAt = timestamp + SESSION_TTL_MS
     if (session.messages[0]?.role === 'USER') {
       session.title = session.messages[0].content.slice(0, 24)
     }
     sessions.value = [...sessions.value]
-    persist()
   }
 
   function removeSession(sessionId: string) {
@@ -104,13 +66,11 @@ export function useLocalSessions() {
     if (activeSessionId.value === sessionId) {
       activeSessionId.value = sessions.value[0]?.id ?? ''
     }
-    persist()
   }
 
   function clearSessions() {
     sessions.value = []
     activeSessionId.value = ''
-    persist()
   }
 
   function seedSession(input: AgentRouteSeed) {
@@ -133,11 +93,13 @@ export function useLocalSessions() {
     appendMessage(session.id, {
       role: 'USER',
       content: input.question,
+      answer: null,
       evidenceIds: [],
     })
     appendMessage(session.id, {
       role: 'AGENT',
-      content: input.answer,
+      content: input.answer.summary,
+      answer: input.answer,
       evidenceIds: input.evidenceIds,
     })
     return sessions.value.find((item) => item.id === session.id) ?? session
@@ -147,7 +109,6 @@ export function useLocalSessions() {
     sessions,
     activeSessionId,
     activeSession,
-    storageWarning,
     createSession,
     selectSession,
     appendMessage,

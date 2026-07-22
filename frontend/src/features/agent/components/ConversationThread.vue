@@ -43,6 +43,16 @@ function submit() {
   emit('submit', value)
   question.value = ''
 }
+
+function answerLabel(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  if (!answer) return ''
+  if (answer.resolution === 'BOUNDARY') return '当前能力边界'
+  if (answer.resolution === 'REJECTED') return '无法处理该请求'
+  if (answer.verification === 'VERIFIED') return '已核验回答'
+  if (answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
+  return '尚未核验'
+}
 </script>
 
 <template>
@@ -97,8 +107,21 @@ function submit() {
           class="message"
           :class="message.role === 'AGENT' ? 'message--agent' : 'message--user'"
         >
-          <p>{{ message.role === 'AGENT' ? 'AGENT · VERIFIED ANSWER' : 'YOU' }}</p>
-          <div>{{ message.content }}</div>
+          <p v-if="message.answer">
+            AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
+            · {{ message.answer.answerSource ?? 'NOT_APPLICABLE' }}
+            · {{ message.answer.generationMode }} · {{ message.answer.verification }}
+          </p>
+          <p v-else>{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
+          <div v-if="message.answer" class="structured-answer">
+            <h3>{{ message.answer.title }}</h3>
+            <p>{{ message.answer.summary }}</p>
+            <section v-for="section in message.answer.sections" :key="section.type">
+              <h4>{{ section.title }}</h4>
+              <p>{{ section.content }}</p>
+            </section>
+          </div>
+          <div v-else>{{ message.content }}</div>
           <footer v-if="message.evidenceIds.length">
             <button
               v-for="id in message.evidenceIds"

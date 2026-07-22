@@ -24,6 +24,7 @@ interface AnswerRequestContext {
   sessionId: string
   projectSlug: string
   question: string
+  questionPresetId?: string
 }
 
 const props = withDefaults(
@@ -98,6 +99,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     sessions.appendMessage(session.id, {
       role: 'USER',
       content: context.question,
+      answer: null,
       evidenceIds: [],
     })
   }
@@ -107,12 +109,21 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
   clearAnswerFailure()
   try {
     const mapped = mapAnswerResponse(
-      await askQuestion(context.projectSlug, context.question),
+      await askQuestion({
+        turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+        projectSlug: context.projectSlug,
+        audienceRole: session.role,
+        source: 'AGENT_PAGE',
+        focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
+        questionPresetId: context.questionPresetId,
+        question: context.questionPresetId ? undefined : context.question,
+      }),
     )
     if (disposed || request !== requestVersion) return
     sessions.appendMessage(session.id, {
       role: 'AGENT',
-      content: mapped.content,
+      content: mapped.summary,
+      answer: mapped,
       evidenceIds: mapped.evidenceIds,
     })
   } catch {
@@ -131,11 +142,15 @@ function submit(question: string) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   if (!session || !project) return
+  const preset = props.portfolio.questionPresets.find(
+    (item) => item.projectSlug === project.slug && item.text === question,
+  )
   void requestAnswer(
     {
       sessionId: session.id,
       projectSlug: project.slug,
       question,
+      questionPresetId: preset?.id,
     },
     true,
   )
@@ -168,11 +183,44 @@ function openEvidence(id: string) {
 function toggleSessions() {
   sessionDrawerOpen.value = !sessionDrawerOpen.value
   if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
+  if (sessionDrawerOpen.value && sessionsIsDrawer.value) focusDrawer('#local-session-rail')
 }
 
 function toggleEvidence() {
   evidenceDrawerOpen.value = !evidenceDrawerOpen.value
   if (evidenceDrawerOpen.value) sessionDrawerOpen.value = false
+  if (evidenceDrawerOpen.value && evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
+}
+
+function focusDrawer(selector: string) {
+  requestAnimationFrame(() => {
+    const root = document.querySelector<HTMLElement>(selector)
+    root?.querySelector<HTMLElement>('button, a, input, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
+  })
+}
+
+function trapDrawerFocus(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return
+  const selector = sessionDrawerOpen.value && sessionsIsDrawer.value
+    ? '#local-session-rail'
+    : evidenceDrawerOpen.value && evidenceIsDrawer.value
+      ? '#agent-evidence-desk'
+      : ''
+  if (!selector) return
+  const root = document.querySelector<HTMLElement>(selector)
+  const focusable = Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  ) ?? [])
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 function clearAllSessions() {
@@ -207,6 +255,7 @@ function closeDrawers(restoreFocus = false) {
 }
 
 function onWindowKeydown(event: KeyboardEvent) {
+  trapDrawerFocus(event)
   if (event.key === 'Escape' && (sessionDrawerOpen.value || evidenceDrawerOpen.value)) {
     closeDrawers(true)
   }
@@ -240,6 +289,7 @@ onBeforeUnmount(() => {
       '--evidence-width': `${split.state.value.evidence}px`,
     }"
   >
+    <p class="session-privacy" role="note">当前对话未保存，刷新后记录会消失</p>
     <LocalSessionRail
       :sessions="sessions.sessions.value"
       :active-id="sessions.activeSessionId.value"
@@ -321,6 +371,17 @@ onBeforeUnmount(() => {
   grid-template-columns: var(--sessions-width) minmax(600px, 1fr) var(--evidence-width);
   background: var(--ink);
   overflow: hidden;
+}
+
+.session-privacy {
+  position: absolute;
+  z-index: 20;
+  right: 18px;
+  bottom: 4px;
+  margin: 0;
+  color: #a99d8f;
+  font: 9px/1.5 var(--mono);
+  pointer-events: none;
 }
 
 .session-resizer {

@@ -2,6 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { askQuestion } from './answerApi'
 
+function input(question: string) {
+  return {
+    turnId: 'turn-1',
+    projectSlug: 'sql-audit',
+    audienceRole: 'INTERVIEWER' as const,
+    source: 'AGENT_PAGE' as const,
+    question,
+  }
+}
+
 describe('answer api', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -18,14 +28,24 @@ describe('answer api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await askQuestion('sql-audit', '介绍项目')
+    await askQuestion(input('介绍项目'))
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/answers',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectSlug: 'sql-audit', question: '介绍项目' }),
+        body: JSON.stringify({
+          turnId: 'turn-1',
+          questionPresetId: undefined,
+          question: '介绍项目',
+          context: {
+            projectSlug: 'sql-audit',
+            audienceRole: 'INTERVIEWER',
+            focusEvidenceIds: [],
+            source: 'AGENT_PAGE',
+          },
+        }),
       }),
     )
   })
@@ -41,7 +61,7 @@ describe('answer api', () => {
       ),
     )
 
-    await expect(askQuestion('sql-audit', '')).rejects.toThrow('请求参数不符合要求')
+    await expect(askQuestion(input(''))).rejects.toThrow('请求参数不符合要求')
   })
 
   it('aborts a stalled request and returns a stable timeout message', async () => {
@@ -53,7 +73,7 @@ describe('answer api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    const request = askQuestion('sql-audit', '介绍项目')
+    const request = askQuestion(input('介绍项目'))
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
     const rejection = expect(request).rejects.toThrow('作品集服务响应超时，请稍后重试')
 
@@ -78,7 +98,7 @@ describe('answer api', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const request = askQuestion('sql-audit', '介绍项目')
+    const request = askQuestion(input('介绍项目'))
     await Promise.resolve()
     await Promise.resolve()
     const rejection = expect(request).rejects.toThrow('作品集服务响应超时，请稍后重试')

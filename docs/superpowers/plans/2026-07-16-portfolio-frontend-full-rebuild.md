@@ -1,6 +1,8 @@
 # 作品集前端全量重构 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行状态（2026-07-20）：** 已执行并进入后续真实 API 联调。六路由、四层首页和 Agent 工作台已落地；勾选表示计划步骤已执行，不表示当前已关闭 Verified 语义、query 筛选、隐私和无障碍缺口。
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 将 `D:\code\agent\frontend` 全量重建为目标原型定义的工程卷宗式多页面作品集，同时在后端重构期间通过本地公开数据预览完成独立前端验证。
 
@@ -110,7 +112,7 @@
 - Produces: `PublicPortfolio`, `AudienceRole`, `PublicContentRepository`, `publicContentRepository`.
 - `PublicContentRepository` exposes `getPortfolio()`, `getProjects()`, `getProject(slug)`, `getTimeline()`, and `getEvidence()`.
 
-- [ ] **Step 1: Write repository contract tests**
+- [x] **Step 1: Write repository contract tests**
 
 ```ts
 it('returns only approved public evidence', async () => {
@@ -125,13 +127,13 @@ it('does not invent a missing owner name', async () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/public-content/repository/previewPublicContentRepository.test.ts`
 
 Expected: FAIL because the repository does not exist.
 
-- [ ] **Step 3: Define public view models**
+- [x] **Step 3: Define public view models**
 
 ```ts
 export type AudienceRole = 'INTERVIEWER' | 'MENTOR' | 'HR' | 'GUEST'
@@ -191,7 +193,7 @@ export interface PublicPortfolio {
 }
 ```
 
-- [ ] **Step 4: Add the preview repository using only current approved public content**
+- [x] **Step 4: Add the preview repository using only current approved public content**
 
 ```ts
 export interface PublicContentRepository {
@@ -208,7 +210,7 @@ export const publicContentRepository: PublicContentRepository =
 
 The preview dataset must copy factual fields from `backend/src/main/resources/public-data/public-portfolio.v1.json`. Timeline content may only summarize the approved evidence period and published project facts; it must not create new achievements.
 
-- [ ] **Step 5: Run repository tests**
+- [x] **Step 5: Run repository tests**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/public-content/repository/previewPublicContentRepository.test.ts`
 
@@ -232,7 +234,7 @@ Expected: PASS.
 - Consumes: route names and global content shell.
 - Produces: `DossierHeader` and named routes `home`, `projects`, `project`, `timeline`, `evidence`, `agent`, `not-found`.
 
-- [ ] **Step 1: Expand router tests**
+- [x] **Step 1: Expand router tests**
 
 ```ts
 it.each([
@@ -250,13 +252,13 @@ it.each([
 })
 ```
 
-- [ ] **Step 2: Run router tests and verify RED**
+- [x] **Step 2: Run router tests and verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/app/router.test.ts`
 
 Expected: FAIL for the four missing routes.
 
-- [ ] **Step 3: Add route-level lazy imports and App Shell**
+- [x] **Step 3: Add route-level lazy imports and App Shell**
 
 ```ts
 const ProjectsPage = () => import('../pages/ProjectsPage.vue')
@@ -268,7 +270,7 @@ const AgentPage = () => import('../pages/AgentPage.vue')
 
 `App.vue` renders `DossierHeader` plus `RouterView`, except the Agent route may request the compact header variant through route meta.
 
-- [ ] **Step 4: Add the only approved color tokens**
+- [x] **Step 4: Add the only approved color tokens**
 
 ```css
 :root {
@@ -290,7 +292,7 @@ const AgentPage = () => import('../pages/AgentPage.vue')
 
 Do not define any green, teal, cyan, purple, glow, or gradient token.
 
-- [ ] **Step 5: Run router tests and build**
+- [x] **Step 5: Run router tests and build**
 
 Run:
 
@@ -320,7 +322,7 @@ Expected: PASS and successful Vite build.
 - Consumes: `PublicPortfolio`, `AudienceRole`.
 - Produces: selected role and optional question route query for `/agent`.
 
-- [ ] **Step 1: Write the home structure test**
+- [x] **Step 1: Write the home structure test**
 
 ```ts
 expect(wrapper.findAll('[data-home-layer]')).toHaveLength(4)
@@ -330,7 +332,7 @@ expect(wrapper.get('[data-home-layer="dialogue"]').exists()).toBe(true)
 expect(wrapper.get('[data-home-layer="explore"]').exists()).toBe(true)
 ```
 
-- [ ] **Step 2: Write the audience interaction test**
+- [x] **Step 2: Write the audience interaction test**
 
 ```ts
 await wrapper.get('[data-role="MENTOR"]').trigger('click')
@@ -338,13 +340,13 @@ expect(wrapper.get('[data-current-role]').attributes('data-current-role')).toBe(
 expect(wrapper.text()).toContain('你如何复盘这个项目')
 ```
 
-- [ ] **Step 3: Run tests and verify RED**
+- [x] **Step 3: Run tests and verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/pages/HomePage.test.ts src/features/audience/components/AudienceDialogue.test.ts`
 
 Expected: FAIL because the new layers and audience component do not exist.
 
-- [ ] **Step 4: Implement the four sections**
+- [x] **Step 4: Implement the four sections**
 
 Hero uses the real owner role and summary; blank owner name is not rendered. Credibility shows only confirmed counts:
 
@@ -357,7 +359,7 @@ const metrics = computed(() => [
 
 Audience questions are phrased from existing public fields. Summary answers are local deterministic compositions and always link to the matching project/evidence.
 
-- [ ] **Step 5: Implement query handoff**
+- [x] **Step 5: Implement query handoff**
 
 ```ts
 const agentTarget = computed(() => ({
@@ -366,7 +368,7 @@ const agentTarget = computed(() => ({
 }))
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run: `npm.cmd --prefix frontend test -- --run src/pages/HomePage.test.ts src/features/audience/components/AudienceDialogue.test.ts`
 
@@ -392,7 +394,7 @@ Expected: PASS.
 - Consumes: `publicContentRepository`.
 - Produces: routable project, timeline, and evidence views with query-based focus.
 
-- [ ] **Step 1: Write page tests**
+- [x] **Step 1: Write page tests**
 
 ```ts
 expect(projectsWrapper.text()).toContain('SQL 审计与故障排查工具')
@@ -402,21 +404,21 @@ expect(timelineWrapper.text()).toContain('公开成长时间线')
 expect(evidenceWrapper.text()).toContain('SQL 审计工具交付证据集')
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/pages/ProjectPage.test.ts src/pages/ProjectsPage.test.ts src/pages/TimelinePage.test.ts src/pages/EvidencePage.test.ts`
 
 Expected: FAIL because three pages and the new dossier structure do not exist.
 
-- [ ] **Step 3: Implement project index and dossier**
+- [x] **Step 3: Implement project index and dossier**
 
 Project detail renders background, responsibilities, solution, decisions, verification, outcome, handoff, evidence references, timeline link, and an Agent link. Missing sections are omitted rather than rendered empty.
 
-- [ ] **Step 4: Implement timeline and evidence**
+- [x] **Step 4: Implement timeline and evidence**
 
 `TimelinePage` renders available factual events or `EmptyDossier`. `EvidencePage` only receives approved evidence and honors `?evidence=<id>` with a selected preview.
 
-- [ ] **Step 5: Run page tests**
+- [x] **Step 5: Run page tests**
 
 Run: `npm.cmd --prefix frontend test -- --run src/pages/ProjectPage.test.ts src/pages/ProjectsPage.test.ts src/pages/TimelinePage.test.ts src/pages/EvidencePage.test.ts`
 
@@ -446,7 +448,7 @@ interface LocalSessionStore {
 }
 ```
 
-- [ ] **Step 1: Write expiry and persistence tests**
+- [x] **Step 1: Write expiry and persistence tests**
 
 ```ts
 it('removes sessions older than seven days', () => {
@@ -463,13 +465,13 @@ it('clears all local sessions', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/agent/composables/useLocalSessions.test.ts`
 
 Expected: FAIL because the composable does not exist.
 
-- [ ] **Step 3: Implement versioned seven-day storage**
+- [x] **Step 3: Implement versioned seven-day storage**
 
 ```ts
 export const SESSION_KEY = 'portfolio.agent.sessions.v1'
@@ -478,11 +480,11 @@ export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 Store complete messages only. On parse or quota failure, keep the active in-memory session and expose a non-blocking `storageWarning`.
 
-- [ ] **Step 4: Add deterministic preview answers**
+- [x] **Step 4: Add deterministic preview answers**
 
 Preview answers are assembled only from `PublicProject` and `PublicEvidence`. Unsupported questions return a clear boundary message and never invent measurements.
 
-- [ ] **Step 5: Run composable tests**
+- [x] **Step 5: Run composable tests**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/agent/composables/useLocalSessions.test.ts`
 
@@ -507,7 +509,7 @@ Expected: PASS.
 - Consumes: `useLocalSessions`, preview answers, route query.
 - Produces: `workspaceSplit`, `applyDelta`, `reset`, drawer controls, active evidence.
 
-- [ ] **Step 1: Write split-boundary tests**
+- [x] **Step 1: Write split-boundary tests**
 
 ```ts
 expect(clampWorkspaceSplit({ sessions: 100, evidence: 900 })).toEqual({
@@ -525,13 +527,13 @@ await handle.trigger('keydown', { key: 'Home' })
 expect(handle.attributes('aria-valuenow')).toBe(defaultSessions.toString())
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/agent/composables/useWorkspaceSplit.test.ts src/features/agent/components/AgentWorkspace.test.ts`
 
 Expected: FAIL because the workspace does not exist.
 
-- [ ] **Step 3: Implement split state**
+- [x] **Step 3: Implement split state**
 
 ```ts
 export const WORKSPACE_SPLIT_KEY = 'portfolio.workspace.split.v1'
@@ -544,7 +546,7 @@ export const WORKSPACE_LIMITS = {
 
 Use Pointer Events and pointer capture. Persist only after pointerup, keyboard changes, or reset.
 
-- [ ] **Step 4: Implement the workspace**
+- [x] **Step 4: Implement the workspace**
 
 Desktop columns:
 
@@ -559,11 +561,11 @@ grid-template-columns:
 
 At `<1220px`, evidence becomes a right drawer. At `<=980px`, sessions also becomes a drawer. Drawers are mutually exclusive and support Escape/focus restoration.
 
-- [ ] **Step 5: Implement route query seed**
+- [x] **Step 5: Implement route query seed**
 
 `/agent?role=INTERVIEWER&question=...` creates or reuses an empty session, selects the role, fills the first question, and preserves the source context.
 
-- [ ] **Step 6: Run Agent tests**
+- [x] **Step 6: Run Agent tests**
 
 Run: `npm.cmd --prefix frontend test -- --run src/features/agent`
 
@@ -582,7 +584,7 @@ Expected: PASS.
 - Consumes: completed frontend.
 - Produces: backend-independent end-to-end verification.
 
-- [ ] **Step 1: Switch Playwright web server**
+- [x] **Step 1: Switch Playwright web server**
 
 ```ts
 use: {
@@ -597,7 +599,7 @@ webServer: {
 },
 ```
 
-- [ ] **Step 2: Write pure frontend flows**
+- [x] **Step 2: Write pure frontend flows**
 
 Cover:
 
@@ -612,25 +614,25 @@ Cover:
 9. No horizontal overflow at specified viewports.
 10. No green/teal computed color or legacy selectors in rendered UI.
 
-- [ ] **Step 3: Run all unit tests**
+- [x] **Step 3: Run all unit tests**
 
 Run: `npm.cmd --prefix frontend test -- --run`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run build**
+- [x] **Step 4: Run build**
 
 Run: `npm.cmd --prefix frontend run build`
 
 Expected: PASS.
 
-- [ ] **Step 5: Run Playwright**
+- [x] **Step 5: Run Playwright**
 
 Run: `npm.cmd --prefix frontend run test:e2e`
 
 Expected: PASS without starting Java or calling `/api`.
 
-- [ ] **Step 6: Inspect target viewports**
+- [x] **Step 6: Inspect target viewports**
 
 Use browser screenshots at `2048×1080`, `1440×900`, `1219×900`, `980×800`, and `390×844`. Confirm typography, left-biased chat content, drawers, no horizontal overflow, and no console errors.
 
@@ -646,7 +648,7 @@ Use browser screenshots at `2048×1080`, `1440×900`, `1219×900`, `980×800`, a
 - Consumes: final implemented file structure.
 - Produces: authoritative project constraints matching reality.
 
-- [ ] **Step 1: Find old imports and forbidden colors**
+- [x] **Step 1: Find old imports and forbidden colors**
 
 Run:
 
@@ -656,15 +658,15 @@ rg "ProjectCard|EvidenceCard|AgentPanel|#0f766e|#14b8a6|teal|green|gradient" fro
 
 Expected: no runtime imports or forbidden legacy colors. Test descriptions may mention forbidden values only when asserting absence.
 
-- [ ] **Step 2: Remove obsolete files**
+- [x] **Step 2: Remove obsolete files**
 
 Delete only components and styles with zero remaining imports. Preserve API/type code still needed for future backend adaptation.
 
-- [ ] **Step 3: Update code constraints**
+- [x] **Step 3: Update code constraints**
 
 Document exact routes, dependency direction, target-prototype authority, no-green color rule, public-data boundary, repository boundary, local-session expiry, accessibility, responsive behavior, testing commands, and the prohibition on reviving old visual components.
 
-- [ ] **Step 4: Run final verification**
+- [x] **Step 4: Run final verification**
 
 Run:
 
@@ -677,7 +679,7 @@ git diff --check
 
 Expected: all commands pass; no backend process is required.
 
-- [ ] **Step 5: Review working tree**
+- [x] **Step 5: Review working tree**
 
 Run: `git status --short`
 

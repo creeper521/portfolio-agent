@@ -14,48 +14,49 @@ const QUESTION_ALIASES = new Set([
 const BOUNDARY_MESSAGE =
   '当前版本只稳定支持项目完整介绍问题。你可以使用下方推荐问题了解项目背景、我的职责、技术方案、验证过程和最终状态。'
 
-function answerResponse(question: string) {
+function answerResponse(question: string, questionPresetId?: string) {
   const project = previewPublicContent.projects[0]
   const evidence = previewPublicContent.evidence[0]
-  const matched = QUESTION_ALIASES.has(question.trim())
+  const rejected = /(?:内部|私有|private).*(?:密码|token|密钥|credential)/i.test(question)
+  const matched = questionPresetId === 'sql-audit-overview' || QUESTION_ALIASES.has(question.trim())
+  const evidenceIds = matched ? [evidence.id] : []
+  const resolution = rejected ? 'REJECTED' : matched ? 'ANSWERED' : 'BOUNDARY'
+  const summary = rejected
+    ? '无法处理该请求。你可以改为询问已经公开的项目、职责、方案或验证信息。'
+    : matched ? project.summary : BOUNDARY_MESSAGE
 
   return {
     requestId: 'playwright-mock-request',
-    answerMode: 'DETERMINISTIC',
-    matched,
-    fallback: false,
-    answer: {
-      title: project.title,
-      sections: matched
+    turnId: 'playwright-turn',
+    contentVersion: previewPublicContent.contentVersion,
+    questionPresetId: matched ? 'sql-audit-overview' : undefined,
+    resolution,
+    answerSource: matched ? 'PRESET' : undefined,
+    generationMode: 'DETERMINISTIC',
+    verification: matched ? 'VERIFIED' : 'NOT_APPLICABLE',
+    title: project.title,
+    summary,
+    sections: matched
         ? [
-            { type: 'BACKGROUND', content: project.background },
-            { type: 'RESPONSIBILITY', content: project.responsibilities.join(' ') },
+            { type: 'BACKGROUND', title: '项目背景', content: project.background, evidenceIds },
+            { type: 'RESPONSIBILITY', title: '我的职责', content: project.responsibilities.join(' '), evidenceIds },
             {
               type: 'SOLUTION',
+              title: '技术方案',
               content: `${project.solution} 关键决策包括：${project.keyDecisions.join(' ')}`,
+              evidenceIds,
             },
-            { type: 'VERIFICATION', content: project.verification.join(' ') },
-            { type: 'STATUS', content: `${project.outcome} ${project.handoff}` },
+            { type: 'VERIFICATION', title: '验证过程', content: project.verification.join(' '), evidenceIds },
+            { type: 'STATUS', title: '最终状态', content: `${project.outcome} ${project.handoff}`, evidenceIds },
           ]
-        : [{ type: 'BOUNDARY', content: BOUNDARY_MESSAGE }],
-    },
-    evidence: matched
-      ? [
-          {
-            id: evidence.id,
-            title: evidence.title,
-            type: evidence.type,
-            periodStart: evidence.periodStart,
-            periodEnd: evidence.periodEnd,
-            sourceCount: evidence.sourceCount,
-            summary: evidence.summary,
-            supportedClaims: evidence.supportedClaims,
-            publicStatus: evidence.publicStatus,
-            rawContentPublic: false,
-          },
-        ]
-      : [],
-    suggestedQuestions: [CANONICAL_QUESTION],
+        : [{
+            type: rejected ? 'REJECTED' : 'BOUNDARY',
+            title: '能力说明',
+            content: summary,
+            evidenceIds: [],
+          }],
+    evidenceIds,
+    suggestedQuestionPresetIds: ['sql-audit-overview'],
   }
 }
 
@@ -72,12 +73,15 @@ async function fulfillAnswer(route: Route) {
     await route.fallback()
     return
   }
-  const requestBody = route.request().postDataJSON() as { question?: unknown }
+  const requestBody = route.request().postDataJSON() as { question?: unknown; questionPresetId?: unknown }
   const question = typeof requestBody.question === 'string' ? requestBody.question : ''
+  const questionPresetId = typeof requestBody.questionPresetId === 'string'
+    ? requestBody.questionPresetId
+    : undefined
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
-    json: answerResponse(question),
+    json: answerResponse(question, questionPresetId),
   })
 }
 

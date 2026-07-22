@@ -1,8 +1,10 @@
 # 公开发布包契约
 
-**日期：** 2026-07-15  
-**状态：** 待用户统一审核  
-**适用设计：** `docs/superpowers/specs/2026-07-15-dynamic-public-content-agent-design.md`
+**日期：** 2026-07-15
+**状态：** B 第一版四文件运行包、严格加载器、无环 hash 与外部 active 版本定位已实现并验证；C2 retrieval 扩展未实现
+**适用设计：** B 核心契约见 `2026-07-21-portfolio-agent-content-governance-design.md`；C2 检索扩展见 `2026-07-21-portfolio-agent-future-intelligence-design.md`
+
+> 分阶段说明：B 第一版只要求 `portfolio.json`、`presentation.json`、Manifest 和 checksums。RAG 文档与索引仅在 C2 retrieval 扩展被显式声明时出现；不得用空字段假装支持。Claim 与 Evidence 的支持关系只由 `ClaimEvidenceLink` 保存。
 
 ## 1. 目的
 
@@ -12,32 +14,30 @@
 
 ## 2. 两阶段包结构
 
-私有环境导出的公开候选包只包含可审计的公开源数据：
+私有环境导出的公开候选包只包含可审计的公开源数据。`portfolio.json`、`presentation.json` 以及 C2 可选的 `rag-documents.jsonl` 构成 canonical public payload：
 
 ```text
 <contentVersion>-candidate/
 ├─ candidate-manifest.json
 ├─ portfolio.json
-├─ presentation.json
-└─ rag-documents.jsonl
+└─ presentation.json
 ```
 
-部署服务器验证候选内容并构建索引后，生成完整运行发布包：
+部署服务器逐字节复制已批准 payload，验证候选内容并构建派生索引后，生成完整运行发布包：
 
 ```text
 <contentVersion>/
 ├─ manifest.json
 ├─ portfolio.json
 ├─ presentation.json
-├─ rag-documents.jsonl
-├─ keyword-index/
-├─ vector-index/
 └─ checksums.json
 ```
 
+C2 启用 retrieval 后，同一候选包增加 `rag-documents.jsonl`，同一运行包原子增加该文件及 `keyword-index/`、`vector-index/`。这些文件不能脱离对应 ContentBundle 单独激活或回滚。
+
 所有文件必须位于各自包的根目录内。禁止绝对路径、父目录跳转、符号链接、设备文件和未声明文件。候选包不得携带关键词索引、向量索引、可执行文件或供应商返回的原始响应。
 
-`candidate-manifest.json` 只声明 Schema、contentVersion、源文件名、实体数量和源文件哈希。服务器不得信任其中的审核结论，而应重新执行结构、引用和隐私校验。运行 `manifest.json` 由服务器发布工具生成，增加索引和应用兼容元数据。
+`candidate-manifest.json` 只声明 Schema、contentVersion、源文件名、`counts`、源文件哈希和 `candidatePayloadHash`。人工 Approval 绑定该 payload hash。服务器不得信任候选包中的审核结论，而应重新执行结构、引用和隐私校验；但不得对已批准 payload 排序字段、补默认值、迁移 Schema 或做任何语义规范化。运行 `manifest.json` 由服务器发布工具生成，增加 Approval、索引和应用兼容元数据。
 
 ## 3. Manifest
 
@@ -52,31 +52,35 @@
   "minimumApplicationVersion": "0.1.0",
   "factsFile": "portfolio.json",
   "presentationFile": "presentation.json",
-  "ragDocumentsFile": "rag-documents.jsonl",
-  "keywordIndex": {
-    "format": "portfolio-keyword-v1",
-    "documentCount": 24
-  },
-  "vectorIndex": {
-    "format": "portfolio-vector-v1",
-    "provider": "configured-adapter",
-    "model": "configured-model",
-    "dimension": 1536,
-    "documentCount": 24
-  },
-  "retrievalStrategyVersion": "hybrid-v1",
+  "approvalId": "APR-2026-07-20-001",
+  "approvalDigest": "sha256:...",
+  "candidatePayloadHash": "sha256:...",
+  "checksumsFile": "checksums.json",
   "counts": {
-    "projects": 4,
-    "claims": 36,
-    "evidence": 13,
-    "timelineEvents": 28,
-    "questionPresets": 16,
-    "ragChunks": 24
+    "projects": 1,
+    "claims": 1,
+    "evidence": 1,
+    "claimEvidenceLinks": 1,
+    "timelineEvents": 1,
+    "questionPresets": 1
   }
 }
 ```
 
-示例中的 provider、model 和维度只说明字段含义，不是供应商选型。真实发布时必须写入实际值。
+C2 Bundle 通过独立的 `retrieval` 对象增加 RAG 文件名、strategyVersion、normalizationVersion、embeddingModelId、dimension、chunkCount、chunkSetHash 和索引格式。该对象一旦存在，字段与对应文件全部必填；不存在时表示 `groundedQuestions=false`。
+
+标准 hash 依赖图为：
+
+```text
+对象 canonical bytes → contentHash
+canonical public payload files → candidatePayloadHash
+candidatePayloadHash + 审核元数据 → Approval → approvalDigest
+candidatePayloadHash + approvalDigest + 发布元数据 → manifest.json → manifestHash
+运行包其余文件 → checksums.json → checksumsHash
+manifestHash + checksumsHash → runtimeBundleHash
+```
+
+该图必须无环。Approval 不批准服务器生成的 Manifest、checksums、索引或最终目录字节；这些派生产物必须由获批 payload 确定性构建并单独校验。Manifest 不保存自身 hash，checksums 不反向包含 Manifest 自身 hash。
 
 ## 4. 事实文件
 
@@ -91,6 +95,7 @@
   "projects": [],
   "claims": [],
   "evidence": [],
+  "claimEvidenceLinks": [],
   "timelineEvents": [],
   "questionPresets": []
 }
@@ -158,13 +163,16 @@ URL 字段为空时使用 `null`，禁止空白字符串和非 HTTP(S) 链接。
 ```json
 {
   "id": "claim-sql-audit-async",
-  "projectId": "project-sql-audit",
-  "type": "TECHNICAL_DECISION",
+  "subjectType": "PROJECT",
+  "subjectId": "project-sql-audit",
+  "category": "TECHNICAL_DECISION",
   "statement": "将远程日志查询设计为异步任务。",
   "detail": "查询耗时不可预测，异步执行避免同步请求长期占用。",
   "achievementStatus": "DELIVERED",
   "contributionType": "PRIMARY",
-  "evidenceIds": ["evidence-sql-audit-test"],
+  "verificationBasis": "EVIDENCE_SUPPORTED",
+  "verificationStatus": "VERIFIED",
+  "materiality": "KEY",
   "topics": ["ASYNC_TASK", "RELIABILITY"],
   "audiencePriorities": {
     "INTERVIEWER": 100,
@@ -175,7 +183,7 @@ URL 字段为空时使用 `null`，禁止空白字符串和非 HTTP(S) 链接。
 }
 ```
 
-Claim 类型：
+Claim `category`：
 
 ```text
 BACKGROUND
@@ -188,6 +196,17 @@ LIMITATION
 LEARNING
 REFLECTION
 ```
+
+形成依据 `verificationBasis`：
+
+```text
+EVIDENCE_SUPPORTED
+SELF_DECLARED
+INFERRED
+UNSUPPORTED
+```
+
+`verificationBasis` 是来源语义，`verificationStatus` 是根据当前 Bundle 内有效 ClaimEvidenceLink 与 Evidence 计算出的结果；候选生成器不能直接授予 `VERIFIED`。
 
 事实状态：
 
@@ -204,7 +223,8 @@ UNKNOWN
 规则：
 
 - `statement` 是最短完整事实，`detail` 只能解释该事实；
-- 成果性状态 `DELIVERED / IMPLEMENTED_TESTED / PROTOTYPE / DESIGNED` 必须关联 Evidence；
+- Claim 身份统一使用 `subjectType + subjectId`；`category`、`achievementStatus`、`verificationBasis` 分别表达业务分类、事实生命周期和形成依据，禁止使用重载的 `type` / `claimType`；
+- 成果性状态 `DELIVERED / IMPLEMENTED_TESTED / PROTOTYPE / DESIGNED` 必须存在已批准的 DIRECT ClaimEvidenceLink；
 - `LEARNING / PLANNED / UNKNOWN` 可以没有成果 Evidence，但表达必须保留状态边界；
 - 身份优先级范围为 0 至 100，只影响排序；
 - 缺少某身份优先级时使用代码默认值，不从其他身份推断；
@@ -221,7 +241,6 @@ UNKNOWN
   "periodEnd": "2026-06-05",
   "sourceCount": 3,
   "summary": "覆盖异步任务、状态恢复和轮询兜底的脱敏摘要。",
-  "supportedClaimIds": ["claim-sql-audit-async"],
   "rawContentPublic": false
 }
 ```
@@ -232,11 +251,31 @@ UNKNOWN
 
 - `sourceCount` 大于 0；
 - 日期范围有效；
-- 每个 supported Claim 必须反向引用该 Evidence；
 - 摘要不得包含原始路径、内部地址、账号或凭据；
 - 第一阶段不发布原始 Evidence 正文。
 
-### 4.6 TimelineEvent
+### 4.6 ClaimEvidenceLink
+
+```json
+{
+  "id": "link-sql-audit-async-test",
+  "claimId": "claim-sql-audit-async",
+  "evidenceId": "evidence-sql-audit-test",
+  "supportType": "DIRECT",
+  "scope": "证明异步任务实现与自测，不证明长期生产效果。",
+  "reviewStatus": "APPROVED"
+}
+```
+
+规则：
+
+- Link 是 Claim 与 Evidence 支持关系的唯一权威来源；
+- Claim 不保存 `evidenceIds`，Evidence 不保存 `claimIds` 或 `supportedClaimIds`；
+- `DIRECT / CORROBORATING / CONTEXTUAL` 具有 B 设计定义的验证语义；
+- 只有 reviewStatus=APPROVED 且两端对象有效的 Link 可以进入公开包；
+- 两个方向的查询索引由加载器从 Link 构造，不进入人工维护的源数据。
+
+### 4.7 TimelineEvent
 
 ```json
 {
@@ -267,7 +306,7 @@ REFLECTION
 
 事件摘要不能比其关联 Claim 表达更强的完成结论。
 
-### 4.7 QuestionPreset
+### 4.8 QuestionPreset
 
 ```json
 {
@@ -309,7 +348,7 @@ QuestionPreset 是检索入口，不保存完整答案。`deterministicEntry=tru
   "label": "技术面试官",
   "description": "侧重技术方案、取舍、实现和验证。",
   "detailLevel": "DETAILED",
-  "claimTypePriorities": [
+  "claimCategoryPriorities": [
     "TECHNICAL_DECISION",
     "IMPLEMENTATION",
     "VERIFICATION",
@@ -384,10 +423,12 @@ AGENT
 
 ## 6. RAG 文档
 
+本节只适用于 C2 retrieval Bundle；B 第一版不得生成该文件。
+
 `rag-documents.jsonl` 每行一个完整 JSON 对象：
 
 ```json
-{"chunkId":"chunk-sql-audit-async-01","projectIds":["project-sql-audit"],"claimIds":["claim-sql-audit-async"],"evidenceIds":["evidence-sql-audit-test"],"topics":["ASYNC_TASK"],"text":"经审核的公开补充说明。","contentHash":"sha256:..."}
+{"chunkId":"chunk-sql-audit-async-01","contentVersion":"2026-07-20.1","projectIds":["project-sql-audit"],"claimIds":["claim-sql-audit-async"],"topics":["ASYNC_TASK"],"text":"经审核的公开补充说明。","contentHash":"sha256:..."}
 ```
 
 规则：
@@ -396,12 +437,15 @@ AGENT
 - `chunkId` 唯一；
 - `text` 非空且满足发布长度限制；
 - 所有引用存在；
-- 没有关联 Claim 的 Chunk 只能作为背景补充，不能支持成果结论；
+- 每个 Chunk 至少关联一个当前版本 Claim；
+- Evidence 只能通过 ClaimEvidenceLink 派生，Chunk 不保存第二套 Evidence 关系；
 - `contentHash` 由规范化文本和关联元数据共同计算；
 - 文本或引用变化后，私有审核批准自动失效；
 - Chunk 不包含 Markdown 图片、HTML、脚本、内部 URL 或原始附件路径。
 
 ## 7. 索引契约
+
+本节只适用于 Manifest 声明了 retrieval 的 C2 Bundle。
 
 关键词和向量索引必须由服务器发布工具根据 `rag-documents.jsonl` 构建，不能由上传者直接提供可执行索引文件。
 
@@ -412,10 +456,10 @@ AGENT
 - source file hash；
 - document count；
 - chunk ID 集合摘要；
-- 向量 provider、model 和 dimension；
+- 本地 embeddingModelId、normalizationVersion 和 dimension；
 - 构建时间。
 
-任何不一致都拒绝激活。更换向量模型、provider 输出维度或文本规范化策略时必须完整重建索引。
+任何不一致都拒绝激活。更换本地向量模型、输出维度或文本规范化策略时必须完整重建索引。
 
 ## 8. Checksums
 
@@ -426,7 +470,7 @@ AGENT
 1. 读取 manifest；
 2. 检查允许文件清单；
 3. 读取 checksums；
-4. 验证事实、展示、RAG 和索引文件；
+4. 验证事实和展示文件；若 Manifest 声明 retrieval，再验证 RAG 与全部索引文件；
 5. 解析内容；
 6. 执行跨文件业务校验。
 
@@ -434,15 +478,15 @@ AGENT
 
 - schemaVersion、contentVersion 全部一致；
 - Manifest counts 与实际数量一致；
-- Project、Claim、Evidence、TimelineEvent、QuestionPreset 和 Chunk ID 唯一；
-- 所有正反向引用一致；
-- 成果性 Claim 有 Evidence；
-- Evidence 只支持实际反向引用它的 Claim；
+- Project、Claim、Evidence、ClaimEvidenceLink、TimelineEvent、QuestionPreset ID 唯一；C2 还要求 Chunk ID 唯一；
+- 所有声明引用完整，禁止悬空或跨版本引用；
+- 成果性 Claim 存在已批准的 DIRECT Link 和有效 Evidence；
+- Claim/Evidence 双向查询只由 ClaimEvidenceLink 派生；
 - TimelineEvent 不引用不存在或未发布对象；
 - QuestionPreset 目标存在；
 - presentation 只引用已发布实体；
-- RAG Chunk 引用存在且哈希正确；
-- 索引只包含当前版本 Chunk；
+- C2 Bundle 的 RAG Chunk 引用存在且哈希正确；
+- C2 Bundle 的索引只包含当前版本 Chunk；
 - 禁止未知 JSON 字段静默通过；
 - 禁止 `null` 代替必填集合或必填文本。
 

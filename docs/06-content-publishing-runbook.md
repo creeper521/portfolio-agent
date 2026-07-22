@@ -1,14 +1,18 @@
 # 公开内容服务器发布运行手册
 
-**日期：** 2026-07-15  
-**状态：** 待用户统一审核  
-**适用设计：** `docs/superpowers/specs/2026-07-15-dynamic-public-content-agent-design.md`
+**日期：** 2026-07-15
+**状态：** B 第一版治理/文件发布工具已实现并验证；生产执行仍要求显式人工 Approval、外部私有工作区、部署方配置的 post-switch 探测与逐次确认
+**适用设计：** B 核心发布见 `2026-07-21-portfolio-agent-content-governance-design.md`；C2 retrieval 扩展见 `2026-07-21-portfolio-agent-future-intelligence-design.md`
+
+> 分阶段说明：B 第一版发布不构建 RAG、关键词或向量索引。本文涉及 Embedding、索引和检索冒烟的步骤只适用于 Manifest 显式声明 retrieval 的 C2 Bundle。
+
+当前入口为 `scripts/portfolio-governance.ps1`。工具默认 dry-run，`approve`、`publish`、`rollback` 不会自动串联；`publish -Confirm` 可通过 `-PostSwitchProbeUri` 执行部署方提供的 readiness/HTTP 冒烟，失败时原子恢复已经验证的旧 active。进程重启方式仍由部署环境负责，候选包不能指定命令或获得执行权限。
 
 ## 1. 适用范围
 
 本文定义第一阶段在部署服务器本机执行公开内容发布的操作契约。它不包含应用镜像发布、私有 Obsidian 扫描或人工审核操作。
 
-发布输入必须是从私有环境导出的“公开候选包”，不能是私有审核包或已经生成索引的运行发布包。服务器发布工具负责生成唯一可激活的完整运行发布包。
+发布输入必须是从私有环境导出的“公开候选包”，不能是私有审核包或已经生成索引的运行发布包。候选包中的 canonical public payload 已在私人治理环境完成规范化并由人工 Approval 绑定 `candidatePayloadHash`；服务器发布工具负责逐字节复制该 payload，并生成唯一可激活的完整运行发布包。
 
 ## 2. 权限模型
 
@@ -18,7 +22,7 @@
 - 发布操作者：可以执行发布工具、写版本目录、切换 active 和重启服务；
 - 应用容器：只读访问 `data`，不能访问 `incoming`、release-log 或发布凭据。
 
-Embedding 和表达模型凭据由服务器 Secret 或环境配置管理。发布包、日志、命令参数和 shell history 不得出现 API Key。
+C2 第一版使用本地 Embedding 实现，不向外部 Provider 发送文档或访客查询。表达模型配置属于独立 ModelPolicy 和应用 Secret，不参与 ContentBundle 发布，也不得进入发布包、日志、命令参数或 shell history。
 
 ## 3. 服务器目录
 
@@ -57,9 +61,9 @@ portfolio-publish rollback <contentVersion> --reason <text>
 1. 当前服务健康；
 2. 当前 active 版本已记录；
 3. incoming 候选目录归属和权限正确；
-4. 磁盘空间足够同时保留旧版本、新版本和临时索引；
+4. 磁盘空间足够同时保留旧版本和新版本；C2 还需容纳临时索引；
 5. 重启命令已配置；
-6. Embedding 配置可用；
+6. C2 Bundle 声明的本地 Embedding 模型、维度和规范化版本可用；
 7. 没有其他发布任务持锁。
 
 发布工具不得接受 incoming 根目录之外的任意路径，也不得跟随候选包中的符号链接。
@@ -73,8 +77,9 @@ portfolio-publish rollback <contentVersion> --reason <text>
 - Schema 和应用兼容检查；
 - 实体、引用和状态不变量；
 - 隐私扫描；
-- RAG Chunk 内容与哈希检查；
+- C2 Bundle 才执行 RAG Chunk、retrieval Manifest 和索引输入检查；
 - candidate-manifest 文件清单、实体数量和源文件哈希检查。
+- `candidatePayloadHash`、Approval、`approvalDigest` 和治理 Policy/Benchmark 摘要的一致性检查。
 
 `validate` 不调用 active 切换，不重启服务，也不把候选包复制到正式 versions。
 
@@ -85,12 +90,12 @@ portfolio-publish rollback <contentVersion> --reason <text>
 1. 获取独占发布锁；
 2. 记录原 active 版本；
 3. 执行全部 validate 规则；
-4. 在服务器临时目录规范化公开文件；
-5. 根据公开片段构建关键词索引；
-6. 批量调用 EmbeddingProvider 生成全部文档向量；
-7. 构建向量索引；
-8. 执行检索评测冒烟；
-9. 生成运行 manifest 和 checksums，形成完整运行发布包；
+4. 在服务器临时目录逐字节复制已批准的 canonical payload，并复算 `candidatePayloadHash`；禁止重新排序、补默认值、迁移 Schema 或做语义规范化；
+5. 若 Manifest 声明 retrieval，根据公开 Chunk 构建关键词索引；
+6. 若 Manifest 声明 retrieval，使用指定本地 Embedding 模型生成全部文档向量；
+7. 若 Manifest 声明 retrieval，构建向量索引；
+8. 若 Manifest 声明 retrieval，执行检索与 Grounding 冒烟；
+9. 生成运行 manifest 和 checksums，计算 `manifestHash`、`checksumsHash` 与 `runtimeBundleHash`，形成完整运行发布包；
 10. 将完成版本原子移动到 `data/versions/<contentVersion>`；
 11. 校验正式目录哈希；
 12. 创建临时 active 指针并原子替换；
@@ -102,19 +107,25 @@ portfolio-publish rollback <contentVersion> --reason <text>
 
 任一步骤失败都要写失败阶段并释放锁。active 切换前失败不需要重启或回滚；active 切换后失败必须执行自动回滚。
 
+发布工具必须遵循无环 hash 依赖：对象 `contentHash` → `candidatePayloadHash` → Approval/`approvalDigest` → Manifest/`manifestHash`，运行包其余文件独立形成 `checksumsHash`，最后由 `manifestHash + checksumsHash` 形成 `runtimeBundleHash`。Approval 只覆盖 canonical payload，不覆盖服务器派生的 Manifest、checksums 或索引；派生产物必须可由同一 payload 确定性复算。
+
 ## 8. Embedding 构建规则
 
+本节只适用于 C2 Bundle；B 第一版跳过整个阶段。
+
 - 只提交 `rag-documents.jsonl` 中的公开文本；
-- 使用可配置批量大小、超时和有限重试；
+- 使用 Manifest 指定且应用支持的本地模型、规范化版本、维度和有界批量大小；
 - 单个 Chunk 失败导致整个新版本发布失败；
 - 不允许用零向量、旧版本向量或随机向量填充；
-- 记录 provider 标识、model、dimension 和文档数；
-- 不记录请求正文、响应向量或 API Key 到普通日志；
+- 记录 embeddingModelId、normalizationVersion、dimension 和文档数；
+- 不记录文档正文或响应向量到普通日志；
 - 文档向量全部成功后才能生成可激活索引。
 
-供应商协议尚未锁定，由 `EmbeddingProvider` adapter 适配。发布工具不能把某个供应商 HTTP 格式扩散到内容契约和业务代码。
+第一版只实现一个本地 `EmbeddingPort`，不建设 Provider Registry。文档向量与运行时查询向量必须使用同一实现和参数。
 
 ## 9. 检索冒烟
+
+本节只适用于 C2 Bundle；B 第一版没有检索能力，也不展示 `answerSource = RETRIEVAL` 入口。
 
 每个候选包应携带不含私有信息的公开检索评测定义，或者由发布工具使用项目内固定评测集。至少覆盖：
 
@@ -148,9 +159,9 @@ active.next 原子替换 active
 
 - active 指针解析完成；
 - manifest 和 checksums 通过；
--事实与展示文件解析通过；
--跨文件业务校验通过；
--关键词和向量索引完整；
+- 事实与展示文件解析通过；
+- 跨文件业务校验通过；
+- C2 Bundle 的 RAG、关键词与向量索引完整；
 - ActivePublicContent 已构造完成。
 
 应用启动日志可以记录 contentVersion 和实体数量，不得记录公开正文或服务器数据绝对路径。

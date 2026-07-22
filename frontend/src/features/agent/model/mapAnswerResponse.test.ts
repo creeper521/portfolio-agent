@@ -3,79 +3,61 @@ import { describe, expect, it } from 'vitest'
 import { mapAnswerResponse } from './mapAnswerResponse'
 
 describe('mapAnswerResponse', () => {
-  it('maps structured sections and evidence ids without inventing content', () => {
-    const mapped = mapAnswerResponse({
+  function response(resolution: 'ANSWERED' | 'BOUNDARY' = 'ANSWERED') {
+    return {
       requestId: 'request-1',
-      answerMode: 'DETERMINISTIC',
-      matched: true,
-      fallback: false,
-      answer: {
-        title: '项目说明',
-        sections: [
-          { type: 'BACKGROUND', content: '背景内容' },
-          { type: 'VERIFICATION', content: '验证内容' },
-        ],
-      },
-      evidence: [
-        {
-          id: 'evidence-1',
-          title: '证据',
-          type: 'DOCUMENT',
-          periodStart: '2026-07-01',
-          periodEnd: '2026-07-10',
-          sourceCount: 1,
-          summary: '摘要',
-          supportedClaims: ['已验证'],
-          publicStatus: 'APPROVED',
-          rawContentPublic: false,
-        },
-      ],
-      suggestedQuestions: [],
-    })
+      turnId: 'turn-1',
+      contentVersion: '2026-07-21',
+      questionPresetId: resolution === 'ANSWERED' ? 'preset-1' : undefined,
+      resolution,
+      answerSource: resolution === 'ANSWERED' ? ('PRESET' as const) : undefined,
+      generationMode: 'DETERMINISTIC' as const,
+      verification: resolution === 'ANSWERED' ? ('VERIFIED' as const) : ('NOT_APPLICABLE' as const),
+      title: '项目说明',
+      summary: '公开摘要',
+      sections: [{
+        type: resolution === 'ANSWERED' ? ('BACKGROUND' as const) : ('BOUNDARY' as const),
+        title: '背景',
+        content: '结构化内容',
+        evidenceIds: resolution === 'ANSWERED' ? ['evidence-1'] : [],
+        claimIds: resolution === 'ANSWERED' ? ['claim-1'] : [],
+      }],
+      evidenceIds: resolution === 'ANSWERED' ? ['evidence-1'] : [],
+      suggestedQuestionPresetIds: ['preset-1'],
+    }
+  }
 
-    expect(mapped.content).toBe('项目说明\n\n背景内容\n\n验证内容')
-    expect(mapped.evidenceIds).toEqual(['evidence-1'])
+  it('preserves structured sections and all four answer dimensions', () => {
+    const source = response()
+    const mapped = mapAnswerResponse(source)
+
+    expect(mapped.sections).toEqual(source.sections)
+    expect(mapped).toMatchObject({
+      resolution: 'ANSWERED',
+      answerSource: 'PRESET',
+      generationMode: 'DETERMINISTIC',
+      verification: 'VERIFIED',
+      evidenceIds: ['evidence-1'],
+    })
+    expect(mapped.sections[0].claimIds).toEqual(['claim-1'])
+    expect(mapped.sections[0].claimIds).not.toBe(source.sections[0].claimIds)
   })
 
-  it('rejects an answer whose title and sections are all blank', () => {
-    expect(() =>
-      mapAnswerResponse({
-        requestId: 'request-blank',
-        answerMode: 'DETERMINISTIC',
-        matched: true,
-        fallback: false,
-        answer: {
-          title: '  ',
-          sections: [
-            { type: 'BACKGROUND', content: '\n' },
-            { type: 'VERIFICATION', content: '\t' },
-          ],
-        },
-        evidence: [],
-        suggestedQuestions: [],
-      }),
-    ).toThrowError('Answer response has no content')
+  it('rejects an answer whose title, summary and sections are all blank', () => {
+    const blank = response()
+    blank.title = ' '
+    blank.summary = ' '
+    blank.sections[0].content = ' '
+
+    expect(() => mapAnswerResponse(blank)).toThrowError('Answer response has no content')
   })
 
-  it('preserves a nonblank boundary answer when matched is false', () => {
-    const mapped = mapAnswerResponse({
-      requestId: 'request-boundary',
-      answerMode: 'DETERMINISTIC',
-      matched: false,
-      fallback: false,
-      answer: {
-        title: '项目说明',
-        sections: [
-          { type: 'BOUNDARY', content: '当前版本仅支持推荐问题。' },
-        ],
-      },
-      evidence: [],
-      suggestedQuestions: ['请介绍项目'],
-    })
+  it('keeps a boundary unverified and without a fact source', () => {
+    const mapped = mapAnswerResponse(response('BOUNDARY'))
 
-    expect(mapped).toEqual({
-      content: '项目说明\n\n当前版本仅支持推荐问题。',
-      evidenceIds: [],
-    })
+    expect(mapped.resolution).toBe('BOUNDARY')
+    expect(mapped.answerSource).toBeNull()
+    expect(mapped.verification).toBe('NOT_APPLICABLE')
+    expect(mapped.evidenceIds).toEqual([])
   })
 })

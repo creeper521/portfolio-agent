@@ -2,8 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
-import { SESSION_KEY } from '../composables/useLocalSessions'
 import AgentWorkspace from './AgentWorkspace.vue'
+
+const SESSION_KEY = 'forbidden-session-key'
 
 const { askQuestionMock } = vi.hoisted(() => ({
   askQuestionMock: vi.fn(),
@@ -16,31 +17,21 @@ vi.mock('../api/answerApi', () => ({
 function answerResponse() {
   return {
     requestId: 'request-1',
-    answerMode: 'DETERMINISTIC' as const,
-    matched: true,
-    fallback: false,
-    answer: {
-      title: '项目说明',
-      sections: [
-        { type: 'BACKGROUND' as const, content: '背景内容' },
-        { type: 'VERIFICATION' as const, content: '验证内容' },
-      ],
-    },
-    evidence: [
-      {
-        id: 'sql-audit-delivery-set',
-        title: '证据',
-        type: 'COLLECTION' as const,
-        periodStart: '2026-07-01',
-        periodEnd: '2026-07-10',
-        sourceCount: 1,
-        summary: '摘要',
-        supportedClaims: ['已验证'],
-        publicStatus: 'APPROVED' as const,
-        rawContentPublic: false as const,
-      },
+    turnId: 'turn-1',
+    contentVersion: '2026-07-21',
+    questionPresetId: 'sql-audit-overview',
+    resolution: 'ANSWERED' as const,
+    answerSource: 'PRESET' as const,
+    generationMode: 'DETERMINISTIC' as const,
+    verification: 'VERIFIED' as const,
+    title: '项目说明',
+    summary: '公开摘要',
+    sections: [
+      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] },
+      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'] },
     ],
-    suggestedQuestions: [],
+    evidenceIds: ['sql-audit-delivery-set'],
+    suggestedQuestionPresetIds: ['sql-audit-overview'],
   }
 }
 
@@ -79,7 +70,7 @@ describe('AgentWorkspace', () => {
   it('renders sessions, conversation, evidence desk, and two accessible separators', () => {
     const wrapper = mountWorkspace()
 
-    expect(wrapper.text()).toContain('本地会话')
+    expect(wrapper.text()).toContain('当前页面会话')
     expect(wrapper.text()).toContain('Agent 对话')
     expect(wrapper.text()).toContain('证据工作台')
     expect(wrapper.findAll('[role="separator"]')).toHaveLength(2)
@@ -124,7 +115,7 @@ describe('AgentWorkspace', () => {
     expect(wrapper.text()).toContain('从一个可核验的问题开始。')
   })
 
-  it('shows the user message immediately and persists the Agent message only after API success', async () => {
+  it('shows the user immediately and appends a structured Agent answer only after API success', async () => {
     let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
     askQuestionMock.mockReturnValue(
       new Promise((resolve) => {
@@ -136,24 +127,26 @@ describe('AgentWorkspace', () => {
     await wrapper.get('textarea').setValue('如何验证结果？')
     await wrapper.get('.composer').trigger('submit')
 
-    expect(askQuestionMock).toHaveBeenCalledWith('sql-audit', '如何验证结果？')
+    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
+      projectSlug: 'sql-audit',
+      question: '如何验证结果？',
+      source: 'AGENT_PAGE',
+    }))
     expect(wrapper.get('.message--user').text()).toContain('如何验证结果？')
     expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-agent-submit]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[role="status"]').text()).toContain('正在核对公开事实')
-    expect(storedMessages()).toHaveLength(1)
-    expect(storedMessages()[0].role).toBe('USER')
+    expect(wrapper.findAll('.message--user')).toHaveLength(1)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(0)
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
 
     resolveAnswer(answerResponse())
     await flushPromises()
 
     expect(wrapper.get('.message--agent').text()).toContain('项目说明')
-    expect(storedMessages()).toHaveLength(2)
-    expect(storedMessages()[1]).toMatchObject({
-      role: 'AGENT',
-      content: '项目说明\n\n背景内容\n\n验证内容',
-      evidenceIds: ['sql-audit-delivery-set'],
-    })
+    expect(wrapper.get('.message--agent').text()).toContain('背景内容')
+    expect(wrapper.get('.message--agent').text()).toContain('已核验回答')
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
   it('retries a failed answer without duplicating the persisted user message', async () => {
@@ -168,17 +161,17 @@ describe('AgentWorkspace', () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Agent 暂时无法回答，请稍后重试')
     expect(wrapper.text()).not.toContain('internal.example')
-    expect(storedMessages()).toHaveLength(1)
+    expect(wrapper.findAll('.message--user')).toHaveLength(1)
 
     await wrapper.get('[data-answer-retry]').trigger('click')
     await flushPromises()
 
     expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(1, 'sql-audit', '失败后重试的问题')
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, 'sql-audit', '失败后重试的问题')
+    expect(askQuestionMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ question: '失败后重试的问题' }))
+    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ question: '失败后重试的问题' }))
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
     expect(wrapper.findAll('.message--agent')).toHaveLength(1)
-    expect(storedMessages()).toHaveLength(2)
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
   it('retries against the failed session after the user switches sessions', async () => {
@@ -192,8 +185,6 @@ describe('AgentWorkspace', () => {
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
-    const failedSessionId = storedSessions()[0].id
-    const otherSessionId = storedSessions()[1].id
     await wrapper.findAll('.session-select')[1].trigger('click')
     expect(wrapper.get('.session-list article.active .session-select').text()).not.toContain(
       '保留原会话上下文',
@@ -202,19 +193,11 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-answer-retry]').trigger('click')
     await flushPromises()
 
-    const sessions = storedSessions()
-    const failedSession = sessions.find((session: { id: string }) => session.id === failedSessionId)
-    const otherSession = sessions.find((session: { id: string }) => session.id === otherSessionId)
-    expect(failedSession.messages.map((message: { role: string }) => message.role)).toEqual([
-      'USER',
-      'AGENT',
-    ])
-    expect(otherSession.messages).toEqual([])
-    expect(askQuestionMock).toHaveBeenNthCalledWith(
-      2,
-      'sql-audit',
-      '保留原会话上下文',
-    )
+    expect(wrapper.findAll('.message')).toHaveLength(0)
+    await wrapper.findAll('.session-select')[0].trigger('click')
+    expect(wrapper.findAll('.message--user')).toHaveLength(1)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(1)
+    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ question: '保留原会话上下文' }))
   })
 
   it('clears retry safely when the failed session is deleted', async () => {
@@ -230,8 +213,8 @@ describe('AgentWorkspace', () => {
 
     expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
     expect(askQuestionMock).toHaveBeenCalledTimes(1)
-    expect(storedSessions()).toHaveLength(1)
-    expect(storedSessions()[0].messages).toEqual([])
+    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+    expect(wrapper.findAll('.message')).toHaveLength(0)
   })
 
   it('does not persist a late resolved answer after unmount', async () => {

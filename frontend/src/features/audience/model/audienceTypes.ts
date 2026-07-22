@@ -1,4 +1,5 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
+import type { MappedAnswer } from '../../agent/model/answerTypes'
 
 export interface AudienceProfile {
   id: AudienceRole
@@ -11,7 +12,7 @@ export interface AudienceProfile {
 export interface HomeAnswerState {
   round: number
   question: string
-  answer: string
+  answer: MappedAnswer
   projectSlug: string | null
   evidenceIds: string[]
 }

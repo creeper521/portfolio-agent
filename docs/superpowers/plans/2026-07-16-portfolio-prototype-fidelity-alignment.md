@@ -1,6 +1,8 @@
 # Portfolio Prototype Fidelity Alignment Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行状态（2026-07-20）：** 已执行。纸张/墨色/暗红视觉和 Agent 呈现已落地；reduced-motion、焦点可见性、动态播报和抽屉焦点仍需后续修复。
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Align the existing Vue portfolio frontend with the approved HTML prototype while preserving its public-data boundary, multi-route architecture, local sessions, and responsive Agent workspace.
 
@@ -84,7 +86,7 @@
 - Consumes: existing CSS imports from `frontend/src/app/styles/main.css`.
 - Produces: CSS variables `--content-width`, `--header-height`, `--ease`, and shared classes `.page-shell`, `.eyebrow`, `.paper-surface`.
 
-- [ ] **Step 1: Write a failing visual-token test**
+- [x] **Step 1: Write a failing visual-token test**
 
 ```ts
 import { readFileSync } from 'node:fs'
@@ -109,7 +111,7 @@ describe('prototype visual contract', () => {
 })
 ```
 
-- [ ] **Step 2: Extend the homepage structure test**
+- [x] **Step 2: Extend the homepage structure test**
 
 ```ts
 expect(wrapper.get('[data-home-layer="hero"]').classes()).toContain('paper-surface')
@@ -117,7 +119,7 @@ expect(wrapper.get('[data-home-layer="explore"]').classes()).toContain('paper-su
 expect(wrapper.find('[data-dossier-footer]').exists()).toBe(true)
 ```
 
-- [ ] **Step 3: Run the focused tests and verify RED**
+- [x] **Step 3: Run the focused tests and verify RED**
 
 Run:
 
@@ -127,7 +129,7 @@ npm.cmd --prefix frontend test -- --run src/app/styles/visualContract.test.ts sr
 
 Expected: FAIL because `--content-width`, `paper-surface`, and the footer do not exist.
 
-- [ ] **Step 4: Replace layout tokens with the prototype contract**
+- [x] **Step 4: Replace layout tokens with the prototype contract**
 
 ```css
 :root {
@@ -151,7 +153,7 @@ Expected: FAIL because `--content-width`, `paper-surface`, and the footer do not
 }
 ```
 
-- [ ] **Step 5: Add shared paper and focus primitives**
+- [x] **Step 5: Add shared paper and focus primitives**
 
 ```css
 .page-shell {
@@ -177,7 +179,7 @@ Expected: FAIL because `--content-width`, `paper-surface`, and the footer do not
 }
 ```
 
-- [ ] **Step 6: Add prototype motion and reduced-motion fallbacks**
+- [x] **Step 6: Add prototype motion and reduced-motion fallbacks**
 
 ```css
 @keyframes hero-shift {
@@ -199,7 +201,7 @@ Expected: FAIL because `--content-width`, `paper-surface`, and the footer do not
 }
 ```
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -226,7 +228,7 @@ Expected: PASS.
 - Consumes: current route meta, `PublicOwner`, content version, published date.
 - Produces: `DossierHeader` variants `home`, `route`, `workspace`; `DossierFooter` with optional contact fields.
 
-- [ ] **Step 1: Write failing Header and Hero assertions**
+- [x] **Step 1: Write failing Header and Hero assertions**
 
 ```ts
 expect(wrapper.get('[data-hero-index]').text()).toContain('FACTS BEFORE WORDS')
@@ -259,7 +261,7 @@ describe('DossierHeader', () => {
 })
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run:
 
@@ -269,7 +271,7 @@ npm.cmd --prefix frontend test -- --run src/pages/HomePage.test.ts src/shared/co
 
 Expected: FAIL because the prototype index, actions, and footer are absent.
 
-- [ ] **Step 3: Implement route-aware Header semantics**
+- [x] **Step 3: Implement route-aware Header semantics**
 
 ```ts
 const theme = computed(() => {
@@ -286,7 +288,7 @@ const homeAnchors = [
 
 The template must render homepage anchors only on `/`; other routes keep RouterLinks.
 
-- [ ] **Step 4: Rebuild `PortfolioHero.vue` around the source structure**
+- [x] **Step 4: Rebuild `PortfolioHero.vue` around the source structure**
 
 ```vue
 <section class="portfolio-hero paper-surface" data-home-layer="hero">
@@ -313,7 +315,7 @@ The template must render homepage anchors only on `/`; other routes keep RouterL
 </section>
 ```
 
-- [ ] **Step 5: Use prototype Hero dimensions**
+- [x] **Step 5: Use prototype Hero dimensions**
 
 ```css
 .portfolio-hero {
@@ -343,7 +345,7 @@ The template must render homepage anchors only on `/`; other routes keep RouterL
 }
 ```
 
-- [ ] **Step 6: Add the shared footer without placeholders**
+- [x] **Step 6: Add the shared footer without placeholders**
 
 ```vue
 <footer data-dossier-footer>
@@ -366,7 +368,7 @@ The template must render homepage anchors only on `/`; other routes keep RouterL
 </footer>
 ```
 
-- [ ] **Step 7: Run focused tests and build**
+- [x] **Step 7: Run focused tests and build**
 
 Run:
 
@@ -390,7 +392,7 @@ Expected: PASS and successful build.
 - Consumes: `PublicPortfolio`.
 - Produces: factual `CredibilityMetric[]` and four fixed route entries.
 
-- [ ] **Step 1: Write failing metric and exploration tests**
+- [x] **Step 1: Write failing metric and exploration tests**
 
 ```ts
 expect(wrapper.get('[data-home-layer="credibility"]').text()).toContain('先建立可信度')
@@ -399,7 +401,7 @@ expect(wrapper.get('[data-home-layer="explore"]').classes()).toContain('paper-su
 expect(wrapper.findAll('[data-explore-entry]')).toHaveLength(4)
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -409,7 +411,7 @@ npm.cmd --prefix frontend test -- --run src/pages/HomePage.test.ts
 
 Expected: FAIL because the expected data attributes and paper exploration style are absent.
 
-- [ ] **Step 3: Build factual metric view models**
+- [x] **Step 3: Build factual metric view models**
 
 ```ts
 const metrics = computed(() =>
@@ -439,7 +441,7 @@ const metrics = computed(() =>
 )
 ```
 
-- [ ] **Step 4: Restore section introduction and metric grid**
+- [x] **Step 4: Restore section introduction and metric grid**
 
 ```vue
 <section id="credibility" class="credibility paper-surface" data-home-layer="credibility">
@@ -463,7 +465,7 @@ const metrics = computed(() =>
 </section>
 ```
 
-- [ ] **Step 5: Restore paper exploration with local dark hover**
+- [x] **Step 5: Restore paper exploration with local dark hover**
 
 ```css
 .explore-index {
@@ -488,7 +490,7 @@ const metrics = computed(() =>
 }
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -534,7 +536,7 @@ export interface AgentRouteSeed {
 }
 ```
 
-- [ ] **Step 1: Write failing role, free-form, and answer tests**
+- [x] **Step 1: Write failing role, free-form, and answer tests**
 
 ```ts
 expect(wrapper.findAll('[data-role]')).toHaveLength(4)
@@ -549,7 +551,7 @@ expect(wrapper.get('[data-light-answer]').text()).toContain('如何处理连接�
 expect(wrapper.findAll('[data-answer-action]')).toHaveLength(3)
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -559,7 +561,7 @@ npm.cmd --prefix frontend test -- --run src/features/audience/components/Audienc
 
 Expected: FAIL because there are two questions, no custom form, and no separate answer panel.
 
-- [ ] **Step 3: Expand each role to four factual questions**
+- [x] **Step 3: Expand each role to four factual questions**
 
 ```ts
 {
@@ -578,7 +580,7 @@ Expected: FAIL because there are two questions, no custom form, and no separate 
 
 Apply equivalent four-question arrays for `MENTOR`, `HR`, and `GUEST`, using only public project fields.
 
-- [ ] **Step 4: Use one deterministic answer function for Home and Agent**
+- [x] **Step 4: Use one deterministic answer function for Home and Agent**
 
 ```ts
 export function createPreviewAnswer(
@@ -599,7 +601,7 @@ export function createPreviewAnswer(
 
 `composeAnswerFromPublicProject()` must derive every sentence from `summary`, `solution`, `keyDecisions`, `verification`, `outcome`, or `handoff`.
 
-- [ ] **Step 5: Implement compact role and question columns**
+- [x] **Step 5: Implement compact role and question columns**
 
 ```vue
 <div class="audience-console">
@@ -637,7 +639,7 @@ export function createPreviewAnswer(
 </div>
 ```
 
-- [ ] **Step 6: Implement `LightAnswerPanel.vue`**
+- [x] **Step 6: Implement `LightAnswerPanel.vue`**
 
 ```vue
 <section data-light-answer class="light-answer">
@@ -661,7 +663,7 @@ export function createPreviewAnswer(
 
 Typing animation must reveal the existing complete answer string and skip animation under reduced motion.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -696,7 +698,7 @@ The seed fingerprint is:
 `${input.source}:${input.role}:${input.projectSlug ?? ''}:${input.question}`
 ```
 
-- [ ] **Step 1: Write failing seed tests**
+- [x] **Step 1: Write failing seed tests**
 
 ```ts
 const homeSeed: AgentRouteSeed = {
@@ -723,7 +725,7 @@ it('does not insert the same seed twice', () => {
 })
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -733,7 +735,7 @@ npm.cmd --prefix frontend test -- --run src/features/agent/composables/useLocalS
 
 Expected: FAIL because `seedSession()` does not exist.
 
-- [ ] **Step 3: Add seed metadata to sessions**
+- [x] **Step 3: Add seed metadata to sessions**
 
 ```ts
 export interface AgentSession {
@@ -749,7 +751,7 @@ export interface AgentSession {
 }
 ```
 
-- [ ] **Step 4: Implement idempotent `seedSession()`**
+- [x] **Step 4: Implement idempotent `seedSession()`**
 
 ```ts
 function seedSession(input: AgentRouteSeed): AgentSession {
@@ -783,7 +785,7 @@ function seedSession(input: AgentRouteSeed): AgentSession {
 }
 ```
 
-- [ ] **Step 5: Let `AgentPage.vue` rebuild missing answer state**
+- [x] **Step 5: Let `AgentPage.vue` rebuild missing answer state**
 
 ```ts
 const seed = computed<AgentRouteSeed | null>(() => {
@@ -807,7 +809,7 @@ const seed = computed<AgentRouteSeed | null>(() => {
 })
 ```
 
-- [ ] **Step 6: Seed the workspace once**
+- [x] **Step 6: Seed the workspace once**
 
 ```ts
 onMounted(() => {
@@ -820,7 +822,7 @@ onMounted(() => {
 })
 ```
 
-- [ ] **Step 7: Run Agent tests**
+- [x] **Step 7: Run Agent tests**
 
 Run:
 
@@ -848,7 +850,7 @@ Expected: PASS.
 - Consumes: existing split state, sessions, project, evidence, and active evidence ID.
 - Produces: tab type `EvidenceDeskTab = 'EVIDENCE' | 'PROJECT' | 'TIMELINE' | 'CONTEXT'`.
 
-- [ ] **Step 1: Write failing presentation and accessibility tests**
+- [x] **Step 1: Write failing presentation and accessibility tests**
 
 ```ts
 expect(wrapper.get('.agent-workspace').classes()).toContain('agent-workspace--prototype')
@@ -860,7 +862,7 @@ expect(wrapper.get('#local-session-rail').attributes('inert')).toBeDefined()
 expect(wrapper.get('#agent-evidence-desk').attributes('aria-hidden')).toBe('false')
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -870,7 +872,7 @@ npm.cmd --prefix frontend test -- --run src/features/agent/components/AgentWorks
 
 Expected: FAIL because the new presentation marker and hidden-panel attributes are absent.
 
-- [ ] **Step 3: Remove visible splitter gutters**
+- [x] **Step 3: Remove visible splitter gutters**
 
 ```css
 .agent-workspace {
@@ -901,7 +903,7 @@ Expected: FAIL because the new presentation marker and hidden-panel attributes a
 
 Place one handle at `left: var(--sessions-width)` and one at `right: var(--evidence-width)`.
 
-- [ ] **Step 4: Compact the session rail**
+- [x] **Step 4: Compact the session rail**
 
 ```vue
 <aside class="session-rail">
@@ -921,7 +923,7 @@ Place one handle at `left: var(--sessions-width)` and one at `right: var(--evide
 </aside>
 ```
 
-- [ ] **Step 5: Replace the empty card and user card with linear message flow**
+- [x] **Step 5: Replace the empty card and user card with linear message flow**
 
 ```vue
 <div class="thread">
@@ -947,7 +949,7 @@ Place one handle at `left: var(--sessions-width)` and one at `right: var(--evide
 
 Neither `.thread-empty` nor `.message--user` receives a filled rectangular background.
 
-- [ ] **Step 6: Add evidence tabs and compact evidence cards**
+- [x] **Step 6: Add evidence tabs and compact evidence cards**
 
 ```ts
 export type EvidenceDeskTab =
@@ -978,7 +980,7 @@ const activeTab = ref<EvidenceDeskTab>('EVIDENCE')
 </article>
 ```
 
-- [ ] **Step 7: Add a focused media-query composable**
+- [x] **Step 7: Add a focused media-query composable**
 
 ```ts
 import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
@@ -1024,7 +1026,7 @@ it('tracks the current matchMedia result', () => {
 })
 ```
 
-- [ ] **Step 8: Apply `inert` and `aria-hidden` by breakpoint**
+- [x] **Step 8: Apply `inert` and `aria-hidden` by breakpoint**
 
 ```ts
 const sessionsIsDrawer = useMediaQuery('(max-width: 980px)')
@@ -1040,7 +1042,7 @@ The template must bind:
 
 Apply the equivalent bindings to the evidence desk.
 
-- [ ] **Step 9: Run Agent and media-query tests**
+- [x] **Step 9: Run Agent and media-query tests**
 
 Run:
 
@@ -1069,7 +1071,7 @@ Expected: PASS.
 - Consumes: existing page data and query parameters.
 - Produces: shared `PageLead` variants `paper` and `ink-section`, with paper as the default.
 
-- [ ] **Step 1: Write failing route presentation tests**
+- [x] **Step 1: Write failing route presentation tests**
 
 ```ts
 expect(projects.get('[data-page-lead]').attributes('data-theme')).toBe('paper')
@@ -1085,7 +1087,7 @@ Project mobile semantics:
 expect(project.get('h1').attributes('data-mobile-balanced')).toBeDefined()
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -1095,7 +1097,7 @@ npm.cmd --prefix frontend test -- --run src/pages/ProjectsPage.test.ts src/pages
 
 Expected: FAIL because the new page-lead and selection markers are absent.
 
-- [ ] **Step 3: Make `PageLead` paper-first and more compact**
+- [x] **Step 3: Make `PageLead` paper-first and more compact**
 
 ```vue
 <header data-page-lead :data-theme="theme" class="page-lead">
@@ -1120,7 +1122,7 @@ Expected: FAIL because the new page-lead and selection markers are absent.
 }
 ```
 
-- [ ] **Step 4: Tighten project index hierarchy**
+- [x] **Step 4: Tighten project index hierarchy**
 
 Use the existing project information, but keep technology tags secondary:
 
@@ -1135,7 +1137,7 @@ Use the existing project information, but keep technology tags secondary:
 }
 ```
 
-- [ ] **Step 5: Preserve the project dossier with mobile title control**
+- [x] **Step 5: Preserve the project dossier with mobile title control**
 
 ```vue
 <h1 data-mobile-balanced>{{ project.title }}</h1>
@@ -1152,11 +1154,11 @@ Use the existing project information, but keep technology tags secondary:
 }
 ```
 
-- [ ] **Step 6: Make the timeline page header paper-first**
+- [x] **Step 6: Make the timeline page header paper-first**
 
 Remove the `dark` prop from the timeline `PageLead`. Keep local dark emphasis only if a timeline event is explicitly marked as a major milestone; current data has no such field, so all current events remain paper-based.
 
-- [ ] **Step 7: Replace red evidence selection with ink and rule emphasis**
+- [x] **Step 7: Replace red evidence selection with ink and rule emphasis**
 
 ```css
 .evidence-catalog__list button[aria-pressed='true'] {
@@ -1186,7 +1188,7 @@ Ensure the mobile public-status mark remains horizontal:
 }
 ```
 
-- [ ] **Step 8: Run route tests**
+- [x] **Step 8: Run route tests**
 
 Run:
 
@@ -1209,7 +1211,7 @@ Expected: PASS.
 - Consumes: completed application and target prototype path.
 - Produces: deterministic screenshots under `frontend/output/playwright/fidelity/` and a zero-issue console/overflow report.
 
-- [ ] **Step 1: Add failing visual-semantic E2E assertions**
+- [x] **Step 1: Add failing visual-semantic E2E assertions**
 
 ```ts
 test('home uses paper hero and paper exploration', async ({ page }) => {
@@ -1229,7 +1231,7 @@ test('home uses paper hero and paper exploration', async ({ page }) => {
 })
 ```
 
-- [ ] **Step 2: Add homepage-to-Agent context coverage**
+- [x] **Step 2: Add homepage-to-Agent context coverage**
 
 ```ts
 await page.locator('[data-question]').first().click()
@@ -1239,7 +1241,7 @@ await expect(page.locator('.message--agent')).toBeVisible()
 await expect(page.locator('[data-evidence-id].evidence-card--active')).toBeVisible()
 ```
 
-- [ ] **Step 3: Add drawer accessibility coverage**
+- [x] **Step 3: Add drawer accessibility coverage**
 
 ```ts
 await page.setViewportSize({ width: 980, height: 800 })
@@ -1251,7 +1253,7 @@ await page.keyboard.press('Escape')
 await expect(page.getByRole('button', { name: '会话', exact: true })).toBeFocused()
 ```
 
-- [ ] **Step 4: Run E2E and verify RED before final implementation fixes**
+- [x] **Step 4: Run E2E and verify RED before final implementation fixes**
 
 Run:
 
@@ -1261,7 +1263,7 @@ npm.cmd --prefix frontend run test:e2e
 
 Expected: the new fidelity assertions fail until Tasks 1–7 are complete; after completion all tests pass.
 
-- [ ] **Step 5: Update visual audit routes and states**
+- [x] **Step 5: Update visual audit routes and states**
 
 Capture:
 
@@ -1286,7 +1288,7 @@ const routes = [
 
 Also capture the homepage dialogue before and after selecting a question, plus Agent drawers at `1219px` and `980px`.
 
-- [ ] **Step 6: Run full unit tests**
+- [x] **Step 6: Run full unit tests**
 
 Run:
 
@@ -1296,7 +1298,7 @@ npm.cmd --prefix frontend test -- --run
 
 Expected: all test files pass.
 
-- [ ] **Step 7: Run production build**
+- [x] **Step 7: Run production build**
 
 Run:
 
@@ -1306,7 +1308,7 @@ npm.cmd --prefix frontend run build
 
 Expected: successful Vue TypeScript and Vite build.
 
-- [ ] **Step 8: Run Playwright**
+- [x] **Step 8: Run Playwright**
 
 Run:
 
@@ -1316,7 +1318,7 @@ npm.cmd --prefix frontend run test:e2e
 
 Expected: all desktop and mobile Chromium projects pass.
 
-- [ ] **Step 9: Run visual audit**
+- [x] **Step 9: Run visual audit**
 
 Start Vite:
 
@@ -1332,7 +1334,7 @@ node frontend/scripts/visual-audit.mjs
 
 Expected: `NO ISSUES DETECTED`.
 
-- [ ] **Step 10: Inspect screenshots against the prototype**
+- [x] **Step 10: Inspect screenshots against the prototype**
 
 At minimum compare:
 
@@ -1347,7 +1349,7 @@ prototype Agent 390×844 ↔ current Agent 390×844
 
 Acceptance requires matching color roles, section order, visual density, title scale, control placement, responsive reflow, and absence of cropped or overflowing content. Text and counts may differ only where the public dataset differs from prototype examples.
 
-- [ ] **Step 11: Check diffs without staging**
+- [x] **Step 11: Check diffs without staging**
 
 Run:
 

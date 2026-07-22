@@ -19,50 +19,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AnswerResponseMapperTest {
 
     @Test
-    void mapsAnswerResultToUnchangedJsonReadyResponseFields() throws Exception {
-        AnswerEvidence evidence = new AnswerEvidence(
-                "evidence-1",
-                "SQL audit evidence",
-                "COLLECTION",
-                LocalDate.of(2026, 1, 1),
-                LocalDate.of(2026, 1, 31),
-                3,
-                "Reviewed public evidence",
-                List.of("The audit was completed"),
-                "APPROVED",
-                false
-        );
+    void mapsTheFourDimensionalStructuredContractWithoutLegacyFields() throws Exception {
+        com.portfolio.agent.answer.domain.AnswerTurnSnapshot turn =
+                new com.portfolio.agent.answer.domain.AnswerTurnSnapshot(
+                        "turn-1", "request-1", "version-1", "sha256:bundle",
+                        "sql-audit", "preset-1", List.of("evidence-1"),
+                        com.portfolio.agent.answer.dto.request.AudienceRole.INTERVIEWER,
+                        com.portfolio.agent.answer.dto.request.AnswerRequestSource.AGENT_PAGE
+                );
         AnswerResult result = new AnswerResult(
-                AnswerMode.DETERMINISTIC,
-                true,
-                false,
+                turn,
+                com.portfolio.agent.answer.domain.AnswerResolution.ANSWERED,
+                com.portfolio.agent.answer.domain.AnswerSource.PRESET,
+                com.portfolio.agent.answer.domain.GenerationMode.DETERMINISTIC,
+                com.portfolio.agent.answer.domain.VerificationStatus.VERIFIED,
                 "SQL audit",
-                List.of(new AnswerSection(AnswerSectionType.BACKGROUND, "Background")),
-                List.of(evidence),
-                List.of("What was the final status?")
+                "Reviewed summary",
+                List.of(new AnswerSection(
+                        AnswerSectionType.BACKGROUND,
+                        "Background",
+                        "Reviewed content",
+                        List.of("evidence-1")
+                )),
+                List.of("evidence-1"),
+                List.of("preset-1")
         );
-        AnswerResponseMapper mapper = new AnswerResponseMapper();
-
-        AnswerResponse response = mapper.toResponse("request-1", result);
+        AnswerResponse response = new AnswerResponseMapper().toResponse(result);
 
         assertThat(response.getRequestId()).isEqualTo("request-1");
-        assertThat(response.getAnswerMode()).isEqualTo(AnswerMode.DETERMINISTIC);
-        assertThat(response.isMatched()).isTrue();
-        assertThat(response.isFallback()).isFalse();
-        assertThat(response.getAnswer().getTitle()).isEqualTo("SQL audit");
-        assertThat(response.getAnswer().getSections()).hasSize(1);
-        assertThat(response.getEvidence()).hasSize(1);
-        assertThat(response.getEvidence().getFirst()).isInstanceOf(AnswerEvidenceResponse.class);
-        assertThat(response.getEvidence().getFirst().getType()).isEqualTo("COLLECTION");
-        assertThat(response.getEvidence().getFirst().getPublicStatus()).isEqualTo("APPROVED");
-        assertThat(response.getEvidence().getFirst().isRawContentPublic()).isFalse();
-        assertThat(response.getSuggestedQuestions()).containsExactly("What was the final status?");
+        assertThat(response.getTurnId()).isEqualTo("turn-1");
+        assertThat(response.getResolution())
+                .isEqualTo(com.portfolio.agent.answer.domain.AnswerResolution.ANSWERED);
+        assertThat(response.getSections()).singleElement()
+                .satisfies(section -> assertThat(section.getEvidenceIds())
+                        .containsExactly("evidence-1"));
 
-        ObjectMapper objectMapper = new ObjectMapper()
-                .findAndRegisterModules()
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        assertThat(objectMapper.writeValueAsString(response)).isEqualTo(
-                """
-                {"requestId":"request-1","answerMode":"DETERMINISTIC","matched":true,"fallback":false,"answer":{"title":"SQL audit","sections":[{"type":"BACKGROUND","content":"Background"}]},"evidence":[{"id":"evidence-1","title":"SQL audit evidence","type":"COLLECTION","periodStart":"2026-01-01","periodEnd":"2026-01-31","sourceCount":3,"summary":"Reviewed public evidence","supportedClaims":["The audit was completed"],"publicStatus":"APPROVED","rawContentPublic":false}],"suggestedQuestions":["What was the final status?"]}""");
+        String json = new ObjectMapper().findAndRegisterModules().writeValueAsString(response);
+        assertThat(json).contains("\"answerSource\":\"PRESET\"")
+                .contains("\"generationMode\":\"DETERMINISTIC\"")
+                .contains("\"verification\":\"VERIFIED\"")
+                .doesNotContain("\"matched\"")
+                .doesNotContain("\"answerMode\"")
+                .doesNotContain("\"fallback\"");
     }
 }

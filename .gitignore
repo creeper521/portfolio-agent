@@ -6,6 +6,9 @@ playwright-report/
 test-results/
 output/playwright/
 .worktrees/
+output/
+frontend/output/
+frontend/.playwright-cli/
 
 # Local environment and secrets
 .env
@@ -16,6 +19,12 @@ output/playwright/
 *.p12
 *.jks
 secrets/
+
+# Local agent tooling and machine-specific metadata
+.agents/
+.claude/
+.codex/
+skills-lock.json
 
 # Private content pipeline artifacts
 private-kb/

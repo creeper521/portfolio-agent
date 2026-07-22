@@ -5,20 +5,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AnswerEvidenceResponseTest {
 
     @Test
     void exposesImmutableJsonReadyEvidenceValue() throws Exception {
-        List<String> supportedClaims = new ArrayList<>(List.of("Claim"));
-        AnswerEvidenceResponse response = response(supportedClaims);
-
-        supportedClaims.add("Changed outside");
+        AnswerEvidenceResponse response = response();
 
         assertThat(response.getId()).isEqualTo("evidence-1");
         assertThat(response.getTitle()).isEqualTo("SQL audit evidence");
@@ -27,24 +20,21 @@ class AnswerEvidenceResponseTest {
         assertThat(response.getPeriodEnd()).isEqualTo(LocalDate.of(2026, 1, 31));
         assertThat(response.getSourceCount()).isEqualTo(3);
         assertThat(response.getSummary()).isEqualTo("Reviewed public evidence");
-        assertThat(response.getSupportedClaims()).containsExactly("Claim");
         assertThat(response.getPublicStatus()).isEqualTo("APPROVED");
         assertThat(response.isRawContentPublic()).isFalse();
-        assertThatThrownBy(() -> response.getSupportedClaims().add("Forbidden"))
-                .isInstanceOf(UnsupportedOperationException.class);
 
         ObjectMapper objectMapper = new ObjectMapper()
                 .findAndRegisterModules()
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         assertThat(objectMapper.writeValueAsString(response)).isEqualTo(
                 """
-                {"id":"evidence-1","title":"SQL audit evidence","type":"COLLECTION","periodStart":"2026-01-01","periodEnd":"2026-01-31","sourceCount":3,"summary":"Reviewed public evidence","supportedClaims":["Claim"],"publicStatus":"APPROVED","rawContentPublic":false}""");
+                {"id":"evidence-1","title":"SQL audit evidence","type":"COLLECTION","periodStart":"2026-01-01","periodEnd":"2026-01-31","sourceCount":3,"summary":"Reviewed public evidence","publicStatus":"APPROVED","rawContentPublic":false}""");
     }
 
     @Test
     void implementsValueEqualityHashCodeAndReadableString() {
-        AnswerEvidenceResponse response = response(List.of("Claim"));
-        AnswerEvidenceResponse equalResponse = response(List.of("Claim"));
+        AnswerEvidenceResponse response = response();
+        AnswerEvidenceResponse equalResponse = response();
         AnswerEvidenceResponse differentResponse = new AnswerEvidenceResponse(
                 "evidence-2",
                 "SQL audit evidence",
@@ -53,7 +43,6 @@ class AnswerEvidenceResponseTest {
                 LocalDate.of(2026, 1, 31),
                 3,
                 "Reviewed public evidence",
-                List.of("Claim"),
                 "APPROVED",
                 false
         );
@@ -70,7 +59,7 @@ class AnswerEvidenceResponseTest {
         );
     }
 
-    private AnswerEvidenceResponse response(List<String> supportedClaims) {
+    private AnswerEvidenceResponse response() {
         return new AnswerEvidenceResponse(
                 "evidence-1",
                 "SQL audit evidence",
@@ -79,7 +68,6 @@ class AnswerEvidenceResponseTest {
                 LocalDate.of(2026, 1, 31),
                 3,
                 "Reviewed public evidence",
-                supportedClaims,
                 "APPROVED",
                 false
         );

@@ -1,5 +1,7 @@
 # 模块化单体后端统一审核文档
 
+> **当前状态（2026-07-20）：** 历史阶段审核。模块化单体结论继续有效；本文记录的前端、package、JAR、Playwright、聚合 API 和 Timeline 延期项已在后续前端重构与 2026-07-17 公开内容联调中完成。动态发布、Claim、RAG、模型、数据库、认证和 SSE 仍未实施。
+
 **日期：** 2026-07-16
 **审核范围：** 后端模块化单体重构与后端专项验证
 **分支：** `codex/modular-monolith-refactor`
@@ -159,7 +161,7 @@ PortfolioKnowledgeGateway
 
 `answer-engine-boundary` 对项目内部引用采用白名单：`answer.engine` 只允许依赖 `answer.engine` 与 `answer.domain`。JDK、Spring 注解等非 `com.portfolio.agent` 引用不属于该规则的检查范围。
 
-该架构检查当前作为独立后端门禁运行；把它接入 `verify-release.ps1` 的完整发布流水线明确延期。
+截至 2026-07-16 本审核时，该架构检查只作为独立后端门禁运行；2026-07-17 已接入 `verify-release.ps1`，本句保留为历史时点记录。
 
 ## 7. 测试与验证证据
 
@@ -197,7 +199,7 @@ PortfolioKnowledgeGateway
 
 动态发布设计中已经确认的独立发布、审核状态、Claim、混合检索、模型/Embedding 端口、数据库后续迁移等决策均未被本轮文档改写。
 
-## 9. 已明确延期项
+## 9. 本审核时点的延期项
 
 以下内容没有在 Task 8 中执行或验证：
 
@@ -210,7 +212,7 @@ PortfolioKnowledgeGateway
 - Claim、TimelineEvent、展示编排、公开 RAG、模型与 Embedding；
 - 数据库、审核后台、服务端会话、SSE 与多实例协调。
 
-原因是前端正在独立大规模重构，本任务仅对后端包边界和后端契约负责。上述延期项不得被描述为已通过或已发布。
+原因是当时前端正在独立大规模重构，本任务仅对后端包边界和后端契约负责。此列表只描述 2026-07-16 的审核边界；其中前端构建、Maven package、JAR、Playwright、完整发布验证和 Timeline 已由后续提交完成，动态发布、Claim、RAG、模型、数据库、认证、服务端会话和 SSE 仍保持延期。
 
 ## 10. 提交列表
 
@@ -235,14 +237,14 @@ Task 8 文档建议提交信息：
 docs: align modular monolith backend documentation
 ```
 
-## 11. 用户审核清单
+## 11. 审核清单当前状态
 
-- [ ] 是否认可 `common / portfolio / answer` 三个顶层模块；
-- [ ] 是否认可 `controller / service / domain / repository / mapper / validation / engine / gateway / adapter` 命名；
-- [ ] 是否认可当前只使用进程内 Java Gateway，不引入 Feign 或远程自调用；
-- [ ] 是否认可唯一跨模块翻译点为 `answer.adapter.portfolio`；
-- [ ] 是否确认公共 API 与当前确定性回答行为保持不变；
-- [ ] 是否确认动态发布、Claim、RAG、数据库等既有设计决策继续保留；
-- [ ] 是否接受前端、JAR/package、Playwright、Docker、浏览器集成和发布就绪验证延期；
-- [ ] 是否同意后续把独立架构门禁接入完整发布流水线；
-- [ ] 是否同意使用建议提交信息提交 Task 8 文档。
+- [x] `common / portfolio / answer` 三个顶层模块已经实现；
+- [x] 常见 Spring Boot 包命名已经实现；
+- [x] 当前使用进程内 Java Gateway，没有 Feign 或远程自调用；
+- [x] 唯一跨模块翻译点为 `answer.adapter.portfolio`；
+- [x] 公共 API 与确定性回答核心行为保持兼容；
+- [ ] 动态发布、Claim、RAG、模型和数据库仍待单独审批，不能从本次后端重构推导为已批准；
+- [x] 本审核当时接受的前端/JAR/Playwright/发布验证延期，已由 2026-07-17 后续工作完成；
+- [x] 独立架构门禁已经接入完整发布流水线；
+- [x] Task 8 文档已通过 `7f4f646` 等文档提交进入历史。

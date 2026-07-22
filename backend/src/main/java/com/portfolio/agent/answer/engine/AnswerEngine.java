@@ -1,9 +1,9 @@
 package com.portfolio.agent.answer.engine;
 
-import com.portfolio.agent.answer.domain.AnswerKnowledge;
-import com.portfolio.agent.answer.domain.AnswerResult;
+import com.portfolio.agent.answer.domain.GeneratedAnswer;
+import com.portfolio.agent.answer.domain.ResolvedAnswerContext;
 
 public interface AnswerEngine {
 
-    AnswerResult answer(AnswerKnowledge knowledge, String question);
+    GeneratedAnswer answer(ResolvedAnswerContext context);
 }

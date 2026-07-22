@@ -1,0 +1,237 @@
+{
+  "schemaVersion": "2.0",
+  "contentVersion": "2026-07-21.1",
+  "owner": {
+    "name": "",
+    "role": "Java 后端开发实习生",
+    "summary": "我关注真实工程问题的拆解、实现与验证，并用可追溯证据说明自己的贡献。",
+    "githubUrl": null,
+    "email": null,
+    "resumeUrl": null
+  },
+  "projects": [
+    {
+      "id": "sql-audit-project",
+      "code": "P-01",
+      "slug": "sql-audit",
+      "title": "SQL 审计与故障排查工具",
+      "summary": "把分散在远程服务器上的 SQL 日志检索、结果追溯和归档流程整合为可复用的内部工具。",
+      "background": "原有排查依赖固定服务器与固定目录，新增环境需要修改代码，查询过程耗时且结果不易复用。项目需要在不开放任意服务器和路径输入的前提下，提高日志检索、定位和追溯效率。",
+      "responsibilities": [
+        "主导核心功能和多轮迭代，从既有固定路径查询扩展到可配置的多目标路由。",
+        "完成异步查询、任务状态恢复与取消、WebSocket 状态推送和轮询降级的体验优化。",
+        "完成动态来源结果、Excel 导出、结果归档、条件复用和软删除等闭环能力。",
+        "补充路径边界、输入限制和 SQL 注入相关验证，并完成打包、部署备份与使用文档。"
+      ],
+      "solution": "后端以查询目标、SSH 连接和日志来源路由构成统一配置模型，优先读取数据库配置并用 properties 兜底。查询以异步任务执行，结果按来源动态分组；前端优先接收 WebSocket 进度，连接异常时退化为状态轮询。成功结果可以导出或归档，历史归档可以查看并复用查询条件。",
+      "keyDecisions": [
+        "用目标、连接和来源路由替代服务器与目录硬编码，同时禁止用户输入任意主机和路径。",
+        "把动态 sourceResults 作为唯一真实结果，旧固定字段只作为短期兼容派生。",
+        "WebSocket 正常时避免固定轮询，断开或长时间无消息时使用状态查询兜底。",
+        "允许截断结果归档，但显式记录截断状态，避免把部分结果误认为完整结果。"
+      ],
+      "technologies": [
+        "Java",
+        "Spring Boot",
+        "Vue",
+        "SSH",
+        "WebSocket",
+        "MySQL",
+        "Excel 导出"
+      ],
+      "verification": [
+        "逐项验证时间排序、完整 SQL 展示、动态来源、导出、归档、复用和软删除。",
+        "验证 WebSocket 断开后的轮询降级，以及页面刷新后的任务状态恢复。",
+        "测试关键字输入、路径安全和 SQL 注入相关边界，并记录仍需兼容的负号场景。",
+        "生成可部署 JAR，部署前备份原制品，并编写面向使用者的完整操作文档。"
+      ],
+      "outcome": "核心版本已完成、部署并形成使用文档，覆盖查询、实时进度、结果查看、导出、归档和复用等主要流程。",
+      "handoff": "本人主导核心功能及多轮迭代，后续部分环境适配和优化由同事继续接手。",
+      "status": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-sql-audit-background",
+        "claim-sql-audit-responsibility",
+        "claim-sql-audit-technical-decision",
+        "claim-sql-audit-verification",
+        "claim-sql-audit-delivered"
+      ],
+      "evidenceIds": [
+        "sql-audit-delivery-set"
+      ],
+      "timelineEventIds": [
+        "timeline-sql-audit-delivery"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-sql-audit-background",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "BACKGROUND",
+      "statement": "原有排查依赖固定服务器与固定目录，新增环境需要修改代码。",
+      "detail": "仅说明已审核的项目背景，不推断影响规模。",
+      "achievementStatus": "UNKNOWN",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["PROJECT_OVERVIEW"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 70, "GUEST": 70}
+    },
+    {
+      "id": "claim-sql-audit-responsibility",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "RESPONSIBILITY",
+      "statement": "本人主导核心功能及多轮迭代。",
+      "detail": "后续部分环境适配和优化由同事继续接手。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["PROJECT_OVERVIEW"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 90, "GUEST": 70}
+    },
+    {
+      "id": "claim-sql-audit-technical-decision",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "TECHNICAL_DECISION",
+      "statement": "使用目标、连接和来源路由替代服务器与目录硬编码。",
+      "detail": "同时限制用户输入任意主机和路径。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["IMPLEMENTATION"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 60, "GUEST": 60}
+    },
+    {
+      "id": "claim-sql-audit-verification",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "VERIFICATION",
+      "statement": "已验证主要功能流程、降级路径和关键安全输入边界。",
+      "detail": "验证范围以公开 Evidence 摘要列出的项目为限。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["VERIFICATION"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 70, "GUEST": 70}
+    },
+    {
+      "id": "claim-sql-audit-delivered",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "OUTCOME",
+      "statement": "核心版本已完成、部署并形成使用文档。",
+      "detail": "公开事实只覆盖已审核的核心交付范围，不声明长期生产效果。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["DELIVERY"],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 80,
+        "GUEST": 80
+      }
+    }
+  ],
+  "claimEvidenceLinks": [
+    {
+      "id": "link-sql-audit-background-e01",
+      "claimId": "claim-sql-audit-background",
+      "evidenceId": "sql-audit-delivery-set",
+      "supportType": "DIRECT",
+      "scope": "仅支持已审核的项目背景描述，不支持影响规模推断。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-responsibility-e01",
+      "claimId": "claim-sql-audit-responsibility",
+      "evidenceId": "sql-audit-delivery-set",
+      "supportType": "DIRECT",
+      "scope": "支持核心功能和多轮迭代的个人贡献边界。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-technical-decision-e01",
+      "claimId": "claim-sql-audit-technical-decision",
+      "evidenceId": "sql-audit-delivery-set",
+      "supportType": "DIRECT",
+      "scope": "支持公开摘要中的配置化路由和输入限制决策。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-verification-e01",
+      "claimId": "claim-sql-audit-verification",
+      "evidenceId": "sql-audit-delivery-set",
+      "supportType": "DIRECT",
+      "scope": "仅支持公开验证清单覆盖的功能、降级和安全边界。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-delivered-e01",
+      "claimId": "claim-sql-audit-delivered",
+      "evidenceId": "sql-audit-delivery-set",
+      "supportType": "DIRECT",
+      "scope": "证明核心版本已经交付并形成使用文档；不证明长期生产效果。",
+      "reviewStatus": "APPROVED"
+    }
+  ],
+  "questionPresets": [
+    {
+      "id": "sql-audit-overview",
+      "text": "请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？",
+      "aliases": [
+        "请详细介绍SQL审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么",
+        "详细介绍一下 SQL 审计与故障排查工具项目",
+        "你在 SQL 审计与故障排查工具项目中做了什么",
+        "你在SQL审计与故障排查工具项目中做了什么"
+      ],
+      "audiences": ["INTERVIEWER", "MENTOR", "HR", "GUEST"],
+      "projectIds": ["sql-audit-project"],
+      "topics": ["DELIVERY", "PROJECT_OVERVIEW"],
+      "preferredClaimCategories": ["BACKGROUND", "RESPONSIBILITY", "TECHNICAL_DECISION", "VERIFICATION", "OUTCOME"],
+      "placements": ["HOME", "AGENT", "PROJECT"],
+      "deterministicEntry": true,
+      "displayOrder": 10
+    }
+  ],
+  "evidence": [
+    {
+      "id": "sql-audit-delivery-set",
+      "code": "E-01",
+      "title": "SQL 审计工具交付证据集",
+      "type": "COLLECTION",
+      "periodStart": "2026-06-02",
+      "periodEnd": "2026-07-10",
+      "sourceCount": 7,
+      "summary": "由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    }
+  ],
+  "timelineEvents": [
+    {
+      "id": "timeline-sql-audit-delivery",
+      "dateLabel": "2026.06–07",
+      "title": "从固定路径查询到可交付工具",
+      "problem": "查询目标和目录被写死，任务过程、结果复用和交付说明缺少完整闭环。",
+      "action": "围绕多目标路由、异步任务、进度降级、动态结果、导出归档和安全边界完成连续迭代与验证。",
+      "impact": "形成已部署的核心版本、使用文档和一组经过脱敏审核的交付证据。",
+      "projectIds": ["sql-audit-project"],
+      "claimIds": ["claim-sql-audit-delivered"],
+      "evidenceIds": ["sql-audit-delivery-set"]
+    }
+  ]
+}

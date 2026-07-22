@@ -1,55 +1,38 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { AgentRouteSeed, AgentSession } from '../model/sessionTypes'
-import {
-  SESSION_KEY,
-  SESSION_TTL_MS,
-  useLocalSessions,
-} from './useLocalSessions'
+import type { AgentRouteSeed } from '../model/sessionTypes'
+import { useLocalSessions } from './useLocalSessions'
 
-const now = new Date('2026-07-16T08:00:00.000Z').getTime()
-
-function makeSession(id: string, updatedAt: number): AgentSession {
-  return {
-    id,
-    title: 'SQL 审计工具追问',
-    role: 'INTERVIEWER',
-    projectSlug: 'sql-audit',
-    evidenceId: null,
-    seedFingerprint: null,
-    createdAt: updatedAt,
-    updatedAt,
-    expiresAt: updatedAt + SESSION_TTL_MS,
-    messages: [],
-  }
+const mappedAnswer = {
+  title: '项目说明',
+  summary: '公开摘要',
+  sections: [{ type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] }],
+  resolution: 'ANSWERED' as const,
+  answerSource: 'PRESET' as const,
+  generationMode: 'DETERMINISTIC' as const,
+  verification: 'VERIFIED' as const,
+  evidenceIds: ['sql-audit-delivery-set'],
+  suggestedQuestionPresetIds: ['sql-audit-overview'],
 }
 
 describe('useLocalSessions', () => {
   beforeEach(() => {
     localStorage.clear()
-    vi.useFakeTimers()
-    vi.setSystemTime(now)
+    sessionStorage.clear()
   })
 
-  it('removes sessions older than seven days', () => {
-    const expired = makeSession('expired', now - SESSION_TTL_MS - 1)
-    const current = makeSession('current', now)
-    localStorage.setItem(SESSION_KEY, JSON.stringify([expired, current]))
-
-    const store = useLocalSessions()
-
-    expect(store.sessions.value.map((item) => item.id)).toEqual(['current'])
+  it('starts empty for every page-memory store instance', () => {
+    const first = useLocalSessions()
+    first.createSession()
+    expect(first.sessions.value).toHaveLength(1)
+    expect(useLocalSessions().sessions.value).toEqual([])
   })
 
-  it('persists a new local session with a seven-day expiry', () => {
+  it('never persists a visitor session', () => {
     const store = useLocalSessions()
-
-    const session = store.createSession({ role: 'MENTOR', title: '项目复盘' })
-    const persisted = JSON.parse(localStorage.getItem(SESSION_KEY) ?? '[]') as AgentSession[]
-
-    expect(session.role).toBe('MENTOR')
-    expect(session.expiresAt).toBe(now + SESSION_TTL_MS)
-    expect(persisted[0]?.id).toBe(session.id)
+    store.createSession({ role: 'MENTOR', title: '项目复盘' })
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
   })
 
   it('clears all local sessions', () => {
@@ -59,14 +42,14 @@ describe('useLocalSessions', () => {
     store.clearSessions()
 
     expect(store.sessions.value).toEqual([])
-    expect(localStorage.getItem(SESSION_KEY)).toBe('[]')
+    expect(localStorage.length).toBe(0)
   })
 
   it('creates user and agent messages from a homepage seed without duplicating it', () => {
     const homeSeed: AgentRouteSeed = {
       role: 'INTERVIEWER',
       question: '介绍 SQL 审计工具的完整迭代。',
-      answer: '该项目从固定路径查询演进为可配置、可恢复、可追溯的交付工具。',
+      answer: mappedAnswer,
       projectSlug: 'sql-audit',
       evidenceIds: ['sql-audit-delivery-set'],
       source: 'HOME',
@@ -78,6 +61,7 @@ describe('useLocalSessions', () => {
 
     expect(session.messages.map((item) => item.role)).toEqual(['USER', 'AGENT'])
     expect(session.messages[1]?.evidenceIds).toEqual(homeSeed.evidenceIds)
+    expect(session.messages[1]?.answer?.sections).toEqual(mappedAnswer.sections)
     expect(store.sessions.value).toHaveLength(1)
   })
 })

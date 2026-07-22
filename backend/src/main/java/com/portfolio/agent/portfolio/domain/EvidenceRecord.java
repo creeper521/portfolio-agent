@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Objects;
 
 public final class EvidenceRecord {
@@ -17,7 +16,6 @@ public final class EvidenceRecord {
     private final LocalDate periodEnd;
     private final int sourceCount;
     private final String summary;
-    private final List<String> supportedClaims;
     private final EvidenceStatus publicStatus;
     private final Boolean rawContentPublic;
 
@@ -31,7 +29,6 @@ public final class EvidenceRecord {
             @JsonProperty("periodEnd") LocalDate periodEnd,
             @JsonProperty("sourceCount") int sourceCount,
             @JsonProperty("summary") String summary,
-            @JsonProperty("supportedClaims") List<String> supportedClaims,
             @JsonProperty("publicStatus") EvidenceStatus publicStatus,
             @JsonProperty("rawContentPublic") Boolean rawContentPublic
     ) {
@@ -43,7 +40,6 @@ public final class EvidenceRecord {
         this.periodEnd = periodEnd;
         this.sourceCount = sourceCount;
         this.summary = summary;
-        this.supportedClaims = List.copyOf(supportedClaims);
         this.publicStatus = publicStatus;
         this.rawContentPublic = rawContentPublic;
     }
@@ -80,10 +76,6 @@ public final class EvidenceRecord {
         return summary;
     }
 
-    public List<String> getSupportedClaims() {
-        return supportedClaims;
-    }
-
     public EvidenceStatus getPublicStatus() {
         return publicStatus;
     }
@@ -108,7 +100,6 @@ public final class EvidenceRecord {
                 && Objects.equals(periodStart, that.periodStart)
                 && Objects.equals(periodEnd, that.periodEnd)
                 && Objects.equals(summary, that.summary)
-                && Objects.equals(supportedClaims, that.supportedClaims)
                 && Objects.equals(publicStatus, that.publicStatus)
                 && Objects.equals(rawContentPublic, that.rawContentPublic);
     }
@@ -116,7 +107,7 @@ public final class EvidenceRecord {
     @Override
     public int hashCode() {
         return Objects.hash(id, code, title, type, periodStart, periodEnd, sourceCount, summary,
-                supportedClaims, publicStatus, rawContentPublic);
+                publicStatus, rawContentPublic);
     }
 
     @Override
@@ -130,7 +121,6 @@ public final class EvidenceRecord {
                 ", periodEnd=" + periodEnd +
                 ", sourceCount=" + sourceCount +
                 ", summary='" + summary + '\'' +
-                ", supportedClaims=" + supportedClaims +
                 ", publicStatus=" + publicStatus +
                 ", rawContentPublic=" + rawContentPublic +
                 '}';

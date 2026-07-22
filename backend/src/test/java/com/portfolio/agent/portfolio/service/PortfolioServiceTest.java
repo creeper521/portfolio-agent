@@ -10,6 +10,7 @@ import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
@@ -17,6 +18,7 @@ import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -89,15 +91,21 @@ class PortfolioServiceTest {
                 "Handoff",
                 ProjectStatus.DELIVERED,
                 ContributionType.PRIMARY,
-                List.of("question-1"),
-                List.of("evidence-1")
+                List.of(),
+                List.of("evidence-1"),
+                List.of("timeline-1")
         );
         QuestionDefinition question = new QuestionDefinition(
                 "question-1",
-                "project-1",
                 "What did you build?",
                 List.of("Explain the project"),
-                "What did you build?"
+                List.of("INTERVIEWER"),
+                List.of("project-1"),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10
         );
         EvidenceRecord evidence = new EvidenceRecord(
                 "evidence-1",
@@ -108,7 +116,6 @@ class PortfolioServiceTest {
                 LocalDate.parse("2026-07-14"),
                 1,
                 "Approved public evidence",
-                List.of("Delivered"),
                 EvidenceStatus.APPROVED,
                 false
         );
@@ -119,7 +126,8 @@ class PortfolioServiceTest {
                 "Hard-coded paths",
                 "Completed multi-target routing",
                 "Created a deliverable version",
-                List.of("sql-audit"),
+                List.of("project-1"),
+                List.of(),
                 List.of("evidence-1")
         );
         return new PortfolioSnapshot(
@@ -128,6 +136,8 @@ class PortfolioServiceTest {
                 OffsetDateTime.parse("2026-07-14T12:00:00+08:00"),
                 owner,
                 List.of(project),
+                List.of(),
+                List.of(),
                 List.of(question),
                 List.of(evidence),
                 List.of(timeline)
@@ -136,15 +146,19 @@ class PortfolioServiceTest {
 
     private static final class CountingRepository implements PublicPortfolioRepository {
 
-        private final PortfolioSnapshot snapshot;
+        private final RuntimeContentSnapshot snapshot;
         private int reads;
 
         private CountingRepository(PortfolioSnapshot snapshot) {
-            this.snapshot = snapshot;
+            this.snapshot = new RuntimeContentSnapshot(
+                    snapshot,
+                    "sha256:test-runtime-bundle",
+                    Instant.parse("2026-07-21T00:00:00Z")
+            );
         }
 
         @Override
-        public PortfolioSnapshot getSnapshot() {
+        public RuntimeContentSnapshot getSnapshot() {
             reads++;
             return snapshot;
         }

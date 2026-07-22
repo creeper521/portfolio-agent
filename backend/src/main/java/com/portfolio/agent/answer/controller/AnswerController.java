@@ -4,37 +4,31 @@ import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.answer.dto.request.AnswerRequest;
 import com.portfolio.agent.answer.dto.response.AnswerResponse;
 import com.portfolio.agent.answer.mapper.AnswerResponseMapper;
-import com.portfolio.agent.answer.service.AnswerService;
+import com.portfolio.agent.answer.service.PortfolioAgentRuntime;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/answers")
 public class AnswerController {
 
-    private final AnswerService answerService;
+    private final PortfolioAgentRuntime runtime;
     private final AnswerResponseMapper responseMapper;
 
     public AnswerController(
-            AnswerService answerService,
+            PortfolioAgentRuntime runtime,
             AnswerResponseMapper responseMapper
     ) {
-        this.answerService = answerService;
+        this.runtime = runtime;
         this.responseMapper = responseMapper;
     }
 
     @PostMapping
     public AnswerResponse answer(@Valid @RequestBody AnswerRequest request) {
-        String requestId = UUID.randomUUID().toString();
-        AnswerResult result = answerService.answer(
-                request.getProjectSlug(),
-                request.getQuestion()
-        );
-        return responseMapper.toResponse(requestId, result);
+        AnswerResult result = runtime.answer(request);
+        return responseMapper.toResponse(result);
     }
 }

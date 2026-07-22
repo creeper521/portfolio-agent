@@ -1,17 +1,20 @@
 # 实习作品集 Agent
 
+> **项目状态（2026-07-22）：** A 的可信运行时与严格会话隐私、B 的 Claim/Evidence 治理及四文件发布包已经实现并通过 packaged-JAR 验证；C 的模型表达、公开检索与工具能力尚未实现。完整文档状态见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)。
+
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
 ## 当前范围
 
-- Vue 3 首页与项目详情页
-- Spring Boot 只读作品集 API
-- 一个规范问题及有限等价问法
-- 五段式确定性回答
-- 脱敏 Evidence 卡片
-- 单个可执行 JAR 和 Docker 构建定义
+- Vue 3 六路由作品集：概览、项目目录、项目详情、时间线、证据中心和完整 Agent 工作台
+- Spring Boot 公开作品集 API，以及供正式页面使用的 `GET /api/v1/public-content` 聚合接口
+- 一个规范问题及有限精确别名、五段式确定性回答和未命中边界回答
+- 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
+- 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
+- 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
+- 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 
-V0 不连接大模型，不读取私有知识库，不保存访客问题。
+V0 不连接大模型，不读取私有知识库，也不在服务端保存或记录访客问题。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
 
 ## 环境要求
 
@@ -126,9 +129,9 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 ## 目录结构
 
 - `backend/`：Spring Boot API、确定性回答引擎和公开快照
-- `frontend/`：Vue 3 页面、组件测试和 Playwright 测试
-- `scripts/`：隐私扫描器及其测试
-- `docs/`：背景、需求、技术选型和 Superpowers 设计计划
+- `frontend/`：Vue 3 六路由页面、组件测试和 Playwright 测试
+- `scripts/`：代码质量、架构、隐私、静态 bundle、JAR E2E 和完整发布门禁
+- `docs/`：文档状态索引、背景、需求、技术选型、设计、计划和阶段审核
 
 后端 Java 代码采用模块化单体结构：
 
@@ -157,9 +160,13 @@ AnswerService
 
 项目当前不使用 Feign，也不通过 HTTP 或 localhost 对自身模块发起远程调用。
 
-## 设计文档
+## 文档入口
 
-- `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`
-- `docs/superpowers/plans/2026-07-14-internship-portfolio-v0.md`
-- `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`
-- `docs/07-modular-monolith-backend-review.md`
+- `docs/00-文档状态索引.md`：全部文档的当前状态、权威顺序和已知缺口
+- `docs/04-项目代码约束.md`：当前代码与发布约束
+- `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`：当前 V0 事实与回答边界
+- `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`：当前后端结构
+- `docs/superpowers/specs/2026-07-16-portfolio-frontend-full-rebuild-design.md`：当前前端产品与视觉基线
+- `docs/superpowers/specs/2026-07-17-public-content-api-integration-design.md`：当前公开内容 API 与真实联调基线
+
+`docs/01-03` 描述长期产品和技术路线；标记为历史、已取代或待审批的设计与计划不能直接作为当前实施授权。

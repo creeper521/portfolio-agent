@@ -49,17 +49,14 @@ const deliveryEvidence = {
   periodEnd: '2026-07-10',
   sourceCount: 7,
   summary: '由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。',
-  supportedClaims: [
-    '核心版本已部署并形成使用文档。',
-    '本人主导核心功能及多轮迭代。',
-    '后续部分优化由同事继续接手。',
-  ],
+  claimIds: ['claim-sql-audit-delivered'],
   publicStatus: 'APPROVED' as const,
   projectSlugs: ['sql-audit'],
 }
 
 export const previewPublicContent: PublicPortfolio = {
-  contentVersion: '2026-07-14.1',
+  contentVersion: '2026-07-21.1',
+  runtimeBundleHash: 'sha256:preview-runtime',
   publishedAt: '2026-07-14T00:00:00+08:00',
   owner: {
     name: '',
@@ -67,6 +64,32 @@ export const previewPublicContent: PublicPortfolio = {
     summary: '我关注真实工程问题的拆解、实现与验证，并用可追溯证据说明自己的贡献。',
   },
   projects: [sqlAuditProject],
+  claims: [
+    {
+      id: 'claim-sql-audit-delivered',
+      subjectType: 'PROJECT',
+      subjectId: 'sql-audit-project',
+      category: 'OUTCOME',
+      statement: '核心版本已完成、部署并形成使用文档。',
+      detail: '公开事实只覆盖已审核的核心交付范围，不声明长期生产效果。',
+      achievementStatus: 'DELIVERED',
+      contributionType: 'PRIMARY',
+      verificationBasis: 'EVIDENCE_SUPPORTED',
+      verificationStatus: 'VERIFIED',
+      materiality: 'KEY',
+      topics: ['DELIVERY'],
+      audiencePriorities: { INTERVIEWER: 100, MENTOR: 100, HR: 80, GUEST: 80 },
+    },
+  ],
+  claimEvidenceLinks: [
+    {
+      id: 'link-sql-audit-delivered-e01',
+      claimId: 'claim-sql-audit-delivered',
+      evidenceId: 'sql-audit-delivery-set',
+      supportType: 'DIRECT',
+      scope: '证明核心版本已经交付并形成使用文档；不证明长期生产效果。',
+    },
+  ],
   evidence: [deliveryEvidence],
   timeline: [
     {
@@ -78,6 +101,15 @@ export const previewPublicContent: PublicPortfolio = {
       impact: '形成已部署的核心版本、使用文档和一组经过脱敏审核的交付证据。',
       projectSlugs: ['sql-audit'],
       evidenceIds: ['sql-audit-delivery-set'],
+    },
+  ],
+  questionPresets: [
+    {
+      id: 'sql-audit-overview',
+      projectSlug: 'sql-audit',
+      text: sqlAuditProject.suggestedQuestions[0],
+      audiences: ['INTERVIEWER', 'MENTOR', 'HR', 'GUEST'],
+      placements: ['HOME', 'AGENT', 'PROJECT'],
     },
   ],
 }
