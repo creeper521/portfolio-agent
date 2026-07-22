@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-22）：** A、B、默认关闭的 C1，以及 C2 本地公开检索、固定只读工具和引用式多轮已经实现；C3 中仅 Model Provider Registry 已实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。完整文档状态见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)。
+> **项目状态（2026-07-22）：** A、B、默认关闭的 C1，以及 C2 本地公开检索、固定只读工具和引用式多轮已经实现；C3 中仅 Model Provider Registry 已实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。文档治理见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)，逐功能盘点见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 

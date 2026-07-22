@@ -1,5 +1,7 @@
 # Portfolio Agent Future Intelligence C1 Implementation Plan
 
+> **Implementation status (2026-07-22):** Implemented and verified, disabled by default. C2 and the C3 built-in Model Provider Registry were implemented later. The unchecked checklist below is retained as the original implementation record, not current outstanding work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add optional, provider-neutral, policy-gated model expression for approved public facts while preserving deterministic answers, strict visitor privacy, the four-dimensional answer contract, and whole-draft fallback.

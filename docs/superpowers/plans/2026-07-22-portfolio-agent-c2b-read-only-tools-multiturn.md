@@ -1,6 +1,6 @@
 # Portfolio Agent C2b Read-only Tools and Referential Multi-turn Implementation Plan
 
-> **执行状态（2026-07-22）：** 已按本计划完成并通过 `scripts/verify-release.ps1 -SkipInstall`。C1/C2 已实现，C3 未开始；下方清单保留实施时的 TDD 迁移记录。
+> **执行状态（2026-07-22）：** 已按本计划完成并通过 `scripts/verify-release.ps1 -SkipInstall`。C1/C2 已实现；随后 C3 仅内置 Model Provider Registry 已实现，其余 C3 未准入。下方清单保留实施时的 TDD 迁移记录。
 
 > **For agentic workers:** Execute inline in the current workspace with strict RED -> GREEN -> REFACTOR cycles. The user-owned dirty worktree must be preserved. Do not stage, commit, push, reset, restore, checkout, or delete existing files.
 

@@ -1,14 +1,14 @@
 # Project Agent Instructions
 
-> **Documentation status (2026-07-20):** Current repository authority. See `docs/00-文档状态索引.md` for the status of every design and plan.
+> **Documentation status (2026-07-22):** Current repository authority. See `docs/00-文档状态索引.md` for the status of every design and plan, and `docs/08-current-implementation-status.md` for the feature inventory.
 
 ## Product boundary
 
 This repository builds a public internship portfolio Agent. Runtime code may read only the reviewed public snapshot under `backend/src/main/resources/public-data/`. It must never read the private Obsidian knowledge base, candidate snapshots, raw daily reports, credentials, or unreviewed screenshots.
 
-The current V0 contains one SQL audit project and one deterministic question, plus a six-route Vue portfolio shell, a public-content aggregate API, a responsive Agent workspace, and browser-local sessions. These UI additions do not expand the answer engine's factual scope.
+The current public content still contains one SQL audit project and one executable preset. The runtime now also contains the implemented A/B/C1/C2 capabilities and the C3 built-in Model Provider Registry documented in `docs/08-current-implementation-status.md`; optional model expression and local retrieval remain disabled by default. These runtime additions do not expand the reviewed public factual scope.
 
-Do not add DeepSeek, Spring AI runtime calls, SSE, a database, embeddings, authentication, dynamic external publication, or private search unless the authoritative design is updated and approved.
+Do not add Spring AI runtime calls, SSE, a database, authentication, dynamic external publication, private search, or further C3 abstractions unless the authoritative design is updated and approved. The existing fixed DeepSeek/GLM expression adapters and local BGE embedding path are admitted only under their documented fail-closed configuration and privacy boundaries.
 
 ## Source of truth
 

@@ -1,6 +1,6 @@
 # Portfolio Agent C2a 本地公开检索设计
 
-- 状态：已确认，待实现
+- 状态：已实现并验证（2026-07-22）
 - 日期：2026-07-22
 - 范围：C2a——Claim 派生 Chunk、本地关键词/向量混合检索、RetrievalDecision 与 `ANSWERED + RETRIEVAL`
 - 前置设计：`2026-07-21-portfolio-agent-content-governance-design.md`

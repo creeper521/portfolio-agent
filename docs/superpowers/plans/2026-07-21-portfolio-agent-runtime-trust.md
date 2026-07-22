@@ -1,5 +1,7 @@
 # Portfolio Agent Runtime Trust Implementation Plan
 
+> **Implementation status (2026-07-22):** A stage is implemented and verified. The unchecked checklist below is retained as the original implementation record, not current outstanding work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the approved A-stage runtime trust design without starting B/C work, while preserving every pre-existing user change in the dirty worktree.

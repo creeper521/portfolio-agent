@@ -2,7 +2,7 @@
 
 ## Implementation status (2026-07-22)
 
-C2a is implemented and verified. This plan remains the implementation record; C2b read-only tools/cited multi-turn and C3 Registry/Hook/Orchestrator/multi-Agent work are explicitly not implemented.
+C2a is implemented and verified. This plan remains the implementation record. C2b read-only tools/cited multi-turn and the C3 built-in Model Provider Registry were implemented later; C3 Hook/Orchestrator/multi-Agent/DurableTask work remains explicitly not implemented.
 
 - Backend clean package: 175 tests, 0 failures, 0 errors; the optional real-model benchmark/performance tests are run separately with an explicit local-model property.
 - Release verification: code quality, architecture, privacy, deterministic bundle governance for both legacy four-file and retrieval seven-file releases, JAR unpack/static checks, and packaged application checks passed.
@@ -227,7 +227,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/privacy-check.ps
 ## Task 10：完整发布验证、packaged JAR 联调和文档收口
 
 - [ ] 生成一份经过测试 Approval fixture 的七文件 C2a Bundle；用 compiler 重建两次，确认派生索引与所有 hash 完全一致。
-- [ ] 更新权威文档的实现状态、安装/回滚/故障诊断命令与资源要求；明确 C2b/C2c/C3 未实现。
+- [ ] 更新当时权威文档的实现状态、安装/回滚/故障诊断命令与资源要求；记录 C2a 完成时 C2b/C2c/C3 尚未实现（后续状态见本文页首与 `docs/00-文档状态索引.md`）。
 - [ ] 运行后端要求：
 
 ```powershell

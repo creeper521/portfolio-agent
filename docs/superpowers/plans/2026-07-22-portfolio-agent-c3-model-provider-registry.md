@@ -1,5 +1,7 @@
 # Portfolio Agent C3 Model Provider Registry Implementation Plan
 
+> **Implementation status (2026-07-22):** Implemented and verified as `c3-model-registry-v1`. The unchecked checklist below is retained as the original implementation record; it is not current outstanding work. Other C3 capabilities remain unadmitted and unimplemented.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace repeated DeepSeek/GLM selection branches with one immutable, fail-closed, built-in Model Provider Registry while preserving the single-Provider answer and privacy contracts.

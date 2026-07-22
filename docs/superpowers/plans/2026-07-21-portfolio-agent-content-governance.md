@@ -1,5 +1,7 @@
 # Portfolio Agent Content Governance Implementation Plan
 
+> **Implementation status (2026-07-22):** B first release is implemented and verified. The unchecked checklist below is retained as the original implementation record, not current outstanding work; a real production publication still requires external human approval.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the approved B-stage Claim/Evidence governance, immutable public release bundle, offline governance CLI, approval, benchmark, audit, publish, rollback, and controlled learning loop without starting C.
