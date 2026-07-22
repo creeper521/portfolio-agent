@@ -1,5 +1,7 @@
 # Portfolio Agent Light Workspace Palette Implementation Plan
 
+> **执行状态（2026-07-22）：** 已按 A「均衡纸阶」实施并通过前端测试、生产构建、Playwright 与 `1440×900 / 1219×900 / 980×800 / 390×844` 视觉验收；下方清单保留测试驱动实施记录。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the Agent conversation area's full-height dark stage with the approved A “balanced paper hierarchy” while keeping the dark header, existing layout, interactions, privacy contract, and exactly two solid dark primary buttons.
