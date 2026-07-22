@@ -20,5 +20,13 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     verification: response.verification,
     evidenceIds: [...response.evidenceIds],
     suggestedQuestionPresetIds: [...response.suggestedQuestionPresetIds],
+    contextEnvelope: response.contextEnvelope
+      ? {
+          ...response.contextEnvelope,
+          projectSlugs: [...response.contextEnvelope.projectSlugs],
+          referencedClaimIds: [...response.contextEnvelope.referencedClaimIds],
+        }
+      : undefined,
+    contextVersionUpdated: response.contextVersionUpdated === true,
   }
 }

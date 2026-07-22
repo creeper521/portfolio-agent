@@ -586,6 +586,70 @@ package com.portfolio.agent.portfolio.repository;
 public interface PublicPortfolioRepository {}
 '@
         }
+    },
+    @{
+        Name = 'answer-core-to-onnx-runtime'
+        File = 'com\portfolio\agent\answer\service\BadOnnxService.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+import ai.onnxruntime.OrtSession;
+public final class BadOnnxService {}
+'@
+        Rule = 'answer-core-local-model-runtime'
+    },
+    @{
+        Name = 'embedding-port-outside-local-adapter'
+        File = 'com\portfolio\agent\answer\service\BadEmbedding.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
+public final class BadEmbedding implements LocalEmbeddingPort {}
+'@
+        Rule = 'local-embedding-adapter-boundary'
+        ExpectedLine = 3
+        ExpectedStatement = 'implements LocalEmbeddingPort'
+    },
+    @{
+        Name = 'premature-orchestrator-package'
+        File = 'com\portfolio\agent\orchestrator\BadOrchestrator.java'
+        Source = @'
+package com.portfolio.agent.orchestrator;
+public final class BadOrchestrator {}
+'@
+        Rule = 'future-agent-framework'
+        ExpectedLine = 1
+        ExpectedStatement = 'package com.portfolio.agent.orchestrator;'
+    },
+    @{
+        Name = 'premature-tool-registry-package'
+        File = 'com\portfolio\agent\answer\adapter\tool\registry\BadToolRegistry.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.tool.registry;
+public final class BadToolRegistry {}
+'@
+        Rule = 'future-agent-framework'
+        ExpectedLine = 1
+        ExpectedStatement = 'package com.portfolio.agent.answer.adapter.tool.registry;'
+    },
+    @{
+        Name = 'answer-service-to-model-adapter'
+        File = 'com\portfolio\agent\answer\service\BadModelAdapterService.java'
+        Source = @'
+package com.portfolio.agent.answer.service;
+import com.portfolio.agent.answer.adapter.model.ModelProviderRegistrySnapshot;
+public final class BadModelAdapterService {}
+'@
+        Rule = 'answer-service-model-adapter'
+    },
+    @{
+        Name = 'external-vector-database'
+        File = 'com\portfolio\agent\answer\adapter\retrieval\BadVectorClient.java'
+        Source = @'
+package com.portfolio.agent.answer.adapter.retrieval;
+import io.qdrant.client.QdrantClient;
+public final class BadVectorClient {}
+'@
+        Rule = 'external-vector-service'
     }
 )
 

@@ -2,6 +2,9 @@ param(
     [string]$JarPath,
     [string]$JavaExecutable = 'java.exe',
     [string]$NpmExecutable = 'npm.cmd',
+    [string]$ReleaseRoot = '',
+    [string]$RetrievalProfile = '',
+    [string]$ModelDirectory = '',
     [ValidateRange(1, 65535)]
     [int]$Port = 4173
 )
@@ -61,11 +64,28 @@ $environment = @{
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
+    PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
 }
 
 $quotedJar = '"' + $jar + '"'
+$applicationArguments = @('-jar', $quotedJar, "--server.port=$Port")
+if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
+    $resolvedReleaseRoot = (Resolve-Path -LiteralPath $ReleaseRoot).Path
+    $applicationArguments += '"--portfolio.content.release-root=' + $resolvedReleaseRoot + '"'
+}
+if (-not [string]::IsNullOrWhiteSpace($RetrievalProfile)) {
+    if ($RetrievalProfile -notin @('DISABLED', 'KEYWORD_ONLY', 'HYBRID')) {
+        throw 'RetrievalProfile is invalid.'
+    }
+    $applicationArguments += "--portfolio.retrieval.profile=$RetrievalProfile"
+}
+if (-not [string]::IsNullOrWhiteSpace($ModelDirectory)) {
+    $resolvedModelDirectory = (Resolve-Path -LiteralPath $ModelDirectory).Path
+    $applicationArguments += '"--portfolio.retrieval.model-directory=' `
+        + $resolvedModelDirectory + '"'
+}
 $process = Start-Process -FilePath $JavaExecutable `
-    -ArgumentList @('-jar', $quotedJar, "--server.port=$Port") `
+    -ArgumentList $applicationArguments `
     -PassThru -WindowStyle Hidden
 
 Write-Output "Started packaged application process $($process.Id)."
@@ -139,6 +159,9 @@ try {
     $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
     $env:PLAYWRIGHT_REAL_API = '1'
     $env:PLAYWRIGHT_BASE_URL = $baseUrl
+    if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
+        $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
+    }
 
     & $NpmExecutable --prefix (Join-Path $root 'frontend') run test:e2e
     $playwrightExitCode = $LASTEXITCODE
@@ -148,9 +171,13 @@ finally {
         Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
+            $environment.PLAYWRIGHT_REAL_RETRIEVAL
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
+            $environment.PLAYWRIGHT_REAL_RETRIEVAL
         Write-Output 'Playwright environment restored.'
     }
     finally {

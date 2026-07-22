@@ -8,11 +8,18 @@ import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
 import com.portfolio.agent.answer.domain.AnswerMateriality;
 import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.domain.AnswerKeywordIndex;
+import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
+import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
+import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
@@ -41,8 +48,64 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         return new RuntimeAnswerContent(
                 snapshot.getContentVersion(),
                 snapshot.getRuntimeBundleHash(),
-                projects
+                projects,
+                snapshot.getRetrievalContent().map(this::toRetrievalCorpus).orElse(null),
+                toTimeline(snapshot)
         );
+    }
+
+    private List<AnswerTimelineEvent> toTimeline(RuntimeContentSnapshot snapshot) {
+        Map<String, String> projectSlugsById = snapshot.getProjects().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        ProjectProfile::getId,
+                        ProjectProfile::getSlug));
+        Set<String> claimIds = snapshot.getClaims().stream()
+                .map(com.portfolio.agent.portfolio.domain.Claim::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        Set<String> approvedEvidenceIds = snapshot.getEvidence().stream()
+                .filter(evidence -> evidence.getPublicStatus() == EvidenceStatus.APPROVED)
+                .filter(evidence -> Boolean.FALSE.equals(evidence.getRawContentPublic()))
+                .map(EvidenceRecord::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        return snapshot.getTimeline().stream()
+                .filter(event -> projectSlugsById.keySet().containsAll(event.getProjectIds()))
+                .filter(event -> claimIds.containsAll(event.getClaimIds()))
+                .filter(event -> approvedEvidenceIds.containsAll(event.getEvidenceIds()))
+                .map(event -> new AnswerTimelineEvent(
+                        event.getId(),
+                        event.getDateLabel(),
+                        event.getTitle(),
+                        event.getProblem(),
+                        event.getAction(),
+                        event.getImpact(),
+                        event.getProjectIds().stream().map(projectSlugsById::get).toList(),
+                        event.getClaimIds(),
+                        event.getEvidenceIds()))
+                .toList();
+    }
+
+    private AnswerRetrievalCorpus toRetrievalCorpus(RuntimeRetrievalContent source) {
+        List<AnswerKeywordIndex.DocumentEntry> keywordDocuments = source.getKeywordIndex()
+                .getDocuments().stream()
+                .map(item -> new AnswerKeywordIndex.DocumentEntry(
+                        item.getChunkId(), item.getDocumentLength(), item.getTermFrequencies()))
+                .toList();
+        AnswerKeywordIndex keywordIndex = new AnswerKeywordIndex(
+                source.getKeywordIndex().getDocumentCount(),
+                source.getKeywordIndex().getAverageDocumentLength(),
+                keywordDocuments,
+                source.getKeywordIndex().getDocumentFrequencies());
+        Map<String, AnswerRetrievalChunk> chunks = source.getDocuments().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        com.portfolio.agent.portfolio.domain.RagDocument::getChunkId,
+                        item -> new AnswerRetrievalChunk(
+                                item.getChunkId(), item.getProjectSlugs(), item.getClaimIds(),
+                                item.getTopics(), item.getText().length())));
+        return new AnswerRetrievalCorpus(
+                keywordIndex, source.getVectorIndex().getVectors(), chunks,
+                source.getManifest().getEmbeddingModelId(),
+                source.getManifest().getEmbeddingArtifactSha256(),
+                source.getManifest().getDimension());
     }
 
     private AnswerKnowledge toKnowledge(RuntimeContentSnapshot snapshot, ProjectProfile value) {
@@ -78,9 +141,14 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .map(claim -> new AnswerClaimProjection(
                         claim.getId(),
                         AnswerClaimCategory.valueOf(claim.getCategory().name()),
+                        claim.getStatement(),
+                        claim.getDetail(),
+                        AnswerAchievementStatus.valueOf(claim.getAchievementStatus().name()),
+                        AnswerContributionType.valueOf(claim.getContributionType().name()),
                         AnswerVerificationBasis.valueOf(claim.getVerificationBasis().name()),
                         AnswerClaimVerificationStatus.valueOf(claim.getVerificationStatus().name()),
                         AnswerMateriality.valueOf(claim.getMateriality().name()),
+                        claim.getTopics(),
                         directEvidenceByClaimId.getOrDefault(claim.getId(), List.of())))
                 .toList();
 

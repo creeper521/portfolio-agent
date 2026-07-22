@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.AnswerDecision;
+import com.portfolio.agent.answer.domain.AgentExecutionSnapshot;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerResolution;
@@ -9,11 +10,12 @@ import com.portfolio.agent.answer.domain.QuestionKind;
 import com.portfolio.agent.answer.domain.QuestionResolution;
 import com.portfolio.agent.answer.domain.ResolvedAnswerContext;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.domain.RetrievalCapability;
+import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.dto.request.AnswerContextRequest;
 import com.portfolio.agent.answer.dto.request.AnswerRequest;
 import com.portfolio.agent.answer.dto.request.AnswerRequestSource;
 import com.portfolio.agent.answer.dto.request.AudienceRole;
-import com.portfolio.agent.answer.engine.AnswerEngine;
 import com.portfolio.agent.answer.gateway.AnswerDecisionPublisher;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import org.junit.jupiter.api.Test;
@@ -66,7 +68,10 @@ class PortfolioAgentRuntimeTest {
         PortfolioKnowledgeGateway knowledgeGateway = mock(PortfolioKnowledgeGateway.class);
         QuestionResolver questionResolver = mock(QuestionResolver.class);
         AnswerContextFactory contextFactory = mock(AnswerContextFactory.class);
-        AnswerEngine answerEngine = mock(AnswerEngine.class);
+        AnswerPlanBuilder answerPlanBuilder = mock(AnswerPlanBuilder.class);
+        AgentExecutionSnapshotFactory executionSnapshotFactory =
+                mock(AgentExecutionSnapshotFactory.class);
+        ModelAnswerCoordinator modelAnswerCoordinator = mock(ModelAnswerCoordinator.class);
         VerificationPolicy verificationPolicy = mock(VerificationPolicy.class);
         AnswerDecisionPublisher publisher = mock(AnswerDecisionPublisher.class);
 
@@ -85,6 +90,8 @@ class PortfolioAgentRuntimeTest {
 
         when(knowledgeGateway.getContent()).thenReturn(content);
         when(questionResolver.resolve(content, request)).thenReturn(resolution);
+        when(executionSnapshotFactory.create(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(mock(AgentExecutionSnapshot.class));
         when(contextFactory.create(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq(resolution),
                 org.mockito.ArgumentMatchers.eq(request)))
@@ -95,9 +102,14 @@ class PortfolioAgentRuntimeTest {
                 knowledgeGateway,
                 questionResolver,
                 contextFactory,
-                answerEngine,
+                answerPlanBuilder,
+                executionSnapshotFactory,
+                modelAnswerCoordinator,
                 verificationPolicy,
-                publisher
+                publisher,
+                mock(LocalRetrievalCoordinator.class),
+                RetrievalPolicy.firstRelease(),
+                RetrievalCapability.disabled()
         );
         return new Fixture(runtime, request, knowledgeGateway, publisher);
     }

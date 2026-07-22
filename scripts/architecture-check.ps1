@@ -45,6 +45,20 @@ function Add-ReferenceViolations(
         Add-StatementViolation 'answer-core-portfolio' $File $LineNumber $Display
     }
 
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer\.service(\.|$)' -and
+            $Reference -match '^com\.portfolio\.agent\.answer\.adapter\.model(\.|$)') {
+        Add-StatementViolation 'answer-service-model-adapter' $File $LineNumber $Display
+    }
+
+    if ($SourcePackage -match '^com\.portfolio\.agent\.answer\.(service|domain|engine|gateway)(\.|$)' -and
+            $Reference -match '^(ai\.onnxruntime|ai\.djl)(\.|$)') {
+        Add-StatementViolation 'answer-core-local-model-runtime' $File $LineNumber $Display
+    }
+
+    if ($Reference -match '^(?:io\.pinecone|io\.qdrant|org\.weaviate|io\.milvus|org\.chromadb|com\.pgvector|org\.springframework\.ai\.embedding)(\.|$)') {
+        Add-StatementViolation 'external-vector-service' $File $LineNumber $Display
+    }
+
     if ($SourcePackage -match '^com\.portfolio\.agent\.answer(\.|$)' -and
             $SourcePackage -notmatch '^com\.portfolio\.agent\.answer\.adapter\.portfolio(\.|$)' -and
             $Reference -match '^com\.portfolio\.agent\.portfolio\.') {
@@ -291,6 +305,9 @@ foreach ($file in $javaFiles) {
         if ($relativeDirectory -ne $expectedDirectory) {
             Add-StatementViolation 'package-path-mismatch' $file $packageLineNumber $packageStatement
         }
+        if ($sourcePackage -match '^com\.portfolio\.agent\.(?:(?:tool|tools)(?:\.|$)|(?:.*\.)?(?:registry|hook|hooks|orchestrator|durabletask|multiagent)(?:\.|$))') {
+            Add-StatementViolation 'future-agent-framework' $file $packageLineNumber $packageStatement
+        }
     } elseif ($isMavenSourceFile) {
         Add-StatementViolation 'package-path-mismatch' $file 1 'package <default>;'
     }
@@ -322,6 +339,18 @@ foreach ($file in $javaFiles) {
     }
 
     $bodySource = $bodyBuilder.ToString()
+    if ($sourcePackage -notmatch '^com\.portfolio\.agent\.answer\.adapter\.retrieval(\.|$)') {
+        $embeddingImplementation = [regex]::Match(
+            $bodySource,
+            '\bimplements\s+(?:com\s*\.\s*portfolio\s*\.\s*agent\s*\.\s*answer\s*\.\s*gateway\s*\.\s*)?LocalEmbeddingPort\b'
+        )
+        if ($embeddingImplementation.Success) {
+            $prefix = $bodySource.Substring(0, $embeddingImplementation.Index)
+            $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
+            Add-StatementViolation 'local-embedding-adapter-boundary' $file $lineNumber `
+                ([regex]::Replace($embeddingImplementation.Value, '\s+', ' '))
+        }
+    }
     $qualifiedMatches = [regex]::Matches(
         $bodySource,
         '\bcom\s*\.\s*portfolio\s*\.\s*agent(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)+'

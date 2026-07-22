@@ -8,6 +8,11 @@ $root = Split-Path -Parent $PSScriptRoot
 $jarPath = Join-Path $root 'backend\target\portfolio-agent.jar'
 $checker = Join-Path $root 'scripts\privacy-check.ps1'
 $scanRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('portfolio-release-' + [guid]::NewGuid())
+$maven = if (Test-Path -LiteralPath 'C:\tools\apache-maven-3.9.9\bin\mvn.cmd') {
+    'C:\tools\apache-maven-3.9.9\bin\mvn.cmd'
+} else {
+    (Get-Command mvn.cmd -ErrorAction Stop).Source
+}
 
 function Assert-ExitCode([string]$Label) {
     if ($LASTEXITCODE -ne 0) {
@@ -50,9 +55,9 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\privacy-check.test.ps1')
     Assert-ExitCode 'Privacy checker tests'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File (Join-Path $root 'scripts\portfolio-governance.test.ps1')
-    Assert-ExitCode 'Portfolio governance CLI tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
+        -Path (Join-Path $root 'backend\src\main')
+    Assert-ExitCode 'Pre-package production source and configuration privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root '.agents\skills\portfolio-governance')
     Assert-ExitCode 'Public governance skill privacy scan'
@@ -78,8 +83,23 @@ try {
         -Path (Join-Path $root 'frontend\dist')
     Assert-ExitCode 'Pre-package frontend dist privacy scan'
 
-    & mvn.cmd -f backend/pom.xml clean package
+    & $maven -f backend/pom.xml clean package
     Assert-ExitCode 'Backend clean package'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\build-retrieval-bundle.test.ps1')
+    Assert-ExitCode 'Canonical retrieval candidate builder tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\portfolio-governance.test.ps1')
+    Assert-ExitCode 'Portfolio governance B and C2 CLI tests'
+
+    $localModel = Join-Path $root 'runtime-models\bge-small-zh-v1.5'
+    if (Test-Path -LiteralPath (Join-Path $localModel 'onnx\model_quantized.onnx') -PathType Leaf) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
+            -ModelDirectory $localModel
+        Assert-ExitCode 'Local retrieval correctness and performance gates'
+    }
 
     $entries = @(& jar.exe tf $jarPath)
     Assert-ExitCode 'JAR listing'
@@ -105,11 +125,16 @@ try {
     Assert-ExitCode 'Packaged static bundle verification'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
+        -Path (Join-Path $scanRoot 'BOOT-INF\classes')
+    Assert-ExitCode 'Packaged classpath privacy scan'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $scanRoot 'BOOT-INF\classes\public-data')
     Assert-ExitCode 'Packaged public data privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $scanRoot 'BOOT-INF\classes\static')
     Assert-ExitCode 'Packaged static resources privacy scan'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker -Path $root
+    Assert-ExitCode 'Final repository risk-artifact privacy scan'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\run-jar-e2e.ps1')

@@ -23,6 +23,13 @@ public final class BundleHashCalculator {
     }
 
     public static String candidatePayloadHash(Map<String, byte[]> files) {
+        if (files.containsKey("rag-documents.jsonl")) {
+            return sha256(frame(
+                    "portfolio.json", required(files, "portfolio.json"),
+                    "presentation.json", required(files, "presentation.json"),
+                    "rag-documents.jsonl", required(files, "rag-documents.jsonl")
+            ));
+        }
         return sha256(frame(
                 "portfolio.json", required(files, "portfolio.json"),
                 "presentation.json", required(files, "presentation.json")

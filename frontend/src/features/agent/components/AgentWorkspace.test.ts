@@ -27,11 +27,17 @@ function answerResponse() {
     title: '项目说明',
     summary: '公开摘要',
     sections: [
-      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] },
-      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'] },
+      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'], claimIds: ['claim-sql-audit-delivered'] },
+      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'], claimIds: ['claim-sql-audit-delivered'] },
     ],
     evidenceIds: ['sql-audit-delivery-set'],
     suggestedQuestionPresetIds: ['sql-audit-overview'],
+    contextEnvelope: {
+      previousContentVersion: '2026-07-21',
+      projectSlugs: ['sql-audit'],
+      questionPresetId: 'sql-audit-overview',
+      referencedClaimIds: ['claim-sql-audit-delivered'],
+    },
   }
 }
 
@@ -147,6 +153,81 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('.message--agent').text()).toContain('背景内容')
     expect(wrapper.get('.message--agent').text()).toContain('已核验回答')
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('shows retrieval provenance without turning a boundary into an applicable source', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        questionPresetId: undefined,
+        answerSource: 'RETRIEVAL' as const,
+        verification: 'PARTIALLY_VERIFIED' as const,
+      })
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        questionPresetId: undefined,
+        resolution: 'BOUNDARY' as const,
+        answerSource: undefined,
+        verification: 'NOT_APPLICABLE' as const,
+      })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('公开检索问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(wrapper.findAll('.message--agent')[0].text())
+      .toContain('RETRIEVAL · 来自公开资料检索')
+
+    await wrapper.get('textarea').setValue('越界问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    const boundary = wrapper.findAll('.message--agent')[1].text()
+    expect(boundary).toContain('当前能力边界')
+    expect(boundary).not.toContain('来自公开资料检索')
+    expect(boundary).not.toContain('PRESET')
+    expect(boundary).not.toContain('RETRIEVAL')
+  })
+
+  it('sends only stable page-memory references after an explicit follow-up action', async () => {
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('公开检索问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('[data-follow-up="current-status"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      question: '查看当前状态',
+      questionPresetId: undefined,
+      contextEnvelope: {
+        previousContentVersion: '2026-07-21',
+        projectSlugs: ['sql-audit'],
+        questionPresetId: 'sql-audit-overview',
+        referencedClaimIds: ['claim-sql-audit-delivered'],
+        selectedSectionType: undefined,
+        followUpIntent: 'CURRENT_STATUS',
+      },
+    }))
+    expect(JSON.stringify(askQuestionMock.mock.calls[1]?.[0])).not.toContain('公开摘要')
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('announces when stable references were revalidated against a newer content version', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      contextVersionUpdated: true,
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('查看更新后的状态')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-context-version-updated]').text())
+      .toContain('公开内容已更新，本轮已按当前版本重新核对')
   })
 
   it('retries a failed answer without duplicating the persisted user message', async () => {

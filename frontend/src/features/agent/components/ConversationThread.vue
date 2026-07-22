@@ -3,6 +3,11 @@ import { nextTick, ref, watch } from 'vue'
 
 import type { AudienceRole, PublicProject } from '../../public-content/model/publicContentTypes'
 import type { AgentSession } from '../model/sessionTypes'
+import type {
+  AnswerSectionType,
+  FollowUpAction,
+  FollowUpIntent,
+} from '../model/answerTypes'
 
 const props = defineProps<{
   session: AgentSession
@@ -21,6 +26,7 @@ const emit = defineEmits<{
   toggleSessions: []
   toggleEvidence: []
   retry: []
+  followUp: [action: FollowUpAction]
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -52,6 +58,34 @@ function answerLabel(message: AgentSession['messages'][number]) {
   if (answer.verification === 'VERIFIED') return '已核验回答'
   if (answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
   return '尚未核验'
+}
+
+function answerSourceLabel(message: AgentSession['messages'][number]) {
+  const source = message.answer?.answerSource
+  if (source === 'RETRIEVAL') return 'RETRIEVAL · 来自公开资料检索'
+  if (source === 'PRESET') return 'PRESET · 来自已发布问题'
+  return ''
+}
+
+function followUp(
+  message: AgentSession['messages'][number],
+  question: string,
+  intent: FollowUpIntent,
+  selectedSectionType?: AnswerSectionType,
+  referencedClaimIds?: string[],
+) {
+  const envelope = message.answer?.contextEnvelope
+  if (!envelope || props.pending) return
+  emit('followUp', {
+    question,
+    contextEnvelope: {
+      ...envelope,
+      projectSlugs: [...envelope.projectSlugs],
+      referencedClaimIds: [...(referencedClaimIds ?? envelope.referencedClaimIds)],
+      selectedSectionType,
+      followUpIntent: intent,
+    },
+  })
 }
 </script>
 
@@ -109,17 +143,61 @@ function answerLabel(message: AgentSession['messages'][number]) {
         >
           <p v-if="message.answer">
             AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
-            · {{ message.answer.answerSource ?? 'NOT_APPLICABLE' }}
+            <template v-if="answerSourceLabel(message)">
+              · {{ answerSourceLabel(message) }}
+            </template>
             · {{ message.answer.generationMode }} · {{ message.answer.verification }}
           </p>
           <p v-else>{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <div v-if="message.answer" class="structured-answer">
             <h3>{{ message.answer.title }}</h3>
             <p>{{ message.answer.summary }}</p>
+            <p
+              v-if="message.answer.contextVersionUpdated"
+              data-context-version-updated
+              class="context-version-updated"
+              role="status"
+            >公开内容已更新，本轮已按当前版本重新核对。</p>
             <section v-for="section in message.answer.sections" :key="section.type">
               <h4>{{ section.title }}</h4>
               <p>{{ section.content }}</p>
+              <div v-if="message.answer.contextEnvelope" class="follow-up-actions">
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, `展开${section.title}`, 'EXPAND_SECTION', section.type, section.claimIds)"
+                >展开本节</button>
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, `查看${section.title}的证据`, 'SHOW_EVIDENCE', section.type, section.claimIds)"
+                >查看本节证据</button>
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, `说明${section.title}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
+                >说明判断</button>
+              </div>
             </section>
+            <div v-if="message.answer.contextEnvelope" class="follow-up-actions follow-up-actions--answer">
+              <button
+                data-follow-up="current-status"
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
+              >查看当前状态</button>
+              <button
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
+              >查看相关问题</button>
+              <button
+                v-if="message.answer.contextEnvelope.projectSlugs.length > 1"
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '对比这些项目', 'COMPARE_PROJECTS')"
+              >对比项目</button>
+            </div>
           </div>
           <div v-else>{{ message.content }}</div>
           <footer v-if="message.evidenceIds.length">
@@ -291,6 +369,38 @@ function answerLabel(message: AgentSession['messages'][number]) {
   border: 1px solid #5d554b;
   background: transparent;
   font: 8px var(--mono);
+}
+
+.follow-up-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  gap: 7px;
+}
+
+.context-version-updated {
+  padding: 9px 11px;
+  color: #d7c8b7;
+  border-left: 2px solid #c46f66;
+  background: rgba(196, 111, 102, 0.08);
+  font: 10px/1.6 var(--mono);
+}
+
+.follow-up-actions--answer {
+  margin-top: 18px;
+}
+
+.follow-up-actions button {
+  padding: 6px 9px;
+  color: #b7ab9d;
+  border: 1px solid #5d554b;
+  background: transparent;
+  font: 9px var(--mono);
+}
+
+.follow-up-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .answer-state {

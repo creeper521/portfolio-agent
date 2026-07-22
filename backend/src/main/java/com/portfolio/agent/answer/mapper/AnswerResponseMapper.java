@@ -3,6 +3,8 @@ package com.portfolio.agent.answer.mapper;
 import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.answer.dto.response.AnswerResponse;
 import com.portfolio.agent.answer.dto.response.AnswerSectionResponse;
+import com.portfolio.agent.answer.dto.response.ContextEnvelopeResponse;
+import com.portfolio.agent.answer.domain.AnswerResolution;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -20,6 +22,7 @@ public final class AnswerResponseMapper {
                         section.getClaimIds()
                 ))
                 .toList();
+        ContextEnvelopeResponse contextEnvelope = createContextEnvelope(result, sections);
         return new AnswerResponse(
                 result.getTurnSnapshot().getRequestId(),
                 result.getTurnSnapshot().getTurnId(),
@@ -33,7 +36,30 @@ public final class AnswerResponseMapper {
                 result.getSummary(),
                 sections,
                 result.getEvidenceIds(),
-                result.getSuggestedQuestionPresetIds()
+                result.getSuggestedQuestionPresetIds(),
+                contextEnvelope,
+                result.isContextVersionUpdated()
         );
+    }
+
+    private ContextEnvelopeResponse createContextEnvelope(
+            AnswerResult result,
+            List<AnswerSectionResponse> sections
+    ) {
+        if (result.getResolution() != AnswerResolution.ANSWERED) {
+            return null;
+        }
+        List<String> claimIds = sections.stream()
+                .flatMap(section -> section.getClaimIds().stream())
+                .distinct()
+                .limit(8)
+                .toList();
+        return new ContextEnvelopeResponse(
+                result.getTurnSnapshot().getContentVersion(),
+                List.of(result.getTurnSnapshot().getProjectSlug()),
+                result.getTurnSnapshot().getQuestionPresetId(),
+                claimIds,
+                null,
+                null);
     }
 }

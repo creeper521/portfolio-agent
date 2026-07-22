@@ -19,6 +19,16 @@ function New-Candidate([string]$Name) {
     return $path
 }
 
+function Invoke-CompilerMain(
+    [string]$MainClass,
+    [string]$Jar,
+    [string[]]$Arguments
+) {
+    $output = & java.exe ("-Dloader.main=" + $MainClass) -cp $Jar `
+        org.springframework.boot.loader.launch.PropertiesLauncher @Arguments 2>&1
+    return @{ ExitCode = $LASTEXITCODE; Output = ($output -join [Environment]::NewLine) }
+}
+
 try {
     $missing = Invoke-Governance @('-Command', 'inspect')
     if ($missing.ExitCode -eq 0) { throw 'Missing workspace must fail.' }
@@ -235,6 +245,84 @@ try {
         '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1', '-Confirm')
     if ($rollback.ExitCode -ne 0) { throw "Rollback failed: $($rollback.Output)" }
     if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne '2026-07-21.1') { throw 'Rollback did not restore verified target.' }
+
+    $compilerJar = Join-Path $repositoryRoot 'backend\target\portfolio-agent.jar'
+    $localModel = Join-Path $repositoryRoot 'runtime-models\bge-small-zh-v1.5'
+    if ((Test-Path -LiteralPath $compilerJar -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $localModel 'onnx\model_quantized.onnx') -PathType Leaf)) {
+        $retrievalCandidate = New-Candidate 'retrieval-candidate'
+        $ragFile = Join-Path $retrievalCandidate 'rag-documents.jsonl'
+        $ragBuild = Invoke-CompilerMain 'com.portfolio.agent.release.RagDocumentCompilerCli' `
+            $compilerJar @('--portfolio', (Join-Path $retrievalCandidate 'portfolio.json'),
+                '--output', $ragFile, '--valid-from', '2026-07-21')
+        if ($ragBuild.ExitCode -ne 0) { throw "RAG candidate build failed: $($ragBuild.Output)" }
+
+        $retrievalValidation = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+            '-Candidate', $retrievalCandidate, '-JarPath', $compilerJar)
+        if ($retrievalValidation.ExitCode -ne 0) {
+            throw "Canonical retrieval candidate failed validation: $($retrievalValidation.Output)"
+        }
+        $retrievalValidationResult = $retrievalValidation.Output | ConvertFrom-Json
+        if ($retrievalValidationResult.runSnapshot.candidatePayloadHash -eq
+                $result.runSnapshot.candidatePayloadHash) {
+            throw 'Retrieval candidate hash must bind canonical RAG bytes.'
+        }
+
+        $tamperedRetrievalCandidate = New-Candidate 'retrieval-tampered'
+        Copy-Item -LiteralPath $ragFile -Destination $tamperedRetrievalCandidate
+        Add-Content -LiteralPath (Join-Path $tamperedRetrievalCandidate 'rag-documents.jsonl') -Value ' '
+        $tamperedRetrieval = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+            '-Candidate', $tamperedRetrievalCandidate, '-JarPath', $compilerJar)
+        if ($tamperedRetrieval.ExitCode -eq 0 -or
+                -not $tamperedRetrieval.Output.Contains('RAG_CANONICAL_MISMATCH')) {
+            throw 'Non-canonical RAG bytes must fail before Approval.'
+        }
+
+        $retrievalReview = Invoke-Governance @('-Command', 'build-review-pack',
+            '-Workspace', $workspace, '-Candidate', $retrievalCandidate, '-JarPath', $compilerJar)
+        if ($retrievalReview.ExitCode -ne 0) { throw "Retrieval review failed: $($retrievalReview.Output)" }
+        $retrievalReviewResult = $retrievalReview.Output | ConvertFrom-Json
+        $retrievalApproval = Invoke-Governance @('-Command', 'approve', '-Workspace', $workspace,
+            '-Candidate', $retrievalCandidate, '-ReviewRunId', $retrievalReviewResult.runId,
+            '-ApprovedBy', 'owner-alias', '-PrivacyReviewId', 'PRIV-C2',
+            '-BenchmarkRunId', 'BENCH-C2', '-JarPath', $compilerJar)
+        if ($retrievalApproval.ExitCode -ne 0) { throw "Retrieval approval failed: $($retrievalApproval.Output)" }
+        $retrievalApprovalResult = $retrievalApproval.Output | ConvertFrom-Json
+        $retrievalApprovalData = Get-Content -LiteralPath `
+            (Join-Path $workspace $retrievalApprovalResult.artifacts[-1]) -Raw -Encoding UTF8 |
+            ConvertFrom-Json
+        $retrievalReleaseRoot = Join-Path $fixtureRoot 'retrieval-public-releases'
+        New-Item -ItemType Directory -Force -Path $retrievalReleaseRoot | Out-Null
+        $retrievalPublish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
+            '-Candidate', $retrievalCandidate, '-ApprovalId', $retrievalApprovalData.approvalId,
+            '-ReleaseRoot', $retrievalReleaseRoot, '-JarPath', $compilerJar,
+            '-ModelDirectory', $localModel, '-Confirm')
+        if ($retrievalPublish.ExitCode -ne 0) { throw "Retrieval publish failed: $($retrievalPublish.Output)" }
+        $retrievalVersion = Join-Path $retrievalReleaseRoot 'versions\2026-07-21.1'
+        $retrievalNames = @(Get-ChildItem -LiteralPath $retrievalVersion -File |
+            ForEach-Object { $_.Name } | Sort-Object)
+        if (($retrievalNames -join ',') -ne
+                'checksums.json,keyword-index.json,manifest.json,portfolio.json,presentation.json,rag-documents.jsonl,vector-index.bin') {
+            throw 'Retrieval publish did not produce the closed seven-file runtime bundle.'
+        }
+        if (-not [Linq.Enumerable]::SequenceEqual(
+                [byte[]][IO.File]::ReadAllBytes($ragFile),
+                [byte[]][IO.File]::ReadAllBytes((Join-Path $retrievalVersion 'rag-documents.jsonl')))) {
+            throw 'Retrieval publish changed approved canonical RAG bytes.'
+        }
+        $retrievalManifest = Get-Content -LiteralPath (Join-Path $retrievalVersion 'manifest.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -eq $retrievalManifest.retrieval -or
+                $retrievalManifest.candidatePayloadHash -ne
+                $retrievalApprovalData.candidatePayloadHash) {
+            throw 'Runtime Manifest did not bind Approval and retrieval metadata.'
+        }
+        $retrievalVerify = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
+            '-ReleaseRoot', $retrievalReleaseRoot, '-TargetVersion', '2026-07-21.1')
+        if ($retrievalVerify.ExitCode -ne 0) {
+            throw "Seven-file retrieval release failed verify: $($retrievalVerify.Output)"
+        }
+    }
 
     Write-Output 'portfolio-governance tests passed'
 }

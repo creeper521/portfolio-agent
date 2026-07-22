@@ -30,6 +30,7 @@ $environment = @{
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
+    PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
 }
 
 try {
@@ -52,6 +53,7 @@ try {
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'
     $env:PLAYWRIGHT_REAL_API = 'original-real'
     $env:PLAYWRIGHT_BASE_URL = 'original-base'
+    $env:PLAYWRIGHT_REAL_RETRIEVAL = 'original-retrieval'
 
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
         -JarPath $spacedJar -NpmExecutable $fakeNpm -Port $port 2>&1 | Out-String)
@@ -99,6 +101,8 @@ finally {
     Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
     Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+    Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
+        $environment.PLAYWRIGHT_REAL_RETRIEVAL
 
     if (Test-Path -LiteralPath $fixtureRoot) {
         $resolvedFixtureRoot = (Resolve-Path -LiteralPath $fixtureRoot).Path

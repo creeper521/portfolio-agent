@@ -27,17 +27,31 @@ public final class AnswerRequest {
     @NotNull(message = "context is required")
     private final AnswerContextRequest context;
 
+    @Valid
+    private final ContextEnvelopeRequest contextEnvelope;
+
     @JsonCreator
     public AnswerRequest(
             @JsonProperty("turnId") String turnId,
             @JsonProperty("questionPresetId") String questionPresetId,
             @JsonProperty("question") String question,
-            @JsonProperty("context") AnswerContextRequest context
+            @JsonProperty("context") AnswerContextRequest context,
+            @JsonProperty("contextEnvelope") ContextEnvelopeRequest contextEnvelope
     ) {
         this.turnId = turnId;
         this.questionPresetId = questionPresetId;
         this.question = question;
         this.context = context;
+        this.contextEnvelope = contextEnvelope;
+    }
+
+    public AnswerRequest(
+            String turnId,
+            String questionPresetId,
+            String question,
+            AnswerContextRequest context
+    ) {
+        this(turnId, questionPresetId, question, context, null);
     }
 
     public String getTurnId() {
@@ -54,6 +68,10 @@ public final class AnswerRequest {
 
     public AnswerContextRequest getContext() {
         return context;
+    }
+
+    public ContextEnvelopeRequest getContextEnvelope() {
+        return contextEnvelope;
     }
 
     @AssertTrue(message = "questionPresetId or question is required")
@@ -76,12 +94,13 @@ public final class AnswerRequest {
         return Objects.equals(turnId, that.turnId)
                 && Objects.equals(questionPresetId, that.questionPresetId)
                 && Objects.equals(question, that.question)
-                && Objects.equals(context, that.context);
+                && Objects.equals(context, that.context)
+                && Objects.equals(contextEnvelope, that.contextEnvelope);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(turnId, questionPresetId, question, context);
+        return Objects.hash(turnId, questionPresetId, question, context, contextEnvelope);
     }
 
     @Override
@@ -90,6 +109,7 @@ public final class AnswerRequest {
                 "turnId='" + turnId + '\'' +
                 ", questionPresetId='" + questionPresetId + '\'' +
                 ", question='<redacted>'" +
+                ", hasContextEnvelope=" + (contextEnvelope != null) +
                 '}';
     }
 }

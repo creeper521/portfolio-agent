@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "modelId": "BAAI/bge-small-zh-v1.5",
+  "installDirectory": "bge-small-zh-v1.5",
+  "repository": "onnx-community/bge-small-zh-v1.5-ONNX",
+  "revision": "9507db33464b5da99a532ac26b2a251767cbc62b",
+  "license": "MIT",
+  "format": "INT8_ONNX_EXTERNAL_DATA",
+  "dimension": 512,
+  "maxTokens": 256,
+  "vectorNormalization": "L2",
+  "similarity": "COSINE",
+  "queryInstruction": "为这个句子生成表示以用于检索相关文章：",
+  "intraOpNumThreads": 2,
+  "interOpNumThreads": 1,
+  "files": [
+    {
+      "path": "config.json",
+      "size": 904,
+      "sha256": "34fa1ea6278c257de3cc8ce7e9bdc48647b802145a9da0fc32e95db620efd04f"
+    },
+    {
+      "path": "onnx/model_quantized.onnx",
+      "size": 168002,
+      "sha256": "99a6e522710c00220c89f8c52e0cc5aa09d4cbb1c34c0e932eab3a9dfdc65df3"
+    },
+    {
+      "path": "onnx/model_quantized.onnx_data",
+      "size": 23774208,
+      "sha256": "952623481ca8beea884e3d3c9ecaf8a3c7bf1d0c21de29e970cd31af9d37a90b"
+    },
+    {
+      "path": "tokenizer.json",
+      "size": 362603,
+      "sha256": "3d09c84ebd10306706a79a8276b3ab736a40d8ec03251c7639f4e52c3a1a4f8e"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size": 414,
+      "sha256": "7e3bd6113f18c20975eaa8e8cc03c95b727fd83d6357f8e171e22b3736bf706d"
+    }
+  ]
+}

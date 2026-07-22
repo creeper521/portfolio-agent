@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installPublicApiMocks } from './support/publicApiMocks'
+import { previewPublicContent } from '../src/features/public-content/data/previewPublicContent'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -153,6 +154,45 @@ test('workspace separators support keyboard adjustment and reset', async ({ page
   await expect(handle).toHaveAttribute('aria-valuenow', String(before))
 })
 
+test('explicit follow-up sends stable references only and is lost on reload', async ({ page }) => {
+  await openAgentDeepLink(page)
+
+  await page.getByLabel('你的问题').fill(
+    '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？',
+  )
+  await page.getByRole('button', { name: /发送/ }).click()
+  await expect(page.locator('[data-follow-up="current-status"]')).toBeVisible()
+
+  const requestPromise = page.waitForRequest((request) =>
+    new URL(request.url()).pathname === '/api/v1/answers' &&
+    request.method() === 'POST' &&
+    Boolean(request.postDataJSON()?.contextEnvelope),
+  )
+  await page.locator('[data-follow-up="current-status"]').click()
+  const body = (await requestPromise).postDataJSON()
+
+  expect(body.question).toBe('查看当前状态')
+  expect(body.contextEnvelope).toMatchObject({
+    previousContentVersion: previewPublicContent.contentVersion,
+    projectSlugs: ['sql-audit'],
+    questionPresetId: 'sql-audit-overview',
+    followUpIntent: 'CURRENT_STATUS',
+  })
+  expect(body.contextEnvelope.referencedClaimIds)
+    .toEqual(expect.arrayContaining(['claim-sql-audit-delivered']))
+  expect(body.contextEnvelope.referencedClaimIds.length).toBeLessThanOrEqual(8)
+  expect(body.contextEnvelope.referencedClaimIds.every(
+    (id: unknown) => typeof id === 'string' && /^[a-z0-9-]{1,100}$/.test(id),
+  )).toBe(true)
+  expect(body).not.toHaveProperty('messages')
+  expect(body).not.toHaveProperty('previousQuestion')
+  expect(body).not.toHaveProperty('previousAnswer')
+
+  await expect(page.locator('.message--user').last()).toContainText('查看当前状态')
+  await page.reload()
+  await expect(page.locator('.message')).toHaveCount(0)
+})
+
 test('Agent renders boundary and rejected dimensions without a verified label', async ({ page }) => {
   await openAgentDeepLink(page)
 
@@ -170,6 +210,80 @@ test('Agent renders boundary and rejected dimensions without a verified label', 
   await expect(rejected).toContainText('无法处理该请求')
   await expect(rejected).toContainText('REJECTED')
   await expect(rejected).toContainText('NOT_APPLICABLE')
+})
+
+test('Agent distinguishes retrieval provenance from verification', async ({ page }) => {
+  test.skip(
+    process.env.PLAYWRIGHT_REAL_API === '1' && process.env.PLAYWRIGHT_REAL_RETRIEVAL !== '1',
+    'The active real bundle does not enable retrieval',
+  )
+  await openAgentDeepLink(page)
+
+  await page.getByLabel('你的问题').fill('这个项目交付了什么？')
+  await page.getByRole('button', { name: /发送/ }).click()
+  const answer = page.locator('.message--agent').last()
+
+  await expect(answer).toContainText('ANSWERED')
+  await expect(answer).toContainText('RETRIEVAL · 来自公开资料检索')
+  if (process.env.PLAYWRIGHT_REAL_RETRIEVAL === '1') {
+    await expect(answer).toContainText('VERIFIED')
+    await expect(answer).toContainText('已核验回答')
+  } else {
+    await expect(answer).toContainText('PARTIALLY_VERIFIED')
+    await expect(answer).not.toContainText('已核验回答')
+  }
+})
+
+test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes', async ({
+  page,
+}) => {
+  test.skip(process.env.PLAYWRIGHT_REAL_API === '1', 'Provider behavior uses local fake responses')
+  await page.unroute('**/api/v1/answers')
+  let attempt = 0
+  await page.route('**/api/v1/answers', async (route) => {
+    attempt += 1
+    const request = route.request().postDataJSON() as { turnId?: string }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      json: {
+        requestId: `fake-provider-${attempt}`,
+        turnId: request.turnId ?? `turn-${attempt}`,
+        contentVersion: '2026-07-22',
+        questionPresetId: 'sql-audit-overview',
+        resolution: 'ANSWERED',
+        answerSource: 'PRESET',
+        generationMode: attempt === 1 ? 'MODEL' : 'FALLBACK',
+        verification: 'VERIFIED',
+        title: 'SQL 审计与故障排查工具',
+        summary: attempt === 1 ? '受约束模型表达' : '同一计划的确定性回退',
+        sections: [{
+          type: 'BACKGROUND',
+          title: '项目背景',
+          content: '仅使用已批准的公开事实。',
+          evidenceIds: ['sql-audit-delivery-set'],
+          claimIds: ['sql-audit-background'],
+        }],
+        evidenceIds: ['sql-audit-delivery-set'],
+        suggestedQuestionPresetIds: ['sql-audit-overview'],
+      },
+    })
+  })
+  await openAgentDeepLink(page)
+
+  const input = page.getByLabel('你的问题')
+  await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
+  await page.getByRole('button', { name: /发送/ }).click()
+  const modelAnswer = page.locator('.message--agent').last()
+  await expect(modelAnswer).toContainText('MODEL')
+  await expect(modelAnswer).toContainText('PRESET')
+  await expect(modelAnswer).toContainText('VERIFIED')
+
+  await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
+  await page.getByRole('button', { name: /发送/ }).click()
+  const fallbackAnswer = page.locator('.message--agent').last()
+  await expect(fallbackAnswer).toContainText('FALLBACK')
+  await expect(fallbackAnswer).toContainText('同一计划的确定性回退')
 })
 
 test('responsive Agent uses evidence and session drawers without horizontal overflow', async ({

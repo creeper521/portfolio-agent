@@ -24,6 +24,13 @@ describe('mapAnswerResponse', () => {
       }],
       evidenceIds: resolution === 'ANSWERED' ? ['evidence-1'] : [],
       suggestedQuestionPresetIds: ['preset-1'],
+      contextEnvelope: resolution === 'ANSWERED' ? {
+        previousContentVersion: '2026-07-21',
+        projectSlugs: ['sql-audit'],
+        questionPresetId: 'preset-1',
+        referencedClaimIds: ['claim-1'],
+      } : undefined,
+      contextVersionUpdated: resolution === 'ANSWERED',
     }
   }
 
@@ -41,6 +48,12 @@ describe('mapAnswerResponse', () => {
     })
     expect(mapped.sections[0].claimIds).toEqual(['claim-1'])
     expect(mapped.sections[0].claimIds).not.toBe(source.sections[0].claimIds)
+    expect(mapped.contextEnvelope).toEqual(source.contextEnvelope)
+    expect(mapped.contextEnvelope?.projectSlugs)
+      .not.toBe(source.contextEnvelope?.projectSlugs)
+    expect(mapped.contextEnvelope?.referencedClaimIds)
+      .not.toBe(source.contextEnvelope?.referencedClaimIds)
+    expect(mapped.contextVersionUpdated).toBe(true)
   })
 
   it('rejects an answer whose title, summary and sections are all blank', () => {

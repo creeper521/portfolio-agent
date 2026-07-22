@@ -94,6 +94,25 @@ describe('AudienceDialogue', () => {
     expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
   })
 
+  it('labels retrieval independently from partial verification', async () => {
+    askQuestionMock.mockResolvedValue({
+      ...answerResponse(),
+      questionPresetId: undefined,
+      answerSource: 'RETRIEVAL' as const,
+      verification: 'PARTIALLY_VERIFIED' as const,
+    })
+    const wrapper = mountDialogue()
+
+    await wrapper.get('[data-custom-question]').setValue('检索公开交付结果')
+    await wrapper.get('[data-question-form]').trigger('submit')
+    await flushPromises()
+
+    const panel = wrapper.get('[data-light-answer]').text()
+    expect(panel).toContain('RETRIEVAL · 来自公开资料检索')
+    expect(panel).toContain('部分事实已核验')
+    expect(panel).not.toContain('已核验回答')
+  })
+
   it('disables question input and submission while an answer is pending', async () => {
     let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
     askQuestionMock.mockReturnValue(

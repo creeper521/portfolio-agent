@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class RuntimeContentSnapshot {
 
@@ -19,11 +20,21 @@ public final class RuntimeContentSnapshot {
     private final List<QuestionDefinition> questionPresets;
     private final List<EvidenceRecord> approvedEvidence;
     private final List<TimelineEvent> timeline;
+    private final RuntimeRetrievalContent retrievalContent;
 
     public RuntimeContentSnapshot(
             PortfolioSnapshot content,
             String runtimeBundleHash,
             Instant loadedAt
+    ) {
+        this(content, runtimeBundleHash, loadedAt, null);
+    }
+
+    public RuntimeContentSnapshot(
+            PortfolioSnapshot content,
+            String runtimeBundleHash,
+            Instant loadedAt,
+            RuntimeRetrievalContent retrievalContent
     ) {
         this.schemaVersion = content.getSchemaVersion();
         this.contentVersion = content.getContentVersion();
@@ -37,6 +48,7 @@ public final class RuntimeContentSnapshot {
         this.questionPresets = List.copyOf(content.getQuestions());
         this.approvedEvidence = List.copyOf(content.getEvidence());
         this.timeline = List.copyOf(content.getTimeline());
+        this.retrievalContent = retrievalContent;
     }
 
     public String getSchemaVersion() {
@@ -95,6 +107,10 @@ public final class RuntimeContentSnapshot {
         return timeline;
     }
 
+    public Optional<RuntimeRetrievalContent> getRetrievalContent() {
+        return Optional.ofNullable(retrievalContent);
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -114,13 +130,14 @@ public final class RuntimeContentSnapshot {
                 && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(questionPresets, that.questionPresets)
                 && Objects.equals(approvedEvidence, that.approvedEvidence)
-                && Objects.equals(timeline, that.timeline);
+                && Objects.equals(timeline, that.timeline)
+                && Objects.equals(retrievalContent, that.retrievalContent);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(schemaVersion, contentVersion, runtimeBundleHash, loadedAt,
                 publishedAt, owner, projects, claims, claimEvidenceLinks, questionPresets,
-                approvedEvidence, timeline);
+                approvedEvidence, timeline, retrievalContent);
     }
 }

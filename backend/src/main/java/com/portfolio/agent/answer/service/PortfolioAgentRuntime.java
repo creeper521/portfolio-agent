@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.AnswerDecision;
+import com.portfolio.agent.answer.domain.AgentExecutionSnapshot;
+import com.portfolio.agent.answer.domain.AnswerPlan;
 import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.AnswerResult;
 import com.portfolio.agent.answer.domain.AnswerSection;
@@ -12,14 +14,25 @@ import com.portfolio.agent.answer.domain.GeneratedAnswer;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.QuestionKind;
 import com.portfolio.agent.answer.domain.QuestionResolution;
+import com.portfolio.agent.answer.domain.RetrievalCapability;
+import com.portfolio.agent.answer.domain.RetrievalDecision;
+import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.ResolvedAnswerContext;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.domain.VerificationStatus;
+import com.portfolio.agent.answer.domain.ContextResolution;
+import com.portfolio.agent.answer.domain.ContextResolutionType;
+import com.portfolio.agent.answer.domain.ExecutionBudgets;
+import com.portfolio.agent.answer.domain.PublicToolResultStatus;
+import com.portfolio.agent.answer.domain.ToolExecutionOutcome;
+import com.portfolio.agent.answer.domain.ToolPlan;
+import com.portfolio.agent.answer.domain.ValidatedContextEnvelope;
 import com.portfolio.agent.answer.dto.request.AnswerRequest;
-import com.portfolio.agent.answer.engine.AnswerEngine;
 import com.portfolio.agent.answer.gateway.AnswerDecisionPublisher;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Instant;
 import java.util.List;
@@ -36,24 +49,68 @@ public final class PortfolioAgentRuntime {
     private final PortfolioKnowledgeGateway knowledgeGateway;
     private final QuestionResolver questionResolver;
     private final AnswerContextFactory contextFactory;
-    private final AnswerEngine answerEngine;
+    private final AnswerPlanBuilder answerPlanBuilder;
+    private final AgentExecutionSnapshotFactory executionSnapshotFactory;
+    private final ModelAnswerCoordinator modelAnswerCoordinator;
     private final VerificationPolicy verificationPolicy;
     private final AnswerDecisionPublisher decisionPublisher;
+    private final LocalRetrievalCoordinator retrievalCoordinator;
+    private final RetrievalPolicy retrievalPolicy;
+    private final RetrievalCapability retrievalCapability;
+    private final ContextEnvelopeValidator contextEnvelopeValidator;
+    private final ToolPlanBuilder toolPlanBuilder;
+    private final ToolPlanExecutor toolPlanExecutor;
 
     public PortfolioAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
             QuestionResolver questionResolver,
             AnswerContextFactory contextFactory,
-            AnswerEngine answerEngine,
+            AnswerPlanBuilder answerPlanBuilder,
+            AgentExecutionSnapshotFactory executionSnapshotFactory,
+            ModelAnswerCoordinator modelAnswerCoordinator,
             VerificationPolicy verificationPolicy,
-            AnswerDecisionPublisher decisionPublisher
+            AnswerDecisionPublisher decisionPublisher,
+            LocalRetrievalCoordinator retrievalCoordinator,
+            RetrievalPolicy retrievalPolicy,
+            RetrievalCapability retrievalCapability
+    ) {
+        this(knowledgeGateway, questionResolver, contextFactory, answerPlanBuilder,
+                executionSnapshotFactory, modelAnswerCoordinator, verificationPolicy,
+                decisionPublisher, retrievalCoordinator, retrievalPolicy, retrievalCapability,
+                null, null, null);
+    }
+
+    @Autowired
+    public PortfolioAgentRuntime(
+            PortfolioKnowledgeGateway knowledgeGateway,
+            QuestionResolver questionResolver,
+            AnswerContextFactory contextFactory,
+            AnswerPlanBuilder answerPlanBuilder,
+            AgentExecutionSnapshotFactory executionSnapshotFactory,
+            ModelAnswerCoordinator modelAnswerCoordinator,
+            VerificationPolicy verificationPolicy,
+            AnswerDecisionPublisher decisionPublisher,
+            LocalRetrievalCoordinator retrievalCoordinator,
+            RetrievalPolicy retrievalPolicy,
+            RetrievalCapability retrievalCapability,
+            ContextEnvelopeValidator contextEnvelopeValidator,
+            ToolPlanBuilder toolPlanBuilder,
+            ToolPlanExecutor toolPlanExecutor
     ) {
         this.knowledgeGateway = knowledgeGateway;
         this.questionResolver = questionResolver;
         this.contextFactory = contextFactory;
-        this.answerEngine = answerEngine;
+        this.answerPlanBuilder = answerPlanBuilder;
+        this.executionSnapshotFactory = executionSnapshotFactory;
+        this.modelAnswerCoordinator = modelAnswerCoordinator;
         this.verificationPolicy = verificationPolicy;
         this.decisionPublisher = decisionPublisher;
+        this.retrievalCoordinator = retrievalCoordinator;
+        this.retrievalPolicy = retrievalPolicy;
+        this.retrievalCapability = retrievalCapability;
+        this.contextEnvelopeValidator = contextEnvelopeValidator;
+        this.toolPlanBuilder = toolPlanBuilder;
+        this.toolPlanExecutor = toolPlanExecutor;
     }
 
     public AnswerResult answer(AnswerRequest request) {
@@ -61,24 +118,142 @@ public final class PortfolioAgentRuntime {
         String requestId = UUID.randomUUID().toString();
         RuntimeAnswerContent content = knowledgeGateway.getContent();
         QuestionResolution resolution = questionResolver.resolve(content, request);
-        AnswerTurnSnapshot turn = new AnswerTurnSnapshot(
+        ResolvedAnswerContext context;
+        boolean contextVersionUpdated = false;
+        if (shouldUseTools(request, resolution)) {
+            ToolContextResolution toolContext = resolveToolContext(
+                    content, request, requestId);
+            context = toolContext == null ? null : toolContext.getContext();
+            if (toolContext != null) {
+                contextVersionUpdated = toolContext.isVersionUpdated();
+                resolution = new QuestionResolution(
+                        AnswerResolution.ANSWERED, context.getProject(), null);
+            } else {
+                AnswerTurnSnapshot boundaryTurn = createTurn(
+                        requestId, content, resolution, request);
+                context = contextFactory.create(boundaryTurn, resolution, request);
+            }
+        } else if (shouldRetrieve(resolution, content)) {
+            RetrievalDecision retrievalDecision = retrieve(content, resolution, request);
+            if (retrievalDecision != null
+                    && retrievalDecision.getType() == RetrievalDecisionType.SUFFICIENT) {
+                context = contextFactory.createRetrieval(
+                        content, resolution.getProject(), retrievalDecision, request, requestId);
+                resolution = new QuestionResolution(
+                        AnswerResolution.ANSWERED, resolution.getProject(), null);
+            } else {
+                AnswerTurnSnapshot boundaryTurn = createTurn(
+                        requestId, content, resolution, request);
+                context = contextFactory.create(boundaryTurn, resolution, request);
+            }
+        } else {
+            AnswerTurnSnapshot initialTurn = createTurn(requestId, content, resolution, request);
+            context = contextFactory.create(initialTurn, resolution, request);
+        }
+        AnswerTurnSnapshot turn = context.getTurnSnapshot();
+        AgentExecutionSnapshot execution = executionSnapshotFactory.create(turn);
+        AnswerResult result = buildResult(
+                turn, execution, resolution, context, contextVersionUpdated);
+        publishBestEffort(result, request, startedAt);
+        return result;
+    }
+
+    private boolean shouldUseTools(
+            AnswerRequest request,
+            QuestionResolution resolution
+    ) {
+        return request.getContextEnvelope() != null
+                && resolution.getResolution() != AnswerResolution.REJECTED
+                && contextEnvelopeValidator != null
+                && toolPlanBuilder != null
+                && toolPlanExecutor != null;
+    }
+
+    private ToolContextResolution resolveToolContext(
+            RuntimeAnswerContent content,
+            AnswerRequest request,
+            String requestId
+    ) {
+        try {
+            ContextResolution contextResolution = contextEnvelopeValidator.validate(
+                    content, request.getContextEnvelope());
+            if (contextResolution.getType() == ContextResolutionType.INVALID) {
+                return null;
+            }
+            ValidatedContextEnvelope envelope = contextResolution.getEnvelope().orElseThrow();
+            ExecutionBudgets budgets = new ExecutionBudgets(
+                    5000L,
+                    1,
+                    4,
+                    retrievalPolicy.getMaxClaims(),
+                    retrievalPolicy.getMaxContextCharacters());
+            ToolPlan toolPlan = toolPlanBuilder.build(
+                    content, envelope.toQueryIntent(), budgets.getMaxToolCalls());
+            ToolExecutionOutcome outcome = toolPlanExecutor.execute(
+                    content, toolPlan, budgets);
+            if (outcome.getStatus() != PublicToolResultStatus.SUCCESS) {
+                return null;
+            }
+            ResolvedAnswerContext context = contextFactory.createTool(
+                    content, envelope, outcome, request, requestId);
+            return new ToolContextResolution(
+                    context,
+                    contextResolution.getType() == ContextResolutionType.VERSION_UPDATED);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private boolean shouldRetrieve(
+            QuestionResolution resolution,
+            RuntimeAnswerContent content
+    ) {
+        return resolution.getResolution() == AnswerResolution.BOUNDARY
+                && content.getRetrievalCorpus()
+                        .map(retrievalCapability::supports)
+                        .orElse(false);
+    }
+
+    private RetrievalDecision retrieve(
+            RuntimeAnswerContent content,
+            QuestionResolution resolution,
+            AnswerRequest request
+    ) {
+        try {
+            return retrievalCoordinator.retrieve(
+                    request.getQuestion(),
+                    resolution.getProject().getSlug(),
+                    content.getRetrievalCorpus().orElseThrow(),
+                    resolution.getProject().getClaims(),
+                    resolution.getProject().getEvidence(),
+                    retrievalCapability.getMode(),
+                    retrievalPolicy);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private AnswerTurnSnapshot createTurn(
+            String requestId,
+            RuntimeAnswerContent content,
+            QuestionResolution resolution,
+            AnswerRequest request
+    ) {
+        return new AnswerTurnSnapshot(
                 request.getTurnId(),
                 requestId,
                 content,
                 resolution,
                 request.getContext().getAudienceRole(),
-                request.getContext().getSource()
-        );
-        ResolvedAnswerContext context = contextFactory.create(turn, resolution, request);
-        AnswerResult result = buildResult(turn, resolution, context);
-        publishBestEffort(result, request, startedAt);
-        return result;
+                request.getContext().getSource());
     }
 
     private AnswerResult buildResult(
             AnswerTurnSnapshot turn,
+            AgentExecutionSnapshot execution,
             QuestionResolution resolution,
-            ResolvedAnswerContext context
+            ResolvedAnswerContext context,
+            boolean contextVersionUpdated
     ) {
         List<String> suggestions = resolution.getProject().getQuestions().stream()
                 .map(com.portfolio.agent.answer.domain.AnswerQuestion::getId)
@@ -104,7 +279,9 @@ public final class PortfolioAgentRuntime {
             );
         }
 
-        GeneratedAnswer generated = answerEngine.answer(context);
+        AnswerPlan plan = answerPlanBuilder.build(turn, context);
+        ModelAnswerOutcome outcome = modelAnswerCoordinator.generate(execution, plan);
+        GeneratedAnswer generated = outcome.getAnswer();
         VerificationStatus verification = verificationPolicy.verify(
                 resolution.getResolution(), context, generated);
         List<String> evidenceIds = context.getApprovedEvidence().stream()
@@ -114,15 +291,32 @@ public final class PortfolioAgentRuntime {
         return new AnswerResult(
                 turn,
                 AnswerResolution.ANSWERED,
-                AnswerSource.PRESET,
-                GenerationMode.DETERMINISTIC,
+                context.getAnswerSource(),
+                outcome.getGenerationMode(),
                 verification,
                 generated.getTitle(),
                 generated.getSummary(),
                 generated.getSections(),
                 evidenceIds,
-                suggestions
+                suggestions,
+                contextVersionUpdated
         );
+    }
+
+    private static final class ToolContextResolution {
+        private final ResolvedAnswerContext context;
+        private final boolean versionUpdated;
+
+        private ToolContextResolution(
+                ResolvedAnswerContext context,
+                boolean versionUpdated
+        ) {
+            this.context = context;
+            this.versionUpdated = versionUpdated;
+        }
+
+        private ResolvedAnswerContext getContext() { return context; }
+        private boolean isVersionUpdated() { return versionUpdated; }
     }
 
     private void publishBestEffort(AnswerResult result, AnswerRequest request, long startedAt) {

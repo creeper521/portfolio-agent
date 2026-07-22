@@ -14,6 +14,7 @@ import {
   type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed } from '../model/sessionTypes'
+import type { ContextEnvelope, FollowUpAction } from '../model/answerTypes'
 import { mapAnswerResponse } from '../model/mapAnswerResponse'
 import ConversationThread from './ConversationThread.vue'
 import EvidenceDesk from './EvidenceDesk.vue'
@@ -25,6 +26,7 @@ interface AnswerRequestContext {
   projectSlug: string
   question: string
   questionPresetId?: string
+  contextEnvelope?: ContextEnvelope
 }
 
 const props = withDefaults(
@@ -117,6 +119,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
         questionPresetId: context.questionPresetId,
         question: context.questionPresetId ? undefined : context.question,
+        contextEnvelope: context.contextEnvelope,
       }),
     )
     if (disposed || request !== requestVersion) return
@@ -184,6 +187,21 @@ function toggleSessions() {
   sessionDrawerOpen.value = !sessionDrawerOpen.value
   if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
   if (sessionDrawerOpen.value && sessionsIsDrawer.value) focusDrawer('#local-session-rail')
+}
+
+function submitFollowUp(action: FollowUpAction) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  if (!session || !project) return
+  void requestAnswer(
+    {
+      sessionId: session.id,
+      projectSlug: project.slug,
+      question: action.question,
+      contextEnvelope: action.contextEnvelope,
+    },
+    true,
+  )
 }
 
 function toggleEvidence() {
@@ -324,6 +342,7 @@ onBeforeUnmount(() => {
       :pending="pending"
       :error="answerError"
       @submit="submit"
+      @follow-up="submitFollowUp"
       @retry="retryAnswer"
       @evidence="openEvidence"
       @toggle-sessions="toggleSessions"

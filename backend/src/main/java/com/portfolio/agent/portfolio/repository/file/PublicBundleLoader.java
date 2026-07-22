@@ -9,18 +9,27 @@ import com.portfolio.agent.portfolio.domain.ReleaseManifest;
 import com.portfolio.agent.portfolio.domain.PresentationSnapshot;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
+import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 
 import java.io.IOException;
 import java.time.Clock;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 public final class PublicBundleLoader {
 
-    private static final Set<String> REQUIRED_FILES = Set.of(
+    private static final Set<String> LEGACY_FILES = Set.of(
             "manifest.json", "portfolio.json", "presentation.json", "checksums.json");
+    private static final Set<String> RETRIEVAL_FILES = Set.of(
+            "manifest.json", "portfolio.json", "presentation.json", "rag-documents.jsonl",
+            "keyword-index.json", "vector-index.bin", "checksums.json");
     private static final String APPLICATION_VERSION = "0.1.0";
     private static final Set<String> PORTFOLIO_FIELDS = Set.of(
             "schemaVersion", "contentVersion", "owner", "internshipPeriod", "projects",
@@ -43,9 +52,13 @@ public final class PublicBundleLoader {
 
     public RuntimeContentSnapshot load(Map<String, byte[]> files) {
         try {
-            require(files != null && files.keySet().equals(REQUIRED_FILES),
+            require(files != null && (files.keySet().equals(LEGACY_FILES)
+                            || files.keySet().equals(RETRIEVAL_FILES)),
                     "bundle file set is not closed");
             ReleaseManifest manifest = read(files, "manifest.json", ReleaseManifest.class);
+            boolean hasRetrieval = manifest.getRetrieval() != null;
+            require(hasRetrieval == files.keySet().equals(RETRIEVAL_FILES),
+                    "bundle file set does not match retrieval manifest");
             require("2.0".equals(manifest.getSchemaVersion()), "unsupported manifest schemaVersion");
             require("portfolio.json".equals(manifest.getFactsFile()), "invalid factsFile");
             require("presentation.json".equals(manifest.getPresentationFile()),
@@ -61,11 +74,15 @@ public final class PublicBundleLoader {
                     "checksums schemaVersion mismatch");
             require(manifest.getContentVersion().equals(checksums.getContentVersion()),
                     "checksums contentVersion mismatch");
-            require(checksums.getFiles().keySet().equals(
-                    Set.of("portfolio.json", "presentation.json")),
+            Set<String> expectedChecksums = hasRetrieval
+                    ? Set.of("portfolio.json", "presentation.json", "rag-documents.jsonl",
+                            "keyword-index.json", "vector-index.bin")
+                    : Set.of("portfolio.json", "presentation.json");
+            require(checksums.getFiles().keySet().equals(expectedChecksums),
                     "checksums file set is not closed");
-            verifyChecksum(files, checksums, "portfolio.json");
-            verifyChecksum(files, checksums, "presentation.json");
+            for (String name : expectedChecksums) {
+                verifyChecksum(files, checksums, name);
+            }
 
             String candidateHash = BundleHashCalculator.candidatePayloadHash(files);
             require(candidateHash.equals(manifest.getCandidatePayloadHash()),
@@ -87,11 +104,15 @@ public final class PublicBundleLoader {
 
             PortfolioSnapshot published = content.withPublishedAt(manifest.getPublishedAt());
             validator.validate(published);
+            RuntimeRetrievalContent retrievalContent = hasRetrieval
+                    ? readRetrievalContent(files, manifest)
+                    : null;
             return new RuntimeContentSnapshot(
                     published,
                     BundleHashCalculator.runtimeBundleHash(
                             files.get("manifest.json"), files.get("checksums.json")),
-                    clock.instant()
+                    clock.instant(),
+                    retrievalContent
             );
         } catch (IOException | IllegalArgumentException exception) {
             if (exception instanceof InvalidPortfolioSnapshotException invalid) {
@@ -100,6 +121,67 @@ public final class PublicBundleLoader {
             throw new InvalidPortfolioSnapshotException(
                     "unable to load public release bundle: " + exception.getMessage(), exception);
         }
+    }
+
+    private RuntimeRetrievalContent readRetrievalContent(
+            Map<String, byte[]> files,
+            ReleaseManifest manifest
+    ) throws IOException {
+        byte[] source = files.get("rag-documents.jsonl");
+        List<RagDocument> documents = new ArrayList<>();
+        String[] lines = new String(source, java.nio.charset.StandardCharsets.UTF_8)
+                .split("\\R", -1);
+        for (int index = 0; index < lines.length; index++) {
+            if (lines[index].isEmpty() && index == lines.length - 1) {
+                continue;
+            }
+            require(!lines[index].isBlank(), "rag-documents.jsonl contains a blank line");
+            RagDocument document = objectMapper.readValue(lines[index], RagDocument.class);
+            require(manifest.getContentVersion().equals(document.getContentVersion()),
+                    "rag document contentVersion mismatch");
+            documents.add(document);
+        }
+        require(manifest.getRetrieval().getChunkCount() == documents.size(),
+                "retrieval chunkCount mismatch");
+        require(BundleHashCalculator.sha256(source)
+                        .equals(manifest.getRetrieval().getChunkSetHash()),
+                "retrieval chunkSetHash mismatch");
+        KeywordIndexFile keywordFile = read(
+                files, "keyword-index.json", KeywordIndexFile.class);
+        require(manifest.getRetrieval().getKeywordIndexFormatVersion()
+                        .equals(keywordFile.getFormatVersion()),
+                "keyword index formatVersion mismatch");
+        require(manifest.getRetrieval().getNormalizationVersion()
+                        .equals(keywordFile.getNormalizationVersion()),
+                "keyword index normalizationVersion mismatch");
+        require(keywordFile.getDocumentCount() == documents.size(),
+                "keyword index documentCount mismatch");
+        VectorIndexFile vectorFile = new VectorIndexCodec().decode(
+                files.get("vector-index.bin"), manifest.getRetrieval().getDimension());
+        Set<String> chunkIds = documents.stream()
+                .map(RagDocument::getChunkId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        require(keywordFile.getDocuments().stream()
+                        .map(KeywordIndexFile.DocumentEntry::getChunkId)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet())
+                        .equals(chunkIds),
+                "keyword index chunk set mismatch");
+        require(vectorFile.getVectors().keySet().equals(chunkIds),
+                "vector index chunk set mismatch");
+        return new RuntimeRetrievalContent(
+                manifest.getRetrieval(), documents,
+                toRuntimeKeywordIndex(keywordFile),
+                new RuntimeVectorIndex(vectorFile.getDimension(), vectorFile.getVectors()));
+    }
+
+    private RuntimeKeywordIndex toRuntimeKeywordIndex(KeywordIndexFile source) {
+        List<RuntimeKeywordIndex.DocumentEntry> documents = source.getDocuments().stream()
+                .map(item -> new RuntimeKeywordIndex.DocumentEntry(
+                        item.getChunkId(), item.getDocumentLength(), item.getTermFrequencies()))
+                .toList();
+        return new RuntimeKeywordIndex(
+                source.getDocumentCount(), source.getAverageDocumentLength(),
+                documents, source.getDocumentFrequencies());
     }
 
     private <T> T read(Map<String, byte[]> files, String name, Class<T> type) throws IOException {

@@ -64,6 +64,41 @@ describe('answer api', () => {
     await expect(askQuestion(input(''))).rejects.toThrow('请求参数不符合要求')
   })
 
+  it('sends only stable referential context without historical messages', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'BOUNDARY' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('查看当前状态'),
+      contextEnvelope: {
+        previousContentVersion: '2026-07-21.1',
+        projectSlugs: ['sql-audit'],
+        questionPresetId: 'sql-audit-overview',
+        referencedClaimIds: ['claim-sql-audit-delivered'],
+        selectedSectionType: 'STATUS',
+        followUpIntent: 'CURRENT_STATUS',
+      },
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.contextEnvelope).toEqual({
+      previousContentVersion: '2026-07-21.1',
+      projectSlugs: ['sql-audit'],
+      questionPresetId: 'sql-audit-overview',
+      referencedClaimIds: ['claim-sql-audit-delivered'],
+      selectedSectionType: 'STATUS',
+      followUpIntent: 'CURRENT_STATUS',
+    })
+    expect(JSON.stringify(body)).not.toContain('messages')
+    expect(JSON.stringify(body)).not.toContain('previousAnswer')
+    expect(JSON.stringify(body)).not.toContain('previousQuestion')
+  })
+
   it('aborts a stalled request and returns a stable timeout message', async () => {
     vi.useFakeTimers()
     const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) =>

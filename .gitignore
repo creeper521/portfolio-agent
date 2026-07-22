@@ -24,6 +24,7 @@ secrets/
 .agents/
 .claude/
 .codex/
+.superpowers/
 skills-lock.json
 
 # Private content pipeline artifacts
@@ -43,3 +44,4 @@ Thumbs.db
 # Logs and runtime files
 *.log
 *.pid
+runtime-models/

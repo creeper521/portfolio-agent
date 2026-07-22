@@ -14,8 +14,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class ActiveBundleLocator {
-    private static final Set<String> FILES = Set.of(
+    private static final Set<String> LEGACY_FILES = Set.of(
             "manifest.json", "portfolio.json", "presentation.json", "checksums.json");
+    private static final Set<String> RETRIEVAL_FILES = Set.of(
+            "manifest.json", "portfolio.json", "presentation.json",
+            "rag-documents.jsonl", "keyword-index.json", "vector-index.bin",
+            "checksums.json");
 
     public RuntimeContentSnapshot load(Path releaseRoot, PublicBundleLoader loader) {
         try {
@@ -36,9 +40,10 @@ public final class ActiveBundleLocator {
                 names = entries.map(path -> path.getFileName().toString())
                         .collect(Collectors.toUnmodifiableSet());
             }
-            require(names.equals(FILES), "active bundle file set is not closed");
+            require(names.equals(LEGACY_FILES) || names.equals(RETRIEVAL_FILES),
+                    "active bundle file set is not closed");
             java.util.LinkedHashMap<String, byte[]> bytes = new java.util.LinkedHashMap<>();
-            for (String name : FILES) {
+            for (String name : names) {
                 Path file = version.resolve(name);
                 require(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
                         && !Files.isSymbolicLink(file), "active bundle file is invalid");

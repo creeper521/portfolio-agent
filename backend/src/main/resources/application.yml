@@ -3,6 +3,8 @@ spring:
     name: portfolio-agent
   jackson:
     default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
 
 server:
   error:
@@ -12,3 +14,17 @@ server:
 portfolio:
   content:
     release-root: ${PORTFOLIO_CONTENT_RELEASE_ROOT:}
+  retrieval:
+    profile: ${PORTFOLIO_RETRIEVAL_PROFILE:DISABLED}
+    model-directory: ${PORTFOLIO_RETRIEVAL_MODEL_DIR:}
+  model-expression:
+    enabled: ${PORTFOLIO_MODEL_ENABLED:false}
+    provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
+    model-policy-version: ${PORTFOLIO_MODEL_POLICY_VERSION:c1-policy-v1}
+    answer-schema-version: c1.answer.v1
+    timeout: ${PORTFOLIO_MODEL_TIMEOUT:8s}
+    max-tokens: ${PORTFOLIO_MODEL_MAX_TOKENS:1200}
+    max-model-attempts: 1
+    external-data-policy-approved: ${PORTFOLIO_MODEL_DATA_POLICY_APPROVED:false}
+    deepseek-api-key: ${PORTFOLIO_AGENT_DEEPSEEK_API_KEY:}
+    glm-api-key: ${PORTFOLIO_AGENT_GLM_API_KEY:}

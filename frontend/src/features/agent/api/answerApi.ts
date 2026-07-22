@@ -1,5 +1,5 @@
 import { request } from '../../portfolio/api/portfolioApi'
-import type { AnswerResponse } from '../model/answerTypes'
+import type { AnswerResponse, ContextEnvelope } from '../model/answerTypes'
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 
 export interface AnswerApiRequest {
@@ -10,6 +10,7 @@ export interface AnswerApiRequest {
   focusEvidenceIds?: string[]
   questionPresetId?: string
   question?: string
+  contextEnvelope?: ContextEnvelope
 }
 
 export function askQuestion(input: AnswerApiRequest): Promise<AnswerResponse> {
@@ -20,6 +21,7 @@ export function askQuestion(input: AnswerApiRequest): Promise<AnswerResponse> {
       turnId: input.turnId,
       questionPresetId: input.questionPresetId,
       question: input.question,
+      contextEnvelope: input.contextEnvelope,
       context: {
         projectSlug: input.projectSlug,
         audienceRole: input.audienceRole,

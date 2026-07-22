@@ -23,6 +23,9 @@ param(
     [string]$RegressionBenchmarkCaseId,
     [string]$PlaybookDecision,
     [string[]]$PostSwitchProbeUri,
+    [string]$JarPath,
+    [string]$ModelDirectory,
+    [string]$JavaExecutable = 'java.exe',
     [switch]$Confirm
 )
 $skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\portfolio-governance\scripts\portfolio-governance.ps1'
@@ -35,5 +38,6 @@ $skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\portfol
     -RootCause $RootCause -ResolutionNote $ResolutionNote -FixedVersion $FixedVersion `
     -RegressionBenchmarkCaseId $RegressionBenchmarkCaseId -PlaybookDecision $PlaybookDecision `
     -PostSwitchProbeUri $PostSwitchProbeUri `
+    -JarPath $JarPath -ModelDirectory $ModelDirectory -JavaExecutable $JavaExecutable `
     -Confirm:$Confirm
 exit $LASTEXITCODE

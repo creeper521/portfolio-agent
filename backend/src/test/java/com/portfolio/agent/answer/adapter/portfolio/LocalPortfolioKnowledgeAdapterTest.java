@@ -3,6 +3,8 @@ package com.portfolio.agent.answer.adapter.portfolio;
 import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
+import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
+import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
 import com.portfolio.agent.portfolio.domain.ContributionType;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
@@ -12,6 +14,11 @@ import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.RetrievalManifest;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -24,11 +31,50 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalPortfolioKnowledgeAdapterTest {
+
+    @Test
+    void projectsTypedRetrievalContentWithoutChunkText() {
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit", List.of())),
+                List.of(), List.of());
+        RagDocument document = new RagDocument(
+                "chunk-1", snapshot.getContentVersion(), List.of("sql-audit"),
+                List.of("claim-1"), "Private-to-retrieval chunk text",
+                List.of("DELIVERY"), LocalDate.parse("2026-07-01"), null, "sha256:test");
+        RuntimeKeywordIndex keywordIndex = new RuntimeKeywordIndex(
+                1, 1.0,
+                List.of(new RuntimeKeywordIndex.DocumentEntry(
+                        "chunk-1", 1, Map.of("交付", 1))),
+                Map.of("交付", 1));
+        RuntimeRetrievalContent retrieval = new RuntimeRetrievalContent(
+                new RetrievalManifest(
+                        "hybrid-rag-v1", "nfkc-bigram-v1", "retrieval-policy-v1",
+                        "BAAI/bge-small-zh-v1.5", "sha256:model", 512, 256,
+                        "L2", "COSINE", 1, "sha256:chunks",
+                        "keyword-index-v1", "vector-index-v1"),
+                List.of(document), keywordIndex,
+                new RuntimeVectorIndex(2, Map.of("chunk-1", new float[]{1.0f, 0.0f})));
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot, retrieval));
+
+        AnswerRetrievalCorpus corpus = adapter.getContent().getRetrievalCorpus().orElseThrow();
+
+        assertThat(corpus.getChunks().get("chunk-1").getTextLength())
+                .isEqualTo(document.getText().length());
+        assertThat(corpus.getChunks().get("chunk-1").getClaimIds())
+                .containsExactly("claim-1");
+        assertThat(corpus.getKeywordIndex().getDocumentCount()).isEqualTo(1);
+        assertThat(corpus.copyVectors()).containsKey("chunk-1");
+        assertThat(corpus.getChunks().get("chunk-1").getClass().getDeclaredFields())
+                .extracting(java.lang.reflect.Field::getName)
+                .doesNotContain("text");
+    }
 
     @Test
     void mapsOnlyKnowledgeOwnedByRequestedProject() {
@@ -118,6 +164,32 @@ class LocalPortfolioKnowledgeAdapterTest {
                 .isEqualTo("claim-sql-audit-delivered");
         assertThat(knowledge.getClaims().getFirst().getDirectEvidenceIds())
                 .containsExactly("sql-audit-delivery-set");
+    }
+
+    @Test
+    void projectsReviewedTimelineIntoTheSameRuntimeAnswerContent() throws Exception {
+        ClassPathResource resource =
+                new ClassPathResource("public-data/public-portfolio.v1.json");
+        PortfolioSnapshot snapshot;
+        try (InputStream inputStream = resource.getInputStream()) {
+            snapshot = new ObjectMapper()
+                    .findAndRegisterModules()
+                    .readValue(inputStream, PortfolioSnapshot.class);
+        }
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        List<AnswerTimelineEvent> timeline = adapter.getContent().getTimeline();
+
+        assertThat(timeline).hasSize(1);
+        assertThat(timeline.getFirst().getProjectSlugs()).containsExactly("sql-audit");
+        assertThat(timeline.getFirst().getClaimIds())
+                .containsExactly("claim-sql-audit-delivered");
+        assertThat(timeline.getFirst().getEvidenceIds())
+                .containsExactly("sql-audit-delivery-set");
+        assertThat(adapter.getContent().getCapabilities().isPresetAnswers()).isTrue();
+        assertThat(adapter.getContent().getCapabilities().isReadOnlyTools()).isTrue();
+        assertThat(adapter.getContent().getCapabilities().isMultiTurnReferences()).isTrue();
     }
 
     @Test
@@ -331,13 +403,21 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     private static PublicPortfolioRepository repository(PortfolioSnapshot snapshot) {
+        return repository(snapshot, null);
+    }
+
+    private static PublicPortfolioRepository repository(
+            PortfolioSnapshot snapshot,
+            RuntimeRetrievalContent retrieval
+    ) {
         return new PublicPortfolioRepository() {
             @Override
             public RuntimeContentSnapshot getSnapshot() {
                 return new RuntimeContentSnapshot(
                         snapshot,
                         "sha256:test-runtime-bundle",
-                        Instant.parse("2026-07-21T00:00:00Z")
+                        Instant.parse("2026-07-21T00:00:00Z"),
+                        retrieval
                 );
             }
         };

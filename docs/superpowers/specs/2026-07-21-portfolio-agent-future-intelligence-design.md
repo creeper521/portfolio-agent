@@ -1,10 +1,22 @@
 # Portfolio Agent 未来智能能力设计
 
-- 状态：讨论已确认，已完成书面化，待实现
+- 状态：C1 与 C2 已实现；C3 中仅 Model Provider Registry 已按准入实现，其余能力待真实准入条件满足后再评估
 - 日期：2026-07-21
 - 范围：C 阶段——受约束模型表达、公开检索与条件式扩展架构
 - 前置设计：`2026-07-20-portfolio-agent-runtime-trust-design.md`
 - 前置设计：`2026-07-21-portfolio-agent-content-governance-design.md`
+
+## 0. 实现状态（2026-07-22）
+
+C1 已按本设计实现：运行时从已解析的公开 `QuestionPreset`、Claim/Evidence 投影和 AudienceRole 构建不可变白名单 `AnswerPlan`；每个部署只选择 DeepSeek V4 Flash 或 GLM-4.7 之一，通过固定 `ModelExpressionPort` 做一次非流式结构化表达。模型默认关闭，只有显式启用、所选密钥存在且部署方独立批准外部数据策略时才可调用。原始访客问题、别名、历史、`turnId`、`requestId` 和 `handoffId` 不进入 Provider 请求。
+
+完整 Draft 必须通过 section、Claim/Evidence 引用、治理标签、长度、数字事实和禁止内容校验；任一 Provider、超时、解析或校验失败都会丢弃整个 Draft，并用同一 `AnswerPlan` 产生 `FALLBACK`。`verification` 仍只由核心 `VerificationPolicy` 计算。实现未引入 Spring AI、自动重试、跨 Provider 重发、RAG、通用工具、Hook、Orchestrator、DurableTask 或多 Agent。
+
+C2 已按本设计实现：C2a 固定 `BAAI/bge-small-zh-v1.5` INT8 ONNX、512 维、L2/Cosine，发布期生成文档向量，运行期只在本机生成查询向量；BM25 与向量候选经 RRF 和 Grounding Gate，只有 `SUFFICIENT` 返回 `ANSWERED + RETRIEVAL`。Preset 跳过检索，向量失败只在本次请求内降级关键词。四文件旧 Bundle 兼容，声明 retrieval 的七文件 Bundle 与本地 descriptor/model hash 不匹配时失败关闭。
+
+C2b 使用 `c2b-tools-v1` 封闭策略，在同一个 `RuntimeAnswerContent` 上确定性执行最多四次固定只读工具；未知、跨项目、跨版本、未批准或超预算结果失败关闭。引用式多轮只携带公开版本、Project/Claim/Preset/Section 稳定引用和封闭 `FollowUpIntent`，不携带历史问答正文；每轮重新验证引用，版本变化时使用当前版本并提示，引用失效时返回 `BOUNDARY`。前端上下文只存在当前页面内存。模型仍只接收最终 `AnswerPlan`。C3 中仅 Model Provider Registry 已实现；Tool Registry、Hook、Orchestrator、DurableTask、多 Agent 和持久会话未准入、未实现。
+
+C3 Model Provider Registry 使用不可变 `registrySnapshotVersion=c3-model-registry-v1`，只有 DeepSeek V4 Flash 与 GLM-4.7 两个内建 Descriptor。仍沿用 `PORTFOLIO_AGENT_DEEPSEEK_API_KEY` 和 `PORTFOLIO_AGENT_GLM_API_KEY`，由 `PORTFOLIO_MODEL_PROVIDER` 显式选择单一 Provider；不自动故障转移、不跨 Provider 重发、不动态发现。Registry 不保存凭据、不提供可变 register/remove/replace API，且不记录原始 Provider 请求或响应。
 
 ## 1. 背景
 
@@ -130,7 +142,7 @@ ModelExpressionPort
 └─ express(ModelExpressionRequest): ModelExpressionResult
 ```
 
-C1 只配置一个 Provider，不建设 Registry。单次调用使用明确超时，默认不重试、不跨 Provider 重发；原始请求、响应和 Prompt 不进入普通日志。Provider 不保存应用侧会话，也不使用供应商 conversation/thread ID。第一版采用非流式结构化输出，通过完整验证后一次性返回。不能确认数据保留策略时禁用模型路径。
+C1 每次部署只显式配置一个 Provider；Model Provider Registry 仅提供两个内建 Descriptor 的不可变快照 `c3-model-registry-v1`，不保存凭据、不动态发现。单次调用使用明确超时，默认不重试、不跨 Provider 重发；原始请求、响应和 Prompt 不进入普通日志。Provider 不保存应用侧会话，也不使用供应商 conversation/thread ID。第一版采用非流式结构化输出，通过完整验证后一次性返回。不能确认数据保留策略时禁用模型路径。
 
 ## 8. C1：受治理的身份化表达
 
@@ -227,8 +239,8 @@ runtime-bundle/
 ├─ portfolio.json
 ├─ presentation.json
 ├─ rag-documents.jsonl
-├─ keyword-index/
-├─ vector-index/
+├─ keyword-index.json
+├─ vector-index.bin
 └─ checksums.json
 ```
 
@@ -339,20 +351,26 @@ ObservationHook<ModelAttemptCompletedEvent>
 
 ## 19. C3：Registry
 
-Registry 只负责发现、校验和选择已配置实现：
+### 19.1 已实施的 Model Provider Registry
+
+Model Provider Registry 以 2026-07-22 的 C3 ADR 为准。第一版只校验和选择两个受审的内建实现，不负责动态发现：
 
 ```text
-Configured Implementations
-→ Descriptor Validation
+DeepSeek V4 Flash / GLM-4.7 内建 Descriptor
+→ Descriptor 完整性校验
 → ID / Version Collision Check
-→ Capability Compatibility Check
-→ Policy Binding
-→ ImmutableExtensionRegistrySnapshot
+→ ModelPolicy / Answer Schema / Capability Compatibility Check
+→ 单 Provider 显式绑定
+→ Immutable ModelProviderRegistrySnapshot (c3-model-registry-v1)
 ```
 
-Model Provider Descriptor 声明 providerId、adapterVersion、capabilities、支持的 ModelPolicy 范围和数据策略；Tool Descriptor 声明 toolId、toolVersion、输入/输出 Schema、权限和副作用等级。密钥、端点和私人配置不进入公开 Bundle 或 Descriptor。
+`ModelProviderDescriptor` 声明 `providerId`、`adapterVersion`、内建 HTTPS `endpoint` 常量、`modelName`、capabilities，以及支持的 ModelPolicy 与 Answer Schema 版本。endpoint 必须进入内建 Descriptor，不接受请求、公开 Bundle、目录、网络或配置中心覆盖。密钥与私人配置不进入 Descriptor、Registry Snapshot 或公开 Bundle，只在配置边界为已选 Provider 注入 Adapter。
 
-同 ID 异实现或版本冲突时启动失败，不能 first-wins。未声明 capability/permission 的实现不能注册。请求不能动态安装实现。ModelPolicy 显式绑定一个 Provider；ToolPlan 只能引用 Policy 允许且 Registry 存在的工具。Registry Snapshot 构造后不可变，热更新通过完整重建并原子替换；在途请求继续使用旧版本。即使存在两个 Provider，也不默认自动故障转移。
+同 ID 异实现或版本冲突时启动失败，不能 first-wins。ModelPolicy 只显式绑定一个兼容 Provider；未知或不兼容选择 fail-closed，不选择替代项。Registry Snapshot 构造后不可变，不提供 `register/remove/replace`，不扫描 classpath、文件、网络或插件，也不支持热更新。Descriptor、版本或兼容性变更必须形成新的受审常量并通过重新部署生效；每轮只固定 `registrySnapshotVersion`。即使存在两个 Provider，也不自动重试、故障转移或跨 Provider 重发。
+
+### 19.2 尚未准入的通用/Tool Registry
+
+通用 Extension Registry 与 Tool Registry 仍是未来设想，当前未准入、未实现，也不能覆盖 19.1 或 C3 ADR 的已实施约束。只有第 17 节的真实多实现、重复权限/注册代码、稳定类型化契约、失败语义、运行证据和 Benchmark 条件全部满足后，才可另立 ADR 评估 Tool Descriptor、权限声明、版本冲突和更新策略。在此之前，C2 继续使用封闭 `ToolKind`、固定 `ToolPlan` 和显式端口；不得预建动态发现、动态安装、可变注册或热更新框架。
 
 ## 20. C3：多 Agent 与 DurableTask
 
@@ -386,7 +404,7 @@ Orchestrator 拥有目标、预算、取消状态和任务快照；Worker 使用
   "audienceProfileVersion": "1.0.0",
   "modelPolicyVersion": "1.0.0",
   "retrievalPolicyVersion": "hybrid-v1",
-  "registrySnapshotVersion": "none",
+  "registrySnapshotVersion": "c3-model-registry-v1",
   "extensionPolicyVersion": "none",
   "budgets": {
     "totalDeadlineMs": 5000,

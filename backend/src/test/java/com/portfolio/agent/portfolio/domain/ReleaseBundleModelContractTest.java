@@ -17,12 +17,28 @@ class ReleaseBundleModelContractTest {
                 OffsetDateTime.parse("2026-07-20T23:55:00+08:00"),
                 "0.1.0", "portfolio.json", "presentation.json",
                 "APR-1", "sha256:approval", "sha256:candidate",
-                "checksums.json", counts);
+                "checksums.json", counts, null);
 
         assertThat(ReleaseManifest.class.isRecord()).isFalse();
         assertThat(BundleCounts.class.isRecord()).isFalse();
         assertThat(PresentationSnapshot.class.isRecord()).isFalse();
         assertThat(manifest.getCounts()).isEqualTo(counts);
         assertThat(manifest.getFactsFile()).isEqualTo("portfolio.json");
+        assertThat(manifest.getRetrieval()).isNull();
+    }
+
+    @Test
+    void retrievalManifestUsesTheClosedC2aContract() {
+        RetrievalManifest retrieval = new RetrievalManifest(
+                "hybrid-rag-v1", "nfkc-bigram-v1", "retrieval-policy-v1",
+                "BAAI/bge-small-zh-v1.5", "sha256:model",
+                512, 256, "L2", "COSINE", 3, "sha256:chunks",
+                "keyword-index-v1", "vector-index-v1");
+
+        assertThat(RetrievalManifest.class.isRecord()).isFalse();
+        assertThat(retrieval.getEmbeddingModelId()).isEqualTo("BAAI/bge-small-zh-v1.5");
+        assertThat(retrieval.getDimension()).isEqualTo(512);
+        assertThat(retrieval.getChunkCount()).isEqualTo(3);
+        assertThat(retrieval.getVectorNormalization()).isEqualTo("L2");
     }
 }

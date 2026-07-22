@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-22）：** A 的可信运行时与严格会话隐私、B 的 Claim/Evidence 治理及四文件发布包已经实现并通过 packaged-JAR 验证；C 的模型表达、公开检索与工具能力尚未实现。完整文档状态见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)。
+> **项目状态（2026-07-22）：** A、B、默认关闭的 C1，以及 C2 本地公开检索、固定只读工具和引用式多轮已经实现；C3 中仅 Model Provider Registry 已实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。完整文档状态见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
@@ -12,9 +12,12 @@
 - 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
+- 可选的 DeepSeek V4 Flash 或 GLM-4.7 单 Provider 表达；只接收公开 `AnswerPlan`，完整校验失败即整轮确定性回退
+- 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；文档向量在发布期生成，访客查询只在本机向量化
+- 固定六类只读公开工具与页面内存引用式多轮；只传稳定公开 ID 和意图，不传历史问答正文
 - 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 
-V0 不连接大模型，不读取私有知识库，也不在服务端保存或记录访客问题。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
+默认配置不连接大模型。即使显式启用 C1，外部 Provider 也只接收从已批准公开内容构建的白名单 `AnswerPlan`，不接收访客原问题、会话、`turnId`、`requestId` 或私有知识。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
 
 ## 环境要求
 
@@ -39,6 +42,60 @@ npm.cmd --prefix frontend ci
 ```powershell
 mvn.cmd -f backend/pom.xml spring-boot:run
 ```
+
+### C1 模型表达（默认关闭）
+
+每个进程只选择一个 Provider，不自动切换、不重试，也不把供应商 conversation/thread ID 保存到应用。未同时满足启用开关、所选 Provider 密钥和独立数据策略批准时，请求继续走 `DETERMINISTIC`。
+
+DeepSeek V4 Flash：
+
+```powershell
+$env:PORTFOLIO_MODEL_ENABLED = "true"
+$env:PORTFOLIO_MODEL_PROVIDER = "DEEPSEEK_V4_FLASH"
+$env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = "true"
+$env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = "<runtime-secret>"
+```
+
+GLM-4.7：
+
+```powershell
+$env:PORTFOLIO_MODEL_ENABLED = "true"
+$env:PORTFOLIO_MODEL_PROVIDER = "GLM_4_7"
+$env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = "true"
+$env:PORTFOLIO_AGENT_GLM_API_KEY = "<runtime-secret>"
+$env:PORTFOLIO_MODEL_TIMEOUT = "30s" # GLM-4.7 latency allowance; tune from production evidence
+```
+
+`PORTFOLIO_MODEL_TIMEOUT` 默认 `8s`，`PORTFOLIO_MODEL_MAX_TOKENS` 默认 `1200`。是否允许向所选 Provider 发送已批准公开事实，必须由部署方根据当时有效的数据条款独立确认；无法确认时不要设置批准开关。回滚只需设置 `PORTFOLIO_MODEL_ENABLED=false` 并重启，不需要回滚 ContentBundle。
+
+### C3 Model Provider Registry（仅此项已实现）
+
+Registry 快照固定为 `registrySnapshotVersion=c3-model-registry-v1`，内建 DeepSeek V4 Flash 与 GLM-4.7 两个已审 Provider；环境变量仍分别为 `PORTFOLIO_AGENT_DEEPSEEK_API_KEY` 和 `PORTFOLIO_AGENT_GLM_API_KEY`。每个部署仍由 `PORTFOLIO_MODEL_PROVIDER` 显式选择且只使用一个 Provider；没有自动故障转移、跨 Provider 重发或动态 classpath、文件、网络发现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 与持久会话不在本次准入范围内。
+
+### C2a 本地公开检索（默认关闭）
+
+模型文件不会进入 Git，也不会在应用启动时下载。先显式安装并核验固定 revision 的本地制品：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-local-embedding-model.ps1
+```
+
+只有 active Bundle 是完整七文件 retrieval 包，且本地 descriptor、逐文件 SHA-256、模型 ID 和 512 维全部匹配时，才可启用 Hybrid：
+
+```powershell
+$env:PORTFOLIO_RETRIEVAL_PROFILE = "HYBRID"
+$env:PORTFOLIO_RETRIEVAL_MODEL_DIR = "<local-model-directory>"
+```
+
+`DISABLED` 是默认值；`KEYWORD_ONLY` 只用于显式开发诊断。Preset 始终优先并跳过检索。自由问题只有通过 Grounding Gate 才返回 `ANSWERED + RETRIEVAL`，否则保持安全 `BOUNDARY`。查询、词项、向量、分数和候选不写日志、不持久化，也不发送给 DeepSeek、GLM 或任何外部 Embedding Provider。
+
+C2 候选先在仓库外私有工作区运行 `scripts/build-retrieval-bundle.ps1` 生成 canonical `rag-documents.jsonl`，再进行人工 review/Approval。服务器发布端逐字节复核已批准 RAG，只派生 keyword/vector 索引；候选不得携带预构建索引。
+
+### C2b 固定只读工具与引用式多轮
+
+后端只允许 `getProject`、`getClaims`、`getEvidenceForClaims`、`getTimeline`、`searchPublicContent` 和 `compareProjects` 六类固定读操作。`ToolPlan` 在模型调用前由服务端根据封闭 `FollowUpIntent` 确定，最多四次调用，全部读取同一个 `RuntimeAnswerContent`；工具不能访问文件系统、网络、私有治理目录或写接口，模型只接收最终白名单 `AnswerPlan`。
+
+前端只有在回答返回 `ContextEnvelope` 时才展示追问操作。Envelope 只包含当前公开内容版本、Project/Claim/Preset/Section 稳定引用和追问意图；不包含历史问题、回答正文、会话、身份或 Provider thread。刷新后引用式上下文随页面内存会话一起消失；内容版本变化时重新按稳定 ID 核对并明确提示，引用失效则返回 `BOUNDARY`。
 
 在另一个终端启动前端，Vite 会把 `/api` 请求代理到后端：
 
@@ -95,7 +152,7 @@ powershell -ExecutionPolicy Bypass -File scripts/privacy-check.ps1 -Path backend
 powershell -ExecutionPolicy Bypass -File scripts/privacy-check.ps1 -Path frontend/dist
 ```
 
-扫描器检查 IPv4、常见内部绝对路径、内部域名和凭据赋值。它是发布前防线，不替代人工脱敏审核。
+扫描器检查 IPv4、常见内部绝对路径、内部域名、凭据字面量、原始模型 Prompt/响应日志以及访客问题直传 Provider 的高风险代码形态。它是发布前防线，不替代人工脱敏审核。
 
 ## Docker
 
@@ -122,7 +179,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 - `GET /api/v1/public-content`：正式页面使用的审核公开内容聚合
 - `GET /api/v1/portfolio`：首页公开快照
 - `GET /api/v1/projects/{slug}`：项目详情
-- `POST /api/v1/answers`：确定性问答
+- `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
 
 公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
 

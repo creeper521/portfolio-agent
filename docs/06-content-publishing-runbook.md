@@ -1,12 +1,14 @@
 # 公开内容服务器发布运行手册
 
 **日期：** 2026-07-15
-**状态：** B 第一版治理/文件发布工具已实现并验证；生产执行仍要求显式人工 Approval、外部私有工作区、部署方配置的 post-switch 探测与逐次确认
+**状态：** B 四文件与 C2a 七文件治理/发布路径已实现并验证；生产执行仍要求显式人工 Approval、外部私有工作区、固定本地模型、部署方 post-switch 探测与逐次确认
 **适用设计：** B 核心发布见 `2026-07-21-portfolio-agent-content-governance-design.md`；C2 retrieval 扩展见 `2026-07-21-portfolio-agent-future-intelligence-design.md`
 
 > 分阶段说明：B 第一版发布不构建 RAG、关键词或向量索引。本文涉及 Embedding、索引和检索冒烟的步骤只适用于 Manifest 显式声明 retrieval 的 C2 Bundle。
 
 当前入口为 `scripts/portfolio-governance.ps1`。工具默认 dry-run，`approve`、`publish`、`rollback` 不会自动串联；`publish -Confirm` 可通过 `-PostSwitchProbeUri` 执行部署方提供的 readiness/HTTP 冒烟，失败时原子恢复已经验证的旧 active。进程重启方式仍由部署环境负责，候选包不能指定命令或获得执行权限。
+
+C2a 候选必须先在仓库外私有工作区显式运行 `scripts/build-retrieval-bundle.ps1`，形成只含 `portfolio.json`、`presentation.json`、`rag-documents.jsonl` 的 canonical payload。随后再执行 validate、review、人工 Approval 和 publish。候选不得上传 keyword/vector 索引；`publish` 通过 `-JarPath` 与 `-ModelDirectory` 在服务器本机逐字节复现 RAG 后派生索引。B 候选仍保持两个 canonical 文件，不要求模型。
 
 ## 1. 适用范围
 
@@ -54,6 +56,23 @@ portfolio-publish rollback <contentVersion> --reason <text>
 
 所有改变状态的命令必须返回明确退出码，并输出不含敏感内容的阶段结果。`validate`、`list`、`status` 和 `verify` 不改变 active。
 
+当前仓库的 Windows 入口示例：
+
+```powershell
+# 仅 C2a：在仓库外候选目录增加 canonical rag-documents.jsonl
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-retrieval-bundle.ps1 `
+  -CandidateDirectory <private-candidate> -JarPath backend/target/portfolio-agent.jar
+
+# review/approve 仍是彼此独立的人工作业；下例只展示发布参数
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/portfolio-governance.ps1 `
+  -Command publish -Workspace <private-workspace> -Candidate <private-candidate> `
+  -ApprovalId <approval-id> -ReleaseRoot <release-root> `
+  -JarPath backend/target/portfolio-agent.jar `
+  -ModelDirectory <verified-local-model> -Confirm
+```
+
+B 四文件发布省略候选准备、`-JarPath` 和 `-ModelDirectory`。C2a 的 `publish` dry-run 也会真实复算 canonical RAG 并派生临时索引，以便在任何 active 状态变化前验证模型和制品；临时派生目录随后删除。
+
 ## 5. 发布前检查
 
 操作者在服务器确认：
@@ -78,7 +97,7 @@ portfolio-publish rollback <contentVersion> --reason <text>
 - 实体、引用和状态不变量；
 - 隐私扫描；
 - C2 Bundle 才执行 RAG Chunk、retrieval Manifest 和索引输入检查；
-- candidate-manifest 文件清单、实体数量和源文件哈希检查。
+- 治理运行快照中的文件清单、实体数量、源文件哈希与 candidatePayloadHash 检查。
 - `candidatePayloadHash`、Approval、`approvalDigest` 和治理 Policy/Benchmark 摘要的一致性检查。
 
 `validate` 不调用 active 切换，不重启服务，也不把候选包复制到正式 versions。

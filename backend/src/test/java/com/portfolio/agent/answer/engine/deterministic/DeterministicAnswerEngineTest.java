@@ -1,22 +1,16 @@
 package com.portfolio.agent.answer.engine.deterministic;
 
-import com.portfolio.agent.answer.domain.AnswerEvidence;
-import com.portfolio.agent.answer.domain.AnswerClaimProjection;
-import com.portfolio.agent.answer.domain.AnswerKnowledge;
-import com.portfolio.agent.answer.domain.AnswerQuestion;
+import com.portfolio.agent.answer.domain.AnswerPlan;
+import com.portfolio.agent.answer.domain.AnswerPlanSection;
 import com.portfolio.agent.answer.domain.AnswerSection;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.answer.domain.ExpressionPolicy;
+import com.portfolio.agent.answer.domain.ExpressionTone;
 import com.portfolio.agent.answer.domain.GeneratedAnswer;
-import com.portfolio.agent.answer.domain.ResolvedAnswerContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDate;
 import java.util.List;
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
-import com.portfolio.agent.answer.domain.AnswerMateriality;
-import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,8 +24,8 @@ class DeterministicAnswerEngineTest {
     }
 
     @Test
-    void buildsFiveStructuredSectionsFromResolvedContext() {
-        GeneratedAnswer result = engine.answer(context());
+    void rendersTheFiveStructuredSectionsFromTheProvidedPlan() {
+        GeneratedAnswer result = engine.answer(plan(true));
 
         assertThat(result.getTitle()).isEqualTo("SQL audit tool");
         assertThat(result.getSummary()).isEqualTo("A public project summary");
@@ -63,72 +57,50 @@ class DeterministicAnswerEngineTest {
     }
 
     @Test
-    void emitsOnlyEvidenceApprovedByTheResolvedContext() {
-        ResolvedAnswerContext context = new ResolvedAnswerContext(
-                null, knowledge(), knowledge().getQuestions().getFirst(),
-                List.of(evidence("evidence-1"))
-        );
-
-        GeneratedAnswer result = engine.answer(context);
+    void emitsOnlyEvidenceWhitelistedByThePlan() {
+        GeneratedAnswer result = engine.answer(plan(false));
 
         assertThat(result.getSections())
                 .allSatisfy(section -> assertThat(section.getEvidenceIds())
                         .doesNotContain("evidence-2"));
     }
 
-    private ResolvedAnswerContext context() {
-        AnswerKnowledge knowledge = knowledge();
-        return new ResolvedAnswerContext(
-                null, knowledge, knowledge.getQuestions().getFirst(), knowledge.getEvidence()
+    private AnswerPlan plan(boolean includeSecondEvidence) {
+        List<String> firstEvidence = List.of("evidence-1");
+        List<String> secondEvidence = includeSecondEvidence
+                ? List.of("evidence-2")
+                : firstEvidence;
+        List<AnswerPlanSection> sections = List.of(
+                section(AnswerSectionType.BACKGROUND, "背景", "Project background",
+                        "claim-background", secondEvidence),
+                section(AnswerSectionType.RESPONSIBILITY, "职责",
+                        "Responsibility one. Responsibility two.",
+                        "claim-responsibility", firstEvidence),
+                section(AnswerSectionType.SOLUTION, "方案",
+                        "Technical solution. 关键决策包括：Decision one. Decision two.",
+                        "claim-solution", firstEvidence),
+                section(AnswerSectionType.VERIFICATION, "验证",
+                        "Verification one. Verification two.",
+                        "claim-verification", secondEvidence),
+                section(AnswerSectionType.STATUS, "状态", "Delivered. Handed over.",
+                        "claim-outcome", firstEvidence)
+        );
+        return new AnswerPlan(
+                "2026-07-22", "project-overview", "Describe this project", null,
+                "SQL audit tool", "A public project summary", sections,
+                List.of(), List.of(), new ExpressionPolicy(
+                        ExpressionTone.CONCISE_TECHNICAL, 80, 240, 40, 800,
+                        true, true, List.of())
         );
     }
 
-    private AnswerKnowledge knowledge() {
-        return new AnswerKnowledge(
-                "sql-audit",
-                "SQL audit tool",
-                "A public project summary",
-                "Project background",
-                List.of("Responsibility one.", "Responsibility two."),
-                "Technical solution.",
-                List.of("Decision one.", "Decision two."),
-                List.of("Verification one.", "Verification two."),
-                "Delivered.",
-                "Handed over.",
-                "DELIVERED",
-                List.of(new AnswerQuestion(
-                        "project-overview",
-                        "Describe this project",
-                        List.of("What did you build?"),
-                        "Project overview"
-                )),
-                List.of(evidence("evidence-2"), evidence("evidence-1")),
-                List.of(
-                        claim("claim-background", AnswerClaimCategory.BACKGROUND, "evidence-2"),
-                        claim("claim-responsibility", AnswerClaimCategory.RESPONSIBILITY, "evidence-1"),
-                        claim("claim-solution", AnswerClaimCategory.TECHNICAL_DECISION, "evidence-1"),
-                        claim("claim-verification", AnswerClaimCategory.VERIFICATION, "evidence-2"),
-                        claim("claim-outcome", AnswerClaimCategory.OUTCOME, "evidence-1")
-                )
-        );
-    }
-
-    private AnswerClaimProjection claim(String id, AnswerClaimCategory category, String evidenceId) {
-        return new AnswerClaimProjection(id, category, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
-                AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY, List.of(evidenceId));
-    }
-
-    private AnswerEvidence evidence(String id) {
-        return new AnswerEvidence(
-                id,
-                "Evidence " + id,
-                "DOCUMENT",
-                LocalDate.of(2026, 7, 1),
-                LocalDate.of(2026, 7, 14),
-                2,
-                "Summary " + id,
-                "APPROVED",
-                false
-        );
+    private AnswerPlanSection section(
+            AnswerSectionType type,
+            String title,
+            String content,
+            String claimId,
+            List<String> evidenceIds
+    ) {
+        return new AnswerPlanSection(type, title, content, List.of(claimId), evidenceIds);
     }
 }

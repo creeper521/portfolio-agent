@@ -59,6 +59,13 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.evidenceIds[0]").value("sql-audit-delivery-set"))
                 .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
                         .value("sql-audit-overview"))
+                .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
+                        .value("2026-07-21.1"))
+                .andExpect(jsonPath("$.contextEnvelope.projectSlugs[0]")
+                        .value("sql-audit"))
+                .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
+                        .value("claim-sql-audit-background"))
+                .andExpect(jsonPath("$.contextEnvelope.followUpIntent").doesNotExist())
                 .andExpect(jsonPath("$.matched").doesNotExist())
                 .andExpect(jsonPath("$.answerMode").doesNotExist())
                 .andExpect(jsonPath("$.fallback").doesNotExist());
@@ -190,5 +197,66 @@ class AnswerControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    void acceptsSanitizedReferentialContextWithoutConversationHistory() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-follow-up",
+                                  "question": "查看当前状态",
+                                  "context": {
+                                    "projectSlug": "sql-audit",
+                                    "audienceRole": "INTERVIEWER",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  },
+                                  "contextEnvelope": {
+                                    "previousContentVersion": "2026-07-21.1",
+                                    "projectSlugs": ["sql-audit"],
+                                    "questionPresetId": "sql-audit-overview",
+                                    "referencedClaimIds": ["claim-sql-audit-delivered"],
+                                    "selectedSectionType": "STATUS",
+                                    "followUpIntent": "CURRENT_STATUS"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
+                .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
+                        .value("2026-07-21.1"))
+                .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
+                        .value("claim-sql-audit-delivered"));
+    }
+
+    @Test
+    void rejectsHistoricalBodiesInsideContextEnvelope() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-history-rejected",
+                                  "question": "展开技术方案",
+                                  "context": {
+                                    "projectSlug": "sql-audit",
+                                    "audienceRole": "INTERVIEWER",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  },
+                                  "contextEnvelope": {
+                                    "previousContentVersion": "2026-07-21.1",
+                                    "projectSlugs": ["sql-audit"],
+                                    "referencedClaimIds": ["claim-sql-audit-delivered"],
+                                    "followUpIntent": "EXPAND_SECTION",
+                                    "previousQuestion": "请把上一轮原问题保存下来",
+                                    "previousAnswer": "请把上一轮完整回答保存下来"
+                                  }
+                                }
+                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }

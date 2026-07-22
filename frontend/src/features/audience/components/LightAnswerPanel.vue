@@ -50,6 +50,16 @@ const answerStatus = computed(() => {
   return '尚未核验'
 })
 
+const answerSourceLabel = computed(() => {
+  if (props.answer.answer.answerSource === 'RETRIEVAL') {
+    return 'RETRIEVAL · 来自公开资料检索'
+  }
+  if (props.answer.answer.answerSource === 'PRESET') {
+    return 'PRESET · 来自已发布问题'
+  }
+  return ''
+})
+
 function stopTyping() {
   if (typingTimer) clearInterval(typingTimer)
   typingTimer = null
@@ -89,7 +99,7 @@ onBeforeUnmount(stopTyping)
       <b>{{ role }}</b>
       <span>ROUND {{ String(answer.round).padStart(2, '0') }} / 03</span>
       <span>RESOLUTION<br />{{ answer.answer.resolution }}</span>
-      <span>SOURCE<br />{{ answer.answer.answerSource ?? 'NOT_APPLICABLE' }}</span>
+      <span v-if="answerSourceLabel">SOURCE<br />{{ answerSourceLabel }}</span>
       <span>GENERATION<br />{{ answer.answer.generationMode }}</span>
       <span>VERIFICATION<br />{{ answer.answer.verification }}</span>
     </aside>

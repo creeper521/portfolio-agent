@@ -15,6 +15,28 @@ export type AnswerSectionType =
   | 'BOUNDARY'
   | 'REJECTED'
 
+export type FollowUpIntent =
+  | 'EXPAND_SECTION'
+  | 'SHOW_EVIDENCE'
+  | 'EXPLAIN_DECISION'
+  | 'COMPARE_PROJECTS'
+  | 'CURRENT_STATUS'
+  | 'RELATED_QUESTION'
+
+export interface ContextEnvelope {
+  previousContentVersion: string
+  projectSlugs: string[]
+  questionPresetId?: string
+  referencedClaimIds: string[]
+  selectedSectionType?: AnswerSectionType
+  followUpIntent?: FollowUpIntent
+}
+
+export interface FollowUpAction {
+  question: string
+  contextEnvelope: ContextEnvelope
+}
+
 export interface AnswerSection {
   type: AnswerSectionType
   title: string
@@ -37,6 +59,8 @@ export interface AnswerResponse {
   sections: AnswerSection[]
   evidenceIds: string[]
   suggestedQuestionPresetIds: string[]
+  contextEnvelope?: ContextEnvelope
+  contextVersionUpdated?: boolean
 }
 
 export interface MappedAnswer {
@@ -49,4 +73,6 @@ export interface MappedAnswer {
   verification: Verification
   evidenceIds: string[]
   suggestedQuestionPresetIds: string[]
+  contextEnvelope?: ContextEnvelope
+  contextVersionUpdated?: boolean
 }

@@ -22,6 +22,8 @@ public final class AnswerResponse {
     private final List<AnswerSectionResponse> sections;
     private final List<String> evidenceIds;
     private final List<String> suggestedQuestionPresetIds;
+    private final ContextEnvelopeResponse contextEnvelope;
+    private final boolean contextVersionUpdated;
 
     public AnswerResponse(
             String requestId,
@@ -38,6 +40,49 @@ public final class AnswerResponse {
             List<String> evidenceIds,
             List<String> suggestedQuestionPresetIds
     ) {
+        this(requestId, turnId, contentVersion, questionPresetId, resolution, answerSource,
+                generationMode, verification, title, summary, sections, evidenceIds,
+                suggestedQuestionPresetIds, null, false);
+    }
+
+    public AnswerResponse(
+            String requestId,
+            String turnId,
+            String contentVersion,
+            String questionPresetId,
+            AnswerResolution resolution,
+            AnswerSource answerSource,
+            GenerationMode generationMode,
+            VerificationStatus verification,
+            String title,
+            String summary,
+            List<AnswerSectionResponse> sections,
+            List<String> evidenceIds,
+            List<String> suggestedQuestionPresetIds,
+            ContextEnvelopeResponse contextEnvelope
+    ) {
+        this(requestId, turnId, contentVersion, questionPresetId, resolution,
+                answerSource, generationMode, verification, title, summary, sections,
+                evidenceIds, suggestedQuestionPresetIds, contextEnvelope, false);
+    }
+
+    public AnswerResponse(
+            String requestId,
+            String turnId,
+            String contentVersion,
+            String questionPresetId,
+            AnswerResolution resolution,
+            AnswerSource answerSource,
+            GenerationMode generationMode,
+            VerificationStatus verification,
+            String title,
+            String summary,
+            List<AnswerSectionResponse> sections,
+            List<String> evidenceIds,
+            List<String> suggestedQuestionPresetIds,
+            ContextEnvelopeResponse contextEnvelope,
+            boolean contextVersionUpdated
+    ) {
         this.requestId = requestId;
         this.turnId = turnId;
         this.contentVersion = contentVersion;
@@ -51,6 +96,8 @@ public final class AnswerResponse {
         this.sections = List.copyOf(sections);
         this.evidenceIds = List.copyOf(evidenceIds);
         this.suggestedQuestionPresetIds = List.copyOf(suggestedQuestionPresetIds);
+        this.contextEnvelope = contextEnvelope;
+        this.contextVersionUpdated = contextVersionUpdated;
     }
 
     public String getRequestId() { return requestId; }
@@ -66,4 +113,6 @@ public final class AnswerResponse {
     public List<AnswerSectionResponse> getSections() { return sections; }
     public List<String> getEvidenceIds() { return evidenceIds; }
     public List<String> getSuggestedQuestionPresetIds() { return suggestedQuestionPresetIds; }
+    public ContextEnvelopeResponse getContextEnvelope() { return contextEnvelope; }
+    public boolean isContextVersionUpdated() { return contextVersionUpdated; }
 }

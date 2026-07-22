@@ -17,6 +17,7 @@ public final class ReleaseManifest {
     private final String candidatePayloadHash;
     private final String checksumsFile;
     private final BundleCounts counts;
+    private final RetrievalManifest retrieval;
 
     @JsonCreator
     public ReleaseManifest(@JsonProperty("schemaVersion") String schemaVersion,
@@ -30,13 +31,15 @@ public final class ReleaseManifest {
             @JsonProperty("approvalDigest") String approvalDigest,
             @JsonProperty("candidatePayloadHash") String candidatePayloadHash,
             @JsonProperty("checksumsFile") String checksumsFile,
-            @JsonProperty("counts") BundleCounts counts) {
+            @JsonProperty("counts") BundleCounts counts,
+            @JsonProperty("retrieval") RetrievalManifest retrieval) {
         this.schemaVersion = schemaVersion; this.contentVersion = contentVersion;
         this.publishedAt = publishedAt; this.builtAt = builtAt;
         this.minimumApplicationVersion = minimumApplicationVersion; this.factsFile = factsFile;
         this.presentationFile = presentationFile; this.approvalId = approvalId;
         this.approvalDigest = approvalDigest; this.candidatePayloadHash = candidatePayloadHash;
         this.checksumsFile = checksumsFile; this.counts = counts;
+        this.retrieval = retrieval;
     }
     public String getSchemaVersion() { return schemaVersion; }
     public String getContentVersion() { return contentVersion; }
@@ -50,4 +53,5 @@ public final class ReleaseManifest {
     public String getCandidatePayloadHash() { return candidatePayloadHash; }
     public String getChecksumsFile() { return checksumsFile; }
     public BundleCounts getCounts() { return counts; }
+    public RetrievalManifest getRetrieval() { return retrieval; }
 }
