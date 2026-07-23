@@ -27,6 +27,7 @@ import com.portfolio.agent.portfolio.release.ClaimRagDocumentBuilder;
 import com.portfolio.agent.portfolio.release.KeywordIndexBuilder;
 import com.portfolio.agent.portfolio.release.LocalDocumentEmbeddingBuilder;
 import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import org.junit.jupiter.api.Assumptions;
@@ -59,8 +60,8 @@ class RetrievalBenchmarkTest {
                 .verify(modelDirectory);
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         Path bundle = root.resolve("backend/src/main/resources/public-data/bundle");
-        PortfolioSnapshot portfolio = mapper.readValue(
-                Files.readAllBytes(bundle.resolve("portfolio.json")), PortfolioSnapshot.class);
+        PortfolioSnapshot portfolio = new PortfolioSnapshotJsonReader(mapper).readBundle(
+                Files.readAllBytes(bundle.resolve("portfolio.json")));
         List<RagDocument> documents = new ClaimRagDocumentBuilder().build(
                 portfolio, LocalDate.of(2026, 7, 21));
         Map<String, float[]> vectors;

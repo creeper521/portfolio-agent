@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.repository.file;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
@@ -26,7 +27,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void loadsClosedBundleAndDerivesRuntimeHashWithoutCycles() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
 
         RuntimeContentSnapshot snapshot = loader.load(bundle);
 
@@ -36,6 +37,53 @@ class PublicBundleLoaderTest {
         assertThat(snapshot.getRuntimeBundleHash()).startsWith("sha256:");
         assertThat(snapshot.getLoadedAt()).isEqualTo("2026-07-21T09:00:00Z");
         assertThat(snapshot.getRetrievalContent()).isEmpty();
+    }
+
+    @Test
+    void loadsLegacySchemaTwoBundleWithZeroCases() {
+        RuntimeContentSnapshot loaded = loader.load(validLegacyBundle());
+
+        assertThat(loaded.getSchemaVersion()).isEqualTo("2.0");
+        assertThat(loaded.getCases()).isEmpty();
+    }
+
+    @Test
+    void loadsSchemaThreeBundleWithCasesCount() {
+        RuntimeContentSnapshot loaded = loader.load(validSchemaThreeBundle());
+
+        assertThat(loaded.getSchemaVersion()).isEqualTo("3.0");
+        assertThat(loaded.getCases()).extracting(CaseStudy::getSlug)
+                .containsExactly("multilingual-image-preservation");
+    }
+
+    @Test
+    void rejectsSchemaThreeManifestWithWrongCasesCount() {
+        Map<String, byte[]> bundle = validSchemaThreeBundle();
+        replaceAndRehashManifest(bundle, "\"cases\":1", "\"cases\":0");
+
+        assertThatThrownBy(() -> loader.load(bundle))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("manifest counts mismatch");
+    }
+
+    @Test
+    void rejectsSchemaThreeManifestWithoutExplicitCasesCount() {
+        Map<String, byte[]> bundle = validSchemaThreeBundle();
+        replaceAndRehashManifest(bundle, "\"cases\":1,", "");
+
+        assertThatThrownBy(() -> loader.load(bundle))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("counts.cases");
+    }
+
+    @Test
+    void caseByteChangeInvalidatesChecksumAndCandidateHash() {
+        Map<String, byte[]> files = new LinkedHashMap<>(validSchemaThreeBundle());
+        files.put("portfolio.json", changeCaseOutcome(files.get("portfolio.json")));
+
+        assertThatThrownBy(() -> loader.load(files))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("checksum mismatch: portfolio.json");
     }
 
     @Test
@@ -81,7 +129,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsPayloadByteMutation() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         bundle.put("portfolio.json", new String(bundle.get("portfolio.json"), StandardCharsets.UTF_8)
                 .replace("SQL Audit", "SQL Audit changed")
                 .getBytes(StandardCharsets.UTF_8));
@@ -93,7 +141,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsUnknownFile() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         bundle.put("keyword-index.json", "{}".getBytes(StandardCharsets.UTF_8));
 
         assertThatThrownBy(() -> loader.load(bundle))
@@ -103,7 +151,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsCountMismatch() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         replaceAndRehashManifest(bundle, "\"projects\":1", "\"projects\":2");
 
         assertThatThrownBy(() -> loader.load(bundle))
@@ -113,7 +161,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsCrossFileVersionMismatch() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         byte[] presentation = new String(bundle.get("presentation.json"), StandardCharsets.UTF_8)
                 .replace("2026-07-21.1", "2026-07-22.1")
                 .getBytes(StandardCharsets.UTF_8);
@@ -127,7 +175,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsBundleRequiringNewerApplication() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         replaceAndRehashManifest(bundle,
                 "\"minimumApplicationVersion\":\"0.1.0\"",
                 "\"minimumApplicationVersion\":\"9.0.0\"");
@@ -139,7 +187,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsTraversalInDeclaredFilename() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         replaceAndRehashManifest(bundle, "\"factsFile\":\"portfolio.json\"",
                 "\"factsFile\":\"../portfolio.json\"");
 
@@ -150,13 +198,13 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsMissingChecksumAndUnknownManifestField() {
-        Map<String, byte[]> missing = validBundle();
+        Map<String, byte[]> missing = validLegacyBundle();
         missing.put("checksums.json", new String(missing.get("checksums.json"), StandardCharsets.UTF_8)
                 .replaceAll(",\\\"presentation\\.json\\\":\\\"sha256:[^\\\"]+\\\"", "")
                 .getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(() -> loader.load(missing)).isInstanceOf(InvalidPortfolioSnapshotException.class);
 
-        Map<String, byte[]> unknown = validBundle();
+        Map<String, byte[]> unknown = validLegacyBundle();
         replaceAndRehashManifest(unknown, "\"counts\":{", "\"unknown\":true,\"counts\":{");
         assertThatThrownBy(() -> loader.load(unknown))
                 .isInstanceOf(InvalidPortfolioSnapshotException.class)
@@ -165,7 +213,7 @@ class PublicBundleLoaderTest {
 
     @Test
     void rejectsLegacyOrManifestOnlyFieldsInCanonicalPortfolioPayload() {
-        Map<String, byte[]> publishedAt = validBundle();
+        Map<String, byte[]> publishedAt = validLegacyBundle();
         publishedAt.put("portfolio.json", new String(
                 publishedAt.get("portfolio.json"), StandardCharsets.UTF_8)
                 .replace("\"owner\":", "\"publishedAt\":\"2026-07-21T16:30:00+08:00\",\"owner\":")
@@ -176,7 +224,7 @@ class PublicBundleLoaderTest {
                 .isInstanceOf(InvalidPortfolioSnapshotException.class)
                 .hasMessageContaining("portfolio.json field set");
 
-        Map<String, byte[]> legacyAlias = validBundle();
+        Map<String, byte[]> legacyAlias = validLegacyBundle();
         legacyAlias.put("portfolio.json", new String(
                 legacyAlias.get("portfolio.json"), StandardCharsets.UTF_8)
                 .replace("\"questionPresets\":", "\"questions\":")
@@ -185,21 +233,29 @@ class PublicBundleLoaderTest {
 
         assertThatThrownBy(() -> loader.load(legacyAlias))
                 .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("portfolio.json field set");
+                .hasMessageContaining("questionPresets");
     }
 
     @Test
     void derivesSameRuntimeHashFromSameExactBytes() {
-        Map<String, byte[]> bundle = validBundle();
+        Map<String, byte[]> bundle = validLegacyBundle();
         assertThat(loader.load(bundle).getRuntimeBundleHash())
                 .isEqualTo(loader.load(new LinkedHashMap<>(bundle)).getRuntimeBundleHash());
     }
 
-    private Map<String, byte[]> validBundle() {
+    private Map<String, byte[]> validLegacyBundle() {
         Map<String, byte[]> bundle = new LinkedHashMap<>();
         bundle.put("portfolio.json", portfolio().getBytes(StandardCharsets.UTF_8));
         bundle.put("presentation.json", presentation().getBytes(StandardCharsets.UTF_8));
         rebuildChecksumsAndManifest(bundle);
+        return bundle;
+    }
+
+    private Map<String, byte[]> validSchemaThreeBundle() {
+        Map<String, byte[]> bundle = new LinkedHashMap<>();
+        bundle.put("portfolio.json", schemaThreePortfolio().getBytes(StandardCharsets.UTF_8));
+        bundle.put("presentation.json", schemaThreePresentation().getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(bundle, "3.0", 1);
         return bundle;
     }
 
@@ -236,6 +292,14 @@ class PublicBundleLoaderTest {
     }
 
     private void rebuildChecksumsAndManifest(Map<String, byte[]> bundle) {
+        rebuildChecksumsAndManifest(bundle, "2.0", 0);
+    }
+
+    private void rebuildChecksumsAndManifest(
+            Map<String, byte[]> bundle,
+            String schemaVersion,
+            int cases
+    ) {
         String portfolioHash = BundleHashCalculator.sha256(bundle.get("portfolio.json"));
         String presentationHash = BundleHashCalculator.sha256(bundle.get("presentation.json"));
         String retrievalChecksums = "";
@@ -247,13 +311,16 @@ class PublicBundleLoaderTest {
                     + "\",\"vector-index.bin\":\""
                     + BundleHashCalculator.sha256(bundle.get("vector-index.bin")) + "\"";
         }
-        String checksums = "{\"schemaVersion\":\"2.0\",\"contentVersion\":\"2026-07-21.1\","
+        String checksums = "{\"schemaVersion\":\"" + schemaVersion
+                + "\",\"contentVersion\":\"2026-07-21.1\","
                 + "\"files\":{\"portfolio.json\":\"" + portfolioHash + "\","
                 + "\"presentation.json\":\"" + presentationHash + "\""
                 + retrievalChecksums + "}}";
         bundle.put("checksums.json", checksums.getBytes(StandardCharsets.UTF_8));
         String candidateHash = BundleHashCalculator.candidatePayloadHash(bundle);
-        String manifest = "{\"schemaVersion\":\"2.0\",\"contentVersion\":\"2026-07-21.1\","
+        String caseCount = "3.0".equals(schemaVersion) ? "\"cases\":" + cases + "," : "";
+        String manifest = "{\"schemaVersion\":\"" + schemaVersion
+                + "\",\"contentVersion\":\"2026-07-21.1\","
                 + "\"publishedAt\":\"2026-07-21T16:30:00+08:00\","
                 + "\"builtAt\":\"2026-07-21T16:25:00+08:00\","
                 + "\"minimumApplicationVersion\":\"0.1.0\","
@@ -261,7 +328,10 @@ class PublicBundleLoaderTest {
                 + "\"approvalId\":\"APR-2026-07-21-001\",\"approvalDigest\":\"sha256:approved\","
                 + "\"candidatePayloadHash\":\"" + candidateHash + "\","
                 + "\"checksumsFile\":\"checksums.json\",\"counts\":{"
-                + "\"projects\":1,\"claims\":1,\"evidence\":1,\"claimEvidenceLinks\":1,"
+                + "\"projects\":1," + caseCount
+                + "\"claims\":" + ("3.0".equals(schemaVersion) ? 2 : 1)
+                + ",\"evidence\":1,\"claimEvidenceLinks\":"
+                + ("3.0".equals(schemaVersion) ? 2 : 1) + ","
                 + "\"timelineEvents\":1,\"questionPresets\":1}"
                 + retrievalManifest(bundle) + "}";
         bundle.put("manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
@@ -305,5 +375,51 @@ class PublicBundleLoaderTest {
         return """
                 {"schemaVersion":"2.0","contentVersion":"2026-07-21.1","audiences":[],"homeSections":[],"metrics":[],"explorePortals":[],"footer":{}}
                 """;
+    }
+
+    private String schemaThreePresentation() {
+        return presentation().replace(
+                "\"schemaVersion\":\"2.0\"",
+                "\"schemaVersion\":\"3.0\"");
+    }
+
+    private String schemaThreePortfolio() {
+        String caseStudy = """
+                "cases":[{"id":"case-1","code":"CASE-01",
+                "slug":"multilingual-image-preservation","type":"FEATURE",
+                "title":"Multilingual image preservation","summary":"Preserved language results",
+                "problem":"A later upload replaced earlier visible results",
+                "actions":["Merged existing and uploaded languages"],"decisions":[],
+                "verification":["Queried both language results"],
+                "outcome":"Preserved both language results","limitations":["Public scope only"],
+                "achievementStatus":"DELIVERED","contributionType":"PRIMARY","projectId":null,
+                "claimIds":["claim-2"],"evidenceIds":["evidence-1"],
+                "timelineEventIds":["timeline-1"],"questionPresetIds":["question-1"]}],
+                """;
+        String caseClaim = """
+                ,{"id":"claim-2","subjectType":"CASE","subjectId":"case-1",
+                "category":"OUTCOME","statement":"Preserved language results","detail":"Reviewed",
+                "achievementStatus":"DELIVERED","contributionType":"PRIMARY",
+                "verificationBasis":"EVIDENCE_SUPPORTED","verificationStatus":"VERIFIED",
+                "materiality":"KEY","topics":["DELIVERY"],
+                "audiencePriorities":{"INTERVIEWER":100}}
+                """;
+        String caseLink = """
+                ,{"id":"link-2","claimId":"claim-2","evidenceId":"evidence-1",
+                "supportType":"DIRECT","scope":"Case delivery only","reviewStatus":"APPROVED"}
+                """;
+        return portfolio()
+                .replace("\"schemaVersion\":\"2.0\"", "\"schemaVersion\":\"3.0\"")
+                .replace("\"claims\":[", caseStudy + "\"claims\":[")
+                .replace("}],\n\"evidence\":[", "}" + caseClaim + "],\n\"evidence\":[")
+                .replace("}],\n\"timelineEvents\":[", "}" + caseLink + "],\n\"timelineEvents\":[")
+                .replace("\"projectIds\":[\"project-1\"],",
+                        "\"projectIds\":[\"project-1\"],\"caseIds\":[\"case-1\"],");
+    }
+
+    private byte[] changeCaseOutcome(byte[] portfolioBytes) {
+        return new String(portfolioBytes, StandardCharsets.UTF_8)
+                .replace("Preserved both language results", "Changed case outcome")
+                .getBytes(StandardCharsets.UTF_8);
     }
 }

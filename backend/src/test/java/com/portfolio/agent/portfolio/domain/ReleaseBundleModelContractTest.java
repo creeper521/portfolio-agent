@@ -10,7 +10,7 @@ class ReleaseBundleModelContractTest {
 
     @Test
     void releaseModelsAreExplicitImmutableClassesRatherThanRecords() {
-        BundleCounts counts = new BundleCounts(1, 5, 1, 5, 1, 1);
+        BundleCounts counts = new BundleCounts(1, 0, 5, 1, 5, 1, 1);
         ReleaseManifest manifest = new ReleaseManifest(
                 "2.0", "2026-07-21.1",
                 OffsetDateTime.parse("2026-07-21T00:00:00+08:00"),
@@ -23,6 +23,7 @@ class ReleaseBundleModelContractTest {
         assertThat(BundleCounts.class.isRecord()).isFalse();
         assertThat(PresentationSnapshot.class.isRecord()).isFalse();
         assertThat(manifest.getCounts()).isEqualTo(counts);
+        assertThat(manifest.getCounts().getCases()).isZero();
         assertThat(manifest.getFactsFile()).isEqualTo("portfolio.json");
         assertThat(manifest.getRetrieval()).isNull();
     }

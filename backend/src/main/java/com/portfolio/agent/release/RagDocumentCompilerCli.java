@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.release.RetrievalBundleCompiler;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,8 +42,8 @@ public final class RagDocumentCompilerCli {
             throw new IllegalArgumentException("RAG output parent is invalid");
         }
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        PortfolioSnapshot snapshot = mapper.readValue(
-                Files.readAllBytes(portfolioFile), PortfolioSnapshot.class);
+        PortfolioSnapshot snapshot = new PortfolioSnapshotJsonReader(mapper).readBundle(
+                Files.readAllBytes(portfolioFile));
         byte[] documents = RetrievalBundleCompiler.compileCanonicalDocuments(
                 snapshot, validFrom);
         Path temporary = Files.createTempFile(parent, ".rag-documents-", ".tmp");

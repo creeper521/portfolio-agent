@@ -3,10 +3,8 @@ package com.portfolio.agent.portfolio.validation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
-import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ByteArrayResource;
 
 import java.nio.charset.StandardCharsets;
 
@@ -419,16 +417,9 @@ class PortfolioSnapshotValidatorTest {
                 .hasMessageContaining(expectedMessage);
     }
 
-    private void validate(String json) {
-        repository(json).getSnapshot();
-    }
-
-    private JsonPublicPortfolioRepository repository(String json) {
-        return new JsonPublicPortfolioRepository(
-                objectMapper,
-                new ByteArrayResource(json.getBytes(StandardCharsets.UTF_8)),
-                validator
-        );
+    private void validate(String json) throws Exception {
+        PortfolioSnapshot snapshot = objectMapper.readValue(json, PortfolioSnapshot.class);
+        validator.validate(snapshot);
     }
 
     private String withCase(String replacement) {

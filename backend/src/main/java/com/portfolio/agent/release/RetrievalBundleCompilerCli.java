@@ -11,6 +11,7 @@ import com.portfolio.agent.answer.adapter.retrieval.LocalEmbeddingArtifactVerifi
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.release.RetrievalBundleCompiler;
 import com.portfolio.agent.portfolio.release.RetrievalCompilation;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -56,8 +57,8 @@ public final class RetrievalBundleCompilerCli {
                 .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
                 .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .build();
-        PortfolioSnapshot snapshot = mapper.readValue(
-                Files.readAllBytes(portfolioFile), PortfolioSnapshot.class);
+        PortfolioSnapshot snapshot = new PortfolioSnapshotJsonReader(mapper).readBundle(
+                Files.readAllBytes(portfolioFile));
         RetrievalCompilation compilation;
         LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
                 .verify(modelDirectory);

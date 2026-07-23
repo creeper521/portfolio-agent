@@ -31,11 +31,10 @@ public final class PublicBundleLoader {
             "manifest.json", "portfolio.json", "presentation.json", "rag-documents.jsonl",
             "keyword-index.json", "vector-index.bin", "checksums.json");
     private static final String APPLICATION_VERSION = "0.1.0";
-    private static final Set<String> PORTFOLIO_FIELDS = Set.of(
-            "schemaVersion", "contentVersion", "owner", "internshipPeriod", "projects",
-            "claims", "evidence", "claimEvidenceLinks", "timelineEvents", "questionPresets");
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("2.0", "3.0");
 
     private final ObjectMapper objectMapper;
+    private final PortfolioSnapshotJsonReader snapshotReader;
     private final PortfolioSnapshotValidator validator;
     private final Clock clock;
 
@@ -46,6 +45,7 @@ public final class PublicBundleLoader {
     ) {
         this.objectMapper = objectMapper.copy()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+        this.snapshotReader = new PortfolioSnapshotJsonReader(this.objectMapper);
         this.validator = validator;
         this.clock = clock;
     }
@@ -55,11 +55,12 @@ public final class PublicBundleLoader {
             require(files != null && (files.keySet().equals(LEGACY_FILES)
                             || files.keySet().equals(RETRIEVAL_FILES)),
                     "bundle file set is not closed");
-            ReleaseManifest manifest = read(files, "manifest.json", ReleaseManifest.class);
+            ReleaseManifest manifest = readManifest(files);
             boolean hasRetrieval = manifest.getRetrieval() != null;
             require(hasRetrieval == files.keySet().equals(RETRIEVAL_FILES),
                     "bundle file set does not match retrieval manifest");
-            require("2.0".equals(manifest.getSchemaVersion()), "unsupported manifest schemaVersion");
+            require(SUPPORTED_SCHEMA_VERSIONS.contains(manifest.getSchemaVersion()),
+                    "unsupported manifest schemaVersion");
             require("portfolio.json".equals(manifest.getFactsFile()), "invalid factsFile");
             require("presentation.json".equals(manifest.getPresentationFile()),
                     "invalid presentationFile");
@@ -88,9 +89,7 @@ public final class PublicBundleLoader {
             require(candidateHash.equals(manifest.getCandidatePayloadHash()),
                     "candidatePayloadHash mismatch");
 
-            requireExactTopLevelFields(files.get("portfolio.json"), PORTFOLIO_FIELDS,
-                    "portfolio.json");
-            PortfolioSnapshot content = read(files, "portfolio.json", PortfolioSnapshot.class);
+            PortfolioSnapshot content = snapshotReader.readBundle(files.get("portfolio.json"));
             PresentationSnapshot presentation = read(
                     files, "presentation.json", PresentationSnapshot.class);
             require(manifest.getSchemaVersion().equals(content.getSchemaVersion())
@@ -190,16 +189,19 @@ public final class PublicBundleLoader {
         return objectMapper.readValue(bytes, type);
     }
 
-    private void requireExactTopLevelFields(
-            byte[] bytes,
-            Set<String> allowedFields,
-            String fileName
-    ) throws IOException {
+    private ReleaseManifest readManifest(Map<String, byte[]> files) throws IOException {
+        byte[] bytes = files.get("manifest.json");
+        require(bytes != null, "missing bundle file: manifest.json");
         JsonNode root = objectMapper.readTree(bytes);
-        require(root != null && root.isObject(), fileName + " must contain a JSON object");
-        Set<String> actualFields = new java.util.HashSet<>();
-        root.fieldNames().forEachRemaining(actualFields::add);
-        require(allowedFields.containsAll(actualFields), fileName + " field set is not canonical");
+        require(root != null && root.isObject(), "manifest.json must contain a JSON object");
+        JsonNode schemaVersion = root.get("schemaVersion");
+        if (schemaVersion != null && "3.0".equals(schemaVersion.textValue())) {
+            JsonNode counts = root.get("counts");
+            require(counts != null && counts.isObject()
+                            && counts.has("cases") && counts.get("cases").isIntegralNumber(),
+                    "manifest counts.cases is required for schemaVersion 3.0");
+        }
+        return objectMapper.treeToValue(root, ReleaseManifest.class);
     }
 
     private void verifyChecksum(Map<String, byte[]> files, Checksums checksums, String name) {
