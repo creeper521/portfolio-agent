@@ -1,8 +1,10 @@
 # Portfolio CaseStudy Public Contract Design
 
-> **状态：** 已确认，等待实施计划
+> **状态：** 后端纵向切片与首批公开内容已实施并验证
 > **确认日期：** 2026-07-23
 > **实施范围：** schema 3.0、后端只读 API、首批公开内容与发布工具
+
+> **实施结果（2026-07-23）：** schema 3.0 与 2.0 兼容加载、CaseStudy 领域模型/校验/服务/API、三个公开 Case 和 SQL 审计主线 2026-07 扩展已完成。Case 前端列表/详情与视觉、Agent Case 检索/上下文/可执行预设、生产部署与线上验收尚未完成。
 
 ## 1. 目标
 
@@ -486,7 +488,7 @@ powershell -ExecutionPolicy Bypass -File scripts/privacy-check.ps1
 
 ## 12. 验收结论
 
-当本设计对应的后端阶段完成时，项目应具备：
+本设计对应的后端阶段已完成并具备：
 
 - 可显式读取 schema `2.0/3.0` 的加载器；
 - schema `3.0` CaseStudy 正式契约；
@@ -496,3 +498,11 @@ powershell -ExecutionPolicy Bypass -File scripts/privacy-check.ps1
 - 失败关闭的引用、版本与路由行为；
 - 无任何前端源文件变更；
 - 无部署行为。
+
+当前随包 Bundle 为 schema `3.0`、内容版本 `2026-07-23.1`。三个公开 Case 分别为多语言图片上传结果保留、测试角色重置工具和 CodeGraph 定性评测；SQL 审计 Project 已加入 2026-07 能力扩展。CodeGraph 不包含精确效率指标或内部项目信息。
+
+尚未完成：
+
+- CaseStudy 前端列表/详情页与视觉设计；
+- Agent 对 CaseStudy 的检索、上下文组装与可执行问题预设；
+- 生产部署与线上验收。
