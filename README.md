@@ -9,7 +9,7 @@
 - Vue 3 六路由作品集：概览、项目目录、项目详情、时间线、证据中心和完整 Agent 工作台
 - Spring Boot 公开作品集 API，以及供正式页面使用的 `GET /api/v1/public-content` 聚合接口
 - 独立 CaseStudy 领域模型、严格校验、只读服务、列表/详情 API，以及三个经审核的公开案例
-- 一个规范问题及有限精确别名、五段式确定性回答和未命中边界回答
+- 公开 Bundle 包含 6 个 QuestionPreset 和 5 条 TimelineEvent；其中 3 个 Project preset 进入现有项目/Agent 能力，3 个 Case-only preset 仅由公开 API 返回，Agent 尚不执行
 - 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
