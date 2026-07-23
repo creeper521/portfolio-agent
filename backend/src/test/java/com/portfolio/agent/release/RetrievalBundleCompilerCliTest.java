@@ -23,6 +23,30 @@ class RetrievalBundleCompilerCliTest {
     }
 
     @Test
+    void releaseCompilersRejectSchemaThreeWithoutCasesThroughCentralReader()
+            throws Exception {
+        Path portfolio = temporary.resolve("portfolio.json");
+        Files.writeString(portfolio, """
+                {"schemaVersion":"3.0","contentVersion":"content-1",
+                "owner":{"name":"Owner","role":"Engineer","summary":"Summary",
+                "githubUrl":null,"email":null,"resumeUrl":null},
+                "projects":[],"claims":[],"evidence":[],"claimEvidenceLinks":[],
+                "timelineEvents":[],"questionPresets":[]}
+                """);
+        Path model = temporary.resolve("model");
+        Files.createDirectory(model);
+
+        assertThatThrownBy(() -> RagDocumentCompilerCli.compile(
+                portfolio, temporary.resolve("rag-documents.jsonl"),
+                LocalDate.of(2026, 7, 23)))
+                .hasMessageContaining("cases is required for schemaVersion 3.0");
+        assertThatThrownBy(() -> RetrievalBundleCompilerCli.compile(
+                portfolio, model, temporary.resolve("retrieval"),
+                LocalDate.of(2026, 7, 23)))
+                .hasMessageContaining("cases is required for schemaVersion 3.0");
+    }
+
+    @Test
     void compilesRealLocalArtifactsAtomicallyWhenThePinnedModelIsInstalled()
             throws Exception {
         Path root = projectRoot();

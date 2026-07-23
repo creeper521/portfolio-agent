@@ -12,6 +12,7 @@ import com.portfolio.agent.portfolio.domain.RetrievalManifest;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.repository.file.ActiveBundleLocator;
 import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import org.junit.jupiter.api.Assumptions;
@@ -57,7 +58,8 @@ class C2ReleaseFixtureBuilderTest {
         byte[] portfolioBytes = Files.readAllBytes(sourceBundle.resolve("portfolio.json"));
         byte[] presentationBytes = Files.readAllBytes(
                 sourceBundle.resolve("presentation.json"));
-        PortfolioSnapshot snapshot = mapper.readValue(portfolioBytes, PortfolioSnapshot.class);
+        PortfolioSnapshot snapshot = new PortfolioSnapshotJsonReader(mapper)
+                .readBundle(portfolioBytes);
         RetrievalManifest retrieval = mapper.readValue(
                 Files.readAllBytes(artifacts.resolve("retrieval-manifest.json")),
                 RetrievalManifest.class);
@@ -73,7 +75,8 @@ class C2ReleaseFixtureBuilderTest {
 
         String candidateHash = BundleHashCalculator.candidatePayloadHash(files);
         BundleCounts counts = new BundleCounts(
-                snapshot.getProjects().size(), snapshot.getClaims().size(),
+                snapshot.getProjects().size(), snapshot.getCases().size(),
+                snapshot.getClaims().size(),
                 snapshot.getEvidence().size(), snapshot.getClaimEvidenceLinks().size(),
                 snapshot.getTimeline().size(), snapshot.getQuestions().size());
         OffsetDateTime publishedAt = OffsetDateTime.parse("2026-07-21T16:30:00+08:00");

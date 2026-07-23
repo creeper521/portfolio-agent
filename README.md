@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-22）：** A、B、默认关闭的 C1，以及 C2 本地公开检索、固定只读工具和引用式多轮已经实现；C3 中仅 Model Provider Registry 已实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。文档治理见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)，逐功能盘点见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
+> **项目状态（2026-07-23）：** A、B、默认关闭的 C1、C2，以及 CaseStudy 后端纵向切片已经实现。公开 Bundle 已升级为 schema 3.0，同时保留 schema 2.0 兼容加载；三个公开 Case 和 SQL 审计主线 2026-07 扩展已发布。Case 前端页面、Agent Case 能力和生产部署仍未完成。文档治理见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)，逐功能盘点见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
@@ -8,7 +8,8 @@
 
 - Vue 3 六路由作品集：概览、项目目录、项目详情、时间线、证据中心和完整 Agent 工作台
 - Spring Boot 公开作品集 API，以及供正式页面使用的 `GET /api/v1/public-content` 聚合接口
-- 一个规范问题及有限精确别名、五段式确定性回答和未命中边界回答
+- 独立 CaseStudy 领域模型、严格校验、只读服务、列表/详情 API，以及三个经审核的公开案例
+- 公开 Bundle 包含 6 个 QuestionPreset 和 5 条 TimelineEvent；其中 3 个 Project preset 进入现有项目/Agent 能力，3 个 Case-only preset 仅由公开 API 返回，Agent 尚不执行
 - 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
@@ -179,7 +180,11 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 - `GET /api/v1/public-content`：正式页面使用的审核公开内容聚合
 - `GET /api/v1/portfolio`：首页公开快照
 - `GET /api/v1/projects/{slug}`：项目详情
+- `GET /api/v1/cases`：公开案例摘要列表
+- `GET /api/v1/cases/{slug}`：公开案例详情
 - `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
+
+`GET /api/v1/public-content` 现新增顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影新增 `caseSlugs`。这些是后端公开数据契约；当前前端尚无 Case 列表或详情路由，也不会消费 Case 专属问题。
 
 公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
 

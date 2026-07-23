@@ -59,7 +59,8 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
     ) {
         try {
             byte[] bytes = resource.getContentAsByteArray();
-            PortfolioSnapshot loaded = objectMapper.readValue(bytes, PortfolioSnapshot.class);
+            PortfolioSnapshot loaded = new PortfolioSnapshotJsonReader(objectMapper)
+                    .readLegacyResource(bytes);
             validator.validate(loaded);
             this.snapshot = new RuntimeContentSnapshot(loaded, sha256(bytes), Instant.now());
         } catch (IOException | IllegalArgumentException | NoSuchAlgorithmException exception) {

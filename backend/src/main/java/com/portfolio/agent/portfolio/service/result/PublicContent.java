@@ -20,11 +20,13 @@ public final class PublicContent {
     private final OffsetDateTime publishedAt;
     private final OwnerProfile owner;
     private final List<ProjectDetails> projects;
+    private final List<CaseDetails> cases;
     private final List<Claim> claims;
     private final List<ClaimEvidenceLink> claimEvidenceLinks;
     private final List<EvidenceRecord> evidence;
     private final List<TimelineEvent> timeline;
     private final Map<String, List<String>> projectSlugsByEvidenceId;
+    private final Map<String, List<String>> caseSlugsByEvidenceId;
     private final Map<String, List<String>> claimIdsByEvidenceId;
     private final List<QuestionDefinition> questionPresets;
 
@@ -34,11 +36,13 @@ public final class PublicContent {
             OffsetDateTime publishedAt,
             OwnerProfile owner,
             List<ProjectDetails> projects,
+            List<CaseDetails> cases,
             List<Claim> claims,
             List<ClaimEvidenceLink> claimEvidenceLinks,
             List<EvidenceRecord> evidence,
             List<TimelineEvent> timeline,
             Map<String, List<String>> projectSlugsByEvidenceId,
+            Map<String, List<String>> caseSlugsByEvidenceId,
             Map<String, List<String>> claimIdsByEvidenceId,
             List<QuestionDefinition> questionPresets
     ) {
@@ -47,6 +51,7 @@ public final class PublicContent {
         this.publishedAt = publishedAt;
         this.owner = owner;
         this.projects = List.copyOf(projects);
+        this.cases = List.copyOf(cases);
         this.claims = List.copyOf(claims);
         this.claimEvidenceLinks = List.copyOf(claimEvidenceLinks);
         this.evidence = List.copyOf(evidence);
@@ -57,6 +62,12 @@ public final class PublicContent {
                         copiedProjectSlugs.put(evidenceId, List.copyOf(projectSlugs))
         );
         this.projectSlugsByEvidenceId = Map.copyOf(copiedProjectSlugs);
+        LinkedHashMap<String, List<String>> copiedCaseSlugs = new LinkedHashMap<>();
+        caseSlugsByEvidenceId.forEach(
+                (evidenceId, caseSlugs) ->
+                        copiedCaseSlugs.put(evidenceId, List.copyOf(caseSlugs))
+        );
+        this.caseSlugsByEvidenceId = Map.copyOf(copiedCaseSlugs);
         LinkedHashMap<String, List<String>> copiedClaimIds = new LinkedHashMap<>();
         claimIdsByEvidenceId.forEach((evidenceId, claimIds) ->
                 copiedClaimIds.put(evidenceId, List.copyOf(claimIds)));
@@ -94,6 +105,10 @@ public final class PublicContent {
         return projects;
     }
 
+    public List<CaseDetails> getCases() {
+        return cases;
+    }
+
     public List<EvidenceRecord> getEvidence() {
         return evidence;
     }
@@ -104,6 +119,10 @@ public final class PublicContent {
 
     public Map<String, List<String>> getProjectSlugsByEvidenceId() {
         return projectSlugsByEvidenceId;
+    }
+
+    public Map<String, List<String>> getCaseSlugsByEvidenceId() {
+        return caseSlugsByEvidenceId;
     }
 
     @Override
@@ -119,20 +138,22 @@ public final class PublicContent {
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
+                && Objects.equals(cases, that.cases)
                 && Objects.equals(claims, that.claims)
                 && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(timeline, that.timeline)
                 && Objects.equals(projectSlugsByEvidenceId, that.projectSlugsByEvidenceId)
+                && Objects.equals(caseSlugsByEvidenceId, that.caseSlugsByEvidenceId)
                 && Objects.equals(claimIdsByEvidenceId, that.claimIdsByEvidenceId)
                 && Objects.equals(questionPresets, that.questionPresets);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, projects,
+        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, projects, cases,
                 claims, claimEvidenceLinks, evidence, timeline, projectSlugsByEvidenceId,
-                claimIdsByEvidenceId, questionPresets);
+                caseSlugsByEvidenceId, claimIdsByEvidenceId, questionPresets);
     }
 
     @Override
@@ -143,9 +164,11 @@ public final class PublicContent {
                 ", publishedAt=" + publishedAt +
                 ", owner=" + owner +
                 ", projects=" + projects +
+                ", cases=" + cases +
                 ", evidence=" + evidence +
                 ", timeline=" + timeline +
                 ", projectSlugsByEvidenceId=" + projectSlugsByEvidenceId +
+                ", caseSlugsByEvidenceId=" + caseSlugsByEvidenceId +
                 ", questionPresets=" + questionPresets +
                 '}';
     }

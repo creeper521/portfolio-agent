@@ -19,6 +19,43 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AnswerResponseMapperTest {
 
     @Test
+    void contextEnvelopeKeepsOneClaimFromEveryAnswerSectionBeforeApplyingBudget() {
+        com.portfolio.agent.answer.domain.AnswerTurnSnapshot turn =
+                new com.portfolio.agent.answer.domain.AnswerTurnSnapshot(
+                        "turn-1", "request-1", "version-1", "sha256:bundle",
+                        "sql-audit", "preset-1", List.of("evidence-1"),
+                        com.portfolio.agent.answer.dto.request.AudienceRole.INTERVIEWER,
+                        com.portfolio.agent.answer.dto.request.AnswerRequestSource.AGENT_PAGE
+                );
+        AnswerResult result = new AnswerResult(
+                turn,
+                com.portfolio.agent.answer.domain.AnswerResolution.ANSWERED,
+                com.portfolio.agent.answer.domain.AnswerSource.PRESET,
+                com.portfolio.agent.answer.domain.GenerationMode.DETERMINISTIC,
+                com.portfolio.agent.answer.domain.VerificationStatus.VERIFIED,
+                "SQL audit",
+                "Reviewed summary",
+                List.of(
+                        section(AnswerSectionType.BACKGROUND, "claim-background"),
+                        section(AnswerSectionType.RESPONSIBILITY, "claim-responsibility"),
+                        section(AnswerSectionType.SOLUTION, "claim-solution-1",
+                                "claim-solution-2", "claim-solution-3", "claim-solution-4"),
+                        section(AnswerSectionType.VERIFICATION, "claim-verification-1",
+                                "claim-verification-2"),
+                        section(AnswerSectionType.STATUS, "claim-sql-audit-delivered")
+                ),
+                List.of("evidence-1"),
+                List.of("preset-1")
+        );
+
+        AnswerResponse response = new AnswerResponseMapper().toResponse(result);
+
+        assertThat(response.getContextEnvelope().getReferencedClaimIds())
+                .hasSizeLessThanOrEqualTo(8)
+                .contains("claim-sql-audit-delivered");
+    }
+
+    @Test
     void mapsTheFourDimensionalStructuredContractWithoutLegacyFields() throws Exception {
         com.portfolio.agent.answer.domain.AnswerTurnSnapshot turn =
                 new com.portfolio.agent.answer.domain.AnswerTurnSnapshot(
@@ -61,5 +98,11 @@ class AnswerResponseMapperTest {
                 .doesNotContain("\"matched\"")
                 .doesNotContain("\"answerMode\"")
                 .doesNotContain("\"fallback\"");
+    }
+
+    private AnswerSection section(AnswerSectionType type, String... claimIds) {
+        return new AnswerSection(
+                type, type.name(), "Reviewed content",
+                List.of("evidence-1"), List.of(claimIds));
     }
 }

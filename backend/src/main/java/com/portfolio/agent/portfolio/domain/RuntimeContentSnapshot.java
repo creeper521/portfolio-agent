@@ -15,6 +15,7 @@ public final class RuntimeContentSnapshot {
     private final OffsetDateTime publishedAt;
     private final OwnerProfile owner;
     private final List<ProjectProfile> projects;
+    private final List<CaseStudy> cases;
     private final List<Claim> claims;
     private final List<ClaimEvidenceLink> claimEvidenceLinks;
     private final List<QuestionDefinition> questionPresets;
@@ -43,6 +44,7 @@ public final class RuntimeContentSnapshot {
         this.publishedAt = content.getPublishedAt();
         this.owner = content.getOwner();
         this.projects = List.copyOf(content.getProjects());
+        this.cases = List.copyOf(content.getCases());
         this.claims = List.copyOf(content.getClaims());
         this.claimEvidenceLinks = List.copyOf(content.getClaimEvidenceLinks());
         this.questionPresets = List.copyOf(content.getQuestions());
@@ -77,6 +79,10 @@ public final class RuntimeContentSnapshot {
 
     public List<ProjectProfile> getProjects() {
         return projects;
+    }
+
+    public List<CaseStudy> getCases() {
+        return cases;
     }
 
     public List<Claim> getClaims() {
@@ -126,6 +132,7 @@ public final class RuntimeContentSnapshot {
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
+                && Objects.equals(cases, that.cases)
                 && Objects.equals(claims, that.claims)
                 && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(questionPresets, that.questionPresets)
@@ -137,7 +144,7 @@ public final class RuntimeContentSnapshot {
     @Override
     public int hashCode() {
         return Objects.hash(schemaVersion, contentVersion, runtimeBundleHash, loadedAt,
-                publishedAt, owner, projects, claims, claimEvidenceLinks, questionPresets,
+                publishedAt, owner, projects, cases, claims, claimEvidenceLinks, questionPresets,
                 approvedEvidence, timeline, retrievalContent);
     }
 }

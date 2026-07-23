@@ -2,16 +2,16 @@
 
 > **状态：** 当前实现盘点（以生产代码、配置、自动化测试和发布脚本为证据）
 > **核对日期：** 2026-07-23
-> **代码基线：** `c5cde9b`
+> **代码基线：** `c0a8823`
 > **维护规则：** 功能合入、默认开关或产品边界变化时，同步更新本文与 `00-文档状态索引.md`。
 
 ## 1. 结论
 
 当前项目已经从“一个确定性问答的 V0”扩展为一个可打包交付的公开实习作品集 Agent：前端具备六个正式路由和页面内存工作台，后端具备公开内容 API、严格回答契约、内容治理、可选模型表达、本地混合检索、固定只读工具和引用式多轮，并提供单 JAR、Docker 与完整发布门禁。
 
-但它仍不是完整 V1。当前公开内容只有一个已交付项目、一个可执行问题、一个 Evidence 和一条 TimelineEvent；模型表达与本地检索默认关闭；真实生产内容尚需在仓库外完成一次人工 Approval；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
+但它仍不是完整 V1。模型表达与本地检索默认关闭；Case 前端列表/详情和视觉、Agent Case 检索/上下文/可执行预设、生产部署与线上验收仍未完成；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
 
-内容准备层已经登记 68 项私有候选，并为 SQL 主线扩充、多语言图片修复、角色重置工具和 CodeGraph 评测形成首批四项脱敏候选包。这里的“候选已准备”不等于“公开内容已扩充”：当前公开 schema、bundle、API、Agent 回答事实和前端页面均未变化。
+内容准备层已经登记 68 项私有资产。首批 SQL 主线扩充、多语言图片修复、角色重置工具和 CodeGraph 评测已通过人工 Approval，发布为 schema 3.0、内容版本 `2026-07-23.1`；后端可读取和返回 Case 数据，但前端和 Agent Case 执行边界保持不变。
 
 ## 2. 已实现功能
 
@@ -28,8 +28,11 @@
 
 ### 2.2 公开内容与 API
 
-- Spring Boot 提供 `GET /api/v1/portfolio`、`GET /api/v1/projects/{slug}`、`GET /api/v1/public-content` 和 `POST /api/v1/answers`。
-- 当前随包公开快照为 schema 2.0、内容版本 `2026-07-21.1`，包含 1 个 `DELIVERED + PRIMARY` SQL 审计项目、5 个 Claim、1 个 APPROVED Evidence、5 条 Claim-Evidence 关联、1 条 TimelineEvent 和 1 个 QuestionPreset。
+- Spring Boot 提供 `GET /api/v1/portfolio`、`GET /api/v1/projects/{slug}`、`GET /api/v1/cases`、`GET /api/v1/cases/{slug}`、`GET /api/v1/public-content` 和 `POST /api/v1/answers`。
+- 当前随包公开快照为 schema 3.0、内容版本 `2026-07-23.1`，包含 1 个 SQL 审计 Project、3 个 CaseStudy、16 个 Claim、5 个 APPROVED Evidence、16 条 Claim-Evidence 关联、5 条 TimelineEvent 和 6 个 QuestionPreset。
+- 已实现独立不可变 CaseStudy 领域模型、CaseType、CASE Claim 归属与引用校验、只读服务和公开 DTO；未知 Case slug 返回 404 `CASE_NOT_FOUND`。
+- 加载器显式接受 schema 2.0/3.0：2.0 被规范化为空 `cases`/`caseIds`，3.0 严格校验 Case 集合与引用，未知版本和缺失必填集合失败关闭。
+- `GET /api/v1/public-content` 新增 `cases`、`caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影新增 `caseSlugs`。
 - 公开 DTO 与内部领域对象分离；启动/加载阶段校验 schema、唯一性、交叉引用、Evidence 审批状态、原始内容暴露标志和 Claim 验证约束。
 - SPA 正式路由由单 JAR 回退到 Vue 入口，同时不吞掉 API 和静态资源路径；异常响应不暴露堆栈、本地路径或内部错误信息。
 
@@ -43,7 +46,7 @@
 
 ### 2.4 A/B：运行时可信度与内容治理
 
-- Claim、Evidence、ClaimEvidenceLink、Project、QuestionPreset、TimelineEvent 和发布清单均有显式不可变领域模型。
+- Claim、Evidence、ClaimEvidenceLink、Project、CaseStudy、QuestionPreset、TimelineEvent 和发布清单均有显式不可变领域模型。
 - 支持四文件基础 bundle 与七文件 retrieval bundle 的确定性编译、SHA-256 校验、严格加载、active 版本定位和原子发布边界。
 - 提供内容治理、检索 bundle 构建、静态 bundle 校验、架构、代码质量、隐私、JAR E2E 和完整 release verification 脚本。
 - 内容发布 runbook 覆盖仓库外候选内容、人工 Approval、dry-run、发布、验证和回滚；bootstrap bundle 仅是开发/首装种子，不等价于生产人工审批。
@@ -82,32 +85,33 @@
 - 自动化覆盖领域约束、控制器、公开内容加载、确定性回答、模型 fallback、Provider Registry、混合检索、工具、多轮引用、隐私、无障碍交互和响应式布局。
 - `scripts/verify-release.ps1` 组合代码质量、架构、隐私、bundle、前后端测试、构建、JAR 静态资源与端到端检查；直接 `mvn package` 不能替代完整发布门禁。
 
-### 2.10 内容资产准备
+### 2.10 内容资产与首批公开发布
 
 - 在仓库外私有治理区登记 7 条长期主线、19 项任务、25 项事件和 17 项知识资产，共 68 项。
 - 每项资产均记录内容类型、完成状态、贡献边界、公开优先级、证据状态和审核状态；不确定贡献或缺少最终验收的内容保持 `HOLD` 或 `EXCLUDE`。
-- 首批准备 SQL 主线增量候选，以及多语言图片修复、角色重置工具和 CodeGraph 评测三个 Case 候选。
-- SQL 增量候选只新增输入安全、多来源选择、成功结果保留和选中目标检查等保守事实，不覆盖既有公开 Project。
-- 三个 Case 候选均标记为 `AWAITING_CASESTUDY_CONTRACT`，当前 schema 2.0 不读取这些数据，也没有伪造为 Project。
-- 私有候选已通过结构、敏感信息和跨文件一致性检查；检查通过不能代替人工公开文案审核或 Bundle Approval。
+- 首批 SQL 主线增量和三个 Case 已完成公开文案、Evidence、引用、隐私、精确 diff/hash 与人工 Approval，并进入随包公开 Bundle。
+- SQL 2026-07 扩展新增负号输入安全、多来源选择、成功结果保留和选中目标检查等保守事实，不覆盖既有公开 Project。
+- 三个 Case 分别为多语言图片上传结果保留、测试角色重置工具和 CodeGraph 定性评测；CodeGraph 不公开精确效率指标或内部项目资料。
+- 私有治理区与原始知识库仍不由运行时直接读取；后续资产仍需逐批走相同人工审核和发布流程。
 
 ## 3. 部分实现或受运行条件限制
 
 | 能力 | 当前状态 | 还缺什么 |
 |---|---|---|
-| 公开内容规模 | 已完成 68 项私有登记和首批四项候选；随包数据仍只有 1 个项目、1 个问题、1 个 Evidence、1 条时间线 | 先完成 CaseStudy 公共契约和公开文案审核，再按 runbook 审批并发布新 bundle |
+| 公开内容规模 | 68 项私有登记；首批 1 个 Project 增量和 3 个 Case 已进入 schema 3.0 Bundle | 继续逐批审核资产，并在前端和 Agent 支持 Case 前保持公开数据与可执行能力的边界 |
 | C1 模型表达 | 代码、双 Provider Adapter、Registry 与 fallback 已实现，默认关闭 | 部署方独立完成数据条款审批、注入密钥并决定是否启用；真实 Provider 可用性属于运行环境状态 |
 | C2a 本地检索 | 检索、索引、模型校验与 benchmark 已实现，默认关闭 | 运维侧安装固定 revision 的本地 ONNX 模型并显式配置 `HYBRID`；当前 Git 不包含模型二进制 |
 | C2b 项目比较 | 工具实现并能在多项目时比较 | 当前只有 1 个公开项目，因此真实比较请求会安全返回信息不足 |
-| 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现 | bootstrap 数据不是生产人工 Approval；真实发布需明确的人类审核者在外部私有工作区完成 |
+| 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；首批 CaseStudy 内容已由明确的人类审核者批准并发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
 | 匿名观测 | 领域事件、耗时桶和 best-effort 发布端口已实现 | 当前生产适配器是 Noop，没有指标后端、告警或运营面板 |
-| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略 | 公开问题仍只有一个；角色不会解锁不同事实或未发布问题 |
+| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略；公开 Bundle 有 6 个 QuestionPreset | 3 个 Project preset 进入现有项目/Agent 能力；3 个 Case-only preset 仅由公开 API 返回且 Agent 尚不执行，角色不会解锁不同事实或未发布问题 |
 | 无障碍与视觉收口 | 键盘分栏、抽屉、reduced-motion 用例和主要 loading/error 状态已有覆盖 | 历史设计审核仍记录焦点管理、完整语义和更广 WCAG 人工验收尾项，尚无“全面合规”结论 |
 
 ## 4. 尚未实现或未准入
 
 ### 4.1 产品与内容
 
+- CaseStudy 前端列表/详情页、路由、Repository 映射与统一视觉设计。
 - 完整 V1 内容规模、多主题项目库、更多可执行 FAQ 和跨项目真实比较数据。
 - 私有 Obsidian/候选材料检索、个人 Copilot、管理后台和未审核内容预览。
 - 用户注册、登录、权限、团队协作、收藏、分享链接和跨设备会话。
@@ -116,6 +120,7 @@
 
 ### 4.2 Agent 与扩展架构
 
+- Agent 对 CaseStudy 的检索语料、ContextEnvelope 上下文组装、只读工具支持和 Case 问题预设执行。
 - 动态 Tool Registry、动态插件安装/发现/热更新和第三方工具授权。
 - 通用 Hook、Orchestrator、工作流 DSL、DurableTask、任务恢复、调度和队列。
 - 多 Agent 协作、委派、共享记忆和 Agent 间通信。
@@ -128,14 +133,16 @@
 - SSE/WebSocket 流式回答；当前 API 为一次性 JSON 响应。
 - 生产级指标存储、Tracing、日志检索、告警、SLO 与运营 Dashboard。
 - 自动部署流水线、托管环境、域名/TLS 和正式生产发布证明。
+- 当前 schema 3.0 Bundle 尚未生产部署，也没有线上 Case API/页面验收结论。
 
 ## 5. 下一步优先级建议
 
-1. **先扩真实公开内容。** 在不扩大隐私边界的前提下新增第二个已交付项目、更多 APPROVED Evidence 和可执行 QuestionPreset，才能真正验证动态页面、检索与比较工具的价值。
-2. **完成一次真实发布演练。** 在仓库外走完人工 Approval、七文件 bundle、发布、验证和回滚，补齐 bootstrap 与生产流程之间的证据缺口。
-3. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
-4. **按部署需求启用可选能力。** 先决定是否允许 C1 外部模型和 C2a 本地模型，再分别准备数据策略审批、密钥或固定 ONNX 制品；默认关闭是安全基线。
-5. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
+1. **完善 Case 前端。** 在 Agent 页面重构稳定后，实现 Case 列表/详情、数据映射、错误状态与统一视觉。
+2. **扩展 Agent Case 能力。** 单独设计并实现 Case 检索、上下文组装、只读工具和可执行问题预设，不能因 API 已返回数据而视为可执行。
+3. **继续扩真实公开内容。** 按治理流程审核更多 APPROVED Evidence 和可执行 QuestionPreset，验证动态页面、检索与比较工具的价值。
+4. **完成生产部署与线上验收。** 功能和视觉完整后再部署，保留 API、页面、隐私和回滚证据。
+5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
+6. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
 
 ## 6. 状态判定依据
 

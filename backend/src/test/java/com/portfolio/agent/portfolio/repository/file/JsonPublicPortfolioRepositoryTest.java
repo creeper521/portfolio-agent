@@ -26,6 +26,7 @@ class JsonPublicPortfolioRepositoryTest {
         ProjectProfile project = snapshot.getProjects().getFirst();
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("2.0");
+        assertThat(snapshot.getCases()).isEmpty();
         assertThat(snapshot.getClaims()).singleElement()
                 .satisfies(claim -> assertThat(claim.getId())
                         .isEqualTo("claim-sql-audit-delivered"));

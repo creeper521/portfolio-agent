@@ -15,6 +15,7 @@ public final class TimelineEvent {
     private final String action;
     private final String impact;
     private final List<String> projectIds;
+    private final List<String> caseIds;
     private final List<String> claimIds;
     private final List<String> evidenceIds;
 
@@ -27,6 +28,7 @@ public final class TimelineEvent {
             @JsonProperty("action") String action,
             @JsonProperty("impact") String impact,
             @JsonProperty("projectIds") List<String> projectIds,
+            @JsonProperty("caseIds") List<String> caseIds,
             @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("evidenceIds") List<String> evidenceIds
     ) {
@@ -37,6 +39,7 @@ public final class TimelineEvent {
         this.action = action;
         this.impact = impact;
         this.projectIds = List.copyOf(projectIds);
+        this.caseIds = List.copyOf(caseIds);
         this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
     }
@@ -69,6 +72,10 @@ public final class TimelineEvent {
         return projectIds;
     }
 
+    public List<String> getCaseIds() {
+        return caseIds;
+    }
+
     public List<String> getClaimIds() {
         return claimIds;
     }
@@ -92,14 +99,15 @@ public final class TimelineEvent {
                 && Objects.equals(action, that.action)
                 && Objects.equals(impact, that.impact)
                 && Objects.equals(projectIds, that.projectIds)
+                && Objects.equals(caseIds, that.caseIds)
                 && Objects.equals(claimIds, that.claimIds)
                 && Objects.equals(evidenceIds, that.evidenceIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, dateLabel, title, problem, action, impact, projectIds, claimIds,
-                evidenceIds);
+        return Objects.hash(id, dateLabel, title, problem, action, impact, projectIds, caseIds,
+                claimIds, evidenceIds);
     }
 
     @Override
@@ -112,6 +120,7 @@ public final class TimelineEvent {
                 ", action='" + action + '\'' +
                 ", impact='" + impact + '\'' +
                 ", projectIds=" + projectIds +
+                ", caseIds=" + caseIds +
                 ", claimIds=" + claimIds +
                 ", evidenceIds=" + evidenceIds +
                 '}';

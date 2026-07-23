@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.domain.AnswerResolution;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 
 @Component
 public final class AnswerResponseMapper {
@@ -49,11 +50,7 @@ public final class AnswerResponseMapper {
         if (result.getResolution() != AnswerResolution.ANSWERED) {
             return null;
         }
-        List<String> claimIds = sections.stream()
-                .flatMap(section -> section.getClaimIds().stream())
-                .distinct()
-                .limit(8)
-                .toList();
+        List<String> claimIds = boundedSectionClaims(sections);
         return new ContextEnvelopeResponse(
                 result.getTurnSnapshot().getContentVersion(),
                 List.of(result.getTurnSnapshot().getProjectSlug()),
@@ -61,5 +58,26 @@ public final class AnswerResponseMapper {
                 claimIds,
                 null,
                 null);
+    }
+
+    private List<String> boundedSectionClaims(List<AnswerSectionResponse> sections) {
+        LinkedHashSet<String> claimIds = new LinkedHashSet<>();
+        for (AnswerSectionResponse section : sections) {
+            if (claimIds.size() == 8) {
+                return List.copyOf(claimIds);
+            }
+            if (!section.getClaimIds().isEmpty()) {
+                claimIds.add(section.getClaimIds().getFirst());
+            }
+        }
+        for (AnswerSectionResponse section : sections) {
+            for (String claimId : section.getClaimIds()) {
+                if (claimIds.size() == 8) {
+                    return List.copyOf(claimIds);
+                }
+                claimIds.add(claimId);
+            }
+        }
+        return List.copyOf(claimIds);
     }
 }

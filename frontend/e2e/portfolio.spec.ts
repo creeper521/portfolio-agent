@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installPublicApiMocks } from './support/publicApiMocks'
-import { previewPublicContent } from '../src/features/public-content/data/previewPublicContent'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -98,12 +97,15 @@ test('visitor can move from a project dossier to its approved evidence', async (
 test('visitor can follow timeline links to the related project and evidence', async ({ page }) => {
   await page.goto('/timeline')
 
-  await page.getByRole('link', { name: '查看关联项目 →' }).click()
+  const deliveryEvent = page.locator('article').filter({
+    has: page.getByRole('heading', { name: '从固定路径查询到可交付工具' }),
+  })
+  await deliveryEvent.getByRole('link', { name: '查看关联项目 →' }).click()
   await expect(page).toHaveURL(/\/projects\/sql-audit$/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('SQL 审计与故障排查工具')
 
   await page.getByRole('link', { name: '查看成长时间线' }).click()
-  await page.getByRole('link', { name: '查看关联证据 →' }).click()
+  await deliveryEvent.getByRole('link', { name: '查看关联证据 →' }).click()
   await expect(page).toHaveURL(/\/evidence\?evidence=sql-audit-delivery-set/)
   await expect(page.getByRole('heading', { name: 'SQL 审计工具交付证据集' })).toBeVisible()
 })
@@ -416,6 +418,36 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
 test('explicit follow-up sends stable references only and is lost on reload', async ({ page }) => {
   await openAgentDeepLink(page)
 
+  const publicContent = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/public-content')
+    if (!response.ok) {
+      throw new Error(`public-content request failed with ${response.status}`)
+    }
+    const body: unknown = await response.json()
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !('contentVersion' in body) ||
+      typeof body.contentVersion !== 'string' ||
+      !('claims' in body) ||
+      !Array.isArray(body.claims)
+    ) {
+      throw new Error('public-content response is missing follow-up reference data')
+    }
+    const claimIds = body.claims.flatMap((claim: unknown) =>
+      typeof claim === 'object' &&
+      claim !== null &&
+      'id' in claim &&
+      typeof claim.id === 'string'
+        ? [claim.id]
+        : [],
+    )
+    if (claimIds.length === 0) {
+      throw new Error('public-content response has no public claim ids')
+    }
+    return { contentVersion: body.contentVersion, claimIds }
+  })
+
   await page.getByLabel('你的问题').fill(
     '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？',
   )
@@ -432,14 +464,17 @@ test('explicit follow-up sends stable references only and is lost on reload', as
 
   expect(body.question).toBe('查看当前状态')
   expect(body.contextEnvelope).toMatchObject({
-    previousContentVersion: previewPublicContent.contentVersion,
+    previousContentVersion: publicContent.contentVersion,
     projectSlugs: ['sql-audit'],
     questionPresetId: 'sql-audit-overview',
     followUpIntent: 'CURRENT_STATUS',
   })
-  expect(body.contextEnvelope.referencedClaimIds)
-    .toEqual(expect.arrayContaining(['claim-sql-audit-delivered']))
+  expect(body.contextEnvelope.referencedClaimIds.length).toBeGreaterThan(0)
   expect(body.contextEnvelope.referencedClaimIds.length).toBeLessThanOrEqual(8)
+  expect(body.contextEnvelope.referencedClaimIds).toContain('claim-sql-audit-delivered')
+  expect(body.contextEnvelope.referencedClaimIds.every(
+    (id: unknown) => typeof id === 'string' && publicContent.claimIds.includes(id),
+  )).toBe(true)
   expect(body.contextEnvelope.referencedClaimIds.every(
     (id: unknown) => typeof id === 'string' && /^[a-z0-9-]{1,100}$/.test(id),
   )).toBe(true)

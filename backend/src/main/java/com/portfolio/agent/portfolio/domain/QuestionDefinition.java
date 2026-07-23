@@ -13,6 +13,7 @@ public final class QuestionDefinition {
     private final List<String> aliases;
     private final List<String> audiences;
     private final List<String> projectIds;
+    private final List<String> caseIds;
     private final List<String> topics;
     private final List<ClaimCategory> preferredClaimCategories;
     private final List<String> placements;
@@ -26,6 +27,7 @@ public final class QuestionDefinition {
             @JsonProperty("aliases") List<String> aliases,
             @JsonProperty("audiences") List<String> audiences,
             @JsonProperty("projectIds") List<String> projectIds,
+            @JsonProperty("caseIds") List<String> caseIds,
             @JsonProperty("topics") List<String> topics,
             @JsonProperty("preferredClaimCategories") List<ClaimCategory> preferredClaimCategories,
             @JsonProperty("placements") List<String> placements,
@@ -37,6 +39,7 @@ public final class QuestionDefinition {
         this.aliases = List.copyOf(aliases);
         this.audiences = List.copyOf(audiences);
         this.projectIds = List.copyOf(projectIds);
+        this.caseIds = List.copyOf(caseIds);
         this.topics = List.copyOf(topics);
         this.preferredClaimCategories = List.copyOf(preferredClaimCategories);
         this.placements = List.copyOf(placements);
@@ -61,6 +64,8 @@ public final class QuestionDefinition {
     }
 
     public List<String> getProjectIds() { return projectIds; }
+
+    public List<String> getCaseIds() { return caseIds; }
 
     public List<String> getTopics() { return topics; }
 
@@ -87,6 +92,7 @@ public final class QuestionDefinition {
                 && Objects.equals(aliases, that.aliases)
                 && Objects.equals(audiences, that.audiences)
                 && Objects.equals(projectIds, that.projectIds)
+                && Objects.equals(caseIds, that.caseIds)
                 && Objects.equals(topics, that.topics)
                 && Objects.equals(preferredClaimCategories, that.preferredClaimCategories)
                 && Objects.equals(placements, that.placements)
@@ -96,7 +102,7 @@ public final class QuestionDefinition {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, text, aliases, audiences, projectIds, topics,
+        return Objects.hash(id, text, aliases, audiences, projectIds, caseIds, topics,
                 preferredClaimCategories, placements, deterministicEntry, displayOrder);
     }
 
@@ -107,6 +113,7 @@ public final class QuestionDefinition {
                 ", text='" + text + '\'' +
                 ", aliases=" + aliases +
                 ", projectIds=" + projectIds +
+                ", caseIds=" + caseIds +
                 '}';
     }
 }
