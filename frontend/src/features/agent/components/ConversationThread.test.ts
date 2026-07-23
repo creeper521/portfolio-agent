@@ -1,9 +1,41 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
+import type { AnswerFocusTarget } from '../model/evidenceDeskModel'
 import type { AgentSession } from '../model/sessionTypes'
 import ConversationThread from './ConversationThread.vue'
+
+const answerMessageFixture: AgentSession['messages'][number] = {
+  id: 'agent-1',
+  role: 'AGENT',
+  content: 'Verified answer',
+  createdAt: 3,
+  evidenceIds: ['sql-audit-delivery-set'],
+  answer: {
+    title: 'Project details',
+    summary: 'Verified answer',
+    resolution: 'ANSWERED',
+    answerSource: 'PRESET',
+    generationMode: 'DETERMINISTIC',
+    verification: 'VERIFIED',
+    evidenceIds: ['sql-audit-delivery-set'],
+    suggestedQuestionPresetIds: [],
+    contextEnvelope: {
+      previousContentVersion: '2026-07-21',
+      projectSlugs: ['sql-audit'],
+      questionPresetId: 'sql-audit-overview',
+      referencedClaimIds: ['claim-sql-audit-delivered'],
+    },
+    sections: [{
+      type: 'VERIFICATION',
+      title: 'Verification',
+      content: 'Verified against delivery artifacts and test results.',
+      evidenceIds: ['sql-audit-delivery-set'],
+      claimIds: ['claim-sql-audit-delivered'],
+    }],
+  },
+}
 
 function session(messages: AgentSession['messages'] = []): AgentSession {
   return {
@@ -23,6 +55,7 @@ function mountThread(
   messages: AgentSession['messages'] = [],
   pending = false,
   error = '',
+  focusTarget: AnswerFocusTarget | null = null,
 ) {
   return mount(ConversationThread, {
     props: {
@@ -31,11 +64,52 @@ function mountThread(
       project: previewPublicContent.projects[0],
       pending,
       error,
+      focusTarget,
     },
   })
 }
 
 describe('ConversationThread', () => {
+  it('emits a section evidence inspection instead of a follow-up request', async () => {
+    const wrapper = mountThread([answerMessageFixture])
+    await wrapper.get('[data-section-evidence]').trigger('click')
+
+    expect(wrapper.emitted('inspectEvidence')).toEqual([[
+      {
+        messageId: 'agent-1',
+        evidenceIds: ['sql-audit-delivery-set'],
+        sectionType: 'VERIFICATION',
+      },
+    ]])
+    expect(wrapper.emitted('followUp')).toBeUndefined()
+  })
+
+  it('focuses the exact answer section without smooth scrolling under reduced motion', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    const wrapper = mountThread([answerMessageFixture])
+    const section = wrapper.get('[data-section-type="VERIFICATION"]')
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(section.element, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    await wrapper.setProps({
+      focusTarget: {
+        requestId: 1,
+        messageId: 'agent-1',
+        sectionType: 'VERIFICATION',
+      },
+    })
+    await flushPromises()
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+      behavior: 'auto',
+    })
+    expect(section.attributes('data-answer-focus')).toBe('true')
+  })
+
   it('submits a suggested question immediately', async () => {
     const wrapper = mountThread()
     const question = previewPublicContent.projects[0].suggestedQuestions[0]

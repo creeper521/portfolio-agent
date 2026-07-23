@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import type { AudienceRole, PublicProject } from '../../public-content/model/publicContentTypes'
 import type { AgentSession } from '../model/sessionTypes'
@@ -8,6 +8,10 @@ import type {
   FollowUpAction,
   FollowUpIntent,
 } from '../model/answerTypes'
+import type {
+  AnswerFocusTarget,
+  EvidenceInspectRequest,
+} from '../model/evidenceDeskModel'
 
 const props = defineProps<{
   session: AgentSession
@@ -18,11 +22,12 @@ const props = defineProps<{
   evidenceOpen?: boolean
   pending: boolean
   error: string
+  focusTarget?: AnswerFocusTarget | null
 }>()
 
 const emit = defineEmits<{
   submit: [question: string]
-  evidence: [id: string]
+  inspectEvidence: [request: EvidenceInspectRequest]
   toggleSessions: []
   toggleEvidence: []
   retry: []
@@ -34,6 +39,8 @@ const input = ref<HTMLTextAreaElement | null>(null)
 const scrollArea = ref<HTMLElement | null>(null)
 const showJumpToLatest = ref(false)
 const followLatest = ref(true)
+const highlightedTarget = ref('')
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
 const state = computed(() => {
   if (props.pending) return 'generating'
   return props.session.messages.length ? 'conversation' : 'empty'
@@ -119,6 +126,38 @@ watch(
   },
 )
 
+watch(
+  () => props.focusTarget?.requestId,
+  async () => {
+    const target = props.focusTarget
+    if (!target) return
+    await nextTick()
+    const message = scrollArea.value?.querySelector<HTMLElement>(
+      `[data-message-id="${target.messageId}"]`,
+    )
+    const element = target.sectionType
+      ? message?.querySelector<HTMLElement>(
+        `[data-section-type="${target.sectionType}"]`,
+      )
+      : message
+    element?.scrollIntoView({
+      block: 'center',
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    })
+    highlightedTarget.value = `${target.messageId}:${target.sectionType ?? ''}`
+    if (highlightTimer) clearTimeout(highlightTimer)
+    highlightTimer = setTimeout(() => {
+      highlightedTarget.value = ''
+    }, 1600)
+  },
+)
+
+onBeforeUnmount(() => {
+  if (highlightTimer) clearTimeout(highlightTimer)
+})
+
 function answerLabel(message: AgentSession['messages'][number]) {
   const answer = message.answer
   if (!answer) return ''
@@ -154,6 +193,27 @@ function followUp(
       selectedSectionType,
       followUpIntent: intent,
     },
+  })
+}
+
+function inspectSection(
+  message: AgentSession['messages'][number],
+  section: NonNullable<AgentSession['messages'][number]['answer']>['sections'][number],
+) {
+  emit('inspectEvidence', {
+    messageId: message.id,
+    evidenceIds: [...section.evidenceIds],
+    sectionType: section.type,
+  })
+}
+
+function inspectMessageEvidence(
+  message: AgentSession['messages'][number],
+  evidenceId: string,
+) {
+  emit('inspectEvidence', {
+    messageId: message.id,
+    evidenceIds: [evidenceId],
   })
 }
 </script>
@@ -211,6 +271,7 @@ function followUp(
           class="message"
           :class="message.role === 'AGENT' ? 'message--agent' : 'message--user'"
           :data-message-id="message.id"
+          :data-answer-focus="highlightedTarget === `${message.id}:` ? 'true' : undefined"
         >
           <p v-if="message.answer" class="message__meta">
             AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
@@ -229,7 +290,14 @@ function followUp(
               class="context-version-updated"
               role="status"
             >公开内容已更新，本轮已按当前版本重新核对。</p>
-            <section v-for="section in message.answer.sections" :key="section.type">
+            <section
+              v-for="section in message.answer.sections"
+              :key="section.type"
+              :data-section-type="section.type"
+              :data-answer-focus="
+                highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
+              "
+            >
               <h4>{{ section.title }}</h4>
               <p>{{ section.content }}</p>
               <div v-if="message.answer.contextEnvelope" class="follow-up-actions">
@@ -239,9 +307,10 @@ function followUp(
                   @click="followUp(message, `展开${section.title}`, 'EXPAND_SECTION', section.type, section.claimIds)"
                 >展开本节</button>
                 <button
+                  data-section-evidence
                   type="button"
-                  :disabled="pending"
-                  @click="followUp(message, `查看${section.title}的证据`, 'SHOW_EVIDENCE', section.type, section.claimIds)"
+                  :disabled="pending || !section.evidenceIds.length"
+                  @click="inspectSection(message, section)"
                 >查看本节证据</button>
                 <button
                   type="button"
@@ -276,7 +345,7 @@ function followUp(
               v-for="id in message.evidenceIds"
               :key="id"
               type="button"
-              @click="$emit('evidence', id)"
+              @click="inspectMessageEvidence(message, id)"
             >
               [{{ id }}]
             </button>
@@ -427,6 +496,8 @@ function followUp(
 .message {
   max-width: 760px;
   margin-bottom: 34px;
+  border-radius: var(--agent-radius-sm);
+  transition: background-color 360ms ease, box-shadow 360ms ease;
 }
 
 .message--user {
@@ -453,6 +524,17 @@ function followUp(
   padding: 0;
   border: 0;
   color: var(--workspace-text, var(--ink));
+}
+
+.structured-answer > section {
+  border-radius: var(--agent-radius-sm);
+  transition: background-color 360ms ease, box-shadow 360ms ease;
+}
+
+[data-answer-focus="true"] {
+  background: color-mix(in srgb, var(--workspace-accent, var(--red)) 9%, transparent);
+  box-shadow: 0 0 0 8px
+    color-mix(in srgb, var(--workspace-accent, var(--red)) 4%, transparent);
 }
 
 .message > div {
@@ -644,6 +726,13 @@ textarea:disabled,
   .composer {
     right: 18px;
     left: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message,
+  .structured-answer > section {
+    transition: none;
   }
 }
 </style>

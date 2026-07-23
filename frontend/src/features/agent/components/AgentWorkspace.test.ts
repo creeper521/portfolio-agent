@@ -78,6 +78,80 @@ describe('AgentWorkspace', () => {
     )
   })
 
+  it('focuses cited evidence after an answer and opens citations from a section', async () => {
+    const wrapper = mountWorkspace()
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('.message--user')).toBeTruthy()
+    expect(wrapper.get('[data-evidence-id="sql-audit-delivery-set"]').classes())
+      .toContain('evidence-card--focused')
+
+    await wrapper.get('[data-section-evidence]').trigger('click')
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('.evidence-toggle').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('引用')
+    expect(wrapper.find('[data-citation-id]').exists()).toBe(true)
+
+    const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    await wrapper.get('[data-citation-id]').trigger('click')
+    await flushPromises()
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+      behavior: 'smooth',
+    })
+    expect(answerSection.attributes('data-answer-focus')).toBe('true')
+  })
+
+  it('resets citation focus when selecting a different session', async () => {
+    const wrapper = mountWorkspace()
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.findAll('.session-select')[1].trigger('click')
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-section-evidence]').trigger('click')
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('引用')
+
+    await wrapper.findAll('.session-select')[0].trigger('click')
+
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('证据')
+    expect(wrapper.find('[data-citation-id]').exists()).toBe(false)
+  })
+
+  it('restores focus to the exact evidence inspection trigger after closing the drawer', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 0
+    })
+    const wrapper = mount(AgentWorkspace, {
+      attachTo: document.body,
+      props: { portfolio: previewPublicContent },
+      global: {
+        stubs: { RouterLink: { template: '<a><slot /></a>' } },
+      },
+    })
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    const trigger = wrapper.get('[data-section-evidence]')
+    ;(trigger.element as HTMLElement).focus()
+
+    await trigger.trigger('click')
+    expect(document.activeElement?.getAttribute('role')).toBe('tab')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
   it('renders sessions, conversation, evidence desk, and two accessible separators', () => {
     const wrapper = mountWorkspace()
 

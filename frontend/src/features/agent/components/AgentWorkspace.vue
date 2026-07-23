@@ -16,6 +16,12 @@ import {
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed } from '../model/sessionTypes'
 import type { ContextEnvelope, FollowUpAction } from '../model/answerTypes'
+import {
+  buildEvidenceDeskContext,
+  type AnswerFocusTarget,
+  type EvidenceDeskTab,
+  type EvidenceInspectRequest,
+} from '../model/evidenceDeskModel'
 import { mapAnswerResponse } from '../model/mapAnswerResponse'
 import ConversationThread from './ConversationThread.vue'
 import EvidenceDesk from './EvidenceDesk.vue'
@@ -57,13 +63,18 @@ const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
 const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
+const evidenceTab = ref<EvidenceDeskTab>('EVIDENCE')
+const focusedAnswerMessageId = ref('')
+const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerError = ref('')
 const failedRequest = ref<AnswerRequestContext | null>(null)
 let activeRequest: AnswerRequestContext | null = null
 let requestVersion = 0
+let answerFocusRequestId = 0
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
+let drawerReturnFocus: HTMLElement | null = null
 
 const effectiveSplit = computed(() =>
   evidenceIsDrawer.value
@@ -111,7 +122,21 @@ const activeProject = computed(
     props.portfolio.projects[0],
 )
 
+const evidenceContext = computed(() =>
+  buildEvidenceDeskContext(
+    sessions.activeSession.value?.messages ?? [],
+    focusedAnswerMessageId.value,
+  ),
+)
+
+function resetEvidenceFocus() {
+  focusedAnswerMessageId.value = ''
+  evidenceTab.value = 'EVIDENCE'
+  answerFocusTarget.value = null
+}
+
 function createSession() {
+  resetEvidenceFocus()
   sessions.createSession({
     role: props.initialRole,
     projectSlug: activeProject.value?.slug ?? null,
@@ -248,14 +273,29 @@ function updateWorkspaceWidth() {
   if (width > 0) workspaceWidth.value = width
 }
 
-function openEvidence(id: string) {
-  activeEvidenceId.value = id
+function inspectEvidence(request: EvidenceInspectRequest) {
+  const trigger = document.activeElement
+  drawerReturnFocus =
+    trigger instanceof HTMLElement && trigger !== document.body ? trigger : null
+  focusedAnswerMessageId.value = request.messageId
+  activeEvidenceId.value = request.evidenceIds[0] ?? activeEvidenceId.value
+  evidenceTab.value = 'CITATIONS'
   sessionDrawerOpen.value = false
   evidenceDrawerOpen.value = true
+  if (evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
+}
+
+function locateAnswer(target: Omit<AnswerFocusTarget, 'requestId'>) {
+  answerFocusRequestId += 1
+  answerFocusTarget.value = {
+    ...target,
+    requestId: answerFocusRequestId,
+  }
 }
 
 function toggleSessions() {
   sessionDrawerOpen.value = !sessionDrawerOpen.value
+  drawerReturnFocus = null
   if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
   if (sessionDrawerOpen.value && sessionsIsDrawer.value) focusDrawer('#local-session-rail')
 }
@@ -277,6 +317,7 @@ function submitFollowUp(action: FollowUpAction) {
 
 function toggleEvidence() {
   evidenceDrawerOpen.value = !evidenceDrawerOpen.value
+  drawerReturnFocus = null
   if (evidenceDrawerOpen.value) sessionDrawerOpen.value = false
   if (evidenceDrawerOpen.value && evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
 }
@@ -315,11 +356,13 @@ function trapDrawerFocus(event: KeyboardEvent) {
 function clearAllSessions() {
   invalidatePendingRequest()
   clearAnswerFailure()
+  resetEvidenceFocus()
   sessions.clearSessions()
   createSession()
 }
 
 function removeSession(sessionId: string) {
+  const previousSessionId = sessions.activeSessionId.value
   if (activeRequest?.sessionId === sessionId) {
     invalidatePendingRequest()
   }
@@ -327,18 +370,33 @@ function removeSession(sessionId: string) {
     clearAnswerFailure()
   }
   sessions.removeSession(sessionId)
+  if (sessions.activeSessionId.value !== previousSessionId) {
+    resetEvidenceFocus()
+  }
   if (!sessions.activeSession.value) {
     createSession()
   }
 }
 
+function selectSession(sessionId: string) {
+  const previousSessionId = sessions.activeSessionId.value
+  sessions.selectSession(sessionId)
+  if (sessions.activeSessionId.value !== previousSessionId) {
+    resetEvidenceFocus()
+  }
+}
+
 function closeDrawers(restoreFocus = false) {
-  const focusTarget = evidenceDrawerOpen.value ? '.evidence-toggle' : '.session-toggle'
+  const fallbackSelector = evidenceDrawerOpen.value ? '.evidence-toggle' : '.session-toggle'
+  const returnFocus = drawerReturnFocus?.isConnected
+    ? drawerReturnFocus
+    : document.querySelector<HTMLElement>(fallbackSelector)
+  drawerReturnFocus = null
   sessionDrawerOpen.value = false
   evidenceDrawerOpen.value = false
   if (restoreFocus) {
     requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(focusTarget)?.focus()
+      returnFocus?.focus()
     })
   }
 }
@@ -396,7 +454,7 @@ onBeforeUnmount(() => {
       :inert="sessionsIsDrawer && !sessionDrawerOpen ? true : undefined"
       :aria-hidden="sessionsIsDrawer ? String(!sessionDrawerOpen) : undefined"
       @create="createSession"
-      @select="sessions.selectSession"
+      @select="selectSession"
       @rename="sessions.renameSession"
       @remove="removeSession"
       @clear="clearAllSessions"
@@ -424,10 +482,11 @@ onBeforeUnmount(() => {
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
       :error="answerError"
+      :focus-target="answerFocusTarget"
       @submit="submit"
       @follow-up="submitFollowUp"
       @retry="retryAnswer"
-      @evidence="openEvidence"
+      @inspect-evidence="inspectEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"
     />
@@ -449,12 +508,14 @@ onBeforeUnmount(() => {
       :evidence="portfolio.evidence"
       :project="activeProject"
       :active-evidence-id="activeEvidenceId"
-      :focus-evidence-ids="[]"
-      :citations="[]"
-      tab="EVIDENCE"
+      :focus-evidence-ids="evidenceContext.focusEvidenceIds"
+      :citations="evidenceContext.citations"
+      :tab="evidenceTab"
       :inert="evidenceIsDrawer && !evidenceDrawerOpen ? true : undefined"
       :aria-hidden="evidenceIsDrawer ? String(!evidenceDrawerOpen) : undefined"
+      @update:tab="evidenceTab = $event"
       @select="activeEvidenceId = $event"
+      @locate-answer="locateAnswer"
     />
 
     <button
