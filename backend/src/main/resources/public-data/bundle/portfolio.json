@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "2.0",
-  "contentVersion": "2026-07-21.1",
+  "schemaVersion": "3.0",
+  "contentVersion": "2026-07-23.1",
   "owner": {
     "name": "",
     "role": "Java 后端开发实习生",
@@ -54,13 +54,19 @@
         "claim-sql-audit-responsibility",
         "claim-sql-audit-technical-decision",
         "claim-sql-audit-verification",
-        "claim-sql-audit-delivered"
+        "claim-sql-audit-delivered",
+        "claim-sql-audit-fixed-string-search",
+        "claim-sql-audit-source-selection",
+        "claim-sql-audit-partial-success",
+        "claim-sql-audit-selected-target-check"
       ],
       "evidenceIds": [
-        "sql-audit-delivery-set"
+        "sql-audit-delivery-set",
+        "sql-audit-july-iteration-set"
       ],
       "timelineEventIds": [
-        "timeline-sql-audit-delivery"
+        "timeline-sql-audit-delivery",
+        "timeline-sql-audit-july-hardening"
       ]
     }
   ],
@@ -77,8 +83,15 @@
       "verificationBasis": "EVIDENCE_SUPPORTED",
       "verificationStatus": "VERIFIED",
       "materiality": "KEY",
-      "topics": ["PROJECT_OVERVIEW"],
-      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 70, "GUEST": 70}
+      "topics": [
+        "PROJECT_OVERVIEW"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
     },
     {
       "id": "claim-sql-audit-responsibility",
@@ -92,8 +105,15 @@
       "verificationBasis": "EVIDENCE_SUPPORTED",
       "verificationStatus": "VERIFIED",
       "materiality": "KEY",
-      "topics": ["PROJECT_OVERVIEW"],
-      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 90, "GUEST": 70}
+      "topics": [
+        "PROJECT_OVERVIEW"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 90,
+        "GUEST": 70
+      }
     },
     {
       "id": "claim-sql-audit-technical-decision",
@@ -107,8 +127,15 @@
       "verificationBasis": "EVIDENCE_SUPPORTED",
       "verificationStatus": "VERIFIED",
       "materiality": "KEY",
-      "topics": ["IMPLEMENTATION"],
-      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 60, "GUEST": 60}
+      "topics": [
+        "IMPLEMENTATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 60,
+        "GUEST": 60
+      }
     },
     {
       "id": "claim-sql-audit-verification",
@@ -122,8 +149,15 @@
       "verificationBasis": "EVIDENCE_SUPPORTED",
       "verificationStatus": "VERIFIED",
       "materiality": "KEY",
-      "topics": ["VERIFICATION"],
-      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 70, "GUEST": 70}
+      "topics": [
+        "VERIFICATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
     },
     {
       "id": "claim-sql-audit-delivered",
@@ -137,12 +171,267 @@
       "verificationBasis": "EVIDENCE_SUPPORTED",
       "verificationStatus": "VERIFIED",
       "materiality": "KEY",
-      "topics": ["DELIVERY"],
+      "topics": [
+        "DELIVERY"
+      ],
       "audiencePriorities": {
         "INTERVIEWER": 100,
         "MENTOR": 100,
         "HR": 80,
         "GUEST": 80
+      }
+    },
+    {
+      "id": "claim-sql-audit-fixed-string-search",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "TECHNICAL_DECISION",
+      "statement": "负号开头的输入按固定检索文本处理，而不是按命令选项解释。",
+      "detail": "输入边界被限制为检索条件；公开说明不包含内部命令、环境、路径或原始输入样本。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "IMPLEMENTATION",
+        "INPUT_SAFETY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-sql-audit-source-selection",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "IMPLEMENTATION",
+      "statement": "一次任务可选择一个服务目标和多个已配置日志来源。",
+      "detail": "查询范围由当前任务显式选择；公开说明不包含真实服务、来源、环境或路由标识。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "IMPLEMENTATION",
+        "SOURCE_SELECTION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-sql-audit-partial-success",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "IMPLEMENTATION",
+      "statement": "单个来源失败时，已完成来源的结果仍可保留并独立展示。",
+      "detail": "失败影响被限制在对应来源；失败来源独立重试仍缺少直接截图，因此只作部分验证说明。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "IMPLEMENTATION",
+        "FAILURE_ISOLATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-sql-audit-selected-target-check",
+      "subjectType": "PROJECT",
+      "subjectId": "sql-audit-project",
+      "category": "VERIFICATION",
+      "statement": "连接检查只覆盖当前任务选中的目标。",
+      "detail": "检查范围与当前选择保持一致；不据此宣称生产规模、性能或长期稳定性。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "VERIFICATION",
+        "SOURCE_SELECTION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-multilingual-preserve-existing",
+      "subjectType": "CASE",
+      "subjectId": "case-multilingual-upload",
+      "category": "IMPLEMENTATION",
+      "statement": "后续语言图片上传会合并并保留既有语言结果。",
+      "detail": "最终映射由已持久化语言与本次有效上传语言合并得到。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "IMPLEMENTATION",
+        "MULTILINGUAL_MEDIA"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-multilingual-sequential-verification",
+      "subjectType": "CASE",
+      "subjectId": "case-multilingual-upload",
+      "category": "VERIFICATION",
+      "statement": "德语上传与查询后再上传法语，最终查询可同时返回德语和法语结果。",
+      "detail": "验证顺序为德语上传、德语查询、法语上传、德语与法语查询。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "VERIFICATION",
+        "MULTILINGUAL_MEDIA"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-role-reset-controlled-flow",
+      "subjectType": "CASE",
+      "subjectId": "case-role-reset",
+      "category": "IMPLEMENTATION",
+      "statement": "角色重置通过环境选择、查询、二次确认、重置和复查组成受控流程。",
+      "detail": "破坏性操作与查询分步，执行前显示明确影响提示。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "IMPLEMENTATION",
+        "TEST_TOOLING"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-role-reset-acceptance",
+      "subjectType": "CASE",
+      "subjectId": "case-role-reset",
+      "category": "VERIFICATION",
+      "statement": "旧角色重置后不可继续查询，重新登录可进入新角色创建流程。",
+      "detail": "测试人员频繁使用该能力创建新账号状态，避免旧角色缓存干扰；不公开使用次数和人员信息。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "VERIFICATION",
+        "TEST_TOOLING"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-codegraph-narrowing",
+      "subjectType": "CASE",
+      "subjectId": "case-codegraph-evaluation",
+      "category": "TECHNICAL_DECISION",
+      "statement": "代码图谱适合用于收窄检索范围和批量导航。",
+      "detail": "该结论来自选定符号检索样本与工具任务，只作定性说明。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "EVALUATION",
+        "CODE_NAVIGATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-codegraph-failure-boundary",
+      "subjectType": "CASE",
+      "subjectId": "case-codegraph-evaluation",
+      "category": "LIMITATION",
+      "statement": "间接关系、动态分发和重名符号可能带来漏报或噪声。",
+      "detail": "方法引用、匿名函数、依赖注入与事件分发等场景需要额外核验。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "EVALUATION",
+        "LIMITATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-case-codegraph-combined-workflow",
+      "subjectType": "CASE",
+      "subjectId": "case-codegraph-evaluation",
+      "category": "TECHNICAL_DECISION",
+      "statement": "采用图谱导航与文本搜索、源码阅读相结合的工作流。",
+      "detail": "图谱用于收窄范围，关键结论和答案质量仍需人工复核。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "EVALUATION",
+        "VERIFICATION"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 70
       }
     }
   ],
@@ -186,6 +475,94 @@
       "supportType": "DIRECT",
       "scope": "证明核心版本已经交付并形成使用文档；不证明长期生产效果。",
       "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-fixed-string-search-e02",
+      "claimId": "claim-sql-audit-fixed-string-search",
+      "evidenceId": "sql-audit-july-iteration-set",
+      "supportType": "DIRECT",
+      "scope": "仅支持负号开头输入按固定检索文本处理的实现与结果，不支持任意命令执行能力。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-source-selection-e02",
+      "claimId": "claim-sql-audit-source-selection",
+      "evidenceId": "sql-audit-july-iteration-set",
+      "supportType": "DIRECT",
+      "scope": "仅支持一个服务目标与多个已配置来源的任务选择，不支持生产规模或性能结论。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-partial-success-e02",
+      "claimId": "claim-sql-audit-partial-success",
+      "evidenceId": "sql-audit-july-iteration-set",
+      "supportType": "DIRECT",
+      "scope": "支持成功来源结果保留；失败来源独立重试仍是部分验证，不支持长期可靠性结论。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-sql-audit-selected-target-check-e02",
+      "claimId": "claim-sql-audit-selected-target-check",
+      "evidenceId": "sql-audit-july-iteration-set",
+      "supportType": "DIRECT",
+      "scope": "仅支持连接检查范围跟随当前选择，不支持延迟、吞吐量或可用性结论。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-multilingual-preserve-existing-e03",
+      "claimId": "claim-case-multilingual-preserve-existing",
+      "evidenceId": "evidence-case-multilingual-implementation-and-regression",
+      "supportType": "DIRECT",
+      "scope": "支持既有语言映射与本次有效上传合并的实现事实。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-multilingual-sequential-verification-e03",
+      "claimId": "claim-case-multilingual-sequential-verification",
+      "evidenceId": "evidence-case-multilingual-implementation-and-regression",
+      "supportType": "DIRECT",
+      "scope": "支持德语与法语分次上传、分步查询并最终共存的回归结果。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-role-reset-controlled-flow-e04",
+      "claimId": "claim-case-role-reset-controlled-flow",
+      "evidenceId": "evidence-case-role-reset-guide-and-acceptance",
+      "supportType": "DIRECT",
+      "scope": "支持环境选择、查询、二次确认、重置与复查的受控流程。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-role-reset-acceptance-e04",
+      "claimId": "claim-case-role-reset-acceptance",
+      "evidenceId": "evidence-case-role-reset-guide-and-acceptance",
+      "supportType": "DIRECT",
+      "scope": "支持旧角色不可继续查询和重新创建新角色的验收结果；不支持精确使用量推断。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-codegraph-narrowing-e05",
+      "claimId": "claim-case-codegraph-narrowing",
+      "evidenceId": "evidence-case-codegraph-report-collection",
+      "supportType": "DIRECT",
+      "scope": "仅支持选定样本中图谱收窄范围和批量导航的定性结论。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-codegraph-failure-boundary-e05",
+      "claimId": "claim-case-codegraph-failure-boundary",
+      "evidenceId": "evidence-case-codegraph-report-collection",
+      "supportType": "DIRECT",
+      "scope": "支持间接关系、动态分发和重名符号可能出现漏报或噪声的边界说明。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-case-codegraph-combined-workflow-e05",
+      "claimId": "claim-case-codegraph-combined-workflow",
+      "evidenceId": "evidence-case-codegraph-report-collection",
+      "supportType": "DIRECT",
+      "scope": "支持图谱导航配合文本搜索和源码阅读精确复核的决策；答案质量仍需人工复核。",
+      "reviewStatus": "APPROVED"
     }
   ],
   "questionPresets": [
@@ -198,13 +575,184 @@
         "你在 SQL 审计与故障排查工具项目中做了什么",
         "你在SQL审计与故障排查工具项目中做了什么"
       ],
-      "audiences": ["INTERVIEWER", "MENTOR", "HR", "GUEST"],
-      "projectIds": ["sql-audit-project"],
-      "topics": ["DELIVERY", "PROJECT_OVERVIEW"],
-      "preferredClaimCategories": ["BACKGROUND", "RESPONSIBILITY", "TECHNICAL_DECISION", "VERIFICATION", "OUTCOME"],
-      "placements": ["HOME", "AGENT", "PROJECT"],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "sql-audit-project"
+      ],
+      "topics": [
+        "DELIVERY",
+        "PROJECT_OVERVIEW"
+      ],
+      "preferredClaimCategories": [
+        "BACKGROUND",
+        "RESPONSIBILITY",
+        "TECHNICAL_DECISION",
+        "VERIFICATION",
+        "OUTCOME"
+      ],
+      "placements": [
+        "HOME",
+        "AGENT",
+        "PROJECT"
+      ],
       "deterministicEntry": true,
-      "displayOrder": 10
+      "displayOrder": 10,
+      "caseIds": []
+    },
+    {
+      "id": "question-sql-audit-negative-input",
+      "text": "为什么负号开头的关键词会导致查询异常，最终如何避免把输入当作命令选项？",
+      "aliases": [
+        "SQL 审计工具如何安全处理负号开头的检索关键词？"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "sql-audit-project"
+      ],
+      "caseIds": [],
+      "topics": [
+        "INPUT_SAFETY"
+      ],
+      "preferredClaimCategories": [
+        "TECHNICAL_DECISION",
+        "VERIFICATION"
+      ],
+      "placements": [
+        "PROJECT"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 20
+    },
+    {
+      "id": "question-sql-audit-partial-success",
+      "text": "多来源查询如何保留成功结果，并把失败影响限制在单个来源？",
+      "aliases": [
+        "SQL 审计工具如何处理部分来源失败？"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "sql-audit-project"
+      ],
+      "caseIds": [],
+      "topics": [
+        "SOURCE_SELECTION",
+        "FAILURE_ISOLATION"
+      ],
+      "preferredClaimCategories": [
+        "IMPLEMENTATION",
+        "VERIFICATION"
+      ],
+      "placements": [
+        "PROJECT"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 30
+    },
+    {
+      "id": "question-case-multilingual-overview",
+      "text": "多语言图片分次上传为什么会覆盖既有结果，最终如何修复并验证？",
+      "aliases": [
+        "请介绍多语言图片保留修复案例。"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [],
+      "caseIds": [
+        "case-multilingual-upload"
+      ],
+      "topics": [
+        "MULTILINGUAL_MEDIA"
+      ],
+      "preferredClaimCategories": [
+        "IMPLEMENTATION",
+        "VERIFICATION",
+        "OUTCOME"
+      ],
+      "placements": [
+        "CASE"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 100
+    },
+    {
+      "id": "question-case-role-reset-overview",
+      "text": "测试角色重置工具如何保证查询、确认、重置和验收流程受控？",
+      "aliases": [
+        "请介绍测试角色重置案例。"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [],
+      "caseIds": [
+        "case-role-reset"
+      ],
+      "topics": [
+        "TEST_TOOLING"
+      ],
+      "preferredClaimCategories": [
+        "IMPLEMENTATION",
+        "VERIFICATION",
+        "OUTCOME"
+      ],
+      "placements": [
+        "CASE"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 110
+    },
+    {
+      "id": "question-case-codegraph-overview",
+      "text": "代码图谱评测发现了哪些收益、失效边界和组合使用策略？",
+      "aliases": [
+        "请介绍代码图谱端到端评测案例。"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [],
+      "caseIds": [
+        "case-codegraph-evaluation"
+      ],
+      "topics": [
+        "EVALUATION",
+        "CODE_NAVIGATION"
+      ],
+      "preferredClaimCategories": [
+        "TECHNICAL_DECISION",
+        "LIMITATION",
+        "VERIFICATION"
+      ],
+      "placements": [
+        "CASE"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 120
     }
   ],
   "evidence": [
@@ -219,6 +767,54 @@
       "summary": "由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。",
       "publicStatus": "APPROVED",
       "rawContentPublic": false
+    },
+    {
+      "id": "sql-audit-july-iteration-set",
+      "code": "E-02",
+      "title": "七月输入安全与多来源迭代证据集",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-01",
+      "periodEnd": "2026-07-23",
+      "sourceCount": 2,
+      "summary": "由实现演进记录与结果验收记录脱敏汇总，支持负号输入处理、来源选择、成功结果保留和选中目标检查。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-case-multilingual-implementation-and-regression",
+      "code": "E-03",
+      "title": "多语言图片保留实现与回归证据集",
+      "type": "COLLECTION",
+      "periodStart": "2026-04-29",
+      "periodEnd": "2026-06-16",
+      "sourceCount": 2,
+      "summary": "由实现记录和顺序上传回归记录脱敏汇总，支持既有语言映射保留与德语、法语分次上传后的共存查询。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-case-role-reset-guide-and-acceptance",
+      "code": "E-04",
+      "title": "测试角色重置说明与验收证据集",
+      "type": "COLLECTION",
+      "periodStart": "2026-06-18",
+      "periodEnd": "2026-07-23",
+      "sourceCount": 2,
+      "summary": "由功能交付记录、使用说明和验收流程脱敏汇总，支持受控重置闭环及新角色创建验证。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-case-codegraph-report-collection",
+      "code": "E-05",
+      "title": "代码图谱端到端评测报告集",
+      "type": "COLLECTION",
+      "periodStart": "2026-05-25",
+      "periodEnd": "2026-05-26",
+      "sourceCount": 3,
+      "summary": "由部署与测评攻略、工具提效测试和端到端实战报告脱敏汇总，支持图谱导航收益、失效边界与组合复核决策。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
     }
   ],
   "timelineEvents": [
@@ -229,9 +825,235 @@
       "problem": "查询目标和目录被写死，任务过程、结果复用和交付说明缺少完整闭环。",
       "action": "围绕多目标路由、异步任务、进度降级、动态结果、导出归档和安全边界完成连续迭代与验证。",
       "impact": "形成已部署的核心版本、使用文档和一组经过脱敏审核的交付证据。",
-      "projectIds": ["sql-audit-project"],
-      "claimIds": ["claim-sql-audit-delivered"],
-      "evidenceIds": ["sql-audit-delivery-set"]
+      "projectIds": [
+        "sql-audit-project"
+      ],
+      "claimIds": [
+        "claim-sql-audit-delivered"
+      ],
+      "evidenceIds": [
+        "sql-audit-delivery-set"
+      ],
+      "caseIds": []
+    },
+    {
+      "id": "timeline-sql-audit-july-hardening",
+      "dateLabel": "2026.07",
+      "title": "输入安全与多来源隔离增强",
+      "problem": "特殊前缀输入和多来源失败会削弱查询可用性与结果可解释性。",
+      "action": "限制输入解释方式，并将来源选择、结果和失败状态拆分处理。",
+      "impact": "已完成来源可继续提供结果，查询范围和限制更加明确；不宣称生产规模、性能提升或长期影响。",
+      "projectIds": [
+        "sql-audit-project"
+      ],
+      "caseIds": [],
+      "claimIds": [
+        "claim-sql-audit-fixed-string-search",
+        "claim-sql-audit-source-selection",
+        "claim-sql-audit-partial-success",
+        "claim-sql-audit-selected-target-check"
+      ],
+      "evidenceIds": [
+        "sql-audit-july-iteration-set"
+      ]
+    },
+    {
+      "id": "timeline-case-multilingual-delivery",
+      "dateLabel": "2026.04–06",
+      "title": "多语言图片顺序上传修复与回归",
+      "problem": "后续语言上传会覆盖已有语言映射。",
+      "action": "合并既有映射与本次有效上传，并按德语、法语顺序完成回归。",
+      "impact": "分次上传后可同时查询德语和法语结果。",
+      "projectIds": [],
+      "caseIds": [
+        "case-multilingual-upload"
+      ],
+      "claimIds": [
+        "claim-case-multilingual-preserve-existing",
+        "claim-case-multilingual-sequential-verification"
+      ],
+      "evidenceIds": [
+        "evidence-case-multilingual-implementation-and-regression"
+      ]
+    },
+    {
+      "id": "timeline-case-role-reset-delivery",
+      "dateLabel": "2026.06–07",
+      "title": "测试角色重置工具交付与使用",
+      "problem": "旧角色状态和缓存干扰重复创建新角色的测试。",
+      "action": "交付受控查询、二次确认、重置、复查和使用说明。",
+      "impact": "测试人员可频繁创建新账号状态进行重复验证，不公开精确使用量和内部系统信息。",
+      "projectIds": [],
+      "caseIds": [
+        "case-role-reset"
+      ],
+      "claimIds": [
+        "claim-case-role-reset-controlled-flow",
+        "claim-case-role-reset-acceptance"
+      ],
+      "evidenceIds": [
+        "evidence-case-role-reset-guide-and-acceptance"
+      ]
+    },
+    {
+      "id": "timeline-case-codegraph-evaluation",
+      "dateLabel": "2026.05",
+      "title": "代码图谱端到端评测",
+      "problem": "图谱检索的适用收益和动态关系失效边界需要通过真实任务验证。",
+      "action": "执行符号检索样本和两组工具任务，记录导航收益、噪声与遗漏。",
+      "impact": "形成图谱收窄范围、文本搜索与源码阅读复核的组合决策，答案质量仍需人工复核。",
+      "projectIds": [],
+      "caseIds": [
+        "case-codegraph-evaluation"
+      ],
+      "claimIds": [
+        "claim-case-codegraph-narrowing",
+        "claim-case-codegraph-failure-boundary",
+        "claim-case-codegraph-combined-workflow"
+      ],
+      "evidenceIds": [
+        "evidence-case-codegraph-report-collection"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-multilingual-upload",
+      "code": "CASE-01",
+      "slug": "multilingual-image-preservation",
+      "type": "FEATURE",
+      "title": "多语言图片上传结果保留修复",
+      "summary": "修复后续语言上传覆盖既有语言映射的问题。",
+      "problem": "分次上传不同语言图片时，后一次结果会替换此前已经可见的语言集合。",
+      "actions": [
+        "读取已经持久化的语言映射。",
+        "只合并本次请求中实际上传且有效的语言。",
+        "保留未被本次上传替换的既有语言结果。"
+      ],
+      "decisions": [
+        "使用既有持久化映射与本次有效上传的并集作为最终结果。",
+        "无效或缺少图片的语言不写入新映射。"
+      ],
+      "verification": [
+        "第一次上传德语图片。",
+        "第一次查询确认德语图片可用。",
+        "第二次上传法语图片。",
+        "第二次查询确认德语与法语图片同时可用。"
+      ],
+      "outcome": "按“德语上传、德语查询、法语上传、德语与法语查询”的顺序完成回归，后续上传不再删除此前语言结果。",
+      "limitations": [
+        "不公开内部模块、数据结构、渠道、区域和存储标识。",
+        "公开材料只描述行为与验证，不展示原始代码、截图或内部地址。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": null,
+      "claimIds": [
+        "claim-case-multilingual-preserve-existing",
+        "claim-case-multilingual-sequential-verification"
+      ],
+      "evidenceIds": [
+        "evidence-case-multilingual-implementation-and-regression"
+      ],
+      "timelineEventIds": [
+        "timeline-case-multilingual-delivery"
+      ],
+      "questionPresetIds": [
+        "question-case-multilingual-overview"
+      ]
+    },
+    {
+      "id": "case-role-reset",
+      "code": "CASE-02",
+      "slug": "test-role-reset",
+      "type": "FEATURE",
+      "title": "测试角色重置工具",
+      "summary": "为重复验证新账号流程提供受控的角色查询与重置入口。",
+      "problem": "旧角色状态和缓存会干扰需要反复创建新角色的测试流程。",
+      "actions": [
+        "选择经过批准的目标环境。",
+        "使用测试流程提供的抽象标识查询角色。",
+        "在明确提示影响后执行二次确认重置。",
+        "重新查询并验证旧角色不可用。"
+      ],
+      "decisions": [
+        "环境选择、角色查询和破坏性操作必须分步进行。",
+        "重置前必须显示明确确认，避免误操作。",
+        "文档以可复查的验收流程代替内部数据细节。"
+      ],
+      "verification": [
+        "可以在批准环境中查询到目标角色。",
+        "确认重置后旧角色无法继续查询。",
+        "重新登录后可以创建新角色并获得新的抽象标识。"
+      ],
+      "outcome": "该工具已被测试人员频繁用于创建新账号状态，避免旧角色缓存干扰重复验证，并形成查询、确认、重置、复查和使用说明的完整闭环。",
+      "limitations": [
+        "频繁使用由资产所有者确认，不公开或虚构调用次数与用户数量。",
+        "不公开删除语句、数据结构、内部环境、账号和示例标识。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": null,
+      "claimIds": [
+        "claim-case-role-reset-controlled-flow",
+        "claim-case-role-reset-acceptance"
+      ],
+      "evidenceIds": [
+        "evidence-case-role-reset-guide-and-acceptance"
+      ],
+      "timelineEventIds": [
+        "timeline-case-role-reset-delivery"
+      ],
+      "questionPresetIds": [
+        "question-case-role-reset-overview"
+      ]
+    },
+    {
+      "id": "case-codegraph-evaluation",
+      "code": "CASE-03",
+      "slug": "codegraph-evaluation",
+      "type": "EVALUATION",
+      "title": "代码图谱工具端到端评测",
+      "summary": "通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。",
+      "problem": "大型代码库中的符号定位与关系追踪成本较高，但图谱结果并不总能覆盖动态或间接关系。",
+      "actions": [
+        "建立精确符号与全文符号检索样本。",
+        "执行两组工具任务并记录命中、噪声和遗漏。",
+        "对方法引用、匿名函数、依赖注入、事件分发和重名符号进行失效分析。"
+      ],
+      "decisions": [
+        "使用代码图谱进行范围收窄和批量导航。",
+        "关键结论继续用文本搜索与源码阅读做精确复核。",
+        "不把局部样本结果推广为通用效率结论。"
+      ],
+      "verification": [
+        "符号检索在选定样本中能够缩小代码定位范围。",
+        "间接关系和重名符号场景存在漏报或噪声。",
+        "组合工作流同时保留图谱导航和文本、源码精确复核。"
+      ],
+      "outcome": "形成以图谱收窄范围、再用文本搜索和源码阅读复核的组合工作流与保守使用边界。",
+      "limitations": [
+        "当前状态为原型评测，不公开原始项目名称、仓库规模、内部符号和源码样本。",
+        "评测结论只作定性说明，不提供精确效率指标或普遍生产力结论。",
+        "工具给出的答案质量仍需人工复核。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": null,
+      "claimIds": [
+        "claim-case-codegraph-narrowing",
+        "claim-case-codegraph-failure-boundary",
+        "claim-case-codegraph-combined-workflow"
+      ],
+      "evidenceIds": [
+        "evidence-case-codegraph-report-collection"
+      ],
+      "timelineEventIds": [
+        "timeline-case-codegraph-evaluation"
+      ],
+      "questionPresetIds": [
+        "question-case-codegraph-overview"
+      ]
     }
   ]
 }

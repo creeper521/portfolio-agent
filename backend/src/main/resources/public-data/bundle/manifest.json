@@ -1,21 +1,22 @@
-{
-  "schemaVersion": "2.0",
-  "contentVersion": "2026-07-21.1",
-  "publishedAt": "2026-07-21T00:00:00+08:00",
-  "builtAt": "2026-07-21T00:00:00+08:00",
-  "minimumApplicationVersion": "0.1.0",
-  "factsFile": "portfolio.json",
-  "presentationFile": "presentation.json",
-  "approvalId": "APR-2026-07-21-BOOTSTRAP",
-  "approvalDigest": "sha256:38f31917cb4ce7d33cb371565751fb1be7fb3cd850659a01102ce7e3087c67ce",
-  "candidatePayloadHash": "sha256:c73a8169a7c0148eb0f32721f95c0d63dc8c8ad1f1f89b3890d5417a1c3478a1",
-  "checksumsFile": "checksums.json",
-  "counts": {
-    "projects": 1,
-    "claims": 5,
-    "evidence": 1,
-    "claimEvidenceLinks": 5,
-    "timelineEvents": 1,
-    "questionPresets": 1
-  }
+﻿{
+    "schemaVersion":  "3.0",
+    "contentVersion":  "2026-07-23.1",
+    "publishedAt":  "2026-07-23T10:39:08.5322876+00:00",
+    "builtAt":  "2026-07-23T10:39:08.5322876+00:00",
+    "minimumApplicationVersion":  "0.1.0",
+    "factsFile":  "portfolio.json",
+    "presentationFile":  "presentation.json",
+    "approvalId":  "APR-a3ad93910e634e129e454e80844c2516",
+    "approvalDigest":  "sha256:2353747d634192bd44a73b6ba01ca9edde9b898ed515ce20f625b90fe23a191d",
+    "candidatePayloadHash":  "sha256:564330cbdf98693e16a4f80a96c55716c244295ae10f7df8a33480f3b1716f48",
+    "checksumsFile":  "checksums.json",
+    "counts":  {
+                   "projects":  1,
+                   "cases":  3,
+                   "claims":  16,
+                   "evidence":  5,
+                   "claimEvidenceLinks":  16,
+                   "timelineEvents":  5,
+                   "questionPresets":  6
+               }
 }

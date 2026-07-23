@@ -1,8 +1,8 @@
-{
-  "schemaVersion": "2.0",
-  "contentVersion": "2026-07-21.1",
-  "files": {
-    "portfolio.json": "sha256:7ff36423d6ac75e2b0d550366bc0fd8224f8c4115e1caead11ac90af10f0ddcc",
-    "presentation.json": "sha256:0067475645a07d9e90180ea74b1f737a867ecaf27871250b99a918d9e5fd4494"
-  }
+﻿{
+    "schemaVersion":  "3.0",
+    "contentVersion":  "2026-07-23.1",
+    "files":  {
+                  "portfolio.json":  "sha256:e3b6dc1100b8355a3d32375999b9f0786427b1538e0c8022bb17f5b0a334c2f1",
+                  "presentation.json":  "sha256:ae587727f18c9885e8fa5d2c777ca111526dfa4706ad0dab70063ec1de97a9f5"
+              }
 }
