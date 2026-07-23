@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import type { AudienceRole, PublicProject } from '../../public-content/model/publicContentTypes'
 import type { AgentSession } from '../model/sessionTypes'
@@ -31,6 +31,13 @@ const emit = defineEmits<{
 
 const question = ref(props.seedQuestion ?? '')
 const input = ref<HTMLTextAreaElement | null>(null)
+const scrollArea = ref<HTMLElement | null>(null)
+const showJumpToLatest = ref(false)
+const followLatest = ref(true)
+const state = computed(() => {
+  if (props.pending) return 'generating'
+  return props.session.messages.length ? 'conversation' : 'empty'
+})
 
 watch(
   () => props.seedQuestion,
@@ -38,6 +45,7 @@ watch(
     if (value && !props.session.messages.length) {
       question.value = value
       await nextTick()
+      resizeInput()
       input.value?.focus()
     }
   },
@@ -48,7 +56,68 @@ function submit() {
   if (!value || props.pending) return
   emit('submit', value)
   question.value = ''
+  nextTick(resizeInput)
 }
+
+function submitSuggested(value: string) {
+  if (props.pending) return
+  emit('submit', value)
+  question.value = ''
+  nextTick(resizeInput)
+}
+
+function onComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  submit()
+}
+
+function resizeInput() {
+  const element = input.value
+  if (!element) return
+  element.style.height = 'auto'
+  element.style.height = `${Math.min(element.scrollHeight, 110)}px`
+}
+
+function focusComposer() {
+  question.value = props.session.messages.at(-1)?.role === 'USER'
+    ? props.session.messages.at(-1)?.content ?? ''
+    : ''
+  nextTick(() => {
+    resizeInput()
+    input.value?.focus()
+  })
+}
+
+function onThreadScroll() {
+  const element = scrollArea.value
+  if (!element) return
+  const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+  followLatest.value = distance < 80
+  showJumpToLatest.value = !followLatest.value
+}
+
+function jumpToLatest() {
+  const element = scrollArea.value
+  if (!element) return
+  element.scrollTo?.({
+    top: element.scrollHeight,
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      ? 'auto'
+      : 'smooth',
+  })
+  followLatest.value = true
+  showJumpToLatest.value = false
+}
+
+watch(
+  () => [props.session.messages.length, props.pending],
+  async () => {
+    if (!followLatest.value) return
+    await nextTick()
+    jumpToLatest()
+  },
+)
 
 function answerLabel(message: AgentSession['messages'][number]) {
   const answer = message.answer
@@ -119,17 +188,18 @@ function followUp(
       </div>
     </header>
 
-    <div class="conversation__scroll">
-      <div class="thread">
-        <section v-if="!session.messages.length" class="thread-empty">
+    <div ref="scrollArea" class="conversation__scroll" @scroll.passive="onThreadScroll">
+      <div class="thread" :data-conversation-state="state">
+        <section v-if="state === 'empty'" class="thread-empty">
           <p>YOU · FROM DOSSIER</p>
           <h2>从一个可核验的问题开始。</h2>
           <button
             v-for="item in project.suggestedQuestions"
             :key="item"
+            data-suggested-question
             type="button"
             :disabled="pending"
-            @click="question = item"
+            @click="submitSuggested(item)"
           >
             <span>↳</span>{{ item }}
           </button>
@@ -140,15 +210,16 @@ function followUp(
           :key="message.id"
           class="message"
           :class="message.role === 'AGENT' ? 'message--agent' : 'message--user'"
+          :data-message-id="message.id"
         >
-          <p v-if="message.answer">
+          <p v-if="message.answer" class="message__meta">
             AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
             <template v-if="answerSourceLabel(message)">
               · {{ answerSourceLabel(message) }}
             </template>
             · {{ message.answer.generationMode }} · {{ message.answer.verification }}
           </p>
-          <p v-else>{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
+          <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <div v-if="message.answer" class="structured-answer">
             <h3>{{ message.answer.title }}</h3>
             <p>{{ message.answer.summary }}</p>
@@ -199,7 +270,7 @@ function followUp(
               >对比项目</button>
             </div>
           </div>
-          <div v-else>{{ message.content }}</div>
+          <div v-else class="message__body">{{ message.content }}</div>
           <footer v-if="message.evidenceIds.length">
             <button
               v-for="id in message.evidenceIds"
@@ -212,15 +283,26 @@ function followUp(
           </footer>
         </article>
 
-        <div v-if="pending" class="answer-state" role="status">
-          正在核对公开事实…
+        <div v-if="pending" data-agent-loading class="answer-state" role="status">
+          AGENT · 正在核验证据
         </div>
         <div v-else-if="error" class="answer-state answer-state--error" role="alert">
           <p>{{ error }}</p>
-          <button data-answer-retry type="button" @click="$emit('retry')">重新回答</button>
+          <div>
+            <button data-answer-retry type="button" @click="$emit('retry')">重新回答</button>
+            <button data-answer-edit type="button" @click="focusComposer">修改问题</button>
+          </div>
         </div>
       </div>
     </div>
+
+    <button
+      v-if="showJumpToLatest"
+      data-jump-latest
+      class="jump-latest"
+      type="button"
+      @click="jumpToLatest"
+    >回到最新回答</button>
 
     <form class="composer" @submit.prevent="submit">
       <span aria-hidden="true">›</span>
@@ -231,7 +313,8 @@ function followUp(
         :disabled="pending"
         aria-label="你的问题"
         placeholder="继续追问方案取舍、验证过程或证据"
-        @keydown.ctrl.enter.prevent="submit"
+        @input="resizeInput"
+        @keydown="onComposerKeydown"
       ></textarea>
       <button data-agent-submit type="submit" :disabled="pending">发送 ↵</button>
     </form>
@@ -307,8 +390,8 @@ function followUp(
 }
 
 .thread-empty {
-  padding: 0 0 10px 18px;
-  border-left: 1px solid var(--workspace-rule, var(--rule));
+  padding: 0 0 10px;
+  border: 0;
 }
 
 .thread-empty h2 {
@@ -320,14 +403,17 @@ function followUp(
 .thread-empty button {
   display: flex;
   width: 100%;
-  padding: 16px 0;
+  margin-top: 10px;
+  padding: 14px 16px;
   gap: 13px;
   color: var(--workspace-text-secondary, var(--muted));
   text-align: left;
-  border: 0;
-  border-top: 1px solid var(--workspace-rule, var(--rule));
-  background: transparent;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: var(--agent-radius-md);
+  background: color-mix(in srgb, var(--agent-shell-paper) 72%, transparent);
   font-size: 14px;
+  transition: border-color var(--agent-motion-fast) var(--ease),
+    background var(--agent-motion-fast) var(--ease);
 }
 
 .thread-empty button:last-child {
@@ -341,16 +427,31 @@ function followUp(
 .message {
   max-width: 760px;
   margin-bottom: 34px;
-  padding-left: 18px;
-  border-left: 1px solid var(--workspace-rule, var(--rule));
 }
 
 .message--user {
-  color: var(--workspace-text-secondary, var(--muted));
-  border-left: 2px solid var(--workspace-accent, var(--red));
+  width: fit-content;
+  max-width: 64%;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+}
+
+.message--user .message__meta {
+  text-align: right;
+}
+
+.message--user .message__body {
+  padding: 14px 18px;
+  color: var(--workspace-primary-text, var(--paper-hi));
+  border-radius: var(--agent-radius-md);
+  background: var(--workspace-primary-bg, var(--ink));
+  font: 15px/1.7 var(--sans);
 }
 
 .message--agent {
+  padding: 0;
+  border: 0;
   color: var(--workspace-text, var(--ink));
 }
 
@@ -364,11 +465,14 @@ function followUp(
   gap: 7px;
 }
 
+.follow-up-actions button,
 .message footer button {
-  padding: 6px 8px;
+  min-height: 32px;
+  padding: 6px 10px;
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
-  background: transparent;
+  border-radius: var(--agent-radius-sm);
+  background: color-mix(in srgb, var(--agent-shell-paper) 78%, transparent);
   font: 11px var(--mono);
 }
 
@@ -392,10 +496,6 @@ function followUp(
 }
 
 .follow-up-actions button {
-  padding: 6px 9px;
-  color: var(--workspace-text-secondary, var(--muted));
-  border: 1px solid var(--workspace-rule, var(--rule));
-  background: transparent;
   font: 12px var(--mono);
 }
 
@@ -425,11 +525,32 @@ function followUp(
   margin: 0;
 }
 
+.answer-state--error > div {
+  display: flex;
+  gap: 8px;
+}
+
 .answer-state--error button {
   padding: 7px 10px;
   color: inherit;
   border: 1px solid currentcolor;
+  border-radius: var(--agent-radius-sm);
   background: transparent;
+  font: 11px var(--mono);
+}
+
+.jump-latest {
+  position: absolute;
+  right: 44px;
+  bottom: 96px;
+  z-index: 2;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: var(--workspace-text-secondary, var(--muted));
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-shell-paper) 90%, white);
+  box-shadow: 0 8px 20px rgb(26 20 16 / 10%);
   font: 11px var(--mono);
 }
 
@@ -439,12 +560,13 @@ function followUp(
   bottom: 24px;
   left: 28px;
   display: flex;
-  min-height: 58px;
+  min-height: 62px;
   padding: 0 16px;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--workspace-rule, var(--rule));
-  background: var(--workspace-thread-bg, var(--paper-hi));
+  border-radius: var(--agent-radius-md);
+  background: color-mix(in srgb, var(--agent-shell-paper) 86%, white);
 }
 
 .composer > span {
@@ -469,9 +591,11 @@ textarea::placeholder {
 }
 
 .composer button {
+  min-height: 42px;
   padding: 10px 14px;
   color: var(--workspace-primary-text, var(--paper-hi));
   border: 0;
+  border-radius: var(--agent-radius-sm);
   background: var(--workspace-action-bg, var(--red));
   font: 13px var(--mono);
   letter-spacing: 0.1em;

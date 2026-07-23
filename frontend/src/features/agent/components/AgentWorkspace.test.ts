@@ -180,10 +180,12 @@ describe('AgentWorkspace', () => {
       question: '如何验证结果？',
       source: 'AGENT_PAGE',
     }))
-    expect(wrapper.get('.message--user').text()).toContain('如何验证结果？')
+    expect(wrapper.get('.message--user .message__body').text()).toBe('如何验证结果？')
     expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-agent-submit]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[role="status"]').text()).toContain('正在核对公开事实')
+    expect(wrapper.get('[data-conversation-state]').attributes('data-conversation-state'))
+      .toBe('generating')
+    expect(wrapper.get('[data-agent-loading]').text()).toContain('正在核验证据')
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
     expect(wrapper.findAll('.message--agent')).toHaveLength(0)
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
