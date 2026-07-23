@@ -107,7 +107,7 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 959.98px) {
   .pane-resizer {
     display: none;
   }

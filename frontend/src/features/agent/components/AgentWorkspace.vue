@@ -634,4 +634,16 @@ onBeforeUnmount(() => {
     transform: translateX(0);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(.thread-empty),
+  :deep(.message),
+  :deep(.evidence-card),
+  :deep(.citation-card),
+  :deep(.source-card) {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+}
 </style>

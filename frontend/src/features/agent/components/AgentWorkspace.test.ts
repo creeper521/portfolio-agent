@@ -110,6 +110,35 @@ describe('AgentWorkspace', () => {
     expect(answerSection.attributes('data-answer-focus')).toBe('true')
   })
 
+  it('returns to cited answer content without smooth motion when reduced motion is requested', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+    const wrapper = mountWorkspace()
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-section-evidence]').trigger('click')
+
+    const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    await wrapper.get('[data-citation-id]').trigger('click')
+    await flushPromises()
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+      behavior: 'auto',
+    })
+  })
+
   it('resets citation focus when selecting a different session', async () => {
     const wrapper = mountWorkspace()
     await wrapper.get('.session-rail__new').trigger('click')

@@ -700,7 +700,7 @@ textarea:disabled,
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 959.98px) {
   .session-toggle {
     display: block !important;
   }

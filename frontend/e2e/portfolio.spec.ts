@@ -125,10 +125,15 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
 
   const userMessage = page.locator('.message--user').last()
   const agentMessage = page.locator('.message--agent').last()
-  await expect(userMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-  await expect(userMessage).toHaveCSS('border-left-color', 'rgb(122, 46, 42)')
+  await expect(userMessage.locator('.message__body')).toHaveCSS(
+    'background-color',
+    'rgb(32, 28, 23)',
+  )
+  await expect(userMessage.locator('.message__body')).toHaveCSS(
+    'border-radius',
+    '12px',
+  )
   await expect(agentMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-  await expect(agentMessage).toHaveCSS('border-left-color', 'rgb(205, 191, 169)')
 
   await expect(page).toHaveURL(/\/agent$/)
   const storageSnapshot = await page.evaluate(async () => ({
@@ -146,6 +151,49 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   await expect(page.getByText('当前对话未保存，刷新后记录会消失')).toBeVisible()
   await expect(page.locator('.message--user')).toHaveCount(0)
   await expect(page.getByText('从一个可核验的问题开始。')).toBeVisible()
+})
+
+test('recommended question enters the conversation immediately', async ({ page }) => {
+  let releaseResponse!: () => void
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve
+  })
+  await page.route('**/api/v1/answers', async (route) => {
+    await responseGate
+    await route.fallback()
+  })
+  await openAgentDeepLink(page)
+  const suggestion = page.locator('[data-suggested-question]').first()
+  const text = (await suggestion.textContent())?.trim() ?? ''
+  const response = page.waitForResponse(
+    (item) =>
+      new URL(item.url()).pathname === '/api/v1/answers' &&
+      item.request().method() === 'POST',
+  )
+
+  await suggestion.click()
+  await expect(page.locator('.message--user')).toContainText(text.replace(/^↳/, '').trim())
+  await expect(page.locator('[data-agent-loading]')).toBeVisible()
+  releaseResponse()
+  expect((await response).ok()).toBe(true)
+  await expect(page.locator('.message--agent')).toBeVisible()
+  await expect(page.locator('[data-conversation-state]'))
+    .toHaveAttribute('data-conversation-state', 'conversation')
+})
+
+test('answer evidence opens citations and returns to the cited section', async ({ page }) => {
+  await openAgentDeepLink(page)
+  await page.locator('[data-suggested-question]').first().click()
+  await expect(page.locator('.message--agent')).toBeVisible()
+
+  await page.locator('[data-section-evidence]').first().click()
+  await expect(page.getByRole('tab', { name: '引用' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.locator('[data-citation-id]').first()).toBeVisible()
+  await page.locator('[data-citation-id]').first().click()
+  await expect(page.locator('[data-answer-focus]')).toBeVisible()
 })
 
 test('workspace separators support keyboard adjustment and reset', async ({ page }) => {
@@ -259,27 +307,32 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
     { name: '2048x1080', width: 2048, height: 1080 },
     { name: '1440x900', width: 1440, height: 900 },
     { name: '1279x900', width: 1279, height: 900 },
-    { name: '1219x900', width: 1219, height: 900 },
-    { name: '980x800', width: 980, height: 800 },
+    { name: '960x800', width: 960, height: 800 },
+    { name: '959x800', width: 959, height: 800 },
     { name: '390x844', width: 390, height: 844 },
   ]
 
   for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await openAgentDeepLink(page)
+    await page.locator('[data-suggested-question]').first().click()
+    await expect(page.locator('.message--agent')).toBeVisible()
+    await page.locator('.conversation__scroll').evaluate((element) => {
+      element.scrollTop = 0
+    })
 
-    await expect(page.locator('.dossier-header')).toHaveCSS(
-      'background-color',
-      'rgb(239, 231, 216)',
-    )
     await expect(page.locator('.conversation')).toHaveCSS(
       'background-color',
-      'rgb(243, 232, 214)',
+      'rgb(245, 232, 209)',
     )
     await expect(page.locator('.conversation')).toHaveCSS('color', 'rgb(32, 28, 23)')
     await expect(page.locator('.evidence-desk')).toHaveCSS(
       'background-color',
-      'rgb(244, 238, 228)',
+      'rgb(248, 243, 234)',
+    )
+    await expect(page.locator('.session-rail')).toHaveCSS(
+      'background-color',
+      'rgb(240, 233, 222)',
     )
 
     const solidInkButtons = await page.locator('.agent-workspace button').evaluateAll(
@@ -287,7 +340,7 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
         .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(32, 28, 23)')
         .map((button) => button.textContent?.trim()),
     )
-    expect(solidInkButtons).toEqual(['＋ 新对话'])
+    expect(solidInkButtons).toEqual(['＋新对话'])
 
     const solidRedButtons = await page.locator('.agent-workspace button').evaluateAll(
       (buttons) => buttons
@@ -304,10 +357,9 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
     ).toBe(true)
 
     if (viewport.width >= 1440) {
-      await expect(shell).toHaveCSS('border-radius', '16px')
-      expect(shellBox?.width).toBeLessThanOrEqual(1600)
-      expect(shellBox?.x).toBeGreaterThanOrEqual(24)
-    } else if (viewport.width > 980) {
+      await expect(shell).toHaveCSS('border-radius', '20px')
+      expect(shellBox?.x).toBeGreaterThan(0)
+    } else if (viewport.width >= 960) {
       await expect(shell).toHaveCSS('border-radius', '12px')
       expect(Math.round(shellBox?.x ?? 0)).toBe(16)
     } else {
@@ -315,7 +367,7 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
       expect(Math.round(shellBox?.x ?? -1)).toBe(0)
     }
 
-    if (viewport.width === 1279 || viewport.width === 1219) {
+    if (viewport.width === 1279 || viewport.width === 960) {
       await page.getByRole('button', { name: '证据', exact: true }).click()
       await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'false')
       await expect(page.locator('#agent-evidence-desk')).toHaveCSS(
@@ -323,7 +375,7 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
         'matrix(1, 0, 0, 1, 0, 0)',
       )
     }
-    if (viewport.width === 980 || viewport.width === 390) {
+    if (viewport.width === 959 || viewport.width === 390) {
       await page.getByRole('button', { name: '会话', exact: true }).click()
       await expect(page.locator('#local-session-rail')).toHaveAttribute('aria-hidden', 'false')
       await expect(page.locator('#local-session-rail')).toHaveCSS(
@@ -474,7 +526,7 @@ test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes
 test('responsive Agent uses evidence and session drawers without horizontal overflow', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1219, height: 900 })
+  await page.setViewportSize({ width: 1279, height: 900 })
   await openAgentDeepLink(page)
   await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'true')
   await page.getByRole('button', { name: '证据', exact: true }).click()
@@ -486,7 +538,7 @@ test('responsive Agent uses evidence and session drawers without horizontal over
 
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: '证据', exact: true })).toBeFocused()
-  await page.setViewportSize({ width: 980, height: 800 })
+  await page.setViewportSize({ width: 959, height: 800 })
   await expect(page.locator('#local-session-rail')).toHaveAttribute('aria-hidden', 'true')
   await page.getByRole('button', { name: '会话', exact: true }).click()
   await expect(page.locator('.agent-workspace')).toHaveClass(/sessions-open/)

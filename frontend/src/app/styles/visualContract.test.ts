@@ -84,16 +84,41 @@ describe('prototype visual contract', () => {
 
   it('uses one evidence-drawer breakpoint across behavior and presentation', () => {
     const evidenceBreakpoint = '@media (max-width: 1279.98px)'
+    const sessionsBreakpoint = '@media (max-width: 959.98px)'
 
     expect(workspace).toContain("useMediaQuery('(max-width: 959.98px)')")
-    expect(base).toContain('@media (max-width: 959.98px)')
+    expect(workspace).toContain(sessionsBreakpoint)
+    expect(conversation).toContain(sessionsBreakpoint)
+    expect(paneResizer).toContain(sessionsBreakpoint)
+    expect(base).toContain(sessionsBreakpoint)
     expect(base).not.toContain('@media (max-width: 980px)')
+    expect(conversation).not.toContain('@media (max-width: 980px)')
+    expect(paneResizer).not.toContain('@media (max-width: 980px)')
     expect(workspace).toContain(evidenceBreakpoint)
     expect(conversation).toContain(evidenceBreakpoint)
     expect(paneResizer).toContain(evidenceBreakpoint)
     expect(workspace).not.toContain('@media (max-width: 1279px)')
     expect(conversation).not.toContain('@media (max-width: 1279px)')
     expect(paneResizer).not.toContain('@media (max-width: 1220px)')
+  })
+
+  it('removes Agent motion and smooth scrolling when reduced motion is requested', () => {
+    expect(workspace).toContain('@media (prefers-reduced-motion: reduce)')
+    for (const selector of [
+      '.thread-empty',
+      '.message',
+      '.evidence-card',
+      '.citation-card',
+      '.source-card',
+    ]) {
+      expect(workspace).toContain(`:deep(${selector})`)
+    }
+    expect(workspace).toContain('scroll-behavior: auto')
+    expect(workspace).toContain('transition: none')
+    expect(workspace).toContain('animation: none')
+    expect(conversation).toContain(
+      "window.matchMedia?.('(prefers-reduced-motion: reduce)').matches",
+    )
   })
 
   it('keeps the compact shell and workspace navigation aligned to its header', () => {
