@@ -1,5 +1,6 @@
 package com.portfolio.agent.portfolio.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 
 import java.util.List;
@@ -56,6 +57,7 @@ public final class QuestionPresetResponse {
         return text;
     }
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public String getProjectSlug() {
         return projectSlug;
     }

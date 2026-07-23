@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -94,6 +95,22 @@ class CaseControllerTest {
     }
 
     @Test
+    void returnsExplicitNullProjectSlugForStandaloneCase() throws Exception {
+        CaseDetails standaloneDetails = new CaseDetails(
+                standaloneCase(),
+                List.of(),
+                List.of("How was the standalone case verified?"),
+                null
+        );
+        when(portfolioService.getCase("standalone-case")).thenReturn(standaloneDetails);
+
+        mockMvc.perform(get("/api/v1/cases/standalone-case"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(16))
+                .andExpect(jsonPath("$.projectSlug").value(nullValue()));
+    }
+
+    @Test
     void returnsCaseNotFoundErrorFromService() throws Exception {
         when(portfolioService.getCase("missing"))
                 .thenThrow(new CaseNotFoundException("missing"));
@@ -140,6 +157,30 @@ class CaseControllerTest {
                 "覆盖实现说明与回归验证",
                 EvidenceStatus.APPROVED,
                 false
+        );
+    }
+
+    private static CaseStudy standaloneCase() {
+        return new CaseStudy(
+                "case-standalone",
+                "CASE-02",
+                "standalone-case",
+                CaseType.FEATURE,
+                "Standalone case",
+                "A case without a project relation",
+                "Standalone problem",
+                List.of("Standalone action"),
+                List.of("Standalone decision"),
+                List.of("Standalone verification"),
+                "Standalone outcome",
+                List.of("Standalone limitation"),
+                AchievementStatus.IMPLEMENTED_TESTED,
+                ContributionType.PRIMARY,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
         );
     }
 }

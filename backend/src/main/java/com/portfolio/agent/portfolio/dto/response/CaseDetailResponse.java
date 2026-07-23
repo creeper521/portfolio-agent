@@ -1,5 +1,6 @@
 package com.portfolio.agent.portfolio.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
@@ -141,6 +142,7 @@ public final class CaseDetailResponse {
         return limitations;
     }
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public String getProjectSlug() {
         return projectSlug;
     }

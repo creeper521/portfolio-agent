@@ -94,7 +94,11 @@ public class PortfolioResponseMapper {
                 content.getQuestionPresets().stream()
                         .map(question -> QuestionPresetResponse.from(
                                 question,
-                                firstProjectSlug(question.getProjectIds(), projectSlugsById),
+                                firstProjectSlug(
+                                        question.getProjectIds(),
+                                        content.getProjects(),
+                                        projectSlugsById
+                                ),
                                 resolveSlugs(question.getCaseIds(), caseSlugsById)
                         ))
                         .toList()
@@ -117,13 +121,22 @@ public class PortfolioResponseMapper {
 
     private String firstProjectSlug(
             List<String> projectIds,
+            List<ProjectDetails> projects,
             Map<String, String> projectSlugsById
     ) {
-        return projectSlugsById.entrySet().stream()
-                .filter(entry -> projectIds.contains(entry.getKey()))
-                .map(Map.Entry::getValue)
+        if (projectIds.isEmpty()) {
+            return null;
+        }
+
+        projectIds.forEach(id -> requiredSlug(id, projectSlugsById));
+
+        return projects.stream()
+                .map(ProjectDetails::getProject)
+                .filter(project -> projectIds.contains(project.getId()))
+                .map(project -> project.getSlug())
                 .findFirst()
-                .orElse(null);
+                .orElseThrow(() ->
+                        new IllegalStateException("Missing validated public project relation"));
     }
 
     private List<String> resolveSlugs(

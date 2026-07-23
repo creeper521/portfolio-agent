@@ -1,5 +1,8 @@
 package com.portfolio.agent.portfolio.mapper;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
@@ -14,6 +17,7 @@ import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
+import com.portfolio.agent.portfolio.dto.response.QuestionPresetResponse;
 import com.portfolio.agent.portfolio.service.result.CaseDetails;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
@@ -87,6 +91,11 @@ class PortfolioResponseMapperTest {
                             "codegraph-evaluation"
                     );
                 });
+        assertThat(response.getQuestionPresets())
+                .filteredOn(item -> item.getId().equals("question-multi-project"))
+                .singleElement()
+                .satisfies(item ->
+                        assertThat(item.getProjectSlug()).isEqualTo("sql-audit"));
 
         assertThat(response.getTimeline())
                 .filteredOn(item -> item.getId().equals("timeline-mixed"))
@@ -114,6 +123,40 @@ class PortfolioResponseMapperTest {
                 .get("evidence-case-role-reset-guide-and-acceptance")
                 .add("other-case"))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void serializesExplicitNullProjectSlugForCaseOnlyQuestionPreset() throws Exception {
+        PublicContentResponse response =
+                mapper.toPublicContentResponse(publicContentWithThreeCases());
+        QuestionPresetResponse caseOnly = response.getQuestionPresets().stream()
+                .filter(item -> item.getId().equals("question-case-role-reset-overview"))
+                .findFirst()
+                .orElseThrow();
+        ObjectMapper objectMapper = new ObjectMapper()
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(caseOnly));
+
+        assertThat(json.has("projectSlug")).isTrue();
+        assertThat(json.get("projectSlug").isNull()).isTrue();
+    }
+
+    @Test
+    void rejectsUnknownIdAmongNonEmptyQuestionProjectIds() {
+        PublicContent content = publicContentWithThreeCases();
+        PublicContent invalid = withQuestions(
+                content,
+                List.of(question(
+                        "question-unknown-project",
+                        List.of("project-1", "missing-project"),
+                        List.of()
+                ))
+        );
+
+        assertThatThrownBy(() -> mapper.toPublicContentResponse(invalid))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("missing-project");
     }
 
     private static PublicContent publicContentWithThreeCases() {
@@ -191,6 +234,11 @@ class PortfolioResponseMapperTest {
                         "question-mixed-comparison",
                         List.of("project-1"),
                         List.of("case-multilingual", "case-codegraph-evaluation")
+                ),
+                question(
+                        "question-multi-project",
+                        List.of("project-2", "project-1"),
+                        List.of()
                 )
         );
 
@@ -229,11 +277,18 @@ class PortfolioResponseMapperTest {
                         "owner@example.com",
                         "/resume.pdf"
                 ),
-                List.of(new ProjectDetails(
-                        project,
-                        List.of(projectEvidence),
-                        List.of("What did you build?")
-                )),
+                List.of(
+                        new ProjectDetails(
+                                project,
+                                List.of(projectEvidence),
+                                List.of("What did you build?")
+                        ),
+                        new ProjectDetails(
+                                secondProject(),
+                                List.of(),
+                                List.of()
+                        )
+                ),
                 List.of(multilingual, roleReset, evaluation),
                 List.of(),
                 List.of(),
@@ -271,6 +326,29 @@ class PortfolioResponseMapperTest {
                 List.of(),
                 List.of("evidence-project"),
                 List.of("timeline-mixed")
+        );
+    }
+
+    private static ProjectProfile secondProject() {
+        return new ProjectProfile(
+                "project-2",
+                "P-02",
+                "secondary-project",
+                "Secondary project",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(),
+                List.of(),
+                List.of()
         );
     }
 
@@ -350,6 +428,28 @@ class PortfolioResponseMapperTest {
                 List.of("HOME"),
                 true,
                 10
+        );
+    }
+
+    private static PublicContent withQuestions(
+            PublicContent content,
+            List<QuestionDefinition> questions
+    ) {
+        return new PublicContent(
+                content.getContentVersion(),
+                content.getRuntimeBundleHash(),
+                content.getPublishedAt(),
+                content.getOwner(),
+                content.getProjects(),
+                content.getCases(),
+                content.getClaims(),
+                content.getClaimEvidenceLinks(),
+                content.getEvidence(),
+                content.getTimeline(),
+                content.getProjectSlugsByEvidenceId(),
+                content.getCaseSlugsByEvidenceId(),
+                content.getClaimIdsByEvidenceId(),
+                questions
         );
     }
 }
