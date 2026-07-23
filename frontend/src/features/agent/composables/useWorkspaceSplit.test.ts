@@ -4,6 +4,7 @@ import {
   WORKSPACE_SPLIT_KEY,
   clampWorkspaceSplit,
   useWorkspaceSplit,
+  workspaceDefaults,
 } from './useWorkspaceSplit'
 
 describe('useWorkspaceSplit', () => {
@@ -11,8 +12,16 @@ describe('useWorkspaceSplit', () => {
 
   it('clamps sessions and evidence widths to the approved framed-shell bounds', () => {
     expect(clampWorkspaceSplit({ sessions: 100, evidence: 900 })).toEqual({
-      sessions: 220,
-      evidence: 420,
+      sessions: 250,
+      evidence: 380,
+    })
+  })
+
+  it('uses the approved demo-aligned side widths', () => {
+    expect(workspaceDefaults()).toEqual({ sessions: 260, evidence: 350 })
+    expect(clampWorkspaceSplit({ sessions: 999, evidence: 999 })).toEqual({
+      sessions: 280,
+      evidence: 380,
     })
   })
 
@@ -24,7 +33,7 @@ describe('useWorkspaceSplit', () => {
     expect(persisted.sessions).toBe(split.state.value.sessions)
 
     split.reset()
-    expect(split.state.value).toEqual({ sessions: 250, evidence: 340 })
+    expect(split.state.value).toEqual({ sessions: 260, evidence: 350 })
   })
 
   it('clamps legacy persisted widths without changing the storage key', () => {
@@ -34,8 +43,8 @@ describe('useWorkspaceSplit', () => {
     )
 
     expect(useWorkspaceSplit().state.value).toEqual({
-      sessions: 320,
-      evidence: 420,
+      sessions: 280,
+      evidence: 380,
     })
   })
 })

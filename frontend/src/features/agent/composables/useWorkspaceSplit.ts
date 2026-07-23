@@ -2,8 +2,8 @@ import { ref } from 'vue'
 
 export const WORKSPACE_SPLIT_KEY = 'portfolio.workspace.split.v1'
 export const WORKSPACE_LIMITS = {
-  sessions: [220, 320] as const,
-  evidence: [300, 420] as const,
+  sessions: [250, 280] as const,
+  evidence: [330, 380] as const,
   chatMin: 640,
 }
 
@@ -18,8 +18,8 @@ function clamp(value: number, [min, max]: readonly [number, number]) {
 
 export function workspaceDefaults(): WorkspaceSplit {
   return {
-    sessions: 250,
-    evidence: 340,
+    sessions: 260,
+    evidence: 350,
   }
 }
 

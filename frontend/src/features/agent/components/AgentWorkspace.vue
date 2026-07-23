@@ -54,7 +54,7 @@ const workspaceRoot = ref<HTMLElement | null>(null)
 const workspaceWidth = ref(Number.POSITIVE_INFINITY)
 const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
-const sessionsIsDrawer = useMediaQuery('(max-width: 980px)')
+const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
 const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
 const pending = ref(false)
@@ -465,9 +465,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .agent-workspace {
-  --workspace-rail-bg: color-mix(in srgb, var(--paper) 72%, var(--paper-low));
-  --workspace-thread-bg: var(--warm);
-  --workspace-evidence-bg: var(--paper);
+  --workspace-rail-bg: var(--agent-rail-paper);
+  --workspace-thread-bg: var(--agent-thread-paper);
+  --workspace-evidence-bg: var(--agent-evidence-paper);
   --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
   --workspace-text: var(--ink);
   --workspace-text-secondary: var(--muted);
@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 959.98px) {
   .agent-workspace {
     grid-template-columns: minmax(0, 1fr);
   }

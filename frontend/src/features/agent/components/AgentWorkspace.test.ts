@@ -141,7 +141,7 @@ describe('AgentWorkspace', () => {
     const toggle = wrapper.get('.evidence-toggle')
 
     expect(matchMedia).toHaveBeenCalledWith('(max-width: 1279.98px)')
-    expect(matchMedia).toHaveBeenCalledWith('(max-width: 980px)')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 959.98px)')
     expect(toggle.attributes('aria-expanded')).toBe('false')
     await toggle.trigger('click')
     expect(toggle.attributes('aria-expanded')).toBe('true')

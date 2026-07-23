@@ -42,22 +42,28 @@ describe('prototype visual contract', () => {
     expect(tokens).not.toMatch(/green|teal|cyan|purple/i)
   })
 
-  it('defines the approved responsive framed Agent shell', () => {
-    expect(tokens).toContain('--agent-stage: #2a2620')
-    expect(tokens).toContain('--agent-header: #efe7d8')
-    expect(tokens).toContain('--agent-shell-max: 1600px')
-    expect(tokens).toContain('--agent-shell-radius: 16px')
-    expect(base).toContain('.site-frame--workspace')
-    expect(base).toContain('border-radius: var(--agent-shell-radius)')
-    expect(base).toContain('box-shadow: var(--agent-shell-shadow)')
-    expect(base).toContain("[data-header-theme='warm']")
-    expect(header).toContain("route.meta.workspace === true ? 'warm' : 'paper'")
+  it('defines the warm-black floating Agent shell', () => {
+    expect(tokens).toContain('--agent-stage: #1e1b17')
+    expect(tokens).toContain('--agent-shell-paper: #f3eadb')
+    expect(tokens).toContain('--agent-rail-paper: #f0e9de')
+    expect(tokens).toContain('--agent-thread-paper: #f5e8d1')
+    expect(tokens).toContain('--agent-evidence-paper: #f8f3ea')
+    expect(tokens).toContain('--agent-radius-shell: 20px')
+    expect(tokens).toContain('--agent-radius-md: 12px')
+    expect(tokens).toContain('--agent-radius-sm: 8px')
+    expect(tokens).toContain('--agent-hairline: rgba(104, 84, 60, 0.22)')
+    expect(base).toContain('border-radius: var(--agent-radius-shell)')
+    expect(base).toContain('background: var(--agent-stage)')
+  })
+
+  it('keeps structural panes square inside the rounded shell', () => {
+    expect(workspace).toContain('--workspace-rail-bg: var(--agent-rail-paper)')
+    expect(workspace).toContain('--workspace-thread-bg: var(--agent-thread-paper)')
+    expect(workspace).toContain('--workspace-evidence-bg: var(--agent-evidence-paper)')
+    expect(workspace).not.toMatch(/\.agent-workspace\s*\{[^}]*border-radius:/s)
   })
 
   it('defines the approved balanced-paper Agent hierarchy', () => {
-    expect(workspace).toContain('--workspace-rail-bg:')
-    expect(workspace).toContain('--workspace-thread-bg: var(--warm)')
-    expect(workspace).toContain('--workspace-evidence-bg: var(--paper)')
     expect(workspace).toContain('--workspace-primary-bg: var(--ink)')
     expect(sessions).toContain('background: var(--workspace-rail-bg, var(--paper))')
     expect(conversation).toContain('background: var(--workspace-thread-bg, var(--paper-hi))')
@@ -76,7 +82,9 @@ describe('prototype visual contract', () => {
   it('uses one evidence-drawer breakpoint across behavior and presentation', () => {
     const evidenceBreakpoint = '@media (max-width: 1279.98px)'
 
-    expect(workspace).toContain("useMediaQuery('(max-width: 1279.98px)')")
+    expect(workspace).toContain("useMediaQuery('(max-width: 959.98px)')")
+    expect(base).toContain('@media (max-width: 959.98px)')
+    expect(base).not.toContain('@media (max-width: 980px)')
     expect(workspace).toContain(evidenceBreakpoint)
     expect(conversation).toContain(evidenceBreakpoint)
     expect(paneResizer).toContain(evidenceBreakpoint)
