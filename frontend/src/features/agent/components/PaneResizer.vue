@@ -91,14 +91,14 @@ function onKeydown(event: KeyboardEvent) {
   left: 5px;
   width: 1px;
   content: '';
-  background: var(--rule);
+  background: var(--workspace-rule, var(--rule));
   transition: background 160ms ease;
 }
 
 .pane-resizer:hover::after,
 .pane-resizer:focus-visible::after,
 .pane-resizer.dragging::after {
-  background: var(--red-hi);
+  background: var(--workspace-accent-soft, var(--red-hi));
 }
 
 @media (max-width: 1220px) {

@@ -383,12 +383,24 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .agent-workspace {
+  --workspace-rail-bg: color-mix(in srgb, var(--paper) 72%, var(--paper-low));
+  --workspace-thread-bg: var(--paper-hi);
+  --workspace-evidence-bg: var(--paper);
+  --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
+  --workspace-text: var(--ink);
+  --workspace-text-secondary: var(--muted);
+  --workspace-text-faint: var(--faint);
+  --workspace-rule: var(--rule);
+  --workspace-accent: var(--red);
+  --workspace-accent-soft: var(--red-hi);
+  --workspace-primary-bg: var(--ink);
+  --workspace-primary-text: var(--paper-hi);
   position: relative;
   display: grid;
   width: 100%;
   height: calc(100vh - var(--header-height));
   grid-template-columns: var(--sessions-width) minmax(600px, 1fr) var(--evidence-width);
-  background: var(--ink);
+  background: var(--workspace-evidence-bg);
   overflow: hidden;
 }
 
@@ -398,7 +410,7 @@ onBeforeUnmount(() => {
   right: 18px;
   bottom: 4px;
   margin: 0;
-  color: #a99d8f;
+  color: var(--workspace-text-faint);
   font: 9px/1.5 var(--mono);
   pointer-events: none;
 }

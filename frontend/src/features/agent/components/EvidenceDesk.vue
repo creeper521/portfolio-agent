@@ -94,9 +94,9 @@ const selected = computed(
 .evidence-desk {
   height: calc(100vh - var(--header-height));
   padding: 28px 25px;
-  color: var(--ink);
-  border-left: 1px solid var(--rule);
-  background: var(--paper-hi);
+  color: var(--workspace-text, var(--ink));
+  border-left: 1px solid var(--workspace-rule, var(--rule));
+  background: var(--workspace-evidence-bg, var(--paper));
   overflow-y: auto;
 }
 
@@ -121,7 +121,7 @@ header span {
   display: flex;
   margin: 24px 0 28px;
   gap: 18px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--workspace-rule, var(--rule));
 }
 
 .evidence-tabs button {
@@ -142,7 +142,7 @@ header span {
 .evidence-list article,
 .context-panel {
   padding: 18px 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--workspace-rule, var(--rule));
 }
 
 .evidence-list article {
@@ -152,8 +152,8 @@ header span {
 .evidence-list .evidence-card--active {
   margin-inline: -13px;
   padding-inline: 13px;
-  border-left: 2px solid var(--red);
-  background: var(--paper);
+  border-left: 2px solid var(--workspace-accent, var(--red));
+  background: var(--workspace-surface-subtle, var(--paper-low));
 }
 
 article > span {

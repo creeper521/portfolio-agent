@@ -20,7 +20,8 @@ Read these before changing behavior:
 4. `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`
 5. `docs/superpowers/specs/2026-07-16-portfolio-frontend-full-rebuild-design.md`
 6. `docs/superpowers/specs/2026-07-17-public-content-api-integration-design.md`
-7. `docs/01-项目背景.md`, `docs/02-需求探索文档.md`, and `docs/03-可能技术选型.md` for the longer-term roadmap
+7. `docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md`
+8. `docs/01-项目背景.md`, `docs/02-需求探索文档.md`, and `docs/03-可能技术选型.md` for the longer-term roadmap
 
 Do not treat a historical or superseded plan as active work. Dynamic publication, Claim/RAG/model work, and its release contract remain pending until explicitly approved.
 

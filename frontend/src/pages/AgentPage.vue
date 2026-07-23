@@ -62,8 +62,8 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
   min-height: calc(100vh - var(--header-height));
   place-content: center;
   gap: 18px;
-  color: var(--paper);
-  background: var(--ink);
+  color: var(--ink);
+  background: var(--paper-hi);
   font: 12px/1.7 var(--mono);
 }
 
@@ -71,10 +71,10 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
   margin: 0;
 }
 
-.route-seed-feedback button {
+.route-seed-feedback a {
   justify-self: center;
   padding: 9px 13px;
-  color: #e1948b;
+  color: var(--red);
   border: 1px solid currentcolor;
   background: transparent;
   font: 10px var(--mono);

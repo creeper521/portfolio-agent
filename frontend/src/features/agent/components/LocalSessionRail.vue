@@ -66,9 +66,9 @@ function timeLabel(timestamp: number) {
   height: calc(100vh - var(--header-height));
   padding: 25px 23px;
   flex-direction: column;
-  color: var(--ink);
-  border-right: 1px solid var(--rule);
-  background: var(--paper);
+  color: var(--workspace-text, var(--ink));
+  border-right: 1px solid var(--workspace-rule, var(--rule));
+  background: var(--workspace-rail-bg, var(--paper));
   overflow: hidden;
 }
 
@@ -81,11 +81,15 @@ function timeLabel(timestamp: number) {
 
 .session-rail__new {
   min-height: 44px;
-  color: var(--paper);
-  border: 1px solid var(--ink);
-  background: var(--ink);
+  color: var(--workspace-primary-text, var(--paper-hi));
+  border: 1px solid var(--workspace-primary-bg, var(--ink));
+  background: var(--workspace-primary-bg, var(--ink));
   font: 11px var(--mono);
   letter-spacing: 0.08em;
+}
+
+.session-rail__new:not(:disabled):hover {
+  background: var(--ink-2);
 }
 
 .session-list {
@@ -98,11 +102,12 @@ article {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--workspace-rule, var(--rule));
 }
 
 article.active {
-  box-shadow: inset 2px 0 var(--red);
+  background: var(--workspace-surface-subtle, var(--paper-low));
+  box-shadow: inset 2px 0 var(--workspace-accent, var(--red));
 }
 
 .session-select,
@@ -153,7 +158,7 @@ article:hover .session-remove,
 footer {
   margin-top: auto;
   padding-top: 15px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--workspace-rule, var(--rule));
 }
 
 footer p {

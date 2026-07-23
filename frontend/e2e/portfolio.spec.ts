@@ -123,6 +123,13 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   expect((await answerResponse).ok()).toBe(true)
   await expect(page.getByText(/逐项验证时间排序/)).toBeVisible()
 
+  const userMessage = page.locator('.message--user').last()
+  const agentMessage = page.locator('.message--agent').last()
+  await expect(userMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(userMessage).toHaveCSS('border-left-color', 'rgb(122, 46, 42)')
+  await expect(agentMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(agentMessage).toHaveCSS('border-left-color', 'rgb(205, 191, 169)')
+
   await expect(page).toHaveURL(/\/agent$/)
   const storageSnapshot = await page.evaluate(async () => ({
     localSession: localStorage.getItem('portfolio.agent.sessions.v1'),
@@ -152,6 +159,66 @@ test('workspace separators support keyboard adjustment and reset', async ({ page
   await expect(handle).toHaveAttribute('aria-valuenow', String(before + 16))
   await handle.press('Home')
   await expect(handle).toHaveAttribute('aria-valuenow', String(before))
+})
+
+test('Agent uses the approved balanced-paper hierarchy at every review viewport', async ({
+  page,
+}, testInfo) => {
+  const viewports = [
+    { name: '1440x900', width: 1440, height: 900 },
+    { name: '1219x900', width: 1219, height: 900 },
+    { name: '980x800', width: 980, height: 800 },
+    { name: '390x844', width: 390, height: 844 },
+  ]
+
+  for (const viewport of viewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await openAgentDeepLink(page)
+
+    await expect(page.locator('.dossier-header')).toHaveCSS(
+      'background-color',
+      'rgba(32, 28, 23, 0.94)',
+    )
+    await expect(page.locator('.conversation')).toHaveCSS(
+      'background-color',
+      'rgb(251, 247, 239)',
+    )
+    await expect(page.locator('.conversation')).toHaveCSS('color', 'rgb(32, 28, 23)')
+    await expect(page.locator('.evidence-desk')).toHaveCSS(
+      'background-color',
+      'rgb(244, 238, 228)',
+    )
+
+    const solidInkButtons = await page.locator('.agent-workspace button').evaluateAll(
+      (buttons) => buttons
+        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(32, 28, 23)')
+        .map((button) => button.textContent?.trim()),
+    )
+    expect(solidInkButtons).toEqual(expect.arrayContaining(['＋ 新对话', '发送 ↵']))
+    expect(solidInkButtons).toHaveLength(2)
+
+    if (viewport.width === 1219) {
+      await page.getByRole('button', { name: '证据', exact: true }).click()
+      await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'false')
+      await expect(page.locator('#agent-evidence-desk')).toHaveCSS(
+        'transform',
+        'matrix(1, 0, 0, 1, 0, 0)',
+      )
+    }
+    if (viewport.width === 980) {
+      await page.getByRole('button', { name: '会话', exact: true }).click()
+      await expect(page.locator('#local-session-rail')).toHaveAttribute('aria-hidden', 'false')
+      await expect(page.locator('#local-session-rail')).toHaveCSS(
+        'transform',
+        'matrix(1, 0, 0, 1, 0, 0)',
+      )
+    }
+
+    await page.screenshot({
+      path: testInfo.outputPath(`agent-balanced-paper-${viewport.name}.png`),
+      fullPage: false,
+    })
+  }
 })
 
 test('explicit follow-up sends stable references only and is lost on reload', async ({ page }) => {
