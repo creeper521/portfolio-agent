@@ -151,7 +151,15 @@ public class PortfolioService {
                 .map(QuestionDefinition::getText)
                 .toList();
 
-        return new CaseDetails(caseStudy, evidence, suggestedQuestions);
+        String projectSlug = caseStudy.getProjectId() == null
+                ? null
+                : snapshot.getProjects().stream()
+                        .filter(project -> project.getId().equals(caseStudy.getProjectId()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getSlug();
+
+        return new CaseDetails(caseStudy, evidence, suggestedQuestions, projectSlug);
     }
 
     private ProjectProfile findProject(RuntimeContentSnapshot snapshot, String slug) {

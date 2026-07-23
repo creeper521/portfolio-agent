@@ -14,6 +14,7 @@ public final class TimelineEventResponse {
     private final String action;
     private final String impact;
     private final List<String> projectSlugs;
+    private final List<String> caseSlugs;
     private final List<String> evidenceIds;
 
     public TimelineEventResponse(
@@ -24,6 +25,7 @@ public final class TimelineEventResponse {
             String action,
             String impact,
             List<String> projectSlugs,
+            List<String> caseSlugs,
             List<String> evidenceIds
     ) {
         this.id = id;
@@ -33,12 +35,21 @@ public final class TimelineEventResponse {
         this.action = action;
         this.impact = impact;
         this.projectSlugs = List.copyOf(projectSlugs);
+        this.caseSlugs = List.copyOf(caseSlugs);
         this.evidenceIds = List.copyOf(evidenceIds);
     }
 
     public static TimelineEventResponse from(
             TimelineEvent timelineEvent,
             List<String> projectSlugs
+    ) {
+        return from(timelineEvent, projectSlugs, List.of());
+    }
+
+    public static TimelineEventResponse from(
+            TimelineEvent timelineEvent,
+            List<String> projectSlugs,
+            List<String> caseSlugs
     ) {
         return new TimelineEventResponse(
                 timelineEvent.getId(),
@@ -48,6 +59,7 @@ public final class TimelineEventResponse {
                 timelineEvent.getAction(),
                 timelineEvent.getImpact(),
                 projectSlugs,
+                caseSlugs,
                 timelineEvent.getEvidenceIds()
         );
     }
@@ -80,6 +92,10 @@ public final class TimelineEventResponse {
         return projectSlugs;
     }
 
+    public List<String> getCaseSlugs() {
+        return caseSlugs;
+    }
+
     public List<String> getEvidenceIds() {
         return evidenceIds;
     }
@@ -99,12 +115,23 @@ public final class TimelineEventResponse {
                 && Objects.equals(action, that.action)
                 && Objects.equals(impact, that.impact)
                 && Objects.equals(projectSlugs, that.projectSlugs)
+                && Objects.equals(caseSlugs, that.caseSlugs)
                 && Objects.equals(evidenceIds, that.evidenceIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, dateLabel, title, problem, action, impact, projectSlugs, evidenceIds);
+        return Objects.hash(
+                id,
+                dateLabel,
+                title,
+                problem,
+                action,
+                impact,
+                projectSlugs,
+                caseSlugs,
+                evidenceIds
+        );
     }
 
     @Override
@@ -117,6 +144,7 @@ public final class TimelineEventResponse {
                 ", action='" + action + '\'' +
                 ", impact='" + impact + '\'' +
                 ", projectSlugs=" + projectSlugs +
+                ", caseSlugs=" + caseSlugs +
                 ", evidenceIds=" + evidenceIds +
                 '}';
     }

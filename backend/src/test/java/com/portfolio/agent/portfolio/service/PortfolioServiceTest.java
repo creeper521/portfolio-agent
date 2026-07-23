@@ -100,8 +100,41 @@ class PortfolioServiceTest {
         assertThat(result.getCaseStudy().getCode()).isEqualTo("CASE-01");
         assertThat(result.getEvidence()).extracting(EvidenceRecord::getId)
                 .containsExactly("evidence-case-multilingual-implementation-and-regression");
+        assertThat(result.getProjectSlug()).isEqualTo("sql-audit");
         assertThat(result.getSuggestedQuestions())
                 .containsExactly("多语言图片上传修复解决了什么问题？");
+    }
+
+    @Test
+    void returnsNullProjectSlugForStandaloneCase() {
+        PortfolioSnapshot base = snapshot();
+        CaseStudy standaloneCase = caseStudy(
+                "case-standalone",
+                "CASE-03",
+                "standalone-case",
+                CaseType.FEATURE,
+                List.of(),
+                null
+        );
+        PortfolioSnapshot withStandaloneCase = new PortfolioSnapshot(
+                base.getSchemaVersion(),
+                base.getContentVersion(),
+                base.getPublishedAt(),
+                base.getOwner(),
+                base.getProjects(),
+                List.of(standaloneCase),
+                base.getClaims(),
+                base.getClaimEvidenceLinks(),
+                base.getQuestions(),
+                base.getEvidence(),
+                base.getTimeline()
+        );
+        PortfolioService service =
+                new PortfolioService(new CountingRepository(withStandaloneCase));
+
+        CaseDetails result = service.getCase("standalone-case");
+
+        assertThat(result.getProjectSlug()).isNull();
     }
 
     @Test
@@ -318,6 +351,17 @@ class PortfolioServiceTest {
             CaseType type,
             List<String> evidenceIds
     ) {
+        return caseStudy(id, code, slug, type, evidenceIds, "project-1");
+    }
+
+    private static CaseStudy caseStudy(
+            String id,
+            String code,
+            String slug,
+            CaseType type,
+            List<String> evidenceIds,
+            String projectId
+    ) {
         return new CaseStudy(
                 id,
                 code,
@@ -333,7 +377,7 @@ class PortfolioServiceTest {
                 List.of("Limitation"),
                 AchievementStatus.IMPLEMENTED_TESTED,
                 ContributionType.PRIMARY,
-                "project-1",
+                projectId,
                 List.of(),
                 evidenceIds,
                 List.of("timeline-1"),

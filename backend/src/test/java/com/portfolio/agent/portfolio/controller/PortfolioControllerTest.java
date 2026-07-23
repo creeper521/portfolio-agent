@@ -56,6 +56,7 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.questionPresets.length()").value(1))
                 .andExpect(jsonPath("$.questionPresets[0].id").value("sql-audit-overview"))
                 .andExpect(jsonPath("$.questionPresets[0].projectSlug").value("sql-audit"))
+                .andExpect(jsonPath("$.questionPresets[0].caseSlugs").isEmpty())
                 .andExpect(jsonPath("$.questionPresets[0].audiences.length()").value(4))
                 .andExpect(jsonPath("$.questionPresets[0].placements[0]").value("HOME"))
                 .andExpect(jsonPath("$.projects[0].code").value("P-01"))
@@ -83,6 +84,10 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.claims[4].materiality").value("KEY"))
                 .andExpect(jsonPath("$.claimEvidenceLinks[0].supportType").value("DIRECT"))
                 .andExpect(jsonPath("$.timeline[0].id")
-                        .value("timeline-sql-audit-delivery"));
+                        .value("timeline-sql-audit-delivery"))
+                .andExpect(jsonPath("$.timeline[0].caseSlugs").isEmpty())
+                .andExpect(jsonPath("$.cases").isEmpty())
+                .andExpect(jsonPath("$.caseSlugsByEvidenceId").isMap())
+                .andExpect(jsonPath("$.caseSlugsByEvidenceId").isEmpty());
     }
 }
