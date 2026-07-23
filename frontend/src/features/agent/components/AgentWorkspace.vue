@@ -10,6 +10,7 @@ import { askQuestion } from '../api/answerApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import {
   WORKSPACE_LIMITS,
+  fitWorkspaceSplit,
   useWorkspaceSplit,
   type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
@@ -49,10 +50,12 @@ const props = withDefaults(
 
 const sessions = useLocalSessions()
 const split = useWorkspaceSplit()
+const workspaceRoot = ref<HTMLElement | null>(null)
+const workspaceWidth = ref(Number.POSITIVE_INFINITY)
 const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 980px)')
-const evidenceIsDrawer = useMediaQuery('(max-width: 1219.98px)')
+const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
 const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
 const pending = ref(false)
 const answerError = ref('')
@@ -60,6 +63,44 @@ const failedRequest = ref<AnswerRequestContext | null>(null)
 let activeRequest: AnswerRequestContext | null = null
 let requestVersion = 0
 let disposed = false
+let workspaceResizeObserver: ResizeObserver | null = null
+
+const effectiveSplit = computed(() =>
+  evidenceIsDrawer.value
+    ? split.state.value
+    : fitWorkspaceSplit(split.state.value, workspaceWidth.value),
+)
+
+const availableSideWidth = computed(() =>
+  Number.isFinite(workspaceWidth.value)
+    ? Math.floor(workspaceWidth.value) - WORKSPACE_LIMITS.chatMin
+    : Number.POSITIVE_INFINITY,
+)
+
+const effectiveMaximums = computed(() => {
+  if (evidenceIsDrawer.value || !Number.isFinite(availableSideWidth.value)) {
+    return {
+      sessions: WORKSPACE_LIMITS.sessions[1],
+      evidence: WORKSPACE_LIMITS.evidence[1],
+    }
+  }
+  return {
+    sessions: Math.min(
+      WORKSPACE_LIMITS.sessions[1],
+      Math.max(
+        WORKSPACE_LIMITS.sessions[0],
+        availableSideWidth.value - WORKSPACE_LIMITS.evidence[0],
+      ),
+    ),
+    evidence: Math.min(
+      WORKSPACE_LIMITS.evidence[1],
+      Math.max(
+        WORKSPACE_LIMITS.evidence[0],
+        availableSideWidth.value - WORKSPACE_LIMITS.sessions[0],
+      ),
+    ),
+  }
+})
 
 const activeProject = computed(
   () =>
@@ -174,7 +215,37 @@ function retryAnswer() {
 }
 
 function previewSplit(key: keyof WorkspaceSplit, value: number) {
-  split.set(key, value)
+  setEffectiveSplit(key, value)
+}
+
+function adjustSplit(key: keyof WorkspaceSplit, delta: number) {
+  setEffectiveSplit(key, effectiveSplit.value[key] + delta, true)
+}
+
+function setEffectiveSplit(
+  key: keyof WorkspaceSplit,
+  value: number,
+  persistChange = false,
+) {
+  const other: keyof WorkspaceSplit = key === 'sessions' ? 'evidence' : 'sessions'
+  const [minimum] = WORKSPACE_LIMITS[key]
+  const target = Math.min(effectiveMaximums.value[key], Math.max(minimum, value))
+  const next = { ...effectiveSplit.value, [key]: target }
+
+  if (!evidenceIsDrawer.value && Number.isFinite(availableSideWidth.value)) {
+    const overflow = next.sessions + next.evidence - availableSideWidth.value
+    if (overflow > 0) {
+      next[other] = Math.max(WORKSPACE_LIMITS[other][0], next[other] - overflow)
+    }
+  }
+
+  split.set(other, next[other])
+  split.set(key, next[key], persistChange)
+}
+
+function updateWorkspaceWidth() {
+  const width = workspaceRoot.value?.clientWidth ?? 0
+  if (width > 0) workspaceWidth.value = width
 }
 
 function openEvidence(id: string) {
@@ -286,25 +357,36 @@ if (props.initialSeed) {
   createSession()
 }
 
-onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('resize', updateWorkspaceWidth)
+  updateWorkspaceWidth()
+  if (typeof ResizeObserver !== 'undefined' && workspaceRoot.value) {
+    workspaceResizeObserver = new ResizeObserver(updateWorkspaceWidth)
+    workspaceResizeObserver.observe(workspaceRoot.value)
+  }
+})
 onBeforeUnmount(() => {
   disposed = true
   invalidatePendingRequest()
+  workspaceResizeObserver?.disconnect()
   window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('resize', updateWorkspaceWidth)
 })
 </script>
 
 <template>
   <main
     v-if="activeProject && sessions.activeSession.value"
+    ref="workspaceRoot"
     class="agent-workspace agent-workspace--prototype"
     :class="{
       'sessions-open': sessionDrawerOpen,
       'evidence-open': evidenceDrawerOpen,
     }"
     :style="{
-      '--sessions-width': `${split.state.value.sessions}px`,
-      '--evidence-width': `${split.state.value.evidence}px`,
+      '--sessions-width': `${effectiveSplit.sessions}px`,
+      '--evidence-width': `${effectiveSplit.evidence}px`,
     }"
   >
     <p class="session-privacy" role="note">当前对话未保存，刷新后记录会消失</p>
@@ -322,13 +404,13 @@ onBeforeUnmount(() => {
     <PaneResizer
       class="session-resizer"
       label="调整历史会话宽度"
-      :value="split.state.value.sessions"
+      :value="effectiveSplit.sessions"
       :min="WORKSPACE_LIMITS.sessions[0]"
-      :max="WORKSPACE_LIMITS.sessions[1]"
+      :max="effectiveMaximums.sessions"
       :direction="1"
       @preview="previewSplit('sessions', $event)"
       @commit="split.persist"
-      @adjust="split.adjust('sessions', $event)"
+      @adjust="adjustSplit('sessions', $event)"
       @reset="split.reset"
     />
 
@@ -352,13 +434,13 @@ onBeforeUnmount(() => {
     <PaneResizer
       class="evidence-resizer"
       label="调整证据工作台宽度"
-      :value="split.state.value.evidence"
+      :value="effectiveSplit.evidence"
       :min="WORKSPACE_LIMITS.evidence[0]"
-      :max="WORKSPACE_LIMITS.evidence[1]"
+      :max="effectiveMaximums.evidence"
       :direction="-1"
       @preview="previewSplit('evidence', $event)"
       @commit="split.persist"
-      @adjust="split.adjust('evidence', $event)"
+      @adjust="adjustSplit('evidence', $event)"
       @reset="split.reset"
     />
 
@@ -384,7 +466,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .agent-workspace {
   --workspace-rail-bg: color-mix(in srgb, var(--paper) 72%, var(--paper-low));
-  --workspace-thread-bg: var(--paper-hi);
+  --workspace-thread-bg: var(--warm);
   --workspace-evidence-bg: var(--paper);
   --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
   --workspace-text: var(--ink);
@@ -395,11 +477,14 @@ onBeforeUnmount(() => {
   --workspace-accent-soft: var(--red-hi);
   --workspace-primary-bg: var(--ink);
   --workspace-primary-text: var(--paper-hi);
+  --workspace-action-bg: var(--red);
+  --workspace-action-bg-hover: #662522;
   position: relative;
   display: grid;
   width: 100%;
-  height: calc(100vh - var(--header-height));
-  grid-template-columns: var(--sessions-width) minmax(600px, 1fr) var(--evidence-width);
+  height: 100%;
+  grid-template-columns: var(--sessions-width) minmax(640px, 1fr) var(--evidence-width);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--workspace-evidence-bg);
   overflow: hidden;
 }
@@ -421,20 +506,14 @@ onBeforeUnmount(() => {
 
 .evidence-resizer {
   right: var(--evidence-width);
+  transform: translateX(6px);
 }
 
 .workspace-scrim {
   display: none;
 }
 
-@media (max-width: 1279px) and (min-width: 1221px) {
-  .agent-workspace {
-    --sessions-width: clamp(220px, 18vw, 240px) !important;
-    --evidence-width: 380px !important;
-  }
-}
-
-@media (max-width: 1220px) {
+@media (max-width: 1279.98px) {
   .agent-workspace {
     grid-template-columns: var(--sessions-width) minmax(0, 1fr);
   }
@@ -444,11 +523,12 @@ onBeforeUnmount(() => {
   }
 
   :deep(.evidence-desk) {
-    position: fixed;
+    position: absolute;
     z-index: 70;
-    top: var(--header-height);
-    right: 0;
-    width: min(88vw, 520px);
+    grid-area: 1 / 1 / -1 / -1;
+    inset: 0 0 0 auto;
+    height: 100%;
+    width: min(88%, 520px);
     transform: translateX(100%);
     transition: transform 220ms ease;
   }
@@ -458,9 +538,10 @@ onBeforeUnmount(() => {
   }
 
   .workspace-scrim {
-    position: fixed;
+    position: absolute;
     z-index: 60;
-    inset: var(--header-height) 0 0;
+    grid-area: 1 / 1 / -1 / -1;
+    inset: 0;
     display: block;
     cursor: default;
     border: 0;
@@ -474,11 +555,12 @@ onBeforeUnmount(() => {
   }
 
   :deep(.session-rail) {
-    position: fixed;
+    position: absolute;
     z-index: 70;
-    top: var(--header-height);
-    left: 0;
-    width: min(86vw, 340px);
+    grid-area: 1 / 1 / -1 / -1;
+    inset: 0 auto 0 0;
+    height: 100%;
+    width: min(86%, 340px);
     transform: translateX(-100%);
     transition: transform 220ms ease;
   }

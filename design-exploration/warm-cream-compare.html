@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>配色探索 · 米白中栏暖调聚焦</title>
+<style>
+  /* ---- 与项目 tokens.css 对齐的真实色值 ---- */
+  :root{
+    --paper:#f4eee4;      /* 左栏 */
+    --paper-hi:#fbf7ef;   /* 右栏 */
+    --paper-low:#e9dfd0;
+    --ink:#201c17;        /* 原始深中栏 */
+    --ink-2:#34302a;
+    --muted:#746b5e;
+    --faint:#9c9182;
+    --rule:#cdbfa9;
+    --red:#7a2e2a;        /* 牛血红重音 */
+    --red-hi:#b65d53;
+    --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+    --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    /* 暖调中栏的三个档位（用户选的方向：暖调聚焦层） */
+    --warm-light:#f3e8d6;  /* 1档 极淡燕麦 */
+    --warm-mid:#ede0c8;    /* 2档 燕麦（主推） */
+    --warm-strong:#e6d4b6; /* 3档 浅香槟 */
+    --agent-stage:#2a2620;
+    --agent-stage-gap:clamp(24px,2vw,32px);
+    --agent-shell-max:1600px;
+    --agent-shell-radius:16px;
+    --agent-shell-shadow:0 30px 80px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:#2a2620;color:var(--paper);font-family:var(--sans);}
+  body{overflow:auto;}
+
+  /* ===== 顶部工具栏 ===== */
+  .toolbar{
+    position:sticky;top:0;z-index:50;
+    background:rgba(20,17,14,.92);backdrop-filter:blur(12px);
+    border-bottom:1px solid #423b33;
+    padding:14px 22px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  }
+  .toolbar h1{margin:0;font-family:var(--serif);font-size:16px;font-weight:400;letter-spacing:.02em;color:#e8ddc9;}
+  .toolbar h1 b{color:#fff;}
+  .seg{display:flex;gap:0;border:1px solid #524a40;border-radius:8px;overflow:hidden;}
+  .seg button{
+    appearance:none;border:0;background:transparent;color:#cdbfa9;
+    font-family:var(--sans);font-size:12.5px;padding:7px 13px;cursor:pointer;
+    border-right:1px solid #524a40;transition:.15s;letter-spacing:.02em;
+  }
+  .seg button:last-child{border-right:0;}
+  .seg button.on{background:var(--red);color:#fff;}
+  .seg button:not(.on):hover{background:#3a332b;color:#fff;}
+  .toolbar .hint{font-size:11.5px;color:#9c9182;font-family:var(--mono);margin-left:auto;}
+
+  /* ===== 舞台 ===== */
+  .stage{
+    min-height:calc(100vh - 66px);
+    padding:var(--agent-stage-gap);
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    background:var(--agent-stage);
+  }
+  .frame{
+    width:min(100%,var(--agent-shell-max));
+    background:#fff;
+    border-radius:var(--agent-shell-radius);
+    overflow:hidden;
+    box-shadow:var(--agent-shell-shadow);
+  }
+
+  /* ===== 顶 header（与 base.css 工作区 ink 主题近似） ===== */
+  .app-header{
+    height:60px;display:flex;align-items:center;padding:0 24px;gap:28px;
+    border-bottom:1px solid transparent;
+    transition:background .25s,color .25s,border-color .25s;
+  }
+  .app-header .brand{font-family:var(--serif);font-size:17px;letter-spacing:.01em;}
+  .app-header nav{display:flex;gap:22px;}
+  .app-header nav a{font-size:13.5px;color:inherit;text-decoration:none;opacity:.72;transition:.15s;}
+  .app-header nav a.on{opacity:1;font-weight:600;}
+  .app-header nav a.on::after{content:"";display:block;height:2px;background:var(--red);margin-top:4px;}
+  .app-header .right{margin-left:auto;font-size:12px;font-family:var(--mono);opacity:.6;}
+
+  /* ===== 三栏布局（与 AgentWorkspace.vue 近似） ===== */
+  .workspace{
+    display:grid;
+    height:min(760px,calc(100vh - 190px));
+    min-height:620px;
+    grid-template-columns:250px minmax(0,1fr) 340px;
+  }
+  .pane{overflow:hidden;display:flex;flex-direction:column;}
+
+  /* 通用小标签（栏眉 eyebrow） */
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.55;}
+
+  /* ---- 左栏 会话列表 ---- */
+  .rail{padding:18px 0;border-right:1px solid var(--rule);}
+  .rail .new{
+    margin:0 18px 18px;padding:10px 12px;border-radius:8px;
+    display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;
+    transition:background .18s,color .18s;
+  }
+  .rail .new .plus{font-size:16px;line-height:1;}
+  .rail ul{list-style:none;margin:0;padding:0;}
+  .rail li{padding:10px 18px 10px 20px;font-size:13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background .15s;}
+  .rail li .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rail li .x{opacity:0;font-size:14px;transition:.15s;}
+  .rail li:hover .x{opacity:.5;}
+  .rail li.active{box-shadow:inset 2px 0 var(--red);}
+  .rail .rail-foot{margin-top:auto;padding:12px 20px;font-size:12px;cursor:pointer;}
+
+  /* ---- 中栏 对话 ---- */
+  .conv{display:flex;flex-direction:column;height:100%;}
+  .conv__head{padding:18px 28px 16px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid;}
+  .conv__head h2{margin:4px 0 0;font-family:var(--serif);font-size:20px;font-weight:500;}
+  .conv__tools{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;}
+  .conv__tools .chip{padding:4px 9px;border:1px solid;border-radius:6px;cursor:pointer;}
+  .conv__scroll{flex:1;overflow:hidden;padding:20px 28px;display:flex;flex-direction:column;gap:18px;}
+  .msg{display:flex;flex-direction:column;gap:6px;}
+  .msg .role{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;}
+  .msg .bubble{font-size:14px;line-height:1.65;max-width:78%;}
+  .msg--user{align-items:flex-end;}
+  .msg--user .bubble{padding:10px 14px;border-radius:12px 12px 4px 12px;max-width:62%;}
+  .msg--agent .bubble{font-family:var(--serif);}
+  .msg--agent .bubble h3{margin:0 0 4px;font-size:15.5px;font-weight:600;}
+  .msg--agent .bubble p{margin:0 0 6px;}
+  .followups{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .followups button{font-size:11.5px;padding:5px 10px;border-radius:6px;border:1px solid;cursor:pointer;font-family:var(--sans);transition:.15s;}
+
+  /* composer */
+  .composer{margin:16px 28px 20px;padding:8px 8px 8px 14px;border:1px solid;border-radius:12px;display:flex;align-items:center;gap:10px;}
+  .composer textarea{flex:1;border:0;background:transparent;resize:none;font-family:var(--sans);font-size:14px;outline:none;line-height:1.5;height:22px;}
+  .composer .gt{font-family:var(--mono);opacity:.5;}
+  .composer button.send{font-size:13px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid;font-family:var(--sans);transition:.15s;white-space:nowrap;}
+
+  /* ---- 右栏 证据台 ---- */
+  .desk{padding:18px 0;border-left:1px solid var(--rule);}
+  .desk .tabs{display:flex;gap:14px;padding:0 20px 12px;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  .desk .tab{padding-bottom:6px;cursor:pointer;}
+  .desk .tab.on{color:var(--red);border-bottom:2px solid var(--red);font-weight:600;}
+  .desk .cards{padding:16px 20px;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
+  .card{border:1px solid var(--rule);border-radius:8px;padding:12px;transition:.15s;}
+  .card.sel{border-left:2px solid var(--red);}
+  .card .c-eye{font-family:var(--mono);font-size:10px;color:var(--red);letter-spacing:.08em;}
+  .card h4{margin:4px 0 6px;font-family:var(--serif);font-size:14px;font-weight:600;}
+  .card p{margin:0;font-size:12px;line-height:1.55;}
+  .card a{font-size:11.5px;color:var(--red);text-decoration:none;}
+
+  .privacy{padding:10px 20px;font-size:11px;opacity:.6;}
+
+  /* ============================================ */
+  /* 变体 A ：原始深中栏（对照基线）              */
+  /* ============================================ */
+  .v-original .app-header{background:rgba(32,28,23,.94);color:var(--paper);border-color:#4a433b;}
+  .v-original .rail{background:var(--paper);color:var(--ink);}
+  .v-original .rail .new{background:var(--ink);color:var(--paper);}
+  .v-original .rail li:hover{background:var(--paper-low);}
+  .v-original .rail li.active{background:var(--paper-low);}
+  .v-original .rail .rail-foot{color:var(--red);}
+  .v-original .conv{background:var(--ink);color:var(--paper);}
+  .v-original .conv__head{border-color:#554d44;}
+  .v-original .conv__head .eyebrow{color:#c46f66;}
+  .v-original .conv__tools .chip{border-color:#635a50;color:#d0c4b5;}
+  .v-original .msg--user .bubble{background:#29241f;color:#ded3c4;}
+  .v-original .msg--agent .bubble{color:#ded3c4;}
+  .v-original .msg--agent .role{color:#c46f66;}
+  .v-original .followups button{border-color:#5d554b;color:#b7ab9d;}
+  .v-original .composer{border-color:#62594e;background:#29241f;}
+  .v-original .composer textarea{color:var(--paper);}
+  .v-original .composer .gt{color:#ca7168;}
+  .v-original .composer button.send{background:var(--paper);color:var(--ink);border-color:var(--paper);}
+  .v-original .desk{background:var(--paper-hi);color:var(--ink);}
+
+  /* ============================================ */
+  /* 变体 B/C/D 共享：米白 + 暖中栏（仅中栏色 + cta 不同） */
+  /* ============================================ */
+  .v-warm .app-header{background:#efe7d8;color:var(--ink);border-color:var(--rule);}
+  .v-warm .rail{background:var(--paper);color:var(--ink);}
+  .v-warm .rail .new{background:var(--ink);color:var(--paper);}
+  .v-warm .rail li:hover{background:var(--paper-low);}
+  .v-warm .rail li.active{background:var(--paper-low);}
+  .v-warm .rail .rail-foot{color:var(--red);}
+  .v-warm .conv{color:var(--ink);}
+  .v-warm .conv__head{border-color:var(--rule);}
+  .v-warm .conv__head .eyebrow{color:var(--red);}
+  .v-warm .conv__tools .chip{border-color:var(--rule);color:var(--muted);}
+  .v-warm .msg--user .bubble{background:var(--ink);color:var(--paper);}
+  .v-warm .msg--agent .bubble{color:var(--ink);}
+  .v-warm .msg--agent .role{color:var(--red);}
+  .v-warm .followups button{border-color:var(--rule);color:var(--muted);background:rgba(255,255,255,.35);}
+  .v-warm .followups button:hover{border-color:var(--red);color:var(--red);}
+  .v-warm .composer{border-color:var(--rule);background:rgba(255,255,255,.45);}
+  .v-warm .composer textarea{color:var(--ink);}
+  .v-warm .composer textarea::placeholder{color:var(--faint);}
+  .v-warm .composer .gt{color:var(--red);}
+  .v-warm .desk{background:var(--paper-hi);color:var(--ink);}
+
+  /* 三档暖调强度 —— 只改中栏底色 */
+  .v-warm.l1 .conv{background:var(--warm-light);}
+  .v-warm.l2 .conv{background:var(--warm-mid);}
+  .v-warm.l3 .conv{background:var(--warm-strong);}
+
+  /* CTA 模式 */
+  .v-warm .composer button.send.ink{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .v-warm .composer button.send.ink:hover{background:var(--ink-2);}
+  .v-warm .composer button.send.red{background:var(--red);color:#fff;border-color:var(--red);}
+  .v-warm .composer button.send.red:hover{background:#662522;}
+
+  /* 旁注 */
+  .annot{font-family:var(--mono);font-size:11px;color:#9c9182;padding:10px 22px 0;}
+
+  @media (max-width:1439px){
+    :root{
+      --agent-stage-gap:16px;
+      --agent-shell-radius:12px;
+    }
+    .workspace{
+      grid-template-columns:clamp(220px,20vw,250px) minmax(0,1fr) clamp(300px,28vw,340px);
+    }
+  }
+
+  @media (max-width:1220px){
+    .workspace{
+      grid-template-columns:220px minmax(0,1fr);
+    }
+    .desk{display:none;}
+    .app-header .right{display:none;}
+  }
+
+  @media (max-width:980px){
+    :root{
+      --agent-stage-gap:0px;
+      --agent-shell-radius:0px;
+      --agent-shell-shadow:none;
+    }
+    .stage{min-height:0;}
+    .frame{width:100%;}
+    .workspace{
+      min-height:680px;
+      grid-template-columns:minmax(0,1fr);
+    }
+    .rail{display:none;}
+    .app-header{padding-inline:18px;}
+    .app-header nav{gap:14px;}
+    .conv__head{padding-inline:20px;}
+    .conv__scroll{padding-inline:20px;}
+    .composer{margin-inline:20px;}
+  }
+
+  @media (max-width:620px){
+    .toolbar{position:relative;padding:12px;}
+    .toolbar h1{width:100%;}
+    .toolbar .hint{display:none;}
+    .seg{max-width:100%;overflow-x:auto;}
+    .seg button{flex:0 0 auto;padding-inline:10px;}
+    .app-header nav a:not(.on){display:none;}
+    .conv__tools .chip{display:none;}
+    .msg .bubble,
+    .msg--user .bubble{max-width:92%;}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>配色探索 · <b>中栏暖调聚焦</b></h1>
+
+  <div class="seg" id="seg-variant">
+    <button data-v="v-original">A · 原始深中栏（对照）</button>
+    <button data-v="v-warm l1" class="on">B · 暖调 1档 极淡</button>
+    <button data-v="v-warm l2">C · 暖调 2档 燕麦（主推）</button>
+    <button data-v="v-warm l3">D · 暖调 3档 香槟</button>
+  </div>
+
+  <div class="seg" id="seg-cta">
+    <button data-cta="ink">CTA · 深墨按钮</button>
+    <button data-cta="red" class="on">CTA · 牛血红按钮</button>
+  </div>
+
+  <div class="hint">← 切换查看 · 仅 B/C/D 受 CTA 影响</div>
+</div>
+
+<div class="stage">
+  <div class="frame v-warm l1" id="frame">
+
+    <!-- header -->
+    <div class="app-header">
+      <div class="brand">作品集 · Dossier</div>
+      <nav>
+        <a>首页</a><a>项目</a><a class="on">Agent</a><a>关于</a>
+      </nav>
+      <div class="right">VISITOR · 访客模式</div>
+    </div>
+
+    <!-- 三栏 -->
+    <div class="workspace">
+
+      <!-- 左：会话列表 -->
+      <aside class="pane rail">
+        <div class="new"><span class="plus">＋</span> 新对话</div>
+        <ul>
+          <li class="active"><span class="t">SQL 审计项目的取舍</span><span class="x">×</span></li>
+          <li><span class="t">作品集的核验边界</span><span class="x">×</span></li>
+          <li><span class="t">前端构建为何重做</span><span class="x">×</span></li>
+          <li><span class="t">C3 模型注册表现状</span><span class="x">×</span></li>
+        </ul>
+        <div class="rail-foot" style="margin-top:auto;color:var(--red)">清空本地会话</div>
+      </aside>
+
+      <!-- 中：对话 -->
+      <main class="pane conv">
+        <div class="conv__head">
+          <div>
+            <p class="eyebrow">AGENT CONVERSATION · Agent 对话</p>
+            <h2>SQL 审计项目的取舍</h2>
+          </div>
+          <div class="conv__tools">
+            <span class="chip">会话</span>
+            <span class="chip">证据</span>
+            <span>TECH MODE</span>
+          </div>
+        </div>
+
+        <div class="conv__scroll">
+          <div class="msg msg--user">
+            <span class="role">YOU</span>
+            <div class="bubble">这个 SQL 审计项目为什么没有做成可运行的产物？</div>
+          </div>
+
+          <div class="msg msg--agent">
+            <span class="role">AGENT · BOUNDARY · 当前能力边界 · PRESET · 已核验</span>
+            <div class="bubble">
+              <h3>当前仅作为审计证据保留，未进入运行时</h3>
+              <p>该项目在公开快照里以「审计证据」形式存在，不提供可执行入口。运行时只读已审核的公开资料，不会执行其中的 SQL。</p>
+              <p>若你需要它的设计意图或被采纳的结论，可以继续追问。</p>
+              <div class="followups">
+                <button>展开本节</button>
+                <button>查看本节证据</button>
+                <button>说明判断</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="msg msg--user">
+            <span class="role">YOU</span>
+            <div class="bubble">那它的结论有没有被后续项目用到？</div>
+          </div>
+        </div>
+
+        <form class="composer" onsubmit="return false">
+          <span class="gt">›</span>
+          <textarea placeholder="继续追问方案取舍、验证过程或证据" rows="1"></textarea>
+          <button class="send red" type="submit">发送 ↵</button>
+        </form>
+      </main>
+
+      <!-- 右：证据台 -->
+      <aside class="pane desk">
+        <div class="tabs">
+          <span class="tab on">证据</span>
+          <span class="tab">引用</span>
+          <span class="tab">来源</span>
+        </div>
+        <div class="cards">
+          <div class="card sel">
+            <div class="c-eye">EVIDENCE · SQL-AUDIT-01</div>
+            <h4>SQL 审计清单（脱敏）</h4>
+            <p>已审核 · APPROVED · 公开快照片段</p>
+            <a>查看证据 ↗</a>
+          </div>
+          <div class="card">
+            <div class="c-eye">EVIDENCE · ARCH-02</div>
+            <h4>模块化单体包设计</h4>
+            <p>说明为何拆分为 backend / frontend 两个交付物。</p>
+            <a>查看证据 ↗</a>
+          </div>
+        </div>
+        <div class="privacy">会话仅存于当前标签页，刷新或关闭即清空。</div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<div class="annot" style="text-align:center">
+  对比要点：A 是现状（深中栏=天然焦点）｜ B/C/D 中栏改暖米，靠<b style="color:#e8ddc9">色温差</b>重建焦点；左右栏保持原 paper / paper-hi，发送与激活态保留牛血红／深墨。
+</div>
+
+<script>
+  const frame = document.getElementById('frame');
+
+  // 直开支持：?v=A|B|C|D  &cta=ink|red  —— 方便单帧截图
+  (function initFromQuery(){
+    const map = { A:'v-original', B:'v-warm l1', C:'v-warm l2', D:'v-warm l3' };
+    const p = new URLSearchParams(location.search);
+    const v = p.get('v'), cta = p.get('cta');
+    if(!v && !cta) return;
+    [...document.querySelectorAll('#seg-variant button')].forEach(b=>{
+      b.classList.toggle('on', v && b.dataset.v === map[v.toUpperCase()]);
+    });
+    if(cta) [...document.querySelectorAll('#seg-cta button')].forEach(b=>{
+      b.classList.toggle('on', b.dataset.cta === cta);
+    });
+    apply();
+  })();
+
+  function apply(){
+    const v = document.querySelector('#seg-variant .on').dataset.v;       // e.g. "v-warm l2"
+    const cta = document.querySelector('#seg-cta .on').dataset.cta;       // "ink" | "red"
+    // 重置 class 到 'frame'，再追加变体
+    frame.className = 'frame ' + v;
+    const send = frame.querySelector('.composer button.send');
+    send.classList.remove('ink','red');
+    // A 原始档永远是反相纸按钮，忽略 CTA
+    if (v.startsWith('v-warm')) {
+      send.classList.add(cta);
+    } else {
+      send.classList.add('ink');
+    }
+  }
+
+  document.getElementById('seg-variant').addEventListener('click', e=>{
+    if(e.target.tagName!=='BUTTON') return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
+    e.target.classList.add('on');
+    apply();
+  });
+  document.getElementById('seg-cta').addEventListener('click', e=>{
+    if(e.target.tagName!=='BUTTON') return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
+    e.target.classList.add('on');
+    apply();
+  });
+</script>
+</body>
+</html>

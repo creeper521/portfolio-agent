@@ -8,7 +8,7 @@ const route = useRoute()
 const open = ref(false)
 const menuButton = ref<HTMLButtonElement | null>(null)
 
-const theme = computed(() => (route.meta.workspace === true ? 'ink' : 'paper'))
+const theme = computed(() => (route.meta.workspace === true ? 'warm' : 'paper'))
 const isHome = computed(() => route.name === 'home')
 
 const homeAnchors = [

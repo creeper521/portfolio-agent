@@ -92,8 +92,8 @@ const selected = computed(
 
 <style scoped>
 .evidence-desk {
-  height: calc(100vh - var(--header-height));
-  padding: 28px 25px;
+  height: 100%;
+  padding: 28px 20px;
   color: var(--workspace-text, var(--ink));
   border-left: 1px solid var(--workspace-rule, var(--rule));
   background: var(--workspace-evidence-bg, var(--paper));
@@ -113,7 +113,7 @@ header h2 {
 
 header span {
   color: var(--muted);
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.14em;
 }
 
@@ -130,7 +130,7 @@ header span {
   border: 0;
   border-bottom: 1px solid transparent;
   background: transparent;
-  font: 8px var(--mono);
+  font: 12px var(--mono);
   letter-spacing: 0.1em;
 }
 
@@ -158,7 +158,7 @@ header span {
 
 article > span {
   color: var(--red);
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.1em;
 }
 
@@ -170,14 +170,14 @@ h3 {
 p {
   margin: 0 0 12px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
 }
 
 small {
   display: block;
   color: var(--faint);
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.07em;
 }
 
@@ -185,6 +185,6 @@ article a {
   display: inline-block;
   margin-top: 16px;
   color: var(--red);
-  font: 9px var(--mono);
+  font: 11px var(--mono);
 }
 </style>

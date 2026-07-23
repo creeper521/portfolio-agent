@@ -2,6 +2,12 @@
   --paper: #f4eee4;
   --paper-hi: #fbf7ef;
   --paper-low: #e9dfd0;
+  --warm: #f3e8d6;
+  --agent-stage: #2a2620;
+  --agent-header: #efe7d8;
+  --agent-shell-max: 1600px;
+  --agent-shell-radius: 16px;
+  --agent-shell-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
   --ink: #201c17;
   --ink-2: #34302a;
   --muted: #746b5e;

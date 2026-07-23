@@ -101,7 +101,7 @@ function onKeydown(event: KeyboardEvent) {
   background: var(--workspace-accent-soft, var(--red-hi));
 }
 
-@media (max-width: 1220px) {
+@media (max-width: 1279.98px) {
   .evidence-resizer {
     display: none;
   }

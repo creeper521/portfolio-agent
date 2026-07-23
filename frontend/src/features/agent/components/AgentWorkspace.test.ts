@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
+import { WORKSPACE_SPLIT_KEY } from '../composables/useWorkspaceSplit'
 import AgentWorkspace from './AgentWorkspace.vue'
 
 const SESSION_KEY = 'forbidden-session-key'
@@ -59,6 +60,10 @@ function storedSessions() {
 }
 
 describe('AgentWorkspace', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     localStorage.clear()
     askQuestionMock.mockReset()
@@ -66,7 +71,7 @@ describe('AgentWorkspace', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn((query: string) => ({
-        matches: query.includes('1219'),
+        matches: query.includes('1279'),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       })),
@@ -97,10 +102,46 @@ describe('AgentWorkspace', () => {
     expect(Number(handle.attributes('aria-valuenow'))).not.toBe(before + 16)
   })
 
+  it('fits max persisted widths to a 1280px viewport shell without rewriting the preference', async () => {
+    localStorage.setItem(
+      WORKSPACE_SPLIT_KEY,
+      JSON.stringify({ sessions: 320, evidence: 420 }),
+    )
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1248)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+
+    const wrapper = mountWorkspace()
+    await wrapper.vm.$nextTick()
+
+    const workspaceStyle = wrapper.get('.agent-workspace').attributes('style')
+    expect(workspaceStyle).toContain('--sessions-width: 260px')
+    expect(workspaceStyle).toContain('--evidence-width: 348px')
+    expect(
+      wrapper.get('[aria-label="调整历史会话宽度"]').attributes('aria-valuenow'),
+    ).toBe('260')
+    expect(
+      wrapper.get('[aria-label="调整证据工作台宽度"]').attributes('aria-valuenow'),
+    ).toBe('348')
+    expect(JSON.parse(localStorage.getItem(WORKSPACE_SPLIT_KEY) ?? '{}')).toEqual({
+      sessions: 320,
+      evidence: 420,
+    })
+  })
+
   it('exposes drawer state and closes an open drawer with Escape', async () => {
+    const matchMedia = vi.mocked(window.matchMedia)
     const wrapper = mountWorkspace()
     const toggle = wrapper.get('.evidence-toggle')
 
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 1279.98px)')
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 980px)')
     expect(toggle.attributes('aria-expanded')).toBe('false')
     await toggle.trigger('click')
     expect(toggle.attributes('aria-expanded')).toBe('true')

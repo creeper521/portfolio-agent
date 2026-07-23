@@ -161,11 +161,104 @@ test('workspace separators support keyboard adjustment and reset', async ({ page
   await expect(handle).toHaveAttribute('aria-valuenow', String(before))
 })
 
-test('Agent uses the approved balanced-paper hierarchy at every review viewport', async ({
+test('persisted max pane preferences fit inside the framed shell at narrow desktop widths', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'portfolio.workspace.split.v1',
+      JSON.stringify({ sessions: 320, evidence: 420 }),
+    )
+  })
+
+  for (const width of [1280, 1411]) {
+    await page.setViewportSize({ width, height: 900 })
+    await openAgentDeepLink(page)
+
+    const shellBox = await page.locator('.site-frame--workspace').boundingBox()
+    const conversationBox = await page.locator('.conversation').boundingBox()
+    const sessionBox = await page.locator('#local-session-rail').boundingBox()
+    const evidenceBox = await page.locator('#agent-evidence-desk').boundingBox()
+    const sessionResizerBox = await page
+      .getByRole('separator', { name: '调整历史会话宽度' })
+      .boundingBox()
+    const evidenceResizerBox = await page
+      .getByRole('separator', { name: '调整证据工作台宽度' })
+      .boundingBox()
+
+    expect(shellBox).not.toBeNull()
+    for (const box of [
+      conversationBox,
+      sessionBox,
+      evidenceBox,
+      sessionResizerBox,
+      evidenceResizerBox,
+    ]) {
+      expect(box).not.toBeNull()
+      expect((box?.x ?? 0) + 0.5).toBeGreaterThanOrEqual(shellBox?.x ?? 0)
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+        (shellBox?.x ?? 0) + (shellBox?.width ?? 0) + 0.5,
+      )
+    }
+    expect(conversationBox?.width ?? 0).toBeGreaterThanOrEqual(639.5)
+
+    await expect(
+      page.getByRole('separator', { name: '调整历史会话宽度' }),
+    ).toHaveAttribute('aria-valuenow', String(Math.round(sessionBox?.width ?? 0)))
+    await expect(
+      page.getByRole('separator', { name: '调整证据工作台宽度' }),
+    ).toHaveAttribute('aria-valuenow', String(Math.round(evidenceBox?.width ?? 0)))
+    expect(
+      Math.abs(
+        (evidenceResizerBox?.x ?? 0) +
+          (evidenceResizerBox?.width ?? 0) / 2 -
+          (evidenceBox?.x ?? 0),
+      ),
+    ).toBeLessThanOrEqual(0.75)
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(localStorage.getItem('portfolio.workspace.split.v1') ?? '{}'),
+      ),
+    ).toEqual({ sessions: 320, evidence: 420 })
+  }
+})
+
+test('the rounded shell contains the responsive evidence drawer and scrim', async ({ page }) => {
+  await page.setViewportSize({ width: 1279, height: 900 })
+  await openAgentDeepLink(page)
+  await page.getByRole('button', { name: '证据', exact: true }).click()
+  await expect(page.locator('#agent-evidence-desk')).toHaveCSS(
+    'transform',
+    'matrix(1, 0, 0, 1, 0, 0)',
+  )
+
+  const shellBox = await page.locator('.site-frame--workspace').boundingBox()
+  const drawerBox = await page.locator('#agent-evidence-desk').boundingBox()
+  const scrimBox = await page.locator('.workspace-scrim').boundingBox()
+
+  expect(shellBox).not.toBeNull()
+  for (const box of [drawerBox, scrimBox]) {
+    expect(box).not.toBeNull()
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual((shellBox?.x ?? 0) - 0.5)
+    expect(box?.y ?? 0).toBeGreaterThanOrEqual(
+      (shellBox?.y ?? 0) + 0.5,
+    )
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+      (shellBox?.x ?? 0) + (shellBox?.width ?? 0) + 0.5,
+    )
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
+      (shellBox?.y ?? 0) + (shellBox?.height ?? 0) + 0.5,
+    )
+  }
+})
+
+test('Agent uses the approved responsive framed workspace at every review viewport', async ({
   page,
 }, testInfo) => {
   const viewports = [
+    { name: '2048x1080', width: 2048, height: 1080 },
     { name: '1440x900', width: 1440, height: 900 },
+    { name: '1279x900', width: 1279, height: 900 },
     { name: '1219x900', width: 1219, height: 900 },
     { name: '980x800', width: 980, height: 800 },
     { name: '390x844', width: 390, height: 844 },
@@ -177,11 +270,11 @@ test('Agent uses the approved balanced-paper hierarchy at every review viewport'
 
     await expect(page.locator('.dossier-header')).toHaveCSS(
       'background-color',
-      'rgba(32, 28, 23, 0.94)',
+      'rgb(239, 231, 216)',
     )
     await expect(page.locator('.conversation')).toHaveCSS(
       'background-color',
-      'rgb(251, 247, 239)',
+      'rgb(243, 232, 214)',
     )
     await expect(page.locator('.conversation')).toHaveCSS('color', 'rgb(32, 28, 23)')
     await expect(page.locator('.evidence-desk')).toHaveCSS(
@@ -194,10 +287,35 @@ test('Agent uses the approved balanced-paper hierarchy at every review viewport'
         .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(32, 28, 23)')
         .map((button) => button.textContent?.trim()),
     )
-    expect(solidInkButtons).toEqual(expect.arrayContaining(['＋ 新对话', '发送 ↵']))
-    expect(solidInkButtons).toHaveLength(2)
+    expect(solidInkButtons).toEqual(['＋ 新对话'])
 
-    if (viewport.width === 1219) {
+    const solidRedButtons = await page.locator('.agent-workspace button').evaluateAll(
+      (buttons) => buttons
+        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(122, 46, 42)')
+        .map((button) => button.textContent?.trim()),
+    )
+    expect(solidRedButtons).toEqual(['发送 ↵'])
+
+    const shell = page.locator('.site-frame--workspace')
+    const shellBox = await shell.boundingBox()
+    expect(shellBox).not.toBeNull()
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+
+    if (viewport.width >= 1440) {
+      await expect(shell).toHaveCSS('border-radius', '16px')
+      expect(shellBox?.width).toBeLessThanOrEqual(1600)
+      expect(shellBox?.x).toBeGreaterThanOrEqual(24)
+    } else if (viewport.width > 980) {
+      await expect(shell).toHaveCSS('border-radius', '12px')
+      expect(Math.round(shellBox?.x ?? 0)).toBe(16)
+    } else {
+      await expect(shell).toHaveCSS('border-radius', '0px')
+      expect(Math.round(shellBox?.x ?? -1)).toBe(0)
+    }
+
+    if (viewport.width === 1279 || viewport.width === 1219) {
       await page.getByRole('button', { name: '证据', exact: true }).click()
       await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'false')
       await expect(page.locator('#agent-evidence-desk')).toHaveCSS(
@@ -205,7 +323,7 @@ test('Agent uses the approved balanced-paper hierarchy at every review viewport'
         'matrix(1, 0, 0, 1, 0, 0)',
       )
     }
-    if (viewport.width === 980) {
+    if (viewport.width === 980 || viewport.width === 390) {
       await page.getByRole('button', { name: '会话', exact: true }).click()
       await expect(page.locator('#local-session-rail')).toHaveAttribute('aria-hidden', 'false')
       await expect(page.locator('#local-session-rail')).toHaveCSS(
@@ -215,7 +333,7 @@ test('Agent uses the approved balanced-paper hierarchy at every review viewport'
     }
 
     await page.screenshot({
-      path: testInfo.outputPath(`agent-balanced-paper-${viewport.name}.png`),
+      path: testInfo.outputPath(`agent-framed-workspace-${viewport.name}.png`),
       fullPage: false,
     })
   }

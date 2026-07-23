@@ -63,8 +63,8 @@ function timeLabel(timestamp: number) {
 .session-rail {
   display: flex;
   min-width: 0;
-  height: calc(100vh - var(--header-height));
-  padding: 25px 23px;
+  height: 100%;
+  padding: 25px 20px;
   flex-direction: column;
   color: var(--workspace-text, var(--ink));
   border-right: 1px solid var(--workspace-rule, var(--rule));
@@ -75,7 +75,7 @@ function timeLabel(timestamp: number) {
 .session-rail__label {
   margin: 0 0 10px;
   color: var(--faint);
-  font: 10px/1 var(--mono);
+  font: 11px/1 var(--mono);
   letter-spacing: 0.14em;
 }
 
@@ -84,7 +84,7 @@ function timeLabel(timestamp: number) {
   color: var(--workspace-primary-text, var(--paper-hi));
   border: 1px solid var(--workspace-primary-bg, var(--ink));
   background: var(--workspace-primary-bg, var(--ink));
-  font: 11px var(--mono);
+  font: 13px var(--mono);
   letter-spacing: 0.08em;
 }
 
@@ -136,7 +136,7 @@ article.active {
 
 .session-select small {
   color: var(--faint);
-  font: 10px var(--mono);
+  font: 11px var(--mono);
 }
 
 .session-remove {
@@ -164,7 +164,7 @@ footer {
 footer p {
   margin: 0;
   color: var(--faint);
-  font: 10px/1.7 var(--mono);
+  font: 11px/1.7 var(--mono);
 }
 
 footer button {
@@ -173,6 +173,6 @@ footer button {
   color: var(--red);
   border: 0;
   background: transparent;
-  font: 10px var(--mono);
+  font: 11px var(--mono);
 }
 </style>

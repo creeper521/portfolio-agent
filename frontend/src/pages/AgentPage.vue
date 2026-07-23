@@ -38,6 +38,7 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
 <template>
   <PublicContentFeedback
     v-if="status === 'loading' || status === 'error'"
+    class="agent-route-feedback"
     :status="status"
     :message="error"
     @retry="retry"
@@ -59,7 +60,7 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
 <style scoped>
 .route-seed-feedback {
   display: grid;
-  min-height: calc(100vh - var(--header-height));
+  min-height: 100%;
   place-content: center;
   gap: 18px;
   color: var(--ink);
@@ -78,5 +79,9 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
   border: 1px solid currentcolor;
   background: transparent;
   font: 10px var(--mono);
+}
+
+.agent-route-feedback {
+  min-height: 100%;
 }
 </style>

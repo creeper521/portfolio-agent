@@ -93,6 +93,22 @@ describe('AgentPage', () => {
     expect(askQuestionMock).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('正在装订公开档案')
     expect(wrapper.find('.agent-workspace').exists()).toBe(false)
+    expect(wrapper.get('.public-content-feedback').classes()).toContain(
+      'agent-route-feedback',
+    )
+  })
+
+  it('keeps the public-content error state inside the Agent shell content height', async () => {
+    const state = readyPublicContentState()
+    state.portfolio.value = null
+    state.status.value = 'error'
+    state.error.value = '公开内容加载失败'
+    const { wrapper } = await mountAgentPage(state)
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('公开内容加载失败')
+    expect(wrapper.get('.public-content-feedback').classes()).toContain(
+      'agent-route-feedback',
+    )
   })
 
   it('consumes a homepage handoff once and removes it from the URL', async () => {

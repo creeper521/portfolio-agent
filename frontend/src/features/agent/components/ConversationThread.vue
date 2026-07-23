@@ -240,10 +240,10 @@ function followUp(
 
 <style scoped>
 .conversation {
+  height: 100%;
   position: relative;
   display: grid;
   min-width: 0;
-  height: calc(100vh - var(--header-height));
   grid-template-rows: auto 1fr;
   color: var(--workspace-text, var(--ink));
   background: var(--workspace-thread-bg, var(--paper-hi));
@@ -253,7 +253,7 @@ function followUp(
 .conversation__head {
   display: flex;
   min-height: 82px;
-  padding: 20px 35px 18px;
+  padding: 20px 28px 18px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -265,7 +265,7 @@ function followUp(
 .message > p {
   margin: 0 0 10px;
   color: var(--workspace-accent-soft, var(--red-hi));
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.13em;
 }
 
@@ -286,13 +286,13 @@ function followUp(
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
   background: transparent;
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.08em;
 }
 
 .conversation__tools button {
   display: none;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .conversation__scroll {
@@ -369,7 +369,7 @@ function followUp(
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
   background: transparent;
-  font: 8px var(--mono);
+  font: 11px var(--mono);
 }
 
 .follow-up-actions {
@@ -384,7 +384,7 @@ function followUp(
   color: var(--ink-2);
   border-left: 2px solid var(--workspace-accent-soft, var(--red-hi));
   background: var(--workspace-surface-subtle, var(--paper-low));
-  font: 10px/1.6 var(--mono);
+  font: 11px/1.6 var(--mono);
 }
 
 .follow-up-actions--answer {
@@ -396,7 +396,7 @@ function followUp(
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
   background: transparent;
-  font: 9px var(--mono);
+  font: 12px var(--mono);
 }
 
 .follow-up-actions button:disabled {
@@ -430,14 +430,14 @@ function followUp(
   color: inherit;
   border: 1px solid currentcolor;
   background: transparent;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
 }
 
 .composer {
   position: absolute;
-  right: 35px;
+  right: 28px;
   bottom: 24px;
-  left: 35px;
+  left: 28px;
   display: flex;
   min-height: 58px;
   padding: 0 16px;
@@ -472,13 +472,13 @@ textarea::placeholder {
   padding: 10px 14px;
   color: var(--workspace-primary-text, var(--paper-hi));
   border: 0;
-  background: var(--workspace-primary-bg, var(--ink));
-  font: 9px var(--mono);
+  background: var(--workspace-action-bg, var(--red));
+  font: 13px var(--mono);
   letter-spacing: 0.1em;
 }
 
 .composer button:not(:disabled):hover {
-  background: var(--ink-2);
+  background: var(--workspace-action-bg-hover, #662522);
 }
 
 .thread-empty button:disabled,
@@ -488,7 +488,7 @@ textarea:disabled,
   opacity: 0.55;
 }
 
-@media (max-width: 1220px) {
+@media (max-width: 1279.98px) {
   .evidence-toggle {
     display: block !important;
   }

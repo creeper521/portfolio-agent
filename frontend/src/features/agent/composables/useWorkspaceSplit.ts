@@ -2,9 +2,9 @@ import { ref } from 'vue'
 
 export const WORKSPACE_SPLIT_KEY = 'portfolio.workspace.split.v1'
 export const WORKSPACE_LIMITS = {
-  sessions: [220, 380] as const,
-  evidence: [380, 760] as const,
-  chatMin: 600,
+  sessions: [220, 320] as const,
+  evidence: [300, 420] as const,
+  chatMin: 640,
 }
 
 export interface WorkspaceSplit {
@@ -16,10 +16,10 @@ function clamp(value: number, [min, max]: readonly [number, number]) {
   return Math.min(max, Math.max(min, Math.round(value)))
 }
 
-export function workspaceDefaults(viewport = globalThis.innerWidth || 1440): WorkspaceSplit {
+export function workspaceDefaults(): WorkspaceSplit {
   return {
-    sessions: clamp(viewport * 0.15, [240, 320]),
-    evidence: clamp(viewport * 0.31, [420, 720]),
+    sessions: 250,
+    evidence: 340,
   }
 }
 
@@ -27,6 +27,37 @@ export function clampWorkspaceSplit(next: WorkspaceSplit): WorkspaceSplit {
   return {
     sessions: clamp(next.sessions, WORKSPACE_LIMITS.sessions),
     evidence: clamp(next.evidence, WORKSPACE_LIMITS.evidence),
+  }
+}
+
+export function fitWorkspaceSplit(
+  preferred: WorkspaceSplit,
+  availableWidth: number,
+): WorkspaceSplit {
+  const clamped = clampWorkspaceSplit(preferred)
+  if (!Number.isFinite(availableWidth)) return clamped
+
+  const minimumSideWidth =
+    WORKSPACE_LIMITS.sessions[0] + WORKSPACE_LIMITS.evidence[0]
+  const availableSideWidth = Math.max(
+    minimumSideWidth,
+    Math.floor(availableWidth) - WORKSPACE_LIMITS.chatMin,
+  )
+  if (clamped.sessions + clamped.evidence <= availableSideWidth) return clamped
+
+  const sessionsSlack = clamped.sessions - WORKSPACE_LIMITS.sessions[0]
+  const evidenceSlack = clamped.evidence - WORKSPACE_LIMITS.evidence[0]
+  const preferredSlack = sessionsSlack + evidenceSlack
+  if (preferredSlack <= 0) return clamped
+
+  const availableSlack = availableSideWidth - minimumSideWidth
+  const sessions =
+    WORKSPACE_LIMITS.sessions[0] +
+    Math.floor((availableSlack * sessionsSlack) / preferredSlack)
+
+  return {
+    sessions,
+    evidence: availableSideWidth - sessions,
   }
 }
 
