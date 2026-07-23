@@ -1,13 +1,16 @@
 package com.portfolio.agent.portfolio.service;
 
+import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.exception.CaseNotFoundException;
 import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
+import com.portfolio.agent.portfolio.service.result.CaseDetails;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
@@ -44,16 +47,33 @@ public class PortfolioService {
         return toProjectDetails(snapshot, project);
     }
 
+    public List<CaseDetails> getCases() {
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
+        return snapshot.getCases().stream()
+                .map(caseStudy -> toCaseDetails(snapshot, caseStudy))
+                .toList();
+    }
+
+    public CaseDetails getCase(String slug) {
+        RuntimeContentSnapshot snapshot = repository.getSnapshot();
+        CaseStudy caseStudy = findCase(snapshot, slug);
+        return toCaseDetails(snapshot, caseStudy);
+    }
+
     public PublicContent getPublicContent() {
         RuntimeContentSnapshot snapshot = repository.getSnapshot();
         List<ProjectDetails> projects = snapshot.getProjects().stream()
                 .map(project -> toProjectDetails(snapshot, project))
+                .toList();
+        List<CaseDetails> cases = snapshot.getCases().stream()
+                .map(caseStudy -> toCaseDetails(snapshot, caseStudy))
                 .toList();
         List<EvidenceRecord> evidence = snapshot.getEvidence().stream()
                 .filter(item -> item.getPublicStatus() == EvidenceStatus.APPROVED)
                 .filter(item -> Boolean.FALSE.equals(item.getRawContentPublic()))
                 .toList();
         Map<String, List<String>> projectSlugsByEvidenceId = new LinkedHashMap<>();
+        Map<String, List<String>> caseSlugsByEvidenceId = new LinkedHashMap<>();
         Map<String, List<String>> claimIdsByEvidenceId = new LinkedHashMap<>();
         for (ProjectDetails projectDetails : projects) {
             String projectSlug = projectDetails.getProject().getSlug();
@@ -61,6 +81,14 @@ public class PortfolioService {
                 projectSlugsByEvidenceId
                         .computeIfAbsent(evidenceRecord.getId(), ignored -> new ArrayList<>())
                         .add(projectSlug);
+            }
+        }
+        for (CaseDetails caseDetails : cases) {
+            String caseSlug = caseDetails.getCaseStudy().getSlug();
+            for (EvidenceRecord evidenceRecord : caseDetails.getEvidence()) {
+                caseSlugsByEvidenceId
+                        .computeIfAbsent(evidenceRecord.getId(), ignored -> new ArrayList<>())
+                        .add(caseSlug);
             }
         }
         for (ClaimEvidenceLink link : snapshot.getClaimEvidenceLinks()) {
@@ -74,11 +102,13 @@ public class PortfolioService {
                 snapshot.getPublishedAt(),
                 snapshot.getOwner(),
                 projects,
+                cases,
                 snapshot.getClaims(),
                 snapshot.getClaimEvidenceLinks(),
                 evidence,
                 snapshot.getTimeline(),
                 projectSlugsByEvidenceId,
+                caseSlugsByEvidenceId,
                 claimIdsByEvidenceId,
                 snapshot.getQuestionPresets()
         );
@@ -104,10 +134,37 @@ public class PortfolioService {
         return new ProjectDetails(project, evidence, suggestedQuestions);
     }
 
+    private CaseDetails toCaseDetails(
+            RuntimeContentSnapshot snapshot,
+            CaseStudy caseStudy
+    ) {
+        Set<String> evidenceIds = Set.copyOf(caseStudy.getEvidenceIds());
+
+        List<EvidenceRecord> evidence = snapshot.getEvidence().stream()
+                .filter(item -> evidenceIds.contains(item.getId()))
+                .filter(item -> item.getPublicStatus() == EvidenceStatus.APPROVED)
+                .filter(item -> Boolean.FALSE.equals(item.getRawContentPublic()))
+                .toList();
+
+        List<String> suggestedQuestions = snapshot.getQuestions().stream()
+                .filter(question -> question.getCaseIds().contains(caseStudy.getId()))
+                .map(QuestionDefinition::getText)
+                .toList();
+
+        return new CaseDetails(caseStudy, evidence, suggestedQuestions);
+    }
+
     private ProjectProfile findProject(RuntimeContentSnapshot snapshot, String slug) {
         return snapshot.getProjects().stream()
                 .filter(project -> project.getSlug().equals(slug))
                 .findFirst()
                 .orElseThrow(() -> new ProjectNotFoundException(slug));
+    }
+
+    private CaseStudy findCase(RuntimeContentSnapshot snapshot, String slug) {
+        return snapshot.getCases().stream()
+                .filter(caseStudy -> caseStudy.getSlug().equals(slug))
+                .findFirst()
+                .orElseThrow(() -> new CaseNotFoundException(slug));
     }
 }
