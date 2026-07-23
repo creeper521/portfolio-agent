@@ -43,4 +43,25 @@ describe('LocalSessionRail', () => {
     await wrapper.get('[data-session-remove]').trigger('click')
     expect(wrapper.emitted('remove')).toEqual([['session-1']])
   })
+
+  it('requires an accessible confirmation before clearing local sessions', async () => {
+    const wrapper = mount(LocalSessionRail, {
+      attachTo: document.body,
+      props: { sessions, activeId: 'session-1' },
+    })
+
+    await wrapper.get('[data-session-clear]').trigger('click')
+    expect(wrapper.get('[role="alertdialog"]').attributes('aria-labelledby'))
+      .toBe('clear-sessions-title')
+    expect(wrapper.emitted('clear')).toBeUndefined()
+
+    await wrapper.get('[data-session-clear-cancel]').trigger('click')
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(wrapper.emitted('clear')).toBeUndefined()
+
+    await wrapper.get('[data-session-clear]').trigger('click')
+    await wrapper.get('[data-session-clear-confirm]').trigger('click')
+    expect(wrapper.emitted('clear')).toEqual([[]])
+    wrapper.unmount()
+  })
 })

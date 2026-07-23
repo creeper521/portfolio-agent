@@ -28,6 +28,26 @@ describe('useLocalSessions', () => {
     expect(useLocalSessions().sessions.value).toEqual([])
   })
 
+  it('keeps only one active empty draft outside history until its first user message', () => {
+    const store = useLocalSessions()
+    store.createSession()
+    const draft = store.createSession()
+    store.createSession()
+
+    expect(store.sessions.value).toHaveLength(1)
+    expect(store.historySessions.value).toEqual([])
+
+    store.appendMessage(store.activeSessionId.value, {
+      role: 'USER',
+      content: '第一条用户消息',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(store.historySessions.value).toHaveLength(1)
+    expect(store.historySessions.value[0]?.id).not.toBe(draft.id)
+  })
+
   it('never persists a visitor session', () => {
     const store = useLocalSessions()
     store.createSession({ role: 'MENTOR', title: '项目复盘' })

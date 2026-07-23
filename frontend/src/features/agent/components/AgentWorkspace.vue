@@ -62,7 +62,7 @@ const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
-const activeEvidenceId = ref(props.initialEvidence || props.portfolio.evidence[0]?.id || '')
+const activeEvidenceId = ref('')
 const evidenceTab = ref<EvidenceDeskTab>('EVIDENCE')
 const focusedAnswerMessageId = ref('')
 const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
@@ -129,19 +129,49 @@ const evidenceContext = computed(() =>
   ),
 )
 
-function resetEvidenceFocus() {
+function clearFocusedAnswer() {
   focusedAnswerMessageId.value = ''
-  evidenceTab.value = 'EVIDENCE'
   answerFocusTarget.value = null
 }
 
-function createSession() {
+function resetEvidenceFocus() {
+  clearFocusedAnswer()
+  evidenceTab.value = 'EVIDENCE'
+}
+
+function coreEvidenceId(
+  session = sessions.activeSession.value,
+) {
+  const projectSlug = session?.projectSlug || props.initialProject
+  const project =
+    props.portfolio.projects.find((item) => item.slug === projectSlug) ??
+    props.portfolio.projects[0]
+  return (
+    session?.evidenceId ||
+    project?.evidenceIds[0] ||
+    props.portfolio.evidence[0]?.id ||
+    ''
+  )
+}
+
+function syncActiveEvidence() {
+  activeEvidenceId.value = coreEvidenceId()
+}
+
+function createSession(initialEvidenceId = '') {
   resetEvidenceFocus()
-  sessions.createSession({
+  const project = activeProject.value
+  const evidenceId =
+    initialEvidenceId ||
+    project?.evidenceIds[0] ||
+    props.portfolio.evidence[0]?.id ||
+    ''
+  const session = sessions.createSession({
     role: props.initialRole,
-    projectSlug: activeProject.value?.slug ?? null,
-    evidenceId: activeEvidenceId.value || null,
+    projectSlug: project?.slug ?? null,
+    evidenceId: evidenceId || null,
   })
+  activeEvidenceId.value = coreEvidenceId(session)
 }
 
 function clearAnswerFailure() {
@@ -163,6 +193,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     return
   }
 
+  clearFocusedAnswer()
   if (appendUser) {
     sessions.appendMessage(session.id, {
       role: 'USER',
@@ -189,6 +220,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       }),
     )
     if (disposed || request !== requestVersion) return
+    clearFocusedAnswer()
     sessions.appendMessage(session.id, {
       role: 'AGENT',
       content: mapped.summary,
@@ -286,6 +318,9 @@ function inspectEvidence(request: EvidenceInspectRequest) {
 }
 
 function locateAnswer(target: Omit<AnswerFocusTarget, 'requestId'>) {
+  if (evidenceDrawerOpen.value && evidenceIsDrawer.value) {
+    closeDrawers()
+  }
   answerFocusRequestId += 1
   answerFocusTarget.value = {
     ...target,
@@ -372,9 +407,11 @@ function removeSession(sessionId: string) {
   sessions.removeSession(sessionId)
   if (sessions.activeSessionId.value !== previousSessionId) {
     resetEvidenceFocus()
-  }
-  if (!sessions.activeSession.value) {
-    createSession()
+    if (sessions.activeSession.value) {
+      syncActiveEvidence()
+    } else {
+      createSession()
+    }
   }
 }
 
@@ -383,6 +420,7 @@ function selectSession(sessionId: string) {
   sessions.selectSession(sessionId)
   if (sessions.activeSessionId.value !== previousSessionId) {
     resetEvidenceFocus()
+    syncActiveEvidence()
   }
 }
 
@@ -409,10 +447,10 @@ function onWindowKeydown(event: KeyboardEvent) {
 }
 
 if (props.initialSeed) {
-  const seeded = sessions.seedSession(props.initialSeed)
-  activeEvidenceId.value = props.initialSeed.evidenceIds[0] ?? seeded.evidenceId ?? ''
+  sessions.seedSession(props.initialSeed)
+  syncActiveEvidence()
 } else if (!sessions.activeSession.value) {
-  createSession()
+  createSession(props.initialEvidence)
 }
 
 onMounted(() => {
@@ -449,7 +487,7 @@ onBeforeUnmount(() => {
   >
     <p class="session-privacy" role="note">当前对话未保存，刷新后记录会消失</p>
     <LocalSessionRail
-      :sessions="sessions.sessions.value"
+      :sessions="sessions.historySessions.value"
       :active-id="sessions.activeSessionId.value"
       :inert="sessionsIsDrawer && !sessionDrawerOpen ? true : undefined"
       :aria-hidden="sessionsIsDrawer ? String(!sessionDrawerOpen) : undefined"
@@ -538,12 +576,12 @@ onBeforeUnmount(() => {
   --workspace-text-secondary: var(--muted);
   --workspace-text-faint: var(--faint);
   --workspace-rule: var(--agent-hairline);
-  --workspace-accent: var(--red);
-  --workspace-accent-soft: var(--red-hi);
+  --workspace-accent: var(--agent-accent);
+  --workspace-accent-soft: color-mix(in srgb, var(--agent-accent) 68%, white);
   --workspace-primary-bg: var(--ink);
   --workspace-primary-text: var(--paper-hi);
-  --workspace-action-bg: var(--red);
-  --workspace-action-bg-hover: #662522;
+  --workspace-action-bg: var(--agent-accent);
+  --workspace-action-bg-hover: color-mix(in srgb, var(--agent-accent) 82%, black);
   position: relative;
   display: grid;
   width: 100%;
@@ -636,6 +674,13 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :deep(.evidence-desk),
+  :deep(.session-rail),
+  .workspace-scrim {
+    transition: none;
+    animation: none;
+  }
+
   :deep(.thread-empty),
   :deep(.thread-empty button),
   :deep(.message),

@@ -160,6 +160,16 @@ describe('ConversationThread', () => {
     expect(wrapper.emitted('submit')).toHaveLength(1)
   })
 
+  it('does not submit Enter while an IME composition is active', async () => {
+    const wrapper = mountThread()
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('正在组合的中文')
+    await textarea.trigger('keydown', { key: 'Enter', isComposing: true })
+
+    expect(wrapper.emitted('submit')).toBeUndefined()
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('正在组合的中文')
+  })
+
   it('marks the generating state with progressive Agent copy', () => {
     const wrapper = mountThread([], true)
 
@@ -232,5 +242,36 @@ describe('ConversationThread', () => {
 
     expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'auto' })
     expect(wrapper.find('[data-jump-latest]').exists()).toBe(false)
+  })
+
+  it('does not auto-scroll when messages update after the reader moves away', async () => {
+    const wrapper = mountThread([answerMessageFixture])
+    const scrollArea = wrapper.get('.conversation__scroll')
+    Object.defineProperties(scrollArea.element, {
+      scrollHeight: { configurable: true, value: 1000 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+      clientHeight: { configurable: true, value: 300 },
+    })
+    const scrollTo = vi.fn()
+    Object.defineProperty(scrollArea.element, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+
+    await scrollArea.trigger('scroll')
+    await wrapper.setProps({
+      session: session([
+        answerMessageFixture,
+        {
+          ...answerMessageFixture,
+          id: 'agent-2',
+          createdAt: 4,
+        },
+      ]),
+    })
+    await flushPromises()
+
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-jump-latest]').exists()).toBe(true)
   })
 })

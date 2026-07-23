@@ -146,6 +146,7 @@ watch(
         ? 'auto'
         : 'smooth',
     })
+    element?.focus({ preventScroll: true })
     highlightedTarget.value = `${target.messageId}:${target.sectionType ?? ''}`
     if (highlightTimer) clearTimeout(highlightTimer)
     highlightTimer = setTimeout(() => {
@@ -272,6 +273,7 @@ function inspectMessageEvidence(
           :class="message.role === 'AGENT' ? 'message--agent' : 'message--user'"
           :data-message-id="message.id"
           :data-answer-focus="highlightedTarget === `${message.id}:` ? 'true' : undefined"
+          tabindex="-1"
         >
           <p v-if="message.answer" class="message__meta">
             AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
@@ -297,6 +299,7 @@ function inspectMessageEvidence(
               :data-answer-focus="
                 highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
               "
+              tabindex="-1"
             >
               <h4>{{ section.title }}</h4>
               <p>{{ section.content }}</p>
@@ -721,6 +724,10 @@ textarea:disabled,
 
   .thread {
     width: calc(100% - 36px);
+  }
+
+  .message--user {
+    max-width: 85%;
   }
 
   .composer {

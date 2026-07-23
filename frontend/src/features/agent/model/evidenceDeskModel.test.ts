@@ -50,4 +50,28 @@ describe('buildEvidenceDeskContext', () => {
       citations: [],
     })
   })
+
+  it('prefers an explicitly inspected answer and otherwise selects the latest answer', () => {
+    const latest: AgentMessage = {
+      ...messages[0]!,
+      id: 'answer-2',
+      createdAt: 2,
+      evidenceIds: ['evidence-b'],
+      answer: {
+        ...messages[0]!.answer!,
+        evidenceIds: ['evidence-b'],
+        sections: [{
+          ...messages[0]!.answer!.sections[0]!,
+          evidenceIds: ['evidence-b'],
+        }],
+      },
+    }
+    const conversation = [messages[0]!, latest]
+
+    expect(buildEvidenceDeskContext(conversation).answerMessageId).toBe('answer-2')
+    expect(buildEvidenceDeskContext(conversation, 'answer-1').answerMessageId)
+      .toBe('answer-1')
+    expect(buildEvidenceDeskContext(conversation, 'missing-answer').answerMessageId)
+      .toBe('answer-2')
+  })
 })

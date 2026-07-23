@@ -19,7 +19,10 @@ const emit = defineEmits<{
 const menuId = ref('')
 const editingId = ref('')
 const draftTitle = ref('')
+const clearConfirmationOpen = ref(false)
 const renameInput = ref<HTMLInputElement | HTMLInputElement[] | null>(null)
+const clearTrigger = ref<HTMLButtonElement | null>(null)
+const clearCancelButton = ref<HTMLButtonElement | null>(null)
 
 async function beginRename(session: AgentSession) {
   editingId.value = session.id
@@ -34,6 +37,24 @@ function confirmRename() {
   const title = draftTitle.value.trim()
   if (editingId.value && title) emit('rename', editingId.value, title)
   editingId.value = ''
+}
+
+async function beginClear() {
+  clearConfirmationOpen.value = true
+  menuId.value = ''
+  await nextTick()
+  clearCancelButton.value?.focus()
+}
+
+async function cancelClear() {
+  clearConfirmationOpen.value = false
+  await nextTick()
+  clearTrigger.value?.focus()
+}
+
+function confirmClear() {
+  clearConfirmationOpen.value = false
+  emit('clear')
 }
 </script>
 
@@ -95,9 +116,39 @@ function confirmRename() {
 
     <footer>
       <p>会话仅保留在当前标签页</p>
-      <button v-if="sessions.length" type="button" @click="emit('clear')">
+      <button
+        v-if="sessions.length"
+        ref="clearTrigger"
+        data-session-clear
+        type="button"
+        @click="beginClear"
+      >
         清空本地会话
       </button>
+      <div
+        v-if="clearConfirmationOpen"
+        class="clear-confirmation"
+        role="alertdialog"
+        aria-labelledby="clear-sessions-title"
+        aria-describedby="clear-sessions-description"
+        @keydown.esc.stop.prevent="cancelClear"
+      >
+        <h3 id="clear-sessions-title">清空本地会话？</h3>
+        <p id="clear-sessions-description">此操作会移除当前标签页中的全部会话记录。</p>
+        <div>
+          <button
+            ref="clearCancelButton"
+            data-session-clear-cancel
+            type="button"
+            @click="cancelClear"
+          >取消</button>
+          <button
+            data-session-clear-confirm
+            type="button"
+            @click="confirmClear"
+          >确认清空</button>
+        </div>
+      </div>
     </footer>
   </aside>
 </template>
@@ -242,5 +293,35 @@ footer button {
   border: 0;
   background: transparent;
   font: 11px var(--mono);
+}
+
+.clear-confirmation {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: var(--agent-radius-sm);
+  background: var(--workspace-rail-bg, var(--paper));
+}
+
+.clear-confirmation h3 {
+  margin: 0 0 6px;
+  font: 500 14px var(--serif);
+}
+
+.clear-confirmation p {
+  color: var(--muted);
+  font: 11px/1.6 var(--sans);
+}
+
+.clear-confirmation > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.clear-confirmation button {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid currentcolor;
 }
 </style>

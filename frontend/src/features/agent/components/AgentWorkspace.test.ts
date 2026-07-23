@@ -15,7 +15,10 @@ vi.mock('../api/answerApi', () => ({
   askQuestion: askQuestionMock,
 }))
 
-function answerResponse() {
+function answerResponse(
+  evidenceId = 'sql-audit-delivery-set',
+  title = '项目说明',
+) {
   return {
     requestId: 'request-1',
     turnId: 'turn-1',
@@ -25,13 +28,13 @@ function answerResponse() {
     answerSource: 'PRESET' as const,
     generationMode: 'DETERMINISTIC' as const,
     verification: 'VERIFIED' as const,
-    title: '项目说明',
+    title,
     summary: '公开摘要',
     sections: [
-      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'], claimIds: ['claim-sql-audit-delivered'] },
-      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'], claimIds: ['claim-sql-audit-delivered'] },
+      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: [evidenceId], claimIds: ['claim-sql-audit-delivered'] },
+      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: [evidenceId], claimIds: ['claim-sql-audit-delivered'] },
     ],
-    evidenceIds: ['sql-audit-delivery-set'],
+    evidenceIds: [evidenceId],
     suggestedQuestionPresetIds: ['sql-audit-overview'],
     contextEnvelope: {
       previousContentVersion: '2026-07-21',
@@ -42,13 +45,35 @@ function answerResponse() {
   }
 }
 
-function mountWorkspace() {
+function portfolioWithSecondaryEvidence() {
+  const core = previewPublicContent.evidence[0]!
+  const secondary = {
+    ...core,
+    id: 'sql-audit-secondary',
+    code: 'E-SECONDARY',
+    title: '次级证据',
+  }
+  return {
+    ...previewPublicContent,
+    evidence: [core, secondary],
+    projects: previewPublicContent.projects.map((project, index) =>
+      index === 0
+        ? { ...project, evidenceIds: [core.id, secondary.id] }
+        : project),
+  }
+}
+
+function mountWorkspace(portfolio = previewPublicContent) {
   return mount(AgentWorkspace, {
-    props: { portfolio: previewPublicContent },
+    props: { portfolio },
     global: {
       stubs: { RouterLink: { template: '<a><slot /></a>' } },
     },
   })
+}
+
+function activeEvidenceId(wrapper: ReturnType<typeof mountWorkspace>) {
+  return wrapper.get('.evidence-card--active').attributes('data-evidence-id')
 }
 
 function storedMessages() {
@@ -110,6 +135,30 @@ describe('AgentWorkspace', () => {
     expect(answerSection.attributes('data-answer-focus')).toBe('true')
   })
 
+  it('uses the newest successful answer after inspecting an older answer', async () => {
+    const portfolio = portfolioWithSecondaryEvidence()
+    askQuestionMock
+      .mockResolvedValueOnce(answerResponse('sql-audit-delivery-set', '较早回答'))
+      .mockResolvedValueOnce(answerResponse('sql-audit-secondary', '最新回答'))
+    const wrapper = mountWorkspace(portfolio)
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-section-evidence]').trigger('click')
+    expect(wrapper.get('[data-citation-id] small').text())
+      .toContain('sql-audit-delivery-set')
+
+    await wrapper.get('textarea').setValue('生成更新后的回答')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-citation-id] small').text())
+      .toContain('sql-audit-secondary')
+    await wrapper.findAll('[role="tab"]')[0]!.trigger('click')
+    expect(wrapper.get('.evidence-card--focused').attributes('data-evidence-id'))
+      .toBe('sql-audit-secondary')
+  })
+
   it('returns to cited answer content without smooth motion when reduced motion is requested', async () => {
     vi.stubGlobal(
       'matchMedia',
@@ -141,14 +190,15 @@ describe('AgentWorkspace', () => {
 
   it('resets citation focus when selecting a different session', async () => {
     const wrapper = mountWorkspace()
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
     await wrapper.get('.session-rail__new').trigger('click')
-    await wrapper.findAll('.session-select')[1].trigger('click')
     await wrapper.get('[data-suggested-question]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-section-evidence]').trigger('click')
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('引用')
 
-    await wrapper.findAll('.session-select')[0].trigger('click')
+    await wrapper.findAll('.session-select').at(-1)!.trigger('click')
 
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('证据')
     expect(wrapper.find('[data-citation-id]').exists()).toBe(false)
@@ -178,6 +228,36 @@ describe('AgentWorkspace', () => {
     await wrapper.vm.$nextTick()
 
     expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
+  it('closes a responsive evidence drawer before focusing cited answer content', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 0
+    })
+    const wrapper = mount(AgentWorkspace, {
+      attachTo: document.body,
+      props: { portfolio: previewPublicContent },
+      global: {
+        stubs: { RouterLink: { template: '<a><slot /></a>' } },
+      },
+    })
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-section-evidence]').trigger('click')
+    const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
+    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    })
+
+    await wrapper.get('[data-citation-id]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.evidence-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.workspace-scrim').exists()).toBe(false)
+    expect(document.activeElement).toBe(answerSection.element)
     wrapper.unmount()
   })
 
@@ -258,12 +338,87 @@ describe('AgentWorkspace', () => {
   it('keeps the workspace usable after deleting the only session', async () => {
     const wrapper = mountWorkspace()
 
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
     await wrapper.get('[data-session-menu]').trigger('click')
     await wrapper.get('[data-session-remove]').trigger('click')
 
     expect(wrapper.find('.agent-workspace').exists()).toBe(true)
-    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+    expect(wrapper.findAll('.session-list article')).toHaveLength(0)
     expect(wrapper.text()).toContain('从一个可核验的问题开始。')
+  })
+
+  it('stages a new draft outside history until the first user message', async () => {
+    const wrapper = mountWorkspace()
+
+    expect(wrapper.findAll('.session-list article')).toHaveLength(0)
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('.session-rail__new').trigger('click')
+    expect(wrapper.findAll('.session-list article')).toHaveLength(0)
+
+    await wrapper.get('textarea').setValue('进入历史的第一条消息')
+    await wrapper.get('.composer').trigger('submit')
+
+    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+  })
+
+  it('restores project core evidence when creating a conversation', async () => {
+    const wrapper = mountWorkspace(portfolioWithSecondaryEvidence())
+
+    await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-secondary')
+
+    await wrapper.get('.session-rail__new').trigger('click')
+
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-delivery-set')
+  })
+
+  it('restores the selected session core evidence', async () => {
+    const wrapper = mountWorkspace(portfolioWithSecondaryEvidence())
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
+
+    await wrapper.findAll('.session-select').at(-1)!.trigger('click')
+
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-delivery-set')
+  })
+
+  it('restores fallback session core evidence after removing the current session', async () => {
+    const wrapper = mountWorkspace(portfolioWithSecondaryEvidence())
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('textarea').setValue('第二个历史会话')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
+
+    await wrapper.get('.session-list article.active [data-session-menu]').trigger('click')
+    await wrapper.get('.session-list article.active [data-session-remove]').trigger('click')
+
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-delivery-set')
+    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+  })
+
+  it('cancels or confirms clearing history and restores fallback core evidence', async () => {
+    const wrapper = mountWorkspace(portfolioWithSecondaryEvidence())
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
+
+    await wrapper.get('[data-session-clear]').trigger('click')
+    await wrapper.get('[data-session-clear-cancel]').trigger('click')
+    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-secondary')
+
+    await wrapper.get('[data-session-clear]').trigger('click')
+    await wrapper.get('[data-session-clear-confirm]').trigger('click')
+
+    expect(wrapper.findAll('.session-list article')).toHaveLength(0)
+    expect(wrapper.findAll('.message')).toHaveLength(0)
+    expect(activeEvidenceId(wrapper)).toBe('sql-audit-delivery-set')
   })
 
   it('shows the user immediately and appends a structured Agent answer only after API success', async () => {
@@ -404,16 +559,19 @@ describe('AgentWorkspace', () => {
 
   it('retries against the failed session after the user switches sessions', async () => {
     askQuestionMock
+      .mockResolvedValueOnce(answerResponse())
       .mockRejectedValueOnce(new Error('first request failed'))
       .mockResolvedValueOnce(answerResponse())
     const wrapper = mountWorkspace()
 
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
     await wrapper.get('.session-rail__new').trigger('click')
     await wrapper.get('textarea').setValue('保留原会话上下文')
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
-    await wrapper.findAll('.session-select')[1].trigger('click')
+    await wrapper.findAll('.session-select').at(-1)!.trigger('click')
     expect(wrapper.get('.session-list article.active .session-select').text()).not.toContain(
       '保留原会话上下文',
     )
@@ -421,11 +579,12 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-answer-retry]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('.message')).toHaveLength(0)
+    expect(wrapper.findAll('.message--user')).toHaveLength(1)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(1)
     await wrapper.findAll('.session-select')[0].trigger('click')
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
     expect(wrapper.findAll('.message--agent')).toHaveLength(1)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ question: '保留原会话上下文' }))
+    expect(askQuestionMock).toHaveBeenNthCalledWith(3, expect.objectContaining({ question: '保留原会话上下文' }))
   })
 
   it('clears retry safely when the failed session is deleted', async () => {
@@ -442,7 +601,7 @@ describe('AgentWorkspace', () => {
 
     expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
     expect(askQuestionMock).toHaveBeenCalledTimes(1)
-    expect(wrapper.findAll('.session-list article')).toHaveLength(1)
+    expect(wrapper.findAll('.session-list article')).toHaveLength(0)
     expect(wrapper.findAll('.message')).toHaveLength(0)
   })
 

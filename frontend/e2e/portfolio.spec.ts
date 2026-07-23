@@ -196,6 +196,28 @@ test('answer evidence opens citations and returns to the cited section', async (
   await expect(page.locator('[data-answer-focus]')).toBeVisible()
 })
 
+test('Agent citation round trip closes the responsive evidence drawer and focuses the answer', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 959, height: 800 })
+  await openAgentDeepLink(page)
+  await page.locator('[data-suggested-question]').first().click()
+  await expect(page.locator('.message--agent')).toBeVisible()
+
+  const answerSection = page.locator('[data-section-type]').first()
+  await answerSection.locator('[data-section-evidence]').click()
+  await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'false')
+  await expect(page.locator('.workspace-scrim')).toBeVisible()
+
+  await page.locator('[data-citation-id]').first().click()
+
+  await expect(page.locator('#agent-evidence-desk')).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.locator('.workspace-scrim')).toHaveCount(0)
+  await expect(answerSection).toHaveAttribute('data-answer-focus', 'true')
+  await expect(answerSection).toBeFocused()
+  await expect(page.getByLabel('你的问题')).toBeVisible()
+})
+
 test('workspace separators support keyboard adjustment and reset', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await openAgentDeepLink(page)
@@ -342,12 +364,12 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
     )
     expect(solidInkButtons).toEqual(['＋新对话'])
 
-    const solidRedButtons = await page.locator('.agent-workspace button').evaluateAll(
+    const solidAccentButtons = await page.locator('.agent-workspace button').evaluateAll(
       (buttons) => buttons
-        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(122, 46, 42)')
+        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(141, 48, 43)')
         .map((button) => button.textContent?.trim()),
     )
-    expect(solidRedButtons).toEqual(['发送 ↵'])
+    expect(solidAccentButtons).toEqual(['发送 ↵'])
 
     const shell = page.locator('.site-frame--workspace')
     const shellBox = await shell.boundingBox()
@@ -556,11 +578,17 @@ test('reduced motion keeps revealed content visible without animation', async ({
   await expect(hero).toHaveCSS('opacity', '1')
 })
 
-test('Agent reduced motion disables suggested-question transitions', async ({ page }) => {
+test('Agent reduced motion disables suggested-question and drawer transitions', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 959, height: 800 })
   await openAgentDeepLink(page)
 
   const suggestion = page.locator('[data-suggested-question]').first()
   await expect(suggestion).toBeVisible()
   await expect(suggestion).toHaveCSS('transition-duration', '0s')
+  await expect(page.locator('#agent-evidence-desk')).toHaveCSS('transition-duration', '0s')
+  await expect(page.locator('#local-session-rail')).toHaveCSS('transition-duration', '0s')
+
+  await page.getByRole('button', { name: '证据', exact: true }).click()
+  await expect(page.locator('.workspace-scrim')).toHaveCSS('transition-duration', '0s')
 })

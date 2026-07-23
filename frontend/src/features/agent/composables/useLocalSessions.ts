@@ -20,6 +20,11 @@ export function useLocalSessions() {
   const activeSession = computed(
     () => sessions.value.find((session) => session.id === activeSessionId.value) ?? null,
   )
+  const historySessions = computed(
+    () => sessions.value.filter(
+      (session) => session.messages.some((message) => message.role === 'USER'),
+    ),
+  )
 
   function createSession(seed: SessionSeed = {}) {
     const createdAt = Date.now()
@@ -34,7 +39,15 @@ export function useLocalSessions() {
       updatedAt: createdAt,
       messages: [],
     }
-    sessions.value = [session, ...sessions.value]
+    const retainedSessions = sessions.value.filter(
+      (item) => item.messages.some((message) => message.role === 'USER'),
+    )
+    for (const item of sessions.value) {
+      if (!retainedSessions.includes(item)) {
+        manuallyRenamedSessionIds.delete(item.id)
+      }
+    }
+    sessions.value = [session, ...retainedSessions]
     activeSessionId.value = session.id
     return session
   }
@@ -123,6 +136,7 @@ export function useLocalSessions() {
     sessions,
     activeSessionId,
     activeSession,
+    historySessions,
     createSession,
     selectSession,
     renameSession,

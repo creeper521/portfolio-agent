@@ -71,4 +71,48 @@ describe('EvidenceDesk', () => {
       { messageId: 'answer-1', sectionType: 'VERIFICATION' },
     ]])
   })
+
+  it('reorders focused evidence first without mutating the input collection', () => {
+    const secondary = {
+      ...evidence[0]!,
+      id: 'secondary-evidence',
+      code: 'E-SECONDARY',
+      title: 'Secondary evidence',
+    }
+    const input = [evidence[0]!, secondary]
+    const originalIds = input.map((item) => item.id)
+    const wrapper = mount(EvidenceDesk, {
+      props: {
+        evidence: input,
+        project,
+        activeEvidenceId: evidence[0]!.id,
+        focusEvidenceIds: [secondary.id],
+        citations: [citation],
+        tab: 'EVIDENCE',
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+
+    expect(wrapper.findAll('.evidence-card').map((card) => card.attributes('data-evidence-id')))
+      .toEqual([secondary.id, evidence[0]!.id])
+    expect(input.map((item) => item.id)).toEqual(originalIds)
+  })
+
+  it('renders public source metadata on the Sources tab', () => {
+    const wrapper = mount(EvidenceDesk, {
+      props: {
+        evidence,
+        project,
+        activeEvidenceId: evidence[0]!.id,
+        focusEvidenceIds: [],
+        citations: [],
+        tab: 'SOURCES',
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+
+    expect(wrapper.findAll('.source-card')).toHaveLength(evidence.length)
+    expect(wrapper.get('.source-card').text()).toContain(evidence[0]!.title)
+    expect(wrapper.get('.source-card').text()).toContain(String(evidence[0]!.sourceCount))
+  })
 })

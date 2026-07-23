@@ -117,6 +117,9 @@ describe('prototype visual contract', () => {
     expect(workspace).toContain('scroll-behavior: auto')
     expect(workspace).toContain('transition: none')
     expect(workspace).toContain('animation: none')
+    expect(workspace).toMatch(
+      /:deep\(\.evidence-desk\),\s*:deep\(\.session-rail\),\s*\.workspace-scrim\s*\{[^}]*transition: none;/s,
+    )
     expect(conversation).toContain(
       "window.matchMedia?.('(prefers-reduced-motion: reduce)').matches",
     )
@@ -157,7 +160,15 @@ describe('prototype visual contract', () => {
     expect(sessions).toMatch(
       /\.session-rail__new\s*\{[^}]*background: var\(--workspace-primary-bg, var\(--ink\)\)/s,
     )
-    expect(workspace).toContain('--workspace-action-bg: var(--red)')
-    expect(workspace).toContain('--workspace-action-bg-hover: #662522')
+    expect(workspace).toContain('--workspace-accent: var(--agent-accent)')
+    expect(workspace).toContain('--workspace-action-bg: var(--agent-accent)')
+    expect(workspace).not.toContain('--workspace-accent: var(--red)')
+    expect(workspace).not.toContain('--workspace-action-bg: var(--red)')
+  })
+
+  it('allows user messages to use the mobile reading width', () => {
+    expect(conversation).toMatch(
+      /@media \(max-width: 620px\)\s*\{[\s\S]*?\.message--user\s*\{[^}]*max-width: 85%;/s,
+    )
   })
 })
