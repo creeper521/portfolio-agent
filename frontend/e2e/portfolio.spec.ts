@@ -555,3 +555,12 @@ test('reduced motion keeps revealed content visible without animation', async ({
   await expect(hero).toHaveCSS('animation-name', 'none')
   await expect(hero).toHaveCSS('opacity', '1')
 })
+
+test('Agent reduced motion disables suggested-question transitions', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openAgentDeepLink(page)
+
+  const suggestion = page.locator('[data-suggested-question]').first()
+  await expect(suggestion).toBeVisible()
+  await expect(suggestion).toHaveCSS('transition-duration', '0s')
+})

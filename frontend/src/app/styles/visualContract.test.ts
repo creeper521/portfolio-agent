@@ -106,6 +106,7 @@ describe('prototype visual contract', () => {
     expect(workspace).toContain('@media (prefers-reduced-motion: reduce)')
     for (const selector of [
       '.thread-empty',
+      '.thread-empty button',
       '.message',
       '.evidence-card',
       '.citation-card',

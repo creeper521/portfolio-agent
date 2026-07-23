@@ -637,6 +637,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   :deep(.thread-empty),
+  :deep(.thread-empty button),
   :deep(.message),
   :deep(.evidence-card),
   :deep(.citation-card),
