@@ -44,6 +44,16 @@ export function useLocalSessions() {
     }
   }
 
+  function renameSession(sessionId: string, title: string) {
+    const normalized = title.trim()
+    if (!normalized) return
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.title = normalized.slice(0, 40)
+    session.updatedAt = Date.now()
+    sessions.value = [...sessions.value]
+  }
+
   function appendMessage(sessionId: string, message: Omit<AgentMessage, 'id' | 'createdAt'>) {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) return
@@ -111,6 +121,7 @@ export function useLocalSessions() {
     activeSession,
     createSession,
     selectSession,
+    renameSession,
     appendMessage,
     seedSession,
     removeSession,

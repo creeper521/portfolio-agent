@@ -74,7 +74,7 @@ describe('prototype visual contract', () => {
     expect(workspace).toContain('@media (max-width: 1279.98px)')
     expect(conversation).toContain('right: 28px')
     expect(conversation).toContain('left: 28px')
-    expect(sessions).toContain('padding: 25px 20px')
+    expect(sessions).toContain('padding: 18px 0')
     expect(evidence).toContain('padding: 28px 20px')
     expect(agentPage).toContain('min-height: 100%')
   })

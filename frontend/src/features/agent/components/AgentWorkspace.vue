@@ -397,6 +397,7 @@ onBeforeUnmount(() => {
       :aria-hidden="sessionsIsDrawer ? String(!sessionDrawerOpen) : undefined"
       @create="createSession"
       @select="sessions.selectSession"
+      @rename="sessions.renameSession"
       @remove="removeSession"
       @clear="clearAllSessions"
     />

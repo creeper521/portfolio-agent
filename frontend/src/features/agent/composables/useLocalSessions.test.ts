@@ -45,6 +45,17 @@ describe('useLocalSessions', () => {
     expect(localStorage.length).toBe(0)
   })
 
+  it('renames a session in page memory and ignores blank titles', () => {
+    const state = useLocalSessions()
+    const session = state.createSession({ title: '原标题' })
+
+    state.renameSession(session.id, '  新标题  ')
+    expect(state.activeSession.value?.title).toBe('新标题')
+
+    state.renameSession(session.id, '   ')
+    expect(state.activeSession.value?.title).toBe('新标题')
+  })
+
   it('creates user and agent messages from a homepage seed without duplicating it', () => {
     const homeSeed: AgentRouteSeed = {
       role: 'INTERVIEWER',

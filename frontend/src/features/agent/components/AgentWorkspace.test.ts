@@ -81,7 +81,7 @@ describe('AgentWorkspace', () => {
   it('renders sessions, conversation, evidence desk, and two accessible separators', () => {
     const wrapper = mountWorkspace()
 
-    expect(wrapper.text()).toContain('当前页面会话')
+    expect(wrapper.text()).toContain('会话仅保留在当前标签页')
     expect(wrapper.text()).toContain('Agent 对话')
     expect(wrapper.text()).toContain('证据工作台')
     expect(wrapper.findAll('[role="separator"]')).toHaveLength(2)
@@ -155,7 +155,8 @@ describe('AgentWorkspace', () => {
   it('keeps the workspace usable after deleting the only session', async () => {
     const wrapper = mountWorkspace()
 
-    await wrapper.get('[aria-label^="删除会话："]').trigger('click')
+    await wrapper.get('[data-session-menu]').trigger('click')
+    await wrapper.get('[data-session-remove]').trigger('click')
 
     expect(wrapper.find('.agent-workspace').exists()).toBe(true)
     expect(wrapper.findAll('.session-list article')).toHaveLength(1)
@@ -331,7 +332,8 @@ describe('AgentWorkspace', () => {
     await flushPromises()
     expect(wrapper.find('[data-answer-retry]').exists()).toBe(true)
 
-    await wrapper.get('[aria-label^="删除会话："]').trigger('click')
+    await wrapper.get('[data-session-menu]').trigger('click')
+    await wrapper.get('[data-session-remove]').trigger('click')
 
     expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
     expect(askQuestionMock).toHaveBeenCalledTimes(1)
