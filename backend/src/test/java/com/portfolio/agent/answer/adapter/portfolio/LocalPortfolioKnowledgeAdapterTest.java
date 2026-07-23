@@ -8,22 +8,34 @@ import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
+import com.portfolio.agent.portfolio.domain.Claim;
+import com.portfolio.agent.portfolio.domain.ClaimCategory;
+import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
+import com.portfolio.agent.portfolio.domain.ClaimVerificationStatus;
 import com.portfolio.agent.portfolio.domain.ContributionType;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.EvidenceType;
+import com.portfolio.agent.portfolio.domain.Materiality;
+import com.portfolio.agent.portfolio.domain.OwnerProfile;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.ReviewStatus;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RetrievalManifest;
 import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
 import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
+import com.portfolio.agent.portfolio.domain.SupportType;
+import com.portfolio.agent.portfolio.domain.TimelineEvent;
+import com.portfolio.agent.portfolio.domain.VerificationBasis;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
+import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -231,11 +243,25 @@ class LocalPortfolioKnowledgeAdapterTest {
 
     @Test
     void excludesCaseOnlyQuestionsFromAgentSuggestedQuestions() {
+        String projectQuestion = "SQL 审计项目解决了什么问题？";
         String caseQuestion = "测试角色清理功能解决了什么问题？";
-        QuestionDefinition question = new QuestionDefinition(
+        QuestionDefinition projectQuestionDefinition = new QuestionDefinition(
+                "question-project-sql-audit",
+                projectQuestion,
+                List.of("SQL 审计解决了什么？"),
+                List.of("INTERVIEWER"),
+                List.of("project-1"),
+                List.of(),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10
+        );
+        QuestionDefinition caseQuestionDefinition = new QuestionDefinition(
                 "question-case-role-reset",
                 caseQuestion,
-                List.of(),
+                List.of("测试角色清理有什么作用？"),
                 List.of("INTERVIEWER"),
                 List.of(),
                 List.of("case-role-reset"),
@@ -245,33 +271,11 @@ class LocalPortfolioKnowledgeAdapterTest {
                 true,
                 10
         );
-        CaseStudy caseStudy = new CaseStudy(
-                "case-role-reset",
-                "C-01",
-                "test-role-reset",
-                CaseType.FEATURE,
-                "测试角色清理",
-                "Summary",
-                "Problem",
-                List.of("Action"),
-                List.of("Decision"),
-                List.of("Verified"),
-                "Outcome",
-                List.of(),
-                AchievementStatus.DELIVERED,
-                ContributionType.PRIMARY,
-                null,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(question.getId())
+        PortfolioSnapshot snapshot = validCaseBoundarySnapshot(
+                projectQuestionDefinition,
+                caseQuestionDefinition
         );
-        PortfolioSnapshot snapshot = snapshot(
-                List.of(project("project-1", "sql-audit", List.of())),
-                List.of(question),
-                List.of(),
-                List.of(caseStudy)
-        );
+        new PortfolioSnapshotValidator().validate(snapshot);
         LocalPortfolioKnowledgeAdapter adapter =
                 new LocalPortfolioKnowledgeAdapter(repository(snapshot));
 
@@ -280,7 +284,133 @@ class LocalPortfolioKnowledgeAdapterTest {
                 .map(AnswerQuestion::getSuggestion)
                 .toList();
 
+        assertThat(suggestedQuestions).contains(projectQuestion);
         assertThat(suggestedQuestions).doesNotContain(caseQuestion);
+    }
+
+    private static PortfolioSnapshot validCaseBoundarySnapshot(
+            QuestionDefinition projectQuestion,
+            QuestionDefinition caseQuestion
+    ) {
+        String evidenceId = "evidence-1";
+        String timelineId = "timeline-boundary";
+        Claim projectClaim = claim(
+                "claim-project",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim caseClaim = claim(
+                "claim-case",
+                ClaimSubjectType.CASE,
+                "case-role-reset"
+        );
+        ProjectProfile project = new ProjectProfile(
+                "project-1",
+                "P-01",
+                "sql-audit",
+                "SQL Audit",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(projectClaim.getId()),
+                List.of(evidenceId),
+                List.of(timelineId)
+        );
+        CaseStudy caseStudy = new CaseStudy(
+                "case-role-reset",
+                "C-01",
+                "test-role-reset",
+                CaseType.FEATURE,
+                "测试角色清理",
+                "测试人员频繁创建新号时清理旧角色状态",
+                "旧账号缓存会影响重复测试",
+                List.of("实现清理角色信息能力"),
+                List.of("保持公开 Case 与 Agent 项目检索隔离"),
+                List.of("通过功能测试验证"),
+                "测试人员可重复创建干净账号",
+                List.of("仅陈述已验证的功能结果"),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                null,
+                List.of(caseClaim.getId()),
+                List.of(evidenceId),
+                List.of(timelineId),
+                List.of(caseQuestion.getId())
+        );
+        TimelineEvent timeline = new TimelineEvent(
+                timelineId,
+                "2026-07",
+                "公开边界验证",
+                "Case 问题不应进入 Agent 项目问题目录",
+                "构造同时关联项目与 Case 的有效快照",
+                "验证项目问题保留且 Case-only 问题隔离",
+                List.of(project.getId()),
+                List.of(caseStudy.getId()),
+                List.of(projectClaim.getId(), caseClaim.getId()),
+                List.of(evidenceId)
+        );
+        EvidenceRecord evidence = evidence(evidenceId, EvidenceStatus.APPROVED, false);
+
+        return new PortfolioSnapshot(
+                "3.0",
+                "2026-07-23.1",
+                OffsetDateTime.parse("2026-07-23T12:00:00+08:00"),
+                new OwnerProfile(
+                        "",
+                        "Java backend intern",
+                        "Engineering portfolio",
+                        null,
+                        null,
+                        null
+                ),
+                List.of(project),
+                List.of(caseStudy),
+                List.of(projectClaim, caseClaim),
+                List.of(
+                        link("link-project", projectClaim.getId(), evidenceId),
+                        link("link-case", caseClaim.getId(), evidenceId)
+                ),
+                List.of(projectQuestion, caseQuestion),
+                List.of(evidence),
+                List.of(timeline)
+        );
+    }
+
+    private static Claim claim(String id, ClaimSubjectType subjectType, String subjectId) {
+        return new Claim(
+                id,
+                subjectType,
+                subjectId,
+                ClaimCategory.OUTCOME,
+                "Reviewed delivery outcome",
+                "Only the reviewed result is stated",
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                VerificationBasis.EVIDENCE_SUPPORTED,
+                ClaimVerificationStatus.VERIFIED,
+                Materiality.KEY,
+                List.of("DELIVERY"),
+                Map.of("INTERVIEWER", 100)
+        );
+    }
+
+    private static ClaimEvidenceLink link(String id, String claimId, String evidenceId) {
+        return new ClaimEvidenceLink(
+                id,
+                claimId,
+                evidenceId,
+                SupportType.DIRECT,
+                "Supports the reviewed delivery outcome",
+                ReviewStatus.APPROVED
+        );
     }
 
     @Test
