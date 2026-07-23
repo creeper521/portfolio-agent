@@ -1,10 +1,12 @@
 package com.portfolio.agent.portfolio.domain;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ReleaseBundleModelContractTest {
 
@@ -41,5 +43,28 @@ class ReleaseBundleModelContractTest {
         assertThat(retrieval.getDimension()).isEqualTo(512);
         assertThat(retrieval.getChunkCount()).isEqualTo(3);
         assertThat(retrieval.getVectorNormalization()).isEqualTo("L2");
+    }
+
+    @Test
+    void legacyMissingOrNullCasesCountNormalizesToZero() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        BundleCounts missing = mapper.readValue("""
+                {"projects":1,"claims":1,"evidence":1,"claimEvidenceLinks":1,
+                "timelineEvents":1,"questionPresets":1}
+                """, BundleCounts.class);
+        BundleCounts explicitNull = mapper.readValue("""
+                {"projects":1,"cases":null,"claims":1,"evidence":1,
+                "claimEvidenceLinks":1,"timelineEvents":1,"questionPresets":1}
+                """, BundleCounts.class);
+
+        assertThat(missing.getCases()).isZero();
+        assertThat(explicitNull.getCases()).isZero();
+    }
+
+    @Test
+    void rejectsNegativeCasesCount() {
+        assertThatThrownBy(() -> new BundleCounts(1, -1, 1, 1, 1, 1, 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cases");
     }
 }

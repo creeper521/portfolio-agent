@@ -77,13 +77,60 @@ class PublicBundleLoaderTest {
     }
 
     @Test
-    void caseByteChangeInvalidatesChecksumAndCandidateHash() {
+    void rejectsSchemaThreeManifestWithInvalidCasesCountTypes() {
+        for (String invalidValue : java.util.List.of(
+                "null", "\"1\"", "true", "1.0")) {
+            Map<String, byte[]> bundle = validSchemaThreeBundle();
+            replaceAndRehashManifest(bundle, "\"cases\":1",
+                    "\"cases\":" + invalidValue);
+
+            assertThatThrownBy(() -> loader.load(bundle))
+                    .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                    .hasMessageContaining("counts.cases");
+        }
+    }
+
+    @Test
+    void rejectsNumericManifestSchemaVersionBeforeMapping() {
+        Map<String, byte[]> bundle = validSchemaThreeBundle();
+        replaceAndRehashManifest(bundle,
+                "\"schemaVersion\":\"3.0\"", "\"schemaVersion\":3.0");
+
+        assertThatThrownBy(() -> loader.load(bundle))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("manifest schemaVersion");
+    }
+
+    @Test
+    void rejectsMissingManifestSchemaVersionBeforeMapping() {
+        Map<String, byte[]> bundle = validSchemaThreeBundle();
+        replaceAndRehashManifest(bundle,
+                "\"schemaVersion\":\"3.0\",", "");
+
+        assertThatThrownBy(() -> loader.load(bundle))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("manifest schemaVersion");
+    }
+
+    @Test
+    void caseByteChangeInvalidatesChecksum() {
         Map<String, byte[]> files = new LinkedHashMap<>(validSchemaThreeBundle());
         files.put("portfolio.json", changeCaseOutcome(files.get("portfolio.json")));
 
         assertThatThrownBy(() -> loader.load(files))
                 .isInstanceOf(InvalidPortfolioSnapshotException.class)
                 .hasMessageContaining("checksum mismatch: portfolio.json");
+    }
+
+    @Test
+    void caseByteChangeWithUpdatedChecksumInvalidatesCandidateHash() {
+        Map<String, byte[]> files = new LinkedHashMap<>(validSchemaThreeBundle());
+        files.put("portfolio.json", changeCaseOutcome(files.get("portfolio.json")));
+        updatePortfolioChecksum(files);
+
+        assertThatThrownBy(() -> loader.load(files))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("candidatePayloadHash mismatch");
     }
 
     @Test
@@ -421,5 +468,15 @@ class PublicBundleLoaderTest {
         return new String(portfolioBytes, StandardCharsets.UTF_8)
                 .replace("Preserved both language results", "Changed case outcome")
                 .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private void updatePortfolioChecksum(Map<String, byte[]> files) {
+        String replacement = "\"portfolio.json\":\""
+                + BundleHashCalculator.sha256(files.get("portfolio.json")) + "\"";
+        String checksums = new String(files.get("checksums.json"), StandardCharsets.UTF_8)
+                .replaceFirst(
+                        "\"portfolio\\.json\":\"sha256:[0-9a-f]+\"",
+                        replacement);
+        files.put("checksums.json", checksums.getBytes(StandardCharsets.UTF_8));
     }
 }

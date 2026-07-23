@@ -21,6 +21,9 @@ public final class BundleCounts {
             @JsonProperty("claimEvidenceLinks") int claimEvidenceLinks,
             @JsonProperty("timelineEvents") int timelineEvents,
             @JsonProperty("questionPresets") int questionPresets) {
+        if (cases != null && cases < 0) {
+            throw new IllegalArgumentException("cases must not be negative");
+        }
         this.projects = projects;
         this.cases = cases == null ? 0 : cases;
         this.claims = claims;

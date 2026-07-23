@@ -195,7 +195,10 @@ public final class PublicBundleLoader {
         JsonNode root = objectMapper.readTree(bytes);
         require(root != null && root.isObject(), "manifest.json must contain a JSON object");
         JsonNode schemaVersion = root.get("schemaVersion");
-        if (schemaVersion != null && "3.0".equals(schemaVersion.textValue())) {
+        require(schemaVersion != null && schemaVersion.isTextual()
+                        && !schemaVersion.textValue().isBlank(),
+                "manifest schemaVersion is required and must be text");
+        if ("3.0".equals(schemaVersion.textValue())) {
             JsonNode counts = root.get("counts");
             require(counts != null && counts.isObject()
                             && counts.has("cases") && counts.get("cases").isIntegralNumber(),
