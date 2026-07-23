@@ -279,6 +279,27 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsCaseIdThatCollidesWithProjectId() {
+        assertInvalid(withCase(caseJson().replace(
+                "\"id\": \"case-one\"", "\"id\": \"sql-audit-project\"")),
+                "project and case ids must be disjoint");
+    }
+
+    @Test
+    void rejectsCaseCodeThatCollidesWithProjectCode() {
+        assertInvalid(withCase(caseJson().replace(
+                "\"code\": \"CASE-01\"", "\"code\": \"P-01\"")),
+                "project and case codes must be disjoint");
+    }
+
+    @Test
+    void rejectsCaseSlugThatCollidesWithProjectSlug() {
+        assertInvalid(withCase(caseJson().replace(
+                "\"slug\": \"case-one\"", "\"slug\": \"sql-audit\"")),
+                "project and case slugs must be disjoint");
+    }
+
+    @Test
     void rejectsIllegalCaseSlug() {
         assertInvalid(withCase(caseJson().replace(
                 "\"slug\": \"case-one\"", "\"slug\": \"Case One\"")),

@@ -30,22 +30,29 @@ class PortfolioSnapshotJsonReaderTest {
     }
 
     @Test
-    void schemaTwoPreservesExistingCases() {
+    void schemaTwoClearsExistingCaseCollections() {
         PortfolioSnapshot snapshot = reader.readBundle(bytes(canonicalJson(
                 "2.0", ",\"cases\":[" + caseStudyJson() + "]", "", "")));
 
-        assertThat(snapshot.getCases()).singleElement().satisfies(caseStudy ->
-                assertThat(caseStudy.getId()).isEqualTo("case-1"));
+        assertThat(snapshot.getCases()).isEmpty();
     }
 
     @Test
-    void schemaTwoRejectsNonArrayCases() throws Exception {
+    void schemaTwoClearsNonArrayCasesAndExistingNestedCaseIds() throws Exception {
         ObjectNode root = (ObjectNode) objectMapper.readTree(schemaTwoPortfolioBytes());
         root.put("cases", "not-an-array");
+        ((ObjectNode) root.withArray("questionPresets").get(0))
+                .putArray("caseIds").add("case-hostile");
+        ((ObjectNode) root.withArray("timelineEvents").get(0))
+                .put("caseIds", "case-hostile");
 
-        assertThatThrownBy(() -> reader.readBundle(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("cases is required and must be an array");
+        PortfolioSnapshot snapshot = reader.readBundle(objectMapper.writeValueAsBytes(root));
+
+        assertThat(snapshot.getCases()).isEmpty();
+        assertThat(snapshot.getQuestions()).allSatisfy(question ->
+                assertThat(question.getCaseIds()).isEmpty());
+        assertThat(snapshot.getTimeline()).allSatisfy(event ->
+                assertThat(event.getCaseIds()).isEmpty());
     }
 
     @Test

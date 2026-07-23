@@ -55,10 +55,19 @@ public class PortfolioSnapshotValidator {
         Map<String, ProjectProfile> projectsById = uniqueById(projects, ProjectProfile::getId, "project");
         Map<String, ProjectProfile> projectsBySlug = uniqueById(projects, ProjectProfile::getSlug,
                 "project slug");
-        uniqueById(projects, ProjectProfile::getCode, "project code");
+        Map<String, ProjectProfile> projectsByCode =
+                uniqueById(projects, ProjectProfile::getCode, "project code");
         Map<String, CaseStudy> casesById = uniqueById(cases, CaseStudy::getId, "case");
-        uniqueById(cases, CaseStudy::getSlug, "case slug");
-        uniqueById(cases, CaseStudy::getCode, "case code");
+        Map<String, CaseStudy> casesBySlug =
+                uniqueById(cases, CaseStudy::getSlug, "case slug");
+        Map<String, CaseStudy> casesByCode =
+                uniqueById(cases, CaseStudy::getCode, "case code");
+        requireDisjoint(projectsById.keySet(), casesById.keySet(),
+                "project and case ids must be disjoint");
+        requireDisjoint(projectsByCode.keySet(), casesByCode.keySet(),
+                "project and case codes must be disjoint");
+        requireDisjoint(projectsBySlug.keySet(), casesBySlug.keySet(),
+                "project and case slugs must be disjoint");
         Map<String, Claim> claimsById = uniqueById(claims, Claim::getId, "claim");
         Map<String, QuestionDefinition> questionsById = uniqueById(questions,
                 QuestionDefinition::getId, "question");
@@ -331,6 +340,14 @@ public class PortfolioSnapshotValidator {
         for (String item : values) {
             require(hasText(item), field + " must not contain blank values");
         }
+    }
+
+    private static void requireDisjoint(
+            Set<String> first,
+            Set<String> second,
+            String message
+    ) {
+        require(first.stream().noneMatch(second::contains), message);
     }
 
     private static <T> Map<String, T> uniqueById(

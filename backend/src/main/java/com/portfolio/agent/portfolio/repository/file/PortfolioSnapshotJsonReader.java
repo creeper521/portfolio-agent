@@ -41,14 +41,9 @@ public final class PortfolioSnapshotJsonReader {
             if ("2.0".equals(schemaVersion)) {
                 ArrayNode questionPresets = requiredArray(root, "questionPresets");
                 ArrayNode timelineEvents = requiredArray(root, "timelineEvents");
-                JsonNode cases = root.get("cases");
-                if (cases == null) {
-                    root.putArray("cases");
-                } else {
-                    require(cases.isArray(), "cases is required and must be an array");
-                }
-                normalizeMissingArray(questionPresets, "caseIds");
-                normalizeMissingArray(timelineEvents, "caseIds");
+                root.putArray("cases");
+                normalizeArray(questionPresets, "caseIds");
+                normalizeArray(timelineEvents, "caseIds");
             } else if ("3.0".equals(schemaVersion)) {
                 JsonNode cases = root.get("cases");
                 require(cases != null, "cases is required for schemaVersion 3.0");
@@ -89,8 +84,8 @@ public final class PortfolioSnapshotJsonReader {
             root.set("timelineEvents", timeline);
             root.remove("timeline");
             root.putArray("cases");
-            normalizeMissingArray(questions, "caseIds");
-            normalizeMissingArray(timeline, "caseIds");
+            normalizeArray(questions, "caseIds");
+            normalizeArray(timeline, "caseIds");
             return strictMapper.treeToValue(root, PortfolioSnapshot.class);
         } catch (InvalidPortfolioSnapshotException exception) {
             throw exception;
@@ -115,15 +110,12 @@ public final class PortfolioSnapshotJsonReader {
         return (ArrayNode) value;
     }
 
-    private void normalizeMissingArray(ArrayNode items, String field) {
+    private void normalizeArray(ArrayNode items, String field) {
         for (int index = 0; index < items.size(); index++) {
             JsonNode item = items.get(index);
             require(item instanceof ObjectNode,
                     "array item at index " + index + " must be a JSON object");
-            ObjectNode object = (ObjectNode) item;
-            if (!object.has(field)) {
-                object.putArray(field);
-            }
+            ((ObjectNode) item).putArray(field);
         }
     }
 

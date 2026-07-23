@@ -279,6 +279,7 @@ test('explicit follow-up sends stable references only and is lost on reload', as
   })
   expect(body.contextEnvelope.referencedClaimIds.length).toBeGreaterThan(0)
   expect(body.contextEnvelope.referencedClaimIds.length).toBeLessThanOrEqual(8)
+  expect(body.contextEnvelope.referencedClaimIds).toContain('claim-sql-audit-delivered')
   expect(body.contextEnvelope.referencedClaimIds.every(
     (id: unknown) => typeof id === 'string' && publicContent.claimIds.includes(id),
   )).toBe(true)

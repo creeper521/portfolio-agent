@@ -18,6 +18,8 @@ import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
+import com.portfolio.agent.portfolio.domain.Claim;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
@@ -55,22 +58,31 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
     }
 
     private List<AnswerTimelineEvent> toTimeline(RuntimeContentSnapshot snapshot) {
-        Map<String, String> projectSlugsById = snapshot.getProjects().stream()
+        Map<String, ProjectProfile> projectsById = snapshot.getProjects().stream()
                 .collect(Collectors.toUnmodifiableMap(
                         ProjectProfile::getId,
-                        ProjectProfile::getSlug));
-        Set<String> claimIds = snapshot.getClaims().stream()
-                .map(com.portfolio.agent.portfolio.domain.Claim::getId)
-                .collect(Collectors.toUnmodifiableSet());
+                        project -> project));
+        Map<String, Claim> projectClaimsById = snapshot.getClaims().stream()
+                .filter(claim -> claim.getSubjectType() == ClaimSubjectType.PROJECT)
+                .collect(Collectors.toUnmodifiableMap(Claim::getId, claim -> claim));
         Set<String> approvedEvidenceIds = snapshot.getEvidence().stream()
                 .filter(evidence -> evidence.getPublicStatus() == EvidenceStatus.APPROVED)
                 .filter(evidence -> Boolean.FALSE.equals(evidence.getRawContentPublic()))
                 .map(EvidenceRecord::getId)
                 .collect(Collectors.toUnmodifiableSet());
         return snapshot.getTimeline().stream()
-                .filter(event -> projectSlugsById.keySet().containsAll(event.getProjectIds()))
-                .filter(event -> claimIds.containsAll(event.getClaimIds()))
+                .filter(event -> !event.getProjectIds().isEmpty())
+                .filter(event -> event.getCaseIds().isEmpty())
+                .filter(event -> projectsById.keySet().containsAll(event.getProjectIds()))
+                .filter(event -> event.getClaimIds().stream().allMatch(claimId -> {
+                    Claim claim = projectClaimsById.get(claimId);
+                    return claim != null && event.getProjectIds().contains(claim.getSubjectId());
+                }))
                 .filter(event -> approvedEvidenceIds.containsAll(event.getEvidenceIds()))
+                .filter(event -> event.getEvidenceIds().stream().allMatch(evidenceId ->
+                        event.getProjectIds().stream()
+                                .map(projectsById::get)
+                                .anyMatch(project -> project.getEvidenceIds().contains(evidenceId))))
                 .map(event -> new AnswerTimelineEvent(
                         event.getId(),
                         event.getDateLabel(),
@@ -78,7 +90,10 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         event.getProblem(),
                         event.getAction(),
                         event.getImpact(),
-                        event.getProjectIds().stream().map(projectSlugsById::get).toList(),
+                        event.getProjectIds().stream()
+                                .map(projectsById::get)
+                                .map(ProjectProfile::getSlug)
+                                .toList(),
                         event.getClaimIds(),
                         event.getEvidenceIds()))
                 .toList();
@@ -113,6 +128,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
 
         List<AnswerQuestion> questions = snapshot.getQuestions().stream()
                 .filter(candidate -> candidate.getProjectIds().contains(value.getId()))
+                .filter(candidate -> candidate.getCaseIds().isEmpty())
                 .map(this::toQuestion)
                 .toList();
 
@@ -136,8 +152,13 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         Collectors.mapping(
                                 com.portfolio.agent.portfolio.domain.ClaimEvidenceLink::getEvidenceId,
                                 Collectors.toUnmodifiableList())));
-        List<AnswerClaimProjection> claims = snapshot.getClaims().stream()
+        Map<String, Claim> projectClaimsById = snapshot.getClaims().stream()
+                .filter(claim -> claim.getSubjectType() == ClaimSubjectType.PROJECT)
                 .filter(claim -> value.getId().equals(claim.getSubjectId()))
+                .collect(Collectors.toUnmodifiableMap(Claim::getId, claim -> claim));
+        List<AnswerClaimProjection> claims = value.getClaimIds().stream()
+                .map(projectClaimsById::get)
+                .filter(Objects::nonNull)
                 .map(claim -> new AnswerClaimProjection(
                         claim.getId(),
                         AnswerClaimCategory.valueOf(claim.getCategory().name()),

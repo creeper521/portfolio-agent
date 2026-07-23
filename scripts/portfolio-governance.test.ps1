@@ -101,6 +101,48 @@ function New-PublicCase([object]$PortfolioData) {
     }
 }
 
+function Invoke-LegacyReviewPack(
+    [string]$CandidatePath,
+    [object]$PortfolioData
+) {
+    $benchmarkPath = Join-Path $repositoryRoot `
+        '.agents\skills\portfolio-governance\benchmark\active-benchmarks.v1.json'
+    $originalBenchmarkBytes = [IO.File]::ReadAllBytes($benchmarkPath)
+    try {
+        $benchmarkCases = @()
+        foreach ($preset in @($PortfolioData.questionPresets)) {
+            foreach ($caseType in @(
+                'SUPPORTED_QUESTION', 'ALIAS', 'BOUNDARY', 'CLAIM_EVIDENCE', 'SAFETY'
+            )) {
+                $benchmarkCase = [ordered]@{
+                    caseId = 'LEGACY-' + $preset.id + '-' + $caseType
+                    category = 'CONTRACT'
+                    caseType = $caseType
+                    questionPresetId = $preset.id
+                    severity = 'ERROR'
+                }
+                if ($caseType -eq 'CLAIM_EVIDENCE') {
+                    $benchmarkCase.requiredClaimIds = @()
+                    $benchmarkCase.requiredEvidenceIds = @()
+                }
+                $benchmarkCases += [pscustomobject]$benchmarkCase
+            }
+        }
+        Save-Json ([pscustomobject]@{
+            schemaVersion = '1.0'
+            cases = $benchmarkCases
+        }) $benchmarkPath
+        return Invoke-Governance @(
+            '-Command', 'build-review-pack',
+            '-Workspace', $workspace,
+            '-Candidate', $CandidatePath
+        )
+    }
+    finally {
+        [IO.File]::WriteAllBytes($benchmarkPath, $originalBenchmarkBytes)
+    }
+}
+
 function Invoke-CompilerMain(
     [string]$MainClass,
     [string]$Jar,
@@ -194,6 +236,38 @@ try {
     if ($legacyData.schemaVersion -ne '2.0' -or
             $legacyData.PSObject.Properties.Name -contains 'cases') {
         throw 'Schema 2.0 compatibility fixture must omit the Case collection.'
+    }
+    $legacyData | Add-Member -NotePropertyName cases -NotePropertyValue @(
+        (New-PublicCase $legacyData)
+    )
+    $legacyData.questionPresets | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @('case-hostile')
+    }
+    $legacyData.timelineEvents | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @('case-hostile')
+    }
+    Save-Json $legacyData (Join-Path $legacy 'portfolio.json')
+    $hostileLegacyResult = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace, '-Candidate', $legacy
+    )
+    if ($hostileLegacyResult.ExitCode -ne 0) {
+        throw "Schema 2.0 hostile Case fields must normalize away: $($hostileLegacyResult.Output)"
+    }
+    $legacyReview = Invoke-LegacyReviewPack $legacy $legacyData
+    if ($legacyReview.ExitCode -ne 0) {
+        throw "Schema 2.0 review pack failed: $($legacyReview.Output)"
+    }
+    $legacyReviewResult = $legacyReview.Output | ConvertFrom-Json
+    $legacyReviewPack = Join-Path $workspace $legacyReviewResult.artifacts[1]
+    $legacySummary = Get-Content -LiteralPath (Join-Path $legacyReviewPack 'summary.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($legacySummary.counts.cases -ne 0) {
+        throw 'Schema 2.0 review summary must report zero cases.'
+    }
+    $legacyCasesJson = Get-Content -LiteralPath (Join-Path $legacyReviewPack 'cases.json') `
+        -Raw -Encoding UTF8
+    if ($legacyCasesJson -notmatch '^\s*\[\s*\]\s*$') {
+        throw 'Schema 2.0 review cases.json must be an empty array.'
     }
 
     $schemaThree = New-Candidate 'schema-three'

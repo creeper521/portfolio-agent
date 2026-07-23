@@ -187,7 +187,7 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     @Test
-    void projectsReviewedTimelineIntoTheSameRuntimeAnswerContent() {
+    void excludesCaseOnlyAndMixedCaseTimelineFromAgentContent() {
         QuestionDefinition projectQuestion = question(
                 "question-project-sql-audit",
                 "project-1"
@@ -212,15 +212,53 @@ class LocalPortfolioKnowledgeAdapterTest {
 
         List<AnswerTimelineEvent> timeline = adapter.getContent().getTimeline();
 
-        assertThat(timeline).hasSize(1);
-        assertThat(timeline.getFirst().getProjectSlugs()).containsExactly("sql-audit");
-        assertThat(timeline.getFirst().getClaimIds())
-                .containsExactly("claim-project", "claim-case");
-        assertThat(timeline.getFirst().getEvidenceIds())
-                .containsExactly("evidence-1");
+        assertThat(timeline).isEmpty();
         assertThat(adapter.getContent().getCapabilities().isPresetAnswers()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isReadOnlyTools()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isMultiTurnReferences()).isTrue();
+    }
+
+    @Test
+    void preservesProjectClaimOrderAndRejectsCaseClaimsWithCollidingSubjectIds() {
+        Claim firstInSnapshot = claim(
+                "claim-project-second",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim firstInProject = claim(
+                "claim-project-first",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim collidingCaseClaim = claim(
+                "claim-case-collision",
+                ClaimSubjectType.CASE,
+                "project-1"
+        );
+        ProjectProfile project = new ProjectProfile(
+                "project-1", "P-01", "sql-audit", "SQL Audit", "Summary",
+                "Background", List.of("Responsibility"), "Solution",
+                List.of("Decision"), List.of("Java"), List.of("Verified"),
+                "Outcome", "Handoff", ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(firstInProject.getId(), firstInSnapshot.getId()),
+                List.of(), List.of()
+        );
+        PortfolioSnapshot snapshot = new PortfolioSnapshot(
+                "3.0", "2026-07-23.1",
+                OffsetDateTime.parse("2026-07-23T12:00:00+08:00"),
+                new OwnerProfile("", "Java backend intern", "Engineering portfolio",
+                        null, null, null),
+                List.of(project), List.of(),
+                List.of(firstInSnapshot, collidingCaseClaim, firstInProject),
+                List.of(), List.of(), List.of(), List.of()
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        assertThat(adapter.findBySlug("sql-audit").orElseThrow().getClaims())
+                .extracting(item -> item.getId())
+                .containsExactly("claim-project-first", "claim-project-second");
     }
 
     @Test
@@ -371,6 +409,18 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(projectClaim.getId(), caseClaim.getId()),
                 List.of(evidenceId)
         );
+        TimelineEvent caseOnlyTimeline = new TimelineEvent(
+                "timeline-case-only",
+                "2026-07",
+                "Case-only event",
+                "Case-only content must stay outside Agent",
+                "Keep the public Case API separate",
+                "Agent content remains project-only",
+                List.of(),
+                List.of(caseStudy.getId()),
+                List.of(caseClaim.getId()),
+                List.of(evidenceId)
+        );
         EvidenceRecord evidence = evidence(evidenceId, EvidenceStatus.APPROVED, false);
 
         return new PortfolioSnapshot(
@@ -394,7 +444,7 @@ class LocalPortfolioKnowledgeAdapterTest {
                 ),
                 List.of(projectQuestion, caseQuestion),
                 List.of(evidence),
-                List.of(timeline)
+                List.of(timeline, caseOnlyTimeline)
         );
     }
 
