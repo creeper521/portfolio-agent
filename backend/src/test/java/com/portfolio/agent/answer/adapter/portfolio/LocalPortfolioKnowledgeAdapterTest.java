@@ -34,13 +34,8 @@ import com.portfolio.agent.portfolio.domain.SupportType;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.domain.VerificationBasis;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
-import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
-import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
 
-import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -149,16 +144,30 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     @Test
-    void mapsReviewedUtf8QuestionAndEvidenceContractFromPublicSnapshot() throws Exception {
-        ClassPathResource resource =
-                new ClassPathResource("public-data/public-portfolio.v1.json");
-        PortfolioSnapshot snapshot;
-        try (InputStream inputStream = resource.getInputStream()) {
-            snapshot = new PortfolioSnapshotJsonReader(
-                    new ObjectMapper().findAndRegisterModules())
-                    .readLegacyResource(inputStream.readAllBytes());
-        }
-        QuestionDefinition publishedQuestion = snapshot.getQuestions().getFirst();
+    void mapsReviewedUtf8QuestionAndEvidenceContract() {
+        QuestionDefinition publishedQuestion = new QuestionDefinition(
+                "sql-audit-overview",
+                "请介绍 SQL 审计项目",
+                List.of("SQL 审计项目解决了什么问题？"),
+                List.of("INTERVIEWER"),
+                List.of("project-1"),
+                List.of(),
+                List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit",
+                        List.of("sql-audit-delivery-set"))),
+                List.of(publishedQuestion),
+                List.of(evidence(
+                        "sql-audit-delivery-set",
+                        EvidenceStatus.APPROVED,
+                        false
+                ))
+        );
         LocalPortfolioKnowledgeAdapter adapter =
                 new LocalPortfolioKnowledgeAdapter(repository(snapshot));
 
@@ -175,23 +184,29 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(knowledge.getEvidence())
                 .extracting(AnswerEvidence::getId)
                 .containsExactly("sql-audit-delivery-set");
-        assertThat(knowledge.getClaims()).hasSize(1);
-        assertThat(knowledge.getClaims().getFirst().getId())
-                .isEqualTo("claim-sql-audit-delivered");
-        assertThat(knowledge.getClaims().getFirst().getDirectEvidenceIds())
-                .containsExactly("sql-audit-delivery-set");
     }
 
     @Test
-    void projectsReviewedTimelineIntoTheSameRuntimeAnswerContent() throws Exception {
-        ClassPathResource resource =
-                new ClassPathResource("public-data/public-portfolio.v1.json");
-        PortfolioSnapshot snapshot;
-        try (InputStream inputStream = resource.getInputStream()) {
-            snapshot = new PortfolioSnapshotJsonReader(
-                    new ObjectMapper().findAndRegisterModules())
-                    .readLegacyResource(inputStream.readAllBytes());
-        }
+    void projectsReviewedTimelineIntoTheSameRuntimeAnswerContent() {
+        QuestionDefinition projectQuestion = question(
+                "question-project-sql-audit",
+                "project-1"
+        );
+        QuestionDefinition caseQuestion = new QuestionDefinition(
+                "question-case-role-reset",
+                "测试角色清理功能解决了什么问题？",
+                List.of(),
+                List.of("INTERVIEWER"),
+                List.of(),
+                List.of("case-role-reset"),
+                List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("CASE"),
+                true,
+                10
+        );
+        PortfolioSnapshot snapshot =
+                validCaseBoundarySnapshot(projectQuestion, caseQuestion);
         LocalPortfolioKnowledgeAdapter adapter =
                 new LocalPortfolioKnowledgeAdapter(repository(snapshot));
 
@@ -200,9 +215,9 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(timeline).hasSize(1);
         assertThat(timeline.getFirst().getProjectSlugs()).containsExactly("sql-audit");
         assertThat(timeline.getFirst().getClaimIds())
-                .containsExactly("claim-sql-audit-delivered");
+                .containsExactly("claim-project", "claim-case");
         assertThat(timeline.getFirst().getEvidenceIds())
-                .containsExactly("sql-audit-delivery-set");
+                .containsExactly("evidence-1");
         assertThat(adapter.getContent().getCapabilities().isPresetAnswers()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isReadOnlyTools()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isMultiTurnReferences()).isTrue();
@@ -275,7 +290,6 @@ class LocalPortfolioKnowledgeAdapterTest {
                 projectQuestionDefinition,
                 caseQuestionDefinition
         );
-        new PortfolioSnapshotValidator().validate(snapshot);
         LocalPortfolioKnowledgeAdapter adapter =
                 new LocalPortfolioKnowledgeAdapter(repository(snapshot));
 

@@ -40,7 +40,7 @@ class AnswerControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(jsonPath("$.turnId").value("turn-canonical"))
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-21.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-23.1"))
                 .andExpect(jsonPath("$.questionPresetId").value("sql-audit-overview"))
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))
                 .andExpect(jsonPath("$.answerSource").value("PRESET"))
@@ -60,7 +60,7 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
                         .value("sql-audit-overview"))
                 .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
-                        .value("2026-07-21.1"))
+                        .value("2026-07-23.1"))
                 .andExpect(jsonPath("$.contextEnvelope.projectSlugs[0]")
                         .value("sql-audit"))
                 .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
@@ -94,7 +94,19 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.verification").value("NOT_APPLICABLE"))
                 .andExpect(jsonPath("$.sections[0].type").value("BOUNDARY"))
                 .andExpect(jsonPath("$.evidenceIds.length()").value(0))
-                .andExpect(jsonPath("$.suggestedQuestionPresetIds.length()").value(1));
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds.length()").value(3))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
+                        .value("sql-audit-overview"))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds[1]")
+                        .value("question-sql-audit-negative-input"))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds[2]")
+                        .value("question-sql-audit-partial-success"))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItems(
+                                "question-case-multilingual-overview",
+                                "question-case-role-reset-overview",
+                                "question-case-codegraph-overview"
+                        ))));
     }
 
     @Test
@@ -227,7 +239,7 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))
                 .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
                 .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
-                        .value("2026-07-21.1"))
+                        .value("2026-07-23.1"))
                 .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
                         .value("claim-sql-audit-delivered"));
     }

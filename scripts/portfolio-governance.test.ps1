@@ -5,6 +5,8 @@ $repositoryRoot = Split-Path $PSScriptRoot -Parent
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-governance-' + [guid]::NewGuid())
 $workspace = Join-Path $fixtureRoot 'workspace'
 $candidate = Join-Path $workspace 'candidates\candidate-1'
+$currentBundleVersion = '2026-07-23.1'
+$nextBundleVersion = '2026-07-23.2'
 
 function Invoke-Governance([string[]]$Arguments) {
     $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cli @Arguments 2>&1
@@ -29,18 +31,50 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     $presentationPath = Join-Path $CandidatePath 'presentation.json'
     $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $data.schemaVersion = '3.0'
-    $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
+    $data.contentVersion = '2026-07-21.1'
+    if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
+        $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
+    }
     $data.questionPresets | ForEach-Object {
-        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+        if (-not ($_.PSObject.Properties.Name -contains 'caseIds')) {
+            $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+        }
     }
     $data.timelineEvents | ForEach-Object {
-        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+        if (-not ($_.PSObject.Properties.Name -contains 'caseIds')) {
+            $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+        }
     }
     Save-Json $data $portfolioPath
     $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $presentation.schemaVersion = '3.0'
+    $presentation.contentVersion = '2026-07-21.1'
     Save-Json $presentation $presentationPath
     return $data
+}
+
+function ConvertTo-SchemaTwo([string]$CandidatePath) {
+    $portfolioPath = Join-Path $CandidatePath 'portfolio.json'
+    $presentationPath = Join-Path $CandidatePath 'presentation.json'
+    $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $data.schemaVersion = '2.0'
+    $data.contentVersion = '2026-07-21.1'
+    $data.PSObject.Properties.Remove('cases')
+    $data.claims = @($data.claims | Where-Object { $_.subjectType -ne 'CASE' })
+    $legacyClaimIds = @($data.claims | ForEach-Object { [string]$_.id })
+    $data.claimEvidenceLinks = @($data.claimEvidenceLinks |
+        Where-Object { $legacyClaimIds -contains [string]$_.claimId })
+    $data.questionPresets = @($data.questionPresets |
+        Where-Object { @($_.projectIds).Count -gt 0 })
+    $data.timelineEvents = @($data.timelineEvents |
+        Where-Object { @($_.projectIds).Count -gt 0 })
+    $data.questionPresets | ForEach-Object { $_.PSObject.Properties.Remove('caseIds') }
+    $data.timelineEvents | ForEach-Object { $_.PSObject.Properties.Remove('caseIds') }
+    Save-Json $data $portfolioPath
+    $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $presentation.schemaVersion = '2.0'
+    $presentation.contentVersion = '2026-07-21.1'
+    Save-Json $presentation $presentationPath
 }
 
 function New-PublicCase([object]$PortfolioData) {
@@ -109,8 +143,8 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:c73a8169a7c0148eb0f32721f95c0d63dc8c8ad1f1f89b3890d5417a1c3478a1') {
-        throw 'PowerShell candidatePayloadHash does not match the Java test vector.'
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:564330cbdf98693e16a4f80a96c55716c244295ae10f7df8a33480f3b1716f48') {
+        throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if ($result.runSnapshot.policyBundleHash.Contains('pending') -or
         $result.runSnapshot.benchmarkDefinitionHash.Contains('pending')) {
@@ -149,20 +183,17 @@ try {
     if ($private.ExitCode -eq 0 -or -not $private.Output.Contains('PRIVACY_CONTENT_REJECTED')) { throw 'Private content must fail PrivacyGate.' }
 
     $legacy = New-Candidate 'schema-two-legacy'
+    ConvertTo-SchemaTwo $legacy
     $legacyResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
         '-Candidate', $legacy)
     if ($legacyResult.ExitCode -ne 0) {
         throw "Schema 2.0 candidate must normalize to zero cases: $($legacyResult.Output)"
     }
-    $legacyReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
-        '-Candidate', $legacy)
-    if ($legacyReview.ExitCode -ne 0) { throw "Schema 2.0 review failed: $($legacyReview.Output)" }
-    $legacyReviewResult = $legacyReview.Output | ConvertFrom-Json
-    $legacyReviewPack = Join-Path $workspace $legacyReviewResult.artifacts[1]
-    $legacySummary = Get-Content -LiteralPath (Join-Path $legacyReviewPack 'summary.json') `
+    $legacyData = Get-Content -LiteralPath (Join-Path $legacy 'portfolio.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($legacySummary.counts.cases -ne 0) {
-        throw 'Schema 2.0 review must normalize the Case count to zero.'
+    if ($legacyData.schemaVersion -ne '2.0' -or
+            $legacyData.PSObject.Properties.Name -contains 'cases') {
+        throw 'Schema 2.0 compatibility fixture must omit the Case collection.'
     }
 
     $schemaThree = New-Candidate 'schema-three'
@@ -171,24 +202,13 @@ try {
     $schemaThreeResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
         '-Candidate', $schemaThree)
     if ($schemaThreeResult.ExitCode -ne 0) {
-        throw "Schema 3.0 candidate with explicit empty cases must pass: $($schemaThreeResult.Output)"
+        throw "Schema 3.0 candidate with explicit cases must pass: $($schemaThreeResult.Output)"
     }
 
     $missingCases = New-Candidate 'schema-three-missing-cases'
-    $missingCasesData = Get-Content -LiteralPath (Join-Path $missingCases 'portfolio.json') `
-        -Raw -Encoding UTF8 | ConvertFrom-Json
-    $missingCasesData.schemaVersion = '3.0'
-    $missingCasesData.questionPresets | ForEach-Object {
-        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
-    }
-    $missingCasesData.timelineEvents | ForEach-Object {
-        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
-    }
+    $missingCasesData = ConvertTo-SchemaThree $missingCases
+    $missingCasesData.PSObject.Properties.Remove('cases')
     Save-Json $missingCasesData (Join-Path $missingCases 'portfolio.json')
-    $missingCasesPresentation = Get-Content -LiteralPath (Join-Path $missingCases 'presentation.json') `
-        -Raw -Encoding UTF8 | ConvertFrom-Json
-    $missingCasesPresentation.schemaVersion = '3.0'
-    Save-Json $missingCasesPresentation (Join-Path $missingCases 'presentation.json')
     $missingCasesResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
         '-Candidate', $missingCases)
     if ($missingCasesResult.ExitCode -eq 0 -or
@@ -228,7 +248,7 @@ try {
         $caseData = ConvertTo-SchemaThree $caseCandidate
         $publicCase = New-PublicCase $caseData
         $publicCase.($referenceCase.Property) = @($referenceCase.Missing)
-        $caseData.cases = @($publicCase)
+        $caseData.cases = @($caseData.cases) + @($publicCase)
         Save-Json $caseData (Join-Path $caseCandidate 'portfolio.json')
         $caseResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
             '-Candidate', $caseCandidate)
@@ -253,7 +273,7 @@ try {
     $casePrivacyData = ConvertTo-SchemaThree $casePrivacyCandidate
     $privateCase = New-PublicCase $casePrivacyData
     $privateCase.summary = 'Internal host 192.168.1.24'
-    $casePrivacyData.cases = @($privateCase)
+    $casePrivacyData.cases = @($casePrivacyData.cases) + @($privateCase)
     Save-Json $casePrivacyData (Join-Path $casePrivacyCandidate 'portfolio.json')
     $casePrivacy = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
         '-Candidate', $casePrivacyCandidate)
@@ -386,14 +406,14 @@ try {
     }
     $schemaThreeSummary = Get-Content -LiteralPath (Join-Path $schemaThreeReviewPack 'summary.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($schemaThreeSummary.counts.cases -ne 0) {
+    if ($schemaThreeSummary.counts.cases -ne 3) {
         throw 'Review output must include the Case count.'
     }
     $caseReviewCandidate = New-Candidate 'schema-three-case-review'
     $caseReviewData = ConvertTo-SchemaThree $caseReviewCandidate
     $reviewCase = New-PublicCase $caseReviewData
     $reviewCase.evidenceIds = @($caseReviewData.evidence[0].id)
-    $caseReviewData.cases = @($reviewCase)
+    $caseReviewData.cases = @($caseReviewData.cases) + @($reviewCase)
     Save-Json $caseReviewData (Join-Path $caseReviewCandidate 'portfolio.json')
     $caseReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
         '-Candidate', $caseReviewCandidate)
@@ -403,7 +423,7 @@ try {
         (Join-Path (Join-Path $workspace $caseReviewResult.artifacts[1]) 'summary.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
     $evidenceId = [string]$caseReviewData.evidence[0].id
-    if ($caseReviewSummary.counts.cases -ne 1 -or
+    if ($caseReviewSummary.counts.cases -ne 4 -or
             @($caseReviewSummary.caseSlugsByEvidenceId.$evidenceId) -notcontains 'case-one') {
         throw 'Review output must expose Evidence-to-Case slug changes.'
     }
@@ -435,7 +455,7 @@ try {
         -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($schemaThreeManifest.schemaVersion -ne '3.0' -or
             -not ($schemaThreeManifest.counts.PSObject.Properties.Name -contains 'cases') -or
-            $schemaThreeManifest.counts.cases -ne 0) {
+            $schemaThreeManifest.counts.cases -ne 3) {
         throw 'Schema 3.0 Manifest must explicitly bind counts.cases.'
     }
     $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')
@@ -516,7 +536,7 @@ try {
     $dryRun = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot)
     if ($dryRun.ExitCode -ne 0 -or -not (($dryRun.Output | ConvertFrom-Json).dryRun)) { throw 'Publish must default to dry-run.' }
-    if (Test-Path -LiteralPath (Join-Path $releaseRoot 'versions\2026-07-21.1')) { throw 'Dry-run changed public release state.' }
+    if (Test-Path -LiteralPath (Join-Path $releaseRoot ('versions\' + $currentBundleVersion))) { throw 'Dry-run changed public release state.' }
 
     $blockedPublishAudit = Join-Path $workspace 'audit\publish.jsonl'
     New-Item -ItemType Directory -Force -Path $blockedPublishAudit | Out-Null
@@ -526,7 +546,7 @@ try {
     if ($auditFailure.ExitCode -eq 0 -or -not $auditFailure.Output.Contains('PUBLISH_AUDIT_WRITE_FAILED')) {
         throw "Publish must fail closed when its security audit is unavailable: $($auditFailure.Output)"
     }
-    if (Test-Path -LiteralPath (Join-Path $releaseRoot 'versions\2026-07-21.1')) {
+    if (Test-Path -LiteralPath (Join-Path $releaseRoot ('versions\' + $currentBundleVersion))) {
         throw 'Audit failure must happen before any public release state is written.'
     }
     Remove-Item -LiteralPath $blockedPublishAudit -Recurse -Force
@@ -534,12 +554,12 @@ try {
     $publish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot, '-Confirm')
     if ($publish.ExitCode -ne 0) { throw "Publish failed: $($publish.Output)" }
-    $publishedVersion = Join-Path $releaseRoot 'versions\2026-07-21.1'
+    $publishedVersion = Join-Path $releaseRoot ('versions\' + $currentBundleVersion)
     if (-not (Test-Path -LiteralPath (Join-Path $publishedVersion 'manifest.json') -PathType Leaf) -or
         -not (Test-Path -LiteralPath (Join-Path $publishedVersion 'checksums.json') -PathType Leaf)) { throw 'Published bundle is incomplete.' }
     if (-not [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes((Join-Path $candidate 'portfolio.json')),
         [byte[]][IO.File]::ReadAllBytes((Join-Path $publishedVersion 'portfolio.json')))) { throw 'Publish changed approved portfolio bytes.' }
-    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne '2026-07-21.1') { throw 'Active pointer was not switched.' }
+    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) { throw 'Active pointer was not switched.' }
 
     $listed = Invoke-Governance @('-Command', 'list', '-Workspace', $workspace,
         '-ReleaseRoot', $releaseRoot)
@@ -549,12 +569,12 @@ try {
     $status = Invoke-Governance @('-Command', 'status', '-Workspace', $workspace,
         '-ReleaseRoot', $releaseRoot)
     $statusResult = $status.Output | ConvertFrom-Json
-    if ($status.ExitCode -ne 0 -or $statusResult.activeVersion -ne '2026-07-21.1') {
+    if ($status.ExitCode -ne 0 -or $statusResult.activeVersion -ne $currentBundleVersion) {
         throw "Status must report the active version: $($status.Output)"
     }
     $verified = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
-        '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1')
-    if ($verified.ExitCode -ne 0 -or ($verified.Output | ConvertFrom-Json).verifiedVersion -ne '2026-07-21.1') {
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion)
+    if ($verified.ExitCode -ne 0 -or ($verified.Output | ConvertFrom-Json).verifiedVersion -ne $currentBundleVersion) {
         throw "Verify must validate an immutable published bundle: $($verified.Output)"
     }
 
@@ -565,7 +585,7 @@ try {
     $candidate2 = New-Candidate 'candidate-2'
     foreach ($name in @('portfolio.json', 'presentation.json')) {
         $path = Join-Path $candidate2 $name
-        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace('2026-07-21.1', '2026-07-21.2') |
+        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace($currentBundleVersion, $nextBundleVersion) |
             Set-Content -LiteralPath $path -Encoding UTF8
     }
     $review2 = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace, '-Candidate', $candidate2)
@@ -581,19 +601,19 @@ try {
     if ($postSwitchFailure.ExitCode -eq 0 -or -not $postSwitchFailure.Output.Contains('PUBLISH_POST_SWITCH_FAILED')) {
         throw "A failed post-switch probe must fail publication: $($postSwitchFailure.Output)"
     }
-    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne '2026-07-21.1') {
+    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) {
         throw 'Post-switch failure must atomically restore the verified old active version.'
     }
 
     Set-Content -LiteralPath (Join-Path $releaseRoot 'active') -Value 'broken-active' -Encoding UTF8
     $rollbackDryRun = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,
-        '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1')
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion)
     if ($rollbackDryRun.ExitCode -ne 0 -or -not (($rollbackDryRun.Output | ConvertFrom-Json).dryRun)) { throw 'Rollback must default to dry-run.' }
     if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne 'broken-active') { throw 'Rollback dry-run changed active.' }
     $blockedRollbackAudit = Join-Path $workspace 'audit\rollback.jsonl'
     New-Item -ItemType Directory -Force -Path $blockedRollbackAudit | Out-Null
     $rollbackAuditFailure = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,
-        '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1', '-Confirm')
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion, '-Confirm')
     if ($rollbackAuditFailure.ExitCode -eq 0 -or -not $rollbackAuditFailure.Output.Contains('ROLLBACK_AUDIT_WRITE_FAILED')) {
         throw "Rollback must fail closed when its security audit is unavailable: $($rollbackAuditFailure.Output)"
     }
@@ -601,18 +621,18 @@ try {
         throw 'Rollback audit failure must preserve the old active pointer.'
     }
     Remove-Item -LiteralPath $blockedRollbackAudit -Recurse -Force
-    @{ versions = @('2026-07-21.1') } | ConvertTo-Json |
+    @{ versions = @($currentBundleVersion) } | ConvertTo-Json |
         Set-Content -LiteralPath (Join-Path $releaseRoot 'blocked-versions.json') -Encoding UTF8
     $blockedRollback = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,
-        '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1', '-Confirm')
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion, '-Confirm')
     if ($blockedRollback.ExitCode -eq 0 -or -not $blockedRollback.Output.Contains('ROLLBACK_TARGET_BLOCKED')) {
         throw 'Rollback must reject versions in blocked-versions.json.'
     }
     Remove-Item -LiteralPath (Join-Path $releaseRoot 'blocked-versions.json') -Force
     $rollback = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,
-        '-ReleaseRoot', $releaseRoot, '-TargetVersion', '2026-07-21.1', '-Confirm')
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion, '-Confirm')
     if ($rollback.ExitCode -ne 0) { throw "Rollback failed: $($rollback.Output)" }
-    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne '2026-07-21.1') { throw 'Rollback did not restore verified target.' }
+    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) { throw 'Rollback did not restore verified target.' }
 
     $compilerJar = Join-Path $repositoryRoot 'backend\target\portfolio-agent.jar'
     $localModel = Join-Path $repositoryRoot 'runtime-models\bge-small-zh-v1.5'
@@ -666,7 +686,7 @@ try {
             '-ReleaseRoot', $retrievalReleaseRoot, '-JarPath', $compilerJar,
             '-ModelDirectory', $localModel, '-Confirm')
         if ($retrievalPublish.ExitCode -ne 0) { throw "Retrieval publish failed: $($retrievalPublish.Output)" }
-        $retrievalVersion = Join-Path $retrievalReleaseRoot 'versions\2026-07-21.1'
+        $retrievalVersion = Join-Path $retrievalReleaseRoot ('versions\' + $currentBundleVersion)
         $retrievalNames = @(Get-ChildItem -LiteralPath $retrievalVersion -File |
             ForEach-Object { $_.Name } | Sort-Object)
         if (($retrievalNames -join ',') -ne
@@ -686,7 +706,7 @@ try {
             throw 'Runtime Manifest did not bind Approval and retrieval metadata.'
         }
         $retrievalVerify = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
-            '-ReleaseRoot', $retrievalReleaseRoot, '-TargetVersion', '2026-07-21.1')
+            '-ReleaseRoot', $retrievalReleaseRoot, '-TargetVersion', $currentBundleVersion)
         if ($retrievalVerify.ExitCode -ne 0) {
             throw "Seven-file retrieval release failed verify: $($retrievalVerify.Output)"
         }

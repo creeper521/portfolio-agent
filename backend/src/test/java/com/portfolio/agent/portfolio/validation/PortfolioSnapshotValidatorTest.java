@@ -25,7 +25,7 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
-    void acceptsSchemaThreeCaseOwnedContent() {
+    void acceptsSchemaThreeCaseOnlyQuestionFixture() {
         assertThatCode(() -> validate(validSchemaThreeJson())).doesNotThrowAnyException();
     }
 
