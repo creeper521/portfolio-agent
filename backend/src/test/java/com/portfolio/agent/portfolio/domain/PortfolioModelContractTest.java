@@ -14,21 +14,27 @@ class PortfolioModelContractTest {
     @Test
     void questionDefinitionDefensivelyCopiesAliasesAndKeepsValueSemantics() {
         List<String> aliases = new ArrayList<>(List.of("介绍项目"));
+        List<String> caseIds = new ArrayList<>(List.of("case-1"));
         QuestionDefinition first = new QuestionDefinition(
                 "question-1", "完整介绍", aliases, List.of("INTERVIEWER"),
-                List.of("project-1"), List.of("OVERVIEW"), List.of(ClaimCategory.OUTCOME),
+                List.of("project-1"), caseIds, List.of("OVERVIEW"), List.of(ClaimCategory.OUTCOME),
                 List.of("HOME"), true, 10
         );
         QuestionDefinition second = new QuestionDefinition(
                 "question-1", "完整介绍", List.of("介绍项目"), List.of("INTERVIEWER"),
-                List.of("project-1"), List.of("OVERVIEW"), List.of(ClaimCategory.OUTCOME),
+                List.of("project-1"), List.of("case-1"), List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
                 List.of("HOME"), true, 10
         );
 
         aliases.add("后来加入的别名");
+        caseIds.add("case-2");
 
         assertThat(first.getAliases()).containsExactly("介绍项目");
+        assertThat(first.getCaseIds()).containsExactly("case-1");
         assertThatThrownBy(() -> first.getAliases().add("禁止修改"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> first.getCaseIds().add("blocked"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(first).isEqualTo(second);
         assertThat(first.hashCode()).isEqualTo(second.hashCode());
@@ -98,24 +104,31 @@ class PortfolioModelContractTest {
     @Test
     void timelineEventDefensivelyCopiesReferencesAndKeepsValueSemantics() {
         List<String> projectIds = new ArrayList<>(List.of("project-1"));
+        List<String> caseIds = new ArrayList<>(List.of("case-1"));
         List<String> claimIds = new ArrayList<>(List.of("claim-1"));
         List<String> evidenceIds = new ArrayList<>(List.of("evidence-1"));
         TimelineEvent first = new TimelineEvent(
                 "timeline-1", "2026.06–07", "交付闭环", "路径硬编码",
-                "完成多目标路由", "形成可交付版本", projectIds, claimIds, evidenceIds
+                "完成多目标路由", "形成可交付版本",
+                projectIds, caseIds, claimIds, evidenceIds
         );
         TimelineEvent second = new TimelineEvent(
                 "timeline-1", "2026.06–07", "交付闭环", "路径硬编码",
                 "完成多目标路由", "形成可交付版本",
-                List.of("project-1"), List.of("claim-1"), List.of("evidence-1")
+                List.of("project-1"), List.of("case-1"),
+                List.of("claim-1"), List.of("evidence-1")
         );
 
         projectIds.add("private-project");
+        caseIds.add("private-case");
         evidenceIds.add("private-evidence");
 
         assertThat(first.getProjectIds()).containsExactly("project-1");
+        assertThat(first.getCaseIds()).containsExactly("case-1");
         assertThat(first.getEvidenceIds()).containsExactly("evidence-1");
         assertThatThrownBy(() -> first.getProjectIds().add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> first.getCaseIds().add("blocked"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(first).isEqualTo(second);
         assertThat(first.hashCode()).isEqualTo(second.hashCode());
@@ -124,19 +137,36 @@ class PortfolioModelContractTest {
 
     @Test
     void snapshotDefensivelyCopiesTimeline() {
+        List<CaseStudy> cases = new ArrayList<>(List.of(caseStudy()));
         List<TimelineEvent> timeline = new ArrayList<>(List.of(new TimelineEvent(
                 "timeline-1", "2026.06–07", "交付闭环", "问题", "行动", "影响",
-                List.of("project-1"), List.of("claim-1"), List.of("evidence-1")
+                List.of("project-1"), List.of("case-1"),
+                List.of("claim-1"), List.of("evidence-1")
         )));
         PortfolioSnapshot snapshot = new PortfolioSnapshot(
                 "1.0", "version-1", OffsetDateTime.parse("2026-07-17T00:00:00+08:00"),
-                null, List.of(), List.of(), List.of(), List.of(), List.of(), timeline
+                null, List.of(), cases, List.of(), List.of(), List.of(), List.of(), timeline
         );
 
+        cases.clear();
         timeline.clear();
 
+        assertThat(snapshot.getCases()).hasSize(1);
+        assertThatThrownBy(() -> snapshot.getCases().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
         assertThat(snapshot.getTimeline()).hasSize(1);
         assertThatThrownBy(() -> snapshot.getTimeline().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    private CaseStudy caseStudy() {
+        return new CaseStudy(
+                "case-1", "CASE-01", "case-one", CaseType.FEATURE,
+                "Case one", "Summary", "Problem", List.of("Action"),
+                List.of("Decision"), List.of("Verification"), "Outcome",
+                List.of("Limitation"), AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY, "project-1", List.of("claim-1"),
+                List.of("evidence-1"), List.of("timeline-1"), List.of("question-1")
+        );
     }
 }
