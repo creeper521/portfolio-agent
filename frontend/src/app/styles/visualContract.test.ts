@@ -75,6 +75,8 @@ describe('prototype visual contract', () => {
     expect(conversation).toContain('right: 28px')
     expect(conversation).toContain('left: 28px')
     expect(sessions).toContain('padding: 18px 0')
+    expect(sessions).toMatch(/article\.menu-open\s*\{[^}]*min-height:/s)
+    expect(sessions).not.toMatch(/\.session-menu\s*\{[^}]*position:\s*absolute/s)
     expect(evidence).toContain('padding: 28px 20px')
     expect(agentPage).toContain('min-height: 100%')
   })

@@ -47,7 +47,10 @@ function confirmRename() {
       <article
         v-for="session in sessions"
         :key="session.id"
-        :class="{ active: session.id === activeId }"
+        :class="{
+          active: session.id === activeId,
+          'menu-open': menuId === session.id,
+        }"
       >
         <form
           v-if="editingId === session.id"
@@ -144,6 +147,10 @@ article.active {
   box-shadow: inset 2px 0 var(--workspace-accent, var(--red));
 }
 
+article.menu-open {
+  min-height: 88px;
+}
+
 .session-select,
 .session-menu-trigger {
   color: inherit;
@@ -175,19 +182,14 @@ article:focus-within .session-menu-trigger {
 }
 
 .session-menu {
-  position: absolute;
-  z-index: 1;
-  top: calc(100% - 4px);
-  right: 8px;
-  display: grid;
-  min-width: 104px;
-  padding: 4px;
-  border: 1px solid var(--workspace-rule, var(--rule));
-  background: var(--workspace-rail-bg, var(--paper));
-  box-shadow: 0 8px 18px rgb(0 0 0 / 12%);
+  display: flex;
+  padding: 0 18px 8px;
+  grid-column: 1 / -1;
+  gap: 4px;
 }
 
 .session-menu button {
+  flex: 1;
   padding: 8px 10px;
   color: inherit;
   border: 0;

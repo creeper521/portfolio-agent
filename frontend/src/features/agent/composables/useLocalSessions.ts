@@ -15,6 +15,7 @@ function makeId(prefix: string) {
 export function useLocalSessions() {
   const sessions = ref<AgentSession[]>([])
   const activeSessionId = ref('')
+  const manuallyRenamedSessionIds = new Set<string>()
 
   const activeSession = computed(
     () => sessions.value.find((session) => session.id === activeSessionId.value) ?? null,
@@ -51,6 +52,7 @@ export function useLocalSessions() {
     if (!session) return
     session.title = normalized.slice(0, 40)
     session.updatedAt = Date.now()
+    manuallyRenamedSessionIds.add(sessionId)
     sessions.value = [...sessions.value]
   }
 
@@ -65,7 +67,7 @@ export function useLocalSessions() {
       createdAt: timestamp,
     })
     session.updatedAt = timestamp
-    if (session.messages[0]?.role === 'USER') {
+    if (session.messages[0]?.role === 'USER' && !manuallyRenamedSessionIds.has(sessionId)) {
       session.title = session.messages[0].content.slice(0, 24)
     }
     sessions.value = [...sessions.value]
@@ -73,6 +75,7 @@ export function useLocalSessions() {
 
   function removeSession(sessionId: string) {
     sessions.value = sessions.value.filter((session) => session.id !== sessionId)
+    manuallyRenamedSessionIds.delete(sessionId)
     if (activeSessionId.value === sessionId) {
       activeSessionId.value = sessions.value[0]?.id ?? ''
     }
@@ -81,6 +84,7 @@ export function useLocalSessions() {
   function clearSessions() {
     sessions.value = []
     activeSessionId.value = ''
+    manuallyRenamedSessionIds.clear()
   }
 
   function seedSession(input: AgentRouteSeed) {

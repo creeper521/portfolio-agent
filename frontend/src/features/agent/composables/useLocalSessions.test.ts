@@ -56,6 +56,21 @@ describe('useLocalSessions', () => {
     expect(state.activeSession.value?.title).toBe('新标题')
   })
 
+  it('preserves a renamed title when messages are appended', () => {
+    const state = useLocalSessions()
+    const session = state.createSession({ title: '原标题' })
+
+    state.renameSession(session.id, '手动标题')
+    state.appendMessage(session.id, {
+      role: 'USER',
+      content: '第一条用户消息',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(state.activeSession.value?.title).toBe('手动标题')
+  })
+
   it('creates user and agent messages from a homepage seed without duplicating it', () => {
     const homeSeed: AgentRouteSeed = {
       role: 'INTERVIEWER',
