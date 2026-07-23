@@ -39,6 +39,13 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsMissingSchemaVersion() {
+        assertInvalid(validJson().replace(
+                "  \"schemaVersion\": \"2.0\",\n", ""),
+                "unsupported schemaVersion: null");
+    }
+
+    @Test
     void rejectsDanglingClaimEvidenceLink() {
         assertInvalid(validJson().replace(
                 "\"evidenceId\": \"sql-audit-delivery-set\"",

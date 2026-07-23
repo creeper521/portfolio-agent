@@ -34,7 +34,8 @@ public class PortfolioSnapshotValidator {
 
     public void validate(PortfolioSnapshot snapshot) {
         require(snapshot != null, "snapshot is required");
-        require(SUPPORTED_SCHEMA_VERSIONS.contains(snapshot.getSchemaVersion()),
+        require(snapshot.getSchemaVersion() != null
+                        && SUPPORTED_SCHEMA_VERSIONS.contains(snapshot.getSchemaVersion()),
                 "unsupported schemaVersion: " + snapshot.getSchemaVersion());
         require(hasText(snapshot.getContentVersion()), "contentVersion is required");
         require(snapshot.getPublishedAt() != null, "publishedAt is required");
