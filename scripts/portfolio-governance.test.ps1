@@ -275,6 +275,19 @@ try {
         throw 'Forbidden exact CodeGraph metrics must fail PrivacyGate.'
     }
 
+    $metricBeforeCodeGraph = New-Candidate 'codegraph-metric-before-name'
+    $metricBeforeCodeGraphData = Get-Content -LiteralPath `
+        (Join-Path $metricBeforeCodeGraph 'portfolio.json') -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $metricBeforeCodeGraphData.owner.summary = '28.2% measured in CodeGraph'
+    Save-Json $metricBeforeCodeGraphData (Join-Path $metricBeforeCodeGraph 'portfolio.json')
+    $metricBeforeCodeGraphResult = Invoke-Governance @('-Command', 'validate',
+        '-Workspace', $workspace, '-Candidate', $metricBeforeCodeGraph)
+    if ($metricBeforeCodeGraphResult.ExitCode -eq 0 -or
+            -not $metricBeforeCodeGraphResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Forbidden exact CodeGraph metrics must fail regardless of text order.'
+    }
+
     $qualitativeCodeGraph = New-Candidate 'codegraph-qualitative'
     $qualitativeData = Get-Content -LiteralPath (Join-Path $qualitativeCodeGraph 'portfolio.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -299,16 +312,24 @@ try {
         throw "The sole CSDN profile allowlist URL must pass: $($allowedProfileResult.Output)"
     }
 
-    $unapprovedUrl = New-Candidate 'unapproved-url'
-    $unapprovedUrlData = Get-Content -LiteralPath (Join-Path $unapprovedUrl 'portfolio.json') `
-        -Raw -Encoding UTF8 | ConvertFrom-Json
-    $unapprovedUrlData.owner.githubUrl = 'https://example.com/private-profile'
-    Save-Json $unapprovedUrlData (Join-Path $unapprovedUrl 'portfolio.json')
-    $unapprovedUrlResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
-        '-Candidate', $unapprovedUrl)
-    if ($unapprovedUrlResult.ExitCode -eq 0 -or
-            -not $unapprovedUrlResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
-        throw 'Non-allowlisted URLs must fail PrivacyGate.'
+    foreach ($urlCase in @(
+        @{ Name = 'unapproved-url-host'; Url = 'https://example.com/private-profile' },
+        @{ Name = 'unapproved-url-prefix'; Url = 'https://blog.csdn.net/2301_81073317.evil.example' },
+        @{ Name = 'unapproved-url-query'; Url = 'https://blog.csdn.net/2301_81073317?next=evil' },
+        @{ Name = 'unapproved-url-fragment'; Url = 'https://blog.csdn.net/2301_81073317#private' },
+        @{ Name = 'unapproved-url-path'; Url = 'https://blog.csdn.net/2301_81073317/private' }
+    )) {
+        $unapprovedUrl = New-Candidate $urlCase.Name
+        $unapprovedUrlData = Get-Content -LiteralPath (Join-Path $unapprovedUrl 'portfolio.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $unapprovedUrlData.owner.githubUrl = $urlCase.Url
+        Save-Json $unapprovedUrlData (Join-Path $unapprovedUrl 'portfolio.json')
+        $unapprovedUrlResult = Invoke-Governance @('-Command', 'validate',
+            '-Workspace', $workspace, '-Candidate', $unapprovedUrl)
+        if ($unapprovedUrlResult.ExitCode -eq 0 -or
+                -not $unapprovedUrlResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+            throw "Non-allowlisted URL must fail PrivacyGate: $($urlCase.Name)."
+        }
     }
 
     $emailLeak = New-Candidate 'email-leak'
@@ -323,16 +344,34 @@ try {
         throw 'Email addresses must fail PrivacyGate.'
     }
 
-    $sqlLeak = New-Candidate 'raw-sql-leak'
-    $sqlLeakData = Get-Content -LiteralPath (Join-Path $sqlLeak 'portfolio.json') `
+    foreach ($sqlCase in @(
+        @{ Name = 'raw-sql-insert'; Text = 'INSERT INTO accounts VALUES (1)' },
+        @{ Name = 'raw-sql-delete'; Text = 'DELETE FROM accounts WHERE id = 1' },
+        @{ Name = 'raw-sql-replace'; Text = 'REPLACE INTO accounts VALUES (1)' }
+    )) {
+        $sqlLeak = New-Candidate $sqlCase.Name
+        $sqlLeakData = Get-Content -LiteralPath (Join-Path $sqlLeak 'portfolio.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $sqlLeakData.owner.summary = $sqlCase.Text
+        Save-Json $sqlLeakData (Join-Path $sqlLeak 'portfolio.json')
+        $sqlLeakResult = Invoke-Governance @('-Command', 'validate',
+            '-Workspace', $workspace, '-Candidate', $sqlLeak)
+        if ($sqlLeakResult.ExitCode -eq 0 -or
+                -not $sqlLeakResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+            throw "Raw SQL fragment must fail PrivacyGate: $($sqlCase.Name)."
+        }
+    }
+
+    $privateSource = New-Candidate 'private-source-name'
+    $privateSourceData = Get-Content -LiteralPath (Join-Path $privateSource 'portfolio.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
-    $sqlLeakData.owner.summary = 'SELECT password FROM internal_user'
-    Save-Json $sqlLeakData (Join-Path $sqlLeak 'portfolio.json')
-    $sqlLeakResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
-        '-Candidate', $sqlLeak)
-    if ($sqlLeakResult.ExitCode -eq 0 -or
-            -not $sqlLeakResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
-        throw 'Raw SQL fragments and private source names must fail PrivacyGate.'
+    $privateSourceData.owner.summary = 'source d11_manager_test'
+    Save-Json $privateSourceData (Join-Path $privateSource 'portfolio.json')
+    $privateSourceResult = Invoke-Governance @('-Command', 'validate',
+        '-Workspace', $workspace, '-Candidate', $privateSource)
+    if ($privateSourceResult.ExitCode -eq 0 -or
+            -not $privateSourceResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Private source names must fail PrivacyGate independently.'
     }
 
     $schemaThreeReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
