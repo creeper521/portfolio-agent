@@ -240,7 +240,7 @@ main {
 @media (max-width: 1279.98px) and (min-width: 960px) {
   .site-frame--workspace {
     --agent-shell-gap: 16px;
-    border-radius: 14px;
+    border-radius: 12px;
   }
 }
 
@@ -276,6 +276,10 @@ main {
     color: var(--ink);
     border-bottom: 1px solid var(--rule);
     background: var(--paper-hi);
+  }
+
+  .site-frame--workspace .primary-nav {
+    inset: 70px 0 auto;
   }
 
   .primary-nav--open {

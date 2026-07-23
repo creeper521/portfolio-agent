@@ -93,6 +93,15 @@ describe('prototype visual contract', () => {
     expect(paneResizer).not.toContain('@media (max-width: 1220px)')
   })
 
+  it('keeps the compact shell and workspace navigation aligned to its header', () => {
+    expect(base).toMatch(
+      /@media \(max-width: 1279\.98px\) and \(min-width: 960px\)\s*\{[^}]*\.site-frame--workspace\s*\{[^}]*border-radius: 12px;/s,
+    )
+    expect(base).toMatch(
+      /\.site-frame--workspace \.primary-nav\s*\{[^}]*inset: 70px 0 auto;/s,
+    )
+  })
+
   it('keeps Agent loading and error feedback relative to the workspace shell', () => {
     expect(agentPage).toContain('class="agent-route-feedback"')
     expect(agentPage).toMatch(
