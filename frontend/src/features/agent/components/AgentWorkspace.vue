@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
   --workspace-text: var(--ink);
   --workspace-text-secondary: var(--muted);
   --workspace-text-faint: var(--faint);
-  --workspace-rule: var(--rule);
+  --workspace-rule: var(--agent-hairline);
   --workspace-accent: var(--red);
   --workspace-accent-soft: var(--red-hi);
   --workspace-primary-bg: var(--ink);

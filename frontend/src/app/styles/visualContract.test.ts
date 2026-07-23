@@ -60,6 +60,7 @@ describe('prototype visual contract', () => {
     expect(workspace).toContain('--workspace-rail-bg: var(--agent-rail-paper)')
     expect(workspace).toContain('--workspace-thread-bg: var(--agent-thread-paper)')
     expect(workspace).toContain('--workspace-evidence-bg: var(--agent-evidence-paper)')
+    expect(workspace).toContain('--workspace-rule: var(--agent-hairline)')
     expect(workspace).not.toMatch(/\.agent-workspace\s*\{[^}]*border-radius:/s)
   })
 
