@@ -20,6 +20,7 @@ import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
 import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -138,9 +139,9 @@ class LocalPortfolioKnowledgeAdapterTest {
                 new ClassPathResource("public-data/public-portfolio.v1.json");
         PortfolioSnapshot snapshot;
         try (InputStream inputStream = resource.getInputStream()) {
-            snapshot = new ObjectMapper()
-                    .findAndRegisterModules()
-                    .readValue(inputStream, PortfolioSnapshot.class);
+            snapshot = new PortfolioSnapshotJsonReader(
+                    new ObjectMapper().findAndRegisterModules())
+                    .readLegacyResource(inputStream.readAllBytes());
         }
         QuestionDefinition publishedQuestion = snapshot.getQuestions().getFirst();
         LocalPortfolioKnowledgeAdapter adapter =
@@ -172,9 +173,9 @@ class LocalPortfolioKnowledgeAdapterTest {
                 new ClassPathResource("public-data/public-portfolio.v1.json");
         PortfolioSnapshot snapshot;
         try (InputStream inputStream = resource.getInputStream()) {
-            snapshot = new ObjectMapper()
-                    .findAndRegisterModules()
-                    .readValue(inputStream, PortfolioSnapshot.class);
+            snapshot = new PortfolioSnapshotJsonReader(
+                    new ObjectMapper().findAndRegisterModules())
+                    .readLegacyResource(inputStream.readAllBytes());
         }
         LocalPortfolioKnowledgeAdapter adapter =
                 new LocalPortfolioKnowledgeAdapter(repository(snapshot));
@@ -436,6 +437,7 @@ class LocalPortfolioKnowledgeAdapterTest {
                 projects,
                 List.of(),
                 List.of(),
+                List.of(),
                 questions,
                 evidence,
                 List.of()
@@ -476,6 +478,7 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of("Alias " + id),
                 List.of("INTERVIEWER"),
                 List.of(projectId),
+                List.of(),
                 List.of("OVERVIEW"),
                 List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
                 List.of("HOME"),

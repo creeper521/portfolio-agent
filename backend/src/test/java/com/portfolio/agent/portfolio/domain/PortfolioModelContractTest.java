@@ -26,6 +26,12 @@ class PortfolioModelContractTest {
                 List.of(ClaimCategory.OUTCOME),
                 List.of("HOME"), true, 10
         );
+        QuestionDefinition differentCases = new QuestionDefinition(
+                "question-1", "完整介绍", List.of("介绍项目"), List.of("INTERVIEWER"),
+                List.of("project-1"), List.of("case-2"), List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("HOME"), true, 10
+        );
 
         aliases.add("后来加入的别名");
         caseIds.add("case-2");
@@ -38,6 +44,8 @@ class PortfolioModelContractTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(first).isEqualTo(second);
         assertThat(first.hashCode()).isEqualTo(second.hashCode());
+        assertThat(first).isNotEqualTo(differentCases);
+        assertThat(first.hashCode()).isNotEqualTo(differentCases.hashCode());
         assertThat(first.toString()).contains("question-1", "完整介绍");
     }
 
@@ -118,6 +126,12 @@ class PortfolioModelContractTest {
                 List.of("project-1"), List.of("case-1"),
                 List.of("claim-1"), List.of("evidence-1")
         );
+        TimelineEvent differentCases = new TimelineEvent(
+                "timeline-1", "2026.06–07", "交付闭环", "路径硬编码",
+                "完成多目标路由", "形成可交付版本",
+                List.of("project-1"), List.of("case-2"),
+                List.of("claim-1"), List.of("evidence-1")
+        );
 
         projectIds.add("private-project");
         caseIds.add("private-case");
@@ -132,6 +146,8 @@ class PortfolioModelContractTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(first).isEqualTo(second);
         assertThat(first.hashCode()).isEqualTo(second.hashCode());
+        assertThat(first).isNotEqualTo(differentCases);
+        assertThat(first.hashCode()).isNotEqualTo(differentCases.hashCode());
         assertThat(first.toString()).contains("timeline-1", "交付闭环");
     }
 
@@ -147,6 +163,13 @@ class PortfolioModelContractTest {
                 "1.0", "version-1", OffsetDateTime.parse("2026-07-17T00:00:00+08:00"),
                 null, List.of(), cases, List.of(), List.of(), List.of(), List.of(), timeline
         );
+        PortfolioSnapshot differentCases = new PortfolioSnapshot(
+                "1.0", "version-1", OffsetDateTime.parse("2026-07-17T00:00:00+08:00"),
+                null, List.of(), List.of(caseStudy("case-2")), List.of(), List.of(),
+                List.of(), List.of(), timeline
+        );
+        OffsetDateTime republishedAt = OffsetDateTime.parse("2026-07-18T00:00:00+08:00");
+        PortfolioSnapshot republished = snapshot.withPublishedAt(republishedAt);
 
         cases.clear();
         timeline.clear();
@@ -154,14 +177,22 @@ class PortfolioModelContractTest {
         assertThat(snapshot.getCases()).hasSize(1);
         assertThatThrownBy(() -> snapshot.getCases().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(snapshot).isNotEqualTo(differentCases);
+        assertThat(snapshot.hashCode()).isNotEqualTo(differentCases.hashCode());
+        assertThat(republished.getCases()).containsExactly(caseStudy());
+        assertThat(republished.getPublishedAt()).isEqualTo(republishedAt);
         assertThat(snapshot.getTimeline()).hasSize(1);
         assertThatThrownBy(() -> snapshot.getTimeline().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
     private CaseStudy caseStudy() {
+        return caseStudy("case-1");
+    }
+
+    private CaseStudy caseStudy(String id) {
         return new CaseStudy(
-                "case-1", "CASE-01", "case-one", CaseType.FEATURE,
+                id, "CASE-01", "case-one", CaseType.FEATURE,
                 "Case one", "Summary", "Problem", List.of("Action"),
                 List.of("Decision"), List.of("Verification"), "Outcome",
                 List.of("Limitation"), AchievementStatus.DELIVERED,

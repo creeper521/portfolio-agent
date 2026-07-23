@@ -101,6 +101,7 @@ class PortfolioServiceTest {
                 List.of("Explain the project"),
                 List.of("INTERVIEWER"),
                 List.of("project-1"),
+                List.of(),
                 List.of("OVERVIEW"),
                 List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
                 List.of("HOME"),
@@ -128,6 +129,7 @@ class PortfolioServiceTest {
                 "Created a deliverable version",
                 List.of("project-1"),
                 List.of(),
+                List.of(),
                 List.of("evidence-1")
         );
         return new PortfolioSnapshot(
@@ -136,6 +138,7 @@ class PortfolioServiceTest {
                 OffsetDateTime.parse("2026-07-14T12:00:00+08:00"),
                 owner,
                 List.of(project),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(question),
