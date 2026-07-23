@@ -5,6 +5,9 @@ import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
 import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
+import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.CaseStudy;
+import com.portfolio.agent.portfolio.domain.CaseType;
 import com.portfolio.agent.portfolio.domain.ContributionType;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
@@ -227,6 +230,60 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     @Test
+    void excludesCaseOnlyQuestionsFromAgentSuggestedQuestions() {
+        String caseQuestion = "测试角色清理功能解决了什么问题？";
+        QuestionDefinition question = new QuestionDefinition(
+                "question-case-role-reset",
+                caseQuestion,
+                List.of(),
+                List.of("INTERVIEWER"),
+                List.of(),
+                List.of("case-role-reset"),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10
+        );
+        CaseStudy caseStudy = new CaseStudy(
+                "case-role-reset",
+                "C-01",
+                "test-role-reset",
+                CaseType.FEATURE,
+                "测试角色清理",
+                "Summary",
+                "Problem",
+                List.of("Action"),
+                List.of("Decision"),
+                List.of("Verified"),
+                "Outcome",
+                List.of(),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(question.getId())
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit", List.of())),
+                List.of(question),
+                List.of(),
+                List.of(caseStudy)
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        List<String> suggestedQuestions = adapter.getContent().getProjects().stream()
+                .flatMap(project -> project.getQuestions().stream())
+                .map(AnswerQuestion::getSuggestion)
+                .toList();
+
+        assertThat(suggestedQuestions).doesNotContain(caseQuestion);
+    }
+
+    @Test
     void filtersEvidenceThatIsNotApprovedOrExposesRawContent() {
         ProjectProfile requested = project(
                 "project-1",
@@ -429,13 +486,22 @@ class LocalPortfolioKnowledgeAdapterTest {
             List<QuestionDefinition> questions,
             List<EvidenceRecord> evidence
     ) {
+        return snapshot(projects, questions, evidence, List.of());
+    }
+
+    private static PortfolioSnapshot snapshot(
+            List<ProjectProfile> projects,
+            List<QuestionDefinition> questions,
+            List<EvidenceRecord> evidence,
+            List<CaseStudy> cases
+    ) {
         return new PortfolioSnapshot(
                 "1.0",
                 "2026-07-14.1",
                 OffsetDateTime.parse("2026-07-14T12:00:00+08:00"),
                 null,
                 projects,
-                List.of(),
+                cases,
                 List.of(),
                 List.of(),
                 questions,
