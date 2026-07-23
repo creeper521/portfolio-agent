@@ -19,6 +19,54 @@ function New-Candidate([string]$Name) {
     return $path
 }
 
+function Save-Json([object]$Value, [string]$Path) {
+    $Value | ConvertTo-Json -Depth 30 |
+        Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function ConvertTo-SchemaThree([string]$CandidatePath) {
+    $portfolioPath = Join-Path $CandidatePath 'portfolio.json'
+    $presentationPath = Join-Path $CandidatePath 'presentation.json'
+    $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $data.schemaVersion = '3.0'
+    $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
+    $data.questionPresets | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+    }
+    $data.timelineEvents | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+    }
+    Save-Json $data $portfolioPath
+    $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $presentation.schemaVersion = '3.0'
+    Save-Json $presentation $presentationPath
+    return $data
+}
+
+function New-PublicCase([object]$PortfolioData) {
+    return [pscustomobject][ordered]@{
+        id = 'case-one'
+        code = 'CASE-01'
+        slug = 'case-one'
+        type = 'FEATURE'
+        title = 'Case one'
+        summary = 'A focused public case study'
+        problem = 'The behavior needed an explicit public contract'
+        actions = @('Implement validation')
+        decisions = @('Keep compatibility')
+        verification = @('Focused tests')
+        outcome = 'The case contract is explicit'
+        limitations = @('Public data only')
+        achievementStatus = 'DELIVERED'
+        contributionType = 'PRIMARY'
+        projectId = $null
+        claimIds = @()
+        evidenceIds = @()
+        timelineEventIds = @()
+        questionPresetIds = @()
+    }
+}
+
 function Invoke-CompilerMain(
     [string]$MainClass,
     [string]$Jar,
@@ -100,6 +148,267 @@ try {
     $private = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace, '-Candidate', $privateCandidate)
     if ($private.ExitCode -eq 0 -or -not $private.Output.Contains('PRIVACY_CONTENT_REJECTED')) { throw 'Private content must fail PrivacyGate.' }
 
+    $legacy = New-Candidate 'schema-two-legacy'
+    $legacyResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $legacy)
+    if ($legacyResult.ExitCode -ne 0) {
+        throw "Schema 2.0 candidate must normalize to zero cases: $($legacyResult.Output)"
+    }
+    $legacyReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
+        '-Candidate', $legacy)
+    if ($legacyReview.ExitCode -ne 0) { throw "Schema 2.0 review failed: $($legacyReview.Output)" }
+    $legacyReviewResult = $legacyReview.Output | ConvertFrom-Json
+    $legacyReviewPack = Join-Path $workspace $legacyReviewResult.artifacts[1]
+    $legacySummary = Get-Content -LiteralPath (Join-Path $legacyReviewPack 'summary.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($legacySummary.counts.cases -ne 0) {
+        throw 'Schema 2.0 review must normalize the Case count to zero.'
+    }
+
+    $schemaThree = New-Candidate 'schema-three'
+    $schemaThreeData = ConvertTo-SchemaThree $schemaThree
+    Save-Json $schemaThreeData (Join-Path $schemaThree 'portfolio.json')
+    $schemaThreeResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $schemaThree)
+    if ($schemaThreeResult.ExitCode -ne 0) {
+        throw "Schema 3.0 candidate with explicit empty cases must pass: $($schemaThreeResult.Output)"
+    }
+
+    $missingCases = New-Candidate 'schema-three-missing-cases'
+    $missingCasesData = Get-Content -LiteralPath (Join-Path $missingCases 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $missingCasesData.schemaVersion = '3.0'
+    $missingCasesData.questionPresets | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+    }
+    $missingCasesData.timelineEvents | ForEach-Object {
+        $_ | Add-Member -NotePropertyName caseIds -NotePropertyValue @()
+    }
+    Save-Json $missingCasesData (Join-Path $missingCases 'portfolio.json')
+    $missingCasesPresentation = Get-Content -LiteralPath (Join-Path $missingCases 'presentation.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $missingCasesPresentation.schemaVersion = '3.0'
+    Save-Json $missingCasesPresentation (Join-Path $missingCases 'presentation.json')
+    $missingCasesResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $missingCases)
+    if ($missingCasesResult.ExitCode -eq 0 -or
+            -not $missingCasesResult.Output.Contains('SCHEMA_CASES_REQUIRED')) {
+        throw 'Schema 3.0 must require cases.'
+    }
+
+    $missingQuestionCaseIds = New-Candidate 'schema-three-missing-question-case-ids'
+    $missingQuestionData = ConvertTo-SchemaThree $missingQuestionCaseIds
+    $missingQuestionData.questionPresets[0].PSObject.Properties.Remove('caseIds')
+    Save-Json $missingQuestionData (Join-Path $missingQuestionCaseIds 'portfolio.json')
+    $missingQuestionResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $missingQuestionCaseIds)
+    if ($missingQuestionResult.ExitCode -eq 0 -or
+            -not $missingQuestionResult.Output.Contains('SCHEMA_CASE_IDS_REQUIRED')) {
+        throw 'Schema 3.0 must require questionPreset.caseIds.'
+    }
+
+    $missingTimelineCaseIds = New-Candidate 'schema-three-missing-timeline-case-ids'
+    $missingTimelineData = ConvertTo-SchemaThree $missingTimelineCaseIds
+    $missingTimelineData.timelineEvents[0].PSObject.Properties.Remove('caseIds')
+    Save-Json $missingTimelineData (Join-Path $missingTimelineCaseIds 'portfolio.json')
+    $missingTimelineResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $missingTimelineCaseIds)
+    if ($missingTimelineResult.ExitCode -eq 0 -or
+            -not $missingTimelineResult.Output.Contains('SCHEMA_CASE_IDS_REQUIRED')) {
+        throw 'Schema 3.0 must require timelineEvent.caseIds.'
+    }
+
+    foreach ($referenceCase in @(
+        @{ Name = 'claim'; Property = 'claimIds'; Missing = 'claim-missing'; Code = 'REFERENCE_DANGLING_CASE_CLAIM' },
+        @{ Name = 'evidence'; Property = 'evidenceIds'; Missing = 'evidence-missing'; Code = 'REFERENCE_DANGLING_CASE_EVIDENCE' },
+        @{ Name = 'timeline'; Property = 'timelineEventIds'; Missing = 'timeline-missing'; Code = 'REFERENCE_DANGLING_CASE_TIMELINE' },
+        @{ Name = 'question'; Property = 'questionPresetIds'; Missing = 'question-missing'; Code = 'REFERENCE_DANGLING_CASE_QUESTION' }
+    )) {
+        $caseCandidate = New-Candidate ('dangling-case-' + $referenceCase.Name)
+        $caseData = ConvertTo-SchemaThree $caseCandidate
+        $publicCase = New-PublicCase $caseData
+        $publicCase.($referenceCase.Property) = @($referenceCase.Missing)
+        $caseData.cases = @($publicCase)
+        Save-Json $caseData (Join-Path $caseCandidate 'portfolio.json')
+        $caseResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+            '-Candidate', $caseCandidate)
+        if ($caseResult.ExitCode -eq 0 -or
+                -not $caseResult.Output.Contains($referenceCase.Code)) {
+            throw "Unknown Case $($referenceCase.Name) reference must fail ReferenceIntegrityGate."
+        }
+    }
+
+    $danglingQuestionCase = New-Candidate 'dangling-question-case'
+    $danglingQuestionData = ConvertTo-SchemaThree $danglingQuestionCase
+    $danglingQuestionData.questionPresets[0].caseIds = @('case-missing')
+    Save-Json $danglingQuestionData (Join-Path $danglingQuestionCase 'portfolio.json')
+    $danglingQuestionResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $danglingQuestionCase)
+    if ($danglingQuestionResult.ExitCode -eq 0 -or
+            -not $danglingQuestionResult.Output.Contains('REFERENCE_DANGLING_CASE')) {
+        throw 'Unknown QuestionPreset Case reference must fail ReferenceIntegrityGate.'
+    }
+
+    $casePrivacyCandidate = New-Candidate 'case-private-content'
+    $casePrivacyData = ConvertTo-SchemaThree $casePrivacyCandidate
+    $privateCase = New-PublicCase $casePrivacyData
+    $privateCase.summary = 'Internal host 192.168.1.24'
+    $casePrivacyData.cases = @($privateCase)
+    Save-Json $casePrivacyData (Join-Path $casePrivacyCandidate 'portfolio.json')
+    $casePrivacy = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $casePrivacyCandidate)
+    if ($casePrivacy.ExitCode -eq 0 -or
+            -not $casePrivacy.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Every Case text field must be privacy-scanned.'
+    }
+
+    $metricLeak = New-Candidate 'codegraph-metric-leak'
+    $metricLeakData = Get-Content -LiteralPath (Join-Path $metricLeak 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $metricLeakData.owner.summary = [Text.Encoding]::UTF8.GetString(
+        [Convert]::FromBase64String('Q29kZUdyYXBoIOWkp+WcuuaZr+iKguecgSAyOC4yJQ=='))
+    Save-Json $metricLeakData (Join-Path $metricLeak 'portfolio.json')
+    $metricLeakResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $metricLeak)
+    if ($metricLeakResult.ExitCode -eq 0 -or
+            -not $metricLeakResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Forbidden exact CodeGraph metrics must fail PrivacyGate.'
+    }
+
+    $qualitativeCodeGraph = New-Candidate 'codegraph-qualitative'
+    $qualitativeData = Get-Content -LiteralPath (Join-Path $qualitativeCodeGraph 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $qualitativeData.owner.summary = [Text.Encoding]::UTF8.GetString(
+        [Convert]::FromBase64String(
+            'Q29kZUdyYXBoIOWcqOWkp+WcuuaZr+S4reWHj+WwkeaXoOWFs+S4iuS4i+aWh++8jOS9humcgOimgeS6uuW3peWkjeaguOetlOahiOi0qOmHjw=='))
+    Save-Json $qualitativeData (Join-Path $qualitativeCodeGraph 'portfolio.json')
+    $qualitativeResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $qualitativeCodeGraph)
+    if ($qualitativeResult.ExitCode -ne 0) {
+        throw "Approved qualitative CodeGraph wording must pass: $($qualitativeResult.Output)"
+    }
+
+    $allowedProfile = New-Candidate 'allowed-csdn-profile'
+    $allowedProfileData = Get-Content -LiteralPath (Join-Path $allowedProfile 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $allowedProfileData.owner.githubUrl = 'https://blog.csdn.net/2301_81073317'
+    Save-Json $allowedProfileData (Join-Path $allowedProfile 'portfolio.json')
+    $allowedProfileResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $allowedProfile)
+    if ($allowedProfileResult.ExitCode -ne 0) {
+        throw "The sole CSDN profile allowlist URL must pass: $($allowedProfileResult.Output)"
+    }
+
+    $unapprovedUrl = New-Candidate 'unapproved-url'
+    $unapprovedUrlData = Get-Content -LiteralPath (Join-Path $unapprovedUrl 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unapprovedUrlData.owner.githubUrl = 'https://example.com/private-profile'
+    Save-Json $unapprovedUrlData (Join-Path $unapprovedUrl 'portfolio.json')
+    $unapprovedUrlResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $unapprovedUrl)
+    if ($unapprovedUrlResult.ExitCode -eq 0 -or
+            -not $unapprovedUrlResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Non-allowlisted URLs must fail PrivacyGate.'
+    }
+
+    $emailLeak = New-Candidate 'email-leak'
+    $emailLeakData = Get-Content -LiteralPath (Join-Path $emailLeak 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $emailLeakData.owner.email = 'owner@example.com'
+    Save-Json $emailLeakData (Join-Path $emailLeak 'portfolio.json')
+    $emailLeakResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $emailLeak)
+    if ($emailLeakResult.ExitCode -eq 0 -or
+            -not $emailLeakResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Email addresses must fail PrivacyGate.'
+    }
+
+    $sqlLeak = New-Candidate 'raw-sql-leak'
+    $sqlLeakData = Get-Content -LiteralPath (Join-Path $sqlLeak 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $sqlLeakData.owner.summary = 'SELECT password FROM internal_user'
+    Save-Json $sqlLeakData (Join-Path $sqlLeak 'portfolio.json')
+    $sqlLeakResult = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $sqlLeak)
+    if ($sqlLeakResult.ExitCode -eq 0 -or
+            -not $sqlLeakResult.Output.Contains('PRIVACY_CONTENT_REJECTED')) {
+        throw 'Raw SQL fragments and private source names must fail PrivacyGate.'
+    }
+
+    $schemaThreeReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
+        '-Candidate', $schemaThree)
+    if ($schemaThreeReview.ExitCode -ne 0) {
+        throw "Schema 3.0 review failed: $($schemaThreeReview.Output)"
+    }
+    $schemaThreeReviewResult = $schemaThreeReview.Output | ConvertFrom-Json
+    $schemaThreeReviewPack = Join-Path $workspace $schemaThreeReviewResult.artifacts[1]
+    if (-not (Test-Path -LiteralPath (Join-Path $schemaThreeReviewPack 'cases.json') -PathType Leaf)) {
+        throw 'Review output must include the public Case changes.'
+    }
+    $schemaThreeSummary = Get-Content -LiteralPath (Join-Path $schemaThreeReviewPack 'summary.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($schemaThreeSummary.counts.cases -ne 0) {
+        throw 'Review output must include the Case count.'
+    }
+    $caseReviewCandidate = New-Candidate 'schema-three-case-review'
+    $caseReviewData = ConvertTo-SchemaThree $caseReviewCandidate
+    $reviewCase = New-PublicCase $caseReviewData
+    $reviewCase.evidenceIds = @($caseReviewData.evidence[0].id)
+    $caseReviewData.cases = @($reviewCase)
+    Save-Json $caseReviewData (Join-Path $caseReviewCandidate 'portfolio.json')
+    $caseReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
+        '-Candidate', $caseReviewCandidate)
+    if ($caseReview.ExitCode -ne 0) { throw "Case review failed: $($caseReview.Output)" }
+    $caseReviewResult = $caseReview.Output | ConvertFrom-Json
+    $caseReviewSummary = Get-Content -LiteralPath `
+        (Join-Path (Join-Path $workspace $caseReviewResult.artifacts[1]) 'summary.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $evidenceId = [string]$caseReviewData.evidence[0].id
+    if ($caseReviewSummary.counts.cases -ne 1 -or
+            @($caseReviewSummary.caseSlugsByEvidenceId.$evidenceId) -notcontains 'case-one') {
+        throw 'Review output must expose Evidence-to-Case slug changes.'
+    }
+    if (Test-Path -LiteralPath (Join-Path $workspace 'approvals') -PathType Container) {
+        throw 'Review-pack generation must never auto-approve a candidate.'
+    }
+    $schemaThreeApproval = Invoke-Governance @('-Command', 'approve', '-Workspace', $workspace,
+        '-Candidate', $schemaThree, '-ReviewRunId', $schemaThreeReviewResult.runId,
+        '-ApprovedBy', 'owner-alias', '-PrivacyReviewId', 'PRIV-SCHEMA-3',
+        '-BenchmarkRunId', 'BENCH-SCHEMA-3')
+    if ($schemaThreeApproval.ExitCode -ne 0) {
+        throw "Schema 3.0 approval failed: $($schemaThreeApproval.Output)"
+    }
+    $schemaThreeApprovalResult = $schemaThreeApproval.Output | ConvertFrom-Json
+    $schemaThreeApprovalData = Get-Content -LiteralPath `
+        (Join-Path $workspace $schemaThreeApprovalResult.artifacts[-1]) -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $schemaThreeReleaseRoot = Join-Path $fixtureRoot 'schema-three-releases'
+    New-Item -ItemType Directory -Force -Path $schemaThreeReleaseRoot | Out-Null
+    $schemaThreePublish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
+        '-Candidate', $schemaThree, '-ApprovalId', $schemaThreeApprovalData.approvalId,
+        '-ReleaseRoot', $schemaThreeReleaseRoot, '-Confirm')
+    if ($schemaThreePublish.ExitCode -ne 0) {
+        throw "Schema 3.0 publish fixture failed: $($schemaThreePublish.Output)"
+    }
+    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot 'versions\2026-07-21.1'
+    $schemaThreeManifestPath = Join-Path $schemaThreePublishedVersion 'manifest.json'
+    $schemaThreeManifest = Get-Content -LiteralPath $schemaThreeManifestPath `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($schemaThreeManifest.schemaVersion -ne '3.0' -or
+            -not ($schemaThreeManifest.counts.PSObject.Properties.Name -contains 'cases') -or
+            $schemaThreeManifest.counts.cases -ne 0) {
+        throw 'Schema 3.0 Manifest must explicitly bind counts.cases.'
+    }
+    $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')
+    Save-Json $schemaThreeManifest $schemaThreeManifestPath
+    $missingManifestCases = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
+        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', '2026-07-21.1')
+    if ($missingManifestCases.ExitCode -eq 0 -or
+            -not $missingManifestCases.Output.Contains('VERIFY_TARGET_INVALID')) {
+        throw 'Schema 3.0 verify must reject a Manifest without counts.cases.'
+    }
+    Remove-Item -LiteralPath (Join-Path $workspace 'audit\publish.jsonl') -Force
+
     $uncoveredCandidate = New-Candidate 'uncovered-preset'
     $uncoveredData = Get-Content -LiteralPath (Join-Path $uncoveredCandidate 'portfolio.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $extraPreset = $uncoveredData.questionPresets[0].PSObject.Copy()
@@ -145,6 +454,26 @@ try {
 
     $releaseRoot = Join-Path $fixtureRoot 'public-releases'
     New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+    $publishHashMismatch = New-Candidate 'publish-hash-mismatch'
+    $publishHashReview = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace,
+        '-Candidate', $publishHashMismatch)
+    $publishHashReviewResult = $publishHashReview.Output | ConvertFrom-Json
+    $publishHashApproval = Invoke-Governance @('-Command', 'approve', '-Workspace', $workspace,
+        '-Candidate', $publishHashMismatch, '-ReviewRunId', $publishHashReviewResult.runId,
+        '-ApprovedBy', 'owner-alias', '-PrivacyReviewId', 'PRIV-HASH', '-BenchmarkRunId', 'BENCH-HASH')
+    $publishHashApprovalResult = $publishHashApproval.Output | ConvertFrom-Json
+    $publishHashApprovalData = Get-Content -LiteralPath `
+        (Join-Path $workspace $publishHashApprovalResult.artifacts[-1]) -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    Add-Content -LiteralPath (Join-Path $publishHashMismatch 'portfolio.json') -Value ' '
+    $publishHashMismatchResult = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
+        '-Candidate', $publishHashMismatch, '-ApprovalId', $publishHashApprovalData.approvalId,
+        '-ReleaseRoot', $releaseRoot)
+    if ($publishHashMismatchResult.ExitCode -eq 0 -or
+            -not $publishHashMismatchResult.Output.Contains('PUBLISH_APPROVAL_STALE')) {
+        throw 'Publish must reject candidate bytes that differ from the approved hash.'
+    }
+
     $dryRun = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot)
     if ($dryRun.ExitCode -ne 0 -or -not (($dryRun.Output | ConvertFrom-Json).dryRun)) { throw 'Publish must default to dry-run.' }
