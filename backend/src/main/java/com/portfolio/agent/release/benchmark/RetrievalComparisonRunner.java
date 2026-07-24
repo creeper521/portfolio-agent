@@ -2,6 +2,7 @@ package com.portfolio.agent.release.benchmark;
 
 import com.portfolio.agent.answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
+import com.portfolio.agent.answer.domain.AnswerKeywordIndex;
 import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
 import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
@@ -19,7 +20,10 @@ import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
 import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
+import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,9 +59,12 @@ public final class RetrievalComparisonRunner {
     public List<RetrievalRouteEvaluation> run(
             RetrievalBenchmarkSuite suite,
             RuntimeContentSnapshot snapshot,
-            AnswerRetrievalCorpus corpus,
             RetrievalPolicy policy
     ) {
+        RuntimeRetrievalContent retrieval = snapshot.getRetrievalContent()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "retrieval comparison requires published retrieval content"));
+        AnswerRetrievalCorpus corpus = corpus(retrieval);
         RuntimeAnswerContent content = new LocalPortfolioKnowledgeAdapter(() -> snapshot)
                 .getContent();
         List<RetrievalRouteEvaluation> evaluations = new ArrayList<>();
@@ -116,6 +123,44 @@ public final class RetrievalComparisonRunner {
             ));
         }
         return List.copyOf(evaluations);
+    }
+
+    private AnswerRetrievalCorpus corpus(RuntimeRetrievalContent retrieval) {
+        RuntimeKeywordIndex publishedKeyword = retrieval.getKeywordIndex();
+        List<AnswerKeywordIndex.DocumentEntry> keywordDocuments = new ArrayList<>();
+        for (RuntimeKeywordIndex.DocumentEntry document
+                : publishedKeyword.getDocuments()) {
+            keywordDocuments.add(new AnswerKeywordIndex.DocumentEntry(
+                    document.getChunkId(),
+                    document.getDocumentLength(),
+                    document.getTermFrequencies()
+            ));
+        }
+        AnswerKeywordIndex keywordIndex = new AnswerKeywordIndex(
+                publishedKeyword.getDocumentCount(),
+                publishedKeyword.getAverageDocumentLength(),
+                keywordDocuments,
+                publishedKeyword.getDocumentFrequencies()
+        );
+        Map<String, AnswerRetrievalChunk> chunks = new LinkedHashMap<>();
+        for (RagDocument document : retrieval.getDocuments()) {
+            chunks.put(document.getChunkId(), new AnswerRetrievalChunk(
+                    document.getChunkId(),
+                    document.getProjectSlugs(),
+                    document.getCaseSlugs(),
+                    document.getClaimIds(),
+                    document.getTopics(),
+                    document.getText().length()
+            ));
+        }
+        return new AnswerRetrievalCorpus(
+                keywordIndex,
+                retrieval.getVectorIndex().getVectors(),
+                chunks,
+                retrieval.getManifest().getEmbeddingModelId(),
+                retrieval.getManifest().getEmbeddingArtifactSha256(),
+                retrieval.getManifest().getDimension()
+        );
     }
 
     private AnswerKnowledge findSubject(

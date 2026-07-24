@@ -1,7 +1,12 @@
 package com.portfolio.agent.release;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkReport;
 import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
+import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
+import com.portfolio.agent.portfolio.repository.file.VectorIndexCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -11,6 +16,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,17 +38,62 @@ class RetrievalComparisonCliTest {
         Path sourceBundle = projectRoot().resolve(
                 "backend/src/main/resources/public-data/bundle");
         Path bundle = Files.createDirectory(temporary.resolve("bundle"));
-        for (String name : List.of(
-                "manifest.json",
-                "portfolio.json",
-                "presentation.json",
-                "checksums.json")) {
-            Files.copy(sourceBundle.resolve(name), bundle.resolve(name));
-        }
+        writeSevenFileBundle(sourceBundle, bundle);
         portfolio = bundle.resolve("portfolio.json");
         cases = temporary.resolve("cases.json");
         Files.writeString(cases, casesJson("2026-07-23.1"));
         modelDirectory = Files.createDirectory(temporary.resolve("model"));
+    }
+
+    @Test
+    void rejectsFourFileBundleBeforeExecutingOrPublishing() throws Exception {
+        Path sourceBundle = projectRoot().resolve(
+                "backend/src/main/resources/public-data/bundle");
+        Path legacyBundle = Files.createDirectory(temporary.resolve("legacy-bundle"));
+        for (String name : List.of(
+                "manifest.json", "portfolio.json", "presentation.json", "checksums.json")) {
+            Files.copy(sourceBundle.resolve(name), legacyBundle.resolve(name));
+        }
+        AtomicInteger executions = new AtomicInteger();
+        Path output = temporary.resolve("legacy-output");
+
+        RunResult result = run(validArguments(
+                output, legacyBundle.resolve("portfolio.json"), cases, modelDirectory),
+                request -> {
+                    executions.incrementAndGet();
+                    return fixedReport();
+                });
+
+        assertThat(result.exitCode).isEqualTo(1);
+        assertThat(executions).hasValue(0);
+        assertThat(output).doesNotExist();
+    }
+
+    @Test
+    void rejectsPublishedRetrievalIdentityMismatchesWithoutFallback() {
+        RuntimeContentSnapshot snapshot = capturedSnapshot();
+
+        assertThat(RetrievalComparisonCli.matchesRetrievalIdentity(
+                snapshot,
+                "BAAI/bge-small-zh-v1.5",
+                "sha256:model",
+                512,
+                "retrieval-policy-v1")).isTrue();
+        assertThat(RetrievalComparisonCli.matchesRetrievalIdentity(
+                snapshot, "other-model", "sha256:model", 512,
+                "retrieval-policy-v1")).isFalse();
+        assertThat(RetrievalComparisonCli.matchesRetrievalIdentity(
+                snapshot, "BAAI/bge-small-zh-v1.5", "sha256:other", 512,
+                "retrieval-policy-v1")).isFalse();
+        assertThat(RetrievalComparisonCli.matchesRetrievalIdentity(
+                snapshot, "BAAI/bge-small-zh-v1.5", "sha256:model", 384,
+                "retrieval-policy-v1")).isFalse();
+        assertThat(RetrievalComparisonCli.matchesRetrievalIdentity(
+                snapshot,
+                "BAAI/bge-small-zh-v1.5",
+                "sha256:model",
+                512,
+                "retrieval-policy-v2")).isFalse();
     }
 
     @Test
@@ -335,6 +386,79 @@ class RetrievalComparisonCliTest {
                 Files.readAllBytes(bundle.resolve("manifest.json")),
                 Files.readAllBytes(bundle.resolve("checksums.json"))
         );
+    }
+
+    private RuntimeContentSnapshot capturedSnapshot() {
+        AtomicReference<RuntimeContentSnapshot> captured = new AtomicReference<>();
+        RunResult result = run(validArguments(temporary.resolve("identity-capture")), request -> {
+            captured.set(request.getSnapshot());
+            return fixedReport();
+        });
+        assertThat(result.exitCode).isZero();
+        return captured.get();
+    }
+
+    private void writeSevenFileBundle(Path source, Path target) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("portfolio.json", Files.readAllBytes(source.resolve("portfolio.json")));
+        files.put("presentation.json", Files.readAllBytes(source.resolve("presentation.json")));
+        byte[] rag = ("{\"chunkId\":\"chunk-sql-audit-delivery\","
+                + "\"contentVersion\":\"2026-07-23.1\","
+                + "\"projectSlugs\":[\"sql-audit\"],\"caseSlugs\":[],"
+                + "\"claimIds\":[\"claim-sql-audit-delivered\"],"
+                + "\"text\":\"SQL audit delivered\","
+                + "\"topics\":[\"DELIVERY\"],\"validFrom\":\"2026-07-01\","
+                + "\"validUntil\":null,\"contentHash\":\"sha256:chunk\"}\n")
+                .getBytes(StandardCharsets.UTF_8);
+        files.put("rag-documents.jsonl", rag);
+        KeywordIndexFile keyword = new KeywordIndexFile(
+                "keyword-index-v1",
+                "nfkc-bigram-v1",
+                1,
+                3.0,
+                List.of(new KeywordIndexFile.DocumentEntry(
+                        "chunk-sql-audit-delivery", 3, Map.of("sql", 1, "audit", 1))),
+                Map.of("sql", 1, "audit", 1));
+        files.put("keyword-index.json", mapper.writeValueAsBytes(keyword));
+        float[] vector = new float[512];
+        vector[0] = 1.0f;
+        files.put("vector-index.bin", new VectorIndexCodec().encode(
+                Map.of("chunk-sql-audit-delivery", vector), 512));
+
+        ObjectNode manifest = (ObjectNode) mapper.readTree(
+                Files.readAllBytes(source.resolve("manifest.json")));
+        ObjectNode retrieval = mapper.createObjectNode();
+        retrieval.put("strategyVersion", "hybrid-rag-v1");
+        retrieval.put("normalizationVersion", "nfkc-bigram-v1");
+        retrieval.put("retrievalPolicyVersion", "retrieval-policy-v1");
+        retrieval.put("embeddingModelId", "BAAI/bge-small-zh-v1.5");
+        retrieval.put("embeddingArtifactSha256", "sha256:model");
+        retrieval.put("dimension", 512);
+        retrieval.put("documentMaxTokens", 256);
+        retrieval.put("vectorNormalization", "L2");
+        retrieval.put("similarity", "COSINE");
+        retrieval.put("chunkCount", 1);
+        retrieval.put("chunkSetHash", BundleHashCalculator.sha256(rag));
+        retrieval.put("keywordIndexFormatVersion", "keyword-index-v1");
+        retrieval.put("vectorIndexFormatVersion", "vector-index-v1");
+        manifest.set("retrieval", retrieval);
+        manifest.put("candidatePayloadHash", BundleHashCalculator.candidatePayloadHash(files));
+        byte[] manifestBytes = mapper.writeValueAsBytes(manifest);
+
+        ObjectNode checksums = mapper.createObjectNode();
+        checksums.put("schemaVersion", manifest.path("schemaVersion").asText());
+        checksums.put("contentVersion", manifest.path("contentVersion").asText());
+        ObjectNode hashes = mapper.createObjectNode();
+        for (Map.Entry<String, byte[]> entry : files.entrySet()) {
+            hashes.put(entry.getKey(), BundleHashCalculator.sha256(entry.getValue()));
+        }
+        checksums.set("files", hashes);
+        files.put("manifest.json", manifestBytes);
+        files.put("checksums.json", mapper.writeValueAsBytes(checksums));
+        for (Map.Entry<String, byte[]> entry : files.entrySet()) {
+            Files.write(target.resolve(entry.getKey()), entry.getValue());
+        }
     }
 
     private Path projectRoot() {

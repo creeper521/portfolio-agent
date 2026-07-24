@@ -175,6 +175,56 @@ class PublicBundleLoaderTest {
     }
 
     @Test
+    void rejectsTamperedKeywordAndVectorArtifacts() {
+        Map<String, byte[]> keyword = validRetrievalBundle();
+        keyword.put("keyword-index.json", "{}".getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> loader.load(keyword))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("checksum");
+
+        Map<String, byte[]> vector = validRetrievalBundle();
+        byte[] tampered = vector.get("vector-index.bin").clone();
+        tampered[tampered.length - 1] ^= 1;
+        vector.put("vector-index.bin", tampered);
+        assertThatThrownBy(() -> loader.load(vector))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("checksum");
+    }
+
+    @Test
+    void rejectsRehashedChunkSetAndIndexMembershipMismatches() {
+        Map<String, byte[]> rag = validRetrievalBundle();
+        rag.put("rag-documents.jsonl", new String(
+                rag.get("rag-documents.jsonl"), StandardCharsets.UTF_8)
+                .replace("chunk-sql-audit-delivery", "chunk-sql-audit-other")
+                .getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(rag);
+        assertThatThrownBy(() -> loader.load(rag))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("keyword index chunk set mismatch");
+
+        Map<String, byte[]> keyword = validRetrievalBundle();
+        keyword.put("keyword-index.json", new String(
+                keyword.get("keyword-index.json"), StandardCharsets.UTF_8)
+                .replace("chunk-sql-audit-delivery", "chunk-sql-audit-other")
+                .getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(keyword);
+        assertThatThrownBy(() -> loader.load(keyword))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("keyword index chunk set mismatch");
+
+        Map<String, byte[]> vector = validRetrievalBundle();
+        float[] value = new float[512];
+        value[0] = 1.0f;
+        vector.put("vector-index.bin", new VectorIndexCodec().encode(
+                Map.of("chunk-sql-audit-other", value), 512));
+        rebuildChecksumsAndManifest(vector);
+        assertThatThrownBy(() -> loader.load(vector))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("vector index chunk set mismatch");
+    }
+
+    @Test
     void rejectsPayloadByteMutation() {
         Map<String, byte[]> bundle = validLegacyBundle();
         bundle.put("portfolio.json", new String(bundle.get("portfolio.json"), StandardCharsets.UTF_8)

@@ -1,8 +1,5 @@
 package com.portfolio.agent.release.benchmark;
 
-import com.portfolio.agent.answer.domain.AnswerKeywordIndex;
-import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
-import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
 import com.portfolio.agent.answer.domain.RetrievalMode;
@@ -30,7 +27,12 @@ import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.ReviewStatus;
+import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.RetrievalManifest;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
 import com.portfolio.agent.portfolio.domain.SupportType;
 import com.portfolio.agent.portfolio.domain.VerificationBasis;
 import org.junit.jupiter.api.Test;
@@ -60,7 +62,6 @@ class RetrievalComparisonRunnerTest {
     void evaluatesThreeRoutesWithOneNormalizedEmbeddingAndSubjectFilteringPerCase() {
         RetrievalBenchmarkSuite suite = suite();
         RuntimeContentSnapshot snapshot = snapshot();
-        AnswerRetrievalCorpus corpus = corpus();
         RetrievalPolicy policy = RetrievalPolicy.firstRelease();
         AtomicInteger embeddingCalls = new AtomicInteger();
         LocalEmbeddingPort embeddingPort = query -> {
@@ -82,7 +83,7 @@ class RetrievalComparisonRunnerTest {
         );
 
         List<RetrievalRouteEvaluation> evaluations =
-                runner.run(suite, snapshot, corpus, policy);
+                runner.run(suite, snapshot, policy);
 
         assertThat(embeddingCalls.get()).isEqualTo(suite.getCases().size());
         verify(normalizer, times(suite.getCases().size())).normalize(any());
@@ -184,8 +185,8 @@ class RetrievalComparisonRunnerTest {
         );
     }
 
-    private AnswerRetrievalCorpus corpus() {
-        AnswerKeywordIndex keywordIndex = new AnswerKeywordIndex(
+    private RuntimeRetrievalContent retrievalContent() {
+        RuntimeKeywordIndex keywordIndex = new RuntimeKeywordIndex(
                 3,
                 2.0,
                 List.of(
@@ -199,35 +200,44 @@ class RetrievalComparisonRunnerTest {
         vectors.put("aaa-distractor", new float[]{1.0f, 1.0f});
         vectors.put("chunk-agent", new float[]{0.0f, 1.0f});
         vectors.put("chunk-sql", new float[]{1.0f, 0.0f});
-        Map<String, AnswerRetrievalChunk> chunks = new LinkedHashMap<>();
-        chunks.put("aaa-distractor", chunk(
-                "aaa-distractor", "other-project", "claim-other"));
-        chunks.put("chunk-agent", chunk(
-                "chunk-agent", "target-project", "claim-agent"));
-        chunks.put("chunk-sql", chunk(
-                "chunk-sql", "target-project", "claim-sql"));
-        return new AnswerRetrievalCorpus(keywordIndex, vectors, chunks);
+        List<RagDocument> documents = List.of(
+                ragDocument("aaa-distractor", "other-project", "claim-other"),
+                ragDocument("chunk-agent", "target-project", "claim-agent"),
+                ragDocument("chunk-sql", "target-project", "claim-sql")
+        );
+        RetrievalManifest manifest = new RetrievalManifest(
+                "hybrid-rag-v1", "nfkc-bigram-v1", "retrieval-policy-v1",
+                "BAAI/bge-small-zh-v1.5", "sha256:model", 2, 256,
+                "L2", "COSINE", 3, "sha256:chunks",
+                "keyword-index-v1", "vector-index-v1");
+        return new RuntimeRetrievalContent(
+                manifest, documents, keywordIndex, new RuntimeVectorIndex(2, vectors));
     }
 
-    private AnswerKeywordIndex.DocumentEntry document(
+    private RuntimeKeywordIndex.DocumentEntry document(
             String chunkId,
             Map<String, Integer> terms
     ) {
         int documentLength = terms.values().stream().mapToInt(Integer::intValue).sum();
-        return new AnswerKeywordIndex.DocumentEntry(chunkId, documentLength, terms);
+        return new RuntimeKeywordIndex.DocumentEntry(chunkId, documentLength, terms);
     }
 
-    private AnswerRetrievalChunk chunk(
+    private RagDocument ragDocument(
             String chunkId,
             String projectSlug,
             String claimId
     ) {
-        return new AnswerRetrievalChunk(
+        return new RagDocument(
                 chunkId,
+                "2026-07-23.1",
                 List.of(projectSlug),
+                List.of(),
                 List.of(claimId),
+                "Opaque published content",
                 List.of("RETRIEVAL"),
-                120
+                LocalDate.parse("2026-07-01"),
+                null,
+                "sha256:" + chunkId
         );
     }
 
@@ -272,7 +282,8 @@ class RetrievalComparisonRunnerTest {
         return new RuntimeContentSnapshot(
                 source,
                 "sha256:test-runtime-bundle",
-                Instant.parse("2026-07-23T04:00:00Z")
+                Instant.parse("2026-07-23T04:00:00Z"),
+                retrievalContent()
         );
     }
 

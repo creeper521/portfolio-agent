@@ -8,9 +8,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.answer.adapter.retrieval.LocalEmbeddingArtifact;
 import com.portfolio.agent.answer.adapter.retrieval.LocalEmbeddingArtifactVerifier;
 import com.portfolio.agent.answer.adapter.retrieval.OnnxLocalEmbeddingAdapter;
-import com.portfolio.agent.answer.domain.AnswerKeywordIndex;
-import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
-import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.service.KeywordRetriever;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
@@ -18,12 +15,7 @@ import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
-import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
-import com.portfolio.agent.portfolio.release.ClaimRagDocumentBuilder;
-import com.portfolio.agent.portfolio.release.KeywordIndexBuilder;
-import com.portfolio.agent.portfolio.release.LocalDocumentEmbeddingBuilder;
-import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
@@ -43,7 +35,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -107,6 +98,10 @@ public final class RetrievalComparisonCli {
                     portfolioFile,
                     mapper
             );
+            if (snapshot.getRetrievalContent().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "retrieval comparison requires a seven-file bundle");
+            }
             RetrievalBenchmarkSuite suite = new RetrievalBenchmarkCaseLoader(mapper)
                     .load(Files.readAllBytes(casesFile));
             if (!snapshot.getContentVersion().equals(suite.getContentVersion())) {
@@ -139,32 +134,16 @@ public final class RetrievalComparisonCli {
             throws IOException {
         LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
                 .verify(request.getModelDirectory());
-        List<RagDocument> documents = new ClaimRagDocumentBuilder().build(
-                request.getPortfolio(),
-                request.getValidFrom()
-        );
-        KeywordIndexFile keywordIndex = new KeywordIndexBuilder().build(documents);
-        Map<String, float[]> vectors;
-        try (OnnxLocalEmbeddingAdapter documentAdapter =
-                OnnxLocalEmbeddingAdapter.forDocuments(
-                        request.getModelDirectory(),
-                        artifact.getMaxTokens(),
-                        artifact.getDimension(),
-                        artifact.getIntraOpThreads(),
-                        artifact.getInterOpThreads()
-                )) {
-            vectors = new LocalDocumentEmbeddingBuilder(
-                    text -> documentAdapter.embedQuery(text).copyValues(),
-                    artifact.getDimension()
-            ).build(documents);
-        }
-        AnswerRetrievalCorpus corpus = corpus(
-                documents,
-                keywordIndex,
-                vectors,
-                artifact
-        );
         RetrievalPolicy policy = RetrievalPolicy.firstRelease();
+        if (!matchesRetrievalIdentity(
+                request.getSnapshot(),
+                artifact.getModelId(),
+                artifact.getDescriptorSha256(),
+                artifact.getDimension(),
+                policy.getVersion())) {
+            throw new IllegalArgumentException(
+                    "retrieval comparison identity mismatch");
+        }
         List<RetrievalRouteEvaluation> evaluations;
         try (OnnxLocalEmbeddingAdapter queryAdapter =
                 new OnnxLocalEmbeddingAdapter(
@@ -182,7 +161,7 @@ public final class RetrievalComparisonCli {
                     new ReciprocalRankFusion(),
                     new RetrievalContextValidator(),
                     queryAdapter
-            ).run(request.getSuite(), request.getSnapshot(), corpus, policy);
+            ).run(request.getSuite(), request.getSnapshot(), policy);
         }
         return new RetrievalBenchmarkReport(
                 request.getSuite().getSuiteVersion(),
@@ -196,45 +175,26 @@ public final class RetrievalComparisonCli {
         );
     }
 
-    private static AnswerRetrievalCorpus corpus(
-            List<RagDocument> documents,
-            KeywordIndexFile source,
-            Map<String, float[]> vectors,
-            LocalEmbeddingArtifact artifact
+    static boolean matchesRetrievalIdentity(
+            RuntimeContentSnapshot snapshot,
+            String modelId,
+            String descriptorSha256,
+            int dimension,
+            String policyVersion
     ) {
-        List<AnswerKeywordIndex.DocumentEntry> entries = new ArrayList<>();
-        for (KeywordIndexFile.DocumentEntry entry : source.getDocuments()) {
-            entries.add(new AnswerKeywordIndex.DocumentEntry(
-                    entry.getChunkId(),
-                    entry.getDocumentLength(),
-                    entry.getTermFrequencies()
-            ));
+        if (snapshot == null || policyVersion == null) {
+            return false;
         }
-        AnswerKeywordIndex keywordIndex = new AnswerKeywordIndex(
-                source.getDocumentCount(),
-                source.getAverageDocumentLength(),
-                entries,
-                source.getDocumentFrequencies()
-        );
-        Map<String, AnswerRetrievalChunk> chunks = new LinkedHashMap<>();
-        for (RagDocument document : documents) {
-            chunks.put(document.getChunkId(), new AnswerRetrievalChunk(
-                    document.getChunkId(),
-                    document.getProjectSlugs(),
-                    document.getCaseSlugs(),
-                    document.getClaimIds(),
-                    document.getTopics(),
-                    document.getText().length()
-            ));
-        }
-        return new AnswerRetrievalCorpus(
-                keywordIndex,
-                vectors,
-                chunks,
-                artifact.getModelId(),
-                artifact.getDescriptorSha256(),
-                artifact.getDimension()
-        );
+        return snapshot.getRetrievalContent()
+                .map(content -> content.getManifest())
+                .filter(manifest -> Objects.equals(
+                        manifest.getEmbeddingModelId(), modelId))
+                .filter(manifest -> Objects.equals(
+                        manifest.getEmbeddingArtifactSha256(), descriptorSha256))
+                .filter(manifest -> manifest.getDimension() == dimension)
+                .filter(manifest -> Objects.equals(
+                        manifest.getRetrievalPolicyVersion(), policyVersion))
+                .isPresent();
     }
 
     private static void validatePaths(
