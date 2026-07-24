@@ -30,7 +30,7 @@
 p {
   color: var(--red-hi);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.15em;
 }
 
@@ -56,7 +56,7 @@ a {
   color: var(--paper);
   border-bottom: 1px solid var(--red-hi);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 @media (max-width: 760px) {

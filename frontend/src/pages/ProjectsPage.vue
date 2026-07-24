@@ -97,7 +97,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
 .dossier-group__head p {
   margin: 0;
   color: var(--red);
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.15em;
 }
 
@@ -149,7 +149,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   padding: 3px 7px;
   border: 1px solid var(--rule);
   color: var(--ink-2);
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -202,7 +202,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
 .dossier-row__tech li {
   padding: 7px 9px;
   border: 1px solid var(--rule);
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.04em;
 }
 

@@ -176,6 +176,29 @@ function answerSourceLabel(message: AgentSession['messages'][number]) {
   return ''
 }
 
+// 来源的人话短标签（去掉冗长的「来自…」，只留检索/预设）
+function answerSourceTag(message: AgentSession['messages'][number]) {
+  const source = message.answer?.answerSource
+  if (source === 'RETRIEVAL') return '资料检索'
+  if (source === 'PRESET') return '预设问题'
+  return ''
+}
+
+// 核验状态的人话标签，用于做视觉重点
+function answerVerificationTag(message: AgentSession['messages'][number]) {
+  const verification = message.answer?.verification
+  if (verification === 'VERIFIED') return '已核验'
+  if (verification === 'PARTIALLY_VERIFIED') return '部分核验'
+  return '未核验'
+}
+
+// 技术枚举尾注：resolution + generationMode，价值低，降级成极淡尾注
+function answerTechTail(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  if (!answer) return ''
+  return [answer.resolution, answer.generationMode].filter(Boolean).join(' · ')
+}
+
 function followUp(
   message: AgentSession['messages'][number],
   question: string,
@@ -278,11 +301,12 @@ function inspectMessageEvidence(
           tabindex="-1"
         >
           <p v-if="message.answer" class="message__meta">
-            AGENT · {{ message.answer.resolution }} · {{ answerLabel(message) }}
-            <template v-if="answerSourceLabel(message)">
-              · {{ answerSourceLabel(message) }}
-            </template>
-            · {{ message.answer.generationMode }} · {{ message.answer.verification }}
+            <span class="message__meta-prefix">AGENT · {{ answerLabel(message) }}</span>
+            <span class="message__meta-tags">
+              <span class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message) }}</span>
+              <span v-if="answerSourceTag(message)" class="message__meta-tag">{{ answerSourceTag(message) }}</span>
+            </span>
+            <span v-if="answerTechTail(message)" class="message__meta-tail">{{ answerTechTail(message) }}</span>
           </p>
           <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <div v-if="message.answer" class="structured-answer">
@@ -424,6 +448,49 @@ function inspectMessageEvidence(
   color: var(--workspace-accent-soft, var(--red-hi));
   font: 11px var(--mono);
   letter-spacing: 0.13em;
+}
+
+/* Agent meta 分层：把「核验状态/来源」做视觉重点，技术枚举降级成尾注。
+   替代原来六个字段用 · 串成一行日志式的写法。 */
+.message__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.message__meta-prefix {
+  color: var(--workspace-accent-soft, var(--red-hi));
+}
+
+.message__meta-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 核验状态与来源：边框小标签，承载「可追溯」这个核心信号 */
+.message__meta-tag {
+  padding: 2px 7px;
+  color: var(--workspace-accent, var(--red));
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+/* 已核验状态用红色实底，强调可信度这个卖点 */
+.message__meta-tag[data-verification='VERIFIED'] {
+  color: var(--workspace-primary-text, var(--paper-hi));
+  border-color: var(--workspace-accent, var(--red));
+  background: var(--workspace-accent, var(--red));
+}
+
+/* 技术枚举尾注：resolution/generationMode，价值低，降到极淡 */
+.message__meta-tail {
+  color: var(--workspace-text-faint, var(--faint));
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 
 .conversation__head h1 {

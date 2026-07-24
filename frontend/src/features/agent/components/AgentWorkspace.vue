@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
   bottom: 4px;
   margin: 0;
   color: var(--workspace-text-faint);
-  font: 9px/1.5 var(--mono);
+  font: 10px/1.5 var(--mono);
   pointer-events: none;
 }
 

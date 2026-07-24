@@ -182,7 +182,7 @@ function traceFor(anchor: SectionAnchor) {
 .project-cover__copy > p {
   color: var(--red-hi);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.14em;
 }
 
@@ -215,7 +215,7 @@ blockquote {
   color: #a99f91;
   border-bottom: 1px solid #4a433b;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .project-body {
@@ -238,7 +238,7 @@ blockquote {
   margin-bottom: 18px;
   color: var(--red);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .project-toc a {
@@ -266,7 +266,7 @@ blockquote {
   margin: 0 0 16px;
   color: var(--red);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.14em;
 }
 
@@ -350,7 +350,7 @@ li::before {
   content: counter(dossier, decimal-leading-zero);
   color: var(--red);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .project-story__dark {

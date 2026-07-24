@@ -93,7 +93,7 @@ const entries = [
 .explore-index__grid a:hover {
   color: var(--paper);
   background: var(--ink);
-  transform: translateY(-8px);
+  transform: translateY(-6px);
 }
 
 .explore-index__grid span {

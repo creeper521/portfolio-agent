@@ -337,7 +337,7 @@ h3 {
   white-space: nowrap;
   border: 0;
   background: transparent;
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.12em;
 }
 

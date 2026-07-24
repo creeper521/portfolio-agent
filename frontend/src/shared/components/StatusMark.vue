@@ -31,7 +31,7 @@ const labels: Record<string, string> = {
   gap: 7px;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.06em;
 }
 

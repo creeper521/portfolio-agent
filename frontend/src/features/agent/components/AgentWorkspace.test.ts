@@ -478,7 +478,7 @@ describe('AgentWorkspace', () => {
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
     expect(wrapper.findAll('.message--agent')[0].text())
-      .toContain('RETRIEVAL · 来自公开资料检索')
+      .toContain('资料检索')
 
     await wrapper.get('textarea').setValue('越界问题')
     await wrapper.get('.composer').trigger('submit')

@@ -54,7 +54,7 @@ withDefaults(
 p {
   margin: 0;
   color: var(--red);
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.15em;
 }
 

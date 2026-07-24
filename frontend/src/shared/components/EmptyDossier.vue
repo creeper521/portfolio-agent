@@ -27,7 +27,7 @@ defineProps<{
 span {
   color: var(--red);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.14em;
 }
 

@@ -155,7 +155,7 @@ aside {
 
 aside b {
   color: #d27d74;
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   font-weight: 400;
   letter-spacing: 0.14em;
 }
@@ -174,7 +174,7 @@ aside span {
 .light-answer__speaker {
   margin: 0 0 22px;
   color: #c7776e;
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.14em;
 }
 
@@ -199,7 +199,7 @@ aside span {
   padding-top: 18px;
   color: #cb756c;
   border-top: 1px solid #5b5349;
-  font: 9px var(--mono);
+  font: 10px var(--mono);
   letter-spacing: 0.1em;
 }
 
@@ -218,7 +218,7 @@ aside span {
   color: #c8bcad;
   border: 1px solid #60574d;
   background: transparent;
-  font: 9px var(--mono);
+  font: 10px var(--mono);
 }
 
 .light-answer__actions .primary {

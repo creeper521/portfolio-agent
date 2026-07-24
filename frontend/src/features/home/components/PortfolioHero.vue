@@ -202,7 +202,7 @@ h1 em {
   }
 
   .portfolio-hero__index {
-    font-size: 8px;
+    font-size: 10px;
   }
 
   .portfolio-hero__copy {

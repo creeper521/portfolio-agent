@@ -124,7 +124,7 @@ const selectedClaims = computed(() => selected.value
   margin: 0 0 20px;
   color: var(--red);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.14em;
 }
 
@@ -154,7 +154,7 @@ const selectedClaims = computed(() => selected.value
 .evidence-catalog__list span,
 .evidence-catalog__list small {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .evidence-catalog__list strong {
