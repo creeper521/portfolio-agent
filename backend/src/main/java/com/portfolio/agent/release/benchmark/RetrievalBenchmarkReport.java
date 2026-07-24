@@ -126,7 +126,8 @@ public final class RetrievalBenchmarkReport {
 
         public boolean isFailure() {
             return expectedDecision != actualDecision
-                    || (expectedDecision == RetrievalDecisionType.SUFFICIENT && expectedRank == null);
+                    || (expectedDecision == RetrievalDecisionType.SUFFICIENT
+                    && (expectedRank == null || expectedRank > 5));
         }
 
         private RetrievalRouteEvaluation toRouteEvaluation() {

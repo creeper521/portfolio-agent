@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.domain.RetrievalDecisionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,7 @@ class RetrievalBenchmarkReportTest {
         RetrievalBenchmarkReport first = report(evaluations(), metrics());
 
         List<RetrievalRouteEvaluation> reversedEvaluations = new ArrayList<>(evaluations());
-        reversedEvaluations.sort((left, right) -> right.getCaseId().compareTo(left.getCaseId()));
+        Collections.reverse(reversedEvaluations);
         Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> reversedMetrics = new LinkedHashMap<>();
         reversedMetrics.put(RetrievalBenchmarkRoute.HYBRID, metrics().get(RetrievalBenchmarkRoute.HYBRID));
         reversedMetrics.put(RetrievalBenchmarkRoute.VECTOR, metrics().get(RetrievalBenchmarkRoute.VECTOR));
@@ -41,6 +42,7 @@ class RetrievalBenchmarkReportTest {
                         org.assertj.core.groups.Tuple.tuple(RetrievalBenchmarkRoute.KEYWORD, "case-a"),
                         org.assertj.core.groups.Tuple.tuple(RetrievalBenchmarkRoute.KEYWORD, "case-b"),
                         org.assertj.core.groups.Tuple.tuple(RetrievalBenchmarkRoute.VECTOR, "case-a"),
+                        org.assertj.core.groups.Tuple.tuple(RetrievalBenchmarkRoute.VECTOR, "case-c"),
                         org.assertj.core.groups.Tuple.tuple(RetrievalBenchmarkRoute.HYBRID, "case-b")
                 );
     }
@@ -81,7 +83,8 @@ class RetrievalBenchmarkReportTest {
                 "| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | False sufficient |",
                 "| EXACT_TERM | KEYWORD | 1 | 1.0000 | 1.0000 | 1.0000 | 1 |",
                 "- KEYWORD: `case-b`",
-                "- VECTOR: `case-a`");
+                "- VECTOR: `case-a`",
+                "- VECTOR: `case-c`");
         assertThat(markdown).doesNotContainIgnoringCase("hybrid is valuable", "hybrid provides value");
     }
 
@@ -108,6 +111,8 @@ class RetrievalBenchmarkReportTest {
                         RetrievalDecisionType.INSUFFICIENT, RetrievalDecisionType.SUFFICIENT, null),
                 evaluation(RetrievalBenchmarkRoute.VECTOR, "case-a", RetrievalBenchmarkCategory.EXACT_TERM,
                         RetrievalDecisionType.SUFFICIENT, RetrievalDecisionType.SUFFICIENT, null),
+                evaluation(RetrievalBenchmarkRoute.VECTOR, "case-c", RetrievalBenchmarkCategory.EXACT_TERM,
+                        RetrievalDecisionType.SUFFICIENT, RetrievalDecisionType.SUFFICIENT, 6),
                 evaluation(RetrievalBenchmarkRoute.KEYWORD, "case-a", RetrievalBenchmarkCategory.EXACT_TERM,
                         RetrievalDecisionType.SUFFICIENT, RetrievalDecisionType.SUFFICIENT, 1)
         );
