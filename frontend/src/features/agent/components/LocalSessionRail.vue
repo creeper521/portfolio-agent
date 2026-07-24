@@ -171,6 +171,7 @@ function confirmClear() {
   margin: 0 18px;
   color: var(--workspace-primary-text, var(--paper-hi));
   border: 1px solid var(--workspace-primary-bg, var(--ink));
+  border-radius: var(--agent-radius-sm);
   background: var(--workspace-primary-bg, var(--ink));
   font: 13px var(--mono);
   letter-spacing: 0.08em;

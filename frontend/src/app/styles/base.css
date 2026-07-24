@@ -49,6 +49,44 @@ a {
   outline-offset: 4px;
 }
 
+/* Agent 工作区滚动条：细窄、暖色调，贴合米色风格
+   rgba(122,46,42) 对应 --red 牛血红，半透明使其在任意暖底上自然融入 */
+.conversation__scroll::-webkit-scrollbar,
+.session-list::-webkit-scrollbar,
+.evidence-desk::-webkit-scrollbar {
+  width: 8px;
+}
+
+.conversation__scroll::-webkit-scrollbar-track,
+.session-list::-webkit-scrollbar-track,
+.evidence-desk::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation__scroll::-webkit-scrollbar-thumb,
+.session-list::-webkit-scrollbar-thumb,
+.evidence-desk::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-color: rgba(122, 46, 42, 0.22);
+  background-clip: padding-box;
+}
+
+.conversation__scroll::-webkit-scrollbar-thumb:hover,
+.session-list::-webkit-scrollbar-thumb:hover,
+.evidence-desk::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(122, 46, 42, 0.5);
+  background-clip: padding-box;
+}
+
+/* Firefox */
+.conversation__scroll,
+.session-list,
+.evidence-desk {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 46, 42, 0.22) transparent;
+}
+
 ::selection {
   color: var(--paper-hi);
   background: var(--red);

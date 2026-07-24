@@ -253,17 +253,19 @@ function inspectMessageEvidence(
       <div class="thread" :data-conversation-state="state">
         <section v-if="state === 'empty'" class="thread-empty">
           <p>YOU · FROM DOSSIER</p>
-          <h2>从一个可核验的问题开始。</h2>
-          <button
-            v-for="item in project.suggestedQuestions"
-            :key="item"
-            data-suggested-question
-            type="button"
-            :disabled="pending"
-            @click="submitSuggested(item)"
-          >
-            <span>↳</span>{{ item }}
-          </button>
+          <p class="thread-empty__lead">从一个可核验的问题开始——这里只回答有公开证据支撑的内容。</p>
+          <div class="thread-empty__list">
+            <button
+              v-for="item in project.suggestedQuestions"
+              :key="item"
+              data-suggested-question
+              type="button"
+              :disabled="pending"
+              @click="submitSuggested(item)"
+            >
+              <span>↳</span>{{ item }}
+            </button>
+          </div>
         </section>
 
         <article
@@ -457,43 +459,57 @@ function inspectMessageEvidence(
 }
 
 .thread {
-  width: min(820px, calc(100% - 56px));
-  margin: 35px auto 40px clamp(0px, calc(25% - 205px), 160px);
+  width: min(820px, calc(100% - 96px));
+  margin: 24px auto 40px;
 }
 
 .thread-empty {
-  padding: 0 0 10px;
+  padding: 8px 0 10px;
   border: 0;
 }
 
-.thread-empty h2 {
-  margin: 0 0 30px;
-  color: var(--workspace-text, var(--ink));
-  font: 400 clamp(28px, 3.5vw, 44px) / 1.2 var(--serif);
+.thread-empty > p:first-child {
+  margin: 0 0 18px;
 }
 
-.thread-empty button {
+.thread-empty__lead {
+  margin: 0 0 32px;
+  padding-left: 14px;
+  max-width: 460px;
+  color: var(--workspace-text, var(--ink));
+  border-left: 2px solid var(--workspace-accent, var(--red));
+  font: 400 17px/1.75 var(--serif);
+}
+
+.thread-empty__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thread-empty__list button {
   display: flex;
   width: 100%;
-  margin-top: 10px;
-  padding: 14px 16px;
-  gap: 13px;
-  color: var(--workspace-text-secondary, var(--muted));
+  padding: 11px 14px;
+  gap: 8px;
+  color: var(--workspace-text, var(--ink));
   text-align: left;
   border: 1px solid var(--workspace-rule, var(--rule));
-  border-radius: var(--agent-radius-md);
-  background: color-mix(in srgb, var(--agent-shell-paper) 72%, transparent);
-  font-size: 14px;
+  border-radius: var(--agent-radius-sm);
+  background: rgba(255, 255, 255, 0.35);
+  font: 13px/1.5 var(--sans);
   transition: border-color var(--agent-motion-fast) var(--ease),
-    background var(--agent-motion-fast) var(--ease);
+    color var(--agent-motion-fast) var(--ease);
 }
 
-.thread-empty button:last-child {
-  border-bottom: 1px solid var(--workspace-rule, var(--rule));
+.thread-empty__list button:not(:disabled):hover {
+  border-color: var(--workspace-accent, var(--red));
+  color: var(--workspace-accent, var(--red));
 }
 
-.thread-empty button span {
-  color: var(--workspace-accent-soft, var(--red-hi));
+.thread-empty__list button span {
+  color: var(--workspace-accent, var(--red));
+  font-family: var(--mono);
 }
 
 .message {
@@ -518,9 +534,9 @@ function inspectMessageEvidence(
 .message--user .message__body {
   padding: 14px 18px;
   color: var(--workspace-primary-text, var(--paper-hi));
-  border-radius: var(--agent-radius-md);
+  border-radius: 12px 12px 4px 12px;
   background: var(--workspace-primary-bg, var(--ink));
-  font: 15px/1.7 var(--sans);
+  font: 16px/1.7 var(--sans);
 }
 
 .message--agent {
@@ -541,7 +557,20 @@ function inspectMessageEvidence(
 }
 
 .message > div {
-  font: 15px/1.95 var(--serif);
+  font: 16px/1.85 var(--serif);
+}
+
+.structured-answer h3 {
+  margin: 0 0 8px;
+  color: var(--workspace-text, var(--ink));
+  font: 600 16px/1.45 var(--serif);
+}
+
+.structured-answer h4,
+.structured-answer section h4 {
+  margin: 16px 0 4px;
+  color: var(--workspace-text, var(--ink-2));
+  font: 600 13px/1.4 var(--sans);
 }
 
 .message footer {
@@ -556,9 +585,17 @@ function inspectMessageEvidence(
   padding: 6px 10px;
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
-  border-radius: var(--agent-radius-sm);
-  background: color-mix(in srgb, var(--agent-shell-paper) 78%, transparent);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.35);
   font: 11px var(--mono);
+  transition: border-color var(--agent-motion-fast) var(--ease),
+    color var(--agent-motion-fast) var(--ease);
+}
+
+.follow-up-actions button:not(:disabled):hover,
+.message footer button:hover {
+  border-color: var(--workspace-accent, var(--red));
+  color: var(--workspace-accent, var(--red));
 }
 
 .follow-up-actions {
@@ -633,7 +670,7 @@ function inspectMessageEvidence(
   padding: 6px 10px;
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
-  border-radius: 8px;
+  border-radius: var(--agent-radius-sm);
   background: color-mix(in srgb, var(--agent-shell-paper) 90%, white);
   box-shadow: 0 8px 20px rgb(26 20 16 / 10%);
   font: 11px var(--mono);

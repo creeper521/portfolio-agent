@@ -345,7 +345,7 @@ describe('AgentWorkspace', () => {
 
     expect(wrapper.find('.agent-workspace').exists()).toBe(true)
     expect(wrapper.findAll('.session-list article')).toHaveLength(0)
-    expect(wrapper.text()).toContain('从一个可核验的问题开始。')
+    expect(wrapper.text()).toContain('从一个可核验的问题开始')
   })
 
   it('stages a new draft outside history until the first user message', async () => {

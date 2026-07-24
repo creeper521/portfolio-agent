@@ -197,10 +197,11 @@ header span {
   padding: 16px;
   color: inherit;
   border: 1px solid var(--workspace-rule, var(--rule));
-  border-radius: 12px;
-  background: transparent;
+  border-radius: var(--agent-radius-sm);
+  background: rgba(255, 255, 255, 0.5);
   box-shadow: none;
   text-align: left;
+  transition: border-color var(--agent-motion-fast) var(--ease);
 }
 
 .evidence-card,
@@ -213,7 +214,7 @@ header span {
 }
 
 .evidence-card--active {
-  border: 1px solid var(--workspace-accent, var(--red));
+  border-left: 2px solid var(--workspace-accent, var(--red));
 }
 
 .evidence-card--active.evidence-card--focused {
@@ -266,6 +267,6 @@ small {
 .evidence-empty {
   padding: 16px;
   border: 1px solid var(--workspace-rule, var(--rule));
-  border-radius: 12px;
+  border-radius: var(--agent-radius-sm);
 }
 </style>
