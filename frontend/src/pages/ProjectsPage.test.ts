@@ -8,7 +8,7 @@ import ProjectsPage from './ProjectsPage.vue'
 const RouterLinkStub = { template: '<a><slot /></a>' }
 
 describe('ProjectsPage', () => {
-  it('renders the approved project index', async () => {
+  it('renders projects and delivered cases in a unified index', async () => {
     const wrapper = mount(ProjectsPage, {
       global: {
         provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
@@ -18,12 +18,19 @@ describe('ProjectsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('工程案卷目录')
+    // 核心交付组：项目 + 功能修复案例
+    expect(wrapper.text()).toContain('核心交付')
     expect(wrapper.text()).toContain('SQL 审计与故障排查工具')
     expect(wrapper.text()).toContain('P-01')
+    expect(wrapper.text()).toContain('多语言图片上传结果保留修复')
+    expect(wrapper.text()).toContain('CASE-01')
+    // 评测组：独立分组
+    expect(wrapper.text()).toContain('探索与评测')
+    expect(wrapper.text()).toContain('代码图谱工具端到端评测')
     expect(wrapper.get('[data-page-lead]').attributes('data-theme')).toBe('paper')
   })
 
-  it('shows loading feedback before deciding the project list is empty', () => {
+  it('shows loading feedback before deciding the dossier list is empty', () => {
     const state = readyPublicContentState()
     state.portfolio.value = null
     state.status.value = 'loading'
@@ -35,6 +42,6 @@ describe('ProjectsPage', () => {
     })
 
     expect(wrapper.text()).toContain('正在装订公开档案…')
-    expect(wrapper.text()).not.toContain('项目资料准备中')
+    expect(wrapper.text()).not.toContain('案卷资料准备中')
   })
 })
