@@ -380,6 +380,10 @@ Markdown table; Calibration is separate.
   `backend/src/main/java/com/portfolio/agent/release/PublicBundleVerificationCli.java`
 - Create:
   `backend/src/test/java/com/portfolio/agent/release/PublicBundleVerificationCliTest.java`
+- Modify:
+  `backend/src/main/java/com/portfolio/agent/portfolio/domain/ReleaseManifest.java`
+- Modify:
+  `backend/src/test/java/com/portfolio/agent/portfolio/repository/file/PublicBundleLoaderTest.java`
 
 **Contract**
 
@@ -391,6 +395,12 @@ manifest, candidate hash, references, retrieval manifest and index identities,
 and prints only a stable verified identity summary. `verify-release.ps1` gains
 `-BundleDirectory` and calls this verifier instead of silently checking only the
 classpath Bundle.
+
+`ReleaseManifest` directly parses the F1 `ledgerHash` from the original
+Manifest bytes. Legacy four-file Manifests may omit it; every new seven-file
+release and external verifier requires a nonblank value. The verifier must never
+strip governance fields before calling `PublicBundleLoader`; runtime Bundle hash
+continues to use the original Manifest bytes.
 
 `import-public-release.ps1`:
 
