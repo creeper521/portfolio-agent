@@ -5,6 +5,7 @@ import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 
 import java.time.LocalDate;
@@ -40,6 +41,12 @@ public final class RagDocumentValidator {
         for (Claim claim : snapshot.getClaims()) {
             claimsById.put(claim.getId(), claim);
         }
+        Map<String, CaseStudy> casesBySlug = new HashMap<>();
+        Map<String, CaseStudy> casesById = new HashMap<>();
+        for (CaseStudy caseStudy : snapshot.getCases()) {
+            casesBySlug.put(caseStudy.getSlug(), caseStudy);
+            casesById.put(caseStudy.getId(), caseStudy);
+        }
 
         Set<String> chunkIds = new HashSet<>();
         Set<String> contentHashes = new HashSet<>();
@@ -50,7 +57,8 @@ public final class RagDocumentValidator {
                     "duplicate chunkId: " + document.getChunkId());
             require(snapshot.getContentVersion().equals(document.getContentVersion()),
                     "RAG document contentVersion mismatch: " + document.getChunkId());
-            requireNonBlank(document.getProjectSlugs(), "projectSlugs");
+            require(document.getProjectSlugs().isEmpty() != document.getCaseSlugs().isEmpty(),
+                    "RAG document must belong to exactly one subject type");
             requireNonBlank(document.getClaimIds(), "claimIds");
             requireNonBlank(document.getTopics(), "topics");
             require(hasText(document.getText()), "RAG document text is required");
@@ -72,14 +80,23 @@ public final class RagDocumentValidator {
                 require(projectsBySlug.containsKey(slug),
                         "RAG document project does not exist: " + slug);
             }
+            for (String slug : document.getCaseSlugs()) {
+                require(casesBySlug.containsKey(slug),
+                        "RAG document case does not exist: " + slug);
+            }
             for (String claimId : document.getClaimIds()) {
                 Claim claim = claimsById.get(claimId);
                 require(claim != null, "RAG document claim does not exist: " + claimId);
-                require(claim.getSubjectType() == ClaimSubjectType.PROJECT,
-                        "RAG document claim is not project-scoped: " + claimId);
-                ProjectProfile owner = projectsById.get(claim.getSubjectId());
-                require(owner != null && document.getProjectSlugs().contains(owner.getSlug()),
-                        "RAG document claim belongs to a different project: " + claimId);
+                if (claim.getSubjectType() == ClaimSubjectType.PROJECT) {
+                    ProjectProfile owner = projectsById.get(claim.getSubjectId());
+                    require(owner != null
+                                    && document.getProjectSlugs().contains(owner.getSlug()),
+                            "RAG document claim belongs to a different project: " + claimId);
+                } else {
+                    CaseStudy owner = casesById.get(claim.getSubjectId());
+                    require(owner != null && document.getCaseSlugs().contains(owner.getSlug()),
+                            "RAG document claim belongs to a different case: " + claimId);
+                }
             }
         }
     }

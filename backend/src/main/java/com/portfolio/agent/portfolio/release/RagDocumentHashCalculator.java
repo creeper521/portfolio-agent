@@ -24,6 +24,7 @@ public final class RagDocumentHashCalculator {
             write(data, document.getChunkId());
             write(data, document.getContentVersion());
             write(data, document.getProjectSlugs());
+            write(data, document.getCaseSlugs());
             write(data, document.getClaimIds());
             write(data, document.getText());
             write(data, document.getTopics());

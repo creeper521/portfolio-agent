@@ -4,6 +4,7 @@ import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 
@@ -30,24 +31,39 @@ public final class ClaimRagDocumentBuilder {
         }
         Map<String, ProjectProfile> projectsById = snapshot.getProjects().stream()
                 .collect(Collectors.toUnmodifiableMap(ProjectProfile::getId, Function.identity()));
+        Map<String, CaseStudy> casesById = snapshot.getCases().stream()
+                .collect(Collectors.toUnmodifiableMap(CaseStudy::getId, Function.identity()));
         return snapshot.getClaims().stream()
-                .filter(claim -> claim.getSubjectType() == ClaimSubjectType.PROJECT)
                 .sorted(java.util.Comparator.comparing(Claim::getId))
-                .map(claim -> document(snapshot, projectsById, claim, validFrom))
+                .map(claim -> document(
+                        snapshot, projectsById, casesById, claim, validFrom))
                 .toList();
     }
 
     private RagDocument document(
             PortfolioSnapshot snapshot,
             Map<String, ProjectProfile> projectsById,
+            Map<String, CaseStudy> casesById,
             Claim claim,
             LocalDate validFrom
     ) {
-        ProjectProfile project = projectsById.get(claim.getSubjectId());
-        if (project == null) {
+        ProjectProfile project = claim.getSubjectType() == ClaimSubjectType.PROJECT
+                ? projectsById.get(claim.getSubjectId())
+                : null;
+        CaseStudy caseStudy = claim.getSubjectType() == ClaimSubjectType.CASE
+                ? casesById.get(claim.getSubjectId())
+                : null;
+        if (project == null && caseStudy == null) {
             throw new InvalidPortfolioSnapshotException(
-                    "project claim owner does not exist: " + claim.getId());
+                    "claim owner does not exist: " + claim.getId());
         }
+        List<String> projectSlugs = project == null
+                ? List.of()
+                : List.of(project.getSlug());
+        List<String> caseSlugs = caseStudy == null
+                ? List.of()
+                : List.of(caseStudy.getSlug());
+        String ownerTitle = project == null ? caseStudy.getTitle() : project.getTitle();
         List<String> topics = claim.getTopics().stream()
                 .map(String::strip)
                 .filter(value -> !value.isBlank())
@@ -58,9 +74,10 @@ public final class ClaimRagDocumentBuilder {
         RagDocument unsigned = new RagDocument(
                 "chunk-" + claim.getId(),
                 snapshot.getContentVersion(),
-                List.of(project.getSlug()),
+                projectSlugs,
+                caseSlugs,
                 List.of(claim.getId()),
-                project.getTitle().strip() + "：" + fact,
+                ownerTitle.strip() + "：" + fact,
                 topics,
                 validFrom,
                 null,
@@ -69,6 +86,7 @@ public final class ClaimRagDocumentBuilder {
                 unsigned.getChunkId(),
                 unsigned.getContentVersion(),
                 unsigned.getProjectSlugs(),
+                unsigned.getCaseSlugs(),
                 unsigned.getClaimIds(),
                 unsigned.getText(),
                 unsigned.getTopics(),

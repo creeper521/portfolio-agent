@@ -11,6 +11,7 @@ public final class RagDocument {
     private final String chunkId;
     private final String contentVersion;
     private final List<String> projectSlugs;
+    private final List<String> caseSlugs;
     private final List<String> claimIds;
     private final String text;
     private final List<String> topics;
@@ -23,6 +24,7 @@ public final class RagDocument {
             @JsonProperty("chunkId") String chunkId,
             @JsonProperty("contentVersion") String contentVersion,
             @JsonProperty("projectSlugs") List<String> projectSlugs,
+            @JsonProperty("caseSlugs") List<String> caseSlugs,
             @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("text") String text,
             @JsonProperty("topics") List<String> topics,
@@ -33,6 +35,7 @@ public final class RagDocument {
         this.chunkId = chunkId;
         this.contentVersion = contentVersion;
         this.projectSlugs = List.copyOf(projectSlugs);
+        this.caseSlugs = caseSlugs == null ? List.of() : List.copyOf(caseSlugs);
         this.claimIds = List.copyOf(claimIds);
         this.text = text;
         this.topics = List.copyOf(topics);
@@ -41,9 +44,25 @@ public final class RagDocument {
         this.contentHash = contentHash;
     }
 
+    public RagDocument(
+            String chunkId,
+            String contentVersion,
+            List<String> projectSlugs,
+            List<String> claimIds,
+            String text,
+            List<String> topics,
+            LocalDate validFrom,
+            LocalDate validUntil,
+            String contentHash
+    ) {
+        this(chunkId, contentVersion, projectSlugs, List.of(), claimIds, text,
+                topics, validFrom, validUntil, contentHash);
+    }
+
     public String getChunkId() { return chunkId; }
     public String getContentVersion() { return contentVersion; }
     public List<String> getProjectSlugs() { return projectSlugs; }
+    public List<String> getCaseSlugs() { return caseSlugs; }
     public List<String> getClaimIds() { return claimIds; }
     public String getText() { return text; }
     public List<String> getTopics() { return topics; }
