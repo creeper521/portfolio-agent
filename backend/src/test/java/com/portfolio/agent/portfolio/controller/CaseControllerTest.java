@@ -77,7 +77,8 @@ class CaseControllerTest {
 
         mockMvc.perform(get("/api/v1/cases/multilingual-image-preservation"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(16))
+                .andExpect(jsonPath("$.length()").value(17))
+                .andExpect(jsonPath("$.id").value("case-multilingual"))
                 .andExpect(jsonPath("$.verification[0]")
                         .value("先上传德语，再上传法语并查询"))
                 .andExpect(jsonPath("$.projectSlug").value("sql-audit"))
@@ -86,7 +87,6 @@ class CaseControllerTest {
                 .andExpect(jsonPath("$.evidence[0].rawContent").doesNotExist())
                 .andExpect(jsonPath("$.suggestedQuestions[0]")
                         .value("多语言图片上传修复解决了什么问题？"))
-                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.projectId").doesNotExist())
                 .andExpect(jsonPath("$.claimIds").doesNotExist())
                 .andExpect(jsonPath("$.evidenceIds").doesNotExist())
@@ -106,7 +106,8 @@ class CaseControllerTest {
 
         mockMvc.perform(get("/api/v1/cases/standalone-case"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(16))
+                .andExpect(jsonPath("$.length()").value(17))
+                .andExpect(jsonPath("$.id").value("case-standalone"))
                 .andExpect(jsonPath("$.projectSlug").value(nullValue()));
     }
 

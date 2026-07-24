@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LocalPortfolioKnowledgeAdapterTest {
 
     @Test
-    void projectsTypedRetrievalContentWithoutChunkText() {
+    void projectsReviewedPublicRetrievalChunkText() {
         PortfolioSnapshot snapshot = snapshot(
                 List.of(project("project-1", "sql-audit", List.of())),
                 List.of(), List.of());
@@ -80,11 +80,10 @@ class LocalPortfolioKnowledgeAdapterTest {
                 .isEqualTo(document.getText().length());
         assertThat(corpus.getChunks().get("chunk-1").getClaimIds())
                 .containsExactly("claim-1");
+        assertThat(corpus.getChunks().get("chunk-1").getText())
+                .isEqualTo(document.getText());
         assertThat(corpus.getKeywordIndex().getDocumentCount()).isEqualTo(1);
         assertThat(corpus.copyVectors()).containsKey("chunk-1");
-        assertThat(corpus.getChunks().get("chunk-1").getClass().getDeclaredFields())
-                .extracting(java.lang.reflect.Field::getName)
-                .doesNotContain("text");
     }
 
     @Test

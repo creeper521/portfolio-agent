@@ -28,3 +28,13 @@ portfolio:
     external-data-policy-approved: ${PORTFOLIO_MODEL_DATA_POLICY_APPROVED:false}
     deepseek-api-key: ${PORTFOLIO_AGENT_DEEPSEEK_API_KEY:}
     glm-api-key: ${PORTFOLIO_AGENT_GLM_API_KEY:}
+  conversational-agent:
+    enabled: ${PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED:false}
+    visitor-data-policy-approved: ${PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED:false}
+    max-history-rounds: 20
+    recent-raw-rounds: 6
+    max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}
+    max-tool-calls: 4
+    max-tool-rounds: 2
+    max-suggested-questions: 3
+    minimum-intent-confidence: 0.65

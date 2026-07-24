@@ -87,7 +87,7 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
                 URI.create(endpoint),
                 modelName,
                 Set.of("c1-policy-v1"),
-                Set.of("c1.answer.v1"),
+                Set.of("c1.answer.v1", ConversationalAgentProperties.ANSWER_SCHEMA_VERSION),
                 capabilities);
     }
 

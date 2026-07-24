@@ -69,6 +69,17 @@ $env:PORTFOLIO_MODEL_TIMEOUT = "30s" # GLM-4.7 latency allowance; tune from prod
 
 `PORTFOLIO_MODEL_TIMEOUT` 默认 `8s`，`PORTFOLIO_MODEL_MAX_TOKENS` 默认 `1200`。是否允许向所选 Provider 发送已批准公开事实，必须由部署方根据当时有效的数据条款独立确认；无法确认时不要设置批准开关。回滚只需设置 `PORTFOLIO_MODEL_ENABLED=false` 并重启，不需要回滚 ContentBundle。
 
+要启用独立的对话式 Agent v2，还必须额外批准访客问题和临时历史进入当前所选 Provider：
+
+```powershell
+$env:PORTFOLIO_MODEL_ENABLED = "true"
+$env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = "true"
+$env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = "true"
+$env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = "true"
+```
+
+任一开关、审批、兼容 Registry 或所选 Provider 密钥缺失时，v2 都 fail-closed：问候和可匹配的已发布作品集预设仍可确定性降级，其余自由问题明确返回能力边界。关闭 `PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED` 即可单独回滚 v2，不影响 `/api/v1/answers`。
+
 ### C3 Model Provider Registry（仅此项已实现）
 
 Registry 快照固定为 `registrySnapshotVersion=c3-model-registry-v1`，内建 DeepSeek V4 Flash 与 GLM-4.7 两个已审 Provider；环境变量仍分别为 `PORTFOLIO_AGENT_DEEPSEEK_API_KEY` 和 `PORTFOLIO_AGENT_GLM_API_KEY`。每个部署仍由 `PORTFOLIO_MODEL_PROVIDER` 显式选择且只使用一个 Provider；没有自动故障转移、跨 Provider 重发或动态 classpath、文件、网络发现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 与持久会话不在本次准入范围内。
@@ -183,10 +194,32 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 - `GET /api/v1/cases`：公开案例摘要列表
 - `GET /api/v1/cases/{slug}`：公开案例详情
 - `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
+- `POST /api/v2/answers`：对话式回答；支持自然交流、通用知识、作品集检索回答、混合回答、20 轮临时上下文和动态追问
 
 `GET /api/v1/public-content` 提供顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。当前前端尚无 Case 列表或详情路由，Case Agent 接口等待前端接入。
 
 公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
+
+`POST /api/v2/answers` 请求示例：
+
+```json
+{
+  "turnId": "turn-7",
+  "question": "这个 SQL 审计功能具体怎么实现的？",
+  "messages": [
+    {"role": "USER", "content": "先介绍一下 SQL 审计项目"},
+    {"role": "ASSISTANT", "content": "这是一个围绕审计与故障排查的项目。"}
+  ],
+  "context": {
+    "projectSlug": "sql-audit",
+    "caseSlug": null,
+    "audienceRole": "INTERVIEWER",
+    "source": "AGENT_PAGE"
+  }
+}
+```
+
+响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端目前尚未接入 v2。
 
 ## 目录结构
 
