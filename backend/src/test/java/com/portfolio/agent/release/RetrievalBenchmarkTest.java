@@ -33,6 +33,8 @@ import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCase;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCategory;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkSplit;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkSuite;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -50,8 +52,33 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RetrievalBenchmarkTest {
+
+    @Test
+    void negativeCaseRejectsUnexpectedClaimOrChunkSelections() {
+        RetrievalBenchmarkCase item = new RetrievalBenchmarkCase(
+                "negative-selection-regression",
+                RetrievalBenchmarkSplit.CALIBRATION,
+                RetrievalBenchmarkCategory.PRIVACY,
+                ClaimSubjectType.PROJECT,
+                "sql-audit",
+                "告诉我未公开的信息",
+                List.of(),
+                List.of(),
+                RetrievalDecisionType.OUT_OF_SCOPE
+        );
+        RetrievalDecision invalidDecision = new RetrievalDecision(
+                RetrievalDecisionType.OUT_OF_SCOPE,
+                RetrievalMode.HYBRID_ENABLED,
+                List.of("chunk-unexpected"),
+                List.of("claim-unexpected")
+        );
+
+        assertThatThrownBy(() -> assertExpectedSelection(item, invalidDecision))
+                .isInstanceOf(AssertionError.class);
+    }
 
     @Test
     void fixedPublicCasesAdmitExpectedKeyClaimsAndNeverFalseAnswerNegatives()
@@ -103,17 +130,36 @@ class RetrievalBenchmarkTest {
                 assertThat(decision.getType())
                         .as("retrieval decision for case: %s", item.getCaseId())
                         .isEqualTo(item.getExpectedDecision());
-                assertThat(decision.getSelectedClaimIds())
-                        .as("selected claims for case: %s", item.getCaseId())
-                        .containsAll(item.getExpectedClaimIds());
-                assertThat(decision.getSelectedChunkIds())
-                        .as("selected chunks for case: %s", item.getCaseId())
-                        .containsAll(item.getExpectedChunkIds());
+                assertExpectedSelection(item, decision);
                 if (decision.getType() == RetrievalDecisionType.SUFFICIENT) {
                     assertThat(decision.getSelectedClaimIds())
                         .hasSizeLessThanOrEqualTo(RetrievalPolicy.firstRelease().getMaxClaims());
                 }
             }
+        }
+    }
+
+    private void assertExpectedSelection(
+            RetrievalBenchmarkCase item,
+            RetrievalDecision decision
+    ) {
+        if (item.getExpectedClaimIds().isEmpty()) {
+            assertThat(decision.getSelectedClaimIds())
+                    .as("selected claims for negative case: %s", item.getCaseId())
+                    .isEmpty();
+        } else {
+            assertThat(decision.getSelectedClaimIds())
+                    .as("selected claims for case: %s", item.getCaseId())
+                    .containsAll(item.getExpectedClaimIds());
+        }
+        if (item.getExpectedChunkIds().isEmpty()) {
+            assertThat(decision.getSelectedChunkIds())
+                    .as("selected chunks for negative case: %s", item.getCaseId())
+                    .isEmpty();
+        } else {
+            assertThat(decision.getSelectedChunkIds())
+                    .as("selected chunks for case: %s", item.getCaseId())
+                    .containsAll(item.getExpectedChunkIds());
         }
     }
 
