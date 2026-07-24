@@ -1,6 +1,5 @@
 package com.portfolio.agent.release;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter;
 import com.portfolio.agent.answer.adapter.retrieval.LocalEmbeddingArtifact;
@@ -14,12 +13,14 @@ import com.portfolio.agent.answer.domain.RetrievalDecision;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
 import com.portfolio.agent.answer.domain.RetrievalMode;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
+import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.service.KeywordRetriever;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
@@ -30,6 +31,9 @@ import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
 import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCase;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkSuite;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -75,9 +79,14 @@ class RetrievalBenchmarkTest {
         }
         AnswerRetrievalCorpus corpus = corpus(documents, vectors, artifact);
         RuntimeContentSnapshot runtimeSnapshot = loadRuntimeSnapshot(bundle, mapper);
-        AnswerKnowledge project = new LocalPortfolioKnowledgeAdapter(() -> runtimeSnapshot)
-                .getContent().getProjects().get(0);
-        JsonNode cases = benchmarkCases(mapper);
+        RuntimeAnswerContent content = new LocalPortfolioKnowledgeAdapter(() -> runtimeSnapshot)
+                .getContent();
+        RetrievalBenchmarkSuite suite = benchmarkCases(mapper);
+        assertThat(suite.getContentVersion()).isEqualTo(runtimeSnapshot.getContentVersion());
+        assertThat(suite.getCases()).hasSize(12);
+        assertThat(suite.getCases())
+                .extracting(RetrievalBenchmarkCase::getSubjectType)
+                .contains(ClaimSubjectType.PROJECT, ClaimSubjectType.CASE);
 
         try (OnnxLocalEmbeddingAdapter queryAdapter = new OnnxLocalEmbeddingAdapter(
                 modelDirectory, artifact.getQueryInstruction(), artifact.getMaxTokens(),
@@ -87,31 +96,46 @@ class RetrievalBenchmarkTest {
                     new RetrievalQueryNormalizer(), new KeywordRetriever(),
                     new VectorRetriever(), new ReciprocalRankFusion(),
                     new RetrievalContextValidator(), queryAdapter);
-            for (JsonNode positive : cases.path("positive")) {
-                String query = positive.path("query").asText();
+            for (RetrievalBenchmarkCase item : suite.getCases()) {
+                AnswerKnowledge subject = subject(content, item);
                 RetrievalDecision decision = retrieve(
-                        coordinator, query, project, corpus);
+                        coordinator, item.getQuery(), subject, corpus);
                 assertThat(decision.getType())
-                        .as("retrieval decision for query: %s", query)
-                        .isEqualTo(RetrievalDecisionType.SUFFICIENT);
+                        .as("retrieval decision for case: %s", item.getCaseId())
+                        .isEqualTo(item.getExpectedDecision());
                 assertThat(decision.getSelectedClaimIds())
-                        .contains(positive.path("expectedClaimId").asText());
-                assertThat(decision.getSelectedClaimIds())
+                        .as("selected claims for case: %s", item.getCaseId())
+                        .containsAll(item.getExpectedClaimIds());
+                assertThat(decision.getSelectedChunkIds())
+                        .as("selected chunks for case: %s", item.getCaseId())
+                        .containsAll(item.getExpectedChunkIds());
+                if (decision.getType() == RetrievalDecisionType.SUFFICIENT) {
+                    assertThat(decision.getSelectedClaimIds())
                         .hasSizeLessThanOrEqualTo(RetrievalPolicy.firstRelease().getMaxClaims());
-            }
-            for (JsonNode negative : cases.path("negative")) {
-                RetrievalDecision decision = retrieve(
-                        coordinator, negative.path("query").asText(), project, corpus);
-                assertThat(decision.getType()).isNotEqualTo(RetrievalDecisionType.SUFFICIENT);
+                }
             }
         }
     }
 
+    private AnswerKnowledge subject(
+            RuntimeAnswerContent content,
+            RetrievalBenchmarkCase item
+    ) {
+        List<AnswerKnowledge> subjects = item.getSubjectType() == ClaimSubjectType.PROJECT
+                ? content.getProjects()
+                : content.getCases();
+        return subjects.stream()
+                .filter(candidate -> candidate.getSlug().equals(item.getSubjectSlug()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "Unknown benchmark subject: " + item.getSubjectSlug()));
+    }
+
     private RetrievalDecision retrieve(LocalRetrievalCoordinator coordinator, String query,
             AnswerKnowledge project, AnswerRetrievalCorpus corpus) {
-        return coordinator.retrieve(query, project.getSlug(), corpus,
-                project.getClaims(), project.getEvidence(), RetrievalMode.HYBRID_ENABLED,
-                RetrievalPolicy.firstRelease());
+        return coordinator.retrieve(query, project.getSlug(), project.getSubjectType(),
+                corpus, project.getClaims(), project.getEvidence(),
+                RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.firstRelease());
     }
 
     private AnswerRetrievalCorpus corpus(List<RagDocument> documents,
@@ -127,8 +151,8 @@ class RetrievalBenchmarkTest {
         Map<String, AnswerRetrievalChunk> chunks = documents.stream()
                 .collect(Collectors.toUnmodifiableMap(RagDocument::getChunkId,
                         item -> new AnswerRetrievalChunk(item.getChunkId(),
-                                item.getProjectSlugs(), item.getClaimIds(), item.getTopics(),
-                                item.getText().length())));
+                                item.getProjectSlugs(), item.getCaseSlugs(),
+                                item.getClaimIds(), item.getTopics(), item.getText().length())));
         return new AnswerRetrievalCorpus(keyword, vectors, chunks, artifact.getModelId(),
                 artifact.getDescriptorSha256(), artifact.getDimension());
     }
@@ -145,11 +169,11 @@ class RetrievalBenchmarkTest {
                 .load(files);
     }
 
-    private JsonNode benchmarkCases(ObjectMapper mapper) throws Exception {
+    private RetrievalBenchmarkSuite benchmarkCases(ObjectMapper mapper) throws Exception {
         try (InputStream input = getClass().getResourceAsStream(
                 "/retrieval-benchmark/cases.json")) {
             assertThat(input).isNotNull();
-            return mapper.readTree(input);
+            return new RetrievalBenchmarkCaseLoader(mapper).load(input.readAllBytes());
         }
     }
 
