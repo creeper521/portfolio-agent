@@ -716,7 +716,7 @@ try {
         $ragFile = Join-Path $retrievalCandidate 'rag-documents.jsonl'
         $ragBuild = Invoke-CompilerMain 'com.portfolio.agent.release.RagDocumentCompilerCli' `
             $compilerJar @('--portfolio', (Join-Path $retrievalCandidate 'portfolio.json'),
-                '--output', $ragFile, '--valid-from', '2026-07-21')
+                '--output', $ragFile, '--valid-from', $currentBundleVersion.Substring(0, 10))
         if ($ragBuild.ExitCode -ne 0) { throw "RAG candidate build failed: $($ragBuild.Output)" }
 
         $retrievalValidation = Invoke-Governance @('-Command', 'validate', '-Workspace', $workspace,

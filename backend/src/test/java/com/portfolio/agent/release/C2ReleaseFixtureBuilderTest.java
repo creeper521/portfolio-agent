@@ -81,7 +81,7 @@ class C2ReleaseFixtureBuilderTest {
                 snapshot.getTimeline().size(), snapshot.getQuestions().size());
         OffsetDateTime publishedAt = OffsetDateTime.parse("2026-07-21T16:30:00+08:00");
         ReleaseManifest manifest = new ReleaseManifest(
-                "2.0", snapshot.getContentVersion(), publishedAt, publishedAt,
+                snapshot.getSchemaVersion(), snapshot.getContentVersion(), publishedAt, publishedAt,
                 "0.1.0", "portfolio.json", "presentation.json",
                 "TEST-C2-APPROVAL-FIXTURE",
                 BundleHashCalculator.sha256(
@@ -90,7 +90,7 @@ class C2ReleaseFixtureBuilderTest {
                 candidateHash, "checksums.json", counts, retrieval);
         byte[] manifestBytes = mapper.writeValueAsBytes(manifest);
         Map<String, Object> checksums = new LinkedHashMap<>();
-        checksums.put("schemaVersion", "2.0");
+        checksums.put("schemaVersion", snapshot.getSchemaVersion());
         checksums.put("contentVersion", snapshot.getContentVersion());
         Map<String, String> hashes = new java.util.TreeMap<>();
         files.forEach((name, bytes) -> hashes.put(name, BundleHashCalculator.sha256(bytes)));

@@ -88,12 +88,16 @@ class RetrievalBenchmarkTest {
                     new VectorRetriever(), new ReciprocalRankFusion(),
                     new RetrievalContextValidator(), queryAdapter);
             for (JsonNode positive : cases.path("positive")) {
+                String query = positive.path("query").asText();
                 RetrievalDecision decision = retrieve(
-                        coordinator, positive.path("query").asText(), project, corpus);
-                assertThat(decision.getType()).isEqualTo(RetrievalDecisionType.SUFFICIENT);
+                        coordinator, query, project, corpus);
+                assertThat(decision.getType())
+                        .as("retrieval decision for query: %s", query)
+                        .isEqualTo(RetrievalDecisionType.SUFFICIENT);
                 assertThat(decision.getSelectedClaimIds())
                         .contains(positive.path("expectedClaimId").asText());
-                assertThat(decision.getSelectedClaimIds()).hasSizeLessThanOrEqualTo(5);
+                assertThat(decision.getSelectedClaimIds())
+                        .hasSizeLessThanOrEqualTo(RetrievalPolicy.firstRelease().getMaxClaims());
             }
             for (JsonNode negative : cases.path("negative")) {
                 RetrievalDecision decision = retrieve(

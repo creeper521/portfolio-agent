@@ -133,7 +133,7 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   )
   await expect(userMessage.locator('.message__body')).toHaveCSS(
     'border-radius',
-    '12px',
+    '12px 12px 4px',
   )
   await expect(agentMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
@@ -152,7 +152,9 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   await page.reload()
   await expect(page.getByText('当前对话未保存，刷新后记录会消失')).toBeVisible()
   await expect(page.locator('.message--user')).toHaveCount(0)
-  await expect(page.getByText('从一个可核验的问题开始。')).toBeVisible()
+  await expect(page.getByText(
+    '从一个可核验的问题开始——这里只回答有公开证据支撑的内容。',
+  )).toBeVisible()
 })
 
 test('recommended question enters the conversation immediately', async ({ page }) => {
@@ -368,7 +370,7 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
 
     const solidAccentButtons = await page.locator('.agent-workspace button').evaluateAll(
       (buttons) => buttons
-        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(141, 48, 43)')
+        .filter((button) => getComputedStyle(button).backgroundColor === 'rgb(122, 46, 42)')
         .map((button) => button.textContent?.trim()),
     )
     expect(solidAccentButtons).toEqual(['发送 ↵'])
