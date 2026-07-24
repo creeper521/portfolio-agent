@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Objects;
 
 public final class ConversationSuggestedQuestion {
@@ -9,11 +12,12 @@ public final class ConversationSuggestedQuestion {
     private final String caseSlug;
     private final PortfolioKnowledgeFacet facet;
 
+    @JsonCreator
     public ConversationSuggestedQuestion(
-            String text,
-            String projectSlug,
-            String caseSlug,
-            PortfolioKnowledgeFacet facet
+            @JsonProperty("text") String text,
+            @JsonProperty("projectSlug") String projectSlug,
+            @JsonProperty("caseSlug") String caseSlug,
+            @JsonProperty("facet") PortfolioKnowledgeFacet facet
     ) {
         this.text = Objects.requireNonNull(text, "text");
         this.projectSlug = projectSlug;
