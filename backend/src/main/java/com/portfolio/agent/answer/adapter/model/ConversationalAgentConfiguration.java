@@ -3,8 +3,16 @@ package com.portfolio.agent.answer.adapter.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelPolicy;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
+import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
+import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationIntentRouter;
+import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
+import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
+import com.portfolio.agent.answer.service.DeterministicConversationFallback;
+import com.portfolio.agent.answer.service.DynamicQuestionService;
+import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -86,11 +94,79 @@ public class ConversationalAgentConfiguration {
                 properties.allowsProviderCalls(modelPolicy, registry));
     }
 
+    @Bean
+    PortfolioGroundingAssembler portfolioGroundingAssembler() {
+        return new PortfolioGroundingAssembler(6, 12, 12000);
+    }
+
+    @Bean
+    ConversationToolService conversationToolService(
+            OpenAiCompatibleConversationalModelAdapter modelAdapter,
+            PublicKnowledgeTools tools,
+            ConversationalAgentProperties properties
+    ) {
+        return new ConversationToolService(
+                modelAdapter,
+                tools,
+                properties.getMaxToolRounds(),
+                properties.getMaxToolCalls());
+    }
+
+    @Bean
+    ConversationDraftValidator conversationDraftValidator(
+            OpenAiCompatibleConversationalModelAdapter modelAdapter
+    ) {
+        return new ConversationDraftValidator(modelAdapter);
+    }
+
+    @Bean
+    DynamicQuestionService dynamicQuestionService(
+            OpenAiCompatibleConversationalModelAdapter modelAdapter,
+            PortfolioGroundingAssembler groundingAssembler,
+            ConversationalAgentProperties properties
+    ) {
+        return new DynamicQuestionService(
+                modelAdapter,
+                groundingAssembler,
+                properties.getMaxSuggestedQuestions());
+    }
+
+    @Bean
+    DeterministicConversationFallback deterministicConversationFallback() {
+        return new DeterministicConversationFallback();
+    }
+
+    @Bean
+    ConversationalAgentRuntime conversationalAgentRuntime(
+            PortfolioKnowledgeGateway knowledgeGateway,
+            ConversationWindowManager windowManager,
+            ConversationIntentRouter intentRouter,
+            PortfolioGroundingAssembler groundingAssembler,
+            ConversationToolService toolService,
+            OpenAiCompatibleConversationalModelAdapter modelAdapter,
+            ConversationDraftValidator draftValidator,
+            DynamicQuestionService questionService,
+            DeterministicConversationFallback fallback,
+            ConversationProviderAccess providerAccess
+    ) {
+        return new ConversationalAgentRuntime(
+                knowledgeGateway,
+                windowManager,
+                intentRouter,
+                groundingAssembler,
+                toolService,
+                modelAdapter,
+                draftValidator,
+                questionService,
+                fallback,
+                providerAccess);
+    }
+
     public static final class ConversationProviderAccess {
 
         private final boolean allowed;
 
-        ConversationProviderAccess(boolean allowed) {
+        public ConversationProviderAccess(boolean allowed) {
             this.allowed = allowed;
         }
 
