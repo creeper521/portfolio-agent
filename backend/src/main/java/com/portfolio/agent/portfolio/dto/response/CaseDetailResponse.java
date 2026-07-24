@@ -11,6 +11,7 @@ import java.util.Objects;
 
 public final class CaseDetailResponse {
 
+    private final String id;
     private final String slug;
     private final String code;
     private final CaseType type;
@@ -29,6 +30,7 @@ public final class CaseDetailResponse {
     private final List<String> suggestedQuestions;
 
     public CaseDetailResponse(
+            String id,
             String slug,
             String code,
             CaseType type,
@@ -46,6 +48,7 @@ public final class CaseDetailResponse {
             List<EvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
+        this.id = id;
         this.slug = slug;
         this.code = code;
         this.type = type;
@@ -71,6 +74,7 @@ public final class CaseDetailResponse {
             List<String> suggestedQuestions
     ) {
         return new CaseDetailResponse(
+                caseStudy.getId(),
                 caseStudy.getSlug(),
                 caseStudy.getCode(),
                 caseStudy.getType(),
@@ -88,6 +92,10 @@ public final class CaseDetailResponse {
                 evidence,
                 suggestedQuestions
         );
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getSlug() {
@@ -163,7 +171,8 @@ public final class CaseDetailResponse {
         if (!(other instanceof CaseDetailResponse that)) {
             return false;
         }
-        return Objects.equals(slug, that.slug)
+        return Objects.equals(id, that.id)
+                && Objects.equals(slug, that.slug)
                 && Objects.equals(code, that.code)
                 && type == that.type
                 && Objects.equals(title, that.title)
@@ -184,6 +193,7 @@ public final class CaseDetailResponse {
     @Override
     public int hashCode() {
         return Objects.hash(
+                id,
                 slug,
                 code,
                 type,
@@ -206,7 +216,8 @@ public final class CaseDetailResponse {
     @Override
     public String toString() {
         return "CaseDetailResponse{" +
-                "slug='" + slug + '\'' +
+                "id='" + id + '\'' +
+                ", slug='" + slug + '\'' +
                 ", code='" + code + '\'' +
                 ", type=" + type +
                 ", title='" + title + '\'' +

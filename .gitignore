@@ -9,6 +9,8 @@ output/playwright/
 output/
 frontend/output/
 frontend/.playwright-cli/
+/design-exploration/
+/交付文件/
 
 # Local environment and secrets
 .env

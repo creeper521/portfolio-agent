@@ -9,6 +9,7 @@ import java.util.Objects;
 
 public final class ProjectDetailResponse {
 
+    private final String id;
     private final String slug;
     private final String code;
     private final String title;
@@ -28,6 +29,7 @@ public final class ProjectDetailResponse {
     private final List<String> suggestedQuestions;
 
     public ProjectDetailResponse(
+            String id,
             String slug,
             String code,
             String title,
@@ -46,6 +48,7 @@ public final class ProjectDetailResponse {
             List<EvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
+        this.id = id;
         this.slug = slug;
         this.code = code;
         this.title = title;
@@ -71,6 +74,7 @@ public final class ProjectDetailResponse {
             List<String> suggestedQuestions
     ) {
         return new ProjectDetailResponse(
+                project.getId(),
                 project.getSlug(),
                 project.getCode(),
                 project.getTitle(),
@@ -89,6 +93,10 @@ public final class ProjectDetailResponse {
                 evidence,
                 suggestedQuestions
         );
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getSlug() {
@@ -167,7 +175,8 @@ public final class ProjectDetailResponse {
         if (!(other instanceof ProjectDetailResponse that)) {
             return false;
         }
-        return Objects.equals(slug, that.slug)
+        return Objects.equals(id, that.id)
+                && Objects.equals(slug, that.slug)
                 && Objects.equals(code, that.code)
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
@@ -188,7 +197,7 @@ public final class ProjectDetailResponse {
 
     @Override
     public int hashCode() {
-        return Objects.hash(slug, code, title, summary, background, responsibilities, solution,
+        return Objects.hash(id, slug, code, title, summary, background, responsibilities, solution,
                 keyDecisions, technologies, verification, outcome, handoff, status,
                 contributionType, evidenceIds, evidence, suggestedQuestions);
     }
@@ -196,7 +205,8 @@ public final class ProjectDetailResponse {
     @Override
     public String toString() {
         return "ProjectDetailResponse{" +
-                "slug='" + slug + '\'' +
+                "id='" + id + '\'' +
+                ", slug='" + slug + '\'' +
                 ", code='" + code + '\'' +
                 ", title='" + title + '\'' +
                 ", summary='" + summary + '\'' +
