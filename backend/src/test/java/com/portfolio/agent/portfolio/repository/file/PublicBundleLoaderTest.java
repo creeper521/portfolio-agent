@@ -1,7 +1,9 @@
 package com.portfolio.agent.portfolio.repository.file;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
+import com.portfolio.agent.portfolio.domain.ReleaseManifest;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
@@ -375,6 +377,21 @@ class PublicBundleLoaderTest {
         return bundle;
     }
 
+    @Test
+    void loadsGovernedRetrievalManifestDirectlyWhileLegacyRemainsCompatible()
+            throws Exception {
+        Map<String, byte[]> retrieval = validRetrievalBundle();
+        RuntimeContentSnapshot governed = loader.load(retrieval);
+        ReleaseManifest governedManifest = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(retrieval.get("manifest.json"), ReleaseManifest.class);
+
+        assertThat(governed.getRetrievalContent()).isPresent();
+        assertThat(governedManifest.getLedgerHash())
+                .isEqualTo("sha256:" + "1".repeat(64));
+        assertThat(loader.load(validLegacyBundle()).getRetrievalContent()).isEmpty();
+    }
+
     private byte[] keywordIndexBytes() {
         try {
             KeywordIndexFile index = new KeywordIndexFile(
@@ -424,6 +441,9 @@ class PublicBundleLoaderTest {
                 + "\"factsFile\":\"portfolio.json\",\"presentationFile\":\"presentation.json\","
                 + "\"approvalId\":\"APR-2026-07-21-001\",\"approvalDigest\":\"sha256:approved\","
                 + "\"candidatePayloadHash\":\"" + candidateHash + "\","
+                + (bundle.containsKey("rag-documents.jsonl")
+                        ? "\"ledgerHash\":\"sha256:" + "1".repeat(64) + "\","
+                        : "")
                 + "\"checksumsFile\":\"checksums.json\",\"counts\":{"
                 + "\"projects\":1," + caseCount
                 + "\"claims\":" + ("3.0".equals(schemaVersion) ? 2 : 1)

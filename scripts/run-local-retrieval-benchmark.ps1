@@ -1,6 +1,7 @@
 param(
     [switch]$UnitOnly,
     [string]$ModelDirectory = '',
+    [string]$BundleDirectory = '',
     [string]$CasesPath = 'backend\src\test\resources\retrieval-benchmark\cases.json',
     [string]$OutputDirectory = 'output\retrieval-benchmark\wave-0'
 )
@@ -8,8 +9,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $pom = Join-Path $root 'backend\pom.xml'
-$portfolio = Join-Path $root `
-    'backend\src\main\resources\public-data\bundle\portfolio.json'
 $jar = Join-Path $root 'backend\target\portfolio-agent.jar'
 $maven = if (-not [string]::IsNullOrWhiteSpace($env:BENCHMARK_MAVEN)) {
     $env:BENCHMARK_MAVEN
@@ -59,6 +58,18 @@ if ($UnitOnly.IsPresent) {
     exit 0
 }
 
+$hasBundle = -not [string]::IsNullOrWhiteSpace($BundleDirectory)
+if (-not $hasBundle) {
+    throw 'Real retrieval benchmark mode requires -BundleDirectory.'
+}
+$resolvedBundle = Resolve-RepositoryPath $BundleDirectory
+if (-not (Test-Path -LiteralPath $resolvedBundle -PathType Container)) {
+    throw 'Retrieval benchmark Bundle directory does not exist.'
+}
+$portfolio = Join-Path $resolvedBundle 'portfolio.json'
+if (-not (Test-Path -LiteralPath $portfolio -PathType Leaf)) {
+    throw 'Retrieval benchmark Bundle portfolio does not exist.'
+}
 $resolvedModel = Resolve-RepositoryPath $ModelDirectory
 if (-not (Test-Path -LiteralPath $resolvedModel -PathType Container)) {
     throw 'Retrieval benchmark model directory does not exist.'

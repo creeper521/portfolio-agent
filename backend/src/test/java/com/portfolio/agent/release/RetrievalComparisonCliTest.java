@@ -571,6 +571,7 @@ class RetrievalComparisonCliTest {
         retrieval.put("keywordIndexFormatVersion", "keyword-index-v1");
         retrieval.put("vectorIndexFormatVersion", "vector-index-v1");
         manifest.set("retrieval", retrieval);
+        manifest.put("ledgerHash", "sha256:" + "1".repeat(64));
         manifest.put("candidatePayloadHash", BundleHashCalculator.candidatePayloadHash(files));
         byte[] manifestBytes = mapper.writeValueAsBytes(manifest);
 

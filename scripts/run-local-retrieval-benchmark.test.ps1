@@ -7,6 +7,7 @@ $fakeMaven = Join-Path $fixtureRoot 'mvn.cmd'
 $fakeJava = Join-Path $fixtureRoot 'java.cmd'
 $fakeJavaScript = Join-Path $fixtureRoot 'fake-java.ps1'
 $modelDirectory = Join-Path $fixtureRoot 'model'
+$bundleDirectory = Join-Path $fixtureRoot 'bundle'
 $casesPath = Join-Path $fixtureRoot 'cases.json'
 $outputDirectory = Join-Path $fixtureRoot 'output'
 
@@ -40,8 +41,11 @@ function Reset-Fixture {
 }
 
 try {
-    New-Item -ItemType Directory -Force -Path $fixtureRoot, $modelDirectory | Out-Null
+    New-Item -ItemType Directory -Force `
+        -Path $fixtureRoot, $modelDirectory, $bundleDirectory | Out-Null
     Set-Content -LiteralPath $casesPath -Value '{}' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $bundleDirectory 'portfolio.json') `
+        -Value '{"contentVersion":"2026-07-23.1"}' -Encoding UTF8
     @'
 @echo off
 echo MAVEN %*>>"%BENCHMARK_CALL_LOG%"
@@ -101,6 +105,8 @@ exit /b %ERRORLEVEL%
         'Unit-only mode must not run the performance test.'
     Assert-True ($calls -notmatch 'RetrievalComparisonCli') `
         'Unit-only mode must not run the comparison CLI.'
+    Assert-True ($calls -notmatch '--portfolio') `
+        'Unit-only mode must not use a Bundle directory.'
 
     Reset-Fixture
     $missingModel = Join-Path $fixtureRoot 'missing-model'
@@ -109,8 +115,14 @@ exit /b %ERRORLEVEL%
         'Real mode must reject a nonexistent model directory.'
 
     Reset-Fixture
+    $result = Invoke-Benchmark @('-ModelDirectory', $modelDirectory)
+    Assert-True ($result.ExitCode -ne 0) `
+        'Real mode must require an explicit Bundle directory.'
+
+    Reset-Fixture
     $result = Invoke-Benchmark @(
         '-ModelDirectory', $modelDirectory,
+        '-BundleDirectory', $bundleDirectory,
         '-CasesPath', $casesPath,
         '-OutputDirectory', $outputDirectory)
     $calls = Get-Content -Raw -LiteralPath $callLog
@@ -142,6 +154,9 @@ exit /b %ERRORLEVEL%
         'Real mode must invoke the comparison CLI through PropertiesLauncher.'
     Assert-True ($calls -match 'RetrievalComparisonCli') `
         'Real mode must invoke RetrievalComparisonCli.'
+    Assert-True ($calls -match [regex]::Escape(
+            (Join-Path $bundleDirectory 'portfolio.json'))) `
+        'Real mode must forward the external Bundle portfolio to the comparison CLI.'
     Assert-True (Test-Path -LiteralPath (Join-Path $outputDirectory 'comparison.json') `
             -PathType Leaf) 'Real mode must require comparison.json.'
     Assert-True (Test-Path -LiteralPath (Join-Path $outputDirectory 'comparison.md') `
@@ -154,6 +169,7 @@ exit /b %ERRORLEVEL%
     $env:BENCHMARK_FAIL_MATCH = 'LocalEmbeddingPerformanceTest'
     $result = Invoke-Benchmark @(
         '-ModelDirectory', $modelDirectory,
+        '-BundleDirectory', $bundleDirectory,
         '-CasesPath', $casesPath,
         '-OutputDirectory', $outputDirectory)
     Assert-True ($result.ExitCode -ne 0) 'A failed real-mode stage must return nonzero.'
