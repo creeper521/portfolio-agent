@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>中间区排版探索 · 空态 + Agent 回复</title>
+<style>
+  :root{
+    --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0;
+    --ink:#201c17; --ink-2:#34302a; --muted:#746b5e; --faint:#9c9182;
+    --rule:#cdbfa9; --red:#7a2e2a; --red-hi:#b65d53;
+    --thread:#f5e8d1; --rail:#f0e9de; --desk:#f8f3ea;
+    --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+    --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:#1e1b17;color:var(--paper);font-family:var(--sans);}
+
+  /* 切换栏 */
+  .bar{position:sticky;top:0;z-index:50;background:rgba(20,17,14,.94);backdrop-filter:blur(12px);
+    border-bottom:1px solid #423b33;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .bar h1{margin:0;font:400 15px var(--serif);color:#e8ddc9;}
+  .seg{display:flex;border:1px solid #524a40;border-radius:8px;overflow:hidden;}
+  .seg button{appearance:none;border:0;background:transparent;color:#cdbfa9;font-family:var(--sans);
+    font-size:12.5px;padding:7px 13px;cursor:pointer;border-right:1px solid #524a40;transition:.15s;}
+  .seg button:last-child{border-right:0;}
+  .seg button.on{background:var(--red);color:#fff;}
+  .seg button:not(.on):hover{background:#3a332b;color:#fff;}
+  .bar .hint{font:11px var(--mono);color:#9c9182;margin-left:auto;}
+
+  .stage{padding:24px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;}
+  .frame{width:520px;background:var(--thread);border-radius:16px;overflow:hidden;
+    box-shadow:0 24px 64px rgba(0,0,0,.5);display:flex;flex-direction:column;height:760px;}
+
+  /* conv header（共用） */
+  .head{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 24px;border-bottom:1px solid var(--rule);}
+  .head .eb{font:11px var(--mono);letter-spacing:.13em;color:var(--red);margin:0 0 4px;}
+  .head h2{margin:0;font:500 20px var(--serif);color:var(--ink);}
+  .head .tools{display:flex;gap:8px;align-items:center;font:11px var(--mono);color:var(--muted);}
+  .head .chip{padding:4px 9px;border:1px solid var(--rule);border-radius:6px;}
+
+  .scroll{flex:1;overflow:hidden;padding:0 24px;}
+  .composer{margin:16px 24px 20px;padding:8px 8px 8px 14px;border:1px solid var(--rule);
+    border-radius:12px;background:rgba(255,255,255,.45);display:flex;align-items:center;gap:10px;}
+  .composer span{color:var(--red);font:20px var(--serif);}
+  .composer input{flex:1;border:0;background:transparent;font:14px var(--sans);color:var(--ink);outline:none;}
+  .composer button{font:13px var(--mono);padding:8px 14px;border-radius:8px;border:0;
+    background:var(--red);color:#fff;cursor:pointer;}
+
+  /* 真实数据文案 */
+  .q{margin:0;}
+
+  /* ============================================ */
+  /* 版本 1：克制极简（eyebrow + 小标题 + 紧凑列表） */
+  /* ============================================ */
+  .v1 .empty{padding:36px 0 0;}
+  .v1 .empty .eb{font:11px var(--mono);letter-spacing:.14em;color:var(--red);margin:0 0 14px;}
+  .v1 .empty h3{margin:0 0 6px;font:400 22px/1.35 var(--serif);color:var(--ink);}
+  .v1 .empty .lead{margin:0 0 28px;font:13px/1.7 var(--sans);color:var(--muted);max-width:340px;}
+  .v1 .qlist{list-style:none;margin:0;padding:0;}
+  .v1 .qlist li{padding:14px 0;border-top:1px solid var(--rule);}
+  .v1 .qlist li:last-child{border-bottom:1px solid var(--rule);}
+  .v1 .qlist button{background:none;border:0;text-align:left;cursor:pointer;width:100%;
+    display:flex;gap:10px;font:14px/1.55 var(--sans);color:var(--ink);}
+  .v1 .qlist button span{color:var(--red);font-family:var(--mono);}
+
+  /* ============================================ */
+  /* 版本 2：左对齐编辑式（无大标题，引语感） */
+  /* ============================================ */
+  .v2 .empty{padding:44px 0 0;}
+  .v2 .empty .eb{font:11px var(--mono);letter-spacing:.14em;color:var(--red);margin:0 0 18px;}
+  .v2 .empty .quote{font:400 17px/1.75 var(--serif);color:var(--ink);margin:0 0 32px;
+    padding-left:14px;border-left:2px solid var(--red);max-width:380px;}
+  .v2 .qlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .v2 .qlist button{background:rgba(255,255,255,.35);border:1px solid var(--rule);
+    border-radius:8px;padding:11px 14px;cursor:pointer;text-align:left;width:100%;
+    font:13px/1.5 var(--sans);color:var(--ink);transition:.15s;}
+  .v2 .qlist button:hover{border-color:var(--red);color:var(--red);}
+  .v2 .qlist button .arr{color:var(--red);margin-right:8px;font-family:var(--mono);}
+
+  /* ============================================ */
+  /* 版本 3：卡片网格（推荐问题做成可点击卡片） */
+  /* ============================================ */
+  .v3 .empty{padding:32px 0 0;}
+  .v3 .empty .eb{font:11px var(--mono);letter-spacing:.14em;color:var(--red);margin:0 0 10px;}
+  .v3 .empty h3{margin:0 0 22px;font:500 18px var(--sans);color:var(--ink);}
+  .v3 .qgrid{display:grid;grid-template-columns:1fr;gap:10px;}
+  .v3 .qgrid button{background:rgba(255,255,255,.4);border:1px solid var(--rule);
+    border-radius:10px;padding:14px 16px;cursor:pointer;text-align:left;
+    display:flex;flex-direction:column;gap:4px;transition:.15s;}
+  .v3 .qgrid button:hover{border-color:var(--red);background:rgba(255,255,255,.6);}
+  .v3 .qgrid button .tag{font:10px var(--mono);color:var(--red);letter-spacing:.08em;}
+  .v3 .qgrid button .t{font:14px/1.5 var(--sans);color:var(--ink);}
+
+  /* === Agent 回复：三个版本共用一套克制的标题梯度 === */
+  .agent-msg{padding:24px 0;border-top:1px solid var(--rule);}
+  .agent-msg .meta{font:11px var(--mono);letter-spacing:.06em;color:var(--red);margin:0 0 12px;}
+  .agent-msg h3{margin:0 0 8px;font:600 15px/1.45 var(--serif);color:var(--ink);}
+  .agent-msg p{margin:0 0 10px;font:14px/1.8 var(--serif);color:var(--ink);}
+  .agent-msg .sec-h4{margin:16px 0 4px;font:600 13px var(--sans);color:var(--ink-2);}
+  .agent-msg .follow{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;}
+  .agent-msg .follow button{font:11px var(--mono);padding:5px 10px;border-radius:6px;
+    border:1px solid var(--rule);background:rgba(255,255,255,.35);color:var(--muted);cursor:pointer;transition:.15s;}
+  .agent-msg .follow button:hover{border-color:var(--red);color:var(--red);}
+
+  .label{font:11px var(--mono);color:#9c9182;text-align:center;padding:10px 0 0;}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>中间区排版探索 · 空态 + Agent 回复</h1>
+  <div class="seg" id="seg">
+    <button data-v="v1" class="on">① 克制极简</button>
+    <button data-v="v2">② 左对齐引语</button>
+    <button data-v="v3">③ 卡片网格</button>
+  </div>
+  <div class="hint">← 切换看空态布局 · Agent 回复三版共用克制标题梯度</div>
+</div>
+
+<div class="stage">
+  <div class="frame" id="emptyFrame">
+    <div class="head">
+      <div>
+        <p class="eb">AGENT CONVERSATION · Agent 对话</p>
+        <h2>SQL 审计项目的取舍</h2>
+      </div>
+      <div class="tools"><span class="chip">会话</span><span class="chip">证据</span><span>TECH MODE</span></div>
+    </div>
+
+    <div class="scroll" id="emptyScroll">
+      <!-- 空态内容由 JS 注入 -->
+    </div>
+
+    <div class="composer">
+      <span>›</span>
+      <input placeholder="继续追问方案取舍、验证过程或证据" />
+      <button>发送 ↵</button>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="head">
+      <div>
+        <p class="eb">AGENT CONVERSATION · Agent 对话</p>
+        <h2>SQL 审计项目的取舍</h2>
+      </div>
+      <div class="tools"><span class="chip">会话</span><span class="chip">证据</span><span>TECH MODE</span></div>
+    </div>
+
+    <div class="scroll">
+      <!-- 用户气泡 -->
+      <div style="display:flex;justify-content:flex-end;margin:24px 0;">
+        <div style="background:var(--ink);color:var(--paper);padding:12px 16px;border-radius:12px 12px 4px 12px;max-width:72%;font:14px/1.65 var(--sans);">
+          这个 SQL 审计项目为什么没有做成可运行的产物？
+        </div>
+      </div>
+
+      <!-- Agent 回复（克制标题梯度，三版共用） -->
+      <div class="agent-msg">
+        <p class="meta">AGENT · BOUNDARY · 当前能力边界 · PRESET · 已核验</p>
+        <h3>当前仅作为审计证据保留，未进入运行时</h3>
+        <p>该项目在公开快照里以「审计证据」形式存在，不提供可执行入口。运行时只读已审核的公开资料，不会执行其中的 SQL。</p>
+        <p>若你需要它的设计意图或被采纳的结论，可以继续追问。</p>
+        <div class="sec-h4">设计意图</div>
+        <p>审计覆盖了拼接风险、权限边界与回滚完整性三个维度，结论被后续模块化单体设计吸收。</p>
+        <div class="follow">
+          <button>展开本节</button>
+          <button>查看本节证据</button>
+          <button>说明判断</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <span>›</span>
+      <input placeholder="继续追问方案取舍、验证过程或证据" />
+      <button>发送 ↵</button>
+    </div>
+  </div>
+</div>
+
+<div class="label">左 = 空态布局（切换看三版） · 右 = Agent 回复（克制标题梯度，三版统一）</div>
+
+<script>
+const empties = {
+  v1: `<div class="empty">
+    <p class="eb">YOU · FROM DOSSIER</p>
+    <h3>从一个可核验的问题开始。</h3>
+    <p class="lead">下面是几个已经核对过证据的切入点，选一个即可展开对话。也可以直接在下方输入你的问题。</p>
+    <ul class="qlist">
+      <li><button><span>↳</span>这个 SQL 审计项目为什么没有做成可运行的产物？</button></li>
+      <li><button><span>↳</span>作品集的核验边界是怎么界定的？</button></li>
+      <li><button><span>↳</span>前端构建为什么选择整体重做？</button></li>
+      <li><button><span>↳</span>C3 模型注册表现状如何？</button></li>
+    </ul>
+  </div>`,
+
+  v2: `<div class="empty">
+    <p class="eb">YOU · FROM DOSSIER</p>
+    <p class="quote">从一个可核验的问题开始——这里只回答有公开证据支撑的内容。</p>
+    <div class="qlist">
+      <button><span class="arr">↳</span>这个 SQL 审计项目为什么没有做成可运行的产物？</button>
+      <button><span class="arr">↳</span>作品集的核验边界是怎么界定的？</button>
+      <button><span class="arr">↳</span>前端构建为什么选择整体重做？</button>
+      <button><span class="arr">↳</span>C3 模型注册表现状如何？</button>
+    </div>
+  </div>`,
+
+  v3: `<div class="empty">
+    <p class="eb">YOU · FROM DOSSIER</p>
+    <h3>从已核验的问题切入</h3>
+    <div class="qgrid">
+      <button><span class="tag">PROJECT · SQL-AUDIT</span><span class="t">这个审计项目为什么没有做成可运行的产物？</span></button>
+      <button><span class="tag">BOUNDARY</span><span class="t">作品集的核验边界是怎么界定的？</span></button>
+      <button><span class="tag">ARCHITECTURE</span><span class="t">前端构建为什么选择整体重做？</span></button>
+      <button><span class="tag">RUNTIME</span><span class="t">C3 模型注册表现状如何？</span></button>
+    </div>
+  </div>`,
+};
+
+const scroll = document.getElementById('emptyScroll');
+const frame = document.getElementById('emptyFrame');
+function render(v){
+  frame.className = 'frame ' + v;
+  scroll.innerHTML = empties[v];
+}
+render('v1');
+document.getElementById('seg').addEventListener('click', e=>{
+  if(e.target.tagName!=='BUTTON') return;
+  [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
+  e.target.classList.add('on');
+  render(e.target.dataset.v);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>案卷索引探索 · 类型 tag + 统一交付物</title>
+<style>
+  /* 复用 frontend tokens.css 的变量，保持与生产视觉一致 */
+  :root{
+    --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0; --warm:#f3e8d6;
+    --ink:#201c17; --ink-2:#34302a; --muted:#746b5e; --faint:#9c9182;
+    --rule:#cdbfa9; --red:#7a2e2a; --red-hi:#b65d53;
+    --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+    --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --ease:cubic-bezier(0.22,0.8,0.22,1);
+    --header-height:66px;
+    --content-width:1180px;
+    --page-gutter:clamp(22px,4vw,48px);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;color:var(--ink);background:var(--paper);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;}
+  a{color:inherit;text-decoration:none;}
+  ::selection{color:var(--paper-hi);background:var(--red);}
+
+  /* —— 探索切换栏（交付产物，用完即弃，不进生产） —— */
+  .bar{position:sticky;top:0;z-index:50;background:var(--ink);color:#e8ddc9;
+    border-bottom:1px solid #423b33;padding:11px 22px;display:flex;align-items:center;
+    gap:14px;flex-wrap:wrap;}
+  .bar h1{margin:0;font:400 14px var(--serif);color:#e8ddc9;}
+  .seg{display:flex;border:1px solid #524a40;border-radius:8px;overflow:hidden;}
+  .seg button{appearance:none;border:0;background:transparent;color:#cdbfa9;
+    font-family:var(--sans);font-size:12.5px;padding:7px 13px;cursor:pointer;
+    border-right:1px solid #524a40;transition:.15s;}
+  .seg button:last-child{border-right:0;}
+  .seg button.on{background:var(--red);color:#fff;}
+  .seg button:not(.on):hover{background:#3a332b;color:#fff;}
+  .bar .hint{font:10.5px var(--mono);color:#9c9182;margin-left:auto;letter-spacing:.06em;}
+
+  /* —— PageLead（复用生产组件样式） —— */
+  .page-lead{padding:clamp(74px,8vw,112px) 0 58px;border-bottom:1px solid var(--rule);
+    background:var(--paper-hi);}
+  .page-lead__inner{width:min(var(--content-width),calc(100% - (var(--page-gutter)*2)));
+    margin-inline:auto;display:grid;padding-top:var(--header-height);
+    grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(26px,5vw,80px);align-items:end;}
+  .page-lead p{margin:0;color:var(--red);font:9px var(--mono);letter-spacing:.15em;}
+  .page-lead h1{margin:0;font:400 clamp(44px,6vw,78px)/0.98 var(--serif);letter-spacing:-0.045em;}
+  .page-lead__desc{color:var(--muted);font-size:13px;line-height:1.8;}
+
+  /* —— StatusMark 语法（复用生产） —— */
+  .status-mark{display:inline-flex;align-items:center;gap:7px;color:var(--muted);
+    font-family:var(--mono);font-size:9px;letter-spacing:.06em;}
+  .status-mark i{color:var(--red);font-size:7px;font-style:normal;}
+  .status-mark--verified i{color:#4a6b3a;} /* 核验绿，仅 demo 区分语义用 */
+
+  /* —— 共用索引容器 —— */
+  .page-shell{width:min(var(--content-width),calc(100% - (var(--page-gutter)*2)));
+    margin-inline:auto;}
+
+  /* ============================================ */
+  /* 版本 ①：平铺行式（沿用现 ProjectsPage，加 type tag） */
+  /* ============================================ */
+  .v1 .index{padding:70px 0 120px;}
+  .v1 .row{position:relative;display:grid;padding:36px 0;
+    grid-template-columns:140px minmax(0,1fr) 300px;gap:clamp(24px,5vw,72px);
+    border-bottom:1px solid var(--rule);transition:0.3s var(--ease);}
+  .v1 .row:first-child{border-top:1px solid var(--rule);}
+  .v1 .row:hover{background:var(--paper-hi);}
+  .v1 .row__code{display:flex;flex-direction:column;gap:12px;}
+  .v1 .row__code > span{color:var(--red);font:10px var(--mono);letter-spacing:.12em;}
+  /* type tag：dossier 里的小标记，承载「交付物类型」这个信息维度 */
+  .type-tag{display:inline-flex;align-items:center;gap:5px;width:fit-content;
+    padding:3px 7px;border:1px solid var(--rule);color:var(--ink-2);
+    font:8.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;}
+  .type-tag[data-t='PROJECT']{border-color:var(--red);color:var(--red);}
+  .type-tag[data-t='FEATURE']{border-color:var(--ink-2);color:var(--ink-2);}
+  .type-tag[data-t='EVALUATION']{border-style:dashed;border-color:var(--faint);color:var(--faint);}
+  .v1 .row h2{margin:0;font:400 clamp(25px,3vw,40px)/1.1 var(--serif);}
+  .v1 .row p{max-width:640px;margin:14px 0 18px;color:var(--muted);font-size:13px;line-height:1.8;}
+  .v1 .row__status{display:flex;flex-wrap:wrap;gap:18px;}
+  .v1 .row__tech{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;list-style:none;margin:0;padding:0;}
+  .v1 .row__tech li{padding:7px 9px;border:1px solid var(--rule);font:8px var(--mono);letter-spacing:.04em;}
+
+  /* ============================================ */
+  /* 版本 ②：按类型分组（最贴合定位：交付物 vs 探索评测） */
+  /* ============================================ */
+  .v2 .index{padding:60px 0 120px;}
+  .v2 .group + .group{margin-top:64px;}
+  .v2 .group__head{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;
+    gap:clamp(26px,5vw,80px);align-items:end;padding-bottom:18px;
+    border-bottom:1px solid var(--ink);}
+  .v2 .group__head .code{margin:0;color:var(--red);font:9px var(--mono);letter-spacing:.15em;}
+  .v2 .group__head h2{margin:0;font:400 clamp(30px,3.5vw,46px)/1.05 var(--serif);letter-spacing:-0.03em;}
+  .v2 .group__head .note{margin:0;color:var(--muted);font-size:12.5px;line-height:1.7;}
+  .v2 .row{position:relative;display:grid;padding:34px 0;
+    grid-template-columns:150px minmax(0,1fr) 240px;gap:clamp(24px,5vw,72px);
+    border-bottom:1px solid var(--rule);transition:0.3s var(--ease);}
+  .v2 .row:hover{background:var(--paper-hi);}
+  .v2 .row__code{display:flex;flex-direction:column;gap:14px;}
+  .v2 .row__code .num{color:var(--red);font:10px var(--mono);letter-spacing:.12em;}
+  .v2 .row h3{margin:0;font:400 clamp(24px,2.8vw,38px)/1.1 var(--serif);}
+  .v2 .row p{max-width:640px;margin:12px 0 16px;color:var(--muted);font-size:13px;line-height:1.8;}
+  .v2 .row__meta{display:flex;flex-direction:column;gap:12px;align-items:flex-start;}
+  .v2 .row__chips{display:flex;flex-wrap:wrap;gap:10px;}
+  .v2 .row__chips .status-mark{font-size:9.5px;}
+
+  /* ============================================ */
+  /* 版本 ③：卡片网格（把证据数 / claim / 核验推到表层，为核验可视化预热） */
+  /* ============================================ */
+  .v3 .index{padding:64px 0 120px;}
+  .v3 .grid{display:grid;grid-template-columns:repeat(2,1fr);
+    border-top:1px solid var(--rule);border-left:1px solid var(--rule);}
+  .v3 .card{position:relative;display:flex;flex-direction:column;
+    padding:30px 28px 28px;border-right:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);transition:0.3s var(--ease);min-height:300px;}
+  .v3 .card:hover{background:var(--paper-hi);}
+  .v3 .card__top{display:flex;justify-content:space-between;align-items:flex-start;
+    margin-bottom:22px;}
+  .v3 .card__code{color:var(--red);font:10px var(--mono);letter-spacing:.12em;}
+  .v3 .card h3{margin:0 0 14px;font:400 clamp(22px,2.4vw,32px)/1.15 var(--serif);}
+  .v3 .card p{margin:0 0 auto;color:var(--muted);font-size:13px;line-height:1.8;max-width:46ch;}
+  .v3 .card__stats{display:grid;grid-template-columns:1fr 1fr 1fr;
+    margin-top:24px;padding-top:18px;border-top:1px solid var(--rule);gap:14px;}
+  .v3 .stat{display:flex;flex-direction:column;gap:3px;}
+  .v3 .stat b{margin:0;font:400 30px/1 var(--serif);color:var(--ink);letter-spacing:-0.04em;}
+  .v3 .stat span{color:var(--muted);font:8.5px var(--mono);letter-spacing:.08em;}
+  .v3 .card__foot{display:flex;flex-wrap:wrap;gap:14px;margin-top:16px;}
+
+  /* 区分评测卡：用虚线边提示"原型/非交付" */
+  .v3 .card[data-t='EVALUATION']{background:var(--paper-low);}
+  .v3 .card[data-t='EVALUATION']::before{content:'PROTOTYPE · 非生产交付物';
+    position:absolute;top:0;left:0;background:var(--faint);color:var(--paper);
+    font:8px var(--mono);letter-spacing:.1em;padding:4px 8px;}
+
+  .label{font:10px var(--mono);color:var(--faint);text-align:center;padding:16px 0;
+    letter-spacing:.08em;}
+
+  @media (max-width:760px){
+    .v1 .row,.v2 .row{grid-template-columns:1fr;gap:18px;}
+    .v3 .grid{grid-template-columns:1fr;}
+    .page-lead__inner,.v2 .group__head{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>案卷索引探索 · 统一交付物 + 类型 tag</h1>
+  <div class="seg" id="seg">
+    <button data-v="v1" class="on">① 平铺行式</button>
+    <button data-v="v2">② 按类型分组</button>
+    <button data-v="v3">③ 卡片网格</button>
+  </div>
+  <div class="hint">← 切换看三种组织方式 · 真实数据（1 项目 + 2 case + 1 评测）</div>
+</div>
+
+<!-- 共用 PageLead -->
+<header class="page-lead">
+  <div class="page-lead__inner">
+    <p>01 / DOSSIER INDEX</p>
+    <h1>工程案卷目录</h1>
+    <div class="page-lead__desc">
+      核心项目、功能修复案例与工具评测统一归档。每项标明类型、贡献方式与核验规模；
+      评测类条目以虚线标记，与交付物显式区分。
+    </div>
+  </div>
+</header>
+
+<!-- 索引区，由 JS 注入 -->
+<main id="index" class="v1"></main>
+
+<div class="label">三版共用同一批真实交付物 · 数据来自 portfolio.json（projects + cases）</div>
+
+<script>
+// —— 真实数据（来自 backend/public-data/portfolio.json）——
+const items = [
+  {
+    code:'P-01', type:'PROJECT', typeLabel:'核心项目',
+    title:'SQL 审计与故障排查工具',
+    summary:'把分散在远程服务器上的 SQL 日志检索、结果追溯和归档流程整合为可复用的内部工具。',
+    tech:['Java','Spring Boot','Vue','SSH','WebSocket','MySQL','Excel 导出'],
+    statusLabel:'核心版本已交付', contributionLabel:'主导贡献',
+    evidence:2, claims:9,
+  },
+  {
+    code:'CASE-01', type:'FEATURE', typeLabel:'功能修复',
+    title:'多语言图片上传结果保留修复',
+    summary:'修复后续语言上传覆盖既有语言映射的问题。按德语→查询→法语→德法共存顺序完成回归。',
+    tech:['状态合并','回归验证','边界处理'],
+    statusLabel:'核心版本已交付', contributionLabel:'主导贡献',
+    evidence:1, claims:2,
+  },
+  {
+    code:'CASE-02', type:'FEATURE', typeLabel:'功能修复',
+    title:'测试角色重置工具',
+    summary:'为重复验证新账号流程提供受控的角色查询与重置入口，破坏性操作分步确认。',
+    tech:['受控流程','破坏性确认','测试工具'],
+    statusLabel:'核心版本已交付', contributionLabel:'主导贡献',
+    evidence:1, claims:2,
+  },
+  {
+    code:'CASE-03', type:'EVALUATION', typeLabel:'工具评测',
+    title:'代码图谱工具端到端评测',
+    summary:'通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界，仅定性结论，非生产交付。',
+    tech:['符号检索','失效分析','定性评测'],
+    statusLabel:'原型验证', contributionLabel:'主导贡献',
+    evidence:1, claims:3,
+  },
+];
+
+const techList = (arr) => arr.map(t=>`<li>${t}</li>`).join('');
+const chips = (it) => `
+  <span class="status-mark"><i>◆</i>${it.statusLabel}</span>
+  <span class="status-mark"><i>◆</i>${it.contributionLabel}</span>
+`;
+
+function v1(){
+  return `<div class="index page-shell">` + items.map(it=>`
+    <a class="row" href="#">
+      <div class="row__code">
+        <span>${it.code}</span>
+        <span class="type-tag" data-t="${it.type}">${it.typeLabel}</span>
+      </div>
+      <div>
+        <h2>${it.title}</h2>
+        <p>${it.summary}</p>
+        <div class="row__status">${chips(it)}</div>
+      </div>
+      <ul class="row__tech">${techList(it.tech.slice(0,5))}</ul>
+    </a>`).join('') + `</div>`;
+}
+
+function v2(){
+  const delivered = items.filter(i=>i.type!=='EVALUATION');
+  const explore = items.filter(i=>i.type==='EVALUATION');
+  const group = (code,title,note,list)=>`
+    <section class="group">
+      <div class="group__head">
+        <p class="code">${code}</p>
+        <h2>${title}</h2>
+        <p class="note">${note}</p>
+      </div>
+      <div class="page-shell" style="padding:0">
+      ` + list.map(it=>`
+        <a class="row" href="#">
+          <div class="row__code">
+            <span class="num">${it.code}</span>
+            <span class="type-tag" data-t="${it.type}">${it.typeLabel}</span>
+          </div>
+          <div>
+            <h3>${it.title}</h3>
+            <p>${it.summary}</p>
+          </div>
+          <div class="row__meta">
+            <div class="row__chips">${chips(it)}</div>
+          </div>
+        </a>`).join('') + `
+      </div>
+    </section>`;
+  return (
+    `<div class="index">` +
+    group('A / DELIVERED','核心交付','已完成、部署或回归的主导工作，含主项目与功能修复案例。',delivered) +
+    group('B / EVALUATION','探索与评测','原型阶段的工具评测与失效分析，结论定性，非生产交付物。',explore) +
+    `</div>`
+  );
+}
+
+function v3(){
+  return `<div class="index page-shell"><div class="grid">` + items.map(it=>`
+    <a class="card" data-t="${it.type}" href="#">
+      <div class="card__top">
+        <span class="card__code">${it.code}</span>
+        <span class="type-tag" data-t="${it.type}">${it.typeLabel}</span>
+      </div>
+      <h3>${it.title}</h3>
+      <p>${it.summary}</p>
+      <div class="card__stats">
+        <div class="stat"><b>${String(it.evidence).padStart(2,'0')}</b><span>EVIDENCE</span></div>
+        <div class="stat"><b>${String(it.claims).padStart(2,'0')}</b><span>CLAIMS</span></div>
+        <div class="stat"><b>✓</b><span>VERIFIED</span></div>
+      </div>
+      <div class="card__foot">${chips(it)}</div>
+    </a>`).join('') + `</div></div>`;
+}
+
+const root = document.getElementById('index');
+function render(v){
+  root.className = v;
+  root.innerHTML = ({v1, v2, v3})[v]();
+}
+render('v1');
+document.getElementById('seg').addEventListener('click', e=>{
+  if(e.target.tagName!=='BUTTON') return;
+  [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
+  e.target.classList.add('on');
+  render(e.target.dataset.v);
+});
+</script>
+</body>
+</html>
