@@ -18,7 +18,7 @@ defineProps<{
         </section>
         <section>
           <h2>PRIVACY</h2>
-          <p>无需登录；会话只保存在当前浏览器，并在 7 天后自动过期。</p>
+          <p>无需登录；对话只存在当前页签内存，刷新或关闭后记录会消失。</p>
         </section>
       </div>
       <div class="dossier-footer__base">
