@@ -204,7 +204,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         item -> new AnswerRetrievalChunk(
                                 item.getChunkId(), item.getProjectSlugs(), item.getCaseSlugs(),
                                 item.getClaimIds(),
-                                item.getTopics(), item.getText().length())));
+                                item.getTopics(), item.getText(), item.getText().length())));
         return new AnswerRetrievalCorpus(
                 keywordIndex, source.getVectorIndex().getVectors(), chunks,
                 source.getManifest().getEmbeddingModelId(),
