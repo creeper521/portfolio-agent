@@ -1,6 +1,7 @@
 package com.portfolio.agent.release.benchmark;
 
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,6 +22,13 @@ public final class RetrievalBenchmarkReport {
     private final List<Evaluation> evaluations;
     private final Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> metricsByRoute;
     private final List<CategoryMetrics> categoryMetrics;
+    private final List<RetrievalBenchmarkGroupMetrics> splitRouteMetrics;
+    private final List<RetrievalBenchmarkGroupMetrics>
+            splitCategoryRouteMetrics;
+    private final List<RetrievalBenchmarkGroupMetrics>
+            splitSubjectRouteMetrics;
+    private final List<RetrievalDecisionCount> splitRouteDecisionCounts;
+    private final RetrievalBenchmarkRunMetadata runMetadata;
 
     public RetrievalBenchmarkReport(
             String suiteVersion,
@@ -31,6 +39,30 @@ public final class RetrievalBenchmarkReport {
             String modelDescriptorHash,
             List<RetrievalRouteEvaluation> evaluations,
             Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> metricsByRoute
+    ) {
+        this(
+                suiteVersion,
+                contentVersion,
+                runtimeBundleHash,
+                snapshotValidFrom,
+                policyVersion,
+                modelDescriptorHash,
+                evaluations,
+                metricsByRoute,
+                null
+        );
+    }
+
+    public RetrievalBenchmarkReport(
+            String suiteVersion,
+            String contentVersion,
+            String runtimeBundleHash,
+            String snapshotValidFrom,
+            String policyVersion,
+            String modelDescriptorHash,
+            List<RetrievalRouteEvaluation> evaluations,
+            Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> metricsByRoute,
+            RetrievalBenchmarkRunMetadata runMetadata
     ) {
         this.suiteVersion = Objects.requireNonNull(suiteVersion, "suiteVersion");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
@@ -47,6 +79,25 @@ public final class RetrievalBenchmarkReport {
         this.evaluations = safeEvaluations(evaluations);
         this.metricsByRoute = stableMetrics(metricsByRoute);
         this.categoryMetrics = categoryMetrics(this.evaluations);
+        RetrievalBenchmarkEvaluator evaluator = new RetrievalBenchmarkEvaluator();
+        List<RetrievalRouteEvaluation> stableSource =
+                toRouteEvaluations(this.evaluations);
+        if (stableSource.isEmpty()) {
+            this.splitRouteMetrics = List.of();
+            this.splitCategoryRouteMetrics = List.of();
+            this.splitSubjectRouteMetrics = List.of();
+            this.splitRouteDecisionCounts = List.of();
+        } else {
+            this.splitRouteMetrics =
+                    evaluator.evaluateBySplitAndRoute(stableSource);
+            this.splitCategoryRouteMetrics =
+                    evaluator.evaluateBySplitCategoryAndRoute(stableSource);
+            this.splitSubjectRouteMetrics =
+                    evaluator.evaluateBySplitSubjectAndRoute(stableSource);
+            this.splitRouteDecisionCounts =
+                    evaluator.countBySplitRouteAndDecision(stableSource);
+        }
+        this.runMetadata = runMetadata;
     }
 
     public String getSuiteVersion() { return suiteVersion; }
@@ -58,6 +109,23 @@ public final class RetrievalBenchmarkReport {
     public List<Evaluation> getEvaluations() { return evaluations; }
     public Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> getMetricsByRoute() { return metricsByRoute; }
     public List<CategoryMetrics> getCategoryMetrics() { return categoryMetrics; }
+    public List<RetrievalBenchmarkGroupMetrics> getSplitRouteMetrics() {
+        return splitRouteMetrics;
+    }
+    public List<RetrievalBenchmarkGroupMetrics>
+            getSplitCategoryRouteMetrics() {
+        return splitCategoryRouteMetrics;
+    }
+    public List<RetrievalBenchmarkGroupMetrics>
+            getSplitSubjectRouteMetrics() {
+        return splitSubjectRouteMetrics;
+    }
+    public List<RetrievalDecisionCount> getSplitRouteDecisionCounts() {
+        return splitRouteDecisionCounts;
+    }
+    public RetrievalBenchmarkRunMetadata getRunMetadata() {
+        return runMetadata;
+    }
 
     private List<Evaluation> safeEvaluations(List<RetrievalRouteEvaluation> source) {
         Objects.requireNonNull(source, "evaluations");
@@ -102,6 +170,16 @@ public final class RetrievalBenchmarkReport {
         return List.copyOf(result);
     }
 
+    private List<RetrievalRouteEvaluation> toRouteEvaluations(
+            List<Evaluation> source
+    ) {
+        List<RetrievalRouteEvaluation> result = new ArrayList<>();
+        for (Evaluation evaluation : source) {
+            result.add(evaluation.toRouteEvaluation());
+        }
+        return List.copyOf(result);
+    }
+
     private RetrievalBenchmarkMetrics zeroMetrics() {
         return new RetrievalBenchmarkMetrics(
                 0,
@@ -120,27 +198,43 @@ public final class RetrievalBenchmarkReport {
         private final String caseId;
         private final RetrievalBenchmarkSplit split;
         private final RetrievalBenchmarkCategory category;
+        private final ClaimSubjectType subjectType;
+        private final String subjectSlug;
         private final RetrievalDecisionType expectedDecision;
         private final RetrievalDecisionType actualDecision;
         private final Integer expectedRank;
+        private final List<RetrievalExpectedRank> expectedClaimRanks;
+        private final List<RetrievalExpectedRank> expectedChunkRanks;
 
         private Evaluation(RetrievalRouteEvaluation source) {
             this.route = source.getRoute();
             this.caseId = source.getCaseId();
             this.split = source.getSplit();
             this.category = source.getCategory();
+            this.subjectType = source.getSubjectType();
+            this.subjectSlug = source.getSubjectSlug();
             this.expectedDecision = source.getExpectedDecision();
             this.actualDecision = source.getActualDecision();
             this.expectedRank = source.getExpectedRank();
+            this.expectedClaimRanks = source.getExpectedClaimRanks();
+            this.expectedChunkRanks = source.getExpectedChunkRanks();
         }
 
         public RetrievalBenchmarkRoute getRoute() { return route; }
         public String getCaseId() { return caseId; }
         public RetrievalBenchmarkSplit getSplit() { return split; }
         public RetrievalBenchmarkCategory getCategory() { return category; }
+        public ClaimSubjectType getSubjectType() { return subjectType; }
+        public String getSubjectSlug() { return subjectSlug; }
         public RetrievalDecisionType getExpectedDecision() { return expectedDecision; }
         public RetrievalDecisionType getActualDecision() { return actualDecision; }
         public Integer getExpectedRank() { return expectedRank; }
+        public List<RetrievalExpectedRank> getExpectedClaimRanks() {
+            return expectedClaimRanks;
+        }
+        public List<RetrievalExpectedRank> getExpectedChunkRanks() {
+            return expectedChunkRanks;
+        }
 
         public boolean isFailure() {
             return expectedDecision != actualDecision
@@ -154,9 +248,13 @@ public final class RetrievalBenchmarkReport {
                     caseId,
                     split,
                     category,
+                    subjectType,
+                    subjectSlug,
                     expectedDecision,
                     actualDecision,
                     expectedRank,
+                    expectedClaimRanks,
+                    expectedChunkRanks,
                     List.of(),
                     List.of()
             );

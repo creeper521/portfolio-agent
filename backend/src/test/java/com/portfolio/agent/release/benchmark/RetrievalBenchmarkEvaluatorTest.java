@@ -12,6 +12,100 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RetrievalBenchmarkEvaluatorTest {
 
     @Test
+    void calculatesSeparateSplitCategorySubjectAndDecisionAggregates() {
+        RetrievalBenchmarkEvaluator evaluator = new RetrievalBenchmarkEvaluator();
+        List<RetrievalRouteEvaluation> evaluations = List.of(
+                evaluation(
+                        RetrievalBenchmarkRoute.HYBRID,
+                        "holdout-positive",
+                        RetrievalBenchmarkSplit.HOLDOUT,
+                        RetrievalBenchmarkCategory.SEMANTIC_PARAPHRASE,
+                        "project-a",
+                        RetrievalDecisionType.SUFFICIENT,
+                        RetrievalDecisionType.SUFFICIENT,
+                        1
+                ),
+                evaluation(
+                        RetrievalBenchmarkRoute.HYBRID,
+                        "calibration-negative",
+                        RetrievalBenchmarkSplit.CALIBRATION,
+                        RetrievalBenchmarkCategory.OUT_OF_SCOPE,
+                        "project-b",
+                        RetrievalDecisionType.INSUFFICIENT,
+                        RetrievalDecisionType.AMBIGUOUS,
+                        null
+                )
+        );
+
+        assertThat(evaluator.evaluateBySplitAndRoute(evaluations))
+                .extracting(
+                        RetrievalBenchmarkGroupMetrics::getSplit,
+                        RetrievalBenchmarkGroupMetrics::getRoute,
+                        group -> group.getMetrics().getPositiveCount())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.CALIBRATION,
+                                RetrievalBenchmarkRoute.HYBRID,
+                                0),
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.HOLDOUT,
+                                RetrievalBenchmarkRoute.HYBRID,
+                                1)
+                );
+        assertThat(evaluator.evaluateBySplitCategoryAndRoute(evaluations))
+                .extracting(
+                        RetrievalBenchmarkGroupMetrics::getSplit,
+                        RetrievalBenchmarkGroupMetrics::getCategory,
+                        RetrievalBenchmarkGroupMetrics::getRoute)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.CALIBRATION,
+                                RetrievalBenchmarkCategory.OUT_OF_SCOPE,
+                                RetrievalBenchmarkRoute.HYBRID),
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.HOLDOUT,
+                                RetrievalBenchmarkCategory.SEMANTIC_PARAPHRASE,
+                                RetrievalBenchmarkRoute.HYBRID)
+                );
+        assertThat(evaluator.evaluateBySplitSubjectAndRoute(evaluations))
+                .extracting(
+                        RetrievalBenchmarkGroupMetrics::getSplit,
+                        RetrievalBenchmarkGroupMetrics::getSubjectType,
+                        RetrievalBenchmarkGroupMetrics::getSubjectSlug,
+                        RetrievalBenchmarkGroupMetrics::getRoute)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.CALIBRATION,
+                                com.portfolio.agent.portfolio.domain.ClaimSubjectType.PROJECT,
+                                "project-b",
+                                RetrievalBenchmarkRoute.HYBRID),
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.HOLDOUT,
+                                com.portfolio.agent.portfolio.domain.ClaimSubjectType.PROJECT,
+                                "project-a",
+                                RetrievalBenchmarkRoute.HYBRID)
+                );
+        assertThat(evaluator.countBySplitRouteAndDecision(evaluations))
+                .extracting(
+                        RetrievalDecisionCount::getSplit,
+                        RetrievalDecisionCount::getRoute,
+                        RetrievalDecisionCount::getActualDecision,
+                        RetrievalDecisionCount::getCount)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.CALIBRATION,
+                                RetrievalBenchmarkRoute.HYBRID,
+                                RetrievalDecisionType.AMBIGUOUS,
+                                1),
+                        org.assertj.core.groups.Tuple.tuple(
+                                RetrievalBenchmarkSplit.HOLDOUT,
+                                RetrievalBenchmarkRoute.HYBRID,
+                                RetrievalDecisionType.SUFFICIENT,
+                                1)
+                );
+    }
+
+    @Test
     void calculatesMetricsAndReturnsRoutesInDeterministicOrder() {
         RetrievalBenchmarkEvaluator evaluator = new RetrievalBenchmarkEvaluator();
 
@@ -70,6 +164,33 @@ class RetrievalBenchmarkEvaluatorTest {
                 expectedRank,
                 List.of("claim-" + caseId),
                 List.of("chunk-" + caseId)
+        );
+    }
+
+    private RetrievalRouteEvaluation evaluation(
+            RetrievalBenchmarkRoute route,
+            String caseId,
+            RetrievalBenchmarkSplit split,
+            RetrievalBenchmarkCategory category,
+            String subjectSlug,
+            RetrievalDecisionType expectedDecision,
+            RetrievalDecisionType actualDecision,
+            Integer expectedRank
+    ) {
+        return new RetrievalRouteEvaluation(
+                route,
+                caseId,
+                split,
+                category,
+                com.portfolio.agent.portfolio.domain.ClaimSubjectType.PROJECT,
+                subjectSlug,
+                expectedDecision,
+                actualDecision,
+                expectedRank,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
         );
     }
 }

@@ -22,6 +22,7 @@ import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkEvaluator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkMarkdownRenderer;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkReport;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkRunMetadata;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkSuite;
 import com.portfolio.agent.release.benchmark.RetrievalComparisonRunner;
 import com.portfolio.agent.release.benchmark.RetrievalRouteEvaluation;
@@ -34,6 +35,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.LongSupplier;
 
 public final class RetrievalComparisonCli {
 
@@ -76,10 +79,27 @@ public final class RetrievalComparisonCli {
             PrintStream out,
             PrintStream err
     ) {
+        return run(
+                args,
+                executor,
+                out,
+                err,
+                new DefaultReportFileOperations()
+        );
+    }
+
+    static int run(
+            String[] args,
+            BenchmarkExecutor executor,
+            PrintStream out,
+            PrintStream err,
+            ReportFileOperations fileOperations
+    ) {
         try {
             Objects.requireNonNull(executor, "executor");
             Objects.requireNonNull(out, "out");
             Objects.requireNonNull(err, "err");
+            Objects.requireNonNull(fileOperations, "fileOperations");
             Map<String, String> options = options(args);
             Path portfolioFile = Path.of(required(options, "--portfolio"));
             Path casesFile = Path.of(required(options, "--cases"));
@@ -119,7 +139,7 @@ public final class RetrievalComparisonCli {
                     executor.execute(request),
                     "benchmark report"
             );
-            writeReports(outputDirectory, report, mapper);
+            writeReports(outputDirectory, report, mapper, fileOperations);
             out.println("Retrieval comparison completed.");
             return 0;
         } catch (IOException | RuntimeException exception) {
@@ -132,9 +152,59 @@ public final class RetrievalComparisonCli {
             ComparisonRequest request
     )
             throws IOException {
-        LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
-                .verify(request.getModelDirectory());
-        RetrievalPolicy policy = RetrievalPolicy.firstRelease();
+        return executeRealBenchmark(
+                request,
+                directory -> verifiedModel(
+                        new LocalEmbeddingArtifactVerifier().verify(directory)),
+                (comparisonRequest, policy, model) -> {
+                    try (OnnxLocalEmbeddingAdapter queryAdapter =
+                            new OnnxLocalEmbeddingAdapter(
+                                    comparisonRequest.getModelDirectory(),
+                                    model.getQueryInstruction(),
+                                    model.getMaxTokens(),
+                                    model.getDimension(),
+                                    model.getIntraOpThreads(),
+                                    model.getInterOpThreads()
+                            )) {
+                        return new RetrievalComparisonRunner(
+                                new RetrievalQueryNormalizer(),
+                                new KeywordRetriever(),
+                                new VectorRetriever(),
+                                new ReciprocalRankFusion(),
+                                new RetrievalContextValidator(),
+                                queryAdapter
+                        ).run(
+                                comparisonRequest.getSuite(),
+                                comparisonRequest.getSnapshot(),
+                                policy
+                        );
+                    }
+                },
+                RetrievalPolicy.firstRelease(),
+                Clock.systemUTC(),
+                System::nanoTime
+        );
+    }
+
+    static RetrievalBenchmarkReport executeRealBenchmark(
+            ComparisonRequest request,
+            VerifiedModelProvider modelProvider,
+            RealEvaluationExecutor evaluationExecutor,
+            RetrievalPolicy policy,
+            Clock clock,
+            LongSupplier stageTimer
+    )
+            throws IOException {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(modelProvider, "modelProvider");
+        Objects.requireNonNull(evaluationExecutor, "evaluationExecutor");
+        Objects.requireNonNull(policy, "policy");
+        Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(stageTimer, "stageTimer");
+        Instant startedAt = clock.instant();
+        long startedNanos = stageTimer.getAsLong();
+        VerifiedModel artifact = modelProvider.verify(
+                request.getModelDirectory());
         if (!matchesRetrievalIdentity(
                 request.getSnapshot(),
                 artifact.getModelId(),
@@ -144,25 +214,34 @@ public final class RetrievalComparisonCli {
             throw new IllegalArgumentException(
                     "retrieval comparison identity mismatch");
         }
-        List<RetrievalRouteEvaluation> evaluations;
-        try (OnnxLocalEmbeddingAdapter queryAdapter =
-                new OnnxLocalEmbeddingAdapter(
-                        request.getModelDirectory(),
-                        artifact.getQueryInstruction(),
-                        artifact.getMaxTokens(),
-                        artifact.getDimension(),
-                        artifact.getIntraOpThreads(),
-                        artifact.getInterOpThreads()
-                )) {
-            evaluations = new RetrievalComparisonRunner(
-                    new RetrievalQueryNormalizer(),
-                    new KeywordRetriever(),
-                    new VectorRetriever(),
-                    new ReciprocalRankFusion(),
-                    new RetrievalContextValidator(),
-                    queryAdapter
-            ).run(request.getSuite(), request.getSnapshot(), policy);
-        }
+        List<RetrievalRouteEvaluation> evaluations =
+                evaluationExecutor.run(request, policy, artifact);
+        long completedNanos = stageTimer.getAsLong();
+        Instant completedAt = clock.instant();
+        long durationMillis = Math.max(
+                0L,
+                (completedNanos - startedNanos) / 1_000_000L
+        );
+        RetrievalBenchmarkRunMetadata runMetadata =
+                new RetrievalBenchmarkRunMetadata(
+                        systemProperty("java.version"),
+                        systemProperty("java.runtime.name"),
+                        systemProperty("java.vendor"),
+                        systemProperty("os.name"),
+                        systemProperty("os.version"),
+                        systemProperty("os.arch"),
+                        Runtime.getRuntime().availableProcessors(),
+                        startedAt,
+                        completedAt,
+                        durationMillis,
+                        request.getSuite().getSuiteVersion(),
+                        request.getSuite().getContentVersion(),
+                        request.getRuntimeBundleHash(),
+                        policy.getVersion(),
+                        artifact.getModelId(),
+                        artifact.getDescriptorSha256(),
+                        artifact.getDimension()
+                );
         return new RetrievalBenchmarkReport(
                 request.getSuite().getSuiteVersion(),
                 request.getSuite().getContentVersion(),
@@ -171,8 +250,28 @@ public final class RetrievalComparisonCli {
                 policy.getVersion(),
                 artifact.getDescriptorSha256(),
                 evaluations,
-                new RetrievalBenchmarkEvaluator().evaluate(evaluations)
+                new RetrievalBenchmarkEvaluator().evaluate(evaluations),
+                runMetadata
         );
+    }
+
+    private static VerifiedModel verifiedModel(
+            LocalEmbeddingArtifact artifact
+    ) {
+        return new VerifiedModel(
+                artifact.getModelId(),
+                artifact.getDescriptorSha256(),
+                artifact.getDimension(),
+                artifact.getMaxTokens(),
+                artifact.getQueryInstruction(),
+                artifact.getIntraOpThreads(),
+                artifact.getInterOpThreads()
+        );
+    }
+
+    private static String systemProperty(String name) {
+        String value = System.getProperty(name);
+        return value == null || value.isBlank() ? "unknown" : value;
     }
 
     static boolean matchesRetrievalIdentity(
@@ -256,7 +355,8 @@ public final class RetrievalComparisonCli {
     private static void writeReports(
             Path outputDirectory,
             RetrievalBenchmarkReport report,
-            ObjectMapper mapper
+            ObjectMapper mapper,
+            ReportFileOperations fileOperations
     )
             throws IOException {
         Path absoluteOutput = outputDirectory.toAbsolutePath().normalize();
@@ -266,7 +366,8 @@ public final class RetrievalComparisonCli {
             throw new IllegalArgumentException(
                     "retrieval comparison output is invalid");
         }
-        Path temporary = Files.createTempDirectory(parent, TEMPORARY_PREFIX)
+        Path temporary = fileOperations.createTempDirectory(
+                parent, TEMPORARY_PREFIX)
                 .toRealPath(LinkOption.NOFOLLOW_LINKS);
         boolean moved = false;
         try {
@@ -276,14 +377,13 @@ public final class RetrievalComparisonCli {
                     .getBytes(StandardCharsets.UTF_8);
             Path jsonFile = temporary.resolve("comparison.json");
             Path markdownFile = temporary.resolve("comparison.md");
-            Files.write(jsonFile, json);
-            Files.write(markdownFile, markdown);
-            verifyReadback(jsonFile, json);
-            verifyReadback(markdownFile, markdown);
-            Files.move(
+            fileOperations.write(jsonFile, json);
+            fileOperations.write(markdownFile, markdown);
+            verifyReadback(jsonFile, json, fileOperations);
+            verifyReadback(markdownFile, markdown, fileOperations);
+            fileOperations.move(
                     temporary,
-                    absoluteOutput,
-                    StandardCopyOption.ATOMIC_MOVE
+                    absoluteOutput
             );
             moved = true;
         } finally {
@@ -293,9 +393,13 @@ public final class RetrievalComparisonCli {
         }
     }
 
-    private static void verifyReadback(Path file, byte[] expected)
+    private static void verifyReadback(
+            Path file,
+            byte[] expected,
+            ReportFileOperations fileOperations
+    )
             throws IOException {
-        if (!Arrays.equals(expected, Files.readAllBytes(file))) {
+        if (!Arrays.equals(expected, fileOperations.readAllBytes(file))) {
             throw new IOException("retrieval comparison report readback failed");
         }
     }
@@ -373,6 +477,98 @@ public final class RetrievalComparisonCli {
                 throws IOException;
     }
 
+    @FunctionalInterface
+    interface VerifiedModelProvider {
+
+        VerifiedModel verify(Path modelDirectory) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface RealEvaluationExecutor {
+
+        List<RetrievalRouteEvaluation> run(
+                ComparisonRequest request,
+                RetrievalPolicy policy,
+                VerifiedModel model
+        ) throws IOException;
+    }
+
+    interface ReportFileOperations {
+
+        Path createTempDirectory(Path parent, String prefix)
+                throws IOException;
+
+        void write(Path file, byte[] content) throws IOException;
+
+        byte[] readAllBytes(Path file) throws IOException;
+
+        void move(Path source, Path target) throws IOException;
+    }
+
+    static final class VerifiedModel {
+
+        private final String modelId;
+        private final String descriptorSha256;
+        private final int dimension;
+        private final int maxTokens;
+        private final String queryInstruction;
+        private final int intraOpThreads;
+        private final int interOpThreads;
+
+        VerifiedModel(
+                String modelId,
+                String descriptorSha256,
+                int dimension,
+                int maxTokens,
+                String queryInstruction,
+                int intraOpThreads,
+                int interOpThreads
+        ) {
+            this.modelId = Objects.requireNonNull(modelId, "modelId");
+            this.descriptorSha256 = Objects.requireNonNull(
+                    descriptorSha256, "descriptorSha256");
+            this.dimension = dimension;
+            this.maxTokens = maxTokens;
+            this.queryInstruction = Objects.requireNonNull(
+                    queryInstruction, "queryInstruction");
+            this.intraOpThreads = intraOpThreads;
+            this.interOpThreads = interOpThreads;
+        }
+
+        String getModelId() { return modelId; }
+        String getDescriptorSha256() { return descriptorSha256; }
+        int getDimension() { return dimension; }
+        int getMaxTokens() { return maxTokens; }
+        String getQueryInstruction() { return queryInstruction; }
+        int getIntraOpThreads() { return intraOpThreads; }
+        int getInterOpThreads() { return interOpThreads; }
+    }
+
+    private static final class DefaultReportFileOperations
+            implements ReportFileOperations {
+
+        @Override
+        public Path createTempDirectory(Path parent, String prefix)
+                throws IOException {
+            return Files.createTempDirectory(parent, prefix);
+        }
+
+        @Override
+        public void write(Path file, byte[] content) throws IOException {
+            Files.write(file, content);
+        }
+
+        @Override
+        public byte[] readAllBytes(Path file) throws IOException {
+            return Files.readAllBytes(file);
+        }
+
+        @Override
+        public void move(Path source, Path target) throws IOException {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        }
+    }
+
     static final class ComparisonRequest {
 
         private final RuntimeContentSnapshot snapshot;
@@ -380,7 +576,7 @@ public final class RetrievalComparisonCli {
         private final Path modelDirectory;
         private final LocalDate validFrom;
 
-        private ComparisonRequest(
+        ComparisonRequest(
                 RuntimeContentSnapshot snapshot,
                 RetrievalBenchmarkSuite suite,
                 Path modelDirectory,

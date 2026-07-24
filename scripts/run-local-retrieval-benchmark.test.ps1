@@ -114,7 +114,22 @@ exit /b %ERRORLEVEL%
         '-CasesPath', $casesPath,
         '-OutputDirectory', $outputDirectory)
     $calls = Get-Content -Raw -LiteralPath $callLog
+    $callLines = @(Get-Content -LiteralPath $callLog |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     Assert-True ($result.ExitCode -eq 0) 'Real mode must complete all required stages.'
+    Assert-True ($callLines.Count -eq 5) `
+        'Real mode must execute exactly five stages.'
+    Assert-True ($callLines[0] -match 'RetrievalQueryNormalizerTest') `
+        'Stage 1 must be component gates.'
+    Assert-True ($callLines[1] -match
+            'OnnxLocalEmbeddingAdapterSmokeTest,RetrievalBenchmarkTest') `
+        'Stage 2 must be real-model acceptance.'
+    Assert-True ($callLines[2] -match 'LocalEmbeddingPerformanceTest') `
+        'Stage 3 must be the performance gate.'
+    Assert-True ($callLines[3] -match 'package') `
+        'Stage 4 must package the executable JAR.'
+    Assert-True ($callLines[4] -match 'RetrievalComparisonCli') `
+        'Stage 5 must publish the comparison reports.'
     Assert-True ($calls -match 'RetrievalQueryNormalizerTest') `
         'Real mode must run component gates.'
     Assert-True ($calls -match

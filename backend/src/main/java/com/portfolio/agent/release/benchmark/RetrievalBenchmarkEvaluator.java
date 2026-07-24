@@ -1,8 +1,12 @@
 package com.portfolio.agent.release.benchmark;
 
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +32,174 @@ public final class RetrievalBenchmarkEvaluator {
             metrics.put(route, accumulators.get(route).toMetrics());
         }
         return metrics;
+    }
+
+    public List<RetrievalBenchmarkGroupMetrics> evaluateBySplitAndRoute(
+            List<RetrievalRouteEvaluation> evaluations
+    ) {
+        requireEvaluations(evaluations);
+        List<RetrievalBenchmarkGroupMetrics> result = new ArrayList<>();
+        for (RetrievalBenchmarkSplit split : RetrievalBenchmarkSplit.values()) {
+            for (RetrievalBenchmarkRoute route
+                    : RetrievalBenchmarkRoute.values()) {
+                List<RetrievalRouteEvaluation> matching = matching(
+                        evaluations, split, null, null, null, route);
+                if (!matching.isEmpty()) {
+                    result.add(new RetrievalBenchmarkGroupMetrics(
+                            split,
+                            null,
+                            null,
+                            null,
+                            route,
+                            evaluate(matching).get(route)
+                    ));
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public List<RetrievalBenchmarkGroupMetrics>
+            evaluateBySplitCategoryAndRoute(
+                    List<RetrievalRouteEvaluation> evaluations
+            ) {
+        requireEvaluations(evaluations);
+        List<RetrievalBenchmarkGroupMetrics> result = new ArrayList<>();
+        for (RetrievalBenchmarkSplit split : RetrievalBenchmarkSplit.values()) {
+            for (RetrievalBenchmarkCategory category
+                    : RetrievalBenchmarkCategory.values()) {
+                for (RetrievalBenchmarkRoute route
+                        : RetrievalBenchmarkRoute.values()) {
+                    List<RetrievalRouteEvaluation> matching = matching(
+                            evaluations,
+                            split,
+                            category,
+                            null,
+                            null,
+                            route
+                    );
+                    if (!matching.isEmpty()) {
+                        result.add(new RetrievalBenchmarkGroupMetrics(
+                                split,
+                                category,
+                                null,
+                                null,
+                                route,
+                                evaluate(matching).get(route)
+                        ));
+                    }
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public List<RetrievalBenchmarkGroupMetrics>
+            evaluateBySplitSubjectAndRoute(
+                    List<RetrievalRouteEvaluation> evaluations
+            ) {
+        requireEvaluations(evaluations);
+        Map<String, Subject> subjects = new LinkedHashMap<>();
+        evaluations.stream()
+                .filter(evaluation -> evaluation.getSubjectType() != null)
+                .filter(evaluation -> evaluation.getSubjectSlug() != null)
+                .sorted(Comparator
+                        .comparing((RetrievalRouteEvaluation evaluation) ->
+                                evaluation.getSubjectType().name())
+                        .thenComparing(
+                                RetrievalRouteEvaluation::getSubjectSlug))
+                .forEach(evaluation -> subjects.putIfAbsent(
+                        evaluation.getSubjectType().name()
+                                + "\u0000" + evaluation.getSubjectSlug(),
+                        new Subject(
+                                evaluation.getSubjectType(),
+                                evaluation.getSubjectSlug())));
+        List<RetrievalBenchmarkGroupMetrics> result = new ArrayList<>();
+        for (RetrievalBenchmarkSplit split : RetrievalBenchmarkSplit.values()) {
+            for (Subject subject : subjects.values()) {
+                for (RetrievalBenchmarkRoute route
+                        : RetrievalBenchmarkRoute.values()) {
+                    List<RetrievalRouteEvaluation> matching = matching(
+                            evaluations,
+                            split,
+                            null,
+                            subject.type,
+                            subject.slug,
+                            route
+                    );
+                    if (!matching.isEmpty()) {
+                        result.add(new RetrievalBenchmarkGroupMetrics(
+                                split,
+                                null,
+                                subject.type,
+                                subject.slug,
+                                route,
+                                evaluate(matching).get(route)
+                        ));
+                    }
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public List<RetrievalDecisionCount> countBySplitRouteAndDecision(
+            List<RetrievalRouteEvaluation> evaluations
+    ) {
+        requireEvaluations(evaluations);
+        List<RetrievalDecisionCount> result = new ArrayList<>();
+        for (RetrievalBenchmarkSplit split : RetrievalBenchmarkSplit.values()) {
+            for (RetrievalBenchmarkRoute route
+                    : RetrievalBenchmarkRoute.values()) {
+                for (RetrievalDecisionType decision
+                        : RetrievalDecisionType.values()) {
+                    int count = 0;
+                    for (RetrievalRouteEvaluation evaluation : evaluations) {
+                        if (evaluation.getSplit() == split
+                                && evaluation.getRoute() == route
+                                && evaluation.getActualDecision() == decision) {
+                            count++;
+                        }
+                    }
+                    if (count > 0) {
+                        result.add(new RetrievalDecisionCount(
+                                split, route, decision, count));
+                    }
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private List<RetrievalRouteEvaluation> matching(
+            List<RetrievalRouteEvaluation> evaluations,
+            RetrievalBenchmarkSplit split,
+            RetrievalBenchmarkCategory category,
+            ClaimSubjectType subjectType,
+            String subjectSlug,
+            RetrievalBenchmarkRoute route
+    ) {
+        List<RetrievalRouteEvaluation> result = new ArrayList<>();
+        for (RetrievalRouteEvaluation evaluation : evaluations) {
+            if (evaluation.getSplit() == split
+                    && evaluation.getRoute() == route
+                    && (category == null
+                    || evaluation.getCategory() == category)
+                    && (subjectType == null
+                    || evaluation.getSubjectType() == subjectType)
+                    && (subjectSlug == null
+                    || subjectSlug.equals(evaluation.getSubjectSlug()))) {
+                result.add(evaluation);
+            }
+        }
+        return result;
+    }
+
+    private void requireEvaluations(List<RetrievalRouteEvaluation> evaluations) {
+        if (evaluations == null || evaluations.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "evaluations must not be empty");
+        }
     }
 
     private static final class MetricAccumulator {
@@ -77,6 +249,17 @@ public final class RetrievalBenchmarkEvaluator {
                     positiveDecisionSuccessRate,
                     falseSufficientCount
             );
+        }
+    }
+
+    private static final class Subject {
+
+        private final ClaimSubjectType type;
+        private final String slug;
+
+        private Subject(ClaimSubjectType type, String slug) {
+            this.type = type;
+            this.slug = slug;
         }
     }
 }

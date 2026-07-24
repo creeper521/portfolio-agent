@@ -2,8 +2,17 @@ package com.portfolio.agent.release;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RetrievalManifest;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCategory;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkReport;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkRoute;
+import com.portfolio.agent.release.benchmark.RetrievalBenchmarkSplit;
+import com.portfolio.agent.release.benchmark.RetrievalRouteEvaluation;
 import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
 import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
 import com.portfolio.agent.portfolio.repository.file.VectorIndexCodec;
@@ -12,14 +21,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,6 +108,78 @@ class RetrievalComparisonCliTest {
                 "sha256:model",
                 512,
                 "retrieval-policy-v2")).isFalse();
+    }
+
+    @Test
+    void realExecutorRejectsIdentityMismatchBeforeRunningOrPublishing()
+            throws Exception {
+        RuntimeContentSnapshot snapshot = capturedSnapshot();
+        AtomicInteger executions = new AtomicInteger();
+        List<RetrievalComparisonCli.VerifiedModel> mismatchedModels = List.of(
+                verifiedModel("wrong-model", "sha256:model", 512),
+                verifiedModel(
+                        "BAAI/bge-small-zh-v1.5",
+                        "sha256:wrong",
+                        512),
+                verifiedModel(
+                        "BAAI/bge-small-zh-v1.5",
+                        "sha256:model",
+                        384)
+        );
+        for (RetrievalComparisonCli.VerifiedModel model : mismatchedModels) {
+            assertRealExecutorMismatch(snapshot, model, executions);
+        }
+        assertRealExecutorMismatch(
+                snapshotWithPolicy(snapshot, "retrieval-policy-v2"),
+                verifiedModel(
+                        "BAAI/bge-small-zh-v1.5",
+                        "sha256:model",
+                        512),
+                executions
+        );
+        assertThat(executions).hasValue(0);
+    }
+
+    @Test
+    void realExecutorUsesInjectedClockAndTimerForStableRunMetadata()
+            throws Exception {
+        RuntimeContentSnapshot snapshot = capturedSnapshot();
+        RetrievalComparisonCli.ComparisonRequest request =
+                new RetrievalComparisonCli.ComparisonRequest(
+                        snapshot,
+                        new com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader(
+                                new ObjectMapper()).load(Files.readAllBytes(cases)),
+                        modelDirectory,
+                        java.time.LocalDate.parse("2026-07-23"));
+        AtomicLong timer = new AtomicLong(2_000_000L);
+        Clock clock = new SequenceClock(
+                Instant.parse("2026-07-24T01:00:00Z"),
+                Instant.parse("2026-07-24T01:00:02Z"));
+
+        RetrievalBenchmarkReport report =
+                RetrievalComparisonCli.executeRealBenchmark(
+                        request,
+                        ignored -> new RetrievalComparisonCli.VerifiedModel(
+                                "BAAI/bge-small-zh-v1.5",
+                                "sha256:model",
+                                512,
+                                256,
+                                "",
+                                1,
+                                1),
+                        (comparisonRequest, policy, model) ->
+                                List.of(executorEvaluation()),
+                        RetrievalPolicy.firstRelease(),
+                        clock,
+                        () -> timer.getAndAdd(250_000_000L));
+
+        assertThat(report.getRunMetadata().getStartedAt())
+                .isEqualTo(Instant.parse("2026-07-24T01:00:00Z"));
+        assertThat(report.getRunMetadata().getCompletedAt())
+                .isEqualTo(Instant.parse("2026-07-24T01:00:02Z"));
+        assertThat(report.getRunMetadata().getDurationMillis()).isEqualTo(250L);
+        assertThat(report.getRunMetadata().getModelId())
+                .isEqualTo("BAAI/bge-small-zh-v1.5");
     }
 
     @Test
@@ -284,6 +370,26 @@ class RetrievalComparisonCliTest {
         }
     }
 
+    @Test
+    void jsonWriteReadbackAndAtomicMoveFailuresLeaveNoPublicationOrTemporaryDirectory()
+            throws Exception {
+        for (FailureStage stage : FailureStage.values()) {
+            Path output = temporary.resolve("failed-" + stage.name().toLowerCase());
+            RunResult result = run(
+                    validArguments(output),
+                    request -> fixedReport(),
+                    new FaultingReportFileOperations(stage));
+
+            assertThat(result.exitCode).isEqualTo(1);
+            assertThat(output).doesNotExist();
+            try (java.util.stream.Stream<Path> children = Files.list(temporary)) {
+                assertThat(children.map(path -> path.getFileName().toString()))
+                        .noneMatch(name -> name.startsWith(
+                                ".retrieval-comparison-"));
+            }
+        }
+    }
+
     private RunResult run(
             String[] arguments,
             RetrievalComparisonCli.BenchmarkExecutor executor
@@ -294,6 +400,28 @@ class RetrievalComparisonCliTest {
         try (PrintStream out = new PrintStream(standard, true, StandardCharsets.UTF_8);
                 PrintStream err = new PrintStream(error, true, StandardCharsets.UTF_8)) {
             exitCode = RetrievalComparisonCli.run(arguments, executor, out, err);
+        }
+        return new RunResult(
+                exitCode,
+                standard.toString(StandardCharsets.UTF_8),
+                error.toString(StandardCharsets.UTF_8)
+        );
+    }
+
+    private RunResult run(
+            String[] arguments,
+            RetrievalComparisonCli.BenchmarkExecutor executor,
+            RetrievalComparisonCli.ReportFileOperations fileOperations
+    ) {
+        ByteArrayOutputStream standard = new ByteArrayOutputStream();
+        ByteArrayOutputStream error = new ByteArrayOutputStream();
+        int exitCode;
+        try (PrintStream out = new PrintStream(
+                standard, true, StandardCharsets.UTF_8);
+                PrintStream err = new PrintStream(
+                        error, true, StandardCharsets.UTF_8)) {
+            exitCode = RetrievalComparisonCli.run(
+                    arguments, executor, out, err, fileOperations);
         }
         return new RunResult(
                 exitCode,
@@ -478,6 +606,197 @@ class RetrievalComparisonCliTest {
             this.exitCode = exitCode;
             this.out = out;
             this.err = err;
+        }
+    }
+
+    private static final class SequenceClock extends Clock {
+
+        private final Instant[] values;
+        private int index;
+
+        private SequenceClock(Instant... values) {
+            this.values = values.clone();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return values[Math.min(index++, values.length - 1)];
+        }
+    }
+
+    private static RetrievalRouteEvaluation executorEvaluation() {
+        return new RetrievalRouteEvaluation(
+                RetrievalBenchmarkRoute.HYBRID,
+                "executor-case",
+                RetrievalBenchmarkSplit.HOLDOUT,
+                RetrievalBenchmarkCategory.EXACT_TERM,
+                RetrievalDecisionType.SUFFICIENT,
+                RetrievalDecisionType.SUFFICIENT,
+                1,
+                List.of(),
+                List.of()
+        );
+    }
+
+    private void assertRealExecutorMismatch(
+            RuntimeContentSnapshot snapshot,
+            RetrievalComparisonCli.VerifiedModel model,
+            AtomicInteger executions
+    ) throws Exception {
+        RetrievalComparisonCli.ComparisonRequest request =
+                new RetrievalComparisonCli.ComparisonRequest(
+                        snapshot,
+                        new com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader(
+                                new ObjectMapper()).load(Files.readAllBytes(cases)),
+                        modelDirectory,
+                        java.time.LocalDate.parse("2026-07-23"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                RetrievalComparisonCli.executeRealBenchmark(
+                        request,
+                        ignored -> model,
+                        (comparisonRequest, policy, verified) -> {
+                            executions.incrementAndGet();
+                            return List.of(executorEvaluation());
+                        },
+                        RetrievalPolicy.firstRelease(),
+                        Clock.fixed(
+                                Instant.parse("2026-07-24T01:00:00Z"),
+                                ZoneId.of("UTC")),
+                        () -> 0L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("identity mismatch");
+    }
+
+    private RetrievalComparisonCli.VerifiedModel verifiedModel(
+            String modelId,
+            String descriptorHash,
+            int dimension
+    ) {
+        return new RetrievalComparisonCli.VerifiedModel(
+                modelId,
+                descriptorHash,
+                dimension,
+                256,
+                "",
+                1,
+                1
+        );
+    }
+
+    private RuntimeContentSnapshot snapshotWithPolicy(
+            RuntimeContentSnapshot source,
+            String policyVersion
+    ) {
+        RuntimeRetrievalContent retrieval = source.getRetrievalContent()
+                .orElseThrow();
+        RetrievalManifest manifest = retrieval.getManifest();
+        RetrievalManifest changed = new RetrievalManifest(
+                manifest.getStrategyVersion(),
+                manifest.getNormalizationVersion(),
+                policyVersion,
+                manifest.getEmbeddingModelId(),
+                manifest.getEmbeddingArtifactSha256(),
+                manifest.getDimension(),
+                manifest.getDocumentMaxTokens(),
+                manifest.getVectorNormalization(),
+                manifest.getSimilarity(),
+                manifest.getChunkCount(),
+                manifest.getChunkSetHash(),
+                manifest.getKeywordIndexFormatVersion(),
+                manifest.getVectorIndexFormatVersion()
+        );
+        PortfolioSnapshot portfolio = new PortfolioSnapshot(
+                source.getSchemaVersion(),
+                source.getContentVersion(),
+                source.getPublishedAt(),
+                source.getOwner(),
+                source.getProjects(),
+                source.getCases(),
+                source.getClaims(),
+                source.getClaimEvidenceLinks(),
+                source.getQuestions(),
+                source.getApprovedEvidence(),
+                source.getTimeline()
+        );
+        return new RuntimeContentSnapshot(
+                portfolio,
+                source.getRuntimeBundleHash(),
+                source.getLoadedAt(),
+                new RuntimeRetrievalContent(
+                        changed,
+                        retrieval.getDocuments(),
+                        retrieval.getKeywordIndex(),
+                        retrieval.getVectorIndex()
+                )
+        );
+    }
+
+    private enum FailureStage {
+        JSON_WRITE,
+        JSON_READBACK,
+        MARKDOWN_READBACK,
+        ATOMIC_MOVE
+    }
+
+    private static final class FaultingReportFileOperations
+            implements RetrievalComparisonCli.ReportFileOperations {
+
+        private final FailureStage stage;
+        private int writes;
+        private int reads;
+
+        private FaultingReportFileOperations(FailureStage stage) {
+            this.stage = stage;
+        }
+
+        @Override
+        public Path createTempDirectory(Path parent, String prefix)
+                throws IOException {
+            return Files.createTempDirectory(parent, prefix);
+        }
+
+        @Override
+        public void write(Path file, byte[] content) throws IOException {
+            writes++;
+            if (stage == FailureStage.JSON_WRITE && writes == 1) {
+                throw new IOException("injected JSON write failure");
+            }
+            Files.write(file, content);
+        }
+
+        @Override
+        public byte[] readAllBytes(Path file) throws IOException {
+            reads++;
+            if (stage == FailureStage.JSON_READBACK && reads == 1) {
+                throw new IOException("injected JSON readback failure");
+            }
+            if (stage == FailureStage.MARKDOWN_READBACK && reads == 2) {
+                throw new IOException("injected Markdown readback failure");
+            }
+            return Files.readAllBytes(file);
+        }
+
+        @Override
+        public void move(Path source, Path target) throws IOException {
+            if (stage == FailureStage.ATOMIC_MOVE) {
+                throw new IOException("injected atomic move failure");
+            }
+            Files.move(
+                    source,
+                    target,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+            );
         }
     }
 }

@@ -96,6 +96,25 @@ class RetrievalComparisonRunnerTest {
             assertThat(evaluation.getActualDecision())
                     .isEqualTo(RetrievalDecisionType.SUFFICIENT);
             assertThat(evaluation.getExpectedRank()).isEqualTo(1);
+            assertThat(evaluation.getSubjectType())
+                    .isEqualTo(ClaimSubjectType.PROJECT);
+            assertThat(evaluation.getSubjectSlug()).isEqualTo("target-project");
+            assertThat(evaluation.getExpectedClaimRanks())
+                    .extracting(
+                            RetrievalExpectedRank::getTargetType,
+                            RetrievalExpectedRank::getRank)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("CLAIM", 1),
+                            org.assertj.core.groups.Tuple.tuple("CLAIM", null)
+                    );
+            assertThat(evaluation.getExpectedChunkRanks())
+                    .extracting(
+                            RetrievalExpectedRank::getTargetType,
+                            RetrievalExpectedRank::getRank)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("CHUNK", 1),
+                            org.assertj.core.groups.Tuple.tuple("CHUNK", null)
+                    );
             assertThat(evaluation.getSelectedChunkIds())
                     .doesNotContain("aaa-distractor");
         });
@@ -179,8 +198,8 @@ class RetrievalComparisonRunnerTest {
                 ClaimSubjectType.PROJECT,
                 "target-project",
                 query,
-                List.of(expectedClaimId),
-                List.of(expectedChunkId),
+                List.of(expectedClaimId, "missing-" + expectedClaimId),
+                List.of(expectedChunkId, "missing-" + expectedChunkId),
                 RetrievalDecisionType.SUFFICIENT
         );
     }

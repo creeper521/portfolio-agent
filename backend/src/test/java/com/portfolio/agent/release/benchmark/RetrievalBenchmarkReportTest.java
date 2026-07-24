@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RetrievalBenchmarkReportTest {
 
     private final ObjectMapper canonicalMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
             .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
             .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
@@ -76,6 +80,101 @@ class RetrievalBenchmarkReportTest {
     }
 
     @Test
+    void serializesSubjectsExpectedItemRanksGroupedMetricsAndSafeRunMetadata()
+            throws Exception {
+        RetrievalBenchmarkRunMetadata metadata = new RetrievalBenchmarkRunMetadata(
+                "17.0.12",
+                "OpenJDK Runtime Environment",
+                "Eclipse Adoptium",
+                "Windows 11",
+                "10.0",
+                "amd64",
+                8,
+                Instant.parse("2026-07-24T01:02:03Z"),
+                Instant.parse("2026-07-24T01:02:04Z"),
+                321L,
+                "retrieval-benchmark-v2",
+                "2026-07-23.1",
+                "bundle-sha256",
+                "policy-v1",
+                "BAAI/bge-small-zh-v1.5",
+                "model-sha256",
+                512
+        );
+        RetrievalRouteEvaluation evaluation = new RetrievalRouteEvaluation(
+                RetrievalBenchmarkRoute.HYBRID,
+                "case-ranks",
+                RetrievalBenchmarkSplit.HOLDOUT,
+                RetrievalBenchmarkCategory.SEMANTIC_PARAPHRASE,
+                ClaimSubjectType.PROJECT,
+                "sql-audit",
+                RetrievalDecisionType.SUFFICIENT,
+                RetrievalDecisionType.SUFFICIENT,
+                2,
+                List.of(
+                        new RetrievalExpectedRank("CLAIM", "claim-z", null),
+                        new RetrievalExpectedRank("CLAIM", "claim-a", 3)
+                ),
+                List.of(
+                        new RetrievalExpectedRank("CHUNK", "chunk-z", 2),
+                        new RetrievalExpectedRank("CHUNK", "chunk-a", null)
+                ),
+                List.of(),
+                List.of()
+        );
+        RetrievalBenchmarkReport report = report(
+                List.of(evaluation),
+                new RetrievalBenchmarkEvaluator().evaluate(List.of(evaluation)),
+                metadata
+        );
+
+        JsonNode root = canonicalMapper.readTree(
+                canonicalMapper.writeValueAsBytes(report));
+        JsonNode serialized = root.path("evaluations").get(0);
+        assertThat(serialized.path("subjectType").asText()).isEqualTo("PROJECT");
+        assertThat(serialized.path("subjectSlug").asText()).isEqualTo("sql-audit");
+        assertThat(serialized.path("expectedRank").asInt()).isEqualTo(2);
+        assertThat(serialized.path("expectedClaimRanks").toString())
+                .isEqualTo("[{\"rank\":3,\"targetId\":\"claim-a\",\"targetType\":\"CLAIM\"},"
+                        + "{\"rank\":null,\"targetId\":\"claim-z\",\"targetType\":\"CLAIM\"}]");
+        assertThat(serialized.path("expectedChunkRanks").toString())
+                .isEqualTo("[{\"rank\":null,\"targetId\":\"chunk-a\",\"targetType\":\"CHUNK\"},"
+                        + "{\"rank\":2,\"targetId\":\"chunk-z\",\"targetType\":\"CHUNK\"}]");
+        assertThat(root.path("splitRouteMetrics")).hasSize(1);
+        assertThat(root.path("splitCategoryRouteMetrics")).hasSize(1);
+        assertThat(root.path("splitSubjectRouteMetrics")).hasSize(1);
+        assertThat(root.path("splitRouteDecisionCounts")).hasSize(1);
+        assertThat(root.path("runMetadata").path("durationMillis").asLong())
+                .isEqualTo(321L);
+        assertThat(root.toString()).doesNotContain(
+                "hostname", "query", "path", "vector", "rawScore",
+                "credential", "secret");
+    }
+
+    @Test
+    void derivesNullCompatibilityRankWhenEveryExpectedItemMisses() {
+        RetrievalRouteEvaluation evaluation = new RetrievalRouteEvaluation(
+                RetrievalBenchmarkRoute.VECTOR,
+                "all-miss",
+                RetrievalBenchmarkSplit.HOLDOUT,
+                RetrievalBenchmarkCategory.SEMANTIC_PARAPHRASE,
+                ClaimSubjectType.PROJECT,
+                "sql-audit",
+                RetrievalDecisionType.SUFFICIENT,
+                RetrievalDecisionType.AMBIGUOUS,
+                1,
+                List.of(new RetrievalExpectedRank(
+                        "CLAIM", "claim-missing", null)),
+                List.of(new RetrievalExpectedRank(
+                        "CHUNK", "chunk-missing", null)),
+                List.of(),
+                List.of()
+        );
+
+        assertThat(evaluation.getExpectedRank()).isNull();
+    }
+
+    @Test
     void rendersNeutralStableMarkdownWithMetricsCategoriesAndFailures() {
         RetrievalBenchmarkReport report = report(evaluations(), metrics());
 
@@ -90,13 +189,52 @@ class RetrievalBenchmarkReportTest {
                 "- Policy version: `policy-v1`",
                 "- Model descriptor hash: `model-sha256`",
                 "| Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | Positive decision success | Positive decision success rate | False sufficient |",
-                "| KEYWORD | 2 | 0.5000 | 1.0000 | 0.7500 | 1 | 0.5000 | 1 |",
+                "| KEYWORD | 1 | 1.0000 | 1.0000 | 1.0000 | 1 | 1.0000 | 1 |",
                 "| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | Positive decision success | Positive decision success rate | False sufficient |",
                 "| EXACT_TERM | KEYWORD | 1 | 1.0000 | 1.0000 | 1.0000 | 1 | 1.0000 | 1 |",
                 "- KEYWORD: `case-b`",
                 "- VECTOR: `case-a`",
                 "- VECTOR: `case-c`");
         assertThat(markdown).doesNotContainIgnoringCase("hybrid is valuable", "hybrid provides value");
+    }
+
+    @Test
+    void rendersHoldoutBeforeSeparateCalibrationWithoutMixedRouteConclusion() {
+        List<RetrievalRouteEvaluation> mixed = List.of(
+                evaluation(
+                        RetrievalBenchmarkRoute.HYBRID,
+                        "calibration",
+                        RetrievalBenchmarkSplit.CALIBRATION,
+                        RetrievalBenchmarkCategory.EXACT_TERM,
+                        "calibration-project",
+                        RetrievalDecisionType.SUFFICIENT,
+                        RetrievalDecisionType.SUFFICIENT,
+                        1),
+                evaluation(
+                        RetrievalBenchmarkRoute.HYBRID,
+                        "holdout",
+                        RetrievalBenchmarkSplit.HOLDOUT,
+                        RetrievalBenchmarkCategory.SEMANTIC_PARAPHRASE,
+                        "holdout-project",
+                        RetrievalDecisionType.SUFFICIENT,
+                        RetrievalDecisionType.AMBIGUOUS,
+                        null)
+        );
+        RetrievalBenchmarkReport report = report(
+                mixed,
+                new RetrievalBenchmarkEvaluator().evaluate(mixed));
+
+        String markdown = new RetrievalBenchmarkMarkdownRenderer().render(report);
+
+        assertThat(markdown.indexOf("## Holdout route metrics"))
+                .isGreaterThanOrEqualTo(0)
+                .isLessThan(markdown.indexOf("## Calibration route metrics"));
+        String holdoutSection = markdown.substring(
+                markdown.indexOf("## Holdout route metrics"),
+                markdown.indexOf("## Calibration route metrics"));
+        assertThat(holdoutSection)
+                .contains("| HYBRID | 1 | 0.0000 | 0.0000 | 0.0000")
+                .doesNotContain("calibration-project");
     }
 
     private RetrievalBenchmarkReport report(
@@ -112,6 +250,24 @@ class RetrievalBenchmarkReportTest {
                 "model-sha256",
                 evaluations,
                 metrics
+        );
+    }
+
+    private RetrievalBenchmarkReport report(
+            List<RetrievalRouteEvaluation> evaluations,
+            Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> metrics,
+            RetrievalBenchmarkRunMetadata metadata
+    ) {
+        return new RetrievalBenchmarkReport(
+                "retrieval-benchmark-v2",
+                "2026-07-23.1",
+                "bundle-sha256",
+                "2026-07-23",
+                "policy-v1",
+                "model-sha256",
+                evaluations,
+                metrics,
+                metadata
         );
     }
 
@@ -159,6 +315,33 @@ class RetrievalBenchmarkReportTest {
                 expectedRank,
                 List.of("private-claim-id"),
                 List.of("private-chunk-id")
+        );
+    }
+
+    private RetrievalRouteEvaluation evaluation(
+            RetrievalBenchmarkRoute route,
+            String caseId,
+            RetrievalBenchmarkSplit split,
+            RetrievalBenchmarkCategory category,
+            String subjectSlug,
+            RetrievalDecisionType expectedDecision,
+            RetrievalDecisionType actualDecision,
+            Integer expectedRank
+    ) {
+        return new RetrievalRouteEvaluation(
+                route,
+                caseId,
+                split,
+                category,
+                ClaimSubjectType.PROJECT,
+                subjectSlug,
+                expectedDecision,
+                actualDecision,
+                expectedRank,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
         );
     }
 }

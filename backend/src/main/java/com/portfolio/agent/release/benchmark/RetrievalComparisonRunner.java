@@ -210,7 +210,12 @@ public final class RetrievalComparisonRunner {
             List<RetrievalCandidate> candidates,
             RetrievalPolicy policy
     ) {
-        Integer expectedRank = expectedRank(item, subjectChunks, candidates);
+        List<RetrievalExpectedRank> expectedClaimRanks =
+                expectedClaimRanks(item, subjectChunks, candidates);
+        List<RetrievalExpectedRank> expectedChunkRanks =
+                expectedChunkRanks(item, candidates);
+        Integer expectedRank = bestRank(
+                expectedClaimRanks, expectedChunkRanks);
         RetrievalDecision decision = contextValidator.validate(
                 subject.getClaims(),
                 subject.getEvidence(),
@@ -224,31 +229,72 @@ public final class RetrievalComparisonRunner {
                 item.getCaseId(),
                 item.getSplit(),
                 item.getCategory(),
+                item.getSubjectType(),
+                item.getSubjectSlug(),
                 item.getExpectedDecision(),
                 decision.getType(),
                 expectedRank,
+                expectedClaimRanks,
+                expectedChunkRanks,
                 decision.getSelectedClaimIds(),
                 decision.getSelectedChunkIds()
         );
     }
 
-    private Integer expectedRank(
+    private List<RetrievalExpectedRank> expectedClaimRanks(
             RetrievalBenchmarkCase item,
             Map<String, AnswerRetrievalChunk> chunks,
             List<RetrievalCandidate> candidates
     ) {
-        for (int index = 0; index < candidates.size(); index++) {
-            RetrievalCandidate candidate = candidates.get(index);
-            if (item.getExpectedChunkIds().contains(candidate.getChunkId())) {
-                return index + 1;
+        List<RetrievalExpectedRank> result = new ArrayList<>();
+        for (String claimId : item.getExpectedClaimIds()) {
+            Integer rank = null;
+            for (int index = 0; index < candidates.size(); index++) {
+                AnswerRetrievalChunk chunk =
+                        chunks.get(candidates.get(index).getChunkId());
+                if (chunk != null && chunk.getClaimIds().contains(claimId)) {
+                    rank = index + 1;
+                    break;
+                }
             }
-            AnswerRetrievalChunk chunk = chunks.get(candidate.getChunkId());
-            if (chunk != null
-                    && chunk.getClaimIds().stream()
-                    .anyMatch(item.getExpectedClaimIds()::contains)) {
-                return index + 1;
+            result.add(new RetrievalExpectedRank("CLAIM", claimId, rank));
+        }
+        return List.copyOf(result);
+    }
+
+    private List<RetrievalExpectedRank> expectedChunkRanks(
+            RetrievalBenchmarkCase item,
+            List<RetrievalCandidate> candidates
+    ) {
+        List<RetrievalExpectedRank> result = new ArrayList<>();
+        for (String chunkId : item.getExpectedChunkIds()) {
+            Integer rank = null;
+            for (int index = 0; index < candidates.size(); index++) {
+                if (chunkId.equals(candidates.get(index).getChunkId())) {
+                    rank = index + 1;
+                    break;
+                }
+            }
+            result.add(new RetrievalExpectedRank("CHUNK", chunkId, rank));
+        }
+        return List.copyOf(result);
+    }
+
+    private Integer bestRank(
+            List<RetrievalExpectedRank> claimRanks,
+            List<RetrievalExpectedRank> chunkRanks
+    ) {
+        Integer best = null;
+        List<RetrievalExpectedRank> combined = new ArrayList<>(
+                claimRanks.size() + chunkRanks.size());
+        combined.addAll(claimRanks);
+        combined.addAll(chunkRanks);
+        for (RetrievalExpectedRank expected : combined) {
+            Integer rank = expected.getRank();
+            if (rank != null && (best == null || rank < best)) {
+                best = rank;
             }
         }
-        return null;
+        return best;
     }
 }
