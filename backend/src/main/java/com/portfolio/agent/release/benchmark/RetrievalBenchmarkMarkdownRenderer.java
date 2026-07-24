@@ -10,7 +10,10 @@ public final class RetrievalBenchmarkMarkdownRenderer {
         markdown.append("## Immutable identities\n\n");
         markdown.append("- Suite version: `").append(report.getSuiteVersion()).append("`\n");
         markdown.append("- Content version: `").append(report.getContentVersion()).append("`\n");
-        markdown.append("- Bundle hash: `").append(report.getBundleHash()).append("`\n");
+        markdown.append("- Verified runtime Bundle hash: `")
+                .append(report.getRuntimeBundleHash()).append("`\n");
+        markdown.append("- Snapshot validFrom: `")
+                .append(report.getSnapshotValidFrom()).append("`\n");
         markdown.append("- Policy version: `").append(report.getPolicyVersion()).append("`\n");
         markdown.append("- Model descriptor hash: `").append(report.getModelDescriptorHash()).append("`\n\n");
         appendRouteMetrics(markdown, report);
@@ -21,8 +24,10 @@ public final class RetrievalBenchmarkMarkdownRenderer {
 
     private void appendRouteMetrics(StringBuilder markdown, RetrievalBenchmarkReport report) {
         markdown.append("## Route metrics\n\n");
-        markdown.append("| Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | False sufficient |\n");
-        markdown.append("| --- | ---: | ---: | ---: | ---: | ---: |\n");
+        markdown.append("| Route | Positive cases | Hit@1 | Hit@5 | MRR@5"
+                + " | Positive decision success | Positive decision success rate"
+                + " | False sufficient |\n");
+        markdown.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n");
         for (RetrievalBenchmarkRoute route : RetrievalBenchmarkRoute.values()) {
             appendMetricsRow(markdown, route.name(), report.getMetricsByRoute().get(route));
         }
@@ -31,8 +36,10 @@ public final class RetrievalBenchmarkMarkdownRenderer {
 
     private void appendCategoryMetrics(StringBuilder markdown, RetrievalBenchmarkReport report) {
         markdown.append("## Category breakdown\n\n");
-        markdown.append("| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | False sufficient |\n");
-        markdown.append("| --- | --- | ---: | ---: | ---: | ---: | ---: |\n");
+        markdown.append("| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5"
+                + " | Positive decision success | Positive decision success rate"
+                + " | False sufficient |\n");
+        markdown.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n");
         for (RetrievalBenchmarkReport.CategoryMetrics categoryMetrics : report.getCategoryMetrics()) {
             RetrievalBenchmarkMetrics metrics = categoryMetrics.getMetrics();
             markdown.append("| ").append(categoryMetrics.getCategory().name())
@@ -41,6 +48,10 @@ public final class RetrievalBenchmarkMarkdownRenderer {
                     .append(" | ").append(metric(metrics.getHitAt1()))
                     .append(" | ").append(metric(metrics.getHitAt5()))
                     .append(" | ").append(metric(metrics.getMrrAt5()))
+                    .append(" | ").append(
+                            metrics.getPositiveDecisionSuccessCount())
+                    .append(" | ").append(metric(
+                            metrics.getPositiveDecisionSuccessRate()))
                     .append(" | ").append(metrics.getFalseSufficientCount())
                     .append(" |\n");
         }
@@ -68,6 +79,9 @@ public final class RetrievalBenchmarkMarkdownRenderer {
                 .append(" | ").append(metric(metrics.getHitAt1()))
                 .append(" | ").append(metric(metrics.getHitAt5()))
                 .append(" | ").append(metric(metrics.getMrrAt5()))
+                .append(" | ").append(metrics.getPositiveDecisionSuccessCount())
+                .append(" | ").append(metric(
+                        metrics.getPositiveDecisionSuccessRate()))
                 .append(" | ").append(metrics.getFalseSufficientCount())
                 .append(" |\n");
     }

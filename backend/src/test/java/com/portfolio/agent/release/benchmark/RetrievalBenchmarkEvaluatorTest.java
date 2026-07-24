@@ -25,7 +25,7 @@ class RetrievalBenchmarkEvaluatorTest {
                 evaluation(RetrievalBenchmarkRoute.HYBRID, "positive-rank-1", RetrievalDecisionType.SUFFICIENT,
                         RetrievalDecisionType.SUFFICIENT, 1),
                 evaluation(RetrievalBenchmarkRoute.HYBRID, "positive-absent", RetrievalDecisionType.SUFFICIENT,
-                        RetrievalDecisionType.SUFFICIENT, null),
+                        RetrievalDecisionType.AMBIGUOUS, null),
                 evaluation(RetrievalBenchmarkRoute.HYBRID, "positive-rank-2", RetrievalDecisionType.SUFFICIENT,
                         RetrievalDecisionType.SUFFICIENT, 2)
         ));
@@ -35,6 +35,8 @@ class RetrievalBenchmarkEvaluatorTest {
         assertThat(metrics.getHitAt1()).isEqualTo(0.25);
         assertThat(metrics.getHitAt5()).isEqualTo(0.75);
         assertThat(metrics.getMrrAt5()).isEqualTo((1.0 + 0.5 + 0.2) / 4.0);
+        assertThat(metrics.getPositiveDecisionSuccessCount()).isEqualTo(3);
+        assertThat(metrics.getPositiveDecisionSuccessRate()).isEqualTo(0.75);
         assertThat(metrics.getFalseSufficientCount()).isEqualTo(1);
         assertThat(metricsByRoute.keySet()).containsExactly(
                 RetrievalBenchmarkRoute.KEYWORD,

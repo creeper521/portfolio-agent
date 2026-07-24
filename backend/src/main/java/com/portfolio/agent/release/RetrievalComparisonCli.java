@@ -23,9 +23,9 @@ import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.release.ClaimRagDocumentBuilder;
 import com.portfolio.agent.portfolio.release.KeywordIndexBuilder;
 import com.portfolio.agent.portfolio.release.LocalDocumentEmbeddingBuilder;
-import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
 import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
-import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
+import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
+import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkEvaluator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkMarkdownRenderer;
@@ -41,7 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -103,22 +103,22 @@ public final class RetrievalComparisonCli {
             );
 
             ObjectMapper mapper = canonicalMapper();
-            byte[] portfolioBytes = Files.readAllBytes(portfolioFile);
-            PortfolioSnapshot portfolio = new PortfolioSnapshotJsonReader(mapper)
-                    .readBundle(portfolioBytes);
+            RuntimeContentSnapshot snapshot = loadVerifiedSnapshot(
+                    portfolioFile,
+                    mapper
+            );
             RetrievalBenchmarkSuite suite = new RetrievalBenchmarkCaseLoader(mapper)
                     .load(Files.readAllBytes(casesFile));
-            if (!portfolio.getContentVersion().equals(suite.getContentVersion())) {
+            if (!snapshot.getContentVersion().equals(suite.getContentVersion())) {
                 throw new IllegalArgumentException(
                         "retrieval comparison contentVersion mismatch");
             }
 
             ComparisonRequest request = new ComparisonRequest(
-                    portfolio,
+                    snapshot,
                     suite,
                     modelDirectory.toAbsolutePath().normalize(),
-                    validFrom,
-                    BundleHashCalculator.sha256(portfolioBytes)
+                    validFrom
             );
             RetrievalBenchmarkReport report = Objects.requireNonNull(
                     executor.execute(request),
@@ -164,11 +164,6 @@ public final class RetrievalComparisonCli {
                 vectors,
                 artifact
         );
-        RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
-                request.getPortfolio(),
-                request.getBundleHash(),
-                Instant.EPOCH
-        );
         RetrievalPolicy policy = RetrievalPolicy.firstRelease();
         List<RetrievalRouteEvaluation> evaluations;
         try (OnnxLocalEmbeddingAdapter queryAdapter =
@@ -187,12 +182,13 @@ public final class RetrievalComparisonCli {
                     new ReciprocalRankFusion(),
                     new RetrievalContextValidator(),
                     queryAdapter
-            ).run(request.getSuite(), snapshot, corpus, policy);
+            ).run(request.getSuite(), request.getSnapshot(), corpus, policy);
         }
         return new RetrievalBenchmarkReport(
                 request.getSuite().getSuiteVersion(),
                 request.getSuite().getContentVersion(),
-                request.getBundleHash(),
+                request.getRuntimeBundleHash(),
+                request.getValidFrom().toString(),
                 policy.getVersion(),
                 artifact.getDescriptorSha256(),
                 evaluations,
@@ -260,6 +256,41 @@ public final class RetrievalComparisonCli {
             throw new IllegalArgumentException(
                     "retrieval comparison output parent is invalid");
         }
+    }
+
+    private static RuntimeContentSnapshot loadVerifiedSnapshot(
+            Path portfolioFile,
+            ObjectMapper mapper
+    )
+            throws IOException {
+        Path absolutePortfolio = portfolioFile.toAbsolutePath().normalize();
+        if (!"portfolio.json".equals(
+                absolutePortfolio.getFileName().toString())) {
+            throw new IllegalArgumentException(
+                    "retrieval comparison portfolio must be bundle portfolio.json");
+        }
+        Path bundleDirectory = absolutePortfolio.getParent();
+        if (bundleDirectory == null || !Files.isDirectory(bundleDirectory)) {
+            throw new IllegalArgumentException(
+                    "retrieval comparison bundle directory is invalid");
+        }
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        try (java.util.stream.Stream<Path> entries =
+                Files.list(bundleDirectory)) {
+            for (Path entry : entries
+                    .filter(path -> Files.isRegularFile(
+                            path,
+                            LinkOption.NOFOLLOW_LINKS))
+                    .sorted()
+                    .toList()) {
+                files.put(entry.getFileName().toString(), Files.readAllBytes(entry));
+            }
+        }
+        return new PublicBundleLoader(
+                mapper,
+                new PortfolioSnapshotValidator(),
+                Clock.systemUTC()
+        ).load(files);
     }
 
     private static void writeReports(
@@ -384,31 +415,44 @@ public final class RetrievalComparisonCli {
 
     static final class ComparisonRequest {
 
-        private final PortfolioSnapshot portfolio;
+        private final RuntimeContentSnapshot snapshot;
         private final RetrievalBenchmarkSuite suite;
         private final Path modelDirectory;
         private final LocalDate validFrom;
-        private final String bundleHash;
 
         private ComparisonRequest(
-                PortfolioSnapshot portfolio,
+                RuntimeContentSnapshot snapshot,
                 RetrievalBenchmarkSuite suite,
                 Path modelDirectory,
-                LocalDate validFrom,
-                String bundleHash
+                LocalDate validFrom
         ) {
-            this.portfolio = Objects.requireNonNull(portfolio, "portfolio");
+            this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
             this.suite = Objects.requireNonNull(suite, "suite");
             this.modelDirectory = Objects.requireNonNull(
                     modelDirectory,
                     "modelDirectory"
             );
             this.validFrom = Objects.requireNonNull(validFrom, "validFrom");
-            this.bundleHash = Objects.requireNonNull(bundleHash, "bundleHash");
         }
 
         PortfolioSnapshot getPortfolio() {
-            return portfolio;
+            return new PortfolioSnapshot(
+                    snapshot.getSchemaVersion(),
+                    snapshot.getContentVersion(),
+                    snapshot.getPublishedAt(),
+                    snapshot.getOwner(),
+                    snapshot.getProjects(),
+                    snapshot.getCases(),
+                    snapshot.getClaims(),
+                    snapshot.getClaimEvidenceLinks(),
+                    snapshot.getQuestions(),
+                    snapshot.getApprovedEvidence(),
+                    snapshot.getTimeline()
+            );
+        }
+
+        RuntimeContentSnapshot getSnapshot() {
+            return snapshot;
         }
 
         RetrievalBenchmarkSuite getSuite() {
@@ -423,8 +467,8 @@ public final class RetrievalComparisonCli {
             return validFrom;
         }
 
-        String getBundleHash() {
-            return bundleHash;
+        String getRuntimeBundleHash() {
+            return snapshot.getRuntimeBundleHash();
         }
     }
 }

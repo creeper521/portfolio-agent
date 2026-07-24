@@ -36,6 +36,7 @@ public final class RetrievalBenchmarkEvaluator {
         private int hitAt1Count;
         private int hitAt5Count;
         private double reciprocalRankSum;
+        private int positiveDecisionSuccessCount;
         private int falseSufficientCount;
 
         private void add(RetrievalRouteEvaluation evaluation) {
@@ -49,6 +50,10 @@ public final class RetrievalBenchmarkEvaluator {
                         hitAt1Count++;
                     }
                 }
+                if (evaluation.getActualDecision()
+                        == RetrievalDecisionType.SUFFICIENT) {
+                    positiveDecisionSuccessCount++;
+                }
             }
             if (evaluation.getExpectedDecision() != RetrievalDecisionType.SUFFICIENT
                     && evaluation.getActualDecision() == RetrievalDecisionType.SUFFICIENT) {
@@ -60,11 +65,16 @@ public final class RetrievalBenchmarkEvaluator {
             double hitAt1 = positiveCount == 0 ? 0.0 : hitAt1Count / (double) positiveCount;
             double hitAt5 = positiveCount == 0 ? 0.0 : hitAt5Count / (double) positiveCount;
             double mrrAt5 = positiveCount == 0 ? 0.0 : reciprocalRankSum / positiveCount;
+            double positiveDecisionSuccessRate = positiveCount == 0
+                    ? 0.0
+                    : positiveDecisionSuccessCount / (double) positiveCount;
             return new RetrievalBenchmarkMetrics(
                     positiveCount,
                     hitAt1,
                     hitAt5,
                     mrrAt5,
+                    positiveDecisionSuccessCount,
+                    positiveDecisionSuccessRate,
                     falseSufficientCount
             );
         }

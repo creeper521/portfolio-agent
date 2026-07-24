@@ -14,7 +14,8 @@ public final class RetrievalBenchmarkReport {
 
     private final String suiteVersion;
     private final String contentVersion;
-    private final String bundleHash;
+    private final String runtimeBundleHash;
+    private final String snapshotValidFrom;
     private final String policyVersion;
     private final String modelDescriptorHash;
     private final List<Evaluation> evaluations;
@@ -24,7 +25,8 @@ public final class RetrievalBenchmarkReport {
     public RetrievalBenchmarkReport(
             String suiteVersion,
             String contentVersion,
-            String bundleHash,
+            String runtimeBundleHash,
+            String snapshotValidFrom,
             String policyVersion,
             String modelDescriptorHash,
             List<RetrievalRouteEvaluation> evaluations,
@@ -32,7 +34,14 @@ public final class RetrievalBenchmarkReport {
     ) {
         this.suiteVersion = Objects.requireNonNull(suiteVersion, "suiteVersion");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
-        this.bundleHash = Objects.requireNonNull(bundleHash, "bundleHash");
+        this.runtimeBundleHash = Objects.requireNonNull(
+                runtimeBundleHash,
+                "runtimeBundleHash"
+        );
+        this.snapshotValidFrom = Objects.requireNonNull(
+                snapshotValidFrom,
+                "snapshotValidFrom"
+        );
         this.policyVersion = Objects.requireNonNull(policyVersion, "policyVersion");
         this.modelDescriptorHash = Objects.requireNonNull(modelDescriptorHash, "modelDescriptorHash");
         this.evaluations = safeEvaluations(evaluations);
@@ -42,7 +51,8 @@ public final class RetrievalBenchmarkReport {
 
     public String getSuiteVersion() { return suiteVersion; }
     public String getContentVersion() { return contentVersion; }
-    public String getBundleHash() { return bundleHash; }
+    public String getRuntimeBundleHash() { return runtimeBundleHash; }
+    public String getSnapshotValidFrom() { return snapshotValidFrom; }
     public String getPolicyVersion() { return policyVersion; }
     public String getModelDescriptorHash() { return modelDescriptorHash; }
     public List<Evaluation> getEvaluations() { return evaluations; }
@@ -93,7 +103,15 @@ public final class RetrievalBenchmarkReport {
     }
 
     private RetrievalBenchmarkMetrics zeroMetrics() {
-        return new RetrievalBenchmarkMetrics(0, 0.0, 0.0, 0.0, 0);
+        return new RetrievalBenchmarkMetrics(
+                0,
+                0.0,
+                0.0,
+                0.0,
+                0,
+                0.0,
+                0
+        );
     }
 
     public static final class Evaluation {

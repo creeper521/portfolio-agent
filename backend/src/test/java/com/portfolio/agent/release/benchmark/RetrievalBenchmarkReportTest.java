@@ -55,6 +55,16 @@ class RetrievalBenchmarkReportTest {
         assertThat(report.getMetricsByRoute().get(RetrievalBenchmarkRoute.HYBRID).getMrrAt5())
                 .isEqualTo(1.0 / 3.0);
         JsonNode root = canonicalMapper.readTree(json);
+        assertThat(root.path("runtimeBundleHash").asText())
+                .isEqualTo("bundle-sha256");
+        assertThat(root.path("snapshotValidFrom").asText())
+                .isEqualTo("2026-07-23");
+        assertThat(root.path("metricsByRoute").path("HYBRID")
+                .path("positiveDecisionSuccessCount").asInt())
+                .isEqualTo(1);
+        assertThat(root.path("metricsByRoute").path("HYBRID")
+                .path("positiveDecisionSuccessRate").asDouble())
+                .isEqualTo(1.0);
         assertThat(root.findValues("timestamp")).isEmpty();
         assertThat(root.findValues("path")).isEmpty();
         assertThat(root.findValues("hostname")).isEmpty();
@@ -75,13 +85,14 @@ class RetrievalBenchmarkReportTest {
         assertThat(markdown).contains(
                 "- Suite version: `retrieval-benchmark-v2`",
                 "- Content version: `2026-07-23.1`",
-                "- Bundle hash: `bundle-sha256`",
+                "- Verified runtime Bundle hash: `bundle-sha256`",
+                "- Snapshot validFrom: `2026-07-23`",
                 "- Policy version: `policy-v1`",
                 "- Model descriptor hash: `model-sha256`",
-                "| Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | False sufficient |",
-                "| KEYWORD | 2 | 0.5000 | 1.0000 | 0.7500 | 1 |",
-                "| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | False sufficient |",
-                "| EXACT_TERM | KEYWORD | 1 | 1.0000 | 1.0000 | 1.0000 | 1 |",
+                "| Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | Positive decision success | Positive decision success rate | False sufficient |",
+                "| KEYWORD | 2 | 0.5000 | 1.0000 | 0.7500 | 1 | 0.5000 | 1 |",
+                "| Category | Route | Positive cases | Hit@1 | Hit@5 | MRR@5 | Positive decision success | Positive decision success rate | False sufficient |",
+                "| EXACT_TERM | KEYWORD | 1 | 1.0000 | 1.0000 | 1.0000 | 1 | 1.0000 | 1 |",
                 "- KEYWORD: `case-b`",
                 "- VECTOR: `case-a`",
                 "- VECTOR: `case-c`");
@@ -96,6 +107,7 @@ class RetrievalBenchmarkReportTest {
                 "retrieval-benchmark-v2",
                 "2026-07-23.1",
                 "bundle-sha256",
+                "2026-07-23",
                 "policy-v1",
                 "model-sha256",
                 evaluations,
@@ -120,9 +132,12 @@ class RetrievalBenchmarkReportTest {
 
     private Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> metrics() {
         Map<RetrievalBenchmarkRoute, RetrievalBenchmarkMetrics> result = new LinkedHashMap<>();
-        result.put(RetrievalBenchmarkRoute.KEYWORD, new RetrievalBenchmarkMetrics(2, 0.5, 1.0, 0.75, 1));
-        result.put(RetrievalBenchmarkRoute.VECTOR, new RetrievalBenchmarkMetrics(1, 0.0, 0.0, 0.0, 0));
-        result.put(RetrievalBenchmarkRoute.HYBRID, new RetrievalBenchmarkMetrics(1, 0.0, 1.0, 1.0 / 3.0, 0));
+        result.put(RetrievalBenchmarkRoute.KEYWORD,
+                new RetrievalBenchmarkMetrics(2, 0.5, 1.0, 0.75, 1, 0.5, 1));
+        result.put(RetrievalBenchmarkRoute.VECTOR,
+                new RetrievalBenchmarkMetrics(1, 0.0, 0.0, 0.0, 1, 1.0, 0));
+        result.put(RetrievalBenchmarkRoute.HYBRID,
+                new RetrievalBenchmarkMetrics(1, 0.0, 1.0, 1.0 / 3.0, 1, 1.0, 0));
         return result;
     }
 

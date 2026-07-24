@@ -1,6 +1,7 @@
 package com.portfolio.agent.release;
 
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkReport;
+import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,9 +29,17 @@ class RetrievalComparisonCliTest {
 
     @BeforeEach
     void prepareValidInputs() throws Exception {
-        portfolio = temporary.resolve("portfolio.json");
-        Files.copy(projectRoot().resolve(
-                "backend/src/main/resources/public-data/bundle/portfolio.json"), portfolio);
+        Path sourceBundle = projectRoot().resolve(
+                "backend/src/main/resources/public-data/bundle");
+        Path bundle = Files.createDirectory(temporary.resolve("bundle"));
+        for (String name : List.of(
+                "manifest.json",
+                "portfolio.json",
+                "presentation.json",
+                "checksums.json")) {
+            Files.copy(sourceBundle.resolve(name), bundle.resolve(name));
+        }
+        portfolio = bundle.resolve("portfolio.json");
         cases = temporary.resolve("cases.json");
         Files.writeString(cases, casesJson("2026-07-23.1"));
         modelDirectory = Files.createDirectory(temporary.resolve("model"));
@@ -145,7 +155,10 @@ class RetrievalComparisonCliTest {
 
         RunResult result = run(validArguments(output), request -> {
             captured.set(request);
-            return fixedReport();
+            return fixedReport(
+                    request.getRuntimeBundleHash(),
+                    request.getValidFrom().toString()
+            );
         });
 
         assertThat(result.exitCode).isZero();
@@ -156,15 +169,50 @@ class RetrievalComparisonCliTest {
         assertThat(output.resolve("comparison.md")).isRegularFile();
         assertThat(Files.readString(output.resolve("comparison.json")))
                 .contains("\"suiteVersion\":\"retrieval-benchmark-v2\"",
-                        "\"contentVersion\":\"2026-07-23.1\"");
+                        "\"contentVersion\":\"2026-07-23.1\"",
+                        "\"runtimeBundleHash\":\"" + expectedRuntimeBundleHash() + "\"",
+                        "\"snapshotValidFrom\":\"2026-07-23\"");
         assertThat(Files.readString(output.resolve("comparison.md")))
-                .startsWith("# Retrieval Baseline Comparison\n");
+                .startsWith("# Retrieval Baseline Comparison\n")
+                .contains(
+                        "- Verified runtime Bundle hash: `"
+                                + expectedRuntimeBundleHash() + "`",
+                        "- Snapshot validFrom: `2026-07-23`"
+                );
         assertThat(captured.get().getPortfolio().getContentVersion())
                 .isEqualTo("2026-07-23.1");
         assertThat(captured.get().getSuite().getContentVersion())
                 .isEqualTo("2026-07-23.1");
         assertThat(captured.get().getModelDirectory()).isEqualTo(modelDirectory);
         assertThat(captured.get().getValidFrom().toString()).isEqualTo("2026-07-23");
+        assertThat(captured.get().getRuntimeBundleHash())
+                .isEqualTo(expectedRuntimeBundleHash())
+                .isNotEqualTo(BundleHashCalculator.sha256(Files.readAllBytes(portfolio)));
+    }
+
+    @Test
+    void rejectsTamperedChecksummedBundleBeforeExecutingOrPublishing()
+            throws Exception {
+        Files.writeString(
+                portfolio,
+                Files.readString(portfolio).replace(
+                        "\"sql-audit\"",
+                        "\"tampered-sql-audit\""
+                )
+        );
+        AtomicInteger executions = new AtomicInteger();
+        Path output = temporary.resolve("tampered-comparison");
+
+        RunResult result = run(validArguments(output), request -> {
+            executions.incrementAndGet();
+            return fixedReport();
+        });
+
+        assertThat(result.exitCode).isEqualTo(1);
+        assertThat(result.err).isEqualTo(
+                "RETRIEVAL_COMPARISON_FAILED" + System.lineSeparator());
+        assertThat(executions).hasValue(0);
+        assertThat(output).doesNotExist();
     }
 
     @Test
@@ -239,10 +287,21 @@ class RetrievalComparisonCliTest {
     }
 
     private RetrievalBenchmarkReport fixedReport() {
+        return fixedReport(
+                "sha256:runtime",
+                "2026-07-23"
+        );
+    }
+
+    private RetrievalBenchmarkReport fixedReport(
+            String runtimeBundleHash,
+            String snapshotValidFrom
+    ) {
         return new RetrievalBenchmarkReport(
                 "retrieval-benchmark-v2",
                 "2026-07-23.1",
-                "sha256:portfolio",
+                runtimeBundleHash,
+                snapshotValidFrom,
                 "retrieval-policy-v1",
                 "sha256:model",
                 List.of(),
@@ -268,6 +327,14 @@ class RetrievalComparisonCliTest {
                   }]
                 }
                 """.formatted(contentVersion);
+    }
+
+    private String expectedRuntimeBundleHash() throws Exception {
+        Path bundle = portfolio.getParent();
+        return BundleHashCalculator.runtimeBundleHash(
+                Files.readAllBytes(bundle.resolve("manifest.json")),
+                Files.readAllBytes(bundle.resolve("checksums.json"))
+        );
     }
 
     private Path projectRoot() {
