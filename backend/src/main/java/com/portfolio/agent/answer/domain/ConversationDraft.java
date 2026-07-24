@@ -8,13 +8,13 @@ import java.util.List;
 public final class ConversationDraft {
 
     private final String title;
-    private final String resolution;
+    private final AnswerResolution resolution;
     private final List<ConversationAnswerBlock> blocks;
 
     @JsonCreator
     public ConversationDraft(
             @JsonProperty("title") String title,
-            @JsonProperty("resolution") String resolution,
+            @JsonProperty("resolution") AnswerResolution resolution,
             @JsonProperty("blocks") List<ConversationAnswerBlock> blocks
     ) {
         this.title = title;
@@ -23,6 +23,6 @@ public final class ConversationDraft {
     }
 
     public String getTitle() { return title; }
-    public String getResolution() { return resolution; }
+    public AnswerResolution getResolution() { return resolution; }
     public List<ConversationAnswerBlock> getBlocks() { return blocks; }
 }

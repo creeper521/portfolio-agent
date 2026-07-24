@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -10,16 +13,17 @@ public final class ConversationAnswerBlock {
     private final List<String> claimIds;
     private final List<String> evidenceIds;
 
+    @JsonCreator
     public ConversationAnswerBlock(
-            ConversationSourceScope sourceScope,
-            String content,
-            List<String> claimIds,
-            List<String> evidenceIds
+            @JsonProperty("sourceScope") ConversationSourceScope sourceScope,
+            @JsonProperty("content") String content,
+            @JsonProperty("claimIds") List<String> claimIds,
+            @JsonProperty("evidenceIds") List<String> evidenceIds
     ) {
         this.sourceScope = Objects.requireNonNull(sourceScope, "sourceScope");
         this.content = Objects.requireNonNull(content, "content");
-        this.claimIds = List.copyOf(claimIds);
-        this.evidenceIds = List.copyOf(evidenceIds);
+        this.claimIds = claimIds == null ? List.of() : List.copyOf(claimIds);
+        this.evidenceIds = evidenceIds == null ? List.of() : List.copyOf(evidenceIds);
     }
 
     public ConversationSourceScope getSourceScope() { return sourceScope; }
