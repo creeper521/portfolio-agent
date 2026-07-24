@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.domain.ConversationMessageRole;
 import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationRoute;
+import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
 import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.ModelProviderKind;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
@@ -72,7 +73,37 @@ class OpenAiCompatibleConversationalModelAdapterTest {
         server.verify();
     }
 
+    @Test
+    void unwrapsSuggestedQuestionsFromJsonObject() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder);
+        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
+                .andRespond(withSuccess("""
+                        {
+                          "choices": [{
+                            "message": {
+                              "content": "{\\"questions\\":[{\\"text\\":\\"如何验证实现？\\",\\"projectSlug\\":\\"sql-audit\\",\\"caseSlug\\":null,\\"facet\\":\\"VERIFICATION\\"}]}"
+                            }
+                          }]
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        ConversationModelResult<List<ConversationSuggestedQuestion>> result =
+                adapter.suggest(route(), window(), List.of(), List.of());
+
+        assertThat(result.isSuccessful()).isTrue();
+        assertThat(result.getValue()).singleElement().satisfies(question -> {
+            assertThat(question.getText()).isEqualTo("如何验证实现？");
+            assertThat(question.getProjectSlug()).isEqualTo("sql-audit");
+            assertThat(question.getFacet())
+                    .isEqualTo(PortfolioKnowledgeFacet.VERIFICATION);
+        });
+        server.verify();
+    }
+
     private OpenAiCompatibleConversationalModelAdapter adapter(RestClient.Builder builder) {
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ModelProviderDescriptor descriptor = new ModelProviderDescriptor(
                 ModelProviderKind.DEEPSEEK_V4_FLASH,
                 "conversation-v1",
@@ -86,8 +117,8 @@ class OpenAiCompatibleConversationalModelAdapterTest {
                         ModelProviderCapability.NON_STREAMING));
         return new OpenAiCompatibleConversationalModelAdapter(
                 builder,
-                new ObjectMapper(),
-                new ConversationalPromptFactory(new ObjectMapper(), "system prompt"),
+                objectMapper,
+                new ConversationalPromptFactory(objectMapper, "system prompt"),
                 descriptor,
                 "test-key",
                 1200);
@@ -99,6 +130,17 @@ class OpenAiCompatibleConversationalModelAdapterTest {
                 List.of(new ConversationMessage(
                         ConversationMessageRole.USER, "earlier question")),
                 10);
+    }
+
+    private ConversationRoute route() {
+        return new ConversationRoute(
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                0.98,
+                "sql-audit",
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
     }
 
     private String routeResponse() {

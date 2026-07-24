@@ -136,13 +136,15 @@ public final class OpenAiCompatibleConversationalModelAdapter
         Map<String, Object> approved = new LinkedHashMap<>();
         approved.put("route", route);
         approved.put("publicSubjects", publicSubjects);
-        JavaType responseType = objectMapper.getTypeFactory().constructCollectionType(
-                List.class, ConversationSuggestedQuestion.class);
-        return post(
+        ConversationModelResult<SuggestedQuestionsResponse> result = post(
                 "suggestion",
                 promptFactory.suggestionPrompt(conversation, approved),
-                responseType,
+                objectMapper.constructType(SuggestedQuestionsResponse.class),
                 0.3);
+        if (!result.isSuccessful()) {
+            return ConversationModelResult.failure(result.getFailureCode());
+        }
+        return ConversationModelResult.success(result.getValue().getQuestions());
     }
 
     @Override
@@ -332,5 +334,18 @@ public final class OpenAiCompatibleConversationalModelAdapter
 
         public String getSummary() { return summary; }
         public void setSummary(String summary) { this.summary = summary; }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    private static final class SuggestedQuestionsResponse {
+        private List<ConversationSuggestedQuestion> questions;
+
+        public List<ConversationSuggestedQuestion> getQuestions() {
+            return questions == null ? List.of() : List.copyOf(questions);
+        }
+
+        public void setQuestions(List<ConversationSuggestedQuestion> questions) {
+            this.questions = questions;
+        }
     }
 }
