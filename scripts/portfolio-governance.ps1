@@ -8,6 +8,7 @@ param(
     [string]$PrivacyReviewId,
     [string]$BenchmarkRunId,
     [string]$ApprovalId,
+    [string]$DecisionLedger,
     [string]$ReleaseRoot,
     [string]$TargetVersion,
     [string]$CaseId,
@@ -28,10 +29,11 @@ param(
     [string]$JavaExecutable = 'java.exe',
     [switch]$Confirm
 )
-$skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\portfolio-governance\scripts\portfolio-governance.ps1'
+$skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) 'governance\portfolio-governance\scripts\portfolio-governance.ps1'
 & $skillCli -Command $Command -Workspace $Workspace -Candidate $Candidate `
     -ReviewRunId $ReviewRunId -ApprovedBy $ApprovedBy -PrivacyReviewId $PrivacyReviewId `
     -BenchmarkRunId $BenchmarkRunId -ApprovalId $ApprovalId -ReleaseRoot $ReleaseRoot `
+    -DecisionLedger $DecisionLedger `
     -TargetVersion $TargetVersion -CaseId $CaseId -TargetStatus $TargetStatus `
     -CaseSource $CaseSource -ContentVersion $ContentVersion -FailureType $FailureType `
     -SanitizedObservation $SanitizedObservation -ExpectedBehavior $ExpectedBehavior `

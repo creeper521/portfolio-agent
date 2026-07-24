@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["playbookId", "title", "trigger", "rule", "sourceCaseIds", "status", "approvedBy"],
+  "properties": {
+    "playbookId": {"type": "string"}, "title": {"type": "string"},
+    "trigger": {"type": "string"}, "rule": {"type": "string"},
+    "sourceCaseIds": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "status": {"const": "ACTIVE"}, "approvedBy": {"type": "string", "minLength": 1}
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["caseId", "category", "caseType", "questionPresetId", "severity"],
+  "properties": {
+    "caseId": {"type": "string"}, "category": {"enum": ["CONTRACT", "CONTENT", "SAFETY"]},
+    "caseType": {"enum": ["SUPPORTED_QUESTION", "ALIAS", "BOUNDARY", "CLAIM_EVIDENCE", "SAFETY"]},
+    "questionPresetId": {"type": "string"}, "severity": {"enum": ["BLOCKER", "ERROR", "WARNING", "INFO"]},
+    "requiredClaimIds": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "requiredEvidenceIds": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}

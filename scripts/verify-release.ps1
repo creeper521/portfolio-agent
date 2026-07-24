@@ -60,8 +60,8 @@ try {
         -Path (Join-Path $root 'backend\src\main')
     Assert-ExitCode 'Pre-package production source and configuration privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
-        -Path (Join-Path $root '.agents\skills\portfolio-governance')
-    Assert-ExitCode 'Public governance skill privacy scan'
+        -Path (Join-Path $root 'governance\portfolio-governance')
+    Assert-ExitCode 'Tracked governance package privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root 'backend\src\main\resources\public-data')
     Assert-ExitCode 'Pre-package public snapshot privacy scan'
