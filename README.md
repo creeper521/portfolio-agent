@@ -48,6 +48,11 @@ mvn.cmd -f backend/pom.xml spring-boot:run
 
 每个进程只选择一个 Provider，不自动切换、不重试，也不把供应商 conversation/thread ID 保存到应用。未同时满足启用开关、所选 Provider 密钥和独立数据策略批准时，请求继续走 `DETERMINISTIC`。
 
+仓库根目录提供不含真实密钥的 `.env.example`。本地可复制为 `.env`，但 Spring Boot
+不会自动加载该文件；请通过 IDE、部署平台或启动 Shell 将其中变量注入进程环境。
+`.env` 已被 Git 忽略，禁止把真实 API Key 写入 `.env.example` 或其他受版本控制文件。
+任何曾出现在聊天、日志或提交历史中的密钥都应先吊销，再把新密钥写入本机 `.env`。
+
 DeepSeek V4 Flash：
 
 ```powershell
