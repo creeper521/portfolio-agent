@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { buildDossierIndex } from '../../portfolio/model/dossierIndexModel'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 
 const props = defineProps<{ portfolio: PublicPortfolio }>()
 
+// 案卷总数对齐索引页：projects + 全部 cases（含评测）。
+// 首页数字点进去能找到的所有条目都算，避免"数字虚高无处可点"。
+const dossierCount = computed(() =>
+  buildDossierIndex(props.portfolio.projects, props.portfolio.cases)
+    .reduce((sum, group) => sum + group.entries.length, 0),
+)
+
 const metrics = computed(() =>
   [
     {
-      value: props.portfolio.projects.length,
-      code: 'PROJECTS',
-      label: '核心项目',
-      description: '项目状态与个人贡献按独立标记。',
+      value: dossierCount.value,
+      code: 'DOSSIERS',
+      label: '工程案卷',
+      description: '核心项目、功能修复案例与工具评测，按类型分组。',
       to: '/projects',
     },
     {

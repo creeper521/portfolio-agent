@@ -54,6 +54,23 @@ describe('ProjectPage', () => {
     expect(wrapper.text()).toContain('如何证明')
   })
 
+  it('renders a section-trace footnote only on sections that have verified claims', async () => {
+    // preview fixture: sql-audit 只有 1 个 OUTCOME claim → 仅 status 段有脚注
+    const wrapper = mount(ProjectPage, {
+      props: { slug: 'sql-audit' },
+      global: {
+        provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+
+    const traces = wrapper.findAll('.section-trace')
+    expect(traces).toHaveLength(1)
+    // 落在最终状态段，且含断言数与证据数
+    expect(wrapper.get('#status .section-trace').text()).toContain('1')
+  })
+
   it('does not report an unpublished project while public content is loading', () => {
     const state = readyPublicContentState()
     state.portfolio.value = null

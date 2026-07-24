@@ -57,6 +57,7 @@ export interface PublicClaimEvidenceLink {
 export type CaseType = 'FEATURE' | 'EVALUATION' | 'BUGFIX'
 
 export interface PublicCase {
+  id: string
   slug: string
   code: string
   type: CaseType
@@ -76,6 +77,7 @@ export interface PublicCase {
 }
 
 export interface PublicProject {
+  id: string
   slug: string
   code: string
   title: string

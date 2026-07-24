@@ -22,7 +22,8 @@ describe('HomePage', () => {
 
     expect(wrapper.findAll('[data-home-layer]')).toHaveLength(4)
     expect(wrapper.get('[data-home-layer="hero"]').text()).toContain('Java 后端开发实习生')
-    expect(wrapper.get('[data-home-layer="credibility"]').text()).toContain('1')
+    // 案卷数 = 项目(1) + 功能修复(1) + 评测(1) = 3，与索引页可点条目对齐
+    expect(wrapper.get('[data-home-layer="credibility"]').text()).toContain('03')
     expect(wrapper.get('[data-home-layer="dialogue"]').text()).toContain('技术面试官')
     expect(wrapper.get('[data-home-layer="explore"]').text()).toContain('完整对话')
     expect(wrapper.get('[data-home-layer="hero"]').classes()).toContain('paper-surface')

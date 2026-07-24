@@ -1,6 +1,7 @@
 import type { PublicPortfolio } from '../model/publicContentTypes'
 
 const sqlAuditProject = {
+  id: 'sql-audit-project',
   slug: 'sql-audit',
   code: 'P-01',
   title: 'SQL 审计与故障排查工具',
@@ -72,6 +73,7 @@ const multilingualEvidence = {
 }
 
 const multilingualCase = {
+  id: 'case-multilingual-upload',
   slug: 'multilingual-image-preservation',
   code: 'CASE-01',
   type: 'FEATURE' as const,
@@ -122,6 +124,7 @@ const codegraphEvidence = {
 }
 
 const codegraphCase = {
+  id: 'case-codegraph-evaluation',
   slug: 'codegraph-evaluation',
   code: 'CASE-03',
   type: 'EVALUATION' as const,

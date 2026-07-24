@@ -3,6 +3,10 @@ import { computed } from 'vue'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import { resolveDossier } from '../features/portfolio/model/dossierModel'
+import {
+  buildSectionTraces,
+  type SectionAnchor,
+} from '../features/portfolio/model/sectionTrace'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
@@ -20,6 +24,19 @@ const evidenceTarget = computed(() => {
   const slug = dossier.value?.kind === 'PROJECT' ? dossier.value.slug : (dossier.value?.slug ?? '')
   return { path: '/evidence', query: { project: slug } }
 })
+
+// 段落追溯信封：每个锚点对应几条已核验断言、直连几条脱敏证据。
+// null 表示该段落无对应 claim（case 常见），模板据此不渲染脚注。
+const traces = computed(() => {
+  const data = portfolio.value
+  const current = dossier.value
+  if (!data || !current) return null
+  return buildSectionTraces(current.subjectId, data.claims, data.claimEvidenceLinks)
+})
+
+function traceFor(anchor: SectionAnchor) {
+  return traces.value?.[anchor] ?? null
+}
 </script>
 
 <template>
@@ -55,6 +72,10 @@ const evidenceTarget = computed(() => {
           <p class="section-code">01 / WHY</p>
           <h2>为什么做</h2>
           <p class="story-lead">{{ dossier.problem }}</p>
+          <p v-if="traceFor('why')" class="section-trace">
+            对应 <em>{{ traceFor('why')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('why')!.evidence }}</em> 条脱敏证据
+            <RouterLink :to="evidenceTarget">证据 →</RouterLink>
+          </p>
         </section>
 
         <section id="role">
@@ -63,6 +84,10 @@ const evidenceTarget = computed(() => {
           <ol>
             <li v-for="item in dossier.responsibilities" :key="item">{{ item }}</li>
           </ol>
+          <p v-if="traceFor('role')" class="section-trace">
+            对应 <em>{{ traceFor('role')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('role')!.evidence }}</em> 条脱敏证据
+            <RouterLink :to="evidenceTarget">证据 →</RouterLink>
+          </p>
         </section>
 
         <section id="how" class="project-story__dark">
@@ -73,6 +98,10 @@ const evidenceTarget = computed(() => {
           <ol>
             <li v-for="item in dossier.decisions" :key="item">{{ item }}</li>
           </ol>
+          <p v-if="traceFor('how')" class="section-trace">
+            对应 <em>{{ traceFor('how')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('how')!.evidence }}</em> 条脱敏证据
+            <RouterLink :to="evidenceTarget">证据 →</RouterLink>
+          </p>
         </section>
 
         <section id="proof">
@@ -82,6 +111,10 @@ const evidenceTarget = computed(() => {
             <li v-for="item in dossier.verification" :key="item">{{ item }}</li>
           </ol>
           <RouterLink class="evidence-link" :to="evidenceTarget">打开关联证据 →</RouterLink>
+          <p v-if="traceFor('proof')" class="section-trace">
+            对应 <em>{{ traceFor('proof')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('proof')!.evidence }}</em> 条脱敏证据
+            <RouterLink :to="evidenceTarget">证据 →</RouterLink>
+          </p>
         </section>
 
         <section id="status">
@@ -89,6 +122,10 @@ const evidenceTarget = computed(() => {
           <h2>最终状态</h2>
           <p class="story-lead">{{ dossier.outcome }}</p>
           <p v-if="dossier.boundary">{{ dossier.boundary }}</p>
+          <p v-if="traceFor('status')" class="section-trace">
+            对应 <em>{{ traceFor('status')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('status')!.evidence }}</em> 条脱敏证据
+            <RouterLink :to="evidenceTarget">证据 →</RouterLink>
+          </p>
         </section>
 
         <footer class="project-next">
@@ -254,6 +291,43 @@ h3 {
   font-family: var(--serif);
   font-size: 17px;
   line-height: 2;
+}
+
+/* 段落追溯信封：衬线引语式批注，右对齐，数字微微加重。
+   与段落正文同源（serif），像编辑用铅笔在段落旁写的注释，
+   而非外挂数据标签。无断言的段落不渲染（v-if 控制）。 */
+.section-trace {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin: 20px 0 0;
+  font: italic 15px/1.6 var(--serif);
+  color: var(--muted);
+}
+
+.section-trace em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--red);
+  font-variant-numeric: tabular-nums;
+}
+
+.section-trace a {
+  align-self: center;
+  font: 10px var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--red);
+}
+
+/* 黑底段落里的追溯行用暖色，避免在深底上发灰 */
+.project-story__dark .section-trace {
+  color: #a99f91;
+}
+
+.project-story__dark .section-trace em {
+  color: var(--red-hi);
 }
 
 ol {

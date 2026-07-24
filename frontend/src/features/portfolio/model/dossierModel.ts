@@ -34,6 +34,8 @@ export interface Dossier {
   /** case 的 type（FEATURE/EVALUATION/...）；project 为 null */
   caseType: CaseType | null
   slug: string
+  /** claim.subjectId 引用的实体标识，用于段落追溯（project.id / case.id） */
+  subjectId: string
   code: string
   title: string
   summary: string
@@ -62,6 +64,7 @@ const SHARED_SECTIONS: DossierSection[] = [
 
 export function projectToDossier(
   project: {
+    id: string
     slug: string
     code: string
     title: string
@@ -84,6 +87,7 @@ export function projectToDossier(
     kind: 'PROJECT',
     caseType: null,
     slug: project.slug,
+    subjectId: project.id,
     code: project.code,
     title: project.title,
     summary: project.summary,
@@ -107,6 +111,7 @@ export function projectToDossier(
 
 export function caseToDossier(
   caseStudy: {
+    id: string
     slug: string
     code: string
     type: CaseType
@@ -128,6 +133,7 @@ export function caseToDossier(
     kind: 'CASE',
     caseType: caseStudy.type,
     slug: caseStudy.slug,
+    subjectId: caseStudy.id,
     code: caseStudy.code,
     title: caseStudy.title,
     summary: caseStudy.summary,
