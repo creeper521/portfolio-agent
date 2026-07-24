@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.adapter.model;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelPolicy;
+import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
@@ -162,16 +163,4 @@ public class ConversationalAgentConfiguration {
                 providerAccess);
     }
 
-    public static final class ConversationProviderAccess {
-
-        private final boolean allowed;
-
-        public ConversationProviderAccess(boolean allowed) {
-            this.allowed = allowed;
-        }
-
-        public boolean isAllowed() {
-            return allowed;
-        }
-    }
 }

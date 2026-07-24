@@ -1,10 +1,10 @@
 package com.portfolio.agent.answer.service;
 
-import com.portfolio.agent.answer.adapter.model.ConversationalAgentConfiguration;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationDraft;
 import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
+import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
 import com.portfolio.agent.answer.domain.ConversationWindow;
@@ -27,7 +27,7 @@ public final class ConversationalAgentRuntime {
     private final ConversationDraftValidator draftValidator;
     private final DynamicQuestionService questionService;
     private final DeterministicConversationFallback fallback;
-    private final ConversationalAgentConfiguration.ConversationProviderAccess providerAccess;
+    private final ConversationProviderAccess providerAccess;
 
     public ConversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
@@ -39,7 +39,7 @@ public final class ConversationalAgentRuntime {
             ConversationDraftValidator draftValidator,
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
-            ConversationalAgentConfiguration.ConversationProviderAccess providerAccess
+            ConversationProviderAccess providerAccess
     ) {
         this.knowledgeGateway = knowledgeGateway;
         this.windowManager = windowManager;
