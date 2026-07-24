@@ -14,10 +14,11 @@
 |---|---|
 | Content version | `2026-07-23.1` |
 | Benchmark suite version | `retrieval-benchmark-v2` |
-| Bundle hash | `sha256:e3b6dc1100b8355a3d32375999b9f0786427b1538e0c8022bb17f5b0a334c2f1` |
+| Verified runtime Bundle hash | `sha256:8fbaa4be3a7753020310a28f5b3451a9217746ba1563ef0755601a37bc2ea0c4` |
+| Snapshot `validFrom` | `2026-07-23` |
 | Policy version | `retrieval-policy-v1` |
 | Model descriptor hash | `sha256:9ff520c01576e44eb0eb07a420e50bfb7603a0471ebb7c4693b31726858fa37a` |
-| `comparison.json` SHA-256 | `C977D03A20212D3C860CE7F35D4C480EA1BA16E17280EBE0EC4C7C0C9489EE48` |
+| `comparison.json` SHA-256 | `EA0AD6194C96C35EABD5B9D48CA3AC0F4611482FF0A2D9670DA4CCEA8376D484` |
 
 模型为本地只读的 `BAAI/bge-small-zh-v1.5` 固定描述制品。模型目录、主机路径和模型二进制不进入 Git，也不写入报告产物。
 
@@ -49,7 +50,7 @@ Vector 对 `negative-injection-01` 和 `negative-privacy-contact-01` 返回了�
 | Vector | 8 | 0.7500 | 0.7500 | 0.7500 | 2/8 | 0 |
 | Hybrid | 8 | 1.0000 | 1.0000 | 1.0000 | 8/8 | 0 |
 
-Hit 和 MRR 衡量预期 Claim/Chunk 的排名；`Positive decision success` 还要求共享 Grounding Gate 最终返回 `SUFFICIENT`。因此 Keyword 虽然 Hit@5 为 1.0，仍只有 2/8 个正例通过最终决策；两类指标不能互相替代。
+Hit 和 MRR 衡量预期 Claim/Chunk 的排名；`Positive decision success` 还要求共享 Grounding Gate 最终返回 `SUFFICIENT`。因此 Keyword 虽然 Hit@5 为 1.0，仍只有 2/8 个正例通过最终决策；两类指标不能互相替代。机器报告已直接输出 `positiveDecisionSuccessCount` 与 `positiveDecisionSuccessRate`，上述 2/8、2/8、8/8 不再由文档人工推算。
 
 ### 3.2 分类别指标
 
@@ -140,15 +141,15 @@ C:\tools\apache-maven-3.9.9\bin\mvn.cmd -f backend/pom.xml package
 
 验证结果：
 
-- 后端：328 tests，0 failures，0 errors，6 skipped；
+- 后端：329 tests，0 failures，0 errors，6 skipped；
 - 前端单元/组件：26 test files，143 tests，全部通过；
 - 前端构建：109 modules transformed；
 - standalone privacy：241 files，通过；
 - standalone architecture：通过；
-- `verify-release.ps1`：通过，内部再次完成 328/6 后端测试、143 前端测试、真实模型比较、单 JAR 启动和 Playwright；
+- `verify-release.ps1`：通过，内部再次完成 329/6 后端测试、143 前端测试、真实模型比较、单 JAR 启动和 Playwright；
 - Playwright：32 passed，4 skipped；跳过项为现有套件的预期平台/视口条件；
 - Docker CLI 不可用，脚本按现有契约给出 warning，未执行 Docker build check，整体 release verification 仍通过；
-- 最终 Maven package：328 tests，0 failures，0 errors，6 skipped，构建成功。
+- 最终 Maven package：329 tests，0 failures，0 errors，6 skipped，构建成功。
 
 `<LOCAL_MODEL_DIR>` 表示本机只读模型制品目录；实际绝对路径已按公开报告隐私规则脱敏，其余参数与执行命令一致。
 
