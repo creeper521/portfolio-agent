@@ -2,6 +2,10 @@
 
 > **Status (2026-07-22):** A/B, the default-disabled C1 model-expression boundary, C2a local public retrieval, C2 tools/cited multi-turn, and only the C3 Model Provider Registry are implemented. Tool Registry, Hook, Orchestrator, multi-Agent, DurableTask, and persistent sessions remain unadmitted in `docs/00-文档状态索引.md`.
 
+Project and Case answer contexts are explicit and mutually exclusive. Case retrieval
+chunks, tool calls, and context envelopes carry stable `caseSlugs`; they never widen
+implicitly into a related Project or accept mixed Project/Case claims.
+
 ## Public data boundary
 
 The deployed application reads only the reviewed public snapshot packaged with the backend. The private knowledge base, raw daily reports, candidate snapshots, internal screenshots, credentials, and privacy reports must never be included in runtime artifacts.

@@ -9,9 +9,9 @@
 
 当前项目已经从“一个确定性问答的 V0”扩展为一个可打包交付的公开实习作品集 Agent：前端具备六个正式路由和页面内存工作台，后端具备公开内容 API、严格回答契约、内容治理、可选模型表达、本地混合检索、固定只读工具和引用式多轮，并提供单 JAR、Docker 与完整发布门禁。
 
-但它仍不是完整 V1。模型表达与本地检索默认关闭；Case 前端列表/详情和视觉、Agent Case 检索/上下文/可执行预设、生产部署与线上验收仍未完成；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
+但它仍不是完整 V1。模型表达与本地检索默认关闭；Case 前端列表/详情和视觉、前后端联调、生产部署与线上验收仍未完成；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
 
-内容准备层已经登记 68 项私有资产。首批 SQL 主线扩充、多语言图片修复、角色重置工具和 CodeGraph 评测已通过人工 Approval，发布为 schema 3.0、内容版本 `2026-07-23.1`；后端可读取和返回 Case 数据，但前端和 Agent Case 执行边界保持不变。
+内容准备层已经登记 68 项私有资产。首批 SQL 主线扩充、多语言图片修复、角色重置工具和 CodeGraph 评测已通过人工 Approval，发布为 schema 3.0、内容版本 `2026-07-23.1`；后端已围绕 Case 提供预设回答、主体隔离检索、固定工具和引用式上下文，前端仍待接入。
 
 ## 2. 已实现功能
 
@@ -67,7 +67,7 @@
 
 ### 2.7 C2b：固定只读工具与引用式多轮
 
-- 已实现 `c2b-tools-v1` 固定策略和六类封闭工具：`GET_PROJECT`、`GET_CLAIMS`、`GET_EVIDENCE_FOR_CLAIMS`、`GET_TIMELINE`、`SEARCH_PUBLIC_CONTENT`、`COMPARE_PROJECTS`。
+- 已实现 `c2b-tools-v2` 固定策略和七类封闭工具：`GET_PROJECT`、`GET_CASE`、`GET_CLAIMS`、`GET_EVIDENCE_FOR_CLAIMS`、`GET_TIMELINE`、`SEARCH_PUBLIC_CONTENT`、`COMPARE_PROJECTS`。
 - 工具只读取同一个公开快照，最多执行 4 次；未知、跨项目、跨版本、未批准、比较样本不足或超预算结果失败关闭。
 - 显式追问只传 content version、bundle hash、Project/Claim/Preset/Section 稳定 ID 和封闭 `FollowUpIntent`，不传历史问答正文。
 - 每轮重新验证引用；内容版本更新时基于当前版本回答并提示，引用失效时返回边界结果。
@@ -104,7 +104,7 @@
 | C2b 项目比较 | 工具实现并能在多项目时比较 | 当前只有 1 个公开项目，因此真实比较请求会安全返回信息不足 |
 | 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；首批 CaseStudy 内容已由明确的人类审核者批准并发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
 | 匿名观测 | 领域事件、耗时桶和 best-effort 发布端口已实现 | 当前生产适配器是 Noop，没有指标后端、告警或运营面板 |
-| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略；公开 Bundle 有 6 个 QuestionPreset | 3 个 Project preset 进入现有项目/Agent 能力；3 个 Case-only preset 仅由公开 API 返回且 Agent 尚不执行，角色不会解锁不同事实或未发布问题 |
+| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略；公开 Bundle 的 6 个 QuestionPreset 均可由 Agent 后端执行 | Case-only preset 的前端入口与联调仍待完成；角色不会解锁不同事实或未发布问题 |
 | 无障碍与视觉收口 | 键盘分栏、抽屉、reduced-motion 用例和主要 loading/error 状态已有覆盖 | 历史设计审核仍记录焦点管理、完整语义和更广 WCAG 人工验收尾项，尚无“全面合规”结论 |
 
 ## 4. 尚未实现或未准入
@@ -120,7 +120,6 @@
 
 ### 4.2 Agent 与扩展架构
 
-- Agent 对 CaseStudy 的检索语料、ContextEnvelope 上下文组装、只读工具支持和 Case 问题预设执行。
 - 动态 Tool Registry、动态插件安装/发现/热更新和第三方工具授权。
 - 通用 Hook、Orchestrator、工作流 DSL、DurableTask、任务恢复、调度和队列。
 - 多 Agent 协作、委派、共享记忆和 Agent 间通信。
@@ -138,7 +137,7 @@
 ## 5. 下一步优先级建议
 
 1. **完善 Case 前端。** 在 Agent 页面重构稳定后，实现 Case 列表/详情、数据映射、错误状态与统一视觉。
-2. **扩展 Agent Case 能力。** 单独设计并实现 Case 检索、上下文组装、只读工具和可执行问题预设，不能因 API 已返回数据而视为可执行。
+2. **联调 Agent Case 能力。** 前端按 `caseSlug`/`caseSlugs` 契约接入 Case 预设与追问动作，并完成浏览器隐私、刷新清空和错误边界验收。
 3. **继续扩真实公开内容。** 按治理流程审核更多 APPROVED Evidence 和可执行 QuestionPreset，验证动态页面、检索与比较工具的价值。
 4. **完成生产部署与线上验收。** 功能和视觉完整后再部署，保留 API、页面、隐私和回滚证据。
 5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。

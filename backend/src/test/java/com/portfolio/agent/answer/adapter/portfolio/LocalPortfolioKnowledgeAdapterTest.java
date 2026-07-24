@@ -187,7 +187,7 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     @Test
-    void excludesCaseOnlyAndMixedCaseTimelineFromAgentContent() {
+    void includesCaseOnlyTimelineAndExcludesMixedSubjectTimeline() {
         QuestionDefinition projectQuestion = question(
                 "question-project-sql-audit",
                 "project-1"
@@ -212,7 +212,10 @@ class LocalPortfolioKnowledgeAdapterTest {
 
         List<AnswerTimelineEvent> timeline = adapter.getContent().getTimeline();
 
-        assertThat(timeline).isEmpty();
+        assertThat(timeline).extracting(AnswerTimelineEvent::getId)
+                .containsExactly("timeline-case-only");
+        assertThat(timeline.getFirst().getProjectSlugs()).isEmpty();
+        assertThat(timeline.getFirst().getCaseSlugs()).containsExactly("test-role-reset");
         assertThat(adapter.getContent().getCapabilities().isPresetAnswers()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isReadOnlyTools()).isTrue();
         assertThat(adapter.getContent().getCapabilities().isMultiTurnReferences()).isTrue();

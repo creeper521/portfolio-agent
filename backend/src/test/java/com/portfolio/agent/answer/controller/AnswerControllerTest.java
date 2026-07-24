@@ -84,6 +84,57 @@ class AnswerControllerTest {
     }
 
     @Test
+    void returnsCaseTimelineForCurrentStatusFollowUp() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-case-status",
+                                  "question": "查看当前状态",
+                                  "context": {
+                                    "caseSlug": "codegraph-evaluation",
+                                    "audienceRole": "GUEST",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  },
+                                  "contextEnvelope": {
+                                    "previousContentVersion": "2026-07-23.1",
+                                    "projectSlugs": [],
+                                    "caseSlugs": ["codegraph-evaluation"],
+                                    "questionPresetId": "question-case-codegraph-overview",
+                                    "referencedClaimIds": ["claim-case-codegraph-narrowing"],
+                                    "followUpIntent": "CURRENT_STATUS"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.contextEnvelope.caseSlugs[0]")
+                        .value("codegraph-evaluation"));
+    }
+
+    @Test
+    void returnsBoundaryForUnknownWellFormedCaseReference() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-missing-case",
+                                  "question": "介绍案例",
+                                  "context": {
+                                    "caseSlug": "missing-case",
+                                    "audienceRole": "GUEST",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("BOUNDARY"))
+                .andExpect(jsonPath("$.contextEnvelope").doesNotExist());
+    }
+
+    @Test
     void returnsFiveSectionAnswerAndEvidenceForCanonicalQuestion() throws Exception {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -243,16 +294,15 @@ class AnswerControllerTest {
     }
 
     @Test
-    void returnsNotFoundWhenAnswerCaseDoesNotExist() throws Exception {
+    void returnsBoundaryWhenAnswerCaseDoesNotExist() throws Exception {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"turnId":"turn-missing-case","question":"介绍案例","context":{"caseSlug":"missing-case","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
                                 """))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"))
-                .andExpect(jsonPath("$.message")
-                        .value("公开案例不存在: missing-case"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("BOUNDARY"))
+                .andExpect(jsonPath("$.contextEnvelope").doesNotExist());
     }
 
     @Test

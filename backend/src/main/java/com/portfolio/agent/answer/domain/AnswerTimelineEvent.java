@@ -12,8 +12,33 @@ public final class AnswerTimelineEvent {
     private final String action;
     private final String impact;
     private final List<String> projectSlugs;
+    private final List<String> caseSlugs;
     private final List<String> claimIds;
     private final List<String> evidenceIds;
+
+    public AnswerTimelineEvent(
+            String id,
+            String dateLabel,
+            String title,
+            String problem,
+            String action,
+            String impact,
+            List<String> projectSlugs,
+            List<String> caseSlugs,
+            List<String> claimIds,
+            List<String> evidenceIds
+    ) {
+        this.id = id;
+        this.dateLabel = dateLabel;
+        this.title = title;
+        this.problem = problem;
+        this.action = action;
+        this.impact = impact;
+        this.projectSlugs = List.copyOf(projectSlugs);
+        this.caseSlugs = List.copyOf(caseSlugs);
+        this.claimIds = List.copyOf(claimIds);
+        this.evidenceIds = List.copyOf(evidenceIds);
+    }
 
     public AnswerTimelineEvent(
             String id,
@@ -26,15 +51,8 @@ public final class AnswerTimelineEvent {
             List<String> claimIds,
             List<String> evidenceIds
     ) {
-        this.id = id;
-        this.dateLabel = dateLabel;
-        this.title = title;
-        this.problem = problem;
-        this.action = action;
-        this.impact = impact;
-        this.projectSlugs = List.copyOf(projectSlugs);
-        this.claimIds = List.copyOf(claimIds);
-        this.evidenceIds = List.copyOf(evidenceIds);
+        this(id, dateLabel, title, problem, action, impact, projectSlugs,
+                List.of(), claimIds, evidenceIds);
     }
 
     public String getId() { return id; }
@@ -44,6 +62,7 @@ public final class AnswerTimelineEvent {
     public String getAction() { return action; }
     public String getImpact() { return impact; }
     public List<String> getProjectSlugs() { return projectSlugs; }
+    public List<String> getCaseSlugs() { return caseSlugs; }
     public List<String> getClaimIds() { return claimIds; }
     public List<String> getEvidenceIds() { return evidenceIds; }
 
@@ -62,6 +81,7 @@ public final class AnswerTimelineEvent {
                 && Objects.equals(action, that.action)
                 && Objects.equals(impact, that.impact)
                 && Objects.equals(projectSlugs, that.projectSlugs)
+                && Objects.equals(caseSlugs, that.caseSlugs)
                 && Objects.equals(claimIds, that.claimIds)
                 && Objects.equals(evidenceIds, that.evidenceIds);
     }
@@ -69,6 +89,6 @@ public final class AnswerTimelineEvent {
     @Override
     public int hashCode() {
         return Objects.hash(id, dateLabel, title, problem, action, impact,
-                projectSlugs, claimIds, evidenceIds);
+                projectSlugs, caseSlugs, claimIds, evidenceIds);
     }
 }

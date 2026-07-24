@@ -5,13 +5,14 @@ import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.QuestionResolution;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.dto.request.AnswerRequest;
 import com.portfolio.agent.answer.engine.QuestionNormalizer;
-import com.portfolio.agent.answer.exception.AnswerCaseNotFoundException;
 import com.portfolio.agent.answer.exception.AnswerProjectNotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.List;
 
 @Component
 public final class QuestionResolver {
@@ -45,7 +46,7 @@ public final class QuestionResolver {
                     .filter(candidate -> candidate.getSlug()
                             .equals(request.getContext().getCaseSlug()))
                     .findFirst()
-                    .orElseThrow(() -> new AnswerCaseNotFoundException(
+                    .orElseGet(() -> unavailableCase(
                             request.getContext().getCaseSlug()));
         }
         return content.getProjects().stream()
@@ -54,6 +55,25 @@ public final class QuestionResolver {
                 .findFirst()
                 .orElseThrow(() -> new AnswerProjectNotFoundException(
                         request.getContext().getProjectSlug()));
+    }
+
+    private AnswerKnowledge unavailableCase(String slug) {
+        return new AnswerKnowledge(
+                AnswerSubjectType.CASE,
+                slug,
+                "案例未公开",
+                "当前公开内容中没有可用的案例。",
+                "",
+                List.of(),
+                "",
+                List.of(),
+                List.of(),
+                "",
+                "",
+                "UNAVAILABLE",
+                List.of(),
+                List.of(),
+                List.of());
     }
 
     private AnswerQuestion findPreset(AnswerKnowledge project, AnswerRequest request) {

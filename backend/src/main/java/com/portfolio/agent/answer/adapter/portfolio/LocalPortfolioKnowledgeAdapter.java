@@ -136,8 +136,11 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .collect(Collectors.toUnmodifiableMap(
                         ProjectProfile::getId,
                         project -> project));
-        Map<String, Claim> projectClaimsById = snapshot.getClaims().stream()
-                .filter(claim -> claim.getSubjectType() == ClaimSubjectType.PROJECT)
+        Map<String, CaseStudy> casesById = snapshot.getCases().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        CaseStudy::getId,
+                        caseStudy -> caseStudy));
+        Map<String, Claim> claimsById = snapshot.getClaims().stream()
                 .collect(Collectors.toUnmodifiableMap(Claim::getId, claim -> claim));
         Set<String> approvedEvidenceIds = snapshot.getEvidence().stream()
                 .filter(evidence -> evidence.getPublicStatus() == EvidenceStatus.APPROVED)
@@ -145,18 +148,25 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .map(EvidenceRecord::getId)
                 .collect(Collectors.toUnmodifiableSet());
         return snapshot.getTimeline().stream()
-                .filter(event -> !event.getProjectIds().isEmpty())
-                .filter(event -> event.getCaseIds().isEmpty())
+                .filter(event -> event.getProjectIds().isEmpty()
+                        != event.getCaseIds().isEmpty())
                 .filter(event -> projectsById.keySet().containsAll(event.getProjectIds()))
+                .filter(event -> casesById.keySet().containsAll(event.getCaseIds()))
                 .filter(event -> event.getClaimIds().stream().allMatch(claimId -> {
-                    Claim claim = projectClaimsById.get(claimId);
-                    return claim != null && event.getProjectIds().contains(claim.getSubjectId());
+                    Claim claim = claimsById.get(claimId);
+                    return claim != null && (claim.getSubjectType() == ClaimSubjectType.PROJECT
+                            ? event.getProjectIds().contains(claim.getSubjectId())
+                            : event.getCaseIds().contains(claim.getSubjectId()));
                 }))
                 .filter(event -> approvedEvidenceIds.containsAll(event.getEvidenceIds()))
                 .filter(event -> event.getEvidenceIds().stream().allMatch(evidenceId ->
                         event.getProjectIds().stream()
                                 .map(projectsById::get)
-                                .anyMatch(project -> project.getEvidenceIds().contains(evidenceId))))
+                                .anyMatch(project -> project.getEvidenceIds().contains(evidenceId))
+                        || event.getCaseIds().stream()
+                                .map(casesById::get)
+                                .anyMatch(caseStudy ->
+                                        caseStudy.getEvidenceIds().contains(evidenceId))))
                 .map(event -> new AnswerTimelineEvent(
                         event.getId(),
                         event.getDateLabel(),
@@ -167,6 +177,10 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         event.getProjectIds().stream()
                                 .map(projectsById::get)
                                 .map(ProjectProfile::getSlug)
+                                .toList(),
+                        event.getCaseIds().stream()
+                                .map(casesById::get)
+                                .map(CaseStudy::getSlug)
                                 .toList(),
                         event.getClaimIds(),
                         event.getEvidenceIds()))
@@ -188,7 +202,8 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .collect(Collectors.toUnmodifiableMap(
                         com.portfolio.agent.portfolio.domain.RagDocument::getChunkId,
                         item -> new AnswerRetrievalChunk(
-                                item.getChunkId(), item.getProjectSlugs(), item.getClaimIds(),
+                                item.getChunkId(), item.getProjectSlugs(), item.getCaseSlugs(),
+                                item.getClaimIds(),
                                 item.getTopics(), item.getText().length())));
         return new AnswerRetrievalCorpus(
                 keywordIndex, source.getVectorIndex().getVectors(), chunks,

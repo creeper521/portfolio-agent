@@ -90,9 +90,12 @@ public final class LocalPublicKnowledgeTools implements PublicKnowledgeTools {
             List<AnswerKnowledge> projects
     ) {
         Set<String> projectSlugs = Set.copyOf(call.getProjectSlugs());
+        Set<String> caseSlugs = Set.copyOf(call.getCaseSlugs());
         Set<String> claimIds = Set.copyOf(call.getClaimIds());
         List<AnswerTimelineEvent> timeline = content.getTimeline().stream()
-                .filter(event -> event.getProjectSlugs().stream().anyMatch(projectSlugs::contains))
+                .filter(event -> event.getProjectSlugs().stream()
+                                .anyMatch(projectSlugs::contains)
+                        || event.getCaseSlugs().stream().anyMatch(caseSlugs::contains))
                 .filter(event -> claimIds.isEmpty()
                         || event.getClaimIds().stream().anyMatch(claimIds::contains))
                 .toList();

@@ -11,6 +11,7 @@ import com.portfolio.agent.answer.domain.AnswerMateriality;
 import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
 import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
 import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalDecision;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
@@ -109,6 +110,38 @@ class LocalRetrievalCoordinatorTest {
 
         assertThat(decision.getType()).isEqualTo(RetrievalDecisionType.SUFFICIENT);
         assertThat(decision.getSelectedChunkIds()).containsExactly("chunk-1");
+    }
+
+    @Test
+    void appliesCaseMetadataWithoutRecallingProjectChunks() {
+        AnswerKeywordIndex keywordIndex = new AnswerKeywordIndex(
+                2, 2.0,
+                List.of(
+                        new AnswerKeywordIndex.DocumentEntry(
+                                "project-chunk", 2, Map.of("图谱", 2)),
+                        new AnswerKeywordIndex.DocumentEntry(
+                                "case-chunk", 2, Map.of("图谱", 1))),
+                Map.of("图谱", 2));
+        AnswerRetrievalCorpus mixedCorpus = new AnswerRetrievalCorpus(
+                keywordIndex,
+                Map.of(),
+                Map.of(
+                        "project-chunk", new AnswerRetrievalChunk(
+                                "project-chunk", List.of("sql-audit"), List.of(),
+                                List.of("project-claim"), List.of("OTHER"), 100),
+                        "case-chunk", new AnswerRetrievalChunk(
+                                "case-chunk", List.of(), List.of("codegraph-evaluation"),
+                                List.of("claim-1"), List.of("DELIVERY"), 120)));
+
+        RetrievalDecision decision = coordinator(localText -> {
+            throw new AssertionError("keyword-only must not embed");
+        }).retrieve(
+                "图谱", "codegraph-evaluation", AnswerSubjectType.CASE,
+                mixedCorpus, claims(), evidence(),
+                RetrievalMode.KEYWORD_ONLY, RetrievalPolicy.firstRelease());
+
+        assertThat(decision.getType()).isEqualTo(RetrievalDecisionType.SUFFICIENT);
+        assertThat(decision.getSelectedChunkIds()).containsExactly("case-chunk");
     }
 
     private LocalRetrievalCoordinator coordinator(LocalEmbeddingPort port) {

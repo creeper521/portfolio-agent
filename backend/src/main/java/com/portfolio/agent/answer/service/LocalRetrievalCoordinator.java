@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.domain.RetrievalCandidate;
 import com.portfolio.agent.answer.domain.RetrievalDecision;
 import com.portfolio.agent.answer.domain.RetrievalMode;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 
 import java.util.List;
@@ -49,10 +50,26 @@ public final class LocalRetrievalCoordinator {
             RetrievalMode requestedMode,
             RetrievalPolicy policy
     ) {
+        return retrieve(localQueryText, projectSlug, AnswerSubjectType.PROJECT,
+                corpus, claims, evidence, requestedMode, policy);
+    }
+
+    public RetrievalDecision retrieve(
+            String localQueryText,
+            String subjectSlug,
+            AnswerSubjectType subjectType,
+            AnswerRetrievalCorpus corpus,
+            List<AnswerClaimProjection> claims,
+            List<AnswerEvidence> evidence,
+            RetrievalMode requestedMode,
+            RetrievalPolicy policy
+    ) {
         NormalizedRetrievalQuery query = normalizer.normalize(localQueryText);
         Map<String, com.portfolio.agent.answer.domain.AnswerRetrievalChunk> projectChunks =
                 corpus.getChunks().entrySet().stream()
-                        .filter(entry -> entry.getValue().getProjectSlugs().contains(projectSlug))
+                        .filter(entry -> subjectType == AnswerSubjectType.PROJECT
+                                ? entry.getValue().getProjectSlugs().contains(subjectSlug)
+                                : entry.getValue().getCaseSlugs().contains(subjectSlug))
                         .collect(Collectors.toUnmodifiableMap(
                                 Map.Entry::getKey, Map.Entry::getValue));
         Set<String> allowedChunkIds = projectChunks.keySet();

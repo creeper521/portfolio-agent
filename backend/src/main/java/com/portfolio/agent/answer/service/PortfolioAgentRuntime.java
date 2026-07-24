@@ -220,9 +220,21 @@ public final class PortfolioAgentRuntime {
             AnswerRequest request
     ) {
         try {
+            if (resolution.getProject().getSubjectType()
+                    == com.portfolio.agent.answer.domain.AnswerSubjectType.PROJECT) {
+                return retrievalCoordinator.retrieve(
+                        request.getQuestion(),
+                        resolution.getProject().getSlug(),
+                        content.getRetrievalCorpus().orElseThrow(),
+                        resolution.getProject().getClaims(),
+                        resolution.getProject().getEvidence(),
+                        retrievalCapability.getMode(),
+                        retrievalPolicy);
+            }
             return retrievalCoordinator.retrieve(
                     request.getQuestion(),
                     resolution.getProject().getSlug(),
+                    resolution.getProject().getSubjectType(),
                     content.getRetrievalCorpus().orElseThrow(),
                     resolution.getProject().getClaims(),
                     resolution.getProject().getEvidence(),

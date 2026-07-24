@@ -113,7 +113,7 @@ class PortfolioAgentRuntimeModelPrivacyTest {
                 .contains("Describe the approved project")
                 .doesNotContain(
                         visitorText, turnId, requestMarker, "requestId", "turnId",
-                        "contextEnvelope", "previousContentVersion", "projectSlugs",
+                        "contextEnvelope", "previousContentVersion", "projectSlugs", "caseSlugs",
                         "referencedClaimIds", "selectedSectionType", "toolPlan",
                         "toolResult", "messages", "previousQuestion", "previousAnswer");
     }
