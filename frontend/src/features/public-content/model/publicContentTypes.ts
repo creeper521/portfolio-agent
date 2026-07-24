@@ -1,6 +1,14 @@
 export type AudienceRole = 'INTERVIEWER' | 'MENTOR' | 'HR' | 'GUEST'
 export type ProjectStatus = 'DELIVERED' | 'IN_PROGRESS' | 'PROTOTYPE' | 'LEARNING_ONLY'
 export type ContributionType = 'INDEPENDENT' | 'PRIMARY' | 'COLLABORATIVE' | 'OBSERVED_LEARNING'
+export type AchievementStatus =
+  | 'DELIVERED'
+  | 'IMPLEMENTED_TESTED'
+  | 'PROTOTYPE'
+  | 'DESIGNED'
+  | 'LEARNING'
+  | 'PLANNED'
+  | 'UNKNOWN'
 
 export interface PublicOwner {
   name: string
@@ -29,7 +37,7 @@ export interface PublicClaim {
   category: 'BACKGROUND' | 'RESPONSIBILITY' | 'TECHNICAL_DECISION' | 'IMPLEMENTATION' | 'VERIFICATION' | 'OUTCOME' | 'LIMITATION' | 'LEARNING' | 'REFLECTION'
   statement: string
   detail: string
-  achievementStatus: 'DELIVERED' | 'IMPLEMENTED_TESTED' | 'PROTOTYPE' | 'DESIGNED' | 'LEARNING' | 'PLANNED' | 'UNKNOWN'
+  achievementStatus: AchievementStatus
   contributionType: ContributionType
   verificationBasis: 'EVIDENCE_SUPPORTED' | 'SELF_DECLARED' | 'INFERRED' | 'UNSUPPORTED'
   verificationStatus: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED'
@@ -44,6 +52,27 @@ export interface PublicClaimEvidenceLink {
   evidenceId: string
   supportType: 'DIRECT' | 'CORROBORATING' | 'CONTEXTUAL'
   scope: string
+}
+
+export type CaseType = 'FEATURE' | 'EVALUATION' | 'BUGFIX'
+
+export interface PublicCase {
+  slug: string
+  code: string
+  type: CaseType
+  title: string
+  summary: string
+  problem: string
+  actions: string[]
+  decisions: string[]
+  verification: string[]
+  outcome: string
+  limitations: string[]
+  achievementStatus: AchievementStatus
+  contributionType: ContributionType
+  projectSlug: string | null
+  evidence: PublicEvidence[]
+  suggestedQuestions: string[]
 }
 
 export interface PublicProject {
@@ -90,6 +119,7 @@ export interface PublicPortfolio {
   publishedAt: string
   owner: PublicOwner
   projects: PublicProject[]
+  cases: PublicCase[]
   claims: PublicClaim[]
   claimEvidenceLinks: PublicClaimEvidenceLink[]
   evidence: PublicEvidence[]

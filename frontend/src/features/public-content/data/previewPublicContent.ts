@@ -54,6 +54,109 @@ const deliveryEvidence = {
   projectSlugs: ['sql-audit'],
 }
 
+// —— 两个代表性 Case：一个功能修复（已交付），一个工具评测（原型） ——
+// 对应生产 portfolio.json 的 case-multilingual-upload 与 case-codegraph-evaluation，
+// 用于覆盖"统一案卷索引"中 DELIVERED 与 EVALUATION 两种类型。
+const multilingualEvidence = {
+  id: 'evidence-case-multilingual',
+  code: 'E-03',
+  title: '多语言图片保留实现与回归证据集',
+  type: 'COLLECTION' as const,
+  periodStart: '2026-04-29',
+  periodEnd: '2026-06-16',
+  sourceCount: 2,
+  summary: '由实现记录和顺序上传回归记录脱敏汇总，支持既有语言映射保留与德语、法语分次上传后的共存查询。',
+  claimIds: ['claim-case-multilingual-preserve'],
+  publicStatus: 'APPROVED' as const,
+  projectSlugs: [],
+}
+
+const multilingualCase = {
+  slug: 'multilingual-image-preservation',
+  code: 'CASE-01',
+  type: 'FEATURE' as const,
+  title: '多语言图片上传结果保留修复',
+  summary: '修复后续语言上传覆盖既有语言映射的问题。',
+  problem: '分次上传不同语言图片时，后一次结果会替换此前已经可见的语言集合。',
+  actions: [
+    '读取已经持久化的语言映射。',
+    '只合并本次请求中实际上传且有效的语言。',
+    '保留未被本次上传替换的既有语言结果。',
+  ],
+  decisions: [
+    '使用既有持久化映射与本次有效上传的并集作为最终结果。',
+    '无效或缺少图片的语言不写入新映射。',
+  ],
+  verification: [
+    '第一次上传德语图片。',
+    '第一次查询确认德语图片可用。',
+    '第二次上传法语图片。',
+    '第二次查询确认德语与法语图片同时可用。',
+  ],
+  outcome: '按"德语上传、德语查询、法语上传、德语与法语查询"的顺序完成回归，后续上传不再删除此前语言结果。',
+  limitations: [
+    '不公开内部模块、数据结构、渠道、区域和存储标识。',
+    '公开材料只描述行为与验证，不展示原始代码、截图或内部地址。',
+  ],
+  achievementStatus: 'DELIVERED' as const,
+  contributionType: 'PRIMARY' as const,
+  projectSlug: null,
+  evidence: [multilingualEvidence],
+  suggestedQuestions: [
+    '多语言图片分次上传为什么会覆盖既有结果，最终如何修复并验证？',
+  ],
+}
+
+const codegraphEvidence = {
+  id: 'evidence-case-codegraph',
+  code: 'E-05',
+  title: '代码图谱端到端评测报告集',
+  type: 'COLLECTION' as const,
+  periodStart: '2026-05-25',
+  periodEnd: '2026-05-26',
+  sourceCount: 3,
+  summary: '由部署与测评攻略、工具提效测试和端到端实战报告脱敏汇总，支持图谱导航收益、失效边界与组合复核决策。',
+  claimIds: ['claim-case-codegraph-narrowing'],
+  publicStatus: 'APPROVED' as const,
+  projectSlugs: [],
+}
+
+const codegraphCase = {
+  slug: 'codegraph-evaluation',
+  code: 'CASE-03',
+  type: 'EVALUATION' as const,
+  title: '代码图谱工具端到端评测',
+  summary: '通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。',
+  problem: '大型代码库中的符号定位与关系追踪成本较高，但图谱结果并不总能覆盖动态或间接关系。',
+  actions: [
+    '建立精确符号与全文符号检索样本。',
+    '执行两组工具任务并记录命中、噪声和遗漏。',
+    '对方法引用、匿名函数、依赖注入、事件分发和重名符号进行失效分析。',
+  ],
+  decisions: [
+    '使用代码图谱进行范围收窄和批量导航。',
+    '关键结论继续用文本搜索与源码阅读做精确复核。',
+    '不把局部样本结果推广为通用效率结论。',
+  ],
+  verification: [
+    '符号检索在选定样本中能够缩小代码定位范围。',
+    '间接关系和重名符号场景存在漏报或噪声。',
+    '组合工作流同时保留图谱导航和文本、源码精确复核。',
+  ],
+  outcome: '形成以图谱收窄范围、再用文本搜索和源码阅读复核的组合工作流与保守使用边界。',
+  limitations: [
+    '当前状态为原型评测，不公开原始项目名称、仓库规模、内部符号和源码样本。',
+    '评测结论只作定性说明，不提供精确效率指标或普遍生产力结论。',
+  ],
+  achievementStatus: 'PROTOTYPE' as const,
+  contributionType: 'PRIMARY' as const,
+  projectSlug: null,
+  evidence: [codegraphEvidence],
+  suggestedQuestions: [
+    '代码图谱评测发现了哪些收益、失效边界和组合使用策略？',
+  ],
+}
+
 export const previewPublicContent: PublicPortfolio = {
   contentVersion: '2026-07-21.1',
   runtimeBundleHash: 'sha256:preview-runtime',
@@ -64,6 +167,7 @@ export const previewPublicContent: PublicPortfolio = {
     summary: '我关注真实工程问题的拆解、实现与验证，并用可追溯证据说明自己的贡献。',
   },
   projects: [sqlAuditProject],
+  cases: [multilingualCase, codegraphCase],
   claims: [
     {
       id: 'claim-sql-audit-delivered',
@@ -80,6 +184,36 @@ export const previewPublicContent: PublicPortfolio = {
       topics: ['DELIVERY'],
       audiencePriorities: { INTERVIEWER: 100, MENTOR: 100, HR: 80, GUEST: 80 },
     },
+    {
+      id: 'claim-case-multilingual-preserve',
+      subjectType: 'PROJECT',
+      subjectId: 'case-multilingual-upload',
+      category: 'IMPLEMENTATION',
+      statement: '后续语言图片上传会合并并保留既有语言结果。',
+      detail: '最终映射由已持久化语言与本次有效上传语言合并得到。',
+      achievementStatus: 'DELIVERED',
+      contributionType: 'PRIMARY',
+      verificationBasis: 'EVIDENCE_SUPPORTED',
+      verificationStatus: 'VERIFIED',
+      materiality: 'KEY',
+      topics: ['IMPLEMENTATION', 'MULTILINGUAL_MEDIA'],
+      audiencePriorities: { INTERVIEWER: 100, MENTOR: 100, HR: 70, GUEST: 70 },
+    },
+    {
+      id: 'claim-case-codegraph-narrowing',
+      subjectType: 'PROJECT',
+      subjectId: 'case-codegraph-evaluation',
+      category: 'TECHNICAL_DECISION',
+      statement: '代码图谱适合用于收窄检索范围和批量导航。',
+      detail: '该结论来自选定符号检索样本与工具任务，只作定性说明。',
+      achievementStatus: 'PROTOTYPE',
+      contributionType: 'PRIMARY',
+      verificationBasis: 'EVIDENCE_SUPPORTED',
+      verificationStatus: 'VERIFIED',
+      materiality: 'KEY',
+      topics: ['EVALUATION', 'CODE_NAVIGATION'],
+      audiencePriorities: { INTERVIEWER: 100, MENTOR: 100, HR: 70, GUEST: 70 },
+    },
   ],
   claimEvidenceLinks: [
     {
@@ -89,8 +223,22 @@ export const previewPublicContent: PublicPortfolio = {
       supportType: 'DIRECT',
       scope: '证明核心版本已经交付并形成使用文档；不证明长期生产效果。',
     },
+    {
+      id: 'link-case-multilingual-preserve-e03',
+      claimId: 'claim-case-multilingual-preserve',
+      evidenceId: 'evidence-case-multilingual',
+      supportType: 'DIRECT',
+      scope: '支持既有语言映射与本次有效上传合并的实现事实。',
+    },
+    {
+      id: 'link-case-codegraph-narrowing-e05',
+      claimId: 'claim-case-codegraph-narrowing',
+      evidenceId: 'evidence-case-codegraph',
+      supportType: 'DIRECT',
+      scope: '仅支持选定样本中图谱收窄范围和批量导航的定性结论。',
+    },
   ],
-  evidence: [deliveryEvidence],
+  evidence: [deliveryEvidence, multilingualEvidence, codegraphEvidence],
   timeline: [
     {
       id: 'timeline-sql-audit-delivery',
@@ -101,6 +249,26 @@ export const previewPublicContent: PublicPortfolio = {
       impact: '形成已部署的核心版本、使用文档和一组经过脱敏审核的交付证据。',
       projectSlugs: ['sql-audit'],
       evidenceIds: ['sql-audit-delivery-set'],
+    },
+    {
+      id: 'timeline-case-multilingual-delivery',
+      dateLabel: '2026.04—06',
+      title: '多语言图片顺序上传修复与回归',
+      problem: '后续语言上传会覆盖已有语言映射。',
+      action: '合并既有映射与本次有效上传，并按德语、法语顺序完成回归。',
+      impact: '分次上传后可同时查询德语和法语结果。',
+      projectSlugs: [],
+      evidenceIds: ['evidence-case-multilingual'],
+    },
+    {
+      id: 'timeline-case-codegraph-evaluation',
+      dateLabel: '2026.05',
+      title: '代码图谱端到端评测',
+      problem: '图谱检索的适用收益和动态关系失效边界需要通过真实任务验证。',
+      action: '执行符号检索样本和两组工具任务，记录导航收益、噪声与遗漏。',
+      impact: '形成图谱收窄范围、文本搜索与源码阅读复核的组合决策，答案质量仍需人工复核。',
+      projectSlugs: [],
+      evidenceIds: ['evidence-case-codegraph'],
     },
   ],
   questionPresets: [

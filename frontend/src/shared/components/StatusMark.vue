@@ -11,6 +11,12 @@ const labels: Record<string, string> = {
   COLLABORATIVE: '协作完成',
   OBSERVED_LEARNING: '观察学习',
   APPROVED: '已通过公开审查',
+  // AchievementStatus（case 用）
+  IMPLEMENTED_TESTED: '已实现并测试',
+  DESIGNED: '已完成设计',
+  LEARNING: '学习记录',
+  PLANNED: '已规划',
+  UNKNOWN: '状态未定',
 }
 </script>
 

@@ -35,7 +35,23 @@ describe('ProjectPage', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('该项目尚未公开')
+    expect(wrapper.text()).toContain('该案卷尚未公开')
+  })
+
+  it('renders a case slug as a dossier via the same template', async () => {
+    const wrapper = mount(ProjectPage, {
+      props: { slug: 'multilingual-image-preservation' },
+      global: {
+        provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('多语言图片上传结果保留修复')
+    expect(wrapper.text()).toContain('CASE-01')
+    expect(wrapper.text()).toContain('为什么做')
+    expect(wrapper.text()).toContain('如何证明')
   })
 
   it('does not report an unpublished project while public content is loading', () => {
@@ -51,6 +67,6 @@ describe('ProjectPage', () => {
     })
 
     expect(wrapper.text()).toContain('正在装订公开档案…')
-    expect(wrapper.text()).not.toContain('该项目尚未公开')
+    expect(wrapper.text()).not.toContain('该案卷尚未公开')
   })
 })

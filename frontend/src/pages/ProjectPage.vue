@@ -2,38 +2,42 @@
 import { computed } from 'vue'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
+import { resolveDossier } from '../features/portfolio/model/dossierModel'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
 
 const props = defineProps<{ slug: string }>()
 const { portfolio, status, error, retry } = usePublicContent()
-const project = computed(
-  () => portfolio.value?.projects.find((item) => item.slug === props.slug) ?? null,
-)
 
-const evidenceTarget = computed(() => ({
-  path: '/evidence',
-  query: { project: project.value?.slug },
-}))
+const dossier = computed(() => {
+  const data = portfolio.value
+  if (!data) return null
+  return resolveDossier(props.slug, data.projects, data.cases)
+})
+
+const evidenceTarget = computed(() => {
+  const slug = dossier.value?.kind === 'PROJECT' ? dossier.value.slug : (dossier.value?.slug ?? '')
+  return { path: '/evidence', query: { project: slug } }
+})
 </script>
 
 <template>
-  <main v-if="status === 'ready' && project" class="project-dossier">
+  <main v-if="status === 'ready' && dossier" class="project-dossier">
     <header class="project-cover">
       <div class="page-shell project-cover__grid">
         <div class="project-cover__code">
-          <span>{{ project.code }}</span>
-          <StatusMark :status="project.status" />
-          <StatusMark :status="project.contributionType" />
+          <span>{{ dossier.code }}</span>
+          <StatusMark :status="dossier.status.status" />
+          <StatusMark :status="dossier.status.contributionType" />
         </div>
         <div class="project-cover__copy">
-          <p>ENGINEERING PROJECT RECORD</p>
-          <h1 data-mobile-balanced>{{ project.title }}</h1>
-          <blockquote>{{ project.summary }}</blockquote>
+          <p>{{ dossier.kind === 'PROJECT' ? 'ENGINEERING PROJECT RECORD' : 'ENGINEERING CASE RECORD' }}</p>
+          <h1 data-mobile-balanced>{{ dossier.title }}</h1>
+          <blockquote>{{ dossier.summary }}</blockquote>
         </div>
         <ul>
-          <li v-for="technology in project.technologies" :key="technology">{{ technology }}</li>
+          <li v-for="technology in dossier.technologies" :key="technology">{{ technology }}</li>
         </ul>
       </div>
     </header>
@@ -41,35 +45,33 @@ const evidenceTarget = computed(() => ({
     <div class="project-body page-shell">
       <aside class="project-toc">
         <span>CONTENTS</span>
-        <a href="#why">01 为什么做</a>
-        <a href="#role">02 我的职责</a>
-        <a href="#how">03 如何做</a>
-        <a href="#proof">04 如何证明</a>
-        <a href="#status">05 最终状态</a>
+        <a v-for="section in dossier.sections" :key="section.anchor" :href="`#${section.anchor}`">
+          {{ section.code }} {{ section.title }}
+        </a>
       </aside>
 
       <div class="project-story">
         <section id="why">
           <p class="section-code">01 / WHY</p>
           <h2>为什么做</h2>
-          <p class="story-lead">{{ project.background }}</p>
+          <p class="story-lead">{{ dossier.problem }}</p>
         </section>
 
         <section id="role">
           <p class="section-code">02 / RESPONSIBILITY</p>
           <h2>我的职责</h2>
           <ol>
-            <li v-for="item in project.responsibilities" :key="item">{{ item }}</li>
+            <li v-for="item in dossier.responsibilities" :key="item">{{ item }}</li>
           </ol>
         </section>
 
         <section id="how" class="project-story__dark">
           <p class="section-code">03 / SOLUTION</p>
           <h2>如何做</h2>
-          <p class="story-lead">{{ project.solution }}</p>
+          <p class="story-lead">{{ dossier.solution }}</p>
           <h3>关键决策</h3>
           <ol>
-            <li v-for="item in project.keyDecisions" :key="item">{{ item }}</li>
+            <li v-for="item in dossier.decisions" :key="item">{{ item }}</li>
           </ol>
         </section>
 
@@ -77,7 +79,7 @@ const evidenceTarget = computed(() => ({
           <p class="section-code">04 / VERIFICATION</p>
           <h2>如何证明</h2>
           <ol>
-            <li v-for="item in project.verification" :key="item">{{ item }}</li>
+            <li v-for="item in dossier.verification" :key="item">{{ item }}</li>
           </ol>
           <RouterLink class="evidence-link" :to="evidenceTarget">打开关联证据 →</RouterLink>
         </section>
@@ -85,13 +87,13 @@ const evidenceTarget = computed(() => ({
         <section id="status">
           <p class="section-code">05 / STATUS</p>
           <h2>最终状态</h2>
-          <p class="story-lead">{{ project.outcome }}</p>
-          <p>{{ project.handoff }}</p>
+          <p class="story-lead">{{ dossier.outcome }}</p>
+          <p v-if="dossier.boundary">{{ dossier.boundary }}</p>
         </section>
 
         <footer class="project-next">
-          <RouterLink :to="{ path: '/timeline', query: { project: project.slug } }">查看成长时间线</RouterLink>
-          <RouterLink :to="{ path: '/agent', query: { project: project.slug } }">针对这个项目继续提问</RouterLink>
+          <RouterLink :to="{ path: '/timeline', query: { project: dossier.slug } }">查看成长时间线</RouterLink>
+          <RouterLink :to="{ path: '/agent', query: { project: dossier.slug } }">针对这个项目继续提问</RouterLink>
         </footer>
       </div>
     </div>
@@ -104,13 +106,13 @@ const evidenceTarget = computed(() => ({
     @retry="retry"
   />
 
-  <main v-else-if="status === 'ready' && !project" class="page-shell">
+  <main v-else-if="status === 'ready' && !dossier" class="page-shell">
     <EmptyDossier
       code="UNPUBLISHED"
-      title="该项目尚未公开"
-      description="这个地址没有对应的公开项目，或相关资料仍在审核中。"
+      title="该案卷尚未公开"
+      description="这个地址没有对应的公开项目或案例，或相关资料仍在审核中。"
     >
-      <RouterLink to="/projects">返回项目目录 →</RouterLink>
+      <RouterLink to="/projects">返回案卷目录 →</RouterLink>
     </EmptyDossier>
   </main>
 </template>
