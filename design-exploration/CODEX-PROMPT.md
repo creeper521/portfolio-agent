@@ -1,7 +1,7 @@
 # Codex 开发任务 · Agent 工作区暖调中栏 + 牛血红 CTA
 
 > 把下面整段（从「---BEGIN PROMPT---」到「---END PROMPT---」）复制给 Codex 即可。
-> 路径基于仓库根目录 `D:\code\agent`（Codex 在仓库根执行）。
+> 下列路径均相对于仓库根目录（Codex 在仓库根执行）。
 
 ---BEGIN PROMPT---
 
