@@ -19,7 +19,7 @@ describe('answer api', () => {
   })
 
   it('posts a project question as json', async () => {
-    const response = { matched: true, answerMode: 'DETERMINISTIC' }
+    const response = { resolution: 'ANSWERED', generationMode: 'MODEL' }
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(response), {
         status: 200,
@@ -28,21 +28,25 @@ describe('answer api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await askQuestion(input('介绍项目'))
+    await askQuestion({
+      ...input('介绍项目'),
+      caseSlug: 'some-case',
+      messages: [{ role: 'USER', content: '之前的问题' }],
+    })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/answers',
+      '/api/v2/answers',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           turnId: 'turn-1',
-          questionPresetId: undefined,
           question: '介绍项目',
+          messages: [{ role: 'USER', content: '之前的问题' }],
           context: {
             projectSlug: 'sql-audit',
+            caseSlug: 'some-case',
             audienceRole: 'INTERVIEWER',
-            focusEvidenceIds: [],
             source: 'AGENT_PAGE',
           },
         }),
@@ -64,7 +68,7 @@ describe('answer api', () => {
     await expect(askQuestion(input(''))).rejects.toThrow('请求参数不符合要求')
   })
 
-  it('sends only stable referential context without historical messages', async () => {
+  it('keeps frontend-only referential context out of the strict v2 payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ resolution: 'BOUNDARY' }), {
         status: 200,
@@ -75,6 +79,7 @@ describe('answer api', () => {
 
     await askQuestion({
       ...input('查看当前状态'),
+      messages: [{ role: 'ASSISTANT', content: 'previous answer' }],
       contextEnvelope: {
         previousContentVersion: '2026-07-21.1',
         projectSlugs: ['sql-audit'],
@@ -86,17 +91,10 @@ describe('answer api', () => {
     })
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
-    expect(body.contextEnvelope).toEqual({
-      previousContentVersion: '2026-07-21.1',
-      projectSlugs: ['sql-audit'],
-      questionPresetId: 'sql-audit-overview',
-      referencedClaimIds: ['claim-sql-audit-delivered'],
-      selectedSectionType: 'STATUS',
-      followUpIntent: 'CURRENT_STATUS',
-    })
-    expect(JSON.stringify(body)).not.toContain('messages')
-    expect(JSON.stringify(body)).not.toContain('previousAnswer')
-    expect(JSON.stringify(body)).not.toContain('previousQuestion')
+    expect(body.contextEnvelope).toBeUndefined()
+    expect(body.questionPresetId).toBeUndefined()
+    expect(body.context.focusEvidenceIds).toBeUndefined()
+    expect(body.messages).toEqual([{ role: 'ASSISTANT', content: 'previous answer' }])
   })
 
   it('aborts a stalled request and returns a stable timeout message', async () => {

@@ -15,7 +15,11 @@ import {
   type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed } from '../model/sessionTypes'
-import type { ContextEnvelope, FollowUpAction } from '../model/answerTypes'
+import type {
+  ContextEnvelope,
+  ConversationSuggestedQuestion,
+  FollowUpAction,
+} from '../model/answerTypes'
 import {
   buildEvidenceDeskContext,
   type AnswerFocusTarget,
@@ -31,6 +35,7 @@ import PaneResizer from './PaneResizer.vue'
 interface AnswerRequestContext {
   sessionId: string
   projectSlug: string
+  caseSlug?: string | null
   question: string
   questionPresetId?: string
   contextEnvelope?: ContextEnvelope
@@ -207,15 +212,39 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
   pending.value = true
   clearAnswerFailure()
   try {
+    // Build conversation history from current session (last 40 messages = 20 rounds)
+    const completedMessages = session.messages.at(-1)?.role === 'USER'
+      ? session.messages.slice(0, -1)
+      : session.messages
+    const history = completedMessages
+      .filter((m) => m.role === 'USER' || m.role === 'AGENT')
+      .slice(-40)
+      .map((m) => {
+        let content = m.content
+        if (m.role === 'AGENT' && m.answer) {
+          if (m.answer.summary) {
+            content = m.answer.summary
+          } else if (m.answer.blocks?.length) {
+            content = m.answer.blocks.map((b) => b.content).join('\n\n')
+          }
+        }
+        return {
+          role: m.role === 'USER' ? 'USER' as const : 'ASSISTANT' as const,
+          content,
+        }
+      })
+
     const mapped = mapAnswerResponse(
       await askQuestion({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
-        projectSlug: context.projectSlug,
+        projectSlug: context.caseSlug ? null : context.projectSlug,
+        caseSlug: context.caseSlug ?? null,
         audienceRole: session.role,
         source: 'AGENT_PAGE',
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
         questionPresetId: context.questionPresetId,
-        question: context.questionPresetId ? undefined : context.question,
+        question: context.question,
+        messages: history,
         contextEnvelope: context.contextEnvelope,
       }),
     )
@@ -252,6 +281,23 @@ function submit(question: string) {
       projectSlug: project.slug,
       question,
       questionPresetId: preset?.id,
+    },
+    true,
+  )
+}
+
+function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
+  const session = sessions.activeSession.value
+  const project = props.portfolio.projects.find(
+    (item) => item.slug === (suggestion.projectSlug || activeProject.value?.slug),
+  )
+  if (!session || !project) return
+  void requestAnswer(
+    {
+      sessionId: session.id,
+      projectSlug: project.slug,
+      caseSlug: suggestion.caseSlug,
+      question: suggestion.text,
     },
     true,
   )
@@ -522,6 +568,7 @@ onBeforeUnmount(() => {
       :error="answerError"
       :focus-target="answerFocusTarget"
       @submit="submit"
+      @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
       @retry="retryAnswer"
       @inspect-evidence="inspectEvidence"

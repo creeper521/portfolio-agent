@@ -13,6 +13,7 @@ const mappedAnswer = {
   verification: 'VERIFIED' as const,
   evidenceIds: ['sql-audit-delivery-set'],
   suggestedQuestionPresetIds: ['sql-audit-overview'],
+  suggestedQuestions: [],
 }
 
 describe('useLocalSessions', () => {
@@ -109,5 +110,46 @@ describe('useLocalSessions', () => {
     expect(session.messages[1]?.evidenceIds).toEqual(homeSeed.evidenceIds)
     expect(session.messages[1]?.answer?.sections).toEqual(mappedAnswer.sections)
     expect(store.sessions.value).toHaveLength(1)
+  })
+
+  it('caps session messages at 40 (20 rounds) to enforce memory limit', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+
+    for (let i = 0; i < 25; i++) {
+      store.appendMessage(session.id, {
+        role: 'USER',
+        content: `问题 ${i}`,
+        answer: null,
+        evidenceIds: [],
+      })
+      store.appendMessage(session.id, {
+        role: 'AGENT',
+        content: `回答 ${i}`,
+        answer: null,
+        evidenceIds: [],
+      })
+    }
+
+    expect(session.messages).toHaveLength(40)
+    // 保留最近的 20 轮
+    expect(session.messages[0]?.content).toBe('问题 5')
+    expect(session.messages[39]?.content).toBe('回答 24')
+  })
+
+  it('never writes to localStorage, sessionStorage, or IndexedDB', () => {
+    const store = useLocalSessions()
+    store.createSession()
+    store.appendMessage(store.activeSessionId.value, {
+      role: 'USER',
+      content: '测试隐私',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
+    // IndexedDB 在 jsdom 中不可用，但代码不应引用它
+    expect(typeof indexedDB).toBe('undefined')
   })
 })

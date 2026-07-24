@@ -5,6 +5,7 @@ import type { AudienceRole, PublicProject } from '../../public-content/model/pub
 import type { AgentSession } from '../model/sessionTypes'
 import type {
   AnswerSectionType,
+  ConversationSuggestedQuestion,
   FollowUpAction,
   FollowUpIntent,
 } from '../model/answerTypes'
@@ -27,6 +28,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   submit: [question: string]
+  submitSuggestion: [suggestion: ConversationSuggestedQuestion]
   inspectEvidence: [request: EvidenceInspectRequest]
   toggleSessions: []
   toggleEvidence: []
@@ -66,9 +68,13 @@ function submit() {
   nextTick(resizeInput)
 }
 
-function submitSuggested(value: string) {
+function submitSuggested(value: string | ConversationSuggestedQuestion) {
   if (props.pending) return
-  emit('submit', value)
+  if (typeof value === 'string') {
+    emit('submit', value)
+  } else {
+    emit('submitSuggestion', value)
+  }
   question.value = ''
   nextTick(resizeInput)
 }
@@ -162,11 +168,49 @@ onBeforeUnmount(() => {
 function answerLabel(message: AgentSession['messages'][number]) {
   const answer = message.answer
   if (!answer) return ''
+  // v2: prioritize intent-driven visible labels
+  if (answer.intent === 'TIME_SENSITIVE') return '暂时不可用'
+  if (answer.intent === 'UNSUPPORTED_OR_UNSAFE') return '无法处理该请求'
   if (answer.resolution === 'BOUNDARY') return '当前能力边界'
   if (answer.resolution === 'REJECTED') return '无法处理该请求'
+  if (answer.intent) return '回答'
+  // v1 fallback
   if (answer.verification === 'VERIFIED') return '已核验回答'
   if (answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
   return '尚未核验'
+}
+
+function answerScopeTag(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  if (!answer) return ''
+  if (answer.answerScope === 'GENERAL') return '通用知识'
+  if (answer.answerScope === 'PORTFOLIO') return '作品集资料'
+  if (answer.answerScope === 'HYBRID') return '混合回答'
+  return ''
+}
+
+function blockScopeTag(scope: 'GENERAL' | 'PORTFOLIO') {
+  return scope === 'GENERAL' ? '通用知识' : '作品集资料'
+}
+
+function degradedNotice(message: AgentSession['messages'][number]) {
+  if (!message.answer?.degraded && message.answer?.generationMode !== 'FALLBACK') return ''
+  return '已切换到基础回答'
+}
+
+function v2Blocks(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  if (!answer || !answer.blocks || answer.blocks.length === 0) return []
+  return answer.blocks
+}
+
+function isV2Answer(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  return Boolean(answer && (answer.blocks?.length || answer.intent))
+}
+
+function dynamicSuggestions(message: AgentSession['messages'][number]) {
+  return message.answer?.suggestedQuestions ?? []
 }
 
 function answerSourceLabel(message: AgentSession['messages'][number]) {
@@ -189,7 +233,8 @@ function answerVerificationTag(message: AgentSession['messages'][number]) {
   const verification = message.answer?.verification
   if (verification === 'VERIFIED') return '已核验'
   if (verification === 'PARTIALLY_VERIFIED') return '部分核验'
-  return '未核验'
+  if (verification === 'UNVERIFIED') return '未核验'
+  return ''
 }
 
 // 技术枚举尾注：resolution + generationMode，价值低，降级成极淡尾注
@@ -212,7 +257,7 @@ function followUp(
     question,
     contextEnvelope: {
       ...envelope,
-      projectSlugs: [...envelope.projectSlugs],
+      projectSlugs: envelope.projectSlugs ? [...envelope.projectSlugs] : undefined,
       referencedClaimIds: [...(referencedClaimIds ?? envelope.referencedClaimIds)],
       selectedSectionType,
       followUpIntent: intent,
@@ -303,76 +348,124 @@ function inspectMessageEvidence(
           <p v-if="message.answer" class="message__meta">
             <span class="message__meta-prefix">AGENT · {{ answerLabel(message) }}</span>
             <span class="message__meta-tags">
-              <span class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message) }}</span>
+              <span v-if="answerScopeTag(message)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message) }}</span>
+              <span v-if="message.answer.generationMode !== 'FALLBACK' && answerVerificationTag(message)" class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message) }}</span>
               <span v-if="answerSourceTag(message)" class="message__meta-tag">{{ answerSourceTag(message) }}</span>
             </span>
             <span v-if="answerTechTail(message)" class="message__meta-tail">{{ answerTechTail(message) }}</span>
           </p>
           <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
+          <p
+            v-if="message.answer && degradedNotice(message)"
+            data-degraded-notice
+            class="degraded-notice"
+            role="status"
+          >{{ degradedNotice(message) }}</p>
           <div v-if="message.answer" class="structured-answer">
-            <h3>{{ message.answer.title }}</h3>
-            <p>{{ message.answer.summary }}</p>
-            <p
-              v-if="message.answer.contextVersionUpdated"
-              data-context-version-updated
-              class="context-version-updated"
-              role="status"
-            >公开内容已更新，本轮已按当前版本重新核对。</p>
-            <section
-              v-for="section in message.answer.sections"
-              :key="section.type"
-              :data-section-type="section.type"
-              :data-answer-focus="
-                highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
-              "
-              tabindex="-1"
-            >
-              <h4>{{ section.title }}</h4>
-              <p>{{ section.content }}</p>
-              <div v-if="message.answer.contextEnvelope" class="follow-up-actions">
+            <template v-if="isV2Answer(message)">
+              <h3 v-if="message.answer.title">{{ message.answer.title }}</h3>
+              <p v-if="message.answer.summary">{{ message.answer.summary }}</p>
+              <section
+                v-for="(block, blockIndex) in v2Blocks(message)"
+                :key="blockIndex"
+                :data-block-scope="block.sourceScope"
+                class="answer-block"
+              >
+                <p class="answer-block__scope" :data-scope="block.sourceScope">{{ blockScopeTag(block.sourceScope) }}</p>
+                <p class="answer-block__content">{{ block.content }}</p>
+                <div v-if="block.evidenceIds.length" class="answer-block__citations">
+                  <button
+                    v-for="eid in block.evidenceIds"
+                    :key="eid"
+                    :data-block-evidence="eid"
+                    type="button"
+                    @click="inspectMessageEvidence(message, eid)"
+                  >[{{ eid }}]</button>
+                </div>
+              </section>
+              <p
+                v-if="message.answer.contextVersionUpdated"
+                data-context-version-updated
+                class="context-version-updated"
+                role="status"
+              >公开内容已更新，本轮已按当前版本重新核对。</p>
+              <div v-if="dynamicSuggestions(message).length" class="dynamic-suggestions">
                 <button
+                  v-for="(q, qi) in dynamicSuggestions(message)"
+                  :key="qi"
+                  data-suggested-follow-up
                   type="button"
                   :disabled="pending"
-                  @click="followUp(message, `展开${section.title}`, 'EXPAND_SECTION', section.type, section.claimIds)"
-                >展开本节</button>
-                <button
-                  data-section-evidence
-                  type="button"
-                  :disabled="pending || !section.evidenceIds.length"
-                  @click="inspectSection(message, section)"
-                >查看本节证据</button>
-                <button
-                  type="button"
-                  :disabled="pending"
-                  @click="followUp(message, `说明${section.title}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
-                >说明判断</button>
+                  @click="submitSuggested(q)"
+                >{{ q.text }}</button>
               </div>
-            </section>
-            <div v-if="message.answer.contextEnvelope" class="follow-up-actions follow-up-actions--answer">
-              <button
-                data-follow-up="current-status"
-                type="button"
-                :disabled="pending"
-                @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
-              >查看当前状态</button>
-              <button
-                type="button"
-                :disabled="pending"
-                @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
-              >查看相关问题</button>
-              <button
-                v-if="message.answer.contextEnvelope.projectSlugs.length > 1"
-                type="button"
-                :disabled="pending"
-                @click="followUp(message, '对比这些项目', 'COMPARE_PROJECTS')"
-              >对比项目</button>
-            </div>
+            </template>
+            <template v-else>
+              <h3>{{ message.answer.title }}</h3>
+              <p>{{ message.answer.summary }}</p>
+              <p
+                v-if="message.answer.contextVersionUpdated"
+                data-context-version-updated
+                class="context-version-updated"
+                role="status"
+              >公开内容已更新，本轮已按当前版本重新核对。</p>
+              <section
+                v-for="section in message.answer.sections"
+                :key="section.type"
+                :data-section-type="section.type"
+                :data-answer-focus="
+                  highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
+                "
+                tabindex="-1"
+              >
+                <h4>{{ section.title }}</h4>
+                <p>{{ section.content }}</p>
+                <div v-if="message.answer.contextEnvelope" class="follow-up-actions">
+                  <button
+                    type="button"
+                    :disabled="pending"
+                    @click="followUp(message, `展开${section.title}`, 'EXPAND_SECTION', section.type, section.claimIds)"
+                  >展开本节</button>
+                  <button
+                    data-section-evidence
+                    type="button"
+                    :disabled="pending || !section.evidenceIds.length"
+                    @click="inspectSection(message, section)"
+                  >查看本节证据</button>
+                  <button
+                    type="button"
+                    :disabled="pending"
+                    @click="followUp(message, `说明${section.title}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
+                  >说明判断</button>
+                </div>
+              </section>
+              <div v-if="message.answer.contextEnvelope" class="follow-up-actions follow-up-actions--answer">
+                <button
+                  data-follow-up="current-status"
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
+                >查看当前状态</button>
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
+                >查看相关问题</button>
+                <button
+                  v-if="(message.answer.contextEnvelope.projectSlugs?.length ?? 0) > 1"
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, '对比这些项目', 'COMPARE_PROJECTS')"
+                >对比项目</button>
+              </div>
+            </template>
           </div>
           <div v-else class="message__body">{{ message.content }}</div>
-          <footer v-if="message.evidenceIds.length">
+          <footer v-if="message.evidenceIds.length && !isV2Answer(message)">
             <button
               v-for="id in message.evidenceIds"
               :key="id"
+              :data-message-evidence="id"
               type="button"
               @click="inspectMessageEvidence(message, id)"
             >

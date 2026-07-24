@@ -4,28 +4,29 @@ import type { AudienceRole } from '../../public-content/model/publicContentTypes
 
 export interface AnswerApiRequest {
   turnId: string
-  projectSlug: string
+  projectSlug?: string | null
+  caseSlug?: string | null
   audienceRole: AudienceRole
   source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'EVIDENCE'
   focusEvidenceIds?: string[]
   questionPresetId?: string
   question?: string
+  messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
   contextEnvelope?: ContextEnvelope
 }
 
 export function askQuestion(input: AnswerApiRequest): Promise<AnswerResponse> {
-  return request<AnswerResponse>('/api/v1/answers', {
+  return request<AnswerResponse>('/api/v2/answers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       turnId: input.turnId,
-      questionPresetId: input.questionPresetId,
       question: input.question,
-      contextEnvelope: input.contextEnvelope,
+      messages: input.messages,
       context: {
-        projectSlug: input.projectSlug,
+        projectSlug: input.projectSlug ?? null,
+        caseSlug: input.caseSlug ?? null,
         audienceRole: input.audienceRole,
-        focusEvidenceIds: input.focusEvidenceIds ?? [],
         source: input.source,
       },
     }),

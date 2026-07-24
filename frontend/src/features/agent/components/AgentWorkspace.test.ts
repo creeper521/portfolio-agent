@@ -45,6 +45,32 @@ function answerResponse(
   }
 }
 
+function v2AnswerResponse(
+  intent = 'GENERAL_KNOWLEDGE',
+  answerScope = 'GENERAL',
+  blocks: Array<{ sourceScope: string; content: string; claimIds: string[]; evidenceIds: string[] }> = [],
+) {
+  return {
+    requestId: 'request-v2',
+    turnId: 'turn-v2',
+    contentVersion: '2026-07-21',
+    resolution: 'ANSWERED' as const,
+    generationMode: 'MODEL' as const,
+    verification: 'NOT_APPLICABLE' as const,
+    intent,
+    answerScope,
+    title: '',
+    summary: '',
+    sections: [],
+    blocks: blocks.length ? blocks : [
+      { sourceScope: 'GENERAL' as const, content: '通用回答', claimIds: [], evidenceIds: [] },
+    ],
+    evidenceIds: [],
+    suggestedQuestionPresetIds: [],
+    suggestedQuestions: ['介绍一下 SQL 审计项目'],
+  }
+}
+
 function portfolioWithSecondaryEvidence() {
   const core = previewPublicContent.evidence[0]!
   const secondary = {
@@ -109,6 +135,10 @@ describe('AgentWorkspace', () => {
     await flushPromises()
 
     expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(askQuestionMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      question: previewPublicContent.projects[0].suggestedQuestions[0],
+      questionPresetId: 'sql-audit-overview',
+    }))
     expect(wrapper.get('.message--user')).toBeTruthy()
     expect(wrapper.get('[data-evidence-id="sql-audit-delivery-set"]').classes())
       .toContain('evidence-card--focused')
@@ -513,7 +543,19 @@ describe('AgentWorkspace', () => {
         followUpIntent: 'CURRENT_STATUS',
       },
     }))
-    expect(JSON.stringify(askQuestionMock.mock.calls[1]?.[0])).not.toContain('公开摘要')
+    const body = askQuestionMock.mock.calls[1]?.[0]
+    expect(body.messages).toBeDefined()
+    expect(body.messages.length).toBeGreaterThanOrEqual(2)
+    expect(body.contextEnvelope).toEqual({
+      previousContentVersion: '2026-07-21',
+      projectSlugs: ['sql-audit'],
+      questionPresetId: 'sql-audit-overview',
+      referencedClaimIds: ['claim-sql-audit-delivered'],
+      selectedSectionType: undefined,
+      followUpIntent: 'CURRENT_STATUS',
+    })
+    // 消息历史不应包含原始内部字段
+    expect(JSON.stringify(body.messages)).not.toContain('claim-sql-audit-delivered')
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
@@ -643,5 +685,58 @@ describe('AgentWorkspace', () => {
     await flushPromises()
 
     expect(localStorage.getItem(SESSION_KEY)).toBe(storedBeforeUnmount)
+  })
+
+  it('sends recent conversation messages to the v2 API', async () => {
+    const wrapper = mountWorkspace()
+
+    // First turn
+    askQuestionMock.mockResolvedValueOnce(v2AnswerResponse('GENERAL_KNOWLEDGE', 'GENERAL'))
+    await wrapper.get('textarea').setValue('什么是 HTTP？')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // Second turn - should include history
+    askQuestionMock.mockResolvedValueOnce(v2AnswerResponse('PORTFOLIO_GROUNDED', 'PORTFOLIO'))
+    await wrapper.get('textarea').setValue('作者在项目中用过 HTTP 吗？')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    const secondCall = askQuestionMock.mock.calls[1]?.[0]
+    expect(secondCall.messages).toBeDefined()
+    expect(secondCall.messages.length).toBeGreaterThanOrEqual(2)
+    expect(secondCall.messages[0]).toEqual({ role: 'USER', content: '什么是 HTTP？' })
+    expect(secondCall.messages[1]).toEqual({ role: 'ASSISTANT', content: '通用回答' })
+    expect(secondCall.caseSlug).toBeNull()
+  })
+
+  it('does not duplicate the current question in conversation history', async () => {
+    const wrapper = mountWorkspace()
+
+    askQuestionMock.mockResolvedValueOnce(v2AnswerResponse())
+    await wrapper.get('textarea').setValue('什么是 HTTP？')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[0]?.[0].messages).toEqual([])
+  })
+
+  it('caps conversation history at 20 rounds (40 messages)', async () => {
+    const wrapper = mountWorkspace()
+
+    // Simulate 25 rounds of conversation
+    for (let i = 0; i < 25; i++) {
+      askQuestionMock.mockResolvedValueOnce(v2AnswerResponse('GENERAL_KNOWLEDGE', 'GENERAL'))
+      await wrapper.get('textarea').setValue(`问题 ${i}`)
+      await wrapper.get('.composer').trigger('submit')
+      await flushPromises()
+    }
+
+    const lastCall = askQuestionMock.mock.calls[24]?.[0]
+    expect(lastCall.messages.length).toBeLessThanOrEqual(40)
+    expect(lastCall.messages.length % 2).toBe(0)
+    expect(lastCall.messages[0]?.role).toBe('USER')
+    expect(lastCall.messages.at(-1)?.role).toBe('ASSISTANT')
   })
 })

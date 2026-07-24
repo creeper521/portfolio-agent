@@ -73,4 +73,37 @@ describe('mapAnswerResponse', () => {
     expect(mapped.verification).toBe('NOT_APPLICABLE')
     expect(mapped.evidenceIds).toEqual([])
   })
+
+  it('maps the exact v2 backend contract including contextual suggestions', () => {
+    const mapped = mapAnswerResponse({
+      turnId: 'turn-v2',
+      contentVersion: '2026-07-24',
+      intent: 'PORTFOLIO_GROUNDED',
+      answerScope: 'PORTFOLIO',
+      resolution: 'ANSWERED',
+      title: 'SQL audit tool',
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        content: 'Implementation details',
+        claimIds: ['claim-1'],
+        evidenceIds: ['evidence-1'],
+      }],
+      suggestedQuestions: [{
+        text: 'What challenges came up?',
+        projectSlug: 'sql-audit',
+        caseSlug: 'sql-audit-delivery',
+        facet: 'CHALLENGE',
+      }],
+      degraded: true,
+    })
+
+    expect(mapped.suggestedQuestions).toEqual([{
+      text: 'What challenges came up?',
+      projectSlug: 'sql-audit',
+      caseSlug: 'sql-audit-delivery',
+      facet: 'CHALLENGE',
+    }])
+    expect(mapped.evidenceIds).toEqual(['evidence-1'])
+    expect(mapped.degraded).toBe(true)
+  })
 })

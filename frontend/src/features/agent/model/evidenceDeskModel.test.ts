@@ -18,6 +18,7 @@ const messages: AgentMessage[] = [{
     verification: 'VERIFIED',
     evidenceIds: ['evidence-a'],
     suggestedQuestionPresetIds: [],
+    suggestedQuestions: [],
     sections: [{
       type: 'VERIFICATION',
       title: '验证',

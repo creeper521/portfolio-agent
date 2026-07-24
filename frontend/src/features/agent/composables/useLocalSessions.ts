@@ -80,6 +80,10 @@ export function useLocalSessions() {
       createdAt: timestamp,
     })
     session.updatedAt = timestamp
+    const messageLimit = session.messages.at(-1)?.role === 'USER' ? 41 : 40
+    if (session.messages.length > messageLimit) {
+      session.messages = session.messages.slice(-messageLimit)
+    }
     if (session.messages[0]?.role === 'USER' && !manuallyRenamedSessionIds.has(sessionId)) {
       session.title = session.messages[0].content.slice(0, 24)
     }
