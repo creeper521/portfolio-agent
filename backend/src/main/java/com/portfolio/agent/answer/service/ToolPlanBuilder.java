@@ -13,14 +13,15 @@ import java.util.List;
 @Component
 public final class ToolPlanBuilder {
 
-    private static final String TOOL_POLICY_VERSION = "c2b-tools-v1";
+    private static final String TOOL_POLICY_VERSION = "c2b-tools-v2";
 
     public ToolPlan build(
             RuntimeAnswerContent content,
             QueryIntent queryIntent,
             int maxToolCalls
     ) {
-        List<ToolKind> kinds = kindsFor(queryIntent.getFollowUpIntent());
+        List<ToolKind> kinds = kindsFor(
+                queryIntent.getFollowUpIntent(), !queryIntent.getCaseSlugs().isEmpty());
         if (kinds.size() > maxToolCalls) {
             throw new IllegalArgumentException("tool call budget is insufficient");
         }
@@ -28,6 +29,7 @@ public final class ToolPlanBuilder {
                 .map(kind -> new ToolCall(
                         kind,
                         queryIntent.getProjectSlugs(),
+                        queryIntent.getCaseSlugs(),
                         queryIntent.getReferencedClaimIds(),
                         queryIntent.getSelectedSectionType()))
                 .toList();
@@ -39,18 +41,19 @@ public final class ToolPlanBuilder {
                 calls);
     }
 
-    private List<ToolKind> kindsFor(FollowUpIntent intent) {
+    private List<ToolKind> kindsFor(FollowUpIntent intent, boolean caseSubject) {
+        ToolKind subjectTool = caseSubject ? ToolKind.GET_CASE : ToolKind.GET_PROJECT;
         return switch (intent) {
             case SHOW_EVIDENCE -> List.of(ToolKind.GET_EVIDENCE_FOR_CLAIMS);
             case EXPAND_SECTION -> List.of(
-                    ToolKind.GET_PROJECT,
+                    subjectTool,
                     ToolKind.GET_CLAIMS,
                     ToolKind.GET_EVIDENCE_FOR_CLAIMS);
             case EXPLAIN_DECISION -> List.of(
                     ToolKind.GET_CLAIMS,
                     ToolKind.GET_EVIDENCE_FOR_CLAIMS);
             case CURRENT_STATUS -> List.of(
-                    ToolKind.GET_PROJECT,
+                    subjectTool,
                     ToolKind.GET_CLAIMS,
                     ToolKind.GET_TIMELINE);
             case RELATED_QUESTION -> List.of(ToolKind.SEARCH_PUBLIC_CONTENT);

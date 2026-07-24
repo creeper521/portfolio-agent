@@ -31,6 +31,7 @@ public final class ToolResultValidator {
             throw new IllegalArgumentException("tool kind does not match");
         }
         Set<String> allowedProjectSlugs = Set.copyOf(call.getProjectSlugs());
+        Set<String> allowedCaseSlugs = Set.copyOf(call.getCaseSlugs());
         Set<String> resultProjectSlugs = result.getProjects().stream()
                 .map(AnswerKnowledge::getSlug)
                 .collect(Collectors.toUnmodifiableSet());
@@ -43,8 +44,20 @@ public final class ToolResultValidator {
         if (!publicProjectSlugs.containsAll(resultProjectSlugs)) {
             throw new IllegalArgumentException("tool result contains unknown project");
         }
-        Set<String> publicClaimIds = content.getProjects().stream()
-                .filter(project -> allowedProjectSlugs.contains(project.getSlug()))
+        Set<String> resultCaseSlugs = result.getCases().stream()
+                .map(AnswerKnowledge::getSlug)
+                .collect(Collectors.toUnmodifiableSet());
+        if (!allowedCaseSlugs.containsAll(resultCaseSlugs)) {
+            throw new IllegalArgumentException("tool result contains unauthorized case");
+        }
+        Set<String> publicCaseSlugs = content.getCases().stream()
+                .map(AnswerKnowledge::getSlug)
+                .collect(Collectors.toUnmodifiableSet());
+        if (!publicCaseSlugs.containsAll(resultCaseSlugs)) {
+            throw new IllegalArgumentException("tool result contains unknown case");
+        }
+        Set<String> publicClaimIds = allowedSubjects(
+                content, allowedProjectSlugs, allowedCaseSlugs)
                 .flatMap(project -> project.getClaims().stream())
                 .map(AnswerClaimProjection::getId)
                 .collect(Collectors.toUnmodifiableSet());
@@ -61,9 +74,9 @@ public final class ToolResultValidator {
         if (result.getClaims().size() > budgets.getMaxRetrievedClaims()) {
             throw new IllegalArgumentException("tool result exceeds claim budget");
         }
-        validateEvidence(content, allowedProjectSlugs, result);
+        validateEvidence(content, allowedProjectSlugs, allowedCaseSlugs, result);
         validateTimeline(content, result);
-        validateQuestions(content, allowedProjectSlugs, result);
+        validateQuestions(content, allowedProjectSlugs, allowedCaseSlugs, result);
         if (characterCount(result) > budgets.getMaxContextCharacters()) {
             throw new IllegalArgumentException("tool result exceeds context budget");
         }
@@ -72,10 +85,10 @@ public final class ToolResultValidator {
     private void validateEvidence(
             RuntimeAnswerContent content,
             Set<String> projectSlugs,
+            Set<String> caseSlugs,
             PublicToolResult result
     ) {
-        Set<String> publicEvidenceIds = content.getProjects().stream()
-                .filter(project -> projectSlugs.contains(project.getSlug()))
+        Set<String> publicEvidenceIds = allowedSubjects(content, projectSlugs, caseSlugs)
                 .flatMap(project -> project.getEvidence().stream())
                 .filter(evidence -> "APPROVED".equals(evidence.getPublicStatus()))
                 .filter(evidence -> !evidence.isRawContentPublic())
@@ -100,10 +113,10 @@ public final class ToolResultValidator {
     private void validateQuestions(
             RuntimeAnswerContent content,
             Set<String> projectSlugs,
+            Set<String> caseSlugs,
             PublicToolResult result
     ) {
-        Set<String> publicQuestionIds = content.getProjects().stream()
-                .filter(project -> projectSlugs.contains(project.getSlug()))
+        Set<String> publicQuestionIds = allowedSubjects(content, projectSlugs, caseSlugs)
                 .flatMap(project -> project.getQuestions().stream())
                 .map(AnswerQuestion::getId)
                 .collect(Collectors.toUnmodifiableSet());
@@ -111,6 +124,18 @@ public final class ToolResultValidator {
                 .map(AnswerQuestion::getId).toList())) {
             throw new IllegalArgumentException("tool result contains unknown question");
         }
+    }
+
+    private java.util.stream.Stream<AnswerKnowledge> allowedSubjects(
+            RuntimeAnswerContent content,
+            Set<String> projectSlugs,
+            Set<String> caseSlugs
+    ) {
+        return java.util.stream.Stream.concat(
+                content.getProjects().stream()
+                        .filter(project -> projectSlugs.contains(project.getSlug())),
+                content.getCases().stream()
+                        .filter(caseStudy -> caseSlugs.contains(caseStudy.getSlug())));
     }
 
     private int characterCount(PublicToolResult result) {

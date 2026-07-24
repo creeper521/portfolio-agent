@@ -106,6 +106,10 @@ public final class RetrievalContextValidator {
         }
         RetrievalCandidate first = candidates.get(0);
         RetrievalCandidate second = candidates.get(1);
+        if (Integer.valueOf(1).equals(first.getKeywordRank())
+                && Integer.valueOf(1).equals(first.getVectorRank())) {
+            return false;
+        }
         double relativeMargin = (first.getFusedScore() - second.getFusedScore())
                 / first.getFusedScore();
         AnswerRetrievalChunk firstChunk = chunks.get(first.getChunkId());

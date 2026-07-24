@@ -17,6 +17,7 @@ import com.portfolio.agent.answer.domain.PublicToolResultStatus;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.domain.ToolCall;
 import com.portfolio.agent.answer.domain.ToolKind;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -112,6 +113,33 @@ class LocalPublicKnowledgeToolsTest {
 
         assertThat(result.getStatus()).isEqualTo(PublicToolResultStatus.INSUFFICIENT);
         assertThat(result.getEvidence()).isEmpty();
+    }
+
+    @Test
+    void getsCaseAndItsBoundedClaimsAndEvidence() {
+        AnswerEvidence caseEvidence = evidence("evidence-case");
+        AnswerClaimProjection caseClaim = claim("claim-case", "evidence-case");
+        AnswerKnowledge caseStudy = new AnswerKnowledge(
+                AnswerSubjectType.CASE,
+                "codegraph-evaluation", "CodeGraph", "summary", "problem",
+                List.of("action"), "solution", List.of("decision"),
+                List.of("verified"), "outcome", "limitation", "PROTOTYPE",
+                List.of(new AnswerQuestion(
+                        "question-case", "Case overview", List.of(), "Case overview")),
+                List.of(caseEvidence), List.of(caseClaim));
+        RuntimeAnswerContent caseContent = new RuntimeAnswerContent(
+                "2026-07-23.1", "sha256:runtime", List.of(), List.of(caseStudy),
+                null, List.of());
+
+        PublicToolResult result = tools.execute(caseContent, new ToolCall(
+                ToolKind.GET_CASE,
+                List.of(),
+                List.of("codegraph-evaluation"),
+                List.of("claim-case"),
+                AnswerSectionType.STATUS));
+
+        assertThat(result.getCases()).extracting(AnswerKnowledge::getSlug)
+                .containsExactly("codegraph-evaluation");
     }
 
     private PublicToolResult execute(

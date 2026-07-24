@@ -53,7 +53,12 @@ public final class AnswerResponseMapper {
         List<String> claimIds = boundedSectionClaims(sections);
         return new ContextEnvelopeResponse(
                 result.getTurnSnapshot().getContentVersion(),
-                List.of(result.getTurnSnapshot().getProjectSlug()),
+                result.getTurnSnapshot().getProjectSlug() == null
+                        ? List.of()
+                        : List.of(result.getTurnSnapshot().getProjectSlug()),
+                result.getTurnSnapshot().getCaseSlug() == null
+                        ? List.of()
+                        : List.of(result.getTurnSnapshot().getCaseSlug()),
                 result.getTurnSnapshot().getQuestionPresetId(),
                 claimIds,
                 null,

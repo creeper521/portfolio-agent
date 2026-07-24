@@ -21,24 +21,27 @@ public final class ContextEnvelopeValidator {
             RuntimeAnswerContent content,
             ContextEnvelopeRequest request
     ) {
-        List<AnswerKnowledge> projects = request.getProjectSlugs().stream()
-                .map(slug -> content.getProjects().stream()
-                        .filter(project -> project.getSlug().equals(slug))
-                        .findFirst()
-                        .orElse(null))
-                .filter(java.util.Objects::nonNull)
-                .toList();
-        if (projects.size() != request.getProjectSlugs().size()) {
+        if (!request.getCaseSlugs().isEmpty()
+                && request.getFollowUpIntent()
+                == com.portfolio.agent.answer.domain.FollowUpIntent.COMPARE_PROJECTS) {
             return ContextResolution.invalid();
         }
-        List<AnswerClaimProjection> claims = projects.stream()
+        List<AnswerKnowledge> subjects = request.getProjectSlugs().isEmpty()
+                ? resolveSubjects(content.getCases(), request.getCaseSlugs())
+                : resolveSubjects(content.getProjects(), request.getProjectSlugs());
+        int requestedSubjectCount = request.getProjectSlugs().size()
+                + request.getCaseSlugs().size();
+        if (subjects.size() != requestedSubjectCount) {
+            return ContextResolution.invalid();
+        }
+        List<AnswerClaimProjection> claims = subjects.stream()
                 .flatMap(project -> project.getClaims().stream())
                 .filter(claim -> request.getReferencedClaimIds().contains(claim.getId()))
                 .toList();
         if (claims.size() != request.getReferencedClaimIds().size()) {
             return ContextResolution.invalid();
         }
-        if (!presetExists(projects, request.getQuestionPresetId())) {
+        if (!presetExists(subjects, request.getQuestionPresetId())) {
             return ContextResolution.invalid();
         }
         if (!sectionCompatible(request.getSelectedSectionType(), claims)) {
@@ -51,11 +54,25 @@ public final class ContextEnvelopeValidator {
         ValidatedContextEnvelope envelope = new ValidatedContextEnvelope(
                 content.getContentVersion(),
                 request.getProjectSlugs(),
+                request.getCaseSlugs(),
                 request.getQuestionPresetId(),
                 request.getReferencedClaimIds(),
                 request.getSelectedSectionType(),
                 request.getFollowUpIntent());
         return ContextResolution.valid(type, envelope);
+    }
+
+    private List<AnswerKnowledge> resolveSubjects(
+            List<AnswerKnowledge> available,
+            List<String> slugs
+    ) {
+        return slugs.stream()
+                .map(slug -> available.stream()
+                        .filter(project -> project.getSlug().equals(slug))
+                        .findFirst()
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     private boolean presetExists(List<AnswerKnowledge> projects, String questionPresetId) {

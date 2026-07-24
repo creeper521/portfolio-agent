@@ -11,6 +11,7 @@ import com.portfolio.agent.answer.domain.PublicToolResult;
 import com.portfolio.agent.answer.domain.PublicToolResultStatus;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.domain.ToolCall;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
 import org.springframework.stereotype.Component;
 
@@ -24,17 +25,22 @@ public final class LocalPublicKnowledgeTools implements PublicKnowledgeTools {
     @Override
     public PublicToolResult execute(RuntimeAnswerContent content, ToolCall call) {
         List<AnswerKnowledge> projects = selectedProjects(content, call.getProjectSlugs());
-        if (projects.size() != call.getProjectSlugs().size()) {
+        List<AnswerKnowledge> cases = selectedCases(content, call.getCaseSlugs());
+        if (projects.size() != call.getProjectSlugs().size()
+                || cases.size() != call.getCaseSlugs().size()) {
             return result(content, call, PublicToolResultStatus.INSUFFICIENT,
                     List.of(), List.of(), List.of(), List.of(), List.of());
         }
+        List<AnswerKnowledge> subjects = cases.isEmpty() ? projects : cases;
         return switch (call.getKind()) {
             case GET_PROJECT -> result(content, call, PublicToolResultStatus.SUCCESS,
                     projects, List.of(), List.of(), List.of(), List.of());
-            case GET_CLAIMS -> claimsResult(content, call, projects);
-            case GET_EVIDENCE_FOR_CLAIMS -> evidenceResult(content, call, projects);
-            case GET_TIMELINE -> timelineResult(content, call, projects);
-            case SEARCH_PUBLIC_CONTENT -> searchResult(content, call, projects);
+            case GET_CASE -> result(content, call, PublicToolResultStatus.SUCCESS,
+                    cases, List.of(), List.of(), List.of(), List.of());
+            case GET_CLAIMS -> claimsResult(content, call, subjects);
+            case GET_EVIDENCE_FOR_CLAIMS -> evidenceResult(content, call, subjects);
+            case GET_TIMELINE -> timelineResult(content, call, subjects);
+            case SEARCH_PUBLIC_CONTENT -> searchResult(content, call, subjects);
             case COMPARE_PROJECTS -> compareResult(content, call, projects);
         };
     }
@@ -142,13 +148,26 @@ public final class LocalPublicKnowledgeTools implements PublicKnowledgeTools {
                 .toList();
     }
 
+    private List<AnswerKnowledge> selectedCases(
+            RuntimeAnswerContent content,
+            List<String> caseSlugs
+    ) {
+        return caseSlugs.stream()
+                .map(slug -> content.getCases().stream()
+                        .filter(caseStudy -> caseStudy.getSlug().equals(slug))
+                        .findFirst()
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private List<AnswerClaimProjection> selectedClaims(
-            List<AnswerKnowledge> projects,
+            List<AnswerKnowledge> projectsOrCases,
             ToolCall call
     ) {
         Set<String> requestedClaimIds = Set.copyOf(call.getClaimIds());
         Set<AnswerClaimCategory> categories = categoriesFor(call.getSectionType());
-        return projects.stream()
+        return projectsOrCases.stream()
                 .flatMap(project -> project.getClaims().stream())
                 .filter(claim -> requestedClaimIds.isEmpty()
                         || requestedClaimIds.contains(claim.getId()))
@@ -179,14 +198,20 @@ public final class LocalPublicKnowledgeTools implements PublicKnowledgeTools {
             RuntimeAnswerContent content,
             ToolCall call,
             PublicToolResultStatus status,
-            List<AnswerKnowledge> projects,
+            List<AnswerKnowledge> projectsOrCases,
             List<AnswerClaimProjection> claims,
             List<AnswerEvidence> evidence,
             List<AnswerTimelineEvent> timeline,
             List<AnswerQuestion> questions
     ) {
+        List<AnswerKnowledge> projects = projectsOrCases.stream()
+                .filter(item -> item.getSubjectType() == AnswerSubjectType.PROJECT)
+                .toList();
+        List<AnswerKnowledge> cases = projectsOrCases.stream()
+                .filter(item -> item.getSubjectType() == AnswerSubjectType.CASE)
+                .toList();
         return new PublicToolResult(
                 call.getKind(), content.getContentVersion(), content.getRuntimeBundleHash(),
-                status, projects, claims, evidence, timeline, questions);
+                status, projects, cases, claims, evidence, timeline, questions);
     }
 }

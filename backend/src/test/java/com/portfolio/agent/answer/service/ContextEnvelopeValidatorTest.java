@@ -10,6 +10,7 @@ import com.portfolio.agent.answer.domain.AnswerMateriality;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.ContextResolution;
 import com.portfolio.agent.answer.domain.ContextResolutionType;
 import com.portfolio.agent.answer.domain.FollowUpIntent;
@@ -67,6 +68,48 @@ class ContextEnvelopeValidatorTest {
         assertThat(validator.validate(
                 content("2026-07-22.1", "sql-audit", "claim-other"),
                 envelope("2026-07-21.1", "sql-audit", "claim-solution")).getType())
+                .isEqualTo(ContextResolutionType.INVALID);
+    }
+
+    @Test
+    void resolvesCaseReferencesAndRejectsProjectComparisonIntent() {
+        AnswerClaimProjection claim = new AnswerClaimProjection(
+                "claim-case-codegraph-narrowing",
+                AnswerClaimCategory.IMPLEMENTATION,
+                "statement", "detail",
+                AnswerAchievementStatus.PROTOTYPE,
+                AnswerContributionType.PRIMARY,
+                AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                AnswerClaimVerificationStatus.VERIFIED,
+                AnswerMateriality.KEY,
+                List.of("CODE_NAVIGATION"), List.of());
+        AnswerKnowledge caseStudy = new AnswerKnowledge(
+                AnswerSubjectType.CASE,
+                "codegraph-evaluation", "CodeGraph", "summary", "problem",
+                List.of("action"), "solution", List.of("decision"),
+                List.of("verification"), "outcome", "limitation", "PROTOTYPE",
+                List.of(new AnswerQuestion(
+                        "question-case-codegraph-overview", "Overview", List.of(), "Overview")),
+                List.of(), List.of(claim));
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "2026-07-23.1", "sha256:runtime", List.of(), List.of(caseStudy),
+                null, List.of());
+        ContextEnvelopeRequest valid = new ContextEnvelopeRequest(
+                "2026-07-23.1", List.of(), List.of("codegraph-evaluation"),
+                "question-case-codegraph-overview",
+                List.of("claim-case-codegraph-narrowing"),
+                AnswerSectionType.SOLUTION,
+                FollowUpIntent.EXPAND_SECTION);
+        ContextEnvelopeRequest comparison = new ContextEnvelopeRequest(
+                "2026-07-23.1", List.of(), List.of("codegraph-evaluation"),
+                "question-case-codegraph-overview",
+                List.of("claim-case-codegraph-narrowing"),
+                AnswerSectionType.SOLUTION,
+                FollowUpIntent.COMPARE_PROJECTS);
+
+        assertThat(validator.validate(content, valid).getType())
+                .isEqualTo(ContextResolutionType.VALID);
+        assertThat(validator.validate(content, comparison).getType())
                 .isEqualTo(ContextResolutionType.INVALID);
     }
 

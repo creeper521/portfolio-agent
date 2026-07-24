@@ -6,7 +6,9 @@ public enum AnswerErrorCode implements ErrorCode {
 
     INVALID_ANSWER_CONTEXT("INVALID_ANSWER_CONTEXT", "回答上下文包含无效的公开证据引用", 400),
 
-    PROJECT_NOT_FOUND("PROJECT_NOT_FOUND", "公开项目不存在", 404);
+    PROJECT_NOT_FOUND("PROJECT_NOT_FOUND", "公开项目不存在", 404),
+
+    CASE_NOT_FOUND("CASE_NOT_FOUND", "公开案例不存在", 404);
 
     private final String code;
     private final String defaultMessage;

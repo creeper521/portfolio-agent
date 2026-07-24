@@ -21,8 +21,12 @@ public final class ContextEnvelopeRequest {
     private final String previousContentVersion;
 
     @NotNull(message = "projectSlugs is required")
-    @Size(min = 1, max = 4, message = "projectSlugs must contain between 1 and 4 values")
+    @Size(max = 4, message = "projectSlugs must not contain more than 4 values")
     private final List<@Pattern(regexp = "[a-z0-9-]{1,64}", message = "projectSlug format is invalid") String> projectSlugs;
+
+    @NotNull(message = "caseSlugs is required")
+    @Size(max = 1, message = "caseSlugs must not contain more than 1 value")
+    private final List<@Pattern(regexp = "[a-z0-9-]{1,64}", message = "caseSlug format is invalid") String> caseSlugs;
 
     @Pattern(regexp = "[a-z0-9-]{1,100}", message = "questionPresetId format is invalid")
     private final String questionPresetId;
@@ -40,6 +44,7 @@ public final class ContextEnvelopeRequest {
     public ContextEnvelopeRequest(
             @JsonProperty("previousContentVersion") String previousContentVersion,
             @JsonProperty("projectSlugs") List<String> projectSlugs,
+            @JsonProperty("caseSlugs") List<String> caseSlugs,
             @JsonProperty("questionPresetId") String questionPresetId,
             @JsonProperty("referencedClaimIds") List<String> referencedClaimIds,
             @JsonProperty("selectedSectionType") AnswerSectionType selectedSectionType,
@@ -47,6 +52,7 @@ public final class ContextEnvelopeRequest {
     ) {
         this.previousContentVersion = previousContentVersion;
         this.projectSlugs = projectSlugs == null ? List.of() : List.copyOf(projectSlugs);
+        this.caseSlugs = caseSlugs == null ? List.of() : List.copyOf(caseSlugs);
         this.questionPresetId = questionPresetId;
         this.referencedClaimIds = referencedClaimIds == null
                 ? List.of()
@@ -55,8 +61,21 @@ public final class ContextEnvelopeRequest {
         this.followUpIntent = followUpIntent;
     }
 
+    public ContextEnvelopeRequest(
+            String previousContentVersion,
+            List<String> projectSlugs,
+            String questionPresetId,
+            List<String> referencedClaimIds,
+            AnswerSectionType selectedSectionType,
+            FollowUpIntent followUpIntent
+    ) {
+        this(previousContentVersion, projectSlugs, List.of(), questionPresetId,
+                referencedClaimIds, selectedSectionType, followUpIntent);
+    }
+
     public String getPreviousContentVersion() { return previousContentVersion; }
     public List<String> getProjectSlugs() { return projectSlugs; }
+    public List<String> getCaseSlugs() { return caseSlugs; }
     public String getQuestionPresetId() { return questionPresetId; }
     public List<String> getReferencedClaimIds() { return referencedClaimIds; }
     public AnswerSectionType getSelectedSectionType() { return selectedSectionType; }
@@ -65,7 +84,13 @@ public final class ContextEnvelopeRequest {
     @AssertTrue(message = "stable references must be unique")
     public boolean isStableReferencesUnique() {
         return new HashSet<>(projectSlugs).size() == projectSlugs.size()
+                && new HashSet<>(caseSlugs).size() == caseSlugs.size()
                 && new HashSet<>(referencedClaimIds).size() == referencedClaimIds.size();
+    }
+
+    @AssertTrue(message = "exactly one subject type is required")
+    public boolean isSubjectSelectionValid() {
+        return projectSlugs.isEmpty() != caseSlugs.isEmpty();
     }
 
     @Override
@@ -78,6 +103,7 @@ public final class ContextEnvelopeRequest {
         }
         return Objects.equals(previousContentVersion, that.previousContentVersion)
                 && Objects.equals(projectSlugs, that.projectSlugs)
+                && Objects.equals(caseSlugs, that.caseSlugs)
                 && Objects.equals(questionPresetId, that.questionPresetId)
                 && Objects.equals(referencedClaimIds, that.referencedClaimIds)
                 && selectedSectionType == that.selectedSectionType
@@ -86,7 +112,7 @@ public final class ContextEnvelopeRequest {
 
     @Override
     public int hashCode() {
-        return Objects.hash(previousContentVersion, projectSlugs, questionPresetId,
+        return Objects.hash(previousContentVersion, projectSlugs, caseSlugs, questionPresetId,
                 referencedClaimIds, selectedSectionType, followUpIntent);
     }
 
@@ -95,6 +121,7 @@ public final class ContextEnvelopeRequest {
         return "ContextEnvelopeRequest{" +
                 "previousContentVersion='" + previousContentVersion + '\'' +
                 ", projectCount=" + projectSlugs.size() +
+                ", caseCount=" + caseSlugs.size() +
                 ", claimCount=" + referencedClaimIds.size() +
                 ", selectedSectionType=" + selectedSectionType +
                 ", followUpIntent=" + followUpIntent +

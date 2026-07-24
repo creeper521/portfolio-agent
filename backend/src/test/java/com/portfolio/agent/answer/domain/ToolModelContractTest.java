@@ -14,6 +14,7 @@ class ToolModelContractTest {
     void toolCallsContainOnlyClosedStableParameters() {
         assertThat(ToolKind.values()).containsExactly(
                 ToolKind.GET_PROJECT,
+                ToolKind.GET_CASE,
                 ToolKind.GET_CLAIMS,
                 ToolKind.GET_EVIDENCE_FOR_CLAIMS,
                 ToolKind.GET_TIMELINE,
@@ -22,7 +23,7 @@ class ToolModelContractTest {
 
         assertThat(Arrays.stream(ToolCall.class.getDeclaredFields())
                 .map(Field::getName))
-                .containsExactly("kind", "projectSlugs", "claimIds", "sectionType")
+                .containsExactly("kind", "projectSlugs", "caseSlugs", "claimIds", "sectionType")
                 .doesNotContain("query", "path", "url", "command", "expression", "toolName");
     }
 

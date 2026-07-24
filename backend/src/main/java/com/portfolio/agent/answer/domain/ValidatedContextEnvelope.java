@@ -7,10 +7,29 @@ public final class ValidatedContextEnvelope {
 
     private final String contentVersion;
     private final List<String> projectSlugs;
+    private final List<String> caseSlugs;
     private final String questionPresetId;
     private final List<String> referencedClaimIds;
     private final AnswerSectionType selectedSectionType;
     private final FollowUpIntent followUpIntent;
+
+    public ValidatedContextEnvelope(
+            String contentVersion,
+            List<String> projectSlugs,
+            List<String> caseSlugs,
+            String questionPresetId,
+            List<String> referencedClaimIds,
+            AnswerSectionType selectedSectionType,
+            FollowUpIntent followUpIntent
+    ) {
+        this.contentVersion = contentVersion;
+        this.projectSlugs = List.copyOf(projectSlugs);
+        this.caseSlugs = List.copyOf(caseSlugs);
+        this.questionPresetId = questionPresetId;
+        this.referencedClaimIds = List.copyOf(referencedClaimIds);
+        this.selectedSectionType = selectedSectionType;
+        this.followUpIntent = Objects.requireNonNull(followUpIntent, "followUpIntent");
+    }
 
     public ValidatedContextEnvelope(
             String contentVersion,
@@ -20,16 +39,13 @@ public final class ValidatedContextEnvelope {
             AnswerSectionType selectedSectionType,
             FollowUpIntent followUpIntent
     ) {
-        this.contentVersion = contentVersion;
-        this.projectSlugs = List.copyOf(projectSlugs);
-        this.questionPresetId = questionPresetId;
-        this.referencedClaimIds = List.copyOf(referencedClaimIds);
-        this.selectedSectionType = selectedSectionType;
-        this.followUpIntent = Objects.requireNonNull(followUpIntent, "followUpIntent");
+        this(contentVersion, projectSlugs, List.of(), questionPresetId,
+                referencedClaimIds, selectedSectionType, followUpIntent);
     }
 
     public String getContentVersion() { return contentVersion; }
     public List<String> getProjectSlugs() { return projectSlugs; }
+    public List<String> getCaseSlugs() { return caseSlugs; }
     public String getQuestionPresetId() { return questionPresetId; }
     public List<String> getReferencedClaimIds() { return referencedClaimIds; }
     public AnswerSectionType getSelectedSectionType() { return selectedSectionType; }
@@ -37,6 +53,7 @@ public final class ValidatedContextEnvelope {
 
     public QueryIntent toQueryIntent() {
         return new QueryIntent(
-                followUpIntent, projectSlugs, referencedClaimIds, selectedSectionType);
+                followUpIntent, projectSlugs, caseSlugs,
+                referencedClaimIds, selectedSectionType);
     }
 }

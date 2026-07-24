@@ -12,6 +12,7 @@ public final class AnswerTurnSnapshot {
     private final String contentVersion;
     private final String runtimeBundleHash;
     private final String projectSlug;
+    private final String caseSlug;
     private final String questionPresetId;
     private final List<String> approvedEvidenceIds;
     private final AudienceRole audienceRole;
@@ -29,7 +30,12 @@ public final class AnswerTurnSnapshot {
         this.requestId = requestId;
         this.contentVersion = content.getContentVersion();
         this.runtimeBundleHash = content.getRuntimeBundleHash();
-        this.projectSlug = resolution.getProject().getSlug();
+        this.projectSlug = resolution.getProject().getSubjectType() == AnswerSubjectType.PROJECT
+                ? resolution.getProject().getSlug()
+                : null;
+        this.caseSlug = resolution.getProject().getSubjectType() == AnswerSubjectType.CASE
+                ? resolution.getProject().getSlug()
+                : null;
         this.questionPresetId = resolution.getQuestionPreset() == null
                 ? null
                 : resolution.getQuestionPreset().getId();
@@ -51,11 +57,28 @@ public final class AnswerTurnSnapshot {
             AudienceRole audienceRole,
             AnswerRequestSource source
     ) {
+        this(turnId, requestId, contentVersion, runtimeBundleHash, projectSlug, null,
+                questionPresetId, approvedEvidenceIds, audienceRole, source);
+    }
+
+    public AnswerTurnSnapshot(
+            String turnId,
+            String requestId,
+            String contentVersion,
+            String runtimeBundleHash,
+            String projectSlug,
+            String caseSlug,
+            String questionPresetId,
+            List<String> approvedEvidenceIds,
+            AudienceRole audienceRole,
+            AnswerRequestSource source
+    ) {
         this.turnId = turnId;
         this.requestId = requestId;
         this.contentVersion = contentVersion;
         this.runtimeBundleHash = runtimeBundleHash;
         this.projectSlug = projectSlug;
+        this.caseSlug = caseSlug;
         this.questionPresetId = questionPresetId;
         this.approvedEvidenceIds = List.copyOf(approvedEvidenceIds);
         this.audienceRole = audienceRole;
@@ -67,6 +90,7 @@ public final class AnswerTurnSnapshot {
     public String getContentVersion() { return contentVersion; }
     public String getRuntimeBundleHash() { return runtimeBundleHash; }
     public String getProjectSlug() { return projectSlug; }
+    public String getCaseSlug() { return caseSlug; }
     public String getQuestionPresetId() { return questionPresetId; }
     public List<String> getApprovedEvidenceIds() { return approvedEvidenceIds; }
     public AudienceRole getAudienceRole() { return audienceRole; }

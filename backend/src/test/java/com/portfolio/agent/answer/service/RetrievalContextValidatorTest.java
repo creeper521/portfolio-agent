@@ -81,7 +81,8 @@ class RetrievalContextValidatorTest {
                 distinctClaims, List.of(evidence("evidence-1"), evidence("evidence-2")),
                 Map.of("chunk-1", chunk("chunk-1", "claim-1", 100),
                         "chunk-2", chunk("chunk-2", "claim-2", 100)),
-                List.of(candidate("chunk-1", 0.0300), candidate("chunk-2", 0.0297)),
+                List.of(candidate("chunk-1", 1, 2, 0.0300),
+                        candidate("chunk-2", 2, 1, 0.0297)),
                 RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.firstRelease());
         assertThat(ambiguous.getType()).isEqualTo(RetrievalDecisionType.AMBIGUOUS);
 
@@ -97,6 +98,25 @@ class RetrievalContextValidatorTest {
                 List.of(candidate("chunk-1", 0.04), candidate("chunk-2", 0.02)),
                 RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.firstRelease());
         assertThat(conflicting.getType()).isEqualTo(RetrievalDecisionType.CONFLICTING);
+    }
+
+    @Test
+    void acceptsCloseCandidatesWhenKeywordAndVectorAgreeOnTheLeader() {
+        List<AnswerClaimProjection> claims = List.of(
+                claim("claim-1", AnswerAchievementStatus.DELIVERED,
+                        AnswerMateriality.KEY, List.of("evidence-1")),
+                claim("claim-2", AnswerAchievementStatus.DELIVERED,
+                        AnswerMateriality.KEY, List.of("evidence-2")));
+
+        RetrievalDecision decision = validator.validate(
+                claims, List.of(evidence("evidence-1"), evidence("evidence-2")),
+                Map.of("chunk-1", chunk("chunk-1", "claim-1", 100),
+                        "chunk-2", chunk("chunk-2", "claim-2", 100)),
+                List.of(candidate("chunk-1", 1, 1, 0.03278),
+                        candidate("chunk-2", 2, 2, 0.03225)),
+                RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.firstRelease());
+
+        assertThat(decision.getType()).isEqualTo(RetrievalDecisionType.SUFFICIENT);
     }
 
     private AnswerClaimProjection claim(
@@ -126,5 +146,14 @@ class RetrievalContextValidatorTest {
 
     private RetrievalCandidate candidate(String id, double score) {
         return new RetrievalCandidate(id, 1, 1, score);
+    }
+
+    private RetrievalCandidate candidate(
+            String id,
+            Integer keywordRank,
+            Integer vectorRank,
+            double score
+    ) {
+        return new RetrievalCandidate(id, keywordRank, vectorRank, score);
     }
 }

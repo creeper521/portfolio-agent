@@ -8,6 +8,7 @@ public final class RuntimeAnswerContent {
     private final String contentVersion;
     private final String runtimeBundleHash;
     private final List<AnswerKnowledge> projects;
+    private final List<AnswerKnowledge> cases;
     private final AnswerRetrievalCorpus retrievalCorpus;
     private final List<AnswerTimelineEvent> timeline;
     private final RuntimeCapabilities capabilities;
@@ -17,7 +18,7 @@ public final class RuntimeAnswerContent {
             String runtimeBundleHash,
             List<AnswerKnowledge> projects
     ) {
-        this(contentVersion, runtimeBundleHash, projects, null, List.of());
+        this(contentVersion, runtimeBundleHash, projects, List.of(), null, List.of());
     }
 
     public RuntimeAnswerContent(
@@ -26,7 +27,7 @@ public final class RuntimeAnswerContent {
             List<AnswerKnowledge> projects,
             AnswerRetrievalCorpus retrievalCorpus
     ) {
-        this(contentVersion, runtimeBundleHash, projects, retrievalCorpus, List.of());
+        this(contentVersion, runtimeBundleHash, projects, List.of(), retrievalCorpus, List.of());
     }
 
     public RuntimeAnswerContent(
@@ -36,13 +37,25 @@ public final class RuntimeAnswerContent {
             AnswerRetrievalCorpus retrievalCorpus,
             List<AnswerTimelineEvent> timeline
     ) {
-        boolean presetAnswers = projects.stream()
+        this(contentVersion, runtimeBundleHash, projects, List.of(), retrievalCorpus, timeline);
+    }
+
+    public RuntimeAnswerContent(
+            String contentVersion,
+            String runtimeBundleHash,
+            List<AnswerKnowledge> projects,
+            List<AnswerKnowledge> cases,
+            AnswerRetrievalCorpus retrievalCorpus,
+            List<AnswerTimelineEvent> timeline
+    ) {
+        boolean presetAnswers = java.util.stream.Stream.concat(projects.stream(), cases.stream())
                 .anyMatch(project -> !project.getQuestions().isEmpty());
-        boolean stableReferences = projects.stream()
+        boolean stableReferences = java.util.stream.Stream.concat(projects.stream(), cases.stream())
                 .anyMatch(project -> !project.getClaims().isEmpty());
         this.contentVersion = contentVersion;
         this.runtimeBundleHash = runtimeBundleHash;
         this.projects = List.copyOf(projects);
+        this.cases = List.copyOf(cases);
         this.retrievalCorpus = retrievalCorpus;
         this.timeline = List.copyOf(timeline);
         this.capabilities = new RuntimeCapabilities(
@@ -64,6 +77,7 @@ public final class RuntimeAnswerContent {
         this.contentVersion = contentVersion;
         this.runtimeBundleHash = runtimeBundleHash;
         this.projects = List.copyOf(projects);
+        this.cases = List.of();
         this.retrievalCorpus = retrievalCorpus;
         this.timeline = List.copyOf(timeline);
         this.capabilities = java.util.Objects.requireNonNull(capabilities, "capabilities");
@@ -80,6 +94,8 @@ public final class RuntimeAnswerContent {
     public List<AnswerKnowledge> getProjects() {
         return projects;
     }
+
+    public List<AnswerKnowledge> getCases() { return cases; }
 
     public Optional<AnswerRetrievalCorpus> getRetrievalCorpus() {
         return Optional.ofNullable(retrievalCorpus);

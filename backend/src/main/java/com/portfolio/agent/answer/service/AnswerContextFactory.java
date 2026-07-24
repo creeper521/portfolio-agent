@@ -93,9 +93,14 @@ public final class AnswerContextFactory {
             AnswerRequest request,
             String requestId
     ) {
-        AnswerKnowledge project = content.getProjects().stream()
-                .filter(candidate -> candidate.getSlug()
-                        .equals(request.getContext().getProjectSlug()))
+        List<AnswerKnowledge> available = request.getContext().getCaseSlug() == null
+                ? content.getProjects()
+                : content.getCases();
+        String requestedSlug = request.getContext().getCaseSlug() == null
+                ? request.getContext().getProjectSlug()
+                : request.getContext().getCaseSlug();
+        AnswerKnowledge project = available.stream()
+                .filter(candidate -> candidate.getSlug().equals(requestedSlug))
                 .findFirst()
                 .orElseThrow(InvalidAnswerContextException::new);
         List<AnswerClaimProjection> selectedClaims = outcome.getClaims();
@@ -108,13 +113,21 @@ public final class AnswerContextFactory {
                 requestId,
                 content.getContentVersion(),
                 content.getRuntimeBundleHash(),
-                project.getSlug(),
+                project.getSubjectType()
+                        == com.portfolio.agent.answer.domain.AnswerSubjectType.PROJECT
+                        ? project.getSlug()
+                        : null,
+                project.getSubjectType()
+                        == com.portfolio.agent.answer.domain.AnswerSubjectType.CASE
+                        ? project.getSlug()
+                        : null,
                 envelope.getQuestionPresetId(),
                 selectedEvidence.stream().map(AnswerEvidence::getId).distinct().toList(),
                 request.getContext().getAudienceRole(),
                 request.getContext().getSource());
         String canonicalIntent = "followUpIntent=" + envelope.getFollowUpIntent().name()
                 + "; projects=" + String.join(",", envelope.getProjectSlugs())
+                + "; cases=" + String.join(",", envelope.getCaseSlugs())
                 + "; section=" + (envelope.getSelectedSectionType() == null
                         ? "none"
                         : envelope.getSelectedSectionType().name())

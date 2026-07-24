@@ -46,13 +46,33 @@ class ToolPlanBuilderTest {
 
         ToolPlan plan = builder.build(content, intent, 4);
 
-        assertThat(plan.getToolPolicyVersion()).isEqualTo("c2b-tools-v1");
+        assertThat(plan.getToolPolicyVersion()).isEqualTo("c2b-tools-v2");
         assertThat(plan.getContentVersion()).isEqualTo("2026-07-21.1");
         assertThat(plan.getRuntimeBundleHash()).isEqualTo("sha256:runtime");
         assertThat(plan.getCalls()).hasSize(3);
         assertThatThrownBy(() -> builder.build(content, intent, 2))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tool call budget");
+    }
+
+    @Test
+    void mapsCaseExpansionToGetCaseWithoutProjectTools() {
+        QueryIntent intent = new QueryIntent(
+                FollowUpIntent.EXPAND_SECTION,
+                List.of(),
+                List.of("codegraph-evaluation"),
+                List.of("claim-case-codegraph-narrowing"),
+                AnswerSectionType.SOLUTION);
+
+        ToolPlan plan = builder.build(content, intent, 4);
+
+        assertThat(plan.getCalls()).extracting(call -> call.getKind())
+                .containsExactly(
+                        ToolKind.GET_CASE,
+                        ToolKind.GET_CLAIMS,
+                        ToolKind.GET_EVIDENCE_FOR_CLAIMS);
+        assertThat(plan.getCalls()).allSatisfy(call ->
+                assertThat(call.getCaseSlugs()).containsExactly("codegraph-evaluation"));
     }
 
     private void assertKinds(FollowUpIntent followUpIntent, ToolKind... expected) {

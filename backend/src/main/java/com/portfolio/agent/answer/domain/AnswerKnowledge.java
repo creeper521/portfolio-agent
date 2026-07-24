@@ -5,6 +5,7 @@ import java.util.Objects;
 
 public final class AnswerKnowledge {
 
+    private final AnswerSubjectType subjectType;
     private final String slug;
     private final String title;
     private final String summary;
@@ -36,6 +37,29 @@ public final class AnswerKnowledge {
             List<AnswerEvidence> evidence,
             List<AnswerClaimProjection> claims
     ) {
+        this(AnswerSubjectType.PROJECT, slug, title, summary, background, responsibilities,
+                solution, keyDecisions, verification, outcome, handoff, status,
+                questions, evidence, claims);
+    }
+
+    public AnswerKnowledge(
+            AnswerSubjectType subjectType,
+            String slug,
+            String title,
+            String summary,
+            String background,
+            List<String> responsibilities,
+            String solution,
+            List<String> keyDecisions,
+            List<String> verification,
+            String outcome,
+            String handoff,
+            String status,
+            List<AnswerQuestion> questions,
+            List<AnswerEvidence> evidence,
+            List<AnswerClaimProjection> claims
+    ) {
+        this.subjectType = Objects.requireNonNull(subjectType, "subjectType");
         this.slug = slug;
         this.title = title;
         this.summary = summary;
@@ -51,6 +75,8 @@ public final class AnswerKnowledge {
         this.questions = List.copyOf(questions);
         this.evidence = List.copyOf(evidence);
     }
+
+    public AnswerSubjectType getSubjectType() { return subjectType; }
 
     public AnswerKnowledge(String slug, String title, String summary, String background,
             List<String> responsibilities, String solution, List<String> keyDecisions,
@@ -139,6 +165,7 @@ public final class AnswerKnowledge {
             return false;
         }
         return Objects.equals(slug, that.slug)
+                && subjectType == that.subjectType
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(background, that.background)
@@ -156,7 +183,7 @@ public final class AnswerKnowledge {
 
     @Override
     public int hashCode() {
-        return Objects.hash(slug, title, summary, background, responsibilities, solution, keyDecisions,
+        return Objects.hash(subjectType, slug, title, summary, background, responsibilities, solution, keyDecisions,
                 verification, outcome, handoff, status, questions, evidence, claims);
     }
 

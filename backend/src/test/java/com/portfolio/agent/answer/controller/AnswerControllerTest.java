@@ -21,6 +21,69 @@ class AnswerControllerTest {
     private MockMvc mockMvc;
 
     @Test
+    void returnsFiveSectionAnswerForCasePreset() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-case-preset",
+                                  "questionPresetId": "question-case-codegraph-overview",
+                                  "context": {
+                                    "caseSlug": "codegraph-evaluation",
+                                    "audienceRole": "INTERVIEWER",
+                                    "focusEvidenceIds": ["evidence-case-codegraph-report-collection"],
+                                    "source": "AGENT_PAGE"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.answerSource").value("PRESET"))
+                .andExpect(jsonPath("$.verification").value("VERIFIED"))
+                .andExpect(jsonPath("$.sections.length()").value(5))
+                .andExpect(jsonPath("$.sections[0].type").value("BACKGROUND"))
+                .andExpect(jsonPath("$.sections[4].type").value("STATUS"))
+                .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
+                        .value("question-case-codegraph-overview"))
+                .andExpect(jsonPath("$.contextEnvelope.projectSlugs.length()").value(0))
+                .andExpect(jsonPath("$.contextEnvelope.caseSlugs[0]")
+                        .value("codegraph-evaluation"));
+    }
+
+    @Test
+    void followsUpOnCaseUsingOnlyStableCaseReferences() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "turn-case-follow-up",
+                                  "question": "解释这个决策",
+                                  "context": {
+                                    "caseSlug": "codegraph-evaluation",
+                                    "audienceRole": "INTERVIEWER",
+                                    "focusEvidenceIds": [],
+                                    "source": "AGENT_PAGE"
+                                  },
+                                  "contextEnvelope": {
+                                    "previousContentVersion": "2026-07-23.1",
+                                    "projectSlugs": [],
+                                    "caseSlugs": ["codegraph-evaluation"],
+                                    "questionPresetId": "question-case-codegraph-overview",
+                                    "referencedClaimIds": ["claim-case-codegraph-narrowing"],
+                                    "selectedSectionType": "SOLUTION",
+                                    "followUpIntent": "EXPLAIN_DECISION"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
+                .andExpect(jsonPath("$.contextEnvelope.projectSlugs.length()").value(0))
+                .andExpect(jsonPath("$.contextEnvelope.caseSlugs[0]")
+                        .value("codegraph-evaluation"));
+    }
+
+    @Test
     void returnsFiveSectionAnswerAndEvidenceForCanonicalQuestion() throws Exception {
         mockMvc.perform(post("/api/v1/answers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -177,6 +240,19 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"))
                 .andExpect(jsonPath("$.message")
                         .value("公开项目不存在: missing-project"));
+    }
+
+    @Test
+    void returnsNotFoundWhenAnswerCaseDoesNotExist() throws Exception {
+        mockMvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"turnId":"turn-missing-case","question":"介绍案例","context":{"caseSlug":"missing-case","audienceRole":"GUEST","focusEvidenceIds":[],"source":"AGENT_PAGE"}}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message")
+                        .value("公开案例不存在: missing-case"));
     }
 
     @Test

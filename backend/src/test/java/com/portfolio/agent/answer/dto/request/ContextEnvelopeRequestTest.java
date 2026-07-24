@@ -20,19 +20,23 @@ class ContextEnvelopeRequestTest {
     @Test
     void keepsOnlyBoundedStableReferencesAndDefensivelyCopiesLists() {
         List<String> projectSlugs = new ArrayList<>(List.of("sql-audit"));
+        List<String> caseSlugs = new ArrayList<>();
         List<String> claimIds = new ArrayList<>(List.of("claim-sql-audit-delivered"));
 
         ContextEnvelopeRequest envelope = new ContextEnvelopeRequest(
                 "2026-07-21.1",
                 projectSlugs,
+                caseSlugs,
                 "sql-audit-full-introduction",
                 claimIds,
                 AnswerSectionType.SOLUTION,
                 FollowUpIntent.EXPAND_SECTION);
         projectSlugs.add("unreviewed-project");
+        caseSlugs.add("unreviewed-case");
         claimIds.add("unreviewed-claim");
 
         assertThat(envelope.getProjectSlugs()).containsExactly("sql-audit");
+        assertThat(envelope.getCaseSlugs()).isEmpty();
         assertThat(envelope.getReferencedClaimIds())
                 .containsExactly("claim-sql-audit-delivered");
         assertThat(envelope.toString())
@@ -46,6 +50,7 @@ class ContextEnvelopeRequestTest {
         ContextEnvelopeRequest duplicate = new ContextEnvelopeRequest(
                 "2026-07-21.1",
                 List.of("sql-audit", "sql-audit"),
+                List.of(),
                 null,
                 List.of("claim-one", "claim-one"),
                 null,
@@ -53,6 +58,7 @@ class ContextEnvelopeRequestTest {
         ContextEnvelopeRequest overBudget = new ContextEnvelopeRequest(
                 "2026-07-21.1",
                 List.of("project-1", "project-2", "project-3", "project-4", "project-5"),
+                List.of(),
                 null,
                 List.of(
                         "claim-1", "claim-2", "claim-3", "claim-4", "claim-5",
@@ -78,6 +84,7 @@ class ContextEnvelopeRequestTest {
         ContextEnvelopeRequest envelope = new ContextEnvelopeRequest(
                 "bad version with spaces",
                 List.of("../private"),
+                List.of("../private-case"),
                 "INVALID_PRESET",
                 List.of("claim/../../private"),
                 null,
@@ -88,8 +95,45 @@ class ContextEnvelopeRequestTest {
                 .contains(
                         "previousContentVersion",
                         "projectSlugs[0].<list element>",
+                        "caseSlugs[0].<list element>",
                         "questionPresetId",
                         "referencedClaimIds[0].<list element>",
                         "followUpIntent");
+    }
+
+    @Test
+    void acceptsExactlyOneCaseAndRejectsMixedOrMissingSubjects() {
+        ContextEnvelopeRequest caseEnvelope = new ContextEnvelopeRequest(
+                "2026-07-23.1",
+                List.of(),
+                List.of("codegraph-evaluation"),
+                "question-case-codegraph-overview",
+                List.of("claim-case-codegraph-narrowing"),
+                AnswerSectionType.SOLUTION,
+                FollowUpIntent.EXPLAIN_DECISION);
+        ContextEnvelopeRequest mixedEnvelope = new ContextEnvelopeRequest(
+                "2026-07-23.1",
+                List.of("sql-audit"),
+                List.of("codegraph-evaluation"),
+                null,
+                List.of(),
+                null,
+                FollowUpIntent.CURRENT_STATUS);
+        ContextEnvelopeRequest missingSubjectEnvelope = new ContextEnvelopeRequest(
+                "2026-07-23.1",
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                null,
+                FollowUpIntent.CURRENT_STATUS);
+
+        assertThat(validator.validate(caseEnvelope)).isEmpty();
+        assertThat(validator.validate(mixedEnvelope))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("subjectSelectionValid");
+        assertThat(validator.validate(missingSubjectEnvelope))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("subjectSelectionValid");
     }
 }
