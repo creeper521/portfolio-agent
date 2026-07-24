@@ -97,14 +97,20 @@ The final decision ledger, not this initial route, is authoritative.
 
 **Files**
 
+- Create a tracked canonical package by vendoring the current reviewed local
+  skill runtime:
+  `governance/portfolio-governance/`
 - Create:
-  `.agents/skills/portfolio-governance/schemas/asset-publication-decision-ledger.schema.json`
+  `governance/portfolio-governance/schemas/asset-publication-decision-ledger.schema.json`
 - Modify:
-  `.agents/skills/portfolio-governance/scripts/portfolio-governance.ps1`
+  `governance/portfolio-governance/scripts/portfolio-governance.ps1`
 - Modify:
   `scripts/portfolio-governance.ps1`
 - Modify:
   `scripts/portfolio-governance.test.ps1`
+- Modify:
+  `scripts/verify-release.ps1`
+- Modify corresponding release-verification tests.
 - Private generated file, never committed:
   `agent_docs_staging/portfolio-governance/decisions/asset-publication-decisions-2026-07-24.json`
 
@@ -181,10 +187,17 @@ Rules:
 
 **CLI interface and hash chain**
 
-Both wrappers gain mandatory `-DecisionLedger` for content-changing governance:
+The tracked canonical runtime and repository wrapper gain mandatory
+`-DecisionLedger` for content-changing governance:
 
-- `.agents/skills/portfolio-governance/scripts/portfolio-governance.ps1`
+- `governance/portfolio-governance/scripts/portfolio-governance.ps1`
 - `scripts/portfolio-governance.ps1`
+
+The wrapper and `verify-release.ps1` resolve only the tracked
+`governance/portfolio-governance` package. The ignored local
+`.agents/skills/portfolio-governance` directory is development input, is never
+force-added and is not a runtime dependency. Tests prove a clean checkout works
+without `.agents` and contains no repository-script reference to it.
 
 The `validate`, `benchmark`, `build-review-pack`, `approve`, `publish` and
 `verify` commands all load the same immutable ledger bytes and recompute
@@ -476,7 +489,7 @@ Every KEY Claim requires an `APPROVED + DIRECT` Evidence Link.
 **Files**
 
 - Modify:
-  `.agents/skills/portfolio-governance/benchmark/active-benchmarks.v1.json`
+  `governance/portfolio-governance/benchmark/active-benchmarks.v1.json`
 - Modify:
   `backend/src/test/resources/retrieval-benchmark/cases.json`
 - Modify strict fixture/coverage tests.
