@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -11,17 +14,18 @@ public final class ToolCall {
     private final List<String> claimIds;
     private final AnswerSectionType sectionType;
 
+    @JsonCreator
     public ToolCall(
-            ToolKind kind,
-            List<String> projectSlugs,
-            List<String> caseSlugs,
-            List<String> claimIds,
-            AnswerSectionType sectionType
+            @JsonProperty("kind") ToolKind kind,
+            @JsonProperty("projectSlugs") List<String> projectSlugs,
+            @JsonProperty("caseSlugs") List<String> caseSlugs,
+            @JsonProperty("claimIds") List<String> claimIds,
+            @JsonProperty("sectionType") AnswerSectionType sectionType
     ) {
         this.kind = Objects.requireNonNull(kind, "kind");
-        this.projectSlugs = List.copyOf(projectSlugs);
-        this.caseSlugs = List.copyOf(caseSlugs);
-        this.claimIds = List.copyOf(claimIds);
+        this.projectSlugs = projectSlugs == null ? List.of() : List.copyOf(projectSlugs);
+        this.caseSlugs = caseSlugs == null ? List.of() : List.copyOf(caseSlugs);
+        this.claimIds = claimIds == null ? List.of() : List.copyOf(claimIds);
         this.sectionType = sectionType;
     }
 
