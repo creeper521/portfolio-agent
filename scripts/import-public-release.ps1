@@ -22,9 +22,11 @@ $fileNames = @(
 )
 $ownedTemporaryPrefix = '.public-release-import-temp-'
 $ownedBackupPrefix = '.public-release-import-backup-'
+$ownedQuarantinePrefix = '.public-release-import-quarantine-'
 $knownFaults = @(
     'Copy', 'Readback', 'TempVerify', 'RenameCurrent',
-    'RenameTemp', 'FinalVerify', 'BackupDelete'
+    'RenameTemp', 'FinalVerify', 'BackupDelete',
+    'QuarantineRename', 'BackupRestore', 'QuarantineCleanup'
 )
 
 function Test-Contained([string]$Child, [string]$Parent) {
@@ -119,9 +121,19 @@ function Invoke-TestFault([string]$Stage) {
     if (-not $script:testMode) {
         return
     }
-    if ($script:testFault -eq $Stage) {
+    $rollbackFaults = @(
+        'QuarantineRename', 'BackupRestore', 'QuarantineCleanup')
+    if ($script:testFault -eq $Stage -or
+            ($Stage -eq 'FinalVerify' -and
+                $script:testFault -in $rollbackFaults)) {
         throw "Injected import failure at $Stage."
     }
+}
+
+function Stop-ManualRecovery {
+    [Console]::Error.WriteLine(
+        'PUBLIC_RELEASE_IMPORT_MANUAL_RECOVERY_REQUIRED')
+    exit 2
 }
 
 function Invoke-PublicVerifier([string]$Directory) {
@@ -202,6 +214,19 @@ $testFault = ''
 if ($testMode) {
     $testRoot = Resolve-SafeExistingPath `
         $env:PUBLIC_RELEASE_IMPORT_TEST_ROOT 'testRoot' $true
+    $systemTemporary = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $testRootParent = Split-Path -Parent $testRoot
+    $testRootLeaf = Split-Path -Leaf $testRoot
+    if (-not $testRootParent.Equals(
+                $systemTemporary.TrimEnd(
+                    [IO.Path]::DirectorySeparatorChar,
+                    [IO.Path]::AltDirectorySeparatorChar),
+                [StringComparison]::OrdinalIgnoreCase) -or
+            $testRootLeaf -notmatch
+                '^import-public-release-[0-9a-f]{32}$' -or
+            (Test-Contained $testRoot $repositoryRoot)) {
+        throw 'Import test root must be a dedicated system temporary directory.'
+    }
     $testFault = [string]$env:PUBLIC_RELEASE_IMPORT_FAULT
     if (-not [string]::IsNullOrWhiteSpace($testFault) -and
             $testFault -notin $knownFaults) {
@@ -229,7 +254,12 @@ Assert-ClosedSevenFileDirectory $sourceDirectory
 
 $targetDirectory = if ($testMode) {
     $candidate = [IO.Path]::GetFullPath($env:PUBLIC_RELEASE_IMPORT_TARGET)
-    if (-not (Test-Contained $candidate $testRoot)) {
+    $realRuntimeBundle = [IO.Path]::GetFullPath(
+        (Join-Path $repositoryRoot `
+            'backend\src\main\resources\public-data\bundle'))
+    if (-not (Test-Contained $candidate $testRoot) -or
+            (Test-Contained $candidate $repositoryRoot) -or
+            (Test-Contained $candidate $realRuntimeBundle)) {
         throw 'Test target escapes test root.'
     }
     Resolve-SafeExistingPath $candidate 'testTarget' $true
@@ -243,20 +273,34 @@ else {
 $targetParent = Split-Path -Parent $targetDirectory
 
 $governanceScript = if ($testMode) {
-    Resolve-SafeExistingPath `
+    $candidateGovernance = Resolve-SafeExistingPath `
         $env:PUBLIC_RELEASE_IMPORT_GOVERNANCE 'testGovernance' $false
+    if (-not (Test-Contained $candidateGovernance $testRoot)) {
+        throw 'Test governance command escapes test root.'
+    }
+    $candidateGovernance
 }
 else {
     Join-Path $repositoryRoot 'scripts\portfolio-governance.ps1'
 }
 $javaExecutable = if ($testMode) {
-    Resolve-SafeExistingPath $env:PUBLIC_RELEASE_IMPORT_JAVA 'testJava' $false
+    $candidateJava = Resolve-SafeExistingPath `
+        $env:PUBLIC_RELEASE_IMPORT_JAVA 'testJava' $false
+    if (-not (Test-Contained $candidateJava $testRoot)) {
+        throw 'Test Java command escapes test root.'
+    }
+    $candidateJava
 }
 else {
     (Get-Command java.exe -ErrorAction Stop).Source
 }
 $jarPath = if ($testMode) {
-    Resolve-SafeExistingPath $env:PUBLIC_RELEASE_IMPORT_JAR 'testJar' $false
+    $candidateJar = Resolve-SafeExistingPath `
+        $env:PUBLIC_RELEASE_IMPORT_JAR 'testJar' $false
+    if (-not (Test-Contained $candidateJar $testRoot)) {
+        throw 'Test JAR escapes test root.'
+    }
+    $candidateJar
 }
 else {
     Resolve-SafeExistingPath (
@@ -304,8 +348,11 @@ $temporary = Join-Path $targetParent (
     $ownedTemporaryPrefix + [guid]::NewGuid().ToString('N'))
 $backup = Join-Path $targetParent (
     $ownedBackupPrefix + [guid]::NewGuid().ToString('N'))
+$quarantine = Join-Path $targetParent (
+    $ownedQuarantinePrefix + [guid]::NewGuid().ToString('N'))
 $backupCreated = $false
 $newInstalled = $false
+$quarantineCreated = $false
 $finalVerified = $false
 try {
     New-Item -ItemType Directory -Path $temporary | Out-Null
@@ -342,10 +389,36 @@ try {
 catch {
     if ($backupCreated -and (Test-Path -LiteralPath $backup)) {
         if ($newInstalled -and (Test-Path -LiteralPath $targetDirectory)) {
-            Remove-Item -LiteralPath $targetDirectory -Recurse -Force
+            try {
+                Invoke-TestFault 'QuarantineRename'
+                Move-Item -LiteralPath $targetDirectory -Destination $quarantine
+                $quarantineCreated = $true
+                $newInstalled = $false
+            }
+            catch {
+                Stop-ManualRecovery
+            }
         }
-        Move-Item -LiteralPath $backup -Destination $targetDirectory
-        $backupCreated = $false
+        try {
+            Invoke-TestFault 'BackupRestore'
+            Move-Item -LiteralPath $backup -Destination $targetDirectory
+            $backupCreated = $false
+        }
+        catch {
+            Stop-ManualRecovery
+        }
+        if ($quarantineCreated -and
+                (Test-Path -LiteralPath $quarantine)) {
+            try {
+                Invoke-TestFault 'QuarantineCleanup'
+                Remove-OwnedDirectory `
+                    $quarantine $targetParent $ownedQuarantinePrefix
+                $quarantineCreated = $false
+            }
+            catch {
+                Stop-ManualRecovery
+            }
+        }
     }
     if (Test-Path -LiteralPath $temporary) {
         Remove-OwnedDirectory $temporary $targetParent $ownedTemporaryPrefix

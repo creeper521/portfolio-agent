@@ -19,6 +19,11 @@ $fileNames = @(
     'rag-documents.jsonl',
     'vector-index.bin'
 )
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$realRuntimeBundle = Join-Path $repositoryRoot `
+    'backend\src\main\resources\public-data\bundle'
+$repositoryAttackTarget = Join-Path $repositoryRoot `
+    '.superpowers\sdd\f4-repository-root-attack-target'
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) {
@@ -59,6 +64,26 @@ function Write-Bundle([string]$Directory, [string]$Marker) {
     }
 }
 
+function Assert-TestFixtureIsolation {
+    $temporaryParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar)
+    Assert-True ((Split-Path -Parent $fixtureRoot).Equals(
+            $temporaryParent, [StringComparison]::OrdinalIgnoreCase)) `
+        'Test fixture root must be an immediate child of the system temp directory.'
+    Assert-True ((Split-Path -Leaf $fixtureRoot) -match
+            '^import-public-release-[0-9a-f]{32}$') `
+        'Test fixture root must use the dedicated random prefix.'
+    Assert-True (-not [IO.Path]::GetFullPath($target).StartsWith(
+            [IO.Path]::GetFullPath($repositoryRoot),
+            [StringComparison]::OrdinalIgnoreCase)) `
+        'Default synthetic target must not be inside the repository.'
+    Assert-True (-not [IO.Path]::GetFullPath($target).Equals(
+            [IO.Path]::GetFullPath($realRuntimeBundle),
+            [StringComparison]::OrdinalIgnoreCase)) `
+        'Default synthetic target must never be the real runtime Bundle.'
+}
+
 function Reset-Fixture {
     foreach ($path in @($source, $target)) {
         if (Test-Path -LiteralPath $path) {
@@ -78,8 +103,14 @@ function Reset-Fixture {
         'unrelated.keep') -Value 'preserve'
     $env:PUBLIC_RELEASE_IMPORT_FAULT = ''
     $env:PUBLIC_RELEASE_IMPORT_TEST_MODE = '1'
+    $env:PUBLIC_RELEASE_IMPORT_TEST_ROOT = $fixtureRoot
+    $env:PUBLIC_RELEASE_IMPORT_TARGET = $target
+    $env:PUBLIC_RELEASE_IMPORT_GOVERNANCE = $fakeGovernance
+    $env:PUBLIC_RELEASE_IMPORT_JAVA = $fakeJava
+    $env:PUBLIC_RELEASE_IMPORT_JAR = Join-Path $fixtureRoot 'fake.jar'
     $env:PUBLIC_RELEASE_IMPORT_GOVERNANCE_MODE = 'MATCH'
     $env:PUBLIC_RELEASE_IMPORT_VERIFIER_MODE = 'MATCH'
+    Assert-TestFixtureIsolation
 }
 
 function Invoke-Import([string[]]$Arguments) {
@@ -220,6 +251,81 @@ exit /b %ERRORLEVEL%
     Assert-True ((Get-DirectoryDigest $target) -eq $oldDigest) `
         'Unsafe path rejection must preserve the old Bundle.'
 
+    Reset-Fixture
+    try {
+        if (Test-Path -LiteralPath $repositoryAttackTarget) {
+            Remove-Item -LiteralPath $repositoryAttackTarget -Recurse -Force
+        }
+        Write-Bundle $repositoryAttackTarget 'old'
+        $env:PUBLIC_RELEASE_IMPORT_TEST_ROOT = $repositoryRoot
+        $env:PUBLIC_RELEASE_IMPORT_TARGET = $repositoryAttackTarget
+        $oldDigest = Get-DirectoryDigest $repositoryAttackTarget
+        $result = Invoke-Import (Valid-Arguments)
+        Assert-True ($result.ExitCode -ne 0) `
+            'Test mode must reject the repository root as TEST_ROOT.'
+        Assert-True ((Get-DirectoryDigest $repositoryAttackTarget) -eq $oldDigest) `
+            'Repository-root test injection must fail before target mutation.'
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $workspace 'audit'))) `
+            'Repository-root test injection must fail before governance invocation.'
+    }
+    finally {
+        if (Test-Path -LiteralPath $repositoryAttackTarget) {
+            Remove-Item -LiteralPath $repositoryAttackTarget -Recurse -Force
+        }
+    }
+
+    Reset-Fixture
+    try {
+        Write-Bundle $repositoryAttackTarget 'old'
+        $env:PUBLIC_RELEASE_IMPORT_TARGET = $repositoryAttackTarget
+        $oldDigest = Get-DirectoryDigest $repositoryAttackTarget
+        $result = Invoke-Import (Valid-Arguments)
+        Assert-True ($result.ExitCode -ne 0) `
+            'Test mode must reject every repository target.'
+        Assert-True ((Get-DirectoryDigest $repositoryAttackTarget) -eq $oldDigest) `
+            'Repository target injection must fail before mutation.'
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $workspace 'audit'))) `
+            'Repository target injection must fail before governance invocation.'
+    }
+    finally {
+        if (Test-Path -LiteralPath $repositoryAttackTarget) {
+            Remove-Item -LiteralPath $repositoryAttackTarget -Recurse -Force
+        }
+    }
+
+    Reset-Fixture
+    foreach ($linkType in @('Junction', 'SymbolicLink')) {
+        $link = Join-Path $fixtureRoot ('release-' + $linkType.ToLowerInvariant())
+        $linkCreated = $false
+        try {
+            New-Item -ItemType $linkType -Path $link -Target $releaseRoot `
+                -ErrorAction Stop | Out-Null
+            $linkCreated = $true
+        }
+        catch {
+            Write-Warning "SKIP: $linkType rejection scenario unavailable on this platform."
+        }
+        if ($linkCreated) {
+            try {
+                $oldDigest = Get-DirectoryDigest $target
+                $result = Invoke-Import @(
+                    '-ReleaseRoot', $link,
+                    '-TargetVersion', '2026-07-24.1',
+                    '-Workspace', $workspace,
+                    '-DecisionLedger', $ledger)
+                Assert-True ($result.ExitCode -ne 0) `
+                    "$linkType release paths must be rejected."
+                Assert-True ((Get-DirectoryDigest $target) -eq $oldDigest) `
+                    "$linkType rejection must preserve the old Bundle."
+            }
+            finally {
+                if (Test-Path -LiteralPath $link) {
+                    [IO.Directory]::Delete($link)
+                }
+            }
+        }
+    }
+
     foreach ($invalidName in @('missing', 'extra')) {
         Reset-Fixture
         if ($invalidName -eq 'missing') {
@@ -265,6 +371,50 @@ exit /b %ERRORLEVEL%
         Assert-True (Test-Path -LiteralPath (
                 Join-Path (Split-Path $target -Parent) 'unrelated.keep')) `
             "$fault must not delete unrelated sibling content."
+    }
+
+    foreach ($rollbackFault in @(
+            'QuarantineRename', 'BackupRestore', 'QuarantineCleanup')) {
+        Reset-Fixture
+        $env:PUBLIC_RELEASE_IMPORT_FAULT = $rollbackFault
+        $oldDigest = Get-DirectoryDigest $target
+        $result = Invoke-Import (Valid-Arguments)
+        Assert-True ($result.ExitCode -ne 0) `
+            "$rollbackFault must fail closed."
+        Assert-True ($result.Output -match
+                'PUBLIC_RELEASE_IMPORT_MANUAL_RECOVERY_REQUIRED') `
+            "$rollbackFault must print the stable manual-recovery error."
+        Assert-True ($result.Output -notmatch [regex]::Escape($fixtureRoot)) `
+            "$rollbackFault output must not expose an absolute path."
+        Assert-True (Test-Path -LiteralPath (
+                Join-Path (Split-Path $target -Parent) 'unrelated.keep')) `
+            "$rollbackFault must preserve unrelated sibling content."
+        $siblings = @(Get-ChildItem -LiteralPath (Split-Path $target -Parent) -Force)
+        $backups = @($siblings | Where-Object {
+                $_.Name -like '.public-release-import-backup-*'
+            })
+        $quarantines = @($siblings | Where-Object {
+                $_.Name -like '.public-release-import-quarantine-*'
+            })
+        if ($rollbackFault -eq 'QuarantineRename') {
+            Assert-True ((Get-DirectoryDigest $target) -eq
+                    (Get-DirectoryDigest $source)) `
+                'Quarantine rename failure must keep the whole new Bundle intact.'
+            Assert-True ($backups.Count -eq 1 -and $quarantines.Count -eq 0) `
+                'Quarantine rename failure must preserve the backup beside the target.'
+        }
+        elseif ($rollbackFault -eq 'BackupRestore') {
+            Assert-True (-not (Test-Path -LiteralPath $target)) `
+                'Backup restore failure must leave target absent, never mixed.'
+            Assert-True ($backups.Count -eq 1 -and $quarantines.Count -eq 1) `
+                'Backup restore failure must preserve backup and quarantine.'
+        }
+        else {
+            Assert-True ((Get-DirectoryDigest $target) -eq $oldDigest) `
+                'Quarantine cleanup failure must leave the restored old Bundle active.'
+            Assert-True ($backups.Count -eq 0 -and $quarantines.Count -eq 1) `
+                'Quarantine cleanup failure must preserve only quarantine for recovery.'
+        }
     }
 
     Reset-Fixture
@@ -316,7 +466,7 @@ exit /b %ERRORLEVEL%
     Assert-True ((Get-DirectoryDigest $target) -eq (Get-DirectoryDigest $source)) `
         'Backup cleanup warning must keep the verified new Bundle active.'
 
-    Write-Output 'import-public-release tests passed (19 scenarios)'
+    Write-Output 'import-public-release tests passed (26 scenarios; platform skips explicit)'
 }
 finally {
     foreach ($name in @(
@@ -333,5 +483,8 @@ finally {
     }
     if (Test-Path -LiteralPath $fixtureRoot) {
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $repositoryAttackTarget) {
+        Remove-Item -LiteralPath $repositoryAttackTarget -Recurse -Force
     }
 }

@@ -119,6 +119,20 @@ class PublicBundleVerificationCliTest {
         assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
     }
 
+    @Test
+    void rejectsMissingOrMalformedGovernanceLedgerIdentity() throws Exception {
+        ObjectNode missing = object(bundle.resolve("manifest.json"));
+        missing.remove("ledgerHash");
+        write(bundle.resolve("manifest.json"), missing);
+        assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
+
+        recreateBundle();
+        ObjectNode malformed = object(bundle.resolve("manifest.json"));
+        malformed.put("ledgerHash", "sha256:not-a-ledger-hash");
+        write(bundle.resolve("manifest.json"), malformed);
+        assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
+    }
+
     private void recreateBundle() throws Exception {
         try (java.util.stream.Stream<Path> entries = Files.list(bundle)) {
             for (Path entry : entries.toList()) {

@@ -390,6 +390,34 @@ class PublicBundleLoaderTest {
         assertThat(governedManifest.getLedgerHash())
                 .isEqualTo("sha256:" + "1".repeat(64));
         assertThat(loader.load(validLegacyBundle()).getRetrievalContent()).isEmpty();
+        ReleaseManifest legacyManifest = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(validLegacyBundle().get("manifest.json"),
+                        ReleaseManifest.class);
+        assertThat(legacyManifest.getLedgerHash()).isNull();
+    }
+
+    @Test
+    void rejectsRetrievalManifestWithMissingOrMalformedLedgerHash() {
+        Map<String, byte[]> missing = validRetrievalBundle();
+        missing.put("manifest.json", new String(
+                missing.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace("\"ledgerHash\":\"sha256:" + "1".repeat(64) + "\",", "")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(missing))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("ledgerHash");
+
+        Map<String, byte[]> malformed = validRetrievalBundle();
+        malformed.put("manifest.json", new String(
+                malformed.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace("sha256:" + "1".repeat(64), "sha256:not-a-ledger-hash")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(malformed))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("ledgerHash");
     }
 
     private byte[] keywordIndexBytes() {
