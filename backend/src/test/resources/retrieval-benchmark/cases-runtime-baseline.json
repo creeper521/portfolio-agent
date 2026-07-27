@@ -1,6 +1,6 @@
 {
   "suiteVersion": "retrieval-benchmark-v2",
-  "contentVersion": "2026-07-23.1",
+  "contentVersion": "2026-07-24.1",
   "cases": [
     {
       "caseId": "case-codegraph-workflow-paraphrase-01",
@@ -25,14 +25,14 @@
       "expectedDecision": "SUFFICIENT"
     },
     {
-      "caseId": "case-role-reset-flow-paraphrase-01",
+      "caseId": "case-role-reset-confirmation-safety-paraphrase-01",
       "split": "HOLDOUT",
       "category": "SEMANTIC_PARAPHRASE",
       "subjectType": "CASE",
       "subjectSlug": "test-role-reset",
-      "query": "为了避免误删，测试角色重置要经过哪些受控步骤？",
-      "expectedClaimIds": ["claim-case-role-reset-controlled-flow"],
-      "expectedChunkIds": ["chunk-claim-case-role-reset-controlled-flow"],
+      "query": "执行角色清理前为什么必须二次确认，而不能直接批量删除？",
+      "expectedClaimIds": ["claim-case-role-reset-confirmation-safety"],
+      "expectedChunkIds": ["chunk-claim-case-role-reset-confirmation-safety"],
       "expectedDecision": "SUFFICIENT"
     },
     {
@@ -80,25 +80,31 @@
       "expectedDecision": "OUT_OF_SCOPE"
     },
     {
-      "caseId": "sql-background-exact-01",
-      "split": "CALIBRATION",
-      "category": "EXACT_TERM",
+      "caseId": "sql-async-lifecycle-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
       "subjectType": "PROJECT",
       "subjectSlug": "sql-audit",
-      "query": "原来的排查流程有什么问题？",
-      "expectedClaimIds": ["claim-sql-audit-background"],
-      "expectedChunkIds": ["chunk-claim-sql-audit-background"],
+      "query": "提交大范围审计后，任务从受理到完成的异步生命周期怎样推进？",
+      "expectedClaimIds": ["claim-sql-audit-async-task-lifecycle"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-async-task-lifecycle"],
       "expectedDecision": "SUFFICIENT"
     },
     {
-      "caseId": "sql-delivered-exact-01",
+      "caseId": "sql-archive-truncation-exact-01",
       "split": "HOLDOUT",
       "category": "EXACT_TERM",
       "subjectType": "PROJECT",
       "subjectSlug": "sql-audit",
-      "query": "这个项目最终交付了什么？",
-      "expectedClaimIds": ["claim-sql-audit-delivered"],
-      "expectedChunkIds": ["chunk-claim-sql-audit-delivered"],
+      "query": "归档结果与截断提示分别在什么环节出现？",
+      "expectedClaimIds": [
+        "claim-sql-audit-result-lifecycle",
+        "claim-sql-audit-truncation-disclosure"
+      ],
+      "expectedChunkIds": [
+        "chunk-claim-sql-audit-result-lifecycle",
+        "chunk-claim-sql-audit-truncation-disclosure"
+      ],
       "expectedDecision": "SUFFICIENT"
     },
     {

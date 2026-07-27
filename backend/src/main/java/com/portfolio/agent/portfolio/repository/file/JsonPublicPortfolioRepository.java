@@ -30,6 +30,9 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
             @Value("classpath:public-data/bundle/manifest.json") Resource manifest,
             @Value("classpath:public-data/bundle/portfolio.json") Resource portfolio,
             @Value("classpath:public-data/bundle/presentation.json") Resource presentation,
+            @Value("classpath:public-data/bundle/rag-documents.jsonl") Resource ragDocuments,
+            @Value("classpath:public-data/bundle/keyword-index.json") Resource keywordIndex,
+            @Value("classpath:public-data/bundle/vector-index.bin") Resource vectorIndex,
             @Value("classpath:public-data/bundle/checksums.json") Resource checksums,
             @Value("${portfolio.content.release-root:}") String releaseRoot,
             PortfolioSnapshotValidator validator
@@ -43,6 +46,9 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
                             "manifest.json", manifest.getContentAsByteArray(),
                             "portfolio.json", portfolio.getContentAsByteArray(),
                             "presentation.json", presentation.getContentAsByteArray(),
+                            "rag-documents.jsonl", ragDocuments.getContentAsByteArray(),
+                            "keyword-index.json", keywordIndex.getContentAsByteArray(),
+                            "vector-index.bin", vectorIndex.getContentAsByteArray(),
                             "checksums.json", checksums.getContentAsByteArray()
                     ));
             }

@@ -1,9 +1,19 @@
 {
-  "schemaVersion": "3.0",
-  "contentVersion": "2026-07-23.1",
-  "audiences": [],
-  "homeSections": [],
-  "metrics": [],
-  "explorePortals": [],
-  "footer": {}
+    "schemaVersion":  "3.0",
+    "contentVersion":  "2026-07-24.1",
+    "audiences":  [
+
+                  ],
+    "homeSections":  [
+
+                     ],
+    "metrics":  [
+
+                ],
+    "explorePortals":  [
+
+                       ],
+    "footer":  {
+
+               }
 }

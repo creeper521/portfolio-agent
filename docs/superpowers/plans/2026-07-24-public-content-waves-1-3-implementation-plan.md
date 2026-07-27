@@ -440,7 +440,14 @@ hash differs from the publish/verify receipt is rejected.
 ## 4. Wave 1 — deepen current public achievements
 
 Target content version: `2026-07-24.1`  
-Benchmark suite: `retrieval-benchmark-v3-wave1`
+Benchmark suite: `retrieval-benchmark-v4-wave1-policy-v2`
+
+**执行状态（2026-07-27）：** Wave 1 已完成。最终采用
+`retrieval-policy-v2.1-query-risk`；候选经两次显式人工 Approval、隔离发布、
+Verify、37 例三路真实模型比较和七文件原子导入。策略 v2 因误伤正向安全
+说明问题被拒绝导入；v2.1 的 Regression/Holdout 三路 false-sufficient
+均为 0，详细证据见
+`docs/reports/retrieval-wave-1-policy-v2-1-2026-07-27.md`。
 
 ### Task W1.1 — Prepare reviewed public Claim and Evidence additions
 

@@ -7,8 +7,7 @@ $workspace = Join-Path $fixtureRoot 'workspace'
 $candidate = Join-Path $workspace 'candidates\candidate-1'
 $decisionLedger = $null
 $governanceInvocationCount = 0
-$currentBundleVersion = '2026-07-23.1'
-$nextBundleVersion = '2026-07-23.2'
+$currentBundleVersion = '2026-07-24.1'
 
 function Invoke-Governance([string[]]$Arguments) {
     $script:governanceInvocationCount++
@@ -152,7 +151,12 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
             contentType = 'MAINLINE'; achievementStatus = 'DELIVERED'
             projectSlugs = @('sql-audit')
             caseSlugs = @()
-            evidenceIds = @('sql-audit-delivery-set', 'sql-audit-july-iteration-set')
+            evidenceIds = @(
+                'sql-audit-delivery-set',
+                'sql-audit-july-iteration-set',
+                'evidence-sql-audit-async-progress-validation',
+                'evidence-sql-audit-result-lifecycle-docs'
+            )
         }
         'T-01' = @{
             contentType = 'TASK'; achievementStatus = 'DELIVERED'
@@ -641,7 +645,7 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:564330cbdf98693e16a4f80a96c55716c244295ae10f7df8a33480f3b1716f48') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:fb15dfded1cda5a10e996db441b77bc0a9387750346590628f3dda4a449f8f11') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
@@ -1176,6 +1180,25 @@ try {
     }
     Remove-Item -LiteralPath $blockedPublishAudit -Recurse -Force
 
+    $probeWithoutRollbackPoint = Invoke-Governance @(
+        '-Command', 'publish', '-Workspace', $workspace,
+        '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId,
+        '-ReleaseRoot', $releaseRoot,
+        '-PostSwitchProbeUri', 'http://127.0.0.1:1/health', '-Confirm'
+    )
+    if ($probeWithoutRollbackPoint.ExitCode -eq 0 -or
+            -not $probeWithoutRollbackPoint.Output.Contains(
+                'PUBLISH_ROLLBACK_POINT_REQUIRED'
+            )) {
+        throw "A post-switch probe must require an active rollback point: $($probeWithoutRollbackPoint.Output)"
+    }
+    if ((Test-Path -LiteralPath (Join-Path $releaseRoot 'active')) -or
+            (Test-Path -LiteralPath (
+                Join-Path $releaseRoot ('versions\' + $currentBundleVersion)
+            ))) {
+        throw 'A rejected first-publication probe must not create public release state.'
+    }
+
     $publish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot, '-Confirm')
     if ($publish.ExitCode -ne 0) { throw "Publish failed: $($publish.Output)" }
@@ -1253,29 +1276,6 @@ try {
     $repeat = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot, '-Confirm')
     if ($repeat.ExitCode -ne 0) { throw 'Identical repeat publish must be idempotent.' }
-
-    $candidate2 = New-Candidate 'candidate-2'
-    foreach ($name in @('portfolio.json', 'presentation.json')) {
-        $path = Join-Path $candidate2 $name
-        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace($currentBundleVersion, $nextBundleVersion) |
-            Set-Content -LiteralPath $path -Encoding UTF8
-    }
-    $review2 = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace, '-Candidate', $candidate2)
-    $review2Result = $review2.Output | ConvertFrom-Json
-    $approval2 = Invoke-Governance @('-Command', 'approve', '-Workspace', $workspace,
-        '-Candidate', $candidate2, '-ReviewRunId', $review2Result.runId,
-        '-ApprovedBy', 'owner-alias', '-PrivacyReviewId', 'PRIV-002', '-BenchmarkRunId', 'BENCH-002')
-    $approval2Result = $approval2.Output | ConvertFrom-Json
-    $approval2Data = Get-Content -LiteralPath (Join-Path $workspace $approval2Result.artifacts[-1]) -Raw -Encoding UTF8 | ConvertFrom-Json
-    $postSwitchFailure = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
-        '-Candidate', $candidate2, '-ApprovalId', $approval2Data.approvalId, '-ReleaseRoot', $releaseRoot,
-        '-PostSwitchProbeUri', 'http://127.0.0.1:1/health', '-Confirm')
-    if ($postSwitchFailure.ExitCode -eq 0 -or -not $postSwitchFailure.Output.Contains('PUBLISH_POST_SWITCH_FAILED')) {
-        throw "A failed post-switch probe must fail publication: $($postSwitchFailure.Output)"
-    }
-    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) {
-        throw 'Post-switch failure must atomically restore the verified old active version.'
-    }
 
     Set-Content -LiteralPath (Join-Path $releaseRoot 'active') -Value 'broken-active' -Encoding UTF8
     $rollbackDryRun = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,

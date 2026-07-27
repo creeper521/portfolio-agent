@@ -147,7 +147,7 @@ class RetrievalBenchmarkTest {
                 assertExpectedSelection(item, decision);
                 if (decision.getType() == RetrievalDecisionType.SUFFICIENT) {
                     assertThat(decision.getSelectedClaimIds())
-                        .hasSizeLessThanOrEqualTo(RetrievalPolicy.firstRelease().getMaxClaims());
+                        .hasSizeLessThanOrEqualTo(RetrievalPolicy.currentRelease().getMaxClaims());
                 }
             }
         }
@@ -195,7 +195,7 @@ class RetrievalBenchmarkTest {
             AnswerKnowledge project, AnswerRetrievalCorpus corpus) {
         return coordinator.retrieve(query, project.getSlug(), project.getSubjectType(),
                 corpus, project.getClaims(), project.getEvidence(),
-                RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.firstRelease());
+                RetrievalMode.HYBRID_ENABLED, RetrievalPolicy.currentRelease());
     }
 
     private AnswerRetrievalCorpus corpus(List<RagDocument> documents,
@@ -221,7 +221,9 @@ class RetrievalBenchmarkTest {
             throws Exception {
         Map<String, byte[]> files = new LinkedHashMap<>();
         for (String name : List.of(
-                "manifest.json", "portfolio.json", "presentation.json", "checksums.json")) {
+                "manifest.json", "portfolio.json", "presentation.json",
+                "rag-documents.jsonl", "keyword-index.json", "vector-index.bin",
+                "checksums.json")) {
             files.put(name, Files.readAllBytes(bundle.resolve(name)));
         }
         return new PublicBundleLoader(mapper, new PortfolioSnapshotValidator(),
