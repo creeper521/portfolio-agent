@@ -92,6 +92,6 @@ public final class LocalRetrievalCoordinator {
         List<RetrievalCandidate> candidates = fusion.fuse(
                 keywordHits, vectorHits, policy.getRrfK());
         return contextValidator.validate(
-                claims, evidence, projectChunks, candidates, actualMode, policy);
+                query, claims, evidence, projectChunks, candidates, actualMode, policy);
     }
 }

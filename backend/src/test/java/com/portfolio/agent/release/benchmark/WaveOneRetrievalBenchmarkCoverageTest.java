@@ -68,9 +68,10 @@ class WaveOneRetrievalBenchmarkCoverageTest {
     void freezesWaveOneRetrievalCasesAndHoldoutCoverage() throws Exception {
         RetrievalBenchmarkSuite suite = loadRetrievalSuite();
 
-        assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v3-wave1");
+        assertThat(suite.getSuiteVersion())
+                .isEqualTo("retrieval-benchmark-v4-wave1-policy-v2");
         assertThat(suite.getContentVersion()).isEqualTo("2026-07-24.1");
-        assertThat(suite.getCases()).hasSize(34);
+        assertThat(suite.getCases()).hasSize(37);
         assertThat(caseIds(suite)).containsAll(WAVE_ZERO_CASE_IDS);
 
         Set<String> holdoutClaimIds = suite.getCases().stream()
@@ -92,12 +93,20 @@ class WaveOneRetrievalBenchmarkCoverageTest {
                 "CASE:codegraph-evaluation");
         assertThat(naturalQuestionsBySubject.values()).allMatch(count -> count >= 3);
 
-        assertNegative(suite, "negative-sql-failed-source-retry-01",
+        assertRegression(suite, "negative-injection-01",
                 ClaimSubjectType.PROJECT, "sql-audit");
+        assertRegression(suite, "negative-sql-failed-source-retry-01",
+                ClaimSubjectType.PROJECT, "sql-audit");
+        assertRegression(suite, "negative-role-reset-arbitrary-batch-delete-01",
+                ClaimSubjectType.CASE, "test-role-reset");
+        assertNegative(suite, "negative-injection-private-credential-02",
+                ClaimSubjectType.PROJECT, "sql-audit");
+        assertNegative(suite, "negative-sql-guaranteed-recovery-02",
+                ClaimSubjectType.PROJECT, "sql-audit");
+        assertNegative(suite, "negative-role-reset-no-confirmation-02",
+                ClaimSubjectType.CASE, "test-role-reset");
         assertNegative(suite, "negative-multilingual-historical-backfill-01",
                 ClaimSubjectType.CASE, "multilingual-image-preservation");
-        assertNegative(suite, "negative-role-reset-arbitrary-batch-delete-01",
-                ClaimSubjectType.CASE, "test-role-reset");
         assertNegative(suite, "negative-codegraph-universal-productivity-01",
                 ClaimSubjectType.CASE, "codegraph-evaluation");
 
@@ -194,6 +203,21 @@ class WaveOneRetrievalBenchmarkCoverageTest {
     ) {
         RetrievalBenchmarkCase item = caseById(suite, caseId);
         assertThat(item.getSplit()).isEqualTo(RetrievalBenchmarkSplit.HOLDOUT);
+        assertThat(item.getSubjectType()).isEqualTo(subjectType);
+        assertThat(item.getSubjectSlug()).isEqualTo(subjectSlug);
+        assertThat(item.getExpectedClaimIds()).isEmpty();
+        assertThat(item.getExpectedChunkIds()).isEmpty();
+        assertThat(item.getExpectedDecision()).isEqualTo(RetrievalDecisionType.AMBIGUOUS);
+    }
+
+    private void assertRegression(
+            RetrievalBenchmarkSuite suite,
+            String caseId,
+            ClaimSubjectType subjectType,
+            String subjectSlug
+    ) {
+        RetrievalBenchmarkCase item = caseById(suite, caseId);
+        assertThat(item.getSplit()).isEqualTo(RetrievalBenchmarkSplit.REGRESSION);
         assertThat(item.getSubjectType()).isEqualTo(subjectType);
         assertThat(item.getSubjectSlug()).isEqualTo(subjectSlug);
         assertThat(item.getExpectedClaimIds()).isEmpty();

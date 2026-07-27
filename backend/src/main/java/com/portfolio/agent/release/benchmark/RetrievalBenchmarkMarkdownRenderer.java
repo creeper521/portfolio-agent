@@ -20,6 +20,8 @@ public final class RetrievalBenchmarkMarkdownRenderer {
         appendSplitMetrics(
                 markdown, report, RetrievalBenchmarkSplit.HOLDOUT, "Holdout");
         appendSplitMetrics(
+                markdown, report, RetrievalBenchmarkSplit.REGRESSION, "Regression");
+        appendSplitMetrics(
                 markdown,
                 report,
                 RetrievalBenchmarkSplit.CALIBRATION,

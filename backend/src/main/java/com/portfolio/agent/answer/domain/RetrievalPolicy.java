@@ -12,6 +12,7 @@ public final class RetrievalPolicy {
     private final int strongKeywordMinimum;
     private final double vectorCandidateThreshold;
     private final double ambiguityMargin;
+    private final boolean queryRiskGateEnabled;
 
     private RetrievalPolicy(
             String version,
@@ -23,7 +24,8 @@ public final class RetrievalPolicy {
             int maxContextCharacters,
             int strongKeywordMinimum,
             double vectorCandidateThreshold,
-            double ambiguityMargin
+            double ambiguityMargin,
+            boolean queryRiskGateEnabled
     ) {
         this.version = version;
         this.keywordTopK = keywordTopK;
@@ -35,12 +37,19 @@ public final class RetrievalPolicy {
         this.strongKeywordMinimum = strongKeywordMinimum;
         this.vectorCandidateThreshold = vectorCandidateThreshold;
         this.ambiguityMargin = ambiguityMargin;
+        this.queryRiskGateEnabled = queryRiskGateEnabled;
     }
 
     public static RetrievalPolicy firstRelease() {
         return new RetrievalPolicy(
                 "retrieval-policy-v1", 8, 8, 12, 8, 60,
-                6000, 2, 0.55, 0.05);
+                6000, 2, 0.55, 0.05, false);
+    }
+
+    public static RetrievalPolicy currentRelease() {
+        return new RetrievalPolicy(
+                "retrieval-policy-v2-query-risk", 8, 8, 12, 8, 60,
+                6000, 2, 0.55, 0.05, true);
     }
 
     public String getVersion() { return version; }
@@ -53,4 +62,5 @@ public final class RetrievalPolicy {
     public int getStrongKeywordMinimum() { return strongKeywordMinimum; }
     public double getVectorCandidateThreshold() { return vectorCandidateThreshold; }
     public double getAmbiguityMargin() { return ambiguityMargin; }
+    public boolean isQueryRiskGateEnabled() { return queryRiskGateEnabled; }
 }

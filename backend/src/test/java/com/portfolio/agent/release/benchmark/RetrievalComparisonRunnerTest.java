@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.domain.RetrievalMode;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.service.KeywordRetriever;
+import com.portfolio.agent.answer.service.NormalizedRetrievalQuery;
 import com.portfolio.agent.answer.service.RankedRetrievalHit;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
@@ -145,7 +146,8 @@ class RetrievalComparisonRunnerTest {
 
         ArgumentCaptor<RetrievalMode> modes = ArgumentCaptor.forClass(RetrievalMode.class);
         verify(validator, times(suite.getCases().size() * 3)).validate(
-                anyList(), anyList(), anyMap(), anyList(), modes.capture(), same(policy));
+                any(NormalizedRetrievalQuery.class), anyList(), anyList(), anyMap(),
+                anyList(), modes.capture(), same(policy));
         assertThat(modes.getAllValues()).containsExactly(
                 RetrievalMode.KEYWORD_ONLY,
                 RetrievalMode.HYBRID_ENABLED,

@@ -97,6 +97,7 @@ public final class RetrievalComparisonRunner {
             evaluations.add(evaluate(
                     RetrievalBenchmarkRoute.KEYWORD,
                     RetrievalMode.KEYWORD_ONLY,
+                    query,
                     item,
                     subject,
                     subjectChunks,
@@ -106,6 +107,7 @@ public final class RetrievalComparisonRunner {
             evaluations.add(evaluate(
                     RetrievalBenchmarkRoute.VECTOR,
                     RetrievalMode.HYBRID_ENABLED,
+                    query,
                     item,
                     subject,
                     subjectChunks,
@@ -115,6 +117,7 @@ public final class RetrievalComparisonRunner {
             evaluations.add(evaluate(
                     RetrievalBenchmarkRoute.HYBRID,
                     RetrievalMode.HYBRID_ENABLED,
+                    query,
                     item,
                     subject,
                     subjectChunks,
@@ -204,6 +207,7 @@ public final class RetrievalComparisonRunner {
     private RetrievalRouteEvaluation evaluate(
             RetrievalBenchmarkRoute route,
             RetrievalMode mode,
+            NormalizedRetrievalQuery query,
             RetrievalBenchmarkCase item,
             AnswerKnowledge subject,
             Map<String, AnswerRetrievalChunk> subjectChunks,
@@ -217,6 +221,7 @@ public final class RetrievalComparisonRunner {
         Integer expectedRank = bestRank(
                 expectedClaimRanks, expectedChunkRanks);
         RetrievalDecision decision = contextValidator.validate(
+                query,
                 subject.getClaims(),
                 subject.getEvidence(),
                 subjectChunks,

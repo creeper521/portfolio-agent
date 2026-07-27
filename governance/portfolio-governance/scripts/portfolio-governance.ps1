@@ -92,6 +92,12 @@ function Get-ApprovalDigest([object]$Approval) {
     $projection = [ordered]@{
         candidatePayloadHash = [string]$Approval.candidatePayloadHash
         ledgerHash = [string]$Approval.ledgerHash
+        inputFingerprint = [string]$Approval.inputFingerprint
+        compilerJarHash = if ($null -eq $Approval.compilerJarHash) {
+            $null
+        } else {
+            [string]$Approval.compilerJarHash
+        }
         approvedBy = [string]$Approval.approvedBy
         privacyReviewId = [string]$Approval.privacyReviewId
         benchmarkRunId = [string]$Approval.benchmarkRunId
@@ -1360,9 +1366,16 @@ $policyBundleProjection = $policyBundleEntries | ForEach-Object {
 $policyBundleHash = Get-Sha256 ([Text.Encoding]::UTF8.GetBytes(($policyBundleProjection -join "`n")))
 $benchmarkDefinitionHash = Get-Sha256 ([IO.File]::ReadAllBytes($benchmarkDefinitionFile))
 $toolHash = Get-Sha256 ([IO.File]::ReadAllBytes($PSCommandPath))
+$compilerJarHash = if ($hasRetrievalCandidate) {
+    Get-Sha256 ([IO.File]::ReadAllBytes((Resolve-CompilerJar)))
+} else {
+    $null
+}
+$compilerFingerprint = if ($null -eq $compilerJarHash) { 'NONE' } else { $compilerJarHash }
 $fingerprintInput = [Text.Encoding]::UTF8.GetBytes(
     $candidatePayloadHash + "`n" + $decisionLedgerState.Hash + "`n" +
-    $policyBundleHash + "`n" + $benchmarkDefinitionHash + "`n" + $toolVersion + "`n" + $toolHash)
+    $policyBundleHash + "`n" + $benchmarkDefinitionHash + "`n" + $toolVersion + "`n" +
+    $toolHash + "`n" + $compilerFingerprint)
 $inputFingerprint = Get-Sha256 $fingerprintInput
 $runId = [guid]::NewGuid().ToString('N')
 $runSnapshot = [ordered]@{
@@ -1375,6 +1388,7 @@ $runSnapshot = [ordered]@{
     toolVersion = $toolVersion
     candidatePayloadHash = $candidatePayloadHash
     ledgerHash = $decisionLedgerState.Hash
+    compilerJarHash = $compilerJarHash
 }
 $artifacts = @()
 $dryRun = $false
@@ -1396,7 +1410,8 @@ if ($Command -eq 'approve') {
         $reviewSnapshot.inputFingerprint -ne $inputFingerprint -or
         $reviewSnapshot.policyBundleHash -ne $policyBundleHash -or
         $reviewSnapshot.benchmarkDefinitionHash -ne $benchmarkDefinitionHash -or
-        $reviewSnapshot.toolVersion -ne $toolVersion) {
+        $reviewSnapshot.toolVersion -ne $toolVersion -or
+        $reviewSnapshot.compilerJarHash -ne $compilerJarHash) {
         Write-Failure 'APPROVAL_RUN_STALE' 'The reviewed governance run is stale.'
     }
     $approvalId = 'APR-' + [guid]::NewGuid().ToString('N')
@@ -1404,6 +1419,8 @@ if ($Command -eq 'approve') {
     $approvalForDigest = [ordered]@{
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        inputFingerprint = $inputFingerprint
+        compilerJarHash = $compilerJarHash
         approvedBy = $ApprovedBy
         privacyReviewId = $PrivacyReviewId
         benchmarkRunId = $BenchmarkRunId
@@ -1415,6 +1432,8 @@ if ($Command -eq 'approve') {
         approvalId = $approvalId
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        inputFingerprint = $inputFingerprint
+        compilerJarHash = $compilerJarHash
         approvedBy = $ApprovedBy
         privacyReviewId = $PrivacyReviewId
         benchmarkRunId = $BenchmarkRunId
@@ -1456,6 +1475,8 @@ if ($Command -eq 'build-review-pack') {
         contentVersion = $portfolio.contentVersion
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        inputFingerprint = $inputFingerprint
+        compilerJarHash = $compilerJarHash
         counts = [ordered]@{
             projects = @($portfolio.projects).Count
             cases = @($portfolio.cases).Count
@@ -1482,7 +1503,7 @@ if ($Command -eq 'build-review-pack') {
         $reviewChecksums['rag-documents.jsonl'] = Get-Sha256 $ragDocumentBytes
     }
     $reviewChecksums | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'checksums.json') -Encoding UTF8
-    [ordered]@{ runId = $runId; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; inputFingerprint = $inputFingerprint; status = 'PENDING_HUMAN_APPROVAL' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'approval-request.json') -Encoding UTF8
+    [ordered]@{ runId = $runId; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; inputFingerprint = $inputFingerprint; compilerJarHash = $compilerJarHash; status = 'PENDING_HUMAN_APPROVAL' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'approval-request.json') -Encoding UTF8
     $artifacts += $reviewRelativePath
 }
 
@@ -1491,8 +1512,10 @@ if ($Command -eq 'publish') {
     if (-not (Test-Path -LiteralPath $approvalFile -PathType Leaf)) { Write-Failure 'PUBLISH_APPROVAL_MISSING' 'Approval does not exist.' }
     $approval = Get-Content -LiteralPath $approvalFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($approval.candidatePayloadHash -ne $candidatePayloadHash -or
-            $approval.ledgerHash -ne $decisionLedgerState.Hash) {
-        Write-Failure 'PUBLISH_APPROVAL_STALE' 'Approval does not match candidate payload or decision ledger bytes.'
+            $approval.ledgerHash -ne $decisionLedgerState.Hash -or
+            $approval.inputFingerprint -ne $inputFingerprint -or
+            $approval.compilerJarHash -ne $compilerJarHash) {
+        Write-Failure 'PUBLISH_APPROVAL_STALE' 'Approval does not match the current candidate, ledger, governance input, or compiler identity.'
     }
     if ([string]$approval.approvalDigest -ne (Get-ApprovalDigest $approval)) {
         Write-Failure 'PUBLISH_APPROVAL_STALE' 'Approval digest does not match its approved projection.'

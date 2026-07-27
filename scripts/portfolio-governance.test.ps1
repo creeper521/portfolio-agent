@@ -1102,8 +1102,10 @@ try {
     $approvalData = Get-Content -LiteralPath $approvalFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($approvalData.candidatePayloadHash -ne $reviewResult.runSnapshot.candidatePayloadHash -or
         $approvalData.ledgerHash -ne $reviewResult.runSnapshot.ledgerHash -or
+        $approvalData.inputFingerprint -ne $reviewResult.runSnapshot.inputFingerprint -or
+        $null -ne $approvalData.compilerJarHash -or
         -not $approvalData.approvalDigest.StartsWith('sha256:')) {
-        throw 'Approval did not bind the canonical payload and decision ledger.'
+        throw 'Approval did not bind the canonical payload, decision ledger, input fingerprint, and compiler identity.'
     }
 
     $approvalBytesBeforeTamper = [IO.File]::ReadAllBytes($approvalFile)
@@ -1349,6 +1351,31 @@ try {
         $retrievalApprovalData = Get-Content -LiteralPath `
             (Join-Path $workspace $retrievalApprovalResult.artifacts[-1]) -Raw -Encoding UTF8 |
             ConvertFrom-Json
+        if ($retrievalApprovalData.inputFingerprint -ne
+                $retrievalReviewResult.runSnapshot.inputFingerprint -or
+                -not $retrievalApprovalData.compilerJarHash.StartsWith('sha256:') -or
+                $retrievalApprovalData.compilerJarHash -ne
+                $retrievalReviewResult.runSnapshot.compilerJarHash) {
+            throw 'Retrieval Approval must bind the reviewed input fingerprint and compiler JAR hash.'
+        }
+        $changedCompilerJar = Join-Path $fixtureRoot 'changed-portfolio-agent.jar'
+        Copy-Item -LiteralPath $compilerJar -Destination $changedCompilerJar
+        [IO.File]::WriteAllBytes(
+            $changedCompilerJar,
+            [byte[]]([IO.File]::ReadAllBytes($changedCompilerJar) + [byte[]]@(0)))
+        $changedCompilerReleaseRoot = Join-Path $fixtureRoot 'changed-compiler-public-releases'
+        New-Item -ItemType Directory -Force -Path $changedCompilerReleaseRoot | Out-Null
+        $changedCompilerPublish = Invoke-Governance @(
+            '-Command', 'publish', '-Workspace', $workspace,
+            '-Candidate', $retrievalCandidate,
+            '-ApprovalId', $retrievalApprovalData.approvalId,
+            '-ReleaseRoot', $changedCompilerReleaseRoot,
+            '-JarPath', $changedCompilerJar,
+            '-ModelDirectory', $localModel)
+        if ($changedCompilerPublish.ExitCode -eq 0 -or
+                -not $changedCompilerPublish.Output.Contains('PUBLISH_APPROVAL_STALE')) {
+            throw 'Changing the compiler JAR after Approval must make retrieval publish stale.'
+        }
         $retrievalReleaseRoot = Join-Path $fixtureRoot 'retrieval-public-releases'
         New-Item -ItemType Directory -Force -Path $retrievalReleaseRoot | Out-Null
         $retrievalPublish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,

@@ -33,6 +33,11 @@ class RetrievalModelContractTest {
         assertThat(policy.getMaxChunks()).isEqualTo(12);
         assertThat(policy.getMaxClaims()).isEqualTo(8);
         assertThat(policy.getRrfK()).isEqualTo(60);
+        assertThat(policy.isQueryRiskGateEnabled()).isFalse();
+
+        RetrievalPolicy current = RetrievalPolicy.currentRelease();
+        assertThat(current.getVersion()).isEqualTo("retrieval-policy-v2-query-risk");
+        assertThat(current.isQueryRiskGateEnabled()).isTrue();
     }
 
     @Test

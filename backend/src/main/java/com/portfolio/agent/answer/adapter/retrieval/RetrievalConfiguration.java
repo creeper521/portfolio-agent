@@ -22,7 +22,7 @@ public class RetrievalConfiguration {
 
     @Bean
     RetrievalPolicy retrievalPolicy() {
-        return RetrievalPolicy.firstRelease();
+        return RetrievalPolicy.currentRelease();
     }
 
     @Bean

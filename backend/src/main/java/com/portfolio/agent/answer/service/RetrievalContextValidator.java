@@ -22,7 +22,19 @@ import java.util.Set;
 
 public final class RetrievalContextValidator {
 
+    private final RetrievalQueryRiskGate queryRiskGate;
+
+    public RetrievalContextValidator() {
+        this(new RetrievalQueryRiskGate());
+    }
+
+    RetrievalContextValidator(RetrievalQueryRiskGate queryRiskGate) {
+        this.queryRiskGate = java.util.Objects.requireNonNull(
+                queryRiskGate, "queryRiskGate");
+    }
+
     public RetrievalDecision validate(
+            NormalizedRetrievalQuery query,
             List<AnswerClaimProjection> claims,
             List<AnswerEvidence> evidence,
             Map<String, AnswerRetrievalChunk> chunks,
@@ -30,6 +42,9 @@ public final class RetrievalContextValidator {
             RetrievalMode mode,
             RetrievalPolicy policy
     ) {
+        if (policy.isQueryRiskGateEnabled() && queryRiskGate.blocks(query)) {
+            return decision(RetrievalDecisionType.AMBIGUOUS, mode, List.of(), List.of());
+        }
         if (candidates.isEmpty()) {
             return decision(RetrievalDecisionType.OUT_OF_SCOPE, mode, List.of(), List.of());
         }

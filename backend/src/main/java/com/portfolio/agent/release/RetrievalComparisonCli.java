@@ -180,7 +180,7 @@ public final class RetrievalComparisonCli {
                         );
                     }
                 },
-                RetrievalPolicy.firstRelease(),
+                RetrievalPolicy.currentRelease(),
                 Clock.systemUTC(),
                 System::nanoTime
         );

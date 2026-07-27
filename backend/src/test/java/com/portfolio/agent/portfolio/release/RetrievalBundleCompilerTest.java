@@ -32,6 +32,8 @@ class RetrievalBundleCompilerTest {
         assertThat(first.getKeywordIndex()).isEqualTo(second.getKeywordIndex());
         assertThat(first.getVectorIndex()).isEqualTo(second.getVectorIndex());
         assertThat(first.getManifest().getChunkCount()).isEqualTo(1);
+        assertThat(first.getManifest().getRetrievalPolicyVersion())
+                .isEqualTo("retrieval-policy-v2-query-risk");
         assertThat(first.getManifest().getChunkSetHash())
                 .isEqualTo(BundleHashCalculator.sha256(first.getRagDocuments()));
         assertThat(new VectorIndexCodec().decode(first.getVectorIndex(), 512)
