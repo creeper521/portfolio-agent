@@ -108,5 +108,9 @@ async function fulfillAnswer(route: Route) {
 
 export async function installPublicApiMocks(page: Page) {
   await page.route('**/api/v1/public-content', fulfillPublicContent)
+  await installAnswerApiMock(page)
+}
+
+export async function installAnswerApiMock(page: Page) {
   await page.route('**/api/v2/answers', fulfillAnswer)
 }
