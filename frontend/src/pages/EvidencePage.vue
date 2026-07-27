@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
+import DossierFooter from '../shared/components/DossierFooter.vue'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
@@ -28,10 +29,29 @@ const selectedClaims = computed(() => selected.value
       .map((claimId) => portfolio.value?.claims.find((claim) => claim.id === claimId))
       .filter((claim) => claim !== undefined)
   : [])
+
+// 索引小结卡：纯展示层派生，从当前页可见证据收口左列底部死区。
+// 覆盖项目/案例数取证据 projectSlugs 并集（去重），最近更新月份取 periodEnd 最大值。
+const summary = computed(() => {
+  const items = evidence.value
+  const coveredSlugs = new Set<string>()
+  items.forEach((item) => item.projectSlugs.forEach((slug) => coveredSlugs.add(slug)))
+  const latestEnd = items
+    .map((item) => item.periodEnd)
+    .filter(Boolean)
+    .sort()
+    .at(-1)
+  const latestMonth = latestEnd ? latestEnd.slice(0, 7).replace('-', '.') : '—'
+  return {
+    count: items.length,
+    covered: coveredSlugs.size,
+    latestMonth,
+  }
+})
 </script>
 
 <template>
-  <main v-if="status === 'ready'">
+  <main v-if="status === 'ready' && portfolio">
     <PageLead
       code="03 / EVIDENCE DESK"
       title="证据中心"
@@ -45,7 +65,7 @@ const selectedClaims = computed(() => selected.value
           v-for="item in evidence"
           :key="item.id"
           type="button"
-          :aria-pressed="selected?.id === item.id"
+          :aria-current="selected?.id === item.id ? 'true' : undefined"
           :data-selected-evidence="selected?.id === item.id ? '' : undefined"
           @click="selectedId = item.id"
         >
@@ -53,6 +73,14 @@ const selectedClaims = computed(() => selected.value
           <strong>{{ item.title }}</strong>
           <small>{{ item.periodStart }} — {{ item.periodEnd }}</small>
         </button>
+        <div class="evidence-catalog__summary" data-evidence-summary>
+          <span>INDEX SUMMARY</span>
+          <dl>
+            <div><dt>本页证据</dt><dd>{{ summary.count }}</dd></div>
+            <div><dt>覆盖项目</dt><dd>{{ summary.covered }}</dd></div>
+            <div><dt>最近更新</dt><dd>{{ summary.latestMonth }}</dd></div>
+          </dl>
+        </div>
       </div>
 
       <article v-if="selected" class="evidence-preview">
@@ -100,6 +128,8 @@ const selectedClaims = computed(() => selected.value
     <div v-else class="page-shell">
       <EmptyDossier title="证明材料尚未公开" description="公开审查完成后，证据索引会出现在这里。" />
     </div>
+
+    <DossierFooter :content-version="portfolio.contentVersion" />
   </main>
   <PublicContentFeedback
     v-else-if="status === 'loading' || status === 'error'"
@@ -114,8 +144,9 @@ const selectedClaims = computed(() => selected.value
   display: grid;
   min-height: 680px;
   padding: 70px 0 120px;
-  grid-template-columns: minmax(280px, 0.38fr) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.82fr);
   gap: clamp(36px, 6vw, 90px);
+  align-items: start;
 }
 
 .evidence-catalog__list > p,
@@ -144,7 +175,7 @@ const selectedClaims = computed(() => selected.value
   border-bottom: 1px solid var(--rule);
 }
 
-.evidence-catalog__list button[aria-pressed='true'] {
+.evidence-catalog__list button[aria-current='true'] {
   padding-inline: 18px;
   color: var(--paper);
   background: var(--ink);
@@ -162,6 +193,48 @@ const selectedClaims = computed(() => selected.value
   font-family: var(--serif);
   font-size: 20px;
   font-weight: 400;
+}
+
+/* 索引小结卡：收口左列底部死区。等宽体小号，纯派生数据，不新增事实。
+   结构性中性标签（本页证据/覆盖项目/最近更新）退出红色，回到墨色层级。 */
+.evidence-catalog__summary {
+  margin-top: 28px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.evidence-catalog__summary span {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--ink-2);
+  font: 10px var(--mono);
+  letter-spacing: 0.14em;
+}
+
+.evidence-catalog__summary dl {
+  display: grid;
+  margin: 0;
+  gap: 8px;
+}
+
+.evidence-catalog__summary div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.evidence-catalog__summary dt {
+  color: var(--muted);
+  font: 11px var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.evidence-catalog__summary dd {
+  margin: 0;
+  color: var(--ink);
+  font: 600 13px var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .evidence-preview {

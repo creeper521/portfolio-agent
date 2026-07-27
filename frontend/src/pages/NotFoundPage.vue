@@ -45,7 +45,7 @@ h1 {
 .not-found__inner div {
   display: grid;
   gap: 26px;
-  color: #a99f91;
+  color: var(--ink-text);
   font-size: 13px;
   line-height: 1.8;
 }

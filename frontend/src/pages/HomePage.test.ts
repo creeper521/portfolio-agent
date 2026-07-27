@@ -49,6 +49,22 @@ describe('HomePage', () => {
     expect(wrapper.text()).not.toContain('待填写')
   })
 
+  it('stamps the hero folio with the project code and timeline span', async () => {
+    const wrapper = mount(HomePage, {
+      global: {
+        provide: { [publicContentStateKey as symbol]: readyPublicContentState() },
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+
+    // fixture：项目 P-01，时间线 2026.04—06 / 2026.05 / 2026.06—07 → 跨度 2026.04–2026.07
+    const folio = wrapper.get('[data-hero-folio]').text()
+    expect(folio).toContain('P-01')
+    expect(folio).toContain('2026.04')
+    expect(folio).toContain('2026.07')
+  })
+
   it('shows a safe retry action when public content fails', async () => {
     const state = readyPublicContentState()
     state.portfolio.value = null

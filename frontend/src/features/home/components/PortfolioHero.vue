@@ -4,6 +4,7 @@ import type { PublicOwner } from '../../public-content/model/publicContentTypes'
 defineProps<{
   owner: PublicOwner
   version: string
+  marginalia?: string | null
 }>()
 </script>
 
@@ -33,6 +34,15 @@ defineProps<{
         <i></i>
         <span>SCROLL TO INSPECT</span>
       </div>
+
+      <div
+        v-if="marginalia"
+        class="portfolio-hero__folio"
+        data-hero-folio
+        aria-hidden="true"
+      >
+        {{ marginalia }}
+      </div>
     </div>
   </section>
 </template>
@@ -57,7 +67,7 @@ defineProps<{
   inset: 0;
   content: '';
   pointer-events: none;
-  opacity: 0.48;
+  opacity: 0.65;
   background:
     radial-gradient(circle at 20% 20%, rgba(122, 46, 42, 0.045), transparent 32%),
     repeating-linear-gradient(
@@ -181,6 +191,17 @@ h1 em {
   animation: dossier-scan 2.4s ease-in-out infinite;
 }
 
+.portfolio-hero__folio {
+  position: absolute;
+  z-index: 1;
+  right: max(48px, calc((100vw - var(--content-width)) / 2));
+  bottom: 25px;
+  color: var(--ink-2);
+  font: 11.5px var(--mono);
+  letter-spacing: 0.14em;
+  writing-mode: vertical-rl;
+}
+
 @media (max-width: 980px) {
   .portfolio-hero {
     height: auto;
@@ -193,6 +214,10 @@ h1 em {
 
   .portfolio-hero__copy {
     margin-top: 70px;
+  }
+
+  .portfolio-hero__folio {
+    right: 30px;
   }
 }
 
@@ -210,7 +235,8 @@ h1 em {
   }
 
   h1 {
-    font-size: clamp(48px, 15vw, 62px);
+    max-width: none;
+    font-size: clamp(44px, 13.5vw, 56px);
   }
 
   h1 em {
@@ -223,6 +249,10 @@ h1 em {
 
   .portfolio-hero__scroll {
     left: 22px;
+  }
+
+  .portfolio-hero__folio {
+    display: none;
   }
 }
 </style>

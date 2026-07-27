@@ -7,6 +7,7 @@ import {
   buildSectionTraces,
   type SectionAnchor,
 } from '../features/portfolio/model/sectionTrace'
+import DossierFooter from '../shared/components/DossierFooter.vue'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
@@ -40,7 +41,7 @@ function traceFor(anchor: SectionAnchor) {
 </script>
 
 <template>
-  <main v-if="status === 'ready' && dossier" class="project-dossier">
+  <main v-if="status === 'ready' && portfolio && dossier" class="project-dossier">
     <header class="project-cover">
       <div class="page-shell project-cover__grid">
         <div class="project-cover__code">
@@ -134,6 +135,8 @@ function traceFor(anchor: SectionAnchor) {
         </footer>
       </div>
     </div>
+
+    <DossierFooter :content-version="portfolio.contentVersion" />
   </main>
 
   <PublicContentFeedback
@@ -198,7 +201,7 @@ h1 {
 blockquote {
   max-width: 760px;
   margin: 0;
-  color: #cfc5b7;
+  color: var(--ink-text-hi);
   font-family: var(--serif);
   font-size: 20px;
   line-height: 1.7;
@@ -212,8 +215,8 @@ blockquote {
 
 .project-cover li {
   padding: 10px 0;
-  color: #a99f91;
-  border-bottom: 1px solid #4a433b;
+  color: var(--ink-text);
+  border-bottom: 1px solid var(--ink-line);
   font-family: var(--mono);
   font-size: 10px;
 }
@@ -323,10 +326,25 @@ h3 {
 
 /* 黑底段落里的追溯行用暖色，避免在深底上发灰 */
 .project-story__dark .section-trace {
-  color: #a99f91;
+  color: var(--ink-text);
 }
 
 .project-story__dark .section-trace em {
+  color: var(--red-hi);
+}
+
+/* 黑底段落里的段标 / 列表编号 / 追溯链接切到深底浅色红，
+   避免 --red(#7a2e2a) 压在 --ink(#201c17) 上 ~1.5:1 的低对比。
+   复用文件内既有 --red-hi 先例，不新增 token。 */
+.project-story__dark .section-code {
+  color: var(--red-hi);
+}
+
+.project-story__dark li::before {
+  color: var(--red-hi);
+}
+
+.project-story__dark .section-trace a {
   color: var(--red-hi);
 }
 
@@ -370,11 +388,11 @@ li::before {
 
 .project-story__dark .story-lead,
 .project-story__dark li {
-  color: #d2c8bb;
+  color: var(--ink-text-hi);
 }
 
 .project-story__dark li {
-  border-color: #51493f;
+  border-color: var(--ink-line);
 }
 
 .evidence-link {

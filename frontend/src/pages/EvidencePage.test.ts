@@ -37,6 +37,15 @@ describe('EvidencePage', () => {
     )
   })
 
+  it('marks the selected evidence with aria-current instead of aria-pressed', async () => {
+    const wrapper = await mountEvidencePage()
+    await flushPromises()
+
+    const selected = wrapper.get('[data-selected-evidence]')
+    expect(selected.attributes('aria-current')).toBe('true')
+    expect(selected.attributes('aria-pressed')).toBeUndefined()
+  })
+
   it('shows loading feedback before deciding the evidence index is empty', async () => {
     const state = readyPublicContentState()
     state.portfolio.value = null
@@ -64,5 +73,17 @@ describe('EvidencePage', () => {
 
     expect(wrapper.text()).toContain('证明材料尚未公开')
     expect(wrapper.text()).not.toContain('E-01')
+  })
+
+  it('renders an index summary card derived from the evidence store (B1)', async () => {
+    // 左列底部死区用一张等宽体索引小结卡收尾：本页证据数 / 覆盖项目数 / 最近更新月份，
+    // 全部从已有 store 派生，纯展示，不新增事实。
+    const wrapper = await mountEvidencePage()
+    await flushPromises()
+
+    const summary = wrapper.find('[data-evidence-summary]')
+    expect(summary.exists()).toBe(true)
+    // preview fixture: 3 条证据
+    expect(summary.text()).toContain('3')
   })
 })

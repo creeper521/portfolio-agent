@@ -50,4 +50,18 @@ describe('TimelinePage', () => {
     expect(wrapper.text()).toContain('公开时间线正在整理')
     expect(wrapper.text()).not.toContain('从固定路径查询到可交付工具')
   })
+
+  it('renders events descending by date (newest first) regardless of source order (B1-序)', async () => {
+    // 预览 fixture 原序：2026.06—07 / 2026.04—06 / 2026.05。
+    // 倒序后按起始月：06—07 → 05 → 04—06（最新在前，纯展示层派生，不改 JSON）。
+    const wrapper = await mountTimeline()
+    await flushPromises()
+
+    const titles = wrapper.findAll('article h2').map((h) => h.text())
+    expect(titles).toEqual([
+      '从固定路径查询到可交付工具',
+      '代码图谱端到端评测',
+      '多语言图片顺序上传修复与回归',
+    ])
+  })
 })

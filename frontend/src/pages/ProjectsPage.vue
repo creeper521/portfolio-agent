@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import { buildDossierIndex } from '../features/portfolio/model/dossierIndexModel'
+import DossierFooter from '../shared/components/DossierFooter.vue'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
@@ -18,7 +19,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
 </script>
 
 <template>
-  <main v-if="status === 'ready'">
+  <main v-if="status === 'ready' && portfolio">
     <PageLead
       code="01 / DOSSIER INDEX"
       title="工程案卷目录"
@@ -28,7 +29,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
     <section v-if="total" class="dossier-index">
       <div v-for="group in groups" :key="group.code" class="dossier-group page-shell">
         <header class="dossier-group__head">
-          <p>{{ group.code }}</p>
+          <p class="dossier-group__code">{{ group.code }}</p>
           <h2>{{ group.title }}</h2>
           <p class="dossier-group__note">{{ group.note }}</p>
         </header>
@@ -67,6 +68,8 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
     <div v-else class="page-shell">
       <EmptyDossier title="案卷资料准备中" description="目前还没有可以公开的工程案卷。" />
     </div>
+
+    <DossierFooter :content-version="portfolio.contentVersion" />
   </main>
   <PublicContentFeedback
     v-else-if="status === 'loading' || status === 'error'"
@@ -94,7 +97,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   border-bottom: 1px solid var(--ink);
 }
 
-.dossier-group__head p {
+.dossier-group__code {
   margin: 0;
   color: var(--red);
   font: 10px var(--mono);

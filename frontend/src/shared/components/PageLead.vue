@@ -39,7 +39,7 @@ withDefaults(
 
 .page-lead--dark {
   color: var(--paper);
-  border-color: #4a433b;
+  border-color: var(--ink-line);
   background: var(--ink);
 }
 
@@ -75,7 +75,7 @@ h1 {
 }
 
 .page-lead--dark .page-lead__description {
-  color: #a99f91;
+  color: var(--ink-text);
 }
 
 @media (max-width: 820px) {

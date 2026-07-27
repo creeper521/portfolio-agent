@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
+import { compareTimelineByDateDesc } from '../features/portfolio/model/timelineOrder'
+import DossierFooter from '../shared/components/DossierFooter.vue'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
@@ -11,14 +13,16 @@ const { portfolio, status, error, retry } = usePublicContent()
 const route = useRoute()
 const events = computed(() => {
   const project = typeof route.query.project === 'string' ? route.query.project : ''
-  return (portfolio.value?.timeline ?? []).filter(
-    (event) => !project || event.projectSlugs.includes(project),
-  )
+  // 先按路由 query 过滤，再稳定倒序排序（最新在前）。排序是纯展示层派生，不改动已审核 JSON。
+  return (portfolio.value?.timeline ?? [])
+    .filter((event) => !project || event.projectSlugs.includes(project))
+    .slice()
+    .sort(compareTimelineByDateDesc)
 })
 </script>
 
 <template>
-  <main v-if="status === 'ready'">
+  <main v-if="status === 'ready' && portfolio">
     <PageLead
       code="02 / GROWTH LEDGER"
       title="公开成长时间线"
@@ -57,6 +61,8 @@ const events = computed(() => {
     <div v-else class="page-shell">
       <EmptyDossier title="公开时间线正在整理" description="已有项目仍可从项目目录和完整 Agent 中查看。" />
     </div>
+
+    <DossierFooter :content-version="portfolio.contentVersion" />
   </main>
   <PublicContentFeedback
     v-else-if="status === 'loading' || status === 'error'"
@@ -75,6 +81,11 @@ article {
   display: grid;
   grid-template-columns: 0.34fr 1fr;
   gap: clamp(36px, 7vw, 110px);
+}
+
+/* 下留白移到正文列，使轴线列的 border-right 贯穿整个 article 高度，
+   相邻 article 的边框自然连成一条连续竖线（修复原 80px 下留白造成的断裂观感）。 */
+.timeline-ledger__body {
   padding-bottom: 80px;
 }
 
@@ -126,7 +137,7 @@ dl div {
 }
 
 dt {
-  color: var(--red);
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 13px;
 }
@@ -159,6 +170,11 @@ dd {
     grid-template-columns: auto 1fr;
     border-right: 0;
     border-bottom: 1px solid var(--rule);
+  }
+
+  /* 移动端转横排：正文列的桌面下留白回归 article 间距，避免双重间距 */
+  .timeline-ledger__body {
+    padding-bottom: 56px;
   }
 
   .timeline-ledger__axis time {
