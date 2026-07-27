@@ -36,7 +36,7 @@ class RetrievalModelContractTest {
         assertThat(policy.isQueryRiskGateEnabled()).isFalse();
 
         RetrievalPolicy current = RetrievalPolicy.currentRelease();
-        assertThat(current.getVersion()).isEqualTo("retrieval-policy-v2-query-risk");
+        assertThat(current.getVersion()).isEqualTo("retrieval-policy-v2.1-query-risk");
         assertThat(current.isQueryRiskGateEnabled()).isTrue();
     }
 

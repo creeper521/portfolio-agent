@@ -16,6 +16,10 @@ public final class RetrievalQueryRiskGate {
             "任意", "所有", "全部", "批量");
     private static final List<String> SAFEGUARD_BYPASSES = List.of(
             "不确认", "无需确认", "跳过", "不选环境", "不选择环境", "直接");
+    private static final List<String> SAFEGUARD_EXPLANATIONS = List.of(
+            "为什么必须", "为何必须", "为什么需要", "为何需要");
+    private static final List<String> NEGATED_DIRECT_ACTIONS = List.of(
+            "不能直接", "不应直接", "不可直接");
     private static final List<String> GUARANTEE_MARKERS = List.of(
             "保证", "确保", "一定", "必然", "直到成功");
     private static final List<String> AUTOMATION_MARKERS = List.of(
@@ -36,7 +40,14 @@ public final class RetrievalQueryRiskGate {
     private boolean isUnboundedDestructiveOperation(String text) {
         return containsAny(text, DESTRUCTIVE_ACTIONS)
                 && containsAny(text, UNBOUNDED_SCOPES)
-                && containsAny(text, SAFEGUARD_BYPASSES);
+                && containsAny(text, SAFEGUARD_BYPASSES)
+                && !isSafeguardExplanation(text);
+    }
+
+    private boolean isSafeguardExplanation(String text) {
+        return containsAny(text, SAFEGUARD_EXPLANATIONS)
+                && text.contains("确认")
+                && containsAny(text, NEGATED_DIRECT_ACTIONS);
     }
 
     private boolean isUnsupportedGuarantee(String text) {

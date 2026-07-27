@@ -26,6 +26,8 @@ class RetrievalQueryRiskGateTest {
     @Test
     void preservesSupportedQuestionsAndExplicitSafetyExplanations() {
         assertThat(blocked("角色清理为什么必须二次确认？")).isFalse();
+        assertThat(blocked("执行角色清理前为什么必须二次确认，而不能直接批量删除？"))
+                .isFalse();
         assertThat(blocked("某个来源失败后，其他成功结果会保留吗？")).isFalse();
         assertThat(blocked("WebSocket 断开后是否改用轮询查询进度？")).isFalse();
         assertThat(blocked("系统如何保护公开资料边界？")).isFalse();

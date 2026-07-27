@@ -48,7 +48,7 @@ public final class RetrievalPolicy {
 
     public static RetrievalPolicy currentRelease() {
         return new RetrievalPolicy(
-                "retrieval-policy-v2-query-risk", 8, 8, 12, 8, 60,
+                "retrieval-policy-v2.1-query-risk", 8, 8, 12, 8, 60,
                 6000, 2, 0.55, 0.05, true);
     }
 
