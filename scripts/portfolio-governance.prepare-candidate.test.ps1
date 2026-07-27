@@ -117,10 +117,11 @@ function Invoke-FakePrepare([string]$FakeRoot, [string]$InventoryValue, [string]
         -PatchManifest (Join-Path $FakeRoot 'governance\portfolio-governance\candidates\wave-1-public-patch.json') `
         -RouteManifest (Join-Path $FakeRoot 'governance\portfolio-governance\candidates\wave-1-public-routes.json') `
         -AssetInventory $InventoryValue -TargetVersion '2026-07-24.1' `
-        -PrepareFailureStage $FailureStage
+        -PrepareFailureStage $FailureStage 2>&1
     return [ordered]@{
         ExitCode = $LASTEXITCODE
         Json = ($output | Select-Object -Last 1 | ConvertFrom-Json)
+        OutputText = (@($output) -join [Environment]::NewLine)
         Workspace = $workspace
     }
 }
@@ -399,9 +400,8 @@ try {
     $preservedStages = @(Get-ChildItem (Join-Path $cleanupFailure.Workspace 'prepared-candidates') -Force -ErrorAction SilentlyContinue |
         Where-Object Name -Like '.prepare-*')
     Assert-True ($preservedStages.Count -eq 1) 'A complete staging directory must be preserved for manual recovery.'
-    $cleanupFailureJson = $cleanupFailure.Json | ConvertTo-Json -Depth 8 -Compress
-    Assert-True (-not $cleanupFailureJson.Contains($cleanupFailure.Workspace)) `
-        'A cleanup failure response must not disclose the absolute workspace path.'
+    Assert-True (-not $cleanupFailure.OutputText.Contains($cleanupFailure.Workspace)) `
+        'A cleanup failure process output must not disclose the absolute workspace path.'
 
     if (-not [string]::IsNullOrWhiteSpace($env:PORTFOLIO_TEST_ASSET_INVENTORY)) {
         $integrationWorkspace = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))

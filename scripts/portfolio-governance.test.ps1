@@ -87,9 +87,11 @@ function Invoke-Governance([string[]]$Arguments) {
                     [string]$unmappedCase.achievementStatus -eq 'PROTOTYPE'
                 ) { 'VALIDATED_PROTOTYPE' } else { [string]$unmappedCase.achievementStatus }
                 $availableAsset.contributionType = [string]$unmappedCase.contributionType
+                $availableAsset.evidenceStatus = 'VERIFIED'
                 $availableAsset.finalRoute = 'CASE'
                 $availableAsset.decisionReason = 'Synthetic dynamic Case mapping'
                 $availableAsset.caseSlugs = @([string]$unmappedCase.slug)
+                $availableAsset.evidenceIds = @([string]$candidatePortfolio.evidence[0].id)
                 $availableAsset.routeDecision = 'PUBLISH_CANDIDATE'
                 $availableAsset.targetContentVersion = $candidateContentVersion
                 $availableAsset.targetWave = 1
@@ -516,7 +518,7 @@ try {
     $reverseReferenceData = Get-Content -LiteralPath $reverseReferenceLedger -Raw -Encoding UTF8 | ConvertFrom-Json
     $reverseReferenceData.assets |
         Where-Object { $_.assetId -eq 'K-01' } |
-        ForEach-Object { $_.evidenceIds = @() }
+        ForEach-Object { $_.evidenceIds = @('sql-audit-delivery-set') }
     Save-Json $reverseReferenceData $reverseReferenceLedger
     $reverseReferenceResult = Invoke-LedgerValidation $reverseReferenceLedger
     if ($reverseReferenceResult.ExitCode -eq 0 -or
@@ -575,6 +577,22 @@ try {
     if ($ownerConfirmedEvidenceResult.ExitCode -eq 0 -or
             -not $ownerConfirmedEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
         throw 'Owner-confirmed source Evidence must not be elevated to approved public Evidence.'
+    }
+
+    $ownerConfirmedWithoutEvidenceLedger = Copy-Ledger 'owner-confirmed-without-evidence-reference'
+    $ownerConfirmedWithoutEvidenceData = Get-Content -LiteralPath $ownerConfirmedWithoutEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ownerConfirmedWithoutEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object {
+            $_.evidenceStatus = 'OWNER_CONFIRMED'
+            $_.evidenceIds = @()
+        }
+    Save-Json $ownerConfirmedWithoutEvidenceData $ownerConfirmedWithoutEvidenceLedger
+    $ownerConfirmedWithoutEvidenceResult = Invoke-LedgerValidation $ownerConfirmedWithoutEvidenceLedger
+    if ($ownerConfirmedWithoutEvidenceResult.ExitCode -eq 0 -or
+            -not $ownerConfirmedWithoutEvidenceResult.Output.Contains('DECISION_LEDGER_ROUTE_INVALID')) {
+        throw 'Every publish candidate must retain its own direct Evidence reference.'
     }
 
     $documentedEvidenceLedger = Copy-Ledger 'documented-evidence-only'
@@ -677,6 +695,23 @@ try {
     if ($unsupportedBenchmark.ExitCode -eq 0 -or
             -not $unsupportedBenchmark.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
         throw 'Unknown schema 3.0 content versions must fail closed before governance review.'
+    }
+
+    $downgradedWaveOneCandidate = New-Candidate 'downgraded-wave-one-version'
+    ConvertTo-SchemaTwo $downgradedWaveOneCandidate
+    foreach ($name in @('portfolio.json', 'presentation.json')) {
+        $path = Join-Path $downgradedWaveOneCandidate $name
+        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace(
+            '2026-07-21.1', '2026-07-24.1') |
+            Set-Content -LiteralPath $path -Encoding UTF8
+    }
+    $downgradedWaveOne = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $downgradedWaveOneCandidate
+    )
+    if ($downgradedWaveOne.ExitCode -eq 0 -or
+            -not $downgradedWaveOne.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
+        throw 'Schema downgrade must not bypass the benchmark suite bound to Wave 1.'
     }
 
     $unknownCandidate = New-Candidate 'unknown-field'

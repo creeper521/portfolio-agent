@@ -197,6 +197,7 @@ function Read-DecisionLedger([string]$LedgerPath) {
         if ($asset.routeDecision -eq 'PUBLISH_CANDIDATE') {
             if ($asset.finalRoute -in @('HOLD', 'EXCLUDE') -or
                     $publicReferenceCount -eq 0 -or
+                    @($asset.evidenceIds).Count -eq 0 -or
                     $asset.targetContentVersion -isnot [string] -or
                     [string]$asset.targetContentVersion -notmatch
                         '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+$' -or
@@ -834,7 +835,7 @@ function Invoke-PrepareCandidate {
         }
     }
     if ($cleanupFailed) {
-        Write-Failure 'PREPARE_STAGE_MANUAL_RECOVERY_REQUIRED' 'Candidate staging cleanup failed; the complete staging directory was preserved for manual recovery.'
+        Write-Failure 'PREPARE_STAGE_MANUAL_RECOVERY_REQUIRED' 'Candidate staging cleanup failed; the staging directory was preserved for manual recovery.'
     }
     if ($null -ne $preparationFailureCode) {
         Write-Failure $preparationFailureCode 'Candidate preparation failed atomically.'
@@ -862,15 +863,13 @@ function Resolve-CompilerJar() {
     return Resolve-SafePath $configured 'jarPath'
 }
 function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$ContentVersionValue) {
-    $fileName = if ($SchemaVersionValue -eq '2.0') {
-        'active-benchmarks.v1.json'
-    } else {
-        switch ($ContentVersionValue) {
-            '2026-07-23.1' { 'active-benchmarks.v1.json'; break }
-            '2026-07-23.2' { 'active-benchmarks.v1.json'; break }
-            '2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
-            default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate content version.' }
-        }
+    $versionKey = $SchemaVersionValue + '|' + $ContentVersionValue
+    $fileName = switch ($versionKey) {
+        '2.0|2026-07-21.1' { 'active-benchmarks.v1.json'; break }
+        '3.0|2026-07-23.1' { 'active-benchmarks.v1.json'; break }
+        '3.0|2026-07-23.2' { 'active-benchmarks.v1.json'; break }
+        '3.0|2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
+        default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
     $resolved = Resolve-SafePath (Join-Path $benchmarkDirectory $fileName) 'benchmarkDefinition'
