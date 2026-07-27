@@ -1,7 +1,9 @@
 package com.portfolio.agent.portfolio.repository.file;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
+import com.portfolio.agent.portfolio.domain.ReleaseManifest;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
@@ -175,6 +177,56 @@ class PublicBundleLoaderTest {
     }
 
     @Test
+    void rejectsTamperedKeywordAndVectorArtifacts() {
+        Map<String, byte[]> keyword = validRetrievalBundle();
+        keyword.put("keyword-index.json", "{}".getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> loader.load(keyword))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("checksum");
+
+        Map<String, byte[]> vector = validRetrievalBundle();
+        byte[] tampered = vector.get("vector-index.bin").clone();
+        tampered[tampered.length - 1] ^= 1;
+        vector.put("vector-index.bin", tampered);
+        assertThatThrownBy(() -> loader.load(vector))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("checksum");
+    }
+
+    @Test
+    void rejectsRehashedChunkSetAndIndexMembershipMismatches() {
+        Map<String, byte[]> rag = validRetrievalBundle();
+        rag.put("rag-documents.jsonl", new String(
+                rag.get("rag-documents.jsonl"), StandardCharsets.UTF_8)
+                .replace("chunk-sql-audit-delivery", "chunk-sql-audit-other")
+                .getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(rag);
+        assertThatThrownBy(() -> loader.load(rag))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("keyword index chunk set mismatch");
+
+        Map<String, byte[]> keyword = validRetrievalBundle();
+        keyword.put("keyword-index.json", new String(
+                keyword.get("keyword-index.json"), StandardCharsets.UTF_8)
+                .replace("chunk-sql-audit-delivery", "chunk-sql-audit-other")
+                .getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(keyword);
+        assertThatThrownBy(() -> loader.load(keyword))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("keyword index chunk set mismatch");
+
+        Map<String, byte[]> vector = validRetrievalBundle();
+        float[] value = new float[512];
+        value[0] = 1.0f;
+        vector.put("vector-index.bin", new VectorIndexCodec().encode(
+                Map.of("chunk-sql-audit-other", value), 512));
+        rebuildChecksumsAndManifest(vector);
+        assertThatThrownBy(() -> loader.load(vector))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("vector index chunk set mismatch");
+    }
+
+    @Test
     void rejectsPayloadByteMutation() {
         Map<String, byte[]> bundle = validLegacyBundle();
         bundle.put("portfolio.json", new String(bundle.get("portfolio.json"), StandardCharsets.UTF_8)
@@ -325,6 +377,49 @@ class PublicBundleLoaderTest {
         return bundle;
     }
 
+    @Test
+    void loadsGovernedRetrievalManifestDirectlyWhileLegacyRemainsCompatible()
+            throws Exception {
+        Map<String, byte[]> retrieval = validRetrievalBundle();
+        RuntimeContentSnapshot governed = loader.load(retrieval);
+        ReleaseManifest governedManifest = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(retrieval.get("manifest.json"), ReleaseManifest.class);
+
+        assertThat(governed.getRetrievalContent()).isPresent();
+        assertThat(governedManifest.getLedgerHash())
+                .isEqualTo("sha256:" + "1".repeat(64));
+        assertThat(loader.load(validLegacyBundle()).getRetrievalContent()).isEmpty();
+        ReleaseManifest legacyManifest = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .readValue(validLegacyBundle().get("manifest.json"),
+                        ReleaseManifest.class);
+        assertThat(legacyManifest.getLedgerHash()).isNull();
+    }
+
+    @Test
+    void rejectsRetrievalManifestWithMissingOrMalformedLedgerHash() {
+        Map<String, byte[]> missing = validRetrievalBundle();
+        missing.put("manifest.json", new String(
+                missing.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace("\"ledgerHash\":\"sha256:" + "1".repeat(64) + "\",", "")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(missing))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("ledgerHash");
+
+        Map<String, byte[]> malformed = validRetrievalBundle();
+        malformed.put("manifest.json", new String(
+                malformed.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace("sha256:" + "1".repeat(64), "sha256:not-a-ledger-hash")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(malformed))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("ledgerHash");
+    }
+
     private byte[] keywordIndexBytes() {
         try {
             KeywordIndexFile index = new KeywordIndexFile(
@@ -374,6 +469,9 @@ class PublicBundleLoaderTest {
                 + "\"factsFile\":\"portfolio.json\",\"presentationFile\":\"presentation.json\","
                 + "\"approvalId\":\"APR-2026-07-21-001\",\"approvalDigest\":\"sha256:approved\","
                 + "\"candidatePayloadHash\":\"" + candidateHash + "\","
+                + (bundle.containsKey("rag-documents.jsonl")
+                        ? "\"ledgerHash\":\"sha256:" + "1".repeat(64) + "\","
+                        : "")
                 + "\"checksumsFile\":\"checksums.json\",\"counts\":{"
                 + "\"projects\":1," + caseCount
                 + "\"claims\":" + ("3.0".equals(schemaVersion) ? 2 : 1)

@@ -1,6 +1,8 @@
 param(
     [switch]$SkipInstall,
-    [switch]$SkipDockerCheck
+    [switch]$SkipDockerCheck,
+    [string]$ModelDirectory = '',
+    [string]$BundleDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,8 +61,8 @@ try {
         -Path (Join-Path $root 'backend\src\main')
     Assert-ExitCode 'Pre-package production source and configuration privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
-        -Path (Join-Path $root '.agents\skills\portfolio-governance')
-    Assert-ExitCode 'Public governance skill privacy scan'
+        -Path (Join-Path $root 'governance\portfolio-governance')
+    Assert-ExitCode 'Tracked governance package privacy scan'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root 'backend\src\main\resources\public-data')
     Assert-ExitCode 'Pre-package public snapshot privacy scan'
@@ -86,6 +88,17 @@ try {
     & $maven -f backend/pom.xml clean package
     Assert-ExitCode 'Backend clean package'
 
+    if (-not [string]::IsNullOrWhiteSpace($BundleDirectory)) {
+        $resolvedBundleDirectory = (Resolve-Path -LiteralPath `
+            $BundleDirectory -ErrorAction Stop).Path
+        & java.exe `
+            '-Dloader.main=com.portfolio.agent.release.PublicBundleVerificationCli' `
+            -cp $jarPath `
+            org.springframework.boot.loader.launch.PropertiesLauncher `
+            $resolvedBundleDirectory
+        Assert-ExitCode 'External seven-file public Bundle verification'
+    }
+
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\build-retrieval-bundle.test.ps1')
     Assert-ExitCode 'Canonical retrieval candidate builder tests'
@@ -93,12 +106,23 @@ try {
         -File (Join-Path $root 'scripts\portfolio-governance.test.ps1')
     Assert-ExitCode 'Portfolio governance B and C2 CLI tests'
 
-    $localModel = Join-Path $root 'runtime-models\bge-small-zh-v1.5'
-    if (Test-Path -LiteralPath (Join-Path $localModel 'onnx\model_quantized.onnx') -PathType Leaf) {
+    if ([string]::IsNullOrWhiteSpace($ModelDirectory)) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
-            -ModelDirectory $localModel
-        Assert-ExitCode 'Local retrieval correctness and performance gates'
+            -UnitOnly
+        Assert-ExitCode 'Local retrieval unit gates'
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($BundleDirectory)) {
+            throw 'Real-model release verification requires -BundleDirectory.'
+        }
+        $benchmarkOutput = Join-Path $scanRoot 'retrieval-comparison'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
+            -ModelDirectory $ModelDirectory `
+            -BundleDirectory $BundleDirectory `
+            -OutputDirectory $benchmarkOutput
+        Assert-ExitCode 'Local retrieval real-model comparison'
     }
 
     $entries = @(& jar.exe tf $jarPath)

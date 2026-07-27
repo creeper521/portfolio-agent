@@ -15,6 +15,7 @@ public final class ReleaseManifest {
     private final String approvalId;
     private final String approvalDigest;
     private final String candidatePayloadHash;
+    private final String ledgerHash;
     private final String checksumsFile;
     private final BundleCounts counts;
     private final RetrievalManifest retrieval;
@@ -30,6 +31,7 @@ public final class ReleaseManifest {
             @JsonProperty("approvalId") String approvalId,
             @JsonProperty("approvalDigest") String approvalDigest,
             @JsonProperty("candidatePayloadHash") String candidatePayloadHash,
+            @JsonProperty("ledgerHash") String ledgerHash,
             @JsonProperty("checksumsFile") String checksumsFile,
             @JsonProperty("counts") BundleCounts counts,
             @JsonProperty("retrieval") RetrievalManifest retrieval) {
@@ -38,8 +40,27 @@ public final class ReleaseManifest {
         this.minimumApplicationVersion = minimumApplicationVersion; this.factsFile = factsFile;
         this.presentationFile = presentationFile; this.approvalId = approvalId;
         this.approvalDigest = approvalDigest; this.candidatePayloadHash = candidatePayloadHash;
+        this.ledgerHash = ledgerHash;
         this.checksumsFile = checksumsFile; this.counts = counts;
         this.retrieval = retrieval;
+    }
+    public ReleaseManifest(String schemaVersion,
+            String contentVersion,
+            OffsetDateTime publishedAt,
+            OffsetDateTime builtAt,
+            String minimumApplicationVersion,
+            String factsFile,
+            String presentationFile,
+            String approvalId,
+            String approvalDigest,
+            String candidatePayloadHash,
+            String checksumsFile,
+            BundleCounts counts,
+            RetrievalManifest retrieval) {
+        this(schemaVersion, contentVersion, publishedAt, builtAt,
+                minimumApplicationVersion, factsFile, presentationFile,
+                approvalId, approvalDigest, candidatePayloadHash, null,
+                checksumsFile, counts, retrieval);
     }
     public String getSchemaVersion() { return schemaVersion; }
     public String getContentVersion() { return contentVersion; }
@@ -51,6 +72,7 @@ public final class ReleaseManifest {
     public String getApprovalId() { return approvalId; }
     public String getApprovalDigest() { return approvalDigest; }
     public String getCandidatePayloadHash() { return candidatePayloadHash; }
+    public String getLedgerHash() { return ledgerHash; }
     public String getChecksumsFile() { return checksumsFile; }
     public BundleCounts getCounts() { return counts; }
     public RetrievalManifest getRetrieval() { return retrieval; }

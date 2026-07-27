@@ -59,6 +59,8 @@ public final class PublicBundleLoader {
             boolean hasRetrieval = manifest.getRetrieval() != null;
             require(hasRetrieval == files.keySet().equals(RETRIEVAL_FILES),
                     "bundle file set does not match retrieval manifest");
+            require(!hasRetrieval || isSha256(manifest.getLedgerHash()),
+                    "retrieval manifest ledgerHash is invalid");
             require(SUPPORTED_SCHEMA_VERSIONS.contains(manifest.getSchemaVersion()),
                     "unsupported manifest schemaVersion");
             require("portfolio.json".equals(manifest.getFactsFile()), "invalid factsFile");
@@ -214,6 +216,10 @@ public final class PublicBundleLoader {
 
     private boolean startsWithSha256(String value) {
         return value != null && value.startsWith("sha256:") && value.length() > "sha256:".length();
+    }
+
+    private boolean isSha256(String value) {
+        return value != null && value.matches("sha256:[0-9a-f]{64}");
     }
 
     private boolean hasText(String value) {

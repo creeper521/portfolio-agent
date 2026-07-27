@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Asset Publication Decision Ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "assets"],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 68,
+      "maxItems": 68,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assetId",
+          "contentType",
+          "achievementStatus",
+          "contributionType",
+          "publicPriority",
+          "evidenceStatus",
+          "originalReviewState",
+          "finalRoute",
+          "decisionReason",
+          "projectSlugs",
+          "caseSlugs",
+          "evidenceIds",
+          "privacyReview",
+          "routeDecision",
+          "targetContentVersion",
+          "targetWave"
+        ],
+        "properties": {
+          "assetId": {
+            "pattern": "^(L-(0[1-7])|T-(0[1-9]|1[0-9])|A-(0[1-9]|1[0-9]|2[0-5])|K-(0[1-9]|1[0-7]))$"
+          },
+          "contentType": {
+            "enum": [
+              "MAINLINE",
+              "TASK",
+              "INCIDENT",
+              "KNOWLEDGE_ASSET"
+            ]
+          },
+          "achievementStatus": {
+            "enum": [
+              "DELIVERED",
+              "IMPLEMENTED_TESTED",
+              "VALIDATED_PROTOTYPE",
+              "INVESTIGATED",
+              "DOCUMENTED_OUTPUT",
+              "LEARNING_ONLY",
+              "OBSERVED_LEARNING",
+              "INCOMPLETE"
+            ]
+          },
+          "contributionType": {
+            "enum": [
+              "PRIMARY",
+              "COLLABORATIVE",
+              "ASSISTED",
+              "OBSERVED_LEARNING",
+              "UNRESOLVED"
+            ]
+          },
+          "publicPriority": {
+            "enum": ["P0", "P1", "P2", "EXCLUDE"]
+          },
+          "evidenceStatus": {
+            "enum": ["VERIFIED", "PARTIALLY_VERIFIED", "OWNER_CONFIRMED", "INSUFFICIENT"]
+          },
+          "originalReviewState": {
+            "enum": ["PUBLIC_REVIEW_REQUIRED", "HOLD", "EXCLUDE"]
+          },
+          "finalRoute": {
+            "enum": ["PROJECT", "CASE", "ENRICH_EXISTING_PROJECT", "EVIDENCE_ONLY", "TIMELINE_ONLY", "HOLD", "EXCLUDE"]
+          },
+          "decisionReason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "projectSlugs": {
+            "$ref": "#/$defs/stringSet"
+          },
+          "caseSlugs": {
+            "$ref": "#/$defs/stringSet"
+          },
+          "evidenceIds": {
+            "$ref": "#/$defs/stringSet"
+          },
+          "privacyReview": {
+            "type": "string",
+            "minLength": 1
+          },
+          "routeDecision": {
+            "enum": ["PUBLISH_CANDIDATE", "REVIEWED_HOLD", "EXCLUDED"]
+          },
+          "targetContentVersion": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$"
+          },
+          "targetWave": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

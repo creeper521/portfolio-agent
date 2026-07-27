@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["caseId", "source", "contentVersion", "failureType", "sanitizedObservation", "expectedBehavior", "status"],
+  "properties": {
+    "caseId": {"type": "string"}, "source": {"type": "string"},
+    "contentVersion": {"type": "string"}, "questionPresetId": {"type": ["string", "null"]},
+    "failureType": {"type": "string"}, "sanitizedObservation": {"type": "string"},
+    "expectedBehavior": {"type": "string"}, "rootCause": {"type": "string"},
+    "resolution": {"type": "string"}, "fixedVersion": {"type": "string"},
+    "regressionBenchmarkCaseId": {"type": "string"}, "playbookDecision": {"type": "string"},
+    "status": {"enum": ["OPEN", "INVESTIGATING", "RESOLVED"]}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "RESOLVED"}}}, "then": {"required": ["rootCause", "resolution", "fixedVersion", "regressionBenchmarkCaseId", "playbookDecision"]}}]
+}

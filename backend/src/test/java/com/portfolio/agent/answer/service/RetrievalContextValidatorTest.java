@@ -25,10 +25,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RetrievalContextValidatorTest {
 
     private final RetrievalContextValidator validator = new RetrievalContextValidator();
+    private final RetrievalQueryNormalizer normalizer = new RetrievalQueryNormalizer();
+
+    @Test
+    void rejectsRiskyQueriesBeforeApprovedClaimsCanMakeThemSufficient() {
+        RetrievalDecision decision = validator.validate(
+                normalizer.normalize("日志源失败后会自动重试三次并保证成功吗？"),
+                List.of(claim("claim-1", AnswerAchievementStatus.DELIVERED,
+                        AnswerMateriality.KEY, List.of("evidence-1"))),
+                List.of(evidence("evidence-1")),
+                Map.of("chunk-1", chunk("chunk-1", "claim-1", 120)),
+                List.of(candidate("chunk-1", 0.03)),
+                RetrievalMode.HYBRID_ENABLED,
+                RetrievalPolicy.currentRelease());
+
+        assertThat(decision.getType()).isEqualTo(RetrievalDecisionType.AMBIGUOUS);
+        assertThat(decision.getSelectedClaimIds()).isEmpty();
+    }
 
     @Test
     void acceptsAKeyClaimWithCurrentDirectEvidence() {
         RetrievalDecision decision = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 List.of(claim("claim-1", AnswerAchievementStatus.DELIVERED,
                         AnswerMateriality.KEY, List.of("evidence-1"))),
                 List.of(evidence("evidence-1")),
@@ -45,6 +63,7 @@ class RetrievalContextValidatorTest {
     @Test
     void rejectsMissingEvidenceAndUnsafeContextTruncation() {
         RetrievalDecision missingEvidence = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 List.of(claim("claim-1", AnswerAchievementStatus.DELIVERED,
                         AnswerMateriality.KEY, List.of("missing"))),
                 List.of(evidence("evidence-1")),
@@ -55,6 +74,7 @@ class RetrievalContextValidatorTest {
         assertThat(missingEvidence.getType()).isEqualTo(RetrievalDecisionType.INSUFFICIENT);
 
         RetrievalDecision tooLarge = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 List.of(claim("claim-1", AnswerAchievementStatus.DELIVERED,
                         AnswerMateriality.KEY, List.of("evidence-1"))),
                 List.of(evidence("evidence-1")),
@@ -68,6 +88,7 @@ class RetrievalContextValidatorTest {
     @Test
     void separatesOutOfScopeAmbiguousAndConflictingCandidates() {
         RetrievalDecision outOfScope = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 List.of(), List.of(), Map.of(), List.of(), RetrievalMode.KEYWORD_ONLY,
                 RetrievalPolicy.firstRelease());
         assertThat(outOfScope.getType()).isEqualTo(RetrievalDecisionType.OUT_OF_SCOPE);
@@ -78,6 +99,7 @@ class RetrievalContextValidatorTest {
                 claim("claim-2", AnswerAchievementStatus.DELIVERED,
                         AnswerMateriality.KEY, List.of("evidence-2")));
         RetrievalDecision ambiguous = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 distinctClaims, List.of(evidence("evidence-1"), evidence("evidence-2")),
                 Map.of("chunk-1", chunk("chunk-1", "claim-1", 100),
                         "chunk-2", chunk("chunk-2", "claim-2", 100)),
@@ -92,6 +114,7 @@ class RetrievalContextValidatorTest {
                 claim("claim-2", AnswerAchievementStatus.PLANNED,
                         AnswerMateriality.KEY, List.of("evidence-2")));
         RetrievalDecision conflicting = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 conflictingClaims, List.of(evidence("evidence-1"), evidence("evidence-2")),
                 Map.of("chunk-1", chunk("chunk-1", "claim-1", 100),
                         "chunk-2", chunk("chunk-2", "claim-2", 100)),
@@ -109,6 +132,7 @@ class RetrievalContextValidatorTest {
                         AnswerMateriality.KEY, List.of("evidence-2")));
 
         RetrievalDecision decision = validator.validate(
+                normalizer.normalize("这个项目交付了什么？"),
                 claims, List.of(evidence("evidence-1"), evidence("evidence-2")),
                 Map.of("chunk-1", chunk("chunk-1", "claim-1", 100),
                         "chunk-2", chunk("chunk-2", "claim-2", 100)),

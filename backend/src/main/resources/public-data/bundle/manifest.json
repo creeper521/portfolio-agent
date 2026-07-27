@@ -1,22 +1,38 @@
 ﻿{
     "schemaVersion":  "3.0",
-    "contentVersion":  "2026-07-23.1",
-    "publishedAt":  "2026-07-23T10:39:08.5322876+00:00",
-    "builtAt":  "2026-07-23T10:39:08.5322876+00:00",
+    "contentVersion":  "2026-07-24.1",
+    "publishedAt":  "2026-07-27T07:24:01.2599845+00:00",
+    "builtAt":  "2026-07-27T07:24:01.2599845+00:00",
     "minimumApplicationVersion":  "0.1.0",
     "factsFile":  "portfolio.json",
     "presentationFile":  "presentation.json",
-    "approvalId":  "APR-a3ad93910e634e129e454e80844c2516",
-    "approvalDigest":  "sha256:2353747d634192bd44a73b6ba01ca9edde9b898ed515ce20f625b90fe23a191d",
-    "candidatePayloadHash":  "sha256:564330cbdf98693e16a4f80a96c55716c244295ae10f7df8a33480f3b1716f48",
+    "approvalId":  "APR-263a634c50db44d3b524bee3056983a8",
+    "approvalDigest":  "sha256:4bbe5de3014d54389f385f2ba3d9a2800ae6f30abcbf15887116c870b6279d70",
+    "candidatePayloadHash":  "sha256:53271cf750c2706fd73bafbdda692262e1dae9e6737e1b2cc3ebd22bf73f1ff0",
+    "ledgerHash":  "sha256:38950fff8e262582123ab3955aee240d6ed258bdfc23cf555c6a6e4ef88e21e3",
     "checksumsFile":  "checksums.json",
     "counts":  {
                    "projects":  1,
                    "cases":  3,
-                   "claims":  16,
-                   "evidence":  5,
-                   "claimEvidenceLinks":  16,
+                   "claims":  29,
+                   "evidence":  7,
+                   "claimEvidenceLinks":  29,
                    "timelineEvents":  5,
-                   "questionPresets":  6
-               }
+                   "questionPresets":  15
+               },
+    "retrieval":  {
+                      "chunkCount":  29,
+                      "chunkSetHash":  "sha256:1546df7853ee5976c7fb96caceac6c50d48b49c951afbf4d29335a28ff1e5d35",
+                      "dimension":  512,
+                      "documentMaxTokens":  256,
+                      "embeddingArtifactSha256":  "sha256:9ff520c01576e44eb0eb07a420e50bfb7603a0471ebb7c4693b31726858fa37a",
+                      "embeddingModelId":  "BAAI/bge-small-zh-v1.5",
+                      "keywordIndexFormatVersion":  "keyword-index-v1",
+                      "normalizationVersion":  "nfkc-bigram-v1",
+                      "retrievalPolicyVersion":  "retrieval-policy-v2.1-query-risk",
+                      "similarity":  "COSINE",
+                      "strategyVersion":  "claim-chunk-v1",
+                      "vectorIndexFormatVersion":  "vector-index-v1",
+                      "vectorNormalization":  "L2"
+                  }
 }

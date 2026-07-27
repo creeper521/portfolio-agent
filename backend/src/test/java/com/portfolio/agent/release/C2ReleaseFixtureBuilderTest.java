@@ -87,7 +87,8 @@ class C2ReleaseFixtureBuilderTest {
                 BundleHashCalculator.sha256(
                         ("TEST-C2-APPROVAL-FIXTURE\0" + candidateHash)
                                 .getBytes(StandardCharsets.UTF_8)),
-                candidateHash, "checksums.json", counts, retrieval);
+                candidateHash, "sha256:" + "1".repeat(64),
+                "checksums.json", counts, retrieval);
         byte[] manifestBytes = mapper.writeValueAsBytes(manifest);
         Map<String, Object> checksums = new LinkedHashMap<>();
         checksums.put("schemaVersion", snapshot.getSchemaVersion());

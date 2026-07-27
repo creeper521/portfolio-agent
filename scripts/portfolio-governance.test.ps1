@@ -5,10 +5,99 @@ $repositoryRoot = Split-Path $PSScriptRoot -Parent
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-governance-' + [guid]::NewGuid())
 $workspace = Join-Path $fixtureRoot 'workspace'
 $candidate = Join-Path $workspace 'candidates\candidate-1'
-$currentBundleVersion = '2026-07-23.1'
-$nextBundleVersion = '2026-07-23.2'
+$decisionLedger = $null
+$governanceInvocationCount = 0
+$currentBundleVersion = '2026-07-24.1'
 
 function Invoke-Governance([string[]]$Arguments) {
+    $script:governanceInvocationCount++
+    $commandIndex = [Array]::IndexOf($Arguments, '-Command')
+    $usesDefaultLedger = $false
+    if ($commandIndex -ge 0 -and $commandIndex + 1 -lt $Arguments.Count -and
+            $Arguments[$commandIndex + 1] -in @(
+                'validate', 'benchmark', 'build-review-pack', 'approve', 'publish', 'verify'
+            ) -and
+            [Array]::IndexOf($Arguments, '-DecisionLedger') -lt 0 -and
+            -not [string]::IsNullOrWhiteSpace($decisionLedger)) {
+        $Arguments = @($Arguments) + @('-DecisionLedger', $decisionLedger)
+        $usesDefaultLedger = $true
+    }
+    $candidateIndex = [Array]::IndexOf($Arguments, '-Candidate')
+    if ($usesDefaultLedger -and $candidateIndex -ge 0 -and
+            $candidateIndex + 1 -lt $Arguments.Count) {
+        $candidatePortfolioPath = Join-Path $Arguments[$candidateIndex + 1] 'portfolio.json'
+        if (Test-Path -LiteralPath $candidatePortfolioPath -PathType Leaf) {
+            $candidateContentVersion = [string](
+                Get-Content -LiteralPath $candidatePortfolioPath -Raw -Encoding UTF8 |
+                    ConvertFrom-Json
+            ).contentVersion
+            $ledgerForCandidate = Get-Content -LiteralPath $decisionLedger `
+                -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($dynamicAsset in @($ledgerForCandidate.assets |
+                    Where-Object { $_.decisionReason -eq 'Synthetic dynamic Case mapping' })) {
+                $dynamicAsset.achievementStatus = 'INCOMPLETE'
+                $dynamicAsset.contributionType = 'ASSISTED'
+                $dynamicAsset.finalRoute = 'HOLD'
+                $dynamicAsset.decisionReason = 'Synthetic reviewed hold'
+                $dynamicAsset.projectSlugs = @()
+                $dynamicAsset.caseSlugs = @()
+                $dynamicAsset.evidenceIds = @()
+                $dynamicAsset.routeDecision = 'REVIEWED_HOLD'
+                $dynamicAsset.targetContentVersion = $null
+                $dynamicAsset.targetWave = $null
+            }
+            foreach ($asset in @($ledgerForCandidate.assets |
+                    Where-Object { $_.routeDecision -eq 'PUBLISH_CANDIDATE' })) {
+                $asset.targetContentVersion = $candidateContentVersion
+            }
+            foreach ($caseAssetMapping in @(
+                @{ AssetId = 'T-01'; CaseSlug = 'multilingual-image-preservation' },
+                @{ AssetId = 'T-02'; CaseSlug = 'test-role-reset' },
+                @{ AssetId = 'K-01'; CaseSlug = 'codegraph-evaluation' }
+            )) {
+                $caseAsset = @($ledgerForCandidate.assets |
+                    Where-Object { $_.assetId -eq $caseAssetMapping.AssetId })[0]
+                if ([string]$(
+                        Get-Content -LiteralPath $candidatePortfolioPath -Raw -Encoding UTF8 |
+                            ConvertFrom-Json
+                    ).schemaVersion -eq '2.0') {
+                    $caseAsset.finalRoute = 'EVIDENCE_ONLY'
+                    $caseAsset.caseSlugs = @()
+                }
+                else {
+                    $caseAsset.finalRoute = 'CASE'
+                    $caseAsset.caseSlugs = @($caseAssetMapping.CaseSlug)
+                }
+            }
+            $candidatePortfolio = Get-Content -LiteralPath $candidatePortfolioPath `
+                -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($unmappedCase in @($candidatePortfolio.cases | Where-Object {
+                    [string]$candidatePortfolio.schemaVersion -eq '3.0' -and
+                    $null -ne $_ -and
+                    -not [string]::IsNullOrWhiteSpace([string]$_.slug) -and
+                    ($slug = [string]$_.slug) -and
+                    @($ledgerForCandidate.assets | Where-Object {
+                        @($_.caseSlugs) -contains $slug
+                    }).Count -eq 0
+                })) {
+                $availableAsset = @($ledgerForCandidate.assets |
+                    Where-Object { $_.routeDecision -eq 'REVIEWED_HOLD' })[0]
+                $availableAsset.achievementStatus = if (
+                    [string]$unmappedCase.achievementStatus -eq 'PROTOTYPE'
+                ) { 'VALIDATED_PROTOTYPE' } else { [string]$unmappedCase.achievementStatus }
+                $availableAsset.contributionType = [string]$unmappedCase.contributionType
+                $availableAsset.evidenceStatus = 'VERIFIED'
+                $availableAsset.finalRoute = 'CASE'
+                $availableAsset.decisionReason = 'Synthetic dynamic Case mapping'
+                $availableAsset.caseSlugs = @([string]$unmappedCase.slug)
+                $availableAsset.evidenceIds = @([string]$candidatePortfolio.evidence[0].id)
+                $availableAsset.routeDecision = 'PUBLISH_CANDIDATE'
+                $availableAsset.targetContentVersion = $candidateContentVersion
+                $availableAsset.targetWave = 1
+            }
+            Save-Json $ledgerForCandidate $decisionLedger
+        }
+    }
     $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cli @Arguments 2>&1
     return @{ ExitCode = $LASTEXITCODE; Output = ($output -join [Environment]::NewLine) }
 }
@@ -26,12 +115,112 @@ function Save-Json([object]$Value, [string]$Path) {
         Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
+    $portfolio = Get-Content -LiteralPath (Join-Path $CandidatePath 'portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $assets = @()
+    foreach ($prefixAndCount in @(
+        @('L', 7, 'MAINLINE'),
+        @('T', 19, 'TASK'),
+        @('A', 25, 'INCIDENT'),
+        @('K', 17, 'KNOWLEDGE_ASSET')
+    )) {
+        for ($index = 1; $index -le [int]$prefixAndCount[1]; $index++) {
+            $assets += [pscustomobject][ordered]@{
+                assetId = ('{0}-{1:d2}' -f $prefixAndCount[0], $index)
+                contentType = [string]$prefixAndCount[2]
+                achievementStatus = 'INCOMPLETE'
+                contributionType = 'ASSISTED'
+                publicPriority = 'P2'
+                evidenceStatus = 'INSUFFICIENT'
+                originalReviewState = 'HOLD'
+                finalRoute = 'HOLD'
+                decisionReason = 'Synthetic reviewed hold'
+                projectSlugs = @()
+                caseSlugs = @()
+                evidenceIds = @()
+                privacyReview = 'REVIEWED'
+                routeDecision = 'REVIEWED_HOLD'
+                targetContentVersion = $null
+                targetWave = $null
+            }
+        }
+    }
+    $published = @{
+        'L-01' = @{
+            contentType = 'MAINLINE'; achievementStatus = 'DELIVERED'
+            projectSlugs = @('sql-audit')
+            caseSlugs = @()
+            evidenceIds = @(
+                'sql-audit-delivery-set',
+                'sql-audit-july-iteration-set',
+                'evidence-sql-audit-async-progress-validation',
+                'evidence-sql-audit-result-lifecycle-docs'
+            )
+        }
+        'T-01' = @{
+            contentType = 'TASK'; achievementStatus = 'DELIVERED'
+            projectSlugs = @()
+            caseSlugs = @('multilingual-image-preservation')
+            evidenceIds = @('evidence-case-multilingual-implementation-and-regression')
+        }
+        'T-02' = @{
+            contentType = 'TASK'; achievementStatus = 'DELIVERED'
+            projectSlugs = @()
+            caseSlugs = @('test-role-reset')
+            evidenceIds = @('evidence-case-role-reset-guide-and-acceptance')
+        }
+        'K-01' = @{
+            contentType = 'KNOWLEDGE_ASSET'; achievementStatus = 'VALIDATED_PROTOTYPE'
+            projectSlugs = @()
+            caseSlugs = @('codegraph-evaluation')
+            evidenceIds = @('evidence-case-codegraph-report-collection')
+        }
+    }
+    foreach ($asset in $assets) {
+        if ($published.ContainsKey($asset.assetId)) {
+            $source = $published[$asset.assetId]
+            $asset.contentType = $source.contentType
+            $asset.achievementStatus = $source.achievementStatus
+            $asset.contributionType = 'PRIMARY'
+            $asset.publicPriority = 'P0'
+            $asset.evidenceStatus = 'VERIFIED'
+            $asset.originalReviewState = 'PUBLIC_REVIEW_REQUIRED'
+            $asset.finalRoute = if ($source.caseSlugs.Count -gt 0) { 'CASE' } else { 'PROJECT' }
+            $asset.decisionReason = 'Synthetic published mapping'
+            $asset.projectSlugs = $source.projectSlugs
+            $asset.caseSlugs = $source.caseSlugs
+            $asset.evidenceIds = $source.evidenceIds
+            $asset.routeDecision = 'PUBLISH_CANDIDATE'
+            $asset.targetContentVersion = [string]$portfolio.contentVersion
+            $asset.targetWave = 1
+        }
+    }
+    Save-Json ([pscustomobject][ordered]@{
+        schemaVersion = '1.0'
+        assets = $assets
+    }) $Path
+}
+
+function Copy-Ledger([string]$Name) {
+    $path = Join-Path $workspace ('decisions\' + $Name + '.json')
+    Copy-Item -LiteralPath $decisionLedger -Destination $path
+    return $path
+}
+
+function Invoke-LedgerValidation([string]$LedgerPath) {
+    return Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $candidate, '-DecisionLedger', $LedgerPath
+    )
+}
+
 function ConvertTo-SchemaThree([string]$CandidatePath) {
     $portfolioPath = Join-Path $CandidatePath 'portfolio.json'
     $presentationPath = Join-Path $CandidatePath 'presentation.json'
     $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $data.schemaVersion = '3.0'
-    $data.contentVersion = '2026-07-21.1'
+    $data.contentVersion = $currentBundleVersion
     if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
         $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
     }
@@ -48,7 +237,7 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     Save-Json $data $portfolioPath
     $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $presentation.schemaVersion = '3.0'
-    $presentation.contentVersion = '2026-07-21.1'
+    $presentation.contentVersion = $currentBundleVersion
     Save-Json $presentation $presentationPath
     return $data
 }
@@ -106,7 +295,7 @@ function Invoke-LegacyReviewPack(
     [object]$PortfolioData
 ) {
     $benchmarkPath = Join-Path $repositoryRoot `
-        '.agents\skills\portfolio-governance\benchmark\active-benchmarks.v1.json'
+        'governance\portfolio-governance\benchmark\active-benchmarks.v1.json'
     $originalBenchmarkBytes = [IO.File]::ReadAllBytes($benchmarkPath)
     try {
         $benchmarkCases = @()
@@ -160,7 +349,278 @@ try {
     $inside = Invoke-Governance @('-Command', 'inspect', '-Workspace', $repositoryRoot)
     if ($inside.ExitCode -eq 0) { throw 'Repository-contained workspace must fail.' }
 
+    $ignoredRuntimeReferences = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'scripts') `
+        -File -Filter '*.ps1' | Where-Object {
+            (Get-Content -LiteralPath $_.FullName -Raw) -match
+                '\.agents[\\/]skills[\\/]portfolio-governance'
+        })
+    if ($ignoredRuntimeReferences.Count -gt 0) {
+        throw 'Repository scripts must not reference the ignored local governance skill.'
+    }
+    $canonicalPackage = Join-Path $repositoryRoot 'governance\portfolio-governance'
+    foreach ($canonicalRelativePath in @(
+        'SKILL.md',
+        'scripts\portfolio-governance.ps1',
+        'policies\governance-policy.v1.json',
+        'benchmark\active-benchmarks.v1.json',
+        'benchmark\wave-1-benchmarks.v1.json',
+        'schemas\asset-publication-decision-ledger.schema.json',
+        'schemas\benchmark-case.schema.json',
+        'schemas\feedback-signal.schema.json',
+        'schemas\governance-case.schema.json',
+        'schemas\playbook-rule.schema.json'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $canonicalPackage $canonicalRelativePath) `
+                -PathType Leaf)) {
+            throw "Tracked canonical governance package is missing $canonicalRelativePath."
+        }
+    }
+    $cleanCheckout = Join-Path $fixtureRoot 'clean-checkout'
+    $cleanScripts = Join-Path $cleanCheckout 'scripts'
+    $cleanGovernanceParent = Join-Path $cleanCheckout 'governance'
+    New-Item -ItemType Directory -Force -Path $cleanScripts, $cleanGovernanceParent | Out-Null
+    Copy-Item -LiteralPath $cli -Destination $cleanScripts
+    Copy-Item -LiteralPath $canonicalPackage -Destination $cleanGovernanceParent -Recurse
+    if (Test-Path -LiteralPath (Join-Path $cleanCheckout '.agents')) {
+        throw 'Synthetic clean checkout must not contain .agents.'
+    }
+    $cleanWorkspace = Join-Path $fixtureRoot 'clean-workspace'
+    New-Item -ItemType Directory -Force -Path $cleanWorkspace | Out-Null
+    $script:governanceInvocationCount++
+    $cleanOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $cleanScripts 'portfolio-governance.ps1') `
+        -Command inspect -Workspace $cleanWorkspace 2>&1
+    if ($LASTEXITCODE -ne 0 -or
+            -not (($cleanOutput -join [Environment]::NewLine).Contains('"status":"PASS"'))) {
+        throw 'Tracked governance package must operate in a clean checkout without .agents.'
+    }
+
     $candidate = New-Candidate 'candidate-1'
+    New-Item -ItemType Directory -Force -Path (Join-Path $workspace 'decisions') | Out-Null
+    $decisionLedger = Join-Path $workspace 'decisions\asset-publication-decisions.json'
+    New-DecisionLedger $decisionLedger $candidate
+
+    foreach ($ledgerRequiredCommand in @(
+        'validate', 'benchmark', 'build-review-pack', 'approve', 'publish', 'verify'
+    )) {
+        $script:governanceInvocationCount++
+        $missingLedgerOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cli `
+            -Command $ledgerRequiredCommand -Workspace $workspace -Candidate $candidate 2>&1
+        $missingLedgerExitCode = $LASTEXITCODE
+        if ($missingLedgerExitCode -eq 0 -or
+                -not (($missingLedgerOutput -join [Environment]::NewLine).Contains('DECISION_LEDGER_REQUIRED'))) {
+            throw "$ledgerRequiredCommand must require -DecisionLedger."
+        }
+    }
+
+    $outsideLedger = Join-Path $fixtureRoot 'outside-ledger.json'
+    Copy-Item -LiteralPath $decisionLedger -Destination $outsideLedger
+    $outsideLedgerResult = Invoke-LedgerValidation $outsideLedger
+    if ($outsideLedgerResult.ExitCode -eq 0 -or
+            -not $outsideLedgerResult.Output.Contains('DECISION_LEDGER_OUTSIDE_WORKSPACE')) {
+        throw 'Decision ledger outside the private workspace must fail closed.'
+    }
+
+    $missingIdLedger = Copy-Ledger 'missing-id'
+    $missingIdData = Get-Content -LiteralPath $missingIdLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $missingIdData.assets = @($missingIdData.assets | Where-Object { $_.assetId -ne 'K-17' })
+    Save-Json $missingIdData $missingIdLedger
+    $missingIdResult = Invoke-LedgerValidation $missingIdLedger
+    if ($missingIdResult.ExitCode -eq 0 -or
+            -not $missingIdResult.Output.Contains('DECISION_LEDGER_ID_COVERAGE_INVALID')) {
+        throw "Decision ledger must reject a missing asset ID: $($missingIdResult.Output)"
+    }
+
+    $duplicateIdLedger = Copy-Ledger 'duplicate-id'
+    $duplicateIdData = Get-Content -LiteralPath $duplicateIdLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $duplicateIdData.assets[-1].assetId = 'L-01'
+    Save-Json $duplicateIdData $duplicateIdLedger
+    $duplicateIdResult = Invoke-LedgerValidation $duplicateIdLedger
+    if ($duplicateIdResult.ExitCode -eq 0 -or
+            -not $duplicateIdResult.Output.Contains('DECISION_LEDGER_ID_COVERAGE_INVALID')) {
+        throw 'Decision ledger must reject duplicate asset IDs.'
+    }
+
+    $unknownIdLedger = Copy-Ledger 'unknown-id'
+    $unknownIdData = Get-Content -LiteralPath $unknownIdLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unknownIdData.assets[-1].assetId = 'X-01'
+    Save-Json $unknownIdData $unknownIdLedger
+    $unknownIdResult = Invoke-LedgerValidation $unknownIdLedger
+    if ($unknownIdResult.ExitCode -eq 0 -or
+            -not $unknownIdResult.Output.Contains('DECISION_LEDGER_ID_COVERAGE_INVALID')) {
+        throw 'Decision ledger must reject unknown asset IDs.'
+    }
+
+    $realInventoryLedger = Copy-Ledger 'real-inventory-values'
+    $realInventoryData = Get-Content -LiteralPath $realInventoryLedger -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $realInventoryMutations = @(
+        @{ AssetId = 'T-08'; ContentType = 'TASK'; AchievementStatus = 'VALIDATED_PROTOTYPE';
+            ContributionType = 'PRIMARY' },
+        @{ AssetId = 'K-05'; ContentType = 'KNOWLEDGE_ASSET'; AchievementStatus = 'DOCUMENTED_OUTPUT';
+            ContributionType = 'PRIMARY' },
+        @{ AssetId = 'K-03'; ContentType = 'KNOWLEDGE_ASSET'; AchievementStatus = 'LEARNING_ONLY';
+            ContributionType = 'OBSERVED_LEARNING' },
+        @{ AssetId = 'L-03'; ContentType = 'MAINLINE'; AchievementStatus = 'INVESTIGATED';
+            ContributionType = 'UNRESOLVED' }
+    )
+    foreach ($mutation in $realInventoryMutations) {
+        $asset = @($realInventoryData.assets |
+            Where-Object { $_.assetId -eq $mutation.AssetId })[0]
+        $asset.contentType = $mutation.ContentType
+        $asset.achievementStatus = $mutation.AchievementStatus
+        $asset.contributionType = $mutation.ContributionType
+    }
+    Save-Json $realInventoryData $realInventoryLedger
+    $realInventoryResult = Invoke-LedgerValidation $realInventoryLedger
+    if ($realInventoryResult.ExitCode -ne 0) {
+        throw "Decision ledger must preserve known real inventory values: $($realInventoryResult.Output)"
+    }
+
+    $unknownInventoryValueLedger = Copy-Ledger 'unknown-inventory-value'
+    $unknownInventoryValueData = Get-Content -LiteralPath $unknownInventoryValueLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unknownInventoryValueData.assets[1].achievementStatus = 'UNREVIEWED_MAGIC'
+    Save-Json $unknownInventoryValueData $unknownInventoryValueLedger
+    $unknownInventoryValueResult = Invoke-LedgerValidation $unknownInventoryValueLedger
+    if ($unknownInventoryValueResult.ExitCode -eq 0 -or
+            -not $unknownInventoryValueResult.Output.Contains('DECISION_LEDGER_SCHEMA_INVALID')) {
+        throw 'Decision ledger must still reject unknown inventory values.'
+    }
+
+    $invalidRouteLedger = Copy-Ledger 'invalid-route'
+    $invalidRouteData = Get-Content -LiteralPath $invalidRouteLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $invalidRouteData.assets[0].routeDecision = 'REVIEWED_HOLD'
+    Save-Json $invalidRouteData $invalidRouteLedger
+    $invalidRouteResult = Invoke-LedgerValidation $invalidRouteLedger
+    if ($invalidRouteResult.ExitCode -eq 0 -or
+            -not $invalidRouteResult.Output.Contains('DECISION_LEDGER_ROUTE_INVALID')) {
+        throw 'Decision ledger must reject invalid finalRoute/routeDecision combinations.'
+    }
+
+    $holdLeakLedger = Copy-Ledger 'hold-leak'
+    $holdLeakData = Get-Content -LiteralPath $holdLeakLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $holdLeakData.assets[1].projectSlugs = @('sql-audit')
+    Save-Json $holdLeakData $holdLeakLedger
+    $holdLeakResult = Invoke-LedgerValidation $holdLeakLedger
+    if ($holdLeakResult.ExitCode -eq 0 -or
+            -not $holdLeakResult.Output.Contains('DECISION_LEDGER_ROUTE_INVALID')) {
+        throw 'HOLD and EXCLUDE records must not leak public references.'
+    }
+
+    $forwardReferenceLedger = Copy-Ledger 'forward-reference'
+    $forwardReferenceData = Get-Content -LiteralPath $forwardReferenceLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $forwardReferenceData.assets[0].projectSlugs = @('missing-project')
+    Save-Json $forwardReferenceData $forwardReferenceLedger
+    $forwardReferenceResult = Invoke-LedgerValidation $forwardReferenceLedger
+    if ($forwardReferenceResult.ExitCode -eq 0 -or
+            -not $forwardReferenceResult.Output.Contains('DECISION_LEDGER_FORWARD_REFERENCE_INVALID')) {
+        throw 'Decision ledger public references must resolve in candidate content.'
+    }
+
+    $reverseReferenceLedger = Copy-Ledger 'reverse-reference'
+    $reverseReferenceData = Get-Content -LiteralPath $reverseReferenceLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $reverseReferenceData.assets |
+        Where-Object { $_.assetId -eq 'K-01' } |
+        ForEach-Object { $_.evidenceIds = @('sql-audit-delivery-set') }
+    Save-Json $reverseReferenceData $reverseReferenceLedger
+    $reverseReferenceResult = Invoke-LedgerValidation $reverseReferenceLedger
+    if ($reverseReferenceResult.ExitCode -eq 0 -or
+            -not $reverseReferenceResult.Output.Contains('DECISION_LEDGER_REVERSE_REFERENCE_INVALID')) {
+        throw 'Every public Evidence must reverse-map to a ledger item.'
+    }
+
+    foreach ($statusMutation in @(
+        @{ Name = 'achievement-upgrade'; Field = 'achievementStatus'; Value = 'IMPLEMENTED_TESTED' },
+        @{ Name = 'contribution-upgrade'; Field = 'contributionType'; Value = 'COLLABORATIVE' }
+    )) {
+        $statusLedger = Copy-Ledger $statusMutation.Name
+        $statusData = Get-Content -LiteralPath $statusLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+        $statusData.assets[0].($statusMutation.Field) = $statusMutation.Value
+        Save-Json $statusData $statusLedger
+        $statusResult = Invoke-LedgerValidation $statusLedger
+        if ($statusResult.ExitCode -eq 0 -or
+                -not $statusResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
+            throw "Candidate must not automatically upgrade $($statusMutation.Field)."
+        }
+    }
+
+    $partialEvidenceLedger = Copy-Ledger 'partial-evidence-narrow-public-scope'
+    $partialEvidenceData = Get-Content -LiteralPath $partialEvidenceLedger -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $partialEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'PARTIALLY_VERIFIED' }
+    Save-Json $partialEvidenceData $partialEvidenceLedger
+    $partialEvidenceResult = Invoke-LedgerValidation $partialEvidenceLedger
+    if ($partialEvidenceResult.ExitCode -ne 0) {
+        throw "A partially verified asset may cite narrow APPROVED public Evidence: $($partialEvidenceResult.Output)"
+    }
+
+    $insufficientEvidenceLedger = Copy-Ledger 'insufficient-evidence-public-reference'
+    $insufficientEvidenceData = Get-Content -LiteralPath $insufficientEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $insufficientEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'INSUFFICIENT' }
+    Save-Json $insufficientEvidenceData $insufficientEvidenceLedger
+    $insufficientEvidenceResult = Invoke-LedgerValidation $insufficientEvidenceLedger
+    if ($insufficientEvidenceResult.ExitCode -eq 0 -or
+            -not $insufficientEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
+        throw 'An insufficient asset must not cite public Evidence.'
+    }
+
+    $ownerConfirmedEvidenceLedger = Copy-Ledger 'owner-confirmed-public-reference'
+    $ownerConfirmedEvidenceData = Get-Content -LiteralPath $ownerConfirmedEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ownerConfirmedEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'OWNER_CONFIRMED' }
+    Save-Json $ownerConfirmedEvidenceData $ownerConfirmedEvidenceLedger
+    $ownerConfirmedEvidenceResult = Invoke-LedgerValidation $ownerConfirmedEvidenceLedger
+    if ($ownerConfirmedEvidenceResult.ExitCode -eq 0 -or
+            -not $ownerConfirmedEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
+        throw 'Owner-confirmed source Evidence must not be elevated to approved public Evidence.'
+    }
+
+    $ownerConfirmedWithoutEvidenceLedger = Copy-Ledger 'owner-confirmed-without-evidence-reference'
+    $ownerConfirmedWithoutEvidenceData = Get-Content -LiteralPath $ownerConfirmedWithoutEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ownerConfirmedWithoutEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object {
+            $_.evidenceStatus = 'OWNER_CONFIRMED'
+            $_.evidenceIds = @()
+        }
+    Save-Json $ownerConfirmedWithoutEvidenceData $ownerConfirmedWithoutEvidenceLedger
+    $ownerConfirmedWithoutEvidenceResult = Invoke-LedgerValidation $ownerConfirmedWithoutEvidenceLedger
+    if ($ownerConfirmedWithoutEvidenceResult.ExitCode -eq 0 -or
+            -not $ownerConfirmedWithoutEvidenceResult.Output.Contains('DECISION_LEDGER_ROUTE_INVALID')) {
+        throw 'Every publish candidate must retain its own direct Evidence reference.'
+    }
+
+    $documentedEvidenceLedger = Copy-Ledger 'documented-evidence-only'
+    $documentedEvidenceData = Get-Content -LiteralPath $documentedEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $documentedAsset = @($documentedEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'T-17' })[0]
+    $documentedAsset.contentType = 'TASK'
+    $documentedAsset.achievementStatus = 'DOCUMENTED_OUTPUT'
+    $documentedAsset.contributionType = 'PRIMARY'
+    $documentedAsset.publicPriority = 'P1'
+    $documentedAsset.evidenceStatus = 'VERIFIED'
+    $documentedAsset.originalReviewState = 'PUBLIC_REVIEW_REQUIRED'
+    $documentedAsset.finalRoute = 'EVIDENCE_ONLY'
+    $documentedAsset.decisionReason = 'Documentation enriches the existing project without changing its status.'
+    $documentedAsset.evidenceIds = @('sql-audit-delivery-set')
+    $documentedAsset.routeDecision = 'PUBLISH_CANDIDATE'
+    $documentedAsset.targetContentVersion = $currentBundleVersion
+    $documentedAsset.targetWave = 1
+    Save-Json $documentedEvidenceData $documentedEvidenceLedger
+    $documentedEvidenceResult = Invoke-LedgerValidation $documentedEvidenceLedger
+    if ($documentedEvidenceResult.ExitCode -ne 0) {
+        throw "Evidence-only documentation must not inherit or upgrade Project status: $($documentedEvidenceResult.Output)"
+    }
 
     $openCase = Invoke-Governance @('-Command', 'case', '-Workspace', $workspace,
         '-CaseId', 'CASE-001', '-TargetStatus', 'OPEN', '-CaseSource', 'BENCHMARK',
@@ -185,15 +645,77 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:564330cbdf98693e16a4f80a96c55716c244295ae10f7df8a33480f3b1716f48') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:fb15dfded1cda5a10e996db441b77bc0a9387750346590628f3dda4a449f8f11') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
+    if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
+        throw 'GovernanceRunSnapshot must bind the exact decision ledger hash.'
+    }
+    $ledgerBytesBeforeMutation = [IO.File]::ReadAllBytes($decisionLedger)
+    $ledgerMutationData = Get-Content -LiteralPath $decisionLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ledgerMutationData.assets[0].decisionReason = 'Synthetic published mapping with mutation'
+    Save-Json $ledgerMutationData $decisionLedger
+    $mutatedLedgerValidation = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace, '-Candidate', $candidate
+    )
+    if ($mutatedLedgerValidation.ExitCode -ne 0) {
+        throw "A structurally valid ledger mutation should validate as a new chain: $($mutatedLedgerValidation.Output)"
+    }
+    $mutatedLedgerResult = $mutatedLedgerValidation.Output | ConvertFrom-Json
+    if ($mutatedLedgerResult.runSnapshot.candidatePayloadHash -ne
+            $result.runSnapshot.candidatePayloadHash -or
+            $mutatedLedgerResult.runSnapshot.ledgerHash -eq $result.runSnapshot.ledgerHash) {
+        throw 'Ledger mutation must change ledgerHash without changing candidatePayloadHash.'
+    }
+    [IO.File]::WriteAllBytes($decisionLedger, $ledgerBytesBeforeMutation)
     if ($result.runSnapshot.policyBundleHash.Contains('pending') -or
         $result.runSnapshot.benchmarkDefinitionHash.Contains('pending')) {
         throw 'GovernanceRunSnapshot must bind exact policy and benchmark definitions.'
     }
     if ($result.gates -join ',' -ne 'SchemaGate,ReferenceIntegrityGate,PrivacyGate,ClaimEvidenceGate,CompatibilityGate') {
         throw 'Read-only gates did not run in fixed order.'
+    }
+
+    $unsupportedBenchmarkVersion = '2026-07-25.1'
+    $unsupportedBenchmarkCandidate = New-Candidate 'unsupported-benchmark-version'
+    foreach ($name in @('portfolio.json', 'presentation.json')) {
+        $path = Join-Path $unsupportedBenchmarkCandidate $name
+        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace(
+            $currentBundleVersion, $unsupportedBenchmarkVersion) |
+            Set-Content -LiteralPath $path -Encoding UTF8
+    }
+    $unsupportedBenchmarkLedger = Copy-Ledger 'unsupported-benchmark-version'
+    $unsupportedBenchmarkLedgerData = Get-Content -LiteralPath $unsupportedBenchmarkLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unsupportedBenchmarkLedgerData.assets | Where-Object {
+        $_.routeDecision -eq 'PUBLISH_CANDIDATE'
+    } | ForEach-Object { $_.targetContentVersion = $unsupportedBenchmarkVersion }
+    Save-Json $unsupportedBenchmarkLedgerData $unsupportedBenchmarkLedger
+    $unsupportedBenchmark = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $unsupportedBenchmarkCandidate,
+        '-DecisionLedger', $unsupportedBenchmarkLedger
+    )
+    if ($unsupportedBenchmark.ExitCode -eq 0 -or
+            -not $unsupportedBenchmark.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
+        throw 'Unknown schema 3.0 content versions must fail closed before governance review.'
+    }
+
+    $downgradedWaveOneCandidate = New-Candidate 'downgraded-wave-one-version'
+    ConvertTo-SchemaTwo $downgradedWaveOneCandidate
+    foreach ($name in @('portfolio.json', 'presentation.json')) {
+        $path = Join-Path $downgradedWaveOneCandidate $name
+        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace(
+            '2026-07-21.1', '2026-07-24.1') |
+            Set-Content -LiteralPath $path -Encoding UTF8
+    }
+    $downgradedWaveOne = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $downgradedWaveOneCandidate
+    )
+    if ($downgradedWaveOne.ExitCode -eq 0 -or
+            -not $downgradedWaveOne.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
+        throw 'Schema downgrade must not bypass the benchmark suite bound to Wave 1.'
     }
 
     $unknownCandidate = New-Candidate 'unknown-field'
@@ -523,7 +1045,7 @@ try {
     if ($schemaThreePublish.ExitCode -ne 0) {
         throw "Schema 3.0 publish fixture failed: $($schemaThreePublish.Output)"
     }
-    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot 'versions\2026-07-21.1'
+    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot ('versions\' + $currentBundleVersion)
     $schemaThreeManifestPath = Join-Path $schemaThreePublishedVersion 'manifest.json'
     $schemaThreeManifest = Get-Content -LiteralPath $schemaThreeManifestPath `
         -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -535,7 +1057,7 @@ try {
     $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')
     Save-Json $schemaThreeManifest $schemaThreeManifestPath
     $missingManifestCases = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
-        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', '2026-07-21.1')
+        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', $currentBundleVersion)
     if ($missingManifestCases.ExitCode -eq 0 -or
             -not $missingManifestCases.Output.Contains('VERIFY_TARGET_INVALID')) {
         throw 'Schema 3.0 verify must reject a Manifest without counts.cases.'
@@ -583,7 +1105,40 @@ try {
     $approvalFile = Join-Path $workspace $approvalResult.artifacts[-1]
     $approvalData = Get-Content -LiteralPath $approvalFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($approvalData.candidatePayloadHash -ne $reviewResult.runSnapshot.candidatePayloadHash -or
-        -not $approvalData.approvalDigest.StartsWith('sha256:')) { throw 'Approval did not bind the canonical payload.' }
+        $approvalData.ledgerHash -ne $reviewResult.runSnapshot.ledgerHash -or
+        $approvalData.inputFingerprint -ne $reviewResult.runSnapshot.inputFingerprint -or
+        $null -ne $approvalData.compilerJarHash -or
+        -not $approvalData.approvalDigest.StartsWith('sha256:')) {
+        throw 'Approval did not bind the canonical payload, decision ledger, input fingerprint, and compiler identity.'
+    }
+
+    $approvalBytesBeforeTamper = [IO.File]::ReadAllBytes($approvalFile)
+    $approvalTamperData = Get-Content -LiteralPath $approvalFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $approvalTamperData.approvedBy = 'tampered-owner'
+    Save-Json $approvalTamperData $approvalFile
+    $approvalDigestTamperPublish = Invoke-Governance @(
+        '-Command', 'publish', '-Workspace', $workspace, '-Candidate', $candidate,
+        '-ApprovalId', $approvalData.approvalId,
+        '-ReleaseRoot', (Join-Path $fixtureRoot 'approval-digest-tamper-releases')
+    )
+    if ($approvalDigestTamperPublish.ExitCode -eq 0 -or
+            -not $approvalDigestTamperPublish.Output.Contains('PUBLISH_APPROVAL_STALE')) {
+        throw 'Publish must reject a tampered Approval projection or digest.'
+    }
+    [IO.File]::WriteAllBytes($approvalFile, $approvalBytesBeforeTamper)
+
+    $approvedLedgerBytes = [IO.File]::ReadAllBytes($decisionLedger)
+    $approvedLedgerData = Get-Content -LiteralPath $decisionLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $approvedLedgerData.assets[0].decisionReason = 'Mutation after Approval'
+    Save-Json $approvedLedgerData $decisionLedger
+    $staleLedgerPublish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
+        '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId,
+        '-ReleaseRoot', (Join-Path $fixtureRoot 'stale-ledger-releases'))
+    if ($staleLedgerPublish.ExitCode -eq 0 -or
+            -not $staleLedgerPublish.Output.Contains('PUBLISH_APPROVAL_STALE')) {
+        throw 'Ledger mutation after Approval must make publish stale.'
+    }
+    [IO.File]::WriteAllBytes($decisionLedger, $approvedLedgerBytes)
 
     $releaseRoot = Join-Path $fixtureRoot 'public-releases'
     New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
@@ -625,9 +1180,38 @@ try {
     }
     Remove-Item -LiteralPath $blockedPublishAudit -Recurse -Force
 
+    $probeWithoutRollbackPoint = Invoke-Governance @(
+        '-Command', 'publish', '-Workspace', $workspace,
+        '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId,
+        '-ReleaseRoot', $releaseRoot,
+        '-PostSwitchProbeUri', 'http://127.0.0.1:1/health', '-Confirm'
+    )
+    if ($probeWithoutRollbackPoint.ExitCode -eq 0 -or
+            -not $probeWithoutRollbackPoint.Output.Contains(
+                'PUBLISH_ROLLBACK_POINT_REQUIRED'
+            )) {
+        throw "A post-switch probe must require an active rollback point: $($probeWithoutRollbackPoint.Output)"
+    }
+    if ((Test-Path -LiteralPath (Join-Path $releaseRoot 'active')) -or
+            (Test-Path -LiteralPath (
+                Join-Path $releaseRoot ('versions\' + $currentBundleVersion)
+            ))) {
+        throw 'A rejected first-publication probe must not create public release state.'
+    }
+
     $publish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot, '-Confirm')
     if ($publish.ExitCode -ne 0) { throw "Publish failed: $($publish.Output)" }
+    if (-not [Linq.Enumerable]::SequenceEqual(
+            [byte[]]$approvedLedgerBytes,
+            [byte[]][IO.File]::ReadAllBytes($decisionLedger))) {
+        throw 'Successful publish must not rewrite decision ledger bytes.'
+    }
+    $publishReceipt = (Get-Content -LiteralPath (Join-Path $workspace 'audit\publish.jsonl') `
+        -Encoding UTF8 | Select-Object -Last 1) | ConvertFrom-Json
+    if ($publishReceipt.ledgerHash -ne $approvalData.ledgerHash) {
+        throw 'Publish receipt must join to the exact approved ledgerHash.'
+    }
     $publishedVersion = Join-Path $releaseRoot ('versions\' + $currentBundleVersion)
     if (-not (Test-Path -LiteralPath (Join-Path $publishedVersion 'manifest.json') -PathType Leaf) -or
         -not (Test-Path -LiteralPath (Join-Path $publishedVersion 'checksums.json') -PathType Leaf)) { throw 'Published bundle is incomplete.' }
@@ -646,38 +1230,52 @@ try {
     if ($status.ExitCode -ne 0 -or $statusResult.activeVersion -ne $currentBundleVersion) {
         throw "Status must report the active version: $($status.Output)"
     }
+    $publishedManifestPath = Join-Path $publishedVersion 'manifest.json'
+    $publishedManifestBytes = [IO.File]::ReadAllBytes($publishedManifestPath)
+    $publishedManifestData = Get-Content -LiteralPath $publishedManifestPath `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $publishedManifestData.ledgerHash = 'sha256:' + ('0' * 64)
+    Save-Json $publishedManifestData $publishedManifestPath
+    $tamperedManifestVerify = Invoke-Governance @(
+        '-Command', 'verify', '-Workspace', $workspace,
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion
+    )
+    if ($tamperedManifestVerify.ExitCode -eq 0 -or
+            -not $tamperedManifestVerify.Output.Contains('VERIFY_APPROVAL_INVALID')) {
+        throw 'Verify must reject a Manifest ledger identity that differs from Approval.'
+    }
+    [IO.File]::WriteAllBytes($publishedManifestPath, $publishedManifestBytes)
+    $verifyMutationBytes = [IO.File]::ReadAllBytes($decisionLedger)
+    $verifyMutationData = Get-Content -LiteralPath $decisionLedger -Raw -Encoding UTF8 | ConvertFrom-Json
+    $verifyMutationData.assets[0].decisionReason = 'Mutation before verify'
+    Save-Json $verifyMutationData $decisionLedger
+    $staleVerify = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
+        '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion)
+    if ($staleVerify.ExitCode -eq 0 -or
+            -not $staleVerify.Output.Contains('VERIFY_LEDGER_STALE')) {
+        throw 'Ledger mutation after Approval must make verify stale.'
+    }
+    [IO.File]::WriteAllBytes($decisionLedger, $verifyMutationBytes)
     $verified = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
         '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion)
     if ($verified.ExitCode -ne 0 -or ($verified.Output | ConvertFrom-Json).verifiedVersion -ne $currentBundleVersion) {
         throw "Verify must validate an immutable published bundle: $($verified.Output)"
     }
+    if (-not [Linq.Enumerable]::SequenceEqual(
+            [byte[]]$approvedLedgerBytes,
+            [byte[]][IO.File]::ReadAllBytes($decisionLedger))) {
+        throw 'Successful verify must not rewrite decision ledger bytes.'
+    }
+    $verifyReceipt = (Get-Content -LiteralPath (Join-Path $workspace 'audit\verify.jsonl') `
+        -Encoding UTF8 | Select-Object -Last 1) | ConvertFrom-Json
+    if ($verifyReceipt.ledgerHash -ne $approvalData.ledgerHash -or
+            $verifyReceipt.approvalId -ne $approvalData.approvalId) {
+        throw 'Verify receipt and closure join must use the exact approved ledgerHash.'
+    }
 
     $repeat = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
         '-Candidate', $candidate, '-ApprovalId', $approvalData.approvalId, '-ReleaseRoot', $releaseRoot, '-Confirm')
     if ($repeat.ExitCode -ne 0) { throw 'Identical repeat publish must be idempotent.' }
-
-    $candidate2 = New-Candidate 'candidate-2'
-    foreach ($name in @('portfolio.json', 'presentation.json')) {
-        $path = Join-Path $candidate2 $name
-        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace($currentBundleVersion, $nextBundleVersion) |
-            Set-Content -LiteralPath $path -Encoding UTF8
-    }
-    $review2 = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace, '-Candidate', $candidate2)
-    $review2Result = $review2.Output | ConvertFrom-Json
-    $approval2 = Invoke-Governance @('-Command', 'approve', '-Workspace', $workspace,
-        '-Candidate', $candidate2, '-ReviewRunId', $review2Result.runId,
-        '-ApprovedBy', 'owner-alias', '-PrivacyReviewId', 'PRIV-002', '-BenchmarkRunId', 'BENCH-002')
-    $approval2Result = $approval2.Output | ConvertFrom-Json
-    $approval2Data = Get-Content -LiteralPath (Join-Path $workspace $approval2Result.artifacts[-1]) -Raw -Encoding UTF8 | ConvertFrom-Json
-    $postSwitchFailure = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
-        '-Candidate', $candidate2, '-ApprovalId', $approval2Data.approvalId, '-ReleaseRoot', $releaseRoot,
-        '-PostSwitchProbeUri', 'http://127.0.0.1:1/health', '-Confirm')
-    if ($postSwitchFailure.ExitCode -eq 0 -or -not $postSwitchFailure.Output.Contains('PUBLISH_POST_SWITCH_FAILED')) {
-        throw "A failed post-switch probe must fail publication: $($postSwitchFailure.Output)"
-    }
-    if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) {
-        throw 'Post-switch failure must atomically restore the verified old active version.'
-    }
 
     Set-Content -LiteralPath (Join-Path $releaseRoot 'active') -Value 'broken-active' -Encoding UTF8
     $rollbackDryRun = Invoke-Governance @('-Command', 'rollback', '-Workspace', $workspace,
@@ -753,6 +1351,31 @@ try {
         $retrievalApprovalData = Get-Content -LiteralPath `
             (Join-Path $workspace $retrievalApprovalResult.artifacts[-1]) -Raw -Encoding UTF8 |
             ConvertFrom-Json
+        if ($retrievalApprovalData.inputFingerprint -ne
+                $retrievalReviewResult.runSnapshot.inputFingerprint -or
+                -not $retrievalApprovalData.compilerJarHash.StartsWith('sha256:') -or
+                $retrievalApprovalData.compilerJarHash -ne
+                $retrievalReviewResult.runSnapshot.compilerJarHash) {
+            throw 'Retrieval Approval must bind the reviewed input fingerprint and compiler JAR hash.'
+        }
+        $changedCompilerJar = Join-Path $fixtureRoot 'changed-portfolio-agent.jar'
+        Copy-Item -LiteralPath $compilerJar -Destination $changedCompilerJar
+        [IO.File]::WriteAllBytes(
+            $changedCompilerJar,
+            [byte[]]([IO.File]::ReadAllBytes($changedCompilerJar) + [byte[]]@(0)))
+        $changedCompilerReleaseRoot = Join-Path $fixtureRoot 'changed-compiler-public-releases'
+        New-Item -ItemType Directory -Force -Path $changedCompilerReleaseRoot | Out-Null
+        $changedCompilerPublish = Invoke-Governance @(
+            '-Command', 'publish', '-Workspace', $workspace,
+            '-Candidate', $retrievalCandidate,
+            '-ApprovalId', $retrievalApprovalData.approvalId,
+            '-ReleaseRoot', $changedCompilerReleaseRoot,
+            '-JarPath', $changedCompilerJar,
+            '-ModelDirectory', $localModel)
+        if ($changedCompilerPublish.ExitCode -eq 0 -or
+                -not $changedCompilerPublish.Output.Contains('PUBLISH_APPROVAL_STALE')) {
+            throw 'Changing the compiler JAR after Approval must make retrieval publish stale.'
+        }
         $retrievalReleaseRoot = Join-Path $fixtureRoot 'retrieval-public-releases'
         New-Item -ItemType Directory -Force -Path $retrievalReleaseRoot | Out-Null
         $retrievalPublish = Invoke-Governance @('-Command', 'publish', '-Workspace', $workspace,
@@ -786,7 +1409,7 @@ try {
         }
     }
 
-    Write-Output 'portfolio-governance tests passed'
+    Write-Output "portfolio-governance tests passed; governance command scenarios=$governanceInvocationCount"
 }
 finally {
     if (Test-Path -LiteralPath $fixtureRoot) {

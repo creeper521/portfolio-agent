@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "targetContentVersion": "2026-07-24.1",
+  "publishRoutes": [
+    {"assetId":"L-01","finalRoute":"ENRICH_EXISTING_PROJECT","projectSlugs":["sql-audit"],"caseSlugs":[],"evidenceIds":["sql-audit-delivery-set"]},
+    {"assetId":"T-01","finalRoute":"ENRICH_EXISTING_PROJECT","projectSlugs":["sql-audit"],"caseSlugs":[],"evidenceIds":["evidence-sql-audit-async-progress-validation"]},
+    {"assetId":"T-02","finalRoute":"ENRICH_EXISTING_PROJECT","projectSlugs":["sql-audit"],"caseSlugs":[],"evidenceIds":["evidence-sql-audit-result-lifecycle-docs"]},
+    {"assetId":"T-03","finalRoute":"ENRICH_EXISTING_PROJECT","projectSlugs":["sql-audit"],"caseSlugs":[],"evidenceIds":["sql-audit-july-iteration-set"]},
+    {"assetId":"T-04","finalRoute":"ENRICH_EXISTING_PROJECT","projectSlugs":["sql-audit"],"caseSlugs":[],"evidenceIds":["sql-audit-july-iteration-set"]},
+    {"assetId":"T-05","finalRoute":"CASE","projectSlugs":[],"caseSlugs":["test-role-reset"],"evidenceIds":["evidence-case-role-reset-guide-and-acceptance"]},
+    {"assetId":"T-06","finalRoute":"CASE","projectSlugs":[],"caseSlugs":["multilingual-image-preservation"],"evidenceIds":["evidence-case-multilingual-implementation-and-regression"]},
+    {"assetId":"T-17","finalRoute":"EVIDENCE_ONLY","projectSlugs":[],"caseSlugs":[],"evidenceIds":["evidence-sql-audit-result-lifecycle-docs"]},
+    {"assetId":"K-01","finalRoute":"CASE","projectSlugs":[],"caseSlugs":["codegraph-evaluation"],"evidenceIds":["evidence-case-codegraph-report-collection"]}
+  ]
+}

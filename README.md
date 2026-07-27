@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-24）：** A、B、默认关闭的 C1、C2，以及 Agent Case 后端能力已经实现。公开 Bundle 使用 schema 3.0，同时保留 schema 2.0 兼容加载；三个公开 Case 已接入确定性预设、主体隔离检索、固定只读工具和引用式上下文。Case 前端页面、前后端联调与生产部署仍未完成。文档治理见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)，逐功能盘点见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
+> **项目状态（2026-07-27）：** A、B、默认关闭的 C1、C2，以及 Agent Case 后端能力已经实现。公开 Bundle 已更新为 schema 3.0、内容版本 `2026-07-24.1` 的七文件检索包，并通过 Wave 1 的 37 例 Keyword/Vector/Hybrid 真实模型比较；策略 v2.1 的三路 false-sufficient 均为 0。Case 前端页面、前后端联调与生产部署仍未完成。文档治理见 [`docs/00-文档状态索引.md`](docs/00-文档状态索引.md)，逐功能盘点见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
@@ -14,7 +14,7 @@
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
 - 可选的 DeepSeek V4 Flash 或 GLM-4.7 单 Provider 表达；只接收公开 `AnswerPlan`，完整校验失败即整轮确定性回退
-- 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；文档向量在发布期生成，访客查询只在本机向量化
+- 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；随包使用 `retrieval-policy-v2.1-query-risk`，文档向量在发布期生成，访客查询只在本机向量化
 - 固定六类只读公开工具与页面内存引用式多轮；只传稳定公开 ID 和意图，不传历史问答正文
 - 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 

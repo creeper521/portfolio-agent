@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contentVersion", "questionPresetId", "resolution", "answerSource", "helpful", "reason"],
+  "properties": {
+    "contentVersion": {"type": "string", "minLength": 1},
+    "questionPresetId": {"type": "string", "minLength": 1},
+    "resolution": {"enum": ["ANSWERED", "BOUNDARY", "REJECTED"]},
+    "answerSource": {"enum": ["PRESET", "RETRIEVAL"]},
+    "helpful": {"type": "boolean"},
+    "reason": {"enum": ["INCORRECT", "OUTDATED", "UNCLEAR", "INCOMPLETE", "EVIDENCE_INSUFFICIENT", "WRONG_BOUNDARY", "UI_CONFUSING", "OTHER_STRUCTURED"]}
+  }
+}

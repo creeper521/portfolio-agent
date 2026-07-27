@@ -8,7 +8,13 @@ param(
     [string]$PrivacyReviewId,
     [string]$BenchmarkRunId,
     [string]$ApprovalId,
+    [string]$DecisionLedger,
     [string]$ReleaseRoot,
+    [string]$RuntimeBundle,
+    [string]$PatchManifest,
+    [string]$RouteManifest,
+    [string]$AssetInventory,
+    [ValidateSet('NONE', 'WRITE', 'MOVE', 'CLEANUP')][string]$PrepareFailureStage = 'NONE',
     [string]$TargetVersion,
     [string]$CaseId,
     [string]$TargetStatus,
@@ -28,10 +34,13 @@ param(
     [string]$JavaExecutable = 'java.exe',
     [switch]$Confirm
 )
-$skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\portfolio-governance\scripts\portfolio-governance.ps1'
+$skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) 'governance\portfolio-governance\scripts\portfolio-governance.ps1'
 & $skillCli -Command $Command -Workspace $Workspace -Candidate $Candidate `
     -ReviewRunId $ReviewRunId -ApprovedBy $ApprovedBy -PrivacyReviewId $PrivacyReviewId `
     -BenchmarkRunId $BenchmarkRunId -ApprovalId $ApprovalId -ReleaseRoot $ReleaseRoot `
+    -DecisionLedger $DecisionLedger `
+    -RuntimeBundle $RuntimeBundle -PatchManifest $PatchManifest -RouteManifest $RouteManifest `
+    -AssetInventory $AssetInventory -PrepareFailureStage $PrepareFailureStage `
     -TargetVersion $TargetVersion -CaseId $CaseId -TargetStatus $TargetStatus `
     -CaseSource $CaseSource -ContentVersion $ContentVersion -FailureType $FailureType `
     -SanitizedObservation $SanitizedObservation -ExpectedBehavior $ExpectedBehavior `

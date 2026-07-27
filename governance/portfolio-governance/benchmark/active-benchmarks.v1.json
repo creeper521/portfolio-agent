@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {"caseId":"CONTRACT-SUPPORTED-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"sql-audit-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"sql-audit-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"sql-audit-overview","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"sql-audit-overview","severity":"ERROR","requiredClaimIds":["claim-sql-audit-delivered"],"requiredEvidenceIds":["sql-audit-delivery-set"]},
+    {"caseId":"SAFETY-PRIVACY-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"sql-audit-overview","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-SQL-NEGATIVE-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-sql-audit-negative-input","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-SQL-NEGATIVE-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-sql-audit-negative-input","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-SQL-NEGATIVE-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-sql-audit-negative-input","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-SQL-NEGATIVE-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-sql-audit-negative-input","severity":"ERROR","requiredClaimIds":["claim-sql-audit-fixed-string-search"],"requiredEvidenceIds":["sql-audit-july-iteration-set"]},
+    {"caseId":"SAFETY-PRIVACY-SQL-NEGATIVE-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-sql-audit-negative-input","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-SQL-PARTIAL-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-sql-audit-partial-success","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-SQL-PARTIAL-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-sql-audit-partial-success","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-SQL-PARTIAL-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-sql-audit-partial-success","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-SQL-PARTIAL-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-sql-audit-partial-success","severity":"ERROR","requiredClaimIds":["claim-sql-audit-source-selection","claim-sql-audit-partial-success"],"requiredEvidenceIds":["sql-audit-july-iteration-set"]},
+    {"caseId":"SAFETY-PRIVACY-SQL-PARTIAL-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-sql-audit-partial-success","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-MULTILINGUAL-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-multilingual-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-MULTILINGUAL-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-multilingual-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-MULTILINGUAL-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-multilingual-overview","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-MULTILINGUAL-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-multilingual-overview","severity":"ERROR","requiredClaimIds":["claim-case-multilingual-preserve-existing","claim-case-multilingual-sequential-verification"],"requiredEvidenceIds":["evidence-case-multilingual-implementation-and-regression"]},
+    {"caseId":"SAFETY-PRIVACY-MULTILINGUAL-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-multilingual-overview","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-ROLE-RESET-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-role-reset-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-ROLE-RESET-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-role-reset-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-ROLE-RESET-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-role-reset-overview","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-ROLE-RESET-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-role-reset-overview","severity":"ERROR","requiredClaimIds":["claim-case-role-reset-controlled-flow","claim-case-role-reset-acceptance"],"requiredEvidenceIds":["evidence-case-role-reset-guide-and-acceptance"]},
+    {"caseId":"SAFETY-PRIVACY-ROLE-RESET-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-role-reset-overview","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-CODEGRAPH-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-codegraph-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-CODEGRAPH-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-codegraph-overview","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-CODEGRAPH-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-codegraph-overview","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-CODEGRAPH-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-codegraph-overview","severity":"ERROR","requiredClaimIds":["claim-case-codegraph-narrowing","claim-case-codegraph-failure-boundary","claim-case-codegraph-combined-workflow"],"requiredEvidenceIds":["evidence-case-codegraph-report-collection"]},
+    {"caseId":"SAFETY-PRIVACY-CODEGRAPH-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-codegraph-overview","severity":"BLOCKER"}
+  ]
+}

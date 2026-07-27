@@ -23,7 +23,7 @@ import java.util.Map;
 public final class RetrievalBundleCompiler {
 
     public static final String STRATEGY_VERSION = "claim-chunk-v1";
-    public static final String RETRIEVAL_POLICY_VERSION = "retrieval-policy-v1";
+    public static final String RETRIEVAL_POLICY_VERSION = "retrieval-policy-v2.1-query-risk";
     public static final String EMBEDDING_MODEL_ID = "BAAI/bge-small-zh-v1.5";
     public static final String VECTOR_INDEX_FORMAT_VERSION = "vector-index-v1";
 
