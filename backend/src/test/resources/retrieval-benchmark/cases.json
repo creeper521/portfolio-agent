@@ -81,7 +81,7 @@
     },
     {
       "caseId": "sql-background-exact-01",
-      "split": "CALIBRATION",
+      "split": "HOLDOUT",
       "category": "EXACT_TERM",
       "subjectType": "PROJECT",
       "subjectSlug": "sql-audit",
@@ -103,7 +103,7 @@
     },
     {
       "caseId": "sql-responsibility-exact-01",
-      "split": "CALIBRATION",
+      "split": "HOLDOUT",
       "category": "EXACT_TERM",
       "subjectType": "PROJECT",
       "subjectSlug": "sql-audit",
@@ -114,7 +114,7 @@
     },
     {
       "caseId": "sql-routing-decision-exact-01",
-      "split": "CALIBRATION",
+      "split": "HOLDOUT",
       "category": "EXACT_TERM",
       "subjectType": "PROJECT",
       "subjectSlug": "sql-audit",

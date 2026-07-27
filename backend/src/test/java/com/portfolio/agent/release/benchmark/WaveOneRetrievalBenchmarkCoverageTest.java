@@ -228,11 +228,22 @@ class WaveOneRetrievalBenchmarkCoverageTest {
     ) {
         return suite.getCases().stream()
                 .filter(item -> item.getSplit() == split)
-                .map(item -> item.getSubjectType().name() + "|" + item.getSubjectSlug()
-                        + "|" + item.getCategory().name() + "|"
-                        + String.join(",", new TreeSet<>(item.getExpectedClaimIds()))
-                        + "|" + item.getExpectedDecision().name())
+                .map(this::intentSignature)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private String intentSignature(RetrievalBenchmarkCase item) {
+        String subject = item.getSubjectType().name() + "|" + item.getSubjectSlug();
+        if (item.getExpectedDecision() == RetrievalDecisionType.SUFFICIENT) {
+            // Positive exact-term and paraphrase cases are the same intent when
+            // their subject and expected Claims are identical.
+            return subject + "|" + String.join(",", new TreeSet<>(item.getExpectedClaimIds()))
+                    + "|" + item.getExpectedDecision().name();
+        }
+        // Empty-Claim safety cases use category as the explicit negative intent:
+        // INJECTION, PRIVACY and UNSUPPORTED_OR_WITHDRAWN are distinct boundaries.
+        return subject + "|" + item.getCategory().name()
+                + "|" + item.getExpectedDecision().name();
     }
 
     private Path projectRoot() {
