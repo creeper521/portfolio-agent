@@ -1360,9 +1360,26 @@ try {
         }
         $changedCompilerJar = Join-Path $fixtureRoot 'changed-portfolio-agent.jar'
         Copy-Item -LiteralPath $compilerJar -Destination $changedCompilerJar
-        [IO.File]::WriteAllBytes(
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $changedCompilerArchive = [IO.Compression.ZipFile]::Open(
             $changedCompilerJar,
-            [byte[]]([IO.File]::ReadAllBytes($changedCompilerJar) + [byte[]]@(0)))
+            [IO.Compression.ZipArchiveMode]::Update)
+        try {
+            $markerEntry = $changedCompilerArchive.CreateEntry(
+                'META-INF/governance-test-marker.txt')
+            $markerStream = $markerEntry.Open()
+            try {
+                $markerBytes = [Text.Encoding]::UTF8.GetBytes('changed compiler identity')
+                $markerStream.Write($markerBytes, 0, $markerBytes.Length)
+            }
+            finally {
+                $markerStream.Dispose()
+            }
+        }
+        finally {
+            $changedCompilerArchive.Dispose()
+        }
         $changedCompilerReleaseRoot = Join-Path $fixtureRoot 'changed-compiler-public-releases'
         New-Item -ItemType Directory -Force -Path $changedCompilerReleaseRoot | Out-Null
         $changedCompilerPublish = Invoke-Governance @(
