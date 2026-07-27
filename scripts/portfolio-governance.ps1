@@ -10,6 +10,11 @@ param(
     [string]$ApprovalId,
     [string]$DecisionLedger,
     [string]$ReleaseRoot,
+    [string]$RuntimeBundle,
+    [string]$PatchManifest,
+    [string]$RouteManifest,
+    [string]$AssetInventory,
+    [ValidateSet('NONE', 'WRITE', 'MOVE')][string]$PrepareFailureStage = 'NONE',
     [string]$TargetVersion,
     [string]$CaseId,
     [string]$TargetStatus,
@@ -34,6 +39,8 @@ $skillCli = Join-Path (Split-Path $PSScriptRoot -Parent) 'governance\portfolio-g
     -ReviewRunId $ReviewRunId -ApprovedBy $ApprovedBy -PrivacyReviewId $PrivacyReviewId `
     -BenchmarkRunId $BenchmarkRunId -ApprovalId $ApprovalId -ReleaseRoot $ReleaseRoot `
     -DecisionLedger $DecisionLedger `
+    -RuntimeBundle $RuntimeBundle -PatchManifest $PatchManifest -RouteManifest $RouteManifest `
+    -AssetInventory $AssetInventory -PrepareFailureStage $PrepareFailureStage `
     -TargetVersion $TargetVersion -CaseId $CaseId -TargetStatus $TargetStatus `
     -CaseSource $CaseSource -ContentVersion $ContentVersion -FailureType $FailureType `
     -SanitizedObservation $SanitizedObservation -ExpectedBehavior $ExpectedBehavior `
