@@ -1,17 +1,27 @@
+/* 自托管 Noto Serif SC 子集（同源 /fonts/，无第三方请求）。
+   只打包 CJK 与中文标点（站点用字 + GB2312 一级字表），wght 400–700 可变；
+   拉丁与数字刻意留给 Georgia（既定 display serif），浏览器按字素回退，
+   行为与此前一致。font-display: swap：字体到达前先落系统 serif，不阻塞首屏。 */
+@font-face {
+  font-family: 'Noto Serif SC';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/noto-serif-sc-400-700.woff2') format('woff2');
+}
+
 :root {
   --paper: #f4eee4;
   --paper-hi: #fbf7ef;
   --paper-low: #e9dfd0;
-  --warm: #f3e8d6;
   --agent-stage: #1e1b17;
   --agent-shell-paper: #f3eadb;
   --agent-rail-paper: #f0e9de;
   --agent-thread-paper: #f5e8d1;
   --agent-evidence-paper: #f8f3ea;
-  --agent-header: #f3eadb;
+  --agent-header: var(--agent-shell-paper);
   --agent-hairline: rgba(104, 84, 60, 0.22);
-  --agent-dark-control: #201c17;
-  --agent-accent: #7a2e2a;
+  --agent-accent: var(--red);
   --agent-shell-max: 1680px;
   --agent-radius-sm: 8px;
   --agent-radius-md: 12px;
@@ -21,15 +31,24 @@
   --agent-motion-state: 220ms;
   --ink: #201c17;
   --ink-2: #34302a;
+  --ink-line: #4a433b;
+  --ink-text: #a99f91;
+  --ink-text-hi: #e8ddce;
+  --ink-text-faint: #94897c;
   --muted: #746b5e;
   --faint: #9c9182;
   --rule: #cdbfa9;
   --red: #7a2e2a;
   --red-hi: #b65d53;
+  --red-on-ink: #d27d74;
+  /* Georgia 承担 Latin display serif；中文衬线由上方自托管 'Noto Serif SC'
+     子集兜底（同源加载，无第三方请求），系统 'Songti SC' 为其后援。
+     'Noto Sans SC'、'IBM Plex Mono' 仍是用户本机已装时的可选增强。 */
   --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
   --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
   --header-height: 66px;
+  --header-height-workspace: 70px;
   --content-width: 1180px;
   --page-gutter: clamp(22px, 4vw, 48px);
   --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
