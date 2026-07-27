@@ -123,7 +123,7 @@ class WaveOneRetrievalBenchmarkCoverageTest {
     @Test
     void freezesWaveOneGovernancePresetCoverage() throws Exception {
         JsonNode benchmark = mapper.readTree(Files.readAllBytes(projectRoot().resolve(
-                "governance/portfolio-governance/benchmark/active-benchmarks.v1.json")));
+                "governance/portfolio-governance/benchmark/wave-1-benchmarks.v1.json")));
         Map<String, Set<String>> caseTypesByPreset = new LinkedHashMap<>();
         Map<String, Set<String>> claimIdsByPreset = new LinkedHashMap<>();
         for (JsonNode item : benchmark.path("cases")) {

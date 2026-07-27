@@ -14,7 +14,7 @@ param(
     [string]$PatchManifest,
     [string]$RouteManifest,
     [string]$AssetInventory,
-    [ValidateSet('NONE', 'WRITE', 'MOVE')][string]$PrepareFailureStage = 'NONE',
+    [ValidateSet('NONE', 'WRITE', 'MOVE', 'CLEANUP')][string]$PrepareFailureStage = 'NONE',
     [string]$TargetVersion,
     [string]$CaseId,
     [string]$TargetStatus,

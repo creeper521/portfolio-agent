@@ -13,7 +13,7 @@ param(
     [string]$PatchManifest,
     [string]$RouteManifest,
     [string]$AssetInventory,
-    [ValidateSet('NONE', 'WRITE', 'MOVE')][string]$PrepareFailureStage = 'NONE',
+    [ValidateSet('NONE', 'WRITE', 'MOVE', 'CLEANUP')][string]$PrepareFailureStage = 'NONE',
     [string]$TargetVersion,
     [string]$CaseId,
     [string]$TargetStatus,
@@ -271,9 +271,16 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
             if (-not $evidenceById.ContainsKey([string]$evidenceId)) {
                 Write-Failure 'DECISION_LEDGER_FORWARD_REFERENCE_INVALID' 'Decision ledger Evidence reference is missing.'
             }
-            if ([string]$evidenceById[[string]$evidenceId].publicStatus -eq 'APPROVED' -and
-                    [string]$asset.evidenceStatus -eq 'INSUFFICIENT') {
-                Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Insufficient source Evidence cannot support public Evidence.'
+            $publicEvidence = $evidenceById[[string]$evidenceId]
+            if ([string]$publicEvidence.publicStatus -eq 'APPROVED') {
+                if ([string]$asset.evidenceStatus -notin @('VERIFIED', 'PARTIALLY_VERIFIED')) {
+                    Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'The source Evidence status cannot support approved public Evidence.'
+                }
+                if ([string]$asset.evidenceStatus -eq 'PARTIALLY_VERIFIED' -and
+                        ([string]$asset.routeDecision -ne 'PUBLISH_CANDIDATE' -or
+                            $publicEvidence.rawContentPublic -ne $false)) {
+                    Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Partially verified assets require a reviewed narrow public summary with private raw Evidence.'
+                }
             }
         }
     }
@@ -547,19 +554,19 @@ function Invoke-PrepareCandidate {
         }
     }
     $expectedClaimContract = [ordered]@{
-        'claim-sql-audit-async-task-lifecycle'=@('IMPLEMENTATION','KEY')
-        'claim-sql-audit-progress-fallback'=@('TECHNICAL_DECISION','KEY')
-        'claim-sql-audit-result-lifecycle'=@('IMPLEMENTATION','KEY')
-        'claim-sql-audit-truncation-disclosure'=@('LIMITATION','KEY')
-        'claim-sql-audit-documented-handoff'=@('OUTCOME','SUPPORTING')
-        'claim-case-multilingual-replacement-problem'=@('BACKGROUND','KEY')
-        'claim-case-multilingual-no-backfill'=@('LIMITATION','SUPPORTING')
-        'claim-case-role-reset-cache-interference-problem'=@('BACKGROUND','KEY')
-        'claim-case-role-reset-confirmation-safety'=@('TECHNICAL_DECISION','KEY')
-        'claim-case-role-reset-documented-delivery'=@('OUTCOME','SUPPORTING')
-        'claim-case-codegraph-evaluation-method'=@('VERIFICATION','KEY')
-        'claim-case-codegraph-manual-quality-review'=@('LIMITATION','KEY')
-        'claim-case-codegraph-qualitative-publication'=@('LIMITATION','SUPPORTING')
+        'claim-sql-audit-async-task-lifecycle'=@('IMPLEMENTATION','KEY','sql-audit-project','evidence-sql-audit-async-progress-validation')
+        'claim-sql-audit-progress-fallback'=@('TECHNICAL_DECISION','KEY','sql-audit-project','evidence-sql-audit-async-progress-validation')
+        'claim-sql-audit-result-lifecycle'=@('IMPLEMENTATION','KEY','sql-audit-project','evidence-sql-audit-result-lifecycle-docs')
+        'claim-sql-audit-truncation-disclosure'=@('LIMITATION','KEY','sql-audit-project','evidence-sql-audit-result-lifecycle-docs')
+        'claim-sql-audit-documented-handoff'=@('OUTCOME','SUPPORTING','sql-audit-project','evidence-sql-audit-result-lifecycle-docs')
+        'claim-case-multilingual-replacement-problem'=@('BACKGROUND','KEY','case-multilingual-upload','evidence-case-multilingual-implementation-and-regression')
+        'claim-case-multilingual-no-backfill'=@('LIMITATION','SUPPORTING','case-multilingual-upload','evidence-case-multilingual-implementation-and-regression')
+        'claim-case-role-reset-cache-interference-problem'=@('BACKGROUND','KEY','case-role-reset','evidence-case-role-reset-guide-and-acceptance')
+        'claim-case-role-reset-confirmation-safety'=@('TECHNICAL_DECISION','KEY','case-role-reset','evidence-case-role-reset-guide-and-acceptance')
+        'claim-case-role-reset-documented-delivery'=@('OUTCOME','SUPPORTING','case-role-reset','evidence-case-role-reset-guide-and-acceptance')
+        'claim-case-codegraph-evaluation-method'=@('VERIFICATION','KEY','case-codegraph-evaluation','evidence-case-codegraph-report-collection')
+        'claim-case-codegraph-manual-quality-review'=@('LIMITATION','KEY','case-codegraph-evaluation','evidence-case-codegraph-report-collection')
+        'claim-case-codegraph-qualitative-publication'=@('LIMITATION','SUPPORTING','case-codegraph-evaluation','evidence-case-codegraph-report-collection')
     }
     if ((Compare-Object @($patch.claims | ForEach-Object id) @($expectedClaimContract.Keys)).Count -ne 0) {
         Write-Failure 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID' 'Wave 1 Claim IDs are not exact.'
@@ -567,8 +574,13 @@ function Invoke-PrepareCandidate {
     foreach ($claim in @($patch.claims)) {
         $contract = $expectedClaimContract[[string]$claim.id]
         if ([string]$claim.category -ne $contract[0] -or
-                [string]$claim.materiality -ne $contract[1]) {
-            Write-Failure 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID' 'Wave 1 Claim category or materiality is invalid.'
+                [string]$claim.materiality -ne $contract[1] -or
+                [string]$claim.subjectId -ne $contract[2] -or
+                @($patch.links | Where-Object {
+                    [string]$_.claimId -eq [string]$claim.id -and
+                    [string]$_.evidenceId -eq $contract[3]
+                }).Count -ne 1) {
+            Write-Failure 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID' 'Wave 1 Claim category, materiality, subject or Evidence mapping is invalid.'
         }
     }
     Assert-UniqueIds @($patch.projectUpdates) 'projectUpdates'
@@ -690,11 +702,30 @@ function Invoke-PrepareCandidate {
             $publishIds -contains 'T-07' -or $publishIds -contains 'K-02') {
         Write-Failure 'PREPARE_ROUTE_PUBLISH_SET_INVALID' 'Wave 1 publish routes are not the approved nine-asset set.'
     }
+    $expectedRouteSignatures = @{
+        'L-01'='ENRICH_EXISTING_PROJECT|sql-audit||sql-audit-delivery-set'
+        'T-01'='ENRICH_EXISTING_PROJECT|sql-audit||evidence-sql-audit-async-progress-validation'
+        'T-02'='ENRICH_EXISTING_PROJECT|sql-audit||evidence-sql-audit-result-lifecycle-docs'
+        'T-03'='ENRICH_EXISTING_PROJECT|sql-audit||sql-audit-july-iteration-set'
+        'T-04'='ENRICH_EXISTING_PROJECT|sql-audit||sql-audit-july-iteration-set'
+        'T-05'='CASE||test-role-reset|evidence-case-role-reset-guide-and-acceptance'
+        'T-06'='CASE||multilingual-image-preservation|evidence-case-multilingual-implementation-and-regression'
+        'T-17'='EVIDENCE_ONLY|||evidence-sql-audit-result-lifecycle-docs'
+        'K-01'='CASE||codegraph-evaluation|evidence-case-codegraph-report-collection'
+    }
     $routeById = @{}
     foreach ($route in @($routes.publishRoutes)) {
         Assert-ExactProperties $route @('assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds') `
             'PREPARE_ROUTE_SCHEMA_INVALID'
         $routeById[[string]$route.assetId] = $route
+        $routeSignature = [string]$route.finalRoute + '|' +
+            ((@($route.projectSlugs) | Sort-Object) -join ',') + '|' +
+            ((@($route.caseSlugs) | Sort-Object) -join ',') + '|' +
+            ((@($route.evidenceIds) | Sort-Object) -join ',')
+        if (-not $expectedRouteSignatures.ContainsKey([string]$route.assetId) -or
+                $routeSignature -ne $expectedRouteSignatures[[string]$route.assetId]) {
+            Write-Failure 'PREPARE_ROUTE_CONTRACT_INVALID' 'A Wave 1 asset route differs from the reviewed subject and Evidence mapping.'
+        }
         if (@('PROJECT','CASE','ENRICH_EXISTING_PROJECT','EVIDENCE_ONLY','TIMELINE_ONLY') -notcontains
                 [string]$route.finalRoute) {
             Write-Failure 'PREPARE_ROUTE_SCHEMA_INVALID' 'A Wave 1 route uses an invalid final route.'
@@ -759,6 +790,7 @@ function Invoke-PrepareCandidate {
     $stage = Join-Path $packageRoot ('.prepare-' + [guid]::NewGuid().ToString('N'))
     $completed = $false
     $preparationFailureCode = $null
+    $cleanupFailed = $false
     try {
         $candidateDirectory = Join-Path $stage 'candidate'
         New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null
@@ -777,6 +809,9 @@ function Invoke-PrepareCandidate {
         if ($PrepareFailureStage -eq 'MOVE') {
             throw 'Injected preparation move failure.'
         }
+        if ($PrepareFailureStage -eq 'CLEANUP') {
+            throw 'Injected preparation cleanup failure.'
+        }
         Move-Item -LiteralPath $stage -Destination $targetPackage
         $completed = $true
     }
@@ -789,8 +824,17 @@ function Invoke-PrepareCandidate {
     }
     finally {
         if (-not $completed -and (Test-Path -LiteralPath $stage)) {
-            Remove-Item -LiteralPath $stage -Recurse -Force
+            try {
+                if ($PrepareFailureStage -eq 'CLEANUP') {
+                    throw 'Injected secondary cleanup failure.'
+                }
+                Remove-Item -LiteralPath $stage -Recurse -Force
+            }
+            catch { $cleanupFailed = $true }
         }
+    }
+    if ($cleanupFailed) {
+        Write-Failure 'PREPARE_STAGE_MANUAL_RECOVERY_REQUIRED' 'Candidate staging cleanup failed; the complete staging directory was preserved for manual recovery.'
     }
     if ($null -ne $preparationFailureCode) {
         Write-Failure $preparationFailureCode 'Candidate preparation failed atomically.'
@@ -816,6 +860,22 @@ function Resolve-CompilerJar() {
         Join-Path $repositoryRoot 'backend\target\portfolio-agent.jar'
     } else { $JarPath }
     return Resolve-SafePath $configured 'jarPath'
+}
+function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$ContentVersionValue) {
+    $fileName = if ($SchemaVersionValue -eq '2.0') {
+        'active-benchmarks.v1.json'
+    } else {
+        switch ($ContentVersionValue) {
+            '2026-07-23.1' { 'active-benchmarks.v1.json'; break }
+            '2026-07-23.2' { 'active-benchmarks.v1.json'; break }
+            '2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
+            default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate content version.' }
+        }
+    }
+    $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
+    $resolved = Resolve-SafePath (Join-Path $benchmarkDirectory $fileName) 'benchmarkDefinition'
+    Assert-NoReparsePoint $resolved
+    return $resolved
 }
 function Invoke-Compiler([string]$MainClass, [string[]]$CompilerArguments) {
     $compilerJar = Resolve-CompilerJar
@@ -1267,10 +1327,11 @@ foreach ($claim in @($portfolio.claims)) {
     }
 }
 Assert-DecisionLedgerCandidate $decisionLedgerState.Assets $portfolio
+$benchmarkDefinitionFile = Resolve-BenchmarkDefinition `
+    ([string]$portfolio.schemaVersion) ([string]$portfolio.contentVersion)
 $executedGates = @($gates)
 if ($Command -in @('benchmark', 'build-review-pack', 'approve', 'publish')) {
-    $benchmarkFile = Join-Path $PSScriptRoot '..\benchmark\active-benchmarks.v1.json'
-    $benchmark = Get-Content -LiteralPath $benchmarkFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $benchmark = Get-Content -LiteralPath $benchmarkDefinitionFile -Raw -Encoding UTF8 | ConvertFrom-Json
     $requiredCaseTypes = @('SUPPORTED_QUESTION', 'ALIAS', 'BOUNDARY', 'CLAIM_EVIDENCE', 'SAFETY')
     foreach ($preset in @($portfolio.questionPresets)) {
         $coveredTypes = @($benchmark.cases | Where-Object { $_.questionPresetId -eq $preset.id } | ForEach-Object { $_.caseType } | Select-Object -Unique)
@@ -1291,7 +1352,6 @@ if ($Command -in @('benchmark', 'build-review-pack', 'approve', 'publish')) {
 }
 $candidatePayloadHash = Get-CandidatePayloadHash $portfolioBytes $presentationBytes $ragDocumentBytes
 $policyFile = Join-Path $PSScriptRoot '..\policies\governance-policy.v1.json'
-$benchmarkDefinitionFile = Join-Path $PSScriptRoot '..\benchmark\active-benchmarks.v1.json'
 $schemaDirectory = Join-Path $PSScriptRoot '..\schemas'
 $policyBundleEntries = @($policyFile) + @(Get-ChildItem -LiteralPath $schemaDirectory -File -Filter '*.json' |
     Sort-Object Name | ForEach-Object { $_.FullName })

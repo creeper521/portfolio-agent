@@ -211,6 +211,18 @@ try {
     $validationJson = $validationOutput | Select-Object -Last 1 | ConvertFrom-Json
     Assert-True ($validationExit -eq 0 -and $validationJson.status -eq 'PASS') `
         'The prepared two-file candidate and private ledger must pass governance validate.'
+    $waveOneBenchmark = Join-Path $root `
+        'governance\portfolio-governance\benchmark\wave-1-benchmarks.v1.json'
+    $activeBenchmark = Join-Path $root `
+        'governance\portfolio-governance\benchmark\active-benchmarks.v1.json'
+    $waveOneBenchmarkHash = 'sha256:' + `
+        (Get-FileHash -LiteralPath $waveOneBenchmark -Algorithm SHA256).Hash.ToLowerInvariant()
+    $activeBenchmarkHash = 'sha256:' + `
+        (Get-FileHash -LiteralPath $activeBenchmark -Algorithm SHA256).Hash.ToLowerInvariant()
+    Assert-True ($validationJson.runSnapshot.benchmarkDefinitionHash -eq $waveOneBenchmarkHash) `
+        'Wave 1 candidate must bind the exact Wave 1 governance benchmark bytes.'
+    Assert-True ($waveOneBenchmarkHash -ne $activeBenchmarkHash) `
+        'Runtime and Wave 1 governance benchmark suites must remain byte-distinct.'
 
     $second = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $second | Out-Null
@@ -294,6 +306,18 @@ try {
     $collision = Invoke-FakePrepare $fakeCollision $inventoryCopy
     Assert-True ($collision.ExitCode -ne 0) 'ClaimEvidenceLink ID collision must fail.'
 
+    $fakeClaimMapping = New-FakeRepository
+    $claimMappingPatchPath = Join-Path $fakeClaimMapping 'governance\portfolio-governance\candidates\wave-1-public-patch.json'
+    $claimMappingPatch = Get-Content $claimMappingPatchPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $asyncClaim = $claimMappingPatch.claims | Where-Object id -eq 'claim-sql-audit-async-task-lifecycle'
+    $asyncLink = $claimMappingPatch.links | Where-Object claimId -eq $asyncClaim.id
+    $asyncLink.evidenceId = 'evidence-sql-audit-result-lifecycle-docs'
+    $claimMappingPatch | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $claimMappingPatchPath -Encoding UTF8
+    $invalidClaimMapping = Invoke-FakePrepare $fakeClaimMapping $inventoryCopy
+    Assert-True ($invalidClaimMapping.ExitCode -ne 0) 'A reviewed Claim-to-Evidence mapping swap must fail.'
+    Assert-True ($invalidClaimMapping.Json.blockingFindings[0].code -eq 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID') `
+        'A Claim-to-Evidence mapping swap must report the stable Claim contract code.'
+
     $fakeHold = New-FakeRepository
     $holdInventory = Get-Content $inventoryCopy -Raw -Encoding UTF8 | ConvertFrom-Json
     ($holdInventory.assets | Where-Object id -eq 'T-01').reviewState = 'HOLD'
@@ -329,6 +353,23 @@ try {
     $illegalRoute = Invoke-FakePrepare $fakeRoute $inventoryCopy
     Assert-True ($illegalRoute.ExitCode -ne 0) 'A HOLD publish route must fail.'
 
+    $fakeRouteMapping = New-FakeRepository
+    $routeMappingPath = Join-Path $fakeRouteMapping 'governance\portfolio-governance\candidates\wave-1-public-routes.json'
+    $routeMappingData = Get-Content $routeMappingPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $t05Route = $routeMappingData.publishRoutes | Where-Object assetId -eq 'T-05'
+    $t06Route = $routeMappingData.publishRoutes | Where-Object assetId -eq 'T-06'
+    $t05CaseSlugs = @($t05Route.caseSlugs)
+    $t05EvidenceIds = @($t05Route.evidenceIds)
+    $t05Route.caseSlugs = @($t06Route.caseSlugs)
+    $t05Route.evidenceIds = @($t06Route.evidenceIds)
+    $t06Route.caseSlugs = $t05CaseSlugs
+    $t06Route.evidenceIds = $t05EvidenceIds
+    $routeMappingData | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $routeMappingPath -Encoding UTF8
+    $invalidRouteMapping = Invoke-FakePrepare $fakeRouteMapping $inventoryCopy
+    Assert-True ($invalidRouteMapping.ExitCode -ne 0) 'A reviewed asset route mapping swap must fail.'
+    Assert-True ($invalidRouteMapping.Json.blockingFindings[0].code -eq 'PREPARE_ROUTE_CONTRACT_INVALID') `
+        'An asset route mapping swap must report the stable route contract code.'
+
     $fakeOriginalHold = New-FakeRepository
     $originalHoldRoutePath = Join-Path $fakeOriginalHold 'governance\portfolio-governance\candidates\wave-1-public-routes.json'
     $originalHoldRoute = Get-Content $originalHoldRoutePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -347,6 +388,20 @@ try {
             Where-Object Name -Like '.prepare-*')
         Assert-True ($stages.Count -eq 0) "$failureStage failure must clean staging output."
     }
+
+    $fakeCleanupFailure = New-FakeRepository
+    $cleanupFailure = Invoke-FakePrepare $fakeCleanupFailure $inventoryCopy 'CLEANUP'
+    Assert-True ($cleanupFailure.ExitCode -ne 0) 'A secondary cleanup failure must fail closed.'
+    Assert-True ($cleanupFailure.Json.blockingFindings[0].code -eq 'PREPARE_STAGE_MANUAL_RECOVERY_REQUIRED') `
+        'A secondary cleanup failure must report the stable manual recovery code.'
+    Assert-True (-not (Test-Path (Join-Path $cleanupFailure.Workspace 'prepared-candidates\2026-07-24.1'))) `
+        'A secondary cleanup failure must not leave a final target.'
+    $preservedStages = @(Get-ChildItem (Join-Path $cleanupFailure.Workspace 'prepared-candidates') -Force -ErrorAction SilentlyContinue |
+        Where-Object Name -Like '.prepare-*')
+    Assert-True ($preservedStages.Count -eq 1) 'A complete staging directory must be preserved for manual recovery.'
+    $cleanupFailureJson = $cleanupFailure.Json | ConvertTo-Json -Depth 8 -Compress
+    Assert-True (-not $cleanupFailureJson.Contains($cleanupFailure.Workspace)) `
+        'A cleanup failure response must not disclose the absolute workspace path.'
 
     if (-not [string]::IsNullOrWhiteSpace($env:PORTFOLIO_TEST_ASSET_INVENTORY)) {
         $integrationWorkspace = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))

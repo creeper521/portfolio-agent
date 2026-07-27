@@ -214,7 +214,7 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     $presentationPath = Join-Path $CandidatePath 'presentation.json'
     $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $data.schemaVersion = '3.0'
-    $data.contentVersion = '2026-07-21.1'
+    $data.contentVersion = $currentBundleVersion
     if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
         $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
     }
@@ -231,7 +231,7 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     Save-Json $data $portfolioPath
     $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $presentation.schemaVersion = '3.0'
-    $presentation.contentVersion = '2026-07-21.1'
+    $presentation.contentVersion = $currentBundleVersion
     Save-Json $presentation $presentationPath
     return $data
 }
@@ -357,6 +357,7 @@ try {
         'scripts\portfolio-governance.ps1',
         'policies\governance-policy.v1.json',
         'benchmark\active-benchmarks.v1.json',
+        'benchmark\wave-1-benchmarks.v1.json',
         'schemas\asset-publication-decision-ledger.schema.json',
         'schemas\benchmark-case.schema.json',
         'schemas\feedback-signal.schema.json',
@@ -563,6 +564,19 @@ try {
         throw 'An insufficient asset must not cite public Evidence.'
     }
 
+    $ownerConfirmedEvidenceLedger = Copy-Ledger 'owner-confirmed-public-reference'
+    $ownerConfirmedEvidenceData = Get-Content -LiteralPath $ownerConfirmedEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ownerConfirmedEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'OWNER_CONFIRMED' }
+    Save-Json $ownerConfirmedEvidenceData $ownerConfirmedEvidenceLedger
+    $ownerConfirmedEvidenceResult = Invoke-LedgerValidation $ownerConfirmedEvidenceLedger
+    if ($ownerConfirmedEvidenceResult.ExitCode -eq 0 -or
+            -not $ownerConfirmedEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
+        throw 'Owner-confirmed source Evidence must not be elevated to approved public Evidence.'
+    }
+
     $documentedEvidenceLedger = Copy-Ledger 'documented-evidence-only'
     $documentedEvidenceData = Get-Content -LiteralPath $documentedEvidenceLedger `
         -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -638,6 +652,31 @@ try {
     }
     if ($result.gates -join ',' -ne 'SchemaGate,ReferenceIntegrityGate,PrivacyGate,ClaimEvidenceGate,CompatibilityGate') {
         throw 'Read-only gates did not run in fixed order.'
+    }
+
+    $unsupportedBenchmarkVersion = '2026-07-25.1'
+    $unsupportedBenchmarkCandidate = New-Candidate 'unsupported-benchmark-version'
+    foreach ($name in @('portfolio.json', 'presentation.json')) {
+        $path = Join-Path $unsupportedBenchmarkCandidate $name
+        (Get-Content -LiteralPath $path -Raw -Encoding UTF8).Replace(
+            $currentBundleVersion, $unsupportedBenchmarkVersion) |
+            Set-Content -LiteralPath $path -Encoding UTF8
+    }
+    $unsupportedBenchmarkLedger = Copy-Ledger 'unsupported-benchmark-version'
+    $unsupportedBenchmarkLedgerData = Get-Content -LiteralPath $unsupportedBenchmarkLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unsupportedBenchmarkLedgerData.assets | Where-Object {
+        $_.routeDecision -eq 'PUBLISH_CANDIDATE'
+    } | ForEach-Object { $_.targetContentVersion = $unsupportedBenchmarkVersion }
+    Save-Json $unsupportedBenchmarkLedgerData $unsupportedBenchmarkLedger
+    $unsupportedBenchmark = Invoke-Governance @(
+        '-Command', 'validate', '-Workspace', $workspace,
+        '-Candidate', $unsupportedBenchmarkCandidate,
+        '-DecisionLedger', $unsupportedBenchmarkLedger
+    )
+    if ($unsupportedBenchmark.ExitCode -eq 0 -or
+            -not $unsupportedBenchmark.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
+        throw 'Unknown schema 3.0 content versions must fail closed before governance review.'
     }
 
     $unknownCandidate = New-Candidate 'unknown-field'
@@ -967,7 +1006,7 @@ try {
     if ($schemaThreePublish.ExitCode -ne 0) {
         throw "Schema 3.0 publish fixture failed: $($schemaThreePublish.Output)"
     }
-    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot 'versions\2026-07-21.1'
+    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot ('versions\' + $currentBundleVersion)
     $schemaThreeManifestPath = Join-Path $schemaThreePublishedVersion 'manifest.json'
     $schemaThreeManifest = Get-Content -LiteralPath $schemaThreeManifestPath `
         -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -979,7 +1018,7 @@ try {
     $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')
     Save-Json $schemaThreeManifest $schemaThreeManifestPath
     $missingManifestCases = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
-        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', '2026-07-21.1')
+        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', $currentBundleVersion)
     if ($missingManifestCases.ExitCode -eq 0 -or
             -not $missingManifestCases.Output.Contains('VERIFY_TARGET_INVALID')) {
         throw 'Schema 3.0 verify must reject a Manifest without counts.cases.'
