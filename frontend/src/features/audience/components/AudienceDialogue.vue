@@ -48,7 +48,7 @@ async function ask(question: string, questionPresetId?: string) {
       audienceRole: selectedRole.value.id,
       source: 'HOME',
       questionPresetId,
-      question: questionPresetId ? undefined : normalized,
+      question: normalized,
     }))
     round.value = Math.min(round.value + 1, 3)
     answer.value = {

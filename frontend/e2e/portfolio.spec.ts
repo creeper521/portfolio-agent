@@ -54,16 +54,16 @@ test('home preserves the four-layer experience and hands a role question to Agen
   await expect(supportedQuestion).toBeVisible()
   const answerResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === '/api/v1/answers' &&
+      new URL(response.url()).pathname === '/api/v2/answers' &&
       response.request().method() === 'POST',
   )
   const questionText = (await supportedQuestion.locator('span').textContent()) ?? ''
   await supportedQuestion.click()
   expect((await answerResponse).ok()).toBe(true)
   await expect(page.locator('[data-light-answer]')).toBeVisible()
-  await expect(page.locator('[data-light-answer]')).toContainText('PRESET')
+  await expect(page.locator('[data-light-answer]')).toContainText('预设问题')
   await expect(page.locator('[data-light-answer]')).toContainText('DETERMINISTIC')
-  await expect(page.locator('[data-light-answer]')).toContainText('VERIFIED')
+  await expect(page.locator('[data-light-answer]')).toContainText('已核验')
   await expect(page.locator('[data-answer-action]')).toHaveCount(3)
   await page.getByRole('link', { name: /带着上下文进入 Agent/ }).click()
 
@@ -118,7 +118,7 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   await page.getByLabel('你的问题').fill(question)
   const answerResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === '/api/v1/answers' &&
+      new URL(response.url()).pathname === '/api/v2/answers' &&
       response.request().method() === 'POST',
   )
   await page.getByRole('button', { name: /发送/ }).click()
@@ -129,11 +129,11 @@ test('Agent conversation is page-memory only and disappears on reload', async ({
   const agentMessage = page.locator('.message--agent').last()
   await expect(userMessage.locator('.message__body')).toHaveCSS(
     'background-color',
-    'rgb(32, 28, 23)',
+    'rgba(0, 0, 0, 0)',
   )
   await expect(userMessage.locator('.message__body')).toHaveCSS(
-    'border-radius',
-    '12px 12px 4px',
+    'border-left-width',
+    '2px',
   )
   await expect(agentMessage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
@@ -162,7 +162,7 @@ test('recommended question enters the conversation immediately', async ({ page }
   const responseGate = new Promise<void>((resolve) => {
     releaseResponse = resolve
   })
-  await page.route('**/api/v1/answers', async (route) => {
+  await page.route('**/api/v2/answers', async (route) => {
     await responseGate
     await route.fallback()
   })
@@ -171,7 +171,7 @@ test('recommended question enters the conversation immediately', async ({ page }
   const text = (await suggestion.textContent())?.trim() ?? ''
   const response = page.waitForResponse(
     (item) =>
-      new URL(item.url()).pathname === '/api/v1/answers' &&
+      new URL(item.url()).pathname === '/api/v2/answers' &&
       item.request().method() === 'POST',
   )
 
@@ -417,38 +417,8 @@ test('Agent uses the approved responsive framed workspace at every review viewpo
   }
 })
 
-test('explicit follow-up sends stable references only and is lost on reload', async ({ page }) => {
+test('explicit follow-up uses the strict v2 payload and is lost on reload', async ({ page }) => {
   await openAgentDeepLink(page)
-
-  const publicContent = await page.evaluate(async () => {
-    const response = await fetch('/api/v1/public-content')
-    if (!response.ok) {
-      throw new Error(`public-content request failed with ${response.status}`)
-    }
-    const body: unknown = await response.json()
-    if (
-      typeof body !== 'object' ||
-      body === null ||
-      !('contentVersion' in body) ||
-      typeof body.contentVersion !== 'string' ||
-      !('claims' in body) ||
-      !Array.isArray(body.claims)
-    ) {
-      throw new Error('public-content response is missing follow-up reference data')
-    }
-    const claimIds = body.claims.flatMap((claim: unknown) =>
-      typeof claim === 'object' &&
-      claim !== null &&
-      'id' in claim &&
-      typeof claim.id === 'string'
-        ? [claim.id]
-        : [],
-    )
-    if (claimIds.length === 0) {
-      throw new Error('public-content response has no public claim ids')
-    }
-    return { contentVersion: body.contentVersion, claimIds }
-  })
 
   await page.getByLabel('你的问题').fill(
     '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？',
@@ -457,30 +427,27 @@ test('explicit follow-up sends stable references only and is lost on reload', as
   await expect(page.locator('[data-follow-up="current-status"]')).toBeVisible()
 
   const requestPromise = page.waitForRequest((request) =>
-    new URL(request.url()).pathname === '/api/v1/answers' &&
+    new URL(request.url()).pathname === '/api/v2/answers' &&
     request.method() === 'POST' &&
-    Boolean(request.postDataJSON()?.contextEnvelope),
+    request.postDataJSON()?.question === '查看当前状态',
   )
   await page.locator('[data-follow-up="current-status"]').click()
   const body = (await requestPromise).postDataJSON()
 
   expect(body.question).toBe('查看当前状态')
-  expect(body.contextEnvelope).toMatchObject({
-    previousContentVersion: publicContent.contentVersion,
-    projectSlugs: ['sql-audit'],
-    questionPresetId: 'sql-audit-overview',
-    followUpIntent: 'CURRENT_STATUS',
+  expect(body.context).toMatchObject({
+    projectSlug: 'sql-audit',
+    caseSlug: null,
+    audienceRole: 'INTERVIEWER',
+    source: 'AGENT_PAGE',
   })
-  expect(body.contextEnvelope.referencedClaimIds.length).toBeGreaterThan(0)
-  expect(body.contextEnvelope.referencedClaimIds.length).toBeLessThanOrEqual(8)
-  expect(body.contextEnvelope.referencedClaimIds).toContain('claim-sql-audit-delivered')
-  expect(body.contextEnvelope.referencedClaimIds.every(
-    (id: unknown) => typeof id === 'string' && publicContent.claimIds.includes(id),
-  )).toBe(true)
-  expect(body.contextEnvelope.referencedClaimIds.every(
-    (id: unknown) => typeof id === 'string' && /^[a-z0-9-]{1,100}$/.test(id),
-  )).toBe(true)
-  expect(body).not.toHaveProperty('messages')
+  expect(body.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ role: 'USER' }),
+    expect.objectContaining({ role: 'ASSISTANT' }),
+  ]))
+  expect(body).not.toHaveProperty('contextEnvelope')
+  expect(body).not.toHaveProperty('questionPresetId')
+  expect(body.context).not.toHaveProperty('focusEvidenceIds')
   expect(body).not.toHaveProperty('previousQuestion')
   expect(body).not.toHaveProperty('previousAnswer')
 
@@ -496,7 +463,7 @@ test('Agent renders boundary and rejected dimensions without a verified label', 
   await page.getByRole('button', { name: /发送/ }).click()
   const boundary = page.locator('.message--agent').last()
   await expect(boundary).toContainText('当前能力边界')
-  await expect(boundary).toContainText('NOT_APPLICABLE')
+  await expect(boundary).toContainText('BOUNDARY')
   await expect(boundary).toContainText('DETERMINISTIC')
   await expect(boundary).not.toContainText('已核验回答')
 
@@ -505,7 +472,7 @@ test('Agent renders boundary and rejected dimensions without a verified label', 
   const rejected = page.locator('.message--agent').last()
   await expect(rejected).toContainText('无法处理该请求')
   await expect(rejected).toContainText('REJECTED')
-  await expect(rejected).toContainText('NOT_APPLICABLE')
+  await expect(rejected).toContainText('DETERMINISTIC')
 })
 
 test('Agent distinguishes retrieval provenance from verification', async ({ page }) => {
@@ -520,12 +487,12 @@ test('Agent distinguishes retrieval provenance from verification', async ({ page
   const answer = page.locator('.message--agent').last()
 
   await expect(answer).toContainText('ANSWERED')
-  await expect(answer).toContainText('RETRIEVAL · 来自公开资料检索')
+  await expect(answer).toContainText('资料检索')
   if (process.env.PLAYWRIGHT_REAL_RETRIEVAL === '1') {
-    await expect(answer).toContainText('VERIFIED')
+    await expect(answer).toContainText('已核验')
     await expect(answer).toContainText('已核验回答')
   } else {
-    await expect(answer).toContainText('PARTIALLY_VERIFIED')
+    await expect(answer).toContainText('部分核验')
     await expect(answer).not.toContainText('已核验回答')
   }
 })
@@ -534,9 +501,9 @@ test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes
   page,
 }) => {
   test.skip(process.env.PLAYWRIGHT_REAL_API === '1', 'Provider behavior uses local fake responses')
-  await page.unroute('**/api/v1/answers')
+  await page.unroute('**/api/v2/answers')
   let attempt = 0
-  await page.route('**/api/v1/answers', async (route) => {
+  await page.route('**/api/v2/answers', async (route) => {
     attempt += 1
     const request = route.request().postDataJSON() as { turnId?: string }
     await route.fulfill({
@@ -572,8 +539,8 @@ test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes
   await page.getByRole('button', { name: /发送/ }).click()
   const modelAnswer = page.locator('.message--agent').last()
   await expect(modelAnswer).toContainText('MODEL')
-  await expect(modelAnswer).toContainText('PRESET')
-  await expect(modelAnswer).toContainText('VERIFIED')
+  await expect(modelAnswer).toContainText('预设问题')
+  await expect(modelAnswer).toContainText('已核验')
 
   await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
   await page.getByRole('button', { name: /发送/ }).click()

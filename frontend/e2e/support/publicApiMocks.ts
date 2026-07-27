@@ -5,6 +5,7 @@ import { previewPublicContent } from '../../src/features/public-content/data/pre
 const CANONICAL_QUESTION =
   '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？'
 const QUESTION_ALIASES = new Set([
+  ...previewPublicContent.questionPresets.map((preset) => preset.text),
   CANONICAL_QUESTION,
   '请详细介绍SQL审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么',
   '详细介绍一下 SQL 审计与故障排查工具项目',
@@ -107,5 +108,5 @@ async function fulfillAnswer(route: Route) {
 
 export async function installPublicApiMocks(page: Page) {
   await page.route('**/api/v1/public-content', fulfillPublicContent)
-  await page.route('**/api/v1/answers', fulfillAnswer)
+  await page.route('**/api/v2/answers', fulfillAnswer)
 }
