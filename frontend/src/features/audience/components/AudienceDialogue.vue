@@ -188,7 +188,6 @@ function focusCustomQuestion() {
 
 .audience-console {
   display: grid;
-  min-height: 520px;
   grid-template-columns: 1fr 1.15fr;
   border: 1px solid var(--rule);
   background: var(--paper);
@@ -254,7 +253,7 @@ h3 {
 }
 
 .role-grid .role-button--active small {
-  color: #e1948b;
+  color: var(--red-on-ink);
 }
 
 .role-description {
@@ -326,9 +325,12 @@ h3 {
   width: 100%;
   color: var(--ink);
   border: 0;
-  outline: 0;
   background: transparent;
   font-size: 13px;
+}
+
+.question-form:focus-within {
+  border-color: var(--red);
 }
 
 .question-form button {
@@ -403,6 +405,12 @@ h3 {
   .role-grid button {
     border-right: 0;
     border-bottom: 1px solid var(--rule) !important;
+  }
+}
+
+@media (hover: none) {
+  .question-form input {
+    font-size: 16px;
   }
 }
 </style>

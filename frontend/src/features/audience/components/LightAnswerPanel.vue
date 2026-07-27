@@ -7,6 +7,11 @@ import type {
 } from '../../public-content/model/publicContentTypes'
 import type { HomeAnswerState } from '../model/audienceTypes'
 import { createAgentHandoff } from '../../agent/model/handoffStore'
+import {
+  answerSourceTag,
+  answerStatusLabel,
+  answerTechTail,
+} from '../../agent/model/answerLabels'
 
 const props = defineProps<{
   role: AudienceRole
@@ -42,23 +47,9 @@ const agentTarget = computed(() => ({
   },
 }))
 
-const answerStatus = computed(() => {
-  if (props.answer.answer.resolution === 'BOUNDARY') return '当前能力边界'
-  if (props.answer.answer.resolution === 'REJECTED') return '无法处理该请求'
-  if (props.answer.answer.verification === 'VERIFIED') return '已核验回答'
-  if (props.answer.answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
-  return '尚未核验'
-})
-
-const answerSourceLabel = computed(() => {
-  if (props.answer.answer.answerSource === 'RETRIEVAL') {
-    return 'RETRIEVAL · 来自公开资料检索'
-  }
-  if (props.answer.answer.answerSource === 'PRESET') {
-    return 'PRESET · 来自已发布问题'
-  }
-  return ''
-})
+const answerStatus = computed(() => answerStatusLabel(props.answer.answer))
+const sourceTag = computed(() => answerSourceTag(props.answer.answer))
+const techTail = computed(() => answerTechTail(props.answer.answer))
 
 function stopTyping() {
   if (typingTimer) clearInterval(typingTimer)
@@ -98,10 +89,8 @@ onBeforeUnmount(stopTyping)
     <aside>
       <b>{{ role }}</b>
       <span>ROUND {{ String(answer.round).padStart(2, '0') }} / 03</span>
-      <span>RESOLUTION<br />{{ answer.answer.resolution }}</span>
-      <span v-if="answerSourceLabel">SOURCE<br />{{ answerSourceLabel }}</span>
-      <span>GENERATION<br />{{ answer.answer.generationMode }}</span>
-      <span>VERIFICATION<br />{{ answer.answer.verification }}</span>
+      <span v-if="sourceTag">SOURCE<br />{{ sourceTag }}</span>
+      <span>{{ techTail }}</span>
     </aside>
     <div class="light-answer__content">
       <p class="light-answer__speaker">YOU · {{ answer.question }}</p>
@@ -150,11 +139,11 @@ onBeforeUnmount(stopTyping)
 
 aside {
   padding-right: 25px;
-  border-right: 1px solid #5b5349;
+  border-right: 1px solid var(--ink-line);
 }
 
 aside b {
-  color: #d27d74;
+  color: var(--red-on-ink);
   font: 10px var(--mono);
   font-weight: 400;
   letter-spacing: 0.14em;
@@ -163,7 +152,7 @@ aside b {
 aside span {
   display: block;
   margin-top: 15px;
-  color: #94897c;
+  color: var(--ink-text-faint);
   font: 10px/1.7 var(--mono);
 }
 
@@ -173,14 +162,14 @@ aside span {
 
 .light-answer__speaker {
   margin: 0 0 22px;
-  color: #c7776e;
+  color: var(--red-on-ink);
   font: 10px var(--mono);
   letter-spacing: 0.14em;
 }
 
 .light-answer__text {
   min-height: 105px;
-  color: #e8ddce;
+  color: var(--ink-text-hi);
   font: 17px/2 var(--serif);
 }
 
@@ -190,15 +179,15 @@ aside span {
   height: 18px;
   margin-left: 5px;
   vertical-align: -3px;
-  background: #c9675d;
+  background: var(--red-on-ink);
   animation: cursor-blink 0.78s steps(1) infinite;
 }
 
 .light-answer__status {
   margin: 26px 0 0;
   padding-top: 18px;
-  color: #cb756c;
-  border-top: 1px solid #5b5349;
+  color: var(--red-on-ink);
+  border-top: 1px solid var(--ink-line);
   font: 10px var(--mono);
   letter-spacing: 0.1em;
 }
@@ -215,8 +204,8 @@ aside span {
 .light-answer__actions a,
 .light-answer__actions button {
   padding: 8px 11px;
-  color: #c8bcad;
-  border: 1px solid #60574d;
+  color: var(--ink-text-hi);
+  border: 1px solid var(--ink-line);
   background: transparent;
   font: 10px var(--mono);
 }
@@ -236,7 +225,7 @@ aside span {
   aside {
     padding: 0 0 15px;
     border-right: 0;
-    border-bottom: 1px solid #5b5349;
+    border-bottom: 1px solid var(--ink-line);
   }
 }
 </style>

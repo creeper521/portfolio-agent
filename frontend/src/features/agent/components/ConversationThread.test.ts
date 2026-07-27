@@ -367,10 +367,11 @@ describe('ConversationThread', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
     const wrapper = mountThread([answerMessageFixture])
     const section = wrapper.get('[data-section-type="VERIFICATION"]')
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(section.element, 'scrollIntoView', {
+    const scrollArea = wrapper.get('.conversation__scroll')
+    const scrollTo = vi.fn()
+    Object.defineProperty(scrollArea.element, 'scrollTo', {
       configurable: true,
-      value: scrollIntoView,
+      value: scrollTo,
     })
 
     await wrapper.setProps({
@@ -382,8 +383,8 @@ describe('ConversationThread', () => {
     })
     await flushPromises()
 
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      block: 'center',
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 0,
       behavior: 'auto',
     })
     expect(section.attributes('data-answer-focus')).toBe('true')

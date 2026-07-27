@@ -531,7 +531,6 @@ onBeforeUnmount(() => {
       '--evidence-width': `${effectiveSplit.evidence}px`,
     }"
   >
-    <p class="session-privacy" role="note">当前对话未保存，刷新后记录会消失</p>
     <LocalSessionRail
       :sessions="sessions.historySessions.value"
       :active-id="sessions.activeSessionId.value"
@@ -637,17 +636,6 @@ onBeforeUnmount(() => {
   grid-template-rows: minmax(0, 1fr);
   background: var(--workspace-evidence-bg);
   overflow: hidden;
-}
-
-.session-privacy {
-  position: absolute;
-  z-index: 20;
-  right: 18px;
-  bottom: 4px;
-  margin: 0;
-  color: var(--workspace-text-faint);
-  font: 10px/1.5 var(--mono);
-  pointer-events: none;
 }
 
 .session-resizer {

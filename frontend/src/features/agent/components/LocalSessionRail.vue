@@ -115,7 +115,7 @@ function confirmClear() {
     </div>
 
     <footer>
-      <p>会话仅保留在当前标签页</p>
+      <p>当前对话未保存，刷新后记录会消失</p>
       <button
         v-if="sessions.length"
         ref="clearTrigger"
@@ -324,5 +324,15 @@ footer button {
   margin-top: 8px;
   padding: 6px 8px;
   border: 1px solid currentcolor;
+}
+
+@media (hover: none) {
+  .session-menu-trigger {
+    opacity: 1;
+  }
+
+  input {
+    font-size: 16px;
+  }
 }
 </style>

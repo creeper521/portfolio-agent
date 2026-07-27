@@ -73,21 +73,29 @@ const orderedEvidence = computed(() => {
       <article
         v-for="item in orderedEvidence"
         :key="item.id"
-        class="evidence-card"
-        :class="{
-          'evidence-card--active': activeEvidenceId === item.id,
-          'evidence-card--focused': focusEvidenceIds.includes(item.id),
-        }"
-        :data-evidence-id="item.id"
-        @click="emit('select', item.id)"
+        class="evidence-entry"
       >
-        <span>EVIDENCE · {{ item.code }}</span>
-        <h3>{{ item.title }}</h3>
-        <p>{{ item.summary }}</p>
-        <small>
-          {{ item.publicStatus }} · {{ item.type }} · {{ item.periodStart }}
-        </small>
-        <RouterLink :to="{ path: '/evidence', query: { evidence: item.id } }">
+        <button
+          type="button"
+          class="evidence-card"
+          :class="{
+            'evidence-card--active': activeEvidenceId === item.id,
+            'evidence-card--focused': focusEvidenceIds.includes(item.id),
+          }"
+          :data-evidence-id="item.id"
+          @click="emit('select', item.id)"
+        >
+          <span class="evidence-card__code">EVIDENCE · {{ item.code }}</span>
+          <span class="evidence-card__title">{{ item.title }}</span>
+          <span class="evidence-card__summary">{{ item.summary }}</span>
+          <small>
+            {{ item.publicStatus }} · {{ item.type }} · {{ item.periodStart }}
+          </small>
+        </button>
+        <RouterLink
+          class="evidence-entry__link"
+          :to="{ path: '/evidence', query: { evidence: item.id } }"
+        >
           查看证据 →
         </RouterLink>
       </article>
@@ -221,12 +229,26 @@ header span {
   border-left-width: 3px;
 }
 
-.evidence-card > span,
+.evidence-card__code,
 .citation-card > span,
 .source-card > span {
   color: var(--workspace-accent, var(--red));
   font: 11px var(--mono);
   letter-spacing: 0.1em;
+}
+
+.evidence-card__title {
+  display: block;
+  margin: 9px 0;
+  font: 500 17px/1.35 var(--serif);
+}
+
+.evidence-card__summary {
+  display: block;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
 }
 
 h3 {
@@ -257,9 +279,9 @@ small {
   letter-spacing: 0.07em;
 }
 
-.evidence-card a {
+.evidence-entry__link {
   display: inline-block;
-  margin-top: 16px;
+  margin: 8px 0 0 4px;
   color: var(--workspace-accent, var(--red));
   font: 11px var(--mono);
 }

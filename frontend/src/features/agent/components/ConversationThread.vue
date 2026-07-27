@@ -13,6 +13,15 @@ import type {
   AnswerFocusTarget,
   EvidenceInspectRequest,
 } from '../model/evidenceDeskModel'
+import {
+  answerScopeTag,
+  answerSourceTag,
+  answerStatusLabel,
+  answerTechTail,
+  answerVerificationTag,
+  blockScopeTag,
+  degradedNotice,
+} from '../model/answerLabels'
 
 const props = defineProps<{
   session: AgentSession
@@ -138,7 +147,8 @@ watch(
     const target = props.focusTarget
     if (!target) return
     await nextTick()
-    const message = scrollArea.value?.querySelector<HTMLElement>(
+    const container = scrollArea.value
+    const message = container?.querySelector<HTMLElement>(
       `[data-message-id="${target.messageId}"]`,
     )
     const element = target.sectionType
@@ -146,13 +156,19 @@ watch(
         `[data-section-type="${target.sectionType}"]`,
       )
       : message
-    element?.scrollIntoView({
-      block: 'center',
-      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
+    if (!container || !element) return
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const rect = element.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    const top =
+      container.scrollTop +
+      (rect.top - containerRect.top) -
+      (container.clientHeight - rect.height) / 2
+    container.scrollTo?.({
+      top: Math.max(0, top),
+      behavior: reduced ? 'auto' : 'smooth',
     })
-    element?.focus({ preventScroll: true })
+    element.focus({ preventScroll: true })
     highlightedTarget.value = `${target.messageId}:${target.sectionType ?? ''}`
     if (highlightTimer) clearTimeout(highlightTimer)
     highlightTimer = setTimeout(() => {
@@ -164,39 +180,6 @@ watch(
 onBeforeUnmount(() => {
   if (highlightTimer) clearTimeout(highlightTimer)
 })
-
-function answerLabel(message: AgentSession['messages'][number]) {
-  const answer = message.answer
-  if (!answer) return ''
-  // v2: prioritize intent-driven visible labels
-  if (answer.intent === 'TIME_SENSITIVE') return '暂时不可用'
-  if (answer.intent === 'UNSUPPORTED_OR_UNSAFE') return '无法处理该请求'
-  if (answer.resolution === 'BOUNDARY') return '当前能力边界'
-  if (answer.resolution === 'REJECTED') return '无法处理该请求'
-  if (answer.intent) return '回答'
-  // v1 fallback
-  if (answer.verification === 'VERIFIED') return '已核验回答'
-  if (answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
-  return '尚未核验'
-}
-
-function answerScopeTag(message: AgentSession['messages'][number]) {
-  const answer = message.answer
-  if (!answer) return ''
-  if (answer.answerScope === 'GENERAL') return '通用知识'
-  if (answer.answerScope === 'PORTFOLIO') return '作品集资料'
-  if (answer.answerScope === 'HYBRID') return '混合回答'
-  return ''
-}
-
-function blockScopeTag(scope: 'GENERAL' | 'PORTFOLIO') {
-  return scope === 'GENERAL' ? '通用知识' : '作品集资料'
-}
-
-function degradedNotice(message: AgentSession['messages'][number]) {
-  if (!message.answer?.degraded && message.answer?.generationMode !== 'FALLBACK') return ''
-  return '已切换到基础回答'
-}
 
 function v2Blocks(message: AgentSession['messages'][number]) {
   const answer = message.answer
@@ -211,37 +194,6 @@ function isV2Answer(message: AgentSession['messages'][number]) {
 
 function dynamicSuggestions(message: AgentSession['messages'][number]) {
   return message.answer?.suggestedQuestions ?? []
-}
-
-function answerSourceLabel(message: AgentSession['messages'][number]) {
-  const source = message.answer?.answerSource
-  if (source === 'RETRIEVAL') return 'RETRIEVAL · 来自公开资料检索'
-  if (source === 'PRESET') return 'PRESET · 来自已发布问题'
-  return ''
-}
-
-// 来源的人话短标签（去掉冗长的「来自…」，只留检索/预设）
-function answerSourceTag(message: AgentSession['messages'][number]) {
-  const source = message.answer?.answerSource
-  if (source === 'RETRIEVAL') return '资料检索'
-  if (source === 'PRESET') return '预设问题'
-  return ''
-}
-
-// 核验状态的人话标签，用于做视觉重点
-function answerVerificationTag(message: AgentSession['messages'][number]) {
-  const verification = message.answer?.verification
-  if (verification === 'VERIFIED') return '已核验'
-  if (verification === 'PARTIALLY_VERIFIED') return '部分核验'
-  if (verification === 'UNVERIFIED') return '未核验'
-  return ''
-}
-
-// 技术枚举尾注：resolution + generationMode，价值低，降级成极淡尾注
-function answerTechTail(message: AgentSession['messages'][number]) {
-  const answer = message.answer
-  if (!answer) return ''
-  return [answer.resolution, answer.generationMode].filter(Boolean).join(' · ')
 }
 
 function followUp(
@@ -317,7 +269,8 @@ function inspectMessageEvidence(
       </div>
     </header>
 
-    <div ref="scrollArea" class="conversation__scroll" @scroll.passive="onThreadScroll">
+    <div class="conversation__body">
+      <div ref="scrollArea" class="conversation__scroll" @scroll.passive="onThreadScroll">
       <div class="thread" :data-conversation-state="state">
         <section v-if="state === 'empty'" class="thread-empty">
           <p>YOU · FROM DOSSIER</p>
@@ -346,21 +299,21 @@ function inspectMessageEvidence(
           tabindex="-1"
         >
           <p v-if="message.answer" class="message__meta">
-            <span class="message__meta-prefix">AGENT · {{ answerLabel(message) }}</span>
+            <span class="message__meta-prefix">AGENT · {{ answerStatusLabel(message.answer) }}</span>
             <span class="message__meta-tags">
-              <span v-if="answerScopeTag(message)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message) }}</span>
-              <span v-if="message.answer.generationMode !== 'FALLBACK' && answerVerificationTag(message)" class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message) }}</span>
-              <span v-if="answerSourceTag(message)" class="message__meta-tag">{{ answerSourceTag(message) }}</span>
+              <span v-if="answerScopeTag(message.answer)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message.answer) }}</span>
+              <span v-if="message.answer.generationMode !== 'FALLBACK' && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message.answer) }}</span>
+              <span v-if="answerSourceTag(message.answer)" class="message__meta-tag">{{ answerSourceTag(message.answer) }}</span>
             </span>
-            <span v-if="answerTechTail(message)" class="message__meta-tail">{{ answerTechTail(message) }}</span>
+            <span v-if="answerTechTail(message.answer)" class="message__meta-tail">{{ answerTechTail(message.answer) }}</span>
           </p>
           <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <p
-            v-if="message.answer && degradedNotice(message)"
+            v-if="message.answer && degradedNotice(message.answer)"
             data-degraded-notice
             class="degraded-notice"
             role="status"
-          >{{ degradedNotice(message) }}</p>
+          >{{ degradedNotice(message.answer) }}</p>
           <div v-if="message.answer" class="structured-answer">
             <template v-if="isV2Answer(message)">
               <h3 v-if="message.answer.title">{{ message.answer.title }}</h3>
@@ -485,15 +438,16 @@ function inspectMessageEvidence(
           </div>
         </div>
       </div>
-    </div>
+      </div>
 
-    <button
-      v-if="showJumpToLatest"
-      data-jump-latest
-      class="jump-latest"
-      type="button"
-      @click="jumpToLatest"
-    >回到最新回答</button>
+      <button
+        v-if="showJumpToLatest"
+        data-jump-latest
+        class="jump-latest"
+        type="button"
+        @click="jumpToLatest"
+      >回到最新回答</button>
+    </div>
 
     <form class="composer" @submit.prevent="submit">
       <span aria-hidden="true">›</span>
@@ -518,9 +472,15 @@ function inspectMessageEvidence(
   position: relative;
   display: grid;
   min-width: 0;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   color: var(--workspace-text, var(--ink));
   background: var(--workspace-thread-bg, var(--paper-hi));
+  overflow: hidden;
+}
+
+.conversation__body {
+  position: relative;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -613,14 +573,22 @@ function inspectMessageEvidence(
 }
 
 .conversation__scroll {
-  min-height: 0;
-  padding-bottom: 104px;
+  height: 100%;
   overflow-y: auto;
 }
 
 .thread {
   width: min(820px, calc(100% - 96px));
   margin: 24px auto 40px;
+}
+
+/* B5：空会话时引导区垂直居中，消除中栏约 368px 顶部死空。
+   空态内容少，min-height: 100% + grid 居中让引导区在滚动视口里垂直落中。 */
+.thread[data-conversation-state='empty'] {
+  display: grid;
+  min-height: 100%;
+  margin-block: auto;
+  align-content: center;
 }
 
 .thread-empty {
@@ -691,11 +659,13 @@ function inspectMessageEvidence(
   text-align: right;
 }
 
+/* 用户消息回归文档化样式（07-22 第 116 行）：自然文本流 + 2px --workspace-accent 左线，
+   不使用实心消息气泡。去 background 与 border-radius，文字回到墨色，
+   靠左线与右对齐的 meta 区分用户侧。未来若恢复实心气泡需先回写设计文档授权。 */
 .message--user .message__body {
-  padding: 14px 18px;
-  color: var(--workspace-primary-text, var(--paper-hi));
-  border-radius: 12px 12px 4px 12px;
-  background: var(--workspace-primary-bg, var(--ink));
+  padding: 4px 0 4px 14px;
+  color: var(--workspace-text, var(--ink));
+  border-left: 2px solid var(--workspace-accent, var(--red));
   font: 16px/1.7 var(--sans);
 }
 
@@ -823,8 +793,8 @@ function inspectMessageEvidence(
 
 .jump-latest {
   position: absolute;
-  right: 44px;
-  bottom: 96px;
+  right: 28px;
+  bottom: 16px;
   z-index: 2;
   min-height: 32px;
   padding: 6px 10px;
@@ -837,18 +807,19 @@ function inspectMessageEvidence(
 }
 
 .composer {
-  position: absolute;
-  right: 28px;
-  bottom: 24px;
-  left: 28px;
   display: flex;
   min-height: 62px;
+  margin: 0 28px 24px;
   padding: 0 16px;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--workspace-rule, var(--rule));
   border-radius: var(--agent-radius-md);
   background: color-mix(in srgb, var(--agent-shell-paper) 86%, white);
+}
+
+.composer:focus-within {
+  border-color: var(--workspace-accent, var(--red));
 }
 
 .composer > span {
@@ -863,7 +834,6 @@ textarea {
   resize: none;
   color: var(--workspace-text, var(--ink));
   border: 0;
-  outline: 0;
   background: transparent;
   font-size: 13px;
 }
@@ -928,8 +898,13 @@ textarea:disabled,
   }
 
   .composer {
-    right: 18px;
-    left: 18px;
+    margin-inline: 18px;
+  }
+}
+
+@media (hover: none) {
+  textarea {
+    font-size: 16px;
   }
 }
 

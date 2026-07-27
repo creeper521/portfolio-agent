@@ -150,16 +150,17 @@ describe('AgentWorkspace', () => {
     expect(wrapper.find('[data-citation-id]').exists()).toBe(true)
 
     const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+    const scrollArea = wrapper.get('.conversation__scroll')
+    const scrollTo = vi.fn()
+    Object.defineProperty(scrollArea.element, 'scrollTo', {
       configurable: true,
-      value: scrollIntoView,
+      value: scrollTo,
     })
     await wrapper.get('[data-citation-id]').trigger('click')
     await flushPromises()
 
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      block: 'center',
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 0,
       behavior: 'smooth',
     })
     expect(answerSection.attributes('data-answer-focus')).toBe('true')
@@ -204,16 +205,17 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-section-evidence]').trigger('click')
 
     const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+    const scrollArea = wrapper.get('.conversation__scroll')
+    const scrollTo = vi.fn()
+    Object.defineProperty(scrollArea.element, 'scrollTo', {
       configurable: true,
-      value: scrollIntoView,
+      value: scrollTo,
     })
     await wrapper.get('[data-citation-id]').trigger('click')
     await flushPromises()
 
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      block: 'center',
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 0,
       behavior: 'auto',
     })
   })
@@ -277,7 +279,8 @@ describe('AgentWorkspace', () => {
     await flushPromises()
     await wrapper.get('[data-section-evidence]').trigger('click')
     const answerSection = wrapper.get('[data-section-type="BACKGROUND"]')
-    Object.defineProperty(answerSection.element, 'scrollIntoView', {
+    const scrollArea = wrapper.get('.conversation__scroll')
+    Object.defineProperty(scrollArea.element, 'scrollTo', {
       configurable: true,
       value: vi.fn(),
     })
@@ -294,7 +297,9 @@ describe('AgentWorkspace', () => {
   it('renders sessions, conversation, evidence desk, and two accessible separators', () => {
     const wrapper = mountWorkspace()
 
-    expect(wrapper.text()).toContain('会话仅保留在当前标签页')
+    // A5：隐私提示从右下绝对位覆盖层移到会话栏 footer 静态位，
+    // 文案改为安全规则要求的完整版（AGENTS.md 8.3）。
+    expect(wrapper.text()).toContain('当前对话未保存，刷新后记录会消失')
     expect(wrapper.text()).toContain('Agent 对话')
     expect(wrapper.text()).toContain('证据工作台')
     expect(wrapper.findAll('[role="separator"]')).toHaveLength(2)

@@ -34,6 +34,28 @@ describe('EvidenceDesk', () => {
     expect(wrapper.get('.evidence-card').classes()).toContain('evidence-card--focused')
   })
 
+  it('renders evidence cards as keyboard-activatable buttons with the detail link outside', async () => {
+    const wrapper = mount(EvidenceDesk, {
+      props: {
+        evidence,
+        project,
+        activeEvidenceId: evidence[0].id,
+        focusEvidenceIds: [evidence[0].id],
+        citations: [citation],
+        tab: 'EVIDENCE',
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+
+    const card = wrapper.get('.evidence-card')
+    expect(card.element.tagName).toBe('BUTTON')
+    expect(card.attributes('type')).toBe('button')
+    expect(card.find('a').exists()).toBe(false)
+
+    await card.trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[evidence[0].id]])
+  })
+
   it('requests a tab update without owning the active tab', async () => {
     const wrapper = mount(EvidenceDesk, {
       props: {

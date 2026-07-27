@@ -108,9 +108,13 @@ describe('AudienceDialogue', () => {
     await flushPromises()
 
     const panel = wrapper.get('[data-light-answer]').text()
-    expect(panel).toContain('RETRIEVAL · 来自公开资料检索')
+    expect(panel).toContain('资料检索')
+    expect(panel).not.toContain('RETRIEVAL · 来自公开资料检索')
     expect(panel).toContain('部分事实已核验')
     expect(panel).not.toContain('已核验回答')
+    expect(panel).not.toContain('RESOLUTION')
+    expect(panel).not.toContain('GENERATION')
+    expect(panel).not.toContain('VERIFICATION')
   })
 
   it('disables question input and submission while an answer is pending', async () => {
