@@ -1,6 +1,6 @@
 {
-  "suiteVersion": "retrieval-benchmark-v2",
-  "contentVersion": "2026-07-23.1",
+  "suiteVersion": "retrieval-benchmark-v3-wave1",
+  "contentVersion": "2026-07-24.1",
   "cases": [
     {
       "caseId": "case-codegraph-workflow-paraphrase-01",
@@ -133,6 +133,254 @@
       "expectedClaimIds": ["claim-sql-audit-verification"],
       "expectedChunkIds": ["chunk-claim-sql-audit-verification"],
       "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-background-paraphrase-02",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "如果不固定机器和目录，最初的排查痛点是什么？",
+      "expectedClaimIds": ["claim-sql-audit-background"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-background"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-responsibility-paraphrase-02",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "在多轮迭代里，你承担了哪些核心工作？",
+      "expectedClaimIds": ["claim-sql-audit-responsibility"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-responsibility"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-routing-decision-paraphrase-02",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "环境和来源变化时，路由方案怎样替代写死配置？",
+      "expectedClaimIds": ["claim-sql-audit-technical-decision"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-technical-decision"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-fixed-string-search-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "以负号开头的关键词会被当成命令参数还是普通检索文本？",
+      "expectedClaimIds": ["claim-sql-audit-fixed-string-search"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-fixed-string-search"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-source-selection-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "一次审计任务能同时选多少个服务目标和日志来源？",
+      "expectedClaimIds": ["claim-sql-audit-source-selection"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-source-selection"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-partial-success-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "某个来源查询失败后，其他已完成来源的结果会不会保留？",
+      "expectedClaimIds": ["claim-sql-audit-partial-success"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-partial-success"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-async-lifecycle-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "提交大范围审计后，任务从受理到完成的异步生命周期怎样推进？",
+      "expectedClaimIds": ["claim-sql-audit-async-task-lifecycle"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-async-task-lifecycle"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-progress-fallback-acronym-01",
+      "split": "HOLDOUT",
+      "category": "ENGLISH_OR_ACRONYM",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "WS 进度推送断开时，前端是否会改用 polling 继续查询状态？",
+      "expectedClaimIds": ["claim-sql-audit-progress-fallback"],
+      "expectedChunkIds": ["chunk-claim-sql-audit-progress-fallback"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "sql-archive-truncation-exact-01",
+      "split": "HOLDOUT",
+      "category": "EXACT_TERM",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "归档结果与截断提示分别在什么环节出现？",
+      "expectedClaimIds": [
+        "claim-sql-audit-result-lifecycle",
+        "claim-sql-audit-truncation-disclosure"
+      ],
+      "expectedChunkIds": [
+        "chunk-claim-sql-audit-result-lifecycle",
+        "chunk-claim-sql-audit-truncation-disclosure"
+      ],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-multilingual-sequential-verification-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "multilingual-image-preservation",
+      "query": "这次先传德语再传法语，最终如何验证两个语言结果都还在？",
+      "expectedClaimIds": ["claim-case-multilingual-sequential-verification"],
+      "expectedChunkIds": ["chunk-claim-case-multilingual-sequential-verification"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-multilingual-replacement-problem-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "multilingual-image-preservation",
+      "query": "多语言图片上传修复针对的覆盖问题是什么，替换逻辑怎样处理？",
+      "expectedClaimIds": ["claim-case-multilingual-replacement-problem"],
+      "expectedChunkIds": ["chunk-claim-case-multilingual-replacement-problem"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-role-reset-acceptance-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "test-role-reset",
+      "query": "重置完成后，旧角色和重新登录后的新建流程分别表现怎样？",
+      "expectedClaimIds": ["claim-case-role-reset-acceptance"],
+      "expectedChunkIds": ["chunk-claim-case-role-reset-acceptance"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-role-reset-cache-interference-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "test-role-reset",
+      "query": "为什么老账号缓存会干扰测试，角色重置解决了什么前置问题？",
+      "expectedClaimIds": ["claim-case-role-reset-cache-interference-problem"],
+      "expectedChunkIds": ["chunk-claim-case-role-reset-cache-interference-problem"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-role-reset-confirmation-safety-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "test-role-reset",
+      "query": "执行角色清理前为什么必须二次确认，而不能直接批量删除？",
+      "expectedClaimIds": ["claim-case-role-reset-confirmation-safety"],
+      "expectedChunkIds": ["chunk-claim-case-role-reset-confirmation-safety"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-codegraph-narrowing-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "codegraph-evaluation",
+      "query": "面对大型仓库时，代码图谱怎样帮助缩小检索范围？",
+      "expectedClaimIds": ["claim-case-codegraph-narrowing"],
+      "expectedChunkIds": ["chunk-claim-case-codegraph-narrowing"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-codegraph-failure-boundary-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "codegraph-evaluation",
+      "query": "哪些间接关系、动态分发或重名符号会让图谱结果漏报或变吵？",
+      "expectedClaimIds": ["claim-case-codegraph-failure-boundary"],
+      "expectedChunkIds": ["chunk-claim-case-codegraph-failure-boundary"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-codegraph-evaluation-method-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "codegraph-evaluation",
+      "query": "这次 CodeGraph 评测如何从小场景走到端到端实战验证？",
+      "expectedClaimIds": ["claim-case-codegraph-evaluation-method"],
+      "expectedChunkIds": ["chunk-claim-case-codegraph-evaluation-method"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "case-codegraph-manual-quality-review-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "CASE",
+      "subjectSlug": "codegraph-evaluation",
+      "query": "自动评测显示任务成功后，为什么仍要人工复核答案质量？",
+      "expectedClaimIds": ["claim-case-codegraph-manual-quality-review"],
+      "expectedChunkIds": ["chunk-claim-case-codegraph-manual-quality-review"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "negative-sql-failed-source-retry-01",
+      "split": "HOLDOUT",
+      "category": "UNSUPPORTED_OR_WITHDRAWN",
+      "subjectType": "PROJECT",
+      "subjectSlug": "sql-audit",
+      "query": "某个日志来源失败后，系统会自动重试三次并保证最终成功吗？",
+      "expectedClaimIds": [],
+      "expectedChunkIds": [],
+      "expectedDecision": "AMBIGUOUS"
+    },
+    {
+      "caseId": "negative-multilingual-historical-backfill-01",
+      "split": "HOLDOUT",
+      "category": "SIMILAR_BUT_FALSE",
+      "subjectType": "CASE",
+      "subjectSlug": "multilingual-image-preservation",
+      "query": "修复后系统会自动回填修复前历史活动的所有语言图片吗？",
+      "expectedClaimIds": [],
+      "expectedChunkIds": [],
+      "expectedDecision": "AMBIGUOUS"
+    },
+    {
+      "caseId": "negative-role-reset-arbitrary-batch-delete-01",
+      "split": "HOLDOUT",
+      "category": "SIMILAR_BUT_FALSE",
+      "subjectType": "CASE",
+      "subjectSlug": "test-role-reset",
+      "query": "可以不选环境、不确认就任意批量删除所有角色吗？",
+      "expectedClaimIds": [],
+      "expectedChunkIds": [],
+      "expectedDecision": "AMBIGUOUS"
+    },
+    {
+      "caseId": "negative-codegraph-universal-productivity-01",
+      "split": "HOLDOUT",
+      "category": "SIMILAR_BUT_FALSE",
+      "subjectType": "CASE",
+      "subjectSlug": "codegraph-evaluation",
+      "query": "CodeGraph 是否保证所有项目都能提升一倍开发效率？",
+      "expectedClaimIds": [],
+      "expectedChunkIds": [],
+      "expectedDecision": "AMBIGUOUS"
     }
   ]
 }

@@ -19,8 +19,8 @@ class RetrievalBenchmarkCaseLoaderTest {
         RetrievalBenchmarkSuite suite = new RetrievalBenchmarkCaseLoader(mapper)
                 .load(validSuiteBytes());
 
-        assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v2");
-        assertThat(suite.getContentVersion()).isEqualTo("2026-07-23.1");
+        assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v3-wave1");
+        assertThat(suite.getContentVersion()).isEqualTo("2026-07-24.1");
         assertThat(suite.getCases()).extracting(RetrievalBenchmarkCase::getCaseId)
                 .containsExactly("sql-background-exact-01", "sql-background-paraphrase-01");
         RetrievalBenchmarkCase item = suite.getCases().getFirst();
@@ -88,7 +88,20 @@ class RetrievalBenchmarkCaseLoaderTest {
 
     @Test
     void rejectsContentVersionOutsideDateRevisionFormat() {
-        assertInvalid(validSuiteJson().replace("2026-07-23.1", "content-1"));
+        assertInvalid(validSuiteJson().replace("2026-07-24.1", "content-1"));
+    }
+
+    @Test
+    void keepsLegacyWaveZeroSuiteReadable() {
+        String legacy = validSuiteJson()
+                .replace("retrieval-benchmark-v3-wave1", "retrieval-benchmark-v2")
+                .replace("2026-07-24.1", "2026-07-23.1");
+
+        RetrievalBenchmarkSuite suite = new RetrievalBenchmarkCaseLoader(mapper)
+                .load(legacy.getBytes(StandardCharsets.UTF_8));
+
+        assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v2");
+        assertThat(suite.getContentVersion()).isEqualTo("2026-07-23.1");
     }
 
     private void assertInvalid(String source) {
@@ -104,8 +117,8 @@ class RetrievalBenchmarkCaseLoaderTest {
     private String validSuiteJson() {
         return """
                 {
-                  "suiteVersion": "retrieval-benchmark-v2",
-                  "contentVersion": "2026-07-23.1",
+                  "suiteVersion": "retrieval-benchmark-v3-wave1",
+                  "contentVersion": "2026-07-24.1",
                   "cases": [
                     {
                       "caseId": "sql-background-paraphrase-01",

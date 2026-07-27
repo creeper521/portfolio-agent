@@ -14,7 +14,10 @@ import java.util.regex.Pattern;
 
 public final class RetrievalBenchmarkCaseLoader {
 
-    private static final String SUITE_VERSION = "retrieval-benchmark-v2";
+    private static final Set<String> SUITE_VERSIONS = Set.of(
+            "retrieval-benchmark-v2",
+            "retrieval-benchmark-v3-wave1"
+    );
     private static final Pattern CONTENT_VERSION = Pattern.compile("\\d{4}-\\d{2}-\\d{2}\\.\\d+");
 
     private final ObjectMapper mapper;
@@ -34,7 +37,7 @@ public final class RetrievalBenchmarkCaseLoader {
     }
 
     private RetrievalBenchmarkSuite validateAndSort(RetrievalBenchmarkSuite suite) {
-        require(SUITE_VERSION.equals(suite.getSuiteVersion()), "suiteVersion is invalid");
+        require(SUITE_VERSIONS.contains(suite.getSuiteVersion()), "suiteVersion is invalid");
         require(CONTENT_VERSION.matcher(suite.getContentVersion()).matches(),
                 "contentVersion must match YYYY-MM-DD.N");
         require(!suite.getCases().isEmpty(), "cases must not be empty");

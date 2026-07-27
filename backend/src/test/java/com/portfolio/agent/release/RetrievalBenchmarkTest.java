@@ -57,6 +57,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RetrievalBenchmarkTest {
 
     @Test
+    void fixedRuntimeBenchmarkFixtureRemainsBoundToCurrentPublicBundle() throws Exception {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        Path bundle = projectRoot().resolve(
+                "backend/src/main/resources/public-data/bundle");
+        PortfolioSnapshot portfolio = new PortfolioSnapshotJsonReader(mapper).readBundle(
+                Files.readAllBytes(bundle.resolve("portfolio.json")));
+        RetrievalBenchmarkSuite suite = runtimeBenchmarkCases(mapper);
+
+        assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v2");
+        assertThat(suite.getContentVersion()).isEqualTo(portfolio.getContentVersion());
+        assertThat(suite.getCases()).hasSize(12);
+    }
+
+    @Test
     void negativeCaseRejectsUnexpectedClaimOrChunkSelections() {
         RetrievalBenchmarkCase item = new RetrievalBenchmarkCase(
                 "negative-selection-regression",
@@ -108,7 +122,7 @@ class RetrievalBenchmarkTest {
         RuntimeContentSnapshot runtimeSnapshot = loadRuntimeSnapshot(bundle, mapper);
         RuntimeAnswerContent content = new LocalPortfolioKnowledgeAdapter(() -> runtimeSnapshot)
                 .getContent();
-        RetrievalBenchmarkSuite suite = benchmarkCases(mapper);
+        RetrievalBenchmarkSuite suite = runtimeBenchmarkCases(mapper);
         assertThat(suite.getContentVersion()).isEqualTo(runtimeSnapshot.getContentVersion());
         assertThat(suite.getCases()).hasSize(12);
         assertThat(suite.getCases())
@@ -215,9 +229,9 @@ class RetrievalBenchmarkTest {
                 .load(files);
     }
 
-    private RetrievalBenchmarkSuite benchmarkCases(ObjectMapper mapper) throws Exception {
+    private RetrievalBenchmarkSuite runtimeBenchmarkCases(ObjectMapper mapper) throws Exception {
         try (InputStream input = getClass().getResourceAsStream(
-                "/retrieval-benchmark/cases.json")) {
+                "/retrieval-benchmark/cases-runtime-baseline.json")) {
             assertThat(input).isNotNull();
             return new RetrievalBenchmarkCaseLoader(mapper).load(input.readAllBytes());
         }

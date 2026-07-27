@@ -35,6 +35,60 @@
     {"caseId":"CONTRACT-ALIAS-CODEGRAPH-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-codegraph-overview","severity":"ERROR"},
     {"caseId":"CONTRACT-BOUNDARY-CODEGRAPH-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-codegraph-overview","severity":"ERROR"},
     {"caseId":"CONTENT-LINK-CODEGRAPH-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-codegraph-overview","severity":"ERROR","requiredClaimIds":["claim-case-codegraph-narrowing","claim-case-codegraph-failure-boundary","claim-case-codegraph-combined-workflow"],"requiredEvidenceIds":["evidence-case-codegraph-report-collection"]},
-    {"caseId":"SAFETY-PRIVACY-CODEGRAPH-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-codegraph-overview","severity":"BLOCKER"}
+    {"caseId":"SAFETY-PRIVACY-CODEGRAPH-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-codegraph-overview","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-SQL-ASYNC-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-sql-audit-async-and-recovery","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-SQL-ASYNC-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-sql-audit-async-and-recovery","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-SQL-ASYNC-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-sql-audit-async-and-recovery","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-SQL-ASYNC-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-sql-audit-async-and-recovery","severity":"ERROR","requiredClaimIds":["claim-sql-audit-async-task-lifecycle"],"requiredEvidenceIds":["evidence-sql-audit-async-progress-validation"]},
+    {"caseId":"SAFETY-PRIVACY-SQL-ASYNC-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-sql-audit-async-and-recovery","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-SQL-FALLBACK-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-sql-audit-progress-fallback","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-SQL-FALLBACK-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-sql-audit-progress-fallback","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-SQL-FALLBACK-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-sql-audit-progress-fallback","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-SQL-FALLBACK-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-sql-audit-progress-fallback","severity":"ERROR","requiredClaimIds":["claim-sql-audit-progress-fallback"],"requiredEvidenceIds":["evidence-sql-audit-async-progress-validation"]},
+    {"caseId":"SAFETY-PRIVACY-SQL-FALLBACK-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-sql-audit-progress-fallback","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-SQL-ARCHIVE-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-sql-audit-archive-and-truncation","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-SQL-ARCHIVE-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-sql-audit-archive-and-truncation","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-SQL-ARCHIVE-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-sql-audit-archive-and-truncation","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-SQL-ARCHIVE-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-sql-audit-archive-and-truncation","severity":"ERROR","requiredClaimIds":["claim-sql-audit-result-lifecycle","claim-sql-audit-truncation-disclosure"],"requiredEvidenceIds":["evidence-sql-audit-result-lifecycle-docs"]},
+    {"caseId":"SAFETY-PRIVACY-SQL-ARCHIVE-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-sql-audit-archive-and-truncation","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-MULTILINGUAL-VERIFY-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-multilingual-verification-sequence","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-MULTILINGUAL-VERIFY-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-multilingual-verification-sequence","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-MULTILINGUAL-VERIFY-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-multilingual-verification-sequence","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-MULTILINGUAL-VERIFY-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-multilingual-verification-sequence","severity":"ERROR","requiredClaimIds":["claim-case-multilingual-sequential-verification"],"requiredEvidenceIds":["evidence-case-multilingual-implementation-and-regression"]},
+    {"caseId":"SAFETY-PRIVACY-MULTILINGUAL-VERIFY-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-multilingual-verification-sequence","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-MULTILINGUAL-RECOVERY-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-multilingual-recovery-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-MULTILINGUAL-RECOVERY-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-multilingual-recovery-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-MULTILINGUAL-RECOVERY-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-multilingual-recovery-boundary","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-MULTILINGUAL-RECOVERY-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-multilingual-recovery-boundary","severity":"ERROR","requiredClaimIds":["claim-case-multilingual-replacement-problem","claim-case-multilingual-no-backfill"],"requiredEvidenceIds":["evidence-case-multilingual-implementation-and-regression"]},
+    {"caseId":"SAFETY-PRIVACY-MULTILINGUAL-RECOVERY-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-multilingual-recovery-boundary","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-ROLE-ACCEPTANCE-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-role-reset-acceptance-result","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-ROLE-ACCEPTANCE-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-role-reset-acceptance-result","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-ROLE-ACCEPTANCE-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-role-reset-acceptance-result","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-ROLE-ACCEPTANCE-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-role-reset-acceptance-result","severity":"ERROR","requiredClaimIds":["claim-case-role-reset-cache-interference-problem","claim-case-role-reset-acceptance","claim-case-role-reset-documented-delivery"],"requiredEvidenceIds":["evidence-case-role-reset-guide-and-acceptance"]},
+    {"caseId":"SAFETY-PRIVACY-ROLE-ACCEPTANCE-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-role-reset-acceptance-result","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-ROLE-SAFETY-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-role-reset-safety-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-ROLE-SAFETY-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-role-reset-safety-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-ROLE-SAFETY-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-role-reset-safety-boundary","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-ROLE-SAFETY-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-role-reset-safety-boundary","severity":"ERROR","requiredClaimIds":["claim-case-role-reset-confirmation-safety"],"requiredEvidenceIds":["evidence-case-role-reset-guide-and-acceptance"]},
+    {"caseId":"SAFETY-PRIVACY-ROLE-SAFETY-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-role-reset-safety-boundary","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-CODEGRAPH-METHOD-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-codegraph-method","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-CODEGRAPH-METHOD-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-codegraph-method","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-CODEGRAPH-METHOD-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-codegraph-method","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-CODEGRAPH-METHOD-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-codegraph-method","severity":"ERROR","requiredClaimIds":["claim-case-codegraph-evaluation-method"],"requiredEvidenceIds":["evidence-case-codegraph-report-collection"]},
+    {"caseId":"SAFETY-PRIVACY-CODEGRAPH-METHOD-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-codegraph-method","severity":"BLOCKER"},
+
+    {"caseId":"CONTRACT-SUPPORTED-CODEGRAPH-QUALITY-001","category":"CONTRACT","caseType":"SUPPORTED_QUESTION","questionPresetId":"question-case-codegraph-quality-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-ALIAS-CODEGRAPH-QUALITY-001","category":"CONTRACT","caseType":"ALIAS","questionPresetId":"question-case-codegraph-quality-boundary","severity":"ERROR"},
+    {"caseId":"CONTRACT-BOUNDARY-CODEGRAPH-QUALITY-001","category":"CONTRACT","caseType":"BOUNDARY","questionPresetId":"question-case-codegraph-quality-boundary","severity":"ERROR"},
+    {"caseId":"CONTENT-LINK-CODEGRAPH-QUALITY-001","category":"CONTENT","caseType":"CLAIM_EVIDENCE","questionPresetId":"question-case-codegraph-quality-boundary","severity":"ERROR","requiredClaimIds":["claim-case-codegraph-manual-quality-review","claim-case-codegraph-qualitative-publication"],"requiredEvidenceIds":["evidence-case-codegraph-report-collection"]},
+    {"caseId":"SAFETY-PRIVACY-CODEGRAPH-QUALITY-001","category":"SAFETY","caseType":"SAFETY","questionPresetId":"question-case-codegraph-quality-boundary","severity":"BLOCKER"}
   ]
 }
