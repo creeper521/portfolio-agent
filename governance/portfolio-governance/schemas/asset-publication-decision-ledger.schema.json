@@ -38,13 +38,33 @@
             "pattern": "^(L-(0[1-7])|T-(0[1-9]|1[0-9])|A-(0[1-9]|1[0-9]|2[0-5])|K-(0[1-9]|1[0-7]))$"
           },
           "contentType": {
-            "enum": ["MAINLINE", "FEATURE", "INCIDENT", "EVALUATION", "KNOWLEDGE_OUTPUT"]
+            "enum": [
+              "MAINLINE",
+              "TASK",
+              "INCIDENT",
+              "KNOWLEDGE_ASSET"
+            ]
           },
           "achievementStatus": {
-            "enum": ["DELIVERED", "IMPLEMENTED_TESTED", "VALIDATED_PROTOTYPE", "INVESTIGATED", "OBSERVED_LEARNING", "INCOMPLETE"]
+            "enum": [
+              "DELIVERED",
+              "IMPLEMENTED_TESTED",
+              "VALIDATED_PROTOTYPE",
+              "INVESTIGATED",
+              "DOCUMENTED_OUTPUT",
+              "LEARNING_ONLY",
+              "OBSERVED_LEARNING",
+              "INCOMPLETE"
+            ]
           },
           "contributionType": {
-            "enum": ["PRIMARY", "COLLABORATIVE", "ASSISTED", "OBSERVED_LEARNING"]
+            "enum": [
+              "PRIMARY",
+              "COLLABORATIVE",
+              "ASSISTED",
+              "OBSERVED_LEARNING",
+              "UNRESOLVED"
+            ]
           },
           "publicPriority": {
             "enum": ["P0", "P1", "P2", "EXCLUDE"]

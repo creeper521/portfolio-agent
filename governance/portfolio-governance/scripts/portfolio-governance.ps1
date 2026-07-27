@@ -131,12 +131,15 @@ function Read-DecisionLedger([string]$LedgerPath) {
         'decisionReason', 'projectSlugs', 'caseSlugs', 'evidenceIds',
         'privacyReview', 'routeDecision', 'targetContentVersion', 'targetWave'
     )
-    $contentTypes = @('MAINLINE', 'FEATURE', 'INCIDENT', 'EVALUATION', 'KNOWLEDGE_OUTPUT')
+    $contentTypes = @('MAINLINE', 'TASK', 'INCIDENT', 'KNOWLEDGE_ASSET')
     $achievementStatuses = @(
         'DELIVERED', 'IMPLEMENTED_TESTED', 'VALIDATED_PROTOTYPE', 'INVESTIGATED',
-        'OBSERVED_LEARNING', 'INCOMPLETE'
+        'DOCUMENTED_OUTPUT', 'LEARNING_ONLY', 'OBSERVED_LEARNING', 'INCOMPLETE'
     )
-    $contributionTypes = @('PRIMARY', 'COLLABORATIVE', 'ASSISTED', 'OBSERVED_LEARNING')
+    $contributionTypes = @(
+        'PRIMARY', 'COLLABORATIVE', 'ASSISTED', 'OBSERVED_LEARNING',
+        'UNRESOLVED'
+    )
     $publicPriorities = @('P0', 'P1', 'P2', 'EXCLUDE')
     $evidenceStatuses = @('VERIFIED', 'PARTIALLY_VERIFIED', 'OWNER_CONFIRMED', 'INSUFFICIENT')
     $reviewStates = @('PUBLIC_REVIEW_REQUIRED', 'HOLD', 'EXCLUDE')
@@ -264,8 +267,8 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
                 Write-Failure 'DECISION_LEDGER_FORWARD_REFERENCE_INVALID' 'Decision ledger Evidence reference is missing.'
             }
             if ([string]$evidenceById[[string]$evidenceId].publicStatus -eq 'APPROVED' -and
-                    [string]$asset.evidenceStatus -ne 'VERIFIED') {
-                Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Public Evidence status exceeds source inventory.'
+                    [string]$asset.evidenceStatus -eq 'INSUFFICIENT') {
+                Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Insufficient source Evidence cannot support public Evidence.'
             }
         }
     }

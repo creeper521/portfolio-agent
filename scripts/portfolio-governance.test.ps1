@@ -120,9 +120,9 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
     $assets = @()
     foreach ($prefixAndCount in @(
         @('L', 7, 'MAINLINE'),
-        @('T', 19, 'FEATURE'),
+        @('T', 19, 'TASK'),
         @('A', 25, 'INCIDENT'),
-        @('K', 17, 'KNOWLEDGE_OUTPUT')
+        @('K', 17, 'KNOWLEDGE_ASSET')
     )) {
         for ($index = 1; $index -le [int]$prefixAndCount[1]; $index++) {
             $assets += [pscustomobject][ordered]@{
@@ -153,19 +153,19 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
             evidenceIds = @('sql-audit-delivery-set', 'sql-audit-july-iteration-set')
         }
         'T-01' = @{
-            contentType = 'FEATURE'; achievementStatus = 'DELIVERED'
+            contentType = 'TASK'; achievementStatus = 'DELIVERED'
             projectSlugs = @()
             caseSlugs = @('multilingual-image-preservation')
             evidenceIds = @('evidence-case-multilingual-implementation-and-regression')
         }
         'T-02' = @{
-            contentType = 'FEATURE'; achievementStatus = 'DELIVERED'
+            contentType = 'TASK'; achievementStatus = 'DELIVERED'
             projectSlugs = @()
             caseSlugs = @('test-role-reset')
             evidenceIds = @('evidence-case-role-reset-guide-and-acceptance')
         }
         'K-01' = @{
-            contentType = 'EVALUATION'; achievementStatus = 'VALIDATED_PROTOTYPE'
+            contentType = 'KNOWLEDGE_ASSET'; achievementStatus = 'VALIDATED_PROTOTYPE'
             projectSlugs = @()
             caseSlugs = @('codegraph-evaluation')
             evidenceIds = @('evidence-case-codegraph-report-collection')
@@ -444,6 +444,43 @@ try {
         throw 'Decision ledger must reject unknown asset IDs.'
     }
 
+    $realInventoryLedger = Copy-Ledger 'real-inventory-values'
+    $realInventoryData = Get-Content -LiteralPath $realInventoryLedger -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $realInventoryMutations = @(
+        @{ AssetId = 'T-08'; ContentType = 'TASK'; AchievementStatus = 'VALIDATED_PROTOTYPE';
+            ContributionType = 'PRIMARY' },
+        @{ AssetId = 'K-05'; ContentType = 'KNOWLEDGE_ASSET'; AchievementStatus = 'DOCUMENTED_OUTPUT';
+            ContributionType = 'PRIMARY' },
+        @{ AssetId = 'K-03'; ContentType = 'KNOWLEDGE_ASSET'; AchievementStatus = 'LEARNING_ONLY';
+            ContributionType = 'OBSERVED_LEARNING' },
+        @{ AssetId = 'L-03'; ContentType = 'MAINLINE'; AchievementStatus = 'INVESTIGATED';
+            ContributionType = 'UNRESOLVED' }
+    )
+    foreach ($mutation in $realInventoryMutations) {
+        $asset = @($realInventoryData.assets |
+            Where-Object { $_.assetId -eq $mutation.AssetId })[0]
+        $asset.contentType = $mutation.ContentType
+        $asset.achievementStatus = $mutation.AchievementStatus
+        $asset.contributionType = $mutation.ContributionType
+    }
+    Save-Json $realInventoryData $realInventoryLedger
+    $realInventoryResult = Invoke-LedgerValidation $realInventoryLedger
+    if ($realInventoryResult.ExitCode -ne 0) {
+        throw "Decision ledger must preserve known real inventory values: $($realInventoryResult.Output)"
+    }
+
+    $unknownInventoryValueLedger = Copy-Ledger 'unknown-inventory-value'
+    $unknownInventoryValueData = Get-Content -LiteralPath $unknownInventoryValueLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $unknownInventoryValueData.assets[1].achievementStatus = 'UNREVIEWED_MAGIC'
+    Save-Json $unknownInventoryValueData $unknownInventoryValueLedger
+    $unknownInventoryValueResult = Invoke-LedgerValidation $unknownInventoryValueLedger
+    if ($unknownInventoryValueResult.ExitCode -eq 0 -or
+            -not $unknownInventoryValueResult.Output.Contains('DECISION_LEDGER_SCHEMA_INVALID')) {
+        throw 'Decision ledger must still reject unknown inventory values.'
+    }
+
     $invalidRouteLedger = Copy-Ledger 'invalid-route'
     $invalidRouteData = Get-Content -LiteralPath $invalidRouteLedger -Raw -Encoding UTF8 | ConvertFrom-Json
     $invalidRouteData.assets[0].routeDecision = 'REVIEWED_HOLD'
@@ -488,8 +525,7 @@ try {
 
     foreach ($statusMutation in @(
         @{ Name = 'achievement-upgrade'; Field = 'achievementStatus'; Value = 'IMPLEMENTED_TESTED' },
-        @{ Name = 'contribution-upgrade'; Field = 'contributionType'; Value = 'COLLABORATIVE' },
-        @{ Name = 'evidence-upgrade'; Field = 'evidenceStatus'; Value = 'PARTIALLY_VERIFIED' }
+        @{ Name = 'contribution-upgrade'; Field = 'contributionType'; Value = 'COLLABORATIVE' }
     )) {
         $statusLedger = Copy-Ledger $statusMutation.Name
         $statusData = Get-Content -LiteralPath $statusLedger -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -500,6 +536,54 @@ try {
                 -not $statusResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
             throw "Candidate must not automatically upgrade $($statusMutation.Field)."
         }
+    }
+
+    $partialEvidenceLedger = Copy-Ledger 'partial-evidence-narrow-public-scope'
+    $partialEvidenceData = Get-Content -LiteralPath $partialEvidenceLedger -Raw -Encoding UTF8 |
+        ConvertFrom-Json
+    $partialEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'PARTIALLY_VERIFIED' }
+    Save-Json $partialEvidenceData $partialEvidenceLedger
+    $partialEvidenceResult = Invoke-LedgerValidation $partialEvidenceLedger
+    if ($partialEvidenceResult.ExitCode -ne 0) {
+        throw "A partially verified asset may cite narrow APPROVED public Evidence: $($partialEvidenceResult.Output)"
+    }
+
+    $insufficientEvidenceLedger = Copy-Ledger 'insufficient-evidence-public-reference'
+    $insufficientEvidenceData = Get-Content -LiteralPath $insufficientEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $insufficientEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'L-01' } |
+        ForEach-Object { $_.evidenceStatus = 'INSUFFICIENT' }
+    Save-Json $insufficientEvidenceData $insufficientEvidenceLedger
+    $insufficientEvidenceResult = Invoke-LedgerValidation $insufficientEvidenceLedger
+    if ($insufficientEvidenceResult.ExitCode -eq 0 -or
+            -not $insufficientEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
+        throw 'An insufficient asset must not cite public Evidence.'
+    }
+
+    $documentedEvidenceLedger = Copy-Ledger 'documented-evidence-only'
+    $documentedEvidenceData = Get-Content -LiteralPath $documentedEvidenceLedger `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+    $documentedAsset = @($documentedEvidenceData.assets |
+        Where-Object { $_.assetId -eq 'T-17' })[0]
+    $documentedAsset.contentType = 'TASK'
+    $documentedAsset.achievementStatus = 'DOCUMENTED_OUTPUT'
+    $documentedAsset.contributionType = 'PRIMARY'
+    $documentedAsset.publicPriority = 'P1'
+    $documentedAsset.evidenceStatus = 'VERIFIED'
+    $documentedAsset.originalReviewState = 'PUBLIC_REVIEW_REQUIRED'
+    $documentedAsset.finalRoute = 'EVIDENCE_ONLY'
+    $documentedAsset.decisionReason = 'Documentation enriches the existing project without changing its status.'
+    $documentedAsset.evidenceIds = @('sql-audit-delivery-set')
+    $documentedAsset.routeDecision = 'PUBLISH_CANDIDATE'
+    $documentedAsset.targetContentVersion = $currentBundleVersion
+    $documentedAsset.targetWave = 1
+    Save-Json $documentedEvidenceData $documentedEvidenceLedger
+    $documentedEvidenceResult = Invoke-LedgerValidation $documentedEvidenceLedger
+    if ($documentedEvidenceResult.ExitCode -ne 0) {
+        throw "Evidence-only documentation must not inherit or upgrade Project status: $($documentedEvidenceResult.Output)"
     }
 
     $openCase = Invoke-Governance @('-Command', 'case', '-Workspace', $workspace,
