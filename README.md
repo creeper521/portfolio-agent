@@ -229,7 +229,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 }
 ```
 
-响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端目前尚未接入 v2。
+响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端已接入 v2；Case 独立页面流程和生产验收仍未完成。
 
 ## 目录结构
 
