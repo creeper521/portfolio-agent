@@ -5,13 +5,6 @@ param(
     [string]$ReleaseRoot = '',
     [string]$RetrievalProfile = '',
     [string]$ModelDirectory = '',
-    [scriptblock]$LiveProviderResponseCleanup = {
-        param([string]$Path)
-        if (-not [string]::IsNullOrEmpty($Path) -and
-                (Test-Path -LiteralPath $Path -PathType Leaf)) {
-            Remove-Item -LiteralPath $Path -Force
-        }
-    },
     [switch]$RequireLiveProvider,
     [ValidateRange(1, 65535)]
     [int]$Port = 4173
@@ -238,7 +231,10 @@ try {
 finally {
     try {
         try {
-            & $LiveProviderResponseCleanup $liveProviderResponsePath
+            if ($null -ne $liveProviderResponsePath -and
+                    (Test-Path -LiteralPath $liveProviderResponsePath -PathType Leaf)) {
+                Remove-Item -LiteralPath $liveProviderResponsePath -Force
+            }
         }
         finally {
             Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER

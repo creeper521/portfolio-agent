@@ -10,7 +10,8 @@ $spacedJar = Join-Path $fixtureRoot 'packaged app\portfolio agent.jar'
 $fakeNpm = Join-Path $fixtureRoot 'fake npm\npm with spaces.cmd'
 $fakeJava = Join-Path $fixtureRoot 'fake java\java with spaces.cmd'
 $javaArgumentCapture = Join-Path $fixtureRoot 'java-arguments.txt'
-$cleanupHarness = Join-Path $fixtureRoot 'cleanup-failure-harness.ps1'
+$cleanupProbe = Join-Path $fixtureRoot 'cleanup-probe.json'
+$cleanupRunner = Join-Path $fixtureRoot 'run-jar-e2e-cleanup-failure.ps1'
 $port = 43173
 
 function Get-EnvironmentSnapshot([string]$Name) {
@@ -60,12 +61,14 @@ try {
         'JarPath',
         'NpmExecutable',
         'Port',
-        'RequireLiveProvider',
-        'LiveProviderResponseCleanup'
+        'RequireLiveProvider'
     )) {
         if (-not $runnerCommand.Parameters.ContainsKey($parameterName)) {
             throw "Runner is missing testable parameter seam '$parameterName'."
         }
+    }
+    if ($runnerCommand.Parameters.ContainsKey('LiveProviderResponseCleanup')) {
+        throw 'Production runner must not expose a replaceable cleanup scriptblock.'
     }
     $releaseCommand = Get-Command $releaseVerifier
     if (-not $releaseCommand.Parameters.ContainsKey('RequireLiveProvider')) {
@@ -189,20 +192,38 @@ try {
         throw "Runner left port $port occupied."
     }
 
-    $escapedRunner = $runner.Replace("'", "''")
-    $escapedSpacedJar = $spacedJar.Replace("'", "''")
-    $escapedFakeNpm = $fakeNpm.Replace("'", "''")
-    $cleanupHarnessSource = @"
-`$cleanup = {
-    param([string]`$Path)
-    throw 'simulated live response cleanup failure'
-}
-& '$escapedRunner' -JarPath '$escapedSpacedJar' -NpmExecutable '$escapedFakeNpm' ``
-    -Port $($port + 2) -LiveProviderResponseCleanup `$cleanup
-"@
     [System.IO.File]::WriteAllText(
-        $cleanupHarness,
-        $cleanupHarnessSource,
+        $cleanupProbe,
+        '{}',
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $cleanupRunnerSource = Get-Content -LiteralPath $runner -Raw
+    $cleanupPathInitialization = '$liveProviderResponsePath = $null'
+    $cleanupCommand = 'Remove-Item -LiteralPath $liveProviderResponsePath -Force'
+    if (([regex]::Matches(
+        $cleanupRunnerSource,
+        [regex]::Escape($cleanupPathInitialization)
+    )).Count -ne 1) {
+        throw 'Cleanup test copy requires exactly one response-path initialization.'
+    }
+    if (([regex]::Matches(
+        $cleanupRunnerSource,
+        [regex]::Escape($cleanupCommand)
+    )).Count -ne 1) {
+        throw 'Cleanup test copy requires exactly one hard-coded cleanup command.'
+    }
+    $escapedCleanupProbe = $cleanupProbe.Replace("'", "''")
+    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
+        $cleanupPathInitialization,
+        "`$liveProviderResponsePath = '$escapedCleanupProbe'"
+    )
+    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
+        $cleanupCommand,
+        "throw 'simulated live response cleanup failure'"
+    )
+    [System.IO.File]::WriteAllText(
+        $cleanupRunner,
+        $cleanupRunnerSource,
         [System.Text.UTF8Encoding]::new($false)
     )
 
@@ -210,7 +231,8 @@ try {
     $ErrorActionPreference = 'Continue'
     try {
         $cleanupOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File $cleanupHarness 2>&1 | Out-String)
+            -File $cleanupRunner -JarPath $spacedJar -NpmExecutable $fakeNpm `
+            -Port ($port + 2) 2>&1 | Out-String)
         $cleanupExitCode = $LASTEXITCODE
     }
     finally {
