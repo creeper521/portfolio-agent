@@ -1,6 +1,7 @@
 param(
     [switch]$SkipInstall,
     [switch]$SkipDockerCheck,
+    [switch]$RequireLiveProvider,
     [string]$ModelDirectory = '',
     [string]$BundleDirectory = '',
     [string]$RetrievalCasesPath = ''
@@ -58,6 +59,9 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\privacy-check.test.ps1')
     Assert-ExitCode 'Privacy checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\assert-live-provider-response.test.ps1')
+    Assert-ExitCode 'Live Provider response checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root 'backend\src\main')
     Assert-ExitCode 'Pre-package production source and configuration privacy scan'
@@ -189,8 +193,17 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker -Path $root
     Assert-ExitCode 'Final repository risk-artifact privacy scan'
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File (Join-Path $root 'scripts\run-jar-e2e.ps1')
+    $jarE2eArguments = @(
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        (Join-Path $root 'scripts\run-jar-e2e.ps1')
+    )
+    if ($RequireLiveProvider) {
+        $jarE2eArguments += '-RequireLiveProvider'
+    }
+    & powershell.exe @jarE2eArguments
     Assert-ExitCode 'Packaged JAR Playwright integration tests'
 
     if (-not $SkipDockerCheck) {

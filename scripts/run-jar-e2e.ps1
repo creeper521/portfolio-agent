@@ -5,6 +5,7 @@ param(
     [string]$ReleaseRoot = '',
     [string]$RetrievalProfile = '',
     [string]$ModelDirectory = '',
+    [switch]$RequireLiveProvider,
     [ValidateRange(1, 65535)]
     [int]$Port = 4173
 )
@@ -91,6 +92,7 @@ $process = Start-Process -FilePath $JavaExecutable `
 Write-Output "Started packaged application process $($process.Id)."
 
 $playwrightExitCode = 0
+$liveProviderResponsePath = $null
 try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -156,6 +158,59 @@ try {
     }
 
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
+
+    $caseResponse = Invoke-RestMethod -UseBasicParsing `
+        "$baseUrl/api/v1/cases/multilingual-image-preservation"
+    if ([string]$caseResponse.slug -ne 'multilingual-image-preservation') {
+        throw 'Packaged Case API returned the wrong subject.'
+    }
+    if (@($caseResponse.evidence).Count -eq 0) {
+        throw 'Packaged Case API returned no public evidence.'
+    }
+    Write-Output 'Packaged Case API smoke passed.'
+
+    $caseAgentRequest = @{
+        turnId = 'packaged-case-agent-smoke'
+        question = 'How was this case verified?'
+        messages = @()
+        context = @{
+            projectSlug = $null
+            caseSlug = 'multilingual-image-preservation'
+            audienceRole = 'INTERVIEWER'
+            source = 'CASE'
+        }
+    } | ConvertTo-Json -Depth 5 -Compress
+    $caseAgentResponse = Invoke-RestMethod -UseBasicParsing `
+        -Method Post `
+        -Uri "$baseUrl/api/v2/answers" `
+        -ContentType 'application/json; charset=utf-8' `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes($caseAgentRequest))
+    if ([string]$caseAgentResponse.contentVersion -ne [string]$publicContent.contentVersion) {
+        throw 'Packaged Case Agent returned the wrong contentVersion.'
+    }
+    if (@($caseAgentResponse.blocks).Count -eq 0) {
+        throw 'Packaged Case Agent returned no answer blocks.'
+    }
+    Write-Output 'Packaged Case Agent smoke passed.'
+
+    if ($RequireLiveProvider) {
+        $liveProviderResponsePath = Join-Path `
+            ([System.IO.Path]::GetTempPath()) `
+            ('portfolio-live-provider-response-' + [guid]::NewGuid() + '.json')
+        [System.IO.File]::WriteAllText(
+            $liveProviderResponsePath,
+            ($caseAgentResponse | ConvertTo-Json -Depth 12 -Compress),
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\assert-live-provider-response.ps1') `
+            -ResponsePath $liveProviderResponsePath `
+            -ExpectedContentVersion ([string]$publicContent.contentVersion)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Live Provider response verification failed with exit code $LASTEXITCODE."
+        }
+    }
+
     $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
     $env:PLAYWRIGHT_REAL_API = '1'
     $env:PLAYWRIGHT_BASE_URL = $baseUrl
@@ -168,6 +223,10 @@ try {
 }
 finally {
     try {
+        if ($null -ne $liveProviderResponsePath -and
+                (Test-Path -LiteralPath $liveProviderResponsePath -PathType Leaf)) {
+            Remove-Item -LiteralPath $liveProviderResponsePath -Force
+        }
         Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL

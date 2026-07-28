@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $runner = Join-Path $PSScriptRoot 'run-jar-e2e.ps1'
+$releaseVerifier = Join-Path $PSScriptRoot 'verify-release.ps1'
 $root = Split-Path -Parent $PSScriptRoot
 $sourceJar = Join-Path $root 'backend\target\portfolio-agent.jar'
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
@@ -39,10 +40,18 @@ try {
     }
 
     $runnerCommand = Get-Command $runner
-    foreach ($parameterName in @('JarPath', 'NpmExecutable', 'Port')) {
+    foreach ($parameterName in @('JarPath', 'NpmExecutable', 'Port', 'RequireLiveProvider')) {
         if (-not $runnerCommand.Parameters.ContainsKey($parameterName)) {
             throw "Runner is missing testable parameter seam '$parameterName'."
         }
+    }
+    $releaseCommand = Get-Command $releaseVerifier
+    if (-not $releaseCommand.Parameters.ContainsKey('RequireLiveProvider')) {
+        throw "Release verifier is missing parameter seam 'RequireLiveProvider'."
+    }
+    $releaseSource = Get-Content -LiteralPath $releaseVerifier -Raw
+    if ($releaseSource -notmatch 'assert-live-provider-response\.test\.ps1') {
+        throw 'Release verifier does not run the live Provider assertion tests.'
     }
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $spacedJar) -Force | Out-Null
@@ -64,6 +73,13 @@ try {
     }
     if ($output -notmatch 'owns port 43173') {
         throw "Expected spaced JAR path to start and own the test port. Output: $output"
+    }
+
+    if ($output -notmatch 'Packaged Case API smoke passed\.') {
+        throw "Expected packaged Case API smoke evidence. Output: $output"
+    }
+    if ($output -notmatch 'Packaged Case Agent smoke passed\.') {
+        throw "Expected packaged Case Agent smoke evidence. Output: $output"
     }
     if ($output -notmatch 'Playwright environment restored\.') {
         throw "Expected runner to self-verify environment restoration. Output: $output"
