@@ -8,23 +8,29 @@ $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio runner with spaces ' + [guid]::NewGuid())
 $spacedJar = Join-Path $fixtureRoot 'packaged app\portfolio agent.jar'
 $fakeNpm = Join-Path $fixtureRoot 'fake npm\npm with spaces.cmd'
+$fakeJava = Join-Path $fixtureRoot 'fake java\java with spaces.cmd'
+$javaArgumentCapture = Join-Path $fixtureRoot 'java-arguments.txt'
+$cleanupHarness = Join-Path $fixtureRoot 'cleanup-failure-harness.ps1'
 $port = 43173
 
 function Get-EnvironmentSnapshot([string]$Name) {
-    $item = Get-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
+    $value = [System.Environment]::GetEnvironmentVariable(
+        $Name,
+        [System.EnvironmentVariableTarget]::Process
+    )
     return @{
-        Exists = $null -ne $item
-        Value = if ($null -ne $item) { $item.Value } else { $null }
+        Exists = $null -ne $value
+        Value = $value
     }
 }
 
 function Restore-EnvironmentVariable([string]$Name, [hashtable]$Snapshot) {
-    if ($Snapshot.Exists) {
-        Set-Item -LiteralPath "Env:$Name" -Value $Snapshot.Value
-    }
-    else {
-        Remove-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
-    }
+    $value = if ($Snapshot.Exists) { [string]$Snapshot.Value } else { $null }
+    [System.Environment]::SetEnvironmentVariable(
+        $Name,
+        $value,
+        [System.EnvironmentVariableTarget]::Process
+    )
 }
 
 $environment = @{
@@ -50,7 +56,13 @@ try {
     }
 
     $runnerCommand = Get-Command $runner
-    foreach ($parameterName in @('JarPath', 'NpmExecutable', 'Port', 'RequireLiveProvider')) {
+    foreach ($parameterName in @(
+        'JarPath',
+        'NpmExecutable',
+        'Port',
+        'RequireLiveProvider',
+        'LiveProviderResponseCleanup'
+    )) {
         if (-not $runnerCommand.Parameters.ContainsKey($parameterName)) {
             throw "Runner is missing testable parameter seam '$parameterName'."
         }
@@ -66,8 +78,69 @@ try {
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $spacedJar) -Force | Out-Null
     New-Item -ItemType Directory -Path (Split-Path -Parent $fakeNpm) -Force | Out-Null
+    New-Item -ItemType Directory -Path (Split-Path -Parent $fakeJava) -Force | Out-Null
     Copy-Item -LiteralPath $sourceJar -Destination $spacedJar
     [System.IO.File]::WriteAllText($fakeNpm, "@exit /b 23`r`n", [System.Text.Encoding]::ASCII)
+    $escapedJavaArgumentCapture = $javaArgumentCapture.Replace('%', '%%')
+    [System.IO.File]::WriteAllText(
+        $fakeJava,
+        "@echo %* > `"$escapedJavaArgumentCapture`"`r`n@exit /b 31`r`n",
+        [System.Text.Encoding]::ASCII
+    )
+
+    $previousArgumentCaptureErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $normalCaptureOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $runner -JarPath $spacedJar -JavaExecutable $fakeJava `
+            -NpmExecutable $fakeNpm -Port ($port + 10) 2>&1 | Out-String)
+        $normalCaptureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousArgumentCaptureErrorActionPreference
+    }
+    if ($normalCaptureExitCode -eq 0) {
+        throw "Expected capture-only Java wrapper to stop before readiness. Output: $normalCaptureOutput"
+    }
+    $normalJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
+    foreach ($disabledArgument in @(
+        '--portfolio.model-expression.enabled=false',
+        '--portfolio.conversational-agent.enabled=false'
+    )) {
+        $matchCount = ([regex]::Matches(
+            $normalJavaArguments,
+            '(?<!\S)' + [regex]::Escape($disabledArgument) + '(?!\S)'
+        )).Count
+        if ($matchCount -ne 1) {
+            throw "Expected normal mode to pass '$disabledArgument' exactly once."
+        }
+    }
+
+    Remove-Item -LiteralPath $javaArgumentCapture -Force
+    $previousLiveCaptureErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $liveCaptureOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $runner -JarPath $spacedJar -JavaExecutable $fakeJava `
+            -NpmExecutable $fakeNpm -Port ($port + 11) -RequireLiveProvider `
+            2>&1 | Out-String)
+        $liveCaptureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousLiveCaptureErrorActionPreference
+    }
+    if ($liveCaptureExitCode -eq 0) {
+        throw "Expected capture-only Java wrapper to stop before readiness. Output: $liveCaptureOutput"
+    }
+    $liveJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
+    foreach ($disabledArgument in @(
+        '--portfolio.model-expression.enabled=false',
+        '--portfolio.conversational-agent.enabled=false'
+    )) {
+        if ($liveJavaArguments -match [regex]::Escape($disabledArgument)) {
+            throw "Live Provider mode unexpectedly passed '$disabledArgument'."
+        }
+    }
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'
     $env:PLAYWRIGHT_REAL_API = 'original-real'
@@ -116,26 +189,20 @@ try {
         throw "Runner left port $port occupied."
     }
 
-    $cleanupProbe = Join-Path $fixtureRoot 'cleanup-probe.json'
-    $cleanupRunner = Join-Path $fixtureRoot 'run-jar-e2e-cleanup-failure.ps1'
+    $escapedRunner = $runner.Replace("'", "''")
+    $escapedSpacedJar = $spacedJar.Replace("'", "''")
+    $escapedFakeNpm = $fakeNpm.Replace("'", "''")
+    $cleanupHarnessSource = @"
+`$cleanup = {
+    param([string]`$Path)
+    throw 'simulated live response cleanup failure'
+}
+& '$escapedRunner' -JarPath '$escapedSpacedJar' -NpmExecutable '$escapedFakeNpm' ``
+    -Port $($port + 2) -LiveProviderResponseCleanup `$cleanup
+"@
     [System.IO.File]::WriteAllText(
-        $cleanupProbe,
-        '{}',
-        [System.Text.UTF8Encoding]::new($false)
-    )
-    $cleanupRunnerSource = Get-Content -LiteralPath $runner -Raw
-    $escapedCleanupProbe = $cleanupProbe.Replace("'", "''")
-    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
-        '$liveProviderResponsePath = $null',
-        "`$liveProviderResponsePath = '$escapedCleanupProbe'"
-    )
-    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
-        'Remove-Item -LiteralPath $liveProviderResponsePath -Force',
-        "throw 'simulated live response cleanup failure'"
-    )
-    [System.IO.File]::WriteAllText(
-        $cleanupRunner,
-        $cleanupRunnerSource,
+        $cleanupHarness,
+        $cleanupHarnessSource,
         [System.Text.UTF8Encoding]::new($false)
     )
 
@@ -143,8 +210,7 @@ try {
     $ErrorActionPreference = 'Continue'
     try {
         $cleanupOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File $cleanupRunner -JarPath $spacedJar -NpmExecutable $fakeNpm `
-            -Port ($port + 2) 2>&1 | Out-String)
+            -File $cleanupHarness 2>&1 | Out-String)
         $cleanupExitCode = $LASTEXITCODE
     }
     finally {
@@ -152,6 +218,9 @@ try {
     }
     if ($cleanupExitCode -eq 0) {
         throw "Expected injected cleanup failure to remain nonzero. Output: $cleanupOutput"
+    }
+    if ($cleanupOutput -notmatch 'simulated live response cleanup failure') {
+        throw "Expected the injected cleanup failure to execute. Output: $cleanupOutput"
     }
     if ($cleanupOutput -notmatch 'Playwright environment restored\.') {
         throw "Cleanup failure skipped Playwright environment restoration. Output: $cleanupOutput"
