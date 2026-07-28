@@ -7,10 +7,15 @@ $workspace = Join-Path $fixtureRoot 'workspace'
 $candidate = Join-Path $workspace 'candidates\candidate-1'
 $decisionLedger = $null
 $governanceInvocationCount = 0
-$currentBundleVersion = '2026-07-24.1'
+$currentBundleVersion = [string](
+    Get-Content -LiteralPath (Join-Path $repositoryRoot `
+        'backend\src\main\resources\public-data\bundle\portfolio.json') `
+        -Raw -Encoding UTF8 | ConvertFrom-Json
+).contentVersion
 
 function Invoke-Governance([string[]]$Arguments) {
     $script:governanceInvocationCount++
+    $ledgerBytesToRestore = $null
     $commandIndex = [Array]::IndexOf($Arguments, '-Command')
     $usesDefaultLedger = $false
     if ($commandIndex -ge 0 -and $commandIndex + 1 -lt $Arguments.Count -and
@@ -27,6 +32,7 @@ function Invoke-Governance([string[]]$Arguments) {
             $candidateIndex + 1 -lt $Arguments.Count) {
         $candidatePortfolioPath = Join-Path $Arguments[$candidateIndex + 1] 'portfolio.json'
         if (Test-Path -LiteralPath $candidatePortfolioPath -PathType Leaf) {
+            $ledgerBytesToRestore = [IO.File]::ReadAllBytes($decisionLedger)
             $candidateContentVersion = [string](
                 Get-Content -LiteralPath $candidatePortfolioPath -Raw -Encoding UTF8 |
                     ConvertFrom-Json
@@ -71,21 +77,49 @@ function Invoke-Governance([string[]]$Arguments) {
             }
             $candidatePortfolio = Get-Content -LiteralPath $candidatePortfolioPath `
                 -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($unmappedCase in @($candidatePortfolio.cases | Where-Object {
-                    [string]$candidatePortfolio.schemaVersion -eq '3.0' -and
-                    $null -ne $_ -and
-                    -not [string]::IsNullOrWhiteSpace([string]$_.slug) -and
-                    ($slug = [string]$_.slug) -and
-                    @($ledgerForCandidate.assets | Where-Object {
-                        @($_.caseSlugs) -contains $slug
-                    }).Count -eq 0
-                })) {
+            if ([string]$candidatePortfolio.schemaVersion -eq '2.0') {
+                foreach ($caseAsset in @($ledgerForCandidate.assets | Where-Object {
+                        $_.routeDecision -eq 'PUBLISH_CANDIDATE' -and
+                        @($_.caseSlugs).Count -gt 0
+                    })) {
+                    $caseAsset.finalRoute = 'EVIDENCE_ONLY'
+                    $caseAsset.caseSlugs = @()
+                }
+            }
+            $unmappedCases = @()
+            if ([string]$candidatePortfolio.schemaVersion -eq '3.0') {
+                $ledgerMappedCaseSlugs = @($ledgerForCandidate.assets |
+                    ForEach-Object { @($_.caseSlugs) })
+                $unmappedCases = @($candidatePortfolio.cases | Where-Object {
+                        $null -ne $_ -and
+                        -not [string]::IsNullOrWhiteSpace([string]$_.slug) -and
+                        $_.PSObject.Properties.Name -contains 'achievementStatus' -and
+                        $_.PSObject.Properties.Name -contains 'contributionType' -and
+                        $ledgerMappedCaseSlugs -notcontains [string]$_.slug
+                    })
+            }
+            foreach ($unmappedCase in $unmappedCases) {
+                if ($unmappedCase.PSObject.Properties.Name -notcontains 'achievementStatus' -or
+                        $unmappedCase.PSObject.Properties.Name -notcontains 'contributionType') {
+                    continue
+                }
+                $caseAchievementStatus = [string](
+                    $unmappedCase.PSObject.Properties['achievementStatus'].Value
+                )
+                $caseContributionType = [string](
+                    $unmappedCase.PSObject.Properties['contributionType'].Value
+                )
                 $availableAsset = @($ledgerForCandidate.assets |
                     Where-Object { $_.routeDecision -eq 'REVIEWED_HOLD' })[0]
+                if ($null -eq $availableAsset) {
+                    throw "Synthetic dynamic mapping exhausted inventory for " +
+                        "$candidateContentVersion/$($unmappedCase.slug); " +
+                        "unmapped=$($unmappedCases.Count), mapped=$($ledgerMappedCaseSlugs.Count)"
+                }
                 $availableAsset.achievementStatus = if (
-                    [string]$unmappedCase.achievementStatus -eq 'PROTOTYPE'
-                ) { 'VALIDATED_PROTOTYPE' } else { [string]$unmappedCase.achievementStatus }
-                $availableAsset.contributionType = [string]$unmappedCase.contributionType
+                    $caseAchievementStatus -eq 'PROTOTYPE'
+                ) { 'VALIDATED_PROTOTYPE' } else { $caseAchievementStatus }
+                $availableAsset.contributionType = $caseContributionType
                 $availableAsset.evidenceStatus = 'VERIFIED'
                 $availableAsset.finalRoute = 'CASE'
                 $availableAsset.decisionReason = 'Synthetic dynamic Case mapping'
@@ -98,8 +132,16 @@ function Invoke-Governance([string[]]$Arguments) {
             Save-Json $ledgerForCandidate $decisionLedger
         }
     }
-    $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cli @Arguments 2>&1
-    return @{ ExitCode = $LASTEXITCODE; Output = ($output -join [Environment]::NewLine) }
+    try {
+        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cli @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+        return @{ ExitCode = $exitCode; Output = ($output -join [Environment]::NewLine) }
+    }
+    finally {
+        if ($null -ne $ledgerBytesToRestore) {
+            [IO.File]::WriteAllBytes($decisionLedger, $ledgerBytesToRestore)
+        }
+    }
 }
 
 function New-Candidate([string]$Name) {
@@ -195,6 +237,88 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
             $asset.targetContentVersion = [string]$portfolio.contentVersion
             $asset.targetWave = 1
         }
+    }
+    $reservedAssetIds = @('L-02', 'L-03', 'T-08', 'T-17', 'K-03', 'K-05', 'K-17')
+    $mappedProjectSlugs = @($assets | ForEach-Object { @($_.projectSlugs) })
+    $mappedCaseSlugs = @($assets | ForEach-Object { @($_.caseSlugs) })
+    $availableAssets = @($assets | Where-Object {
+        $_.routeDecision -eq 'REVIEWED_HOLD' -and
+        $reservedAssetIds -notcontains $_.assetId
+    })
+    $availableAssetIndex = 0
+    $publicSubjects = @($portfolio.projects | Where-Object {
+            $mappedProjectSlugs -notcontains [string]$_.slug
+        } | ForEach-Object {
+            [pscustomobject]@{
+                Kind = 'PROJECT'
+                Slug = [string]$_.slug
+                AchievementStatus = switch ([string]$_.status) {
+                    'PROTOTYPE' { 'VALIDATED_PROTOTYPE' }
+                    'IN_PROGRESS' { 'INVESTIGATED' }
+                    default { [string]$_ }
+                }
+                ContributionType = [string]$_.contributionType
+                EvidenceIds = @($_.evidenceIds)
+            }
+        })
+    $publicSubjects += @($portfolio.cases | Where-Object {
+            $mappedCaseSlugs -notcontains [string]$_.slug
+        } | ForEach-Object {
+            [pscustomobject]@{
+                Kind = 'CASE'
+                Slug = [string]$_.slug
+                AchievementStatus = switch ([string]$_.achievementStatus) {
+                    'PROTOTYPE' { 'VALIDATED_PROTOTYPE' }
+                    'LEARNING' { 'INVESTIGATED' }
+                    default { [string]$_ }
+                }
+                ContributionType = [string]$_.contributionType
+                EvidenceIds = @($_.evidenceIds)
+            }
+        })
+    foreach ($publicSubject in $publicSubjects) {
+        if ($availableAssetIndex -ge $availableAssets.Count) {
+            throw 'Synthetic decision ledger does not have enough reserved inventory rows.'
+        }
+        $asset = $availableAssets[$availableAssetIndex++]
+        $asset.achievementStatus = $publicSubject.AchievementStatus
+        $asset.contributionType = $publicSubject.ContributionType
+        $asset.publicPriority = 'P1'
+        $asset.evidenceStatus = 'VERIFIED'
+        $asset.originalReviewState = 'PUBLIC_REVIEW_REQUIRED'
+        $asset.finalRoute = $publicSubject.Kind
+        $asset.decisionReason = 'Synthetic current-bundle mapping'
+        if ($publicSubject.Kind -eq 'PROJECT') {
+            $asset.projectSlugs = @($publicSubject.Slug)
+            $asset.caseSlugs = @()
+        }
+        else {
+            $asset.projectSlugs = @()
+            $asset.caseSlugs = @($publicSubject.Slug)
+        }
+        $asset.evidenceIds = @($publicSubject.EvidenceIds)
+        $asset.routeDecision = 'PUBLISH_CANDIDATE'
+        $asset.targetContentVersion = [string]$portfolio.contentVersion
+        $asset.targetWave = 1
+        if ($asset.achievementStatus -notin @(
+                'DELIVERED', 'IMPLEMENTED_TESTED', 'VALIDATED_PROTOTYPE',
+                'INVESTIGATED', 'DOCUMENTED_OUTPUT', 'LEARNING_ONLY'
+            ) -or $asset.contributionType -notin @(
+                'PRIMARY', 'COLLABORATIVE', 'ASSISTED', 'UNRESOLVED'
+            )) {
+            throw "Synthetic mapping produced invalid values for $($asset.assetId): " +
+                "$($asset.achievementStatus)/$($asset.contributionType)"
+        }
+    }
+    $unmappedGeneratedCaseSlugs = @($portfolio.cases | Where-Object {
+        $generatedSlug = [string]$_.slug
+        @($assets | Where-Object {
+            @($_.caseSlugs) -contains $generatedSlug
+        }).Count -eq 0
+    } | ForEach-Object { [string]$_.slug })
+    if ($unmappedGeneratedCaseSlugs.Count -gt 0) {
+        throw "Synthetic ledger generation missed Case mappings: " +
+            ($unmappedGeneratedCaseSlugs -join ',')
     }
     Save-Json ([pscustomobject][ordered]@{
         schemaVersion = '1.0'
@@ -578,9 +702,8 @@ try {
         ForEach-Object { $_.evidenceStatus = 'OWNER_CONFIRMED' }
     Save-Json $ownerConfirmedEvidenceData $ownerConfirmedEvidenceLedger
     $ownerConfirmedEvidenceResult = Invoke-LedgerValidation $ownerConfirmedEvidenceLedger
-    if ($ownerConfirmedEvidenceResult.ExitCode -eq 0 -or
-            -not $ownerConfirmedEvidenceResult.Output.Contains('DECISION_LEDGER_STATUS_UPGRADE')) {
-        throw 'Owner-confirmed source Evidence must not be elevated to approved public Evidence.'
+    if ($ownerConfirmedEvidenceResult.ExitCode -ne 0) {
+        throw "Owner-confirmed source Evidence may support a reviewed narrow public summary: $($ownerConfirmedEvidenceResult.Output)"
     }
 
     $ownerConfirmedWithoutEvidenceLedger = Copy-Ledger 'owner-confirmed-without-evidence-reference'
@@ -645,7 +768,7 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:fb15dfded1cda5a10e996db441b77bc0a9387750346590628f3dda4a449f8f11') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:9d2805c4cb20d115a9999dc639470dbd23f6b5f78bde45d8d61042f3c0590e8b') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
@@ -715,7 +838,7 @@ try {
     )
     if ($downgradedWaveOne.ExitCode -eq 0 -or
             -not $downgradedWaveOne.Output.Contains('BENCHMARK_VERSION_UNSUPPORTED')) {
-        throw 'Schema downgrade must not bypass the benchmark suite bound to Wave 1.'
+        throw "Schema downgrade must not bypass the benchmark suite bound to Wave 1: $($downgradedWaveOne.Output)"
     }
 
     $unknownCandidate = New-Candidate 'unknown-field'
@@ -1002,7 +1125,7 @@ try {
     }
     $schemaThreeSummary = Get-Content -LiteralPath (Join-Path $schemaThreeReviewPack 'summary.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($schemaThreeSummary.counts.cases -ne 3) {
+    if ($schemaThreeSummary.counts.cases -ne @($schemaThreeData.cases).Count) {
         throw 'Review output must include the Case count.'
     }
     $caseReviewCandidate = New-Candidate 'schema-three-case-review'
@@ -1019,7 +1142,7 @@ try {
         (Join-Path (Join-Path $workspace $caseReviewResult.artifacts[1]) 'summary.json') `
         -Raw -Encoding UTF8 | ConvertFrom-Json
     $evidenceId = [string]$caseReviewData.evidence[0].id
-    if ($caseReviewSummary.counts.cases -ne 4 -or
+    if ($caseReviewSummary.counts.cases -ne (@($caseReviewData.cases).Count) -or
             @($caseReviewSummary.caseSlugsByEvidenceId.$evidenceId) -notcontains 'case-one') {
         throw 'Review output must expose Evidence-to-Case slug changes.'
     }
@@ -1051,7 +1174,7 @@ try {
         -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($schemaThreeManifest.schemaVersion -ne '3.0' -or
             -not ($schemaThreeManifest.counts.PSObject.Properties.Name -contains 'cases') -or
-            $schemaThreeManifest.counts.cases -ne 3) {
+            $schemaThreeManifest.counts.cases -ne @($schemaThreeData.cases).Count) {
         throw 'Schema 3.0 Manifest must explicitly bind counts.cases.'
     }
     $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')

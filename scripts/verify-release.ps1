@@ -2,7 +2,8 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipDockerCheck,
     [string]$ModelDirectory = '',
-    [string]$BundleDirectory = ''
+    [string]$BundleDirectory = '',
+    [string]$RetrievalCasesPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,11 +117,39 @@ try {
         if ([string]::IsNullOrWhiteSpace($BundleDirectory)) {
             throw 'Real-model release verification requires -BundleDirectory.'
         }
+        $benchmarkCases = $RetrievalCasesPath
+        if ([string]::IsNullOrWhiteSpace($benchmarkCases)) {
+            $bundlePortfolio = Get-Content -LiteralPath `
+                (Join-Path $BundleDirectory 'portfolio.json') -Raw -Encoding UTF8 |
+                ConvertFrom-Json
+            $matchingSuites = @(Get-ChildItem -LiteralPath `
+                    (Join-Path $root 'backend\src\test\resources\retrieval-benchmark') `
+                    -File -Filter 'cases*.json' | Where-Object {
+                    if ($_.Name -ne 'cases.json' -and
+                            $_.Name -notlike 'cases-wave*.json') {
+                        return $false
+                    }
+                    try {
+                        [string](
+                            Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 |
+                                ConvertFrom-Json
+                        ).contentVersion -eq [string]$bundlePortfolio.contentVersion
+                    }
+                    catch {
+                        $false
+                    }
+                })
+            if ($matchingSuites.Count -ne 1) {
+                throw 'Real-model release verification requires exactly one matching retrieval benchmark suite.'
+            }
+            $benchmarkCases = $matchingSuites[0].FullName
+        }
         $benchmarkOutput = Join-Path $scanRoot 'retrieval-comparison'
         & powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
             -ModelDirectory $ModelDirectory `
             -BundleDirectory $BundleDirectory `
+            -CasesPath $benchmarkCases `
             -OutputDirectory $benchmarkOutput
         Assert-ExitCode 'Local retrieval real-model comparison'
     }
