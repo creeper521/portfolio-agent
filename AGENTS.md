@@ -36,6 +36,7 @@ Do not treat a historical or superseded plan as active work. Dynamic publication
 - Use explicit immutable classes for value objects.
 - Run fresh verification before claiming completion.
 - Preserve user-owned Git changes. Do not reset, restore, stage, commit, or push without explicit authorization.
+- All future Git commit messages must be written in Chinese. When using Conventional Commits, the `type`/`scope` prefix may retain its conventional English identifier, but the subject and body after the prefix must be in Chinese.
 - Prefix shell commands with `rtk` when it is installed. If unavailable, use the documented raw-command debugging exception.
 
 ## Technology
