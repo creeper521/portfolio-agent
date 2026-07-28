@@ -4,5 +4,6 @@ public enum AnswerRequestSource {
     HOME,
     AGENT_PAGE,
     PROJECT,
+    CASE,
     EVIDENCE
 }

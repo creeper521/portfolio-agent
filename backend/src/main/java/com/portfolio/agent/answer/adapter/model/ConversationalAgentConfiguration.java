@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationIntentRouter;
+import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
@@ -138,6 +139,11 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
+    ConversationSubjectGuard conversationSubjectGuard() {
+        return new ConversationSubjectGuard();
+    }
+
+    @Bean
     ConversationalAgentRuntime conversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
             ConversationWindowManager windowManager,
@@ -148,7 +154,8 @@ public class ConversationalAgentConfiguration {
             ConversationDraftValidator draftValidator,
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
-            ConversationProviderAccess providerAccess
+            ConversationProviderAccess providerAccess,
+            ConversationSubjectGuard subjectGuard
     ) {
         return new ConversationalAgentRuntime(
                 knowledgeGateway,
@@ -160,7 +167,8 @@ public class ConversationalAgentConfiguration {
                 draftValidator,
                 questionService,
                 fallback,
-                providerAccess);
+                providerAccess,
+                subjectGuard);
     }
 
 }

@@ -1,5 +1,6 @@
 package com.portfolio.agent.answer.dto.request;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ConversationMessageRole;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -64,6 +65,28 @@ class ConversationAnswerRequestTest {
         assertThat(validator.validate(request))
                 .extracting(ConstraintViolation::getMessage)
                 .contains("projectSlug and caseSlug cannot both be set");
+    }
+
+    @Test
+    void deserializesCaseSourceAndCaseSlug() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        ConversationAnswerRequest request = objectMapper.readValue("""
+                {
+                  "turnId": "turn-case",
+                  "question": "Tell me about this case",
+                  "messages": [],
+                  "context": {
+                    "caseSlug": "multilingual-image-preservation",
+                    "audienceRole": "INTERVIEWER",
+                    "source": "CASE"
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThat(request.getContext().getSource()).isEqualTo(AnswerRequestSource.CASE);
+        assertThat(request.getContext().getCaseSlug())
+                .isEqualTo("multilingual-image-preservation");
     }
 
     @Test

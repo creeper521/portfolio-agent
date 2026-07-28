@@ -20,6 +20,23 @@ import java.util.Set;
 
 public final class DeterministicConversationFallback {
 
+    public ConversationAnswerResult unknownSubject(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content
+    ) {
+        return result(
+                request,
+                content,
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                AnswerResolution.BOUNDARY,
+                "可公开范围",
+                "该项目或案例不在当前已发布作品集范围内，无法提供具体说明。",
+                List.of(),
+                List.of(),
+                false);
+    }
+
     public ConversationAnswerResult answer(
             ConversationAnswerRequest request,
             RuntimeAnswerContent content

@@ -28,6 +28,7 @@ public final class ConversationalAgentRuntime {
     private final DynamicQuestionService questionService;
     private final DeterministicConversationFallback fallback;
     private final ConversationProviderAccess providerAccess;
+    private final ConversationSubjectGuard subjectGuard;
 
     public ConversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
@@ -39,7 +40,8 @@ public final class ConversationalAgentRuntime {
             ConversationDraftValidator draftValidator,
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
-            ConversationProviderAccess providerAccess
+            ConversationProviderAccess providerAccess,
+            ConversationSubjectGuard subjectGuard
     ) {
         this.knowledgeGateway = knowledgeGateway;
         this.windowManager = windowManager;
@@ -51,10 +53,14 @@ public final class ConversationalAgentRuntime {
         this.questionService = questionService;
         this.fallback = fallback;
         this.providerAccess = providerAccess;
+        this.subjectGuard = subjectGuard;
     }
 
     public ConversationAnswerResult answer(ConversationAnswerRequest request) {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
+        if (!subjectGuard.accepts(request.getContext(), content)) {
+            return fallback.unknownSubject(request, content);
+        }
         if (!providerAccess.isAllowed()) {
             return fallback.answer(request, content);
         }
