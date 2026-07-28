@@ -67,7 +67,7 @@ try {
         throw 'blocks'
     }
 
-    Write-Output "Provider=$provider ContentVersion=$ExpectedContentVersion Resolution=ANSWERED BlockCount=$($response.blocks.Count)"
+    Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; resolution=ANSWERED; blocks=$($response.blocks.Count)."
 }
 catch {
     Write-Error 'Live Provider response assertion failed.'

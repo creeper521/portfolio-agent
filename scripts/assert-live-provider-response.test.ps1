@@ -107,18 +107,18 @@ try {
         Write-ResponseFixture
         $result = Invoke-Checker
         Assert-True ($result.ExitCode -eq 0) "Approved $provider fixture must pass. Output: $($result.Output)"
-        Assert-True ($result.Output -match [regex]::Escape("Provider=$provider")) `
+        Assert-True ($result.Output -match [regex]::Escape("Live Provider verification passed: provider=$provider;")) `
             "Approved $provider output must name only the selected Provider."
-        Assert-True ($result.Output -match [regex]::Escape("ContentVersion=$expectedContentVersion")) `
+        Assert-True ($result.Output -match [regex]::Escape("contentVersion=$expectedContentVersion")) `
             'Approved output must name the content version.'
-        Assert-True ($result.Output -match 'Resolution=ANSWERED') `
+        Assert-True ($result.Output -match 'resolution=ANSWERED') `
             'Approved output must name the resolution.'
-        Assert-True ($result.Output -match 'BlockCount=1') `
+        Assert-True ($result.Output -match 'blocks=1') `
             'Approved output must name the block count.'
         Assert-True ($result.Output -match (
-                '^Provider=' + [regex]::Escape($provider) +
-                ' ContentVersion=' + [regex]::Escape($expectedContentVersion) +
-                ' Resolution=ANSWERED BlockCount=1\s*$'
+                '^Live Provider verification passed: provider=' + [regex]::Escape($provider) +
+                '; contentVersion=' + [regex]::Escape($expectedContentVersion) +
+                '; resolution=ANSWERED; blocks=1\.\s*$'
             )) 'Approved output must contain only the permitted assertion summary.'
         Assert-NoSensitiveOutput $result "approved $provider"
     }
