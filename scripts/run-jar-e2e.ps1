@@ -70,6 +70,10 @@ $environment = @{
 
 $quotedJar = '"' + $jar + '"'
 $applicationArguments = @('-jar', $quotedJar, "--server.port=$Port")
+if (-not $RequireLiveProvider) {
+    $applicationArguments += '--portfolio.model-expression.enabled=false'
+    $applicationArguments += '--portfolio.conversational-agent.enabled=false'
+}
 if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
     $resolvedReleaseRoot = (Resolve-Path -LiteralPath $ReleaseRoot).Path
     $applicationArguments += '"--portfolio.content.release-root=' + $resolvedReleaseRoot + '"'
@@ -90,6 +94,9 @@ $process = Start-Process -FilePath $JavaExecutable `
     -PassThru -WindowStyle Hidden
 
 Write-Output "Started packaged application process $($process.Id)."
+if (-not $RequireLiveProvider) {
+    Write-Output 'Provider calls disabled for deterministic smoke.'
+}
 
 $playwrightExitCode = 0
 $liveProviderResponsePath = $null
@@ -223,21 +230,25 @@ try {
 }
 finally {
     try {
-        if ($null -ne $liveProviderResponsePath -and
-                (Test-Path -LiteralPath $liveProviderResponsePath -PathType Leaf)) {
-            Remove-Item -LiteralPath $liveProviderResponsePath -Force
+        try {
+            if ($null -ne $liveProviderResponsePath -and
+                    (Test-Path -LiteralPath $liveProviderResponsePath -PathType Leaf)) {
+                Remove-Item -LiteralPath $liveProviderResponsePath -Force
+            }
         }
-        Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
-        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-        Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
-        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
-            $environment.PLAYWRIGHT_REAL_RETRIEVAL
-        Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
-        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-        Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
-        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
-            $environment.PLAYWRIGHT_REAL_RETRIEVAL
-        Write-Output 'Playwright environment restored.'
+        finally {
+            Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+            Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+            Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+            Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
+                $environment.PLAYWRIGHT_REAL_RETRIEVAL
+            Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+            Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+            Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+            Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
+                $environment.PLAYWRIGHT_REAL_RETRIEVAL
+            Write-Output 'Playwright environment restored.'
+        }
     }
     finally {
         $process.Refresh()
