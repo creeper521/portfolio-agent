@@ -31,7 +31,7 @@ class ActiveBundleLocatorTest {
                 new PortfolioSnapshotValidator(), Clock.systemUTC());
 
         assertThat(new ActiveBundleLocator().load(releaseRoot, loader).getContentVersion())
-                .isEqualTo("2026-07-24.1");
+                .isEqualTo("2026-07-27.1");
     }
 
     @Test
@@ -73,7 +73,7 @@ class ActiveBundleLocatorTest {
 
     private Path createReleaseRoot() throws Exception {
         Path root = Files.createDirectories(temporaryDirectory.resolve("releases"));
-        Path version = Files.createDirectories(root.resolve("versions").resolve("2026-07-24.1"));
+        Path version = Files.createDirectories(root.resolve("versions").resolve("2026-07-27.1"));
         for (String name : new String[]{
                 "manifest.json", "portfolio.json", "presentation.json",
                 "rag-documents.jsonl", "keyword-index.json", "vector-index.bin",
@@ -81,7 +81,7 @@ class ActiveBundleLocatorTest {
             ClassPathResource resource = new ClassPathResource("public-data/bundle/" + name);
             Files.write(version.resolve(name), resource.getContentAsByteArray());
         }
-        Files.writeString(root.resolve("active"), "2026-07-24.1");
+        Files.writeString(root.resolve("active"), "2026-07-27.1");
         return root;
     }
 }

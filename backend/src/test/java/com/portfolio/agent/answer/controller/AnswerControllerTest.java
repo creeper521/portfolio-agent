@@ -154,7 +154,7 @@ class AnswerControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(jsonPath("$.turnId").value("turn-canonical"))
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-24.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-27.1"))
                 .andExpect(jsonPath("$.questionPresetId").value("sql-audit-overview"))
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))
                 .andExpect(jsonPath("$.answerSource").value("PRESET"))
@@ -174,7 +174,7 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.suggestedQuestionPresetIds[0]")
                         .value("sql-audit-overview"))
                 .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
-                        .value("2026-07-24.1"))
+                        .value("2026-07-27.1"))
                 .andExpect(jsonPath("$.contextEnvelope.projectSlugs[0]")
                         .value("sql-audit"))
                 .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
@@ -365,7 +365,7 @@ class AnswerControllerTest {
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))
                 .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
                 .andExpect(jsonPath("$.contextEnvelope.previousContentVersion")
-                        .value("2026-07-24.1"))
+                        .value("2026-07-27.1"))
                 .andExpect(jsonPath("$.contextEnvelope.referencedClaimIds[0]")
                         .value("claim-sql-audit-delivered"));
     }
