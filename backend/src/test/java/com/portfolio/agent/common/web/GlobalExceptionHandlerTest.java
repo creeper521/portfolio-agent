@@ -46,4 +46,18 @@ class GlobalExceptionHandlerTest {
         assertThat(body.getMessage()).isEqualTo("服务暂时不可用，请稍后重试");
         assertThat(serialized).doesNotContain("secret-local-path");
     }
+
+    @Test
+    void errorBodyCanExposeOnlySafeRetryDelay() {
+        ApiErrorResponse response = new ApiErrorResponse(
+                "request-id",
+                "ANSWER_RATE_LIMITED",
+                "请求过于频繁，请稍后再试。",
+                12,
+                java.time.OffsetDateTime.parse("2026-07-28T00:00:00Z"));
+
+        assertThat(response.getRetryAfterSeconds()).isEqualTo(12);
+        assertThat(response.toString())
+                .doesNotContain("visitor question", "203.0.113.7", "request-token");
+    }
 }

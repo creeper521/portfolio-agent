@@ -8,6 +8,7 @@ public final class ApiErrorResponse {
     private final String requestId;
     private final String code;
     private final String message;
+    private final Integer retryAfterSeconds;
     private final OffsetDateTime timestamp;
 
     public ApiErrorResponse(
@@ -16,11 +17,24 @@ public final class ApiErrorResponse {
             String message,
             OffsetDateTime timestamp
     ) {
+        this(requestId, code, message, null, timestamp);
+    }
+
+    public ApiErrorResponse(
+            String requestId,
+            String code,
+            String message,
+            Integer retryAfterSeconds,
+            OffsetDateTime timestamp
+    ) {
         this.requestId = requestId;
         this.code = code;
         this.message = message;
+        this.retryAfterSeconds = retryAfterSeconds;
         this.timestamp = timestamp;
     }
+
+    public Integer getRetryAfterSeconds() { return retryAfterSeconds; }
 
     public String getRequestId() {
         return requestId;
@@ -49,12 +63,13 @@ public final class ApiErrorResponse {
         return Objects.equals(requestId, that.requestId)
                 && Objects.equals(code, that.code)
                 && Objects.equals(message, that.message)
+                && Objects.equals(retryAfterSeconds, that.retryAfterSeconds)
                 && Objects.equals(timestamp, that.timestamp);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(requestId, code, message, timestamp);
+        return Objects.hash(requestId, code, message, retryAfterSeconds, timestamp);
     }
 
     @Override
@@ -63,6 +78,7 @@ public final class ApiErrorResponse {
                 "requestId='" + requestId + '\'' +
                 ", code='" + code + '\'' +
                 ", message='" + message + '\'' +
+                ", retryAfterSeconds=" + retryAfterSeconds +
                 ", timestamp=" + timestamp +
                 '}';
     }

@@ -4,6 +4,8 @@ import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationIntent;
+import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.answer.domain.GenerationMode;
 
 import java.util.List;
 
@@ -18,6 +20,9 @@ public final class ConversationAnswerResponse {
     private final List<ConversationAnswerBlockResponse> blocks;
     private final List<ConversationSuggestedQuestionResponse> suggestedQuestions;
     private final boolean degraded;
+    private final GenerationMode generationMode;
+    private final AnswerSource answerSource;
+    private final String noticeCode;
 
     public ConversationAnswerResponse(ConversationAnswerResult result) {
         this.turnId = result.getTurnId();
@@ -33,6 +38,9 @@ public final class ConversationAnswerResponse {
                 .map(ConversationSuggestedQuestionResponse::from)
                 .toList();
         this.degraded = result.isDegraded();
+        this.generationMode = result.getGenerationMode();
+        this.answerSource = result.getAnswerSource();
+        this.noticeCode = result.getNoticeCode();
     }
 
     public String getTurnId() { return turnId; }
@@ -46,4 +54,7 @@ public final class ConversationAnswerResponse {
         return suggestedQuestions;
     }
     public boolean isDegraded() { return degraded; }
+    public GenerationMode getGenerationMode() { return generationMode; }
+    public AnswerSource getAnswerSource() { return answerSource; }
+    public String getNoticeCode() { return noticeCode; }
 }

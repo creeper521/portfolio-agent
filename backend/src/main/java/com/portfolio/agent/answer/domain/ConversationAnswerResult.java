@@ -14,6 +14,9 @@ public final class ConversationAnswerResult {
     private final List<ConversationAnswerBlock> blocks;
     private final List<ConversationSuggestedQuestion> suggestedQuestions;
     private final boolean degraded;
+    private final GenerationMode generationMode;
+    private final AnswerSource answerSource;
+    private final String noticeCode;
 
     public ConversationAnswerResult(
             String turnId,
@@ -26,6 +29,27 @@ public final class ConversationAnswerResult {
             List<ConversationSuggestedQuestion> suggestedQuestions,
             boolean degraded
     ) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title,
+                blocks, suggestedQuestions, degraded,
+                degraded ? GenerationMode.FALLBACK : GenerationMode.DETERMINISTIC,
+                null,
+                degraded ? "MODEL_UNAVAILABLE_FALLBACK" : null);
+    }
+
+    public ConversationAnswerResult(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlock> blocks,
+            List<ConversationSuggestedQuestion> suggestedQuestions,
+            boolean degraded,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String noticeCode
+    ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
         this.intent = Objects.requireNonNull(intent, "intent");
@@ -35,6 +59,9 @@ public final class ConversationAnswerResult {
         this.blocks = List.copyOf(blocks);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
         this.degraded = degraded;
+        this.generationMode = Objects.requireNonNull(generationMode, "generationMode");
+        this.answerSource = answerSource;
+        this.noticeCode = noticeCode;
     }
 
     public String getTurnId() { return turnId; }
@@ -48,4 +75,7 @@ public final class ConversationAnswerResult {
         return suggestedQuestions;
     }
     public boolean isDegraded() { return degraded; }
+    public GenerationMode getGenerationMode() { return generationMode; }
+    public AnswerSource getAnswerSource() { return answerSource; }
+    public String getNoticeCode() { return noticeCode; }
 }
