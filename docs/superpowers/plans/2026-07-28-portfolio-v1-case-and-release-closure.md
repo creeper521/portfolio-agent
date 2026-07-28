@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **执行状态（2026-07-28）：** Task 1–5 的后端契约、公开主体 Guard、真实 Bundle 集成、Provider 响应断言和发布脚本接线均已实现并合入本地 `master`；Task 6 的当前状态文档与前端交接已同步。普通自动化测试和随包 Case 冒烟已有证据，但真实 Provider 外部调用、独立 Case 前端和生产部署尚未执行。下方复选框保留原始 TDD 实施步骤，不再作为当前待办清单；当前状态以 `docs/00-文档状态索引.md` 和 `docs/08-current-implementation-status.md` 为准。
+
 **Goal:** 固定独立 Case 后端契约，阻止未知公开主体进入 Provider，增加真实 Provider 与打包后 Case 冒烟门禁，并同步项目文档。
 
 **Architecture:** 保留现有 `/api/v1/cases`、`/api/v1/cases/{slug}` 和 `/api/v2/answers`，不增加重复接口。在对话运行时最前端增加公开主体 Guard，并用独立 PowerShell 响应断言器把真实 Provider 验收接入现有 JAR 与发布脚本。
@@ -390,7 +392,11 @@ $env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = 'true'
 $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
 $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'true'
 $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
-$env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = $secretSentinel
+[Environment]::SetEnvironmentVariable(
+    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+    $secretSentinel,
+    'Process'
+)
 
 if ($LASTEXITCODE -ne 0) { throw 'Expected approved response to pass.' }
 if ($output -match 'sentinel-answer' -or $output.Contains($secretSentinel)) {

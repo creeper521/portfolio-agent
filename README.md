@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-28）：** 全量公开资产已完成人工 Approval、本地发布和原子导入，当前随包运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件检索包：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；公开 61/68 项资产，7 项 `EXCLUDE` 保持私有。89 例 Keyword/Vector/Hybrid 真实模型比较中 Hybrid 的正例充分判定为 32/38，三路 false-sufficient 均为 0。共享 Case 目录模型和共享详情投影已存在；独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收仍未完成，本次没有部署。详见 [`docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`](docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md)。
+> **项目状态（2026-07-28）：** 全量公开资产已完成人工 Approval、本地发布和原子导入，当前随包运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件检索包：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；公开 61/68 项资产，7 项 `EXCLUDE` 保持私有。89 例 Keyword/Vector/Hybrid 真实模型比较中 Hybrid 的正例充分判定为 32/38，三路 false-sufficient 均为 0。Case 后端契约、未知主体 fail-closed、随包 Case 冒烟和真实 Provider 显式验收门禁已经完成；下一阶段是独立 `/cases`、`/cases/:slug`、规范重定向与具体 UI，之后再做生产候选验收。本次没有部署，也没有取得真实 Provider 外部调用证据。详见 [`docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`](docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
@@ -50,10 +50,11 @@ mvn.cmd -f backend/pom.xml spring-boot:run
 
 每个进程只选择一个 Provider，不自动切换、不重试，也不把供应商 conversation/thread ID 保存到应用。未同时满足启用开关、所选 Provider 密钥和独立数据策略批准时，请求继续走 `DETERMINISTIC`。
 
-仓库根目录提供不含真实密钥的 `.env.example`。本地可复制为 `.env`，但 Spring Boot
-不会自动加载该文件；请通过 IDE、部署平台或启动 Shell 将其中变量注入进程环境。
-`.env` 已被 Git 忽略，禁止把真实 API Key 写入 `.env.example` 或其他受版本控制文件。
-任何曾出现在聊天、日志或提交历史中的密钥都应先吊销，再把新密钥写入本机 `.env`。
+仓库根目录提供不含真实密钥的 `.env.example`，仅作为变量名模板。不要把真实 API Key
+保存在仓库目录内的 `.env`：完整发布门禁会扫描仓库风险制品并阻止凭据文件。请通过
+IDE 的受保护环境配置、部署平台 Secret 或仓库外的本机 Secret 注入进程环境。禁止把
+真实 API Key 写入 `.env.example`、其他受版本控制文件、聊天或日志；曾经暴露的密钥
+必须先吊销再重新签发。
 
 DeepSeek V4 Flash：
 
