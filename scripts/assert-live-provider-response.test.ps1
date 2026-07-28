@@ -144,6 +144,13 @@ foreach ($name in $environmentNames) {
 try {
     Assert-True (Test-Path -LiteralPath $checker -PathType Leaf) `
         "Live Provider checker does not exist: $checker"
+    $checkerSource = [System.IO.File]::ReadAllText($checker)
+    Assert-True ($checkerSource -notmatch '(?i)(Get-Item|Set-Item|Remove-Item)[^\r\n]*Env:') `
+        'Live Provider checker must not use Env provider item access.'
+    Assert-True ($checkerSource -notmatch '\$env:') `
+        'Live Provider checker must not use the Env provider variable syntax.'
+    Assert-True ($checkerSource -match 'GetEnvironmentVariable') `
+        'Live Provider checker must read Process environment through System.Environment.'
     New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
 
     foreach ($provider in @('DEEPSEEK_V4_FLASH', 'GLM_4_7')) {

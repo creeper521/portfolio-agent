@@ -15,6 +15,13 @@ function Test-ExactProvider([string]$Value, [string]$Expected) {
     return [string]::Equals($Value, $Expected, [System.StringComparison]::Ordinal)
 }
 
+function Get-ProcessEnvironmentValue([string]$Name) {
+    return [System.Environment]::GetEnvironmentVariable(
+        $Name,
+        [System.EnvironmentVariableTarget]::Process
+    )
+}
+
 try {
     foreach ($approvalName in @(
         'PORTFOLIO_MODEL_ENABLED',
@@ -22,17 +29,17 @@ try {
         'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
         'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
     )) {
-        if (-not (Test-ApprovedFlag (Get-Item -LiteralPath "Env:$approvalName" -ErrorAction SilentlyContinue).Value)) {
+        if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $approvalName))) {
             throw 'approval'
         }
     }
 
-    $provider = $env:PORTFOLIO_MODEL_PROVIDER
+    $provider = Get-ProcessEnvironmentValue 'PORTFOLIO_MODEL_PROVIDER'
     if (Test-ExactProvider $provider 'DEEPSEEK_V4_FLASH') {
-        $selectedKey = $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY
+        $selectedKey = Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
     }
     elseif (Test-ExactProvider $provider 'GLM_4_7') {
-        $selectedKey = $env:PORTFOLIO_AGENT_GLM_API_KEY
+        $selectedKey = Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_GLM_API_KEY'
     }
     else {
         throw 'provider'
