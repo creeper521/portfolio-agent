@@ -1,10 +1,12 @@
 # 公开发布包契约
 
 **日期：** 2026-07-15
-**状态：** B 四文件包与 C2a 七文件 retrieval 扩展均已实现并验证；旧包兼容，C2 只读工具/引用式多轮不属于本契约完成范围
+**状态：** 当前运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent、16 个 QuestionPreset，公开 61/68 项资产，7 项 `EXCLUDE` 保持私有。B 四文件包与 C2a 七文件 retrieval 扩展均已实现并验证；旧包兼容，C2 只读工具/引用式多轮不属于本契约完成范围。
 **适用设计：** B 核心契约见 `2026-07-21-portfolio-agent-content-governance-design.md`；C2 检索扩展见 `2026-07-21-portfolio-agent-future-intelligence-design.md`
 
 > 分阶段说明：B 第一版只要求 `portfolio.json`、`presentation.json`、Manifest 和 checksums。RAG 文档与索引仅在 C2 retrieval 扩展被显式声明时出现；不得用空字段假装支持。Claim 与 Evidence 的支持关系只由 `ClaimEvidenceLink` 保存。
+
+> 以下标为 schema 2.0 / `2026-07-20.1` 的 JSON 仅为**历史示例**，不描述当前运行时快照；当前发布以 schema 3.0、内容版本 `2026-07-27.1` 为准。
 
 ## 1. 目的
 
@@ -44,7 +46,7 @@ C2a 启用 retrieval 后，同一候选包增加 `rag-documents.jsonl`，同一�
 
 ## 3. Manifest
 
-`manifest.json` 是运行发布包入口：
+`manifest.json` 是运行发布包入口。下例是**历史 schema 2.0 示例**：
 
 ```json
 {
@@ -87,7 +89,7 @@ manifestHash + checksumsHash → runtimeBundleHash
 
 ## 4. 事实文件
 
-`portfolio.json` 顶层结构：
+`portfolio.json` 顶层结构。下例是**历史 schema 2.0 示例**：
 
 ```json
 {
@@ -161,7 +163,20 @@ URL 字段为空时使用 `null`，禁止空白字符串和非 HTTP(S) 链接。
 - 所有关联对象必须反向指向同一 Project 或声明为跨项目对象；
 - `featured` 只表示可被展示配置选择，不自动决定页面位置。
 
-### 4.4 Claim
+### 4.4 Case
+
+Case 是与 Project 并列的独立公开主体，而不是 Project 的展开视图。产品采用独立 Case 信息架构，同时复用既有 Dossier 能力；故事页属于后续 selected-case 增强，不属于当前 Bundle 或后端闭环的交付范围。
+
+Case 必须具有全局唯一的 `id`、`slug`、`type`、标题、摘要和受控的 Claim/Evidence 引用。Case 可关联 Project，但该关联只用于展示和显式引用，不能改变主体边界。
+
+回答或检索上下文指定 `source=CASE` 时：
+
+- Project 与 Case 目标必须互斥；
+- 未知 Case 或未知 Project 必须 fail-closed；
+- Case 不会隐式扩展为相关 Project，相关 Project 也不会替代 Case 作为回答范围；
+- `subjectType=CASE` 的 Claim 只能引用存在且已发布的 Case。
+
+### 4.5 Claim
 
 ```json
 {
@@ -233,7 +248,7 @@ UNKNOWN
 - 缺少某身份优先级时使用代码默认值，不从其他身份推断；
 - 不允许在 Claim 中保存模型 Prompt 或渲染 HTML。
 
-### 4.5 Evidence
+### 4.6 Evidence
 
 ```json
 {
@@ -257,7 +272,7 @@ UNKNOWN
 - 摘要不得包含原始路径、内部地址、账号或凭据；
 - 第一阶段不发布原始 Evidence 正文。
 
-### 4.6 ClaimEvidenceLink
+### 4.7 ClaimEvidenceLink
 
 ```json
 {
@@ -278,7 +293,7 @@ UNKNOWN
 - 只有 reviewStatus=APPROVED 且两端对象有效的 Link 可以进入公开包；
 - 两个方向的查询索引由加载器从 Link 构造，不进入人工维护的源数据。
 
-### 4.7 TimelineEvent
+### 4.8 TimelineEvent
 
 ```json
 {
@@ -309,7 +324,7 @@ REFLECTION
 
 事件摘要不能比其关联 Claim 表达更强的完成结论。
 
-### 4.8 QuestionPreset
+### 4.9 QuestionPreset
 
 ```json
 {
@@ -329,7 +344,7 @@ QuestionPreset 是检索入口，不保存完整答案。`deterministicEntry=tru
 
 ## 5. 展示配置
 
-`presentation.json` 顶层结构：
+`presentation.json` 顶层结构。下例是**历史 schema 2.0 示例**：
 
 ```json
 {
@@ -481,8 +496,9 @@ AGENT
 
 - schemaVersion、contentVersion 全部一致；
 - Manifest counts 与实际数量一致；
-- Project、Claim、Evidence、ClaimEvidenceLink、TimelineEvent、QuestionPreset ID 唯一；C2 还要求 Chunk ID 唯一；
+- Project、Case、Claim、Evidence、ClaimEvidenceLink、TimelineEvent、QuestionPreset ID 唯一；C2 还要求 Chunk ID 唯一；
 - 所有声明引用完整，禁止悬空或跨版本引用；
+- Case、Project 与 `source=CASE` 的主体范围遵守互斥和 fail-closed 规则，不得通过关联关系隐式扩展；
 - 成果性 Claim 存在已批准的 DIRECT Link 和有效 Evidence；
 - Claim/Evidence 双向查询只由 ClaimEvidenceLink 派生；
 - TimelineEvent 不引用不存在或未发布对象；

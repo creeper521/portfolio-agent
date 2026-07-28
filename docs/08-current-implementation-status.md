@@ -9,7 +9,7 @@
 
 当前项目已经从“一个确定性问答的 V0”扩展为一个可打包交付的公开实习作品集 Agent：前端具备六个正式路由和页面内存工作台，后端具备公开内容 API、严格回答契约、内容治理、可选模型表达、本地混合检索、固定只读工具和引用式多轮，并提供单 JAR、Docker 与完整发布门禁。
 
-但它仍不是完整 V1。模型表达与本地检索默认关闭；Case 前端列表/详情和视觉、前后端联调、生产部署与线上验收仍未完成；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
+但它仍不是完整 V1。产品方向是独立 Case 信息架构，同时复用既有 Dossier 能力；故事页属于后续 selected-case 增强。模型表达与本地检索默认关闭；共享 Case 目录模型和共享详情投影已存在，前端也已调用 `/api/v2/answers`，但独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收仍未完成。动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
 
 内容准备层已经登记 68 项私有资产。61 项非排除资产已通过精确哈希人工 Approval，本地发布并原子导入为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle；当前随包运行时包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset。7 项 `EXCLUDE` 继续保持私有。
 
@@ -33,10 +33,11 @@
 ### 2.2 公开内容与 API
 
 - Spring Boot 提供 `GET /api/v1/portfolio`、`GET /api/v1/projects/{slug}`、`GET /api/v1/cases`、`GET /api/v1/cases/{slug}`、`GET /api/v1/public-content` 和 `POST /api/v1/answers`。
-- 当前随包公开快照为 schema 3.0、内容版本 `2026-07-23.1`，包含 1 个 SQL 审计 Project、3 个 CaseStudy、16 个 Claim、5 个 APPROVED Evidence、16 条 Claim-Evidence 关联、5 条 TimelineEvent 和 6 个 QuestionPreset。
+- 当前随包公开快照为 schema 3.0、内容版本 `2026-07-27.1`，包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；61/68 项公开资产，7 项 `EXCLUDE` 保持私有。
 - 已实现独立不可变 CaseStudy 领域模型、CaseType、CASE Claim 归属与引用校验、只读服务和公开 DTO；未知 Case slug 返回 404 `CASE_NOT_FOUND`。
 - 加载器显式接受 schema 2.0/3.0：2.0 被规范化为空 `cases`/`caseIds`，3.0 严格校验 Case 集合与引用，未知版本和缺失必填集合失败关闭。
 - `GET /api/v1/public-content` 新增 `cases`、`caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影新增 `caseSlugs`。
+- `source=CASE` 时 Project/Case 主体互斥，未知主体 fail-closed，Case 不会隐式扩展为相关 Project；共享目录模型和详情投影已实现。
 - 公开 DTO 与内部领域对象分离；启动/加载阶段校验 schema、唯一性、交叉引用、Evidence 审批状态、原始内容暴露标志和 Claim 验证约束。
 - SPA 正式路由由单 JAR 回退到 Vue 入口，同时不吞掉 API 和静态资源路径；异常响应不暴露堆栈、本地路径或内部错误信息。
 
@@ -114,7 +115,7 @@
 |---|---|---|
 | 公开内容规模 | 当前随包运行时为 `2026-07-27.1`，公开 61/68 项，形成 7 个 Project 和 49 个 Case | 仍未生产部署；7 项排除资产不得进入公开运行时 |
 | C1 模型表达 | 代码、双 Provider Adapter、Registry 与 fallback 已实现，默认关闭 | 部署方独立完成数据条款审批、注入密钥并决定是否启用；真实 Provider 可用性属于运行环境状态 |
-| 对话式 Agent v2 后端 | `/api/v2/answers`、意图路由、20 轮临时上下文、通用/作品集/混合回答、公开检索、固定工具、事实校验和动态追问已实现，默认关闭 | 前端尚未接入；生产启用还要求访客数据条款审批、单 Provider 密钥与线上验收 |
+| 对话式 Agent v2 后端 | `/api/v2/answers`、意图路由、20 轮临时上下文、通用/作品集/混合回答、公开检索、固定工具、事实校验和动态追问已实现，默认关闭；前端已调用该接口 | 生产启用还要求访客数据条款审批、单 Provider 密钥与线上验收 |
 | C2a 本地检索 | 全量内容已发布并导入；89 例比较中 Hybrid 为 32/38 正例充分判定，优于 Keyword 13/38 和 Vector 17/38，三路 false-sufficient 为 0 | 生产侧仍需安装固定 revision 的本地 ONNX 模型并显式配置 `HYBRID`，当前 Git 不包含模型二进制 |
 | C2b 项目比较 | 工具实现并能读取当前 7 个公开 Project，已具备跨项目比较数据 | 仍需完成 Agent 前端入口、浏览器联调和代表性跨项目问题验收 |
 | 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；首批 CaseStudy 内容已由明确的人类审核者批准并发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
@@ -126,7 +127,7 @@
 
 ### 4.1 产品与内容
 
-- CaseStudy 前端列表/详情页、路由、Repository 映射与统一视觉设计；对话式 Agent v2 前端接入与联调。
+- 独立 `/cases`、`/cases/:slug`、规范重定向、具体 Case UI 与最终视觉设计；故事页作为后续 selected-case 增强。`/api/v2/answers` 已有前端调用，剩余为与 Case 流程的完整联调和生产验收。
 - 完整 V1 内容规模、多主题项目库、更多可执行 FAQ 和跨项目真实比较数据。
 - 私有 Obsidian/候选材料检索、个人 Copilot、管理后台和未审核内容预览。
 - 用户注册、登录、权限、团队协作、收藏、分享链接和跨设备会话。
@@ -151,12 +152,14 @@
 
 ## 5. 下一步优先级建议
 
-1. **完善 Case 前端。** 在 Agent 页面重构稳定后，实现 Case 列表/详情、数据映射、错误状态与统一视觉。
-2. **联调 Agent Case 能力。** 前端按 `caseSlug`/`caseSlugs` 契约接入 Case 预设与追问动作，并完成浏览器隐私、刷新清空和错误边界验收。
+1. **实现独立 Case 信息架构。** 在共享目录模型与详情投影之上实现 `/cases`、`/cases/:slug`、规范重定向、数据映射、错误状态与具体 UI；复用 Dossier 能力，故事页留给后续 selected-case 增强。
+2. **完成 Agent Case 流程验收。** 基于现有 `/api/v2/answers` 调用，按 `caseSlug`/`caseSlugs` 契约接入 Case 预设与追问动作，并完成浏览器隐私、刷新清空、错误边界与生产验收。
 3. **复验全量内容的前端与 Agent 行为。** 补齐 Case 页面和 Agent 入口，在浏览器中验证 7 个 Project、49 个 Case、跨项目比较、错误状态与引用边界。
 4. **完成生产部署与线上验收。** 功能和视觉完整后再部署，保留 API、页面、隐私和回滚证据。
 5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
 6. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
+
+本次后端闭环不实现 Vue 页面、路由、组件、CSS 或最终视觉设计；前端 AI 应以 [`2026-07-28-portfolio-v1-case-and-release-closure-design.md`](superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md) 为交接规范。
 
 ## 6. 状态判定依据
 

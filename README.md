@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-28）：** 全量公开资产已完成人工 Approval、本地发布和原子导入，当前随包运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件检索包，公开 61/68 项资产。89 例 Keyword/Vector/Hybrid 真实模型比较中 Hybrid 的正例充分判定为 32/38，三路 false-sufficient 均为 0。Case 分组前端模型已实现，完整 Case 页面、前后端联调与生产部署仍未完成；本次没有部署。详见 [`docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`](docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md)。
+> **项目状态（2026-07-28）：** 全量公开资产已完成人工 Approval、本地发布和原子导入，当前随包运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件检索包：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；公开 61/68 项资产，7 项 `EXCLUDE` 保持私有。89 例 Keyword/Vector/Hybrid 真实模型比较中 Hybrid 的正例充分判定为 32/38，三路 false-sufficient 均为 0。共享 Case 目录模型和共享详情投影已存在；独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收仍未完成，本次没有部署。详见 [`docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`](docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md)。
 
 一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
 
@@ -8,10 +8,10 @@
 
 - Vue 3 六路由作品集：概览、项目目录、项目详情、时间线、证据中心和完整 Agent 工作台
 - Spring Boot 公开作品集 API，以及供正式页面使用的 `GET /api/v1/public-content` 聚合接口
-- 独立 CaseStudy 领域模型、严格校验、只读服务、列表/详情 API，以及三个经审核的公开案例
-- 全量资产生成器：把 52 项新增公开资产编译为 6 条长期主线、46 个独立 Case、脱敏 Claim/Evidence 和检索基准，且发布前必须经过人工批准
-- Case 目录可按长期主线、单体任务、问题处理、知识与评测分组；相关代码与内容已进入当前分支，但尚未部署
-- 公开 Bundle 包含 6 个 QuestionPreset 和 5 条 TimelineEvent；3 个 Project preset 与 3 个 Case-only preset 均可由 Agent 后端执行
+- 独立 Case 领域模型、严格校验、只读服务、列表/详情 API，以及当前公开 49 个 Case
+- 全量资产生成器：把获批公开资产编译为 7 个 Project、49 个 Case、脱敏 Claim/Evidence 和检索基准，且发布前必须经过人工批准
+- 共享 Case 目录模型可按长期主线、单体任务、问题处理、知识与评测分组；独立 Case 信息架构复用既有 Dossier 能力，故事页属于后续的 selected-case 增强
+- 公开 Bundle 包含 16 个 QuestionPreset 和 11 条 TimelineEvent；Case 专属预设由 Agent 后端执行
 - 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
@@ -188,10 +188,13 @@ docker run --rm -p 8080:8080 internship-portfolio-agent
 从项目根目录运行原子化发布门禁。它会依次执行代码质量、架构与静态 bundle 校验器自测，完成前端测试与构建、后端 `clean package`、隐私扫描、JAR 解包检查、区分大小写的静态路径及逐文件 SHA-256 对比，再启动该 JAR 完成真实 Playwright 联调，避免验证旧的前端或 JAR。默认也会在 Docker CLI 可用时运行 Dockerfile 检查。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify-release.ps1 `
+  -SkipInstall `
+  -RequireLiveProvider
 ```
 
-依赖已经通过 `npm ci` 安装时，可使用 `-SkipInstall`；明确只做本机无 Docker 的验收时，可再加 `-SkipDockerCheck`。发布或 CI 不应跳过这两项。
+依赖已经通过 `npm ci` 安装时，可使用 `-SkipInstall`；明确只做本机无 Docker 的验收时，可再加 `-SkipDockerCheck`。正常 CI 不调用真实 Provider；生产候选必须用上面的 `-RequireLiveProvider` 命令单独留存真实 Provider 调用证据，不能把普通 CI 结果当作该证据。
 
 ## 公开 API
 
@@ -203,7 +206,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 - `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
 - `POST /api/v2/answers`：对话式回答；支持自然交流、通用知识、作品集检索回答、混合回答、20 轮临时上下文和动态追问
 
-`GET /api/v1/public-content` 提供顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。当前前端尚无 Case 列表或详情路由，Case Agent 接口等待前端接入。
+`GET /api/v1/public-content` 提供顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已调用 `/api/v2/answers`；剩余缺口是独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收。
 
 公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
 
@@ -270,5 +273,8 @@ AnswerService
 - `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`：当前后端结构
 - `docs/superpowers/specs/2026-07-16-portfolio-frontend-full-rebuild-design.md`：当前前端产品与视觉基线
 - `docs/superpowers/specs/2026-07-17-public-content-api-integration-design.md`：当前公开内容 API 与真实联调基线
+- [`docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md`](docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md)：Case 前端与发布闭环的交接规范，供前端 AI 接手
 
 `docs/01-03` 描述长期产品和技术路线；标记为历史、已取代或待审批的设计与计划不能直接作为当前实施授权。
+
+本次后端闭环不实现 Vue 页面、路由、组件、CSS 或最终视觉设计。

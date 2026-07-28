@@ -8,6 +8,8 @@
 
 当前入口为 `scripts/portfolio-governance.ps1`。工具默认 dry-run，`approve`、`publish`、`rollback` 不会自动串联；`publish -Confirm` 可通过 `-PostSwitchProbeUri` 执行部署方提供的 readiness/HTTP 冒烟，失败时原子恢复已经验证的旧 active。进程重启方式仍由部署环境负责，候选包不能指定命令或获得执行权限。
 
+当前本地运行时基线为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent、16 个 QuestionPreset；61/68 项资产公开，7 项 `EXCLUDE` 保持私有。该本地发布与导入记录不构成生产部署、真实 Provider 调用或线上验收通过的声明。
+
 C2a 候选必须先在仓库外私有工作区显式运行 `scripts/build-retrieval-bundle.ps1`，形成只含 `portfolio.json`、`presentation.json`、`rag-documents.jsonl` 的 canonical payload。随后再执行 validate、review、人工 Approval 和 publish。候选不得上传 keyword/vector 索引；`publish` 通过 `-JarPath` 与 `-ModelDirectory` 在服务器本机逐字节复现 RAG 后派生索引。B 候选仍保持两个 canonical 文件，不要求模型。
 
 ## 1. 适用范围
@@ -86,6 +88,19 @@ B 四文件发布省略候选准备、`-JarPath` 和 `-ModelDirectory`。C2a 的
 7. 没有其他发布任务持锁。
 
 发布工具不得接受 incoming 根目录之外的任意路径，也不得跟随候选包中的符号链接。
+
+### 5.1 生产候选的应用发布证据
+
+生产候选应在已安装依赖的受控环境中单独执行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify-release.ps1 `
+  -SkipInstall `
+  -RequireLiveProvider
+```
+
+正常 CI 不进行真实 Provider 调用；其结果只能证明本地门禁，不能替代生产候选的真实 Provider 记录。保存本次命令的退出状态和脱敏阶段证据，并与部署方的 API、页面、隐私和回滚验收记录关联；未执行前不得声称真实 Provider 或生产发布已通过。
 
 ## 6. Validate
 
