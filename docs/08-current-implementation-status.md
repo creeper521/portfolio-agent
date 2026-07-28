@@ -1,8 +1,8 @@
 # 当前实现与未实现功能盘点
 
 > **状态：** 当前实现盘点（以生产代码、配置、自动化测试和发布脚本为证据）
-> **核对日期：** 2026-07-27
-> **代码基线：** `2b7deed`
+> **核对日期：** 2026-07-28
+> **代码基线：** `7c724d0` + 当前候选分支改动
 > **维护规则：** 功能合入、默认开关或产品边界变化时，同步更新本文与 `00-文档状态索引.md`。
 
 ## 1. 结论
@@ -11,9 +11,11 @@
 
 但它仍不是完整 V1。模型表达与本地检索默认关闭；Case 前端列表/详情和视觉、前后端联调、生产部署与线上验收仍未完成；动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
 
-内容准备层已经登记 68 项私有资产。Wave 1 的 SQL 主线扩充、多语言图片修复、角色重置工具和 CodeGraph 评测已通过人工 Approval，发布并原子导入为 schema 3.0、内容版本 `2026-07-24.1` 的七文件 Bundle；当前包含 29 个 Claim、7 个 APPROVED Evidence 和 15 个 QuestionPreset。后端已围绕 Case 提供预设回答、主体隔离检索、固定工具和引用式上下文，前端仍待接入。
+内容准备层已经登记 68 项私有资产。61 项非排除资产已通过精确哈希人工 Approval，本地发布并原子导入为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle；当前随包运行时包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset。7 项 `EXCLUDE` 继续保持私有。
 
 当前公开版本已完成 Wave 1 的 Keyword、Vector、Hybrid 三路真实本地模型比较：37 个问题覆盖 Holdout、Regression 和 Calibration；策略 v2.1 的三路 false-sufficient 均为 0，Hybrid 在 26 个正例上取得 Hit@1 0.8846、Hit@5 1.0000、MRR@5 0.9359 和 20/26 正向充分判定。完整过程、v2 被拒原因与边界见 `docs/reports/retrieval-wave-1-policy-v2-1-2026-07-27.md`。运行时 Profile 未改变，检索仍默认关闭，也没有部署。
+
+全量内容还完成了 89 例、267 次路由评估的真实比较：Hybrid 在 38 个正例上取得 Hit@1 0.9211、Hit@5 1.0000、MRR@5 0.9561 和 32/38 正向充分判定，明显高于 Keyword 的 13/38 和 Vector 的 17/38；三路 false-sufficient 仍为 0。该结果证明混合检索对扩充内容有价值，但不代表所有决策用例通过，详见 `docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`。
 
 ## 2. 已实现功能
 
@@ -97,15 +99,24 @@
 - 三个 Case 分别为多语言图片上传结果保留、测试角色重置工具和 CodeGraph 定性评测；CodeGraph 不公开精确效率指标或内部项目资料。
 - 私有治理区与原始知识库仍不由运行时直接读取；后续资产仍需逐批走相同人工审核和发布流程。
 
+### 2.11 全量公开资产发布
+
+- 新增确定性生成器，把私有清单中的 52 项非排除资产转换为 6 条长期主线、46 个独立 Case、52 个 Claim、52 个脱敏 Evidence 摘要、6 条 TimelineEvent 和 1 个共享 QuestionPreset。
+- 合并后公开 61/68 项；7 项 `EXCLUDE` 保持私有，原始 Evidence 始终不公开。
+- 治理脚本校验 `VERIFIED / PARTIALLY_VERIFIED / OWNER_CONFIRMED / INVESTIGATED / ASSISTED / UNRESOLVED` 到公开验证状态和贡献类型的保守映射。
+- 比较 CLI 可直接读取三文件候选，在内存中编译 Keyword/Vector 索引并复核规范 RAG 字节，不需要伪造已发布 Bundle。
+- 前端 Case 目录模型已支持“长期主线、单体任务、问题处理、知识与评测”四组；该能力尚未部署。
+- 精确候选已通过结构、引用、隐私、冻结基准和人工 Approval，发布到本地发布区并原子导入当前分支随包运行时。
+
 ## 3. 部分实现或受运行条件限制
 
 | 能力 | 当前状态 | 还缺什么 |
 |---|---|---|
-| 公开内容规模 | 68 项私有登记；首批 1 个 Project 增量和 3 个 Case 已进入 schema 3.0 Bundle | 继续逐批审核资产，并在前端和 Agent 支持 Case 前保持公开数据与可执行能力的边界 |
+| 公开内容规模 | 当前随包运行时为 `2026-07-27.1`，公开 61/68 项，形成 7 个 Project 和 49 个 Case | 仍未生产部署；7 项排除资产不得进入公开运行时 |
 | C1 模型表达 | 代码、双 Provider Adapter、Registry 与 fallback 已实现，默认关闭 | 部署方独立完成数据条款审批、注入密钥并决定是否启用；真实 Provider 可用性属于运行环境状态 |
 | 对话式 Agent v2 后端 | `/api/v2/answers`、意图路由、20 轮临时上下文、通用/作品集/混合回答、公开检索、固定工具、事实校验和动态追问已实现，默认关闭 | 前端尚未接入；生产启用还要求访客数据条款审批、单 Provider 密钥与线上验收 |
-| C2a 本地检索 | Wave 1 内容、索引、策略 v2.1、37 例三路真实模型比较和七文件原子导入已完成；Hybrid 当前优于两个单路基线且三路 false-sufficient 为 0，运行时仍默认关闭 | 继续随 Wave 2/3 扩充真实公开项目与独立 holdout；生产侧仍需安装固定 revision 的本地 ONNX 模型并显式配置 `HYBRID`，当前 Git 不包含模型二进制 |
-| C2b 项目比较 | 工具实现并能在多项目时比较 | 当前只有 1 个公开项目，因此真实比较请求会安全返回信息不足 |
+| C2a 本地检索 | 全量内容已发布并导入；89 例比较中 Hybrid 为 32/38 正例充分判定，优于 Keyword 13/38 和 Vector 17/38，三路 false-sufficient 为 0 | 生产侧仍需安装固定 revision 的本地 ONNX 模型并显式配置 `HYBRID`，当前 Git 不包含模型二进制 |
+| C2b 项目比较 | 工具实现并能读取当前 7 个公开 Project，已具备跨项目比较数据 | 仍需完成 Agent 前端入口、浏览器联调和代表性跨项目问题验收 |
 | 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；首批 CaseStudy 内容已由明确的人类审核者批准并发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
 | 匿名观测 | 领域事件、耗时桶和 best-effort 发布端口已实现 | 当前生产适配器是 Noop，没有指标后端、告警或运营面板 |
 | 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略；公开 Bundle 的 6 个 QuestionPreset 均可由 Agent 后端执行 | Case-only preset 的前端入口与联调仍待完成；角色不会解锁不同事实或未发布问题 |
@@ -142,7 +153,7 @@
 
 1. **完善 Case 前端。** 在 Agent 页面重构稳定后，实现 Case 列表/详情、数据映射、错误状态与统一视觉。
 2. **联调 Agent Case 能力。** 前端按 `caseSlug`/`caseSlugs` 契约接入 Case 预设与追问动作，并完成浏览器隐私、刷新清空和错误边界验收。
-3. **继续扩真实公开内容并复测三路检索。** 按治理流程审核更多 Project、Case、APPROVED Evidence 和可执行 QuestionPreset，在更大独立 holdout 上验证 Keyword、Vector、Hybrid 的真实价值。
+3. **复验全量内容的前端与 Agent 行为。** 补齐 Case 页面和 Agent 入口，在浏览器中验证 7 个 Project、49 个 Case、跨项目比较、错误状态与引用边界。
 4. **完成生产部署与线上验收。** 功能和视觉完整后再部署，保留 API、页面、隐私和回滚证据。
 5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
 6. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
