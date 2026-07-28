@@ -1,0 +1,675 @@
+{
+  "schemaVersion": "2.0",
+  "targetContentVersion": "2026-07-27.1",
+  "publishRoutes": [
+    {
+      "assetId": "L-01",
+      "finalRoute": "ENRICH_EXISTING_PROJECT",
+      "projectSlugs": [
+        "sql-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "sql-audit-delivery-set"
+      ]
+    },
+    {
+      "assetId": "T-01",
+      "finalRoute": "ENRICH_EXISTING_PROJECT",
+      "projectSlugs": [
+        "sql-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-sql-audit-async-progress-validation"
+      ]
+    },
+    {
+      "assetId": "T-02",
+      "finalRoute": "ENRICH_EXISTING_PROJECT",
+      "projectSlugs": [
+        "sql-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-sql-audit-result-lifecycle-docs"
+      ]
+    },
+    {
+      "assetId": "T-03",
+      "finalRoute": "ENRICH_EXISTING_PROJECT",
+      "projectSlugs": [
+        "sql-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "sql-audit-july-iteration-set"
+      ]
+    },
+    {
+      "assetId": "T-04",
+      "finalRoute": "ENRICH_EXISTING_PROJECT",
+      "projectSlugs": [
+        "sql-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "sql-audit-july-iteration-set"
+      ]
+    },
+    {
+      "assetId": "T-05",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "test-role-reset"
+      ],
+      "evidenceIds": [
+        "evidence-case-role-reset-guide-and-acceptance"
+      ]
+    },
+    {
+      "assetId": "T-06",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "multilingual-image-preservation"
+      ],
+      "evidenceIds": [
+        "evidence-case-multilingual-implementation-and-regression"
+      ]
+    },
+    {
+      "assetId": "T-17",
+      "finalRoute": "EVIDENCE_ONLY",
+      "projectSlugs": [],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-sql-audit-result-lifecycle-docs"
+      ]
+    },
+    {
+      "assetId": "K-01",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "codegraph-evaluation"
+      ],
+      "evidenceIds": [
+        "evidence-case-codegraph-report-collection"
+      ]
+    },
+    {
+      "assetId": "L-02",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "image-upload-audit"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-02"
+      ]
+    },
+    {
+      "assetId": "L-03",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "activity-engineering"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-03"
+      ]
+    },
+    {
+      "assetId": "L-04",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "personal-agent-platform"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-04"
+      ]
+    },
+    {
+      "assetId": "L-05",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "context-engineering-evaluation"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-05"
+      ]
+    },
+    {
+      "assetId": "L-06",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "technical-writing"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-06"
+      ]
+    },
+    {
+      "assetId": "L-07",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "engineering-delivery-learning"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-public-l-07"
+      ]
+    },
+    {
+      "assetId": "T-07",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-07-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-07"
+      ]
+    },
+    {
+      "assetId": "T-08",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-08-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-08"
+      ]
+    },
+    {
+      "assetId": "T-09",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-09-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-09"
+      ]
+    },
+    {
+      "assetId": "T-10",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-10-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-10"
+      ]
+    },
+    {
+      "assetId": "T-11",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-11-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-11"
+      ]
+    },
+    {
+      "assetId": "T-12",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-12-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-12"
+      ]
+    },
+    {
+      "assetId": "T-13",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-13-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-13"
+      ]
+    },
+    {
+      "assetId": "T-14",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-14-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-14"
+      ]
+    },
+    {
+      "assetId": "T-15",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-15-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-15"
+      ]
+    },
+    {
+      "assetId": "T-16",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-16-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-16"
+      ]
+    },
+    {
+      "assetId": "T-18",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-18-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-18"
+      ]
+    },
+    {
+      "assetId": "T-19",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "t-19-task"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-19"
+      ]
+    },
+    {
+      "assetId": "A-01",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-01-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-01"
+      ]
+    },
+    {
+      "assetId": "A-02",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-02-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-02"
+      ]
+    },
+    {
+      "assetId": "A-03",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-03-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-03"
+      ]
+    },
+    {
+      "assetId": "A-04",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-04-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-04"
+      ]
+    },
+    {
+      "assetId": "A-05",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-05-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-05"
+      ]
+    },
+    {
+      "assetId": "A-06",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-06-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-06"
+      ]
+    },
+    {
+      "assetId": "A-07",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-07-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-07"
+      ]
+    },
+    {
+      "assetId": "A-08",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-08-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-08"
+      ]
+    },
+    {
+      "assetId": "A-09",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-09-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-09"
+      ]
+    },
+    {
+      "assetId": "A-10",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-10-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-10"
+      ]
+    },
+    {
+      "assetId": "A-11",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-11-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-11"
+      ]
+    },
+    {
+      "assetId": "A-12",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-12-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-12"
+      ]
+    },
+    {
+      "assetId": "A-13",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-13-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-13"
+      ]
+    },
+    {
+      "assetId": "A-14",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-14-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-14"
+      ]
+    },
+    {
+      "assetId": "A-15",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-15-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-15"
+      ]
+    },
+    {
+      "assetId": "A-16",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-16-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-16"
+      ]
+    },
+    {
+      "assetId": "A-17",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-17-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-17"
+      ]
+    },
+    {
+      "assetId": "A-18",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-18-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-18"
+      ]
+    },
+    {
+      "assetId": "A-19",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-19-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-19"
+      ]
+    },
+    {
+      "assetId": "A-20",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-20-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-20"
+      ]
+    },
+    {
+      "assetId": "A-21",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "a-21-incident"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-21"
+      ]
+    },
+    {
+      "assetId": "K-02",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-02-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-02"
+      ]
+    },
+    {
+      "assetId": "K-04",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-04-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-04"
+      ]
+    },
+    {
+      "assetId": "K-05",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-05-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-05"
+      ]
+    },
+    {
+      "assetId": "K-06",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-06-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-06"
+      ]
+    },
+    {
+      "assetId": "K-09",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-09-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-09"
+      ]
+    },
+    {
+      "assetId": "K-10",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-10-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-10"
+      ]
+    },
+    {
+      "assetId": "K-11",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-11-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-11"
+      ]
+    },
+    {
+      "assetId": "K-12",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-12-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-12"
+      ]
+    },
+    {
+      "assetId": "K-13",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-13-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-13"
+      ]
+    },
+    {
+      "assetId": "K-14",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-14-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-14"
+      ]
+    },
+    {
+      "assetId": "K-15",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-15-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-15"
+      ]
+    },
+    {
+      "assetId": "K-16",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-16-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-16"
+      ]
+    },
+    {
+      "assetId": "K-17",
+      "finalRoute": "CASE",
+      "projectSlugs": [],
+      "caseSlugs": [
+        "k-17-knowledge"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-17"
+      ]
+    }
+  ]
+}

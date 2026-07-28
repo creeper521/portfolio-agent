@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.adapter.portfolio;
 
 import com.portfolio.agent.answer.domain.AnswerEvidence;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
@@ -48,6 +49,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalPortfolioKnowledgeAdapterTest {
+
+    @Test
+    void answerClaimCategoriesCoverEveryPublicClaimCategory() {
+        assertThat(ClaimCategory.values())
+                .allSatisfy(category -> assertThat(
+                        AnswerClaimCategory.valueOf(category.name()))
+                        .isNotNull());
+    }
 
     @Test
     void projectsReviewedPublicRetrievalChunkText() {

@@ -1,0 +1,4712 @@
+{
+  "schemaVersion": "2.0",
+  "baseContentVersion": "2026-07-24.1",
+  "targetContentVersion": "2026-07-27.1",
+  "projects": [
+    {
+      "id": "image-audit-project",
+      "code": "P-02",
+      "slug": "image-upload-audit",
+      "technologies": [
+        "Java",
+        "Spring Boot",
+        "审计日志"
+      ],
+      "title": "图片上传与审计能力",
+      "summary": "包含多语言图片映射保留修复和上传审计原型，其中审计能力未确认发布。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“图片上传与审计能力”持续整理实现、排查或学习产出。",
+        "当前公开收录 1 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "包含多语言图片映射保留修复和上传审计原型，其中审计能力未确认发布。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-public-l-02"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-02"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-02"
+      ]
+    },
+    {
+      "id": "activity-engineering-project",
+      "code": "P-03",
+      "slug": "activity-engineering",
+      "technologies": [
+        "Java",
+        "配置管理",
+        "缓存"
+      ],
+      "title": "活动系统工程实践",
+      "summary": "覆盖配置、缓存、版本刷新、展示限制和多类故障排查，需按案例确认个人贡献与验收。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“活动系统工程实践”持续整理实现、排查或学习产出。",
+        "当前公开收录 24 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "覆盖配置、缓存、版本刷新、展示限制和多类故障排查，需按案例确认个人贡献与验收。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "IN_PROGRESS",
+      "contributionType": "COLLABORATIVE",
+      "claimIds": [
+        "claim-public-l-03"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-03"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ]
+    },
+    {
+      "id": "personal-agent-platform-project",
+      "code": "P-04",
+      "slug": "personal-agent-platform",
+      "technologies": [
+        "RAG",
+        "MCP",
+        "Agent",
+        "Vue"
+      ],
+      "title": "个人智能平台与 Agent 原型",
+      "summary": "已验证检索、工具连接、会话记忆和语言偏好等关键链路，完整工程边界仍待补齐。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“个人智能平台与 Agent 原型”持续整理实现、排查或学习产出。",
+        "当前公开收录 4 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "已验证检索、工具连接、会话记忆和语言偏好等关键链路，完整工程边界仍待补齐。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-public-l-04"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-04"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-04"
+      ]
+    },
+    {
+      "id": "context-engineering-project",
+      "code": "P-05",
+      "slug": "context-engineering-evaluation",
+      "technologies": [
+        "CodeGraph",
+        "RAG",
+        "检索评测"
+      ],
+      "title": "智能开发工具与上下文工程评测",
+      "summary": "形成代码图谱、上下文压缩及多种辅助工具的本地评测与适用边界。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“智能开发工具与上下文工程评测”持续整理实现、排查或学习产出。",
+        "当前公开收录 5 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "形成代码图谱、上下文压缩及多种辅助工具的本地评测与适用边界。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-public-l-05"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-05"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ]
+    },
+    {
+      "id": "technical-writing-project",
+      "code": "P-06",
+      "slug": "technical-writing",
+      "technologies": [
+        "Markdown",
+        "技术写作"
+      ],
+      "title": "技术写作与内部分享",
+      "summary": "包含私有技术长文、内部分享和专题手册，公开资格与原创边界需逐篇审核。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“技术写作与内部分享”持续整理实现、排查或学习产出。",
+        "当前公开收录 3 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "包含私有技术长文、内部分享和专题手册，公开资格与原创边界需逐篇审核。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-public-l-06"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-06"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-06"
+      ]
+    },
+    {
+      "id": "engineering-delivery-learning-project",
+      "code": "P-07",
+      "slug": "engineering-delivery-learning",
+      "technologies": [
+        "Maven",
+        "Docker",
+        "持续集成"
+      ],
+      "title": "工程操作与交付学习",
+      "summary": "记录构建产物替换、打包交付、本地持续集成和容器化学习，不宣称生产级平台交付。",
+      "background": "该主线由资产库中的已审核摘要汇总，公开内容不包含内部系统标识、环境信息或原始材料。",
+      "responsibilities": [
+        "围绕“工程操作与交付学习”持续整理实现、排查或学习产出。",
+        "当前公开收录 9 个任务、案例或知识条目。"
+      ],
+      "solution": "以可追溯的资产条目组织内容，并按原始成熟度、贡献方式和证据状态展示。",
+      "keyDecisions": [
+        "原始证据保持私有，公开层只保留脱敏摘要。",
+        "未完成最终验收的排查不表述为已修复，协助事项不表述为独立交付。"
+      ],
+      "verification": [
+        "核对资产编号、公开摘要、状态、贡献方式和证据状态。"
+      ],
+      "outcome": "记录构建产物替换、打包交付、本地持续集成和容器化学习，不宣称生产级平台交付。",
+      "handoff": "公开页面保留来源边界；详细证据仅在私有知识库中维护。",
+      "status": "PROTOTYPE",
+      "contributionType": "COLLABORATIVE",
+      "claimIds": [
+        "claim-public-l-07"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-07"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-public-t-07",
+      "code": "CASE-04",
+      "slug": "t-07-task",
+      "type": "FEATURE",
+      "title": "图片上传审计记录",
+      "summary": "实现操作信息和图片清单的独立审计记录，已自测但未确认发布。",
+      "problem": "该条目记录了“图片上传审计记录”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "实现操作信息和图片清单的独立审计记录，已自测但未确认发布。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "projectId": "image-audit-project",
+      "claimIds": [
+        "claim-public-t-07"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-07"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-02"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-08",
+      "code": "CASE-05",
+      "slug": "t-08-task",
+      "type": "FEATURE",
+      "title": "流式聊天与历史会话原型",
+      "summary": "验证流式输出、会话列表、历史消息和会话记忆。",
+      "problem": "该条目记录了“流式聊天与历史会话原型”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "验证流式输出、会话列表、历史消息和会话记忆。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "personal-agent-platform-project",
+      "claimIds": [
+        "claim-public-t-08"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-08"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-04"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-09",
+      "code": "CASE-06",
+      "slug": "t-09-task",
+      "type": "FEATURE",
+      "title": "模型工具调用原型",
+      "summary": "验证时间与天气工具以及两种模型客户端调用方式。",
+      "problem": "该条目记录了“模型工具调用原型”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "验证时间与天气工具以及两种模型客户端调用方式。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "personal-agent-platform-project",
+      "claimIds": [
+        "claim-public-t-09"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-09"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-04"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-10",
+      "code": "CASE-07",
+      "slug": "t-10-task",
+      "type": "FEATURE",
+      "title": "模型上下文协议双传输原型",
+      "summary": "完成标准输入输出与事件流两种本地服务调用闭环。",
+      "problem": "该条目记录了“模型上下文协议双传输原型”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "完成标准输入输出与事件流两种本地服务调用闭环。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "personal-agent-platform-project",
+      "claimIds": [
+        "claim-public-t-10"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-10"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-04"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-11",
+      "code": "CASE-08",
+      "slug": "t-11-task",
+      "type": "FEATURE",
+      "title": "个人智能平台关键链路",
+      "summary": "检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。",
+      "problem": "该条目记录了“个人智能平台关键链路”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "personal-agent-platform-project",
+      "claimIds": [
+        "claim-public-t-11"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-11"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-04"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-12",
+      "code": "CASE-09",
+      "slug": "t-12-task",
+      "type": "FEATURE",
+      "title": "本地持续集成验证",
+      "summary": "完成工具安装、构建环境配置和示例项目构建成功验证。",
+      "problem": "该条目记录了“本地持续集成验证”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "完成工具安装、构建环境配置和示例项目构建成功验证。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "context-engineering-project",
+      "claimIds": [
+        "claim-public-t-12"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-12"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-13",
+      "code": "CASE-10",
+      "slug": "t-13-task",
+      "type": "FEATURE",
+      "title": "压力模块与运行时追踪",
+      "summary": "修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。",
+      "problem": "该条目记录了“压力模块与运行时追踪”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "context-engineering-project",
+      "claimIds": [
+        "claim-public-t-13"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-13"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-14",
+      "code": "CASE-11",
+      "slug": "t-14-task",
+      "type": "FEATURE",
+      "title": "前端构建产物交付流程",
+      "summary": "完成构建、静态资源替换、旧产物清理和版本提交步骤。",
+      "problem": "该条目记录了“前端构建产物交付流程”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "完成构建、静态资源替换、旧产物清理和版本提交步骤。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-t-14"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-14"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-15",
+      "code": "CASE-12",
+      "slug": "t-15-task",
+      "type": "FEATURE",
+      "title": "服务包构建与替换流程",
+      "summary": "形成构建、打包、上传、备份、替换与重启的完整操作流程。",
+      "problem": "该条目记录了“服务包构建与替换流程”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "形成构建、打包、上传、备份、替换与重启的完整操作流程。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-t-15"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-15"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-16",
+      "code": "CASE-13",
+      "slug": "t-16-task",
+      "type": "FEATURE",
+      "title": "活动说明文档",
+      "summary": "在缺少既有说明的情况下按规范补齐活动文档。",
+      "problem": "该条目记录了“活动说明文档”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "在缺少既有说明的情况下按规范补齐活动文档。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-t-16"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-16"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-18",
+      "code": "CASE-14",
+      "slug": "t-18-task",
+      "type": "FEATURE",
+      "title": "智能工程内部分享",
+      "summary": "完成正式讲稿、连续演练、现场分享和讲后复盘闭环。",
+      "problem": "该条目记录了“智能工程内部分享”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "完成正式讲稿、连续演练、现场分享和讲后复盘闭环。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "technical-writing-project",
+      "claimIds": [
+        "claim-public-t-18"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-18"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-06"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-t-19",
+      "code": "CASE-15",
+      "slug": "t-19-task",
+      "type": "FEATURE",
+      "title": "本地知识库迁移与增量同步",
+      "summary": "完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。",
+      "problem": "该条目记录了“本地知识库迁移与增量同步”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-t-19"
+      ],
+      "evidenceIds": [
+        "evidence-public-t-19"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-01",
+      "code": "CASE-16",
+      "slug": "a-01-incident",
+      "type": "INCIDENT",
+      "title": "重复配置导致唯一性冲突",
+      "summary": "通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。",
+      "problem": "该条目记录了“重复配置导致唯一性冲突”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-01"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-01"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-02",
+      "code": "CASE-17",
+      "slug": "a-02-incident",
+      "type": "INCIDENT",
+      "title": "折扣配置未生效",
+      "summary": "定位活动类型与计价配置差异并给出修正。",
+      "problem": "该条目记录了“折扣配置未生效”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "定位活动类型与计价配置差异并给出修正。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-02"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-02"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-03",
+      "code": "CASE-18",
+      "slug": "a-03-incident",
+      "type": "INCIDENT",
+      "title": "账号年龄限制导致内容不展示",
+      "summary": "调整年龄限制、刷新版本并确认内容恢复展示。",
+      "problem": "该条目记录了“账号年龄限制导致内容不展示”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "调整年龄限制、刷新版本并确认内容恢复展示。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-03"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-03"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-04",
+      "code": "CASE-19",
+      "slug": "a-04-incident",
+      "type": "INCIDENT",
+      "title": "活动展示条件异常",
+      "summary": "补齐前置数据并调整开放与创建时间后完成展示验证。",
+      "problem": "该条目记录了“活动展示条件异常”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "补齐前置数据并调整开放与创建时间后完成展示验证。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-04"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-04"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-05",
+      "code": "CASE-20",
+      "slug": "a-05-incident",
+      "type": "INCIDENT",
+      "title": "结束时间与旧客户端双重过滤",
+      "summary": "先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。",
+      "problem": "该条目记录了“结束时间与旧客户端双重过滤”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-05"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-05"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-06",
+      "code": "CASE-21",
+      "slug": "a-06-incident",
+      "type": "INCIDENT",
+      "title": "环境结构缺失字段",
+      "summary": "对比环境结构、确认影响边界并使用既有备份方案补齐字段。",
+      "problem": "该条目记录了“环境结构缺失字段”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "对比环境结构、确认影响边界并使用既有备份方案补齐字段。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-06"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-06"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-07",
+      "code": "CASE-22",
+      "slug": "a-07-incident",
+      "type": "INCIDENT",
+      "title": "周期积分异常排查",
+      "summary": "补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。",
+      "problem": "补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-07"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-07"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-08",
+      "code": "CASE-23",
+      "slug": "a-08-incident",
+      "type": "INCIDENT",
+      "title": "冲突活动残留状态排查",
+      "summary": "按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。",
+      "problem": "按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-08"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-08"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-09",
+      "code": "CASE-24",
+      "slug": "a-09-incident",
+      "type": "INCIDENT",
+      "title": "排位配置加载异常",
+      "summary": "定位两份配置中的活动标识不一致，未记录最终修正与验收。",
+      "problem": "定位两份配置中的活动标识不一致，未记录最终修正与验收。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "定位两份配置中的活动标识不一致，未记录最终修正与验收。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-09"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-09"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-10",
+      "code": "CASE-25",
+      "slug": "a-10-incident",
+      "type": "INCIDENT",
+      "title": "周末奖励倍率异常",
+      "summary": "识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。",
+      "problem": "识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-10"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-10"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-11",
+      "code": "CASE-26",
+      "slug": "a-11-incident",
+      "type": "INCIDENT",
+      "title": "活动初始化异常",
+      "summary": "确认配置正常但初始化数据异常并继续追溯，未形成最终结论。",
+      "problem": "确认配置正常但初始化数据异常并继续追溯，未形成最终结论。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "确认配置正常但初始化数据异常并继续追溯，未形成最终结论。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-11"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-11"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-12",
+      "code": "CASE-27",
+      "slug": "a-12-incident",
+      "type": "INCIDENT",
+      "title": "抽奖兑换标识不一致",
+      "summary": "定位全局配置与活动规则标识不一致，未记录最终修改。",
+      "problem": "定位全局配置与活动规则标识不一致，未记录最终修改。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "定位全局配置与活动规则标识不一致，未记录最终修改。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-12"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-12"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-13",
+      "code": "CASE-28",
+      "slug": "a-13-incident",
+      "type": "INCIDENT",
+      "title": "定制礼包奖励缺失",
+      "summary": "定位规则中缺少一段奖励配置，未记录补齐后的验收。",
+      "problem": "定位规则中缺少一段奖励配置，未记录补齐后的验收。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "定位规则中缺少一段奖励配置，未记录补齐后的验收。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-13"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-13"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-14",
+      "code": "CASE-29",
+      "slug": "a-14-incident",
+      "type": "INCIDENT",
+      "title": "礼包积分被配置覆盖",
+      "summary": "定位分支合并时配置被覆盖，未记录修复发布结果。",
+      "problem": "定位分支合并时配置被覆盖，未记录修复发布结果。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "定位分支合并时配置被覆盖，未记录修复发布结果。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-14"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-14"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-15",
+      "code": "CASE-30",
+      "slug": "a-15-incident",
+      "type": "INCIDENT",
+      "title": "定制内容展示排查",
+      "summary": "确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。",
+      "problem": "确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-15"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-15"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-16",
+      "code": "CASE-31",
+      "slug": "a-16-incident",
+      "type": "INCIDENT",
+      "title": "补发通知模板缺失",
+      "summary": "定位通知模板未配置并协助查询模板标识，缺最终补齐记录。",
+      "problem": "定位通知模板未配置并协助查询模板标识，缺最终补齐记录。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "定位通知模板未配置并协助查询模板标识，缺最终补齐记录。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-16"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-16"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-17",
+      "code": "CASE-32",
+      "slug": "a-17-incident",
+      "type": "INCIDENT",
+      "title": "内容未下发的限制与缓存排查",
+      "summary": "根因候选为新手限制和缓存配置未刷新，缺逐项验证。",
+      "problem": "根因候选为新手限制和缓存配置未刷新，缺逐项验证。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "根因候选为新手限制和缓存配置未刷新，缺逐项验证。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-17"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-17"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-18",
+      "code": "CASE-33",
+      "slug": "a-18-incident",
+      "type": "INCIDENT",
+      "title": "匹配服务启动参数缺失",
+      "summary": "协助定位启动脚本缺少必要参数，缺重启与验收记录。",
+      "problem": "协助定位启动脚本缺少必要参数，缺重启与验收记录。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "协助定位启动脚本缺少必要参数，缺重启与验收记录。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-18"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-18"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-19",
+      "code": "CASE-34",
+      "slug": "a-19-incident",
+      "type": "INCIDENT",
+      "title": "弹窗条件链路排查",
+      "summary": "确认服务端已经下发并将客户端表现问题交由对应人员处理。",
+      "problem": "确认服务端已经下发并将客户端表现问题交由对应人员处理。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "确认服务端已经下发并将客户端表现问题交由对应人员处理。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-19"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-19"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-20",
+      "code": "CASE-35",
+      "slug": "a-20-incident",
+      "type": "INCIDENT",
+      "title": "活动多语言缺失排查",
+      "summary": "从缺少数据继续定位到多语言内容缺失，缺导入后的验收。",
+      "problem": "从缺少数据继续定位到多语言内容缺失，缺导入后的验收。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "从缺少数据继续定位到多语言内容缺失，缺导入后的验收。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-20"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-20"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-a-21",
+      "code": "CASE-36",
+      "slug": "a-21-incident",
+      "type": "INCIDENT",
+      "title": "过滤与资源异常排查",
+      "summary": "服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。",
+      "problem": "服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "当前只确认已完成排查，不声明最终修复或上线验收。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-a-21"
+      ],
+      "evidenceIds": [
+        "evidence-public-a-21"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-02",
+      "code": "CASE-37",
+      "slug": "k-02-knowledge",
+      "type": "EVALUATION",
+      "title": "上下文压缩离线评测",
+      "summary": "完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。",
+      "problem": "该条目记录了“上下文压缩离线评测”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "projectId": "context-engineering-project",
+      "claimIds": [
+        "claim-public-k-02"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-02"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-04",
+      "code": "CASE-38",
+      "slug": "k-04-knowledge",
+      "type": "EVALUATION",
+      "title": "Agent 记忆机制对比",
+      "summary": "比较记忆写入、整理与适用场景，属于外部方案研究。",
+      "problem": "该条目记录了“Agent 记忆机制对比”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "比较记忆写入、整理与适用场景，属于外部方案研究。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "context-engineering-project",
+      "claimIds": [
+        "claim-public-k-04"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-04"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-05",
+      "code": "CASE-39",
+      "slug": "k-05-knowledge",
+      "type": "EVALUATION",
+      "title": "Agent Harness 学习手册",
+      "summary": "形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。",
+      "problem": "该条目记录了“Agent Harness 学习手册”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "context-engineering-project",
+      "claimIds": [
+        "claim-public-k-05"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-05"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-05"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-06",
+      "code": "CASE-40",
+      "slug": "k-06-knowledge",
+      "type": "EVALUATION",
+      "title": "容器化学习手册",
+      "summary": "整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。",
+      "problem": "该条目记录了“容器化学习手册”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-06"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-06"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-09",
+      "code": "CASE-41",
+      "slug": "k-09-knowledge",
+      "type": "EVALUATION",
+      "title": "多数据源路由与缓存研究",
+      "summary": "整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。",
+      "problem": "该条目记录了“多数据源路由与缓存研究”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-09"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-09"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-10",
+      "code": "CASE-42",
+      "slug": "k-10-knowledge",
+      "type": "EVALUATION",
+      "title": "活动开发流程与红点设计",
+      "summary": "整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。",
+      "problem": "该条目记录了“活动开发流程与红点设计”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-k-10"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-10"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-11",
+      "code": "CASE-43",
+      "slug": "k-11-knowledge",
+      "type": "EVALUATION",
+      "title": "对局与通知机制学习",
+      "summary": "形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。",
+      "problem": "该条目记录了“对局与通知机制学习”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-11"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-11"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-12",
+      "code": "CASE-44",
+      "slug": "k-12-knowledge",
+      "type": "EVALUATION",
+      "title": "网络与事件驱动机制学习",
+      "summary": "整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。",
+      "problem": "该条目记录了“网络与事件驱动机制学习”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-12"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-12"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-13",
+      "code": "CASE-45",
+      "slug": "k-13-knowledge",
+      "type": "EVALUATION",
+      "title": "红点架构与复弹机制学习",
+      "summary": "整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。",
+      "problem": "该条目记录了“红点架构与复弹机制学习”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "projectId": "activity-engineering-project",
+      "claimIds": [
+        "claim-public-k-13"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-13"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-03"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-14",
+      "code": "CASE-46",
+      "slug": "k-14-knowledge",
+      "type": "EVALUATION",
+      "title": "版本冲突处理案例",
+      "summary": "记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。",
+      "problem": "该条目记录了“版本冲突处理案例”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-14"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-14"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-15",
+      "code": "CASE-47",
+      "slug": "k-15-knowledge",
+      "type": "EVALUATION",
+      "title": "构建与远程操作资料",
+      "summary": "整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。",
+      "problem": "该条目记录了“构建与远程操作资料”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：PARTIALLY_VERIFIED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "engineering-delivery-learning-project",
+      "claimIds": [
+        "claim-public-k-15"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-15"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-07"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-16",
+      "code": "CASE-48",
+      "slug": "k-16-knowledge",
+      "type": "EVALUATION",
+      "title": "私有技术长文集合",
+      "summary": "私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。",
+      "problem": "该条目记录了“私有技术长文集合”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：OWNER_CONFIRMED。",
+        "来源审核状态：HOLD。"
+      ],
+      "outcome": "私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "technical-writing-project",
+      "claimIds": [
+        "claim-public-k-16"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-16"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-06"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    },
+    {
+      "id": "case-public-k-17",
+      "code": "CASE-49",
+      "slug": "k-17-knowledge",
+      "type": "EVALUATION",
+      "title": "历史技术博客主页",
+      "summary": "公开主页可作为历史写作证据，动态统计数字必须标注快照日期。",
+      "problem": "该条目记录了“历史技术博客主页”的公开工作摘要。",
+      "actions": [
+        "按资产库审核结果提炼公开摘要。",
+        "移除内部标识、原始代码、截图、地址和环境路径。"
+      ],
+      "decisions": [
+        "保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"
+      ],
+      "verification": [
+        "来源证据状态：VERIFIED。",
+        "来源审核状态：PUBLIC_REVIEW_REQUIRED。"
+      ],
+      "outcome": "公开主页可作为历史写作证据，动态统计数字必须标注快照日期。",
+      "limitations": [
+        "公开内容只包含脱敏摘要，不能替代私有原始证据。",
+        "不推断未在资产库中记录的生产效果或量化收益。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "technical-writing-project",
+      "claimIds": [
+        "claim-public-k-17"
+      ],
+      "evidenceIds": [
+        "evidence-public-k-17"
+      ],
+      "timelineEventIds": [
+        "timeline-public-l-06"
+      ],
+      "questionPresetIds": [
+        "question-public-assets-overview"
+      ]
+    }
+  ],
+  "timelineEvents": [
+    {
+      "id": "timeline-public-l-02",
+      "dateLabel": "截至 2026.07",
+      "title": "图片上传与审计能力公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 1 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "image-audit-project"
+      ],
+      "caseIds": [
+        "case-public-t-07"
+      ],
+      "claimIds": [
+        "claim-public-l-02",
+        "claim-public-t-07"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-02",
+        "evidence-public-t-07"
+      ]
+    },
+    {
+      "id": "timeline-public-l-03",
+      "dateLabel": "截至 2026.07",
+      "title": "活动系统工程实践公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 24 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "activity-engineering-project"
+      ],
+      "caseIds": [
+        "case-public-t-16",
+        "case-public-a-01",
+        "case-public-a-02",
+        "case-public-a-03",
+        "case-public-a-04",
+        "case-public-a-05",
+        "case-public-a-06",
+        "case-public-a-07",
+        "case-public-a-08",
+        "case-public-a-09",
+        "case-public-a-10",
+        "case-public-a-11",
+        "case-public-a-12",
+        "case-public-a-13",
+        "case-public-a-14",
+        "case-public-a-15",
+        "case-public-a-16",
+        "case-public-a-17",
+        "case-public-a-18",
+        "case-public-a-19",
+        "case-public-a-20",
+        "case-public-a-21",
+        "case-public-k-10",
+        "case-public-k-13"
+      ],
+      "claimIds": [
+        "claim-public-l-03",
+        "claim-public-t-16",
+        "claim-public-a-01",
+        "claim-public-a-02",
+        "claim-public-a-03",
+        "claim-public-a-04",
+        "claim-public-a-05",
+        "claim-public-a-06",
+        "claim-public-a-07",
+        "claim-public-a-08",
+        "claim-public-a-09",
+        "claim-public-a-10",
+        "claim-public-a-11",
+        "claim-public-a-12",
+        "claim-public-a-13",
+        "claim-public-a-14",
+        "claim-public-a-15",
+        "claim-public-a-16",
+        "claim-public-a-17",
+        "claim-public-a-18",
+        "claim-public-a-19",
+        "claim-public-a-20",
+        "claim-public-a-21",
+        "claim-public-k-10",
+        "claim-public-k-13"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-03",
+        "evidence-public-t-16",
+        "evidence-public-a-01",
+        "evidence-public-a-02",
+        "evidence-public-a-03",
+        "evidence-public-a-04",
+        "evidence-public-a-05",
+        "evidence-public-a-06",
+        "evidence-public-a-07",
+        "evidence-public-a-08",
+        "evidence-public-a-09",
+        "evidence-public-a-10",
+        "evidence-public-a-11",
+        "evidence-public-a-12",
+        "evidence-public-a-13",
+        "evidence-public-a-14",
+        "evidence-public-a-15",
+        "evidence-public-a-16",
+        "evidence-public-a-17",
+        "evidence-public-a-18",
+        "evidence-public-a-19",
+        "evidence-public-a-20",
+        "evidence-public-a-21",
+        "evidence-public-k-10",
+        "evidence-public-k-13"
+      ]
+    },
+    {
+      "id": "timeline-public-l-04",
+      "dateLabel": "截至 2026.07",
+      "title": "个人智能平台与 Agent 原型公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 4 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "personal-agent-platform-project"
+      ],
+      "caseIds": [
+        "case-public-t-08",
+        "case-public-t-09",
+        "case-public-t-10",
+        "case-public-t-11"
+      ],
+      "claimIds": [
+        "claim-public-l-04",
+        "claim-public-t-08",
+        "claim-public-t-09",
+        "claim-public-t-10",
+        "claim-public-t-11"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-04",
+        "evidence-public-t-08",
+        "evidence-public-t-09",
+        "evidence-public-t-10",
+        "evidence-public-t-11"
+      ]
+    },
+    {
+      "id": "timeline-public-l-05",
+      "dateLabel": "截至 2026.07",
+      "title": "智能开发工具与上下文工程评测公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 5 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "context-engineering-project"
+      ],
+      "caseIds": [
+        "case-public-t-12",
+        "case-public-t-13",
+        "case-public-k-02",
+        "case-public-k-04",
+        "case-public-k-05"
+      ],
+      "claimIds": [
+        "claim-public-l-05",
+        "claim-public-t-12",
+        "claim-public-t-13",
+        "claim-public-k-02",
+        "claim-public-k-04",
+        "claim-public-k-05"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-05",
+        "evidence-public-t-12",
+        "evidence-public-t-13",
+        "evidence-public-k-02",
+        "evidence-public-k-04",
+        "evidence-public-k-05"
+      ]
+    },
+    {
+      "id": "timeline-public-l-06",
+      "dateLabel": "截至 2026.07",
+      "title": "技术写作与内部分享公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 3 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "technical-writing-project"
+      ],
+      "caseIds": [
+        "case-public-t-18",
+        "case-public-k-16",
+        "case-public-k-17"
+      ],
+      "claimIds": [
+        "claim-public-l-06",
+        "claim-public-t-18",
+        "claim-public-k-16",
+        "claim-public-k-17"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-06",
+        "evidence-public-t-18",
+        "evidence-public-k-16",
+        "evidence-public-k-17"
+      ]
+    },
+    {
+      "id": "timeline-public-l-07",
+      "dateLabel": "截至 2026.07",
+      "title": "工程操作与交付学习公开资产整理",
+      "problem": "原始工作记录分散在私有知识库中，公开范围、成熟度与贡献边界需要统一复核。",
+      "action": "将该主线及 9 个关联条目整理为脱敏 Claim、Evidence 摘要和可检索案例。",
+      "impact": "形成可公开检索的资产入口，同时保留原始证据私有和未验收事项的限制说明。",
+      "projectIds": [
+        "engineering-delivery-learning-project"
+      ],
+      "caseIds": [
+        "case-public-t-14",
+        "case-public-t-15",
+        "case-public-t-19",
+        "case-public-k-06",
+        "case-public-k-09",
+        "case-public-k-11",
+        "case-public-k-12",
+        "case-public-k-14",
+        "case-public-k-15"
+      ],
+      "claimIds": [
+        "claim-public-l-07",
+        "claim-public-t-14",
+        "claim-public-t-15",
+        "claim-public-t-19",
+        "claim-public-k-06",
+        "claim-public-k-09",
+        "claim-public-k-11",
+        "claim-public-k-12",
+        "claim-public-k-14",
+        "claim-public-k-15"
+      ],
+      "evidenceIds": [
+        "evidence-public-l-07",
+        "evidence-public-t-14",
+        "evidence-public-t-15",
+        "evidence-public-t-19",
+        "evidence-public-k-06",
+        "evidence-public-k-09",
+        "evidence-public-k-11",
+        "evidence-public-k-12",
+        "evidence-public-k-14",
+        "evidence-public-k-15"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-public-l-02",
+      "subjectType": "PROJECT",
+      "subjectId": "image-audit-project",
+      "category": "OUTCOME",
+      "statement": "包含多语言图片映射保留修复和上传审计原型，其中审计能力未确认发布。",
+      "detail": "公开表述保持“IMPLEMENTED_TESTED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "IMPLEMENTED_TESTED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-l-03",
+      "subjectType": "PROJECT",
+      "subjectId": "activity-engineering-project",
+      "category": "LEARNING",
+      "statement": "覆盖配置、缓存、版本刷新、展示限制和多类故障排查，需按案例确认个人贡献与验收。",
+      "detail": "公开表述保持“INVESTIGATED / UNRESOLVED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "INVESTIGATED",
+        "UNRESOLVED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-l-04",
+      "subjectType": "PROJECT",
+      "subjectId": "personal-agent-platform-project",
+      "category": "OUTCOME",
+      "statement": "已验证检索、工具连接、会话记忆和语言偏好等关键链路，完整工程边界仍待补齐。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-l-05",
+      "subjectType": "PROJECT",
+      "subjectId": "context-engineering-project",
+      "category": "OUTCOME",
+      "statement": "形成代码图谱、上下文压缩及多种辅助工具的本地评测与适用边界。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-l-06",
+      "subjectType": "PROJECT",
+      "subjectId": "technical-writing-project",
+      "category": "OUTCOME",
+      "statement": "包含私有技术长文、内部分享和专题手册，公开资格与原创边界需逐篇审核。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-l-07",
+      "subjectType": "PROJECT",
+      "subjectId": "engineering-delivery-learning-project",
+      "category": "OUTCOME",
+      "statement": "记录构建产物替换、打包交付、本地持续集成和容器化学习，不宣称生产级平台交付。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / COLLABORATIVE / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "MAINLINE",
+        "VALIDATED_PROTOTYPE",
+        "COLLABORATIVE"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-07",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-07",
+      "category": "OUTCOME",
+      "statement": "实现操作信息和图片清单的独立审计记录，已自测但未确认发布。",
+      "detail": "公开表述保持“IMPLEMENTED_TESTED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "IMPLEMENTED_TESTED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "TASK",
+        "IMPLEMENTED_TESTED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-08",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-08",
+      "category": "OUTCOME",
+      "statement": "验证流式输出、会话列表、历史消息和会话记忆。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-09",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-09",
+      "category": "OUTCOME",
+      "statement": "验证时间与天气工具以及两种模型客户端调用方式。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-10",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-10",
+      "category": "OUTCOME",
+      "statement": "完成标准输入输出与事件流两种本地服务调用闭环。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-11",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-11",
+      "category": "OUTCOME",
+      "statement": "检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-12",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-12",
+      "category": "OUTCOME",
+      "statement": "完成工具安装、构建环境配置和示例项目构建成功验证。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-13",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-13",
+      "category": "OUTCOME",
+      "statement": "修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "TASK",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-14",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-14",
+      "category": "OUTCOME",
+      "statement": "完成构建、静态资源替换、旧产物清理和版本提交步骤。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-15",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-15",
+      "category": "OUTCOME",
+      "statement": "形成构建、打包、上传、备份、替换与重启的完整操作流程。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-16",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-16",
+      "category": "OUTCOME",
+      "statement": "在缺少既有说明的情况下按规范补齐活动文档。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "TASK",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-18",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-18",
+      "category": "OUTCOME",
+      "statement": "完成正式讲稿、连续演练、现场分享和讲后复盘闭环。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "TASK",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-t-19",
+      "subjectType": "CASE",
+      "subjectId": "case-public-t-19",
+      "category": "OUTCOME",
+      "statement": "完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。",
+      "detail": "公开表述保持“DELIVERED / COLLABORATIVE / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "TASK",
+        "DELIVERED",
+        "COLLABORATIVE"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-01",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-01",
+      "category": "OUTCOME",
+      "statement": "通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-02",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-02",
+      "category": "OUTCOME",
+      "statement": "定位活动类型与计价配置差异并给出修正。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-03",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-03",
+      "category": "OUTCOME",
+      "statement": "调整年龄限制、刷新版本并确认内容恢复展示。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-04",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-04",
+      "category": "OUTCOME",
+      "statement": "补齐前置数据并调整开放与创建时间后完成展示验证。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-05",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-05",
+      "category": "OUTCOME",
+      "statement": "先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-06",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-06",
+      "category": "OUTCOME",
+      "statement": "对比环境结构、确认影响边界并使用既有备份方案补齐字段。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "INCIDENT",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-07",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-07",
+      "category": "LEARNING",
+      "statement": "补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-08",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-08",
+      "category": "LEARNING",
+      "statement": "按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-09",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-09",
+      "category": "LEARNING",
+      "statement": "定位两份配置中的活动标识不一致，未记录最终修正与验收。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-10",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-10",
+      "category": "LEARNING",
+      "statement": "识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-11",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-11",
+      "category": "LEARNING",
+      "statement": "确认配置正常但初始化数据异常并继续追溯，未形成最终结论。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-12",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-12",
+      "category": "LEARNING",
+      "statement": "定位全局配置与活动规则标识不一致，未记录最终修改。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-13",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-13",
+      "category": "LEARNING",
+      "statement": "定位规则中缺少一段奖励配置，未记录补齐后的验收。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-14",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-14",
+      "category": "LEARNING",
+      "statement": "定位分支合并时配置被覆盖，未记录修复发布结果。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-15",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-15",
+      "category": "LEARNING",
+      "statement": "确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。",
+      "detail": "公开表述保持“INVESTIGATED / ASSISTED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "ASSISTED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-16",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-16",
+      "category": "LEARNING",
+      "statement": "定位通知模板未配置并协助查询模板标识，缺最终补齐记录。",
+      "detail": "公开表述保持“INVESTIGATED / ASSISTED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "ASSISTED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-17",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-17",
+      "category": "LEARNING",
+      "statement": "根因候选为新手限制和缓存配置未刷新，缺逐项验证。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-18",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-18",
+      "category": "LEARNING",
+      "statement": "协助定位启动脚本缺少必要参数，缺重启与验收记录。",
+      "detail": "公开表述保持“INVESTIGATED / ASSISTED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "ASSISTED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-19",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-19",
+      "category": "LEARNING",
+      "statement": "确认服务端已经下发并将客户端表现问题交由对应人员处理。",
+      "detail": "公开表述保持“INVESTIGATED / ASSISTED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "ASSISTED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-20",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-20",
+      "category": "LEARNING",
+      "statement": "从缺少数据继续定位到多语言内容缺失，缺导入后的验收。",
+      "detail": "公开表述保持“INVESTIGATED / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-a-21",
+      "subjectType": "CASE",
+      "subjectId": "case-public-a-21",
+      "category": "LEARNING",
+      "statement": "服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。",
+      "detail": "公开表述保持“INVESTIGATED / ASSISTED / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "COLLABORATIVE",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "INCIDENT",
+        "INVESTIGATED",
+        "ASSISTED"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-02",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-02",
+      "category": "OUTCOME",
+      "statement": "完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。",
+      "detail": "公开表述保持“VALIDATED_PROTOTYPE / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "PROTOTYPE",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "VALIDATED_PROTOTYPE",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-04",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-04",
+      "category": "OUTCOME",
+      "statement": "比较记忆写入、整理与适用场景，属于外部方案研究。",
+      "detail": "公开表述保持“LEARNING_ONLY / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "LEARNING_ONLY",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-05",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-05",
+      "category": "OUTCOME",
+      "statement": "形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-06",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-06",
+      "category": "OUTCOME",
+      "statement": "整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-09",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-09",
+      "category": "OUTCOME",
+      "statement": "整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。",
+      "detail": "公开表述保持“LEARNING_ONLY / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "LEARNING_ONLY",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-10",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-10",
+      "category": "OUTCOME",
+      "statement": "整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-11",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-11",
+      "category": "OUTCOME",
+      "statement": "形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。",
+      "detail": "公开表述保持“LEARNING_ONLY / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "LEARNING_ONLY",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-12",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-12",
+      "category": "OUTCOME",
+      "statement": "整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。",
+      "detail": "公开表述保持“LEARNING_ONLY / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "LEARNING_ONLY",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-13",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-13",
+      "category": "OUTCOME",
+      "statement": "整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。",
+      "detail": "公开表述保持“LEARNING_ONLY / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "LEARNING",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "LEARNING_ONLY",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-14",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-14",
+      "category": "OUTCOME",
+      "statement": "记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。",
+      "detail": "公开表述保持“DELIVERED / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DELIVERED",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-15",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-15",
+      "category": "OUTCOME",
+      "statement": "整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / PARTIALLY_VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "INFERRED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-16",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-16",
+      "category": "OUTCOME",
+      "statement": "私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / OWNER_CONFIRMED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "SELF_DECLARED",
+      "verificationStatus": "PARTIALLY_VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-public-k-17",
+      "subjectType": "CASE",
+      "subjectId": "case-public-k-17",
+      "category": "OUTCOME",
+      "statement": "公开主页可作为历史写作证据，动态统计数字必须标注快照日期。",
+      "detail": "公开表述保持“DOCUMENTED_OUTPUT / PRIMARY / VERIFIED”的来源边界，不推断上线、最终修复、生产效果或量化收益。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "KNOWLEDGE_ASSET",
+        "DOCUMENTED_OUTPUT",
+        "PRIMARY"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 70,
+        "GUEST": 60
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence-public-l-02",
+      "code": "E-L-02",
+      "title": "图片上传与审计能力脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-l-03",
+      "code": "E-L-03",
+      "title": "活动系统工程实践脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-l-04",
+      "code": "E-L-04",
+      "title": "个人智能平台与 Agent 原型脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-l-05",
+      "code": "E-L-05",
+      "title": "智能开发工具与上下文工程评测脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-l-06",
+      "code": "E-L-06",
+      "title": "技术写作与内部分享脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-l-07",
+      "code": "E-L-07",
+      "title": "工程操作与交付学习脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-07",
+      "code": "E-T-07",
+      "title": "图片上传审计记录脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-08",
+      "code": "E-T-08",
+      "title": "流式聊天与历史会话原型脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-09",
+      "code": "E-T-09",
+      "title": "模型工具调用原型脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-10",
+      "code": "E-T-10",
+      "title": "模型上下文协议双传输原型脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-11",
+      "code": "E-T-11",
+      "title": "个人智能平台关键链路脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-12",
+      "code": "E-T-12",
+      "title": "本地持续集成验证脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-13",
+      "code": "E-T-13",
+      "title": "压力模块与运行时追踪脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-14",
+      "code": "E-T-14",
+      "title": "前端构建产物交付流程脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-15",
+      "code": "E-T-15",
+      "title": "服务包构建与替换流程脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-16",
+      "code": "E-T-16",
+      "title": "活动说明文档脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-18",
+      "code": "E-T-18",
+      "title": "智能工程内部分享脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-t-19",
+      "code": "E-T-19",
+      "title": "本地知识库迁移与增量同步脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-01",
+      "code": "E-A-01",
+      "title": "重复配置导致唯一性冲突脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-02",
+      "code": "E-A-02",
+      "title": "折扣配置未生效脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-03",
+      "code": "E-A-03",
+      "title": "账号年龄限制导致内容不展示脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-04",
+      "code": "E-A-04",
+      "title": "活动展示条件异常脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-05",
+      "code": "E-A-05",
+      "title": "结束时间与旧客户端双重过滤脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-06",
+      "code": "E-A-06",
+      "title": "环境结构缺失字段脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-07",
+      "code": "E-A-07",
+      "title": "周期积分异常排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-08",
+      "code": "E-A-08",
+      "title": "冲突活动残留状态排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-09",
+      "code": "E-A-09",
+      "title": "排位配置加载异常脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-10",
+      "code": "E-A-10",
+      "title": "周末奖励倍率异常脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-11",
+      "code": "E-A-11",
+      "title": "活动初始化异常脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-12",
+      "code": "E-A-12",
+      "title": "抽奖兑换标识不一致脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-13",
+      "code": "E-A-13",
+      "title": "定制礼包奖励缺失脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-14",
+      "code": "E-A-14",
+      "title": "礼包积分被配置覆盖脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-15",
+      "code": "E-A-15",
+      "title": "定制内容展示排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-16",
+      "code": "E-A-16",
+      "title": "补发通知模板缺失脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-17",
+      "code": "E-A-17",
+      "title": "内容未下发的限制与缓存排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-18",
+      "code": "E-A-18",
+      "title": "匹配服务启动参数缺失脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-19",
+      "code": "E-A-19",
+      "title": "弹窗条件链路排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-20",
+      "code": "E-A-20",
+      "title": "活动多语言缺失排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-a-21",
+      "code": "E-A-21",
+      "title": "过滤与资源异常排查脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-02",
+      "code": "E-K-02",
+      "title": "上下文压缩离线评测脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-04",
+      "code": "E-K-04",
+      "title": "Agent 记忆机制对比脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-05",
+      "code": "E-K-05",
+      "title": "Agent Harness 学习手册脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-06",
+      "code": "E-K-06",
+      "title": "容器化学习手册脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-09",
+      "code": "E-K-09",
+      "title": "多数据源路由与缓存研究脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-10",
+      "code": "E-K-10",
+      "title": "活动开发流程与红点设计脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-11",
+      "code": "E-K-11",
+      "title": "对局与通知机制学习脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-12",
+      "code": "E-K-12",
+      "title": "网络与事件驱动机制学习脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-13",
+      "code": "E-K-13",
+      "title": "红点架构与复弹机制学习脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-14",
+      "code": "E-K-14",
+      "title": "版本冲突处理案例脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-15",
+      "code": "E-K-15",
+      "title": "构建与远程操作资料脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-16",
+      "code": "E-K-16",
+      "title": "私有技术长文集合脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于保留审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-public-k-17",
+      "code": "E-K-17",
+      "title": "历史技术博客主页脱敏证据摘要",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-27",
+      "periodEnd": "2026-07-27",
+      "sourceCount": 1,
+      "summary": "原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    }
+  ],
+  "links": [
+    {
+      "id": "link-public-l-02",
+      "claimId": "claim-public-l-02",
+      "evidenceId": "evidence-public-l-02",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-l-03",
+      "claimId": "claim-public-l-03",
+      "evidenceId": "evidence-public-l-03",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-l-04",
+      "claimId": "claim-public-l-04",
+      "evidenceId": "evidence-public-l-04",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-l-05",
+      "claimId": "claim-public-l-05",
+      "evidenceId": "evidence-public-l-05",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-l-06",
+      "claimId": "claim-public-l-06",
+      "evidenceId": "evidence-public-l-06",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-l-07",
+      "claimId": "claim-public-l-07",
+      "evidenceId": "evidence-public-l-07",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-07",
+      "claimId": "claim-public-t-07",
+      "evidenceId": "evidence-public-t-07",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-08",
+      "claimId": "claim-public-t-08",
+      "evidenceId": "evidence-public-t-08",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-09",
+      "claimId": "claim-public-t-09",
+      "evidenceId": "evidence-public-t-09",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-10",
+      "claimId": "claim-public-t-10",
+      "evidenceId": "evidence-public-t-10",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-11",
+      "claimId": "claim-public-t-11",
+      "evidenceId": "evidence-public-t-11",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-12",
+      "claimId": "claim-public-t-12",
+      "evidenceId": "evidence-public-t-12",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-13",
+      "claimId": "claim-public-t-13",
+      "evidenceId": "evidence-public-t-13",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-14",
+      "claimId": "claim-public-t-14",
+      "evidenceId": "evidence-public-t-14",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-15",
+      "claimId": "claim-public-t-15",
+      "evidenceId": "evidence-public-t-15",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-16",
+      "claimId": "claim-public-t-16",
+      "evidenceId": "evidence-public-t-16",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-18",
+      "claimId": "claim-public-t-18",
+      "evidenceId": "evidence-public-t-18",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-t-19",
+      "claimId": "claim-public-t-19",
+      "evidenceId": "evidence-public-t-19",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-01",
+      "claimId": "claim-public-a-01",
+      "evidenceId": "evidence-public-a-01",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-02",
+      "claimId": "claim-public-a-02",
+      "evidenceId": "evidence-public-a-02",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-03",
+      "claimId": "claim-public-a-03",
+      "evidenceId": "evidence-public-a-03",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-04",
+      "claimId": "claim-public-a-04",
+      "evidenceId": "evidence-public-a-04",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-05",
+      "claimId": "claim-public-a-05",
+      "evidenceId": "evidence-public-a-05",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-06",
+      "claimId": "claim-public-a-06",
+      "evidenceId": "evidence-public-a-06",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-07",
+      "claimId": "claim-public-a-07",
+      "evidenceId": "evidence-public-a-07",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-08",
+      "claimId": "claim-public-a-08",
+      "evidenceId": "evidence-public-a-08",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-09",
+      "claimId": "claim-public-a-09",
+      "evidenceId": "evidence-public-a-09",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-10",
+      "claimId": "claim-public-a-10",
+      "evidenceId": "evidence-public-a-10",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-11",
+      "claimId": "claim-public-a-11",
+      "evidenceId": "evidence-public-a-11",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-12",
+      "claimId": "claim-public-a-12",
+      "evidenceId": "evidence-public-a-12",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-13",
+      "claimId": "claim-public-a-13",
+      "evidenceId": "evidence-public-a-13",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-14",
+      "claimId": "claim-public-a-14",
+      "evidenceId": "evidence-public-a-14",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-15",
+      "claimId": "claim-public-a-15",
+      "evidenceId": "evidence-public-a-15",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-16",
+      "claimId": "claim-public-a-16",
+      "evidenceId": "evidence-public-a-16",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-17",
+      "claimId": "claim-public-a-17",
+      "evidenceId": "evidence-public-a-17",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-18",
+      "claimId": "claim-public-a-18",
+      "evidenceId": "evidence-public-a-18",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-19",
+      "claimId": "claim-public-a-19",
+      "evidenceId": "evidence-public-a-19",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-20",
+      "claimId": "claim-public-a-20",
+      "evidenceId": "evidence-public-a-20",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-a-21",
+      "claimId": "claim-public-a-21",
+      "evidenceId": "evidence-public-a-21",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-02",
+      "claimId": "claim-public-k-02",
+      "evidenceId": "evidence-public-k-02",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-04",
+      "claimId": "claim-public-k-04",
+      "evidenceId": "evidence-public-k-04",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-05",
+      "claimId": "claim-public-k-05",
+      "evidenceId": "evidence-public-k-05",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-06",
+      "claimId": "claim-public-k-06",
+      "evidenceId": "evidence-public-k-06",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-09",
+      "claimId": "claim-public-k-09",
+      "evidenceId": "evidence-public-k-09",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-10",
+      "claimId": "claim-public-k-10",
+      "evidenceId": "evidence-public-k-10",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-11",
+      "claimId": "claim-public-k-11",
+      "evidenceId": "evidence-public-k-11",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-12",
+      "claimId": "claim-public-k-12",
+      "evidenceId": "evidence-public-k-12",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-13",
+      "claimId": "claim-public-k-13",
+      "evidenceId": "evidence-public-k-13",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-14",
+      "claimId": "claim-public-k-14",
+      "evidenceId": "evidence-public-k-14",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-15",
+      "claimId": "claim-public-k-15",
+      "evidenceId": "evidence-public-k-15",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-16",
+      "claimId": "claim-public-k-16",
+      "evidenceId": "evidence-public-k-16",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-public-k-17",
+      "claimId": "claim-public-k-17",
+      "evidenceId": "evidence-public-k-17",
+      "supportType": "DIRECT",
+      "scope": "脱敏资产摘要、状态与贡献边界",
+      "reviewStatus": "APPROVED"
+    }
+  ],
+  "presets": [
+    {
+      "id": "question-public-assets-overview",
+      "text": "除了核心项目，你还完成了哪些任务、问题排查、研究与知识资产？",
+      "aliases": [
+        "介绍一下你的其他公开作品和实践。",
+        "还有哪些可以公开检索的工作？"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "image-audit-project",
+        "activity-engineering-project",
+        "personal-agent-platform-project",
+        "context-engineering-project",
+        "technical-writing-project",
+        "engineering-delivery-learning-project"
+      ],
+      "topics": [
+        "PUBLIC_ASSET",
+        "PORTFOLIO_OVERVIEW"
+      ],
+      "preferredClaimCategories": [
+        "OUTCOME",
+        "LEARNING"
+      ],
+      "placements": [
+        "AGENT"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 190,
+      "caseIds": [
+        "case-public-t-07",
+        "case-public-t-08",
+        "case-public-t-09",
+        "case-public-t-10",
+        "case-public-t-11",
+        "case-public-t-12",
+        "case-public-t-13",
+        "case-public-t-14",
+        "case-public-t-15",
+        "case-public-t-16",
+        "case-public-t-18",
+        "case-public-t-19",
+        "case-public-a-01",
+        "case-public-a-02",
+        "case-public-a-03",
+        "case-public-a-04",
+        "case-public-a-05",
+        "case-public-a-06",
+        "case-public-a-07",
+        "case-public-a-08",
+        "case-public-a-09",
+        "case-public-a-10",
+        "case-public-a-11",
+        "case-public-a-12",
+        "case-public-a-13",
+        "case-public-a-14",
+        "case-public-a-15",
+        "case-public-a-16",
+        "case-public-a-17",
+        "case-public-a-18",
+        "case-public-a-19",
+        "case-public-a-20",
+        "case-public-a-21",
+        "case-public-k-02",
+        "case-public-k-04",
+        "case-public-k-05",
+        "case-public-k-06",
+        "case-public-k-09",
+        "case-public-k-10",
+        "case-public-k-11",
+        "case-public-k-12",
+        "case-public-k-13",
+        "case-public-k-14",
+        "case-public-k-15",
+        "case-public-k-16",
+        "case-public-k-17"
+      ]
+    }
+  ],
+  "projectUpdates": [],
+  "caseUpdates": []
+}

@@ -104,6 +104,21 @@ class RetrievalBenchmarkCaseLoaderTest {
         assertThat(suite.getContentVersion()).isEqualTo("2026-07-23.1");
     }
 
+    @Test
+    void acceptsFullPublicAssetSuiteVersion() {
+        String fullPublicAssets = validSuiteJson()
+                .replace("retrieval-benchmark-v3-wave1",
+                        "retrieval-benchmark-v5-full-public-assets")
+                .replace("2026-07-24.1", "2026-07-27.1");
+
+        RetrievalBenchmarkSuite suite = new RetrievalBenchmarkCaseLoader(mapper)
+                .load(fullPublicAssets.getBytes(StandardCharsets.UTF_8));
+
+        assertThat(suite.getSuiteVersion())
+                .isEqualTo("retrieval-benchmark-v5-full-public-assets");
+        assertThat(suite.getContentVersion()).isEqualTo("2026-07-27.1");
+    }
+
     private void assertInvalid(String source) {
         assertThatThrownBy(() -> new RetrievalBenchmarkCaseLoader(mapper)
                 .load(source.getBytes(StandardCharsets.UTF_8)))

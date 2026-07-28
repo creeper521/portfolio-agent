@@ -55,7 +55,7 @@ class RetrievalComparisonCliTest {
         writeSevenFileBundle(sourceBundle, bundle);
         portfolio = bundle.resolve("portfolio.json");
         cases = temporary.resolve("cases.json");
-        Files.writeString(cases, casesJson("2026-07-24.1"));
+        Files.writeString(cases, casesJson("2026-07-27.1"));
         modelDirectory = Files.createDirectory(temporary.resolve("model"));
     }
 
@@ -150,7 +150,7 @@ class RetrievalComparisonCliTest {
                         new com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader(
                                 new ObjectMapper()).load(Files.readAllBytes(cases)),
                         modelDirectory,
-                        java.time.LocalDate.parse("2026-07-24"));
+                        java.time.LocalDate.parse("2026-07-27"));
         AtomicLong timer = new AtomicLong(2_000_000L);
         Clock clock = new SequenceClock(
                 Instant.parse("2026-07-24T01:00:00Z"),
@@ -306,22 +306,22 @@ class RetrievalComparisonCliTest {
         assertThat(output.resolve("comparison.md")).isRegularFile();
         assertThat(Files.readString(output.resolve("comparison.json")))
                 .contains("\"suiteVersion\":\"retrieval-benchmark-v2\"",
-                        "\"contentVersion\":\"2026-07-24.1\"",
+                        "\"contentVersion\":\"2026-07-27.1\"",
                         "\"runtimeBundleHash\":\"" + expectedRuntimeBundleHash() + "\"",
-                        "\"snapshotValidFrom\":\"2026-07-24\"");
+                        "\"snapshotValidFrom\":\"2026-07-27\"");
         assertThat(Files.readString(output.resolve("comparison.md")))
                 .startsWith("# Retrieval Baseline Comparison\n")
                 .contains(
                         "- Verified runtime Bundle hash: `"
                                 + expectedRuntimeBundleHash() + "`",
-                        "- Snapshot validFrom: `2026-07-24`"
+                        "- Snapshot validFrom: `2026-07-27`"
                 );
         assertThat(captured.get().getPortfolio().getContentVersion())
-                .isEqualTo("2026-07-24.1");
+                .isEqualTo("2026-07-27.1");
         assertThat(captured.get().getSuite().getContentVersion())
-                .isEqualTo("2026-07-24.1");
+                .isEqualTo("2026-07-27.1");
         assertThat(captured.get().getModelDirectory()).isEqualTo(modelDirectory);
-        assertThat(captured.get().getValidFrom().toString()).isEqualTo("2026-07-24");
+        assertThat(captured.get().getValidFrom().toString()).isEqualTo("2026-07-27");
         assertThat(captured.get().getRuntimeBundleHash())
                 .isEqualTo(expectedRuntimeBundleHash())
                 .isNotEqualTo(BundleHashCalculator.sha256(Files.readAllBytes(portfolio)));
@@ -445,7 +445,7 @@ class RetrievalComparisonCliTest {
                 casesPath,
                 modelPath,
                 output,
-                "2026-07-24"
+                "2026-07-27"
         );
     }
 
@@ -468,7 +468,7 @@ class RetrievalComparisonCliTest {
     private RetrievalBenchmarkReport fixedReport() {
         return fixedReport(
                 "sha256:runtime",
-                "2026-07-24"
+                "2026-07-27"
         );
     }
 
@@ -478,7 +478,7 @@ class RetrievalComparisonCliTest {
     ) {
         return new RetrievalBenchmarkReport(
                 "retrieval-benchmark-v2",
-                "2026-07-24.1",
+                "2026-07-27.1",
                 runtimeBundleHash,
                 snapshotValidFrom,
                 "retrieval-policy-v1",
@@ -532,7 +532,7 @@ class RetrievalComparisonCliTest {
         files.put("portfolio.json", Files.readAllBytes(source.resolve("portfolio.json")));
         files.put("presentation.json", Files.readAllBytes(source.resolve("presentation.json")));
         byte[] rag = ("{\"chunkId\":\"chunk-sql-audit-delivery\","
-                + "\"contentVersion\":\"2026-07-24.1\","
+                + "\"contentVersion\":\"2026-07-27.1\","
                 + "\"projectSlugs\":[\"sql-audit\"],\"caseSlugs\":[],"
                 + "\"claimIds\":[\"claim-sql-audit-delivered\"],"
                 + "\"text\":\"SQL audit delivered\","
@@ -660,7 +660,7 @@ class RetrievalComparisonCliTest {
                         new com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader(
                                 new ObjectMapper()).load(Files.readAllBytes(cases)),
                         modelDirectory,
-                        java.time.LocalDate.parse("2026-07-24"));
+                        java.time.LocalDate.parse("2026-07-27"));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
                 RetrievalComparisonCli.executeRealBenchmark(

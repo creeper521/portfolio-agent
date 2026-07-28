@@ -15,8 +15,19 @@ import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
+import com.portfolio.agent.portfolio.release.RetrievalBundleCompiler;
+import com.portfolio.agent.portfolio.release.RetrievalCompilation;
+import com.portfolio.agent.portfolio.repository.file.BundleHashCalculator;
+import com.portfolio.agent.portfolio.repository.file.KeywordIndexFile;
+import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
+import com.portfolio.agent.portfolio.repository.file.VectorIndexCodec;
+import com.portfolio.agent.portfolio.repository.file.VectorIndexFile;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkCaseLoader;
 import com.portfolio.agent.release.benchmark.RetrievalBenchmarkEvaluator;
@@ -37,6 +48,9 @@ import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -115,8 +129,7 @@ public final class RetrievalComparisonCli {
 
             ObjectMapper mapper = canonicalMapper();
             RuntimeContentSnapshot snapshot = loadVerifiedSnapshot(
-                    portfolioFile,
-                    mapper
+                    portfolioFile, modelDirectory, validFrom, mapper
             );
             if (snapshot.getRetrievalContent().isEmpty()) {
                 throw new IllegalArgumentException(
@@ -144,6 +157,10 @@ public final class RetrievalComparisonCli {
             return 0;
         } catch (IOException | RuntimeException exception) {
             err.println("RETRIEVAL_COMPARISON_FAILED");
+            if (Boolean.getBoolean("portfolio.retrieval.diagnostics")) {
+                err.println(exception.getClass().getSimpleName()
+                        + ": " + exception.getMessage());
+            }
             return 1;
         }
     }
@@ -319,6 +336,8 @@ public final class RetrievalComparisonCli {
 
     private static RuntimeContentSnapshot loadVerifiedSnapshot(
             Path portfolioFile,
+            Path modelDirectory,
+            LocalDate validFrom,
             ObjectMapper mapper
     )
             throws IOException {
@@ -345,11 +364,116 @@ public final class RetrievalComparisonCli {
                 files.put(entry.getFileName().toString(), Files.readAllBytes(entry));
             }
         }
+        if (files.keySet().equals(Set.of(
+                "portfolio.json", "presentation.json", "rag-documents.jsonl"))) {
+            return loadCanonicalCandidate(
+                    files, modelDirectory, validFrom, mapper
+            );
+        }
         return new PublicBundleLoader(
                 mapper,
                 new PortfolioSnapshotValidator(),
                 Clock.systemUTC()
         ).load(files);
+    }
+
+    private static RuntimeContentSnapshot loadCanonicalCandidate(
+            Map<String, byte[]> files,
+            Path modelDirectory,
+            LocalDate validFrom,
+            ObjectMapper mapper
+    )
+            throws IOException {
+        PortfolioSnapshot content = new PortfolioSnapshotJsonReader(mapper)
+                .readBundle(files.get("portfolio.json"));
+        PortfolioSnapshot published = content.withPublishedAt(
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
+        new PortfolioSnapshotValidator().validate(published);
+        LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
+                .verify(modelDirectory);
+        RetrievalCompilation compilation;
+        try (OnnxLocalEmbeddingAdapter adapter =
+                OnnxLocalEmbeddingAdapter.forDocuments(
+                        modelDirectory,
+                        artifact.getMaxTokens(),
+                        artifact.getDimension(),
+                        artifact.getIntraOpThreads(),
+                        artifact.getInterOpThreads())) {
+            compilation = new RetrievalBundleCompiler(
+                    text -> adapter.embedQuery(text).copyValues(),
+                    artifact.getDescriptorSha256(),
+                    artifact.getDimension()
+            ).compile(published, validFrom);
+        }
+        if (!Arrays.equals(
+                files.get("rag-documents.jsonl"),
+                compilation.getRagDocuments())) {
+            throw new IllegalArgumentException(
+                    "canonical candidate RAG bytes differ from compiled content");
+        }
+        List<RagDocument> documents = readRagDocuments(
+                compilation.getRagDocuments(), mapper
+        );
+        KeywordIndexFile keywordFile = mapper.readValue(
+                compilation.getKeywordIndex(), KeywordIndexFile.class
+        );
+        VectorIndexFile vectorFile = new VectorIndexCodec().decode(
+                compilation.getVectorIndex(), artifact.getDimension()
+        );
+        RuntimeRetrievalContent retrieval = new RuntimeRetrievalContent(
+                compilation.getManifest(),
+                documents,
+                toRuntimeKeywordIndex(keywordFile),
+                new RuntimeVectorIndex(
+                        vectorFile.getDimension(), vectorFile.getVectors()
+                )
+        );
+        return new RuntimeContentSnapshot(
+                published,
+                BundleHashCalculator.candidatePayloadHash(files),
+                Instant.now(),
+                retrieval
+        );
+    }
+
+    private static List<RagDocument> readRagDocuments(
+            byte[] source,
+            ObjectMapper mapper
+    )
+            throws IOException {
+        List<RagDocument> documents = new ArrayList<>();
+        String[] lines = new String(source, StandardCharsets.UTF_8)
+                .split("\\R", -1);
+        for (int index = 0; index < lines.length; index++) {
+            if (lines[index].isEmpty() && index == lines.length - 1) {
+                continue;
+            }
+            if (lines[index].isBlank()) {
+                throw new IllegalArgumentException(
+                        "canonical candidate RAG contains a blank line");
+            }
+            documents.add(mapper.readValue(lines[index], RagDocument.class));
+        }
+        return List.copyOf(documents);
+    }
+
+    private static RuntimeKeywordIndex toRuntimeKeywordIndex(
+            KeywordIndexFile source
+    ) {
+        List<RuntimeKeywordIndex.DocumentEntry> documents =
+                source.getDocuments().stream()
+                        .map(item -> new RuntimeKeywordIndex.DocumentEntry(
+                                item.getChunkId(),
+                                item.getDocumentLength(),
+                                item.getTermFrequencies()))
+                        .toList();
+        return new RuntimeKeywordIndex(
+                source.getDocumentCount(),
+                source.getAverageDocumentLength(),
+                documents,
+                source.getDocumentFrequencies()
+        );
     }
 
     private static void writeReports(

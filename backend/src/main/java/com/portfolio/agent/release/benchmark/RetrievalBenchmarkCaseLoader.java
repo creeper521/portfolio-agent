@@ -17,7 +17,8 @@ public final class RetrievalBenchmarkCaseLoader {
     private static final Set<String> SUITE_VERSIONS = Set.of(
             "retrieval-benchmark-v2",
             "retrieval-benchmark-v3-wave1",
-            "retrieval-benchmark-v4-wave1-policy-v2"
+            "retrieval-benchmark-v4-wave1-policy-v2",
+            "retrieval-benchmark-v5-full-public-assets"
     );
     private static final Pattern CONTENT_VERSION = Pattern.compile("\\d{4}-\\d{2}-\\d{2}\\.\\d+");
 

@@ -241,6 +241,29 @@ function Read-DecisionLedger([string]$LedgerPath) {
     }
 }
 function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
+    $projectStatusMap = @{
+        DELIVERED='DELIVERED'
+        IMPLEMENTED_TESTED='PROTOTYPE'
+        VALIDATED_PROTOTYPE='PROTOTYPE'
+        INVESTIGATED='IN_PROGRESS'
+        DOCUMENTED_OUTPUT='DELIVERED'
+        LEARNING_ONLY='LEARNING_ONLY'
+    }
+    $caseStatusMap = @{
+        DELIVERED='DELIVERED'
+        IMPLEMENTED_TESTED='IMPLEMENTED_TESTED'
+        VALIDATED_PROTOTYPE='PROTOTYPE'
+        INVESTIGATED='LEARNING'
+        DOCUMENTED_OUTPUT='DELIVERED'
+        LEARNING_ONLY='LEARNING'
+    }
+    $contributionMap = @{
+        INDEPENDENT='INDEPENDENT'
+        PRIMARY='PRIMARY'
+        COLLABORATIVE='COLLABORATIVE'
+        ASSISTED='COLLABORATIVE'
+        UNRESOLVED='COLLABORATIVE'
+    }
     $projectsBySlug = @{}
     foreach ($project in @($Portfolio.projects)) { $projectsBySlug[[string]$project.slug] = $project }
     $casesBySlug = @{}
@@ -257,8 +280,14 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
                 Write-Failure 'DECISION_LEDGER_FORWARD_REFERENCE_INVALID' 'Decision ledger Project reference is missing.'
             }
             $project = $projectsBySlug[[string]$slug]
-            if ([string]$project.status -ne [string]$asset.achievementStatus -or
-                    [string]$project.contributionType -ne [string]$asset.contributionType) {
+            $expectedProjectStatus = if ($projectStatusMap.ContainsKey([string]$asset.achievementStatus)) {
+                [string]$projectStatusMap[[string]$asset.achievementStatus]
+            } else { [string]$asset.achievementStatus }
+            $expectedContribution = if ($contributionMap.ContainsKey([string]$asset.contributionType)) {
+                [string]$contributionMap[[string]$asset.contributionType]
+            } else { [string]$asset.contributionType }
+            if ([string]$project.status -ne $expectedProjectStatus -or
+                    [string]$project.contributionType -ne $expectedContribution) {
                 Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Public Project status exceeds or differs from source inventory.'
             }
         }
@@ -267,10 +296,14 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
                 Write-Failure 'DECISION_LEDGER_FORWARD_REFERENCE_INVALID' 'Decision ledger Case reference is missing.'
             }
             $caseStudy = $casesBySlug[[string]$slug]
-            $caseAchievement = [string]$caseStudy.achievementStatus
-            if ($caseAchievement -eq 'PROTOTYPE') { $caseAchievement = 'VALIDATED_PROTOTYPE' }
-            if ($caseAchievement -ne [string]$asset.achievementStatus -or
-                    [string]$caseStudy.contributionType -ne [string]$asset.contributionType) {
+            $expectedCaseStatus = if ($caseStatusMap.ContainsKey([string]$asset.achievementStatus)) {
+                [string]$caseStatusMap[[string]$asset.achievementStatus]
+            } else { [string]$asset.achievementStatus }
+            $expectedContribution = if ($contributionMap.ContainsKey([string]$asset.contributionType)) {
+                [string]$contributionMap[[string]$asset.contributionType]
+            } else { [string]$asset.contributionType }
+            if ([string]$caseStudy.achievementStatus -ne $expectedCaseStatus -or
+                    [string]$caseStudy.contributionType -ne $expectedContribution) {
                 Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Public Case status exceeds or differs from source inventory.'
             }
         }
@@ -280,13 +313,13 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
             }
             $publicEvidence = $evidenceById[[string]$evidenceId]
             if ([string]$publicEvidence.publicStatus -eq 'APPROVED') {
-                if ([string]$asset.evidenceStatus -notin @('VERIFIED', 'PARTIALLY_VERIFIED')) {
+                if ([string]$asset.evidenceStatus -notin @('VERIFIED', 'PARTIALLY_VERIFIED', 'OWNER_CONFIRMED')) {
                     Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'The source Evidence status cannot support approved public Evidence.'
                 }
-                if ([string]$asset.evidenceStatus -eq 'PARTIALLY_VERIFIED' -and
+                if ([string]$asset.evidenceStatus -in @('PARTIALLY_VERIFIED', 'OWNER_CONFIRMED') -and
                         ([string]$asset.routeDecision -ne 'PUBLISH_CANDIDATE' -or
                             $publicEvidence.rawContentPublic -ne $false)) {
-                    Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Partially verified assets require a reviewed narrow public summary with private raw Evidence.'
+                    Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Partially verified or owner-confirmed assets require a reviewed narrow public summary with private raw Evidence.'
                 }
             }
         }
@@ -398,7 +431,332 @@ function Write-DeterministicJson([string]$PathValue, [object]$Value) {
     $json = $Value | ConvertTo-Json -Depth 50
     [IO.File]::WriteAllText($PathValue, $json + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 }
+function Invoke-PrepareCandidateV2 {
+    $runtimePath = Resolve-CanonicalRepositoryInput $RuntimeBundle `
+        'backend\src\main\resources\public-data\bundle' 'runtimeBundle'
+    $patchPath = Resolve-CanonicalRepositoryInput $PatchManifest `
+        'governance\portfolio-governance\candidates\wave-2-public-patch.json' 'patchManifest'
+    $routePath = Resolve-CanonicalRepositoryInput $RouteManifest `
+        'governance\portfolio-governance\candidates\wave-2-public-routes.json' 'routeManifest'
+    $inventoryPath = Resolve-SafePath $AssetInventory 'assetInventory'
+    Assert-NoReparsePoint $inventoryPath
+    if (Test-Contained $inventoryPath $repositoryRoot) {
+        Write-Failure 'PREPARE_INVENTORY_INSIDE_REPOSITORY' 'Asset inventory must remain outside the repository.'
+    }
+    $runtimeNames = @(Get-ChildItem -LiteralPath $runtimePath -File | ForEach-Object Name | Sort-Object)
+    if (-not (Test-CompleteReleaseNames $runtimeNames)) {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Runtime Bundle must be a closed verified legacy or retrieval Bundle.'
+    }
+    try {
+        $checksums = Get-Content (Join-Path $runtimePath 'checksums.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = Get-Content (Join-Path $runtimePath 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $portfolio = Get-Content (Join-Path $runtimePath 'portfolio.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $presentation = Get-Content (Join-Path $runtimePath 'presentation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $patch = Get-Content $patchPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $routes = Get-Content $routePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $inventoryDocument = Get-Content $inventoryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch { Write-Failure 'PREPARE_INPUT_INVALID' 'A Wave 2 candidate preparation input cannot be parsed.' }
+    foreach ($name in @('portfolio.json', 'presentation.json')) {
+        $actualRuntimeHash = Get-Sha256 ([IO.File]::ReadAllBytes((Join-Path $runtimePath $name)))
+        if ([string]$checksums.files.$name -ne $actualRuntimeHash) {
+            Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Runtime Bundle checksum verification failed.'
+        }
+    }
+    $baseVersion = [string]$portfolio.contentVersion
+    if ($baseVersion -ne '2026-07-24.1' -or
+            [string]$presentation.contentVersion -ne $baseVersion -or
+            [string]$manifest.contentVersion -ne $baseVersion -or
+            [string]$checksums.contentVersion -ne $baseVersion -or
+            [string]$portfolio.schemaVersion -ne '3.0') {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Wave 2 requires the reviewed 2026-07-24.1 schema 3.0 Bundle.'
+    }
+    Assert-ExactProperties $patch @(
+        'schemaVersion','baseContentVersion','targetContentVersion','projects','cases',
+        'timelineEvents','claims','evidence','links','presets','projectUpdates','caseUpdates'
+    ) 'PREPARE_PATCH_SCHEMA_INVALID'
+    Assert-ExactProperties $routes @(
+        'schemaVersion','targetContentVersion','publishRoutes'
+    ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+    if ([string]$patch.schemaVersion -ne '2.0' -or
+            [string]$routes.schemaVersion -ne '2.0' -or
+            [string]$patch.baseContentVersion -ne $baseVersion -or
+            [string]$patch.targetContentVersion -ne $TargetVersion -or
+            [string]$routes.targetContentVersion -ne $TargetVersion) {
+        Write-Failure 'PREPARE_MANIFEST_VERSION_INVALID' 'Wave 2 manifest versions are inconsistent.'
+    }
+    if (@($patch.projects).Count -ne 6 -or @($patch.cases).Count -ne 46 -or
+            @($patch.timelineEvents).Count -ne 6 -or
+            @($patch.claims).Count -ne 52 -or @($patch.evidence).Count -ne 52 -or
+            @($patch.links).Count -ne 52 -or @($patch.presets).Count -ne 1 -or
+            @($patch.projectUpdates).Count -ne 0 -or @($patch.caseUpdates).Count -ne 0) {
+        Write-Failure 'PREPARE_PATCH_COVERAGE_INVALID' 'Wave 2 must add exactly 6 Projects, 46 Cases, 6 Timeline events, 52 Claims, 52 Evidence summaries, 52 links and one shared Agent preset.'
+    }
+    $collectionMap = @{
+        projects='projects'; cases='cases'; timelineEvents='timelineEvents'
+        claims='claims'; evidence='evidence'
+        links='claimEvidenceLinks'; presets='questionPresets'
+    }
+    foreach ($name in $collectionMap.Keys) {
+        Assert-UniqueIds @($patch.$name) $name
+        $baseIds = @($portfolio.($collectionMap[$name]) | ForEach-Object { [string]$_.id })
+        if (@($patch.$name | Where-Object { $baseIds -contains [string]$_.id }).Count -gt 0) {
+            Write-Failure 'PREPARE_ID_COLLISION' 'Wave 2 collides with an existing public ID.'
+        }
+    }
+    $projectFields = @(
+        'id','code','slug','title','summary','background','responsibilities','solution',
+        'keyDecisions','technologies','verification','outcome','handoff','status',
+        'contributionType','claimIds','evidenceIds','timelineEventIds'
+    )
+    $caseFields = @(
+        'id','code','slug','type','title','summary','problem','actions','decisions',
+        'verification','outcome','limitations','achievementStatus','contributionType',
+        'projectId','claimIds','evidenceIds','timelineEventIds','questionPresetIds'
+    )
+    $claimFields = @(
+        'id','subjectType','subjectId','category','statement','detail','achievementStatus',
+        'contributionType','verificationBasis','verificationStatus','materiality','topics',
+        'audiencePriorities'
+    )
+    foreach ($project in @($patch.projects)) {
+        Assert-ExactProperties $project $projectFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$project.status -notin @('DELIVERED','IN_PROGRESS','PROTOTYPE','LEARNING_ONLY') -or
+                [string]$project.contributionType -notin @('INDEPENDENT','PRIMARY','COLLABORATIVE','OBSERVED_LEARNING')) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' 'A Wave 2 Project uses an unsupported status or contribution.'
+        }
+    }
+    foreach ($caseStudy in @($patch.cases)) {
+        Assert-ExactProperties $caseStudy $caseFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$caseStudy.type -notin @('FEATURE','EVALUATION','INCIDENT') -or
+                [string]$caseStudy.achievementStatus -notin @(
+                    'DELIVERED','IMPLEMENTED_TESTED','PROTOTYPE','DESIGNED','LEARNING','PLANNED','UNKNOWN'
+                ) -or [string]$caseStudy.contributionType -notin @(
+                    'INDEPENDENT','PRIMARY','COLLABORATIVE','OBSERVED_LEARNING'
+                )) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' 'A Wave 2 Case uses an unsupported enum value.'
+        }
+    }
+    foreach ($claim in @($patch.claims)) {
+        Assert-ExactProperties $claim $claimFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$claim.subjectType -notin @('PROJECT','CASE') -or
+                [string]$claim.verificationBasis -notin @('EVIDENCE_SUPPORTED','SELF_DECLARED','INFERRED') -or
+                [string]$claim.verificationStatus -notin @('VERIFIED','PARTIALLY_VERIFIED') -or
+                ([string]$claim.verificationBasis -eq 'SELF_DECLARED' -and
+                    [string]$claim.verificationStatus -eq 'VERIFIED')) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' 'A Wave 2 Claim overstates its verification basis.'
+        }
+    }
+    foreach ($item in @($patch.evidence)) {
+        Assert-ExactProperties $item @(
+            'id','code','title','type','periodStart','periodEnd','sourceCount','summary',
+            'publicStatus','rawContentPublic'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$item.publicStatus -ne 'APPROVED' -or $item.rawContentPublic -ne $false) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' 'Wave 2 Evidence must be an approved summary with private raw content.'
+        }
+    }
+    $newProjectIds = @($patch.projects | ForEach-Object { [string]$_.id })
+    $newCaseIds = @($patch.cases | ForEach-Object { [string]$_.id })
+    $newTimelineIds = @($patch.timelineEvents | ForEach-Object { [string]$_.id })
+    $newClaimIds = @($patch.claims | ForEach-Object { [string]$_.id })
+    $newEvidenceIds = @($patch.evidence | ForEach-Object { [string]$_.id })
+    $newPresetIds = @($patch.presets | ForEach-Object { [string]$_.id })
+    foreach ($project in @($patch.projects)) {
+        if (@($project.claimIds).Count -ne 1 -or @($project.evidenceIds).Count -ne 1 -or
+                $newClaimIds -notcontains [string]$project.claimIds[0] -or
+                $newEvidenceIds -notcontains [string]$project.evidenceIds[0] -or
+                @($project.timelineEventIds).Count -ne 1 -or
+                $newTimelineIds -notcontains [string]$project.timelineEventIds[0]) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Every new Project must own one new Claim and one private-raw Evidence summary.'
+        }
+    }
+    foreach ($caseStudy in @($patch.cases)) {
+        if ($newProjectIds -notcontains [string]$caseStudy.projectId -or
+                @($caseStudy.claimIds).Count -ne 1 -or @($caseStudy.evidenceIds).Count -ne 1 -or
+                $newClaimIds -notcontains [string]$caseStudy.claimIds[0] -or
+                $newEvidenceIds -notcontains [string]$caseStudy.evidenceIds[0] -or
+                @($caseStudy.timelineEventIds).Count -ne 1 -or
+                $newTimelineIds -notcontains [string]$caseStudy.timelineEventIds[0] -or
+                @($caseStudy.questionPresetIds).Count -ne 1 -or
+                $newPresetIds -notcontains [string]$caseStudy.questionPresetIds[0]) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Every new Case must map to one new Project, Claim and Evidence summary.'
+        }
+    }
+    foreach ($link in @($patch.links)) {
+        Assert-ExactProperties $link @(
+            'id','claimId','evidenceId','supportType','scope','reviewStatus'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ($newClaimIds -notcontains [string]$link.claimId -or
+                $newEvidenceIds -notcontains [string]$link.evidenceId -or
+                [string]$link.supportType -ne 'DIRECT' -or
+                [string]$link.reviewStatus -ne 'APPROVED') {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Wave 2 links must be direct, reviewed and non-dangling.'
+        }
+    }
+    foreach ($event in @($patch.timelineEvents)) {
+        Assert-ExactProperties $event @(
+            'id','dateLabel','title','problem','action','impact','projectIds',
+            'caseIds','claimIds','evidenceIds'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if (@($event.projectIds).Count -ne 1 -or
+                $newProjectIds -notcontains [string]$event.projectIds[0] -or
+                @($event.caseIds).Count -eq 0 -or
+                @($event.caseIds | Where-Object { $newCaseIds -notcontains [string]$_ }).Count -gt 0 -or
+                @($event.claimIds | Where-Object { $newClaimIds -notcontains [string]$_ }).Count -gt 0 -or
+                @($event.evidenceIds | Where-Object { $newEvidenceIds -notcontains [string]$_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Every Wave 2 Timeline event must remain inside one new Project group.'
+        }
+    }
+    foreach ($preset in @($patch.presets)) {
+        Assert-ExactProperties $preset @(
+            'id','text','aliases','audiences','projectIds','topics',
+            'preferredClaimCategories','placements','deterministicEntry',
+            'displayOrder','caseIds'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ($preset.deterministicEntry -ne $true -or
+                @($preset.projectIds | Where-Object { $newProjectIds -notcontains [string]$_ }).Count -gt 0 -or
+                @($preset.caseIds | Where-Object { $newCaseIds -notcontains [string]$_ }).Count -gt 0 -or
+                (Compare-Object @($preset.projectIds) $newProjectIds).Count -ne 0 -or
+                (Compare-Object @($preset.caseIds) $newCaseIds).Count -ne 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'The Wave 2 shared Agent preset must cover every new public subject.'
+        }
+    }
+    foreach ($claim in @($patch.claims)) {
+        $subjectIds = if ([string]$claim.subjectType -eq 'PROJECT') { $newProjectIds } else { $newCaseIds }
+        if ($subjectIds -notcontains [string]$claim.subjectId -or
+                @($patch.links | Where-Object claimId -eq ([string]$claim.id)).Count -ne 1) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Every Wave 2 Claim must map to one new subject and one Evidence summary.'
+        }
+    }
+    $portfolio.contentVersion = $TargetVersion
+    $presentation.contentVersion = $TargetVersion
+    $portfolio.projects = @($portfolio.projects) + @($patch.projects)
+    $portfolio.cases = @($portfolio.cases) + @($patch.cases)
+    $portfolio.timelineEvents = @($portfolio.timelineEvents) + @($patch.timelineEvents)
+    $portfolio.claims = @($portfolio.claims) + @($patch.claims)
+    $portfolio.evidence = @($portfolio.evidence) + @($patch.evidence)
+    $portfolio.claimEvidenceLinks = @($portfolio.claimEvidenceLinks) + @($patch.links)
+    $portfolio.questionPresets = @($portfolio.questionPresets) + @($patch.presets)
+    Assert-PublicTextPrivacy $portfolio
+    Assert-ExactProperties $inventoryDocument @(
+        'inventoryVersion','reviewState','counts','assets'
+    ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+    $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
+    if (@($inventoryDocument.assets).Count -ne 68 -or
+            @($inventoryIds | Select-Object -Unique).Count -ne 68 -or
+            (Compare-Object $inventoryIds (Get-ExpectedAssetIds)).Count -ne 0) {
+        Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' 'Asset inventory must contain exactly the 68 known assets.'
+    }
+    $publishIds = @($routes.publishRoutes | ForEach-Object { [string]$_.assetId })
+    $excludedIds = @($inventoryDocument.assets |
+        Where-Object reviewState -eq 'EXCLUDE' | ForEach-Object { [string]$_.id })
+    if (@($routes.publishRoutes).Count -ne 61 -or
+            @($publishIds | Select-Object -Unique).Count -ne 61 -or
+            @($publishIds | Where-Object { $excludedIds -contains $_ }).Count -gt 0 -or
+            (Compare-Object $publishIds @($inventoryIds | Where-Object { $excludedIds -notcontains $_ })).Count -ne 0) {
+        Write-Failure 'PREPARE_ROUTE_PUBLISH_SET_INVALID' 'Wave 2 must publish every non-excluded asset exactly once.'
+    }
+    $routeById = @{}
+    foreach ($route in @($routes.publishRoutes)) {
+        Assert-ExactProperties $route @(
+            'assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds'
+        ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+        if ([string]$route.finalRoute -notin @(
+                'PROJECT','CASE','ENRICH_EXISTING_PROJECT','EVIDENCE_ONLY','TIMELINE_ONLY'
+            ) -or @($route.evidenceIds).Count -eq 0) {
+            Write-Failure 'PREPARE_ROUTE_SCHEMA_INVALID' 'A Wave 2 route is incomplete.'
+        }
+        $routeById[[string]$route.assetId] = $route
+    }
+    $ledgerAssets = @()
+    foreach ($sourceAsset in @($inventoryDocument.assets)) {
+        Assert-ExactProperties $sourceAsset @(
+            'id','contentType','title','achievementStatus','contributionType',
+            'publicPriority','evidenceStatus','reviewState','summary'
+        ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+        $id = [string]$sourceAsset.id
+        if ($routeById.ContainsKey($id)) {
+            $route = $routeById[$id]
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute=[string]$route.finalRoute
+                decisionReason='Wave 2 reviewed public summary candidate.'
+                projectSlugs=@($route.projectSlugs); caseSlugs=@($route.caseSlugs)
+                evidenceIds=@($route.evidenceIds)
+                privacyReview='PUBLIC_SUMMARY_ONLY_RAW_PRIVATE'
+                routeDecision='PUBLISH_CANDIDATE'
+                targetContentVersion=$TargetVersion; targetWave=2
+            }
+        }
+        else {
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute='EXCLUDE'; decisionReason='Excluded by reviewed inventory.'
+                projectSlugs=@(); caseSlugs=@(); evidenceIds=@()
+                privacyReview='PRIVATE_SOURCE_REMAINS_WITHHELD'
+                routeDecision='EXCLUDED'; targetContentVersion=$null; targetWave=$null
+            }
+        }
+    }
+    $packageRoot = Join-Path $resolvedWorkspace 'prepared-candidates'
+    if (Test-Path -LiteralPath $packageRoot) { Assert-NoReparsePoint $packageRoot }
+    $targetPackage = Join-Path $packageRoot $TargetVersion
+    if (Test-Path -LiteralPath $targetPackage) {
+        Write-Failure 'PREPARE_TARGET_EXISTS' 'Candidate package already exists and will not be overwritten.'
+    }
+    New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+    $stage = Join-Path $packageRoot ('.prepare-' + [guid]::NewGuid().ToString('N'))
+    $completed = $false
+    try {
+        $candidateDirectory = Join-Path $stage 'candidate'
+        New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null
+        if ($PrepareFailureStage -ne 'NONE') { throw 'Injected Wave 2 preparation failure.' }
+        Write-DeterministicJson (Join-Path $candidateDirectory 'portfolio.json') $portfolio
+        Write-DeterministicJson (Join-Path $candidateDirectory 'presentation.json') $presentation
+        Write-DeterministicJson (Join-Path $stage 'asset-publication-decisions.json') `
+            ([ordered]@{ schemaVersion='1.0'; assets=$ledgerAssets })
+        $ledgerState = Read-DecisionLedger (Join-Path $stage 'asset-publication-decisions.json')
+        Assert-DecisionLedgerCandidate $ledgerState.Assets $portfolio
+        $privacyChecker = Join-Path $repositoryRoot 'scripts\privacy-check.ps1'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $privacyChecker -Path $stage | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Failure 'PRIVACY_CHECK_FAILED' 'Prepared Wave 2 candidate privacy check failed.'
+        }
+        Move-Item -LiteralPath $stage -Destination $targetPackage
+        $completed = $true
+    }
+    catch {
+        if (-not $completed -and (Test-Path -LiteralPath $stage)) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+        }
+        Write-Failure 'PREPARE_STAGE_WRITE_FAILED' 'Wave 2 candidate preparation failed atomically.'
+    }
+    [ordered]@{
+        runId=[guid]::NewGuid().ToString('N'); command=$Command; status='PASS'
+        artifacts=@(
+            ('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
+        )
+        blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+    } | ConvertTo-Json -Depth 8 -Compress | Write-Output
+    exit 0
+}
 function Invoke-PrepareCandidate {
+    if ($TargetVersion -eq '2026-07-27.1') {
+        Invoke-PrepareCandidateV2
+    }
     if ([string]::IsNullOrWhiteSpace($TargetVersion) -or
             $TargetVersion -ne '2026-07-24.1') {
         Write-Failure 'PREPARE_TARGET_VERSION_INVALID' 'Wave 1 candidate version must be 2026-07-24.1.'
@@ -875,6 +1233,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '3.0|2026-07-23.1' { 'active-benchmarks.v1.json'; break }
         '3.0|2026-07-23.2' { 'active-benchmarks.v1.json'; break }
         '3.0|2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
+        '3.0|2026-07-27.1' { 'wave-2-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
