@@ -34,7 +34,7 @@ C2 第一版使用本地 Embedding 实现，不向外部 Provider 发送文档�
 /opt/portfolio/
 ├─ incoming/
 ├─ data/
-│  ├─ active -> versions/2026-07-20.1
+│  ├─ active -> versions/<contentVersion>
 │  └─ versions/
 ├─ release-log/
 ├─ locks/
