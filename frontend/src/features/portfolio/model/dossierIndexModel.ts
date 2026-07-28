@@ -8,6 +8,7 @@ import type {
 } from '../../public-content/model/publicContentTypes'
 
 export type DossierIndexKind = 'PROJECT' | 'CASE'
+export type DossierIndexGroupCode = 'MAINLINE' | 'TASK' | 'INCIDENT' | 'EVALUATION'
 
 /**
  * 案卷索引条目 —— 比 Dossier 更轻，只承载列表页需要的信息。
@@ -17,8 +18,8 @@ export interface DossierIndexEntry {
   slug: string
   code: string
   kind: DossierIndexKind
-  /** 用于分组：交付物（项目 + FEATURE case）vs 评测（EVALUATION case） */
-  group: 'DELIVERED' | 'EVALUATION'
+  /** 用于分组：主线、任务、问题处理和知识/评测。 */
+  group: DossierIndexGroupCode
   typeLabel: string
   title: string
   summary: string
@@ -32,14 +33,16 @@ const TYPE_LABELS: Record<DossierIndexKind | 'PROJECT', string> = {
   CASE: '功能修复',
 }
 
-function caseGroup(caseType: CaseType): 'DELIVERED' | 'EVALUATION' {
-  return caseType === 'EVALUATION' ? 'EVALUATION' : 'DELIVERED'
+function caseGroup(caseType: CaseType): DossierIndexGroupCode {
+  if (caseType === 'EVALUATION') return 'EVALUATION'
+  if (caseType === 'INCIDENT') return 'INCIDENT'
+  return 'TASK'
 }
 
 function caseTypeLabel(caseType: CaseType): string {
   if (caseType === 'EVALUATION') return '工具评测'
-  if (caseType === 'BUGFIX') return '缺陷修复'
-  return '功能修复'
+  if (caseType === 'INCIDENT') return '问题处理'
+  return '功能任务'
 }
 
 export function projectToIndexEntry(project: PublicProject): DossierIndexEntry {
@@ -47,7 +50,7 @@ export function projectToIndexEntry(project: PublicProject): DossierIndexEntry {
     slug: project.slug,
     code: project.code,
     kind: 'PROJECT',
-    group: 'DELIVERED',
+    group: 'MAINLINE',
     typeLabel: TYPE_LABELS.PROJECT,
     title: project.title,
     summary: project.summary,
@@ -80,40 +83,56 @@ export interface DossierIndexGroup {
 }
 
 /**
- * 把 projects + cases 归并成「核心交付 / 探索与评测」两组。
- * 每组保持原序：projects 在前，cases 按数据顺序在后。
- * 评测组即使只有一条也独立成组（保持分组语义完整）。
+ * 把 projects + cases 归并成主线、任务、问题处理与知识/评测四组。
+ * 每组保持源数据顺序，空组不渲染。
  */
 export function buildDossierIndex(
   projects: ReadonlyArray<PublicProject>,
   cases: ReadonlyArray<PublicCase>,
 ): DossierIndexGroup[] {
-  const delivered: DossierIndexEntry[] = [
-    ...projects.map(projectToIndexEntry),
-    ...cases
-      .filter((item) => caseGroup(item.type) === 'DELIVERED')
-      .map(caseToIndexEntry),
+  const entriesByGroup: Record<DossierIndexGroupCode, DossierIndexEntry[]> = {
+    MAINLINE: projects.map(projectToIndexEntry),
+    TASK: cases.filter((item) => caseGroup(item.type) === 'TASK').map(caseToIndexEntry),
+    INCIDENT: cases.filter((item) => caseGroup(item.type) === 'INCIDENT').map(caseToIndexEntry),
+    EVALUATION: cases.filter((item) => caseGroup(item.type) === 'EVALUATION').map(caseToIndexEntry),
+  }
+  const definitions: Array<{
+    group: DossierIndexGroupCode
+    code: string
+    title: string
+    note: string
+  }> = [
+    {
+      group: 'MAINLINE',
+      code: 'A / MAINLINE',
+      title: '长期主线',
+      note: '持续推进的项目、平台、研究与工程学习主线，状态按真实成熟度展示。',
+    },
+    {
+      group: 'TASK',
+      code: 'B / TASK',
+      title: '单体任务',
+      note: '有明确边界的功能、工具、文档与交付任务。',
+    },
+    {
+      group: 'INCIDENT',
+      code: 'C / INCIDENT',
+      title: '问题处理',
+      note: '故障定位与问题排查记录；没有最终验收的条目不会表述为已修复。',
+    },
+    {
+      group: 'EVALUATION',
+      code: 'D / KNOWLEDGE',
+      title: '知识与评测',
+      note: '研究、学习手册、方案比较与离线评测，不等同于生产实现。',
+    },
   ]
-  const evaluation: DossierIndexEntry[] = cases
-    .filter((item) => caseGroup(item.type) === 'EVALUATION')
-    .map(caseToIndexEntry)
-
-  const groups: DossierIndexGroup[] = []
-  if (delivered.length) {
-    groups.push({
-      code: 'A / DELIVERED',
-      title: '核心交付',
-      note: '已完成、部署或回归的主导工作，含核心项目与功能修复案例。',
-      entries: delivered,
-    })
-  }
-  if (evaluation.length) {
-    groups.push({
-      code: 'B / EVALUATION',
-      title: '探索与评测',
-      note: '原型阶段的工具评测与失效分析，结论定性，非生产交付物。',
-      entries: evaluation,
-    })
-  }
-  return groups
+  return definitions
+    .filter(({ group }) => entriesByGroup[group].length > 0)
+    .map(({ group, code, title, note }) => ({
+      code,
+      title,
+      note,
+      entries: entriesByGroup[group],
+    }))
 }

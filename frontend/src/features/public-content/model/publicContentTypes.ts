@@ -32,7 +32,7 @@ export interface PublicEvidence {
 
 export interface PublicClaim {
   id: string
-  subjectType: 'OWNER' | 'PROJECT' | 'INTERNSHIP'
+  subjectType: 'OWNER' | 'PROJECT' | 'CASE' | 'INTERNSHIP'
   subjectId: string
   category: 'BACKGROUND' | 'RESPONSIBILITY' | 'TECHNICAL_DECISION' | 'IMPLEMENTATION' | 'VERIFICATION' | 'OUTCOME' | 'LIMITATION' | 'LEARNING' | 'REFLECTION'
   statement: string
@@ -54,7 +54,7 @@ export interface PublicClaimEvidenceLink {
   scope: string
 }
 
-export type CaseType = 'FEATURE' | 'EVALUATION' | 'BUGFIX'
+export type CaseType = 'FEATURE' | 'EVALUATION' | 'INCIDENT'
 
 export interface PublicCase {
   id: string

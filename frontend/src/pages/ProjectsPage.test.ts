@@ -18,14 +18,15 @@ describe('ProjectsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('工程案卷目录')
-    // 核心交付组：项目 + 功能修复案例
-    expect(wrapper.text()).toContain('核心交付')
+    // 项目与单体任务按长期主线、任务类型分别归档
+    expect(wrapper.text()).toContain('长期主线')
+    expect(wrapper.text()).toContain('单体任务')
     expect(wrapper.text()).toContain('SQL 审计与故障排查工具')
     expect(wrapper.text()).toContain('P-01')
     expect(wrapper.text()).toContain('多语言图片上传结果保留修复')
     expect(wrapper.text()).toContain('CASE-01')
     // 评测组：独立分组
-    expect(wrapper.text()).toContain('探索与评测')
+    expect(wrapper.text()).toContain('知识与评测')
     expect(wrapper.text()).toContain('代码图谱工具端到端评测')
     expect(wrapper.get('[data-page-lead]').attributes('data-theme')).toBe('paper')
   })
