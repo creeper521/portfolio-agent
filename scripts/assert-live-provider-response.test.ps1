@@ -24,30 +24,45 @@ function Assert-True([bool]$Condition, [string]$Message) {
 }
 
 function Get-EnvironmentSnapshot([string]$Name) {
-    $item = Get-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
+    $value = [System.Environment]::GetEnvironmentVariable(
+        $Name,
+        [System.EnvironmentVariableTarget]::Process
+    )
     return @{
-        Exists = $null -ne $item
-        Value = if ($null -ne $item) { $item.Value } else { $null }
+        Exists = $null -ne $value
+        Value = $value
     }
+}
+
+function Set-ProcessEnvironmentVariable(
+    [string]$Name,
+    [AllowNull()][string]$Value
+) {
+    [System.Environment]::SetEnvironmentVariable(
+        $Name,
+        $Value,
+        [System.EnvironmentVariableTarget]::Process
+    )
 }
 
 function Restore-EnvironmentVariable([string]$Name, [hashtable]$Snapshot) {
-    if ($Snapshot.Exists) {
-        Set-Item -LiteralPath "Env:$Name" -Value $Snapshot.Value
-    }
-    else {
-        Remove-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
-    }
+    $value = if ($Snapshot.Exists) { $Snapshot.Value } else { $null }
+    Set-ProcessEnvironmentVariable $Name $value
 }
 
 function Set-ApprovedEnvironment([string]$Provider) {
-    $env:PORTFOLIO_MODEL_ENABLED = 'TrUe'
-    $env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = 'TRUE'
-    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
-    $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'tRuE'
-    $env:PORTFOLIO_MODEL_PROVIDER = $Provider
-    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = $keySentinel
-    $env:PORTFOLIO_AGENT_GLM_API_KEY = $keySentinel
+    $approvedEnvironment = @{
+        PORTFOLIO_MODEL_ENABLED = 'TrUe'
+        PORTFOLIO_MODEL_DATA_POLICY_APPROVED = 'TRUE'
+        PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
+        PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'tRuE'
+        PORTFOLIO_MODEL_PROVIDER = $Provider
+        PORTFOLIO_AGENT_DEEPSEEK_API_KEY = $keySentinel
+        PORTFOLIO_AGENT_GLM_API_KEY = $keySentinel
+    }
+    foreach ($entry in $approvedEnvironment.GetEnumerator()) {
+        Set-ProcessEnvironmentVariable $entry.Key $entry.Value
+    }
 }
 
 function Write-ResponseFixture(
@@ -92,6 +107,35 @@ function Assert-NoSensitiveOutput([hashtable]$Result, [string]$CaseName) {
         "$CaseName leaked the response-content sentinel."
 }
 
+$pathSnapshot = Get-EnvironmentSnapshot 'Path'
+Assert-True ($pathSnapshot.ContainsKey('Exists') -and $pathSnapshot.ContainsKey('Value')) `
+    'Process Path snapshot must tolerate case-duplicate host environment keys.'
+
+$environmentProbeName = 'PORTFOLIO_ENVIRONMENT_PROBE_' + [guid]::NewGuid().ToString('N')
+Set-ProcessEnvironmentVariable $environmentProbeName $null
+$unsetProbe = Get-EnvironmentSnapshot $environmentProbeName
+Assert-True (-not $unsetProbe.Exists -and $null -eq $unsetProbe.Value) `
+    'An unset Process environment variable must remain distinguishable from a value.'
+Set-ProcessEnvironmentVariable $environmentProbeName 'probe-value'
+$setProbe = Get-EnvironmentSnapshot $environmentProbeName
+Assert-True ($setProbe.Exists -and $setProbe.Value -eq 'probe-value') `
+    'A set Process environment variable must retain its exact value.'
+Set-ProcessEnvironmentVariable $environmentProbeName $null
+Restore-EnvironmentVariable $environmentProbeName $setProbe
+Assert-True (
+    [System.Environment]::GetEnvironmentVariable(
+        $environmentProbeName,
+        [System.EnvironmentVariableTarget]::Process
+    ) -eq 'probe-value'
+) 'Restore must reinstate a previously set Process environment variable.'
+Restore-EnvironmentVariable $environmentProbeName $unsetProbe
+Assert-True (
+    $null -eq [System.Environment]::GetEnvironmentVariable(
+        $environmentProbeName,
+        [System.EnvironmentVariableTarget]::Process
+    )
+) 'Restore must remove a previously unset Process environment variable.'
+
 $environment = @{}
 foreach ($name in $environmentNames) {
     $environment[$name] = Get-EnvironmentSnapshot $name
@@ -126,12 +170,7 @@ try {
     foreach ($approvalName in $environmentNames[0..3]) {
         foreach ($invalidValue in @($null, 'false')) {
             Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
-            if ($null -eq $invalidValue) {
-                Remove-Item -LiteralPath "Env:$approvalName" -ErrorAction SilentlyContinue
-            }
-            else {
-                Set-Item -LiteralPath "Env:$approvalName" -Value $invalidValue
-            }
+            Set-ProcessEnvironmentVariable $approvalName $invalidValue
             Write-ResponseFixture
             $result = Invoke-Checker
             Assert-True ($result.ExitCode -ne 0) "$approvalName=$invalidValue must fail."
@@ -145,12 +184,7 @@ try {
     )) {
         foreach ($keyValue in @($null, '   ')) {
             Set-ApprovedEnvironment $providerKey.Provider
-            if ($null -eq $keyValue) {
-                Remove-Item -LiteralPath "Env:$($providerKey.KeyName)" -ErrorAction SilentlyContinue
-            }
-            else {
-                Set-Item -LiteralPath "Env:$($providerKey.KeyName)" -Value $keyValue
-            }
+            Set-ProcessEnvironmentVariable $providerKey.KeyName $keyValue
             Write-ResponseFixture
             $result = Invoke-Checker
             Assert-True ($result.ExitCode -ne 0) `
