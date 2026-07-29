@@ -718,6 +718,59 @@ describe('AgentWorkspace', () => {
     wrapper.unmount()
   })
 
+  it('renders timeout recovery as a retry without a correction action', async () => {
+    askQuestionMock.mockRejectedValueOnce(new PortfolioApiError('fixture timeout', {
+      kind: 'TIMEOUT',
+      code: 'ANSWER_REQUEST_TIMEOUT',
+      requestId: 'req-timeout-12345678',
+      action: 'RETRY',
+      clientRequestId: 'client-timeout',
+    }))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-answer-recovery-action]').attributes('data-answer-recovery-action'))
+      .toBe('retry')
+    expect(wrapper.find('[data-answer-edit]').exists()).toBe(false)
+  })
+
+  it('requests safe portfolio navigation for a missing project', async () => {
+    askQuestionMock.mockRejectedValueOnce(new PortfolioApiError('fixture missing project', {
+      kind: 'HTTP',
+      status: 404,
+      code: 'PROJECT_NOT_FOUND',
+      requestId: 'req-project-missing',
+      action: 'NAVIGATE_BACK',
+      clientRequestId: 'client-project-missing',
+    }))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-answer-recovery-action="navigate-back"]').trigger('click')
+
+    expect(wrapper.emitted('navigatePortfolio')).toHaveLength(1)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('clears a cancelled API request without appending a failure answer', async () => {
+    askQuestionMock.mockRejectedValueOnce(new PortfolioApiError('fixture cancellation', {
+      kind: 'CANCELLED',
+      code: 'REQUEST_CANCELLED',
+      action: 'NONE',
+      clientRequestId: 'client-cancelled',
+    }))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(0)
+  })
+
   it('cancels a pending answer without showing a failure', async () => {
     askQuestionMock.mockImplementation((input) =>
       new Promise((_resolve, reject) => {

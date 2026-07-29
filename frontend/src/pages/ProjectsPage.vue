@@ -9,7 +9,7 @@ import PageLead from '../shared/components/PageLead.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 import StatusMark from '../shared/components/StatusMark.vue'
 
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 const groups = computed(() => {
   const data = portfolio.value
   if (!data) return []
@@ -75,6 +75,8 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
     v-else-if="status === 'loading' || status === 'error'"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
 </template>

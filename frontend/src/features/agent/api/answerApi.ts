@@ -1,4 +1,4 @@
-import { request } from '../../portfolio/api/portfolioApi'
+import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
 import type { AnswerResponse, ContextEnvelope } from '../model/answerTypes'
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import { createRequestToken } from './createRequestToken'
@@ -42,6 +42,7 @@ export function askQuestion(
       },
     }),
   }, {
+    operation: RequestOperation.ANSWER,
     signal: options.signal ?? input.signal,
     timeoutMs: 15_000,
   })

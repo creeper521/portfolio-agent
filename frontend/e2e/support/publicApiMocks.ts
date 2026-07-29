@@ -2,6 +2,27 @@ import type { Page, Route } from '@playwright/test'
 
 import { previewPublicContent } from '../../src/features/public-content/data/previewPublicContent'
 
+interface AnswerScenario {
+  status?: number
+  code?: string
+  retryAfterSeconds?: number
+  requestId?: string
+  unsafeMessage?: string
+  delayMilliseconds?: number
+  networkFailure?: boolean
+  onRequest?: (headers: Record<string, string>) => void
+}
+
+interface DiagnosticsMockOptions {
+  failUploads?: boolean
+}
+
+interface DiagnosticsCapture {
+  attempts: number
+  bodies: unknown[]
+  events: Record<string, unknown>[]
+}
+
 const CANONICAL_QUESTION =
   '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？'
 const QUESTION_ALIASES = new Set([
@@ -113,4 +134,58 @@ export async function installPublicApiMocks(page: Page) {
 
 export async function installAnswerApiMock(page: Page) {
   await page.route('**/api/v2/answers', fulfillAnswer)
+}
+
+export async function installAnswerScenarioMock(page: Page, scenario: AnswerScenario) {
+  await page.route('**/api/v2/answers', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    scenario.onRequest?.(await route.request().allHeaders())
+    if (scenario.delayMilliseconds) {
+      await new Promise((resolve) => setTimeout(resolve, scenario.delayMilliseconds))
+    }
+    if (scenario.networkFailure) {
+      await route.abort('failed')
+      return
+    }
+    if (scenario.status && scenario.status >= 400) {
+      await route.fulfill({
+        status: scenario.status,
+        contentType: 'application/json',
+        headers: scenario.requestId ? { 'X-Request-Id': scenario.requestId } : undefined,
+        json: {
+          code: scenario.code,
+          retryAfterSeconds: scenario.retryAfterSeconds,
+          message: scenario.unsafeMessage,
+        },
+      })
+      return
+    }
+    await fulfillAnswer(route)
+  })
+}
+
+export async function installDiagnosticsApiMock(
+  page: Page,
+  options: DiagnosticsMockOptions = {},
+): Promise<DiagnosticsCapture> {
+  const capture: DiagnosticsCapture = {
+    attempts: 0,
+    bodies: [],
+    events: [],
+  }
+  await page.route('**/api/v1/client-diagnostics', async (route) => {
+    capture.attempts += 1
+    const body = route.request().postDataJSON() as { events?: Record<string, unknown>[] }
+    capture.bodies.push(body)
+    capture.events.push(...(Array.isArray(body.events) ? body.events : []))
+    if (options.failUploads) {
+      await route.abort('failed')
+      return
+    }
+    await route.fulfill({ status: 202, body: '' })
+  })
+  return capture
 }

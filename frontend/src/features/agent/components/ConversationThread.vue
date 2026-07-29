@@ -23,6 +23,14 @@ import {
   blockScopeTag,
   degradedNotice,
 } from '../model/answerLabels'
+import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
+
+interface AnswerFailureView {
+  message: string
+  action: ErrorAction
+  requestId?: string
+  retryAfterSeconds?: number
+}
 
 const props = defineProps<{
   session: AgentSession
@@ -34,8 +42,7 @@ const props = defineProps<{
   sessionsOpen?: boolean
   evidenceOpen?: boolean
   pending: boolean
-  error: string
-  retryAfterSeconds?: number
+  failure?: AnswerFailureView | null
   focusTarget?: AnswerFocusTarget | null
 }>()
 
@@ -46,6 +53,7 @@ const emit = defineEmits<{
   toggleSessions: []
   toggleEvidence: []
   retry: []
+  navigateBack: []
   cancel: []
   followUp: [action: FollowUpAction]
   clearCaseContext: []
@@ -78,6 +86,14 @@ watch(
       input.value?.focus()
     }
   },
+)
+
+watch(
+  () => props.failure?.action,
+  (action) => {
+    if (action === 'CORRECT_INPUT') focusComposer()
+  },
+  { immediate: true },
 )
 
 function submit() {
@@ -120,6 +136,14 @@ function focusComposer() {
     resizeInput()
     input.value?.focus()
   })
+}
+
+function shortSupportReference(requestId: string): string {
+  return requestId.slice(0, 8)
+}
+
+function copySupportReference(requestId: string) {
+  void navigator.clipboard?.writeText(requestId)
 }
 
 function onThreadScroll() {
@@ -457,16 +481,38 @@ function inspectMessageEvidence(
           <button data-answer-cancel type="button" @click="$emit('cancel')">取消回答</button>
           AGENT · 正在核验证据
         </div>
-        <div v-else-if="error" class="answer-state answer-state--error" role="alert">
-          <p>{{ error }}</p>
+        <div v-else-if="failure" class="answer-state answer-state--error" role="alert">
+          <p>{{ failure.message }}</p>
+          <button
+            v-if="failure.requestId"
+            :title="`复制支持参考 ${shortSupportReference(failure.requestId)}`"
+            class="answer-state__reference"
+            data-answer-support-reference
+            type="button"
+            @click="copySupportReference(failure.requestId)"
+          >支持参考：{{ shortSupportReference(failure.requestId) }}</button>
           <div>
             <button
+              v-if="failure.action === 'RETRY' || failure.action === 'RETRY_AFTER'"
+              data-answer-recovery-action="retry"
               data-answer-retry
               type="button"
-              :disabled="(retryAfterSeconds ?? 0) > 0"
+              :disabled="(failure.retryAfterSeconds ?? 0) > 0"
               @click="$emit('retry')"
-            >{{ (retryAfterSeconds ?? 0) > 0 ? `${retryAfterSeconds} 秒后可重试` : '重新回答' }}</button>
-            <button data-answer-edit type="button" @click="focusComposer">修改问题</button>
+            >{{ (failure.retryAfterSeconds ?? 0) > 0 ? `${failure.retryAfterSeconds} 秒后可重试` : '重新回答' }}</button>
+            <button
+              v-else-if="failure.action === 'CORRECT_INPUT'"
+              data-answer-edit
+              data-answer-recovery-action="correct-input"
+              type="button"
+              @click="focusComposer"
+            >修改问题</button>
+            <button
+              v-else-if="failure.action === 'NAVIGATE_BACK'"
+              data-answer-recovery-action="navigate-back"
+              type="button"
+              @click="$emit('navigateBack')"
+            >返回作品集</button>
           </div>
         </div>
       </div>

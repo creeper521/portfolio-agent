@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../data/previewPublicContent'
 import type { PublicPortfolio } from '../model/publicContentTypes'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { ApiPublicContentRepository } from '../repository/apiPublicContentRepository'
 import { createPublicContentState } from './usePublicContent'
 
@@ -54,6 +55,26 @@ describe('createPublicContentState', () => {
     expect(state.error.value).toBe('公开内容暂时无法加载，请稍后重试')
     expect(state.error.value).not.toContain('127.0.0.1')
     expect(state.error.value).not.toContain('C:\\private')
+  })
+
+  it('exposes the API recovery action without retaining failure details', async () => {
+    const repository = new ApiPublicContentRepository(vi.fn().mockRejectedValue(
+      new PortfolioApiError('fixture rate limit', {
+        kind: 'HTTP',
+        code: 'ANSWER_RATE_LIMITED',
+        requestId: 'req-public-12345678',
+        retryAfterSeconds: 12,
+        action: 'RETRY_AFTER',
+        clientRequestId: 'client-public',
+      }),
+    ))
+    const state = createPublicContentState(repository)
+
+    await state.load()
+
+    expect(state.action?.value).toBe('RETRY_AFTER')
+    expect(state.retryAfterSeconds?.value).toBe(12)
+    expect(state.error.value).not.toContain('fixture rate limit')
   })
 
   it('returns the same state-level promise for concurrent loads', async () => {

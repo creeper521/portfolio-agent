@@ -5,6 +5,8 @@ import {
   publicContentRepository,
   type PublicContentRepository,
 } from '../repository/publicContentRepository'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
+import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
 
 export type PublicContentStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -14,6 +16,8 @@ export function createPublicContentState(repository: PublicContentRepository) {
   const portfolio = ref<PublicPortfolio | null>(null)
   const status = ref<PublicContentStatus>('idle')
   const error = ref('')
+  const action = ref<ErrorAction>('RETRY')
+  const retryAfterSeconds = ref(0)
   let inFlight: Promise<void> | null = null
 
   function load(): Promise<void> {
@@ -26,6 +30,8 @@ export function createPublicContentState(repository: PublicContentRepository) {
 
     status.value = 'loading'
     error.value = ''
+    action.value = 'RETRY'
+    retryAfterSeconds.value = 0
 
     let portfolioRequest: Promise<PublicPortfolio>
     try {
@@ -39,9 +45,13 @@ export function createPublicContentState(repository: PublicContentRepository) {
         portfolio.value = loadedPortfolio
         status.value = 'ready'
       })
-      .catch(() => {
+      .catch((failure: unknown) => {
         status.value = 'error'
         error.value = PUBLIC_CONTENT_LOAD_ERROR
+        action.value = failure instanceof PortfolioApiError ? failure.action : 'RETRY'
+        retryAfterSeconds.value = failure instanceof PortfolioApiError
+          ? Math.max(0, Math.ceil(failure.retryAfterSeconds ?? 0))
+          : 0
       })
 
     const trackedRequest = request.finally(() => {
@@ -62,10 +72,16 @@ export function createPublicContentState(repository: PublicContentRepository) {
     return load()
   }
 
-  return { portfolio, status, error, load, retry }
+  return { portfolio, status, error, action, retryAfterSeconds, load, retry }
 }
 
-export type PublicContentState = ReturnType<typeof createPublicContentState>
+export type PublicContentState = Omit<
+  ReturnType<typeof createPublicContentState>,
+  'action' | 'retryAfterSeconds'
+> & {
+  action?: ReturnType<typeof createPublicContentState>['action']
+  retryAfterSeconds?: ReturnType<typeof createPublicContentState>['retryAfterSeconds']
+}
 
 export const publicContentStateKey: InjectionKey<PublicContentState> = Symbol('public-content-state')
 

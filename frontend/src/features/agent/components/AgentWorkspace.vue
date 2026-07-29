@@ -9,6 +9,7 @@ import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
 import { askQuestion } from '../api/answerApi'
 import { createRequestToken } from '../api/createRequestToken'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
+import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import {
   WORKSPACE_LIMITS,
@@ -44,6 +45,13 @@ interface AnswerRequestContext {
   requestToken?: string
 }
 
+interface AnswerFailureView {
+  message: string
+  action: ErrorAction
+  requestId?: string
+  retryAfterSeconds?: number
+}
+
 const props = withDefaults(
   defineProps<{
     portfolio: PublicPortfolio
@@ -63,6 +71,9 @@ const props = withDefaults(
     initialSeed: null,
   },
 )
+const emit = defineEmits<{
+  navigatePortfolio: []
+}>()
 
 const sessions = useLocalSessions()
 const split = useWorkspaceSplit()
@@ -77,8 +88,7 @@ const evidenceTab = ref<EvidenceDeskTab>('EVIDENCE')
 const focusedAnswerMessageId = ref('')
 const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
-const answerError = ref('')
-const retryAfterSeconds = ref(0)
+const answerFailure = ref<AnswerFailureView | null>(null)
 const failedRequest = ref<AnswerRequestContext | null>(null)
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
@@ -202,9 +212,39 @@ function createSession(initialEvidenceId = '') {
 function clearAnswerFailure() {
   if (retryDelayTimer) clearInterval(retryDelayTimer)
   retryDelayTimer = null
-  retryAfterSeconds.value = 0
-  answerError.value = ''
+  answerFailure.value = null
   failedRequest.value = null
+}
+
+function failureMessage(action: ErrorAction): string {
+  switch (action) {
+    case 'RETRY_AFTER':
+      return '请求过于频繁，请在倒计时结束后重试'
+    case 'CORRECT_INPUT':
+      return '请检查问题后再试'
+    case 'NAVIGATE_BACK':
+      return '当前项目不可用，请返回作品集后继续浏览'
+    case 'RETRY':
+    default:
+      return 'Agent 暂时无法回答，请稍后重试'
+  }
+}
+
+function toAnswerFailure(error: unknown): AnswerFailureView {
+  if (error instanceof PortfolioApiError) {
+    return {
+      message: failureMessage(error.action),
+      action: error.action,
+      requestId: error.requestId,
+      retryAfterSeconds: error.action === 'RETRY_AFTER'
+        ? error.retryAfterSeconds
+        : undefined,
+    }
+  }
+  return {
+    message: failureMessage('RETRY'),
+    action: 'RETRY',
+  }
 }
 
 function invalidatePendingRequest() {
@@ -291,15 +331,16 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
   } catch (error) {
     if (disposed || request !== requestVersion) return
     if (controller.signal.aborted
-      || (error instanceof PortfolioApiError && error.code === 'REQUEST_CANCELLED')) {
+      || (error instanceof PortfolioApiError && error.action === 'NONE')) {
       clearAnswerFailure()
       return
     }
     failedRequest.value = preparedContext
-    if (error instanceof PortfolioApiError && error.retryAfterSeconds) {
-      startRetryDelay(error.retryAfterSeconds)
+    const failure = toAnswerFailure(error)
+    answerFailure.value = failure
+    if (failure.retryAfterSeconds) {
+      startRetryDelay(failure.retryAfterSeconds)
     }
-    answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
     if (!disposed && request === requestVersion) {
       activeRequest = null
@@ -311,10 +352,16 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
 
 function startRetryDelay(seconds: number) {
   if (retryDelayTimer) clearInterval(retryDelayTimer)
-  retryAfterSeconds.value = Math.max(1, Math.ceil(seconds))
+  if (!answerFailure.value) return
+  answerFailure.value = {
+    ...answerFailure.value,
+    retryAfterSeconds: Math.max(1, Math.ceil(seconds)),
+  }
   retryDelayTimer = setInterval(() => {
-    retryAfterSeconds.value = Math.max(0, retryAfterSeconds.value - 1)
-    if (retryAfterSeconds.value === 0 && retryDelayTimer) {
+    if (!answerFailure.value) return
+    const retryAfterSeconds = Math.max(0, (answerFailure.value.retryAfterSeconds ?? 0) - 1)
+    answerFailure.value = { ...answerFailure.value, retryAfterSeconds }
+    if (retryAfterSeconds === 0 && retryDelayTimer) {
       clearInterval(retryDelayTimer)
       retryDelayTimer = null
     }
@@ -367,7 +414,9 @@ function clearCaseContext() {
 }
 
 function retryAnswer() {
-  if (retryAfterSeconds.value > 0) return
+  const failure = answerFailure.value
+  if (!failure || !['RETRY', 'RETRY_AFTER'].includes(failure.action)) return
+  if ((failure.retryAfterSeconds ?? 0) > 0) return
   const context = failedRequest.value
   if (!context) return
   const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
@@ -379,6 +428,12 @@ function retryAnswer() {
     return
   }
   void requestAnswer(context, false)
+}
+
+function navigateBackFromFailure() {
+  clearAnswerFailure()
+  clearCaseContext()
+  emit('navigatePortfolio')
 }
 
 function previewSplit(key: keyof WorkspaceSplit, value: number) {
@@ -631,13 +686,13 @@ onBeforeUnmount(() => {
       :sessions-open="sessionDrawerOpen"
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
-      :error="answerError"
-      :retry-after-seconds="retryAfterSeconds"
+      :failure="answerFailure"
       :focus-target="answerFocusTarget"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
       @retry="retryAnswer"
+      @navigate-back="navigateBackFromFailure"
       @cancel="cancelAnswer"
       @inspect-evidence="inspectEvidence"
       @toggle-sessions="toggleSessions"

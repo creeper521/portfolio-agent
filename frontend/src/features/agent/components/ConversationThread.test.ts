@@ -55,8 +55,13 @@ function session(messages: AgentSession['messages'] = []): AgentSession {
 function mountThread(
   messages: AgentSession['messages'] = [],
   pending = false,
-  error = '',
   focusTarget: AnswerFocusTarget | null = null,
+  failure?: {
+    message: string
+    action: 'NONE' | 'RETRY' | 'RETRY_AFTER' | 'CORRECT_INPUT' | 'NAVIGATE_BACK'
+    requestId?: string
+    retryAfterSeconds?: number
+  },
 ) {
   return mount(ConversationThread, {
     props: {
@@ -64,13 +69,77 @@ function mountThread(
       role: 'INTERVIEWER',
       project: previewPublicContent.projects[0],
       pending,
-      error,
       focusTarget,
+      failure,
     },
   })
 }
 
 describe('ConversationThread', () => {
+  it('renders a disabled retry-after countdown as its only recovery action', () => {
+    const wrapper = mountThread([], false, null, {
+      message: '请稍后再试',
+      action: 'RETRY_AFTER',
+      requestId: 'req-rate-12345678',
+      retryAfterSeconds: 12,
+    })
+
+    const actions = wrapper.findAll('[data-answer-recovery-action]')
+    expect(actions).toHaveLength(1)
+    expect(actions[0]?.attributes('data-answer-recovery-action')).toBe('retry')
+    expect(actions[0]?.attributes('disabled')).toBeDefined()
+    expect(actions[0]?.text()).toContain('12 秒后可重试')
+    expect(wrapper.get('[data-answer-support-reference]').text()).toContain('req-rate')
+  })
+
+  it('keeps a validation input available and renders only a correction action', async () => {
+    const wrapper = mountThread([
+      {
+        id: 'user-validation',
+        role: 'USER',
+        content: '可修改的输入',
+        answer: null,
+        evidenceIds: [],
+        createdAt: 1,
+      },
+    ], false, null, {
+      message: '请检查输入后再试',
+      action: 'CORRECT_INPUT',
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('请检查输入后再试')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('可修改的输入')
+    expect(wrapper.findAll('[data-answer-recovery-action]')).toHaveLength(1)
+    expect(wrapper.get('[data-answer-recovery-action]').attributes('data-answer-recovery-action'))
+      .toBe('correct-input')
+  })
+
+  it('emits a safe back-navigation action for unavailable project context', async () => {
+    const wrapper = mountThread([], false, null, {
+      message: '当前项目不可用',
+      action: 'NAVIGATE_BACK',
+    })
+
+    const back = wrapper.get('[data-answer-recovery-action]')
+    expect(back.attributes('data-answer-recovery-action')).toBe('navigate-back')
+    expect(back.attributes('href')).toBeUndefined()
+    await back.trigger('click')
+    expect(wrapper.emitted('navigateBack')).toEqual([[]])
+  })
+
+  it('renders an unknown failure as a single generic retry action', () => {
+    const wrapper = mountThread([], false, null, {
+      message: '暂时无法完成，请稍后重试',
+      action: 'RETRY',
+    })
+
+    expect(wrapper.findAll('[data-answer-recovery-action]')).toHaveLength(1)
+    expect(wrapper.get('[data-answer-recovery-action]').attributes('data-answer-recovery-action'))
+      .toBe('retry')
+  })
+
   it('emits a section evidence inspection instead of a follow-up request', async () => {
     const wrapper = mountThread([answerMessageFixture])
     await wrapper.get('[data-section-evidence]').trigger('click')
@@ -482,7 +551,10 @@ describe('ConversationThread', () => {
         evidenceIds: [],
         createdAt: 2,
       },
-    ], false, '回答失败')
+    ], false, null, {
+      message: '请检查问题后再试',
+      action: 'CORRECT_INPUT',
+    })
     document.body.appendChild(wrapper.element)
 
     await wrapper.get('[data-answer-edit]').trigger('click')

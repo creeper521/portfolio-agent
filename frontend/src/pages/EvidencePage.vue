@@ -10,7 +10,7 @@ import PublicContentFeedback from '../shared/components/PublicContentFeedback.vu
 import StatusMark from '../shared/components/StatusMark.vue'
 
 const route = useRoute()
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 const projectFilter = computed(() =>
   typeof route.query.project === 'string' ? route.query.project : '',
 )
@@ -135,6 +135,8 @@ const summary = computed(() => {
     v-else-if="status === 'loading' || status === 'error'"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
 </template>

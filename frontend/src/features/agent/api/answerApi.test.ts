@@ -35,28 +35,31 @@ describe('answer api', () => {
       messages: [{ role: 'USER', content: '之前的问题' }],
     })
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v2/answers',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          turnId: 'turn-1',
-          requestToken: '63f63c75-16e8-49e7-864d-dcd0fe100d50',
-          question: '介绍项目',
-          messages: [{ role: 'USER', content: '之前的问题' }],
-          context: {
-            projectSlug: 'sql-audit',
-            caseSlug: 'some-case',
-            audienceRole: 'INTERVIEWER',
-            source: 'AGENT_PAGE',
-          },
-        }),
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const requestInit = fetchMock.mock.calls[0]?.[1]
+    const headers = new Headers(requestInit?.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Client-Session-Id')).toMatch(/^[0-9a-f-]{36}$/)
+    expect(headers.get('X-Client-Request-Id')).toMatch(/^[0-9a-f-]{36}$/)
+    expect(requestInit).toMatchObject({
+      method: 'POST',
+      signal: expect.any(AbortSignal),
+      body: JSON.stringify({
+        turnId: 'turn-1',
+        requestToken: '63f63c75-16e8-49e7-864d-dcd0fe100d50',
+        question: '介绍项目',
+        messages: [{ role: 'USER', content: '之前的问题' }],
+        context: {
+          projectSlug: 'sql-audit',
+          caseSlug: 'some-case',
+          audienceRole: 'INTERVIEWER',
+          source: 'AGENT_PAGE',
+        },
       }),
-    )
+    })
   })
 
-  it('uses the api error message for a non-success response', async () => {
+  it('uses a stable local message for a non-success response', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -67,7 +70,12 @@ describe('answer api', () => {
       ),
     )
 
-    await expect(askQuestion(input(''))).rejects.toThrow('请求参数不符合要求')
+    await expect(askQuestion(input(''))).rejects.toMatchObject({
+      name: 'PortfolioApiError',
+      kind: 'HTTP',
+      status: 400,
+      message: '作品集服务暂时无法处理这个请求',
+    })
   })
 
   it('keeps frontend-only referential context out of the strict v2 payload', async () => {
@@ -126,6 +134,7 @@ describe('answer api', () => {
       requestSignal = init?.signal ?? undefined
       return Promise.resolve({
         ok: true,
+        headers: new Headers(),
         json: () =>
           new Promise((_resolve, reject) => {
             requestSignal?.addEventListener('abort', () =>
@@ -136,14 +145,19 @@ describe('answer api', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const request = askQuestion(input('介绍项目'))
+    const failure = askQuestion(input('介绍项目')).catch((error: unknown) => error)
     await Promise.resolve()
     await Promise.resolve()
-    const rejection = expect(request).rejects.toThrow('作品集服务响应超时，请稍后重试')
 
     await vi.advanceTimersByTimeAsync(15_000)
     expect(requestSignal?.aborted).toBe(true)
-    await rejection
+    await expect(failure).resolves.toMatchObject({
+      name: 'PortfolioApiError',
+      kind: 'TIMEOUT',
+      code: 'CLIENT_REQUEST_TIMEOUT',
+      action: 'RETRY',
+      message: '作品集服务响应超时，请稍后重试',
+    })
   })
 
   it('forwards an explicit request token and external cancellation signal', async () => {

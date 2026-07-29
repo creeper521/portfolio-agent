@@ -1,8 +1,24 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { installAnswerApiMock, installPublicApiMocks } from './support/publicApiMocks'
+import {
+  installAnswerApiMock,
+  installAnswerScenarioMock,
+  installDiagnosticsApiMock,
+  installPublicApiMocks,
+} from './support/publicApiMocks'
 
 const usesRealApi = process.env.PLAYWRIGHT_REAL_API === '1'
+const SERVER_REQUEST_ID = '11111111-1111-4111-8111-111111111111'
+const FORBIDDEN_DIAGNOSTIC_KEYS = [
+  'question',
+  'messages',
+  'answer',
+  'stack',
+  'url',
+  'headers',
+  'requestBody',
+  'responseBody',
+]
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -31,6 +47,167 @@ async function openAgentDeepLink(page: Page) {
   await page.goto('/agent')
   await expect(page).toHaveURL(/\/agent$/)
 }
+
+async function submitAgentQuestion(page: Page, question = '这个项目交付了什么？') {
+  await page.getByLabel('你的问题').fill(question)
+  await page.getByRole('button', { name: /发送/ }).click()
+}
+
+function expectClosedDiagnosticBodies(bodies: unknown[]) {
+  for (const body of bodies) {
+    const serialized = JSON.stringify(body)
+    for (const key of FORBIDDEN_DIAGNOSTIC_KEYS) {
+      expect(serialized).not.toContain(`"${key}"`)
+    }
+  }
+}
+
+test.describe('browser diagnostics release gate', () => {
+  test.skip(usesRealApi, 'deterministic failure scenarios use browser API mocks')
+
+  test('429 renders a countdown and uploads only a closed correlated diagnostic', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page)
+    await installAnswerScenarioMock(page, {
+      status: 429,
+      code: 'ANSWER_RATE_LIMITED',
+      retryAfterSeconds: 3,
+      requestId: SERVER_REQUEST_ID,
+    })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page)
+
+    await expect(page.locator('[data-answer-retry]')).toBeDisabled()
+    await expect(page.locator('[data-answer-retry]')).toContainText('3 秒后可重试')
+    await expect(page.locator('[data-answer-retry]')).toBeEnabled({ timeout: 4_500 })
+    await expect.poll(() => diagnostics.events.length).toBe(1)
+    expect(diagnostics.events[0]).toMatchObject({
+      eventName: 'frontend.agent.request.failed',
+      serverRequestId: SERVER_REQUEST_ID,
+      errorCode: 'ANSWER_RATE_LIMITED',
+    })
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('503 timeout offers retry and preserves the returned request correlation', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page)
+    await installAnswerScenarioMock(page, {
+      status: 503,
+      code: 'ANSWER_REQUEST_TIMEOUT',
+      requestId: SERVER_REQUEST_ID,
+    })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page)
+
+    await expect(page.locator('[data-answer-recovery-action="retry"]')).toBeEnabled()
+    await expect.poll(() => diagnostics.events.length).toBe(1)
+    expect(diagnostics.events[0]).toMatchObject({
+      eventName: 'frontend.agent.request.failed',
+      serverRequestId: SERVER_REQUEST_ID,
+      errorCode: 'ANSWER_REQUEST_TIMEOUT',
+    })
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('PROJECT_NOT_FOUND offers safe navigation without exposing the server body', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page)
+    await installAnswerScenarioMock(page, {
+      status: 404,
+      code: 'PROJECT_NOT_FOUND',
+      requestId: SERVER_REQUEST_ID,
+      unsafeMessage: 'visitor question and internal stack must stay hidden',
+    })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page)
+
+    const recovery = page.locator('[data-answer-recovery-action="navigate-back"]')
+    await expect(recovery).toBeVisible()
+    await expect(page.getByRole('alert')).not.toContainText('visitor question')
+    await recovery.click()
+    await expect(page).toHaveURL(/\/projects$/)
+    await expect(page.getByRole('heading', { level: 1, name: '工程案卷目录' })).toBeVisible()
+    await expect.poll(() => diagnostics.events.length).toBe(1)
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('caller cancellation appends no failure answer', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page)
+    await installAnswerScenarioMock(page, { delayMilliseconds: 5_100 })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page, '取消这次回答')
+    await page.locator('[data-answer-cancel]').click()
+
+    await expect(page.locator('[data-agent-loading]')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.locator('.message--agent')).toHaveCount(0)
+    await expect.poll(() => diagnostics.events.length).toBe(1)
+    expect(diagnostics.events[0]).toMatchObject({
+      eventName: 'frontend.agent.request.cancelled',
+      errorCode: 'REQUEST_CANCELLED',
+    })
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('one slow answer emits one diagnostic and an upload failure stays invisible without retry', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page, { failUploads: true })
+    await installAnswerScenarioMock(page, { delayMilliseconds: 5_100 })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page)
+
+    await expect(page.locator('.message--agent')).toBeVisible({ timeout: 8_000 })
+    await expect.poll(() => diagnostics.attempts).toBe(1)
+    await page.waitForTimeout(2_500)
+    expect(diagnostics.attempts).toBe(1)
+    expect(diagnostics.events).toHaveLength(1)
+    expect(diagnostics.events[0]).toMatchObject({
+      eventName: 'frontend.agent.request.slow',
+      durationBucket: 'GE_5000_MS',
+    })
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('a pre-response network failure reports only client correlation', async ({ page }) => {
+    const diagnostics = await installDiagnosticsApiMock(page)
+    await installAnswerScenarioMock(page, { networkFailure: true })
+    await openAgentDeepLink(page)
+
+    await submitAgentQuestion(page)
+
+    await expect(page.locator('[data-answer-recovery-action="retry"]')).toBeVisible()
+    await expect.poll(() => diagnostics.events.length).toBe(1)
+    expect(diagnostics.events[0]).toMatchObject({
+      eventName: 'frontend.agent.request.failed',
+      errorCode: 'CLIENT_NETWORK_ERROR',
+    })
+    expect(diagnostics.events[0]).toHaveProperty('clientRequestId')
+    expect(diagnostics.events[0]).not.toHaveProperty('serverRequestId')
+    expectClosedDiagnosticBodies(diagnostics.bodies)
+  })
+
+  test('refresh creates a new ephemeral client session id', async ({ page }) => {
+    const sessionIds: string[] = []
+    await installAnswerScenarioMock(page, {
+      onRequest: (headers) => sessionIds.push(headers['x-client-session-id'] ?? ''),
+    })
+    await openAgentDeepLink(page)
+    await submitAgentQuestion(page)
+    await expect(page.locator('.message--agent')).toBeVisible()
+
+    await page.reload()
+    await submitAgentQuestion(page)
+    await expect(page.locator('.message--agent')).toBeVisible()
+
+    expect(sessionIds).toHaveLength(2)
+    expect(sessionIds[0]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(sessionIds[1]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(sessionIds[1]).not.toBe(sessionIds[0])
+  })
+})
 
 test('home preserves the four-layer experience and hands a role question to Agent', async ({
   page,

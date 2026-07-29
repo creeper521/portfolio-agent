@@ -14,7 +14,7 @@ import PublicContentFeedback from '../shared/components/PublicContentFeedback.vu
 import StatusMark from '../shared/components/StatusMark.vue'
 
 const props = defineProps<{ slug: string }>()
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 const router = useRouter()
 
 const dossier = computed(() => {
@@ -162,6 +162,8 @@ function traceFor(anchor: SectionAnchor) {
     v-else-if="status === 'loading' || status === 'error'"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
 

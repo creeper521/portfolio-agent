@@ -14,7 +14,7 @@ import PublicContentFeedback from '../shared/components/PublicContentFeedback.vu
 
 const route = useRoute()
 const router = useRouter()
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 
 function queryString(key: string) {
   const value = route.query[key]
@@ -48,6 +48,10 @@ function initialRole(): AudienceRole {
 }
 
 const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
+
+function navigateToPortfolio() {
+  void router.push({ path: '/projects' })
+}
 </script>
 
 <template>
@@ -56,6 +60,8 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
     class="agent-route-feedback"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
   <AgentWorkspace
@@ -67,6 +73,7 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
     :initial-seed="initialSeed"
     :initial-case="caseHandoff?.caseSlug ?? ''"
     :initial-question="caseHandoff?.question ?? ''"
+    @navigate-portfolio="navigateToPortfolio"
   />
   <section v-else-if="status === 'ready' && portfolio" class="route-seed-feedback" data-invalid-handoff role="status">
     <p>这次页面内交接已失效或已被使用。</p>

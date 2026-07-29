@@ -10,7 +10,7 @@ import { usePublicContent } from '../features/public-content/composables/usePubl
 import DossierFooter from '../shared/components/DossierFooter.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 
 const marginalia = computed(() =>
   portfolio.value ? heroMarginalia(portfolio.value) : null,
@@ -33,6 +33,8 @@ const marginalia = computed(() =>
     v-else-if="status === 'loading' || status === 'error'"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
 </template>

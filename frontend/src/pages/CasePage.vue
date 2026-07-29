@@ -14,7 +14,7 @@ import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PublicContentFeedback from '../shared/components/PublicContentFeedback.vue'
 
 const props = defineProps<{ slug: string }>()
-const { portfolio, status, error, retry } = usePublicContent()
+const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublicContent()
 
 /**
  * 只在 cases 里解析——详情页是 Case 专属入口，project 不在此路由渲染。
@@ -324,6 +324,8 @@ watch(caseStudy, () => {
     v-else-if="status === 'loading' || status === 'error'"
     :status="status"
     :message="error"
+    :action="action"
+    :retry-after-seconds="retryAfterSeconds"
     @retry="retry"
   />
 
