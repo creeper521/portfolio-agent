@@ -10,12 +10,16 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
+import java.util.UUID;
 
 public final class ConversationAnswerRequest {
 
     @NotBlank(message = "turnId is required")
     @Size(max = 100, message = "turnId must not exceed 100 characters")
     private final String turnId;
+
+    @NotNull(message = "requestToken is required")
+    private final UUID requestToken;
 
     @NotBlank(message = "question is required")
     @Size(max = 2000, message = "question must not exceed 2000 characters")
@@ -33,17 +37,31 @@ public final class ConversationAnswerRequest {
     @JsonCreator
     public ConversationAnswerRequest(
             @JsonProperty("turnId") String turnId,
+            @JsonProperty("requestToken") UUID requestToken,
             @JsonProperty("question") String question,
             @JsonProperty("messages") List<ConversationMessageRequest> messages,
             @JsonProperty("context") ConversationAnswerContextRequest context
     ) {
         this.turnId = turnId;
+        this.requestToken = requestToken;
         this.question = question;
         this.messages = messages == null ? List.of() : List.copyOf(messages);
         this.context = context;
     }
 
+    public ConversationAnswerRequest(
+            String turnId,
+            String question,
+            List<ConversationMessageRequest> messages,
+            ConversationAnswerContextRequest context
+    ) {
+        this(turnId, UUID.nameUUIDFromBytes(
+                String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                question, messages, context);
+    }
+
     public String getTurnId() { return turnId; }
+    public UUID getRequestToken() { return requestToken; }
     public String getQuestion() { return question; }
     public List<ConversationMessageRequest> getMessages() { return messages; }
     public ConversationAnswerContextRequest getContext() { return context; }

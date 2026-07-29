@@ -38,3 +38,10 @@ portfolio:
     max-tool-rounds: 2
     max-suggested-questions: 3
     minimum-intent-confidence: 0.65
+  answer-production:
+    requests-per-minute: ${PORTFOLIO_ANSWER_REQUESTS_PER_MINUTE:10}
+    max-concurrent: ${PORTFOLIO_ANSWER_MAX_CONCURRENT:2}
+    request-timeout: ${PORTFOLIO_ANSWER_REQUEST_TIMEOUT:12s}
+    idempotency-ttl: ${PORTFOLIO_ANSWER_IDEMPOTENCY_TTL:2m}
+    trust-proxy: ${PORTFOLIO_ANSWER_TRUST_PROXY:false}
+    trusted-proxies: ${PORTFOLIO_ANSWER_TRUSTED_PROXIES:}

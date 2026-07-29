@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDraft;
 import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
@@ -8,6 +9,8 @@ import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
 import com.portfolio.agent.answer.domain.ConversationWindow;
+import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
@@ -98,6 +101,12 @@ public final class ConversationalAgentRuntime {
                 validated.getTitle(),
                 validated.getAcceptedBlocks(),
                 suggestions,
-                false);
+                false,
+                GenerationMode.MODEL,
+                route.getAnswerScope() == ConversationAnswerScope.PORTFOLIO
+                        || route.getAnswerScope() == ConversationAnswerScope.HYBRID
+                        ? AnswerSource.RETRIEVAL
+                        : null,
+                null);
     }
 }

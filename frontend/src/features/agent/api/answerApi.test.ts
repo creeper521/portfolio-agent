@@ -30,6 +30,7 @@ describe('answer api', () => {
 
     await askQuestion({
       ...input('介绍项目'),
+      requestToken: '63f63c75-16e8-49e7-864d-dcd0fe100d50',
       caseSlug: 'some-case',
       messages: [{ role: 'USER', content: '之前的问题' }],
     })
@@ -41,6 +42,7 @@ describe('answer api', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           turnId: 'turn-1',
+          requestToken: '63f63c75-16e8-49e7-864d-dcd0fe100d50',
           question: '介绍项目',
           messages: [{ role: 'USER', content: '之前的问题' }],
           context: {
@@ -91,6 +93,9 @@ describe('answer api', () => {
     })
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.requestToken).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    )
     expect(body.contextEnvelope).toBeUndefined()
     expect(body.questionPresetId).toBeUndefined()
     expect(body.context.focusEvidenceIds).toBeUndefined()
@@ -110,7 +115,7 @@ describe('answer api', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
     const rejection = expect(request).rejects.toThrow('作品集服务响应超时，请稍后重试')
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(15_000)
     await rejection
   })
 
@@ -136,8 +141,33 @@ describe('answer api', () => {
     await Promise.resolve()
     const rejection = expect(request).rejects.toThrow('作品集服务响应超时，请稍后重试')
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(15_000)
     expect(requestSignal?.aborted).toBe(true)
     await rejection
+  })
+
+  it('forwards an explicit request token and external cancellation signal', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        )
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = askQuestion(
+      { ...input('介绍项目'), requestToken: '63f63c75-16e8-49e7-864d-dcd0fe100d50' },
+      { signal: controller.signal },
+    )
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({
+      name: 'PortfolioApiError',
+      code: 'REQUEST_CANCELLED',
+    })
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.requestToken).toBe('63f63c75-16e8-49e7-864d-dcd0fe100d50')
   })
 })

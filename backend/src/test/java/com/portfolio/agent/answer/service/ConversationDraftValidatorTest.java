@@ -78,6 +78,71 @@ class ConversationDraftValidatorTest {
         assertThat(result.getAcceptedBlocks()).containsExactly(block);
     }
 
+    @Test
+    void rejectsBlankBlockContentBeforeSemanticReview() {
+        ConversationDraftValidationResult result = validator.validate(
+                draft(new ConversationAnswerBlock(
+                        ConversationSourceScope.GENERAL, "  ", List.of(), List.of())),
+                ConversationAnswerScope.GENERAL,
+                PortfolioGroundingContext.empty());
+
+        assertThat(result.getFailureCode()).isEqualTo("EMPTY_BLOCK_CONTENT");
+        verifyNoInteractions(modelPort);
+    }
+
+    @Test
+    void rejectsTitleBeyondOneHundredTwentyUnicodeCharacters() {
+        ConversationDraft draft = new ConversationDraft(
+                "问".repeat(121),
+                AnswerResolution.ANSWERED,
+                List.of(new ConversationAnswerBlock(
+                        ConversationSourceScope.GENERAL, "answer", List.of(), List.of())));
+
+        ConversationDraftValidationResult result = validator.validate(
+                draft, ConversationAnswerScope.GENERAL, PortfolioGroundingContext.empty());
+
+        assertThat(result.getFailureCode()).isEqualTo("TITLE_TOO_LONG");
+        verifyNoInteractions(modelPort);
+    }
+
+    @Test
+    void rejectsMoreThanEightBlocks() {
+        ConversationAnswerBlock block = new ConversationAnswerBlock(
+                ConversationSourceScope.GENERAL, "answer", List.of(), List.of());
+        ConversationDraft draft = new ConversationDraft(
+                "title", AnswerResolution.ANSWERED,
+                java.util.Collections.nCopies(9, block));
+
+        ConversationDraftValidationResult result = validator.validate(
+                draft, ConversationAnswerScope.GENERAL, PortfolioGroundingContext.empty());
+
+        assertThat(result.getFailureCode()).isEqualTo("TOO_MANY_BLOCKS");
+        verifyNoInteractions(modelPort);
+    }
+
+    @Test
+    void rejectsIndividualAndTotalContentBudgets() {
+        ConversationAnswerBlock oversized = new ConversationAnswerBlock(
+                ConversationSourceScope.GENERAL, "a".repeat(2001), List.of(), List.of());
+        assertThat(validator.validate(
+                draft(oversized),
+                ConversationAnswerScope.GENERAL,
+                PortfolioGroundingContext.empty()).getFailureCode())
+                .isEqualTo("BLOCK_TOO_LONG");
+
+        ConversationAnswerBlock twoThousand = new ConversationAnswerBlock(
+                ConversationSourceScope.GENERAL, "a".repeat(2000), List.of(), List.of());
+        ConversationDraft totalOversized = new ConversationDraft(
+                "title", AnswerResolution.ANSWERED,
+                java.util.Collections.nCopies(5, twoThousand));
+        assertThat(validator.validate(
+                totalOversized,
+                ConversationAnswerScope.GENERAL,
+                PortfolioGroundingContext.empty()).getFailureCode())
+                .isEqualTo("ANSWER_TOO_LONG");
+        verifyNoInteractions(modelPort);
+    }
+
     private ConversationDraft draft(ConversationAnswerBlock block) {
         return new ConversationDraft(
                 "title",

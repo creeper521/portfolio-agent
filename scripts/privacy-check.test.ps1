@@ -170,6 +170,9 @@ try {
     Set-Content -LiteralPath (Join-Path $safeRoot 'content.json') `
         -Value 'Public portfolio contains reviewed content only.' `
         -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeRoot 'request-token.ts') `
+        -Value 'const payload = { requestToken: crypto.randomUUID() }' `
+        -Encoding UTF8
 
     foreach ($case in $unsafeCases.GetEnumerator()) {
         $caseRoot = Join-Path $fixtureRoot $case.Key

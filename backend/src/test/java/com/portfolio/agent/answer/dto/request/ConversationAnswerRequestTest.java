@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,6 +24,8 @@ class ConversationAnswerRequestTest {
         ConversationAnswerRequest request = request(history(20));
 
         assertThat(validator.validate(request)).isEmpty();
+        assertThat(request.getRequestToken()).isEqualTo(
+                UUID.fromString("6b2d8895-4108-4b4d-aee0-21f6e7c4f333"));
     }
 
     @Test
@@ -74,6 +77,7 @@ class ConversationAnswerRequestTest {
         ConversationAnswerRequest request = objectMapper.readValue("""
                 {
                   "turnId": "turn-case",
+                  "requestToken": "6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
                   "question": "Tell me about this case",
                   "messages": [],
                   "context": {
@@ -87,6 +91,25 @@ class ConversationAnswerRequestTest {
         assertThat(request.getContext().getSource()).isEqualTo(AnswerRequestSource.CASE);
         assertThat(request.getContext().getCaseSlug())
                 .isEqualTo("multilingual-image-preservation");
+    }
+
+    @Test
+    void rejectsMissingRequestTokenFromJson() throws Exception {
+        ConversationAnswerRequest request = new ObjectMapper().readValue("""
+                {
+                  "turnId": "turn-case",
+                  "question": "Tell me about this case",
+                  "messages": [],
+                  "context": {
+                    "audienceRole": "INTERVIEWER",
+                    "source": "AGENT_PAGE"
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThat(validator.validate(request))
+                .extracting(ConstraintViolation::getMessage)
+                .contains("requestToken is required");
     }
 
     @Test
@@ -105,6 +128,7 @@ class ConversationAnswerRequestTest {
     private ConversationAnswerRequest request(List<ConversationMessageRequest> messages) {
         return new ConversationAnswerRequest(
                 "turn-1",
+                UUID.fromString("6b2d8895-4108-4b4d-aee0-21f6e7c4f333"),
                 "visitor question",
                 messages,
                 new ConversationAnswerContextRequest(

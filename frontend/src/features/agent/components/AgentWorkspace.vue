@@ -7,6 +7,8 @@ import type {
 } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
 import { askQuestion } from '../api/answerApi'
+import { createRequestToken } from '../api/createRequestToken'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import {
   WORKSPACE_LIMITS,
@@ -39,6 +41,7 @@ interface AnswerRequestContext {
   question: string
   questionPresetId?: string
   contextEnvelope?: ContextEnvelope
+  requestToken?: string
 }
 
 const props = withDefaults(
@@ -75,6 +78,7 @@ const focusedAnswerMessageId = ref('')
 const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerError = ref('')
+const retryAfterSeconds = ref(0)
 const failedRequest = ref<AnswerRequestContext | null>(null)
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
@@ -82,10 +86,12 @@ const activeCaseSlug = ref(
     : '',
 )
 let activeRequest: AnswerRequestContext | null = null
+let activeRequestController: AbortController | null = null
 let requestVersion = 0
 let answerFocusRequestId = 0
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
+let retryDelayTimer: ReturnType<typeof setInterval> | null = null
 let drawerReturnFocus: HTMLElement | null = null
 
 const effectiveSplit = computed(() =>
@@ -194,11 +200,16 @@ function createSession(initialEvidenceId = '') {
 }
 
 function clearAnswerFailure() {
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
+  retryDelayTimer = null
+  retryAfterSeconds.value = 0
   answerError.value = ''
   failedRequest.value = null
 }
 
 function invalidatePendingRequest() {
+  activeRequestController?.abort()
+  activeRequestController = null
   requestVersion += 1
   activeRequest = null
   pending.value = false
@@ -212,6 +223,10 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     return
   }
 
+  const preparedContext = context.requestToken
+    ? context
+    : { ...context, requestToken: createRequestToken() }
+  const controller = new AbortController()
   clearFocusedAnswer()
   if (appendUser) {
     sessions.appendMessage(session.id, {
@@ -222,7 +237,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     })
   }
   const request = ++requestVersion
-  activeRequest = context
+  activeRequest = preparedContext
+  activeRequestController = controller
   pending.value = true
   clearAnswerFailure()
   try {
@@ -251,15 +267,17 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     const mapped = mapAnswerResponse(
       await askQuestion({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
-        projectSlug: context.caseSlug ? null : context.projectSlug,
-        caseSlug: context.caseSlug ?? null,
+        requestToken: preparedContext.requestToken,
+        signal: controller.signal,
+        projectSlug: preparedContext.caseSlug ? null : preparedContext.projectSlug,
+        caseSlug: preparedContext.caseSlug ?? null,
         audienceRole: session.role,
         source: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
-        questionPresetId: context.questionPresetId,
-        question: context.question,
+        questionPresetId: preparedContext.questionPresetId,
+        question: preparedContext.question,
         messages: history,
-        contextEnvelope: context.contextEnvelope,
+        contextEnvelope: preparedContext.contextEnvelope,
       }),
     )
     if (disposed || request !== requestVersion) return
@@ -270,16 +288,41 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       answer: mapped,
       evidenceIds: mapped.evidenceIds,
     })
-  } catch {
+  } catch (error) {
     if (disposed || request !== requestVersion) return
-    failedRequest.value = context
+    if (controller.signal.aborted
+      || (error instanceof PortfolioApiError && error.code === 'REQUEST_CANCELLED')) {
+      clearAnswerFailure()
+      return
+    }
+    failedRequest.value = preparedContext
+    if (error instanceof PortfolioApiError && error.retryAfterSeconds) {
+      startRetryDelay(error.retryAfterSeconds)
+    }
     answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
     if (!disposed && request === requestVersion) {
       activeRequest = null
+      activeRequestController = null
       pending.value = false
     }
   }
+}
+
+function startRetryDelay(seconds: number) {
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
+  retryAfterSeconds.value = Math.max(1, Math.ceil(seconds))
+  retryDelayTimer = setInterval(() => {
+    retryAfterSeconds.value = Math.max(0, retryAfterSeconds.value - 1)
+    if (retryAfterSeconds.value === 0 && retryDelayTimer) {
+      clearInterval(retryDelayTimer)
+      retryDelayTimer = null
+    }
+  }, 1_000)
+}
+
+function cancelAnswer() {
+  activeRequestController?.abort()
 }
 
 function submit(question: string) {
@@ -324,6 +367,7 @@ function clearCaseContext() {
 }
 
 function retryAnswer() {
+  if (retryAfterSeconds.value > 0) return
   const context = failedRequest.value
   if (!context) return
   const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
@@ -530,6 +574,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   disposed = true
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
   invalidatePendingRequest()
   workspaceResizeObserver?.disconnect()
   window.removeEventListener('keydown', onWindowKeydown)
@@ -587,11 +632,13 @@ onBeforeUnmount(() => {
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
       :error="answerError"
+      :retry-after-seconds="retryAfterSeconds"
       :focus-target="answerFocusTarget"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
       @retry="retryAnswer"
+      @cancel="cancelAnswer"
       @inspect-evidence="inspectEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"

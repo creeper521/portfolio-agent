@@ -2,6 +2,8 @@ package com.portfolio.agent.common.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.PortfolioAgentApplication;
+import com.portfolio.agent.answer.exception.AnswerAdmissionRejectedException;
+import com.portfolio.agent.answer.exception.AnswerErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -45,5 +47,33 @@ class GlobalExceptionHandlerTest {
         assertThat(body).isNotNull();
         assertThat(body.getMessage()).isEqualTo("服务暂时不可用，请稍后重试");
         assertThat(serialized).doesNotContain("secret-local-path");
+    }
+
+    @Test
+    void errorBodyCanExposeOnlySafeRetryDelay() {
+        ApiErrorResponse response = new ApiErrorResponse(
+                "request-id",
+                "ANSWER_RATE_LIMITED",
+                "请求过于频繁，请稍后再试。",
+                12,
+                java.time.OffsetDateTime.parse("2026-07-28T00:00:00Z"));
+
+        assertThat(response.getRetryAfterSeconds()).isEqualTo(12);
+        assertThat(response.toString())
+                .doesNotContain("visitor question", "203.0.113.7", "request-token");
+    }
+
+    @Test
+    void rateLimitResponseIncludesRetryAfterInHeaderAndBody() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleAdmissionRejected(
+                new AnswerAdmissionRejectedException(
+                        AnswerErrorCode.ANSWER_RATE_LIMITED, 17));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(429);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("17");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getRetryAfterSeconds()).isEqualTo(17);
     }
 }

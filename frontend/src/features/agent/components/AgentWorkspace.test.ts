@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { WORKSPACE_SPLIT_KEY } from '../composables/useWorkspaceSplit'
 import AgentWorkspace from './AgentWorkspace.vue'
 
@@ -680,6 +681,61 @@ describe('AgentWorkspace', () => {
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
     expect(wrapper.findAll('.message--agent')).toHaveLength(1)
     expect(askQuestionMock).toHaveBeenNthCalledWith(3, expect.objectContaining({ question: '保留原会话上下文' }))
+  })
+
+  it('reuses the same request token when retrying a failed answer', async () => {
+    askQuestionMock
+      .mockRejectedValueOnce(new Error('failed'))
+      .mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('retry token')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[0]?.[0].requestToken).toBeTruthy()
+    expect(askQuestionMock.mock.calls[0]?.[0].requestToken)
+      .toBe(askQuestionMock.mock.calls[1]?.[0].requestToken)
+  })
+
+  it('honors Retry-After before allowing another retry', async () => {
+    askQuestionMock.mockRejectedValueOnce(
+      new PortfolioApiError('rate limited', 429, 'ANSWER_RATE_LIMITED', 17),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('rate limited question')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const retry = wrapper.get('[data-answer-retry]')
+    expect(retry.attributes('disabled')).toBeDefined()
+    expect(retry.text()).toContain('17 秒后可重试')
+    await retry.trigger('click')
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('cancels a pending answer without showing a failure', async () => {
+    askQuestionMock.mockImplementation((input) =>
+      new Promise((_resolve, reject) => {
+        input.signal?.addEventListener('abort', () => reject(new Error('cancelled')))
+      }),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('cancel answer')
+    await wrapper.get('.composer').trigger('submit')
+    const signal = askQuestionMock.mock.calls[0]?.[0].signal as AbortSignal
+    await wrapper.get('[data-answer-cancel]').trigger('click')
+    await flushPromises()
+
+    expect(signal.aborted).toBe(true)
+    expect(wrapper.find('[data-agent-loading]').exists()).toBe(false)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(0)
   })
 
   it('clears retry safely when the failed session is deleted', async () => {

@@ -54,6 +54,16 @@ export function answerVerificationTag(answer: AnswerLabelInput | null | undefine
   return ''
 }
 
+export function answerGenerationTag(answer: AnswerLabelInput | null | undefined): string {
+  if (!answer) return ''
+  if (answer.resolution === 'REJECTED') return '拒答'
+  if (answer.degraded || answer.generationMode === 'FALLBACK') return '降级回答'
+  if (answer.answerSource === 'RETRIEVAL' || answer.answerSource === 'TOOL') return '检索增强'
+  if (answer.generationMode === 'MODEL') return '模型生成'
+  if (answer.generationMode === 'DETERMINISTIC') return '确定性回答'
+  return ''
+}
+
 // 技术枚举尾注：resolution + generationMode，价值低，降级展示
 export function answerTechTail(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''

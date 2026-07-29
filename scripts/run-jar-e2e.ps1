@@ -178,6 +178,7 @@ try {
 
     $caseAgentRequest = @{
         turnId = 'packaged-case-agent-smoke'
+        requestToken = 'b0b2b34a-b4bf-40db-909a-d2ce8d95fffb'
         question = 'How was this case verified?'
         messages = @()
         context = @{

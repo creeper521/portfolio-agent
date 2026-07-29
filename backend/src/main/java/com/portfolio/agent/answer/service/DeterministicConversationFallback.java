@@ -5,6 +5,7 @@ import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
@@ -12,6 +13,7 @@ import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 
 import java.util.List;
@@ -212,7 +214,14 @@ public final class DeterministicConversationFallback {
                 List.of(new ConversationAnswerBlock(
                         sourceScope, text, claimIds, evidenceIds)),
                 List.of(),
-                degraded);
+                degraded,
+                degraded ? GenerationMode.FALLBACK : GenerationMode.DETERMINISTIC,
+                sourceScope == ConversationSourceScope.PORTFOLIO
+                        && !claimIds.isEmpty()
+                        && !evidenceIds.isEmpty()
+                        ? AnswerSource.PRESET
+                        : null,
+                degraded ? "MODEL_UNAVAILABLE_FALLBACK" : null);
     }
 
     private boolean isGreeting(String value) {

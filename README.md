@@ -88,6 +88,36 @@ $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = "true"
 
 任一开关、审批、兼容 Registry 或所选 Provider 密钥缺失时，v2 都 fail-closed：问候和可匹配的已发布作品集预设仍可确定性降级，其余自由问题明确返回能力边界。关闭 `PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED` 即可单独回滚 v2，不影响 `/api/v1/answers`。
 
+### Agent V1 生产保护
+
+`POST /api/v2/answers` 使用稳定的单次 JSON 响应。每次请求必须携带 UUID
+`requestToken`；同一匿名来源和令牌在 2 分钟内复用同一执行结果，避免重复调用
+Provider。默认每个匿名来源每分钟最多 10 次请求、最多 2 个并发；超限返回
+`429`，并在 `Retry-After` 响应头和错误 JSON 中给出重试秒数。
+
+默认时间预算为 Provider 8 秒、后端总处理 12 秒、Agent 前端 15 秒。前端支持主动取消，
+失败重试复用原令牌。回答 JSON 明确返回 `resolution`、`generationMode`、
+`answerSource`、`degraded` 和 `noticeCode`；Provider 不可用或输出为空、超长、结构非法、
+缺少公开引用时，不展示不完整模型结果，而是返回可用的确定性降级回答或明确能力边界。
+
+可通过以下服务端环境变量调整生产预算：
+
+```powershell
+$env:PORTFOLIO_ANSWER_REQUESTS_PER_MINUTE = "10"
+$env:PORTFOLIO_ANSWER_MAX_CONCURRENT = "2"
+$env:PORTFOLIO_ANSWER_REQUEST_TIMEOUT = "12s"
+$env:PORTFOLIO_ANSWER_IDEMPOTENCY_TTL = "2m"
+```
+
+默认不信任 `X-Forwarded-For`。只有部署方显式开启
+`PORTFOLIO_ANSWER_TRUST_PROXY=true` 并配置可信代理地址时才读取该头。服务仅在内存中使用
+进程级 HMAC 对来源地址做短期限流标识，不记录原始 IP、访客问题、请求令牌或 API Key。
+访客问题仅在用户主动提交后发送；页面会话只保存在当前页面内存，刷新即清空。本版本按产品
+决定不增加单独的访客许可弹窗。
+
+Provider API Key 只允许从服务端环境或部署 Secret 注入；它不会进入前端请求、前端构建产物
+或业务日志。前端代码不得新增任何 Provider Key 或 Provider 直连地址。
+
 ### C3 Model Provider Registry（仅此项已实现）
 
 Registry 快照固定为 `registrySnapshotVersion=c3-model-registry-v1`，内建 DeepSeek V4 Flash 与 GLM-4.7 两个已审 Provider；环境变量仍分别为 `PORTFOLIO_AGENT_DEEPSEEK_API_KEY` 和 `PORTFOLIO_AGENT_GLM_API_KEY`。每个部署仍由 `PORTFOLIO_MODEL_PROVIDER` 显式选择且只使用一个 Provider；没有自动故障转移、跨 Provider 重发或动态 classpath、文件、网络发现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 与持久会话不在本次准入范围内。
