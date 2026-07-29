@@ -1,6 +1,8 @@
 package com.portfolio.agent.portfolio.validation;
 
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.CareerTrack;
+import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
@@ -10,6 +12,7 @@ import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.ReviewStatus;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
@@ -29,7 +32,7 @@ import java.util.regex.Pattern;
 @Component
 public class PortfolioSnapshotValidator {
 
-    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("2.0", "3.0");
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("2.0", "3.0", "4.0");
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9-]{1,64}");
 
     public void validate(PortfolioSnapshot snapshot) {
@@ -45,6 +48,8 @@ public class PortfolioSnapshotValidator {
 
         List<ProjectProfile> projects = requiredList(snapshot.getProjects(), "projects");
         List<CaseStudy> cases = requiredList(snapshot.getCases(), "cases");
+        List<CaseCollection> collections = requiredList(
+                snapshot.getCollections(), "collections");
         List<Claim> claims = requiredList(snapshot.getClaims(), "claims");
         List<ClaimEvidenceLink> links = requiredList(
                 snapshot.getClaimEvidenceLinks(), "claimEvidenceLinks");
@@ -62,12 +67,24 @@ public class PortfolioSnapshotValidator {
                 uniqueById(cases, CaseStudy::getSlug, "case slug");
         Map<String, CaseStudy> casesByCode =
                 uniqueById(cases, CaseStudy::getCode, "case code");
+        Map<String, CaseCollection> collectionsById = uniqueById(
+                collections, CaseCollection::getId, "collection");
+        Map<String, CaseCollection> collectionsBySlug = uniqueById(
+                collections, CaseCollection::getSlug, "collection slug");
         requireDisjoint(projectsById.keySet(), casesById.keySet(),
                 "project and case ids must be disjoint");
+        requireDisjoint(projectsById.keySet(), collectionsById.keySet(),
+                "project and collection ids must be disjoint");
+        requireDisjoint(casesById.keySet(), collectionsById.keySet(),
+                "case and collection ids must be disjoint");
         requireDisjoint(projectsByCode.keySet(), casesByCode.keySet(),
                 "project and case codes must be disjoint");
         requireDisjoint(projectsBySlug.keySet(), casesBySlug.keySet(),
                 "project and case slugs must be disjoint");
+        requireDisjoint(projectsBySlug.keySet(), collectionsBySlug.keySet(),
+                "project and collection slugs must be disjoint");
+        requireDisjoint(casesBySlug.keySet(), collectionsBySlug.keySet(),
+                "case and collection slugs must be disjoint");
         Map<String, Claim> claimsById = uniqueById(claims, Claim::getId, "claim");
         Map<String, QuestionDefinition> questionsById = uniqueById(questions,
                 QuestionDefinition::getId, "question");
@@ -78,6 +95,18 @@ public class PortfolioSnapshotValidator {
                 timeline, TimelineEvent::getId, "timeline");
 
         require(!projectsBySlug.isEmpty(), "at least one project is required");
+
+        for (CaseCollection collection : collections) {
+            require(hasText(collection.getSlug()), "collection slug is required");
+            require(SLUG_PATTERN.matcher(collection.getSlug()).matches(),
+                    "collection slug format is invalid: " + collection.getSlug());
+            require(hasText(collection.getTitle()),
+                    "collection title is required: " + collection.getId());
+            require(hasText(collection.getSummary()),
+                    "collection summary is required: " + collection.getId());
+            require(collection.getDisplayOrder() >= 0,
+                    "collection displayOrder must not be negative: " + collection.getId());
+        }
 
         Map<String, List<ClaimEvidenceLink>> linksByClaimId = links.stream()
                 .collect(java.util.stream.Collectors.groupingBy(ClaimEvidenceLink::getClaimId));
@@ -176,6 +205,32 @@ public class PortfolioSnapshotValidator {
             require(project.getStatus() != null, "project status is required: " + project.getId());
             require(project.getContributionType() != null,
                     "project contributionType is required: " + project.getId());
+            if ("4.0".equals(snapshot.getSchemaVersion())) {
+                require(project.getCareerTrack() != null
+                                && project.getCareerTrack() != CareerTrack.UNCLASSIFIED,
+                        "project careerTrack must be classified: " + project.getId());
+                require(project.getProjectNature() != null
+                                && project.getProjectNature() != ProjectNature.UNCLASSIFIED,
+                        "project projectNature must be classified: " + project.getId());
+                require(project.getDisplayTier() != null,
+                        "project displayTier is required: " + project.getId());
+            }
+
+            List<String> featuredCaseIds = requiredList(
+                    project.getFeaturedCaseIds(), "project featuredCaseIds");
+            validateNonBlankValues(featuredCaseIds, "project featuredCaseIds");
+            require(featuredCaseIds.size() <= 6,
+                    "project featuredCaseIds must contain at most 6 items: " + project.getId());
+            Set<String> uniqueFeaturedCaseIds = new HashSet<>();
+            for (String caseId : featuredCaseIds) {
+                require(uniqueFeaturedCaseIds.add(caseId),
+                        "duplicate featured case reference: " + caseId);
+                CaseStudy featuredCase = casesById.get(caseId);
+                require(featuredCase != null,
+                        "featured case reference does not exist: " + caseId);
+                require(project.getId().equals(featuredCase.getProjectId()),
+                        "featured case must belong to project: " + caseId);
+            }
 
             for (String claimId : requiredNonBlankList(project.getClaimIds(), "project claimIds")) {
                 Claim claim = claimsById.get(claimId);
@@ -227,6 +282,17 @@ public class PortfolioSnapshotValidator {
                         "case projectId must not be blank: " + caseStudy.getId());
                 require(projectsById.containsKey(caseStudy.getProjectId()),
                         "case project reference does not exist: " + caseStudy.getProjectId());
+            }
+
+            Set<String> uniqueCollectionIds = new HashSet<>();
+            for (String collectionId : requiredList(
+                    caseStudy.getCollectionIds(), "case collectionIds")) {
+                require(hasText(collectionId),
+                        "case collectionIds must not contain blank values");
+                require(uniqueCollectionIds.add(collectionId),
+                        "duplicate case collection reference: " + collectionId);
+                require(collectionsById.containsKey(collectionId),
+                        "case collection reference does not exist: " + collectionId);
             }
 
             for (String claimId : requiredNonBlankList(

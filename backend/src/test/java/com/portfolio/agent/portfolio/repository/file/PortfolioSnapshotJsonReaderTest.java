@@ -23,10 +23,57 @@ class PortfolioSnapshotJsonReaderTest {
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("2.0");
         assertThat(snapshot.getCases()).isEmpty();
+        assertThat(snapshot.getCollections()).isEmpty();
         assertThat(snapshot.getQuestions()).allSatisfy(question ->
                 assertThat(question.getCaseIds()).isEmpty());
         assertThat(snapshot.getTimeline()).allSatisfy(event ->
                 assertThat(event.getCaseIds()).isEmpty());
+    }
+
+    @Test
+    void schemaThreeNormalizesCollectionsAndCaseCollectionIds() throws Exception {
+        ObjectNode root = schemaThreeRoot();
+        root.withArray("cases").add(objectMapper.readTree(caseStudyJson()));
+
+        PortfolioSnapshot snapshot = reader.readBundle(objectMapper.writeValueAsBytes(root));
+
+        assertThat(snapshot.getCollections()).isEmpty();
+        assertThat(snapshot.getCases()).singleElement().satisfies(caseStudy ->
+                assertThat(caseStudy.getCollectionIds()).isEmpty());
+        assertThat(snapshot.getProjects()).allSatisfy(project -> {
+            assertThat(project.getCareerTrack()).isEqualTo(
+                    com.portfolio.agent.portfolio.domain.CareerTrack.UNCLASSIFIED);
+            assertThat(project.getProjectNature()).isEqualTo(
+                    com.portfolio.agent.portfolio.domain.ProjectNature.UNCLASSIFIED);
+        });
+    }
+
+    @Test
+    void schemaFourReadsCanonicalCollectionsAndCaseRelations() throws Exception {
+        ObjectNode root = schemaThreeRoot();
+        root.put("schemaVersion", "4.0");
+        root.putArray("collections").add(objectMapper.readTree("""
+                {"id":"collection-1","slug":"engineering-operations",
+                "title":"Engineering operations","summary":"Build cases","displayOrder":10}
+                """));
+        ObjectNode caseStudy = (ObjectNode) objectMapper.readTree(caseStudyJson());
+        caseStudy.putArray("collectionIds").add("collection-1");
+        root.withArray("cases").add(caseStudy);
+
+        PortfolioSnapshot snapshot = reader.readBundle(objectMapper.writeValueAsBytes(root));
+
+        assertThat(snapshot.getSchemaVersion()).isEqualTo("4.0");
+        assertThat(snapshot.getCollections()).singleElement().satisfies(collection ->
+                assertThat(collection.getSlug()).isEqualTo("engineering-operations"));
+        assertThat(snapshot.getCases()).singleElement().satisfies(item ->
+                assertThat(item.getCollectionIds()).containsExactly("collection-1"));
+    }
+
+    @Test
+    void schemaFourRequiresCollectionsAtTopLevel() {
+        assertThatThrownBy(() -> reader.readBundle(portfolioBytesWithSchema("4.0")))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("collections");
     }
 
     @Test
@@ -71,9 +118,9 @@ class PortfolioSnapshotJsonReaderTest {
 
     @Test
     void rejectsUnknownSchemaVersion() {
-        assertThatThrownBy(() -> reader.readBundle(portfolioBytesWithSchema("4.0")))
+        assertThatThrownBy(() -> reader.readBundle(portfolioBytesWithSchema("5.0")))
                 .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("unsupported schemaVersion: 4.0");
+                .hasMessageContaining("unsupported schemaVersion: 5.0");
     }
 
     @Test

@@ -16,7 +16,7 @@ public final class PortfolioSnapshotJsonReader {
 
     private static final Set<String> BUNDLE_FIELDS = Set.of(
             "schemaVersion", "contentVersion", "owner", "projects",
-            "cases", "claims", "evidence", "claimEvidenceLinks", "timelineEvents",
+            "cases", "collections", "claims", "evidence", "claimEvidenceLinks", "timelineEvents",
             "questionPresets");
     private static final Set<String> LEGACY_FIELDS = Set.of(
             "schemaVersion", "contentVersion", "publishedAt", "owner", "projects",
@@ -41,13 +41,28 @@ public final class PortfolioSnapshotJsonReader {
             if ("2.0".equals(schemaVersion)) {
                 ArrayNode questionPresets = requiredArray(root, "questionPresets");
                 ArrayNode timelineEvents = requiredArray(root, "timelineEvents");
-                root.putArray("cases");
+                ArrayNode cases = root.putArray("cases");
+                root.putArray("collections");
+                normalizeProjects(requiredArray(root, "projects"));
+                normalizeCases(cases);
                 normalizeArray(questionPresets, "caseIds");
                 normalizeArray(timelineEvents, "caseIds");
             } else if ("3.0".equals(schemaVersion)) {
-                JsonNode cases = root.get("cases");
-                require(cases != null, "cases is required for schemaVersion 3.0");
-                require(cases.isArray(), "cases is required and must be an array");
+                JsonNode caseNode = root.get("cases");
+                require(caseNode != null, "cases is required for schemaVersion 3.0");
+                require(caseNode.isArray(), "cases is required and must be an array");
+                ArrayNode cases = (ArrayNode) caseNode;
+                root.putArray("collections");
+                normalizeProjects(requiredArray(root, "projects"));
+                normalizeCases(cases);
+                requireNestedArrayPresent(
+                        requiredArray(root, "questionPresets"), "caseIds");
+                requireNestedArrayPresent(
+                        requiredArray(root, "timelineEvents"), "caseIds");
+            } else if ("4.0".equals(schemaVersion)) {
+                requiredArray(root, "cases");
+                requiredArray(root, "collections");
+                requiredArray(root, "projects");
                 requireNestedArrayPresent(
                         requiredArray(root, "questionPresets"), "caseIds");
                 requireNestedArrayPresent(
@@ -83,7 +98,10 @@ public final class PortfolioSnapshotJsonReader {
             root.remove("questions");
             root.set("timelineEvents", timeline);
             root.remove("timeline");
-            root.putArray("cases");
+            ArrayNode cases = root.putArray("cases");
+            root.putArray("collections");
+            normalizeProjects(requiredArray(root, "projects"));
+            normalizeCases(cases);
             normalizeArray(questions, "caseIds");
             normalizeArray(timeline, "caseIds");
             return strictMapper.treeToValue(root, PortfolioSnapshot.class);
@@ -117,6 +135,23 @@ public final class PortfolioSnapshotJsonReader {
                     "array item at index " + index + " must be a JSON object");
             ((ObjectNode) item).putArray(field);
         }
+    }
+
+    private void normalizeProjects(ArrayNode projects) {
+        for (int index = 0; index < projects.size(); index++) {
+            JsonNode project = projects.get(index);
+            require(project instanceof ObjectNode,
+                    "projects item at index " + index + " must be a JSON object");
+            ObjectNode object = (ObjectNode) project;
+            object.put("careerTrack", "UNCLASSIFIED");
+            object.put("projectNature", "UNCLASSIFIED");
+            object.put("displayTier", "PRIMARY");
+            object.putArray("featuredCaseIds");
+        }
+    }
+
+    private void normalizeCases(ArrayNode cases) {
+        normalizeArray(cases, "collectionIds");
     }
 
     private void requireNestedArrayPresent(ArrayNode items, String field) {

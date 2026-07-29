@@ -186,6 +186,70 @@ class PortfolioModelContractTest {
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
+    @Test
+    void schemaFourProjectCopiesClassificationAndFeaturedCases() {
+        List<String> featuredCaseIds = new ArrayList<>(List.of("case-1"));
+        ProjectProfile profile = new ProjectProfile(
+                "project-1", "P-01", "project-one", "Project one", "Summary",
+                "Background", List.of("Responsibility"), "Solution",
+                List.of("Decision"), List.of("Java"), List.of("Verification"),
+                "Outcome", "Handoff", ProjectStatus.DELIVERED, ContributionType.PRIMARY,
+                CareerTrack.JAVA_BACKEND, ProjectNature.TOOL, ProjectDisplayTier.PRIMARY,
+                featuredCaseIds, List.of("claim-1"), List.of("evidence-1"),
+                List.of("timeline-1")
+        );
+
+        featuredCaseIds.add("case-2");
+
+        assertThat(profile.getCareerTrack()).isEqualTo(CareerTrack.JAVA_BACKEND);
+        assertThat(profile.getProjectNature()).isEqualTo(ProjectNature.TOOL);
+        assertThat(profile.getDisplayTier()).isEqualTo(ProjectDisplayTier.PRIMARY);
+        assertThat(profile.getFeaturedCaseIds()).containsExactly("case-1");
+        assertThatThrownBy(() -> profile.getFeaturedCaseIds().add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void caseCollectionKeepsValueSemantics() {
+        CaseCollection first = new CaseCollection(
+                "collection-1", "engineering-operations", "Engineering operations",
+                "Build and delivery cases", 10
+        );
+        CaseCollection same = new CaseCollection(
+                "collection-1", "engineering-operations", "Engineering operations",
+                "Build and delivery cases", 10
+        );
+
+        assertThat(first).isEqualTo(same);
+        assertThat(first.hashCode()).isEqualTo(same.hashCode());
+        assertThat(first.getSlug()).isEqualTo("engineering-operations");
+        assertThat(first.getDisplayOrder()).isEqualTo(10);
+        assertThat(CaseCollection.class.isRecord()).isFalse();
+    }
+
+    @Test
+    void schemaFourSnapshotCopiesCollectionsIntoRuntimeSnapshot() {
+        List<CaseCollection> collections = new ArrayList<>(List.of(new CaseCollection(
+                "collection-1", "engineering-operations", "Engineering operations",
+                "Build and delivery cases", 10
+        )));
+        PortfolioSnapshot snapshot = new PortfolioSnapshot(
+                "4.0", "version-4", OffsetDateTime.parse("2026-07-29T00:00:00+08:00"),
+                null, List.of(), List.of(), collections, List.of(), List.of(),
+                List.of(), List.of(), List.of()
+        );
+        RuntimeContentSnapshot runtime = new RuntimeContentSnapshot(
+                snapshot, "sha256:bundle", java.time.Instant.EPOCH
+        );
+
+        collections.clear();
+
+        assertThat(snapshot.getCollections()).hasSize(1);
+        assertThat(runtime.getCollections()).containsExactlyElementsOf(snapshot.getCollections());
+        assertThatThrownBy(() -> snapshot.getCollections().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     private CaseStudy caseStudy() {
         return caseStudy("case-1");
     }

@@ -5,6 +5,7 @@ public enum AchievementStatus {
     IMPLEMENTED_TESTED,
     PROTOTYPE,
     DESIGNED,
+    INVESTIGATED,
     LEARNING,
     PLANNED,
     UNKNOWN

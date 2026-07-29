@@ -23,6 +23,10 @@ public final class ProjectProfile {
     private final String handoff;
     private final ProjectStatus status;
     private final ContributionType contributionType;
+    private final CareerTrack careerTrack;
+    private final ProjectNature projectNature;
+    private final ProjectDisplayTier displayTier;
+    private final List<String> featuredCaseIds;
     private final List<String> claimIds;
     private final List<String> evidenceIds;
     private final List<String> timelineEventIds;
@@ -44,6 +48,10 @@ public final class ProjectProfile {
             @JsonProperty("handoff") String handoff,
             @JsonProperty("status") ProjectStatus status,
             @JsonProperty("contributionType") ContributionType contributionType,
+            @JsonProperty("careerTrack") CareerTrack careerTrack,
+            @JsonProperty("projectNature") ProjectNature projectNature,
+            @JsonProperty("displayTier") ProjectDisplayTier displayTier,
+            @JsonProperty("featuredCaseIds") List<String> featuredCaseIds,
             @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("evidenceIds") List<String> evidenceIds,
             @JsonProperty("timelineEventIds") List<String> timelineEventIds
@@ -63,6 +71,10 @@ public final class ProjectProfile {
         this.handoff = handoff;
         this.status = status;
         this.contributionType = contributionType;
+        this.careerTrack = careerTrack == null ? CareerTrack.UNCLASSIFIED : careerTrack;
+        this.projectNature = projectNature == null ? ProjectNature.UNCLASSIFIED : projectNature;
+        this.displayTier = displayTier == null ? ProjectDisplayTier.PRIMARY : displayTier;
+        this.featuredCaseIds = featuredCaseIds == null ? List.of() : List.copyOf(featuredCaseIds);
         this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
         this.timelineEventIds = List.copyOf(timelineEventIds);
@@ -128,6 +140,22 @@ public final class ProjectProfile {
         return contributionType;
     }
 
+    public CareerTrack getCareerTrack() {
+        return careerTrack;
+    }
+
+    public ProjectNature getProjectNature() {
+        return projectNature;
+    }
+
+    public ProjectDisplayTier getDisplayTier() {
+        return displayTier;
+    }
+
+    public List<String> getFeaturedCaseIds() {
+        return featuredCaseIds;
+    }
+
     public List<String> getClaimIds() {
         return claimIds;
     }
@@ -163,6 +191,10 @@ public final class ProjectProfile {
                 && Objects.equals(handoff, that.handoff)
                 && Objects.equals(status, that.status)
                 && Objects.equals(contributionType, that.contributionType)
+                && careerTrack == that.careerTrack
+                && projectNature == that.projectNature
+                && displayTier == that.displayTier
+                && Objects.equals(featuredCaseIds, that.featuredCaseIds)
                 && Objects.equals(claimIds, that.claimIds)
                 && Objects.equals(evidenceIds, that.evidenceIds)
                 && Objects.equals(timelineEventIds, that.timelineEventIds);
@@ -172,7 +204,8 @@ public final class ProjectProfile {
     public int hashCode() {
         return Objects.hash(id, code, slug, title, summary, background, responsibilities, solution,
                 keyDecisions, technologies, verification, outcome, handoff, status,
-                contributionType, claimIds, evidenceIds, timelineEventIds);
+                contributionType, careerTrack, projectNature, displayTier, featuredCaseIds,
+                claimIds, evidenceIds, timelineEventIds);
     }
 
     @Override
@@ -193,9 +226,41 @@ public final class ProjectProfile {
                 ", handoff='" + handoff + '\'' +
                 ", status=" + status +
                 ", contributionType=" + contributionType +
+                ", careerTrack=" + careerTrack +
+                ", projectNature=" + projectNature +
+                ", displayTier=" + displayTier +
+                ", featuredCaseIds=" + featuredCaseIds +
                 ", claimIds=" + claimIds +
                 ", evidenceIds=" + evidenceIds +
                 ", timelineEventIds=" + timelineEventIds +
                 '}';
+    }
+
+    public ProjectProfile(
+            String id,
+            String code,
+            String slug,
+            String title,
+            String summary,
+            String background,
+            List<String> responsibilities,
+            String solution,
+            List<String> keyDecisions,
+            List<String> technologies,
+            List<String> verification,
+            String outcome,
+            String handoff,
+            ProjectStatus status,
+            ContributionType contributionType,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            List<String> timelineEventIds
+    ) {
+        this(
+                id, code, slug, title, summary, background, responsibilities, solution,
+                keyDecisions, technologies, verification, outcome, handoff, status,
+                contributionType, CareerTrack.UNCLASSIFIED, ProjectNature.UNCLASSIFIED,
+                ProjectDisplayTier.PRIMARY, List.of(), claimIds, evidenceIds, timelineEventIds
+        );
     }
 }

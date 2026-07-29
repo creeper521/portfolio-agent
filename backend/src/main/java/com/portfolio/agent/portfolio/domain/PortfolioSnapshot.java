@@ -16,6 +16,7 @@ public final class PortfolioSnapshot {
     private final OwnerProfile owner;
     private final List<ProjectProfile> projects;
     private final List<CaseStudy> cases;
+    private final List<CaseCollection> collections;
     private final List<Claim> claims;
     private final List<ClaimEvidenceLink> claimEvidenceLinks;
     private final List<QuestionDefinition> questions;
@@ -30,6 +31,7 @@ public final class PortfolioSnapshot {
             @JsonProperty("owner") OwnerProfile owner,
             @JsonProperty("projects") List<ProjectProfile> projects,
             @JsonProperty("cases") List<CaseStudy> cases,
+            @JsonProperty("collections") List<CaseCollection> collections,
             @JsonProperty("claims") List<Claim> claims,
             @JsonProperty("claimEvidenceLinks") List<ClaimEvidenceLink> claimEvidenceLinks,
             @JsonProperty("questionPresets") @JsonAlias("questions") List<QuestionDefinition> questions,
@@ -42,6 +44,7 @@ public final class PortfolioSnapshot {
         this.owner = owner;
         this.projects = List.copyOf(projects);
         this.cases = List.copyOf(cases);
+        this.collections = collections == null ? List.of() : List.copyOf(collections);
         this.claims = List.copyOf(claims);
         this.claimEvidenceLinks = List.copyOf(claimEvidenceLinks);
         this.questions = List.copyOf(questions);
@@ -73,6 +76,10 @@ public final class PortfolioSnapshot {
         return cases;
     }
 
+    public List<CaseCollection> getCollections() {
+        return collections;
+    }
+
     public List<Claim> getClaims() {
         return claims;
     }
@@ -101,6 +108,7 @@ public final class PortfolioSnapshot {
                 owner,
                 projects,
                 cases,
+                collections,
                 claims,
                 claimEvidenceLinks,
                 questions,
@@ -123,6 +131,7 @@ public final class PortfolioSnapshot {
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
                 && Objects.equals(cases, that.cases)
+                && Objects.equals(collections, that.collections)
                 && Objects.equals(claims, that.claims)
                 && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(questions, that.questions)
@@ -133,7 +142,7 @@ public final class PortfolioSnapshot {
     @Override
     public int hashCode() {
         return Objects.hash(schemaVersion, contentVersion, publishedAt, owner, projects, cases,
-                claims, claimEvidenceLinks, questions, evidence, timeline);
+                collections, claims, claimEvidenceLinks, questions, evidence, timeline);
     }
 
     @Override
@@ -145,11 +154,31 @@ public final class PortfolioSnapshot {
                 ", owner=" + owner +
                 ", projects=" + projects +
                 ", cases=" + cases +
+                ", collections=" + collections +
                 ", claims=" + claims +
                 ", claimEvidenceLinks=" + claimEvidenceLinks +
                 ", questions=" + questions +
                 ", evidence=" + evidence +
                 ", timeline=" + timeline +
                 '}';
+    }
+
+    public PortfolioSnapshot(
+            String schemaVersion,
+            String contentVersion,
+            OffsetDateTime publishedAt,
+            OwnerProfile owner,
+            List<ProjectProfile> projects,
+            List<CaseStudy> cases,
+            List<Claim> claims,
+            List<ClaimEvidenceLink> claimEvidenceLinks,
+            List<QuestionDefinition> questions,
+            List<EvidenceRecord> evidence,
+            List<TimelineEvent> timeline
+    ) {
+        this(
+                schemaVersion, contentVersion, publishedAt, owner, projects, cases, List.of(),
+                claims, claimEvidenceLinks, questions, evidence, timeline
+        );
     }
 }

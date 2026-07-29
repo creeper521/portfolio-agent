@@ -59,6 +59,17 @@ class PublicBundleLoaderTest {
     }
 
     @Test
+    void loadsSchemaFourBundleWithCollectionsAndProjectClassification() {
+        RuntimeContentSnapshot loaded = loader.load(validSchemaFourBundle());
+
+        assertThat(loaded.getSchemaVersion()).isEqualTo("4.0");
+        assertThat(loaded.getCollections()).hasSize(1);
+        assertThat(loaded.getCases()).singleElement()
+                .satisfies(item -> assertThat(item.getCollectionIds())
+                        .containsExactly("collection-1"));
+    }
+
+    @Test
     void rejectsSchemaThreeManifestWithWrongCasesCount() {
         Map<String, byte[]> bundle = validSchemaThreeBundle();
         replaceAndRehashManifest(bundle, "\"cases\":1", "\"cases\":0");
@@ -358,6 +369,14 @@ class PublicBundleLoaderTest {
         return bundle;
     }
 
+    private Map<String, byte[]> validSchemaFourBundle() {
+        Map<String, byte[]> bundle = new LinkedHashMap<>();
+        bundle.put("portfolio.json", schemaFourPortfolio().getBytes(StandardCharsets.UTF_8));
+        bundle.put("presentation.json", schemaFourPresentation().getBytes(StandardCharsets.UTF_8));
+        rebuildChecksumsAndManifest(bundle, "4.0", 1);
+        return bundle;
+    }
+
     private Map<String, byte[]> validRetrievalBundle() {
         Map<String, byte[]> bundle = new LinkedHashMap<>();
         bundle.put("portfolio.json", portfolio().getBytes(StandardCharsets.UTF_8));
@@ -460,7 +479,8 @@ class PublicBundleLoaderTest {
                 + retrievalChecksums + "}}";
         bundle.put("checksums.json", checksums.getBytes(StandardCharsets.UTF_8));
         String candidateHash = BundleHashCalculator.candidatePayloadHash(bundle);
-        String caseCount = "3.0".equals(schemaVersion) ? "\"cases\":" + cases + "," : "";
+        boolean hasCases = "3.0".equals(schemaVersion) || "4.0".equals(schemaVersion);
+        String caseCount = hasCases ? "\"cases\":" + cases + "," : "";
         String manifest = "{\"schemaVersion\":\"" + schemaVersion
                 + "\",\"contentVersion\":\"2026-07-21.1\","
                 + "\"publishedAt\":\"2026-07-21T16:30:00+08:00\","
@@ -474,9 +494,9 @@ class PublicBundleLoaderTest {
                         : "")
                 + "\"checksumsFile\":\"checksums.json\",\"counts\":{"
                 + "\"projects\":1," + caseCount
-                + "\"claims\":" + ("3.0".equals(schemaVersion) ? 2 : 1)
+                + "\"claims\":" + (hasCases ? 2 : 1)
                 + ",\"evidence\":1,\"claimEvidenceLinks\":"
-                + ("3.0".equals(schemaVersion) ? 2 : 1) + ","
+                + (hasCases ? 2 : 1) + ","
                 + "\"timelineEvents\":1,\"questionPresets\":1}"
                 + retrievalManifest(bundle) + "}";
         bundle.put("manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
@@ -560,6 +580,36 @@ class PublicBundleLoaderTest {
                 .replace("}],\n\"timelineEvents\":[", "}" + caseLink + "],\n\"timelineEvents\":[")
                 .replace("\"projectIds\":[\"project-1\"],",
                         "\"projectIds\":[\"project-1\"],\"caseIds\":[\"case-1\"],");
+    }
+
+    private String schemaFourPresentation() {
+        return schemaThreePresentation().replace(
+                "\"schemaVersion\":\"3.0\"",
+                "\"schemaVersion\":\"4.0\"");
+    }
+
+    private String schemaFourPortfolio() {
+        return schemaThreePortfolio()
+                .replace("\"schemaVersion\":\"3.0\"", "\"schemaVersion\":\"4.0\"")
+                .replace(
+                        "\"contributionType\":\"PRIMARY\",\"claimIds\":[\"claim-1\"]",
+                        "\"contributionType\":\"PRIMARY\","
+                                + "\"careerTrack\":\"JAVA_BACKEND\","
+                                + "\"projectNature\":\"TOOL\","
+                                + "\"displayTier\":\"PRIMARY\","
+                                + "\"featuredCaseIds\":[\"case-1\"],"
+                                + "\"claimIds\":[\"claim-1\"]")
+                .replace(
+                        "\"projectId\":null,\n\"claimIds\"",
+                        "\"projectId\":\"project-1\","
+                                + "\"collectionIds\":[\"collection-1\"],\n"
+                                + "\"claimIds\"")
+                .replace(
+                        "\"claims\":[",
+                        "\"collections\":[{\"id\":\"collection-1\","
+                                + "\"slug\":\"collection-1\",\"title\":\"Collection\","
+                                + "\"summary\":\"Reviewed collection\",\"displayOrder\":10}],"
+                                + "\"claims\":[");
     }
 
     private byte[] changeCaseOutcome(byte[] portfolioBytes) {

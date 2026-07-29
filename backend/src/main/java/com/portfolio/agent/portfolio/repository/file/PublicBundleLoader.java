@@ -31,7 +31,8 @@ public final class PublicBundleLoader {
             "manifest.json", "portfolio.json", "presentation.json", "rag-documents.jsonl",
             "keyword-index.json", "vector-index.bin", "checksums.json");
     private static final String APPLICATION_VERSION = "0.1.0";
-    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS = Set.of("2.0", "3.0");
+    private static final Set<String> SUPPORTED_SCHEMA_VERSIONS =
+            Set.of("2.0", "3.0", "4.0");
 
     private final ObjectMapper objectMapper;
     private final PortfolioSnapshotJsonReader snapshotReader;
@@ -200,11 +201,12 @@ public final class PublicBundleLoader {
         require(schemaVersion != null && schemaVersion.isTextual()
                         && !schemaVersion.textValue().isBlank(),
                 "manifest schemaVersion is required and must be text");
-        if ("3.0".equals(schemaVersion.textValue())) {
+        if ("3.0".equals(schemaVersion.textValue())
+                || "4.0".equals(schemaVersion.textValue())) {
             JsonNode counts = root.get("counts");
             require(counts != null && counts.isObject()
                             && counts.has("cases") && counts.get("cases").isIntegralNumber(),
-                    "manifest counts.cases is required for schemaVersion 3.0");
+                    "manifest counts.cases is required for schemaVersion 3.0 or 4.0");
         }
         return objectMapper.treeToValue(root, ReleaseManifest.class);
     }

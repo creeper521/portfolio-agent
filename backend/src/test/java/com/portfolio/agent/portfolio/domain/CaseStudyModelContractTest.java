@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CaseStudyModelContractTest {
 
@@ -32,5 +33,25 @@ class CaseStudyModelContractTest {
         assertThat(value.getProjectId()).isNull();
         assertThat(CaseStudy.class.isRecord()).isFalse();
         assertThat(ClaimSubjectType.valueOf("CASE")).isEqualTo(ClaimSubjectType.CASE);
+    }
+    @Test
+    void schemaFourCaseCopiesCollectionIdsAndSupportsInvestigatedStatus() {
+        List<String> collectionIds = new ArrayList<>(List.of("collection-1"));
+        CaseStudy value = new CaseStudy(
+                "case-1", "CASE-01", "case-one", CaseType.INCIDENT,
+                "Case one", "Summary", "Problem", List.of("Action"),
+                List.of("Decision"), List.of("Verification"), "Outcome",
+                List.of("Limitation"), AchievementStatus.INVESTIGATED,
+                ContributionType.COLLABORATIVE, null, collectionIds,
+                List.of("claim-1"), List.of("evidence-1"),
+                List.of("timeline-1"), List.of("question-1")
+        );
+
+        collectionIds.add("collection-2");
+
+        assertThat(value.getCollectionIds()).containsExactly("collection-1");
+        assertThatThrownBy(() -> value.getCollectionIds().add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(value.getAchievementStatus()).isEqualTo(AchievementStatus.INVESTIGATED);
     }
 }

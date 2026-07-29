@@ -32,8 +32,103 @@ class PortfolioSnapshotValidatorTest {
     @Test
     void rejectsUnsupportedSchemaVersion() {
         assertInvalid(validJson().replace(
-                "\"schemaVersion\": \"2.0\"", "\"schemaVersion\": \"4.0\""),
+                "\"schemaVersion\": \"2.0\"", "\"schemaVersion\": \"5.0\""),
                 "schemaVersion");
+    }
+
+    @Test
+    void acceptsSchemaFourCollectionsAndFeaturedCases() {
+        assertThatCode(() -> validate(validSchemaFourJson())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsDuplicateCollectionIds() {
+        String duplicate = collectionJson().replace(
+                "\"slug\": \"engineering-operations\"",
+                "\"slug\": \"engineering-operations-copy\"");
+        assertInvalid(validSchemaFourJson().replace(
+                "\"collections\": [%s]".formatted(collectionJson()),
+                "\"collections\": [%s,%s]".formatted(collectionJson(), duplicate)),
+                "duplicate collection id");
+    }
+
+    @Test
+    void rejectsDuplicateCollectionSlugs() {
+        String duplicate = collectionJson().replace(
+                "\"id\": \"collection-1\"", "\"id\": \"collection-2\"");
+        assertInvalid(validSchemaFourJson().replace(
+                "\"collections\": [%s]".formatted(collectionJson()),
+                "\"collections\": [%s,%s]".formatted(collectionJson(), duplicate)),
+                "duplicate collection slug");
+    }
+
+    @Test
+    void rejectsInvalidCollectionDisplayOrder() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"displayOrder\": 10", "\"displayOrder\": -1"),
+                "collection displayOrder");
+    }
+
+    @Test
+    void rejectsMissingCaseCollectionReference() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"collectionIds\": [\"collection-1\"]",
+                "\"collectionIds\": [\"collection-missing\"]"),
+                "case collection reference");
+    }
+
+    @Test
+    void rejectsDuplicateCaseCollectionReferences() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"collectionIds\": [\"collection-1\"]",
+                "\"collectionIds\": [\"collection-1\", \"collection-1\"]"),
+                "duplicate case collection reference");
+    }
+
+    @Test
+    void rejectsUnclassifiedSchemaFourProject() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"careerTrack\": \"JAVA_BACKEND\"",
+                "\"careerTrack\": \"UNCLASSIFIED\""),
+                "project careerTrack");
+    }
+
+    @Test
+    void rejectsDuplicateFeaturedCases() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"featuredCaseIds\": [\"case-one\"]",
+                "\"featuredCaseIds\": [\"case-one\", \"case-one\"]"),
+                "duplicate featured case");
+    }
+
+    @Test
+    void rejectsMoreThanSixFeaturedCasesBeforeResolvingReferences() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"featuredCaseIds\": [\"case-one\"]",
+                "\"featuredCaseIds\": [\"case-1\", \"case-2\", \"case-3\", \"case-4\", " +
+                        "\"case-5\", \"case-6\", \"case-7\"]"),
+                "at most 6");
+    }
+
+    @Test
+    void rejectsFeaturedCaseOwnedByAnotherProject() {
+        assertInvalid(validSchemaFourJson().replace(
+                "\"projectId\": \"sql-audit-project\"", "\"projectId\": null"),
+                "featured case must belong to project");
+    }
+
+    @Test
+    void investigatedCaseDoesNotRequireDirectEvidenceByStatusAlone() {
+        String json = validSchemaFourJson()
+                .replace("\"achievementStatus\": \"DELIVERED\"",
+                        "\"achievementStatus\": \"INVESTIGATED\"")
+                .replace("\"verificationBasis\": \"EVIDENCE_SUPPORTED\"",
+                        "\"verificationBasis\": \"SELF_DECLARED\"")
+                .replace("\"verificationStatus\": \"VERIFIED\"",
+                        "\"verificationStatus\": \"PARTIALLY_VERIFIED\"")
+                .replace("," + caseLinkJson(), "");
+
+        assertThatCode(() -> validate(json)).doesNotThrowAnyException();
     }
 
     @Test
@@ -522,6 +617,48 @@ class PortfolioSnapshotValidatorTest {
                 caseQuestionJson(),
                 evidenceJson(),
                 caseTimelineJson());
+    }
+
+    private String validSchemaFourJson() {
+        return validSchemaThreeJson()
+                .replace("\"schemaVersion\": \"3.0\"", "\"schemaVersion\": \"4.0\"")
+                .replace("\"projects\": [%s]".formatted(projectJson()),
+                        "\"collections\": [%s],\n  \"projects\": [%s]".formatted(
+                                collectionJson(), schemaFourProjectJson()))
+                .replace(caseJson(), schemaFourCaseJson());
+    }
+
+    private String collectionJson() {
+        return """
+                {
+                  "id": "collection-1",
+                  "slug": "engineering-operations",
+                  "title": "Engineering operations",
+                  "summary": "Build and delivery cases",
+                  "displayOrder": 10
+                }
+                """;
+    }
+
+    private String schemaFourProjectJson() {
+        return projectJson().replace(
+                "\"contributionType\": \"PRIMARY\",",
+                """
+                "contributionType": "PRIMARY",
+                  "careerTrack": "JAVA_BACKEND",
+                  "projectNature": "TOOL",
+                  "displayTier": "PRIMARY",
+                  "featuredCaseIds": ["case-one"],
+                """);
+    }
+
+    private String schemaFourCaseJson() {
+        return caseJson()
+                .replace("\"projectId\": null",
+                        "\"projectId\": \"sql-audit-project\"")
+                .replace("\"claimIds\": [\"claim-case-delivered\"]",
+                        "\"collectionIds\": [\"collection-1\"],\n" +
+                                "  \"claimIds\": [\"claim-case-delivered\"]");
     }
 
     private String projectClaimJson() {

@@ -16,6 +16,7 @@ public final class RuntimeContentSnapshot {
     private final OwnerProfile owner;
     private final List<ProjectProfile> projects;
     private final List<CaseStudy> cases;
+    private final List<CaseCollection> collections;
     private final List<Claim> claims;
     private final List<ClaimEvidenceLink> claimEvidenceLinks;
     private final List<QuestionDefinition> questionPresets;
@@ -45,6 +46,7 @@ public final class RuntimeContentSnapshot {
         this.owner = content.getOwner();
         this.projects = List.copyOf(content.getProjects());
         this.cases = List.copyOf(content.getCases());
+        this.collections = List.copyOf(content.getCollections());
         this.claims = List.copyOf(content.getClaims());
         this.claimEvidenceLinks = List.copyOf(content.getClaimEvidenceLinks());
         this.questionPresets = List.copyOf(content.getQuestions());
@@ -83,6 +85,10 @@ public final class RuntimeContentSnapshot {
 
     public List<CaseStudy> getCases() {
         return cases;
+    }
+
+    public List<CaseCollection> getCollections() {
+        return collections;
     }
 
     public List<Claim> getClaims() {
@@ -133,6 +139,7 @@ public final class RuntimeContentSnapshot {
                 && Objects.equals(owner, that.owner)
                 && Objects.equals(projects, that.projects)
                 && Objects.equals(cases, that.cases)
+                && Objects.equals(collections, that.collections)
                 && Objects.equals(claims, that.claims)
                 && Objects.equals(claimEvidenceLinks, that.claimEvidenceLinks)
                 && Objects.equals(questionPresets, that.questionPresets)
@@ -144,7 +151,7 @@ public final class RuntimeContentSnapshot {
     @Override
     public int hashCode() {
         return Objects.hash(schemaVersion, contentVersion, runtimeBundleHash, loadedAt,
-                publishedAt, owner, projects, cases, claims, claimEvidenceLinks, questionPresets,
+                publishedAt, owner, projects, cases, collections, claims, claimEvidenceLinks, questionPresets,
                 approvedEvidence, timeline, retrievalContent);
     }
 }

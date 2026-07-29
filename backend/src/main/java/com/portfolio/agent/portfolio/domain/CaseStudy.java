@@ -23,6 +23,7 @@ public final class CaseStudy {
     private final AchievementStatus achievementStatus;
     private final ContributionType contributionType;
     private final String projectId;
+    private final List<String> collectionIds;
     private final List<String> claimIds;
     private final List<String> evidenceIds;
     private final List<String> timelineEventIds;
@@ -45,6 +46,7 @@ public final class CaseStudy {
             @JsonProperty("achievementStatus") AchievementStatus achievementStatus,
             @JsonProperty("contributionType") ContributionType contributionType,
             @JsonProperty("projectId") String projectId,
+            @JsonProperty("collectionIds") List<String> collectionIds,
             @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("evidenceIds") List<String> evidenceIds,
             @JsonProperty("timelineEventIds") List<String> timelineEventIds,
@@ -65,6 +67,7 @@ public final class CaseStudy {
         this.achievementStatus = achievementStatus;
         this.contributionType = contributionType;
         this.projectId = projectId;
+        this.collectionIds = collectionIds == null ? List.of() : List.copyOf(collectionIds);
         this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
         this.timelineEventIds = List.copyOf(timelineEventIds);
@@ -86,6 +89,7 @@ public final class CaseStudy {
     public AchievementStatus getAchievementStatus() { return achievementStatus; }
     public ContributionType getContributionType() { return contributionType; }
     public String getProjectId() { return projectId; }
+    public List<String> getCollectionIds() { return collectionIds; }
     public List<String> getClaimIds() { return claimIds; }
     public List<String> getEvidenceIds() { return evidenceIds; }
     public List<String> getTimelineEventIds() { return timelineEventIds; }
@@ -110,6 +114,7 @@ public final class CaseStudy {
                 && achievementStatus == that.achievementStatus
                 && contributionType == that.contributionType
                 && Objects.equals(projectId, that.projectId)
+                && Objects.equals(collectionIds, that.collectionIds)
                 && Objects.equals(claimIds, that.claimIds)
                 && Objects.equals(evidenceIds, that.evidenceIds)
                 && Objects.equals(timelineEventIds, that.timelineEventIds)
@@ -120,7 +125,7 @@ public final class CaseStudy {
     public int hashCode() {
         return Objects.hash(id, code, slug, type, title, summary, problem, actions, decisions,
                 verification, outcome, limitations, achievementStatus, contributionType, projectId,
-                claimIds, evidenceIds, timelineEventIds, questionPresetIds);
+                collectionIds, claimIds, evidenceIds, timelineEventIds, questionPresetIds);
     }
 
     @Override
@@ -141,10 +146,39 @@ public final class CaseStudy {
                 ", achievementStatus=" + achievementStatus +
                 ", contributionType=" + contributionType +
                 ", projectId='" + projectId + '\'' +
+                ", collectionIds=" + collectionIds +
                 ", claimIds=" + claimIds +
                 ", evidenceIds=" + evidenceIds +
                 ", timelineEventIds=" + timelineEventIds +
                 ", questionPresetIds=" + questionPresetIds +
                 '}';
+    }
+
+    public CaseStudy(
+            String id,
+            String code,
+            String slug,
+            CaseType type,
+            String title,
+            String summary,
+            String problem,
+            List<String> actions,
+            List<String> decisions,
+            List<String> verification,
+            String outcome,
+            List<String> limitations,
+            AchievementStatus achievementStatus,
+            ContributionType contributionType,
+            String projectId,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            List<String> timelineEventIds,
+            List<String> questionPresetIds
+    ) {
+        this(
+                id, code, slug, type, title, summary, problem, actions, decisions,
+                verification, outcome, limitations, achievementStatus, contributionType,
+                projectId, List.of(), claimIds, evidenceIds, timelineEventIds, questionPresetIds
+        );
     }
 }
