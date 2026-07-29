@@ -7,6 +7,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -14,6 +16,8 @@ import java.util.UUID;
 public final class AnswerAdmissionGate {
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
+    private static final Duration CLEANUP_INTERVAL = Duration.ofSeconds(1);
+    private static final int CLEANUP_BATCH_SIZE = 256;
     private static final int DEFAULT_MAX_TRACKED_SOURCES = 10_000;
 
     private final Clock clock;
@@ -21,6 +25,8 @@ public final class AnswerAdmissionGate {
     private final int maxConcurrent;
     private final int maxTrackedSources;
     private final Map<String, SourceState> states = new HashMap<>();
+    private final Deque<SourceExpiry> expiries = new ArrayDeque<>();
+    private Instant nextCleanupAt = Instant.MIN;
 
     public AnswerAdmissionGate(Clock clock, int requestsPerMinute, int maxConcurrent) {
         this(clock, requestsPerMinute, maxConcurrent, DEFAULT_MAX_TRACKED_SOURCES);
@@ -53,15 +59,22 @@ public final class AnswerAdmissionGate {
         var now = clock.instant();
 
         synchronized (states) {
-            states.entrySet().removeIf(entry ->
-                    entry.getValue().active == 0
-                            && !now.isBefore(entry.getValue().windowStartedAt.plus(WINDOW)));
+            cleanupExpired(now, false);
+            if (!states.containsKey(sourceHash) && states.size() >= maxTrackedSources) {
+                cleanupExpired(now, true);
+            }
             if (!states.containsKey(sourceHash) && states.size() >= maxTrackedSources) {
                 throw new AnswerAdmissionRejectedException(
                         AnswerErrorCode.ANSWER_RATE_LIMITED, 60);
             }
-            var state = states.computeIfAbsent(sourceHash, ignored -> new SourceState(now));
-            state.resetWindowIfExpired(now);
+            var state = states.get(sourceHash);
+            if (state == null) {
+                state = new SourceState(now);
+                states.put(sourceHash, state);
+                expiries.addLast(new SourceExpiry(sourceHash, now.plus(WINDOW)));
+            } else if (state.resetWindowIfExpired(now)) {
+                expiries.addLast(new SourceExpiry(sourceHash, now.plus(WINDOW)));
+            }
 
             if (state.requests >= requestsPerMinute) {
                 throw new AnswerAdmissionRejectedException(
@@ -83,6 +96,26 @@ public final class AnswerAdmissionGate {
         return new AnswerAdmission(() -> release(sourceHash));
     }
 
+    private void cleanupExpired(Instant now, boolean force) {
+        if (!force && now.isBefore(nextCleanupAt)) {
+            return;
+        }
+        int inspected = 0;
+        while (!expiries.isEmpty()
+                && !now.isBefore(expiries.peekFirst().expiresAt())
+                && inspected < CLEANUP_BATCH_SIZE) {
+            var expiry = expiries.removeFirst();
+            var state = states.get(expiry.sourceHash());
+            if (state != null
+                    && state.active == 0
+                    && state.windowStartedAt.plus(WINDOW).equals(expiry.expiresAt())) {
+                states.remove(expiry.sourceHash(), state);
+            }
+            inspected++;
+        }
+        nextCleanupAt = now.plus(CLEANUP_INTERVAL);
+    }
+
     int trackedSourceCount() {
         synchronized (states) {
             return states.size();
@@ -100,6 +133,10 @@ public final class AnswerAdmissionGate {
             var state = states.get(sourceHash);
             if (state != null && state.active > 0) {
                 state.active--;
+                if (state.active == 0
+                        && !clock.instant().isBefore(state.windowStartedAt.plus(WINDOW))) {
+                    states.remove(sourceHash, state);
+                }
             }
         }
     }
@@ -114,11 +151,16 @@ public final class AnswerAdmissionGate {
             this.windowStartedAt = windowStartedAt;
         }
 
-        private void resetWindowIfExpired(Instant now) {
+        private boolean resetWindowIfExpired(Instant now) {
             if (!now.isBefore(windowStartedAt.plus(WINDOW))) {
                 windowStartedAt = now;
                 requests = 0;
+                return true;
             }
+            return false;
         }
+    }
+
+    private record SourceExpiry(String sourceHash, Instant expiresAt) {
     }
 }
