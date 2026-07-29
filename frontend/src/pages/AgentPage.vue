@@ -3,7 +3,10 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AgentWorkspace from '../features/agent/components/AgentWorkspace.vue'
-import { consumeAgentHandoff } from '../features/agent/model/handoffStore'
+import {
+  consumeAgentHandoff,
+  consumeCaseAgentHandoff,
+} from '../features/agent/model/handoffStore'
 import type { AgentRouteSeed } from '../features/agent/model/sessionTypes'
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import type { AudienceRole } from '../features/public-content/model/publicContentTypes'
@@ -20,8 +23,20 @@ function queryString(key: string) {
 
 const requestedHandoffId = queryString('handoffId')
 const handoffSeed = consumeAgentHandoff(requestedHandoffId)
-const invalidHandoff = Boolean(requestedHandoffId && !handoffSeed)
-if (route.query.handoffId || route.query.question) {
+const requestedCaseHandoffId = queryString('caseHandoffId')
+const caseHandoff = consumeCaseAgentHandoff(requestedCaseHandoffId)
+const invalidHandoff = Boolean(
+  (requestedHandoffId && !handoffSeed) ||
+  (requestedCaseHandoffId && !caseHandoff),
+)
+if (
+  route.query.handoffId ||
+  route.query.caseHandoffId ||
+  route.query.question ||
+  route.query.q ||
+  route.query.case ||
+  route.query.source
+) {
   void router.replace({ path: '/agent' })
 }
 
@@ -50,6 +65,8 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
     :initial-project="queryString('project')"
     :initial-evidence="queryString('evidence')"
     :initial-seed="initialSeed"
+    :initial-case="caseHandoff?.caseSlug ?? ''"
+    :initial-question="caseHandoff?.question ?? ''"
   />
   <section v-else-if="status === 'ready' && portfolio" class="route-seed-feedback" data-invalid-handoff role="status">
     <p>这次页面内交接已失效或已被使用。</p>

@@ -48,6 +48,7 @@ const props = withDefaults(
     initialQuestion?: string
     initialProject?: string
     initialEvidence?: string
+    initialCase?: string
     initialSeed?: AgentRouteSeed | null
   }>(),
   {
@@ -55,6 +56,7 @@ const props = withDefaults(
     initialQuestion: '',
     initialProject: '',
     initialEvidence: '',
+    initialCase: '',
     initialSeed: null,
   },
 )
@@ -74,6 +76,11 @@ const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerError = ref('')
 const failedRequest = ref<AnswerRequestContext | null>(null)
+const activeCaseSlug = ref(
+  props.portfolio.cases.some((item) => item.slug === props.initialCase)
+    ? props.initialCase
+    : '',
+)
 let activeRequest: AnswerRequestContext | null = null
 let requestVersion = 0
 let answerFocusRequestId = 0
@@ -118,14 +125,18 @@ const effectiveMaximums = computed(() => {
   }
 })
 
-const activeProject = computed(
-  () =>
-    props.portfolio.projects.find(
-      (project) =>
-        project.slug === (sessions.activeSession.value?.projectSlug || props.initialProject),
-    ) ??
-    props.portfolio.projects[0],
+const activeCase = computed(
+  () => props.portfolio.cases.find((item) => item.slug === activeCaseSlug.value),
 )
+
+const activeProject = computed(() => {
+  const projectSlug =
+    activeCase.value?.projectSlug ||
+    sessions.activeSession.value?.projectSlug ||
+    props.initialProject
+  return props.portfolio.projects.find((project) => project.slug === projectSlug) ??
+    props.portfolio.projects[0]
+})
 
 const evidenceContext = computed(() =>
   buildEvidenceDeskContext(
@@ -147,6 +158,8 @@ function resetEvidenceFocus() {
 function coreEvidenceId(
   session = sessions.activeSession.value,
 ) {
+  const caseEvidenceId = activeCase.value?.evidence[0]?.id
+  if (caseEvidenceId) return caseEvidenceId
   const projectSlug = session?.projectSlug || props.initialProject
   const project =
     props.portfolio.projects.find((item) => item.slug === projectSlug) ??
@@ -168,6 +181,7 @@ function createSession(initialEvidenceId = '') {
   const project = activeProject.value
   const evidenceId =
     initialEvidenceId ||
+    activeCase.value?.evidence[0]?.id ||
     project?.evidenceIds[0] ||
     props.portfolio.evidence[0]?.id ||
     ''
@@ -240,7 +254,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         projectSlug: context.caseSlug ? null : context.projectSlug,
         caseSlug: context.caseSlug ?? null,
         audienceRole: session.role,
-        source: 'AGENT_PAGE',
+        source: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
         questionPresetId: context.questionPresetId,
         question: context.question,
@@ -279,6 +293,7 @@ function submit(question: string) {
     {
       sessionId: session.id,
       projectSlug: project.slug,
+      caseSlug: activeCaseSlug.value || null,
       question,
       questionPresetId: preset?.id,
     },
@@ -301,6 +316,11 @@ function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
     },
     true,
   )
+}
+
+function clearCaseContext() {
+  activeCaseSlug.value = ''
+  syncActiveEvidence()
 }
 
 function retryAnswer() {
@@ -561,6 +581,8 @@ onBeforeUnmount(() => {
       :role="sessions.activeSession.value.role"
       :project="activeProject"
       :seed-question="initialQuestion"
+      :case-context-title="activeCase?.title"
+      :suggested-questions="activeCase?.suggestedQuestions"
       :sessions-open="sessionDrawerOpen"
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
@@ -573,6 +595,7 @@ onBeforeUnmount(() => {
       @inspect-evidence="inspectEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"
+      @clear-case-context="clearCaseContext"
     />
 
     <PaneResizer
@@ -589,7 +612,7 @@ onBeforeUnmount(() => {
     />
 
     <EvidenceDesk
-      :evidence="portfolio.evidence"
+      :evidence="activeCase?.evidence ?? portfolio.evidence"
       :project="activeProject"
       :active-evidence-id="activeEvidenceId"
       :focus-evidence-ids="evidenceContext.focusEvidenceIds"

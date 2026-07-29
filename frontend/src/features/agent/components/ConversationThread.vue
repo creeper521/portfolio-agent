@@ -28,6 +28,8 @@ const props = defineProps<{
   role: AudienceRole
   project: PublicProject
   seedQuestion?: string
+  caseContextTitle?: string
+  suggestedQuestions?: ReadonlyArray<string>
   sessionsOpen?: boolean
   evidenceOpen?: boolean
   pending: boolean
@@ -43,6 +45,7 @@ const emit = defineEmits<{
   toggleEvidence: []
   retry: []
   followUp: [action: FollowUpAction]
+  clearCaseContext: []
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -56,6 +59,11 @@ const state = computed(() => {
   if (props.pending) return 'generating'
   return props.session.messages.length ? 'conversation' : 'empty'
 })
+const starterQuestions = computed(
+  () => props.suggestedQuestions?.length
+    ? props.suggestedQuestions
+    : props.project.suggestedQuestions,
+)
 
 watch(
   () => props.seedQuestion,
@@ -245,6 +253,20 @@ function inspectMessageEvidence(
       <div>
         <p>AGENT CONVERSATION · Agent 对话</p>
         <h1>{{ session.title }}</h1>
+        <div
+          v-if="caseContextTitle"
+          class="conversation__case-context"
+          data-case-context
+          role="status"
+        >
+          <span>案例上下文 · {{ caseContextTitle }}</span>
+          <button
+            data-clear-case-context
+            type="button"
+            aria-label="清除案例上下文"
+            @click="$emit('clearCaseContext')"
+          >清除</button>
+        </div>
       </div>
       <div class="conversation__tools">
         <button
@@ -277,7 +299,7 @@ function inspectMessageEvidence(
           <p class="thread-empty__lead">从一个可核验的问题开始——这里只回答有公开证据支撑的内容。</p>
           <div class="thread-empty__list">
             <button
-              v-for="item in project.suggestedQuestions"
+              v-for="item in starterQuestions"
               :key="item"
               data-suggested-question
               type="button"
@@ -549,6 +571,28 @@ function inspectMessageEvidence(
 .conversation__head h1 {
   margin: 0;
   font: 500 22px var(--serif);
+}
+
+.conversation__case-context {
+  display: flex;
+  margin-top: 10px;
+  align-items: center;
+  gap: 8px;
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11px/1.5 var(--mono);
+}
+
+.conversation__case-context button {
+  padding: 2px 6px;
+  color: var(--workspace-accent, var(--red));
+  border: 1px solid currentcolor;
+  border-radius: var(--agent-radius-sm);
+  background: transparent;
+  font: inherit;
+}
+
+.conversation__case-context button:hover {
+  background: color-mix(in srgb, var(--workspace-accent, var(--red)) 8%, transparent);
 }
 
 .conversation__tools {

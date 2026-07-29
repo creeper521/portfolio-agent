@@ -7,7 +7,7 @@ export interface AnswerApiRequest {
   projectSlug?: string | null
   caseSlug?: string | null
   audienceRole: AudienceRole
-  source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'EVIDENCE'
+  source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'EVIDENCE' | 'CASE'
   focusEvidenceIds?: string[]
   questionPresetId?: string
   question?: string

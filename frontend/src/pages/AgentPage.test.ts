@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { publicContentStateKey } from '../features/public-content/composables/usePublicContent'
-import { clearAgentHandoffsForTest, createAgentHandoff } from '../features/agent/model/handoffStore'
+import {
+  clearAgentHandoffsForTest,
+  createAgentHandoff,
+  createCaseAgentHandoff,
+} from '../features/agent/model/handoffStore'
 import { mapAnswerResponse } from '../features/agent/model/mapAnswerResponse'
 import { readyPublicContentState } from '../test/publicContentStateFixture'
 import AgentPage from './AgentPage.vue'
@@ -138,6 +142,31 @@ describe('AgentPage', () => {
     await flushPromises()
     expect(consumed.wrapper.find('[data-invalid-handoff]').exists()).toBe(true)
     expect(consumed.wrapper.text()).toContain('已失效或已被使用')
+  })
+
+  it('consumes a Case handoff once, shows its context, and removes it from the URL', async () => {
+    const handoffId = createCaseAgentHandoff({
+      caseSlug: 'multilingual-image-preservation',
+      question: '这个案例如何验证？',
+    })
+    const { wrapper, router } = await mountAgentPage(
+      readyPublicContentState(),
+      `/agent?caseHandoffId=${handoffId}`,
+    )
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/agent')
+    expect(wrapper.get('[data-case-context]').text()).toContain('多语言图片上传结果保留修复')
+    expect(wrapper.get('textarea').element.value).toBe('这个案例如何验证？')
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+
+    wrapper.unmount()
+    const consumed = await mountAgentPage(
+      readyPublicContentState(),
+      `/agent?caseHandoffId=${handoffId}`,
+    )
+    await flushPromises()
+    expect(consumed.wrapper.find('[data-invalid-handoff]').exists()).toBe(true)
   })
 
   it('drops a legacy question query without submitting or retaining it', async () => {

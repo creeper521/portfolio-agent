@@ -89,9 +89,12 @@ function portfolioWithSecondaryEvidence() {
   }
 }
 
-function mountWorkspace(portfolio = previewPublicContent) {
+function mountWorkspace(
+  portfolio = previewPublicContent,
+  routeContext: { initialCase?: string; initialQuestion?: string } = {},
+) {
   return mount(AgentWorkspace, {
-    props: { portfolio },
+    props: { portfolio, ...routeContext },
     global: {
       stubs: { RouterLink: { template: '<a><slot /></a>' } },
     },
@@ -490,6 +493,51 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('.message--agent').text()).toContain('背景内容')
     expect(wrapper.get('.message--agent').text()).toContain('已核验回答')
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('shows a clearable Case context and scopes requests to that Case', async () => {
+    const wrapper = mountWorkspace(previewPublicContent, {
+      initialCase: 'multilingual-image-preservation',
+      initialQuestion: '这个案例如何验证？',
+    })
+
+    expect(wrapper.get('[data-case-context]').text()).toContain('多语言图片上传结果保留修复')
+    expect(wrapper.get('textarea').element.value).toBe('这个案例如何验证？')
+    expect(wrapper.get('.evidence-card--active').attributes('data-evidence-id')).toBe(
+      previewPublicContent.cases.find(
+        (item) => item.slug === 'multilingual-image-preservation',
+      )!.evidence[0].id,
+    )
+
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        projectSlug: null,
+        caseSlug: 'multilingual-image-preservation',
+        source: 'CASE',
+        question: '这个案例如何验证？',
+      }),
+    )
+
+    await wrapper.get('[data-clear-case-context]').trigger('click')
+    expect(wrapper.find('[data-case-context]').exists()).toBe(false)
+
+    await wrapper.get('textarea').setValue('现在介绍完整项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        projectSlug: 'sql-audit',
+        caseSlug: null,
+        source: 'AGENT_PAGE',
+        question: '现在介绍完整项目',
+      }),
+    )
   })
 
   it('shows retrieval provenance without turning a boundary into an applicable source', async () => {
