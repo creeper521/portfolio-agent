@@ -24,6 +24,17 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         props: true,
       },
       {
+        path: '/cases',
+        name: 'cases',
+        component: () => import('../pages/CasesPage.vue'),
+      },
+      {
+        path: '/cases/:slug',
+        name: 'case',
+        component: () => import('../pages/CasePage.vue'),
+        props: true,
+      },
+      {
         path: '/timeline',
         name: 'timeline',
         component: () => import('../pages/TimelinePage.vue'),

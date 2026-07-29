@@ -20,6 +20,7 @@ const homeAnchors = [
 const routeLinks = [
   { label: '概览', to: '/' },
   { label: '项目', to: '/projects' },
+  { label: '案例', to: '/cases' },
   { label: '时间线', to: '/timeline' },
   { label: '证据', to: '/evidence' },
 ]

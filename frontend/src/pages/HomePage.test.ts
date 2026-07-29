@@ -33,7 +33,12 @@ describe('HomePage', () => {
     expect(wrapper.get('[data-hero-primary-action]').attributes('href')).toBe('#credibility')
     expect(wrapper.get('[data-hero-question-action]').attributes('href')).toBe('#dialogue')
     expect(wrapper.findAll('[data-credibility-metric]')).toHaveLength(3)
-    expect(wrapper.findAll('[data-explore-entry]')).toHaveLength(4)
+    expect(wrapper.findAll('[data-explore-entry]')).toHaveLength(5)
+    expect(
+      wrapper
+        .findAll('[data-explore-entry]')
+        .some((entry) => entry.attributes('data-to') === '"/cases"'),
+    ).toBe(true)
   })
 
   it('hides a missing owner name instead of rendering a placeholder', async () => {

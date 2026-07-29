@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
 import { resolveDossier } from '../features/portfolio/model/dossierModel'
@@ -14,12 +15,30 @@ import StatusMark from '../shared/components/StatusMark.vue'
 
 const props = defineProps<{ slug: string }>()
 const { portfolio, status, error, retry } = usePublicContent()
+const router = useRouter()
 
 const dossier = computed(() => {
   const data = portfolio.value
   if (!data) return null
   return resolveDossier(props.slug, data.projects, data.cases)
 })
+
+/**
+ * spec §5.1：旧的 /projects/{caseSlug} 必须重定向到规范 /cases/{caseSlug}。
+ * 当解析出的 dossier 实际是 case（kind === 'CASE'）时，静默 replace 到 case 路由，
+ * 让地址栏变成规范 Case URL。真正的 project 不受影响。
+ * portfolio 未 ready 时 dossier 为 null，不触发（本就走 loading 分支）。
+ */
+watch(
+  dossier,
+  (current) => {
+    // router 缺失（如脱离路由的单测挂载）时跳过重定向，只渲染
+    if (current && current.kind === 'CASE') {
+      void router?.replace({ name: 'case', params: { slug: current.slug } })
+    }
+  },
+  { immediate: true, flush: 'post' },
+)
 
 const evidenceTarget = computed(() => {
   const slug = dossier.value?.kind === 'PROJECT' ? dossier.value.slug : (dossier.value?.slug ?? '')

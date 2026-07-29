@@ -8,6 +8,8 @@ describe('portfolio router', () => {
     ['/', 'home'],
     ['/projects', 'projects'],
     ['/projects/sql-audit', 'project'],
+    ['/cases', 'cases'],
+    ['/cases/multilingual-image-preservation', 'case'],
     ['/timeline', 'timeline'],
     ['/evidence', 'evidence'],
     ['/agent', 'agent'],
@@ -27,5 +29,15 @@ describe('portfolio router', () => {
     await router.isReady()
 
     expect(router.currentRoute.value.name).toBe('not-found')
+  })
+
+  it('把 case slug 注入详情页组件的 props', async () => {
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/cases/multilingual-image-preservation')
+    await router.isReady()
+
+    expect(router.currentRoute.value.params.slug).toBe('multilingual-image-preservation')
+    expect(router.currentRoute.value.matched[0].props.default).toBe(true)
   })
 })

@@ -30,4 +30,18 @@ describe('DossierHeader', () => {
 
     expect(wrapper.get('[data-header-theme]').attributes('data-header-theme')).toBe('warm')
   })
+
+  it('exposes projects and cases as separate primary navigation entries', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/timeline')
+    await router.isReady()
+
+    const wrapper = mount(DossierHeader, {
+      global: { plugins: [router] },
+    })
+
+    const links = wrapper.findAll('#primary-navigation a')
+    expect(links.some((link) => link.attributes('href') === '/projects')).toBe(true)
+    expect(links.some((link) => link.attributes('href') === '/cases')).toBe(true)
+  })
 })

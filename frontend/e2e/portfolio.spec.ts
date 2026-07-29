@@ -45,7 +45,7 @@ test('home preserves the four-layer experience and hands a role question to Agen
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Java 后端开发实习生')
   await expect(page.getByText('[姓名]')).toHaveCount(0)
   await expect(page.locator('[data-credibility-metric]')).toHaveCount(3)
-  await expect(page.locator('[data-explore-entry]')).toHaveCount(4)
+  await expect(page.locator('[data-explore-entry]')).toHaveCount(5)
 
   await page.locator('[data-role="MENTOR"]').click()
   await expect(page.locator('[data-role="MENTOR"]')).toHaveCSS(
@@ -491,6 +491,38 @@ test('Agent renders boundary and rejected dimensions without a verified label', 
   if (!usesRealApi) {
     await expect(rejected).toContainText('DETERMINISTIC')
   }
+})
+
+test('visitor can open a Case and hand its question to Agent without URL persistence', async ({
+  page,
+}) => {
+  await gotoWithPublicContent(page, '/cases')
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('案例目录')
+  await page.getByRole('link', { name: /多语言图片上传结果保留修复/ }).click()
+  await expect(page).toHaveURL(/\/cases\/multilingual-image-preservation$/)
+
+  const questionLink = page.getByRole('link', { name: /Q01/ })
+  const question = (await questionLink.textContent())?.replace(/^Q01\s*/, '').trim() ?? ''
+  await questionLink.click()
+
+  await expect(page).toHaveURL(/\/agent$/)
+  await expect(page.locator('[data-case-context]')).toContainText(
+    '多语言图片上传结果保留修复',
+  )
+  await expect(page.getByLabel('你的问题')).toHaveValue(question)
+  await expect(page.locator('[data-evidence-id]')).toHaveCount(1)
+  expect(page.url()).not.toContain(question)
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain(question)
+})
+
+test('legacy project-shaped Case URL redirects to its canonical Case route', async ({ page }) => {
+  await page.goto('/projects/multilingual-image-preservation')
+
+  await expect(page).toHaveURL(/\/cases\/multilingual-image-preservation$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    '多语言图片上传结果保留修复',
+  )
 })
 
 test('Agent distinguishes retrieval provenance from verification', async ({ page }) => {

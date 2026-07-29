@@ -41,6 +41,7 @@ describe('prototype visual contract', () => {
   const projectsPage = readFileSync(resolve('src/pages/ProjectsPage.vue'), 'utf8')
   const evidencePage = readFileSync(resolve('src/pages/EvidencePage.vue'), 'utf8')
   const timelinePage = readFileSync(resolve('src/pages/TimelinePage.vue'), 'utf8')
+  const casePage = readFileSync(resolve('src/pages/CasePage.vue'), 'utf8')
   const pageLead = readFileSync(resolve('src/shared/components/PageLead.vue'), 'utf8')
   const dossierFooter = readFileSync(
     resolve('src/shared/components/DossierFooter.vue'),
@@ -58,6 +59,10 @@ describe('prototype visual contract', () => {
 
   it('does not define unapproved color families', () => {
     expect(tokens).not.toMatch(/green|teal|cyan|purple/i)
+  })
+
+  it('avoids transition-all on the Case detail interactions', () => {
+    expect(casePage).not.toMatch(/transition:\s*all\b/)
   })
 
   it('defines the warm-black floating Agent shell', () => {

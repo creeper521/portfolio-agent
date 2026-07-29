@@ -1,9 +1,10 @@
 <script setup lang="ts">
 const entries = [
   { code: '01 / PROJECTS', title: '核心项目', description: '问题、方案、职责、验证、结果与限制。', to: '/projects' },
-  { code: '02 / TIMELINE', title: '成长时间线', description: '按阶段回溯问题、行动与能力形成。', to: '/timeline' },
-  { code: '03 / EVIDENCE', title: '证据档案', description: '脱敏摘要、公开状态与关联项目。', to: '/evidence' },
-  { code: '04 / AGENT', title: '完整对话', description: '长回答、引用核验与历史会话。', to: '/agent' },
+  { code: '02 / CASES', title: '工程案例', description: '具体问题、关键判断、处理动作与验证过程。', to: '/cases' },
+  { code: '03 / TIMELINE', title: '成长时间线', description: '按阶段回溯问题、行动与能力形成。', to: '/timeline' },
+  { code: '04 / EVIDENCE', title: '证据档案', description: '脱敏摘要、公开状态与关联项目。', to: '/evidence' },
+  { code: '05 / AGENT', title: '完整对话', description: '长回答、引用核验与历史会话。', to: '/agent' },
 ]
 </script>
 
@@ -72,7 +73,7 @@ const entries = [
 
 .explore-index__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
 }
@@ -135,7 +136,7 @@ const entries = [
     grid-template-columns: 1fr 1fr;
   }
 
-  .explore-index__grid a:nth-child(2) {
+  .explore-index__grid a:nth-child(even) {
     border-right: 0;
   }
 }
