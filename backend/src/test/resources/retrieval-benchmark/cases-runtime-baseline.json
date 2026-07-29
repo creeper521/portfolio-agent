@@ -1,6 +1,6 @@
 {
   "suiteVersion": "retrieval-benchmark-v2",
-  "contentVersion": "2026-07-27.1",
+  "contentVersion": "2026-07-29.1",
   "cases": [
     {
       "caseId": "case-codegraph-workflow-paraphrase-01",

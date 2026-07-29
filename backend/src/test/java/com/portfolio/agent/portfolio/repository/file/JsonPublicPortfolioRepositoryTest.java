@@ -94,10 +94,10 @@ class JsonPublicPortfolioRepositoryTest {
         assertThat(events).singleElement().satisfies(event -> {
             assertThat(event.getName()).isEqualTo("content.bundle.loaded");
             assertThat(event.getFields())
-                    .containsEntry("schema.version", "3.0")
-                    .containsEntry("content.version", "2026-07-27.1")
+                    .containsEntry("schema.version", "4.0")
+                    .containsEntry("content.version", "2026-07-29.1")
                     .containsEntry("retrieval.enabled", true)
-                    .containsEntry("document.count", 81)
+                    .containsEntry("document.count", 79)
                     .containsEntry("vector.dimension", 512)
                     .containsKey("duration.bucket");
         });

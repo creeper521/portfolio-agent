@@ -32,7 +32,7 @@ class CaseConversationBundleIntegrationTest {
         mockMvc.perform(get("/api/v1/cases/multilingual-image-preservation"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.slug").value("multilingual-image-preservation"))
-                .andExpect(jsonPath("$.projectSlug").isEmpty())
+                .andExpect(jsonPath("$.projectSlug").value("image-upload-audit"))
                 .andExpect(jsonPath("$.evidence.length()").value(1))
                 .andExpect(jsonPath("$.evidence[0].id")
                         .value("evidence-case-multilingual-implementation-and-regression"))
@@ -45,7 +45,7 @@ class CaseConversationBundleIntegrationTest {
                         .content(request("turn-known-case", "multilingual-image-preservation")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.turnId").value("turn-known-case"))
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-27.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
                 .andExpect(jsonPath("$.intent").value("GENERAL_KNOWLEDGE"))
                 .andExpect(jsonPath("$.blocks").isNotEmpty())
                 .andExpect(jsonPath("$.degraded").value(true));

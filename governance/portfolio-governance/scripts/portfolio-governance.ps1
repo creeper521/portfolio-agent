@@ -253,7 +253,7 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
         DELIVERED='DELIVERED'
         IMPLEMENTED_TESTED='IMPLEMENTED_TESTED'
         VALIDATED_PROTOTYPE='PROTOTYPE'
-        INVESTIGATED='LEARNING'
+        INVESTIGATED='INVESTIGATED'
         DOCUMENTED_OUTPUT='DELIVERED'
         LEARNING_ONLY='LEARNING'
     }
@@ -334,7 +334,7 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
     }
 }
 function Test-SupportedPublicSchemaVersion([object]$Value) {
-    return [string]$Value -in @('2.0', '3.0')
+    return [string]$Value -in @('2.0', '3.0', '4.0')
 }
 function Test-PropertyPresent([object]$Value, [string]$Name) {
     return $null -ne $Value -and
@@ -361,6 +361,32 @@ function Assert-SchemaThreeCollections([object]$Portfolio) {
                 $caseIdsProperty.Value -isnot [System.Collections.IEnumerable] -or
                 $caseIdsProperty.Value -is [string]) {
             Write-Failure 'SCHEMA_CASE_IDS_REQUIRED' 'Schema 3.0 requires timelineEvent.caseIds arrays.'
+        }
+    }
+}
+function Assert-SchemaFourCollections([object]$Portfolio) {
+    Assert-SchemaThreeCollections $Portfolio
+    $collectionsProperty = $Portfolio.PSObject.Properties['collections']
+    if ($null -eq $collectionsProperty -or $null -eq $collectionsProperty.Value -or
+            $collectionsProperty.Value -isnot [System.Collections.IEnumerable] -or
+            $collectionsProperty.Value -is [string]) {
+        Write-Failure 'SCHEMA_COLLECTIONS_REQUIRED' 'Schema 4.0 requires an explicit collections array.'
+    }
+    $collectionIds = @($Portfolio.collections | ForEach-Object { [string]$_.id })
+    $collectionSlugs = @($Portfolio.collections | ForEach-Object { [string]$_.slug })
+    if (@($collectionIds | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+            @($collectionIds | Select-Object -Unique).Count -ne $collectionIds.Count -or
+            @($collectionSlugs | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+            @($collectionSlugs | Select-Object -Unique).Count -ne $collectionSlugs.Count) {
+        Write-Failure 'SCHEMA_COLLECTIONS_INVALID' 'Schema 4.0 Collection IDs and slugs must be unique and non-empty.'
+    }
+    foreach ($caseStudy in @($Portfolio.cases)) {
+        $caseCollections = $caseStudy.PSObject.Properties['collectionIds']
+        if ($null -eq $caseCollections -or $null -eq $caseCollections.Value -or
+                $caseCollections.Value -isnot [System.Collections.IEnumerable] -or
+                $caseCollections.Value -is [string] -or
+                @($caseCollections.Value | Where-Object { $collectionIds -notcontains $_ }).Count -gt 0) {
+            Write-Failure 'SCHEMA_CASE_COLLECTIONS_INVALID' 'Schema 4.0 Case collectionIds must be arrays of known Collections.'
         }
     }
 }
@@ -1234,6 +1260,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '3.0|2026-07-23.2' { 'active-benchmarks.v1.json'; break }
         '3.0|2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
         '3.0|2026-07-27.1' { 'wave-2-benchmarks.v1.json'; break }
+        '4.0|2026-07-29.1' { 'wave-2-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
@@ -1432,7 +1459,7 @@ if ($Command -in @('list', 'status', 'verify')) {
     } else { $null }
     $verifySchemaVersion = [string]$verifyPortfolioData.schemaVersion
     $verifyCaseCountValid = $true
-    if ($verifySchemaVersion -eq '3.0') {
+    if ($verifySchemaVersion -in @('3.0', '4.0')) {
         $verifyCaseCountValid = (Test-PropertyPresent $verifyManifest.counts 'cases') -and
             [int]$verifyManifest.counts.cases -eq @($verifyPortfolioData.cases).Count
     }
@@ -1529,7 +1556,7 @@ if ($Command -eq 'rollback') {
     catch { Write-Failure 'ROLLBACK_TARGET_INVALID' 'Rollback target cannot be parsed.' }
     $targetSchemaVersion = [string]$targetPortfolioData.schemaVersion
     $targetCaseCountValid = $true
-    if ($targetSchemaVersion -eq '3.0') {
+    if ($targetSchemaVersion -in @('3.0', '4.0')) {
         $targetCaseCountValid = (Test-PropertyPresent $targetManifest.counts 'cases') -and
             [int]$targetManifest.counts.cases -eq @($targetPortfolioData.cases).Count
     }
@@ -1594,7 +1621,10 @@ if (-not (Test-SupportedPublicSchemaVersion $portfolio.schemaVersion) -or
     Write-Failure 'SCHEMA_VERSION_UNSUPPORTED' 'Candidate schemaVersion is unsupported or inconsistent.'
 }
 $portfolioFieldsFromCandidate = @($portfolio.PSObject.Properties.Name)
-if ($portfolio.schemaVersion -eq '3.0') {
+if ($portfolio.schemaVersion -eq '4.0') {
+    Assert-SchemaFourCollections $portfolio
+}
+elseif ($portfolio.schemaVersion -eq '3.0') {
     Assert-SchemaThreeCollections $portfolio
 }
 else {
@@ -1622,7 +1652,7 @@ if ($hasRetrievalCandidate) {
 }
 $allowedPortfolioFields = @(
     'schemaVersion', 'contentVersion', 'owner', 'internshipPeriod', 'projects',
-    'cases', 'claims', 'evidence', 'claimEvidenceLinks', 'timelineEvents',
+    'cases', 'collections', 'claims', 'evidence', 'claimEvidenceLinks', 'timelineEvents',
     'questionPresets'
 )
 $unknownPortfolioFields = @($portfolioFieldsFromCandidate | Where-Object { $allowedPortfolioFields -notcontains $_ })

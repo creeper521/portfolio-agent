@@ -42,12 +42,12 @@ class PublicBundleVerificationCliTest {
         assertThat(result.exitCode).isZero();
         assertThat(result.err).isEmpty();
         assertThat(result.out).contains(
-                "\"contentVersion\":\"2026-07-27.1\"",
+                "\"contentVersion\":\"2026-07-29.1\"",
                 "\"candidatePayloadHash\":\"sha256:",
                 "\"ledgerHash\":\"sha256:",
                 "\"runtimeBundleHash\":\"sha256:",
                 "\"chunkCount\":1",
-                "\"projects\":7");
+                "\"projects\":5");
         assertThat(result.out)
                 .doesNotContain(bundle.toAbsolutePath().toString())
                 .doesNotContain(System.getProperty("user.name"))
@@ -201,7 +201,7 @@ class PublicBundleVerificationCliTest {
         files.put("presentation.json",
                 Files.readAllBytes(source.resolve("presentation.json")));
         byte[] rag = ("{\"chunkId\":\"chunk-sql-audit-delivery\","
-                + "\"contentVersion\":\"2026-07-27.1\","
+                + "\"contentVersion\":\"2026-07-29.1\","
                 + "\"projectSlugs\":[\"sql-audit\"],\"caseSlugs\":[],"
                 + "\"claimIds\":[\"claim-sql-audit-delivered\"],"
                 + "\"text\":\"SQL audit delivered\","
