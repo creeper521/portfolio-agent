@@ -37,6 +37,9 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 ### 2.2 公开内容与 API
 
 - Spring Boot 提供 `GET /api/v1/portfolio`、`GET /api/v1/projects/{slug}`、`GET /api/v1/cases`、`GET /api/v1/cases/{slug}`、`GET /api/v1/public-content` 和 `POST /api/v1/answers`。
+- `POST /api/v1/client-diagnostics` 是只读公开端点的唯一例外：默认关闭，只接受封闭、限流且
+  不持久化的诊断事件契约；永不接受访客内容、任意元数据、原始堆栈、URL、Headers、请求体、
+  响应体、原始来源地址或凭据。
 - 当前随包公开快照为 schema 3.0、内容版本 `2026-07-27.1`，包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；61/68 项公开资产，7 项 `EXCLUDE` 保持私有。
 - 已实现独立不可变 CaseStudy 领域模型、CaseType、CASE Claim 归属与引用校验、只读服务和公开 DTO；未知 Case slug 返回 404 `CASE_NOT_FOUND`。
 - 加载器显式接受 schema 2.0/3.0：2.0 被规范化为空 `cases`/`caseIds`，3.0 严格校验 Case 集合与引用，未知版本和缺失必填集合失败关闭。
@@ -95,6 +98,26 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 - 自动化覆盖领域约束、控制器、公开内容加载、确定性回答、模型 fallback、Provider Registry、混合检索、工具、多轮引用、隐私、无障碍交互和响应式布局。
 - `scripts/verify-release.ps1` 组合代码质量、架构、隐私、bundle、前后端测试、构建、JAR 静态资源与端到端检查；直接 `mvn package` 不能替代完整发布门禁。
 - 发布门禁支持 `-RequireLiveProvider`：缺少审批、显式 Provider 或密钥时失败；普通模式以高优先级关闭模型能力，避免继承本机环境后误触外部调用。成功摘要只包含 Provider、内容版本、resolution 和 block 数量。
+
+#### 运行与请求排障
+
+本地开发显式使用 `local` Profile，输出便于终端阅读的文本日志：
+
+```powershell
+mvn.cmd -f backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+生产制品显式使用 `prod` Profile，输出结构化 JSON 日志：
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='prod'
+java -jar backend/target/portfolio-agent.jar
+```
+
+单次请求按固定关联链定位：先从浏览器 Network 响应头复制 `X-Request-Id`，再查询
+`request.id=<value>`；找到 `http.request.started` 和对应的 `http.request.completed` 或
+`http.request.failed` 后，使用事件里的 `trace.id` 查看请求内部产生的诊断事件。该链路只关联
+运行状态、错误码和封闭诊断字段，不记录访客问题、回答正文、原始 IP、Provider 载荷或密钥。
 
 ### 2.10 历史内容快照：首批公开发布（schema 3.0 / `2026-07-23.1`）
 

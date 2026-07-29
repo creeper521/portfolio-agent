@@ -8,10 +8,14 @@ $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio runner with spaces ' + [guid]::NewGuid())
 $spacedJar = Join-Path $fixtureRoot 'packaged app\portfolio agent.jar'
 $fakeNpm = Join-Path $fixtureRoot 'fake npm\npm with spaces.cmd'
+$successfulFakeNpm = Join-Path $fixtureRoot 'fake npm\npm success.cmd'
 $fakeJava = Join-Path $fixtureRoot 'fake java\java with spaces.cmd'
 $javaArgumentCapture = Join-Path $fixtureRoot 'java-arguments.txt'
 $cleanupProbe = Join-Path $fixtureRoot 'cleanup-probe.json'
 $cleanupRunner = Join-Path $fixtureRoot 'run-jar-e2e-cleanup-failure.ps1'
+$stdoutValidationRunner = Join-Path $fixtureRoot 'run-jar-e2e-stdout-fixture.ps1'
+$latePlaintextRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-plaintext.ps1'
+$lateLeakRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-leak.ps1'
 $port = 43173
 
 function Get-EnvironmentSnapshot([string]$Name) {
@@ -84,6 +88,11 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $fakeJava) -Force | Out-Null
     Copy-Item -LiteralPath $sourceJar -Destination $spacedJar
     [System.IO.File]::WriteAllText($fakeNpm, "@exit /b 23`r`n", [System.Text.Encoding]::ASCII)
+    [System.IO.File]::WriteAllText(
+        $successfulFakeNpm,
+        "@exit /b 0`r`n",
+        [System.Text.Encoding]::ASCII
+    )
     $escapedJavaArgumentCapture = $javaArgumentCapture.Replace('%', '%%')
     [System.IO.File]::WriteAllText(
         $fakeJava,
@@ -173,6 +182,17 @@ try {
     if ($output -notmatch 'Packaged Case Agent smoke passed\.') {
         throw "Expected packaged Case Agent smoke evidence. Output: $output"
     }
+    foreach ($requiredSmokeEvidence in @(
+        'Packaged request correlation smoke passed.',
+        'Packaged client diagnostics acceptance smoke passed.',
+        'Packaged client diagnostics unknown-field rejection smoke passed.',
+        'Packaged client diagnostics body-limit smoke passed.',
+        'Packaged structured stdout privacy smoke passed.'
+    )) {
+        if ($output -notmatch [regex]::Escape($requiredSmokeEvidence)) {
+            throw "Expected release smoke evidence '$requiredSmokeEvidence'. Output: $output"
+        }
+    }
     if ($output -match 'provider-key-must-not-leak') {
         throw 'Runner output leaked the Provider key sentinel.'
     }
@@ -261,6 +281,113 @@ try {
     }
     if ($output -notmatch 'Provider calls disabled for deterministic smoke\.') {
         throw "Expected normal mode to override inherited Provider enablement. Output: $output"
+    }
+
+    $stdoutValidationSource = Get-Content -LiteralPath $runner -Raw
+    $stdoutReadCommand = '$capturedStdout = Get-Content -LiteralPath $stdoutPath -Raw'
+    if (([regex]::Matches(
+        $stdoutValidationSource,
+        [regex]::Escape($stdoutReadCommand)
+    )).Count -ne 1) {
+        throw 'Stdout fixture requires exactly one captured-stdout read command.'
+    }
+    $stdoutFixtureCommand = @'
+$capturedStdout = '{"message":"structured fixture"}' `
+    + [System.Environment]::NewLine + 'plaintext fixture must fail'
+'@
+    $stdoutValidationSource = $stdoutValidationSource.Replace(
+        $stdoutReadCommand,
+        $stdoutFixtureCommand.Trim()
+    )
+    [System.IO.File]::WriteAllText(
+        $stdoutValidationRunner,
+        $stdoutValidationSource,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $previousStdoutFixtureErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $stdoutFixtureOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $stdoutValidationRunner -JarPath $spacedJar `
+            -NpmExecutable $fakeNpm -Port ($port + 3) 2>&1 | Out-String)
+        $stdoutFixtureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousStdoutFixtureErrorActionPreference
+    }
+    if ($stdoutFixtureExitCode -eq 0) {
+        throw "Expected plaintext stdout fixture to fail. Output: $stdoutFixtureOutput"
+    }
+    if ($stdoutFixtureOutput -notmatch 'non-JSON application stdout line') {
+        throw "Plaintext stdout fixture was not rejected by the JSON boundary. Output: $stdoutFixtureOutput"
+    }
+
+    $lateOutputSource = Get-Content -LiteralPath $runner -Raw
+    $processStoppedCommand =
+            'Write-Output "Packaged application process $($process.Id) is stopped."'
+    if (([regex]::Matches(
+        $lateOutputSource,
+        [regex]::Escape($processStoppedCommand)
+    )).Count -ne 1) {
+        throw 'Late-output fixtures require exactly one process-stopped command.'
+    }
+    $latePlaintextSource = $lateOutputSource.Replace(
+        $processStoppedCommand,
+        $processStoppedCommand + [System.Environment]::NewLine +
+                "[System.IO.File]::AppendAllText(`$stdoutPath, " +
+                "'plaintext emitted after Playwright' + " +
+                "[System.Environment]::NewLine)"
+    )
+    [System.IO.File]::WriteAllText(
+        $latePlaintextRunner,
+        $latePlaintextSource,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $previousLatePlaintextErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $latePlaintextOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $latePlaintextRunner -JarPath $spacedJar `
+            -NpmExecutable $successfulFakeNpm -Port ($port + 4) 2>&1 | Out-String)
+        $latePlaintextExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousLatePlaintextErrorActionPreference
+    }
+    if ($latePlaintextExitCode -eq 0) {
+        throw "Expected late plaintext stdout to fail. Output: $latePlaintextOutput"
+    }
+    if ($latePlaintextOutput -notmatch 'non-JSON application stdout line') {
+        throw "Late plaintext stdout was not rejected by the final JSON boundary. Output: $latePlaintextOutput"
+    }
+
+    $lateLeakSource = $lateOutputSource.Replace(
+        $processStoppedCommand,
+        $processStoppedCommand + [System.Environment]::NewLine +
+                "[System.IO.File]::AppendAllText(`$stderrPath, " +
+                "`$privacySentinel + [System.Environment]::NewLine)"
+    )
+    [System.IO.File]::WriteAllText(
+        $lateLeakRunner,
+        $lateLeakSource,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $previousLateLeakErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $lateLeakOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $lateLeakRunner -JarPath $spacedJar `
+            -NpmExecutable $successfulFakeNpm -Port ($port + 5) 2>&1 | Out-String)
+        $lateLeakExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousLateLeakErrorActionPreference
+    }
+    if ($lateLeakExitCode -eq 0) {
+        throw "Expected late privacy sentinel to fail. Output: $lateLeakOutput"
+    }
+    if ($lateLeakOutput -notmatch 'leaked the visitor-content sentinel') {
+        throw "Late privacy sentinel was not rejected by the final log boundary. Output: $lateLeakOutput"
     }
 
     $previousErrorActionPreference = $ErrorActionPreference

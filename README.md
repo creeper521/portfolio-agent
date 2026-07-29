@@ -43,7 +43,15 @@ npm.cmd --prefix frontend ci
 启动后端，默认监听 `http://localhost:8080`：
 
 ```powershell
-mvn.cmd -f backend/pom.xml spring-boot:run
+mvn.cmd -f backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+`local` Profile 输出便于本机阅读的文本日志；生产运行使用结构化 JSON 日志。生产制品构建完成后，
+显式启用 `prod` Profile 再启动：
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='prod'
+java -jar backend/target/portfolio-agent.jar
 ```
 
 ### C1 模型表达（默认关闭）
@@ -192,6 +200,18 @@ java -jar backend/target/portfolio-agent.jar
 
 最终制品为 `backend/target/portfolio-agent.jar`。打开 `http://localhost:8080` 查看首页。
 
+## 按请求 ID 排障
+
+接口响应会返回 `X-Request-Id`。定位一次请求时按同一条关联链排查：
+
+1. 从浏览器 Network 响应头复制 `X-Request-Id`。
+2. 在日志系统中查询 `request.id=<复制的值>`。
+3. 找到该请求的 `http.request.started`，以及对应的 `http.request.completed` 或 `http.request.failed`。
+4. 从这些 HTTP 事件取得 `trace.id`，继续查看该请求内部产生的诊断事件。
+
+日志只保留封闭的运行状态、错误码和关联标识，不记录访客问题、回答正文、原始 IP、Provider
+载荷或密钥。`X-Request-Id` 用于定位请求，不代表可以绕过这条隐私边界。
+
 ## 隐私检查
 
 先验证扫描器自身，再扫描公开快照和前端构建产物：
@@ -239,7 +259,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 `GET /api/v1/public-content` 提供顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已调用 `/api/v2/answers`；剩余缺口是独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收。
 
-公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
+除浏览器诊断入口外，公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
+`POST /api/v1/client-diagnostics` 是只读公开端点的唯一例外：它只接受封闭、限流且不持久化的
+诊断事件契约。该入口永不接受访客内容、任意元数据、原始堆栈、URL、Headers、请求体、
+响应体、原始来源地址或凭据；关闭时返回 404，只有部署方显式启用后才接收事件。
 
 `POST /api/v2/answers` 请求示例：
 

@@ -2,6 +2,11 @@
 
 > **Status (2026-07-24):** A/B、默认关闭的 C1、C2 本地公开检索/固定只读工具，以及独立的对话式 Agent v2 后端已经实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。
 
+除 `POST /api/v1/client-diagnostics` 外，公开端点保持只读。该唯一例外只接受封闭、限流、
+不持久化的诊断事件契约，默认关闭；它永不接受访客内容、任意元数据、原始堆栈、URL、
+Headers、请求体、响应体、原始来源地址或凭据。服务端只在内存中对来源地址做 HMAC
+匿名化限流，既不发布也不持久化原始地址。
+
 Project and Case answer contexts are explicit and mutually exclusive. Case retrieval
 chunks, tool calls, and context envelopes carry stable `caseSlugs`; they never widen
 implicitly into a related Project or accept mixed Project/Case claims.

@@ -19,6 +19,12 @@ else {
     [System.IO.Path]::GetFullPath($JarPath)
 }
 $baseUrl = "http://127.0.0.1:$Port"
+$logCaptureId = [guid]::NewGuid().ToString('N')
+$stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+    "portfolio-jar-e2e-$logCaptureId.stdout.log"
+$stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+    "portfolio-jar-e2e-$logCaptureId.stderr.log"
+$privacySentinel = 'visitor-content-sentinel-must-not-leak'
 
 if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
     throw 'Packaged JAR is missing. Build the frontend and run Maven clean package first.'
@@ -61,6 +67,35 @@ function Assert-EnvironmentRestored([string]$Name, [hashtable]$Snapshot) {
     }
 }
 
+function Assert-PackagedLogBoundary(
+    [string]$stdoutPath,
+    [string]$stderrPath,
+    [string]$privacySentinel
+) {
+    $capturedStdout = Get-Content -LiteralPath $stdoutPath -Raw
+    $capturedStderr = Get-Content -LiteralPath $stderrPath -Raw
+    if (($capturedStdout + $capturedStderr) -match
+            [regex]::Escape($privacySentinel)) {
+        throw 'Packaged application logs leaked the visitor-content sentinel.'
+    }
+    $applicationStdoutLines = @(
+        $capturedStdout -split '\r?\n' |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    if ($applicationStdoutLines.Count -eq 0) {
+        throw 'Packaged application stdout did not contain structured JSON logs.'
+    }
+    foreach ($line in $applicationStdoutLines) {
+        try {
+            $null = $line | ConvertFrom-Json
+        }
+        catch {
+            throw 'Packaged application stdout contained a non-JSON application stdout line.'
+        }
+    }
+    Write-Output 'Packaged structured stdout privacy smoke passed.'
+}
+
 $environment = @{
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
@@ -69,7 +104,14 @@ $environment = @{
 }
 
 $quotedJar = '"' + $jar + '"'
-$applicationArguments = @('-jar', $quotedJar, "--server.port=$Port")
+$applicationArguments = @(
+    '-jar',
+    $quotedJar,
+    "--server.port=$Port",
+    '--spring.profiles.active=prod',
+    '--spring.main.banner-mode=off',
+    '--portfolio.diagnostics.frontend-ingest-enabled=true'
+)
 if (-not $RequireLiveProvider) {
     $applicationArguments += '--portfolio.model-expression.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
@@ -91,6 +133,8 @@ if (-not [string]::IsNullOrWhiteSpace($ModelDirectory)) {
 }
 $process = Start-Process -FilePath $JavaExecutable `
     -ArgumentList $applicationArguments `
+    -RedirectStandardOutput $stdoutPath `
+    -RedirectStandardError $stderrPath `
     -PassThru -WindowStyle Hidden
 
 Write-Output "Started packaged application process $($process.Id)."
@@ -166,6 +210,87 @@ try {
 
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
 
+    $correlationResponse = Invoke-WebRequest -UseBasicParsing `
+        "$baseUrl/api/v1/public-content"
+    if (
+        [string]::IsNullOrWhiteSpace(
+            [string]$correlationResponse.Headers['X-Request-Id']
+        ) -or
+        [string]::IsNullOrWhiteSpace(
+            [string]$correlationResponse.Headers['X-Trace-Id']
+        )
+    ) {
+        throw 'Packaged successful endpoint did not return request and trace correlation.'
+    }
+    Write-Output 'Packaged request correlation smoke passed.'
+
+    $diagnosticBatch = @{
+        events = @(
+            @{
+                schemaVersion = 1
+                eventName = 'frontend.agent.request.failed'
+                occurredAt = '2026-07-29T00:00:00.000Z'
+                clientSessionId = '22222222-2222-4222-8222-222222222222'
+                clientRequestId = '33333333-3333-4333-8333-333333333333'
+                errorCode = 'CLIENT_NETWORK_ERROR'
+                errorKind = 'NETWORK'
+                durationBucket = 'LT_1000_MS'
+            }
+        )
+    } | ConvertTo-Json -Depth 5 -Compress
+    $diagnosticResponse = Invoke-WebRequest -UseBasicParsing `
+        -Method Post `
+        -Uri "$baseUrl/api/v1/client-diagnostics" `
+        -ContentType 'application/json; charset=utf-8' `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes($diagnosticBatch))
+    if ($diagnosticResponse.StatusCode -ne 202) {
+        throw "Valid diagnostic batch returned $($diagnosticResponse.StatusCode), expected 202."
+    }
+    Write-Output 'Packaged client diagnostics acceptance smoke passed.'
+
+    $unknownFieldBatch = @{
+        events = @(
+            @{
+                schemaVersion = 1
+                eventName = 'frontend.agent.request.failed'
+                occurredAt = '2026-07-29T00:00:00.000Z'
+                clientSessionId = '22222222-2222-4222-8222-222222222222'
+                clientRequestId = '33333333-3333-4333-8333-333333333333'
+                question = 'diagnostic-unknown-field-must-be-rejected'
+            }
+        )
+    } | ConvertTo-Json -Depth 5 -Compress
+    try {
+        $unknownFieldStatus = (Invoke-WebRequest -UseBasicParsing `
+            -Method Post `
+            -Uri "$baseUrl/api/v1/client-diagnostics" `
+            -ContentType 'application/json; charset=utf-8' `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($unknownFieldBatch))).StatusCode
+    }
+    catch {
+        $unknownFieldStatus = [int]$_.Exception.Response.StatusCode
+    }
+    if ($unknownFieldStatus -ne 400) {
+        throw "Unknown diagnostic field returned $unknownFieldStatus, expected 400."
+    }
+    Write-Output 'Packaged client diagnostics unknown-field rejection smoke passed.'
+
+    $oversizedBody = '{"events":[],"padding":"' + ('x' * 17000) + '"}'
+    try {
+        $oversizedStatus = (Invoke-WebRequest -UseBasicParsing `
+            -Method Post `
+            -Uri "$baseUrl/api/v1/client-diagnostics" `
+            -ContentType 'application/json; charset=utf-8' `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($oversizedBody))).StatusCode
+    }
+    catch {
+        $oversizedStatus = [int]$_.Exception.Response.StatusCode
+    }
+    if ($oversizedStatus -ne 413) {
+        throw "Oversized diagnostic body returned $oversizedStatus, expected 413."
+    }
+    Write-Output 'Packaged client diagnostics body-limit smoke passed.'
+
     $caseResponse = Invoke-RestMethod -UseBasicParsing `
         "$baseUrl/api/v1/cases/multilingual-image-preservation"
     if ([string]$caseResponse.slug -ne 'multilingual-image-preservation') {
@@ -179,7 +304,7 @@ try {
     $caseAgentRequest = @{
         turnId = 'packaged-case-agent-smoke'
         requestToken = 'b0b2b34a-b4bf-40db-909a-d2ce8d95fffb'
-        question = 'How was this case verified?'
+        question = $privacySentinel
         messages = @()
         context = @{
             projectSlug = $null
@@ -198,6 +323,11 @@ try {
     }
     if (@($caseAgentResponse.blocks).Count -eq 0) {
         throw 'Packaged Case Agent returned no answer blocks.'
+    }
+    $serializedCaseAgentResponse =
+            $caseAgentResponse | ConvertTo-Json -Depth 12 -Compress
+    if ($serializedCaseAgentResponse -match [regex]::Escape($privacySentinel)) {
+        throw 'Packaged Case Agent response leaked the visitor-content sentinel.'
     }
     Write-Output 'Packaged Case Agent smoke passed.'
 
@@ -260,6 +390,19 @@ finally {
             }
         }
         Write-Output "Packaged application process $($process.Id) is stopped."
+        try {
+            Assert-PackagedLogBoundary `
+                -stdoutPath $stdoutPath `
+                -stderrPath $stderrPath `
+                -privacySentinel $privacySentinel
+        }
+        finally {
+            foreach ($logPath in @($stdoutPath, $stderrPath)) {
+                if (Test-Path -LiteralPath $logPath -PathType Leaf) {
+                    Remove-Item -LiteralPath $logPath -Force
+                }
+            }
+        }
     }
 }
 
