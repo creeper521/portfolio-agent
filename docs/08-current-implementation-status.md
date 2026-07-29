@@ -1,17 +1,17 @@
 # 当前实现与未实现功能盘点
 
 > **状态：** 当前实现盘点（以生产代码、配置、自动化测试和发布脚本为证据）
-> **核对日期：** 2026-07-28
-> **代码基线：** 本地 `master` `ba4f59a`
+> **核对日期：** 2026-07-29
+> **代码基线：** 本地 `master`（Case 独立前端与发布路由已完成验证）
 > **维护规则：** 功能合入、默认开关或产品边界变化时，同步更新本文与 `00-文档状态索引.md`。
 
 ## 1. 结论
 
-当前项目已经从“一个确定性问答的 V0”扩展为一个可打包交付的公开实习作品集 Agent：前端具备六个正式路由和页面内存工作台，后端具备公开内容 API、严格回答契约、内容治理、可选模型表达、本地混合检索、固定只读工具和引用式多轮，并提供单 JAR、Docker 与完整发布门禁。
+当前项目已经从“一个确定性问答的 V0”扩展为一个可打包交付的公开实习作品集 Agent：前端具备八个正式路由、独立 Case 体验和页面内存工作台，后端具备公开内容 API、严格回答契约、内容治理、可选模型表达、本地混合检索、固定只读工具和引用式多轮，并提供单 JAR、Docker 与完整发布门禁。
 
 Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case 互斥、未知公开主体 fail-closed、真实随包 Bundle 集成、Case API/v2 JAR 冒烟，以及显式 `-RequireLiveProvider` 响应门禁均已有实现和自动化测试。普通 CI 强制关闭模型调用；真实 Provider 外部调用仍需在获批生产候选环境单独留证。
 
-但它仍不是完整 V1。产品方向是独立 Case 信息架构，同时复用既有 Dossier 能力；故事页属于后续 selected-case 增强。模型表达与本地检索默认关闭；共享 Case 目录模型和共享详情投影已存在，前端也已调用 `/api/v2/answers`，但独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收仍未完成。动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
+但它仍不是完整 V1。独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI、Case → Agent 页面内存交接和 packaged-JAR 浏览器联调均已完成；故事页属于后续 selected-case 增强。模型表达与本地检索默认关闭，真实 Provider 与生产环境尚未验收。动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
 
 内容准备层已经登记 68 项私有资产。61 项非排除资产已通过精确哈希人工 Approval，本地发布并原子导入为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle；当前随包运行时包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset。7 项 `EXCLUDE` 继续保持私有。
 
@@ -23,7 +23,9 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 
 ### 2.1 公开作品集前端
 
-- Vue 3 + TypeScript + Vite 单页应用，正式路由为 `/`、`/projects`、`/projects/:slug`、`/timeline`、`/evidence`、`/agent`，并有显式 404 页面。
+- Vue 3 + TypeScript + Vite 单页应用，正式路由为 `/`、`/projects`、`/projects/:slug`、`/cases`、`/cases/:slug`、`/timeline`、`/evidence`、`/agent`，并有显式 404 页面。
+- Case 目录按交付状态组织 49 个公开案例；详情页展示问题、动作、判断、验证、结果、边界、证据和建议问题，旧 `/projects/{caseSlug}` 会替换为规范 Case URL。
+- Case → Agent 使用随机、短时、一次性页面内存 handoff；URL 立即清为 `/agent`，问题不进入浏览器历史或存储，Case 上下文可见、可清除，证据栏只展示当前 Case 的公开证据。
 - 首页由公开数据驱动，包含作品定位、角色化提问、可信度摘要和探索入口；缺少姓名时不生成虚构占位内容。
 - 项目目录、项目详情、时间线和证据中心均从 `GET /api/v1/public-content` 聚合接口读取，同一次加载共享请求，并提供 loading、空状态、失败重试和未知资源状态。
 - Agent 三栏工作台包含会话栏、对话区和证据区；桌面端支持可拖动/键盘调整分栏，窄屏改为抽屉且避免水平溢出。
@@ -109,7 +111,7 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 - 合并后公开 61/68 项；7 项 `EXCLUDE` 保持私有，原始 Evidence 始终不公开。
 - 治理脚本校验 `VERIFIED / PARTIALLY_VERIFIED / OWNER_CONFIRMED / INVESTIGATED / ASSISTED / UNRESOLVED` 到公开验证状态和贡献类型的保守映射。
 - 比较 CLI 可直接读取三文件候选，在内存中编译 Keyword/Vector 索引并复核规范 RAG 字节，不需要伪造已发布 Bundle。
-- 前端 Case 目录模型已支持“长期主线、单体任务、问题处理、知识与评测”四组；该能力尚未部署。
+- 前端 Case 目录、详情、规范重定向与 Agent 交接已实现并完成本地打包验收；该能力尚未生产部署。
 - 精确候选已通过结构、引用、隐私、冻结基准和人工 Approval，发布到本地发布区并原子导入当前分支随包运行时。
 
 ## 3. 部分实现或受运行条件限制
@@ -123,14 +125,14 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 | C2b 项目比较 | 工具实现并能读取当前 7 个公开 Project，已具备跨项目比较数据 | 仍需完成 Agent 前端入口、浏览器联调和代表性跨项目问题验收 |
 | 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；`2026-07-23.1` 历史首批三个 Case 及后续 `2026-07-27.1` 全量公开资产均已完成人工批准与本地发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
 | 匿名观测 | 领域事件、耗时桶和 best-effort 发布端口已实现 | 当前生产适配器是 Noop，没有指标后端、告警或运营面板 |
-| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入，模型表达有封闭语气策略；当前公开 Bundle 的 16 个 QuestionPreset 均可由 Agent 后端执行 | Case-only preset 的独立 Case 页面入口与完整生产验收仍待完成；角色不会解锁不同事实或未发布问题 |
+| 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入；Case-only preset 可从独立 Case 页面以页面内存方式进入 Agent；当前公开 Bundle 的 16 个 QuestionPreset 均可由 Agent 后端执行 | 真实 Provider 与生产环境验收仍待完成；角色不会解锁不同事实或未发布问题 |
 | 无障碍与视觉收口 | 键盘分栏、抽屉、reduced-motion 用例和主要 loading/error 状态已有覆盖 | 历史设计审核仍记录焦点管理、完整语义和更广 WCAG 人工验收尾项，尚无“全面合规”结论 |
 
 ## 4. 尚未实现或未准入
 
 ### 4.1 产品与内容
 
-- 独立 `/cases`、`/cases/:slug`、规范重定向、具体 Case UI 与最终视觉设计；故事页作为后续 selected-case 增强。`/api/v2/answers` 已有前端调用，剩余为与 Case 流程的完整联调和生产验收。
+- 3 至 6 个精选故事型 Case 页面；当前 V1 已提供全量目录与结构化详情，不把 49 个 Case 全部改造成故事系统。
 - 完整 V1 内容规模、多主题项目库、更多可执行 FAQ 和跨项目真实比较数据。
 - 私有 Obsidian/候选材料检索、个人 Copilot、管理后台和未审核内容预览。
 - 用户注册、登录、权限、团队协作、收藏、分享链接和跨设备会话。
@@ -155,14 +157,13 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 
 ## 5. 下一步优先级建议
 
-1. **实现独立 Case 信息架构。** 在共享目录模型与详情投影之上实现 `/cases`、`/cases/:slug`、规范重定向、数据映射、错误状态与具体 UI；复用 Dossier 能力，故事页留给后续 selected-case 增强。
-2. **完成 Agent Case 流程验收。** 基于现有 `/api/v2/answers` 调用，按 `caseSlug`/`caseSlugs` 契约接入 Case 预设与追问动作，并完成浏览器隐私、刷新清空、错误边界与生产验收。
-3. **复验全量内容的前端与 Agent 行为。** 补齐 Case 页面和 Agent 入口，在浏览器中验证 7 个 Project、49 个 Case、跨项目比较、错误状态与引用边界。
-4. **完成生产候选与线上验收。** 前端完整后，从仓库外安全注入审批与密钥，执行一次 `-RequireLiveProvider` 并留存安全摘要；随后完成 Docker/部署、API、页面、隐私和回滚证据。
+1. **完成生产候选与线上验收。** 从仓库外安全注入审批与密钥，执行一次 `-RequireLiveProvider` 并留存安全摘要；随后完成 Docker/部署、API、Case 页面、隐私和回滚证据。
+2. **复验全量内容与代表性问题。** 在生产候选中抽查 7 个 Project、49 个 Case、跨项目比较、错误状态、引用边界和 Case 动态追问。
+3. **补齐 C2b 比较入口。** 为已有跨项目比较工具增加明确前端入口，并验收代表性跨项目问题。
 5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
 6. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
 
-本次后端闭环不实现 Vue 页面、路由、组件、CSS 或最终视觉设计；前端 AI 应以 [`2026-07-28-portfolio-v1-case-and-release-closure-design.md`](superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md) 为交接规范。
+本次 Case 闭环已按 [`2026-07-28-portfolio-v1-case-and-release-closure-design.md`](superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md) 实现 Vue 页面、路由、Agent 交接与本地打包验收；该文档继续作为 Case 产品契约。
 
 ## 6. 状态判定依据
 
