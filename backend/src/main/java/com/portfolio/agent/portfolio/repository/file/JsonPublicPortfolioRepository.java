@@ -1,7 +1,9 @@
 package com.portfolio.agent.portfolio.repository.file;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
@@ -35,8 +37,10 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
             @Value("classpath:public-data/bundle/vector-index.bin") Resource vectorIndex,
             @Value("classpath:public-data/bundle/checksums.json") Resource checksums,
             @Value("${portfolio.content.release-root:}") String releaseRoot,
-            PortfolioSnapshotValidator validator
+            PortfolioSnapshotValidator validator,
+            ApplicationStartupDiagnostics startupDiagnostics
     ) {
+        long startedAt = System.nanoTime();
         try {
             PublicBundleLoader loader = new PublicBundleLoader(objectMapper, validator, Clock.systemUTC());
             if (releaseRoot != null && !releaseRoot.isBlank()) {
@@ -52,26 +56,60 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
                             "checksums.json", checksums.getContentAsByteArray()
                     ));
             }
+            publishLoaded(startupDiagnostics, startedAt);
         } catch (IOException exception) {
+            startupDiagnostics.contentBundleFailed();
             throw new InvalidPortfolioSnapshotException(
                     "unable to read public release bundle resources", exception);
+        } catch (RuntimeException exception) {
+            startupDiagnostics.contentBundleFailed();
+            throw exception;
         }
     }
 
     public JsonPublicPortfolioRepository(
             ObjectMapper objectMapper,
             Resource resource,
-            PortfolioSnapshotValidator validator
+            PortfolioSnapshotValidator validator,
+            ApplicationStartupDiagnostics startupDiagnostics
     ) {
+        long startedAt = System.nanoTime();
         try {
             byte[] bytes = resource.getContentAsByteArray();
             PortfolioSnapshot loaded = new PortfolioSnapshotJsonReader(objectMapper)
                     .readLegacyResource(bytes);
             validator.validate(loaded);
             this.snapshot = new RuntimeContentSnapshot(loaded, sha256(bytes), Instant.now());
+            publishLoaded(startupDiagnostics, startedAt);
         } catch (IOException | IllegalArgumentException | NoSuchAlgorithmException exception) {
+            startupDiagnostics.contentBundleFailed();
             throw new InvalidPortfolioSnapshotException("unable to load public portfolio snapshot", exception);
+        } catch (RuntimeException exception) {
+            startupDiagnostics.contentBundleFailed();
+            throw exception;
         }
+    }
+
+    private void publishLoaded(
+            ApplicationStartupDiagnostics startupDiagnostics,
+            long startedAt
+    ) {
+        RuntimeRetrievalContent retrieval = snapshot.getRetrievalContent().orElse(null);
+        int documentCount = retrieval == null ? 0 : retrieval.getDocuments().size();
+        int vectorDimension = retrieval == null
+                ? 0
+                : retrieval.getVectorIndex().getDimension();
+        startupDiagnostics.contentBundleLoaded(
+                snapshot.getSchemaVersion(),
+                snapshot.getContentVersion(),
+                retrieval != null,
+                documentCount,
+                vectorDimension,
+                elapsedMillis(startedAt));
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Math.max(0, (System.nanoTime() - startedAt) / 1_000_000);
     }
 
     private String sha256(byte[] bytes) throws NoSuchAlgorithmException {

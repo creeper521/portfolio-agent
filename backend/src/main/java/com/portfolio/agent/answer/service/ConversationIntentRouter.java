@@ -12,6 +12,9 @@ import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,13 +30,16 @@ public final class ConversationIntentRouter {
 
     private final ConversationalModelPort modelPort;
     private final double minimumConfidence;
+    private final DiagnosticEventPublisher diagnosticEventPublisher;
 
     public ConversationIntentRouter(
             ConversationalModelPort modelPort,
-            double minimumConfidence
+            double minimumConfidence,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         this.modelPort = modelPort;
         this.minimumConfidence = minimumConfidence;
+        this.diagnosticEventPublisher = diagnosticEventPublisher;
     }
 
     public ConversationRoute route(
@@ -41,41 +47,62 @@ public final class ConversationIntentRouter {
             ConversationWindow window,
             ConversationAnswerRequest request
     ) {
+        long startedAt = System.nanoTime();
         String question = request.getQuestion().strip();
         String normalized = question.toLowerCase(Locale.ROOT);
         if (isUnsafe(normalized)) {
-            return deterministic(
+            return decided(deterministic(
                     ConversationIntent.UNSUPPORTED_OR_UNSAFE,
-                    ConversationAnswerScope.CONVERSATION);
+                    ConversationAnswerScope.CONVERSATION), "DETERMINISTIC", startedAt);
         }
         if (isTimeSensitive(normalized)) {
-            return deterministic(
+            return decided(deterministic(
                     ConversationIntent.TIME_SENSITIVE,
-                    ConversationAnswerScope.GENERAL);
+                    ConversationAnswerScope.GENERAL), "DETERMINISTIC", startedAt);
         }
         if (isConversation(normalized)) {
-            return deterministic(
+            return decided(deterministic(
                     ConversationIntent.CONVERSATION,
-                    ConversationAnswerScope.CONVERSATION);
+                    ConversationAnswerScope.CONVERSATION), "DETERMINISTIC", startedAt);
         }
 
         ConversationRoute hinted = routeHint(content, request.getContext());
         if (hinted != null) {
-            return hinted;
+            return decided(hinted, "DETERMINISTIC", startedAt);
         }
 
         List<ConversationSubjectOption> subjects = publicSubjects(content);
         ConversationModelResult<ConversationRoute> classified =
                 modelPort.classify(question, window, subjects);
         if (classified == null || !classified.isSuccessful()) {
-            return clarificationRoute();
+            return decided(clarificationRoute(), "DETERMINISTIC", startedAt);
         }
         ConversationRoute candidate = classified.getValue();
         if (candidate.getConfidence() < minimumConfidence
                 || !subjectIsValid(candidate, content)) {
-            return clarificationRoute();
+            return decided(clarificationRoute(), "DETERMINISTIC", startedAt);
         }
-        return candidate;
+        return decided(candidate, "MODEL", startedAt);
+    }
+
+    private ConversationRoute decided(
+            ConversationRoute route,
+            String routeSource,
+            long startedAt
+    ) {
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+        try {
+            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
+                            "agent.route.decided", DiagnosticLevel.DEBUG)
+                    .field("conversation.intent", route.getIntent())
+                    .field("answer.scope", route.getAnswerScope())
+                    .field("route.source", routeSource)
+                    .field("duration.bucket", DurationBuckets.fromElapsedMillis(elapsedMillis))
+                    .build());
+        } catch (RuntimeException ignored) {
+            // Observability is passive and must never change route selection.
+        }
+        return route;
     }
 
     private ConversationRoute routeHint(

@@ -1,8 +1,6 @@
-package com.portfolio.agent.portfolio.exception;
+package com.portfolio.agent.common.exception;
 
-import com.portfolio.agent.common.exception.ErrorCode;
-
-public enum PortfolioErrorCode implements ErrorCode {
+public enum PublicResourceErrorCode implements ErrorCode {
 
     PROJECT_NOT_FOUND("PROJECT_NOT_FOUND", "公开项目不存在", 404),
     CASE_NOT_FOUND("CASE_NOT_FOUND", "公开案例不存在", 404);
@@ -11,7 +9,7 @@ public enum PortfolioErrorCode implements ErrorCode {
     private final String defaultMessage;
     private final int httpStatus;
 
-    PortfolioErrorCode(String code, String defaultMessage, int httpStatus) {
+    PublicResourceErrorCode(String code, String defaultMessage, int httpStatus) {
         this.code = code;
         this.defaultMessage = defaultMessage;
         this.httpStatus = httpStatus;

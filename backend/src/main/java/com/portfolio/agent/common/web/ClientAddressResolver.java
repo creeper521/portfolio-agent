@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.adapter.web;
+package com.portfolio.agent.common.web;
 
 import jakarta.servlet.http.HttpServletRequest;
 

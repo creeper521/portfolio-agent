@@ -1,11 +1,10 @@
 package com.portfolio.agent.common.web;
 
-import com.portfolio.agent.answer.exception.AnswerAdmissionRejectedException;
 import com.portfolio.agent.common.exception.ApplicationException;
 import com.portfolio.agent.common.exception.CommonErrorCode;
+import com.portfolio.agent.common.observability.SafeExceptionRenderer;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,31 +21,20 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
-    @ExceptionHandler(AnswerAdmissionRejectedException.class)
-    public ResponseEntity<ApiErrorResponse> handleAdmissionRejected(
-            AnswerAdmissionRejectedException exception
-    ) {
-        HttpStatus status = HttpStatus.valueOf(exception.getErrorCode().getHttpStatus());
-        ApiErrorResponse body = new ApiErrorResponse(
-                UUID.randomUUID().toString(),
-                exception.getErrorCode().getCode(),
-                exception.getMessage(),
-                exception.getRetryAfterSeconds(),
-                OffsetDateTime.now()
-        );
-        return ResponseEntity.status(status)
-                .header("Retry-After", Integer.toString(exception.getRetryAfterSeconds()))
-                .body(body);
-    }
+    private final SafeExceptionRenderer renderer = new SafeExceptionRenderer();
 
     @ExceptionHandler(ApplicationException.class)
     public ResponseEntity<ApiErrorResponse> handleApplicationException(
-            ApplicationException exception
+            ApplicationException exception,
+            HttpServletRequest request
     ) {
         HttpStatus status = HttpStatus.valueOf(exception.getErrorCode().getHttpStatus());
-        return response(status, exception.getErrorCode().getCode(), exception.getMessage());
+        markRejected(request, exception.getErrorCode().getCode());
+        return response(
+                status,
+                exception.getErrorCode().getCode(),
+                exception.getMessage(),
+                exception.getRetryAfterSeconds());
     }
 
     @ExceptionHandler({
@@ -54,40 +42,58 @@ public class GlobalExceptionHandler {
             ConstraintViolationException.class,
             HttpMessageNotReadableException.class
     })
-    public ResponseEntity<ApiErrorResponse> handleValidation(Exception exception) {
+    public ResponseEntity<ApiErrorResponse> handleValidation(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        markRejected(request, CommonErrorCode.VALIDATION_ERROR.getCode());
         return response(HttpStatus.BAD_REQUEST, CommonErrorCode.VALIDATION_ERROR);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleNoResource(NoResourceFoundException exception) {
+    public ResponseEntity<ApiErrorResponse> handleNoResource(
+            NoResourceFoundException exception,
+            HttpServletRequest request
+    ) {
+        markRejected(request, CommonErrorCode.NOT_FOUND.getCode());
         return response(HttpStatus.NOT_FOUND, CommonErrorCode.NOT_FOUND);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiErrorResponse> handleMethodNotAllowed(
-            HttpRequestMethodNotSupportedException exception
+            HttpRequestMethodNotSupportedException exception,
+            HttpServletRequest request
     ) {
+        markRejected(request, CommonErrorCode.METHOD_NOT_ALLOWED.getCode());
         return response(HttpStatus.METHOD_NOT_ALLOWED, CommonErrorCode.METHOD_NOT_ALLOWED);
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiErrorResponse> handleUnsupportedMediaType(
-            HttpMediaTypeNotSupportedException exception
+            HttpMediaTypeNotSupportedException exception,
+            HttpServletRequest request
     ) {
+        markRejected(request, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode());
         return response(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                 CommonErrorCode.UNSUPPORTED_MEDIA_TYPE);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception) {
-        String requestId = UUID.randomUUID().toString();
-        LOGGER.error("Unexpected server error, requestId={}", requestId);
-        return response(
-                requestId,
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                CommonErrorCode.INTERNAL_ERROR.getCode(),
-                CommonErrorCode.INTERNAL_ERROR.getDefaultMessage()
-        );
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        try {
+            request.setAttribute(
+                    RequestDiagnosticsFilter.FAILURE_ATTRIBUTE,
+                    new RequestFailure(
+                            CommonErrorCode.INTERNAL_ERROR.getCode(),
+                            exception.getClass().getName(),
+                            renderer.render(exception)));
+        } catch (RuntimeException diagnosticsFailure) {
+            // Diagnostics are best effort and never replace the safe error response.
+        }
+        return response(HttpStatus.INTERNAL_SERVER_ERROR, CommonErrorCode.INTERNAL_ERROR);
     }
 
     private ResponseEntity<ApiErrorResponse> response(
@@ -102,21 +108,42 @@ public class GlobalExceptionHandler {
             String code,
             String message
     ) {
-        return response(UUID.randomUUID().toString(), status, code, message);
+        return response(status, code, message, null);
     }
 
     private ResponseEntity<ApiErrorResponse> response(
-            String requestId,
             HttpStatus status,
             String code,
-            String message
+            String message,
+            Integer retryAfterSeconds
     ) {
+        String requestId = currentRequestId();
         ApiErrorResponse body = new ApiErrorResponse(
                 requestId,
                 code,
                 message,
+                retryAfterSeconds,
                 OffsetDateTime.now()
         );
-        return ResponseEntity.status(status).body(body);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(status)
+                .header("X-Request-Id", requestId);
+        if (retryAfterSeconds != null) {
+            response.header("Retry-After", Integer.toString(retryAfterSeconds));
+        }
+        return response.body(body);
+    }
+
+    private void markRejected(HttpServletRequest request, String errorCode) {
+        try {
+            request.setAttribute(RequestDiagnosticsFilter.ERROR_CODE_ATTRIBUTE, errorCode);
+        } catch (RuntimeException diagnosticsFailure) {
+            // Diagnostics are best effort and never replace the safe error response.
+        }
+    }
+
+    private String currentRequestId() {
+        return RequestContextHolder.current()
+                .map(RequestContext::getRequestId)
+                .orElseGet(() -> UUID.randomUUID().toString());
     }
 }

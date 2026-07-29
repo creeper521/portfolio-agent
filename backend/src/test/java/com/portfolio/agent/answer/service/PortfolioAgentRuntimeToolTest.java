@@ -132,7 +132,9 @@ class PortfolioAgentRuntimeToolTest {
                         "none", false, false, "c3-model-registry-v1",
                         new ExecutionBudgets(5000L, 1, 4, 8, 4000)));
         ToolPlanExecutor toolExecutor = new ToolPlanExecutor(
-                new LocalPublicKnowledgeTools(), new ToolResultValidator());
+                new LocalPublicKnowledgeTools(),
+                new ToolResultValidator(),
+                event -> { });
         PortfolioAgentRuntime runtime = new PortfolioAgentRuntime(
                 gateway, resolver, new AnswerContextFactory(), new AnswerPlanBuilder(),
                 snapshotFactory, modelCoordinator, verificationPolicy,

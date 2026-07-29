@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.adapter.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelPolicy;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
+import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
@@ -15,6 +16,7 @@ import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.DeterministicConversationFallback;
 import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,7 +48,8 @@ public class ConversationalAgentConfiguration {
             ObjectMapper objectMapper,
             ConversationalPromptFactory promptFactory,
             ModelExpressionProperties modelProperties,
-            ModelProviderRegistrySnapshot registry
+            ModelProviderRegistrySnapshot registry,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(modelProperties.getTimeout())
@@ -62,7 +65,8 @@ public class ConversationalAgentConfiguration {
                 promptFactory,
                 registry.getRequiredDescriptor(modelProperties.getProvider()),
                 modelProperties.apiKeyFor(modelProperties.getProvider()),
-                modelProperties.getMaxTokens());
+                modelProperties.getMaxTokens(),
+                diagnosticEventPublisher);
     }
 
     @Bean
@@ -79,11 +83,13 @@ public class ConversationalAgentConfiguration {
     @Bean
     ConversationIntentRouter conversationIntentRouter(
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
-            ConversationalAgentProperties properties
+            ConversationalAgentProperties properties,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         return new ConversationIntentRouter(
                 modelAdapter,
-                properties.getMinimumIntentConfidence());
+                properties.getMinimumIntentConfidence(),
+                diagnosticEventPublisher);
     }
 
     @Bean
@@ -105,13 +111,15 @@ public class ConversationalAgentConfiguration {
     ConversationToolService conversationToolService(
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             PublicKnowledgeTools tools,
-            ConversationalAgentProperties properties
+            ConversationalAgentProperties properties,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         return new ConversationToolService(
                 modelAdapter,
                 tools,
                 properties.getMaxToolRounds(),
-                properties.getMaxToolCalls());
+                properties.getMaxToolCalls(),
+                diagnosticEventPublisher);
     }
 
     @Bean
@@ -155,7 +163,9 @@ public class ConversationalAgentConfiguration {
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
             ConversationProviderAccess providerAccess,
-            ConversationSubjectGuard subjectGuard
+            ConversationSubjectGuard subjectGuard,
+            ConversationDecisionPublisher decisionPublisher,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         return new ConversationalAgentRuntime(
                 knowledgeGateway,
@@ -168,7 +178,9 @@ public class ConversationalAgentConfiguration {
                 questionService,
                 fallback,
                 providerAccess,
-                subjectGuard);
+                subjectGuard,
+                decisionPublisher,
+                diagnosticEventPublisher);
     }
 
 }

@@ -1,0 +1,16 @@
+portfolio:
+  diagnostics:
+    frontend-ingest-enabled: ${PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED:false}
+
+logging:
+  structured:
+    format:
+      console: ecs
+    json:
+      add:
+        deployment.environment: production
+  level:
+    root: INFO
+    com.portfolio.agent: INFO
+    org.springframework.web: WARN
+    org.springframework.web.client: WARN

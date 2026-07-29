@@ -1,5 +1,6 @@
 package com.portfolio.agent.portfolio.service;
 
+import com.portfolio.agent.common.exception.PublicResourceErrorCode;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
@@ -15,7 +16,6 @@ import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.exception.CaseNotFoundException;
-import com.portfolio.agent.portfolio.exception.PortfolioErrorCode;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.CaseDetails;
 import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
@@ -145,7 +145,7 @@ class PortfolioServiceTest {
                 .isInstanceOfSatisfying(
                         CaseNotFoundException.class,
                         exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(PortfolioErrorCode.CASE_NOT_FOUND)
+                                .isEqualTo(PublicResourceErrorCode.CASE_NOT_FOUND)
                 );
     }
 

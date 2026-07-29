@@ -1,11 +1,12 @@
 package com.portfolio.agent.answer.controller;
 
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
-import com.portfolio.agent.answer.adapter.web.ClientAddressResolver;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerResponse;
 import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
 import com.portfolio.agent.answer.service.ProductionConversationService;
+import com.portfolio.agent.common.web.ClientAddressResolver;
+import com.portfolio.agent.common.web.RequestContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +37,7 @@ public final class ConversationAnswerController {
             @Valid @RequestBody ConversationAnswerRequest request,
             HttpServletRequest servletRequest
     ) {
+        RequestContextHolder.enrichTurnId(request.getTurnId());
         ConversationAnswerResult result = service.answer(
                 request, clientAddressResolver.resolve(servletRequest));
         return responseMapper.toResponse(result);

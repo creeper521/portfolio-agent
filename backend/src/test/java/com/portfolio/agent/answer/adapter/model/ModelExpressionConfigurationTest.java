@@ -3,10 +3,13 @@ package com.portfolio.agent.answer.adapter.model;
 import com.portfolio.agent.answer.domain.ModelPolicy;
 import com.portfolio.agent.answer.domain.ModelProviderKind;
 import com.portfolio.agent.answer.gateway.ModelExpressionPort;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,11 +30,14 @@ class ModelExpressionConfigurationTest {
                 .isEqualTo(ModelProviderKind.DEEPSEEK_V4_FLASH);
         assertThat(policy.getTimeout()).isEqualTo(Duration.ofSeconds(8));
         assertThat(properties.selectedApiKey()).isEmpty();
+        List<DiagnosticEvent> events = new ArrayList<>();
         ModelExpressionPort port = configuration.modelExpressionPort(
                 new com.fasterxml.jackson.databind.ObjectMapper(),
                 properties,
-                configuration.modelProviderRegistry());
+                configuration.modelProviderRegistry(),
+                events::add);
         assertThat(port).isNotNull();
+        assertThat(events).isEmpty();
         assertThat(ModelExpressionProperties.class.getDeclaredMethods())
                 .extracting(java.lang.reflect.Method::getName)
                 .doesNotContain("toString");

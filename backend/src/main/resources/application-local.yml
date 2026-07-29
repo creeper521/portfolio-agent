@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.portfolio.agent: DEBUG
+    org.springframework.web: INFO

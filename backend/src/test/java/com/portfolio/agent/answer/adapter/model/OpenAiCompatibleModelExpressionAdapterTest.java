@@ -15,11 +15,15 @@ import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import com.portfolio.agent.answer.domain.ExpressionPolicy;
 import com.portfolio.agent.answer.domain.ExpressionTone;
+import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.ModelExpressionFailureCode;
 import com.portfolio.agent.answer.domain.ModelExpressionRequest;
 import com.portfolio.agent.answer.domain.ModelExpressionResult;
 import com.portfolio.agent.answer.domain.ModelProviderKind;
 import com.portfolio.agent.answer.dto.request.AudienceRole;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -30,6 +34,7 @@ import org.springframework.web.client.ResourceAccessException;
 
 import java.net.http.HttpTimeoutException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +47,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class OpenAiCompatibleModelExpressionAdapterTest {
 
@@ -78,6 +86,20 @@ class OpenAiCompatibleModelExpressionAdapterTest {
 
         assertThat(result.isSuccessful()).isTrue();
         assertThat(result.getDraft().getTitle()).isEqualTo("Approved project");
+        assertThat(fixture.events()).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("provider.call.completed");
+            assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.DEBUG);
+            assertThat(event.getFields()).containsOnlyKeys(
+                    "provider.operation",
+                    "event.outcome",
+                    "duration.bucket",
+                    "response.present");
+            assertThat(event.getFields())
+                    .containsEntry("provider.operation", "EXPRESS")
+                    .containsEntry("event.outcome", "success")
+                    .containsEntry("response.present", true);
+            assertDurationBucket(event.getFields().get("duration.bucket"));
+        });
         fixture.server().verify();
     }
 
@@ -115,6 +137,11 @@ class OpenAiCompatibleModelExpressionAdapterTest {
         assertThat(result.isSuccessful()).isFalse();
         assertThat(result.getFailureCode())
                 .isEqualTo(ModelExpressionFailureCode.INVALID_RESPONSE);
+        assertThat(fixture.events()).singleElement().satisfies(event ->
+                assertThat(event.getFields())
+                        .containsEntry("provider.operation", "EXPRESS")
+                        .containsEntry("failure.code", "PROVIDER_INVALID_RESPONSE")
+                        .containsEntry("response.present", true));
         assertThat(ModelExpressionResult.class.getDeclaredFields())
                 .extracting(java.lang.reflect.Field::getName)
                 .doesNotContain("rawRequest", "rawResponse", "prompt", "cause");
@@ -133,6 +160,10 @@ class OpenAiCompatibleModelExpressionAdapterTest {
         assertThat(result.isSuccessful()).isFalse();
         assertThat(result.getFailureCode())
                 .isEqualTo(ModelExpressionFailureCode.PROVIDER_ERROR);
+        assertThat(fixture.events()).singleElement().satisfies(event ->
+                assertThat(event.getFields())
+                        .containsEntry("failure.code", "PROVIDER_CONNECTION_FAILED")
+                        .containsEntry("response.present", false));
         fixture.server().verify();
     }
 
@@ -151,10 +182,146 @@ class OpenAiCompatibleModelExpressionAdapterTest {
 
         assertThat(result.isSuccessful()).isFalse();
         assertThat(result.getFailureCode()).isEqualTo(ModelExpressionFailureCode.TIMEOUT);
+        assertThat(fixture.events()).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("provider.call.failed");
+            assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.WARN);
+            assertThat(event.getFields()).containsOnlyKeys(
+                    "provider.operation",
+                    "event.outcome",
+                    "duration.bucket",
+                    "response.present",
+                    "failure.code");
+            assertThat(event.getFields())
+                    .containsEntry("provider.operation", "EXPRESS")
+                    .containsEntry("event.outcome", "failure")
+                    .containsEntry("response.present", false)
+                    .containsEntry("failure.code", "PROVIDER_TIMEOUT")
+                    .doesNotContainKeys(
+                            "provider.name",
+                            "provider.url",
+                            "provider.payload",
+                            "exception.message");
+            assertDurationBucket(event.getFields().get("duration.bucket"));
+        });
+        fixture.server().verify();
+    }
+
+    @Test
+    void diagnosticPublisherFailureDoesNotChangeExpressionResult() {
+        DiagnosticEventPublisher throwingPublisher = event -> {
+            throw new IllegalStateException("diagnostics unavailable");
+        };
+        Fixture fixture = fixture(
+                ModelProviderKind.DEEPSEEK_V4_FLASH,
+                throwingPublisher);
+        fixture.server().expect(ExpectedCount.once(), requestTo(
+                        "https://api.deepseek.com/chat/completions"))
+                .andRespond(withSuccess(
+                        providerResponse(validDraftJson()),
+                        MediaType.APPLICATION_JSON));
+
+        ModelExpressionResult result = fixture.adapter().express(request());
+
+        assertThat(result.isSuccessful()).isTrue();
+        fixture.server().verify();
+    }
+
+    @Test
+    void requestBuildFailurePublishesExactlyOneClosedFailureWithoutProviderCall() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
+        ModelPromptFactory promptFactory = mock(ModelPromptFactory.class);
+        when(promptFactory.systemPrompt(anyString()))
+                .thenThrow(new IllegalStateException("sensitive prompt detail"));
+        List<DiagnosticEvent> events = new ArrayList<>();
+        OpenAiCompatibleModelExpressionAdapter adapter =
+                new OpenAiCompatibleModelExpressionAdapter(
+                        builder,
+                        objectMapper,
+                        promptFactory,
+                        ModelProviderRegistrySnapshot.builtIn().getRequiredDescriptor(
+                                ModelProviderKind.DEEPSEEK_V4_FLASH),
+                        "test-key",
+                        1200,
+                        events::add);
+
+        ModelExpressionResult result = adapter.express(request());
+
+        assertThat(result.getFailureCode())
+                .isEqualTo(ModelExpressionFailureCode.REQUEST_BUILD_FAILED);
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("provider.call.failed");
+            assertThat(event.getFields())
+                    .containsEntry("provider.operation", "EXPRESS")
+                    .containsEntry(
+                            "failure.code",
+                            "PROVIDER_REQUEST_BUILD_FAILED")
+                    .containsEntry("response.present", false)
+                    .doesNotContainKey("provider.id");
+        });
+        server.verify();
+    }
+
+    @Test
+    void emptyResponsePublishesExactlyOneClosedFailureEvent() {
+        Fixture fixture = fixture(ModelProviderKind.DEEPSEEK_V4_FLASH);
+        fixture.server().expect(ExpectedCount.once(), requestTo(
+                        "https://api.deepseek.com/chat/completions"))
+                .andRespond(withSuccess(providerResponse(""), MediaType.APPLICATION_JSON));
+
+        ModelExpressionResult result = fixture.adapter().express(request());
+
+        assertThat(result.getFailureCode())
+                .isEqualTo(ModelExpressionFailureCode.EMPTY_RESPONSE);
+        assertThat(fixture.events()).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("provider.call.failed");
+            assertThat(event.getFields())
+                    .containsEntry("failure.code", "PROVIDER_EMPTY_RESPONSE")
+                    .containsEntry("response.present", false)
+                    .doesNotContainKey("provider.id");
+        });
+        fixture.server().verify();
+    }
+
+    @Test
+    void jsonNullPublishesExactlyOneInvalidResponseFailureEvent() {
+        Fixture fixture = fixture(ModelProviderKind.DEEPSEEK_V4_FLASH);
+        fixture.server().expect(ExpectedCount.once(), requestTo(
+                        "https://api.deepseek.com/chat/completions"))
+                .andRespond(withSuccess(providerResponse("null"), MediaType.APPLICATION_JSON));
+
+        ModelExpressionResult result = fixture.adapter().express(request());
+
+        assertThat(result.getFailureCode())
+                .isEqualTo(ModelExpressionFailureCode.INVALID_RESPONSE);
+        assertThat(fixture.events()).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("provider.call.failed");
+            assertThat(event.getFields())
+                    .containsEntry("failure.code", "PROVIDER_INVALID_RESPONSE")
+                    .containsEntry("response.present", true)
+                    .doesNotContainKey("provider.id");
+        });
         fixture.server().verify();
     }
 
     private Fixture fixture(ModelProviderKind provider) {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        return fixture(provider, events::add, events);
+    }
+
+    private Fixture fixture(
+            ModelProviderKind provider,
+            DiagnosticEventPublisher diagnosticEventPublisher
+    ) {
+        return fixture(provider, diagnosticEventPublisher, List.of());
+    }
+
+    private Fixture fixture(
+            ModelProviderKind provider,
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            List<DiagnosticEvent> events
+    ) {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
@@ -167,9 +334,10 @@ class OpenAiCompatibleModelExpressionAdapterTest {
                         new ModelPromptFactory(objectMapper),
                         descriptor,
                         "test-key",
-                        1200
+                        1200,
+                        diagnosticEventPublisher
                 );
-        return new Fixture(adapter, server);
+        return new Fixture(adapter, server, events);
     }
 
     private ModelExpressionRequest request() {
@@ -236,19 +404,30 @@ class OpenAiCompatibleModelExpressionAdapterTest {
         return "{\"choices\":[{\"message\":{\"content\":\"" + escaped + "\"}}]}";
     }
 
+    private void assertDurationBucket(Object value) {
+        assertThat(value).isInstanceOf(String.class);
+        assertThat(java.util.Arrays.stream(DurationBucket.values())
+                .map(DurationBucket::name))
+                .contains((String) value);
+    }
+
     private static final class Fixture {
         private final OpenAiCompatibleModelExpressionAdapter adapter;
         private final MockRestServiceServer server;
+        private final List<DiagnosticEvent> events;
 
         private Fixture(
                 OpenAiCompatibleModelExpressionAdapter adapter,
-                MockRestServiceServer server
+                MockRestServiceServer server,
+                List<DiagnosticEvent> events
         ) {
             this.adapter = adapter;
             this.server = server;
+            this.events = events;
         }
 
         private OpenAiCompatibleModelExpressionAdapter adapter() { return adapter; }
         private MockRestServiceServer server() { return server; }
+        private List<DiagnosticEvent> events() { return events; }
     }
 }

@@ -3,6 +3,9 @@ package com.portfolio.agent.answer.service;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.exception.AnswerRequestTimeoutException;
+import com.portfolio.agent.common.observability.AnonymousSourceHasher;
+import com.portfolio.agent.common.web.RequestContext;
+import com.portfolio.agent.common.web.RequestContextHolder;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -42,14 +45,16 @@ public final class ProductionConversationService {
         String sourceHash = sourceHasher.hash(
                 Objects.requireNonNull(clientAddress, "clientAddress must not be null"));
         return idempotency.execute(sourceHash, request.getRequestToken(), () -> {
-            try (var ignored = admissionGate.acquire(sourceHash, request.getRequestToken())) {
+            try (AnswerAdmission admission = admissionGate.acquire(sourceHash, request.getRequestToken())) {
                 return executeWithinBudget(request);
             }
         });
     }
 
     private ConversationAnswerResult executeWithinBudget(ConversationAnswerRequest request) {
-        Future<ConversationAnswerResult> future = executor.submit(() -> runtime.answer(request));
+        RequestContext context = RequestContextHolder.requireCurrent().copy();
+        Future<ConversationAnswerResult> future = executor.submit(
+                () -> RequestContextHolder.callWith(context, () -> runtime.answer(request)));
         try {
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {

@@ -333,7 +333,7 @@ public final class PortfolioAgentRuntime {
 
     private void publishBestEffort(AnswerResult result, AnswerRequest request, long startedAt) {
         long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-        DurationBucket bucket = durationBucket(elapsedMillis);
+        DurationBucket bucket = DurationBuckets.fromElapsedMillis(elapsedMillis);
         QuestionKind kind = request.getQuestionPresetId() == null
                 ? QuestionKind.FREE_TEXT
                 : QuestionKind.PRESET;
@@ -345,16 +345,4 @@ public final class PortfolioAgentRuntime {
         }
     }
 
-    private DurationBucket durationBucket(long elapsedMillis) {
-        if (elapsedMillis < 100) {
-            return DurationBucket.LT_100_MS;
-        }
-        if (elapsedMillis < 500) {
-            return DurationBucket.FROM_100_TO_499_MS;
-        }
-        if (elapsedMillis < 2000) {
-            return DurationBucket.FROM_500_TO_1999_MS;
-        }
-        return DurationBucket.GE_2000_MS;
-    }
 }

@@ -15,12 +15,18 @@ import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
 import com.portfolio.agent.answer.domain.ConversationToolPlan;
 import com.portfolio.agent.answer.domain.ConversationWindow;
+import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.GroundingReview;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
 import com.portfolio.agent.answer.domain.PublicToolResult;
 import com.portfolio.agent.answer.domain.ToolKind;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
+import com.portfolio.agent.answer.service.DurationBuckets;
+import com.portfolio.agent.answer.service.ProviderFailureCodeMapper;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -31,6 +37,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
+import java.util.function.Supplier;
 
 public final class OpenAiCompatibleConversationalModelAdapter
         implements ConversationalModelPort, ConversationSummaryPort {
@@ -41,6 +49,7 @@ public final class OpenAiCompatibleConversationalModelAdapter
     private final ModelProviderDescriptor descriptor;
     private final String apiKey;
     private final int maxTokens;
+    private final DiagnosticEventPublisher diagnosticEventPublisher;
 
     OpenAiCompatibleConversationalModelAdapter(
             RestClient.Builder builder,
@@ -48,7 +57,8 @@ public final class OpenAiCompatibleConversationalModelAdapter
             ConversationalPromptFactory promptFactory,
             ModelProviderDescriptor descriptor,
             String apiKey,
-            int maxTokens
+            int maxTokens,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         this.restClient = builder.build();
         this.objectMapper = objectMapper.copy()
@@ -57,6 +67,9 @@ public final class OpenAiCompatibleConversationalModelAdapter
         this.descriptor = descriptor;
         this.apiKey = apiKey;
         this.maxTokens = maxTokens;
+        this.diagnosticEventPublisher = Objects.requireNonNull(
+                diagnosticEventPublisher,
+                "diagnosticEventPublisher");
     }
 
     @Override
@@ -65,10 +78,11 @@ public final class OpenAiCompatibleConversationalModelAdapter
             ConversationWindow window,
             List<ConversationSubjectOption> publicSubjects
     ) {
-        Map<String, Object> conversation = conversation(question, window);
         return post(
-                "intent",
-                promptFactory.intentPrompt(conversation, publicSubjects),
+                ProviderOperation.CLASSIFY,
+                () -> promptFactory.intentPrompt(
+                        conversation(question, window),
+                        publicSubjects),
                 objectMapper.constructType(ConversationRoute.class),
                 0.0);
     }
@@ -88,8 +102,10 @@ public final class OpenAiCompatibleConversationalModelAdapter
         approved.put("priorResults", priorResults);
         approved.put("allowedTools", allowedTools);
         return post(
-                "tool_plan",
-                promptFactory.toolPlanPrompt(conversation(question, window), approved),
+                ProviderOperation.PLAN_TOOLS,
+                () -> promptFactory.toolPlanPrompt(
+                        conversation(question, window),
+                        approved),
                 objectMapper.constructType(ConversationToolPlan.class),
                 0.0);
     }
@@ -105,8 +121,10 @@ public final class OpenAiCompatibleConversationalModelAdapter
         approved.put("route", route);
         approved.put("grounding", grounding);
         return post(
-                "generation",
-                promptFactory.generationPrompt(conversation(question, window), approved),
+                ProviderOperation.GENERATE,
+                () -> promptFactory.generationPrompt(
+                        conversation(question, window),
+                        approved),
                 objectMapper.constructType(ConversationDraft.class),
                 0.3);
     }
@@ -117,8 +135,8 @@ public final class OpenAiCompatibleConversationalModelAdapter
             PortfolioGroundingContext grounding
     ) {
         return post(
-                "review",
-                promptFactory.reviewPrompt(blocks, grounding),
+                ProviderOperation.REVIEW,
+                () -> promptFactory.reviewPrompt(blocks, grounding),
                 objectMapper.constructType(GroundingReview.class),
                 0.0);
     }
@@ -137,8 +155,8 @@ public final class OpenAiCompatibleConversationalModelAdapter
         approved.put("route", route);
         approved.put("publicSubjects", publicSubjects);
         ConversationModelResult<SuggestedQuestionsResponse> result = post(
-                "suggestion",
-                promptFactory.suggestionPrompt(conversation, approved),
+                ProviderOperation.SUGGEST,
+                () -> promptFactory.suggestionPrompt(conversation, approved),
                 objectMapper.constructType(SuggestedQuestionsResponse.class),
                 0.3);
         if (!result.isSuccessful()) {
@@ -150,8 +168,8 @@ public final class OpenAiCompatibleConversationalModelAdapter
     @Override
     public Optional<String> summarize(List<ConversationMessage> messages) {
         ConversationModelResult<SummaryResponse> result = post(
-                "summary",
-                promptFactory.summaryPrompt(messages),
+                ProviderOperation.SUMMARIZE,
+                () -> promptFactory.summaryPrompt(messages),
                 objectMapper.constructType(SummaryResponse.class),
                 0.1);
         if (!result.isSuccessful() || result.getValue().getSummary() == null
@@ -170,21 +188,34 @@ public final class OpenAiCompatibleConversationalModelAdapter
     }
 
     private <T> ConversationModelResult<T> post(
-            String operation,
-            String userPrompt,
+            ProviderOperation operation,
+            Supplier<String> userPromptSupplier,
             JavaType responseType,
             double temperature
     ) {
-        ChatCompletionRequest request = new ChatCompletionRequest(
-                descriptor.getModelName(),
-                List.of(
-                        new ChatMessage("system", promptFactory.systemPrompt(operation)),
-                        new ChatMessage("user", userPrompt)),
-                new ResponseFormat("json_object"),
-                new Thinking("disabled"),
-                false,
-                maxTokens,
-                temperature);
+        long startedAt = System.nanoTime();
+        ChatCompletionRequest request;
+        try {
+            request = new ChatCompletionRequest(
+                    descriptor.getModelName(),
+                    List.of(
+                            new ChatMessage(
+                                    "system",
+                                    promptFactory.systemPrompt(
+                                            operation.getPromptOperation())),
+                            new ChatMessage("user", userPromptSupplier.get())),
+                    new ResponseFormat("json_object"),
+                    new Thinking("disabled"),
+                    false,
+                    maxTokens,
+                    temperature);
+        } catch (RuntimeException exception) {
+            return failure(
+                    operation,
+                    ConversationModelFailureCode.REQUEST_BUILD_FAILED,
+                    false,
+                    startedAt);
+        }
         try {
             ChatCompletionResponse response = restClient.post()
                     .uri(descriptor.getEndpoint())
@@ -195,20 +226,93 @@ public final class OpenAiCompatibleConversationalModelAdapter
                     .body(ChatCompletionResponse.class);
             String content = responseContent(response);
             if (content == null || content.isBlank()) {
-                return ConversationModelResult.failure(
-                        ConversationModelFailureCode.EMPTY_RESPONSE);
+                return failure(
+                        operation,
+                        ConversationModelFailureCode.EMPTY_RESPONSE,
+                        false,
+                        startedAt);
             }
             T value = objectMapper.readerFor(responseType)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(content);
-            return ConversationModelResult.success(value);
+            if (value == null) {
+                return failure(
+                        operation,
+                        ConversationModelFailureCode.INVALID_RESPONSE,
+                        true,
+                        startedAt);
+            }
+            ConversationModelResult<T> result =
+                    ConversationModelResult.success(value);
+            publishCompleted(operation, startedAt);
+            return result;
         } catch (RestClientException exception) {
-            return ConversationModelResult.failure(isTimeout(exception)
-                    ? ConversationModelFailureCode.TIMEOUT
-                    : ConversationModelFailureCode.PROVIDER_ERROR);
+            return failure(
+                    operation,
+                    isTimeout(exception)
+                            ? ConversationModelFailureCode.TIMEOUT
+                            : ConversationModelFailureCode.PROVIDER_ERROR,
+                    false,
+                    startedAt);
         } catch (Exception exception) {
-            return ConversationModelResult.failure(
-                    ConversationModelFailureCode.INVALID_RESPONSE);
+            return failure(
+                    operation,
+                    ConversationModelFailureCode.INVALID_RESPONSE,
+                    true,
+                    startedAt);
+        }
+    }
+
+    private <T> ConversationModelResult<T> failure(
+            ProviderOperation operation,
+            ConversationModelFailureCode failureCode,
+            boolean responsePresent,
+            long startedAt
+    ) {
+        publishFailed(operation, failureCode, responsePresent, startedAt);
+        return ConversationModelResult.failure(failureCode);
+    }
+
+    private void publishCompleted(ProviderOperation operation, long startedAt) {
+        publishBestEffort(DiagnosticEvent.builder(
+                        "provider.call.completed",
+                        DiagnosticLevel.DEBUG)
+                .field("provider.operation", operation)
+                .field("event.outcome", "success")
+                .field("duration.bucket", durationBucket(startedAt))
+                .field("response.present", true)
+                .build());
+    }
+
+    private void publishFailed(
+            ProviderOperation operation,
+            ConversationModelFailureCode failureCode,
+            boolean responsePresent,
+            long startedAt
+    ) {
+        publishBestEffort(DiagnosticEvent.builder(
+                        "provider.call.failed",
+                        DiagnosticLevel.WARN)
+                .field("provider.operation", operation)
+                .field("event.outcome", "failure")
+                .field("duration.bucket", durationBucket(startedAt))
+                .field("response.present", responsePresent)
+                .field(
+                        "failure.code",
+                        ProviderFailureCodeMapper.map(failureCode))
+                .build());
+    }
+
+    private DurationBucket durationBucket(long startedAt) {
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+        return DurationBuckets.fromElapsedMillis(elapsedMillis);
+    }
+
+    private void publishBestEffort(DiagnosticEvent event) {
+        try {
+            diagnosticEventPublisher.publish(event);
+        } catch (RuntimeException ignored) {
+            // Diagnostics must never change the provider result.
         }
     }
 

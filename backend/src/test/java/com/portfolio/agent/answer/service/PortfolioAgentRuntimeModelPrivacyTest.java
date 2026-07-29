@@ -26,9 +26,11 @@ import com.portfolio.agent.answer.engine.AnswerEngine;
 import com.portfolio.agent.answer.gateway.AnswerDecisionPublisher;
 import com.portfolio.agent.answer.gateway.ModelExpressionPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +75,7 @@ class PortfolioAgentRuntimeModelPrivacyTest {
         ModelExpressionPort modelPort = mock(ModelExpressionPort.class);
         AnswerEngine deterministicEngine = mock(AnswerEngine.class);
         VerificationPolicy verificationPolicy = mock(VerificationPolicy.class);
+        List<DiagnosticEvent> diagnosticEvents = new ArrayList<>();
 
         when(knowledgeGateway.getContent()).thenReturn(content);
         when(resolver.resolve(content, request)).thenReturn(resolution);
@@ -93,7 +96,10 @@ class PortfolioAgentRuntimeModelPrivacyTest {
                 .thenReturn(VerificationStatus.UNVERIFIED);
 
         ModelAnswerCoordinator coordinator = new ModelAnswerCoordinator(
-                deterministicEngine, modelPort, mock(AnswerOutputValidator.class));
+                deterministicEngine,
+                modelPort,
+                mock(AnswerOutputValidator.class),
+                diagnosticEvents::add);
         PortfolioAgentRuntime runtime = new PortfolioAgentRuntime(
                 knowledgeGateway, resolver, contextFactory, new AnswerPlanBuilder(),
                 snapshotFactory, coordinator, verificationPolicy,
@@ -116,5 +122,18 @@ class PortfolioAgentRuntimeModelPrivacyTest {
                         "contextEnvelope", "previousContentVersion", "projectSlugs", "caseSlugs",
                         "referencedClaimIds", "selectedSectionType", "toolPlan",
                         "toolResult", "messages", "previousQuestion", "previousAnswer");
+        assertThat(diagnosticEvents).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("answer.fallback.selected");
+            assertThat(event.getFields())
+                    .containsOnlyKeys("fallback.trigger", "failure.code")
+                    .doesNotContainKeys(
+                            "question",
+                            "messages",
+                            "answer",
+                            "prompt",
+                            "provider.payload",
+                            "provider.url",
+                            "exception.message");
+        });
     }
 }

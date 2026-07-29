@@ -10,6 +10,8 @@ import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,53 +28,88 @@ public class RetrievalConfiguration {
     }
 
     @Bean
-    RetrievalCapability retrievalCapability(RetrievalProperties properties) {
+    RetrievalCapability retrievalCapability(
+            RetrievalProperties properties,
+            ApplicationStartupDiagnostics startupDiagnostics
+    ) {
+        return retrievalCapability(
+                properties,
+                startupDiagnostics,
+                new LocalEmbeddingArtifactVerifier());
+    }
+
+    RetrievalCapability retrievalCapability(
+            RetrievalProperties properties,
+            ApplicationStartupDiagnostics startupDiagnostics,
+            LocalEmbeddingArtifactVerifier verifier
+    ) {
         return switch (properties.getProfile()) {
             case DISABLED -> RetrievalCapability.disabled();
             case KEYWORD_ONLY -> RetrievalCapability.keywordOnly();
             case HYBRID -> {
-                LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
-                        .descriptor();
-                yield RetrievalCapability.hybridEnabled(
-                        artifact.getModelId(), artifact.getDescriptorSha256(),
-                        artifact.getDimension());
+                try {
+                    LocalEmbeddingArtifact artifact = verifier.descriptor();
+                    yield RetrievalCapability.hybridEnabled(
+                            artifact.getModelId(), artifact.getDescriptorSha256(),
+                            artifact.getDimension());
+                } catch (RuntimeException exception) {
+                    startupDiagnostics.embeddingModelFailed();
+                    throw exception;
+                }
             }
         };
     }
 
     @Bean
-    LocalEmbeddingPort localEmbeddingPort(RetrievalProperties properties) {
+    LocalEmbeddingPort localEmbeddingPort(
+            RetrievalProperties properties,
+            ApplicationStartupDiagnostics startupDiagnostics
+    ) {
         if (properties.getProfile() != RetrievalProfile.HYBRID) {
             return localText -> {
                 throw new LocalEmbeddingFailureException("LOCAL_EMBEDDING_DISABLED");
             };
         }
-        String configuredDirectory = properties.getModelDirectory() == null
-                ? ""
-                : properties.getModelDirectory().strip();
-        if (configuredDirectory.isEmpty()) {
-            throw new LocalEmbeddingFailureException("LOCAL_MODEL_DIRECTORY_REQUIRED");
+        long startedAt = System.nanoTime();
+        try {
+            String configuredDirectory = properties.getModelDirectory() == null
+                    ? ""
+                    : properties.getModelDirectory().strip();
+            if (configuredDirectory.isEmpty()) {
+                throw new LocalEmbeddingFailureException("LOCAL_MODEL_DIRECTORY_REQUIRED");
+            }
+            Path modelDirectory = Path.of(configuredDirectory);
+            LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
+                    .verify(modelDirectory);
+            LocalEmbeddingPort embeddingPort = new OnnxLocalEmbeddingAdapter(
+                    modelDirectory,
+                    artifact.getQueryInstruction(),
+                    artifact.getMaxTokens(),
+                    artifact.getDimension(),
+                    artifact.getIntraOpThreads(),
+                    artifact.getInterOpThreads());
+            startupDiagnostics.embeddingModelLoaded(
+                    artifact.getDimension(),
+                    Math.max(0, (System.nanoTime() - startedAt) / 1_000_000));
+            return embeddingPort;
+        } catch (RuntimeException exception) {
+            startupDiagnostics.embeddingModelFailed();
+            throw exception;
         }
-        Path modelDirectory = Path.of(configuredDirectory);
-        LocalEmbeddingArtifact artifact = new LocalEmbeddingArtifactVerifier()
-                .verify(modelDirectory);
-        return new OnnxLocalEmbeddingAdapter(
-                modelDirectory,
-                artifact.getQueryInstruction(),
-                artifact.getMaxTokens(),
-                artifact.getDimension(),
-                artifact.getIntraOpThreads(),
-                artifact.getInterOpThreads());
     }
 
     @Bean
-    LocalRetrievalCoordinator localRetrievalCoordinator(LocalEmbeddingPort embeddingPort) {
+    LocalRetrievalCoordinator localRetrievalCoordinator(
+            LocalEmbeddingPort embeddingPort,
+            DiagnosticEventPublisher diagnosticEventPublisher
+    ) {
         return new LocalRetrievalCoordinator(
                 new RetrievalQueryNormalizer(),
                 new KeywordRetriever(),
                 new VectorRetriever(),
                 new ReciprocalRankFusion(),
                 new RetrievalContextValidator(),
-                embeddingPort);
+                embeddingPort,
+                diagnosticEventPublisher);
     }
 }

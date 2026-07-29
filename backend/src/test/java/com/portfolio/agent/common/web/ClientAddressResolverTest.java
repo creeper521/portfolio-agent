@@ -1,4 +1,4 @@
-package com.portfolio.agent.answer.adapter.web;
+package com.portfolio.agent.common.web;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;

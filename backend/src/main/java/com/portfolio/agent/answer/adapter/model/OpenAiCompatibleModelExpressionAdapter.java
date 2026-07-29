@@ -5,10 +5,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelAnswerDraft;
+import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.ModelExpressionFailureCode;
 import com.portfolio.agent.answer.domain.ModelExpressionRequest;
 import com.portfolio.agent.answer.domain.ModelExpressionResult;
 import com.portfolio.agent.answer.gateway.ModelExpressionPort;
+import com.portfolio.agent.answer.service.DurationBuckets;
+import com.portfolio.agent.answer.service.ProviderFailureCodeMapper;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -16,6 +22,7 @@ import org.springframework.web.client.RestClientException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.List;
+import java.util.Objects;
 
 public final class OpenAiCompatibleModelExpressionAdapter implements ModelExpressionPort {
 
@@ -25,6 +32,7 @@ public final class OpenAiCompatibleModelExpressionAdapter implements ModelExpres
     private final ModelProviderDescriptor descriptor;
     private final String apiKey;
     private final int maxTokens;
+    private final DiagnosticEventPublisher diagnosticEventPublisher;
 
     OpenAiCompatibleModelExpressionAdapter(
             RestClient.Builder builder,
@@ -32,7 +40,8 @@ public final class OpenAiCompatibleModelExpressionAdapter implements ModelExpres
             ModelPromptFactory promptFactory,
             ModelProviderDescriptor descriptor,
             String apiKey,
-            int maxTokens
+            int maxTokens,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         this.restClient = builder.build();
         this.objectMapper = objectMapper.copy()
@@ -41,16 +50,22 @@ public final class OpenAiCompatibleModelExpressionAdapter implements ModelExpres
         this.descriptor = descriptor;
         this.apiKey = apiKey;
         this.maxTokens = maxTokens;
+        this.diagnosticEventPublisher = Objects.requireNonNull(
+                diagnosticEventPublisher,
+                "diagnosticEventPublisher");
     }
 
     @Override
     public ModelExpressionResult express(ModelExpressionRequest request) {
+        long startedAt = System.nanoTime();
         ChatCompletionRequest providerRequest;
         try {
             providerRequest = requestBody(request);
         } catch (RuntimeException exception) {
-            return ModelExpressionResult.failure(
-                    ModelExpressionFailureCode.REQUEST_BUILD_FAILED);
+            return failure(
+                    ModelExpressionFailureCode.REQUEST_BUILD_FAILED,
+                    false,
+                    startedAt);
         }
         try {
             ChatCompletionResponse response = restClient.post()
@@ -62,21 +77,87 @@ public final class OpenAiCompatibleModelExpressionAdapter implements ModelExpres
                     .body(ChatCompletionResponse.class);
             String content = responseContent(response);
             if (content == null || content.isBlank()) {
-                return ModelExpressionResult.failure(
-                        ModelExpressionFailureCode.EMPTY_RESPONSE);
+                return failure(
+                        ModelExpressionFailureCode.EMPTY_RESPONSE,
+                        false,
+                        startedAt);
             }
             ModelAnswerDraft draft = objectMapper.readerFor(ModelAnswerDraft.class)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(content);
-            return ModelExpressionResult.success(draft);
+            if (draft == null) {
+                return failure(
+                        ModelExpressionFailureCode.INVALID_RESPONSE,
+                        true,
+                        startedAt);
+            }
+            ModelExpressionResult result =
+                    ModelExpressionResult.success(draft);
+            publishCompleted(startedAt);
+            return result;
         } catch (RestClientException exception) {
-            return ModelExpressionResult.failure(
+            return failure(
                     isTimeout(exception)
                             ? ModelExpressionFailureCode.TIMEOUT
-                            : ModelExpressionFailureCode.PROVIDER_ERROR);
+                            : ModelExpressionFailureCode.PROVIDER_ERROR,
+                    false,
+                    startedAt);
         } catch (Exception exception) {
-            return ModelExpressionResult.failure(
-                    ModelExpressionFailureCode.INVALID_RESPONSE);
+            return failure(
+                    ModelExpressionFailureCode.INVALID_RESPONSE,
+                    true,
+                    startedAt);
+        }
+    }
+
+    private ModelExpressionResult failure(
+            ModelExpressionFailureCode failureCode,
+            boolean responsePresent,
+            long startedAt
+    ) {
+        publishFailed(failureCode, responsePresent, startedAt);
+        return ModelExpressionResult.failure(failureCode);
+    }
+
+    private void publishCompleted(long startedAt) {
+        publishBestEffort(DiagnosticEvent.builder(
+                        "provider.call.completed",
+                        DiagnosticLevel.DEBUG)
+                .field("provider.operation", ProviderOperation.EXPRESS)
+                .field("event.outcome", "success")
+                .field("duration.bucket", durationBucket(startedAt))
+                .field("response.present", true)
+                .build());
+    }
+
+    private void publishFailed(
+            ModelExpressionFailureCode failureCode,
+            boolean responsePresent,
+            long startedAt
+    ) {
+        publishBestEffort(DiagnosticEvent.builder(
+                        "provider.call.failed",
+                        DiagnosticLevel.WARN)
+                .field("provider.operation", ProviderOperation.EXPRESS)
+                .field("event.outcome", "failure")
+                .field("duration.bucket", durationBucket(startedAt))
+                .field("response.present", responsePresent)
+                .field(
+                        "failure.code",
+                        ProviderFailureCodeMapper.map(failureCode))
+                .build());
+    }
+
+    private DurationBucket durationBucket(long startedAt) {
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+        return DurationBuckets.fromElapsedMillis(elapsedMillis);
+    }
+
+    private void publishBestEffort(DiagnosticEvent event) {
+        try {
+            diagnosticEventPublisher.publish(event);
+        } catch (RuntimeException ignored) {
+            // Diagnostics must never change the provider result.
         }
     }
 

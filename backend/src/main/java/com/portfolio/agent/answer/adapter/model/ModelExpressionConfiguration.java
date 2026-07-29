@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.adapter.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelPolicy;
 import com.portfolio.agent.answer.gateway.ModelExpressionPort;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,7 +48,8 @@ public class ModelExpressionConfiguration {
     ModelExpressionPort modelExpressionPort(
             ObjectMapper objectMapper,
             ModelExpressionProperties properties,
-            ModelProviderRegistrySnapshot registry
+            ModelProviderRegistrySnapshot registry,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.getTimeout())
@@ -64,7 +66,8 @@ public class ModelExpressionConfiguration {
                 objectMapper,
                 descriptor,
                 properties.apiKeyFor(properties.getProvider()),
-                properties.getMaxTokens()
+                properties.getMaxTokens(),
+                diagnosticEventPublisher
         );
     }
 }

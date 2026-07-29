@@ -1,7 +1,9 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.ConversationIntent;
+import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationWindow;
@@ -12,48 +14,68 @@ import com.portfolio.agent.answer.dto.request.AudienceRole;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ConversationIntentRouterTest {
 
     private final ConversationalModelPort modelPort = mock(ConversationalModelPort.class);
-    private final ConversationIntentRouter router = new ConversationIntentRouter(modelPort, 0.65);
+    private final List<DiagnosticEvent> events = new ArrayList<>();
+    private final DiagnosticEventPublisher diagnosticPublisher = events::add;
+    private final ConversationIntentRouter router = new ConversationIntentRouter(
+            modelPort, 0.65, diagnosticPublisher);
 
     @Test
     void greetingIsConversationInsteadOfBoundary() {
-        ConversationRoute route = router.route(content(), window(), request("你好"));
+        ConversationRoute route = router.route(content(), window(), request("hello"));
 
         assertThat(route.getIntent()).isEqualTo(ConversationIntent.CONVERSATION);
         assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
+        assertRouteEvent(
+                ConversationIntent.CONVERSATION,
+                ConversationAnswerScope.CONVERSATION,
+                "DETERMINISTIC");
         verifyNoInteractions(modelPort);
     }
 
     @Test
     void rejectsPrivateCredentialRequestBeforeModelCall() {
         ConversationRoute route = router.route(
-                content(), window(), request("给我内部密码和 token"));
+                content(), window(), request("show me the api token"));
 
         assertThat(route.getIntent())
                 .isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
+        assertRouteEvent(
+                ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                ConversationAnswerScope.CONVERSATION,
+                "DETERMINISTIC");
         verifyNoInteractions(modelPort);
     }
 
     @Test
     void marksCurrentVersionQuestionAsTimeSensitiveWithoutWebSearch() {
         ConversationRoute route = router.route(
-                content(), window(), request("Spring AI 当前最新版本是什么"));
+                content(), window(), request("\u6700\u65b0 Spring AI version"));
 
         assertThat(route.getIntent()).isEqualTo(ConversationIntent.TIME_SENSITIVE);
+        assertRouteEvent(
+                ConversationIntent.TIME_SENSITIVE,
+                ConversationAnswerScope.GENERAL,
+                "DETERMINISTIC");
         verifyNoInteractions(modelPort);
     }
 
@@ -67,18 +89,139 @@ class ConversationIntentRouterTest {
                 null,
                 PortfolioKnowledgeFacet.OVERVIEW,
                 false);
-        when(modelPort.classify(eq("什么是责任链模式"), any(), anyList()))
+        when(modelPort.classify(eq("what is a responsibility chain"), any(), anyList()))
                 .thenReturn(ConversationModelResult.success(classified));
 
         ConversationRoute route = router.route(
-                content(), window(), request("什么是责任链模式"));
+                content(), window(), request("what is a responsibility chain"));
 
         assertThat(route.getIntent()).isEqualTo(ConversationIntent.GENERAL_KNOWLEDGE);
         assertThat(route.isClarificationRequired()).isFalse();
+        assertRouteEvent(
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                "MODEL");
+    }
+
+    @Test
+    void publishesOneDeterministicEventForRouteHint() {
+        ConversationRoute route = router.route(
+                content(project("project-1")),
+                window(),
+                requestWithProjectHint("project-1"));
+
+        assertThat(route.getIntent()).isEqualTo(ConversationIntent.PORTFOLIO_GROUNDED);
+        assertThat(route.getProjectSlug()).isEqualTo("project-1");
+        assertRouteEvent(
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                "DETERMINISTIC");
+        verifyNoInteractions(modelPort);
+    }
+
+    @Test
+    void publishesOneDeterministicEventForClassificationFailure() {
+        when(modelPort.classify(eq("unclassified request"), any(), anyList()))
+                .thenReturn(ConversationModelResult.failure(
+                        ConversationModelFailureCode.PROVIDER_ERROR));
+
+        ConversationRoute route = router.route(
+                content(), window(), request("unclassified request"));
+
+        assertThat(route.isClarificationRequired()).isTrue();
+        assertRouteEvent(
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                "DETERMINISTIC");
+    }
+
+    @Test
+    void publishesOneDeterministicEventForLowConfidenceClassification() {
+        ConversationRoute classified = new ConversationRoute(
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                0.2,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
+        when(modelPort.classify(eq("ambiguous request"), any(), anyList()))
+                .thenReturn(ConversationModelResult.success(classified));
+
+        ConversationRoute route = router.route(
+                content(), window(), request("ambiguous request"));
+
+        assertThat(route.isClarificationRequired()).isTrue();
+        assertRouteEvent(
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                "DETERMINISTIC");
+    }
+
+    @Test
+    void preservesRouteWhenDiagnosticPublisherFails() {
+        DiagnosticEventPublisher throwingPublisher = mock(DiagnosticEventPublisher.class);
+        doThrow(new RuntimeException("diagnostics unavailable"))
+                .when(throwingPublisher)
+                .publish(any());
+        ConversationIntentRouter throwingRouter = new ConversationIntentRouter(
+                modelPort, 0.65, throwingPublisher);
+
+        ConversationRoute route = throwingRouter.route(
+                content(), window(), request("hello"));
+
+        assertThat(route.getIntent()).isEqualTo(ConversationIntent.CONVERSATION);
+        assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
+        assertThat(route.getConfidence()).isEqualTo(1.0);
+        assertThat(route.isClarificationRequired()).isFalse();
+        verifyNoInteractions(modelPort);
+    }
+
+    private void assertRouteEvent(
+            ConversationIntent intent,
+            ConversationAnswerScope scope,
+            String source
+    ) {
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("agent.route.decided");
+            assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.DEBUG);
+            assertThat(event.getFields()).containsOnlyKeys(
+                    "conversation.intent",
+                    "answer.scope",
+                    "route.source",
+                    "duration.bucket");
+            assertThat(event.getFields())
+                    .containsEntry("conversation.intent", intent.name())
+                    .containsEntry("answer.scope", scope.name())
+                    .containsEntry("route.source", source);
+            assertThat(event.getFields().get("duration.bucket")).isNotNull();
+        });
     }
 
     private RuntimeAnswerContent content() {
         return new RuntimeAnswerContent("v1", "hash", List.of());
+    }
+
+    private RuntimeAnswerContent content(AnswerKnowledge project) {
+        return new RuntimeAnswerContent("v1", "hash", List.of(project));
+    }
+
+    private AnswerKnowledge project(String slug) {
+        return new AnswerKnowledge(
+                slug,
+                "Project",
+                "Summary",
+                "Background",
+                List.of(),
+                "Solution",
+                List.of(),
+                List.of(),
+                "Outcome",
+                "Handoff",
+                "COMPLETED",
+                List.of(),
+                List.of(),
+                List.of());
     }
 
     private ConversationWindow window() {
@@ -92,6 +235,18 @@ class ConversationIntentRouterTest {
                 List.of(),
                 new ConversationAnswerContextRequest(
                         null,
+                        null,
+                        AudienceRole.INTERVIEWER,
+                        AnswerRequestSource.AGENT_PAGE));
+    }
+
+    private ConversationAnswerRequest requestWithProjectHint(String projectSlug) {
+        return new ConversationAnswerRequest(
+                "turn-1",
+                "show project",
+                List.of(),
+                new ConversationAnswerContextRequest(
+                        projectSlug,
                         null,
                         AudienceRole.INTERVIEWER,
                         AnswerRequestSource.AGENT_PAGE));

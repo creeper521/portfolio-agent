@@ -1,6 +1,8 @@
 spring:
   application:
     name: portfolio-agent
+  profiles:
+    default: local
   jackson:
     default-property-inclusion: non_null
     deserialization:
@@ -12,6 +14,11 @@ server:
     include-stacktrace: never
 
 portfolio:
+  diagnostics:
+    frontend-ingest-enabled: false
+    frontend-max-batch-size: 10
+    frontend-max-body-bytes: 16384
+    frontend-events-per-minute: 30
   content:
     release-root: ${PORTFOLIO_CONTENT_RELEASE_ROOT:}
   retrieval:
