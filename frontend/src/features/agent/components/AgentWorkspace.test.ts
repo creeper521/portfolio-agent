@@ -634,6 +634,43 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock).toHaveBeenNthCalledWith(3, expect.objectContaining({ question: '保留原会话上下文' }))
   })
 
+  it('reuses the same request token when retrying a failed answer', async () => {
+    askQuestionMock
+      .mockRejectedValueOnce(new Error('failed'))
+      .mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('retry token')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[0]?.[0].requestToken).toBeTruthy()
+    expect(askQuestionMock.mock.calls[0]?.[0].requestToken)
+      .toBe(askQuestionMock.mock.calls[1]?.[0].requestToken)
+  })
+
+  it('cancels a pending answer without showing a failure', async () => {
+    askQuestionMock.mockImplementation((input) =>
+      new Promise((_resolve, reject) => {
+        input.signal?.addEventListener('abort', () => reject(new Error('cancelled')))
+      }),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('cancel answer')
+    await wrapper.get('.composer').trigger('submit')
+    const signal = askQuestionMock.mock.calls[0]?.[0].signal as AbortSignal
+    await wrapper.get('[data-answer-cancel]').trigger('click')
+    await flushPromises()
+
+    expect(signal.aborted).toBe(true)
+    expect(wrapper.find('[data-agent-loading]').exists()).toBe(false)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.findAll('.message--agent')).toHaveLength(0)
+  })
+
   it('clears retry safely when the failed session is deleted', async () => {
     askQuestionMock.mockRejectedValueOnce(new Error('first request failed'))
     const wrapper = mountWorkspace()

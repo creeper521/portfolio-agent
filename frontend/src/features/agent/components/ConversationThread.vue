@@ -15,6 +15,7 @@ import type {
 } from '../model/evidenceDeskModel'
 import {
   answerScopeTag,
+  answerGenerationTag,
   answerSourceTag,
   answerStatusLabel,
   answerTechTail,
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   toggleSessions: []
   toggleEvidence: []
   retry: []
+  cancel: []
   followUp: [action: FollowUpAction]
 }>()
 
@@ -304,6 +306,7 @@ function inspectMessageEvidence(
               <span v-if="answerScopeTag(message.answer)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message.answer) }}</span>
               <span v-if="message.answer.generationMode !== 'FALLBACK' && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message.answer) }}</span>
               <span v-if="answerSourceTag(message.answer)" class="message__meta-tag">{{ answerSourceTag(message.answer) }}</span>
+              <span v-if="answerGenerationTag(message.answer)" class="message__meta-tag" data-answer-generation>{{ answerGenerationTag(message.answer) }}</span>
             </span>
             <span v-if="answerTechTail(message.answer)" class="message__meta-tail">{{ answerTechTail(message.answer) }}</span>
           </p>
@@ -428,6 +431,7 @@ function inspectMessageEvidence(
         </article>
 
         <div v-if="pending" data-agent-loading class="answer-state" role="status">
+          <button data-answer-cancel type="button" @click="$emit('cancel')">取消回答</button>
           AGENT · 正在核验证据
         </div>
         <div v-else-if="error" class="answer-state answer-state--error" role="alert">

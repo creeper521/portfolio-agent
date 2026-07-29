@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   answerScopeTag,
+  answerGenerationTag,
   answerSourceTag,
   answerStatusLabel,
   answerTechTail,
@@ -67,5 +68,13 @@ describe('answerLabels', () => {
     expect(degradedNotice({ ...base, degraded: true })).toBe('已切换到基础回答')
     expect(degradedNotice(base)).toBe('')
     expect(degradedNotice(null)).toBe('')
+  })
+
+  it('distinguishes deterministic, model, retrieval, fallback, and refusal states', () => {
+    expect(answerGenerationTag(base)).toBe('确定性回答')
+    expect(answerGenerationTag({ ...base, generationMode: 'MODEL' })).toBe('模型生成')
+    expect(answerGenerationTag({ ...base, answerSource: 'RETRIEVAL' })).toBe('检索增强')
+    expect(answerGenerationTag({ ...base, generationMode: 'FALLBACK' })).toBe('降级回答')
+    expect(answerGenerationTag({ ...base, resolution: 'REJECTED' })).toBe('拒答')
   })
 })

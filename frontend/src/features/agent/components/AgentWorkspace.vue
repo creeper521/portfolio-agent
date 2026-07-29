@@ -7,6 +7,8 @@ import type {
 } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
 import { askQuestion } from '../api/answerApi'
+import { createRequestToken } from '../api/createRequestToken'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import {
   WORKSPACE_LIMITS,
@@ -39,6 +41,7 @@ interface AnswerRequestContext {
   question: string
   questionPresetId?: string
   contextEnvelope?: ContextEnvelope
+  requestToken?: string
 }
 
 const props = withDefaults(
@@ -75,6 +78,7 @@ const pending = ref(false)
 const answerError = ref('')
 const failedRequest = ref<AnswerRequestContext | null>(null)
 let activeRequest: AnswerRequestContext | null = null
+let activeRequestController: AbortController | null = null
 let requestVersion = 0
 let answerFocusRequestId = 0
 let disposed = false
@@ -185,6 +189,8 @@ function clearAnswerFailure() {
 }
 
 function invalidatePendingRequest() {
+  activeRequestController?.abort()
+  activeRequestController = null
   requestVersion += 1
   activeRequest = null
   pending.value = false
@@ -198,6 +204,10 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     return
   }
 
+  const preparedContext = context.requestToken
+    ? context
+    : { ...context, requestToken: createRequestToken() }
+  const controller = new AbortController()
   clearFocusedAnswer()
   if (appendUser) {
     sessions.appendMessage(session.id, {
@@ -208,7 +218,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     })
   }
   const request = ++requestVersion
-  activeRequest = context
+  activeRequest = preparedContext
+  activeRequestController = controller
   pending.value = true
   clearAnswerFailure()
   try {
@@ -237,15 +248,17 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     const mapped = mapAnswerResponse(
       await askQuestion({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
-        projectSlug: context.caseSlug ? null : context.projectSlug,
-        caseSlug: context.caseSlug ?? null,
+        requestToken: preparedContext.requestToken,
+        signal: controller.signal,
+        projectSlug: preparedContext.caseSlug ? null : preparedContext.projectSlug,
+        caseSlug: preparedContext.caseSlug ?? null,
         audienceRole: session.role,
         source: 'AGENT_PAGE',
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
-        questionPresetId: context.questionPresetId,
-        question: context.question,
+        questionPresetId: preparedContext.questionPresetId,
+        question: preparedContext.question,
         messages: history,
-        contextEnvelope: context.contextEnvelope,
+        contextEnvelope: preparedContext.contextEnvelope,
       }),
     )
     if (disposed || request !== requestVersion) return
@@ -256,16 +269,26 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       answer: mapped,
       evidenceIds: mapped.evidenceIds,
     })
-  } catch {
+  } catch (error) {
     if (disposed || request !== requestVersion) return
-    failedRequest.value = context
+    if (controller.signal.aborted
+      || (error instanceof PortfolioApiError && error.code === 'REQUEST_CANCELLED')) {
+      clearAnswerFailure()
+      return
+    }
+    failedRequest.value = preparedContext
     answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
     if (!disposed && request === requestVersion) {
       activeRequest = null
+      activeRequestController = null
       pending.value = false
     }
   }
+}
+
+function cancelAnswer() {
+  activeRequestController?.abort()
 }
 
 function submit(question: string) {
@@ -570,6 +593,7 @@ onBeforeUnmount(() => {
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
       @retry="retryAnswer"
+      @cancel="cancelAnswer"
       @inspect-evidence="inspectEvidence"
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"

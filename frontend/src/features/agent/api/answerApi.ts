@@ -6,6 +6,7 @@ import { createRequestToken } from './createRequestToken'
 export interface AnswerApiRequest {
   turnId: string
   requestToken?: string
+  signal?: AbortSignal
   projectSlug?: string | null
   caseSlug?: string | null
   audienceRole: AudienceRole
@@ -41,7 +42,7 @@ export function askQuestion(
       },
     }),
   }, {
-    signal: options.signal,
+    signal: options.signal ?? input.signal,
     timeoutMs: 15_000,
   })
 }
