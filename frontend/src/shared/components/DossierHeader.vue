@@ -75,6 +75,7 @@ watch(
           >
             {{ anchor.label }}
           </a>
+          <RouterLink to="/cases" @click="closeMenu()">案例</RouterLink>
           <span class="primary-nav__role">技术面试官</span>
         </template>
         <template v-else>

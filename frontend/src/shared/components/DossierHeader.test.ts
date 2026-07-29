@@ -17,6 +17,7 @@ describe('DossierHeader', () => {
 
     expect(wrapper.get('[data-header-theme]').attributes('data-header-theme')).toBe('paper')
     expect(wrapper.findAll('[data-home-anchor]')).toHaveLength(3)
+    expect(wrapper.find('#primary-navigation a[href="/cases"]').exists()).toBe(true)
   })
 
   it('uses the warm theme on the Agent workspace route', async () => {
