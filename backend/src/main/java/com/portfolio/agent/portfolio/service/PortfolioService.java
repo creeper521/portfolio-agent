@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.service;
 
 import com.portfolio.agent.portfolio.domain.CaseStudy;
+import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
@@ -33,11 +34,19 @@ public class PortfolioService {
 
     public PortfolioOverview getPortfolio() {
         RuntimeContentSnapshot snapshot = repository.getSnapshot();
+        Map<String, Integer> caseCountsByProjectId = new LinkedHashMap<>();
+        for (CaseStudy caseStudy : snapshot.getCases()) {
+            if (caseStudy.getProjectId() != null) {
+                caseCountsByProjectId.merge(caseStudy.getProjectId(), 1, Integer::sum);
+            }
+        }
         return new PortfolioOverview(
                 snapshot.getContentVersion(),
                 snapshot.getPublishedAt(),
                 snapshot.getOwner(),
-                snapshot.getProjects()
+                snapshot.getProjects(),
+                snapshot.getCollections(),
+                caseCountsByProjectId
         );
     }
 
@@ -101,6 +110,7 @@ public class PortfolioService {
                 snapshot.getRuntimeBundleHash(),
                 snapshot.getPublishedAt(),
                 snapshot.getOwner(),
+                snapshot.getCollections(),
                 projects,
                 cases,
                 snapshot.getClaims(),
@@ -131,7 +141,27 @@ public class PortfolioService {
                 .map(QuestionDefinition::getText)
                 .toList();
 
-        return new ProjectDetails(project, evidence, suggestedQuestions);
+        List<CaseStudy> projectCases = snapshot.getCases().stream()
+                .filter(caseStudy -> project.getId().equals(caseStudy.getProjectId()))
+                .toList();
+        Map<String, CaseStudy> casesById = projectCases.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CaseStudy::getId,
+                        caseStudy -> caseStudy
+                ));
+        List<CaseDetails> featuredCases = project.getFeaturedCaseIds().stream()
+                .map(caseId -> {
+                    CaseStudy caseStudy = casesById.get(caseId);
+                    if (caseStudy == null) {
+                        throw new IllegalStateException(
+                                "Missing validated featured case relation: " + caseId);
+                    }
+                    return toCaseDetails(snapshot, caseStudy);
+                })
+                .toList();
+
+        return new ProjectDetails(
+                project, evidence, suggestedQuestions, projectCases.size(), featuredCases);
     }
 
     private CaseDetails toCaseDetails(
@@ -159,7 +189,24 @@ public class PortfolioService {
                         .orElseThrow()
                         .getSlug();
 
-        return new CaseDetails(caseStudy, evidence, suggestedQuestions, projectSlug);
+        Map<String, CaseCollection> collectionsById = snapshot.getCollections().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CaseCollection::getId,
+                        collection -> collection
+                ));
+        List<String> collectionSlugs = caseStudy.getCollectionIds().stream()
+                .map(collectionId -> {
+                    CaseCollection collection = collectionsById.get(collectionId);
+                    if (collection == null) {
+                        throw new IllegalStateException(
+                                "Missing validated collection relation: " + collectionId);
+                    }
+                    return collection.getSlug();
+                })
+                .toList();
+
+        return new CaseDetails(
+                caseStudy, evidence, suggestedQuestions, projectSlug, collectionSlugs);
     }
 
     private ProjectProfile findProject(RuntimeContentSnapshot snapshot, String slug) {

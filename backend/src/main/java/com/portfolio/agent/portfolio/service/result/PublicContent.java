@@ -1,5 +1,6 @@
 package com.portfolio.agent.portfolio.service.result;
 
+import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
@@ -19,6 +20,7 @@ public final class PublicContent {
     private final String runtimeBundleHash;
     private final OffsetDateTime publishedAt;
     private final OwnerProfile owner;
+    private final List<CaseCollection> collections;
     private final List<ProjectDetails> projects;
     private final List<CaseDetails> cases;
     private final List<Claim> claims;
@@ -35,6 +37,7 @@ public final class PublicContent {
             String runtimeBundleHash,
             OffsetDateTime publishedAt,
             OwnerProfile owner,
+            List<CaseCollection> collections,
             List<ProjectDetails> projects,
             List<CaseDetails> cases,
             List<Claim> claims,
@@ -50,6 +53,7 @@ public final class PublicContent {
         this.runtimeBundleHash = runtimeBundleHash;
         this.publishedAt = publishedAt;
         this.owner = owner;
+        this.collections = List.copyOf(collections);
         this.projects = List.copyOf(projects);
         this.cases = List.copyOf(cases);
         this.claims = List.copyOf(claims);
@@ -101,6 +105,10 @@ public final class PublicContent {
         return owner;
     }
 
+    public List<CaseCollection> getCollections() {
+        return collections;
+    }
+
     public List<ProjectDetails> getProjects() {
         return projects;
     }
@@ -137,6 +145,7 @@ public final class PublicContent {
                 && Objects.equals(runtimeBundleHash, that.runtimeBundleHash)
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
+                && Objects.equals(collections, that.collections)
                 && Objects.equals(projects, that.projects)
                 && Objects.equals(cases, that.cases)
                 && Objects.equals(claims, that.claims)
@@ -151,7 +160,8 @@ public final class PublicContent {
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, projects, cases,
+        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, collections,
+                projects, cases,
                 claims, claimEvidenceLinks, evidence, timeline, projectSlugsByEvidenceId,
                 caseSlugsByEvidenceId, claimIdsByEvidenceId, questionPresets);
     }
@@ -163,6 +173,7 @@ public final class PublicContent {
                 ", runtimeBundleHash='" + runtimeBundleHash + '\'' +
                 ", publishedAt=" + publishedAt +
                 ", owner=" + owner +
+                ", collections=" + collections +
                 ", projects=" + projects +
                 ", cases=" + cases +
                 ", evidence=" + evidence +
@@ -171,5 +182,28 @@ public final class PublicContent {
                 ", caseSlugsByEvidenceId=" + caseSlugsByEvidenceId +
                 ", questionPresets=" + questionPresets +
                 '}';
+    }
+
+    public PublicContent(
+            String contentVersion,
+            String runtimeBundleHash,
+            OffsetDateTime publishedAt,
+            OwnerProfile owner,
+            List<ProjectDetails> projects,
+            List<CaseDetails> cases,
+            List<Claim> claims,
+            List<ClaimEvidenceLink> claimEvidenceLinks,
+            List<EvidenceRecord> evidence,
+            List<TimelineEvent> timeline,
+            Map<String, List<String>> projectSlugsByEvidenceId,
+            Map<String, List<String>> caseSlugsByEvidenceId,
+            Map<String, List<String>> claimIdsByEvidenceId,
+            List<QuestionDefinition> questionPresets
+    ) {
+        this(
+                contentVersion, runtimeBundleHash, publishedAt, owner, List.of(), projects, cases,
+                claims, claimEvidenceLinks, evidence, timeline, projectSlugsByEvidenceId,
+                caseSlugsByEvidenceId, claimIdsByEvidenceId, questionPresets
+        );
     }
 }

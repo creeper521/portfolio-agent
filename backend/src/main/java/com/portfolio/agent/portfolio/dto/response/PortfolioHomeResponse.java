@@ -10,17 +10,20 @@ public final class PortfolioHomeResponse {
     private final OffsetDateTime publishedAt;
     private final OwnerResponse owner;
     private final List<ProjectSummaryResponse> projects;
+    private final List<CaseCollectionResponse> collections;
 
     public PortfolioHomeResponse(
             String contentVersion,
             OffsetDateTime publishedAt,
             OwnerResponse owner,
-            List<ProjectSummaryResponse> projects
+            List<ProjectSummaryResponse> projects,
+            List<CaseCollectionResponse> collections
     ) {
         this.contentVersion = contentVersion;
         this.publishedAt = publishedAt;
         this.owner = owner;
         this.projects = List.copyOf(projects);
+        this.collections = List.copyOf(collections);
     }
 
     public String getContentVersion() {
@@ -39,6 +42,10 @@ public final class PortfolioHomeResponse {
         return projects;
     }
 
+    public List<CaseCollectionResponse> getCollections() {
+        return collections;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -50,12 +57,13 @@ public final class PortfolioHomeResponse {
         return Objects.equals(contentVersion, that.contentVersion)
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
-                && Objects.equals(projects, that.projects);
+                && Objects.equals(projects, that.projects)
+                && Objects.equals(collections, that.collections);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentVersion, publishedAt, owner, projects);
+        return Objects.hash(contentVersion, publishedAt, owner, projects, collections);
     }
 
     @Override
@@ -65,6 +73,7 @@ public final class PortfolioHomeResponse {
                 ", publishedAt=" + publishedAt +
                 ", owner=" + owner +
                 ", projects=" + projects +
+                ", collections=" + collections +
                 '}';
     }
 }

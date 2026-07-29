@@ -49,10 +49,22 @@ class PortfolioControllerTest {
     }
 
     @Test
+    void formerThemeProjectSlugsRemainProjectNotFound() throws Exception {
+        for (String slug : java.util.List.of(
+                "context-engineering-evaluation",
+                "technical-writing",
+                "engineering-delivery-learning")) {
+            mockMvc.perform(get("/api/v1/projects/{slug}", slug))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"));
+        }
+    }
+
+    @Test
     void returnsCompleteReviewedPublicContent() throws Exception {
         mockMvc.perform(get("/api/v1/public-content"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-27.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
                 .andExpect(jsonPath("$.runtimeBundleHash").value(org.hamcrest.Matchers.startsWith("sha256:")))
                 .andExpect(jsonPath("$.questionPresets.length()").value(16))
                 .andExpect(jsonPath("$.questionPresets[0].id").value("sql-audit-overview"))
@@ -75,8 +87,8 @@ class PortfolioControllerTest {
                         .value("claim-sql-audit-delivered"))
                 .andExpect(jsonPath("$.evidence[0].supportedClaims").doesNotExist())
                 .andExpect(jsonPath("$.evidence.length()").value(59))
-                .andExpect(jsonPath("$.claims.length()").value(81))
-                .andExpect(jsonPath("$.claimEvidenceLinks.length()").value(81))
+                .andExpect(jsonPath("$.claims.length()").value(79))
+                .andExpect(jsonPath("$.claimEvidenceLinks.length()").value(79))
                 .andExpect(jsonPath("$.claims[4].id")
                         .value("claim-sql-audit-delivered"))
                 .andExpect(jsonPath("$.claims[4].subjectType").value("PROJECT"))

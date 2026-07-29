@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.CareerTrack;
+import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
 import com.portfolio.agent.portfolio.domain.ClaimCategory;
@@ -13,6 +15,8 @@ import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.EvidenceType;
 import com.portfolio.agent.portfolio.domain.OwnerProfile;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.ProjectDisplayTier;
+import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
@@ -53,9 +57,21 @@ class PortfolioResponseMapperTest {
                 .singleElement()
                 .satisfies(item -> {
                     assertThat(item.getProjectSlug()).isEqualTo("sql-audit");
+                    assertThat(item.getCollectionSlugs())
+                            .containsExactly("engineering-operations");
                     assertThat(item.getEvidence()).extracting("id")
                             .containsExactly("evidence-case-multilingual");
                 });
+        assertThat(response.getCollections()).extracting("slug")
+                .containsExactly("engineering-operations");
+        assertThat(response.getProjects()).first().satisfies(item -> {
+            assertThat(item.getCareerTrack()).isEqualTo(CareerTrack.JAVA_BACKEND);
+            assertThat(item.getProjectNature()).isEqualTo(ProjectNature.TOOL);
+            assertThat(item.getDisplayTier()).isEqualTo(ProjectDisplayTier.PRIMARY);
+            assertThat(item.getCaseCount()).isEqualTo(2);
+            assertThat(item.getFeaturedCases()).extracting("slug")
+                    .containsExactly("multilingual-image-preservation");
+        });
         assertThat(response.getCases())
                 .filteredOn(item -> item.getSlug().equals("test-role-reset"))
                 .singleElement()
@@ -277,11 +293,20 @@ class PortfolioResponseMapperTest {
                         "owner@example.com",
                         "/resume.pdf"
                 ),
+                List.of(new CaseCollection(
+                        "collection-1",
+                        "engineering-operations",
+                        "Engineering operations",
+                        "Build and delivery cases",
+                        10
+                )),
                 List.of(
                         new ProjectDetails(
                                 project,
                                 List.of(projectEvidence),
-                                List.of("What did you build?")
+                                List.of("What did you build?"),
+                                2,
+                                List.of(multilingual)
                         ),
                         new ProjectDetails(
                                 secondProject(),
@@ -323,6 +348,10 @@ class PortfolioResponseMapperTest {
                 "Handoff",
                 ProjectStatus.DELIVERED,
                 ContributionType.PRIMARY,
+                CareerTrack.JAVA_BACKEND,
+                ProjectNature.TOOL,
+                ProjectDisplayTier.PRIMARY,
+                List.of("case-multilingual"),
                 List.of(),
                 List.of("evidence-project"),
                 List.of("timeline-mixed")
@@ -376,6 +405,9 @@ class PortfolioResponseMapperTest {
                 AchievementStatus.IMPLEMENTED_TESTED,
                 ContributionType.PRIMARY,
                 projectId,
+                slug.equals("multilingual-image-preservation")
+                        ? List.of("collection-1")
+                        : List.of(),
                 List.of(),
                 List.of(evidenceId),
                 List.of("timeline-mixed"),
@@ -392,7 +424,10 @@ class PortfolioResponseMapperTest {
                 caseStudy,
                 List.of(evidence),
                 List.of("Suggested question"),
-                projectSlug
+                projectSlug,
+                caseStudy.getCollectionIds().isEmpty()
+                        ? List.of()
+                        : List.of("engineering-operations")
         );
     }
 
@@ -440,6 +475,7 @@ class PortfolioResponseMapperTest {
                 content.getRuntimeBundleHash(),
                 content.getPublishedAt(),
                 content.getOwner(),
+                content.getCollections(),
                 content.getProjects(),
                 content.getCases(),
                 content.getClaims(),

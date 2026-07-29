@@ -26,6 +26,7 @@ public final class CaseDetailResponse {
     private final String outcome;
     private final List<String> limitations;
     private final String projectSlug;
+    private final List<String> collectionSlugs;
     private final List<EvidenceResponse> evidence;
     private final List<String> suggestedQuestions;
 
@@ -45,6 +46,7 @@ public final class CaseDetailResponse {
             String outcome,
             List<String> limitations,
             String projectSlug,
+            List<String> collectionSlugs,
             List<EvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
@@ -63,6 +65,7 @@ public final class CaseDetailResponse {
         this.outcome = outcome;
         this.limitations = List.copyOf(limitations);
         this.projectSlug = projectSlug;
+        this.collectionSlugs = List.copyOf(collectionSlugs);
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
     }
@@ -70,6 +73,7 @@ public final class CaseDetailResponse {
     public static CaseDetailResponse from(
             CaseStudy caseStudy,
             String projectSlug,
+            List<String> collectionSlugs,
             List<EvidenceResponse> evidence,
             List<String> suggestedQuestions
     ) {
@@ -89,6 +93,7 @@ public final class CaseDetailResponse {
                 caseStudy.getOutcome(),
                 caseStudy.getLimitations(),
                 projectSlug,
+                collectionSlugs,
                 evidence,
                 suggestedQuestions
         );
@@ -155,6 +160,10 @@ public final class CaseDetailResponse {
         return projectSlug;
     }
 
+    public List<String> getCollectionSlugs() {
+        return collectionSlugs;
+    }
+
     public List<EvidenceResponse> getEvidence() {
         return evidence;
     }
@@ -186,6 +195,7 @@ public final class CaseDetailResponse {
                 && Objects.equals(outcome, that.outcome)
                 && Objects.equals(limitations, that.limitations)
                 && Objects.equals(projectSlug, that.projectSlug)
+                && Objects.equals(collectionSlugs, that.collectionSlugs)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(suggestedQuestions, that.suggestedQuestions);
     }
@@ -208,6 +218,7 @@ public final class CaseDetailResponse {
                 outcome,
                 limitations,
                 projectSlug,
+                collectionSlugs,
                 evidence,
                 suggestedQuestions
         );
@@ -231,6 +242,7 @@ public final class CaseDetailResponse {
                 ", outcome='" + outcome + '\'' +
                 ", limitations=" + limitations +
                 ", projectSlug='" + projectSlug + '\'' +
+                ", collectionSlugs=" + collectionSlugs +
                 ", evidence=" + evidence +
                 ", suggestedQuestions=" + suggestedQuestions +
                 '}';

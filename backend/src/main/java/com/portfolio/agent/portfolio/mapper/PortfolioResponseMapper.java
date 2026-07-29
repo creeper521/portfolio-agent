@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.mapper;
 
 import com.portfolio.agent.portfolio.dto.response.CaseDetailResponse;
+import com.portfolio.agent.portfolio.dto.response.CaseCollectionResponse;
 import com.portfolio.agent.portfolio.dto.response.CaseSummaryResponse;
 import com.portfolio.agent.portfolio.dto.response.ClaimEvidenceLinkResponse;
 import com.portfolio.agent.portfolio.dto.response.ClaimResponse;
@@ -31,7 +32,11 @@ public class PortfolioResponseMapper {
                 overview.getPublishedAt(),
                 OwnerResponse.from(overview.getOwner()),
                 overview.getProjects().stream()
-                        .map(ProjectSummaryResponse::from)
+                        .map(project -> ProjectSummaryResponse.from(
+                                project, overview.getCaseCount(project.getId())))
+                        .toList(),
+                overview.getCollections().stream()
+                        .map(CaseCollectionResponse::from)
                         .toList()
         );
     }
@@ -40,14 +45,17 @@ public class PortfolioResponseMapper {
         return ProjectDetailResponse.from(
                 details.getProject(),
                 details.getEvidence().stream().map(EvidenceResponse::from).toList(),
-                details.getSuggestedQuestions()
+                details.getSuggestedQuestions(),
+                details.getCaseCount(),
+                details.getFeaturedCases().stream()
+                        .map(this::toCaseSummaryResponse)
+                        .toList()
         );
     }
 
     public List<CaseSummaryResponse> toCaseResponses(List<CaseDetails> details) {
         return details.stream()
-                .map(CaseDetails::getCaseStudy)
-                .map(CaseSummaryResponse::from)
+                .map(this::toCaseSummaryResponse)
                 .toList();
     }
 
@@ -55,6 +63,7 @@ public class PortfolioResponseMapper {
         return CaseDetailResponse.from(
                 details.getCaseStudy(),
                 details.getProjectSlug(),
+                details.getCollectionSlugs(),
                 details.getEvidence().stream().map(EvidenceResponse::from).toList(),
                 details.getSuggestedQuestions()
         );
@@ -69,6 +78,9 @@ public class PortfolioResponseMapper {
                 content.getRuntimeBundleHash(),
                 content.getPublishedAt(),
                 OwnerResponse.from(content.getOwner()),
+                content.getCollections().stream()
+                        .map(CaseCollectionResponse::from)
+                        .toList(),
                 content.getProjects().stream().map(this::toProjectResponse).toList(),
                 content.getCases().stream().map(this::toCaseResponse).toList(),
                 content.getClaims().stream().map(ClaimResponse::new).toList(),
@@ -102,6 +114,14 @@ public class PortfolioResponseMapper {
                                 resolveSlugs(question.getCaseIds(), caseSlugsById)
                         ))
                         .toList()
+        );
+    }
+
+    private CaseSummaryResponse toCaseSummaryResponse(CaseDetails details) {
+        return CaseSummaryResponse.from(
+                details.getCaseStudy(),
+                details.getProjectSlug(),
+                details.getCollectionSlugs()
         );
     }
 

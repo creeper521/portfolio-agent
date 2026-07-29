@@ -12,6 +12,7 @@ public final class PublicContentResponse {
     private final String runtimeBundleHash;
     private final OffsetDateTime publishedAt;
     private final OwnerResponse owner;
+    private final List<CaseCollectionResponse> collections;
     private final List<ProjectDetailResponse> projects;
     private final List<CaseDetailResponse> cases;
     private final List<ClaimResponse> claims;
@@ -26,6 +27,7 @@ public final class PublicContentResponse {
             String runtimeBundleHash,
             OffsetDateTime publishedAt,
             OwnerResponse owner,
+            List<CaseCollectionResponse> collections,
             List<ProjectDetailResponse> projects,
             List<CaseDetailResponse> cases,
             List<ClaimResponse> claims,
@@ -39,6 +41,7 @@ public final class PublicContentResponse {
         this.runtimeBundleHash = runtimeBundleHash;
         this.publishedAt = publishedAt;
         this.owner = owner;
+        this.collections = List.copyOf(collections);
         this.projects = List.copyOf(projects);
         this.cases = List.copyOf(cases);
         this.claims = List.copyOf(claims);
@@ -70,6 +73,10 @@ public final class PublicContentResponse {
 
     public OwnerResponse getOwner() {
         return owner;
+    }
+
+    public List<CaseCollectionResponse> getCollections() {
+        return collections;
     }
 
     public List<ProjectDetailResponse> getProjects() {
@@ -108,6 +115,7 @@ public final class PublicContentResponse {
                 && Objects.equals(runtimeBundleHash, that.runtimeBundleHash)
                 && Objects.equals(publishedAt, that.publishedAt)
                 && Objects.equals(owner, that.owner)
+                && Objects.equals(collections, that.collections)
                 && Objects.equals(projects, that.projects)
                 && Objects.equals(cases, that.cases)
                 && Objects.equals(claims, that.claims)
@@ -120,7 +128,8 @@ public final class PublicContentResponse {
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, projects, cases,
+        return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, collections,
+                projects, cases,
                 claims, claimEvidenceLinks, evidence, timeline, caseSlugsByEvidenceId,
                 questionPresets);
     }
@@ -132,6 +141,7 @@ public final class PublicContentResponse {
                 ", runtimeBundleHash='" + runtimeBundleHash + '\'' +
                 ", publishedAt=" + publishedAt +
                 ", owner=" + owner +
+                ", collections=" + collections +
                 ", projects=" + projects +
                 ", cases=" + cases +
                 ", evidence=" + evidence +

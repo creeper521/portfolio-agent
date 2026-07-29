@@ -12,17 +12,20 @@ public final class CaseDetails {
     private final List<EvidenceRecord> evidence;
     private final List<String> suggestedQuestions;
     private final String projectSlug;
+    private final List<String> collectionSlugs;
 
     public CaseDetails(
             CaseStudy caseStudy,
             List<EvidenceRecord> evidence,
             List<String> suggestedQuestions,
-            String projectSlug
+            String projectSlug,
+            List<String> collectionSlugs
     ) {
         this.caseStudy = caseStudy;
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
         this.projectSlug = projectSlug;
+        this.collectionSlugs = List.copyOf(collectionSlugs);
     }
 
     public CaseStudy getCaseStudy() {
@@ -41,6 +44,10 @@ public final class CaseDetails {
         return projectSlug;
     }
 
+    public List<String> getCollectionSlugs() {
+        return collectionSlugs;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -52,12 +59,13 @@ public final class CaseDetails {
         return Objects.equals(caseStudy, that.caseStudy)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(suggestedQuestions, that.suggestedQuestions)
-                && Objects.equals(projectSlug, that.projectSlug);
+                && Objects.equals(projectSlug, that.projectSlug)
+                && Objects.equals(collectionSlugs, that.collectionSlugs);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(caseStudy, evidence, suggestedQuestions, projectSlug);
+        return Objects.hash(caseStudy, evidence, suggestedQuestions, projectSlug, collectionSlugs);
     }
 
     @Override
@@ -67,6 +75,16 @@ public final class CaseDetails {
                 ", evidence=" + evidence +
                 ", suggestedQuestions=" + suggestedQuestions +
                 ", projectSlug='" + projectSlug + '\'' +
+                ", collectionSlugs=" + collectionSlugs +
                 '}';
+    }
+
+    public CaseDetails(
+            CaseStudy caseStudy,
+            List<EvidenceRecord> evidence,
+            List<String> suggestedQuestions,
+            String projectSlug
+    ) {
+        this(caseStudy, evidence, suggestedQuestions, projectSlug, List.of());
     }
 }

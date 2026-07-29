@@ -2,6 +2,8 @@ package com.portfolio.agent.portfolio.service;
 
 import com.portfolio.agent.common.exception.PublicResourceErrorCode;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.CareerTrack;
+import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
 import com.portfolio.agent.portfolio.domain.ContributionType;
@@ -11,6 +13,8 @@ import com.portfolio.agent.portfolio.domain.EvidenceType;
 import com.portfolio.agent.portfolio.domain.OwnerProfile;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.ProjectDisplayTier;
+import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
@@ -52,6 +56,20 @@ class PortfolioServiceTest {
 
         assertThat(overview.getContentVersion()).isEqualTo("2026-07-14.1");
         assertThat(overview.getProjects()).hasSize(1);
+        assertThat(overview.getCollections()).extracting(CaseCollection::getSlug)
+                .containsExactly("engineering-operations");
+    }
+
+    @Test
+    void projectDetailsDeriveCaseCountAndConfiguredFeaturedCaseOrder() {
+        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
+
+        ProjectDetails details = service.getProject("sql-audit");
+
+        assertThat(details.getCaseCount()).isEqualTo(2);
+        assertThat(details.getFeaturedCases())
+                .extracting(item -> item.getCaseStudy().getSlug())
+                .containsExactly("multilingual-image-preservation");
     }
 
     @Test
@@ -101,6 +119,7 @@ class PortfolioServiceTest {
         assertThat(result.getEvidence()).extracting(EvidenceRecord::getId)
                 .containsExactly("evidence-case-multilingual-implementation-and-regression");
         assertThat(result.getProjectSlug()).isEqualTo("sql-audit");
+        assertThat(result.getCollectionSlugs()).containsExactly("engineering-operations");
         assertThat(result.getSuggestedQuestions())
                 .containsExactly("多语言图片上传修复解决了什么问题？");
     }
@@ -218,6 +237,10 @@ class PortfolioServiceTest {
                 "Handoff",
                 ProjectStatus.DELIVERED,
                 ContributionType.PRIMARY,
+                CareerTrack.JAVA_BACKEND,
+                ProjectNature.TOOL,
+                ProjectDisplayTier.PRIMARY,
+                List.of("case-1"),
                 List.of(),
                 List.of("evidence-1"),
                 List.of("timeline-1")
@@ -302,7 +325,9 @@ class PortfolioServiceTest {
                         caseEvidence.getId(),
                         pendingCaseEvidence.getId(),
                         rawCaseEvidence.getId()
-                )
+                ),
+                "project-1",
+                List.of("collection-1")
         );
         CaseStudy evaluationCase = caseStudy(
                 "case-2",
@@ -330,6 +355,13 @@ class PortfolioServiceTest {
                 owner,
                 List.of(project),
                 List.of(multilingualCase, evaluationCase),
+                List.of(new CaseCollection(
+                        "collection-1",
+                        "engineering-operations",
+                        "Engineering operations",
+                        "Build and delivery cases",
+                        10
+                )),
                 List.of(),
                 List.of(),
                 List.of(question, caseQuestion, otherCaseQuestion),
@@ -351,7 +383,7 @@ class PortfolioServiceTest {
             CaseType type,
             List<String> evidenceIds
     ) {
-        return caseStudy(id, code, slug, type, evidenceIds, "project-1");
+        return caseStudy(id, code, slug, type, evidenceIds, "project-1", List.of());
     }
 
     private static CaseStudy caseStudy(
@@ -361,6 +393,18 @@ class PortfolioServiceTest {
             CaseType type,
             List<String> evidenceIds,
             String projectId
+    ) {
+        return caseStudy(id, code, slug, type, evidenceIds, projectId, List.of());
+    }
+
+    private static CaseStudy caseStudy(
+            String id,
+            String code,
+            String slug,
+            CaseType type,
+            List<String> evidenceIds,
+            String projectId,
+            List<String> collectionIds
     ) {
         return new CaseStudy(
                 id,
@@ -378,6 +422,7 @@ class PortfolioServiceTest {
                 AchievementStatus.IMPLEMENTED_TESTED,
                 ContributionType.PRIMARY,
                 projectId,
+                collectionIds,
                 List.of(),
                 evidenceIds,
                 List.of("timeline-1"),

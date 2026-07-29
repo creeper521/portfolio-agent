@@ -11,15 +11,21 @@ public final class ProjectDetails {
     private final ProjectProfile project;
     private final List<EvidenceRecord> evidence;
     private final List<String> suggestedQuestions;
+    private final int caseCount;
+    private final List<CaseDetails> featuredCases;
 
     public ProjectDetails(
             ProjectProfile project,
             List<EvidenceRecord> evidence,
-            List<String> suggestedQuestions
+            List<String> suggestedQuestions,
+            int caseCount,
+            List<CaseDetails> featuredCases
     ) {
         this.project = project;
         this.evidence = List.copyOf(evidence);
         this.suggestedQuestions = List.copyOf(suggestedQuestions);
+        this.caseCount = caseCount;
+        this.featuredCases = List.copyOf(featuredCases);
     }
 
     public ProjectProfile getProject() {
@@ -34,6 +40,14 @@ public final class ProjectDetails {
         return suggestedQuestions;
     }
 
+    public int getCaseCount() {
+        return caseCount;
+    }
+
+    public List<CaseDetails> getFeaturedCases() {
+        return featuredCases;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -44,12 +58,14 @@ public final class ProjectDetails {
         }
         return Objects.equals(project, that.project)
                 && Objects.equals(evidence, that.evidence)
-                && Objects.equals(suggestedQuestions, that.suggestedQuestions);
+                && Objects.equals(suggestedQuestions, that.suggestedQuestions)
+                && caseCount == that.caseCount
+                && Objects.equals(featuredCases, that.featuredCases);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(project, evidence, suggestedQuestions);
+        return Objects.hash(project, evidence, suggestedQuestions, caseCount, featuredCases);
     }
 
     @Override
@@ -58,6 +74,16 @@ public final class ProjectDetails {
                 "project=" + project +
                 ", evidence=" + evidence +
                 ", suggestedQuestions=" + suggestedQuestions +
+                ", caseCount=" + caseCount +
+                ", featuredCases=" + featuredCases +
                 '}';
+    }
+
+    public ProjectDetails(
+            ProjectProfile project,
+            List<EvidenceRecord> evidence,
+            List<String> suggestedQuestions
+    ) {
+        this(project, evidence, suggestedQuestions, 0, List.of());
     }
 }

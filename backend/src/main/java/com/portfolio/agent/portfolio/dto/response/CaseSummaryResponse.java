@@ -1,11 +1,13 @@
 package com.portfolio.agent.portfolio.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
 import com.portfolio.agent.portfolio.domain.ContributionType;
 
 import java.util.Objects;
+import java.util.List;
 
 public final class CaseSummaryResponse {
 
@@ -16,6 +18,8 @@ public final class CaseSummaryResponse {
     private final String summary;
     private final AchievementStatus achievementStatus;
     private final ContributionType contributionType;
+    private final String projectSlug;
+    private final List<String> collectionSlugs;
 
     public CaseSummaryResponse(
             String slug,
@@ -24,7 +28,9 @@ public final class CaseSummaryResponse {
             String title,
             String summary,
             AchievementStatus achievementStatus,
-            ContributionType contributionType
+            ContributionType contributionType,
+            String projectSlug,
+            List<String> collectionSlugs
     ) {
         this.slug = slug;
         this.code = code;
@@ -33,9 +39,15 @@ public final class CaseSummaryResponse {
         this.summary = summary;
         this.achievementStatus = achievementStatus;
         this.contributionType = contributionType;
+        this.projectSlug = projectSlug;
+        this.collectionSlugs = List.copyOf(collectionSlugs);
     }
 
-    public static CaseSummaryResponse from(CaseStudy caseStudy) {
+    public static CaseSummaryResponse from(
+            CaseStudy caseStudy,
+            String projectSlug,
+            List<String> collectionSlugs
+    ) {
         return new CaseSummaryResponse(
                 caseStudy.getSlug(),
                 caseStudy.getCode(),
@@ -43,7 +55,9 @@ public final class CaseSummaryResponse {
                 caseStudy.getTitle(),
                 caseStudy.getSummary(),
                 caseStudy.getAchievementStatus(),
-                caseStudy.getContributionType()
+                caseStudy.getContributionType(),
+                projectSlug,
+                collectionSlugs
         );
     }
 
@@ -75,6 +89,15 @@ public final class CaseSummaryResponse {
         return contributionType;
     }
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public String getProjectSlug() {
+        return projectSlug;
+    }
+
+    public List<String> getCollectionSlugs() {
+        return collectionSlugs;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -89,7 +112,9 @@ public final class CaseSummaryResponse {
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
                 && achievementStatus == that.achievementStatus
-                && contributionType == that.contributionType;
+                && contributionType == that.contributionType
+                && Objects.equals(projectSlug, that.projectSlug)
+                && Objects.equals(collectionSlugs, that.collectionSlugs);
     }
 
     @Override
@@ -101,7 +126,9 @@ public final class CaseSummaryResponse {
                 title,
                 summary,
                 achievementStatus,
-                contributionType
+                contributionType,
+                projectSlug,
+                collectionSlugs
         );
     }
 
@@ -115,6 +142,8 @@ public final class CaseSummaryResponse {
                 ", summary='" + summary + '\'' +
                 ", achievementStatus=" + achievementStatus +
                 ", contributionType=" + contributionType +
+                ", projectSlug='" + projectSlug + '\'' +
+                ", collectionSlugs=" + collectionSlugs +
                 '}';
     }
 }
