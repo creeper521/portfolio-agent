@@ -1,13 +1,15 @@
 import { request } from '../../portfolio/api/portfolioApi'
 import type { AnswerResponse, ContextEnvelope } from '../model/answerTypes'
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
+import { createRequestToken } from './createRequestToken'
 
 export interface AnswerApiRequest {
   turnId: string
+  requestToken?: string
   projectSlug?: string | null
   caseSlug?: string | null
   audienceRole: AudienceRole
-  source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'EVIDENCE'
+  source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'CASE' | 'EVIDENCE'
   focusEvidenceIds?: string[]
   questionPresetId?: string
   question?: string
@@ -15,12 +17,20 @@ export interface AnswerApiRequest {
   contextEnvelope?: ContextEnvelope
 }
 
-export function askQuestion(input: AnswerApiRequest): Promise<AnswerResponse> {
+export interface AnswerRequestOptions {
+  signal?: AbortSignal
+}
+
+export function askQuestion(
+  input: AnswerApiRequest,
+  options: AnswerRequestOptions = {},
+): Promise<AnswerResponse> {
   return request<AnswerResponse>('/api/v2/answers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       turnId: input.turnId,
+      requestToken: input.requestToken ?? createRequestToken(),
       question: input.question,
       messages: input.messages,
       context: {
@@ -30,5 +40,8 @@ export function askQuestion(input: AnswerApiRequest): Promise<AnswerResponse> {
         source: input.source,
       },
     }),
+  }, {
+    signal: options.signal,
+    timeoutMs: 15_000,
   })
 }

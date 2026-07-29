@@ -1,5 +1,5 @@
 export type AnswerResolution = 'ANSWERED' | 'BOUNDARY' | 'REJECTED'
-export type AnswerSource = 'PRESET' | 'RETRIEVAL'
+export type AnswerSource = 'PRESET' | 'RETRIEVAL' | 'TOOL'
 export type GenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
 export type Verification =
   | 'VERIFIED'
@@ -102,6 +102,7 @@ export interface AnswerResponse {
   suggestedQuestionPresetIds?: string[] // legacy v1
   suggestedQuestions?: Array<string | ConversationSuggestedQuestion>
   degraded?: boolean
+  noticeCode?: string
   contextEnvelope?: ContextEnvelope
   contextVersionUpdated?: boolean
 }
