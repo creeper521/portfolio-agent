@@ -18,6 +18,11 @@ import java.util.stream.Collectors;
 
 public final class ConversationDraftValidator {
 
+    private static final int MAX_TITLE_CODE_POINTS = 120;
+    private static final int MAX_BLOCKS = 8;
+    private static final int MAX_BLOCK_CODE_POINTS = 2_000;
+    private static final int MAX_TOTAL_CODE_POINTS = 8_000;
+
     private final ConversationalModelPort modelPort;
 
     public ConversationDraftValidator(ConversationalModelPort modelPort) {
@@ -34,6 +39,26 @@ public final class ConversationDraftValidator {
                 || draft.getResolution() == null
                 || draft.getBlocks().isEmpty()) {
             return ConversationDraftValidationResult.invalid("INVALID_DRAFT_SHAPE");
+        }
+        if (codePoints(draft.getTitle()) > MAX_TITLE_CODE_POINTS) {
+            return ConversationDraftValidationResult.invalid("TITLE_TOO_LONG");
+        }
+        if (draft.getBlocks().size() > MAX_BLOCKS) {
+            return ConversationDraftValidationResult.invalid("TOO_MANY_BLOCKS");
+        }
+        int totalCodePoints = 0;
+        for (ConversationAnswerBlock block : draft.getBlocks()) {
+            if (block.getContent().isBlank()) {
+                return ConversationDraftValidationResult.invalid("EMPTY_BLOCK_CONTENT");
+            }
+            int blockCodePoints = codePoints(block.getContent());
+            if (blockCodePoints > MAX_BLOCK_CODE_POINTS) {
+                return ConversationDraftValidationResult.invalid("BLOCK_TOO_LONG");
+            }
+            totalCodePoints += blockCodePoints;
+            if (totalCodePoints > MAX_TOTAL_CODE_POINTS) {
+                return ConversationDraftValidationResult.invalid("ANSWER_TOO_LONG");
+            }
         }
         Set<String> allowedClaimIds = grounding.getClaims().stream()
                 .map(AnswerClaimProjection::getId)
@@ -67,6 +92,10 @@ public final class ConversationDraftValidator {
             return ConversationDraftValidationResult.invalid("UNSUPPORTED_BLOCK");
         }
         return ConversationDraftValidationResult.valid(draft, draft.getBlocks());
+    }
+
+    private int codePoints(String value) {
+        return value.codePointCount(0, value.length());
     }
 
     private String validateBlock(

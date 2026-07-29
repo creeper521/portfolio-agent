@@ -7,6 +7,7 @@ import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.dto.request.AnswerRequestSource;
 import com.portfolio.agent.answer.dto.request.AudienceRole;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
@@ -50,6 +51,8 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getIntent()).isEqualTo(ConversationIntent.CONVERSATION);
         assertThat(result.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
         assertThat(result.isDegraded()).isFalse();
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getNoticeCode()).isNull();
         assertThat(result.getBlocks()).hasSize(1);
         verifyNoInteractions(router, modelPort);
     }
@@ -81,6 +84,7 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getAnswerScope()).isEqualTo(ConversationAnswerScope.PORTFOLIO);
         assertThat(result.getResolution()).isEqualTo(AnswerResolution.BOUNDARY);
         assertThat(result.isDegraded()).isFalse();
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         assertThat(result.getBlocks()).singleElement().satisfies(block -> {
             assertThat(block.getSourceScope()).isEqualTo(ConversationSourceScope.PORTFOLIO);
             assertThat(block.getClaimIds()).isEmpty();
