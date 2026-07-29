@@ -9,13 +9,6 @@ const open = ref(false)
 const menuButton = ref<HTMLButtonElement | null>(null)
 
 const theme = computed(() => (route.meta.workspace === true ? 'warm' : 'paper'))
-const isHome = computed(() => route.name === 'home')
-
-const homeAnchors = [
-  { label: '概览', href: '#credibility' },
-  { label: '对话', href: '#dialogue' },
-  { label: '探索', href: '#explore' },
-]
 
 const routeLinks = [
   { label: '概览', to: '/' },
@@ -65,25 +58,15 @@ watch(
         aria-label="主导航"
         @keydown.esc="closeMenu(true)"
       >
-        <template v-if="isHome">
-          <a
-            v-for="anchor in homeAnchors"
-            :key="anchor.href"
-            data-home-anchor
-            :href="anchor.href"
-            @click="closeMenu()"
-          >
-            {{ anchor.label }}
-          </a>
-          <RouterLink to="/cases" @click="closeMenu()">案例</RouterLink>
-          <span class="primary-nav__role">技术面试官</span>
-        </template>
-        <template v-else>
-          <RouterLink v-for="link in routeLinks" :key="link.to" :to="link.to">
-            {{ link.label }}
-          </RouterLink>
-        </template>
-        <RouterLink class="primary-nav__agent" to="/agent">完整 Agent ↗</RouterLink>
+        <RouterLink
+          v-for="link in routeLinks"
+          :key="link.to"
+          :to="link.to"
+          @click="closeMenu()"
+        >
+          {{ link.label }}
+        </RouterLink>
+        <RouterLink class="primary-nav__agent" to="/agent" @click="closeMenu()">完整 Agent ↗</RouterLink>
       </nav>
     </div>
   </header>

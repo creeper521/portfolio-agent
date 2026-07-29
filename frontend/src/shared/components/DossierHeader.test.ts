@@ -6,7 +6,7 @@ import { createAppRouter } from '../../app/router'
 import DossierHeader from './DossierHeader.vue'
 
 describe('DossierHeader', () => {
-  it('uses the paper theme and homepage anchors on the homepage', async () => {
+  it('uses the paper theme and the unified route nav on the homepage', async () => {
     const router = createAppRouter(createMemoryHistory())
     await router.push('/')
     await router.isReady()
@@ -15,9 +15,14 @@ describe('DossierHeader', () => {
       global: { plugins: [router] },
     })
 
+    // 首页顶栏与子页一致：同一套路由导航，无首页特例锚点
     expect(wrapper.get('[data-header-theme]').attributes('data-header-theme')).toBe('paper')
-    expect(wrapper.findAll('[data-home-anchor]')).toHaveLength(3)
-    expect(wrapper.find('#primary-navigation a[href="/cases"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-home-anchor]')).toHaveLength(0)
+    const homeLinks = wrapper.findAll('#primary-navigation a')
+    expect(homeLinks.some((link) => link.attributes('href') === '/projects')).toBe(true)
+    expect(homeLinks.some((link) => link.attributes('href') === '/cases')).toBe(true)
+    expect(homeLinks.some((link) => link.attributes('href') === '/timeline')).toBe(true)
+    expect(homeLinks.some((link) => link.attributes('href') === '/evidence')).toBe(true)
   })
 
   it('uses the warm theme on the Agent workspace route', async () => {

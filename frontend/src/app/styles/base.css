@@ -237,16 +237,6 @@ a {
   background: var(--red);
 }
 
-.primary-nav__role {
-  height: auto !important;
-  padding-left: 18px !important;
-  border-left: 1px solid var(--rule) !important;
-}
-
-[data-header-theme='warm'] .primary-nav__role {
-  border-color: var(--agent-hairline) !important;
-}
-
 [data-header-theme='warm'] .primary-nav {
   border-color: var(--agent-hairline);
 }
@@ -254,10 +244,6 @@ a {
 [data-header-theme='warm'] .primary-nav a,
 [data-header-theme='warm'] .primary-nav button {
   border-color: var(--agent-hairline);
-}
-
-[data-header-theme='ink'] .primary-nav__role {
-  border-color: var(--ink-line) !important;
 }
 
 .menu-trigger {
@@ -327,11 +313,6 @@ main {
   .primary-nav button {
     min-height: 48px;
     border-bottom: 1px solid var(--rule);
-  }
-
-  .primary-nav__role {
-    padding-left: 0 !important;
-    border-left: 0 !important;
   }
 }
 
