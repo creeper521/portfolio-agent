@@ -96,6 +96,19 @@ class AnswerAdmissionGateTest {
         }
     }
 
+    @Test
+    void evictsInactiveSourceStateAfterItsWindowExpires() {
+        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        var gate = new AnswerAdmissionGate(clock, 10, 2, 2);
+        gate.acquire("source-a", UUID.randomUUID()).close();
+        gate.acquire("source-b", UUID.randomUUID()).close();
+
+        clock.advance(Duration.ofMinutes(1));
+        gate.acquire("source-c", UUID.randomUUID()).close();
+
+        assertThat(gate.trackedSourceCount()).isEqualTo(1);
+    }
+
     private static final class MutableClock extends Clock {
 
         private Instant current;

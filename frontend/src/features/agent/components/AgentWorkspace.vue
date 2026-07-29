@@ -76,6 +76,7 @@ const focusedAnswerMessageId = ref('')
 const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerError = ref('')
+const retryAfterSeconds = ref(0)
 const failedRequest = ref<AnswerRequestContext | null>(null)
 let activeRequest: AnswerRequestContext | null = null
 let activeRequestController: AbortController | null = null
@@ -83,6 +84,7 @@ let requestVersion = 0
 let answerFocusRequestId = 0
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
+let retryDelayTimer: ReturnType<typeof setInterval> | null = null
 let drawerReturnFocus: HTMLElement | null = null
 
 const effectiveSplit = computed(() =>
@@ -184,6 +186,9 @@ function createSession(initialEvidenceId = '') {
 }
 
 function clearAnswerFailure() {
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
+  retryDelayTimer = null
+  retryAfterSeconds.value = 0
   answerError.value = ''
   failedRequest.value = null
 }
@@ -277,6 +282,9 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       return
     }
     failedRequest.value = preparedContext
+    if (error instanceof PortfolioApiError && error.retryAfterSeconds) {
+      startRetryDelay(error.retryAfterSeconds)
+    }
     answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
     if (!disposed && request === requestVersion) {
@@ -285,6 +293,18 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       pending.value = false
     }
   }
+}
+
+function startRetryDelay(seconds: number) {
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
+  retryAfterSeconds.value = Math.max(1, Math.ceil(seconds))
+  retryDelayTimer = setInterval(() => {
+    retryAfterSeconds.value = Math.max(0, retryAfterSeconds.value - 1)
+    if (retryAfterSeconds.value === 0 && retryDelayTimer) {
+      clearInterval(retryDelayTimer)
+      retryDelayTimer = null
+    }
+  }, 1_000)
 }
 
 function cancelAnswer() {
@@ -327,6 +347,7 @@ function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
 }
 
 function retryAnswer() {
+  if (retryAfterSeconds.value > 0) return
   const context = failedRequest.value
   if (!context) return
   const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
@@ -533,6 +554,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   disposed = true
+  if (retryDelayTimer) clearInterval(retryDelayTimer)
   invalidatePendingRequest()
   workspaceResizeObserver?.disconnect()
   window.removeEventListener('keydown', onWindowKeydown)
@@ -588,6 +610,7 @@ onBeforeUnmount(() => {
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
       :error="answerError"
+      :retry-after-seconds="retryAfterSeconds"
       :focus-target="answerFocusTarget"
       @submit="submit"
       @submit-suggestion="submitSuggestion"

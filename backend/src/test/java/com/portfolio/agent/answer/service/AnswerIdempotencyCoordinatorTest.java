@@ -70,6 +70,21 @@ class AnswerIdempotencyCoordinatorTest {
                 .isEqualTo("answer-2");
     }
 
+    @Test
+    void removesExpiredEntriesGloballyAndBoundsCompletedResults() {
+        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        var coordinator = new AnswerIdempotencyCoordinator<String>(
+                clock, Duration.ofMinutes(2), 2);
+        coordinator.execute("source", UUID.randomUUID(), () -> "one");
+        coordinator.execute("source", UUID.randomUUID(), () -> "two");
+        assertThat(coordinator.entryCount()).isEqualTo(2);
+
+        clock.advance(Duration.ofMinutes(2));
+        coordinator.execute("source", UUID.randomUUID(), () -> "three");
+
+        assertThat(coordinator.entryCount()).isEqualTo(1);
+    }
+
     private static void await(CountDownLatch latch) {
         try {
             latch.await();

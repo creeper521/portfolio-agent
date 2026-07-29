@@ -14,13 +14,24 @@ import java.util.UUID;
 public final class AnswerAdmissionGate {
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
+    private static final int DEFAULT_MAX_TRACKED_SOURCES = 10_000;
 
     private final Clock clock;
     private final int requestsPerMinute;
     private final int maxConcurrent;
+    private final int maxTrackedSources;
     private final Map<String, SourceState> states = new HashMap<>();
 
     public AnswerAdmissionGate(Clock clock, int requestsPerMinute, int maxConcurrent) {
+        this(clock, requestsPerMinute, maxConcurrent, DEFAULT_MAX_TRACKED_SOURCES);
+    }
+
+    AnswerAdmissionGate(
+            Clock clock,
+            int requestsPerMinute,
+            int maxConcurrent,
+            int maxTrackedSources
+    ) {
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         if (requestsPerMinute < 1) {
             throw new IllegalArgumentException("requestsPerMinute must be positive");
@@ -28,8 +39,12 @@ public final class AnswerAdmissionGate {
         if (maxConcurrent < 1) {
             throw new IllegalArgumentException("maxConcurrent must be positive");
         }
+        if (maxTrackedSources < 1) {
+            throw new IllegalArgumentException("maxTrackedSources must be positive");
+        }
         this.requestsPerMinute = requestsPerMinute;
         this.maxConcurrent = maxConcurrent;
+        this.maxTrackedSources = maxTrackedSources;
     }
 
     public AnswerAdmission acquire(String sourceHash, UUID requestToken) {
@@ -38,6 +53,13 @@ public final class AnswerAdmissionGate {
         var now = clock.instant();
 
         synchronized (states) {
+            states.entrySet().removeIf(entry ->
+                    entry.getValue().active == 0
+                            && !now.isBefore(entry.getValue().windowStartedAt.plus(WINDOW)));
+            if (!states.containsKey(sourceHash) && states.size() >= maxTrackedSources) {
+                throw new AnswerAdmissionRejectedException(
+                        AnswerErrorCode.ANSWER_RATE_LIMITED, 60);
+            }
             var state = states.computeIfAbsent(sourceHash, ignored -> new SourceState(now));
             state.resetWindowIfExpired(now);
 
@@ -59,6 +81,12 @@ public final class AnswerAdmissionGate {
         }
 
         return new AnswerAdmission(() -> release(sourceHash));
+    }
+
+    int trackedSourceCount() {
+        synchronized (states) {
+            return states.size();
+        }
     }
 
     private int secondsUntilWindowReset(Instant windowStartedAt, Instant now) {

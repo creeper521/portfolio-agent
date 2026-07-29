@@ -33,6 +33,7 @@ const props = defineProps<{
   evidenceOpen?: boolean
   pending: boolean
   error: string
+  retryAfterSeconds?: number
   focusTarget?: AnswerFocusTarget | null
 }>()
 
@@ -437,7 +438,12 @@ function inspectMessageEvidence(
         <div v-else-if="error" class="answer-state answer-state--error" role="alert">
           <p>{{ error }}</p>
           <div>
-            <button data-answer-retry type="button" @click="$emit('retry')">重新回答</button>
+            <button
+              data-answer-retry
+              type="button"
+              :disabled="(retryAfterSeconds ?? 0) > 0"
+              @click="$emit('retry')"
+            >{{ (retryAfterSeconds ?? 0) > 0 ? `${retryAfterSeconds} 秒后可重试` : '重新回答' }}</button>
             <button data-answer-edit type="button" @click="focusComposer">修改问题</button>
           </div>
         </div>

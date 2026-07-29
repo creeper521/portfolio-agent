@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
+import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { WORKSPACE_SPLIT_KEY } from '../composables/useWorkspaceSplit'
 import AgentWorkspace from './AgentWorkspace.vue'
 
@@ -649,6 +650,24 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock.mock.calls[0]?.[0].requestToken).toBeTruthy()
     expect(askQuestionMock.mock.calls[0]?.[0].requestToken)
       .toBe(askQuestionMock.mock.calls[1]?.[0].requestToken)
+  })
+
+  it('honors Retry-After before allowing another retry', async () => {
+    askQuestionMock.mockRejectedValueOnce(
+      new PortfolioApiError('rate limited', 429, 'ANSWER_RATE_LIMITED', 17),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('rate limited question')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const retry = wrapper.get('[data-answer-retry]')
+    expect(retry.attributes('disabled')).toBeDefined()
+    expect(retry.text()).toContain('17 秒后可重试')
+    await retry.trigger('click')
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
   })
 
   it('cancels a pending answer without showing a failure', async () => {

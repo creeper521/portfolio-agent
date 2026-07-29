@@ -16,9 +16,18 @@ class ClientAddressResolverTest {
     }
 
     @Test
-    void acceptsFirstAddressOnlyFromExplicitTrustedProxy() {
+    void selectsTheFirstUntrustedHopFromTheRightOfATrustedProxyChain() {
         MockHttpServletRequest request = request("198.51.100.2", "203.0.113.7, 198.51.100.9");
         assertThat(new ClientAddressResolver(true, Set.of("198.51.100.2")).resolve(request))
+                .isEqualTo("198.51.100.9");
+    }
+
+    @Test
+    void skipsKnownInternalProxiesButDoesNotTrustASpoofedLeftmostHop() {
+        MockHttpServletRequest request = request(
+                "198.51.100.2", "192.0.2.66, 203.0.113.7, 198.51.100.3");
+        assertThat(new ClientAddressResolver(
+                true, Set.of("198.51.100.2", "198.51.100.3")).resolve(request))
                 .isEqualTo("203.0.113.7");
     }
 

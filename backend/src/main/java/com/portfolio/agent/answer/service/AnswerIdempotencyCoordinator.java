@@ -9,19 +9,30 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import com.portfolio.agent.answer.exception.AnswerAdmissionRejectedException;
+import com.portfolio.agent.answer.exception.AnswerErrorCode;
 
 public final class AnswerIdempotencyCoordinator<T> {
 
     private final Clock clock;
     private final Duration ttl;
+    private final int maxEntries;
     private final ConcurrentHashMap<RequestKey, Entry<T>> entries = new ConcurrentHashMap<>();
 
     public AnswerIdempotencyCoordinator(Clock clock, Duration ttl) {
+        this(clock, ttl, 20_000);
+    }
+
+    AnswerIdempotencyCoordinator(Clock clock, Duration ttl, int maxEntries) {
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.ttl = Objects.requireNonNull(ttl, "ttl must not be null");
         if (ttl.isZero() || ttl.isNegative()) {
             throw new IllegalArgumentException("ttl must be positive");
         }
+        if (maxEntries < 1) {
+            throw new IllegalArgumentException("maxEntries must be positive");
+        }
+        this.maxEntries = maxEntries;
     }
 
     public T execute(String sourceHash, UUID requestToken, Supplier<T> operation) {
@@ -33,19 +44,33 @@ public final class AnswerIdempotencyCoordinator<T> {
 
         while (true) {
             var now = clock.instant();
-            var candidate = new Entry<T>(now);
-            var existing = entries.putIfAbsent(key, candidate);
-            var selected = existing == null ? candidate : existing;
-
-            if (existing != null && selected.isExpired(now, ttl)) {
-                entries.remove(key, selected);
-                continue;
+            Entry<T> selected;
+            boolean producer;
+            synchronized (entries) {
+                entries.entrySet().removeIf(entry -> entry.getValue().isExpired(now, ttl));
+                var existing = entries.get(key);
+                if (existing == null) {
+                    if (entries.size() >= maxEntries) {
+                        throw new AnswerAdmissionRejectedException(
+                                AnswerErrorCode.ANSWER_RATE_LIMITED, 60);
+                    }
+                    selected = new Entry<>(now);
+                    entries.put(key, selected);
+                    producer = true;
+                } else {
+                    selected = existing;
+                    producer = false;
+                }
             }
-            if (existing == null) {
-                produce(key, candidate, operation);
+            if (producer) {
+                produce(key, selected, operation);
             }
             return await(selected.result);
         }
+    }
+
+    int entryCount() {
+        return entries.size();
     }
 
     private void produce(RequestKey key, Entry<T> entry, Supplier<T> operation) {

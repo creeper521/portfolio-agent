@@ -23,13 +23,36 @@ public final class ClientAddressResolver {
         if (forwarded == null || forwarded.isBlank()) {
             return remote;
         }
-        String candidate = forwarded.split(",", 2)[0].trim();
-        return isLiteralAddress(candidate) ? candidate : remote;
+        String[] hops = forwarded.split(",");
+        for (String hop : hops) {
+            if (!isLiteralAddress(hop.trim())) {
+                return remote;
+            }
+        }
+        for (int index = hops.length - 1; index >= 0; index--) {
+            String candidate = hops[index].trim();
+            if (!trustedProxies.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return remote;
     }
 
     private boolean isLiteralAddress(String value) {
-        if (!value.matches("[0-9a-fA-F:.]+")) {
-            return false;
+        if (value.contains(":")) {
+            if (!value.matches("[0-9a-fA-F:]+")) {
+                return false;
+            }
+        } else {
+            String[] parts = value.split("\\.", -1);
+            if (parts.length != 4) {
+                return false;
+            }
+            for (String part : parts) {
+                if (!part.matches("\\d{1,3}") || Integer.parseInt(part) > 255) {
+                    return false;
+                }
+            }
         }
         try {
             InetAddress.getByName(value);
