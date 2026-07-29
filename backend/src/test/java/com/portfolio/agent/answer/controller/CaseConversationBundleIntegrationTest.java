@@ -65,9 +65,12 @@ class CaseConversationBundleIntegrationTest {
     }
 
     private String request(String turnId, String caseSlug) {
+        String requestToken = java.util.UUID.nameUUIDFromBytes(
+                turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         return """
                 {
                   "turnId": "%s",
+                  "requestToken": "%s",
                   "question": "How was this case verified?",
                   "messages": [],
                   "context": {
@@ -76,6 +79,6 @@ class CaseConversationBundleIntegrationTest {
                     "source": "CASE"
                   }
                 }
-                """.formatted(turnId, caseSlug);
+                """.formatted(turnId, requestToken, caseSlug);
     }
 }
