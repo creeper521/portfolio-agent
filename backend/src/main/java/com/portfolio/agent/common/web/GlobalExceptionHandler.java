@@ -1,5 +1,6 @@
 package com.portfolio.agent.common.web;
 
+import com.portfolio.agent.answer.exception.AnswerAdmissionRejectedException;
 import com.portfolio.agent.common.exception.ApplicationException;
 import com.portfolio.agent.common.exception.CommonErrorCode;
 import jakarta.validation.ConstraintViolationException;
@@ -22,6 +23,23 @@ import java.util.UUID;
 public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(AnswerAdmissionRejectedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAdmissionRejected(
+            AnswerAdmissionRejectedException exception
+    ) {
+        HttpStatus status = HttpStatus.valueOf(exception.getErrorCode().getHttpStatus());
+        ApiErrorResponse body = new ApiErrorResponse(
+                UUID.randomUUID().toString(),
+                exception.getErrorCode().getCode(),
+                exception.getMessage(),
+                exception.getRetryAfterSeconds(),
+                OffsetDateTime.now()
+        );
+        return ResponseEntity.status(status)
+                .header("Retry-After", Integer.toString(exception.getRetryAfterSeconds()))
+                .body(body);
+    }
 
     @ExceptionHandler(ApplicationException.class)
     public ResponseEntity<ApiErrorResponse> handleApplicationException(

@@ -1,10 +1,12 @@
 package com.portfolio.agent.answer.controller;
 
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.adapter.web.ClientAddressResolver;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerResponse;
 import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
-import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
+import com.portfolio.agent.answer.service.ProductionConversationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,22 +17,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v2/answers")
 public final class ConversationAnswerController {
 
-    private final ConversationalAgentRuntime runtime;
+    private final ProductionConversationService service;
+    private final ClientAddressResolver clientAddressResolver;
     private final ConversationAnswerResponseMapper responseMapper;
 
     public ConversationAnswerController(
-            ConversationalAgentRuntime runtime,
+            ProductionConversationService service,
+            ClientAddressResolver clientAddressResolver,
             ConversationAnswerResponseMapper responseMapper
     ) {
-        this.runtime = runtime;
+        this.service = service;
+        this.clientAddressResolver = clientAddressResolver;
         this.responseMapper = responseMapper;
     }
 
     @PostMapping
     public ConversationAnswerResponse answer(
-            @Valid @RequestBody ConversationAnswerRequest request
+            @Valid @RequestBody ConversationAnswerRequest request,
+            HttpServletRequest servletRequest
     ) {
-        ConversationAnswerResult result = runtime.answer(request);
+        ConversationAnswerResult result = service.answer(
+                request, clientAddressResolver.resolve(servletRequest));
         return responseMapper.toResponse(result);
     }
 }

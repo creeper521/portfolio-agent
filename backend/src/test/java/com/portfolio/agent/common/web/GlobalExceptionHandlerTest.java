@@ -2,6 +2,8 @@ package com.portfolio.agent.common.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.PortfolioAgentApplication;
+import com.portfolio.agent.answer.exception.AnswerAdmissionRejectedException;
+import com.portfolio.agent.answer.exception.AnswerErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -59,5 +61,19 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getRetryAfterSeconds()).isEqualTo(12);
         assertThat(response.toString())
                 .doesNotContain("visitor question", "203.0.113.7", "request-token");
+    }
+
+    @Test
+    void rateLimitResponseIncludesRetryAfterInHeaderAndBody() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleAdmissionRejected(
+                new AnswerAdmissionRejectedException(
+                        AnswerErrorCode.ANSWER_RATE_LIMITED, 17));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(429);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("17");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getRetryAfterSeconds()).isEqualTo(17);
     }
 }
