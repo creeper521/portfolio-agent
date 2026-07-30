@@ -16,8 +16,6 @@ import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.LinkedHashMap;
@@ -28,15 +26,6 @@ import java.util.Set;
 
 public final class PublicBundleVerificationCli {
 
-    private static final List<String> FILE_NAMES = List.of(
-            "checksums.json",
-            "keyword-index.json",
-            "manifest.json",
-            "portfolio.json",
-            "presentation.json",
-            "rag-documents.jsonl",
-            "vector-index.bin"
-    );
     private static final Set<String> MANIFEST_FIELDS = Set.of(
             "schemaVersion", "contentVersion", "publishedAt", "builtAt",
             "minimumApplicationVersion", "factsFile", "presentationFile",
@@ -61,7 +50,8 @@ public final class PublicBundleVerificationCli {
                 throw new IllegalArgumentException("one bundle directory is required");
             }
             ObjectMapper mapper = mapper();
-            Map<String, byte[]> files = readClosedDirectory(Path.of(args[0]));
+            Map<String, byte[]> files = new PublicBundleDirectoryReader()
+                    .read(Path.of(args[0]));
             byte[] originalManifest = files.get("manifest.json");
             ObjectNode manifestNode = readManifestEnvelope(mapper, originalManifest);
             String ledgerHash = requiredHash(manifestNode, "ledgerHash");
@@ -101,36 +91,6 @@ public final class PublicBundleVerificationCli {
             err.println("PUBLIC_BUNDLE_VERIFICATION_FAILED");
             return 1;
         }
-    }
-
-    private static Map<String, byte[]> readClosedDirectory(Path supplied)
-            throws IOException {
-        Path absolute = supplied.toAbsolutePath().normalize();
-        if (!Files.isDirectory(absolute, LinkOption.NOFOLLOW_LINKS)
-                || Files.isSymbolicLink(absolute)) {
-            throw new IllegalArgumentException("bundle directory is invalid");
-        }
-        List<Path> entries;
-        try (java.util.stream.Stream<Path> stream = Files.list(absolute)) {
-            entries = stream.sorted().toList();
-        }
-        if (entries.size() != FILE_NAMES.size()) {
-            throw new IllegalArgumentException("bundle file set is not closed");
-        }
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        for (Path entry : entries) {
-            String name = entry.getFileName().toString();
-            if (!FILE_NAMES.contains(name)
-                    || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)
-                    || Files.isSymbolicLink(entry)) {
-                throw new IllegalArgumentException("bundle file set is not closed");
-            }
-            files.put(name, Files.readAllBytes(entry));
-        }
-        if (!files.keySet().equals(Set.copyOf(FILE_NAMES))) {
-            throw new IllegalArgumentException("bundle file set is not closed");
-        }
-        return files;
     }
 
     private static ObjectNode readManifestEnvelope(

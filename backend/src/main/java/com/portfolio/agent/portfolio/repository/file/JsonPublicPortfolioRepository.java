@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Repository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -22,6 +23,11 @@ import java.util.HexFormat;
 import java.util.Map;
 
 @Repository
+@ConditionalOnProperty(
+        prefix = "portfolio.database.public",
+        name = "enabled",
+        havingValue = "false",
+        matchIfMissing = true)
 public class JsonPublicPortfolioRepository implements PublicPortfolioRepository {
 
     private final RuntimeContentSnapshot snapshot;

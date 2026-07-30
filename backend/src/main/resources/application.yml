@@ -1,6 +1,10 @@
 spring:
   application:
     name: portfolio-agent
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
   profiles:
     default: local
   jackson:
@@ -14,6 +18,17 @@ server:
     include-stacktrace: never
 
 portfolio:
+  database:
+    public:
+      enabled: ${PORTFOLIO_PUBLIC_DATABASE_ENABLED:false}
+      url: ${PORTFOLIO_PUBLIC_DATABASE_URL:}
+      username: ${PORTFOLIO_PUBLIC_DATABASE_USERNAME:}
+      password: ${PORTFOLIO_PUBLIC_DATABASE_PASSWORD:}
+    governance:
+      enabled: ${PORTFOLIO_GOVERNANCE_DATABASE_ENABLED:false}
+      url: ${PORTFOLIO_GOVERNANCE_DATABASE_URL:}
+      username: ${PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:}
+      password: ${PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:}
   diagnostics:
     frontend-ingest-enabled: false
     frontend-max-batch-size: 10
