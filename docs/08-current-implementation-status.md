@@ -11,9 +11,9 @@
 
 Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case 互斥、未知公开主体 fail-closed、真实随包 Bundle 集成、Case API/v2 JAR 冒烟，以及显式 `-RequireLiveProvider` 响应门禁均已有实现和自动化测试。普通 CI 强制关闭模型调用；真实 Provider 外部调用仍需在获批生产候选环境单独留证。
 
-但它仍不是完整 V1。独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI、Case → Agent 页面内存交接和 packaged-JAR 浏览器联调均已完成；故事页属于后续 selected-case 增强。模型表达与本地检索默认关闭，真实 Provider 与生产环境尚未验收。动态工具/插件、编排、多 Agent、持久会话、数据库、认证和私有 Copilot 均未实现。
+但它仍不是完整 V1。独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI、Case → Agent 页面内存交接和 packaged-JAR 浏览器联调均已完成；故事页属于后续 selected-case 增强。模型表达、本地检索以及 PostgreSQL/pgvector 数据源默认关闭，真实 Provider、数据库门禁与生产环境尚未验收。动态工具/插件、编排、多 Agent、持久会话、认证和私有 Copilot 均未实现。
 
-内容准备层已经登记 68 项私有资产。61 项非排除资产已通过精确哈希人工 Approval，本地发布并原子导入为 schema 3.0、内容版本 `2026-07-27.1` 的七文件 Bundle；当前随包运行时包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset。7 项 `EXCLUDE` 继续保持私有。
+内容准备层已经登记 68 项私有资产。历史 `2026-07-27.1` 批次完成过精确哈希 Approval 与本地发布；当前随包公开快照已经演进为 schema `4.0`、内容版本 `2026-07-29.1`，包含 5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。7 项 `EXCLUDE` 继续保持私有。
 
 当前公开版本已完成 Wave 1 的 Keyword、Vector、Hybrid 三路真实本地模型比较：37 个问题覆盖 Holdout、Regression 和 Calibration；策略 v2.1 的三路 false-sufficient 均为 0，Hybrid 在 26 个正例上取得 Hit@1 0.8846、Hit@5 1.0000、MRR@5 0.9359 和 20/26 正向充分判定。完整过程、v2 被拒原因与边界见 `docs/reports/retrieval-wave-1-policy-v2-1-2026-07-27.md`。运行时 Profile 未改变，检索仍默认关闭，也没有部署。
 
@@ -40,7 +40,7 @@ Case 后端与发布前五项收尾已经完成：`source=CASE`、Project/Case �
 - `POST /api/v1/client-diagnostics` 是只读公开端点的唯一例外：默认关闭，只接受封闭、限流且
   不持久化的诊断事件契约；永不接受访客内容、任意元数据、原始堆栈、URL、Headers、请求体、
   响应体、原始来源地址或凭据。
-- 当前随包公开快照为 schema 3.0、内容版本 `2026-07-27.1`，包含 7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；61/68 项公开资产，7 项 `EXCLUDE` 保持私有。
+- 当前随包公开快照为 schema `4.0`、内容版本 `2026-07-29.1`，包含 5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset；7 项 `EXCLUDE` 保持私有。
 - 已实现独立不可变 CaseStudy 领域模型、CaseType、CASE Claim 归属与引用校验、只读服务和公开 DTO；未知 Case slug 返回 404 `CASE_NOT_FOUND`。
 - 加载器显式接受 schema 2.0/3.0：2.0 被规范化为空 `cases`/`caseIds`，3.0 严格校验 Case 集合与引用，未知版本和缺失必填集合失败关闭。
 - `GET /api/v1/public-content` 新增 `cases`、`caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影新增 `caseSlugs`。
@@ -123,7 +123,7 @@ java -jar backend/target/portfolio-agent.jar
 
 - 在仓库外私有治理区登记 7 条长期主线、19 项任务、25 项事件和 17 项知识资产，共 68 项。
 - 每项资产均记录内容类型、完成状态、贡献边界、公开优先级、证据状态和审核状态；不确定贡献或缺少最终验收的内容保持 `HOLD` 或 `EXCLUDE`。
-- 在 `2026-07-23.1` 历史快照中，首批 SQL 主线增量和三个 Case 已完成公开文案、Evidence、引用、隐私、精确 diff/hash 与人工 Approval，并进入当时的随包公开 Bundle；当前规模以 `2026-07-27.1` 为准。
+- 在 `2026-07-23.1` 历史快照中，首批 SQL 主线增量和三个 Case 已完成公开文案、Evidence、引用、隐私、精确 diff/hash 与人工 Approval，并进入当时的随包公开 Bundle；该历史链路后来演进到当前 schema `4.0` / `2026-07-29.1` 快照。
 - SQL 2026-07 扩展新增负号输入安全、多来源选择、成功结果保留和选中目标检查等保守事实，不覆盖既有公开 Project。
 - 三个 Case 分别为多语言图片上传结果保留、测试角色重置工具和 CodeGraph 定性评测；CodeGraph 不公开精确效率指标或内部项目资料。
 - 私有治理区与原始知识库仍不由运行时直接读取；后续资产仍需逐批走相同人工审核和发布流程。
@@ -141,11 +141,11 @@ java -jar backend/target/portfolio-agent.jar
 
 | 能力 | 当前状态 | 还缺什么 |
 |---|---|---|
-| 公开内容规模 | 当前随包运行时为 `2026-07-27.1`，公开 61/68 项，形成 7 个 Project 和 49 个 Case | 仍未生产部署；7 项排除资产不得进入公开运行时 |
+| 公开内容规模 | 当前随包运行时为 schema `4.0` / `2026-07-29.1`：5 Project、49 Case、3 Collection、79 Claim、59 Evidence、79 links/chunks | 仍未生产部署；7 项排除资产不得进入公开运行时 |
 | C1 模型表达 | 代码、双 Provider Adapter、Registry 与 fallback 已实现，默认关闭 | 部署方独立完成数据条款审批、注入密钥并决定是否启用；真实 Provider 可用性属于运行环境状态 |
 | 对话式 Agent v2 后端 | `/api/v2/answers`、意图路由、20 轮临时上下文、通用/作品集/混合回答、公开检索、固定工具、事实校验和动态追问已实现，默认关闭；前端已调用该接口 | 生产启用还要求访客数据条款审批、单 Provider 密钥与线上验收 |
 | C2a 本地检索 | 全量内容已发布并导入；89 例比较中 Hybrid 为 32/38 正例充分判定，优于 Keyword 13/38 和 Vector 17/38，三路 false-sufficient 为 0 | 生产侧仍需安装固定 revision 的本地 ONNX 模型并显式配置 `HYBRID`，当前 Git 不包含模型二进制 |
-| C2b 项目比较 | 工具实现并能读取当前 7 个公开 Project，已具备跨项目比较数据 | 仍需完成 Agent 前端入口、浏览器联调和代表性跨项目问题验收 |
+| C2b 项目比较 | 工具实现并能读取当前 5 个公开 Project，已具备跨项目比较数据 | 仍需完成 Agent 前端入口、浏览器联调和代表性跨项目问题验收 |
 | 内容发布闭环 | CLI、审批契约、发布和回滚工具已实现；`2026-07-23.1` 历史首批三个 Case 及后续 `2026-07-27.1` 全量公开资产均已完成人工批准与本地发布 | 生产部署、线上验收和后续内容批次仍需单独执行与留证 |
 | 匿名观测 | 领域事件、耗时桶和 best-effort 发布端口已实现 | 当前生产适配器是 Noop，没有指标后端、告警或运营面板 |
 | 角色化体验 | 前端角色选择与 `audienceRole` 请求字段已接入；Case-only preset 可从独立 Case 页面以页面内存方式进入 Agent；当前公开 Bundle 的 16 个 QuestionPreset 均可由 Agent 后端执行 | 真实 Provider 与生产环境验收仍待完成；角色不会解锁不同事实或未发布问题 |
@@ -191,12 +191,12 @@ JSON，不实现 SSE。API Key 仍只存在服务端环境/Secret，不进入前
 - SSE/WebSocket 流式回答；当前 API 为一次性 JSON 响应。
 - 生产级指标存储、Tracing、日志检索、告警、SLO 与运营 Dashboard。
 - 自动部署流水线、托管环境、域名/TLS 和正式生产发布证明。
-- 当前 schema 3.0 Bundle 尚未生产部署，也没有线上 Case API/页面验收结论。
+- 当前 schema `4.0` Bundle 与默认关闭的 PostgreSQL/pgvector 后端尚未生产部署，也没有线上数据库/组合 API 验收结论。
 
 ## 5. 下一步优先级建议
 
 1. **完成生产候选与线上验收。** 从仓库外安全注入审批与密钥，执行一次 `-RequireLiveProvider` 并留存安全摘要；随后完成 Docker/部署、API、Case 页面、隐私和回滚证据。
-2. **复验全量内容与代表性问题。** 在生产候选中抽查 7 个 Project、49 个 Case、跨项目比较、错误状态、引用边界和 Case 动态追问。
+2. **复验全量内容与代表性问题。** 在生产候选中抽查 5 个 Project、49 个 Case、跨项目比较、错误状态、引用边界和 Case 动态追问。
 3. **补齐 C2b 比较入口。** 为已有跨项目比较工具增加明确前端入口，并验收代表性跨项目问题。
 5. **做可访问性人工验收。** 集中关闭焦点、语义、对比度、读屏和 reduced-motion 尾项，再声明可访问性等级。
 6. **暂不扩 C3。** 只有出现至少两个真实实现、重复扩展代码、稳定契约和运行证据后，再单独 ADR 评估 Registry/Hook/Orchestrator 等抽象。
