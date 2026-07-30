@@ -1,0 +1,33 @@
+name: portfolio-postgres-local
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.5-pg16-bookworm
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORTFOLIO_POSTGRES_PORT:-54329}:5432"
+    environment:
+      POSTGRES_USER: ${PORTFOLIO_POSTGRES_ADMIN_USERNAME}
+      POSTGRES_PASSWORD: ${PORTFOLIO_POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: postgres
+      PORTFOLIO_PUBLIC_DATABASE_NAME: ${PORTFOLIO_PUBLIC_DATABASE_NAME}
+      PORTFOLIO_PUBLIC_DATABASE_USERNAME: ${PORTFOLIO_PUBLIC_DATABASE_USERNAME}
+      PORTFOLIO_PUBLIC_DATABASE_PASSWORD: ${PORTFOLIO_PUBLIC_DATABASE_PASSWORD}
+      PORTFOLIO_GOVERNANCE_DATABASE_NAME: ${PORTFOLIO_GOVERNANCE_DATABASE_NAME}
+      PORTFOLIO_GOVERNANCE_DATABASE_USERNAME: ${PORTFOLIO_GOVERNANCE_DATABASE_USERNAME}
+      PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD: ${PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-portfolio-databases.sh:ro
+      - ./scripts/postgres/init-databases.sh:/opt/portfolio/init-databases.sh:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d postgres
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  postgres_data:

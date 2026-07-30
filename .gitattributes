@@ -1,2 +1,3 @@
 backend/src/main/resources/public-data/bundle/*.json -text
 backend/src/main/resources/public-data/bundle/*.jsonl -text
+scripts/postgres/*.sh text eol=lf
