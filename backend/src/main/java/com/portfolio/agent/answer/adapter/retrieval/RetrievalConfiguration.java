@@ -12,7 +12,9 @@ import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
+import com.portfolio.agent.ingestion.gateway.DocumentEmbeddingPort;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,6 +23,12 @@ import java.nio.file.Path;
 @Configuration
 @EnableConfigurationProperties(RetrievalProperties.class)
 public class RetrievalConfiguration {
+
+    @Bean(name = "governanceDocumentEmbeddingPort")
+    @ConditionalOnProperty(prefix = "portfolio.database.governance", name = "enabled", havingValue = "true")
+    DocumentEmbeddingPort governanceDocumentEmbeddingPort(RetrievalProperties properties) {
+        return new GovernanceDocumentEmbeddingPort(properties, new LocalEmbeddingArtifactVerifier());
+    }
 
     @Bean
     RetrievalPolicy retrievalPolicy() {
