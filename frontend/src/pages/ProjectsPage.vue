@@ -2,7 +2,11 @@
 import { computed } from 'vue'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
-import { buildDossierIndex } from '../features/portfolio/model/dossierIndexModel'
+import {
+  CAREER_TRACK_LABEL,
+  PROJECT_NATURE_LABEL,
+  buildProjectMainlines,
+} from '../features/portfolio/model/projectMainlineModel'
 import DossierFooter from '../shared/components/DossierFooter.vue'
 import EmptyDossier from '../shared/components/EmptyDossier.vue'
 import PageLead from '../shared/components/PageLead.vue'
@@ -13,60 +17,62 @@ const { portfolio, status, error, action, retryAfterSeconds, retry } = usePublic
 const groups = computed(() => {
   const data = portfolio.value
   if (!data) return []
-  return buildDossierIndex(data.projects, data.cases)
+  return buildProjectMainlines(data.projects)
 })
-const total = computed(() => groups.value.reduce((sum, group) => sum + group.entries.length, 0))
+const total = computed(() => groups.value.reduce((sum, group) => sum + group.projects.length, 0))
 </script>
 
 <template>
   <main v-if="status === 'ready' && portfolio">
     <PageLead
-      code="01 / DOSSIER INDEX"
-      title="工程案卷目录"
-      description="核心项目、功能修复案例与工具评测统一归档。每项标明类型、贡献方式与核验规模；评测类条目独立分组，与交付物显式区分。"
+      code="01 / PROJECT MAINLINES"
+      title="项目主线"
+      description="Java 后端与 Agent 两个求职方向并列成架，不互相隐藏。每个项目标明方向、性质、成熟度与贡献方式；具体任务与问题处理沉入项目详情与案例索引，从这里逐层下钻。"
     />
 
-    <section v-if="total" class="dossier-index">
-      <div v-for="group in groups" :key="group.code" class="dossier-group page-shell">
+    <section v-if="total" class="mainline-index">
+      <div v-for="group in groups" :key="group.key" class="dossier-group page-shell">
         <header class="dossier-group__head">
           <p class="dossier-group__code">{{ group.code }}</p>
-          <h2>{{ group.title }}</h2>
+          <h2>{{ group.label }}</h2>
           <p class="dossier-group__note">{{ group.note }}</p>
         </header>
 
         <div class="dossier-group__list">
           <RouterLink
-            v-for="entry in group.entries"
-            :key="entry.slug"
-            class="dossier-row"
-            :to="`/projects/${entry.slug}`"
+            v-for="project in group.projects"
+            :key="project.slug"
+            class="mainline-card"
+            :to="`/projects/${project.slug}`"
           >
-            <div class="dossier-row__code">
-              <span>{{ entry.code }}</span>
-              <span
-                class="type-tag"
-                :data-t="entry.kind === 'PROJECT' ? 'PROJECT' : entry.group"
-              >{{ entry.typeLabel }}</span>
+            <div class="mainline-card__meta">
+              <span class="type-tag" :data-t="project.careerTrack">{{
+                CAREER_TRACK_LABEL[project.careerTrack]
+              }}</span>
+              <span class="type-tag">{{ PROJECT_NATURE_LABEL[project.projectNature] }}</span>
             </div>
-            <div class="dossier-row__body">
-              <h3>{{ entry.title }}</h3>
-              <p>{{ entry.summary }}</p>
-              <div class="dossier-row__status">
-                <StatusMark :status="entry.status" />
-                <StatusMark :status="entry.contributionType" />
+            <div class="mainline-card__body">
+              <h3>{{ project.title }}</h3>
+              <p>{{ project.summary }}</p>
+              <div class="mainline-card__status">
+                <StatusMark :status="project.status" />
+                <StatusMark :status="project.contributionType" />
+                <span v-if="project.caseCount > 0" class="mainline-card__cases"
+                  >{{ project.caseCount }} 个案例</span
+                >
               </div>
             </div>
-            <ul v-if="entry.technologies.length" class="dossier-row__tech" aria-label="技术栈">
-              <li v-for="tech in entry.technologies.slice(0, 5)" :key="tech">{{ tech }}</li>
+            <ul v-if="project.technologies.length" class="mainline-card__tech" aria-label="核心技术">
+              <li v-for="tech in project.technologies.slice(0, 5)" :key="tech">{{ tech }}</li>
             </ul>
-            <i aria-hidden="true">↗</i>
+            <span class="mainline-card__entry">调阅案卷 <i aria-hidden="true">↗</i></span>
           </RouterLink>
         </div>
       </div>
     </section>
 
     <div v-else class="page-shell">
-      <EmptyDossier title="案卷资料准备中" description="目前还没有可以公开的工程案卷。" />
+      <EmptyDossier title="案卷资料准备中" description="目前还没有可以公开的项目。" />
     </div>
 
     <DossierFooter :content-version="portfolio.contentVersion" />
@@ -82,7 +88,7 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
 </template>
 
 <style scoped>
-.dossier-index {
+.mainline-index {
   padding: 60px 0 120px;
 }
 
@@ -119,31 +125,27 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   line-height: 1.7;
 }
 
-.dossier-row {
+.mainline-card {
   position: relative;
   display: grid;
   padding: 34px 0;
   grid-template-columns: 150px minmax(0, 1fr) 240px;
   gap: clamp(24px, 5vw, 72px);
   border-bottom: 1px solid var(--rule);
+  color: inherit;
+  text-decoration: none;
   transition: 0.3s var(--ease);
 }
 
-.dossier-row:hover {
+.mainline-card:hover {
   background: var(--paper-hi);
 }
 
-.dossier-row__code {
+.mainline-card__meta {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   align-items: flex-start;
-}
-
-.dossier-row__code > span:first-child {
-  color: var(--red);
-  font: 10px var(--mono);
-  letter-spacing: 0.12em;
 }
 
 .type-tag {
@@ -156,31 +158,19 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   color: var(--ink-2);
   font: 10px var(--mono);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.type-tag[data-t='PROJECT'] {
+.type-tag[data-t='AGENT'] {
   border-color: var(--red);
   color: var(--red);
 }
 
-.type-tag[data-t='DELIVERED'] {
-  border-color: var(--ink-2);
-  color: var(--ink-2);
-}
-
-.type-tag[data-t='EVALUATION'] {
-  border-style: dashed;
-  border-color: var(--faint);
-  color: var(--faint);
-}
-
-.dossier-row__body h3 {
+.mainline-card__body h3 {
   margin: 0;
   font: 400 clamp(24px, 2.8vw, 38px)/1.1 var(--serif);
 }
 
-.dossier-row__body p {
+.mainline-card__body p {
   max-width: 640px;
   margin: 14px 0 18px;
   color: var(--muted);
@@ -188,13 +178,20 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   line-height: 1.8;
 }
 
-.dossier-row__status {
+.mainline-card__status {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
+  align-items: center;
 }
 
-.dossier-row__tech {
+.mainline-card__cases {
+  color: var(--muted);
+  font: 10px var(--mono);
+  letter-spacing: 0.06em;
+}
+
+.mainline-card__tech {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -204,25 +201,31 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ent
   list-style: none;
 }
 
-.dossier-row__tech li {
+.mainline-card__tech li {
   padding: 7px 9px;
   border: 1px solid var(--rule);
   font: 10px var(--mono);
   letter-spacing: 0.04em;
 }
 
-.dossier-row > i {
+.mainline-card__entry {
   position: absolute;
   right: 0;
   bottom: 34px;
   color: var(--red);
+  font: 10px var(--mono);
+  letter-spacing: 0.1em;
+}
+
+.mainline-card__entry i {
   font-style: normal;
 }
 
 @media (max-width: 760px) {
-  .dossier-row {
+  .mainline-card {
     grid-template-columns: 1fr;
     gap: 18px;
+    padding-bottom: 64px;
   }
 
   .dossier-group__head {

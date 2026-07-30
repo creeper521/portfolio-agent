@@ -1,12 +1,33 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { publicContentStateKey } from '../features/public-content/composables/usePublicContent'
+import { previewPublicContent } from '../features/public-content/data/previewPublicContent'
+import type {
+  PublicCaseSummary,
+  PublicProject,
+} from '../features/public-content/model/publicContentTypes'
 import { readyPublicContentState } from '../test/publicContentStateFixture'
 import ProjectPage from './ProjectPage.vue'
 
-const RouterLinkStub = { props: ['to'], template: '<a><slot /></a>' }
+const RouterLinkStub = defineComponent({
+  props: { to: { type: [String, Object], required: true } },
+  computed: {
+    href(): string {
+      const to = this.to as string | { path?: string; query?: Record<string, string> }
+      if (typeof to === 'string') return to
+      let url: string = to.path ?? ''
+      if (to.query) {
+        const qs = new URLSearchParams(to.query).toString()
+        if (qs) url += (url.includes('?') ? '&' : '?') + qs
+      }
+      return url
+    },
+  },
+  template: '<a :href="href"><slot /></a>',
+})
 const testRouter = () => createRouter({
   history: createMemoryHistory(),
   routes: [{ path: '/', component: { template: '<div />' } }],
@@ -122,5 +143,90 @@ describe('ProjectPage', () => {
 
     expect(router.currentRoute.value.name).toBe('project')
     expect(wrapper.text()).toContain('SQL 审计与故障排查工具')
+  })
+})
+
+describe('ProjectPage · 相关案例', () => {
+  const makeSummary = (overrides: Partial<PublicCaseSummary> = {}): PublicCaseSummary => ({
+    slug: 'featured-case',
+    code: 'CASE-09',
+    type: 'FEATURE',
+    title: '精选案例',
+    summary: '一次具体任务的公开摘要。',
+    achievementStatus: 'DELIVERED',
+    contributionType: 'PRIMARY',
+    projectSlug: 'sql-audit',
+    collectionSlugs: [],
+    ...overrides,
+  })
+
+  const makeProject = (overrides: Partial<PublicProject> = {}): PublicProject => ({
+    ...previewPublicContent.projects[0],
+    ...overrides,
+  })
+
+  function mountWithProject(project: PublicProject) {
+    const state = readyPublicContentState()
+    state.portfolio.value = { ...previewPublicContent, projects: [project] }
+    return mount(ProjectPage, {
+      props: { slug: project.slug },
+      global: {
+        provide: { [publicContentStateKey as symbol]: state },
+        stubs: { RouterLink: RouterLinkStub },
+        plugins: [testRouter()],
+      },
+    })
+  }
+
+  it('项目没有案例时不渲染相关案例区', async () => {
+    const wrapper = mountWithProject(makeProject({ caseCount: 0, featuredCases: [] }))
+    await flushPromises()
+
+    expect(wrapper.find('#cases').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('相关案例')
+  })
+
+  it('1–3 个案例时全部展示摘要，且不出现查看全部入口', async () => {
+    const wrapper = mountWithProject(makeProject())
+    await flushPromises()
+
+    const section = wrapper.get('#cases')
+    expect(section.text()).toContain('相关案例')
+    expect(section.text()).toContain('审计查询归档策略复用')
+    expect(section.text()).toContain('WebSocket 进度推送降级排查')
+    expect(section.text()).not.toContain('查看全部')
+  })
+
+  it('相关案例在目录中登记锚点', async () => {
+    const wrapper = mountWithProject(makeProject())
+    await flushPromises()
+
+    expect(wrapper.get('.project-toc a[href="#cases"]').text()).toContain('相关案例')
+  })
+
+  it('超过 3 个案例时展示精选并提供「查看全部 N 个案例」入口', async () => {
+    const featuredCases = [1, 2, 3].map((n) =>
+      makeSummary({ slug: `featured-${n}`, code: `CASE-1${n}`, title: `精选案例 ${n}` }),
+    )
+    const wrapper = mountWithProject(makeProject({ caseCount: 6, featuredCases }))
+    await flushPromises()
+
+    const section = wrapper.get('#cases')
+    expect(section.text()).toContain('精选案例 1')
+    expect(section.text()).toContain('精选案例 3')
+    const all = section.get('a[href="/cases?project=sql-audit&status=all"]')
+    expect(all.text()).toContain('查看全部 6 个案例')
+  })
+
+  it('条目只呈现摘要信息，并链接到案例详情页', async () => {
+    const wrapper = mountWithProject(makeProject())
+    await flushPromises()
+
+    const section = wrapper.get('#cases')
+    const entry = section.get('a[href="/cases/query-archive-reuse"]')
+    expect(entry.text()).toContain('CASE-02')
+    expect(entry.text()).toContain('功能任务')
+    expect(entry.text()).toContain('审计查询归档策略复用')
+    expect(entry.text()).toContain('复用既有查询归档能力承载审计结果')
   })
 })

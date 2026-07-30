@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { usePublicContent } from '../features/public-content/composables/usePublicContent'
+import { CASE_TYPE_LABEL } from '../features/portfolio/model/caseListModel'
 import { resolveDossier } from '../features/portfolio/model/dossierModel'
 import {
   buildSectionTraces,
@@ -57,6 +58,21 @@ const traces = computed(() => {
 function traceFor(anchor: SectionAnchor) {
   return traces.value?.[anchor] ?? null
 }
+
+// 相关案例：仅 project 详情展示，case 详情（kind === 'CASE'）不出现。
+// caseCount 为 0 时整块（含目录锚点）不渲染；超过精选条数时给出
+// 「查看全部 N 个案例」入口，跳到 /cases?project=<slug>&status=all。
+const projectRecord = computed(() => {
+  const data = portfolio.value
+  if (!data || dossier.value?.kind !== 'PROJECT') return null
+  return data.projects.find((item) => item.slug === props.slug) ?? null
+})
+const relatedCases = computed(() => projectRecord.value?.featuredCases ?? [])
+const relatedCasesTotal = computed(() => projectRecord.value?.caseCount ?? 0)
+const allCasesTarget = computed(() => ({
+  path: '/cases',
+  query: { project: props.slug, status: 'all' },
+}))
 </script>
 
 <template>
@@ -85,6 +101,7 @@ function traceFor(anchor: SectionAnchor) {
         <a v-for="section in dossier.sections" :key="section.anchor" :href="`#${section.anchor}`">
           {{ section.code }} {{ section.title }}
         </a>
+        <a v-if="relatedCases.length" href="#cases">06 / CASES 相关案例</a>
       </aside>
 
       <div class="project-story">
@@ -146,6 +163,34 @@ function traceFor(anchor: SectionAnchor) {
             对应 <em>{{ traceFor('status')!.claims }}</em> 条已核验断言，直连 <em>{{ traceFor('status')!.evidence }}</em> 条脱敏证据
             <RouterLink :to="evidenceTarget">证据 →</RouterLink>
           </p>
+        </section>
+
+        <section v-if="relatedCases.length" id="cases">
+          <p class="section-code">06 / RELATED CASES</p>
+          <h2>相关案例</h2>
+          <ul class="related-cases">
+            <li v-for="item in relatedCases" :key="item.slug">
+              <RouterLink :to="{ path: `/cases/${item.slug}` }" class="related-case">
+                <span class="related-case__code">{{ item.code }}</span>
+                <span class="related-case__type">{{ CASE_TYPE_LABEL[item.type] }}</span>
+                <span class="related-case__body">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.summary }}</span>
+                </span>
+                <span class="related-case__marks">
+                  <StatusMark :status="item.achievementStatus" />
+                  <StatusMark :status="item.contributionType" />
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
+          <RouterLink
+            v-if="relatedCasesTotal > relatedCases.length"
+            class="related-cases__all"
+            :to="allCasesTarget"
+          >
+            查看全部 {{ relatedCasesTotal }} 个案例 →
+          </RouterLink>
         </section>
 
         <footer class="project-next">
@@ -442,10 +487,95 @@ li::before {
   border-right: 1px solid var(--rule);
 }
 
+/* 相关案例：架位内摘要条目，只呈现 编号/类型/标题/摘要/状态印记，
+   不复制案例正文。需压过本文件全局 li 计数器样式（padding/border/counter）。 */
+.related-cases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.related-cases li {
+  padding: 0;
+  border-top: 0;
+  counter-increment: none;
+}
+
+.related-cases li::before {
+  content: none;
+}
+
+.related-case {
+  display: grid;
+  grid-template-columns: 92px 96px 1fr auto;
+  gap: 8px 24px;
+  align-items: baseline;
+  padding: 22px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.related-cases li:last-child .related-case {
+  border-bottom: 1px solid var(--rule);
+}
+
+.related-case__code {
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.related-case__type {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.related-case__body {
+  min-width: 0;
+}
+
+.related-case__body strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.related-case__body span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.related-case__marks {
+  display: flex;
+  gap: 8px;
+}
+
+.related-cases__all {
+  display: inline-block;
+  margin-top: 26px;
+  padding-bottom: 7px;
+  color: var(--red);
+  border-bottom: 1px solid var(--red);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .project-cover__grid,
   .project-body {
     grid-template-columns: 1fr;
+  }
+
+  .related-case {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .project-toc {
