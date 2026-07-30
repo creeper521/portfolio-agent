@@ -136,7 +136,9 @@ public final class MarkdownImportCli {
             if (command.dryRun()) {
                 printScan(scanCommand.scan(command.root()));
             } else {
-                printImport(importCommand.importRoot(command.root()));
+                printImport(
+                        command.retryPending() ? "RETRY" : "IMPORT",
+                        importCommand.importRoot(command.root(), command.retryPending()));
             }
             return 0;
         } catch (RuntimeException exception) {
@@ -169,10 +171,13 @@ public final class MarkdownImportCli {
             return null;
         }
         if ("scan".equals(action) && dryRun) {
-            return new ParsedCommand(root, true);
+            return new ParsedCommand(root, true, false);
         }
         if ("import".equals(action) && !dryRun) {
-            return new ParsedCommand(root, false);
+            return new ParsedCommand(root, false, false);
+        }
+        if ("retry".equals(action) && !dryRun) {
+            return new ParsedCommand(root, false, true);
         }
         return null;
     }
@@ -198,8 +203,8 @@ public final class MarkdownImportCli {
         print("DRY_RUN", added, changed, unchanged, missing, failed, blocked, 0, false);
     }
 
-    private void printImport(MarkdownImportReport report) {
-        print("IMPORT", report.getAdded(), report.getChanged(), report.getUnchanged(), report.getMissing(),
+    private void printImport(String mode, MarkdownImportReport report) {
+        print(mode, report.getAdded(), report.getChanged(), report.getUnchanged(), report.getMissing(),
                 report.getFailed(), report.getBlocked(), report.getVectorPending(), report.isPartial());
     }
 
@@ -223,7 +228,7 @@ public final class MarkdownImportCli {
 
     @FunctionalInterface
     public interface ImportCommand {
-        MarkdownImportReport importRoot(Path root);
+        MarkdownImportReport importRoot(Path root, boolean retryPending);
     }
 
     @FunctionalInterface
@@ -239,14 +244,17 @@ public final class MarkdownImportCli {
     private static final class ParsedCommand {
         private final Path root;
         private final boolean dryRun;
+        private final boolean retryPending;
 
-        private ParsedCommand(Path root, boolean dryRun) {
+        private ParsedCommand(Path root, boolean dryRun, boolean retryPending) {
             this.root = root;
             this.dryRun = dryRun;
+            this.retryPending = retryPending;
         }
 
         private Path root() { return root; }
         private boolean dryRun() { return dryRun; }
+        private boolean retryPending() { return retryPending; }
     }
 
     private static final class RequiredBeans {

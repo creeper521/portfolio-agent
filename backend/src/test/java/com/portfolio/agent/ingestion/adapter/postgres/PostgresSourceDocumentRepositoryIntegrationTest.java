@@ -21,7 +21,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PostgresSourceDocumentRepositoryIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
+    static final PostgreSQLContainer<?> POSTGRES =
+            new PostgreSQLContainer<>("pgvector/pgvector:0.8.5-pg16-bookworm");
 
     private JdbcTemplate jdbcTemplate;
     private PostgresSourceDocumentRepository repository;
@@ -90,6 +91,21 @@ class PostgresSourceDocumentRepositoryIntegrationTest {
                 .startsWith("[").endsWith("]");
         assertThat(jdbcTemplate.queryForObject("SELECT suggestion_payload->>'source' FROM source_link_suggestion", String.class))
                 .isEqualTo("integration");
+    }
+
+    @Test
+    void exposesTheLatestPendingHashToScanningWithoutPromotingItToCurrent() {
+        repository.saveRevision(document(
+                "pending.md", hash(7), MarkdownRevisionStatus.VECTOR_PENDING));
+
+        assertThat(repository.contentHash("pending.md")).contains(hash(7));
+        assertThat(repository.knownDocuments()).containsEntry("pending.md", hash(7));
+        assertThat(repository.pendingDocuments()).containsExactly("pending.md");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT current_revision_id IS NULL
+                FROM source_document
+                WHERE relative_path = 'pending.md'
+                """, Boolean.class)).isTrue();
     }
 
     private ImportedMarkdownDocument document(String path, String hash, MarkdownRevisionStatus status) {

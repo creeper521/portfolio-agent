@@ -26,7 +26,13 @@ public final class PostgresSourceDocumentRepository implements MarkdownGovernanc
         jdbcTemplate.query("""
                 SELECT document.relative_path, revision.content_hash
                 FROM source_document document
-                JOIN source_revision revision ON revision.revision_id = document.current_revision_id
+                JOIN LATERAL (
+                    SELECT candidate.content_hash
+                    FROM source_revision candidate
+                    WHERE candidate.document_id = document.document_id
+                    ORDER BY candidate.imported_at DESC, candidate.revision_id DESC
+                    LIMIT 1
+                ) revision ON true
                 WHERE document.lifecycle_status = 'ACTIVE'
                 """, (RowCallbackHandler) resultSet -> result.put(resultSet.getString(1), resultSet.getString(2)));
         return Map.copyOf(result);
@@ -37,10 +43,33 @@ public final class PostgresSourceDocumentRepository implements MarkdownGovernanc
         List<String> values = jdbcTemplate.query("""
                 SELECT revision.content_hash
                 FROM source_document document
-                JOIN source_revision revision ON revision.revision_id = document.current_revision_id
+                JOIN LATERAL (
+                    SELECT candidate.content_hash
+                    FROM source_revision candidate
+                    WHERE candidate.document_id = document.document_id
+                    ORDER BY candidate.imported_at DESC, candidate.revision_id DESC
+                    LIMIT 1
+                ) revision ON true
                 WHERE document.relative_path = ? AND document.lifecycle_status = 'ACTIVE'
                 """, (resultSet, row) -> resultSet.getString(1), relativePath);
         return values.stream().findFirst();
+    }
+
+    @Override
+    public Set<String> pendingDocuments() {
+        return Set.copyOf(jdbcTemplate.queryForList("""
+                SELECT document.relative_path
+                FROM source_document document
+                JOIN LATERAL (
+                    SELECT candidate.parse_status
+                    FROM source_revision candidate
+                    WHERE candidate.document_id = document.document_id
+                    ORDER BY candidate.imported_at DESC, candidate.revision_id DESC
+                    LIMIT 1
+                ) revision ON true
+                WHERE document.lifecycle_status = 'ACTIVE'
+                  AND revision.parse_status = 'VECTOR_PENDING'
+                """, String.class));
     }
 
     @Override

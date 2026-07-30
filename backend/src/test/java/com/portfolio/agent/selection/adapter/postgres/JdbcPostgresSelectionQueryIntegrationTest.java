@@ -20,7 +20,7 @@ class JdbcPostgresSelectionQueryIntegrationTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("pgvector/pgvector:pg16");
+            new PostgreSQLContainer<>("pgvector/pgvector:0.8.5-pg16-bookworm");
 
     private static final String ACTIVE_RELEASE_ID = "11111111-1111-1111-1111-111111111111";
     private static final String OTHER_RELEASE_ID = "22222222-2222-2222-2222-222222222222";
@@ -108,7 +108,7 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         "java case",
-                        10),
+                        5),
                 10);
 
         assertThat(rows).extracting(PostgresSelectionRow::getSubjectId)
@@ -129,11 +129,11 @@ class JdbcPostgresSelectionQueryIntegrationTest {
 
         List<PostgresSelectionRow> withCapability = query.searchFts(
                 ACTIVE_RELEASE_ID,
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 10),
+                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 5),
                 10);
         List<PostgresSelectionRow> withoutCapability = query.searchFts(
                 ACTIVE_RELEASE_ID,
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of(), null, 10),
+                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of(), null, 5),
                 10);
 
         assertThat(withCapability).extracting(PostgresSelectionRow::getSubjectId)

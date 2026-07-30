@@ -10,6 +10,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -79,6 +80,29 @@ class PublicBundleDatabaseImporterTest {
         verify(transactions).execute(any());
         verify(jdbcTemplate, atLeastOnce()).update(anyString(), any(Object[].class));
         verify(jdbcTemplate, never()).update(anyString());
+    }
+
+    @Test
+    void returnsTheExistingReleaseWithoutWritingDuplicateRows() throws Exception {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        TransactionOperations transactions = immediateTransactions();
+        when(jdbcTemplate.queryForObject(
+                anyString(), any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class)))
+                .thenReturn(new PublicBundleImportResult(
+                        "1ebddf24-991a-340a-a7c5-4457a146afc7",
+                        "2026-07-30.1",
+                        "VERIFIED"));
+        PublicBundleDatabaseImporter importer = new PublicBundleDatabaseImporter(
+                jdbcTemplate, transactions);
+
+        PublicBundleImportResult result = importer.importBundle(snapshot("APPROVED"));
+
+        assertThat(result.getReleaseStatus()).isEqualTo("VERIFIED");
+        verify(jdbcTemplate).queryForObject(
+                anyString(), any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class));
+        verifyNoMoreInteractions(jdbcTemplate);
     }
 
     @Test

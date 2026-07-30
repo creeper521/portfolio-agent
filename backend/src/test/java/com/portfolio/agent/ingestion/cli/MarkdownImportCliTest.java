@@ -30,7 +30,7 @@ class MarkdownImportCliTest {
         MarkdownImportCli cli = new MarkdownImportCli(
                 path -> new MarkdownScanReport(List.of(new MarkdownScanEntry(
                         "private.md", SourceDocumentStatus.ADDED, "hash", null))),
-                path -> new MarkdownImportReport(1, 0, 0, 0, 0, 0, 0),
+                (path, retryPending) -> new MarkdownImportReport(1, 0, 0, 0, 0, 0, 0),
                 new PrintStream(output, true, StandardCharsets.UTF_8),
                 System.err);
 
@@ -41,6 +41,27 @@ class MarkdownImportCliTest {
         assertThat(rendered).contains("\"mode\":\"DRY_RUN\"").contains("\"added\":1")
                 .contains("\"vectorPending\":0").contains("\"partial\":false");
         assertThat(rendered).doesNotContain("private.md").doesNotContain(root.toString());
+    }
+
+    @Test
+    void retryCommandForwardsPendingModeAndPrintsStructuredResult() {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        java.util.concurrent.atomic.AtomicBoolean retry = new java.util.concurrent.atomic.AtomicBoolean();
+        MarkdownImportCli cli = new MarkdownImportCli(
+                path -> new MarkdownScanReport(List.of()),
+                (path, retryPending) -> {
+                    retry.set(retryPending);
+                    return new MarkdownImportReport(0, 1, 0, 0, 0, 0, 0);
+                },
+                new PrintStream(output, true, StandardCharsets.UTF_8),
+                System.err);
+
+        int status = cli.run(new String[] {"retry", "--root", root.toString()});
+
+        assertThat(status).isZero();
+        assertThat(retry).isTrue();
+        assertThat(output.toString(StandardCharsets.UTF_8))
+                .contains("\"mode\":\"RETRY\"", "\"changed\":1");
     }
 
     @Test
@@ -69,7 +90,7 @@ class MarkdownImportCliTest {
                 .thenReturn(store);
         when(context.getBean(com.portfolio.agent.ingestion.service.MarkdownImportService.class))
                 .thenReturn(importer);
-        when(importer.importRoot(Mockito.any())).thenAnswer(invocation -> {
+        when(importer.importRoot(Mockito.any(), Mockito.eq(false))).thenAnswer(invocation -> {
             System.out.println("model C:\\private\\knowledge.md");
             System.err.println("password=hunter2 jdbc:postgresql://secret-host/private");
             return new MarkdownImportReport(1, 0, 0, 0, 0, 0, 0);
@@ -151,7 +172,7 @@ class MarkdownImportCliTest {
                 .thenReturn(store);
         when(context.getBean(com.portfolio.agent.ingestion.service.MarkdownImportService.class))
                 .thenReturn(importer);
-        when(importer.importRoot(Mockito.any())).thenAnswer(invocation -> {
+        when(importer.importRoot(Mockito.any(), Mockito.eq(false))).thenAnswer(invocation -> {
             System.out.println("ONNX model " + root);
             System.err.println("embedding failure password=hunter2");
             throw new IllegalStateException("model directory " + root);

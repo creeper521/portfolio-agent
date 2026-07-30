@@ -6,6 +6,8 @@ import java.util.Set;
 
 public interface MarkdownGovernanceStore extends SourceDocumentCatalog {
 
+    Set<String> pendingDocuments();
+
     Map<String, float[]> reusableEmbeddings(String relativePath, Set<String> chunkHashes);
 
     void saveRevision(ImportedMarkdownDocument document);

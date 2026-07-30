@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.transaction.support.TransactionOperations;
 
 public final class PublicBundleDatabaseImporter {
@@ -79,6 +80,13 @@ public final class PublicBundleDatabaseImporter {
                 (release_id, payload, payload_checksum)
             VALUES (CAST(? AS uuid), CAST(? AS jsonb), ?)
             """;
+    private static final String FIND_RELEASE_SQL = """
+            SELECT release_id::text, release_version, status
+            FROM content_release
+            WHERE release_id = CAST(? AS uuid)
+              AND release_version = ?
+              AND content_hash = ?
+            """;
 
     private final JdbcTemplate jdbcTemplate;
     private final TransactionOperations transactions;
@@ -108,6 +116,10 @@ public final class PublicBundleDatabaseImporter {
 
     private PublicBundleImportResult importInTransaction(
             RuntimeContentSnapshot snapshot, ValidatedBundle bundle, String releaseId) {
+        PublicBundleImportResult existing = findExistingRelease(snapshot, releaseId);
+        if (existing != null) {
+            return existing;
+        }
         jdbcTemplate.update(INSERT_RELEASE_SQL, releaseId, snapshot.getContentVersion(),
                 snapshot.getSchemaVersion(), canonicalHash(snapshot.getRuntimeBundleHash(), "runtime bundle hash"));
         insertSubjects(snapshot, releaseId);
@@ -128,6 +140,23 @@ public final class PublicBundleDatabaseImporter {
                 encoded.getPayload(),
                 encoded.getChecksum());
         return new PublicBundleImportResult(releaseId, snapshot.getContentVersion(), "VERIFIED");
+    }
+
+    private PublicBundleImportResult findExistingRelease(
+            RuntimeContentSnapshot snapshot, String releaseId) {
+        try {
+            return jdbcTemplate.queryForObject(
+                    FIND_RELEASE_SQL,
+                    (resultSet, rowNumber) -> new PublicBundleImportResult(
+                            resultSet.getString(1),
+                            resultSet.getString(2),
+                            resultSet.getString(3)),
+                    releaseId,
+                    snapshot.getContentVersion(),
+                    canonicalHash(snapshot.getRuntimeBundleHash(), "runtime bundle hash"));
+        } catch (EmptyResultDataAccessException exception) {
+            return null;
+        }
     }
 
     private void insertSubjects(RuntimeContentSnapshot snapshot, String releaseId) {

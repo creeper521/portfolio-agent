@@ -47,19 +47,51 @@ public final class MarkdownImportService {
     }
 
     public MarkdownImportReport importRoot(Path root) {
+        return importRoot(root, false);
+    }
+
+    public MarkdownImportReport importRoot(Path root, boolean retryPending) {
         Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         List<MarkdownScanEntry> entries = new MarkdownScanService(store).scan(normalizedRoot).getEntries();
+        Set<String> pendingDocuments = retryPending ? store.pendingDocuments() : Set.of();
         Counts counts = new Counts();
         for (MarkdownScanEntry entry : entries) {
+            if (retryPending) {
+                retryPending(normalizedRoot, entry, pendingDocuments, counts);
+                continue;
+            }
             switch (entry.getStatus()) {
                 case ADDED, CHANGED -> importOne(normalizedRoot, entry, counts);
                 case MISSING -> markMissing(entry, counts);
-                case UNCHANGED -> counts.unchanged++;
+                case UNCHANGED -> {
+                    if (pendingDocuments.contains(entry.getRelativePath())) {
+                        importOne(normalizedRoot, entry, counts);
+                    } else {
+                        counts.unchanged++;
+                    }
+                }
                 case FAILED -> counts.failed++;
                 case BLOCKED -> counts.blocked++;
             }
         }
         return counts.report();
+    }
+
+    private void retryPending(
+            Path root, MarkdownScanEntry entry, Set<String> pendingDocuments, Counts counts) {
+        switch (entry.getStatus()) {
+            case UNCHANGED -> {
+                if (pendingDocuments.contains(entry.getRelativePath())) {
+                    importOne(root, entry, counts);
+                } else {
+                    counts.unchanged++;
+                }
+            }
+            case ADDED, CHANGED -> counts.blocked++;
+            case MISSING -> counts.missing++;
+            case FAILED -> counts.failed++;
+            case BLOCKED -> counts.blocked++;
+        }
     }
 
     private void importOne(Path root, MarkdownScanEntry entry, Counts counts) {

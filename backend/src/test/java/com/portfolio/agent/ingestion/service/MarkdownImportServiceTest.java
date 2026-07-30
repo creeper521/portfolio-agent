@@ -159,6 +159,33 @@ class MarkdownImportServiceTest {
         assertThat(store.saved).extracting(ImportedMarkdownDocument::getRelativePath).containsExactly("second.md");
     }
 
+    @Test
+    void retriesOnlyUnchangedDocumentsWhoseLatestRevisionIsPending() throws Exception {
+        String pendingHash = sha256("pending");
+        String readyHash = sha256("ready");
+        Files.writeString(root.resolve("pending.md"), "pending", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("ready.md"), "ready", StandardCharsets.UTF_8);
+        Files.writeString(root.resolve("new.md"), "new", StandardCharsets.UTF_8);
+        InMemoryStore store = new InMemoryStore(Map.of(
+                "pending.md", pendingHash,
+                "ready.md", readyHash,
+                "missing.md", sha256("missing")));
+        store.pending.add("pending.md");
+
+        MarkdownImportReport report = new MarkdownImportService(
+                store, text -> vector(), immediateTransactions()).importRoot(root, true);
+
+        assertThat(report.getChanged()).isEqualTo(1);
+        assertThat(report.getUnchanged()).isEqualTo(1);
+        assertThat(report.getBlocked()).isEqualTo(1);
+        assertThat(report.getMissing()).isEqualTo(1);
+        assertThat(store.saved)
+                .extracting(ImportedMarkdownDocument::getRelativePath)
+                .containsExactly("pending.md");
+        assertThat(store.missing).isEmpty();
+        assertThat(store.saved.getFirst().isReplaceCurrentRevision()).isTrue();
+    }
+
     private TransactionOperations immediateTransactions() {
         return new TransactionOperations() {
             @Override
@@ -194,6 +221,7 @@ class MarkdownImportServiceTest {
         private final Map<String, float[]> reusable = new HashMap<>();
         private final List<ImportedMarkdownDocument> saved = new ArrayList<>();
         private final List<String> missing = new ArrayList<>();
+        private final Set<String> pending = new java.util.HashSet<>();
         private String failingPath;
 
         private InMemoryStore(Map<String, String> documents) {
@@ -208,6 +236,11 @@ class MarkdownImportServiceTest {
         @Override
         public Optional<String> contentHash(String relativePath) {
             return Optional.ofNullable(documents.get(relativePath));
+        }
+
+        @Override
+        public Set<String> pendingDocuments() {
+            return Set.copyOf(pending);
         }
 
         @Override

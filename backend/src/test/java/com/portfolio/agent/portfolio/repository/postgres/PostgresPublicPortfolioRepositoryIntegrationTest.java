@@ -38,7 +38,7 @@ class PostgresPublicPortfolioRepositoryIntegrationTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("pgvector/pgvector:pg16");
+            new PostgreSQLContainer<>("pgvector/pgvector:0.8.5-pg16-bookworm");
 
     private JdbcTemplate jdbcTemplate;
     private TransactionTemplate transactions;
