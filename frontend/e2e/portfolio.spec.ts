@@ -127,7 +127,7 @@ test.describe('browser diagnostics release gate', () => {
     await expect(page.getByRole('alert')).not.toContainText('visitor question')
     await recovery.click()
     await expect(page).toHaveURL(/\/projects$/)
-    await expect(page.getByRole('heading', { level: 1, name: '工程案卷目录' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: '项目主线' })).toBeVisible()
     await expect.poll(() => diagnostics.events.length).toBe(1)
     expectClosedDiagnosticBodies(diagnostics.bodies)
   })
