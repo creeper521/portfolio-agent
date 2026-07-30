@@ -40,4 +40,18 @@ describe('portfolio router', () => {
     expect(router.currentRoute.value.params.slug).toBe('multilingual-image-preservation')
     expect(router.currentRoute.value.matched[0].props.default).toBe(true)
   })
+
+  it.each([
+    ['/projects/context-engineering-evaluation', 'open-source-evaluation'],
+    ['/projects/technical-writing', 'technical-writing'],
+    ['/projects/engineering-delivery-learning', 'engineering-operations'],
+  ])('把降为 Collection 的旧项目 %s 重定向到对应案例筛选', async (path, collection) => {
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push(path)
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('cases')
+    expect(router.currentRoute.value.query).toEqual({ collection, status: 'all' })
+  })
 })

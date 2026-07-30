@@ -17,6 +17,19 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'projects',
         component: () => import('../pages/ProjectsPage.vue'),
       },
+      // 已降为 Collection 的旧项目地址，重定向到 /cases 的对应主题筛选（必须放在 /projects/:slug 之前）。
+      {
+        path: '/projects/context-engineering-evaluation',
+        redirect: { name: 'cases', query: { collection: 'open-source-evaluation', status: 'all' } },
+      },
+      {
+        path: '/projects/technical-writing',
+        redirect: { name: 'cases', query: { collection: 'technical-writing', status: 'all' } },
+      },
+      {
+        path: '/projects/engineering-delivery-learning',
+        redirect: { name: 'cases', query: { collection: 'engineering-operations', status: 'all' } },
+      },
       {
         path: '/projects/:slug',
         name: 'project',
