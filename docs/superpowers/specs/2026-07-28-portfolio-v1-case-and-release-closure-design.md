@@ -349,9 +349,9 @@ PORTFOLIO_MODEL_PROVIDER=<approved-provider>
 
 - `README.md`
 - `docs/00-文档状态索引.md`
-- `docs/08-current-implementation-status.md`
-- `docs/05-public-release-bundle-contract.md`
-- `docs/06-content-publishing-runbook.md`
+- `docs/08-当前实现状态.md`
+- `docs/05-公开发布包契约.md`
+- `docs/06-公开内容发布运行手册.md`
 
 必须修正的旧结论：
 

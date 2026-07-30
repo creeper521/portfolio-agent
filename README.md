@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-30）：** 当前随包运行时为 schema `4.0`、内容版本 `2026-07-29.1` 的七文件检索包：5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。独立 Case 目录/详情、旧地址规范重定向、Case → Agent 页面内存交接、结构化诊断、PostgreSQL 公开快照、Markdown 增量导入和资产组合推荐后端均已进入当前代码；数据库、混合检索和模型能力默认关闭。当前仍未生产部署，也没有真实 Provider、PostgreSQL 组合 API 或线上数据的生产验收结论。详见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
+> **项目状态（2026-07-30）：** 当前随包运行时为 schema `4.0`、内容版本 `2026-07-29.1` 的七文件检索包：5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。独立 Case 目录/详情、旧地址规范重定向、Case → Agent 页面内存交接、结构化诊断、PostgreSQL 公开快照、Markdown 增量导入和资产组合推荐后端均已进入当前代码；数据库、混合检索和模型能力默认关闭。当前仍未生产部署，也没有真实 Provider、PostgreSQL 组合 API 或线上数据的生产验收结论。详见 [`docs/08-当前实现状态.md`](docs/08-当前实现状态.md)。
 
 一个面向技术面试官、实习导师、HR 和普通访客的交互式实习作品集。系统只展示经人工审核的公开事实，提供 Project/Case 浏览、证据追溯、确定性问答，以及在显式审批后才可启用的模型表达、本地检索和 PostgreSQL 组合推荐能力。
 
@@ -366,7 +366,9 @@ AnswerService
 ## 文档入口
 
 - `docs/00-文档状态索引.md`：全部文档的当前状态、权威顺序和已知缺口
-- `docs/08-current-implementation-status.md`：按代码、配置、测试和制品盘点当前已实现/受限/未实现能力
+- `docs/11-项目演进日志.md`：按日期回顾功能、重要修复、产品决策和技术选型的演进
+- `docs/10-local-postgresql-pgvector-runbook.md`：本地 PostgreSQL 16 / pgvector 双库启动、连接和隔离说明
+- `docs/08-当前实现状态.md`：按代码、配置、测试和制品盘点当前已实现/受限/未实现能力
 - `docs/04-项目代码约束.md`：当前代码与发布约束
 - `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`：当前 V0 事实与回答边界
 - `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`：当前后端结构

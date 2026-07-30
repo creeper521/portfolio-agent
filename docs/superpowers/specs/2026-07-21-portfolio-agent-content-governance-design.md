@@ -210,7 +210,7 @@ PublicEvidence 通过字段白名单重新组装：
 
 ## 7. 不可变发布包
 
-本设计增强而不替代 `docs/05-public-release-bundle-contract.md` 与 `docs/06-content-publishing-runbook.md`。B 第一版沿用 Manifest、checksums、应用兼容、原子切换、健康检查和回滚语义，但只发布确定性运行所需内容：
+本设计增强而不替代 `docs/05-公开发布包契约.md` 与 `docs/06-公开内容发布运行手册.md`。B 第一版沿用 Manifest、checksums、应用兼容、原子切换、健康检查和回滚语义，但只发布确定性运行所需内容：
 
 ```text
 releases/

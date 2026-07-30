@@ -62,7 +62,7 @@ C2a is implemented and verified. This plan remains the implementation record. C2
 - 修改 `frontend/e2e/support/publicApiMocks.ts` 和 `frontend/e2e/portfolio.spec.ts`：覆盖检索答案、Boundary、Evidence 抽屉和隐私状态。
 - 扩展 `architecture-check.ps1`、`privacy-check.ps1`、`verify-static-bundle.ps1` 及各自测试。
 - 新建固定公开 benchmark 夹具 `backend/src/test/resources/retrieval-benchmark/cases.json`；不采集真实访客问题。
-- 更新 `README.md`、`SECURITY.md`、`docs/00-文档状态索引.md`、`docs/05-public-release-bundle-contract.md`、`docs/06-content-publishing-runbook.md` 和 C 设计实现状态；B、C2b、C2c、C3 不得标成完成。
+- 更新 `README.md`、`SECURITY.md`、`docs/00-文档状态索引.md`、`docs/05-公开发布包契约.md`、`docs/06-公开内容发布运行手册.md` 和 C 设计实现状态；B、C2b、C2c、C3 不得标成完成。
 
 ---
 

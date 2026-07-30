@@ -365,9 +365,9 @@ Expected: `status = "PASS"` and empty mismatch arrays.
 ### Task 7: Update the Public Project Documentation
 
 **Files:**
-- Create: `docs/09-portfolio-asset-library-status.md`
+- Create: `docs/09-作品集资产库状态.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/08-当前实现状态.md`
 
 **Interfaces:**
 - Consumes: private validation summaries only.
@@ -447,9 +447,9 @@ Expected content-task changes:
 ```text
 docs/superpowers/specs/2026-07-23-portfolio-asset-library-ingestion-design.md
 docs/superpowers/plans/2026-07-23-portfolio-asset-library-ingestion.md
-docs/09-portfolio-asset-library-status.md
+docs/09-作品集资产库状态.md
 docs/00-文档状态索引.md
-docs/08-current-implementation-status.md
+docs/08-当前实现状态.md
 ```
 
 Existing frontend and design-exploration changes remain unstaged and unmodified by this plan.

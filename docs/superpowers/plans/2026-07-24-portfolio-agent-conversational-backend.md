@@ -77,7 +77,7 @@
 - `backend/src/main/java/com/portfolio/agent/answer/adapter/portfolio/LocalPortfolioKnowledgeAdapter.java`：投影公开 Chunk 文本。
 - `backend/src/main/java/com/portfolio/agent/answer/adapter/model/ModelExpressionConfiguration.java`：共享 Provider 描述、HTTP 超时和 v2 适配器所需 Bean。
 - `backend/src/main/resources/application.yml`：增加 v2 会话配置。
-- `README.md`、`SECURITY.md`、`docs/00-文档状态索引.md`、`docs/08-current-implementation-status.md`：记录新能力和安全基线变化。
+- `README.md`、`SECURITY.md`、`docs/00-文档状态索引.md`、`docs/08-当前实现状态.md`：记录新能力和安全基线变化。
 
 ### 核心测试
 
@@ -927,7 +927,7 @@ git commit -m "test: 固化对话 Agent 的访客隐私边界"
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/08-当前实现状态.md`
 - Verify: `backend/src/main/resources/prompts/portfolio-agent-system.zh-CN.txt`
 
 **Interfaces:**
@@ -994,7 +994,7 @@ Expected: 生成 `backend/target/portfolio-agent.jar`。
 - [ ] **Step 7: 提交文档**
 
 ```powershell
-git add README.md docs/00-文档状态索引.md docs/08-current-implementation-status.md
+git add README.md docs/00-文档状态索引.md docs/08-当前实现状态.md
 git commit -m "docs: 更新对话式 Agent 后端交付状态"
 ```
 

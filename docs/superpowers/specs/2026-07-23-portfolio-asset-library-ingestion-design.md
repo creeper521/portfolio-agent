@@ -209,7 +209,7 @@ Obsidian 原始知识库
 公开项目交付物：
 
 1. 本设计文档；
-2. `docs/09-portfolio-asset-library-status.md`；
+2. `docs/09-作品集资产库状态.md`；
 3. 更新后的文档状态索引和实现状态；
 4. 后续 CaseStudy 公共契约的明确输入边界。
 

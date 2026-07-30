@@ -413,8 +413,8 @@ mvn.cmd -f backend/pom.xml package
 8. 性能与环境报告；
 9. HOLD/EXCLUDE 原因报告；
 10. 更新后的 `docs/00-文档状态索引.md`；
-11. 更新后的 `docs/08-current-implementation-status.md`；
-12. 更新后的 `docs/09-portfolio-asset-library-status.md`；
+11. 更新后的 `docs/08-当前实现状态.md`；
+12. 更新后的 `docs/09-作品集资产库状态.md`；
 13. README 中准确的公开规模和检索状态。
 
 文档必须区分：

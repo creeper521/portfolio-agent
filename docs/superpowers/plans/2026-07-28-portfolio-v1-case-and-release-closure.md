@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **执行状态（2026-07-28）：** Task 1–5 的后端契约、公开主体 Guard、真实 Bundle 集成、Provider 响应断言和发布脚本接线均已实现并合入本地 `master`；Task 6 的当前状态文档与前端交接已同步。普通自动化测试和随包 Case 冒烟已有证据，但真实 Provider 外部调用、独立 Case 前端和生产部署尚未执行。下方复选框保留原始 TDD 实施步骤，不再作为当前待办清单；当前状态以 `docs/00-文档状态索引.md` 和 `docs/08-current-implementation-status.md` 为准。
+> **执行状态（2026-07-28）：** Task 1–5 的后端契约、公开主体 Guard、真实 Bundle 集成、Provider 响应断言和发布脚本接线均已实现并合入本地 `master`；Task 6 的当前状态文档与前端交接已同步。普通自动化测试和随包 Case 冒烟已有证据，但真实 Provider 外部调用、独立 Case 前端和生产部署尚未执行。下方复选框保留原始 TDD 实施步骤，不再作为当前待办清单；当前状态以 `docs/00-文档状态索引.md` 和 `docs/08-当前实现状态.md` 为准。
 
 **Goal:** 固定独立 Case 后端契约，阻止未知公开主体进入 Provider，增加真实 Provider 与打包后 Case 冒烟门禁，并同步项目文档。
 
@@ -38,7 +38,7 @@
 - Modify `scripts/run-jar-e2e.ps1`: 增加 Case API、v2 Case 冒烟与可选真实 Provider 冒烟。
 - Modify `scripts/run-jar-e2e.test.ps1`: 覆盖新增参数、环境恢复和进程清理。
 - Modify `scripts/verify-release.ps1`: 接入脚本测试和 `-RequireLiveProvider`。
-- Modify `README.md`, `docs/00-文档状态索引.md`, `docs/05-public-release-bundle-contract.md`, `docs/06-content-publishing-runbook.md`, `docs/08-current-implementation-status.md`: 同步真实状态与交接契约。
+- Modify `README.md`, `docs/00-文档状态索引.md`, `docs/05-公开发布包契约.md`, `docs/06-公开内容发布运行手册.md`, `docs/08-当前实现状态.md`: 同步真实状态与交接契约。
 
 ---
 
@@ -593,9 +593,9 @@ git commit -m "发布：接入案例与真实模型验收门禁"
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/05-public-release-bundle-contract.md`
-- Modify: `docs/06-content-publishing-runbook.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/05-公开发布包契约.md`
+- Modify: `docs/06-公开内容发布运行手册.md`
+- Modify: `docs/08-当前实现状态.md`
 
 **Interfaces:**
 - Consumes: Tasks 1–5 的最终参数名、接口和测试证据。
@@ -663,8 +663,8 @@ docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.m
 
 ```powershell
 rg -n "2026-07-23\.1|1 个 SQL 审计 Project|3 个 CaseStudy|前端尚无 Case|前端尚未接入" `
-  README.md docs/00-文档状态索引.md docs/05-public-release-bundle-contract.md `
-  docs/06-content-publishing-runbook.md docs/08-current-implementation-status.md
+  README.md docs/00-文档状态索引.md docs/05-公开发布包契约.md `
+  docs/06-公开内容发布运行手册.md docs/08-当前实现状态.md
 ```
 
 Expected: 对当前状态的过期断言为 0；历史记录如保留，必须明确标注为历史快照。
@@ -673,9 +673,9 @@ Expected: 对当前状态的过期断言为 0；历史记录如保留，必须�
 
 ```powershell
 git add README.md docs/00-文档状态索引.md `
-  docs/05-public-release-bundle-contract.md `
-  docs/06-content-publishing-runbook.md `
-  docs/08-current-implementation-status.md
+  docs/05-公开发布包契约.md `
+  docs/06-公开内容发布运行手册.md `
+  docs/08-当前实现状态.md
 git commit -m "文档：同步案例与发布收尾状态"
 ```
 

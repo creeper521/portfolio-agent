@@ -940,8 +940,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.p
 
 - `README.md`
 - `docs/00-文档状态索引.md`
-- `docs/08-current-implementation-status.md`
-- `docs/09-portfolio-asset-library-status.md`
+- `docs/08-当前实现状态.md`
+- `docs/09-作品集资产库状态.md`
 - `docs/reports/retrieval-wave-1-2026-07-24.md`
 - `docs/reports/retrieval-wave-2-2026-07-24.md`
 - `docs/reports/retrieval-wave-3-2026-07-24.md`

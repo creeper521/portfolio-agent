@@ -94,7 +94,7 @@ Expected: both test classes pass.
 - Modify: `backend/src/main/java/com/portfolio/agent/portfolio/service/PortfolioService.java`
 - Modify: `backend/src/main/java/com/portfolio/agent/portfolio/mapper/PortfolioResponseMapper.java`
 - Test: `backend/src/test/java/com/portfolio/agent/portfolio/service/PortfolioServiceTest.java`
-- Modify: `docs/07-modular-monolith-backend-review.md`
+- Modify: `docs/07-模块化单体后端审核记录.md`
 - Modify: `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`
 
 **Interfaces:**
@@ -187,6 +187,6 @@ Expected: the obsolete package references produce no output; diff check exits 0;
 - [x] **Step 4: Commit**
 
 ```powershell
-git add backend/src docs/07-modular-monolith-backend-review.md docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md docs/superpowers/plans/2026-07-16-portfolio-result-validation-boundary-refactor.md
+git add backend/src docs/07-模块化单体后端审核记录.md docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md docs/superpowers/plans/2026-07-16-portfolio-result-validation-boundary-refactor.md
 git commit -m "refactor: clarify portfolio result and validation boundaries"
 ```

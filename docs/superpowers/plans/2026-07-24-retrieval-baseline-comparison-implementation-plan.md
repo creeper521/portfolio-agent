@@ -442,7 +442,7 @@ git commit -m "test: add explicit retrieval comparison gate"
 - Generated, ignored: `output/retrieval-benchmark/wave-0/comparison.md`
 - Create after successful run: `docs/reports/retrieval-baseline-2026-07-24.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/08-当前实现状态.md`
 
 **Interfaces:**
 - Consumes verified model directory `runtime-models/bge-small-zh-v1.5`.
@@ -500,7 +500,7 @@ Expected: every command exits 0. Record exact test counts and any expected skips
 - [ ] **Step 5: Commit the reviewed baseline**
 
 ```powershell
-git add docs/reports/retrieval-baseline-2026-07-24.md docs/00-文档状态索引.md docs/08-current-implementation-status.md
+git add docs/reports/retrieval-baseline-2026-07-24.md docs/00-文档状态索引.md docs/08-当前实现状态.md
 git commit -m "docs: record retrieval baseline comparison"
 ```
 

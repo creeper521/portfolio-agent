@@ -57,7 +57,7 @@
 - Tests: the corresponding model, validator, loader, repository, service, mapper/controller, and release-contract tests.
 - Governance tests/tooling: tracked `scripts/portfolio-governance.test.ps1`; installed private `.agents/skills/portfolio-governance` implementation is updated locally but is never staged.
 - Public bundle after human approval only: the four files in `backend/src/main/resources/public-data/bundle/`.
-- Status documentation after successful verification: `docs/00-文档状态索引.md`, `docs/08-current-implementation-status.md`, `docs/09-portfolio-asset-library-status.md`, the approved design spec status, and `README.md`.
+- Status documentation after successful verification: `docs/00-文档状态索引.md`, `docs/08-当前实现状态.md`, `docs/09-作品集资产库状态.md`, the approved design spec status, and `README.md`.
 
 ---
 
@@ -1136,8 +1136,8 @@ git commit -m "content: publish verified CaseStudy portfolio"
 
 **Files:**
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
-- Modify: `docs/09-portfolio-asset-library-status.md`
+- Modify: `docs/08-当前实现状态.md`
+- Modify: `docs/09-作品集资产库状态.md`
 - Modify: `docs/superpowers/specs/2026-07-23-portfolio-case-study-public-contract-design.md`
 - Modify: `README.md`
 
@@ -1169,7 +1169,7 @@ README API section must list `/api/v1/cases`, `/api/v1/cases/{slug}`, and the ne
 Run:
 
 ```powershell
-rg -n "CaseStudy|/api/v1/cases|schema 3.0|尚未完成" README.md docs/00-文档状态索引.md docs/08-current-implementation-status.md docs/09-portfolio-asset-library-status.md docs/superpowers/specs/2026-07-23-portfolio-case-study-public-contract-design.md
+rg -n "CaseStudy|/api/v1/cases|schema 3.0|尚未完成" README.md docs/00-文档状态索引.md docs/08-当前实现状态.md docs/09-作品集资产库状态.md docs/superpowers/specs/2026-07-23-portfolio-case-study-public-contract-design.md
 git diff -- frontend
 ```
 
@@ -1178,7 +1178,7 @@ Expected: all status claims have matching implementation; frontend diff is empty
 - [ ] **Step 3: Commit documentation**
 
 ```powershell
-git add README.md docs/00-文档状态索引.md docs/08-current-implementation-status.md docs/09-portfolio-asset-library-status.md docs/superpowers/specs/2026-07-23-portfolio-case-study-public-contract-design.md
+git add README.md docs/00-文档状态索引.md docs/08-当前实现状态.md docs/09-作品集资产库状态.md docs/superpowers/specs/2026-07-23-portfolio-case-study-public-contract-design.md
 git commit -m "docs: update CaseStudy implementation status"
 ```
 
@@ -1244,7 +1244,7 @@ Expected:
 - [ ] **Step 6: Run forbidden-metric scans**
 
 ```powershell
-rg -n "192\\.168\\.|localhost:9207|D:\\\\code|C:\\\\Users|28\\.2%|4\\.3%|44608|158318|113710" backend/src/main/resources/public-data/bundle README.md docs/00-文档状态索引.md docs/08-current-implementation-status.md docs/09-portfolio-asset-library-status.md
+rg -n "192\\.168\\.|localhost:9207|D:\\\\code|C:\\\\Users|28\\.2%|4\\.3%|44608|158318|113710" backend/src/main/resources/public-data/bundle README.md docs/00-文档状态索引.md docs/08-当前实现状态.md docs/09-作品集资产库状态.md
 ```
 
 Expected: no matches. If a match appears, do not amend the approved bytes directly; rebuild and reapprove the candidate.

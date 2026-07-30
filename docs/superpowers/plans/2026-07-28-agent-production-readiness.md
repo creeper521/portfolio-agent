@@ -510,7 +510,7 @@ git commit -m "功能：增加回答取消重复保护与状态提示"
 - Modify: `frontend/e2e/support/publicApiMocks.ts`
 - Modify: `README.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/08-当前实现状态.md`
 - Modify: `docs/superpowers/specs/2026-07-28-agent-production-readiness-design.md`
 
 **Interfaces:**

@@ -1,12 +1,12 @@
 # Project Agent Instructions
 
-> **Documentation status (2026-07-22):** Current repository authority. See `docs/00-文档状态索引.md` for the status of every design and plan, and `docs/08-current-implementation-status.md` for the feature inventory.
+> **Documentation status (2026-07-22):** Current repository authority. See `docs/00-文档状态索引.md` for the status of every design and plan, and `docs/08-当前实现状态.md` for the feature inventory.
 
 ## Product boundary
 
 This repository builds a public internship portfolio Agent. Runtime code may read only the reviewed public snapshot under `backend/src/main/resources/public-data/`. It must never read the private Obsidian knowledge base, candidate snapshots, raw daily reports, credentials, or unreviewed screenshots.
 
-The current public content still contains one SQL audit project and one executable preset. The runtime now also contains the implemented A/B/C1/C2 capabilities and the C3 built-in Model Provider Registry documented in `docs/08-current-implementation-status.md`; optional model expression and local retrieval remain disabled by default. These runtime additions do not expand the reviewed public factual scope.
+The current public content still contains one SQL audit project and one executable preset. The runtime now also contains the implemented A/B/C1/C2 capabilities and the C3 built-in Model Provider Registry documented in `docs/08-当前实现状态.md`; optional model expression and local retrieval remain disabled by default. These runtime additions do not expand the reviewed public factual scope.
 
 Do not add Spring AI runtime calls, SSE, a database, authentication, dynamic external publication, private search, or further C3 abstractions unless the authoritative design is updated and approved. The existing fixed DeepSeek/GLM expression adapters and local BGE embedding path are admitted only under their documented fail-closed configuration and privacy boundaries.
 
@@ -38,6 +38,15 @@ Do not treat a historical or superseded plan as active work. Dynamic publication
 - Preserve user-owned Git changes. Do not reset, restore, stage, commit, or push without explicit authorization.
 - All future Git commit messages must be written in Chinese. When using Conventional Commits, the `type`/`scope` prefix may retain its conventional English identifier, but the subject and body after the prefix must be in Chinese.
 - Prefix shell commands with `rtk` when it is installed. If unavailable, use the documented raw-command debugging exception.
+
+## Documentation maintenance
+
+- Complete each independent feature, important behavior fix, product-boundary change, or technology-selection change by updating `docs/11-项目演进日志.md` before ending the task.
+- Record what changed, how it relates to the previous direction, and its current state. Do not record implementation steps, test procedures, or commit metadata.
+- Pure formatting changes, test-only additions, and behavior-preserving mechanical refactors do not need a separate evolution-log entry.
+- When a capability, default switch, or product boundary changes, also update `docs/08-当前实现状态.md`.
+- When public assets, governance waves, or publication status change, also update `docs/09-作品集资产库状态.md`.
+- Changes to release bundles or content publication must read and follow `docs/05-公开发布包契约.md` and `docs/06-公开内容发布运行手册.md`.
 
 ## Technology
 

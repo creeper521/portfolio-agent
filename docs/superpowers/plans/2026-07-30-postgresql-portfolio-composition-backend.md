@@ -364,8 +364,8 @@ Expected: PASS，重复扫描为 UNCHANGED，单文档失败不影响其他文�
 - Create: `backend/src/test/resources/retrieval-benchmark/portfolio-selection-cases.json`
 - Test: `backend/src/test/java/com/portfolio/agent/release/benchmark/PortfolioSelectionBenchmarkEvaluatorTest.java`
 - Modify: `scripts/privacy-check.ps1`
-- Modify: `docs/08-current-implementation-status.md`
-- Modify: `docs/09-portfolio-asset-library-status.md`
+- Modify: `docs/08-当前实现状态.md`
+- Modify: `docs/09-作品集资产库状态.md`
 
 **Interfaces:**
 - Produces: R0–R4 可比较报告

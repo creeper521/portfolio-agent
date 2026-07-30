@@ -36,7 +36,7 @@
 - Modify `frontend/e2e/portfolio.spec.ts`: browser proof for surfaces, button count, message treatment, drawers, and viewport screenshots.
 - Modify `docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md`: mark the approved design implemented only after all gates pass.
 - Modify `docs/00-文档状态索引.md`: register the design and implementation record with their final status.
-- Modify `docs/08-current-implementation-status.md`: record the light paper Agent workspace in the current frontend inventory.
+- Modify `docs/08-当前实现状态.md`: record the light paper Agent workspace in the current frontend inventory.
 - Modify `AGENTS.md`: add the approved light-workspace design to the source-of-truth list.
 
 ---
@@ -554,7 +554,7 @@ Do not add `frontend/test-results` screenshots to Git.
 - Modify: `docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md`
 - Modify: `docs/superpowers/plans/2026-07-22-portfolio-agent-light-workspace-palette.md`
 - Modify: `docs/00-文档状态索引.md`
-- Modify: `docs/08-current-implementation-status.md`
+- Modify: `docs/08-当前实现状态.md`
 - Modify: `AGENTS.md`
 
 **Interfaces:**
@@ -580,7 +580,7 @@ Add these rows to the current-design area of `docs/00-文档状态索引.md`:
 
 - [ ] **Step 3: Update the current frontend inventory**
 
-In `docs/08-current-implementation-status.md`, extend the “公开作品集前端” list with this exact bullet:
+In `docs/08-当前实现状态.md`, extend the “公开作品集前端” list with this exact bullet:
 
 ```markdown
 - Agent 工作台采用 A「均衡纸阶」：顶部导航保持深墨色，三栏使用分级米白纸色，中间对话区最亮；仅“新对话”和“发送”保留实心深色主按钮。
@@ -609,7 +609,7 @@ Immediately below the title of this plan, add:
 Run:
 
 ```powershell
-rg -n "待用户审核|待实现|深色对话舞台" docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md docs/00-文档状态索引.md docs/08-current-implementation-status.md AGENTS.md
+rg -n "待用户审核|待实现|深色对话舞台" docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md docs/00-文档状态索引.md docs/08-当前实现状态.md AGENTS.md
 git diff --check
 git status --short
 ```
@@ -619,7 +619,7 @@ Expected: no stale “待用户审核” or “待实现” status for this feat
 - [ ] **Step 7: Commit the verified documentation state**
 
 ```powershell
-git add AGENTS.md docs/00-文档状态索引.md docs/08-current-implementation-status.md docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md docs/superpowers/plans/2026-07-22-portfolio-agent-light-workspace-palette.md
+git add AGENTS.md docs/00-文档状态索引.md docs/08-当前实现状态.md docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md docs/superpowers/plans/2026-07-22-portfolio-agent-light-workspace-palette.md
 git commit -m "docs: mark light agent workspace implemented"
 ```
 
