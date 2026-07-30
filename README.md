@@ -1,23 +1,26 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-28）：** 全量公开资产已完成人工 Approval、本地发布和原子导入，当前随包运行时为 schema 3.0、内容版本 `2026-07-27.1` 的七文件检索包：7 个 Project、49 个 Case、81 个 Claim、59 个 Evidence、81 条 Claim–Evidence 关联、11 条 TimelineEvent 和 16 个 QuestionPreset；公开 61/68 项资产，7 项 `EXCLUDE` 保持私有。89 例 Keyword/Vector/Hybrid 真实模型比较中 Hybrid 的正例充分判定为 32/38，三路 false-sufficient 均为 0。Case 后端契约、未知主体 fail-closed、随包 Case 冒烟和真实 Provider 显式验收门禁已经完成；下一阶段是独立 `/cases`、`/cases/:slug`、规范重定向与具体 UI，之后再做生产候选验收。本次没有部署，也没有取得真实 Provider 外部调用证据。详见 [`docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md`](docs/reports/retrieval-full-public-assets-candidate-2026-07-27.md)。
+> **项目状态（2026-07-30）：** 当前随包运行时为 schema `4.0`、内容版本 `2026-07-29.1` 的七文件检索包：5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。独立 Case 目录/详情、旧地址规范重定向、Case → Agent 页面内存交接、结构化诊断、PostgreSQL 公开快照、Markdown 增量导入和资产组合推荐后端均已进入当前代码；数据库、混合检索和模型能力默认关闭。当前仍未生产部署，也没有真实 Provider、PostgreSQL 组合 API 或线上数据的生产验收结论。详见 [`docs/08-current-implementation-status.md`](docs/08-current-implementation-status.md)。
 
-一个面向技术面试官和实习导师的交互式实习作品集。V0 使用审核后的公开 JSON 快照，展示 SQL 审计与故障排查工具项目，并提供一个确定性问答闭环。
+一个面向技术面试官、实习导师、HR 和普通访客的交互式实习作品集。系统只展示经人工审核的公开事实，提供 Project/Case 浏览、证据追溯、确定性问答，以及在显式审批后才可启用的模型表达、本地检索和 PostgreSQL 组合推荐能力。
 
 ## 当前范围
 
-- Vue 3 六路由作品集：概览、项目目录、项目详情、时间线、证据中心和完整 Agent 工作台
+- Vue 3 八个正式路由：概览、项目目录、项目详情、Case 目录、Case 详情、时间线、证据中心和完整 Agent 工作台
 - Spring Boot 公开作品集 API，以及供正式页面使用的 `GET /api/v1/public-content` 聚合接口
-- 独立 Case 领域模型、严格校验、只读服务、列表/详情 API，以及当前公开 49 个 Case
-- 全量资产生成器：把获批公开资产编译为 7 个 Project、49 个 Case、脱敏 Claim/Evidence 和检索基准，且发布前必须经过人工批准
-- 共享 Case 目录模型可按长期主线、单体任务、问题处理、知识与评测分组；独立 Case 信息架构复用既有 Dossier 能力，故事页属于后续的 selected-case 增强
+- 独立 Case 领域模型、严格校验、只读服务、列表/详情 API、组合筛选、规范重定向和 Agent 交接
+- 全量资产生成器：把获批公开资产编译为 5 个 Project、49 个 Case、3 个 Collection、脱敏 Claim/Evidence 和检索基准，且发布前必须经过人工批准
+- 共享 Case 目录模型可按长期主线、单体任务、问题处理、知识与评测分组；故事型精选 Case 属于后续增强
 - 公开 Bundle 包含 16 个 QuestionPreset 和 11 条 TimelineEvent；Case 专属预设由 Agent 后端执行
 - 公开快照启动校验、APPROVED Evidence 过滤、项目/Evidence/Timeline 交叉引用
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
+- 请求关联 ID、结构化生产日志、封闭错误码和默认关闭的前端诊断入口
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
 - 可选的 DeepSeek V4 Flash 或 GLM-4.7 单 Provider 表达；只接收公开 `AnswerPlan`，完整校验失败即整轮确定性回退
 - 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；随包使用 `retrieval-policy-v2.1-query-risk`，文档向量在发布期生成，访客查询只在本机向量化
 - 固定六类只读公开工具与页面内存引用式多轮；只传稳定公开 ID 和意图，不传历史问答正文
+- 默认关闭的 PostgreSQL/pgvector 双库：公开运行库只读 active release，私有治理库负责显式 Markdown 扫描与增量导入
+- 确定性资产组合推荐：PostgreSQL 候选召回、2～5 项受约束组合、迁移完整度和 R0～R4 同口径基准
 - 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 
 默认配置不连接大模型。即使显式启用 C1，外部 Provider 也只接收从已批准公开内容构建的白名单 `AnswerPlan`，不接收访客原问题、会话、`turnId`、`requestId` 或私有知识。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
@@ -29,6 +32,7 @@
 - Node.js 22+
 - npm 10+
 - Docker（仅容器构建和运行需要）
+- PostgreSQL 16+ 与 pgvector（仅启用数据库公开运行库、治理导入或组合推荐时需要）
 
 开始前确认 `java -version` 指向 Java 21。Windows 下命令使用 `mvn.cmd` 和 `npm.cmd`；其他系统可分别替换为 `mvn` 和 `npm`。
 
@@ -155,6 +159,36 @@ C2 候选先在仓库外私有工作区运行 `scripts/build-retrieval-bundle.ps
 
 前端只有在回答返回 `ContextEnvelope` 时才展示追问操作。Envelope 只包含当前公开内容版本、Project/Claim/Preset/Section 稳定引用和追问意图；不包含历史问题、回答正文、会话、身份或 Provider thread。刷新后引用式上下文随页面内存会话一起消失；内容版本变化时重新按稳定 ID 核对并明确提示，引用失效则返回 `BOUNDARY`。
 
+### PostgreSQL 公开运行库与私有治理库（默认关闭）
+
+默认启动仍使用随包 JSON Bundle，不要求数据库。PostgreSQL 能力分成两套物理隔离的数据源：
+
+- **公开运行库**：保存规范化公开投影、不可变兼容快照、active release、FTS/pgvector 检索文档和组合推荐所需能力标签；启用后由 `PostgresPublicPortfolioRepository` 替代文件仓储。
+- **私有治理库**：保存操作者显式选择的 Markdown 文档、revision、chunk、向量状态和链接建议；公开 API 不读取该库。
+
+两套数据库分别由以下开关和连接信息控制：
+
+```powershell
+$env:PORTFOLIO_PUBLIC_DATABASE_ENABLED = "true"
+$env:PORTFOLIO_PUBLIC_DATABASE_URL = "jdbc:postgresql://localhost:5432/portfolio_public"
+$env:PORTFOLIO_PUBLIC_DATABASE_USERNAME = "<runtime-user>"
+$env:PORTFOLIO_PUBLIC_DATABASE_PASSWORD = "<runtime-secret>"
+
+$env:PORTFOLIO_GOVERNANCE_DATABASE_ENABLED = "true"
+$env:PORTFOLIO_GOVERNANCE_DATABASE_URL = "jdbc:postgresql://localhost:5432/portfolio_governance"
+$env:PORTFOLIO_GOVERNANCE_DATABASE_USERNAME = "<governance-user>"
+$env:PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD = "<governance-secret>"
+```
+
+Flyway 分别从 `db/public` 和 `db/governance` 初始化 schema。公开发布导入使用
+`PublicBundleDatabaseImportCli`，Markdown 扫描/导入使用 `MarkdownImportCli`，R0～R4
+同口径评测和文件/数据库迁移完整度校验使用 `PortfolioSelectionBenchmarkCli`。
+这些都是显式操作者命令，不存在自动文件 watcher；未审核 Markdown 不会自动进入公开发布链路。
+
+只有公开数据库开关启用时，`POST /api/portfolio-selections` 才会注册。接口从 active release
+召回候选，再由确定性约束组合 2～5 个 Project/Case；检索结果不能绕过 APPROVED Evidence、
+跨 release 阻断或人工发布批准。
+
 在另一个终端启动前端，Vite 会把 `/api` 请求代理到后端：
 
 ```powershell
@@ -256,8 +290,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - `GET /api/v1/cases/{slug}`：公开案例详情
 - `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
 - `POST /api/v2/answers`：对话式回答；支持自然交流、通用知识、作品集检索回答、混合回答、20 轮临时上下文和动态追问
+- `POST /api/v1/client-diagnostics`：默认关闭的前端诊断批量入口，只接受封闭且不持久化的事件契约
+- `POST /api/portfolio-selections`：仅在公开 PostgreSQL 数据源启用时注册，返回 2～5 项受约束的 Project/Case 组合
 
-`GET /api/v1/public-content` 提供顶层 `cases` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已调用 `/api/v2/answers`；剩余缺口是独立 `/cases`、`/cases/:slug`、规范重定向、具体 UI 与生产验收。
+`GET /api/v1/public-content` 提供顶层 `cases`、`collections` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已经实现 `/cases`、`/cases/:slug`、旧项目地址规范重定向和 Case → Agent 交接；剩余缺口是生产部署、线上数据验证和完整生产验收。
 
 除浏览器诊断入口外，公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
 `POST /api/v1/client-diagnostics` 是只读公开端点的唯一例外：它只接受封闭、限流且不持久化的
@@ -283,29 +319,36 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 }
 ```
 
-响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端已接入 v2；Case 独立页面流程和生产验收仍未完成。
+响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端已接入 v2，Case 页面流程和 packaged-JAR 本地联调已完成；生产验收仍未完成。
 
 ## 目录结构
 
-- `backend/`：Spring Boot API、确定性回答引擎和公开快照
-- `frontend/`：Vue 3 六路由页面、组件测试和 Playwright 测试
-- `scripts/`：代码质量、架构、隐私、静态 bundle、JAR E2E 和完整发布门禁
-- `docs/`：文档状态索引、背景、需求、技术选型、设计、计划和阶段审核
+- `backend/`：Spring Boot API、问答运行时、公开发布、PostgreSQL 仓储、治理导入、组合推荐与基准评测
+- `frontend/`：Vue 3 八路由页面、领域组件、Vitest 测试和 Playwright 验收
+- `governance/`：候选、策略、schema、基准和公开资产治理 CLI
+- `runtime-models/`：本机检索模型安装目标；模型二进制不进入 Git
+- `scripts/`：代码质量、架构、隐私、发布导入、检索构建、静态 bundle、JAR E2E 和完整发布门禁
+- `docs/`：文档状态索引、背景、需求、技术选型、决策、设计、计划、交接和阶段审核
 
 后端 Java 代码采用模块化单体结构：
 
 ```text
 com.portfolio.agent
-├─ common       仅保存跨模块共享机制
-├─ portfolio    公开事实、作品集查询与文件仓储
-└─ answer       知识转换、回答编排与确定性引擎
+├─ common       请求关联、错误契约、诊断与跨模块共享机制
+├─ portfolio    公开事实、文件/PostgreSQL 仓储、校验与发布激活
+├─ answer       知识转换、回答编排、模型适配、本地检索与固定工具
+├─ release      Bundle 编译、数据库导入、发布验证与检索比较 CLI
+├─ ingestion    私有治理库的 Markdown 扫描、增量导入与分块
+└─ selection    PostgreSQL 候选召回、确定性组合推荐和 R0～R4 评测
 ```
 
 模块内部使用常见 Spring Boot 命名：
 
 ```text
-portfolio/controller|service|domain|repository|mapper|validation
+portfolio/controller|service|domain|repository|release|mapper|validation
 answer/controller|service|domain|engine|gateway|adapter|mapper
+ingestion/adapter|cli|domain|gateway|service
+selection/adapter|benchmark|controller|domain|dto|gateway|mapper|service
 ```
 
 当前模块通信通过 Java Gateway 接口在同一进程内完成：
@@ -315,6 +358,7 @@ AnswerService
 → PortfolioKnowledgeGateway
 → LocalPortfolioKnowledgeAdapter
 → PublicPortfolioRepository
+→ JsonPublicPortfolioRepository（默认）或 PostgresPublicPortfolioRepository（显式启用）
 ```
 
 项目当前不使用 Feign，也不通过 HTTP 或 localhost 对自身模块发起远程调用。
@@ -322,13 +366,14 @@ AnswerService
 ## 文档入口
 
 - `docs/00-文档状态索引.md`：全部文档的当前状态、权威顺序和已知缺口
+- `docs/08-current-implementation-status.md`：按代码、配置、测试和制品盘点当前已实现/受限/未实现能力
 - `docs/04-项目代码约束.md`：当前代码与发布约束
 - `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`：当前 V0 事实与回答边界
 - `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`：当前后端结构
 - `docs/superpowers/specs/2026-07-16-portfolio-frontend-full-rebuild-design.md`：当前前端产品与视觉基线
 - `docs/superpowers/specs/2026-07-17-public-content-api-integration-design.md`：当前公开内容 API 与真实联调基线
-- [`docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md`](docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md)：Case 前端与发布闭环的交接规范，供前端 AI 接手
+- [`docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md`](docs/superpowers/specs/2026-07-28-portfolio-v1-case-and-release-closure-design.md)：已实现的 Case 前端与发布闭环契约
+- [`docs/superpowers/specs/2026-07-30-postgresql-portfolio-composition-design.md`](docs/superpowers/specs/2026-07-30-postgresql-portfolio-composition-design.md)：PostgreSQL 双库、增量导入、组合推荐与基准评测契约
+- [`docs/decisions/2026-07-30-postgresql-portfolio-composition-evolution.md`](docs/decisions/2026-07-30-postgresql-portfolio-composition-evolution.md)：组合策略与数据库演进边界
 
 `docs/01-03` 描述长期产品和技术路线；标记为历史、已取代或待审批的设计与计划不能直接作为当前实施授权。
-
-本次后端闭环不实现 Vue 页面、路由、组件、CSS 或最终视觉设计。
