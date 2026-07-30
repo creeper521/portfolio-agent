@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资产包组合 · 入口 A 独立工具页 · 原型</title>
+<!--
+
+  原型：资产包组合推荐 · 入口方案 A（独立工具页 /selection）
+
+  对评审者的说明：
+  - 本原型用于确认：入口位置、首屏结构、结果信息层级、状态呈现。
+  - 数据契约对齐 POST /api/portfolio-selections（handoff 2026-07-30）；六值身份枚举、五档状态、
+    固定降级文案与机械句式 selectionReason 均按后端源码逐字复刻，见 _selection-demo-data.js。
+  - subjectId / claimId / evidenceId 只存在于 mock 数据内部，UI 渲染为「资产 01 / 02 / 03」与
+    Evidence 标签，与正式实现一致（review E5）。
+  - 正式实现无后端开关时「未启用」= 端点 404 → 等同于 unavailable，但文案区分部署态；
+    该端点 404 不影响任何现有页面（本页之外的浏览路径不调用它）。
+  - 输入仅存内存：不写入 URL / history / localStorage，刷新即清空（原型本身即证）。
+  - 视觉 token / header / footer 全部复用「Case 目录页 v1.html」，零新增全局色。
+  - 底部 PROTOTYPE 控制条仅用于评审切换状态，不是产品 UI。
+
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  /* —— tokens / reset / header / footer：复用 Case 目录页 v1.html —— */
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a;
+    --ink-text: #a99f91; --ink-text-hi: #e8ddce;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53; --red-on-ink: #d27d74;
+    --header-height: 66px; --content-width: 1180px;
+    --page-gutter: clamp(22px, 4vw, 48px);
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--red); color: var(--paper-hi); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 4px; border-radius: 2px; }
+  a { color: inherit; }
+  .page-shell { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); }
+
+  .dossier-header { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--header-height); background: rgba(244, 238, 228, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-bottom: 1px solid var(--rule); }
+  .dossier-header__inner { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .dossier-mark { display: flex; align-items: baseline; gap: 14px; text-decoration: none; }
+  .dossier-mark__name { font-family: var(--serif); font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+  .dossier-mark__meta { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--red); }
+  .primary-nav { display: flex; align-items: center; gap: 4px; }
+  .primary-nav a { display: block; padding: 8px 13px; font-size: 12.5px; letter-spacing: 0.1em; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.25s, border-color 0.25s; }
+  .primary-nav a:hover { color: var(--ink); }
+  .primary-nav a.is-active { color: var(--red); border-bottom-color: var(--red); }
+  .primary-nav__agent { margin-left: 10px; padding: 7px 15px !important; border: 1px solid var(--rule) !important; color: var(--ink) !important; font-family: var(--mono); font-size: 10.5px !important; letter-spacing: 0.14em !important; }
+  .primary-nav__agent:hover { background: var(--ink); color: var(--paper-hi) !important; border-color: var(--ink) !important; }
+  .menu-trigger { display: none; background: none; border: 1px solid var(--rule); padding: 8px 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink); cursor: pointer; }
+  main { padding-top: var(--header-height); }
+
+  .page-lead { padding: clamp(40px, 7vh, 72px) 0 clamp(28px, 4vh, 44px); display: grid; grid-template-columns: 0.34fr 1fr 0.58fr; gap: clamp(24px, 4vw, 48px); align-items: end; }
+  .page-lead__code { font-family: var(--mono); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--red); line-height: 2; }
+  .page-lead__title { font-family: var(--serif); font-size: clamp(44px, 6vw, 78px); font-weight: 700; line-height: 1.02; letter-spacing: -0.015em; }
+  .page-lead__desc { font-family: var(--serif); font-size: clamp(15px, 1.4vw, 18px); line-height: 1.9; color: var(--muted); max-width: 42ch; justify-self: end; }
+
+  .result-mount { padding-bottom: clamp(48px, 8vh, 96px); min-height: 200px; }
+  .result-idle { border: 1px dashed var(--rule); padding: 34px 30px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--faint); line-height: 2; }
+
+  .dossier-footer { background: var(--ink); color: var(--ink-text); margin-top: clamp(48px, 8vh, 96px); }
+  .dossier-footer__inner { max-width: var(--content-width); margin: 0 auto; padding: clamp(40px, 6vh, 64px) var(--page-gutter) 0; }
+  .dossier-footer__grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: clamp(28px, 4vw, 64px); padding-bottom: 40px; }
+  .dossier-footer__heading { font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
+  .dossier-footer__text { font-size: 13px; line-height: 1.9; color: var(--ink-text); }
+  .dossier-footer__base { border-top: 1px solid var(--ink-2); padding: 20px 0 26px; display: flex; justify-content: space-between; gap: 16px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint); }
+
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+  .reveal.is-visible { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .reveal { opacity: 1; transform: none; transition: none; } }
+  @media (max-width: 959.98px) {
+    .menu-trigger { display: block; }
+    .primary-nav { position: absolute; top: var(--header-height); left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; background: var(--paper-hi); border-bottom: 1px solid var(--rule); padding: 8px var(--page-gutter) 16px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: opacity 0.3s var(--ease), transform 0.3s var(--ease), visibility 0.3s; }
+    .primary-nav.is-open { opacity: 1; visibility: visible; transform: none; }
+    .primary-nav a { padding: 12px 4px; font-size: 13.5px; border-bottom: 1px solid var(--paper-low); }
+    .primary-nav__agent { margin: 10px 0 0; text-align: center; }
+    .page-lead { grid-template-columns: 1fr; align-items: start; }
+    .page-lead__desc { justify-self: start; }
+    .dossier-footer__grid { grid-template-columns: 1fr; gap: 28px; }
+    .dossier-footer__base { flex-direction: column; gap: 8px; }
+  }
+</style>
+<link rel="stylesheet" href="_selection-demo-core.css">
+</head>
+<body>
+
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" href="#">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">Engineering Dossier</span>
+    </a>
+    <button class="menu-trigger" id="menuTrigger" aria-expanded="false" aria-controls="primaryNav">MENU</button>
+    <nav class="primary-nav" id="primaryNav" aria-label="主导航">
+      <a href="#">案例</a>
+      <a href="#">项目</a>
+      <a href="#">时间线</a>
+      <a href="#">证据</a>
+      <a href="#" class="is-active" aria-current="page">组合</a>
+      <a href="#" class="primary-nav__agent">完整 Agent ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page-shell">
+  <section class="page-lead">
+    <p class="page-lead__code reveal">Selection / 资产包组合</p>
+    <h1 class="page-lead__title reveal">组一套互补的资产。</h1>
+    <p class="page-lead__desc reveal">说出你的求职方向与想证明的能力，系统从已审阅的公开项目与案例中给出一套互相补位的组合，并附选择理由与证据。你的输入仅用于本次生成——不保存、不写入浏览器历史，刷新或关闭页面即消失。</p>
+  </section>
+
+  <form class="sel-form reveal" id="selForm" novalidate></form>
+
+  <div class="result-mount" id="selResult">
+    <div class="result-idle">RESULT AREA — 提交需求后，这里呈现一套组合：资产列表、能力覆盖、互补关系、替代候选与依据。</div>
+  </div>
+</main>
+
+<footer class="dossier-footer">
+  <div class="dossier-footer__inner">
+    <div class="dossier-footer__grid">
+      <div>
+        <h4 class="dossier-footer__heading">About</h4>
+        <p class="dossier-footer__text">一份公开的实习工程档案：案例、项目、成长时间线与证据。内容经脱敏与人工复核；代码证据以静态快照呈现。</p>
+      </div>
+      <div>
+        <h4 class="dossier-footer__heading">Public Boundary</h4>
+        <p class="dossier-footer__text">仅包含可公开内容。公司内部资料、凭证与他人信息已移除；个别项目以职责与学习方式呈现。</p>
+      </div>
+      <div>
+        <h4 class="dossier-footer__heading">Privacy</h4>
+        <p class="dossier-footer__text">对话仅存于当前标签页内存，不记录、不保存，刷新或关闭即消失。推荐输入同样不落盘。</p>
+      </div>
+    </div>
+    <div class="dossier-footer__base">
+      <span>Volume 01 · 2026-07-29.1</span>
+      <span>Public · Desensitized · Human Reviewed</span>
+    </div>
+  </div>
+</footer>
+
+<div class="demo-rail" id="demoRail"></div>
+<div class="demo-rail-spacer"></div>
+
+<script src="_selection-demo-data.js"></script>
+<script src="_selection-demo-core.js"></script>
+<script>
+  // header 菜单 + reveal（复用 dossier 页面同款脚本）
+  var trigger = document.getElementById('menuTrigger');
+  var nav = document.getElementById('primaryNav');
+  trigger.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  // 原型内锚点链接不跳转
+  document.querySelectorAll('.dossier-header a, .dossier-footer a').forEach(function (a) {
+    a.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+
+  SelectionDemo.mount({
+    form: document.getElementById('selForm'),
+    result: document.getElementById('selResult'),
+    rail: document.getElementById('demoRail'),
+  });
+</script>
+</body>
+</html>

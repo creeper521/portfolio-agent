@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="only light">
+<title>案例目录变体探索 · 工程成长档案</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  案例目录 · 交互式变体探索（huashu-design · 设计方向顾问）
+
+  目的：把「筛选维度 × 列表处理」的多个方案做成**看得见**的实时变体，
+        让你点顶部开关即时切换 9 种组合，基于真实视觉做选择（选择无效铁律）。
+
+  两个设计维度：
+    A. 筛选维度（只能从现有领域数据里选，spec §5.3 硬约束）
+       A1 类型     → CaseType (功能/问题/评测)
+       A2 状态(推荐)→ AchievementStatus (已交付/原型/学习)
+       A3 双维度   → 类型主筛 + 状态次筛
+
+    B. 列表处理（解决 49 条太长）
+       B1 分组(推荐) → 按所选维度分成带标题小节
+       B2 分页       → 页码 + 每页条数 + 「查看全部」
+       B3 显示更多   → 默认 12 条，按钮渐进加载
+
+  数据：真实 Bundle (49 Case)。视觉：1:1 复刻 tokens.css。
+  ════════════════════════════════════════════════════════════════════════
+-->
+<style>
+:root{
+  --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0;
+  --ink:#201c17; --ink-2:#34302a; --ink-line:#4a433b;
+  --ink-text:#a99f91; --ink-text-hi:#e8ddce; --ink-text-faint:#94897c;
+  --muted:#746b5e; --faint:#9c9182; --rule:#cdbfa9;
+  --red:#7a2e2a; --red-hi:#b65d53; --red-on-ink:#d27d74;
+  --header-height:66px;
+  --content-width:1180px;
+  --page-gutter:clamp(22px,4vw,48px);
+  --ease:cubic-bezier(0.22,0.8,0.22,1);
+  --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+  --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);color:var(--ink-2);background:var(--paper);line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:4px}
+::selection{color:var(--paper-hi);background:var(--red)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(122,46,42,0.22);border-radius:6px;border:3px solid var(--paper)}
+h1,h2,h3,h4,.serif{font-family:var(--serif)}
+.page-shell{max-width:var(--content-width);margin:0 auto;padding:0 var(--page-gutter)}
+
+/* ═══════════ 变体控制台（固定顶部，本页专属） ═══════════ */
+.console{
+  position:sticky; top:0; z-index:90;
+  background:var(--ink); color:var(--ink-text-hi);
+  border-bottom:1px solid var(--ink-line);
+  box-shadow:0 10px 30px rgba(32,28,23,0.18);
+}
+.console__inner{
+  max-width:var(--content-width); margin:0 auto;
+  padding:18px var(--page-gutter);
+  display:flex; gap:36px; flex-wrap:wrap; align-items:flex-end;
+}
+.console__group{display:flex;flex-direction:column;gap:9px}
+.console__label{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:0.18em;
+  color:var(--ink-text); text-transform:uppercase;
+}
+.console__label b{color:var(--red-on-ink);font-weight:400}
+.console__chips{display:flex;gap:6px;flex-wrap:wrap}
+.console__chip{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.04em;
+  padding:8px 13px; border:1px solid var(--ink-line); color:var(--ink-text);
+  transition:all .2s var(--ease); position:relative;
+}
+.console__chip:hover{border-color:var(--ink-text-hi);color:var(--paper-hi)}
+.console__chip.is-active{background:var(--paper-hi);border-color:var(--paper-hi);color:var(--ink)}
+.console__chip small{
+  display:block; font-size:9px; color:var(--ink-text); margin-top:2px;
+  letter-spacing:0.06em; font-weight:400;
+}
+.console__chip.is-active small{color:var(--muted)}
+.console__note{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.06em;
+  color:var(--ink-text-faint); margin-left:auto; max-width:34ch; line-height:1.6;
+  align-self:center;
+}
+@media (max-width:760px){
+  .console__inner{flex-direction:column;align-items:stretch;gap:16px}
+  .console__note{margin-left:0;align-self:stretch}
+}
+
+/* PageLead */
+.page-lead{padding:clamp(54px,6vw,82px) 0 48px;border-bottom:1px solid var(--rule);background:var(--paper-hi)}
+.page-lead__grid{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(24px,4vw,56px);align-items:end}
+.page-lead__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.page-lead__title{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.5vw,72px);line-height:0.98;letter-spacing:-0.045em;color:var(--ink)}
+.page-lead__desc{font-family:var(--serif);font-size:15.5px;line-height:1.75;color:var(--muted);max-width:42ch}
+@media (max-width:760px){.page-lead__grid{grid-template-columns:1fr;gap:16px;align-items:start}}
+
+/* 状态标签 */
+.status-mark{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
+.status-mark::before{content:"";width:7px;height:7px;background:var(--red);transform:rotate(45deg);flex-shrink:0}
+.status-mark[data-t="contrib"]::before{background:var(--muted)}
+.type-tag{display:inline-flex;align-items:center;border:1px solid var(--rule);padding:3px 7px;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-2)}
+.type-tag[data-t="FEATURE"]{border-color:var(--red);color:var(--red)}
+.type-tag[data-t="INCIDENT"]{color:var(--ink-2)}
+.type-tag[data-t="EVALUATION"]{border-style:dashed;border-color:var(--faint);color:var(--faint)}
+
+/* 筛选条（A 维度渲染区） */
+.case-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:24px 0;border-bottom:1px solid var(--rule)}
+.case-filter__label{font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-right:8px}
+.case-filter__chip{font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;padding:7px 13px;border:1px solid var(--rule);color:var(--ink-2);transition:all .2s var(--ease)}
+.case-filter__chip:hover{border-color:var(--ink-2);color:var(--ink)}
+.case-filter__chip.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper-hi)}
+.case-filter__count{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--muted)}
+.case-filter--sub{border-bottom:1px solid var(--rule);padding:14px 0;border-top:none}
+.case-filter--sub .case-filter__label{color:var(--faint)}
+.case-filter--sub .case-filter__chip{font-size:10.5px;padding:5px 10px}
+
+/* 分组标题 */
+.group-head{
+  display:grid; grid-template-columns:0.34fr 1fr 0.58fr; gap:clamp(24px,4vw,56px);
+  align-items:end; padding:54px 0 22px; border-bottom:1px solid var(--ink); margin-top:14px;
+}
+.group-head__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.group-head__title{font-family:var(--serif);font-weight:400;font-size:clamp(30px,3.5vw,46px);line-height:1.05;letter-spacing:-0.03em;color:var(--ink)}
+.group-head__note{font-family:var(--serif);font-size:13.5px;line-height:1.7;color:var(--muted);max-width:40ch}
+@media (max-width:760px){.group-head{grid-template-columns:1fr;gap:10px;padding:40px 0 18px}}
+
+/* Case 行 */
+.case-list{padding:8px 0 0}
+.case-row{display:grid;grid-template-columns:150px minmax(0,1fr) 240px;gap:clamp(20px,3vw,40px);align-items:start;padding:28px 18px 28px 0;position:relative;border-bottom:1px solid var(--rule);transition:background .2s var(--ease)}
+.case-row:hover{background:var(--paper-hi)}
+.case-row:last-child{border-bottom:none}
+.case-row__code{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.case-row__code-text{font-family:var(--mono);font-size:12px;letter-spacing:0.1em;color:var(--red)}
+.case-row__body{min-width:0}
+.case-row__title{font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.4vw,34px);line-height:1.12;letter-spacing:-0.02em;color:var(--ink);margin-bottom:9px}
+.case-row__summary{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--muted);max-width:46ch;margin-bottom:13px}
+.case-row__status{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.case-row__project{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.04em}
+.case-row__project a{border-bottom:1px solid var(--rule);padding-bottom:1px}
+.case-row__project--none{color:var(--faint);font-style:italic;border:none}
+.case-row__tech{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.case-row__counts{font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;color:var(--faint);text-transform:uppercase}
+.case-row__counts b{color:var(--ink-2);font-weight:400}
+.case-row::after{content:"↗";position:absolute;right:0;bottom:24px;font-family:var(--mono);font-size:15px;color:var(--red);opacity:0;transform:translateX(-6px);transition:all .25s var(--ease)}
+.case-row:hover::after{opacity:1;transform:translateX(0)}
+@media (max-width:760px){.case-row{grid-template-columns:1fr;gap:14px;padding:24px 0}.case-row::after{display:none}}
+
+/* 分页 / 显示更多 */
+.list-foot{padding:48px 0 20px;display:flex;justify-content:center;flex-direction:column;align-items:center;gap:22px}
+.pager{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+.pager__btn{font-family:var(--mono);font-size:12px;min-width:38px;height:38px;padding:0 10px;border:1px solid var(--rule);color:var(--ink-2);transition:all .2s var(--ease);display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.pager__btn:hover{border-color:var(--ink-2)}
+.pager__btn.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper-hi)}
+.pager__btn[disabled]{opacity:.35;cursor:not-allowed}
+.pager__sep{font-family:var(--mono);font-size:11px;color:var(--faint);padding:0 4px}
+.pager__meta{font-family:var(--mono);font-size:10.5px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;text-align:center}
+.show-more{font-family:var(--mono);font-size:12px;letter-spacing:0.1em;text-transform:uppercase;padding:16px 32px;border:1px solid var(--ink);color:var(--ink);transition:all .2s var(--ease)}
+.show-more:hover{background:var(--ink);color:var(--paper-hi)}
+.view-all{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--red);border-bottom:1px solid var(--red);padding-bottom:2px}
+
+/* 空状态 */
+.case-empty{padding:80px 0;text-align:center;color:var(--muted)}
+.case-empty__code{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:16px}
+.case-empty__title{font-family:var(--serif);font-size:26px;color:var(--ink);margin-bottom:10px}
+.case-empty__desc{font-family:var(--serif);font-size:14.5px;line-height:1.7;max-width:40ch;margin:0 auto 22px}
+
+/* 页脚 */
+.dossier-footer{border-top:1px solid var(--rule);margin-top:50px;padding:56px 0 34px;background:var(--paper-hi)}
+.dossier-footer__grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:55px}
+.dossier-footer h3{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:16px}
+.dossier-footer p{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--ink-2);max-width:38ch}
+.dossier-footer__base{margin-top:42px;padding-top:20px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase}
+@media (max-width:760px){.dossier-footer__grid{grid-template-columns:1fr;gap:28px}}
+
+.reveal{animation:dossier-reveal .5s var(--ease) both}
+@keyframes dossier-reveal{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}.reveal{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ 变体控制台 ═══════════ -->
+<div class="console">
+  <div class="console__inner">
+    <div class="console__group">
+      <span class="console__label">A · 筛选维度</span>
+      <div class="console__chips" id="dimAFilters">
+        <button class="console__chip" data-a="type">类型<small>CaseType</small></button>
+        <button class="console__chip is-active" data-a="status">状态 <small>推荐</small></button>
+        <button class="console__chip" data-a="both">双维度<small>类型+状态</small></button>
+      </div>
+    </div>
+    <div class="console__group">
+      <span class="console__label">B · 列表处理</span>
+      <div class="console__chips" id="dimBFilters">
+        <button class="console__chip is-active" data-b="group">分组<small>推荐</small></button>
+        <button class="console__chip" data-b="page">分页<small>页码+全部</small></button>
+        <button class="console__chip" data-b="more">显示更多<small>渐进加载</small></button>
+      </div>
+    </div>
+    <div class="console__note">点上方开关实时切换 9 种组合。下方列表用真实 49 条数据渲染，所见即所得。</div>
+  </div>
+</div>
+
+<main id="view"></main>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   真实数据 + 文案映射
+   ════════════════════════════════════════════════════════════════════ */
+const DATA = {"dir":[{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":4,"nE":1},{"code":"CASE-02","slug":"test-role-reset","type":"FEATURE","title":"测试角色重置工具","summary":"为重复验证新账号流程提供受控的角色查询与重置入口。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":5,"nE":1},{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","status":"PROTOTYPE","contrib":"PRIMARY","project":null,"nC":6,"nE":1},{"code":"CASE-04","slug":"t-07-task","type":"FEATURE","title":"图片上传审计记录","summary":"实现操作信息和图片清单的独立审计记录，已自测但未确认发布。","status":"IMPLEMENTED_TESTED","contrib":"PRIMARY","project":{"slug":"image-upload-audit","title":"图片上传与审计能力"},"nC":1,"nE":1},{"code":"CASE-05","slug":"t-08-task","type":"FEATURE","title":"流式聊天与历史会话原型","summary":"验证流式输出、会话列表、历史消息和会话记忆。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-06","slug":"t-09-task","type":"FEATURE","title":"模型工具调用原型","summary":"验证时间与天气工具以及两种模型客户端调用方式。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-07","slug":"t-10-task","type":"FEATURE","title":"模型上下文协议双传输原型","summary":"完成标准输入输出与事件流两种本地服务调用闭环。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-08","slug":"t-11-task","type":"FEATURE","title":"个人智能平台关键链路","summary":"检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-09","slug":"t-12-task","type":"FEATURE","title":"本地持续集成验证","summary":"完成工具安装、构建环境配置和示例项目构建成功验证。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-10","slug":"t-13-task","type":"FEATURE","title":"压力模块与运行时追踪","summary":"修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-11","slug":"t-14-task","type":"FEATURE","title":"前端构建产物交付流程","summary":"完成构建、静态资源替换、旧产物清理和版本提交步骤。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-12","slug":"t-15-task","type":"FEATURE","title":"服务包构建与替换流程","summary":"形成构建、打包、上传、备份、替换与重启的完整操作流程。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-13","slug":"t-16-task","type":"FEATURE","title":"活动说明文档","summary":"在缺少既有说明的情况下按规范补齐活动文档。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-14","slug":"t-18-task","type":"FEATURE","title":"智能工程内部分享","summary":"完成正式讲稿、连续演练、现场分享和讲后复盘闭环。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-15","slug":"t-18b-task","type":"FEATURE","title":"本地知识库迁移与增量同步","summary":"完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。","status":"DELIVERED","contrib":"COLLABORATIVE","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-17","slug":"a-02-incident","type":"INCIDENT","title":"折扣配置未生效","summary":"定位活动类型与计价配置差异并给出修正。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-18","slug":"a-03-incident","type":"INCIDENT","title":"账号年龄限制导致内容不展示","summary":"调整年龄限制、刷新版本并确认内容恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-19","slug":"a-04-incident","type":"INCIDENT","title":"活动展示条件异常","summary":"补齐前置数据并调整开放与创建时间后完成展示验证。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-20","slug":"a-05-incident","type":"INCIDENT","title":"结束时间与旧客户端双重过滤","summary":"先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-21","slug":"a-06-incident","type":"INCIDENT","title":"环境结构缺失字段","summary":"对比环境结构、确认影响边界并使用既有备份方案补齐字段。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-22","slug":"a-07-incident","type":"INCIDENT","title":"周期积分异常排查","summary":"补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-23","slug":"a-08-incident","type":"INCIDENT","title":"冲突活动残留状态排查","summary":"按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-24","slug":"a-09-incident","type":"INCIDENT","title":"排位配置加载异常","summary":"定位两份配置中的活动标识不一致，未记录最终修正与验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-25","slug":"a-10-incident","type":"INCIDENT","title":"周末奖励倍率异常","summary":"识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-26","slug":"a-11-incident","type":"INCIDENT","title":"活动初始化异常","summary":"确认配置正常但初始化数据异常并继续追溯，未形成最终结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-27","slug":"a-12-incident","type":"INCIDENT","title":"抽奖兑换标识不一致","summary":"定位全局配置与活动规则标识不一致，未记录最终修改。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-28","slug":"a-13-incident","type":"INCIDENT","title":"定制礼包奖励缺失","summary":"定位规则中缺少一段奖励配置，未记录补齐后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-29","slug":"a-14-incident","type":"INCIDENT","title":"礼包积分被配置覆盖","summary":"定位分支合并时配置被覆盖，未记录修复发布结果。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-30","slug":"a-15-incident","type":"INCIDENT","title":"定制内容展示排查","summary":"确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-31","slug":"a-16-incident","type":"INCIDENT","title":"补发通知模板缺失","summary":"定位通知模板未配置并协助查询模板标识，缺最终补齐记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-32","slug":"a-17-incident","type":"INCIDENT","title":"内容未下发的限制与缓存排查","summary":"根因候选为新手限制和缓存配置未刷新，缺逐项验证。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-33","slug":"a-18-incident","type":"INCIDENT","title":"匹配服务启动参数缺失","summary":"协助定位启动脚本缺少必要参数，缺重启与验收记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-34","slug":"a-19-incident","type":"INCIDENT","title":"弹窗条件链路排查","summary":"确认服务端已经下发并将客户端表现问题交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-35","slug":"a-20-incident","type":"INCIDENT","title":"活动多语言缺失排查","summary":"从缺少数据继续定位到多语言内容缺失，缺导入后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-36","slug":"a-21-incident","type":"INCIDENT","title":"过滤与资源异常排查","summary":"服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-37","slug":"k-02-knowledge","type":"EVALUATION","title":"上下文压缩离线评测","summary":"完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-38","slug":"k-04-knowledge","type":"EVALUATION","title":"Agent 记忆机制对比","summary":"比较记忆写入、整理与适用场景，属于外部方案研究。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-39","slug":"k-05-knowledge","type":"EVALUATION","title":"Agent Harness 学习手册","summary":"形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-40","slug":"k-06-knowledge","type":"EVALUATION","title":"容器化学习手册","summary":"整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-41","slug":"k-09-knowledge","type":"EVALUATION","title":"多数据源路由与缓存研究","summary":"整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-42","slug":"k-10-knowledge","type":"EVALUATION","title":"活动开发流程与红点设计","summary":"整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-43","slug":"k-11-knowledge","type":"EVALUATION","title":"对局与通知机制学习","summary":"形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-44","slug":"k-12-knowledge","type":"EVALUATION","title":"网络与事件驱动机制学习","summary":"整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-45","slug":"k-13-knowledge","type":"EVALUATION","title":"红点架构与复弹机制学习","summary":"整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-46","slug":"k-14-knowledge","type":"EVALUATION","title":"版本冲突处理案例","summary":"记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-47","slug":"k-15-knowledge","type":"EVALUATION","title":"构建与远程操作资料","summary":"整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-48","slug":"k-16-knowledge","type":"EVALUATION","title":"私有技术长文集合","summary":"私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-49","slug":"k-17-knowledge","type":"EVALUATION","title":"历史技术博客主页","summary":"公开主页可作为历史写作证据，动态统计数字必须标注快照日期。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1}]};
+
+const TYPE_LABEL = { FEATURE:'功能任务', INCIDENT:'问题处理', EVALUATION:'工具评测' };
+const TYPE_NOTE = { FEATURE:'单体功能任务与交付流程', INCIDENT:'问题、事故的识别与处理', EVALUATION:'工具、知识的评测与整理' };
+const TYPE_CODE = { FEATURE:'B / TASK', INCIDENT:'C / INCIDENT', EVALUATION:'D / KNOWLEDGE' };
+const TYPE_CODE_NUM = { FEATURE:'02', INCIDENT:'03', EVALUATION:'04' };
+const STATUS_LABEL = { DELIVERED:'已交付', IMPLEMENTED_TESTED:'已实现并测试', PROTOTYPE:'原型验证', DESIGNED:'已设计', LEARNING:'学习整理', PLANNED:'已规划', UNKNOWN:'状态未知' };
+const STATUS_GROUP = { delivered:{label:'已交付', code:'DELIVERED', note:'已交付并验证的真实产出'}, prototype:{label:'原型验证', code:'PROTOTYPE', note:'可运行的原型探索，未经生产验证'}, learning:{label:'学习整理', code:'LEARNING', note:'结构化学习与知识整理，不宣称实现'} };
+const CONTRIB_LABEL = { PRIMARY:'主要负责', COLLABORATIVE:'协作参与', INDEPENDENT:'独立完成', OBSERVED_LEARNING:'观察学习' };
+
+function statusGroup(s){ return s==='DELIVERED'||s==='IMPLEMENTED_TESTED' ? 'delivered' : (s==='PROTOTYPE' ? 'prototype' : 'learning'); }
+
+/* ════════════════════════════════════════════════════════════════════
+   状态：当前选中的 A / B 方案 + 筛选条件 + 分页/加载状态
+   ════════════════════════════════════════════════════════════════════ */
+const S = {
+  A: 'status',           // type | status | both
+  B: 'group',            // group | page | more
+  typeFilter: 'ALL',     // FEATURE / INCIDENT / EVALUATION / ALL
+  statusFilter: 'ALL',   // delivered / prototype / learning / ALL
+  page: 1,
+  perPage: 12,
+  showCount: 12,         // 显示更多
+  viewAll: false,
+};
+
+/* 取最终用于渲染的行（应用筛选） */
+function filteredRows(){
+  return DATA.dir.filter(c=>{
+    if(S.A==='type' || S.A==='both'){
+      if(S.typeFilter!=='ALL' && c.type!==S.typeFilter) return false;
+    }
+    if(S.A==='status' || S.A==='both'){
+      if(S.statusFilter!=='ALL' && statusGroup(c.status)!==S.statusFilter) return false;
+    }
+    return true;
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   渲染各部分
+   ════════════════════════════════════════════════════════════════════ */
+function renderCaseRow(c){
+  return `<a class="case-row" href="#/cases/${c.slug}" data-slug="${c.slug}">
+    <div class="case-row__code">
+      <span class="case-row__code-text">${c.code}</span>
+      <span class="type-tag" data-t="${c.type}">${TYPE_LABEL[c.type]}</span>
+    </div>
+    <div class="case-row__body">
+      <h3 class="case-row__title">${c.title}</h3>
+      <p class="case-row__summary">${c.summary}</p>
+      <div class="case-row__status">
+        <span class="status-mark">${STATUS_LABEL[c.status]}</span>
+        <span class="status-mark" data-t="contrib">${CONTRIB_LABEL[c.contrib]}</span>
+        ${c.project
+          ? `<span class="case-row__project">关联项目 · <a href="#/projects/${c.project.slug}" onclick="event.stopPropagation()">${c.project.title}</a></span>`
+          : `<span class="case-row__project case-row__project--none">独立案例</span>`}
+      </div>
+    </div>
+    <div class="case-row__tech">
+      <span class="case-row__counts"><b>${c.nC}</b> CLAIM · <b>${c.nE}</b> EVIDENCE</span>
+      <span class="case-row__counts">${c.code}</span>
+    </div>
+  </a>`;
+}
+
+/* 渲染顶部筛选条（A 维度决定形态） */
+function renderFilterBar(){
+  // A=type：单层类型筛选
+  if(S.A==='type'){
+    const types=[['ALL','全部'],['FEATURE','功能任务'],['INCIDENT','问题处理'],['EVALUATION','工具评测']];
+    return `<div class="case-filter reveal">
+      <span class="case-filter__label">类型筛选</span>
+      ${types.map(([k,l])=>{
+        const cnt=k==='ALL'?DATA.dir.length:DATA.dir.filter(c=>c.type===k).length;
+        return `<button class="case-filter__chip ${S.typeFilter===k?'is-active':''}" data-type="${k}">${l} · ${String(cnt).padStart(2,'0')}</button>`;
+      }).join('')}
+      <span class="case-filter__count">按 CaseType 枚举</span>
+    </div>`;
+  }
+  // A=status：单层交付状态筛选
+  if(S.A==='status'){
+    const groups=[['ALL','全部'],['delivered','已交付'],['prototype','原型验证'],['learning','学习整理']];
+    return `<div class="case-filter reveal">
+      <span class="case-filter__label">交付状态筛选</span>
+      ${groups.map(([k,l])=>{
+        const cnt=k==='ALL'?DATA.dir.length:DATA.dir.filter(c=>statusGroup(c.status)===k).length;
+        return `<button class="case-filter__chip ${S.statusFilter===k?'is-active':''}" data-status="${k}">${l} · ${String(cnt).padStart(2,'0')}</button>`;
+      }).join('')}
+      <span class="case-filter__count">按 AchievementStatus</span>
+    </div>`;
+  }
+  // A=both：类型主筛 + 状态次筛（双行）
+  const types=[['ALL','全部'],['FEATURE','功能任务'],['INCIDENT','问题处理'],['EVALUATION','工具评测']];
+  const groups=[['ALL','全部'],['delivered','已交付'],['prototype','原型验证'],['learning','学习整理']];
+  return `<div class="case-filter reveal">
+    <span class="case-filter__label">类型（主）</span>
+    ${types.map(([k,l])=>{
+      const cnt=k==='ALL'?DATA.dir.length:DATA.dir.filter(c=>c.type===k).length;
+      return `<button class="case-filter__chip ${S.typeFilter===k?'is-active':''}" data-type="${k}">${l} · ${String(cnt).padStart(2,'0')}</button>`;
+    }).join('')}
+  </div>
+  <div class="case-filter case-filter--sub">
+    <span class="case-filter__label">状态（次）</span>
+    ${groups.map(([k,l])=>{
+      const base = S.typeFilter==='ALL'?DATA.dir:DATA.dir.filter(c=>c.type===S.typeFilter);
+      const cnt=k==='ALL'?base.length:base.filter(c=>statusGroup(c.status)===k).length;
+      return `<button class="case-filter__chip ${S.statusFilter===k?'is-active':''}" data-status="${k}">${l} · ${String(cnt).padStart(2,'0')}</button>`;
+    }).join('')}
+  </div>`;
+}
+
+/* 分组标题 */
+function groupHead(code, title, note){
+  return `<div class="group-head">
+    <span class="group-head__code">${code}</span>
+    <h2 class="group-head__title">${title}</h2>
+    <p class="group-head__note">${note}</p>
+  </div>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   B 维度：三种列表渲染
+   ════════════════════════════════════════════════════════════════════ */
+
+/* B=group：按维度分组（分组键取决于 A） */
+function renderListGroup(){
+  const rows = filteredRows();
+  if(rows.length===0) return renderEmpty();
+
+  // 分组键
+  let groups;
+  if(S.A==='type'){
+    groups = ['FEATURE','INCIDENT','EVALUATION'].map(t=>({key:t, rows:rows.filter(c=>c.type===t)})).filter(g=>g.rows.length);
+  } else if(S.A==='status'){
+    groups = ['delivered','prototype','learning'].map(g=>({key:g, rows:rows.filter(c=>statusGroup(c.status)===g)})).filter(g=>g.rows.length);
+  } else { // both：主键类型，次键状态
+    groups = [];
+    (S.typeFilter==='ALL'?['FEATURE','INCIDENT','EVALUATION']:[S.typeFilter]).forEach(t=>{
+      (S.statusFilter==='ALL'?['delivered','prototype','learning']:[S.statusFilter]).forEach(g=>{
+        const sub = rows.filter(c=>c.type===t && statusGroup(c.status)===g);
+        if(sub.length) groups.push({key:t+'/'+g, type:t, status:g, rows:sub});
+      });
+    });
+  }
+
+  let html = '';
+  groups.forEach((grp, idx)=>{
+    let code, title, note;
+    if(S.A==='type'){
+      code = TYPE_CODE[grp.key] + ' · ' + String(grp.rows.length).padStart(2,'0');
+      title = TYPE_LABEL[grp.key];
+      note = TYPE_NOTE[grp.key];
+    } else if(S.A==='status'){
+      const g = STATUS_GROUP[grp.key];
+      code = '0'+(['delivered','prototype','learning'].indexOf(grp.key)+2) + ' / ' + g.code + ' · ' + String(grp.rows.length).padStart(2,'0');
+      title = g.label;
+      note = g.note;
+    } else {
+      code = TYPE_CODE[grp.type] + ' · ' + STATUS_GROUP[grp.status].label + ' · ' + String(grp.rows.length).padStart(2,'0');
+      title = TYPE_LABEL[grp.type] + ' · ' + STATUS_GROUP[grp.status].label;
+      note = TYPE_NOTE[grp.type] + '中' + STATUS_GROUP[grp.status].note;
+    }
+    html += groupHead(code, title, note);
+    html += `<div class="case-list">${grp.rows.map(renderCaseRow).join('')}</div>`;
+  });
+  return html;
+}
+
+/* B=page：分页 + 查看全部 */
+function renderListPage(){
+  const rows = filteredRows();
+  if(rows.length===0) return renderEmpty();
+
+  if(S.viewAll){
+    return `<div class="case-list">${rows.map(renderCaseRow).join('')}</div>
+      <div class="list-foot"><button class="view-all" data-viewall="false">恢复分页 ↑</button></div>`;
+  }
+
+  const totalPages = Math.ceil(rows.length / S.perPage);
+  const slice = rows.slice((S.page-1)*S.perPage, S.page*S.perPage);
+  let pager = '';
+  if(totalPages > 1){
+    pager = '<div class="pager">';
+    pager += `<button class="pager__btn" data-page="${S.page-1}" ${S.page===1?'disabled':''}>‹</button>`;
+    for(let p=1;p<=totalPages;p++){
+      if(p===1 || p===totalPages || Math.abs(p-S.page)<=1){
+        pager += `<button class="pager__btn ${p===S.page?'is-active':''}" data-page="${p}">${p}</button>`;
+      } else if(p===2 || p===totalPages-1){
+        pager += `<span class="pager__sep">···</span>`;
+      }
+    }
+    pager += `<button class="pager__btn" data-page="${S.page+1}" ${S.page===totalPages?'disabled':''}>›</button>`;
+    pager += '</div>';
+    pager += `<div class="pager__meta">第 ${S.page} / ${totalPages} 页 · 每页 ${S.perPage} · 共 ${rows.length} 个</div>`;
+    pager += `<button class="view-all" data-viewall="true">查看全部 ${rows.length} 个 ↑</button>`;
+  } else {
+    pager = `<div class="pager__meta">共 ${rows.length} 个案例</div>`;
+  }
+  return `<div class="case-list">${slice.map(renderCaseRow).join('')}</div><div class="list-foot">${pager}</div>`;
+}
+
+/* B=more：显示更多（渐进加载） */
+function renderListMore(){
+  const rows = filteredRows();
+  if(rows.length===0) return renderEmpty();
+  const shown = rows.slice(0, S.showCount);
+  const remaining = rows.length - shown.length;
+  let foot = '';
+  if(remaining > 0){
+    foot = `<div class="list-foot">
+      <div class="pager__meta">已显示 ${shown.length} / ${rows.length} 个</div>
+      <button class="show-more" data-more="1">显示更多 ${Math.min(12, remaining)} 个 ↓</button>
+    </div>`;
+  } else {
+    foot = `<div class="list-foot"><div class="pager__meta">已显示全部 ${rows.length} 个案例</div></div>`;
+  }
+  return `<div class="case-list">${shown.map(renderCaseRow).join('')}</div>${foot}`;
+}
+
+function renderEmpty(){
+  return `<div class="case-empty reveal">
+    <div class="case-empty__code">EMPTY · 无匹配案卷</div>
+    <h2 class="case-empty__title">该筛选下暂无公开案例</h2>
+    <p class="case-empty__desc">当前公开 Bundle 在此条件下没有已批准的 Case。这不是加载失败——只是该分类的公开内容尚未发布。</p>
+    <button class="case-filter__chip is-active" data-reset="1">查看全部案例</button>
+  </div>`;
+}
+
+function renderFooter(){
+  return `<footer class="dossier-footer"><div class="page-shell">
+    <div class="dossier-footer__grid">
+      <div><h3>About</h3><p>这是案例目录的变体探索页，用于在真实视觉上比较「筛选维度 × 列表处理」的组合。所有数据来自公开 Bundle。</p></div>
+      <div><h3>Boundary</h3><p>筛选项只来自现有领域枚举（CaseType / AchievementStatus），不发明新分类，不改后端事实。</p></div>
+      <div><h3>How to use</h3><p>点顶部控制台的两个开关实时切换方案。选定组合后告诉我，我据此产出最终设计。</p></div>
+    </div>
+    <div class="dossier-footer__base"><span>VARIANT EXPLORER · 2026-07-27.1</span><span>49 CASES · 9 COMBINATIONS</span></div>
+  </div></footer>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   主渲染
+   ════════════════════════════════════════════════════════════════════ */
+function render(){
+  const view = document.getElementById('view');
+  const rows = filteredRows();
+
+  let listHtml;
+  if(S.B==='group') listHtml = renderListGroup();
+  else if(S.B==='page') listHtml = renderListPage();
+  else listHtml = renderListMore();
+
+  view.innerHTML = `
+    <section class="page-lead reveal">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">02 / CASE INDEX</div>
+        <h1 class="page-lead__title">案例目录</h1>
+        <p class="page-lead__desc">49 个具体任务、问题与评测。当前演示：<b style="color:var(--ink)">${labelA()}</b> × <b style="color:var(--ink)">${labelB()}</b>。点顶部控制台切换方案。</p>
+      </div>
+    </section>
+    <div class="page-shell">
+      ${renderFilterBar()}
+      ${listHtml}
+    </div>
+    ${renderFooter()}
+  `;
+
+  bindListEvents();
+  // 回到列表顶部（保留筛选时滚到筛选项）
+  const lead = view.querySelector('.page-lead');
+  if(lead) lead.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth', block:'start'});
+}
+function labelA(){return {type:'按类型',status:'按交付状态',both:'双维度'}[S.A];}
+function labelB(){return {group:'分组',page:'分页',more:'显示更多'}[S.B];}
+
+/* ════════════════════════════════════════════════════════════════════
+   事件绑定
+   ════════════════════════════════════════════════════════════════════ */
+function bindListEvents(){
+  // 筛选 chip
+  view.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{
+    S.typeFilter=b.dataset.type; S.page=1; S.showCount=12; S.viewAll=false; render();
+  }));
+  view.querySelectorAll('[data-status]').forEach(b=>b.addEventListener('click',()=>{
+    S.statusFilter=b.dataset.status; S.page=1; S.showCount=12; S.viewAll=false; render();
+  }));
+  view.querySelectorAll('[data-reset]').forEach(b=>b.addEventListener('click',()=>{
+    S.typeFilter='ALL'; S.statusFilter='ALL'; S.page=1; render();
+  }));
+  // 分页
+  view.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
+    const p=parseInt(b.dataset.page); if(p>=1 && p<=Math.ceil(filteredRows().length/S.perPage)){S.page=p; render();}
+  }));
+  view.querySelectorAll('[data-viewall]').forEach(b=>b.addEventListener('click',()=>{
+    S.viewAll = b.dataset.viewall==='true'; S.page=1; render();
+  }));
+  // 显示更多
+  view.querySelectorAll('[data-more]').forEach(b=>b.addEventListener('click',()=>{
+    S.showCount += 12; render();
+  }));
+}
+const view = document.getElementById('view');
+
+// 控制台开关
+document.getElementById('dimAFilters').addEventListener('click', e=>{
+  const chip = e.target.closest('[data-a]'); if(!chip) return;
+  S.A = chip.dataset.a;
+  // 切换维度时重置筛选到 ALL，避免矛盾
+  S.typeFilter='ALL'; S.statusFilter='ALL'; S.page=1; S.showCount=12; S.viewAll=false;
+  updateConsole(); render();
+});
+document.getElementById('dimBFilters').addEventListener('click', e=>{
+  const chip = e.target.closest('[data-b]'); if(!chip) return;
+  S.B = chip.dataset.b;
+  S.page=1; S.showCount=12; S.viewAll=false;
+  updateConsole(); render();
+});
+function updateConsole(){
+  document.querySelectorAll('#dimAFilters [data-a]').forEach(c=>c.classList.toggle('is-active', c.dataset.a===S.A));
+  document.querySelectorAll('#dimBFilters [data-b]').forEach(c=>c.classList.toggle('is-active', c.dataset.b===S.B));
+}
+
+/* 初始化 */
+render();
+</script>
+</body>
+</html>

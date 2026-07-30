@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案 C · 总目卡片网格 — Project—Case 信息架构设计演示</title>
+<style>
+/* ===== 与生产 token 对齐（frontend/src/app/styles/tokens.css） ===== */
+:root {
+  --paper: #f4eee4; --paper-deep: #ebe2d2; --paper-soft: #f8f3ea;
+  --ink: #201c17; --ink-2: #4a4238; --muted: #7d7264;
+  --line: #d8cdbb; --line-soft: #e4dac8;
+  --red: #7a2e2a; --red-soft: #b65d53;
+  --amber: #a3541f; --blue: #35586e; --green: #3f6448;
+  --serif: Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", serif;
+  --sans: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--paper-deep); font-family: var(--sans); color: var(--ink); }
+
+.demo-bar { position: sticky; top: 0; z-index: 50; background: var(--ink); color: var(--paper);
+  display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+  padding: 10px 20px; font: 12px var(--mono); }
+.demo-bar b { font-family: var(--serif); font-size: 14px; margin-right: 8px; }
+.demo-bar .grp { display: flex; gap: 4px; align-items: center; }
+.demo-bar button { background: transparent; color: var(--paper); border: 1px solid rgba(244,238,228,.35);
+  font: 11px var(--mono); padding: 4px 10px; cursor: pointer; }
+.demo-bar button.on { background: var(--red-soft); border-color: var(--red-soft); color: #fff; }
+.demo-bar .sep { width: 1px; height: 16px; background: rgba(244,238,228,.3); }
+
+.note { max-width: 1180px; margin: 0 auto; padding: 12px 24px;
+  font: 12px/1.8 var(--sans); color: var(--muted); }
+.note b { color: var(--red); }
+
+.stage { max-width: 1180px; margin: 0 auto 64px; background: var(--paper);
+  border: 1px solid var(--line); box-shadow: 0 1px 0 rgba(32,28,23,.06); }
+.stage.mobile { max-width: 390px; }
+.stage-inner { padding: 32px 40px 48px; }
+.stage.mobile .stage-inner { padding: 20px 18px 32px; }
+
+.site-nav { display: flex; gap: 20px; align-items: baseline;
+  border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 20px;
+  font: 13px var(--sans); }
+.site-nav .brand { font: 700 15px var(--serif); margin-right: auto; }
+.site-nav a { color: var(--ink-2); text-decoration: none; }
+.site-nav a.cur { color: var(--red); font-weight: 600; border-bottom: 2px solid var(--red); padding-bottom: 2px; }
+
+.page-lead { margin-bottom: 22px; }
+.page-lead .eyebrow { font: 11px var(--mono); letter-spacing: .18em; color: var(--red); margin-bottom: 6px; }
+.page-lead h1 { font: 700 26px/1.3 var(--serif); }
+.page-lead p { margin-top: 6px; font: 13px/1.7 var(--sans); color: var(--ink-2); max-width: 640px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 11px var(--sans); color: var(--muted);
+  border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+  padding: 8px 0; margin-bottom: 20px; }
+
+.st { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.st i { font-style: normal; margin-right: 5px; }
+.st-delivered { color: var(--ink); }
+.st-investigated { color: var(--red); }
+.st-proto { color: var(--ink-2); }
+.st-learning { color: var(--muted); }
+</style>
+<style>
+/* ===== 方案 C 专有：案卷封面网格 / 分段控件+下拉 / 紧凑表格 / 红顶边侧栏卡 ===== */
+
+/* 视图1：2×2 案卷封面卡。直角边框、无渐变无圆角，保持档案气质 */
+.tracks-line { display: flex; gap: 24px; font: 12px var(--sans); color: var(--ink-2);
+  margin-bottom: 14px; }
+.tracks-line b { font-weight: 600; }
+.tracks-line .sw { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--ink);
+  margin-right: 6px; vertical-align: -1px; }
+.tracks-line .sw.red { background: var(--red); border-color: var(--red); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.cover { border: 1px solid var(--ink); background: var(--paper-soft);
+  padding: 20px 22px 16px; display: flex; flex-direction: column; }
+.cover .eyebrow { display: flex; justify-content: space-between; align-items: baseline;
+  font: 10px var(--mono); letter-spacing: .16em; margin-bottom: 10px; }
+.cover .eyebrow .trk { color: var(--red); }
+.cover .eyebrow .no { color: var(--muted); }
+.cover h3 { font: 700 19px/1.4 var(--serif); }
+.cover h3 a { color: var(--ink); text-decoration: none; }
+.cover h3 a:hover { color: var(--red); }
+.cover .facts { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px;
+  display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font: 12px var(--sans); }
+.cover .facts dt { color: var(--muted); }
+.cover .facts dd { color: var(--ink); }
+.cover .goal { margin-top: 10px; font: 13px/1.7 var(--sans); color: var(--ink-2); flex: 1; }
+.cover .tech { margin-top: 10px; font: 11px var(--mono); color: var(--ink-2); }
+.cover .foot { margin-top: 12px; border-top: 1px solid var(--ink); padding-top: 10px;
+  display: flex; justify-content: space-between; align-items: baseline; font: 12px var(--sans); }
+.cover .foot .cases { color: var(--muted); }
+.cover .foot .go { color: var(--red); text-decoration: none; }
+.cover .foot .go::after { content: " →"; }
+.cover.agent { border-color: var(--red); }
+.honest { margin-top: 10px; padding: 7px 12px; border: 1px dashed var(--red-soft);
+  font: 12px/1.7 var(--sans); color: var(--red); background: rgba(182,93,83,.05); }
+
+.minor { margin-top: 18px; border: 1px solid var(--line); background: var(--paper-soft);
+  padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline;
+  font: 12px var(--sans); color: var(--ink-2); }
+.minor .tag { font: 10px var(--mono); letter-spacing: .14em; color: var(--muted); }
+.minor a { color: var(--red); text-decoration: none; }
+
+/* 视图2：相关案例——紧凑表格 */
+.rel-head { display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 2px solid var(--ink); padding-bottom: 8px; margin-bottom: 4px; }
+.rel-head h2 { font: 700 18px var(--serif); }
+.rel-head .rule { font: 11px var(--mono); color: var(--muted); }
+table.reltab { width: 100%; border-collapse: collapse; font: 13px var(--sans); }
+.reltab th { font: 10px var(--mono); letter-spacing: .12em; color: var(--muted);
+  text-align: left; padding: 8px 10px 6px 0; border-bottom: 1px solid var(--ink); }
+.reltab td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line-soft); vertical-align: baseline; }
+.reltab td.id { font: 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.reltab td.tt a { font-weight: 600; color: var(--ink); text-decoration: none; }
+.reltab td.tt a:hover { color: var(--red); }
+.reltab td.tp { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.rel-all { margin-top: 14px; font: 13px var(--sans); }
+.rel-all a { color: var(--red); text-decoration: none; border-bottom: 1px solid var(--red-soft); }
+
+/* 视图3：/cases——分段控件 + 归属下拉 + 类型 chip + 搜索 */
+.fzone { border: 1px solid var(--line); background: var(--paper-soft);
+  padding: 14px 16px; margin-bottom: 14px; }
+.fline { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.fline + .fline { margin-top: 10px; }
+.flab { font: 10px var(--mono); letter-spacing: .1em; color: var(--muted); width: 30px; flex: none; }
+.seg { display: inline-flex; border: 1px solid var(--ink); }
+.seg span { font: 12px var(--sans); padding: 5px 12px; color: var(--ink-2);
+  border-left: 1px solid var(--ink); cursor: default; }
+.seg span:first-child { border-left: none; }
+.seg span.on { background: var(--ink); color: var(--paper); }
+select.attrsel { font: 12px var(--sans); padding: 5px 8px; border: 1px solid var(--ink);
+  background: var(--paper); color: var(--ink); min-width: 240px; }
+.chip { font: 12px var(--sans); border: 1px solid var(--line); padding: 3px 10px;
+  background: var(--paper); color: var(--ink-2); cursor: default; }
+.chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.fsearch input { font: 12px var(--sans); padding: 5px 8px; width: 170px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+.drawer-btn { display: none; width: 100%; font: 13px var(--sans); padding: 8px;
+  border: 1px solid var(--ink); background: var(--paper-soft); color: var(--ink); }
+
+.cond { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline;
+  font: 12px var(--sans); color: var(--ink-2);
+  border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 6px; }
+.cond .n { font: 700 14px var(--serif); color: var(--red); }
+.cond .c { border: 1px solid var(--red-soft); color: var(--red); padding: 1px 8px; font-size: 11px; }
+
+.res-row { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: baseline;
+  padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.res-row .id { font: 11px var(--mono); color: var(--muted); }
+.res-row .tt a { font: 600 14px var(--sans); color: var(--ink); text-decoration: none; }
+.res-row .tt a:hover { color: var(--red); }
+.res-row .why { margin-top: 3px; font: 12px/1.6 var(--sans); color: var(--muted); }
+.res-row .meta { text-align: right; font: 11px var(--sans); color: var(--muted); white-space: nowrap; }
+.empty { padding: 40px 0; text-align: center; font: 13px var(--sans); color: var(--muted); }
+
+/* 视图4：右侧「案卷信息」卡——红顶边 + 双列 dt/dd */
+.case-layout { display: grid; grid-template-columns: 1fr 300px; gap: 32px; align-items: start; }
+.case-cover h1 { font: 700 24px/1.35 var(--serif); margin-bottom: 8px; }
+.case-cover .dek { font: 13px/1.8 var(--sans); color: var(--ink-2); }
+.meta-side { border: 1px solid var(--ink); border-top: 3px solid var(--red);
+  background: var(--paper-soft); padding: 14px 16px; position: sticky; top: 60px; }
+.meta-side h2 { font: 700 13px var(--serif); letter-spacing: .06em; margin-bottom: 10px; }
+.meta-side dl { display: grid; grid-template-columns: 68px 1fr; gap: 7px 10px;
+  font: 12px/1.5 var(--sans); }
+.meta-side dt { color: var(--muted); }
+.meta-side dd { color: var(--ink); }
+.meta-side dd a { color: var(--red); text-decoration: none; border-bottom: 1px solid var(--red-soft); }
+.meta-side dd .sub { display: block; font-size: 11px; color: var(--muted); }
+.meta-side .ask-btn { margin-top: 12px; width: 100%; font: 12px var(--sans);
+  color: var(--paper); background: var(--red); border: none; padding: 8px; cursor: pointer; }
+.variant-tag { font: 11px var(--mono); color: var(--red); letter-spacing: .14em; margin: 34px 0 12px; }
+
+/* ===== 移动端 ===== */
+.stage.mobile .grid2 { grid-template-columns: 1fr; }
+.stage.mobile .fzone { display: none; }              /* 默认收起，由抽屉按钮展开 */
+.stage.mobile .fzone.open { display: block; }
+.stage.mobile .drawer-btn { display: block; margin-bottom: 10px; }
+.stage.mobile .seg { flex-wrap: wrap; }
+.stage.mobile .cond { position: sticky; top: 41px; z-index: 20; background: var(--paper); }
+.stage.mobile .res-row { grid-template-columns: 1fr; gap: 2px; }
+.stage.mobile .res-row .meta { text-align: left; }
+.stage.mobile .case-layout { grid-template-columns: 1fr; }
+.stage.mobile .meta-side { position: static; order: -1; }
+.stage.mobile .reltab th:nth-child(3), .stage.mobile .reltab td.tp { display: none; }
+</style>
+</head>
+<body>
+<div class="demo-bar">
+  <b>方案 C · 总目卡片网格</b>
+  <span class="grp" id="views">
+    <button data-v="v1" class="on">① /projects</button>
+    <button data-v="v2">② 相关案例</button>
+    <button data-v="v3">③ /cases</button>
+    <button data-v="v4">④ Case 元信息</button>
+  </span>
+  <span class="sep"></span>
+  <span class="grp" id="widths">
+    <button data-w="desktop" class="on">桌面 1180</button>
+    <button data-w="mobile">移动 390</button>
+  </span>
+</div>
+
+<div class="note">
+  <b>演示说明</b> · 数据来自公开 bundle 真实标题；归属与 Collection 为 schema 4.0 目标态<b>演示占位</b>，正式归属以后端为准。
+  状态「形状 + 文字」双编码（■ 已交付 / ◐ 已排查·参与处理 / ◇ 原型验证 / ○ 学习整理）。
+  移动端行为：卡片网格塌为单列；筛选区收进「筛选」按钮抽屉，当前条件行 sticky 常显；Case 侧栏卡移到正文前。
+</div>
+
+<!-- ================= 视图 ① /projects ================= -->
+<div class="stage" id="v1">
+  <div class="stage-inner">
+    <nav class="site-nav">
+      <span class="brand">工程作品集</span>
+      <a>概览</a><a class="cur">项目</a><a>案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a>
+    </nav>
+    <div class="page-lead">
+      <div class="eyebrow">PROJECTS · 项目主线</div>
+      <h1>项目主线</h1>
+      <p>四件主要项目按策展顺序编入总目：Java 后端与 Agent 两条主线同屏，不靠 Tab 隐藏任何一方。</p>
+    </div>
+    <div class="legend">
+      <span><span class="st st-delivered"><i>■</i>已交付</span></span>
+      <span><span class="st st-investigated"><i>◐</i>已排查·参与处理</span></span>
+      <span><span class="st st-proto"><i>◇</i>原型验证</span></span>
+      <span><span class="st st-learning"><i>○</i>学习整理</span></span>
+      <span>状态为形状+文字双编码，非仅颜色</span>
+    </div>
+
+    <div class="tracks-line">
+      <span><span class="sw"></span><b>Java 后端</b> · 3 个项目（含次级 1）</span>
+      <span><span class="sw red"></span><b>Agent</b> · 1 个项目 · 学习型集成原型</span>
+    </div>
+
+    <div class="grid2">
+      <article class="cover">
+        <div class="eyebrow"><span class="trk">JAVA 后端</span><span class="no">P-01</span></div>
+        <h3><a>SQL 审计与故障排查工具</a></h3>
+        <dl class="facts">
+          <dt>性质</dt><dd>完整工具项目</dd>
+          <dt>成熟度</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd>
+          <dt>贡献</dt><dd>主导</dd>
+        </dl>
+        <p class="goal">把慢查询定位、索引建议与故障排查固化为可复用工具。</p>
+        <div class="tech">Java 21 · Spring Boot · MySQL 慢查询日志 · EXPLAIN</div>
+        <div class="foot"><span class="cases"></span><a class="go">查看项目</a></div>
+      </article>
+
+      <article class="cover">
+        <div class="eyebrow"><span class="trk">JAVA 后端</span><span class="no">P-02</span></div>
+        <h3><a>活动系统工程实践</a></h3>
+        <dl class="facts">
+          <dt>性质</dt><dd>工作主线</dd>
+          <dt>成熟度</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd>
+          <dt>贡献</dt><dd>协作参与</dd>
+        </dl>
+        <p class="goal">实习贯穿的活动系统：部分功能开发、配置协助、复开、排查与跨端转交。</p>
+        <div class="tech">Java · Spring · 配置中心 · 缓存 · 多端联调</div>
+        <div class="foot"><span class="cases">24 个案例</span><a class="go">查看项目</a></div>
+      </article>
+
+      <article class="cover">
+        <div class="eyebrow"><span class="trk">JAVA 后端</span><span class="no">P-03</span></div>
+        <h3><a>测试角色重置工具</a></h3>
+        <dl class="facts">
+          <dt>性质</dt><dd>内部工具</dd>
+          <dt>成熟度</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd>
+          <dt>贡献</dt><dd>主导</dd>
+        </dl>
+        <p class="goal">查询 → 二次确认 → 重置 → 复查 → 使用说明的完整闭环。</p>
+        <div class="tech">Java · Spring Boot · 权限校验 · 操作审计</div>
+        <div class="foot"><span class="cases">1 个案例</span><a class="go">查看项目</a></div>
+      </article>
+
+      <article class="cover agent">
+        <div class="eyebrow"><span class="trk">AGENT</span><span class="no">P-04</span></div>
+        <h3><a>Agent 能力集成 MVP</a></h3>
+        <dl class="facts">
+          <dt>性质</dt><dd>集成原型</dd>
+          <dt>成熟度</dt><dd><span class="st st-proto"><i>◇</i>原型验证</span></dd>
+          <dt>贡献</dt><dd>主导</dd>
+        </dl>
+        <p class="goal">在同一最小 MVP 中打通 Prompt / Skills / RAG / MCP / Memory / Agent。</p>
+        <div class="honest">学习型集成原型 · 不宣称生产可用或持续运营</div>
+        <div class="foot"><span class="cases">4 个案例</span><a class="go">查看项目</a></div>
+      </article>
+    </div>
+
+    <div class="minor">
+      <span class="tag">次级项目</span>
+      <span><b>图片上传与审计</b> — 多语言图片上传结果保留与上传审计（审计能力未确认发布）</span>
+      <span class="st st-delivered"><i>■</i>已交付</span>
+      <span>2 个案例</span>
+      <a>查看项目 →</a>
+    </div>
+  </div>
+</div>
+<!-- ================= 视图 ② Project 详情 · 相关案例（紧凑表格） ================= -->
+<div class="stage" id="v2" hidden>
+  <div class="stage-inner">
+    <nav class="site-nav">
+      <span class="brand">工程作品集</span>
+      <a>概览</a><a class="cur">项目</a><a>案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a>
+    </nav>
+    <div class="page-lead">
+      <div class="eyebrow">PROJECT · 活动系统工程实践</div>
+      <h1>相关案例</h1>
+      <p>规则：0 个整区不显示；1–3 个全部显示；超过 3 个展示精选并给出全部入口。本例为 24 个案例中的 6 个精选。</p>
+    </div>
+
+    <div class="rel-head"><h2>精选案例</h2><span class="rule">24 个案例 · 精选 6</span></div>
+    <table class="reltab">
+      <tr><th>编号</th><th>案例</th><th>类型</th><th>状态</th></tr>
+      <tr><td class="id">CASE-42</td><td class="tt"><a>活动开发流程与红点设计</a></td><td class="tp">功能任务</td><td><span class="st st-delivered"><i>■</i>已交付</span></td></tr>
+      <tr><td class="id">CASE-16</td><td class="tt"><a>重复配置导致唯一性冲突</a></td><td class="tp">问题处理</td><td><span class="st st-delivered"><i>■</i>已交付</span></td></tr>
+      <tr><td class="id">CASE-20</td><td class="tt"><a>结束时间与旧客户端双重过滤</a></td><td class="tp">问题处理</td><td><span class="st st-delivered"><i>■</i>已交付</span></td></tr>
+      <tr><td class="id">CASE-21</td><td class="tt"><a>环境结构缺失字段</a></td><td class="tp">问题处理</td><td><span class="st st-delivered"><i>■</i>已交付</span></td></tr>
+      <tr><td class="id">CASE-29</td><td class="tt"><a>礼包积分被配置覆盖</a></td><td class="tp">问题处理</td><td><span class="st st-investigated"><i>◐</i>已排查·参与处理</span></td></tr>
+      <tr><td class="id">CASE-30</td><td class="tt"><a>定制内容展示排查（协作转交）</a></td><td class="tp">问题处理</td><td><span class="st st-investigated"><i>◐</i>已排查·参与处理</span></td></tr>
+    </table>
+    <p class="rel-all"><a>查看全部 24 个案例</a>　<span style="color:var(--muted);font-size:12px;">→ /cases?project=campaign-system&amp;status=all</span></p>
+    <div class="note" style="padding:14px 0 0;">
+      <b>规则演示</b> · 0 案例项目整区不渲染；1 案例全显示且无「查看全部」；移动端表格隐藏「类型」列保宽度。
+    </div>
+  </div>
+</div>
+
+<!-- ================= 视图 ③ /cases ================= -->
+<div class="stage" id="v3" hidden>
+  <div class="stage-inner">
+    <nav class="site-nav">
+      <span class="brand">工程作品集</span>
+      <a>概览</a><a>项目</a><a class="cur">案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a>
+    </nav>
+    <div class="page-lead">
+      <div class="eyebrow">CASES · 案例检索</div>
+      <h1>案例</h1>
+      <p>直接进入默认显示「已交付」；筛选条件写入 URL，非法 query 回退安全默认值。</p>
+    </div>
+
+    <button class="drawer-btn" id="drawerBtn">筛选 ▾（当前：状态 · 已交付）</button>
+
+    <div class="fzone" id="fzone">
+      <div class="fline"><span class="flab">状态</span>
+        <span class="seg">
+          <span>全部</span><span class="on">已交付</span><span>已排查·参与处理</span><span>原型验证</span><span>学习整理</span>
+        </span>
+      </div>
+      <div class="fline"><span class="flab">归属</span>
+        <select class="attrsel">
+          <option>全部归属</option>
+          <optgroup label="项目">
+            <option>活动系统工程实践（24）</option>
+            <option>Agent 能力集成 MVP（4）</option>
+            <option>测试角色重置工具（1）</option>
+            <option>图片上传与审计（2）</option>
+          </optgroup>
+          <optgroup label="主题 Collection">
+            <option>开源项目体验与测试</option>
+            <option>工程操作与学习</option>
+            <option>技术写作与分享</option>
+          </optgroup>
+          <option>独立案例</option>
+        </select>
+        <span class="flab" style="width:auto;">类型</span>
+        <span class="chip on">全部</span><span class="chip">功能任务</span><span class="chip">问题处理</span><span class="chip">工具评测</span>
+      </div>
+      <div class="fline"><span class="flab">搜索</span>
+        <span class="fsearch"><input placeholder="标题关键词…"></span>
+      </div>
+    </div>
+
+    <div class="cond">
+      当前筛选：<span class="c">状态 · 已交付</span>
+      <span style="margin-left:auto;"><span class="n">20</span> 条结果</span>
+    </div>
+
+    <div class="res-row"><span class="id">CASE-42</span>
+      <div class="tt"><a>活动开发流程与红点设计</a><p class="why">活动系统工程实践 · 功能任务</p></div>
+      <div class="meta"><span class="st st-delivered"><i>■</i>已交付</span></div></div>
+    <div class="res-row"><span class="id">CASE-16</span>
+      <div class="tt"><a>重复配置导致唯一性冲突</a><p class="why">活动系统工程实践 · 问题处理</p></div>
+      <div class="meta"><span class="st st-delivered"><i>■</i>已交付</span></div></div>
+    <div class="res-row"><span class="id">CASE-20</span>
+      <div class="tt"><a>结束时间与旧客户端双重过滤</a><p class="why">活动系统工程实践 · 问题处理</p></div>
+      <div class="meta"><span class="st st-delivered"><i>■</i>已交付</span></div></div>
+    <div class="res-row"><span class="id">CASE-14</span>
+      <div class="tt"><a>智能工程内部分享</a><p class="why">主题 · 技术写作与分享 · 功能任务</p></div>
+      <div class="meta"><span class="st st-delivered"><i>■</i>已交付</span></div></div>
+    <div class="res-row"><span class="id">CASE-49</span>
+      <div class="tt"><a>历史技术博客主页</a><p class="why">独立案例 · 主题 · 技术写作与分享</p></div>
+      <div class="meta"><span class="st st-delivered"><i>■</i>已交付</span></div></div>
+
+    <div class="empty" hidden>没有符合当前条件的案例。<a>清除全部筛选</a></div>
+    <div class="note" style="padding:14px 0 0;">
+      <b>行为</b> · 归属用原生下拉（Project 与 Collection 分组 optgroup），移动端整个筛选区收进抽屉按钮，条件行 sticky 常显不丢。空态为隐藏演示。
+    </div>
+  </div>
+</div>
+<!-- ================= 视图 ④ Case 详情 · 侧栏案卷信息卡 ================= -->
+<div class="stage" id="v4" hidden>
+  <div class="stage-inner">
+    <nav class="site-nav">
+      <span class="brand">工程作品集</span>
+      <a>概览</a><a>项目</a><a class="cur">案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a>
+    </nav>
+
+    <div class="variant-tag">变体一 · 有所属 Project（CASE-20）</div>
+    <div class="case-layout">
+      <div class="case-cover">
+        <h1>CASE-20 · 结束时间与旧客户端双重过滤</h1>
+        <p class="dek">正文区沿用现有 Case 详情结构（背景 / 问题 / 判断 / 处理 / 验证）。工作状态与证据强度是两个独立维度：本例工作已完成交付，证据为截图加配置记录。</p>
+      </div>
+      <aside class="meta-side">
+        <h2>案卷信息</h2>
+        <dl>
+          <dt>归属</dt><dd><a>← 活动系统工程实践</a></dd>
+          <dt>类型</dt><dd>问题处理</dd>
+          <dt>工作状态</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd>
+          <dt>贡献</dt><dd>参与排查</dd>
+          <dt>主题</dt><dd><span style="color:var(--muted);">—</span></dd>
+          <dt>证据强度</dt><dd>较强<span class="sub">截图 + 配置记录</span></dd>
+        </dl>
+        <button class="ask-btn">询问本案例</button>
+      </aside>
+    </div>
+
+    <div class="variant-tag">变体二 · 独立案例 + Collection（CASE-49）</div>
+    <div class="case-layout">
+      <div class="case-cover">
+        <h1>CASE-49 · 历史技术博客主页</h1>
+        <p class="dek">独立案例不显示「返回 Project」，归属格直接标注「独立案例」；Collection 链接到 /cases?collection=technical-writing&amp;status=all，它不是 Agent 对话主体，也没有独立详情页。</p>
+      </div>
+      <aside class="meta-side">
+        <h2>案卷信息</h2>
+        <dl>
+          <dt>归属</dt><dd>独立案例<span class="sub">不属于任何 Project</span></dd>
+          <dt>类型</dt><dd>功能任务</dd>
+          <dt>工作状态</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd>
+          <dt>贡献</dt><dd>主导</dd>
+          <dt>主题</dt><dd><a>技术写作与分享</a></dd>
+          <dt>证据强度</dt><dd>充分<span class="sub">在线页面可访问</span></dd>
+        </dl>
+        <button class="ask-btn">询问本案例</button>
+      </aside>
+    </div>
+
+    <div class="note" style="padding:16px 0 0;">
+      <b>设计要点</b> · 侧栏卡红顶边 + 双列 dt/dd，桌面 sticky 随正文滚动；「已排查」不写「已修复」，协作转交不写成独立交付。移动端侧栏卡移到正文标题之前。
+    </div>
+  </div>
+</div>
+
+<script>
+const views = document.querySelectorAll('.stage');
+document.getElementById('views').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#views button').forEach(x => x.classList.toggle('on', x === b));
+  views.forEach(s => s.hidden = s.id !== b.dataset.v);
+});
+document.getElementById('widths').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#widths button').forEach(x => x.classList.toggle('on', x === b));
+  views.forEach(s => s.classList.toggle('mobile', b.dataset.w === 'mobile'));
+});
+document.getElementById('drawerBtn').addEventListener('click', () => {
+  document.getElementById('fzone').classList.toggle('open');
+});
+</script>
+</body>
+</html>

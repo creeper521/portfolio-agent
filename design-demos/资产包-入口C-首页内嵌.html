@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资产包组合 · 入口 C 首页内嵌 · 原型</title>
+<!--
+
+  原型：资产包组合推荐 · 入口方案 C（首页内嵌区块）
+
+  对评审者的说明：
+  - 本方案把组合推荐作为首页的一个区块（#selection），置于「向档案提问」之后、探索索引之前。
+    访客无需进入任何新页面即可完成生成；滚动锚点 #selection 直达。
+  - 下方「探索索引」第 06 卡（SELECTION / 组合推荐）同时展示了方案 A 的入口形态：
+    若选方案 A，这张卡链接到独立页 /selection 而非页内锚点。两案可共用这张卡。
+  - 表单、结果、状态组件与方案 A/B 完全一致（共享 _selection-demo-core.*）。
+  - 数据契约对齐 POST /api/portfolio-selections；subjectId / claimId / evidenceId 不渲染；
+    输入仅存内存，刷新即清空。底部 PROTOTYPE 控制条不是产品 UI。
+
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a;
+    --ink-text: #a99f91; --ink-text-hi: #e8ddce;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53; --red-on-ink: #d27d74;
+    --header-height: 66px; --content-width: 1180px;
+    --page-gutter: clamp(22px, 4vw, 48px);
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--red); color: var(--paper-hi); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 4px; border-radius: 2px; }
+  a { color: inherit; }
+  .page-shell { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); }
+
+  .dossier-header { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--header-height); background: rgba(244, 238, 228, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-bottom: 1px solid var(--rule); }
+  .dossier-header__inner { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .dossier-mark { display: flex; align-items: baseline; gap: 14px; text-decoration: none; }
+  .dossier-mark__name { font-family: var(--serif); font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+  .dossier-mark__meta { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--red); }
+  .primary-nav { display: flex; align-items: center; gap: 4px; }
+  .primary-nav a { display: block; padding: 8px 13px; font-size: 12.5px; letter-spacing: 0.1em; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.25s, border-color 0.25s; }
+  .primary-nav a:hover { color: var(--ink); }
+  .primary-nav a.is-active { color: var(--red); border-bottom-color: var(--red); }
+  .primary-nav__agent { margin-left: 10px; padding: 7px 15px !important; border: 1px solid var(--rule) !important; color: var(--ink) !important; font-family: var(--mono); font-size: 10.5px !important; letter-spacing: 0.14em !important; }
+  .primary-nav__agent:hover { background: var(--ink); color: var(--paper-hi) !important; border-color: var(--ink) !important; }
+  .menu-trigger { display: none; background: none; border: 1px solid var(--rule); padding: 8px 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink); cursor: pointer; }
+  main { padding-top: var(--header-height); }
+
+  /* —— 首页 hero 简化示意 —— */
+  .hero { padding: clamp(56px, 10vh, 104px) 0 clamp(36px, 6vh, 56px); }
+  .hero__code { font-family: var(--mono); font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--red); line-height: 2; }
+  .hero__title { font-family: var(--serif); font-size: clamp(48px, 7vw, 92px); font-weight: 700; line-height: 1.02; letter-spacing: -0.015em; max-width: 12ch; }
+  .hero__desc { margin-top: 22px; font-family: var(--serif); font-size: clamp(15px, 1.4vw, 18px); line-height: 1.9; color: var(--muted); max-width: 52ch; }
+
+  .home-section { border: 1px dashed var(--rule); padding: 44px 30px; margin-bottom: clamp(36px, 6vh, 56px); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--faint); line-height: 2; }
+
+  /* —— 组合推荐区块（本方案核心）—— */
+  .selection-section { scroll-margin-top: calc(var(--header-height) + 20px); background: var(--paper-hi); border: 1px solid var(--rule); padding: clamp(30px, 5vh, 52px) clamp(22px, 3.5vw, 44px); margin-bottom: clamp(36px, 6vh, 56px); }
+  .selection-section__head { display: grid; grid-template-columns: 0.34fr 1fr; gap: clamp(20px, 3vw, 40px); align-items: end; margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--rule); }
+  .selection-section__code { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--red); line-height: 2; }
+  .selection-section__title { font-family: var(--serif); font-size: clamp(30px, 3.6vw, 46px); font-weight: 700; line-height: 1.08; letter-spacing: -0.01em; }
+  .selection-section__desc { grid-column: 2; font-family: var(--serif); font-size: 15px; line-height: 1.9; color: var(--muted); max-width: 56ch; }
+  .result-mount { min-height: 120px; }
+  .result-idle { border: 1px dashed var(--rule); padding: 26px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--faint); line-height: 2; }
+
+  /* —— 探索索引（六卡，含方案 A 的入口卡样式）—— */
+  .explore { padding-bottom: clamp(48px, 8vh, 80px); }
+  .explore__heading { font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--faint); margin-bottom: 18px; }
+  .explore__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .explore-card { display: block; background: var(--paper); padding: 24px 22px 20px; text-decoration: none; transition: background 0.3s var(--ease); }
+  .explore-card:hover { background: var(--paper-hi); }
+  .explore-card__no { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--red); }
+  .explore-card__title { font-family: var(--serif); font-size: 22px; font-weight: 700; margin: 10px 0 6px; }
+  .explore-card__desc { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+  .explore-card__go { display: inline-block; margin-top: 14px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+  .explore-card--new { background: var(--paper-low); }
+  .explore-card--new:hover { background: var(--paper-hi); }
+  .explore-card__badge { display: inline-block; margin-left: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--red); border: 1px solid var(--red); padding: 2px 6px; vertical-align: 3px; }
+
+  .dossier-footer { background: var(--ink); color: var(--ink-text); }
+  .dossier-footer__inner { max-width: var(--content-width); margin: 0 auto; padding: 40px var(--page-gutter) 0; }
+  .dossier-footer__base { border-top: 1px solid var(--ink-2); padding: 20px 0 26px; display: flex; justify-content: space-between; gap: 16px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint); }
+
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+  .reveal.is-visible { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .reveal { opacity: 1; transform: none; transition: none; } }
+  @media (max-width: 959.98px) {
+    .menu-trigger { display: block; }
+    .primary-nav { position: absolute; top: var(--header-height); left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; background: var(--paper-hi); border-bottom: 1px solid var(--rule); padding: 8px var(--page-gutter) 16px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: opacity 0.3s, transform 0.3s, visibility 0.3s; }
+    .primary-nav.is-open { opacity: 1; visibility: visible; transform: none; }
+    .primary-nav a { padding: 12px 4px; font-size: 13.5px; border-bottom: 1px solid var(--paper-low); }
+    .primary-nav__agent { margin: 10px 0 0; text-align: center; }
+    .selection-section__head { grid-template-columns: 1fr; }
+    .selection-section__desc { grid-column: 1; }
+    .explore__grid { grid-template-columns: 1fr; }
+    .dossier-footer__base { flex-direction: column; gap: 8px; }
+  }
+</style>
+<link rel="stylesheet" href="_selection-demo-core.css">
+</head>
+<body>
+
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" href="#">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">Engineering Dossier</span>
+    </a>
+    <button class="menu-trigger" id="menuTrigger" aria-expanded="false" aria-controls="primaryNav">MENU</button>
+    <nav class="primary-nav" id="primaryNav" aria-label="主导航">
+      <a href="#">案例</a>
+      <a href="#">项目</a>
+      <a href="#">时间线</a>
+      <a href="#">证据</a>
+      <a href="#selection">组合</a>
+      <a href="#" class="primary-nav__agent">完整 Agent ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page-shell">
+  <section class="hero">
+    <p class="hero__code reveal">Engineering Dossier / 工程成长档案</p>
+    <h1 class="hero__title reveal">一段实习，留下的工程证据。</h1>
+    <p class="hero__desc reveal">案例、项目、时间线与公开证据，经脱敏与人工复核。（首页 hero 简化示意，正式版保持现有内容。）</p>
+  </section>
+
+  <div class="home-section reveal">AUDIENCE DIALOGUE — 现有「向档案提问」区块（本原型不展开，保持现状）。</div>
+
+  <section class="selection-section reveal" id="selection" aria-labelledby="selectionTitle">
+    <div class="selection-section__head">
+      <p class="selection-section__code">Selection / 资产包组合</p>
+      <h2 class="selection-section__title" id="selectionTitle">组一套互补的资产。</h2>
+      <p class="selection-section__desc">说出求职方向与想证明的能力，从公开项目与案例中生成一套互相补位的组合，附选择理由与证据。输入仅用于本次生成，不保存、不写入浏览器历史。</p>
+    </div>
+    <form class="sel-form" id="selForm" novalidate></form>
+    <div class="result-mount" id="selResult">
+      <div class="result-idle">RESULT AREA — 提交需求后呈现资产组合、覆盖、互补与依据。</div>
+    </div>
+  </section>
+
+  <section class="explore reveal" aria-label="探索索引">
+    <h2 class="explore__heading">Explore / 探索索引</h2>
+    <div class="explore__grid">
+      <a class="explore-card" href="#">
+        <span class="explore-card__no">01</span>
+        <h3 class="explore-card__title">项目</h3>
+        <p class="explore-card__desc">完整工程项目的公开摘要与职责边界。</p>
+        <span class="explore-card__go">View</span>
+      </a>
+      <a class="explore-card" href="#">
+        <span class="explore-card__no">02</span>
+        <h3 class="explore-card__title">案例</h3>
+        <p class="explore-card__desc">以问题—行动—结果组织的工程案例。</p>
+        <span class="explore-card__go">View</span>
+      </a>
+      <a class="explore-card" href="#">
+        <span class="explore-card__no">03</span>
+        <h3 class="explore-card__title">时间线</h3>
+        <p class="explore-card__desc">按时间排列的成长与交付记录。</p>
+        <span class="explore-card__go">View</span>
+      </a>
+      <a class="explore-card" href="#">
+        <span class="explore-card__no">04</span>
+        <h3 class="explore-card__title">证据</h3>
+        <p class="explore-card__desc">经审阅的公开证据条目与出处。</p>
+        <span class="explore-card__go">View</span>
+      </a>
+      <a class="explore-card" href="#">
+        <span class="explore-card__no">05</span>
+        <h3 class="explore-card__title">完整 Agent</h3>
+        <p class="explore-card__desc">就档案内容自由提问，仅基于公开语料回答。</p>
+        <span class="explore-card__go">Open</span>
+      </a>
+      <a class="explore-card explore-card--new" href="#selection">
+        <span class="explore-card__no">06</span>
+        <h3 class="explore-card__title">组合推荐<span class="explore-card__badge">NEW</span></h3>
+        <p class="explore-card__desc">按求职方向与能力目标，生成一套互补的资产包。</p>
+        <span class="explore-card__go">Generate</span>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer class="dossier-footer">
+  <div class="dossier-footer__inner">
+    <div class="dossier-footer__base" style="border-top: 0;">
+      <span>Volume 01 · 2026-07-29.1</span>
+      <span>Public · Desensitized · Human Reviewed</span>
+    </div>
+  </div>
+</footer>
+
+<div class="demo-rail" id="demoRail"></div>
+<div class="demo-rail-spacer"></div>
+
+<script src="_selection-demo-data.js"></script>
+<script src="_selection-demo-core.js"></script>
+<script>
+  var trigger = document.getElementById('menuTrigger');
+  var nav = document.getElementById('primaryNav');
+  trigger.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  // 锚点「组合」与第 06 卡走页内滚动，其余链接不跳转
+  document.querySelectorAll('a[href="#"]').forEach(function (a) {
+    a.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+
+  SelectionDemo.mount({
+    form: document.getElementById('selForm'),
+    result: document.getElementById('selResult'),
+    rail: document.getElementById('demoRail'),
+  });
+</script>
+</body>
+</html>

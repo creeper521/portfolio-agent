@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>导航方案 B · 保留首屏入口</title>
+<style>
+  /* ===== 严格复刻项目档案设计 token（与方案A一致） ===== */
+  :root {
+    --paper: #f4eee4;
+    --paper-hi: #fbf7ef;
+    --paper-low: #e9dfd0;
+    --ink: #201c17;
+    --ink-2: #34302a;
+    --muted: #746b5e;
+    --faint: #9c9182;
+    --rule: #cdbfa9;
+    --red: #7a2e2a;
+    --red-hi: #b65d53;
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+    --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --header-height: 66px;
+    --content-width: 1180px;
+    --gutter: clamp(22px, 4vw, 48px);
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); font-family: var(--sans); scroll-behavior: smooth; }
+  body { margin: 0; min-height: 100vh; background: var(--paper); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; cursor: pointer; }
+  button { cursor: pointer; font: inherit; }
+
+  /* ===== 评审控制条 ===== */
+  .review-bar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    padding: 12px var(--gutter);
+    background: var(--ink); color: var(--paper-hi);
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  }
+  .review-bar__tag {
+    padding: 3px 9px; background: var(--red); color: var(--paper-hi);
+    font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .review-bar__title { font-weight: 700; }
+  .review-bar__switch { display: flex; gap: 2px; margin-left: auto; background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px; }
+  .review-bar__switch button {
+    border: 0; background: transparent; color: #a99f91;
+    padding: 7px 14px; font-size: 11.5px; font-family: var(--mono); border-radius: 3px;
+    transition: all 0.2s var(--ease);
+  }
+  .review-bar__switch button.is-active { background: var(--paper-hi); color: var(--ink); }
+  .review-bar__note { color: #a99f91; font-size: 11px; }
+  .review-bar__note b { color: var(--red-hi); }
+
+  /* ===== 真实导航栏（方案B：顶栏同样全局一套，与A一致） ===== */
+  .dossier-header {
+    position: sticky; top: 39px; z-index: 80;
+    height: var(--header-height);
+    color: var(--ink);
+    border-bottom: 1px solid color-mix(in srgb, var(--rule), transparent 25%);
+    background: color-mix(in srgb, var(--paper), transparent 8%);
+    backdrop-filter: blur(15px);
+  }
+  .dossier-header__inner {
+    display: flex; width: min(var(--content-width), calc(100% - 56px));
+    height: 100%; margin-inline: auto; align-items: center; justify-content: space-between;
+  }
+  .dossier-mark { display: flex; align-items: baseline; gap: 14px; }
+  .dossier-mark__name { font: 700 18px/1 var(--serif); }
+  .dossier-mark__meta { color: var(--muted); font: 10.5px/1 var(--mono); letter-spacing: 0.14em; }
+  .primary-nav { display: flex; height: 100%; align-items: center; gap: 29px; font-size: 14px; }
+  .primary-nav a {
+    position: relative; display: grid; height: 100%; padding: 0; align-items: center;
+    transition: color 0.2s var(--ease);
+  }
+  .primary-nav a:hover { color: var(--red); }
+  .primary-nav a.is-active { color: var(--red); }
+  .primary-nav a.is-active::after {
+    content: ''; position: absolute; right: 0; bottom: 0; left: 0; height: 2px; background: var(--red);
+  }
+  .primary-nav__agent { color: var(--red); display: inline-flex; align-items: center; gap: 4px; }
+
+  /* ===== 页面内容区 ===== */
+  main { min-width: 0; }
+  .page { display: none; }
+  .page.is-on { display: block; }
+  .page-shell { width: min(var(--content-width), calc(100% - (var(--gutter) * 2))); margin-inline: auto; }
+
+  .eyebrow { color: var(--ink-2); font: 12px/1.4 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; }
+  h1, h2, h3 { font-family: var(--serif); color: var(--ink); margin: 0; }
+  h1 { font-size: 44px; line-height: 1.1; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 30px; line-height: 1.2; font-weight: 700; }
+  h3 { font-size: 17px; font-weight: 700; }
+  p { color: var(--ink-2); line-height: 1.7; }
+
+  /* — 首页 hero（方案B 关键差异：hero 内嵌次级入口） — */
+  .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
+  .hero__eyebrow { margin-bottom: 22px; }
+  .hero h1 { max-width: 14ch; }
+  .hero__sub { margin-top: 20px; max-width: 52ch; font-size: 16px; }
+  .hero__meta { display: flex; gap: 32px; margin-top: 36px; }
+  .hero__meta dt { color: var(--faint); font: 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+  .hero__meta dd { margin: 4px 0 0; font: 600 15px var(--serif); color: var(--ink); }
+
+  /* ★ 方案B 核心：hero 内次级入口带（取代顶栏的锚点/角色） */
+  .hero-entries {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 38px; padding-top: 28px;
+    border-top: 1px dashed var(--rule);
+  }
+  .hero-entries__label {
+    width: 100%; color: var(--faint); font: 11px var(--mono); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .hero-entry {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 11px 18px; border: 1px solid var(--rule); background: var(--paper-hi);
+    font-size: 14px; color: var(--ink-2); transition: all 0.2s var(--ease);
+  }
+  .hero-entry:hover { border-color: var(--red); color: var(--red); }
+  .hero-entry__icon { font: 600 13px var(--mono); color: var(--red); letter-spacing: 0.08em; }
+  .hero-entry--role { background: var(--ink); color: var(--paper-hi); border-color: var(--ink); }
+  .hero-entry--role:hover { background: var(--red); border-color: var(--red); color: var(--paper-hi); }
+  .hero-entry--role .hero-entry__icon { color: var(--red-hi); }
+
+  /* — 首页区块 — */
+  .home-section { padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  .home-section__head { display: flex; align-items: baseline; gap: 18px; margin-bottom: 34px; }
+  .home-section__num { color: var(--red); font: 12px var(--mono); letter-spacing: 0.14em; }
+  .home-section__head h2 { flex: 1; }
+  .home-section__hint { color: var(--faint); font: 12px var(--mono); }
+
+  .cred-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .cred-cell { background: var(--paper-hi); padding: 26px; }
+  .cred-cell__n { font: 700 40px/1 var(--serif); color: var(--red); }
+  .cred-cell__l { margin-top: 8px; color: var(--muted); font: 12px var(--mono); letter-spacing: 0.06em; }
+
+  .explore-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .explore-card { padding: 22px; border: 1px solid var(--rule); background: var(--paper-hi); transition: all 0.2s var(--ease); }
+  .explore-card:hover { border-color: var(--red); transform: translateY(-2px); }
+  .explore-card__code { color: var(--red); font: 11px var(--mono); letter-spacing: 0.12em; }
+  .explore-card__t { margin: 12px 0 8px; font: 700 18px var(--serif); }
+  .explore-card__d { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .explore-card__arrow { margin-top: 14px; color: var(--red); font: 12px var(--mono); }
+
+  /* — 项目页 — */
+  .sub-hero { padding: 56px 0 40px; border-bottom: 1px solid var(--rule); }
+  .sub-hero__crumb { color: var(--faint); font: 12px var(--mono); letter-spacing: 0.08em; margin-bottom: 18px; }
+  .sub-hero h1 { font-size: 36px; }
+  .proj-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 48px 0; }
+  .proj-card { padding: 28px; border: 1px solid var(--rule); background: var(--paper-hi); }
+  .proj-card__no { color: var(--red); font: 11px var(--mono); letter-spacing: 0.14em; }
+  .proj-card__t { margin: 14px 0 10px; font: 700 22px var(--serif); }
+  .proj-card__d { color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+  /* 方案说明卡 */
+  .scheme-note { max-width: 760px; margin: 0 auto; padding: 30px var(--gutter) 50px; }
+  .scheme-note__box {
+    padding: 26px 30px; background: var(--paper-hi); border: 1px solid var(--rule);
+    border-left: 3px solid var(--red);
+  }
+  .scheme-note__t { font: 700 13px var(--mono); letter-spacing: 0.14em; color: var(--red); text-transform: uppercase; margin-bottom: 14px; }
+  .scheme-note__box h3 { font-size: 19px; margin-bottom: 12px; }
+  .scheme-note__box p { font-size: 14px; margin: 0 0 12px; }
+  .scheme-note__box ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; line-height: 1.9; }
+  .scheme-note__box li b { color: var(--ink); }
+  .scheme-note__trade { margin-top: 14px; padding: 12px 16px; background: color-mix(in srgb, var(--paper-low), transparent 40%); font-size: 13px; color: var(--muted); }
+  .scheme-note__trade b { color: var(--red); }
+
+  footer { padding: 30px var(--gutter); border-top: 1px solid var(--rule); color: var(--faint); font: 11px var(--mono); letter-spacing: 0.1em; }
+</style>
+</head>
+<body>
+
+<!-- 评审控制条 -->
+<div class="review-bar">
+  <span class="review-bar__tag">方案 B</span>
+  <span class="review-bar__title">保留首屏入口 · 顶栏统一 + hero 内嵌次级入口</span>
+  <div class="review-bar__switch">
+    <button data-page="home" class="is-active">首页</button>
+    <button data-page="projects">项目页</button>
+  </div>
+  <span class="review-bar__note">← 切换两页，顶栏一致；<b>首页 hero 区</b>看次级入口</span>
+</div>
+
+<!-- 真实导航栏：全局唯一一套（与方案A相同） -->
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" data-link="home">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">/ ENGINEERING DOSSIER</span>
+    </a>
+    <nav class="primary-nav">
+      <a data-link="home">概览</a>
+      <a data-link="projects">项目</a>
+      <a>案例</a>
+      <a>时间线</a>
+      <a>证据</a>
+      <a class="primary-nav__agent">完整 Agent ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ===== 首页 ===== -->
+  <div class="page is-on" data-page="home">
+    <div class="page-shell">
+      <section class="hero">
+        <div class="eyebrow hero__eyebrow">PUBLIC DOSSIER · v2026.07</div>
+        <h1>先建立可信度，<br/>再进入细节。</h1>
+        <p class="hero__sub">这是一份面向技术面试官的工程成长档案。你可以浏览项目与案例，或直接进入完整 Agent，就任何细节追问、核验与对话。</p>
+        <dl class="hero__meta">
+          <div><dt>OWNER</dt><dd>段惟皓</dd></div>
+          <div><dt>FOCUS</dt><dd>后端 · 工程实践</dd></div>
+          <div><dt>STATUS</dt><dd>实习作品集</dd></div>
+        </dl>
+
+        <!-- ★ 方案B 核心：hero 内次级入口带，取代顶栏锚点 -->
+        <div class="hero-entries">
+          <div class="hero-entries__label">从哪里开始 · 首屏直达</div>
+          <a class="hero-entry hero-entry--role"><span class="hero-entry__icon">R</span>技术面试官视角</a>
+          <a class="hero-entry"><span class="hero-entry__icon">↓</span>可信度速览</a>
+          <a class="hero-entry"><span class="hero-entry__icon">↓</span>对话视角</a>
+          <a class="hero-entry"><span class="hero-entry__icon">↓</span>探索入口</a>
+          <a class="hero-entry" data-link="projects"><span class="hero-entry__icon">→</span>核心项目</a>
+        </div>
+      </section>
+
+      <!-- 可信度区 -->
+      <section class="home-section">
+        <div class="home-section__head">
+          <span class="home-section__num">01</span>
+          <h2>可信度速览</h2>
+          <span class="home-section__hint">hero 区「可信度速览」入口指向这里</span>
+        </div>
+        <div class="cred-grid">
+          <div class="cred-cell"><div class="cred-cell__n">5</div><div class="cred-cell__l">CORE PROJECTS</div></div>
+          <div class="cred-cell"><div class="cred-cell__n">12</div><div class="cred-cell__l">ENGINEERING CASES</div></div>
+          <div class="cred-cell"><div class="cred-cell__n">100%</div><div class="cred-cell__l">脱敏 · 公开审批</div></div>
+        </div>
+      </section>
+
+      <!-- 探索区（路由网格，仍是首屏深度入口） -->
+      <section class="home-section">
+        <div class="home-section__head">
+          <span class="home-section__num">02</span>
+          <h2>继续深入。</h2>
+          <span class="home-section__hint">hero 区「探索入口」指向这里</span>
+        </div>
+        <div class="explore-grid">
+          <div class="explore-card" data-link="projects"><div class="explore-card__code">01 / PROJECTS</div><div class="explore-card__t">核心项目</div><div class="explore-card__d">问题、方案、职责、验证、结果与限制。</div><div class="explore-card__arrow">进入 ↗</div></div>
+          <div class="explore-card"><div class="explore-card__code">02 / CASES</div><div class="explore-card__t">工程案例</div><div class="explore-card__d">具体问题、关键判断、处理动作与验证过程。</div><div class="explore-card__arrow">进入 ↗</div></div>
+          <div class="explore-card"><div class="explore-card__code">03 / TIMELINE</div><div class="explore-card__t">成长时间线</div><div class="explore-card__d">按阶段回溯问题、行动与能力形成。</div><div class="explore-card__arrow">进入 ↗</div></div>
+          <div class="explore-card"><div class="explore-card__code">04 / EVIDENCE</div><div class="explore-card__t">证据档案</div><div class="explore-card__d">脱敏摘要、公开状态与关联项目。</div><div class="explore-card__arrow">进入 ↗</div></div>
+          <div class="explore-card"><div class="explore-card__code">05 / AGENT</div><div class="explore-card__t">完整对话</div><div class="explore-card__d">长回答、引用核验与历史会话。</div><div class="explore-card__arrow">进入 ↗</div></div>
+          <div class="explore-card" style="visibility:hidden"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 方案说明 -->
+    <div class="scheme-note">
+      <div class="scheme-note__box">
+        <div class="scheme-note__t">方案 B · 设计取舍</div>
+        <h3>顶栏统一一套 + 首页 hero 内嵌次级入口</h3>
+        <p>顶栏全局一致（同方案A），但首页首屏不丢失引导——把原本在顶栏的锚点/角色，<b>迁移到 hero 区内部的次级入口带</b>。</p>
+        <ul>
+          <li><b>顶栏</b>：依然是全局一套路由导航，无首页特例（与A同）。</li>
+          <li><b>hero 区</b>：新增「从哪里开始」入口带，承载原锚点（可信度/对话/探索）+ 角色选择。</li>
+          <li><b>角色标签</b>：「技术面试官」从顶栏移到 hero，以「视角按钮」形式存在，首页有、他页无但符合预期。</li>
+        </ul>
+        <div class="scheme-note__trade">
+          <b>取舍：</b>一致性与首屏深度兼得，代价是首页要做「顶栏 + hero 入口带」两层的视觉协调，设计成本比A略高。适合作品集「第一眼就要引导面试官进入核心」的场景。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 项目页 ===== -->
+  <div class="page" data-page="projects">
+    <div class="page-shell">
+      <section class="sub-hero">
+        <div class="sub-hero__crumb">/ PROJECTS · 核心项目</div>
+        <h1>核心项目</h1>
+        <p style="margin-top:16px;max-width:60ch;">问题、方案、职责、验证、结果与限制——每个项目按统一结构呈现，便于横向对照工程判断。</p>
+      </section>
+      <div class="proj-grid">
+        <div class="proj-card"><div class="proj-card__no">01</div><div class="proj-card__t">作品集 Agent</div><div class="proj-card__d">面向公开内容审查的 Spring Boot + Vue 模块化单体，只读公开快照，隐私 fail-closed。</div></div>
+        <div class="proj-card"><div class="proj-card__no">02</div><div class="proj-card__t">SQL 审计项目</div><div class="proj-card__d">慢查询定位、索引重建与执行计划核验，脱敏后纳入公开证据。</div></div>
+        <div class="proj-card"><div class="proj-card__no">03</div><div class="proj-card__t">工程案例库</div><div class="proj-card__d">把零散处理过程沉淀为可检索的案例单元，含关键判断与验证过程。</div></div>
+        <div class="proj-card"><div class="proj-card__no">04</div><div class="proj-card__t">文档治理</div><div class="proj-card__d">建立文档状态索引与约束清单，区分活跃设计与已归档规划。</div></div>
+      </div>
+    </div>
+
+    <div class="scheme-note">
+      <div class="scheme-note__box">
+        <div class="scheme-note__t">观察点</div>
+        <h3>顶栏与首页完全一致，但首页多了 hero 入口带</h3>
+        <p>切回首页对比：顶栏条目完全相同；但首页 hero 区多了「从哪里开始」入口带，首屏深度入口没丢。这是 B 相对 A 的核心增值。</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>DESIGN DEMO · 方案B 保留首屏入口 · 非生产代码</footer>
+
+<script>
+  const navLinks = document.querySelectorAll('.primary-nav a[data-link], .dossier-mark[data-link], .hero-entry[data-link], .explore-card[data-link]');
+  const pages = document.querySelectorAll('.page[data-page]');
+  const switches = document.querySelectorAll('.review-bar__switch button');
+
+  function setPage(name) {
+    pages.forEach(p => p.classList.toggle('is-on', p.dataset.page === name));
+    switches.forEach(s => s.classList.toggle('is-active', s.dataset.page === name));
+    document.querySelectorAll('.primary-nav a').forEach(a => {
+      a.classList.toggle('is-active', a.dataset.link === name);
+    });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  switches.forEach(b => b.addEventListener('click', () => setPage(b.dataset.page)));
+  navLinks.forEach(a => a.addEventListener('click', e => { e.preventDefault(); setPage(a.dataset.link); }));
+</script>
+</body>
+</html>

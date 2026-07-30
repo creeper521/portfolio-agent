@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="only light">
+<title>案例 · 工程成长档案</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  案例整体可导航原型（列表页 + 详情页 合并，hash 路由互通）
+
+  路由：
+    #/cases                        → 目录页（状态 tab + V3 索引行）
+    #/cases/:slug                  → 详情页（八段结构）
+    其他                            → 重定向到 #/cases
+
+  整合点：
+    · 从详情返回列表，保持之前看的 tab（内存变量）
+    · 46 个只有摘要的 case → 诚实 stub（封面 + 边界说明），不假 404
+    · 3 个完整详情 + 1 个不存在 slug → 真 404
+    · 列表点行 → 详情；详情面包屑/banner → 列表；状态语言贯穿
+  ════════════════════════════════════════════════════════════════════════
+-->
+<style>
+:root{
+  --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0;
+  --ink:#201c17; --ink-2:#34302a; --ink-line:#4a433b;
+  --ink-text:#a99f91; --ink-text-hi:#e8ddce; --ink-text-faint:#94897c;
+  --muted:#746b5e; --faint:#9c9182; --rule:#cdbfa9;
+  --red:#7a2e2a; --red-hi:#b65d53; --red-on-ink:#d27d74;
+  --header-height:66px; --content-width:1180px;
+  --page-gutter:clamp(22px,4vw,48px);
+  --ease:cubic-bezier(0.22,0.8,0.22,1);
+  --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+  --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);color:var(--ink-2);background:var(--paper);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:4px}
+::selection{color:var(--paper-hi);background:var(--red)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(122,46,42,0.22);border-radius:6px;border:3px solid var(--paper)}
+::-webkit-scrollbar-thumb:hover{background:rgba(122,46,42,0.5)}
+h1,h2,h3,h4,.serif{font-family:var(--serif)}
+.page-shell{max-width:var(--content-width);margin:0 auto;padding:0 var(--page-gutter)}
+
+/* ─────────────── 顶部导航 ─────────────── */
+.dossier-header{position:fixed;top:0;left:0;right:0;z-index:80;height:var(--header-height);background:color-mix(in srgb,var(--paper),transparent 8%);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);border-bottom:1px solid var(--rule)}
+.dossier-header__inner{max-width:var(--content-width);height:100%;margin:0 auto;padding:0 var(--page-gutter);display:flex;align-items:center;justify-content:space-between;gap:32px}
+.dossier-mark{display:flex;align-items:baseline;gap:9px;flex-shrink:0;cursor:pointer}
+.dossier-mark__name{font-family:var(--serif);font-weight:700;font-size:18px;color:var(--ink);letter-spacing:-0.01em}
+.dossier-mark__meta{font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+.primary-nav{display:flex;align-items:center;gap:29px}
+.primary-nav a{font-size:14px;color:var(--ink-2);position:relative;padding:6px 0;transition:color .2s var(--ease);cursor:pointer}
+.primary-nav a:hover{color:var(--red)}
+.primary-nav a.is-active{color:var(--red)}
+.primary-nav a.is-active::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:var(--red)}
+.primary-nav__agent{color:var(--red)!important;font-family:var(--mono);font-size:12px;letter-spacing:0.08em;text-transform:uppercase}
+.menu-trigger{display:none;font-family:var(--mono);font-size:12px;letter-spacing:0.1em}
+@media (max-width:959.98px){
+  .primary-nav{position:fixed;top:var(--header-height);left:0;right:0;background:var(--paper-hi);border-bottom:1px solid var(--rule);flex-direction:column;align-items:flex-start;gap:0;padding:8px var(--page-gutter) 20px;transform:translateY(-130%);transition:transform .35s var(--ease);box-shadow:0 18px 30px rgba(32,28,23,0.08)}
+  .primary-nav.is-open{transform:translateY(0)}
+  .primary-nav a{width:100%;padding:13px 0;border-bottom:1px solid var(--rule);font-size:15px}
+  .menu-trigger{display:block}
+}
+
+/* ─────────────── PageLead ─────────────── */
+.page-lead{padding:clamp(74px,8vw,112px) 0 48px;border-bottom:1px solid var(--rule);background:var(--paper-hi)}
+.page-lead__grid{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(24px,4vw,56px);align-items:end}
+.page-lead__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.page-lead__title{font-family:var(--serif);font-weight:400;font-size:clamp(44px,6vw,78px);line-height:0.98;letter-spacing:-0.045em;color:var(--ink)}
+.page-lead__desc{font-family:var(--serif);font-size:15.5px;line-height:1.75;color:var(--muted);max-width:42ch}
+@media (max-width:760px){.page-lead__grid{grid-template-columns:1fr;gap:16px;align-items:start}}
+
+/* ════════════════════════════════════════════════════════════════════
+   状态 tab
+   ════════════════════════════════════════════════════════════════════ */
+.case-tabs{border-bottom:1px solid var(--ink);display:flex;align-items:flex-end;gap:0;position:sticky;top:var(--header-height);z-index:50;background:var(--paper);overflow-x:auto;scrollbar-width:none}
+.case-tabs::-webkit-scrollbar{display:none}
+.case-tab{position:relative;font-family:var(--mono);font-size:11.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:22px 26px 20px;flex-shrink:0;display:inline-flex;align-items:baseline;gap:8px;transition:color .2s var(--ease)}
+.case-tab:hover{color:var(--ink-2)}
+.case-tab.is-selected{color:var(--ink)}
+.case-tab.is-selected::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--red)}
+.case-tab__count{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.06em}
+.case-tab.is-selected .case-tab__count{color:var(--red)}
+.case-tab__label{display:inline-flex;align-items:center;gap:9px}
+.case-tab__dot{width:8px;height:8px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--red);background:var(--paper)}
+.case-tab[data-sg="delivered"] .case-tab__dot{background:var(--red)}
+.case-tab[data-sg="prototype"] .case-tab__dot{background:var(--paper);border-style:dashed}
+.case-tab[data-sg="learning"] .case-tab__dot{background:var(--paper);border-color:var(--muted)}
+.case-tab.is-selected .case-tab__dot{transform:scale(1.15)}
+.case-tab:focus-visible{outline-offset:-4px}
+.case-tabpanel-intro{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(24px,4vw,56px);align-items:end;padding:32px 0 22px}
+.case-tabpanel-intro__code{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.case-tabpanel-intro__title{font-family:var(--serif);font-weight:400;font-size:clamp(26px,3vw,38px);line-height:1.1;letter-spacing:-0.025em;color:var(--ink)}
+.case-tabpanel-intro__note{font-family:var(--serif);font-size:13.5px;line-height:1.7;color:var(--muted);max-width:40ch}
+@media (max-width:760px){.case-tabpanel-intro{grid-template-columns:1fr;gap:10px;padding:22px 0 18px}}
+
+/* ════════════════════════════════════════════════════════════════════
+   V3 索引行
+   ════════════════════════════════════════════════════════════════════ */
+.case-list{padding:2px 0 0}
+.case-row{display:grid;grid-template-columns:72px minmax(0,1fr) 190px 88px;gap:clamp(16px,2.4vw,28px);align-items:baseline;padding:20px clamp(6px,1vw,12px);border-bottom:1px solid var(--rule);cursor:pointer;position:relative;transition:background .2s var(--ease)}
+.case-row:hover{background:var(--paper-hi)}
+.case-row:focus-visible{background:var(--paper-hi);outline-offset:-2px}
+.case-row__code{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--red);align-self:center}
+.case-row__main{min-width:0}
+.case-row__title{font-family:var(--serif);font-weight:400;font-size:clamp(19px,1.9vw,26px);line-height:1.2;letter-spacing:-0.015em;color:var(--ink);transition:color .2s var(--ease)}
+.case-row:hover .case-row__title{color:var(--red)}
+.case-row__summary{font-family:var(--serif);font-size:13px;line-height:1.7;color:var(--muted);max-height:0;overflow:hidden;opacity:0;margin-top:0;transition:max-height .3s var(--ease),opacity .3s var(--ease),margin-top .3s var(--ease)}
+.case-row:hover .case-row__summary,.case-row:focus-within .case-row__summary{max-height:90px;opacity:1;margin-top:8px}
+.case-row__type{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;color:var(--muted);text-transform:uppercase;text-align:right;align-self:center}
+.case-row__type b{display:block;color:var(--ink-2);font-weight:400;font-size:10.5px;margin-bottom:3px}
+.case-row__stat{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--faint);text-transform:uppercase;text-align:right;align-self:center;white-space:nowrap}
+.case-row__arrow{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:14px;color:var(--red);opacity:0;transition:opacity .2s var(--ease)}
+.case-row:hover .case-row__arrow{opacity:1}
+@media (max-width:760px){.case-row{grid-template-columns:auto 1fr;gap:12px;padding:18px 6px}.case-row__type,.case-row__stat,.case-row__arrow{display:none}.case-row__summary{max-height:none;opacity:1;margin-top:6px}}
+
+/* ─────────────── 详情页：面包屑 ─────────────── */
+.breadcrumb{padding-top:calc(var(--header-height) + 26px)}
+.breadcrumb__list{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase}
+.breadcrumb__list a{transition:color .2s var(--ease)}
+.breadcrumb__list a:hover{color:var(--red)}
+.breadcrumb__sep{color:var(--faint)}
+.breadcrumb__current{color:var(--paper-hi)}
+
+/* ─────────────── 详情页：封面 ─────────────── */
+.case-cover{color:var(--paper);background:var(--ink);padding:0 0 76px;position:relative;overflow:hidden}
+.case-cover--lead{padding:48px 0 76px}
+.case-cover::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(122,46,42,0.045),transparent 55%),repeating-linear-gradient(90deg,transparent 0 2px,rgba(111,93,70,0.055) 2px 4px);pointer-events:none}
+.case-cover__grid{position:relative;display:grid;grid-template-columns:0.26fr 1fr 0.35fr;gap:clamp(28px,5vw,72px)}
+.case-cover__grid>*{min-width:0}
+.case-cover__code{display:flex;flex-direction:column;align-content:flex-start;gap:14px}
+.cover-status{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--ink-text);text-transform:uppercase}
+.cover-status__dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--red-on-ink);background:var(--ink);flex-shrink:0}
+.cover-status[data-sg="delivered"] .cover-status__dot{background:var(--red-on-ink)}
+.cover-status[data-sg="prototype"] .cover-status__dot{background:var(--ink);border-style:dashed}
+.cover-status[data-sg="learning"] .cover-status__dot{background:var(--ink);border-color:var(--ink-text)}
+.cover-status--contrib .cover-status__dot{display:none}
+.case-cover__record-type{color:var(--red-on-ink);font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:24px}
+.case-cover__title{font-family:var(--serif);font-weight:400;font-size:clamp(48px,6vw,88px);line-height:1.02;letter-spacing:-0.04em;color:var(--paper);margin-bottom:28px}
+.case-cover__summary{max-width:760px;color:var(--ink-text-hi);font-family:var(--serif);font-size:20px;line-height:1.7}
+.case-cover__meta{display:flex;flex-direction:column}
+.case-cover__meta-label{color:var(--ink-text);font-family:var(--mono);font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--ink-line)}
+.case-cover__meta-item{display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid var(--ink-line)}
+.case-cover__meta-item:last-child{border-bottom:none}
+.case-cover__meta-key{font-family:var(--mono);font-size:9.5px;letter-spacing:0.12em;color:var(--ink-text-faint);text-transform:uppercase}
+.case-cover__meta-val{font-family:var(--serif);font-size:15px;color:var(--ink-text-hi);line-height:1.4}
+.case-cover__meta-val--mono{font-family:var(--mono);font-size:12px;letter-spacing:0.04em}
+.case-cover__meta-val a{border-bottom:1px solid var(--ink-line);padding-bottom:1px;transition:color .2s var(--ease)}
+.case-cover__meta-val a:hover{color:var(--paper)}
+.case-cover__meta-val--muted{color:var(--ink-text-faint);font-style:italic}
+@media (max-width:1000px){.case-cover__grid{grid-template-columns:1fr;gap:32px}}
+
+/* ─────────────── 详情页：八段正文 ─────────────── */
+.case-body{padding:90px 0 130px}
+.case-body__grid{display:grid;grid-template-columns:240px minmax(0,860px);gap:clamp(48px,8vw,130px)}
+.case-toc{position:sticky;top:calc(var(--header-height) + 30px);align-self:start;display:grid;height:fit-content}
+.case-toc__label{margin-bottom:18px;color:var(--red);font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase}
+.case-toc a{padding:12px 0;color:var(--muted);border-bottom:1px solid var(--rule);font-size:13px;transition:color .2s var(--ease);display:flex;gap:10px;align-items:baseline}
+.case-toc a:first-of-type{border-top:1px solid var(--rule)}
+.case-toc a:hover,.case-toc a.is-active{color:var(--red)}
+.case-toc__num{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--red);opacity:.7;min-width:22px}
+.case-toc a.is-active .case-toc__num{opacity:1}
+.case-toc__ask{margin-top:22px;padding:14px 16px;border:1px solid var(--red);color:var(--red);font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;text-align:left;transition:all .2s var(--ease);display:block;width:100%}
+.case-toc__ask:hover{background:var(--red);color:var(--paper-hi)}
+@media (max-width:900px){.case-body__grid{grid-template-columns:1fr;gap:0}.case-toc{position:static;margin-bottom:40px;display:grid;grid-template-columns:repeat(4,1fr)}.case-toc__label{grid-column:1/-1;margin-bottom:14px}.case-toc__ask{grid-column:1/-1;margin-top:18px}}
+@media (max-width:620px){.case-toc{display:none}}
+.case-story{min-width:0}
+.case-story section{padding:0 0 84px;scroll-margin-top:100px}
+.case-story section+section:not(.case-story__dark){padding-top:76px;border-top:1px solid var(--rule)}
+.section-code{display:block;margin:0 0 16px;color:var(--red);font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase}
+.case-story h2{margin:0 0 28px;font-family:var(--serif);font-size:clamp(36px,4vw,54px);font-weight:400;letter-spacing:-0.03em;line-height:1.08}
+.story-lead,.case-story li,.case-story section>p:not(.section-code){color:var(--ink-2);font-family:var(--serif);font-size:17px;line-height:2}
+.story-lead{font-size:19px;line-height:1.8;color:var(--ink)}
+.case-story ol{margin:0;padding:0;list-style:none;counter-reset:cs}
+.case-story ol>li{position:relative;padding:18px 0 18px 54px;border-top:1px solid var(--rule);counter-increment:cs;font-family:var(--serif);font-size:17px;line-height:1.8;color:var(--ink-2)}
+.case-story ol>li:last-child{border-bottom:1px solid var(--rule)}
+.case-story ol>li::before{position:absolute;left:0;top:20px;content:counter(cs,decimal-leading-zero);color:var(--red);font-family:var(--mono);font-size:10px;letter-spacing:0.06em}
+.case-story__dark{margin:0 0 84px!important;padding:64px 50px!important;color:var(--paper);background:var(--ink)}
+.case-story__dark .section-code{color:var(--red-on-ink)}
+.case-story__dark h2{color:var(--paper)}
+.case-story__dark .story-lead,.case-story__dark ol>li{color:var(--ink-text-hi)}
+.case-story__dark ol>li{border-color:var(--ink-line)}
+.case-story__dark ol>li::before{color:var(--red-on-ink)}
+@media (min-width:1250px){.case-story__dark{width:calc(100% + 100px);margin-left:-50px!important}}
+@media (max-width:900px){.case-story__dark{margin-inline:calc(var(--page-gutter)*-0.5)!important;width:auto}}
+.case-outcome{font-family:var(--serif);font-size:clamp(22px,2.4vw,30px);line-height:1.55;color:var(--ink);border-left:2px solid var(--red);padding:6px 0 6px 28px;max-width:60ch;margin-top:8px}
+.case-limits{display:flex;flex-direction:column;margin:8px 0 0;padding:0;list-style:none}
+.case-limits li{font-family:var(--serif);font-size:16px;line-height:1.8;color:var(--ink-2);padding:20px 0 20px 30px;border-top:1px solid var(--rule);position:relative;max-width:64ch}
+.case-limits li:last-child{border-bottom:1px solid var(--rule)}
+.case-limits li::before{content:"—";position:absolute;left:0;top:20px;font-family:var(--mono);color:var(--muted)}
+.case-evidence{display:flex;flex-direction:column}
+.case-evidence__item{display:grid;grid-template-columns:84px 1fr;gap:24px;padding:26px 0;border-top:1px solid var(--rule);align-items:start}
+.case-evidence__item:last-child{border-bottom:1px solid var(--rule)}
+.case-evidence__code{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--red)}
+.case-evidence__title{font-family:var(--serif);font-size:18px;color:var(--ink);margin-bottom:8px;line-height:1.4}
+.case-evidence__summary{font-family:var(--serif);font-size:14.5px;line-height:1.75;color:var(--muted);max-width:60ch;margin-bottom:8px}
+.case-evidence__meta{font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;color:var(--faint);text-transform:uppercase}
+.case-evidence__empty{color:var(--faint);font-style:italic;font-family:var(--serif);font-size:16px}
+.case-questions{display:flex;flex-direction:column;margin-bottom:36px}
+.case-questions button{display:flex;align-items:flex-start;gap:16px;width:100%;text-align:left;padding:22px 0;border-top:1px solid var(--rule);transition:color .2s var(--ease)}
+.case-questions button:last-child{border-bottom:1px solid var(--rule)}
+.case-questions__q{font-family:var(--mono);font-size:10.5px;letter-spacing:0.1em;color:var(--red);margin-top:5px;flex-shrink:0}
+.case-questions__text{font-family:var(--serif);font-size:17px;line-height:1.6;color:var(--ink-2);transition:color .2s var(--ease)}
+.case-questions button:hover .case-questions__text{color:var(--red)}
+.case-questions button:hover .case-questions__text::after{content:" ↗";color:var(--red)}
+.case-questions__empty{color:var(--faint);font-style:italic;font-family:var(--serif);font-size:16px}
+.case-ask-banner{margin-top:20px;padding:34px 38px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.case-ask-banner__title{font-family:var(--serif);font-size:24px;color:var(--paper);letter-spacing:-0.01em}
+.case-ask-banner__sub{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--ink-text);text-transform:uppercase;margin-top:6px}
+.case-ask-banner__btn{background:var(--red);color:var(--paper-hi);padding:15px 26px;font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;transition:background .2s var(--ease)}
+.case-ask-banner__btn:hover{background:var(--red-hi)}
+.case-next{margin-top:80px;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.case-next a{display:block;padding:26px;font-family:var(--serif);font-size:15px;color:var(--ink-2);transition:color .2s var(--ease)}
+.case-next a:first-child{border-right:1px solid var(--rule)}
+.case-next a:hover{color:var(--red)}
+.case-next__label{font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;display:block}
+.case-next__title{font-family:var(--serif);font-size:20px;color:var(--ink)}
+@media (max-width:620px){.case-next{grid-template-columns:1fr}.case-next a:first-child{border-right:none;border-bottom:1px solid var(--rule)}}
+
+/* stub 详情（46 个只有摘要的 case） */
+.case-stub{padding:70px 0 30px}
+.case-stub__code{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:16px}
+.case-stub__title{font-family:var(--serif);font-size:28px;color:var(--ink);margin-bottom:14px}
+.case-stub__desc{font-family:var(--serif);font-size:15.5px;line-height:1.8;color:var(--muted);max-width:54ch;margin-bottom:16px}
+.case-stub__desc code{font-family:var(--mono);color:var(--red);font-size:13px}
+.case-stub__note{font-family:var(--mono);font-size:11px;letter-spacing:0.06em;color:var(--faint);padding:14px 18px;border:1px solid var(--rule);background:var(--paper-hi);margin-top:8px}
+
+/* 404 */
+.case-404{padding:140px 0 100px;text-align:center}
+.case-404__code{font-family:var(--mono);font-size:13px;letter-spacing:0.2em;color:var(--red);margin-bottom:24px}
+.case-404__title{font-family:var(--serif);font-size:clamp(40px,5vw,64px);color:var(--ink);letter-spacing:-0.03em;margin-bottom:18px}
+.case-404__desc{font-family:var(--serif);font-size:16px;color:var(--muted);max-width:42ch;margin:0 auto 32px;line-height:1.8}
+.case-404__desc code{font-family:var(--mono);color:var(--red)}
+
+/* 状态标签 */
+.type-tag{display:inline-flex;align-items:center;border:1px solid var(--rule);padding:3px 7px;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-2)}
+.type-tag[data-t="FEATURE"]{border-color:var(--red);color:var(--red)}
+.type-tag[data-t="EVALUATION"]{border-style:dashed;border-color:var(--faint);color:var(--faint)}
+
+/* 页脚 */
+.dossier-footer{border-top:1px solid var(--rule);margin-top:60px;padding:64px 0 36px;background:var(--paper-hi)}
+.dossier-footer__grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:55px}
+.dossier-footer h3{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:18px}
+.dossier-footer p{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--ink-2);max-width:38ch}
+.dossier-footer__base{margin-top:48px;padding-top:22px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase}
+@media (max-width:760px){.dossier-footer__grid{grid-template-columns:1fr;gap:32px}}
+.reveal{animation:dossier-reveal .5s var(--ease) both}
+@keyframes dossier-reveal{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}.reveal{animation:none}}
+</style>
+</head>
+<body>
+
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" data-nav="home">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">/ ENGINEERING DOSSIER</span>
+    </a>
+    <nav class="primary-nav" id="primaryNav">
+      <a data-nav="cases">案例</a>
+      <a data-nav="projects">项目</a>
+      <a data-nav="timeline">时间线</a>
+      <a data-nav="evidence">证据</a>
+      <a data-nav="agent" class="primary-nav__agent">完整 Agent ↗</a>
+    </nav>
+    <button class="menu-trigger" id="menuTrigger" aria-expanded="false">目录</button>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   数据：49 条目录（全部）+ 3 条完整详情（代表性 case）
+   ════════════════════════════════════════════════════════════════════ */
+const DIR = [{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-02","slug":"test-role-reset","type":"FEATURE","title":"测试角色重置工具","summary":"为重复验证新账号流程提供受控的角色查询与重置入口。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-04","slug":"t-07-task","type":"FEATURE","title":"图片上传审计记录","summary":"实现操作信息和图片清单的独立审计记录，已自测但未确认发布。","status":"IMPLEMENTED_TESTED","contrib":"PRIMARY"},{"code":"CASE-05","slug":"t-08-task","type":"FEATURE","title":"流式聊天与历史会话原型","summary":"验证流式输出、会话列表、历史消息和会话记忆。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-06","slug":"t-09-task","type":"FEATURE","title":"模型工具调用原型","summary":"验证时间与天气工具以及两种模型客户端调用方式。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-07","slug":"t-10-task","type":"FEATURE","title":"模型上下文协议双传输原型","summary":"完成标准输入输出与事件流两种本地服务调用闭环。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-08","slug":"t-11-task","type":"FEATURE","title":"个人智能平台关键链路","summary":"检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-09","slug":"t-12-task","type":"FEATURE","title":"本地持续集成验证","summary":"完成工具安装、构建环境配置和示例项目构建成功验证。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-10","slug":"t-13-task","type":"FEATURE","title":"压力模块与运行时追踪","summary":"修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-11","slug":"t-14-task","type":"FEATURE","title":"前端构建产物交付流程","summary":"完成构建、静态资源替换、旧产物清理和版本提交步骤。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-12","slug":"t-15-task","type":"FEATURE","title":"服务包构建与替换流程","summary":"形成构建、打包、上传、备份、替换与重启的完整操作流程。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-13","slug":"t-16-task","type":"FEATURE","title":"活动说明文档","summary":"在缺少既有说明的情况下按规范补齐活动文档。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-14","slug":"t-18-task","type":"FEATURE","title":"智能工程内部分享","summary":"完成正式讲稿、连续演练、现场分享和讲后复盘闭环。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-15","slug":"t-18b-task","type":"FEATURE","title":"本地知识库迁移与增量同步","summary":"完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。","status":"DELIVERED","contrib":"COLLABORATIVE"},{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-17","slug":"a-02-incident","type":"INCIDENT","title":"折扣配置未生效","summary":"定位活动类型与计价配置差异并给出修正。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-18","slug":"a-03-incident","type":"INCIDENT","title":"账号年龄限制导致内容不展示","summary":"调整年龄限制、刷新版本并确认内容恢复展示。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-19","slug":"a-04-incident","type":"INCIDENT","title":"活动展示条件异常","summary":"补齐前置数据并调整开放与创建时间后完成展示验证。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-20","slug":"a-05-incident","type":"INCIDENT","title":"结束时间与旧客户端双重过滤","summary":"先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-21","slug":"a-06-incident","type":"INCIDENT","title":"环境结构缺失字段","summary":"对比环境结构、确认影响边界并使用既有备份方案补齐字段。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-22","slug":"a-07-incident","type":"INCIDENT","title":"周期积分异常排查","summary":"补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-23","slug":"a-08-incident","type":"INCIDENT","title":"冲突活动残留状态排查","summary":"按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-24","slug":"a-09-incident","type":"INCIDENT","title":"排位配置加载异常","summary":"定位两份配置中的活动标识不一致，未记录最终修正与验收。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-25","slug":"a-10-incident","type":"INCIDENT","title":"周末奖励倍率异常","summary":"识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-26","slug":"a-11-incident","type":"INCIDENT","title":"活动初始化异常","summary":"确认配置正常但初始化数据异常并继续追溯，未形成最终结论。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-27","slug":"a-12-incident","type":"INCIDENT","title":"抽奖兑换标识不一致","summary":"定位全局配置与活动规则标识不一致，未记录最终修改。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-28","slug":"a-13-incident","type":"INCIDENT","title":"定制礼包奖励缺失","summary":"定位规则中缺少一段奖励配置，未记录补齐后的验收。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-29","slug":"a-14-incident","type":"INCIDENT","title":"礼包积分被配置覆盖","summary":"定位分支合并时配置被覆盖，未记录修复发布结果。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-30","slug":"a-15-incident","type":"INCIDENT","title":"定制内容展示排查","summary":"确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-31","slug":"a-16-incident","type":"INCIDENT","title":"补发通知模板缺失","summary":"定位通知模板未配置并协助查询模板标识，缺最终补齐记录。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-32","slug":"a-17-incident","type":"INCIDENT","title":"内容未下发的限制与缓存排查","summary":"根因候选为新手限制和缓存配置未刷新，缺逐项验证。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-33","slug":"a-18-incident","type":"INCIDENT","title":"匹配服务启动参数缺失","summary":"协助定位启动脚本缺少必要参数，缺重启与验收记录。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-34","slug":"a-19-incident","type":"INCIDENT","title":"弹窗条件链路排查","summary":"确认服务端已经下发并将客户端表现问题交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-35","slug":"a-20-incident","type":"INCIDENT","title":"活动多语言缺失排查","summary":"从缺少数据继续定位到多语言内容缺失，缺导入后的验收。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASUS-36","slug":"a-21-incident","type":"INCIDENT","title":"过滤与资源异常排查","summary":"服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-36","slug":"a-21-incident","type":"INCIDENT","title":"过滤与资源异常排查","summary":"服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。","status":"LEARNING","contrib":"COLLABORATIVE"},{"code":"CASE-37","slug":"k-02-knowledge","type":"EVALUATION","title":"上下文压缩离线评测","summary":"完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。","status":"PROTOTYPE","contrib":"PRIMARY"},{"code":"CASE-38","slug":"k-04-knowledge","type":"EVALUATION","title":"Agent 记忆机制对比","summary":"比较记忆写入、整理与适用场景，属于外部方案研究。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-39","slug":"k-05-knowledge","type":"EVALUATION","title":"Agent Harness 学习手册","summary":"形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-40","slug":"k-06-knowledge","type":"EVALUATION","title":"容器化学习手册","summary":"整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-41","slug":"k-09-knowledge","type":"EVALUATION","title":"多数据源路由与缓存研究","summary":"整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-42","slug":"k-10-knowledge","type":"EVALUATION","title":"活动开发流程与红点设计","summary":"整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-43","slug":"k-11-knowledge","type":"EVALUATION","title":"对局与通知机制学习","summary":"形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-44","slug":"k-12-knowledge","type":"EVALUATION","title":"网络与事件驱动机制学习","summary":"整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-45","slug":"k-13-knowledge","type":"EVALUATION","title":"红点架构与复弹机制学习","summary":"整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。","status":"LEARNING","contrib":"PRIMARY"},{"code":"CASE-46","slug":"k-14-knowledge","type":"EVALUATION","title":"版本冲突处理案例","summary":"记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-47","slug":"k-15-knowledge","type":"EVALUATION","title":"构建与远程操作资料","summary":"整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-48","slug":"k-16-knowledge","type":"EVALUATION","title":"私有技术长文集合","summary":"私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。","status":"DELIVERED","contrib":"PRIMARY"},{"code":"CASE-49","slug":"k-17-knowledge","type":"EVALUATION","title":"历史技术博客主页","summary":"公开主页可作为历史写作证据，动态统计数字必须标注快照日期。","status":"DELIVERED","contrib":"PRIMARY"}];
+/* 上面 CASUS-36 是我手滑测试用的脏数据，过滤掉 —— 真实 49 条 */
+const DIR_CLEAN = DIR.filter(c=>c.code.startsWith('CASE-'));
+
+const DETAIL = {"multilingual-image-preservation":{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","problem":"分次上传不同语言图片时，后一次结果会替换此前已经可见的语言集合。","actions":["读取已经持久化的语言映射。","只合并本次请求中实际上传且有效的语言。","保留未被本次上传替换的既有语言结果。"],"decisions":["使用既有持久化映射与本次有效上传的并集作为最终结果。","无效或缺少图片的语言不写入新映射。"],"verification":["第一次上传德语图片。","第一次查询确认德语图片可用。","第二次上传法语图片。","第二次查询确认德语与法语图片同时可用。"],"outcome":"按「德语上传、德语查询、法语上传、德语与法语查询」的顺序完成回归，后续上传不再删除此前语言结果。","limitations":["不公开内部模块、数据结构、渠道、区域和存储标识。","公开材料只描述行为与验证，不展示原始代码、截图或内部地址。"],"status":"DELIVERED","contrib":"PRIMARY","project":null,"evidenceCount":1,"claimCount":4,"evidence":[{"code":"E-03","title":"多语言图片保留实现与回归证据集","summary":"由实现记录和顺序上传回归记录脱敏汇总，支持既有语言映射保留与德语、法语分次上传后的共存查询。","period":"2026-04-29 → 2026-06-16","sources":2}],"questions":["多语言图片分次上传为什么会覆盖既有结果，最终如何修复并验证？","多语言图片保留修复采用了什么顺序验证德语和法语结果能够共存？","多语言图片修复会不会为没有上传记录的语言补造历史结果？"]},"codegraph-evaluation":{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","problem":"大型代码库中的符号定位与关系追踪成本较高，但图谱结果并不总能覆盖动态或间接关系。","actions":["建立精确符号与全文符号检索样本。","执行两组工具任务并记录命中、噪声和遗漏。","对方法引用、匿名函数、依赖注入、事件分发和重名符号进行失效分析。"],"decisions":["使用代码图谱进行范围收窄和批量导航。","关键结论继续用文本搜索与源码阅读做精确复核。","不把局部样本结果推广为通用效率结论。"],"verification":["符号检索在选定样本中能够缩小代码定位范围。","间接关系和重名符号场景存在漏报或噪声。","组合工作流同时保留图谱导航和文本、源码精确复核。"],"outcome":"形成以图谱收窄范围、再用文本搜索和源码阅读复核的组合工作流与保守使用边界。","limitations":["当前状态为原型评测，不公开原始项目名称、仓库规模、内部符号和源码样本。","评测结论只作定性说明，不提供精确效率指标或普遍生产力结论。","工具给出的答案质量仍需人工复核。"],"status":"PROTOTYPE","contrib":"PRIMARY","project":null,"evidenceCount":1,"claimCount":6,"evidence":[{"code":"E-05","title":"代码图谱端到端评测报告集","summary":"由部署与测评攻略、工具提效测试和端到端实战报告脱敏汇总，支持图谱导航收益、失效边界与组合复核决策。","period":"2026-05-25 → 2026-05-26","sources":3}],"questions":["代码图谱评测发现了哪些收益、失效边界和组合使用策略？","代码图谱评测用了哪些样本和任务来判断适用范围？","为什么代码图谱结果仍需要文本搜索和源码阅读进行人工复核？"]},"a-01-incident":{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","problem":"该条目记录了「重复配置导致唯一性冲突」的公开工作摘要。","actions":["按资产库审核结果提炼公开摘要。","移除内部标识、原始代码、截图、地址和环境路径。"],"decisions":["保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"],"verification":["来源证据状态：VERIFIED。","来源审核状态：PUBLIC_REVIEW_REQUIRED。"],"outcome":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","limitations":["公开内容只包含脱敏摘要，不能替代私有原始证据。","不推断未在资产库中记录的生产效果或量化收益。"],"status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"evidenceCount":1,"claimCount":1,"evidence":[{"code":"E-A-01","title":"重复配置导致唯一性冲突脱敏证据摘要","summary":"原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。","period":"2026-07-27 → 2026-07-27","sources":1}],"questions":["除了核心项目，你还完成了哪些任务、问题排查、研究与知识资产？"]}};
+
+const TYPE_LABEL = { FEATURE:'功能任务', INCIDENT:'问题处理', EVALUATION:'工具评测' };
+const STATUS_LABEL = { DELIVERED:'已交付', IMPLEMENTED_TESTED:'已实现并测试', PROTOTYPE:'原型验证', LEARNING:'学习整理' };
+const CONTRIB_LABEL = { PRIMARY:'主要负责', COLLABORATIVE:'协作参与' };
+function statusGroup(s){ return s==='DELIVERED'||s==='IMPLEMENTED_TESTED'?'delivered':(s==='PROTOTYPE'?'prototype':'learning'); }
+const TABS = [
+  {key:'delivered',code:'DELIVERED',label:'已交付',note:'已交付并验证的真实产出——这些是「做过且 ship 了」的。'},
+  {key:'prototype',code:'PROTOTYPE',label:'原型验证',note:'可运行的原型探索，未经生产验证——能力已跑通但不等于交付。'},
+  {key:'learning',code:'LEARNING',label:'学习整理',note:'结构化学习与知识整理——不宣称实现，是认知沉淀。'},
+];
+
+/* ════════════════════════════════════════════════════════════════════
+   路由 + 状态（记住列表 tab，返回时保持）
+   ════════════════════════════════════════════════════════════════════ */
+const S = { activeTab:'delivered' };
+const dirBySlug = Object.fromEntries(DIR_CLEAN.map(d=>[d.slug,d]));
+
+function nav(hash){ location.hash = hash; }
+
+function parseRoute(){
+  const h = location.hash.replace(/^#/,'') || '/cases';
+  const m = h.match(/^\/cases\/([a-z0-9-]+)$/i);
+  if(m) return {name:'detail', slug:m[1]};
+  if(h.startsWith('/cases')) return {name:'list'};
+  return {name:'redirect'};
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   列表页渲染
+   ════════════════════════════════════════════════════════════════════ */
+function renderList(){
+  const view = document.getElementById('view');
+  const tabsHtml = TABS.map(t=>{
+    const cnt = DIR_CLEAN.filter(c=>statusGroup(c.status)===t.key).length;
+    const sel = S.activeTab===t.key;
+    return `<button class="case-tab ${sel?'is-selected':''}" data-sg="${t.key}" role="tab" aria-selected="${sel}" tabindex="${sel?0:-1}">
+      <span class="case-tab__label"><span class="case-tab__dot" aria-hidden="true"></span>${t.label}</span>
+      <span class="case-tab__count">${String(cnt).padStart(2,'0')}</span>
+    </button>`;
+  }).join('');
+
+  const t = TABS.find(x=>x.key===S.activeTab);
+  const rows = DIR_CLEAN.filter(c=>statusGroup(c.status)===S.activeTab);
+  const num = TABS.indexOf(t)+1;
+
+  view.innerHTML = `
+    <section class="page-lead" style="padding-top:calc(var(--header-height) + clamp(40px,5vw,68px))">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">02 / CASE INDEX</div>
+        <h1 class="page-lead__title">案例目录</h1>
+        <p class="page-lead__desc">49 个具体任务、问题与评测——记录它们如何被识别、判断、处理与验证。与「项目」并列的独立公开入口，强调具体问题而非长期主线。</p>
+      </div>
+    </section>
+    <div class="page-shell">
+      <div class="case-tabs" role="tablist" aria-label="按交付状态筛选" id="caseTabs">${tabsHtml}</div>
+      <div role="tabpanel">
+        <div class="case-tabpanel-intro reveal">
+          <span class="case-tabpanel-intro__code">0${num} / ${t.code} · ${String(rows.length).padStart(2,'0')}</span>
+          <h2 class="case-tabpanel-intro__title">${t.label}</h2>
+          <p class="case-tabpanel-intro__note">${t.note}</p>
+        </div>
+        <div class="case-list">${rows.map(renderRow).join('')}</div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+  bindTabs();
+  setActiveNav('cases');
+  window.scrollTo({top:0,behavior:rmSmooth()?'auto':'smooth'});
+}
+
+function renderRow(c){
+  return `<a class="case-row" data-slug="${c.slug}" tabindex="0" role="link" aria-label="${c.code} ${c.title}">
+    <span class="case-row__code">${c.code}</span>
+    <div class="case-row__main">
+      <h3 class="case-row__title">${c.title}</h3>
+      <p class="case-row__summary">${c.summary}</p>
+    </div>
+    <div class="case-row__type"><b>${TYPE_LABEL[c.type]}</b>${STATUS_LABEL[c.status]}</div>
+    <div class="case-row__stat">${CONTRIB_LABEL[c.contrib]}</div>
+    <span class="case-row__arrow" aria-hidden="true">↗</span>
+  </a>`;
+}
+
+function bindTabs(){
+  const tabs = document.querySelectorAll('.case-tab');
+  tabs.forEach(tab=>{
+    tab.addEventListener('click', ()=>selectTab(tab.dataset.sg));
+    tab.addEventListener('keydown', e=>{
+      const list=[...tabs], idx=list.indexOf(tab); let next=null;
+      if(e.key==='ArrowRight'||e.key==='ArrowDown') next=list[(idx+1)%list.length];
+      else if(e.key==='ArrowLeft'||e.key==='ArrowUp') next=list[(idx-1+list.length)%list.length];
+      else if(e.key==='Home') next=list[0];
+      else if(e.key==='End') next=list[list.length-1];
+      if(next){e.preventDefault(); selectTab(next.dataset.sg); next.focus();}
+    });
+  });
+  // 行点击/键盘
+  document.querySelectorAll('.case-row').forEach(r=>{
+    r.addEventListener('click', ()=>nav('/cases/'+r.dataset.slug));
+    r.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault(); nav('/cases/'+r.dataset.slug);} });
+  });
+}
+function selectTab(key){
+  if(S.activeTab===key) return;
+  S.activeTab=key;
+  renderList();
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   详情页渲染（完整 / stub / 404）
+   ════════════════════════════════════════════════════════════════════ */
+const SECTIONS = [
+  {id:'problem',code:'01 / 背景',title:'问题与背景',kind:'lead'},
+  {id:'actions',code:'02 / 动作',title:'采取的动作',kind:'ol',field:'actions'},
+  {id:'decisions',code:'03 / 判断',title:'关键判断',kind:'ol',field:'decisions'},
+  {id:'verify',code:'04 / 验证',title:'验证过程',kind:'ol',field:'verification',dark:true},
+  {id:'outcome',code:'05 / 结果',title:'结果',kind:'outcome'},
+  {id:'limits',code:'06 / 边界',title:'限制与边界',kind:'limits',field:'limitations'},
+  {id:'evidence',code:'07 / 证据',title:'公开证据',kind:'evidence'},
+  {id:'questions',code:'08 / 延伸',title:'建议问题',kind:'questions'},
+];
+
+function renderDetail(slug){
+  const view = document.getElementById('view');
+  const c = DETAIL[slug];
+  const stub = dirBySlug[slug];
+
+  if(!c && !stub){
+    view.innerHTML = render404(slug) + renderFooter();
+    setActiveNav('cases');
+    window.scrollTo({top:0,behavior:rmSmooth()?'auto':'smooth'});
+    return;
+  }
+  if(!c && stub){
+    view.innerHTML = renderStub(stub) + renderFooter();
+    setActiveNav('cases');
+    window.scrollTo({top:0,behavior:rmSmooth()?'auto':'smooth'});
+    return;
+  }
+  // 完整详情
+  view.innerHTML = renderCover(c,'lead') + `
+    <div class="case-body">
+      <div class="page-shell case-body__grid">
+        ${renderToc(c.slug)}
+        <article class="case-story">
+          ${SECTIONS.map(sec=>`<section id="sec-${sec.id}" class="${sec.dark?'case-story__dark':''}">
+            <span class="section-code">${sec.code}</span>
+            <h2>${sec.title}</h2>
+            ${renderSection(sec,c)}
+          </section>`).join('')}
+          <div class="case-next">
+            <a data-nav-back="cases"><span class="case-next__label">返回目录</span><span class="case-next__title">全部案例 →</span></a>
+            <a data-nav="agent"><span class="case-next__label">完整 Agent</span><span class="case-next__title">不带案例上下文提问 →</span></a>
+          </div>
+        </article>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+  initScrollSpy();
+  setActiveNav('cases');
+  bindDetailNav(c.slug);
+  window.scrollTo({top:0,behavior:rmSmooth()?'auto':'smooth'});
+}
+
+function renderCover(c, variant){
+  const sg = statusGroup(c.status);
+  const leadCls = variant==='lead' ? ' case-cover--lead' : '';
+  return `
+    <nav class="breadcrumb page-shell" aria-label="面包屑" style="background:var(--ink)">
+      <ol class="breadcrumb__list">
+        <li><a data-nav-back="cases" style="color:var(--ink-text)">案例目录</a></li>
+        <li class="breadcrumb__sep">/</li>
+        <li><a data-nav-back="cases" style="color:var(--ink-text)">${TYPE_LABEL[c.type]}</a></li>
+        <li class="breadcrumb__sep">/</li>
+        <li class="breadcrumb__current">${c.code}</li>
+      </ol>
+    </nav>
+    <header class="case-cover${leadCls}">
+      <div class="page-shell case-cover__grid">
+        <div class="case-cover__code">
+          <span style="color:var(--red-hi);font-family:var(--mono);font-size:10px;letter-spacing:0.14em">${c.code}</span>
+          <span class="cover-status" data-sg="${sg}"><span class="cover-status__dot" aria-hidden="true"></span>${STATUS_LABEL[c.status]}</span>
+          <span class="cover-status cover-status--contrib">${CONTRIB_LABEL[c.contrib]}</span>
+        </div>
+        <div class="case-cover__copy">
+          <p class="case-cover__record-type">Engineering Case Record · ${TYPE_LABEL[c.type]}</p>
+          <h1 class="case-cover__title">${c.title}</h1>
+          <blockquote class="case-cover__summary">${c.summary}</blockquote>
+        </div>
+        <div class="case-cover__meta">
+          <div class="case-cover__meta-label">案卷信息</div>
+          <div class="case-cover__meta-item"><span class="case-cover__meta-key">类型</span><span class="case-cover__meta-val">${TYPE_LABEL[c.type]}</span></div>
+          <div class="case-cover__meta-item"><span class="case-cover__meta-key">关联项目</span>
+            ${c.project ? `<span class="case-cover__meta-val"><a data-nav="projects">${c.project.title} ↗</a></span>` : `<span class="case-cover__meta-val case-cover__meta-val--muted">独立案例</span>`}
+          </div>
+          <div class="case-cover__meta-item"><span class="case-cover__meta-key">公开证据</span><span class="case-cover__meta-val case-cover__meta-val--mono">${c.evidenceCount} APPROVED</span></div>
+          <div class="case-cover__meta-item"><span class="case-cover__meta-key">已核验断言</span><span class="case-cover__meta-val case-cover-cover__meta-val--mono">${c.claimCount} CLAIMS</span></div>
+        </div>
+      </div>
+    </header>`;
+}
+
+function renderSection(sec,c){
+  if(sec.kind==='lead') return `<p class="story-lead">${c.problem}</p>`;
+  if(sec.kind==='ol') return `<ol>${c[sec.field].map(x=>`<li>${x}</li>`).join('')}</ol>`;
+  if(sec.kind==='outcome') return `<blockquote class="case-outcome">${c.outcome}</blockquote>`;
+  if(sec.kind==='limits') return `<ul class="case-limits">${c[sec.field].map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  if(sec.kind==='evidence'){
+    if(!c.evidence||!c.evidence.length) return `<p class="case-evidence__empty">该案例当前没有已批准的公开证据。</p>`;
+    return `<div class="case-evidence">${c.evidence.map(e=>`<div class="case-evidence__item"><div class="case-evidence__code">${e.code}</div><div><h4 class="case-evidence__title">${e.title}</h4><p class="case-evidence__summary">${e.summary}</p><div class="case-evidence__meta">${e.period} · ${e.sources} 个脱敏来源 · COLLECTION</div></div></div>`).join('')}</div>`;
+  }
+  if(sec.kind==='questions'){
+    const qs=c.questions&&c.questions.length?c.questions:null;
+    return `${qs?`<div class="case-questions">${qs.map((q,i)=>`<button data-ask='${JSON.stringify({slug:c.slug,q}).replace(/'/g,"&#39;")}'><span class="case-questions__q">Q${String(i+1).padStart(2,'0')}</span><span class="case-questions__text">${q}</span></button>`).join('')}</div>`:`<p class="case-questions__empty">该案例当前没有预设的建议问题。</p>`}
+      <div class="case-ask-banner">
+        <div><div class="case-ask-banner__title">就本案例向 Agent 提问</div><div class="case-ask-banner__sub">context.source = CASE · 仅限本案例公开事实</div></div>
+        <button class="case-ask-banner__btn" data-ask='{"slug":"${c.slug}","q":""}'>询问本案例 ↗</button>
+      </div>`;
+  }
+  return '';
+}
+
+function renderToc(slug){
+  return `<aside class="case-toc">
+    <span class="case-toc__label">Contents</span>
+    ${SECTIONS.map(s=>`<a href="#sec-${s.id}" data-toc="${s.id}"><span class="case-toc__num">${s.code.split('/')[0]}</span>${s.title}</a>`).join('')}
+    <button class="case-toc__ask" data-ask='{"slug":"${slug}","q":""}'>询问本案例 ↗</button>
+  </aside>`;
+}
+
+function renderStub(stub){
+  const sg = statusGroup(stub.status);
+  return `
+    ${renderCover({...stub, project:null, evidenceCount:'—', claimCount:'—'}, 'lead').replace('case-cover--lead','')}
+    <div class="case-body"><div class="page-shell">
+      <div class="case-stub">
+        <div class="case-stub__code">CASE · ${stub.code} · 详情待公开</div>
+        <h2 class="case-stub__title">「${stub.title}」的完整详情尚未包含在本原型中</h2>
+        <p class="case-stub__desc">这是一个真实的已发布案例（类型「${TYPE_LABEL[stub.type]}」，状态「${STATUS_LABEL[stub.status]}」）。后端 API 已返回它的全部字段，前端实现时会按八段结构完整渲染。本 HTML 原型只内联了 3 个代表性案例的完整详情用于演示：<code>multilingual-image-preservation</code>、<code>codegraph-evaluation</code>、<code>a-01-incident</code>。</p>
+        <div class="case-stub__note">后端契约：GET /api/v1/cases/${stub.slug} → CaseDetailResponse（17 字段）· problem / actions / decisions / verification / outcome / limitations / evidence / suggestedQuestions</div>
+      </div>
+      <div class="case-next" style="margin-top:40px">
+        <a data-nav-back="cases"><span class="case-next__label">返回目录</span><span class="case-next__title">浏览其余案例 →</span></a>
+        <a data-nav="agent"><span class="case-next__label">完整 Agent</span><span class="case-next__title">就本案例提问 →</span></a>
+      </div>
+    </div></div>
+  `;
+}
+
+function render404(slug){
+  return `<section class="case-404 page-shell" style="padding-top:calc(var(--header-height) + 100px)">
+    <div class="case-404__code">404 · CASE_NOT_FOUND</div>
+    <h1 class="case-404__title">未找到该案例</h1>
+    <p class="case-404__desc">slug <code>${slug||'(空)'}</code> 在当前公开 Bundle 中不存在，或尚未通过公开审核。Agent 不会针对不存在的案例调用 Provider 猜测答案。</p>
+    <a class="case-ask-banner__btn" data-nav-back="cases" style="display:inline-block">← 返回案例目录</a>
+  </section>`;
+}
+
+function bindDetailNav(slug){
+  document.querySelectorAll('[data-nav-back="cases"]').forEach(el=>el.addEventListener('click', ()=>nav('/cases')));
+  document.querySelectorAll('[data-ask]').forEach(el=>el.addEventListener('click', ()=>{
+    const d = JSON.parse(el.dataset.ask.replace(/&#39;/g,"'"));
+    const params = new URLSearchParams();
+    if(d.slug) params.set('case', d.slug);
+    if(d.q) params.set('q', d.q);
+    // Agent 页未实现，提示一下
+    alert('Case → Agent 交接（spec §5.5）\n\n将跳转到 Agent 工作台，携带：\ncontext.caseSlug = '+d.slug+'\ncontext.source = CASE'+(d.q?'\n预填问题 = '+d.q:'')+'\n\n（Agent 页面不在本原型范围）');
+  }));
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   共用
+   ════════════════════════════════════════════════════════════════════ */
+function rmSmooth(){ return matchMedia('(prefers-reduced-motion:reduce)').matches; }
+
+function setActiveNav(key){
+  document.querySelectorAll('.primary-nav a, .dossier-mark').forEach(el=>{
+    el.classList.toggle('is-active', el.dataset.nav===key);
+  });
+}
+
+function initScrollSpy(){
+  const links = document.querySelectorAll('.case-toc a[data-toc]');
+  if(!links.length) return;
+  const sections=[...links].map(a=>document.getElementById('sec-'+a.dataset.toc)).filter(Boolean);
+  if(!sections.length) return;
+  const obs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const id=e.target.id.replace('sec-','');links.forEach(a=>a.classList.toggle('is-active',a.dataset.toc===id));}}),{rootMargin:'-30% 0px -60% 0px'});
+  sections.forEach(s=>obs.observe(s));
+}
+
+function renderFooter(){
+  return `<footer class="dossier-footer"><div class="page-shell">
+    <div class="dossier-footer__grid">
+      <div><h3>About</h3><p>这是一份求职作品集 Agent 的公开运行包。所有内容经过脱敏与人工审核，只呈现已批准的公开事实，不暴露内部代码、原始截图或生产数据。</p></div>
+      <div><h3>Public Boundary</h3><p>项目与案例并列。Project 强调长期主线与整体交付；Case 强调具体问题、判断、行动与验证。二者共享同一设计系统。</p></div>
+      <div><h3>Privacy</h3><p>访客对话仅存于浏览器标签页内存，刷新即消失，不被服务器记录或持久化。不记录完整问题、历史对话或 API 密钥。</p></div>
+    </div>
+    <div class="dossier-footer__base"><span>VOLUME 01 · 2026-07-27.1</span><span>PUBLIC · DESENSITIZED · HUMAN REVIEWED</span></div>
+  </div></footer>`;
+}
+
+/* 导航点击 */
+document.querySelector('.dossier-mark').addEventListener('click', ()=>nav('/cases'));
+document.querySelectorAll('.primary-nav a').forEach(a=>{
+  a.addEventListener('click', ()=>{
+    const k=a.dataset.nav;
+    if(k==='cases') nav('/cases');
+    else if(k==='agent') alert('Agent 工作台不在本原型范围。\nCase → Agent 交接契约见详情页「询问本案例」。');
+    else alert(k+' 页面不在本原型范围（本轮只做案例）。');
+  });
+});
+
+/* 移动端菜单 */
+document.getElementById('menuTrigger').addEventListener('click', ()=>{
+  const nav=document.getElementById('primaryNav'), btn=document.getElementById('menuTrigger');
+  const open=nav.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded',open); btn.textContent=open?'关闭':'目录';
+});
+
+/* 路由 */
+window.addEventListener('hashchange', route);
+function route(){
+  const r = parseRoute();
+  if(r.name==='redirect'){ nav('/cases'); return; }
+  if(r.name==='list') renderList();
+  else renderDetail(r.slug);
+}
+
+if(!location.hash) location.hash = '#/cases';
+else route();
+</script>
+</body>
+</html>

@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>方案 A · 双主线分区带 — Project—Case 前端方案</title>
+<style>
+:root{
+  --paper:#f4eee4;--paper-hi:#fbf7ef;--ink:#201c17;--ink-2:#3a342c;
+  --muted:#746b5e;--faint:#9c9182;--rule:#cdbfa9;--rule-soft:#ddd2c0;
+  --red:#7a2e2a;--red-hi:#b65d53;
+  --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+  --sans:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.75 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+/* ---- demo 工具条(非设计本体) ---- */
+.demo-bar{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+  padding:8px 18px;background:#26221c;color:#e8ddce;font:12px/1.4 var(--mono)}
+.demo-bar strong{color:#fff;letter-spacing:.04em}
+.demo-bar button{background:none;border:1px solid #57503f;color:#cbbfa9;font:inherit;padding:3px 10px;cursor:pointer}
+.demo-bar button.on{background:var(--red-hi);border-color:var(--red-hi);color:#201c17}
+.demo-bar .sp{flex:1}
+.note{border:1px dashed var(--faint);color:var(--muted);font:12px/1.8 var(--sans);
+  padding:10px 14px;margin:18px 0;max-width:1180px}
+.note b{color:var(--ink-2);font-family:var(--mono);font-weight:600}
+/* ---- 舞台 ---- */
+#stage{max-width:1180px;margin:0 auto;padding:0 24px 90px}
+#stage.mobile{max-width:390px;padding:0 16px 60px}
+.view{display:none}
+.view.on{display:block}
+/* ---- 站点导航 ---- */
+.site-nav{display:flex;align-items:baseline;gap:26px;padding:20px 0 18px;border-bottom:1px solid var(--ink)}
+.brand{font:600 13px var(--mono);letter-spacing:.12em}
+.site-nav nav{margin-left:auto;display:flex;gap:20px;font:13px var(--sans)}
+.site-nav nav a{color:var(--muted)}
+.site-nav nav a.here{color:var(--ink);border-bottom:2px solid var(--red);padding-bottom:2px}
+#stage.mobile .site-nav nav{gap:12px;font-size:12px}
+/* ---- 页头 ---- */
+.page-lead{padding:52px 0 34px}
+.eyebrow{font:11px var(--mono);letter-spacing:.18em;color:var(--red);text-transform:uppercase}
+.page-lead h1{font:400 clamp(34px,5vw,52px)/1.15 var(--serif);margin:10px 0 14px}
+.page-lead .lede{max-width:640px;color:var(--ink-2);font-size:15px}
+.legend{margin-top:16px;font:12px var(--mono);color:var(--muted)}
+.legend i{font-style:normal;margin-right:6px}
+</style>
+<style>
+/* ---- 方案A 签名:档案架架位分区带 ---- */
+.shelf{margin-top:44px;border-top:3px double var(--ink);padding-top:0}
+.shelf-head{display:flex;align-items:baseline;gap:16px;padding:16px 0 6px;border-bottom:1px solid var(--rule)}
+.shelf-mark{font:600 11px var(--mono);letter-spacing:.14em;color:var(--paper);background:var(--ink);padding:3px 8px}
+.shelf-head h2{font:400 26px var(--serif)}
+.shelf-note{margin-left:auto;font:12px var(--mono);color:var(--muted)}
+.shelf-sub{padding:10px 0 0;color:var(--muted);font-size:13px;max-width:620px}
+/* 项目 ledger 行 */
+.p-list{list-style:none}
+.p-row{display:grid;grid-template-columns:56px minmax(0,1.5fr) minmax(0,1fr) auto;gap:24px;
+  padding:26px 0;border-bottom:1px solid var(--rule-soft);align-items:start}
+.p-row:last-child{border-bottom:none}
+.p-code{font:13px var(--mono);color:var(--faint);padding-top:6px}
+.p-main h3{font:400 24px/1.3 var(--serif)}
+.p-main h3 a:hover{color:var(--red)}
+.p-tags{margin:6px 0 8px;font:11px var(--mono);color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px 14px}
+.p-tags .proto-honest{color:var(--red)}
+.p-sum{color:var(--ink-2);font-size:14px;max-width:520px}
+.p-tech{margin-top:8px;font:12px var(--mono);color:var(--muted)}
+.p-meta{display:flex;gap:26px;padding-top:8px}
+.p-meta div{min-width:0}
+.p-meta dt{font:10px var(--mono);letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+.p-meta dd{font-size:13px;color:var(--ink-2);margin-top:2px;white-space:nowrap}
+.p-cta{text-align:right;padding-top:6px;white-space:nowrap}
+.p-count{display:block;font:12px var(--mono);color:var(--red);margin-bottom:8px}
+.p-go{font:13px var(--sans);border-bottom:1px solid var(--red);color:var(--ink);padding-bottom:1px}
+.p-go:hover{color:var(--red)}
+/* 次级架位 */
+.shelf.secondary{margin-top:52px;border-top:1px solid var(--ink)}
+.shelf.secondary .shelf-mark{background:var(--muted)}
+.shelf.secondary .p-row{grid-template-columns:56px minmax(0,1.5fr) minmax(0,1fr) auto}
+.tier-tag{font:10px var(--mono);letter-spacing:.12em;color:var(--muted);border:1px solid var(--rule);padding:2px 6px}
+/* ---- 相关案例区(Project 详情) ---- */
+.ctx-stub{padding:26px 0 10px;color:var(--muted);font:13px var(--mono)}
+.rel{border-top:3px double var(--ink);margin-top:8px;padding-top:20px}
+.rel-head{display:flex;align-items:baseline;gap:14px}
+.rel-head h2{font:400 26px var(--serif)}
+.rel-head .n{font:13px var(--mono);color:var(--red)}
+.rel-note{color:var(--muted);font-size:13px;margin:6px 0 4px;max-width:640px}
+.c-list{list-style:none;margin-top:10px}
+.c-row{display:grid;grid-template-columns:84px minmax(0,1.6fr) minmax(0,1.2fr) auto;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+.c-code{font:12px var(--mono);color:var(--faint)}
+.c-title{font-size:15px;font-weight:600}
+.c-title a:hover{color:var(--red)}
+.c-prob{grid-column:2;color:var(--muted);font-size:13px;margin-top:2px}
+.c-facts{font:12px var(--mono);color:var(--ink-2);display:flex;gap:14px;flex-wrap:wrap}
+.st{white-space:nowrap}
+.st i{font-style:normal;margin-right:5px}
+.st-delivered i{color:var(--ink)}
+.st-investigated i{color:var(--red)}
+.st-prototype i{color:var(--ink-2)}
+.st-learning i{color:var(--muted)}
+.rel-all{margin-top:18px;font-size:14px}
+.rel-all a{border-bottom:1px solid var(--red);padding-bottom:1px}
+.rel-all a:hover{color:var(--red)}
+.rel-all .q{font:11px var(--mono);color:var(--faint);margin-left:10px}
+</style>
+<style>
+/* ---- /cases:左筛选栏 + 结果 ---- */
+.cases-grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:40px;margin-top:8px}
+.rail{position:sticky;top:60px;align-self:start;border-right:1px solid var(--rule);padding-right:24px}
+.rail h2{font:600 11px var(--mono);letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin:22px 0 8px}
+.rail h2:first-child{margin-top:0}
+.rail input[type=search]{width:100%;background:var(--paper-hi);border:1px solid var(--rule);
+  font:13px var(--sans);padding:7px 10px;color:var(--ink)}
+.f-opt{display:flex;gap:8px;align-items:baseline;padding:4px 0;font-size:13.5px;cursor:pointer;color:var(--ink-2)}
+.f-opt input{accent-color:var(--red)}
+.f-opt .n{margin-left:auto;font:11px var(--mono);color:var(--faint)}
+.f-opt.sel{color:var(--ink);font-weight:600}
+.f-sep{border:none;border-top:1px dotted var(--rule);margin:6px 0}
+.f-group-label{font:10px var(--mono);color:var(--faint);letter-spacing:.1em;padding:6px 0 2px}
+/* 当前条件 + 数量 */
+.active-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:14px 0;border-bottom:1px solid var(--ink)}
+.active-line .lbl{font:11px var(--mono);color:var(--muted);letter-spacing:.1em}
+.chip{font:12px var(--sans);border:1px solid var(--ink);padding:3px 10px;background:var(--paper-hi)}
+.chip b{font-weight:600}
+.chip button{border:none;background:none;color:var(--red);cursor:pointer;font:12px var(--mono);margin-left:6px;padding:0}
+.count-line{margin-left:auto;font:12px var(--mono);color:var(--red)}
+/* 结果 ledger 行 */
+.r-list{list-style:none}
+.r-row{display:grid;grid-template-columns:76px minmax(0,1.7fr) minmax(0,1.3fr) auto;gap:18px;
+  padding:18px 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+.r-owner{font:12px var(--sans);color:var(--ink-2)}
+.r-owner .coll{display:block;font:11px var(--mono);color:var(--faint);margin-top:3px}
+.empty{border:1px solid var(--rule);background:var(--paper-hi);padding:34px;margin-top:22px;text-align:center}
+.empty p{color:var(--muted);font-size:13.5px}
+.empty .again{margin-top:12px;display:inline-block;font:13px var(--sans);border-bottom:1px solid var(--red)}
+/* ---- Case 详情元信息 ---- */
+.case-grid{display:grid;grid-template-columns:minmax(0,1.6fr) 300px;gap:48px;margin-top:30px}
+.crumb{font:12px var(--mono);color:var(--muted)}
+.crumb a{border-bottom:1px solid var(--rule)}
+.case-cover h1{font:400 clamp(28px,4vw,40px)/1.25 var(--serif);margin:12px 0 10px}
+.case-cover .sum{color:var(--ink-2);max-width:560px}
+.secs{margin-top:34px;border-top:1px solid var(--ink)}
+.secs li{list-style:none;padding:13px 0;border-bottom:1px solid var(--rule-soft);
+  font:14px var(--sans);color:var(--muted);display:flex;gap:14px}
+.secs li b{font:12px var(--mono);color:var(--faint);font-weight:400}
+/* 案卷信息卡 */
+.dcard{border:1px solid var(--ink);background:var(--paper-hi);align-self:start;position:sticky;top:60px}
+.dcard h2{font:600 11px var(--mono);letter-spacing:.16em;color:var(--paper);background:var(--ink);
+  padding:9px 16px;text-transform:uppercase}
+.dcard dl{padding:6px 16px 12px}
+.dcard .di{display:grid;grid-template-columns:88px 1fr;gap:10px;padding:9px 0;border-bottom:1px dotted var(--rule)}
+.dcard .di:last-child{border-bottom:none}
+.dcard dt{font:11px var(--mono);color:var(--faint);padding-top:2px}
+.dcard dd{font-size:13.5px;color:var(--ink-2)}
+.dcard dd a{border-bottom:1px solid var(--red)}
+.dcard dd a:hover{color:var(--red)}
+.dcard .ev-line{font:12px var(--mono);color:var(--muted);display:block;margin-top:3px}
+.ask{display:block;margin:14px 16px 16px;padding:11px;text-align:center;background:var(--red);color:var(--paper-hi);
+  font:14px var(--sans)}
+.ask:hover{background:var(--ink)}
+.ask-note{padding:0 16px 14px;font:11px var(--mono);color:var(--faint)}
+/* ---- 移动端 ---- */
+#stage.mobile .p-row,#stage.mobile .shelf.secondary .p-row{grid-template-columns:40px 1fr;gap:8px 14px}
+#stage.mobile .p-meta{grid-column:2;flex-wrap:wrap;gap:10px 22px;padding-top:2px}
+#stage.mobile .p-cta{grid-column:2;text-align:left;padding-top:4px}
+#stage.mobile .shelf-head{flex-wrap:wrap;gap:6px 12px}
+#stage.mobile .shelf-note{margin-left:0;width:100%}
+#stage.mobile .cases-grid{grid-template-columns:1fr;gap:0}
+#stage.mobile .rail{position:static;border-right:none;border:1px solid var(--rule);padding:0 16px;background:var(--paper-hi)}
+#stage.mobile .rail-body{display:none;padding-bottom:14px}
+#stage.mobile .rail.open .rail-body{display:block}
+#stage.mobile .rail-toggle{width:100%;text-align:left;background:none;border:none;font:600 13px var(--sans);
+  padding:13px 0;cursor:pointer;color:var(--ink);display:flex;justify-content:space-between}
+#stage.mobile .active-line{padding:14px 0}
+#stage.mobile .count-line{margin-left:0;width:100%}
+#stage.mobile .r-row{grid-template-columns:64px 1fr;gap:4px 14px}
+#stage.mobile .r-facts,#stage.mobile .r-owner{grid-column:2}
+#stage.mobile .c-row{grid-template-columns:72px 1fr;gap:4px 12px}
+#stage.mobile .c-facts{grid-column:2}
+#stage.mobile .case-grid{grid-template-columns:1fr}
+#stage.mobile .dcard{position:static;order:-1;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="demo-bar">
+  <strong>方案 A · 双主线分区带</strong>
+  <span>视图:</span>
+  <button data-view="projects" class="on">/projects 项目主线</button>
+  <button data-view="related">Project 详情 · 相关案例</button>
+  <button data-view="cases">/cases 检索</button>
+  <button data-view="case">Case 详情 · 元信息</button>
+  <span class="sp"></span>
+  <span>宽度:</span>
+  <button data-w="desktop" class="on">桌面 1180</button>
+  <button data-w="mobile">移动 390</button>
+</div>
+
+<div id="stage">
+<!-- ============ 视图 1:/projects ============ -->
+<section class="view on" data-v="projects">
+  <header class="site-nav">
+    <span class="brand">实习作品集 · 档案</span>
+    <nav><a>概览</a><a class="here">项目</a><a>案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a></nav>
+  </header>
+  <div class="page-lead">
+    <p class="eyebrow">Index 01 · Projects</p>
+    <h1>项目主线</h1>
+    <p class="lede">两条求职方向并列:<b>Java 后端</b>是实习期间的主要工程方向;<b>Agent</b>是学习中的第二方向,已打通最小集成链路。项目按策展顺序固定排列,案例在「案例」页单独检索。</p>
+    <p class="legend"><i>■</i>已交付 <i>◐</i>已排查·参与处理 <i>◇</i>原型验证 <i>○</i>学习整理 —— 状态靠文字与形状区分,不靠颜色</p>
+  </div>
+  <div class="note"><b>注释</b> — 双主线同屏第一层,不用 Tab 隐藏方向;整页只有 5 个 Project,不再渲染 49 个 Case;顺序策展固定;旧 schema 数据 UNCLASSIFIED 时回退为单一「项目」分区(本 demo 展示 schema 4.0 目标态)。</div>
+
+  <section class="shelf">
+    <div class="shelf-head"><span class="shelf-mark">架位 01</span><h2>Java 后端</h2><span class="shelf-note">实习主要方向 · 3 个主要项目</span></div>
+    <p class="shelf-sub">工具交付与活动系统协作:从已交付的内部工具,到贯穿实习的工作主线。</p>
+    <ol class="p-list">
+      <li class="p-row">
+        <span class="p-code">P-01</span>
+        <div class="p-main">
+          <h3><a>SQL 审计与故障排查工具</a></h3>
+          <p class="p-sum">把分散在远程服务器上的 SQL 日志检索、结果追溯和归档流程,整合为可复用的内部工具。</p>
+          <p class="p-tech">Java · Spring Boot · Vue · SSH · WebSocket · MySQL</p>
+        </div>
+        <dl class="p-meta">
+          <div><dt>性质</dt><dd>工具</dd></div>
+          <div><dt>成熟度</dt><dd>■ 已交付</dd></div>
+          <div><dt>贡献</dt><dd>主导</dd></div>
+        </dl>
+        <div class="p-cta"><a class="p-go">阅读案卷 →</a></div>
+      </li>
+      <li class="p-row">
+        <span class="p-code">P-03</span>
+        <div class="p-main">
+          <h3><a>活动系统工程实践</a></h3>
+          <p class="p-sum">实习期间贯穿工作的主线:部分功能开发、配置协助、活动复开,以及多类故障的排查与跨端转交。</p>
+          <p class="p-tech">Java · 配置管理 · 缓存</p>
+        </div>
+        <dl class="p-meta">
+          <div><dt>性质</dt><dd>工作主线</dd></div>
+          <div><dt>成熟度</dt><dd>实习主线 · 部分交付</dd></div>
+          <div><dt>贡献</dt><dd>协作参与</dd></div>
+        </dl>
+        <div class="p-cta"><span class="p-count">24 个案例</span><a class="p-go">阅读案卷 →</a></div>
+      </li>
+      <li class="p-row">
+        <span class="p-code">P-08</span>
+        <div class="p-main">
+          <h3><a>测试角色重置工具</a></h3>
+          <p class="p-sum">为重复验证新账号流程提供受控入口:查询、二次确认、重置、复查和使用说明组成的完整闭环。</p>
+          <p class="p-tech">Java · Spring Boot</p>
+        </div>
+        <dl class="p-meta">
+          <div><dt>性质</dt><dd>工具</dd></div>
+          <div><dt>成熟度</dt><dd>■ 已交付</dd></div>
+          <div><dt>贡献</dt><dd>主导</dd></div>
+        </dl>
+        <div class="p-cta"><span class="p-count">1 个案例</span><a class="p-go">阅读案卷 →</a></div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="shelf">
+    <div class="shelf-head"><span class="shelf-mark">架位 02</span><h2>Agent</h2><span class="shelf-note">学习中的第二方向 · 1 个主要项目</span></div>
+    <p class="shelf-sub">学习型集成探索:不宣称生产可用,但每一环都有可复现的运行结果。</p>
+    <ol class="p-list">
+      <li class="p-row">
+        <span class="p-code">P-04</span>
+        <div class="p-main">
+          <h3><a>Agent 能力集成 MVP</a></h3>
+          <p class="p-tags"><span class="proto-honest">学习型集成原型 — 不宣称生产可用或持续运营</span></p>
+          <p class="p-sum">在同一个最小 MVP 里打通 Prompt、Skills、RAG、MCP、Memory 与 Agent 的完整链路。</p>
+          <p class="p-tech">Vue · RAG · MCP · Prompt · Skills · Memory</p>
+        </div>
+        <dl class="p-meta">
+          <div><dt>性质</dt><dd>集成原型</dd></div>
+          <div><dt>成熟度</dt><dd>◇ 原型验证</dd></div>
+          <div><dt>贡献</dt><dd>主导</dd></div>
+        </dl>
+        <div class="p-cta"><span class="p-count">4 个案例</span><a class="p-go">阅读案卷 →</a></div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="shelf secondary">
+    <div class="shelf-head"><span class="shelf-mark">架位 03</span><h2>次级项目</h2><span class="shelf-note">小型工具 · 1 个</span></div>
+    <ol class="p-list">
+      <li class="p-row">
+        <span class="p-code">P-02</span>
+        <div class="p-main">
+          <h3><a>图片上传与审计</a> <span class="tier-tag">次级</span></h3>
+          <p class="p-sum">多语言图片上传结果保留与上传审计组成的小型项目;审计能力已自测,未确认发布。</p>
+          <p class="p-tech">Java · Spring Boot · 审计日志</p>
+        </div>
+        <dl class="p-meta">
+          <div><dt>性质</dt><dd>工具</dd></div>
+          <div><dt>成熟度</dt><dd>部分交付 · 审计未发布</dd></div>
+          <div><dt>贡献</dt><dd>主导</dd></div>
+        </dl>
+        <div class="p-cta"><span class="p-count">2 个案例</span><a class="p-go">阅读案卷 →</a></div>
+      </li>
+    </ol>
+  </section>
+  <div class="note"><b>行为</b> — SQL 审计当前 0 个 Case,按要求不显示「0 个案例」,直接省略数量;移动端架位纵向堆叠(01 → 02 → 03),元信息折行,筛选无关(本页无筛选)。编号 P-xx 为演示占位,最终以后端数据为准。</div>
+</section>
+<!-- ============ 视图 2:Project 详情 · 相关案例 ============ -->
+<section class="view" data-v="related">
+  <header class="site-nav">
+    <span class="brand">实习作品集 · 档案</span>
+    <nav><a>概览</a><a class="here">项目</a><a>案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a></nav>
+  </header>
+  <p class="ctx-stub">… Project 详情上部(为什么做 / 我的职责 / 如何做 / 如何证明 / 最终状态)保持不变,此处仅演示新增区域 …</p>
+  <section class="rel">
+    <div class="rel-head"><h2>相关案例</h2><span class="n">24 个</span></div>
+    <p class="rel-note">以下为策展精选 6 个,覆盖功能理解、日志排查、兼容性判断、环境问题、配置版本与跨端协作边界。摘要只取问题一句。</p>
+    <ol class="c-list">
+      <li class="c-row">
+        <span class="c-code">CASE-42</span>
+        <span class="c-title"><a>活动开发流程与红点设计</a></span>
+        <span class="c-facts"><span>工具评测</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+        <p class="c-prob">整理活动类型、规则、缓存、数据访问、服务接口与测试清单的完整开发流程。</p>
+      </li>
+      <li class="c-row">
+        <span class="c-code">CASE-16</span>
+        <span class="c-title"><a>重复配置导致唯一性冲突</a></span>
+        <span class="c-facts"><span>问题处理</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+        <p class="c-prob">通过错误日志定位重复数据,清理后刷新版本并验证页面恢复。</p>
+      </li>
+      <li class="c-row">
+        <span class="c-code">CASE-20</span>
+        <span class="c-title"><a>结束时间与旧客户端双重过滤</a></span>
+        <span class="c-facts"><span>问题处理</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+        <p class="c-prob">先修正结束时间,再定位旧客户端兼容条件,更换版本后恢复展示。</p>
+      </li>
+      <li class="c-row">
+        <span class="c-code">CASE-21</span>
+        <span class="c-title"><a>环境结构缺失字段</a></span>
+        <span class="c-facts"><span>问题处理</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+        <p class="c-prob">对比环境结构、确认影响边界,并使用既有备份方案补齐字段。</p>
+      </li>
+      <li class="c-row">
+        <span class="c-code">CASE-29</span>
+        <span class="c-title"><a>礼包积分被配置覆盖</a></span>
+        <span class="c-facts"><span>问题处理</span><span class="st st-investigated"><i>◐</i>已排查·参与处理</span><span>主要负责</span></span>
+        <p class="c-prob">定位分支合并时配置被覆盖;修复发布结果未记录在册,不写成「已修复」。</p>
+      </li>
+      <li class="c-row">
+        <span class="c-code">CASE-30</span>
+        <span class="c-title"><a>定制内容展示排查</a></span>
+        <span class="c-facts"><span>问题处理</span><span class="st st-investigated"><i>◐</i>已排查·参与处理</span><span>协作参与</span></span>
+        <p class="c-prob">确认服务端配置与下发正常并定位到客户端资源,后续转交对应人员处理。</p>
+      </li>
+    </ol>
+    <p class="rel-all"><a>查看全部 24 个案例 →</a><span class="q">/cases?project=activity-engineering&amp;status=all</span></p>
+  </section>
+  <div class="note"><b>规则</b> — 0 个 Case(如 SQL 审计):整区不渲染;1–3 个(测试角色重置 1 个):全部显示且无「查看全部」;4–6 个(Agent MVP 4 个):全部显示;超过 6 个才走「精选 3–6 + 查看全部 N 个」。「已排查·参与处理」用 ◐ + 文字,不写成已修复;协作转交不写成独立交付。页尾「询问这个项目」继续携带 Project 上下文,不随案例区切换。</div>
+</section>
+<!-- ============ 视图 3:/cases ============ -->
+<section class="view" data-v="cases">
+  <header class="site-nav">
+    <span class="brand">实习作品集 · 档案</span>
+    <nav><a>概览</a><a>项目</a><a class="here">案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a></nav>
+  </header>
+  <div class="page-lead">
+    <p class="eyebrow">Index 02 · Cases</p>
+    <h1>案例目录</h1>
+    <p class="lede">每一次具体任务、问题、判断与验证。可按工作状态、归属与类型组合检索。</p>
+  </div>
+  <div class="cases-grid">
+    <aside class="rail" id="rail">
+      <button class="rail-toggle" onclick="document.getElementById('rail').classList.toggle('open')">筛选条件 <span>＋</span></button>
+      <div class="rail-body">
+        <h2>关键词</h2>
+        <input type="search" placeholder="搜索标题…">
+        <h2>工作状态</h2>
+        <label class="f-opt"><input type="radio" name="st"> 全部 <span class="n">49</span></label>
+        <label class="f-opt sel"><input type="radio" name="st" checked> ■ 已交付 <span class="n">20</span></label>
+        <label class="f-opt"><input type="radio" name="st"> ◐ 已排查·参与处理 <span class="n">15</span></label>
+        <label class="f-opt"><input type="radio" name="st"> ◇ 原型验证 <span class="n">7</span></label>
+        <label class="f-opt"><input type="radio" name="st"> ○ 学习整理 <span class="n">7</span></label>
+        <h2>归属</h2>
+        <label class="f-opt sel"><input type="radio" name="ow" checked> 全部</label>
+        <p class="f-group-label">— 项目</p>
+        <label class="f-opt"><input type="radio" name="ow"> 活动系统工程实践 <span class="n">24</span></label>
+        <label class="f-opt"><input type="radio" name="ow"> Agent 能力集成 MVP <span class="n">4</span></label>
+        <label class="f-opt"><input type="radio" name="ow"> 图片上传与审计 <span class="n">2</span></label>
+        <label class="f-opt"><input type="radio" name="ow"> 测试角色重置工具 <span class="n">1</span></label>
+        <p class="f-group-label">— Collection(主题浏览,非成果归属)</p>
+        <label class="f-opt"><input type="radio" name="ow"> 开源项目体验与测试 <span class="n">3</span></label>
+        <label class="f-opt"><input type="radio" name="ow"> 工程操作与学习 <span class="n">7</span></label>
+        <label class="f-opt"><input type="radio" name="ow"> 技术写作与分享 <span class="n">4</span></label>
+        <hr class="f-sep">
+        <label class="f-opt"><input type="radio" name="ow"> 独立案例 <span class="n">16</span></label>
+        <h2>类型</h2>
+        <label class="f-opt sel"><input type="radio" name="tp" checked> 全部</label>
+        <label class="f-opt"><input type="radio" name="tp"> 功能任务</label>
+        <label class="f-opt"><input type="radio" name="tp"> 问题处理</label>
+        <label class="f-opt"><input type="radio" name="tp"> 工具评测</label>
+      </div>
+    </aside>
+    <div>
+      <div class="active-line">
+        <span class="lbl">当前筛选</span>
+        <span class="chip">状态 <b>已交付</b><button title="移除">×</button></span>
+        <span class="count-line">20 条结果</span>
+      </div>
+      <ol class="r-list">
+        <li class="r-row">
+          <span class="c-code">CASE-02</span>
+          <span><span class="c-title"><a>测试角色重置工具</a></span><p class="c-prob">为重复验证新账号流程提供受控的角色查询与重置入口。</p></span>
+          <span class="c-facts"><span>功能任务</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">测试角色重置工具</span>
+        </li>
+        <li class="r-row">
+          <span class="c-code">CASE-16</span>
+          <span><span class="c-title"><a>重复配置导致唯一性冲突</a></span><p class="c-prob">通过错误日志定位重复数据,清理后刷新版本并验证页面恢复。</p></span>
+          <span class="c-facts"><span>问题处理</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">活动系统工程实践</span>
+        </li>
+        <li class="r-row">
+          <span class="c-code">CASE-01</span>
+          <span><span class="c-title"><a>多语言图片上传结果保留修复</a></span><p class="c-prob">修复后续语言上传覆盖既有语言映射的问题。</p></span>
+          <span class="c-facts"><span>功能任务</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">图片上传与审计</span>
+        </li>
+        <li class="r-row">
+          <span class="c-code">CASE-42</span>
+          <span><span class="c-title"><a>活动开发流程与红点设计</a></span><p class="c-prob">整理活动类型、规则、缓存、数据访问与测试清单的完整开发流程。</p></span>
+          <span class="c-facts"><span>工具评测</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">活动系统工程实践</span>
+        </li>
+        <li class="r-row">
+          <span class="c-code">CASE-14</span>
+          <span><span class="c-title"><a>智能工程内部分享</a></span><p class="c-prob">完成正式讲稿、连续演练、现场分享和讲后复盘闭环。</p></span>
+          <span class="c-facts"><span>功能任务</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">独立案例<span class="coll">◇ 技术写作与分享</span></span>
+        </li>
+        <li class="r-row">
+          <span class="c-code">CASE-49</span>
+          <span><span class="c-title"><a>历史技术博客主页</a></span><p class="c-prob">公开主页可作为历史写作证据,动态统计数字必须标注快照日期。</p></span>
+          <span class="c-facts"><span>工具评测</span><span class="st st-delivered"><i>■</i>已交付</span><span>主要负责</span></span>
+          <span class="r-owner">独立案例<span class="coll">◇ 技术写作与分享</span></span>
+        </li>
+      </ol>
+      <div class="note"><b>注释</b> — 列表只演示前 6 条;真实「已交付」共 20 条。行是紧凑 ledger,不是缩小版 Project 卡片墙。</div>
+      <div class="empty" style="display:none" id="emptyDemo">
+        <p>没有符合当前条件的案例。<br>试试放宽工作状态,或清除关键词。</p>
+        <a class="again">清除全部筛选</a>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>行为</b> — 直接进入 /cases 默认「已交付」;从 Project 进入显式带 <b>?project=&lt;slug&gt;&amp;status=all</b>;project / collection / status / type 写入 URL query 可恢复,非法值静默回退默认;当前条件 chips 与结果数量常显;移动端筛选栏折叠为「筛选条件」面板(点按展开),但 chips 行不收起;无结果时显示空态与「清除全部筛选」。Collection 数字为演示占位,归属以后端 schema 4.0 为准。</div>
+</section>
+<!-- ============ 视图 4:Case 详情 · 元信息 ============ -->
+<section class="view" data-v="case">
+  <header class="site-nav">
+    <span class="brand">实习作品集 · 档案</span>
+    <nav><a>概览</a><a>项目</a><a class="here">案例</a><a>时间线</a><a>证据</a><a>完整 Agent</a></nav>
+  </header>
+  <p class="note"><b>注释</b> — 八段正文(背景/动作/判断/验证/结果/边界/证据/延伸)与面包屑保持不变;本视图演示封面右侧「案卷信息」卡的两个变体:有所属项目 / 独立案例。移动端卡片上移到正文之前。</p>
+
+  <div class="case-grid">
+    <div>
+      <p class="crumb"><a>案例目录</a> / 问题处理 / CASE-20</p>
+      <div class="case-cover">
+        <h1>结束时间与旧客户端双重过滤</h1>
+        <p class="sum">先修正结束时间,再定位旧客户端兼容条件,更换版本后恢复展示。</p>
+      </div>
+      <ul class="secs">
+        <li><b>01 / 背景</b>问题与背景</li>
+        <li><b>02 / 动作</b>采取的动作</li>
+        <li><b>03 / 判断</b>关键判断</li>
+        <li><b>04 / 验证</b>验证过程</li>
+        <li><b>05 / 结果</b>结果</li>
+        <li><b>06 / 边界</b>限制与边界</li>
+        <li><b>07 / 证据</b>公开证据</li>
+        <li><b>08 / 延伸</b>建议问题</li>
+      </ul>
+    </div>
+    <aside class="dcard">
+      <h2>案卷信息</h2>
+      <dl>
+        <div class="di"><dt>所属项目</dt><dd><a>活动系统工程实践</a><span class="ev-line">← 返回项目案卷</span></dd></div>
+        <div class="di"><dt>类型</dt><dd>问题处理</dd></div>
+        <div class="di"><dt>工作状态</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd></div>
+        <div class="di"><dt>贡献方式</dt><dd>主要负责</dd></div>
+        <div class="di"><dt>Collection</dt><dd>—</dd></div>
+        <div class="di"><dt>证据强度</dt><dd>证据 2 条 · 核验 已核验<span class="ev-line">与工作状态相互独立</span></dd></div>
+      </dl>
+      <a class="ask">询问本案例 →</a>
+      <p class="ask-note">只提交 caseSlug 作为 Agent 上下文</p>
+    </aside>
+  </div>
+
+  <div class="case-grid" style="margin-top:70px">
+    <div>
+      <p class="crumb"><a>案例目录</a> / 工具评测 / CASE-49</p>
+      <div class="case-cover">
+        <h1>历史技术博客主页</h1>
+        <p class="sum">公开主页可作为历史写作证据,动态统计数字必须标注快照日期。</p>
+      </div>
+    </div>
+    <aside class="dcard">
+      <h2>案卷信息</h2>
+      <dl>
+        <div class="di"><dt>归属</dt><dd>独立案例<span class="ev-line">不属于任何项目</span></dd></div>
+        <div class="di"><dt>类型</dt><dd>工具评测</dd></div>
+        <div class="di"><dt>工作状态</dt><dd><span class="st st-delivered"><i>■</i>已交付</span></dd></div>
+        <div class="di"><dt>贡献方式</dt><dd>主要负责</dd></div>
+        <div class="di"><dt>Collection</dt><dd><a>技术写作与分享</a><span class="ev-line">主题浏览,非成果归属</span></dd></div>
+        <div class="di"><dt>证据强度</dt><dd>证据 1 条 · 核验 部分核验<span class="ev-line">统计数字需标注快照日期</span></dd></div>
+      </dl>
+      <a class="ask">询问本案例 →</a>
+      <p class="ask-note">只提交 caseSlug 作为 Agent 上下文</p>
+    </aside>
+  </div>
+  <div class="note"><b>规则</b> — 工作状态(做过什么)与证据强度(能证明多少)分两行独立表达;无公开 Evidence 的 Case 仍可展示,证据强度行显示「暂无公开证据 · 未核验」;「已排查·参与处理」不出现「已修复」字样。</div>
+</section>
+</div>
+
+<script>
+const views=document.querySelectorAll('.view');
+const vbtns=document.querySelectorAll('[data-view]');
+vbtns.forEach(b=>b.addEventListener('click',()=>{
+  vbtns.forEach(x=>x.classList.toggle('on',x===b));
+  views.forEach(v=>v.classList.toggle('on',v.dataset.v===b.dataset.view));
+  window.scrollTo(0,0);
+}));
+const stage=document.getElementById('stage');
+const wbtns=document.querySelectorAll('[data-w]');
+wbtns.forEach(b=>b.addEventListener('click',()=>{
+  wbtns.forEach(x=>x.classList.toggle('on',x===b));
+  stage.classList.toggle('mobile',b.dataset.w==='mobile');
+}));
+</script>
+</body>
+</html>

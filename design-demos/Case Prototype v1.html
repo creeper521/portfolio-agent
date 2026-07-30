@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="only light">
+<title>案例目录 · 工程成长档案 — HTML 原型</title>
+
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  Portfolio V1 Case — 高保真交互原型（huashu-design · Junior Designer pass）
+
+  本文件验证 2026-07-28 设计 spec §5（前端交接 brief）的关键交互契约：
+    · §5.1  独立规范路由 /cases 与 /cases/:slug，旧 /projects/{caseSlug} 重定向
+    · §5.2  桌面导航明确区分「项目 / 案例」
+    · §5.3  Case 目录：标题/摘要/类型/状态/贡献/关联项目 + 类型筛选
+    · §5.4  Case 详情八段结构（背景→动作→判断→验证→结果→限制→证据→建议问题）
+    · §5.5  Case → Agent 交接（caseSlug + source=CASE，可清除上下文）
+    · §5.6  状态覆盖：加载/空/404/失败/重试/无证据/无建议问题/键盘/Reduced Motion
+
+  视觉系统 1:1 复刻现有 frontend（tokens.css / base.css），不引入新风格：
+    paper #f4eee4 · ink #201c17 · red #7a2e2a · rule #cdbfa9
+    Georgia + Noto Serif SC 衬线 · IBM Plex Mono 元数据 · 发丝线分隔无阴影
+
+  数据：真实 Bundle（49 Case / contentVersion 2026-07-27.1），非编造。
+  ════════════════════════════════════════════════════════════════════════
+-->
+
+<style>
+/* ─────────────────────── 设计令牌（1:1 复刻 tokens.css） ─────────────────────── */
+:root{
+  /* 纸面 */
+  --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0;
+  /* 墨色 */
+  --ink:#201c17; --ink-2:#34302a; --ink-line:#4a433b;
+  --ink-text:#a99f91; --ink-text-hi:#e8ddce; --ink-text-faint:#94897c;
+  /* 中性 */
+  --muted:#746b5e; --faint:#9c9182; --rule:#cdbfa9;
+  /* 牛血红强调 */
+  --red:#7a2e2a; --red-hi:#b65d53; --red-on-ink:#d27d74;
+  /* 尺寸/动效 */
+  --header-height:66px;
+  --content-width:1180px;
+  --page-gutter:clamp(22px,4vw,48px);
+  --ease:cubic-bezier(0.22,0.8,0.22,1);
+  /* 字型 */
+  --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+  --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+}
+
+/* ─────────────────────── 基础重置（base.css） ─────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans); color:var(--ink-2); background:var(--paper);
+  line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  min-height:100vh;
+}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:4px}
+::selection{color:var(--paper-hi);background:var(--red)}
+
+/* 滚动条 */
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(122,46,42,0.22);border-radius:6px;border:3px solid var(--paper)}
+::-webkit-scrollbar-thumb:hover{background:rgba(122,46,42,0.5)}
+
+/* 全局衬线化（正文与标题走 serif，元数据走 mono） */
+.page-shell,h1,h2,h3,h4,.serif{font-family:var(--serif)}
+
+/* 容器 */
+.page-shell{
+  max-width:var(--content-width); margin:0 auto;
+  padding:0 var(--page-gutter);
+}
+
+/* ─────────────────────── 顶部导航（base.css / DossierHeader） ─────────────────────── */
+.dossier-header{
+  position:fixed; top:0; left:0; right:0; z-index:80;
+  height:var(--header-height);
+  background:color-mix(in srgb, var(--paper), transparent 8%);
+  backdrop-filter:blur(15px); -webkit-backdrop-filter:blur(15px);
+  border-bottom:1px solid var(--rule);
+}
+.dossier-header__inner{
+  max-width:var(--content-width); height:100%; margin:0 auto;
+  padding:0 var(--page-gutter);
+  display:flex; align-items:center; justify-content:space-between; gap:32px;
+}
+.dossier-mark{display:flex;align-items:baseline;gap:9px;flex-shrink:0}
+.dossier-mark__name{font-family:var(--serif);font-weight:700;font-size:18px;color:var(--ink);letter-spacing:-0.01em}
+.dossier-mark__meta{font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase}
+
+.primary-nav{display:flex;align-items:center;gap:29px}
+.primary-nav a,.primary-nav button{
+  font-size:14px; color:var(--ink-2); position:relative;
+  padding:6px 0; transition:color .2s var(--ease);
+}
+.primary-nav a:hover,.primary-nav button:hover{color:var(--red)}
+.primary-nav a.is-active{color:var(--red)}
+.primary-nav a.is-active::after{
+  content:""; position:absolute; left:0; right:0; bottom:-2px;
+  height:2px; background:var(--red);
+}
+.primary-nav__agent{
+  color:var(--red)!important; font-family:var(--mono); font-size:12px;
+  letter-spacing:0.08em; text-transform:uppercase;
+}
+
+/* 移动端菜单 */
+.menu-trigger{display:none;font-family:var(--mono);font-size:12px;letter-spacing:0.1em}
+@media (max-width:959.98px){
+  .primary-nav{
+    position:fixed; top:var(--header-height); left:0; right:0;
+    background:var(--paper-hi); border-bottom:1px solid var(--rule);
+    flex-direction:column; align-items:flex-start; gap:0;
+    padding:8px var(--page-gutter) 20px;
+    transform:translateY(-130%); transition:transform .35s var(--ease);
+    box-shadow:0 18px 30px rgba(32,28,23,0.08);
+  }
+  .primary-nav.is-open{transform:translateY(0)}
+  .primary-nav a,.primary-nav button{width:100%;padding:13px 0;border-bottom:1px solid var(--rule);font-size:15px}
+  .menu-trigger{display:block}
+}
+
+/* ─────────────────────── PageLead 通用页头 ─────────────────────── */
+.page-lead{
+  padding:clamp(74px,8vw,112px) 0 58px;
+  border-bottom:1px solid var(--rule);
+  background:var(--paper-hi);
+}
+.page-lead__grid{
+  display:grid; grid-template-columns:0.34fr 1fr 0.58fr;
+  gap:clamp(24px,4vw,56px); align-items:end;
+}
+.page-lead__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.page-lead__title{
+  font-family:var(--serif); font-weight:400;
+  font-size:clamp(44px,6vw,78px); line-height:0.98;
+  letter-spacing:-0.045em; color:var(--ink);
+}
+.page-lead__desc{
+  font-family:var(--serif); font-size:15.5px; line-height:1.75;
+  color:var(--muted); max-width:42ch;
+}
+@media (max-width:760px){
+  .page-lead__grid{grid-template-columns:1fr;gap:18px;align-items:start}
+}
+
+/* ─────────────────────── StatusMark / type-tag / 状态标签 ─────────────────────── */
+.status-mark{
+  display:inline-flex; align-items:center; gap:7px;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.06em;
+  color:var(--muted); text-transform:uppercase;
+}
+.status-mark::before{
+  content:""; width:7px; height:7px; background:var(--red);
+  transform:rotate(45deg); flex-shrink:0;
+}
+.status-mark[data-t="contrib"]::before{background:var(--muted)}
+
+.type-tag{
+  display:inline-flex; align-items:center;
+  border:1px solid var(--rule); padding:3px 7px;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+  text-transform:uppercase; color:var(--ink-2);
+}
+.type-tag[data-t="FEATURE"]{border-color:var(--red);color:var(--red)}
+.type-tag[data-t="INCIDENT"]{color:var(--ink-2)}
+.type-tag[data-t="EVALUATION"]{border-style:dashed;border-color:var(--faint);color:var(--faint)}
+
+/* 状态徽标（详情页 cover 用） */
+.cover-status{display:flex;gap:14px;flex-wrap:wrap}
+
+/* ─────────────────────── 筛选条 ─────────────────────── */
+.case-filter{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:24px 0; border-bottom:1px solid var(--rule);
+}
+.case-filter__label{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:0.14em;
+  color:var(--muted); text-transform:uppercase; margin-right:8px;
+}
+.case-filter__chip{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.06em;
+  text-transform:uppercase; padding:7px 13px;
+  border:1px solid var(--rule); color:var(--ink-2);
+  transition:all .2s var(--ease);
+}
+.case-filter__chip:hover{border-color:var(--ink-2);color:var(--ink)}
+.case-filter__chip.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper-hi)}
+.case-filter__count{
+  margin-left:auto; font-family:var(--mono); font-size:11px;
+  letter-spacing:0.1em; color:var(--muted);
+}
+
+/* ─────────────────────── Case 目录行（复刻 dossier-row） ─────────────────────── */
+.case-list{padding:8px 0 0}
+.case-row{
+  display:grid; grid-template-columns:150px minmax(0,1fr) 240px;
+  gap:clamp(20px,3vw,40px); align-items:start;
+  padding:30px 18px 30px 0; position:relative;
+  border-bottom:1px solid var(--rule);
+  transition:background .2s var(--ease);
+}
+.case-row:hover{background:var(--paper-hi)}
+.case-row:last-child{border-bottom:none}
+.case-row__code{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.case-row__code-text{font-family:var(--mono);font-size:12px;letter-spacing:0.1em;color:var(--red)}
+.case-row__body{min-width:0}
+.case-row__title{
+  font-family:var(--serif); font-weight:400;
+  font-size:clamp(24px,2.6vw,38px); line-height:1.12;
+  letter-spacing:-0.02em; color:var(--ink); margin-bottom:10px;
+}
+.case-row__summary{
+  font-family:var(--serif); font-size:14px; line-height:1.8;
+  color:var(--muted); max-width:46ch; margin-bottom:14px;
+}
+.case-row__status{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.case-row__project{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  letter-spacing:0.04em;
+}
+.case-row__project a{border-bottom:1px solid var(--rule);padding-bottom:1px}
+.case-row__project a:hover{color:var(--red);border-color:var(--red)}
+.case-row__project--none{color:var(--faint);font-style:italic;border:none}
+.case-row__tech{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.case-row__counts{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em;
+  color:var(--faint); text-transform:uppercase;
+}
+.case-row__counts b{color:var(--ink-2);font-weight:400}
+.case-row::after{
+  content:"↗"; position:absolute; right:0; bottom:26px;
+  font-family:var(--mono); font-size:15px; color:var(--red);
+  opacity:0; transform:translateX(-6px); transition:all .25s var(--ease);
+}
+.case-row:hover::after{opacity:1;transform:translateX(0)}
+
+@media (max-width:760px){
+  .case-row{grid-template-columns:1fr;gap:14px;padding:26px 0}
+  .case-row::after{display:none}
+}
+
+/* 空状态 */
+.case-empty{
+  padding:90px 0; text-align:center; color:var(--muted);
+}
+.case-empty__code{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:18px}
+.case-empty__title{font-family:var(--serif);font-size:28px;color:var(--ink);margin-bottom:12px}
+.case-empty__desc{font-family:var(--serif);font-size:15px;line-height:1.7;max-width:40ch;margin:0 auto 26px}
+
+/* ─────────────────────── DossierFooter ─────────────────────── */
+.dossier-footer{
+  border-top:1px solid var(--rule); margin-top:60px;
+  padding:64px 0 36px; background:var(--paper-hi);
+}
+.dossier-footer__grid{
+  display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:55px;
+}
+.dossier-footer h3{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.16em;
+  color:var(--red); text-transform:uppercase; margin-bottom:18px;
+}
+.dossier-footer p{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--ink-2);max-width:38ch}
+.dossier-footer__base{
+  margin-top:48px; padding-top:22px; border-top:1px solid var(--rule);
+  display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:0.12em;
+  color:var(--muted); text-transform:uppercase;
+}
+@media (max-width:760px){.dossier-footer__grid{grid-template-columns:1fr;gap:32px}}
+
+/* ════════════════════════════════════════════════════════════════════
+   Case 详情页（复刻 ProjectPage 的 cover + story 双栏）
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 深色封面 */
+.case-cover{
+  background:var(--ink); color:var(--paper);
+  padding:92px 0 76px; position:relative; overflow:hidden;
+}
+/* 暖色纸纹（复刻 hero 的极淡纹理，避免纯黑空洞） */
+.case-cover::before{
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(122,46,42,0.045), transparent 55%),
+    repeating-linear-gradient(90deg, transparent 0 2px, rgba(111,93,70,0.055) 2px 4px);
+  pointer-events:none;
+}
+.case-cover__inner{
+  position:relative; display:grid; grid-template-columns:0.26fr 1fr 0.35fr;
+  gap:clamp(24px,4vw,56px); align-items:start;
+}
+.case-cover__code{display:flex;flex-direction:column;gap:12px}
+.case-cover__code-text{font-family:var(--mono);font-size:12px;letter-spacing:0.14em;color:var(--red-hi)}
+.case-record-type{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.14em;
+  color:var(--red-on-ink); text-transform:uppercase; margin-bottom:22px;
+}
+.case-cover__title{
+  font-family:var(--serif); font-weight:400;
+  font-size:clamp(48px,6vw,88px); line-height:1.02;
+  letter-spacing:-0.04em; color:var(--paper); margin-bottom:24px;
+}
+.case-cover__summary{
+  font-family:var(--serif); font-size:20px; line-height:1.7;
+  color:var(--ink-text-hi); max-width:30ch;
+}
+.case-cover__side{
+  display:flex; flex-direction:column; gap:18px;
+  padding-top:8px;
+}
+.case-cover__side-label{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.14em;
+  color:var(--ink-text); text-transform:uppercase; margin-bottom:6px;
+}
+.case-cover__project-link{
+  font-family:var(--serif); font-size:16px; color:var(--ink-text-hi);
+  border-bottom:1px solid var(--ink-line); padding-bottom:3px;
+  display:inline-block; transition:color .2s var(--ease);
+}
+.case-cover__project-link:hover{color:var(--paper)}
+.case-cover__project--none{
+  font-family:var(--serif); font-size:14px; color:var(--ink-text-faint); font-style:italic;
+}
+
+@media (max-width:1000px){.case-cover__inner{grid-template-columns:1fr;gap:24px}}
+
+/* 详情主体（TOC + story） */
+.case-body{padding:90px 0 130px}
+.case-body__grid{
+  display:grid; grid-template-columns:240px minmax(0,860px);
+  gap:clamp(48px,8vw,130px);
+}
+
+/* 粘性目录 */
+.case-toc{
+  position:sticky; top:calc(var(--header-height) + 30px);
+  align-self:start;
+}
+.case-toc__label{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:0.16em;
+  color:var(--red); text-transform:uppercase; margin-bottom:20px;
+}
+.case-toc__list{list-style:none;display:flex;flex-direction:column;gap:0}
+.case-toc__list a{
+  display:block; padding:11px 0; border-top:1px solid var(--rule);
+  font-family:var(--serif); font-size:14.5px; color:var(--muted);
+  transition:color .2s var(--ease); position:relative;
+}
+.case-toc__list li:last-child a{border-bottom:1px solid var(--rule)}
+.case-toc__list a:hover,.case-toc__list a.is-active{color:var(--red)}
+.case-toc__num{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.1em;
+  color:var(--red); margin-right:10px; opacity:.7;
+}
+.case-toc__ask{
+  display:block; margin-top:22px; padding:14px 16px;
+  border:1px solid var(--red); color:var(--red);
+  font-family:var(--mono); font-size:11px; letter-spacing:0.1em;
+  text-transform:uppercase; text-align:left;
+  transition:all .2s var(--ease);
+}
+.case-toc__ask:hover{background:var(--red);color:var(--paper-hi)}
+
+@media (max-width:760px){
+  .case-body__grid{grid-template-columns:1fr;gap:0}
+  .case-toc{position:static;margin-bottom:34px}
+}
+
+/* 八段结构 */
+.case-story{min-width:0}
+.case-section{margin-bottom:0}
+.case-section__code{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.16em;
+  color:var(--red); text-transform:uppercase; margin-bottom:14px;
+  display:block;
+}
+.case-section__title{
+  font-family:var(--serif); font-weight:400;
+  font-size:clamp(36px,4vw,54px); line-height:1.08;
+  letter-spacing:-0.03em; color:var(--ink); margin-bottom:34px;
+}
+.case-prose{
+  font-family:var(--serif); font-size:17px; line-height:2;
+  color:var(--ink-2); max-width:64ch;
+}
+.case-prose--lead{
+  font-size:19px; line-height:1.8; color:var(--ink);
+}
+
+/* 编号列表（decimal-leading-zero + 红色 mono 计数） */
+.case-list-numbered{list-style:none;counter-reset:case;margin-top:6px}
+.case-list-numbered > li{
+  counter-increment:case;
+  position:relative; padding:22px 0 22px 54px;
+  border-top:1px solid var(--rule);
+  font-family:var(--serif); font-size:17px; line-height:1.8; color:var(--ink-2);
+  max-width:64ch;
+}
+.case-list-numbered > li:last-child{border-bottom:1px solid var(--rule)}
+.case-list-numbered > li::before{
+  content:counter(case,decimal-leading-zero);
+  position:absolute; left:0; top:24px;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:var(--red);
+}
+
+/* 验证段（深色反白面板，复刻 project-story__dark） */
+.case-section--dark{
+  background:var(--ink); color:var(--paper);
+  padding:64px 50px; margin:48px -50px 0;
+}
+.case-section--dark .case-section__code{color:var(--red-on-ink)}
+.case-section--dark .case-section__title{color:var(--paper)}
+.case-section--dark .case-list-numbered > li{border-color:var(--ink-line);color:var(--ink-text-hi)}
+.case-section--dark .case-list-numbered > li::before{color:var(--red-on-ink)}
+@media (max-width:1249px){.case-section--dark{margin:48px 0 0}}
+
+/* 结果段引述 */
+.case-outcome{
+  font-family:var(--serif); font-size:clamp(22px,2.4vw,30px); line-height:1.55;
+  color:var(--ink); border-left:2px solid var(--red);
+  padding:6px 0 6px 28px; margin-top:8px; max-width:60ch;
+}
+
+/* 限制段 */
+.case-limits{display:flex;flex-direction:column;gap:0;margin-top:8px}
+.case-limits li{
+  font-family:var(--serif); font-size:16px; line-height:1.8; color:var(--ink-2);
+  padding:20px 0 20px 30px; border-top:1px solid var(--rule);
+  position:relative; max-width:64ch;
+}
+.case-limits li:last-child{border-bottom:1px solid var(--rule)}
+.case-limits li::before{
+  content:"—"; position:absolute; left:0; top:20px;
+  font-family:var(--mono); color:var(--muted);
+}
+
+/* 证据列表 */
+.case-evidence{display:flex;flex-direction:column;gap:0}
+.case-evidence__item{
+  display:grid; grid-template-columns:80px 1fr; gap:24px;
+  padding:26px 0; border-top:1px solid var(--rule); align-items:start;
+}
+.case-evidence__item:last-child{border-bottom:1px solid var(--rule)}
+.case-evidence__code{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.1em; color:var(--red);
+}
+.case-evidence__title{
+  font-family:var(--serif); font-size:18px; color:var(--ink); margin-bottom:8px; line-height:1.4;
+}
+.case-evidence__summary{font-family:var(--serif);font-size:14.5px;line-height:1.75;color:var(--muted);max-width:60ch;margin-bottom:8px}
+.case-evidence__meta{font-family:var(--mono);font-size:10.5px;letter-spacing:0.08em;color:var(--faint);text-transform:uppercase}
+
+/* 建议问题 + 询问入口 */
+.case-questions{display:flex;flex-direction:column;gap:0;margin-bottom:40px}
+.case-questions button{
+  display:flex; align-items:flex-start; gap:16px; width:100%;
+  text-align:left; padding:22px 0; border-top:1px solid var(--rule);
+  transition:color .2s var(--ease);
+}
+.case-questions button:last-child{border-bottom:1px solid var(--rule)}
+.case-questions button:hover .case-questions__text{color:var(--red)}
+.case-questions__q{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em;
+  color:var(--red); margin-top:5px; flex-shrink:0;
+}
+.case-questions__text{
+  font-family:var(--serif); font-size:17px; line-height:1.6; color:var(--ink-2);
+  transition:color .2s var(--ease);
+}
+.case-questions button:hover .case-questions__text::after{
+  content:" ↗"; color:var(--red);
+}
+.case-ask-banner{
+  margin-top:20px; padding:34px 38px; background:var(--ink); color:var(--paper);
+  display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap;
+}
+.case-ask-banner__title{font-family:var(--serif);font-size:24px;color:var(--paper);letter-spacing:-0.01em}
+.case-ask-banner__sub{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--ink-text);text-transform:uppercase;margin-top:6px}
+.case-ask-banner__btn{
+  background:var(--red); color:var(--paper-hi); padding:15px 26px;
+  font-family:var(--mono); font-size:12px; letter-spacing:0.12em;
+  text-transform:uppercase; transition:background .2s var(--ease);
+}
+.case-ask-banner__btn:hover{background:var(--red-hi)}
+
+/* 详情页底栏（下一步） */
+.case-next{
+  margin-top:80px; padding-top:40px; border-top:1px solid var(--rule);
+  display:grid; grid-template-columns:1fr 1fr; gap:48px;
+}
+.case-next a{
+  display:block; padding:8px 0;
+  font-family:var(--mono); font-size:11px; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--red);
+  border-bottom:1px solid var(--red);
+}
+.case-next__label{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.case-next__title{font-family:var(--serif);font-size:20px;color:var(--ink);margin-top:6px}
+@media (max-width:760px){.case-next{grid-template-columns:1fr;gap:24px}}
+
+/* 404 */
+.case-404{padding:140px 0 100px;text-align:center}
+.case-404__code{font-family:var(--mono);font-size:13px;letter-spacing:0.2em;color:var(--red);margin-bottom:24px}
+.case-404__title{font-family:var(--serif);font-size:clamp(40px,5vw,64px);color:var(--ink);letter-spacing:-0.03em;margin-bottom:18px}
+.case-404__desc{font-family:var(--serif);font-size:16px;color:var(--muted);max-width:42ch;margin:0 auto 32px;line-height:1.8}
+
+/* ════════════════════════════════════════════════════════════════════
+   Agent 工作台（Case → Agent 交接演示，简化版）
+   ════════════════════════════════════════════════════════════════════ */
+.agent-stage{
+  background:var(--paper); padding:60px 0 120px; min-height:80vh;
+}
+.agent-context-bar{
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:16px 22px; margin-bottom:28px;
+  background:var(--paper-hi); border:1px solid var(--rule); border-left:3px solid var(--red);
+}
+.agent-context-bar__label{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.14em;
+  color:var(--muted); text-transform:uppercase;
+}
+.agent-context-bar__slug{
+  font-family:var(--mono); font-size:12px; color:var(--red); letter-spacing:0.04em;
+}
+.agent-context-bar__clear{
+  margin-left:auto; font-family:var(--mono); font-size:11px;
+  letter-spacing:0.08em; color:var(--muted); text-transform:uppercase;
+  padding:6px 12px; border:1px solid var(--rule);
+  transition:all .2s var(--ease);
+}
+.agent-context-bar__clear:hover{color:var(--red);border-color:var(--red)}
+.agent-context-bar.is-cleared{border-left-color:var(--rule);opacity:.7}
+.agent-context-bar.is-cleared .agent-context-bar__slug{color:var(--faint)}
+
+.agent-mock{
+  max-width:780px; margin:0 auto;
+  display:flex; flex-direction:column; gap:22px;
+}
+.agent-bubble{
+  padding:24px 28px; border:1px solid var(--rule); background:var(--paper-hi);
+}
+.agent-bubble--user{
+  background:transparent; border:none; padding:6px 0;
+  text-align:right; align-self:flex-end; max-width:80%;
+}
+.agent-bubble--user .agent-bubble__text{font-family:var(--serif);font-size:16px;color:var(--ink-2)}
+.agent-bubble__role{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.14em;
+  color:var(--red); text-transform:uppercase; margin-bottom:12px;
+}
+.agent-bubble--user .agent-bubble__role{color:var(--muted);margin-bottom:8px}
+.agent-bubble__text{font-family:var(--serif);font-size:15.5px;line-height:1.9;color:var(--ink-2)}
+.agent-bubble__text p+p{margin-top:12px}
+
+/* 交接契约预览（演示用，说明 source=CASE） */
+.contract-note{
+  max-width:780px; margin:36px auto 0; padding:24px 28px;
+  background:var(--ink); color:var(--ink-text-hi);
+  font-family:var(--mono); font-size:11.5px; line-height:1.9;
+  overflow-x:auto;
+}
+.contract-note__label{
+  font-family:var(--mono); font-size:10px; letter-spacing:0.16em;
+  color:var(--red-on-ink); text-transform:uppercase; margin-bottom:14px; display:block;
+}
+.contract-note pre{margin:0;white-space:pre;color:var(--ink-text-hi)}
+
+/* ─────────────────────── reveal 动效（motion.css） ─────────────────────── */
+.reveal{animation:dossier-reveal .75s var(--ease) both}
+@keyframes dossier-reveal{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important; animation-iteration-count:1!important;
+    transition-duration:.001ms!important; scroll-behavior:auto!important;
+  }
+  .reveal{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ 顶部导航 ═══════════ -->
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" href="#" data-nav="home">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">/ ENGINEERING DOSSIER</span>
+    </a>
+    <nav class="primary-nav" id="primaryNav">
+      <a href="#/cases" data-nav="cases">案例</a>
+      <a href="#/projects" data-nav="projects">项目</a>
+      <a href="#/timeline">时间线</a>
+      <a href="#/evidence">证据</a>
+      <a href="#/agent" data-nav="agent" class="primary-nav__agent">完整 Agent ↗</a>
+    </nav>
+    <button class="menu-trigger" id="menuTrigger" aria-expanded="false">目录</button>
+  </div>
+</header>
+
+<!-- 视图容器 -->
+<main id="view"></main>
+
+<!-- ═══════════ 页脚（每个视图共用，由 JS 渲染） ═══════════ -->
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   真实数据（来自 Bundle contentVersion 2026-07-27.1 · 49 Case）
+   ════════════════════════════════════════════════════════════════════ */
+const DATA = /*__DATA__*/{"dir":[{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":4,"nE":1},{"code":"CASE-02","slug":"test-role-reset","type":"FEATURE","title":"测试角色重置工具","summary":"为重复验证新账号流程提供受控的角色查询与重置入口。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":5,"nE":1},{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","status":"PROTOTYPE","contrib":"PRIMARY","project":null,"nC":6,"nE":1},{"code":"CASE-04","slug":"t-07-task","type":"FEATURE","title":"图片上传审计记录","summary":"实现操作信息和图片清单的独立审计记录，已自测但未确认发布。","status":"IMPLEMENTED_TESTED","contrib":"PRIMARY","project":{"slug":"image-upload-audit","title":"图片上传与审计能力"},"nC":1,"nE":1},{"code":"CASE-05","slug":"t-08-task","type":"FEATURE","title":"流式聊天与历史会话原型","summary":"验证流式输出、会话列表、历史消息和会话记忆。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-06","slug":"t-09-task","type":"FEATURE","title":"模型工具调用原型","summary":"验证时间与天气工具以及两种模型客户端调用方式。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-07","slug":"t-10-task","type":"FEATURE","title":"模型上下文协议双传输原型","summary":"完成标准输入输出与事件流两种本地服务调用闭环。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-08","slug":"t-11-task","type":"FEATURE","title":"个人智能平台关键链路","summary":"检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-09","slug":"t-12-task","type":"FEATURE","title":"本地持续集成验证","summary":"完成工具安装、构建环境配置和示例项目构建成功验证。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-10","slug":"t-13-task","type":"FEATURE","title":"压力模块与运行时追踪","summary":"修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-11","slug":"t-14-task","type":"FEATURE","title":"前端构建产物交付流程","summary":"完成构建、静态资源替换、旧产物清理和版本提交步骤。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-12","slug":"t-15-task","type":"FEATURE","title":"服务包构建与替换流程","summary":"形成构建、打包、上传、备份、替换与重启的完整操作流程。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-13","slug":"t-16-task","type":"FEATURE","title":"活动说明文档","summary":"在缺少既有说明的情况下按规范补齐活动文档。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-14","slug":"t-18-task","type":"FEATURE","title":"智能工程内部分享","summary":"完成正式讲稿、连续演练、现场分享和讲后复盘闭环。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-15","slug":"t-18b-task","type":"FEATURE","title":"本地知识库迁移与增量同步","summary":"完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。","status":"DELIVERED","contrib":"COLLABORATIVE","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-17","slug":"a-02-incident","type":"INCIDENT","title":"折扣配置未生效","summary":"定位活动类型与计价配置差异并给出修正。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-18","slug":"a-03-incident","type":"INCIDENT","title":"账号年龄限制导致内容不展示","summary":"调整年龄限制、刷新版本并确认内容恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-19","slug":"a-04-incident","type":"INCIDENT","title":"活动展示条件异常","summary":"补齐前置数据并调整开放与创建时间后完成展示验证。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-20","slug":"a-05-incident","type":"INCIDENT","title":"结束时间与旧客户端双重过滤","summary":"先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-21","slug":"a-06-incident","type":"INCIDENT","title":"环境结构缺失字段","summary":"对比环境结构、确认影响边界并使用既有备份方案补齐字段。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-22","slug":"a-07-incident","type":"INCIDENT","title":"周期积分异常排查","summary":"补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-23","slug":"a-08-incident","type":"INCIDENT","title":"冲突活动残留状态排查","summary":"按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-24","slug":"a-09-incident","type":"INCIDENT","title":"排位配置加载异常","summary":"定位两份配置中的活动标识不一致，未记录最终修正与验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-25","slug":"a-10-incident","type":"INCIDENT","title":"周末奖励倍率异常","summary":"识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-26","slug":"a-11-incident","type":"INCIDENT","title":"活动初始化异常","summary":"确认配置正常但初始化数据异常并继续追溯，未形成最终结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-27","slug":"a-12-incident","type":"INCIDENT","title":"抽奖兑换标识不一致","summary":"定位全局配置与活动规则标识不一致，未记录最终修改。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-28","slug":"a-13-incident","type":"INCIDENT","title":"定制礼包奖励缺失","summary":"定位规则中缺少一段奖励配置，未记录补齐后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-29","slug":"a-14-incident","type":"INCIDENT","title":"礼包积分被配置覆盖","summary":"定位分支合并时配置被覆盖，未记录修复发布结果。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-30","slug":"a-15-incident","type":"INCIDENT","title":"定制内容展示排查","summary":"确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-31","slug":"a-16-incident","type":"INCIDENT","title":"补发通知模板缺失","summary":"定位通知模板未配置并协助查询模板标识，缺最终补齐记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-32","slug":"a-17-incident","type":"INCIDENT","title":"内容未下发的限制与缓存排查","summary":"根因候选为新手限制和缓存配置未刷新，缺逐项验证。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-33","slug":"a-18-incident","type":"INCIDENT","title":"匹配服务启动参数缺失","summary":"协助定位启动脚本缺少必要参数，缺重启与验收记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-34","slug":"a-19-incident","type":"INCIDENT","title":"弹窗条件链路排查","summary":"确认服务端已经下发并将客户端表现问题交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-35","slug":"a-20-incident","type":"INCIDENT","title":"活动多语言缺失排查","summary":"从缺少数据继续定位到多语言内容缺失，缺导入后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-36","slug":"a-21-incident","type":"INCIDENT","title":"过滤与资源异常排查","summary":"服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-37","slug":"k-02-knowledge","type":"EVALUATION","title":"上下文压缩离线评测","summary":"完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-38","slug":"k-04-knowledge","type":"EVALUATION","title":"Agent 记忆机制对比","summary":"比较记忆写入、整理与适用场景，属于外部方案研究。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-39","slug":"k-05-knowledge","type":"EVALUATION","title":"Agent Harness 学习手册","summary":"形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-40","slug":"k-06-knowledge","type":"EVALUATION","title":"容器化学习手册","summary":"整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-41","slug":"k-09-knowledge","type":"EVALUATION","title":"多数据源路由与缓存研究","summary":"整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-42","slug":"k-10-knowledge","type":"EVALUATION","title":"活动开发流程与红点设计","summary":"整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-43","slug":"k-11-knowledge","type":"EVALUATION","title":"对局与通知机制学习","summary":"形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-44","slug":"k-12-knowledge","type":"EVALUATION","title":"网络与事件驱动机制学习","summary":"整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-45","slug":"k-13-knowledge","type":"EVALUATION","title":"红点架构与复弹机制学习","summary":"整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-46","slug":"k-14-knowledge","type":"EVALUATION","title":"版本冲突处理案例","summary":"记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-47","slug":"k-15-knowledge","type":"EVALUATION","title":"构建与远程操作资料","summary":"整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-48","slug":"k-16-knowledge","type":"EVALUATION","title":"私有技术长文集合","summary":"私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-49","slug":"k-17-knowledge","type":"EVALUATION","title":"历史技术博客主页","summary":"公开主页可作为历史写作证据，动态统计数字必须标注快照日期。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1}],"details":[{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","problem":"分次上传不同语言图片时，后一次结果会替换此前已经可见的语言集合。","actions":["读取已经持久化的语言映射。","只合并本次请求中实际上传且有效的语言。","保留未被本次上传替换的既有语言结果。"],"decisions":["使用既有持久化映射与本次有效上传的并集作为最终结果。","无效或缺少图片的语言不写入新映射。"],"verification":["第一次上传德语图片。","第一次查询确认德语图片可用。","第二次上传法语图片。","第二次查询确认德语与法语图片同时可用。"],"outcome":"按“德语上传、德语查询、法语上传、德语与法语查询”的顺序完成回归，后续上传不再删除此前语言结果。","limitations":["不公开内部模块、数据结构、渠道、区域和存储标识。","公开材料只描述行为与验证，不展示原始代码、截图或内部地址。"],"status":"DELIVERED","contrib":"PRIMARY","project":null,"evidence":[{"code":"E-03","title":"多语言图片保留实现与回归证据集","summary":"由实现记录和顺序上传回归记录脱敏汇总，支持既有语言映射保留与德语、法语分次上传后的共存查询。","period":"2026-04-29 → 2026-06-16","sources":2}],"questions":["多语言图片分次上传为什么会覆盖既有结果，最终如何修复并验证？","多语言图片保留修复采用了什么顺序验证德语和法语结果能够共存？","多语言图片修复会不会为没有上传记录的语言补造历史结果？"]},{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","problem":"大型代码库中的符号定位与关系追踪成本较高，但图谱结果并不总能覆盖动态或间接关系。","actions":["建立精确符号与全文符号检索样本。","执行两组工具任务并记录命中、噪声和遗漏。","对方法引用、匿名函数、依赖注入、事件分发和重名符号进行失效分析。"],"decisions":["使用代码图谱进行范围收窄和批量导航。","关键结论继续用文本搜索与源码阅读做精确复核。","不把局部样本结果推广为通用效率结论。"],"verification":["符号检索在选定样本中能够缩小代码定位范围。","间接关系和重名符号场景存在漏报或噪声。","组合工作流同时保留图谱导航和文本、源码精确复核。"],"outcome":"形成以图谱收窄范围、再用文本搜索和源码阅读复核的组合工作流与保守使用边界。","limitations":["当前状态为原型评测，不公开原始项目名称、仓库规模、内部符号和源码样本。","评测结论只作定性说明，不提供精确效率指标或普遍生产力结论。","工具给出的答案质量仍需人工复核。"],"status":"PROTOTYPE","contrib":"PRIMARY","project":null,"evidence":[{"code":"E-05","title":"代码图谱端到端评测报告集","summary":"由部署与测评攻略、工具提效测试和端到端实战报告脱敏汇总，支持图谱导航收益、失效边界与组合复核决策。","period":"2026-05-25 → 2026-05-26","sources":3}],"questions":["代码图谱评测发现了哪些收益、失效边界和组合使用策略？","代码图谱评测用了哪些样本和任务来判断适用范围？","为什么代码图谱结果仍需要文本搜索和源码阅读进行人工复核？"]},{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","problem":"该条目记录了“重复配置导致唯一性冲突”的公开工作摘要。","actions":["按资产库审核结果提炼公开摘要。","移除内部标识、原始代码、截图、地址和环境路径。"],"decisions":["保持原始成熟度与贡献边界，不把排查、协助或学习记录升级为独立交付。"],"verification":["来源证据状态：VERIFIED。","来源审核状态：PUBLIC_REVIEW_REQUIRED。"],"outcome":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","limitations":["公开内容只包含脱敏摘要，不能替代私有原始证据。","不推断未在资产库中记录的生产效果或量化收益。"],"status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"evidence":[{"code":"E-A-01","title":"重复配置导致唯一性冲突脱敏证据摘要","summary":"原处于待公开审核状态；本条仅公开资产库中的审核摘要、真实状态和贡献边界，原始截图、代码、内部路径与环境信息保持私有。","period":"2026-07-27 → 2026-07-27","sources":1}],"questions":["除了核心项目，你还完成了哪些任务、问题排查、研究与知识资产？"]}],"counts":{"type":{"FEATURE":14,"INCIDENT":21,"EVALUATION":14},"total":49,"status":{"DELIVERED":20,"LEARNING":20,"PROTOTYPE":8,"IMPLEMENTED_TESTED":1}}}/*__DATA__*/;
+
+/* ════════════════════════════════════════════════════════════════════
+   领域文案映射（复刻 projectLabels / StatusMark 映射，不改后端枚举）
+   §5.3：「可以将现有 Case 类型映射成更自然的中文展示文案，但不得改变后端枚举」
+   ════════════════════════════════════════════════════════════════════ */
+const TYPE_LABEL = { FEATURE:'功能任务', INCIDENT:'问题处理', EVALUATION:'工具评测' };
+const STATUS_LABEL = {
+  DELIVERED:'已交付', IMPLEMENTED_TESTED:'已实现并测试', PROTOTYPE:'原型验证',
+  DESIGNED:'已设计', LEARNING:'学习中', PLANNED:'已规划', UNKNOWN:'状态未知'
+};
+const CONTRIB_LABEL = { PRIMARY:'主要负责', COLLABORATIVE:'协作参与', INDEPENDENT:'独立完成', OBSERVED_LEARNING:'观察学习' };
+
+const detailBySlug = Object.fromEntries(DATA.details.map(d=>[d.slug,d]));
+const dirBySlug = Object.fromEntries(DATA.dir.map(d=>[d.slug,d]));
+
+/* ════════════════════════════════════════════════════════════════════
+   路由（hash router：#/cases, #/cases/:slug, #/agent?case=…）
+   §5.1：旧 /projects/{caseSlug} 重定向到 /cases/{caseSlug}
+   ════════════════════════════════════════════════════════════════════ */
+function parseRoute(){
+  let h = location.hash.replace(/^#/,'');
+  // 旧 URL 兼容：/projects/<caseSlug> → /cases/<caseSlug>
+  h = h.replace(/^\/projects\/([a-z0-9-]+)$/i, '/cases/$1');
+  if(h.startsWith('/cases/')){
+    const slug = h.slice('/cases/'.length).split('?')[0];
+    return { name:'case-detail', slug };
+  }
+  if(h.startsWith('/cases')) return { name:'case-list' };
+  if(h.startsWith('/agent')) return { name:'agent', caseSlug: getQueryParam('case') };
+  return { name:'home' };
+}
+function getQueryParam(key){
+  const q = location.hash.split('?')[1] || '';
+  return new URLSearchParams(q).get(key);
+}
+function navigate(hash){
+  location.hash = hash;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   渲染：Case 目录
+   ════════════════════════════════════════════════════════════════════ */
+let activeFilter = 'ALL';
+const FILTERS = [
+  {key:'ALL', label:'全部', type:null},
+  {key:'FEATURE', label:'功能任务', type:'FEATURE'},
+  {key:'INCIDENT', label:'问题处理', type:'INCIDENT'},
+  {key:'EVALUATION', label:'工具评测', type:'EVALUATION'},
+];
+
+function renderCaseList(){
+  const rows = DATA.dir.filter(c => activeFilter==='ALL' ? true : c.type===activeFilter);
+
+  const filterChips = FILTERS.map(f=>{
+    const cnt = f.type ? DATA.dir.filter(c=>c.type===f.type).length : DATA.dir.length;
+    const cls = f.key===activeFilter ? 'is-active' : '';
+    return `<button class="case-filter__chip ${cls}" data-filter="${f.key}">${f.label} · ${String(cnt).padStart(2,'0')}</button>`;
+  }).join('');
+
+  let body;
+  if(rows.length===0){
+    // §5.6 空状态
+    body = `<div class="case-empty reveal">
+      <div class="case-empty__code">EMPTY · 无匹配案卷</div>
+      <h2 class="case-empty__title">该筛选下暂无公开案例</h2>
+      <p class="case-empty__desc">当前公开 Bundle 在此类型下没有已批准的 Case。这不是加载失败——只是该分类的公开内容尚未发布。</p>
+      <button class="case-filter__chip is-active" onclick="setFilter('ALL')">查看全部案例</button>
+    </div>`;
+  } else {
+    body = `<div class="case-list">${rows.map(renderCaseRow).join('')}</div>`;
+  }
+
+  return `
+    <section class="page-lead reveal">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">02 / CASE INDEX</div>
+        <h1 class="page-lead__title">案例目录</h1>
+        <p class="page-lead__desc">49 个具体任务、问题与评测——记录它们如何被识别、判断、处理与验证。与「项目」并列的独立公开入口，强调具体问题而非长期主线。</p>
+      </div>
+    </section>
+    <div class="page-shell">
+      <div class="case-filter reveal">
+        <span class="case-filter__label">类型筛选</span>
+        ${filterChips}
+        <span class="case-filter__count">显示 ${String(rows.length).padStart(2,'0')} / ${DATA.counts.total} 个案例</span>
+      </div>
+      ${body}
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+function renderCaseRow(c){
+  return `<a class="case-row" href="#/cases/${c.slug}" data-slug="${c.slug}">
+    <div class="case-row__code">
+      <span class="case-row__code-text">${c.code}</span>
+      <span class="type-tag" data-t="${c.type}">${TYPE_LABEL[c.type]}</span>
+    </div>
+    <div class="case-row__body">
+      <h3 class="case-row__title">${c.title}</h3>
+      <p class="case-row__summary">${c.summary}</p>
+      <div class="case-row__status">
+        <span class="status-mark">${STATUS_LABEL[c.status]}</span>
+        <span class="status-mark" data-t="contrib">${CONTRIB_LABEL[c.contrib]}</span>
+        ${c.project
+          ? `<span class="case-row__project">关联项目 · <a href="#/projects/${c.project.slug}" onclick="event.stopPropagation()">${c.project.title}</a></span>`
+          : `<span class="case-row__project case-row__project--none">独立案例</span>`}
+      </div>
+    </div>
+    <div class="case-row__tech">
+      <span class="case-row__counts"><b>${c.nC}</b> CLAIM · <b>${c.nE}</b> EVIDENCE</span>
+      <span class="case-row__counts">${c.code}</span>
+    </div>
+  </a>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   渲染：Case 详情（八段结构）
+   ════════════════════════════════════════════════════════════════════ */
+function renderCaseDetail(slug){
+  const c = detailBySlug[slug];
+  // §5.6 404：没有详情数据的 Case（本原型只内联了 3 个详情，其余用目录摘要 + 引导）
+  if(!c){
+    const stub = dirBySlug[slug];
+    if(stub){
+      return renderCaseStub(stub);
+    }
+    return renderNotFound(slug);
+  }
+
+  const sections = [
+    { id:'problem',   code:'01 / 背景',   title:'问题与背景' },
+    { id:'actions',   code:'02 / 动作',   title:'采取的动作' },
+    { id:'decisions', code:'03 / 判断',   title:'关键判断' },
+    { id:'verify',    code:'04 / 验证',   title:'验证过程', dark:true },
+    { id:'outcome',   code:'05 / 结果',   title:'结果' },
+    { id:'limits',    code:'06 / 边界',   title:'限制与边界' },
+    { id:'evidence',  code:'07 / 证据',   title:'公开证据' },
+    { id:'questions', code:'08 / 延伸',   title:'建议问题' },
+  ];
+
+  const tocItems = sections.map(s=>
+    `<li><a href="#sec-${s.id}" data-toc="${s.id}"><span class="case-toc__num">${s.code.split('/')[0]}</span>${s.title}</a></li>`
+  ).join('');
+
+  // 验证段（深色反白）
+  const verifySection = `<section class="case-section case-section--dark" id="sec-verify">
+    <span class="case-section__code">${sections[3].code}</span>
+    <h2 class="case-section__title">${sections[3].title}</h2>
+    <ol class="case-list-numbered">
+      ${c.verification.map(v=>`<li>${v}</li>`).join('')}
+    </ol>
+  </section>`;
+
+  return `
+    <!-- 深色封面 -->
+    <section class="case-cover">
+      <div class="page-shell case-cover__inner">
+        <div class="case-cover__code">
+          <span class="case-cover__code-text">${c.code}</span>
+          <div class="cover-status">
+            <span class="status-mark" style="color:var(--ink-text)">${STATUS_LABEL[c.status]}</span>
+            <span class="status-mark" data-t="contrib" style="color:var(--ink-text)">${CONTRIB_LABEL[c.contrib]}</span>
+          </div>
+        </div>
+        <div class="case-cover__copy">
+          <div class="case-record-type">Engineering Case Record · ${TYPE_LABEL[c.type]}</div>
+          <h1 class="case-cover__title">${c.title}</h1>
+          <p class="case-cover__summary">${c.summary}</p>
+        </div>
+        <div class="case-cover__side">
+          ${c.project
+            ? `<div><div class="case-cover__side-label">关联项目</div><a class="case-cover__project-link" href="#/projects/${c.project.slug}">${c.project.title} ↗</a></div>`
+            : `<div><div class="case-cover__side-label">归属</div><span class="case-cover__project--none">独立案例 · 未关联项目</span></div>`}
+          <div><div class="case-cover__side-label">类型</div><span class="type-tag" data-t="${c.type}" style="border-color:var(--red-on-ink);color:var(--red-on-ink)">${TYPE_LABEL[c.type]}</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 主体 -->
+    <div class="case-body">
+      <div class="page-shell case-body__grid">
+        <!-- 粘性目录 -->
+        <aside class="case-toc">
+          <div class="case-toc__label">Contents</div>
+          <ul class="case-toc__list">${tocItems}</ul>
+          <button class="case-toc__ask" onclick="goAsk('${c.slug}', '')">询问本案例 ↗</button>
+        </aside>
+
+        <!-- 八段正文 -->
+        <article class="case-story">
+          <!-- 01 背景 -->
+          <section class="case-section reveal" id="sec-problem">
+            <span class="case-section__code">${sections[0].code}</span>
+            <h2 class="case-section__title">${sections[0].title}</h2>
+            <p class="case-prose case-prose--lead">${c.problem}</p>
+          </section>
+
+          <!-- 02 动作 -->
+          <section class="case-section reveal" id="sec-actions" style="margin-top:64px">
+            <span class="case-section__code">${sections[1].code}</span>
+            <h2 class="case-section__title">${sections[1].title}</h2>
+            <ol class="case-list-numbered">${c.actions.map(a=>`<li>${a}</li>`).join('')}</ol>
+          </section>
+
+          <!-- 03 判断 -->
+          <section class="case-section reveal" id="sec-decisions" style="margin-top:64px">
+            <span class="case-section__code">${sections[2].code}</span>
+            <h2 class="case-section__title">${sections[2].title}</h2>
+            <ol class="case-list-numbered">${c.decisions.map(d=>`<li>${d}</li>`).join('')}</ol>
+          </section>
+
+          <!-- 04 验证（深色） -->
+          ${verifySection}
+
+          <!-- 05 结果 -->
+          <section class="case-section reveal" id="sec-outcome" style="margin-top:64px">
+            <span class="case-section__code">${sections[4].code}</span>
+            <h2 class="case-section__title">${sections[4].title}</h2>
+            <blockquote class="case-outcome">${c.outcome}</blockquote>
+          </section>
+
+          <!-- 06 限制 -->
+          <section class="case-section reveal" id="sec-limits" style="margin-top:64px">
+            <span class="case-section__code">${sections[5].code}</span>
+            <h2 class="case-section__title">${sections[5].title}</h2>
+            <ul class="case-limits">${c.limitations.map(l=>`<li>${l}</li>`).join('')}</ul>
+          </section>
+
+          <!-- 07 证据 -->
+          <section class="case-section reveal" id="sec-evidence" style="margin-top:64px">
+            <span class="case-section__code">${sections[6].code}</span>
+            <h2 class="case-section__title">${sections[6].title}</h2>
+            ${c.evidence.length
+              ? `<div class="case-evidence">${c.evidence.map(renderEvidence).join('')}</div>`
+              : `<p class="case-prose" style="color:var(--faint);font-style:italic">该案例当前没有已批准的公开证据。</p>`}
+          </section>
+
+          <!-- 08 建议问题 + 询问入口 -->
+          <section class="case-section reveal" id="sec-questions" style="margin-top:64px">
+            <span class="case-section__code">${sections[7].code}</span>
+            <h2 class="case-section__title">${sections[7].title}</h2>
+            ${c.questions.length
+              ? `<div class="case-questions">${c.questions.map((q,i)=>
+                  `<button onclick="goAsk('${c.slug}', ${JSON.stringify(q).replace(/"/g,'&quot;')})">
+                    <span class="case-questions__q">Q${String(i+1).padStart(2,'0')}</span>
+                    <span class="case-questions__text">${q}</span>
+                  </button>`).join('')}</div>`
+              : `<p class="case-prose" style="color:var(--faint);font-style:italic">该案例当前没有预设的建议问题。</p>`}
+            <div class="case-ask-banner">
+              <div>
+                <div class="case-ask-banner__title">就本案例向 Agent 提问</div>
+                <div class="case-ask-banner__sub">context.source = CASE · 仅限本案例公开事实</div>
+              </div>
+              <button class="case-ask-banner__btn" onclick="goAsk('${c.slug}', '')">询问本案例 ↗</button>
+            </div>
+          </section>
+
+          <!-- 下一步 -->
+          <div class="case-next">
+            <div>
+              <div class="case-next__label">返回目录</div>
+              <a href="#/cases">← 全部案例</a>
+              <div class="case-next__title">浏览其余 48 个案例</div>
+            </div>
+            <div>
+              <div class="case-next__label">完整 Agent</div>
+              <a href="#/agent">在公开边界内自由提问 →</a>
+              <div class="case-next__title">不带案例上下文的通用问答</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+function renderEvidence(e){
+  return `<div class="case-evidence__item">
+    <div class="case-evidence__code">${e.code}</div>
+    <div>
+      <h4 class="case-evidence__title">${e.title}</h4>
+      <p class="case-evidence__summary">${e.summary}</p>
+      <div class="case-evidence__meta">${e.period} · ${e.sources} 个脱敏来源 · COLLECTION</div>
+    </div>
+  </div>`;
+}
+
+/* 仅目录摘要、无详情的 Case（引导 + 边界说明，演示 46 个 templated case） */
+function renderCaseStub(stub){
+  return `
+    <section class="case-cover">
+      <div class="page-shell case-cover__inner">
+        <div class="case-cover__code">
+          <span class="case-cover__code-text">${stub.code}</span>
+          <div class="cover-status">
+            <span class="status-mark" style="color:var(--ink-text)">${STATUS_LABEL[stub.status]}</span>
+            <span class="status-mark" data-t="contrib" style="color:var(--ink-text)">${CONTRIB_LABEL[stub.contrib]}</span>
+          </div>
+        </div>
+        <div class="case-cover__copy">
+          <div class="case-record-type">Engineering Case Record · ${TYPE_LABEL[stub.type]}</div>
+          <h1 class="case-cover__title">${stub.title}</h1>
+          <p class="case-cover__summary">${stub.summary}</p>
+        </div>
+        <div class="case-cover__side">
+          ${stub.project
+            ? `<div><div class="case-cover__side-label">关联项目</div><a class="case-cover__project-link" href="#/projects/${stub.project.slug}">${stub.project.title} ↗</a></div>`
+            : `<div><div class="case-cover__side-label">归属</div><span class="case-cover__project--none">独立案例</span></div>`}
+        </div>
+      </div>
+    </section>
+    <div class="case-body">
+      <div class="page-shell">
+        <div class="case-empty" style="padding:80px 0">
+          <div class="case-empty__code">CASE · ${stub.code}</div>
+          <h2 class="case-empty__title">该案例详情正在公开审核中</h2>
+          <p class="case-empty__desc">这是一个真实的已发布案例（类型「${TYPE_LABEL[stub.type]}」，状态「${STATUS_LABEL[stub.status]}」），但其完整八段详情尚未包含在本 HTML 原型的演示数据中。后端 API 已返回全部字段，前端实现时可直接渲染。</p>
+          <p class="case-empty__desc" style="margin-top:20px">本原型仅内联了 3 个代表性案例的完整详情：<code style="font-family:var(--mono);color:var(--red)">multilingual-image-preservation</code>、<code style="font-family:var(--mono);color:var(--red)">codegraph-evaluation</code>、<code style="font-family:var(--mono);color:var(--red)">a-01-incident</code>。</p>
+          <a href="#/cases" class="case-filter__chip is-active" style="display:inline-block;margin-top:10px">← 返回案例目录</a>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+/* §5.6 404 */
+function renderNotFound(slug){
+  return `
+    <section class="case-404 page-shell reveal">
+      <div class="case-404__code">404 · CASE_NOT_FOUND</div>
+      <h1 class="case-404__title">未找到该案例</h1>
+      <p class="case-404__desc">slug <code style="font-family:var(--mono);color:var(--red)">${slug || '(空)'}</code> 在当前公开 Bundle 中不存在，或尚未通过公开审核。Agent 不会针对不存在的案例调用 Provider 猜测答案。</p>
+      <a href="#/cases" class="case-filter__chip is-active">← 返回案例目录</a>
+    </section>
+    ${renderFooter()}
+  `;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   渲染：Agent（Case → Agent 交接演示）
+   §5.5：携带 caseSlug + source=CASE，可清除上下文
+   ════════════════════════════════════════════════════════════════════ */
+let agentState = { caseSlug:null, prefillQuestion:'' };
+
+function renderAgent(){
+  const hasContext = !!agentState.caseSlug;
+  const c = hasContext ? (detailBySlug[agentState.caseSlug] || dirBySlug[agentState.caseSlug]) : null;
+  const contract = hasContext ? {
+    turnId:'turn-2026-07-28-a',
+    question: agentState.prefillQuestion || '(待提问)',
+    messages:[],
+    context:{ projectSlug:null, caseSlug:agentState.caseSlug, audienceRole:'INTERVIEWER', source:'CASE' }
+  } : null;
+
+  return `
+    <section class="page-lead reveal">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">03 / AGENT</div>
+        <h1 class="page-lead__title">公开 Agent</h1>
+        <p class="page-lead__desc">在公开内容边界内回答问题。对话仅存于当前标签页内存，刷新或关闭即消失，不会被服务器记录或持久化。</p>
+      </div>
+    </section>
+    <div class="page-shell">
+      ${hasContext ? `
+        <div class="agent-context-bar" id="ctxBar">
+          <span class="agent-context-bar__label">当前案例上下文</span>
+          <span class="agent-context-bar__slug">${c ? c.title : agentState.caseSlug}</span>
+          <span class="agent-context-bar__label" style="margin-left:4px">source = CASE</span>
+          <button class="agent-context-bar__clear" onclick="clearContext()">清除上下文 ×</button>
+        </div>
+      ` : `
+        <div class="agent-context-bar is-cleared">
+          <span class="agent-context-bar__label">无案例上下文</span>
+          <span class="agent-context-bar__slug" style="color:var(--faint)">通用问答模式</span>
+        </div>
+      `}
+
+      <div class="agent-mock">
+        ${hasContext && agentState.prefillQuestion ? `
+          <div class="agent-bubble agent-bubble--user">
+            <div class="agent-bubble__role">访客提问</div>
+            <div class="agent-bubble__text">${agentState.prefillQuestion}</div>
+          </div>
+          <div class="agent-bubble">
+            <div class="agent-bubble__role">AGENT · 限定于本案例</div>
+            <div class="agent-bubble__text">
+              <p>这是一个确定性降级的示意回答。在真实运行时，Agent 只会使用当前公开 Bundle 中与案例 <code style="font-family:var(--mono);color:var(--red)">${agentState.caseSlug}</code> 直接关联的 Claim、APPROVED 状态的 Evidence 以及显式关联的建议问题，不会扩大到整个项目的全部事实。</p>
+              <p>若 Provider 未批准或缺少密钥，将返回确定性降级，不调用 Provider 猜测答案。</p>
+            </div>
+          </div>
+        ` : hasContext ? `
+          <div class="agent-bubble">
+            <div class="agent-bubble__role">AGENT · 等待提问</div>
+            <div class="agent-bubble__text">已锁定案例上下文（<code style="font-family:var(--mono);color:var(--red)">${agentState.caseSlug}</code>）。在下方输入框提问，或从案例详情页选择一个建议问题带入。</div>
+          </div>
+        ` : `
+          <div class="agent-bubble">
+            <div class="agent-bubble__role">AGENT · 通用模式</div>
+            <div class="agent-bubble__text">上下文已清除。后续请求不会隐式携带旧的 caseSlug。可以围绕项目、案例或通用问题自由提问。</div>
+          </div>
+        `}
+      </div>
+
+      ${contract ? `
+        <div class="contract-note">
+          <span class="contract-note__label">v2 请求契约（演示）</span>
+<pre>${JSON.stringify(contract, null, 2)}</pre>
+        </div>
+      ` : ''}
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   首页（简化占位，仅导航锚点）
+   ════════════════════════════════════════════════════════════════════ */
+function renderHome(){
+  return `
+    <section class="page-lead reveal" style="padding-top:calc(var(--header-height) + 90px)">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">00 / OVERVIEW</div>
+        <h1 class="page-lead__title">工程成长档案</h1>
+        <p class="page-lead__desc">这是 HTML 原型首页占位。原型聚焦「案例」入口——请从顶部导航进入<a href="#/cases" style="color:var(--red);border-bottom:1px solid var(--red)">案例目录</a>查看核心演示。</p>
+      </div>
+    </section>
+    <div class="page-shell" style="padding:60px 0 120px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;max-width:900px">
+        <a href="#/cases" style="padding:32px;border:1px solid var(--rule);background:var(--paper-hi);transition:all .2s var(--ease)" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--rule)'">
+          <div style="font-family:var(--mono);font-size:11px;letter-spacing:0.14em;color:var(--red);text-transform:uppercase;margin-bottom:14px">02 / CASE INDEX</div>
+          <h3 style="font-family:var(--serif);font-size:26px;color:var(--ink);margin-bottom:10px">案例目录 ↗</h3>
+          <p style="font-family:var(--serif);font-size:14px;color:var(--muted);line-height:1.7">49 个具体任务、问题与评测。本原型的核心演示入口。</p>
+        </a>
+        <div style="padding:32px;border:1px dashed var(--rule);opacity:.7">
+          <div style="font-family:var(--mono);font-size:11px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:14px">01 / DOSSIER</div>
+          <h3 style="font-family:var(--serif);font-size:26px;color:var(--muted);margin-bottom:10px">项目主线</h3>
+          <p style="font-family:var(--serif);font-size:14px;color:var(--faint);line-height:1.7">长期工作主线，沿用现有 /projects 页面，不在本原型范围内。</p>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   页脚（复刻 DossierFooter）
+   ════════════════════════════════════════════════════════════════════ */
+function renderFooter(){
+  return `
+    <footer class="dossier-footer">
+      <div class="page-shell">
+        <div class="dossier-footer__grid">
+          <div>
+            <h3>About</h3>
+            <p>这是一份求职作品集 Agent 的公开运行包。所有内容经过脱敏与人工审核，只呈现已批准的公开事实，不暴露内部代码、原始截图或生产数据。</p>
+          </div>
+          <div>
+            <h3>Public Boundary</h3>
+            <p>项目与案例并列。Project 强调长期主线与整体交付；Case 强调具体问题、判断、行动与验证。二者共享同一设计系统。</p>
+          </div>
+          <div>
+            <h3>Privacy</h3>
+            <p>访客对话仅存于浏览器标签页内存，刷新即消失，不被服务器记录或持久化。不记录完整问题、历史对话或 API 密钥。</p>
+          </div>
+        </div>
+        <div class="dossier-footer__base">
+          <span>VOLUME 01 · 2026-07-27.1</span>
+          <span>PUBLIC · DESENSITIZED · HUMAN REVIEWED</span>
+        </div>
+      </div>
+    </footer>
+  `;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   交互动作（暴露到 window 供 inline onclick）
+   ════════════════════════════════════════════════════════════════════ */
+window.setFilter = function(key){
+  activeFilter = key;
+  render();
+};
+window.goAsk = function(caseSlug, question){
+  agentState = { caseSlug, prefillQuestion: question || '' };
+  navigate('/agent?case=' + caseSlug);
+};
+window.clearContext = function(){
+  agentState = { caseSlug:null, prefillQuestion:'' };
+  render();
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   主渲染 + 路由
+   ════════════════════════════════════════════════════════════════════ */
+function render(){
+  const route = parseRoute();
+  const view = document.getElementById('view');
+  let html, navActive;
+
+  switch(route.name){
+    case 'case-list':
+      html = renderCaseList();
+      navActive = 'cases';
+      break;
+    case 'case-detail':
+      html = renderCaseDetail(route.slug);
+      navActive = 'cases';
+      break;
+    case 'agent':
+      if(route.caseSlug) agentState.caseSlug = route.caseSlug;
+      html = renderAgent();
+      navActive = 'agent';
+      break;
+    default:
+      html = renderHome();
+      navActive = '';
+  }
+
+  view.innerHTML = html;
+
+  // 高亮导航
+  document.querySelectorAll('.primary-nav a, .primary-nav button').forEach(el=>{
+    el.classList.toggle('is-active', el.dataset.nav===navActive);
+  });
+
+  // 关闭移动菜单
+  document.getElementById('primaryNav').classList.remove('is-open');
+  document.getElementById('menuTrigger').setAttribute('aria-expanded','false');
+
+  // 回到顶部（详情页 hash 锚点除外）
+  if(!location.hash.includes('#sec-')){
+    window.scrollTo({top:0, behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth'});
+  }
+
+  // TOC 滚动高亮 + 平滑锚点
+  initTocSpy();
+}
+
+/* TOC 滚动监听 */
+function initTocSpy(){
+  const links = document.querySelectorAll('.case-toc__list a');
+  if(!links.length) return;
+  const sections = [...links].map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  if(!sections.length) return;
+
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        const id = e.target.id.replace('sec-','');
+        links.forEach(a=>a.classList.toggle('is-active', a.dataset.toc===id));
+      }
+    });
+  }, { rootMargin:'-30% 0px -60% 0px' });
+  sections.forEach(s=>obs.observe(s));
+}
+
+/* 移动端菜单 */
+document.getElementById('menuTrigger').addEventListener('click', ()=>{
+  const nav = document.getElementById('primaryNav');
+  const btn = document.getElementById('menuTrigger');
+  const open = nav.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded', open);
+  btn.textContent = open ? '关闭' : '目录';
+});
+
+/* 路由监听 */
+window.addEventListener('hashchange', render);
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(!location.hash) location.hash = '#/cases';
+  else render();
+});
+// DOMContentLoaded 已触发时的兜底
+if(document.readyState !== 'loading'){
+  if(!location.hash) location.hash = '#/cases';
+  else render();
+}
+</script>
+</body>
+</html>

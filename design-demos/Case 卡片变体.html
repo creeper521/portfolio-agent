@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="only light">
+<title>案例卡片变体探索 · 工程成长档案</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  Case 列表卡片 · 变体探索（解决"东西胡在一起"）
+
+  诊断：当前行的根因不是丑，是【信息层次塌缩】——
+        标题/摘要/4个状态点/项目/计数全挤一栏、用相近字号颜色平铺，
+        眼睛找不到锚点。变体要解决的是 分层 / 呼吸 / 状态锚点，不是换皮。
+
+  4 个差异化方向（布局逻辑都不同，非微调）：
+    V1 编辑栏   —— 当前基线精修版，保留发丝线列表气质，靠节奏分层
+    V2 档案卡   —— 卡片化，状态色条做左侧锚点，标题大字 serif 主导
+    V3 索引行   —— 去摘要，纯索引气质，hover 才展开，密度最高
+    V4 状态导引 —— 把"已交付/原型/学习"做成视觉主体，类型降级
+
+  全部使用：真实49条数据 + 状态分组（你已确认）+ 现有设计令牌。
+  ════════════════════════════════════════════════════════════════════════
+-->
+<style>
+:root{
+  --paper:#f4eee4; --paper-hi:#fbf7ef; --paper-low:#e9dfd0;
+  --ink:#201c17; --ink-2:#34302a; --ink-line:#4a433b;
+  --ink-text:#a99f91; --ink-text-hi:#e8ddce; --ink-text-faint:#94897c;
+  --muted:#746b5e; --faint:#9c9182; --rule:#cdbfa9;
+  --red:#7a2e2a; --red-hi:#b65d53; --red-on-ink:#d27d74;
+  --header-height:66px; --content-width:1180px;
+  --page-gutter:clamp(22px,4vw,48px);
+  --ease:cubic-bezier(0.22,0.8,0.22,1);
+  --serif:Georgia,'Noto Serif SC','Songti SC',serif;
+  --sans:'Noto Sans SC','Microsoft YaHei',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);color:var(--ink-2);background:var(--paper);line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:4px}
+::selection{color:var(--paper-hi);background:var(--red)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(122,46,42,0.22);border-radius:6px;border:3px solid var(--paper)}
+h1,h2,h3,h4,.serif{font-family:var(--serif)}
+.page-shell{max-width:var(--content-width);margin:0 auto;padding:0 var(--page-gutter)}
+
+/* ═══ 控制台 ═══ */
+.console{position:sticky;top:0;z-index:90;background:var(--ink);color:var(--ink-text-hi);border-bottom:1px solid var(--ink-line);box-shadow:0 10px 30px rgba(32,28,23,0.18)}
+.console__inner{max-width:var(--content-width);margin:0 auto;padding:18px var(--page-gutter);display:flex;gap:36px;flex-wrap:wrap;align-items:flex-end}
+.console__group{display:flex;flex-direction:column;gap:9px}
+.console__label{font-family:var(--mono);font-size:9.5px;letter-spacing:0.18em;color:var(--ink-text);text-transform:uppercase}
+.console__label b{color:var(--red-on-ink);font-weight:400}
+.console__chips{display:flex;gap:6px;flex-wrap:wrap}
+.cchip{font-family:var(--mono);font-size:11px;letter-spacing:0.04em;padding:8px 13px;border:1px solid var(--ink-line);color:var(--ink-text);transition:all .2s var(--ease);position:relative}
+.cchip:hover{border-color:var(--ink-text-hi);color:var(--paper-hi)}
+.cchip.is-active{background:var(--paper-hi);border-color:var(--paper-hi);color:var(--ink)}
+.cchip small{display:block;font-size:9px;color:var(--ink-text);margin-top:2px;letter-spacing:0.06em;font-weight:400}
+.cchip.is-active small{color:var(--muted)}
+.console__note{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--ink-text-faint);margin-left:auto;max-width:38ch;line-height:1.6;align-self:center}
+@media (max-width:760px){.console__inner{flex-direction:column;align-items:stretch;gap:16px}.console__note{margin-left:0;align-self:stretch}}
+
+/* PageLead */
+.page-lead{padding:clamp(54px,6vw,82px) 0 48px;border-bottom:1px solid var(--rule);background:var(--paper-hi)}
+.page-lead__grid{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(24px,4vw,56px);align-items:end}
+.page-lead__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.page-lead__title{font-family:var(--serif);font-weight:400;font-size:clamp(40px,5.5vw,72px);line-height:0.98;letter-spacing:-0.045em;color:var(--ink)}
+.page-lead__desc{font-family:var(--serif);font-size:15.5px;line-height:1.75;color:var(--muted);max-width:42ch}
+@media (max-width:760px){.page-lead__grid{grid-template-columns:1fr;gap:16px;align-items:start}}
+
+/* 状态分组标题 */
+.group-head{display:grid;grid-template-columns:0.34fr 1fr 0.58fr;gap:clamp(24px,4vw,56px);align-items:end;padding:56px 0 24px;border-bottom:1px solid var(--ink);margin-top:16px}
+.group-head__code{font-family:var(--mono);font-size:12px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase}
+.group-head__title{font-family:var(--serif);font-weight:400;font-size:clamp(30px,3.5vw,46px);line-height:1.05;letter-spacing:-0.03em;color:var(--ink)}
+.group-head__note{font-family:var(--serif);font-size:13.5px;line-height:1.7;color:var(--muted);max-width:40ch}
+@media (max-width:760px){.group-head{grid-template-columns:1fr;gap:10px;padding:40px 0 18px}}
+
+/* 共用：枚举文案/标签 */
+.status-mark{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
+.status-mark::before{content:"";width:7px;height:7px;background:var(--red);transform:rotate(45deg);flex-shrink:0}
+.type-tag{display:inline-flex;align-items:center;border:1px solid var(--rule);padding:3px 7px;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-2)}
+.type-tag[data-t="FEATURE"]{border-color:var(--red);color:var(--red)}
+.type-tag[data-t="EVALUATION"]{border-style:dashed;border-color:var(--faint);color:var(--faint)}
+
+/* ════════════════════════════════════════════════════════════════════
+   V1 编辑栏 —— 基线精修：发丝线列表 + 节奏分层（当前方案）
+   修法：code/状态上移到顶行做"标签条"，标题独占大字，摘要下方留
+   更大间距，计数移到独立右侧栏。靠纵向节奏分层，不靠卡片化。
+   ════════════════════════════════════════════════════════════════════ */
+.v1-row{display:grid;grid-template-columns:1fr auto;gap:clamp(20px,4vw,56px);align-items:start;padding:30px 0 32px;border-bottom:1px solid var(--rule);transition:background .2s var(--ease);position:relative;cursor:pointer}
+.v1-row:hover{background:var(--paper-hi)}
+.v1-row:hover .v1-row__title{color:var(--red)}
+.v1-row__top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.v1-row__code{font-family:var(--mono);font-size:12px;letter-spacing:0.1em;color:var(--red)}
+.v1-row__type{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase}
+.v1-row__title{font-family:var(--serif);font-weight:400;font-size:clamp(24px,2.8vw,40px);line-height:1.1;letter-spacing:-0.025em;color:var(--ink);margin-bottom:14px;transition:color .2s var(--ease)}
+.v1-row__summary{font-family:var(--serif);font-size:14.5px;line-height:1.85;color:var(--muted);max-width:54ch;margin-bottom:20px}
+.v1-row__meta{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.v1-row__project{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.02em}
+.v1-row__project--none{color:var(--faint);font-style:italic}
+.v1-row__side{display:flex;flex-direction:column;align-items:flex-end;gap:10px;text-align:right;padding-top:6px}
+.v1-row__counts{font-family:var(--mono);font-size:10.5px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase}
+.v1-row__counts b{color:var(--ink-2);font-weight:400}
+.v1-row__arrow{font-family:var(--mono);font-size:16px;color:var(--red);opacity:0;transform:translateX(-6px);transition:all .25s var(--ease)}
+.v1-row:hover .v1-row__arrow{opacity:1;transform:translateX(0)}
+@media (max-width:760px){.v1-row{grid-template-columns:1fr;gap:16px}.v1-row__side{flex-direction:row;align-items:flex-start;justify-content:space-between;text-align:left}}
+
+/* ════════════════════════════════════════════════════════════════════
+   V2 档案卡 —— 卡片化：状态色条左锚 + serif 大标题主导
+   状态用左色条(交付=实红/原型=虚/学习=点)做强锚点，摘要给框，
+   整体走"档案抽屉"隐喻。信息块明确分三个区。
+   ════════════════════════════════════════════════════════════════════ */
+.v2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0;border-top:1px solid var(--rule);border-left:1px solid var(--rule)}
+.v2-card{display:flex;flex-direction:column;padding:30px 28px 26px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);background:var(--paper);position:relative;cursor:pointer;transition:background .2s var(--ease);overflow:hidden}
+.v2-card:hover{background:var(--paper-hi)}
+.v2-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
+.v2-card[data-sg="prototype"]::before{background:transparent;border-right:2px dashed var(--red-hi);width:0}
+.v2-card[data-sg="learning"]::before{background:var(--red);opacity:0.35;background-image:radial-gradient(circle,var(--red) 2px,transparent 2px);background-size:6px 6px;width:4px}
+.v2-card:hover::before{width:6px}
+.v2-card__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.v2-card__code{font-family:var(--mono);font-size:11.5px;letter-spacing:0.12em;color:var(--red)}
+.v2-card__type{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase}
+.v2-card__title{font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.2vw,30px);line-height:1.16;letter-spacing:-0.02em;color:var(--ink);margin-bottom:14px;transition:color .2s var(--ease)}
+.v2-card:hover .v2-card__title{color:var(--red)}
+.v2-card__summary{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--muted);flex:1;margin-bottom:22px}
+.v2-card__foot{display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:1px solid var(--rule)}
+.v2-card__project{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:0.02em;display:flex;align-items:center;gap:8px}
+.v2-card__project--none{color:var(--faint);font-style:italic}
+.v2-card__counts{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase}
+.v2-card__counts b{color:var(--ink-2);font-weight:400}
+
+/* ════════════════════════════════════════════════════════════════════
+   V3 索引行 —— 去摘要，纯索引气质，hover 展开
+   最低视觉噪音。code+标题+类型一行，状态/项目移到右侧整齐对齐。
+   摘要默认隐藏，hover 渐显。密度最高，适合"扫读找编号"心智。
+   ════════════════════════════════════════════════════════════════════ */
+.v3-row{display:grid;grid-template-columns:64px 1fr 180px 120px;gap:clamp(16px,2vw,28px);align-items:baseline;padding:18px 0;border-bottom:1px solid var(--rule);cursor:pointer;transition:background .2s var(--ease);position:relative}
+.v3-row:hover{background:var(--paper-hi);padding-left:12px;padding-right:12px}
+.v3-row__code{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;color:var(--red);align-self:center}
+.v3-row__main{min-width:0}
+.v3-row__title{font-family:var(--serif);font-weight:400;font-size:clamp(19px,1.8vw,26px);line-height:1.2;letter-spacing:-0.015em;color:var(--ink);transition:color .2s var(--ease)}
+.v3-row:hover .v3-row__title{color:var(--red)}
+.v3-row__summary{font-family:var(--serif);font-size:13px;line-height:1.7;color:var(--muted);max-height:0;overflow:hidden;opacity:0;transition:all .3s var(--ease);margin-top:0}
+.v3-row:hover .v3-row__summary{max-height:80px;opacity:1;margin-top:8px}
+.v3-row__type{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;color:var(--muted);text-transform:uppercase;text-align:right;align-self:center}
+.v3-row__stat{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--faint);text-transform:uppercase;text-align:right;align-self:center;white-space:nowrap}
+@media (max-width:760px){.v3-row{grid-template-columns:auto 1fr;gap:10px}.v3-row__type,.v3-row__stat{display:none}.v3-row__summary{max-height:none;opacity:1;margin-top:6px}}
+
+/* ════════════════════════════════════════════════════════════════════
+   V4 状态导引 —— 状态做视觉主体，类型/项目降级为次要信息
+   左栏大字"已交付/原型/学习"做章节锚(不放 chip 里)，每行用状态
+   的视觉权重区分成熟度。最强调"成熟度光谱"，弱化分类。
+   ════════════════════════════════════════════════════════════════════ */
+.v4-row{display:grid;grid-template-columns:28px 1fr auto;gap:clamp(16px,3vw,32px);align-items:start;padding:24px 0 26px;border-bottom:1px solid var(--rule);cursor:pointer;transition:background .2s var(--ease)}
+.v4-row:hover{background:var(--paper-hi)}
+.v4-row__dot{width:11px;height:11px;margin-top:8px;border:2px solid var(--red);border-radius:50%;background:var(--paper);transition:all .2s var(--ease)}
+.v4-row[data-sg="delivered"] .v4-row__dot{background:var(--red)}
+.v4-row[data-sg="prototype"] .v4-row__dot{border-style:dashed;background:var(--paper)}
+.v4-row[data-sg="learning"] .v4-row__dot{background:var(--paper);border-color:var(--muted)}
+.v4-row:hover .v4-row__dot{transform:scale(1.2)}
+.v4-row__body{min-width:0}
+.v4-row__top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.v4-row__code{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;color:var(--red)}
+.v4-row__type{font-family:var(--mono);font-size:9.5px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase}
+.v4-row__title{font-family:var(--serif);font-weight:400;font-size:clamp(21px,2.4vw,32px);line-height:1.15;letter-spacing:-0.02em;color:var(--ink);margin-bottom:10px;transition:color .2s var(--ease)}
+.v4-row:hover .v4-row__title{color:var(--red)}
+.v4-row__summary{font-family:var(--serif);font-size:14px;line-height:1.8;color:var(--muted);max-width:56ch;margin-bottom:12px}
+.v4-row__bottom{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.v4-row__project{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:0.02em}
+.v4-row__project--none{color:var(--faint);font-style:italic}
+.v4-row__contrib{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:0.08em;text-transform:uppercase}
+.v4-row__side{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase;text-align:right;white-space:nowrap;padding-top:4px}
+.v4-row__side b{color:var(--ink-2);font-weight:400}
+@media (max-width:760px){.v4-row{grid-template-columns:auto 1fr}.v4-row__side{display:none}}
+
+/* 页脚 */
+.dossier-footer{border-top:1px solid var(--rule);margin-top:50px;padding:56px 0 34px;background:var(--paper-hi)}
+.dossier-footer__grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:55px}
+.dossier-footer h3{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;color:var(--red);text-transform:uppercase;margin-bottom:16px}
+.dossier-footer p{font-family:var(--serif);font-size:13.5px;line-height:1.8;color:var(--ink-2);max-width:38ch}
+.dossier-footer__base{margin-top:42px;padding-top:20px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase}
+@media (max-width:760px){.dossier-footer__grid{grid-template-columns:1fr;gap:28px}}
+.reveal{animation:dossier-reveal .5s var(--ease) both}
+@keyframes dossier-reveal{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}.reveal{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- 控制台 -->
+<div class="console">
+  <div class="console__inner">
+    <div class="console__group">
+      <span class="console__label">卡片风格变体</span>
+      <div class="console__chips" id="variantSel">
+        <button class="cchip is-active" data-v="v1">V1 编辑栏<small>基线精修</small></button>
+        <button class="cchip" data-v="v2">V2 档案卡<small>卡片化</small></button>
+        <button class="cchip" data-v="v3">V3 索引行<small>高密度</small></button>
+        <button class="cchip" data-v="v4">V4 状态导引<small>成熟度光谱</small></button>
+      </div>
+    </div>
+    <div class="console__note">四种布局逻辑不同的方向，解决当前"信息胡在一起"。<b style="color:var(--ink-text-hi)">全部沿用已确认的「状态分组」</b>。点开关即时切换。</div>
+  </div>
+</div>
+
+<main id="view"></main>
+
+<script>
+/* ═══ 真实数据 + 文案 ═══ */
+const DATA = {"dir":[{"code":"CASE-01","slug":"multilingual-image-preservation","type":"FEATURE","title":"多语言图片上传结果保留修复","summary":"修复后续语言上传覆盖既有语言映射的问题。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":4,"nE":1},{"code":"CASE-02","slug":"test-role-reset","type":"FEATURE","title":"测试角色重置工具","summary":"为重复验证新账号流程提供受控的角色查询与重置入口。","status":"DELIVERED","contrib":"PRIMARY","project":null,"nC":5,"nE":1},{"code":"CASE-03","slug":"codegraph-evaluation","type":"EVALUATION","title":"代码图谱工具端到端评测","summary":"通过符号检索样本和两组工具任务评估代码图谱的收益与失效边界。","status":"PROTOTYPE","contrib":"PRIMARY","project":null,"nC":6,"nE":1},{"code":"CASE-04","slug":"t-07-task","type":"FEATURE","title":"图片上传审计记录","summary":"实现操作信息和图片清单的独立审计记录，已自测但未确认发布。","status":"IMPLEMENTED_TESTED","contrib":"PRIMARY","project":{"slug":"image-upload-audit","title":"图片上传与审计能力"},"nC":1,"nE":1},{"code":"CASE-05","slug":"t-08-task","type":"FEATURE","title":"流式聊天与历史会话原型","summary":"验证流式输出、会话列表、历史消息和会话记忆。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-06","slug":"t-09-task","type":"FEATURE","title":"模型工具调用原型","summary":"验证时间与天气工具以及两种模型客户端调用方式。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-07","slug":"t-10-task","type":"FEATURE","title":"模型上下文协议双传输原型","summary":"完成标准输入输出与事件流两种本地服务调用闭环。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-08","slug":"t-11-task","type":"FEATURE","title":"个人智能平台关键链路","summary":"检索、工具、记忆和语言偏好已有运行结果，缺完整源码与系统化评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"personal-agent-platform","title":"个人智能平台与 Agent 原型"},"nC":1,"nE":1},{"code":"CASE-09","slug":"t-12-task","type":"FEATURE","title":"本地持续集成验证","summary":"完成工具安装、构建环境配置和示例项目构建成功验证。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-10","slug":"t-13-task","type":"FEATURE","title":"压力模块与运行时追踪","summary":"修复启动方式后完成批量调用，并用运行时追踪定位主要网络耗时。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-11","slug":"t-14-task","type":"FEATURE","title":"前端构建产物交付流程","summary":"完成构建、静态资源替换、旧产物清理和版本提交步骤。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-12","slug":"t-15-task","type":"FEATURE","title":"服务包构建与替换流程","summary":"形成构建、打包、上传、备份、替换与重启的完整操作流程。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-13","slug":"t-16-task","type":"FEATURE","title":"活动说明文档","summary":"在缺少既有说明的情况下按规范补齐活动文档。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-14","slug":"t-18-task","type":"FEATURE","title":"智能工程内部分享","summary":"完成正式讲稿、连续演练、现场分享和讲后复盘闭环。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-15","slug":"t-18b-task","type":"FEATURE","title":"本地知识库迁移与增量同步","summary":"完成受管文档迁移与增量同步验证，未发现断链或远程资源残留。","status":"DELIVERED","contrib":"COLLABORATIVE","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-16","slug":"a-01-incident","type":"INCIDENT","title":"重复配置导致唯一性冲突","summary":"通过错误日志定位重复数据，清理后刷新版本并验证页面恢复。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-17","slug":"a-02-incident","type":"INCIDENT","title":"折扣配置未生效","summary":"定位活动类型与计价配置差异并给出修正。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-18","slug":"a-03-incident","type":"INCIDENT","title":"账号年龄限制导致内容不展示","summary":"调整年龄限制、刷新版本并确认内容恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-19","slug":"a-04-incident","type":"INCIDENT","title":"活动展示条件异常","summary":"补齐前置数据并调整开放与创建时间后完成展示验证。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-20","slug":"a-05-incident","type":"INCIDENT","title":"结束时间与旧客户端双重过滤","summary":"先修正结束时间，再定位旧客户端兼容条件，更换版本后恢复展示。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-21","slug":"a-06-incident","type":"INCIDENT","title":"环境结构缺失字段","summary":"对比环境结构、确认影响边界并使用既有备份方案补齐字段。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-22","slug":"a-07-incident","type":"INCIDENT","title":"周期积分异常排查","summary":"补齐周期并继续排查账号限制、条件和缓存，缺最终复测结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-23","slug":"a-08-incident","type":"INCIDENT","title":"冲突活动残留状态排查","summary":"按团队、活动序列和数据层逐级追踪并清理，缺最终接口验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-24","slug":"a-09-incident","type":"INCIDENT","title":"排位配置加载异常","summary":"定位两份配置中的活动标识不一致，未记录最终修正与验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-25","slug":"a-10-incident","type":"INCIDENT","title":"周末奖励倍率异常","summary":"识别同类活动时间重叠造成倍率叠加的可能根因，未形成最终修复证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-26","slug":"a-11-incident","type":"INCIDENT","title":"活动初始化异常","summary":"确认配置正常但初始化数据异常并继续追溯，未形成最终结论。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-27","slug":"a-12-incident","type":"INCIDENT","title":"抽奖兑换标识不一致","summary":"定位全局配置与活动规则标识不一致，未记录最终修改。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-28","slug":"a-13-incident","type":"INCIDENT","title":"定制礼包奖励缺失","summary":"定位规则中缺少一段奖励配置，未记录补齐后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-29","slug":"a-14-incident","type":"INCIDENT","title":"礼包积分被配置覆盖","summary":"定位分支合并时配置被覆盖，未记录修复发布结果。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-30","slug":"a-15-incident","type":"INCIDENT","title":"定制内容展示排查","summary":"确认服务端配置与下发正常并定位到客户端资源，后续交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-31","slug":"a-16-incident","type":"INCIDENT","title":"补发通知模板缺失","summary":"定位通知模板未配置并协助查询模板标识，缺最终补齐记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-32","slug":"a-17-incident","type":"INCIDENT","title":"内容未下发的限制与缓存排查","summary":"根因候选为新手限制和缓存配置未刷新，缺逐项验证。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-33","slug":"a-18-incident","type":"INCIDENT","title":"匹配服务启动参数缺失","summary":"协助定位启动脚本缺少必要参数，缺重启与验收记录。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-34","slug":"a-19-incident","type":"INCIDENT","title":"弹窗条件链路排查","summary":"确认服务端已经下发并将客户端表现问题交由对应人员处理。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-35","slug":"a-20-incident","type":"INCIDENT","title":"活动多语言缺失排查","summary":"从缺少数据继续定位到多语言内容缺失，缺导入后的验收。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-36","slug":"a-21-incident","type":"INCIDENT","title":"过滤与资源异常排查","summary":"服务端记录显示内容已下发，清缓存与新账号仍异常后转交客户端排查。","status":"LEARNING","contrib":"COLLABORATIVE","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-37","slug":"k-02-knowledge","type":"EVALUATION","title":"上下文压缩离线评测","summary":"完成两组固定输入的离线实验，结果不等同于实际账单或严格质量评测。","status":"PROTOTYPE","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-38","slug":"k-04-knowledge","type":"EVALUATION","title":"Agent 记忆机制对比","summary":"比较记忆写入、整理与适用场景，属于外部方案研究。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-39","slug":"k-05-knowledge","type":"EVALUATION","title":"Agent Harness 学习手册","summary":"形成涵盖 Agent、Skill、Command、Hook、工具协议、安全和实践路线的系统手册。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"context-engineering-evaluation","title":"智能开发工具与上下文工程评测"},"nC":1,"nE":1},{"code":"CASE-40","slug":"k-06-knowledge","type":"EVALUATION","title":"容器化学习手册","summary":"整理容器、编排、网络、存储、运行环境、停机与验收知识，不代表生产迁移完成。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-41","slug":"k-09-knowledge","type":"EVALUATION","title":"多数据源路由与缓存研究","summary":"整理区域路由、请求缓存、分布式缓存、关系存储和配置缓存选择，缺个人实现证据。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-42","slug":"k-10-knowledge","type":"EVALUATION","title":"活动开发流程与红点设计","summary":"整理活动类型、规则、缓存、数据访问、服务、接口、映射、日志和测试清单。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-43","slug":"k-11-knowledge","type":"EVALUATION","title":"对局与通知机制学习","summary":"形成匹配、回档、消极比赛和通知机制的结构化理解，不宣称底层实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-44","slug":"k-12-knowledge","type":"EVALUATION","title":"网络与事件驱动机制学习","summary":"整理可靠传输、线程池、事件驱动和配置热加载，不宣称底层模块由本人实现。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-45","slug":"k-13-knowledge","type":"EVALUATION","title":"红点架构与复弹机制学习","summary":"整理位图、独立表、事件触发和复弹策略，不宣称完成架构重构。","status":"LEARNING","contrib":"PRIMARY","project":{"slug":"activity-engineering","title":"活动系统工程实践"},"nC":1,"nE":1},{"code":"CASE-46","slug":"k-14-knowledge","type":"EVALUATION","title":"版本冲突处理案例","summary":"记录两个配置冲突案例及保留双方修改、逐项合并的处理策略。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-47","slug":"k-15-knowledge","type":"EVALUATION","title":"构建与远程操作资料","summary":"整理日志查询、构建、凭据、打包、上传和重启流程，所有环境信息必须脱敏。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"engineering-delivery-learning","title":"工程操作与交付学习"},"nC":1,"nE":1},{"code":"CASE-48","slug":"k-16-knowledge","type":"EVALUATION","title":"私有技术长文集合","summary":"私有知识库中存在多篇完整长文，需逐篇确认原创、改写和公开资格。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1},{"code":"CASE-49","slug":"k-17-knowledge","type":"EVALUATION","title":"历史技术博客主页","summary":"公开主页可作为历史写作证据，动态统计数字必须标注快照日期。","status":"DELIVERED","contrib":"PRIMARY","project":{"slug":"technical-writing","title":"技术写作与内部分享"},"nC":1,"nE":1}]};
+
+const TYPE_LABEL = { FEATURE:'功能任务', INCIDENT:'问题处理', EVALUATION:'工具评测' };
+const STATUS_LABEL = { DELIVERED:'已交付', IMPLEMENTED_TESTED:'已实现并测试', PROTOTYPE:'原型验证', DESIGNED:'已设计', LEARNING:'学习整理', PLANNED:'已规划', UNKNOWN:'状态未知' };
+const CONTRIB_LABEL = { PRIMARY:'主要负责', COLLABORATIVE:'协作参与', INDEPENDENT:'独立完成', OBSERVED_LEARNING:'观察学习' };
+function statusGroup(s){ return s==='DELIVERED'||s==='IMPLEMENTED_TESTED' ? 'delivered' : (s==='PROTOTYPE' ? 'prototype' : 'learning'); }
+const STATUS_GROUP_INFO = {
+  delivered:{label:'已交付', code:'DELIVERED', note:'已交付并验证的真实产出——这些是"做过且 ship 了"的。'},
+  prototype:{label:'原型验证', code:'PROTOTYPE', note:'可运行的原型探索，未经生产验证——能力已跑通但不等于交付。'},
+  learning:{label:'学习整理', code:'LEARNING', note:'结构化学习与知识整理——不宣称实现，是认知沉淀。'},
+};
+
+const state = { v:'v1' };
+
+/* ═══ 共用：分组标题 ═══ */
+function groupHead(grpKey, count){
+  const g = STATUS_GROUP_INFO[grpKey];
+  const num = ['delivered','prototype','learning'].indexOf(grpKey)+2;
+  return `<div class="group-head">
+    <span class="group-head__code">0${num} / ${g.code} · ${String(count).padStart(2,'0')}</span>
+    <h2 class="group-head__title">${g.label}</h2>
+    <p class="group-head__note">${g.note}</p>
+  </div>`;
+}
+
+/* ═══ V1 编辑栏 ═══ */
+function rowV1(c){
+  return `<a class="v1-row" href="#/cases/${c.slug}">
+    <div>
+      <div class="v1-row__top">
+        <span class="v1-row__code">${c.code}</span>
+        <span class="type-tag" data-t="${c.type}">${TYPE_LABEL[c.type]}</span>
+        <span class="status-mark">${STATUS_LABEL[c.status]}</span>
+      </div>
+      <h3 class="v1-row__title">${c.title}</h3>
+      <p class="v1-row__summary">${c.summary}</p>
+      <div class="v1-row__meta">
+        ${c.project
+          ? `<span class="v1-row__project">关联项目 · ${c.project.title}</span>`
+          : `<span class="v1-row__project v1-row__project--none">独立案例</span>`}
+        <span class="status-mark" data-t="contrib">${CONTRIB_LABEL[c.contrib]}</span>
+      </div>
+    </div>
+    <div class="v1-row__side">
+      <span class="v1-row__counts"><b>${c.nC}</b> CLAIM · <b>${c.nE}</b> EVIDENCE</span>
+      <span class="v1-row__arrow">↗</span>
+    </div>
+  </a>`;
+}
+
+/* ═══ V2 档案卡 ═══ */
+function rowV2(c){
+  return `<a class="v2-card" href="#/cases/${c.slug}" data-sg="${statusGroup(c.status)}">
+    <div class="v2-card__top">
+      <span class="v2-card__code">${c.code}</span>
+      <span class="v2-card__type">${TYPE_LABEL[c.type]}</span>
+    </div>
+    <h3 class="v2-card__title">${c.title}</h3>
+    <p class="v2-card__summary">${c.summary}</p>
+    <div class="v2-card__foot">
+      ${c.project
+        ? `<span class="v2-card__project">关联项目 · ${c.project.title}</span>`
+        : `<span class="v2-card__project v2-card__project--none">独立案例</span>`}
+      <span class="v2-card__counts"><b>${c.nC}</b> CLAIM · <b>${c.nE}</b> EVIDENCE · ${CONTRIB_LABEL[c.contrib]}</span>
+    </div>
+  </a>`;
+}
+
+/* ═══ V3 索引行 ═══ */
+function rowV3(c){
+  return `<a class="v3-row" href="#/cases/${c.slug}">
+    <span class="v3-row__code">${c.code}</span>
+    <div class="v3-row__main">
+      <h3 class="v3-row__title">${c.title}</h3>
+      <p class="v3-row__summary">${c.summary}</p>
+    </div>
+    <span class="v3-row__type">${TYPE_LABEL[c.type]} · ${STATUS_LABEL[c.status]}</span>
+    <span class="v3-row__stat">${c.nC}C/${c.nE}E</span>
+  </a>`;
+}
+
+/* ═══ V4 状态导引 ═══ */
+function rowV4(c){
+  return `<a class="v4-row" href="#/cases/${c.slug}" data-sg="${statusGroup(c.status)}">
+    <span class="v4-row__dot"></span>
+    <div class="v4-row__body">
+      <div class="v4-row__top">
+        <span class="v4-row__code">${c.code}</span>
+        <span class="v4-row__type">${TYPE_LABEL[c.type]}</span>
+      </div>
+      <h3 class="v4-row__title">${c.title}</h3>
+      <p class="v4-row__summary">${c.summary}</p>
+      <div class="v4-row__bottom">
+        ${c.project
+          ? `<span class="v4-row__project">关联项目 · ${c.project.title}</span>`
+          : `<span class="v4-row__project v4-row__project--none">独立案例</span>`}
+        <span class="v4-row__contrib">${CONTRIB_LABEL[c.contrib]}</span>
+      </div>
+    </div>
+    <div class="v4-row__side"><b>${c.nC}</b> CLAIM<br><b>${c.nE}</b> EVIDENCE</div>
+  </a>`;
+}
+
+const rowFn = { v1:rowV1, v2:rowV2, v3:rowV3, v4:rowV4 };
+
+/* ═══ 渲染 ═══ */
+function render(){
+  const view = document.getElementById('view');
+  const groups = ['delivered','prototype','learning'].map(g=>({key:g, rows:DATA.dir.filter(c=>statusGroup(c.status)===g)})).filter(g=>g.rows.length);
+  const isCard = state.v==='v2';
+
+  let body = '';
+  groups.forEach(grp=>{
+    body += groupHead(grp.key, grp.rows.length);
+    if(isCard){
+      body += `<div class="v2-grid">${grp.rows.map(rowV2).join('')}</div>`;
+    } else {
+      body += grp.rows.map(rowFn[state.v]).join('');
+    }
+  });
+
+  view.innerHTML = `
+    <section class="page-lead reveal">
+      <div class="page-shell page-lead__grid">
+        <div class="page-lead__code">02 / CASE INDEX</div>
+        <h1 class="page-lead__title">案例目录</h1>
+        <p class="page-lead__desc">49 个具体任务、问题与评测。当前演示 <b style="color:var(--ink)">${variantName()}</b> 风格 + 状态分组。点顶部控制台切换卡片风格。</p>
+      </div>
+    </section>
+    <div class="page-shell">${body}</div>
+    ${renderFooter()}
+  `;
+  document.querySelector('.page-lead').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'});
+}
+function variantName(){return {v1:'V1 编辑栏',v2:'V2 档案卡',v3:'V3 索引行',v4:'V4 状态导引'}[state.v];}
+
+function renderFooter(){
+  return `<footer class="dossier-footer"><div class="page-shell">
+    <div class="dossier-footer__grid">
+      <div><h3>About</h3><p>这是案例卡片的变体探索页。诊断：原方案"信息层次塌缩"——所有字段挤一栏平铺。四个变体用不同布局逻辑解决分层问题。</p></div>
+      <div><h3>Variants</h3><p>V1 基线精修 · V2 卡片化 · V3 高密度索引 · V4 状态光谱。同一数据、同一设计令牌，仅布局不同，方便横向对比。</p></div>
+      <div><h3>Next</h3><p>选定卡片风格后，进入 Case 详情页设计。详情页会沿用这里定下的节奏与状态语言。</p></div>
+    </div>
+    <div class="dossier-footer__base"><span>CARD VARIANTS · 2026-07-27.1</span><span>4 STYLES · 49 CASES</span></div>
+  </div></footer>`;
+}
+
+/* 控制台 */
+document.getElementById('variantSel').addEventListener('click', e=>{
+  const chip = e.target.closest('[data-v]'); if(!chip) return;
+  state.v = chip.dataset.v;
+  document.querySelectorAll('#variantSel [data-v]').forEach(c=>c.classList.toggle('is-active', c.dataset.v===state.v));
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

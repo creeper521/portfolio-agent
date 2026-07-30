@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资产包组合 · 入口 B Agent 工作台内嵌 · 原型</title>
+<!--
+
+  原型：资产包组合推荐 · 入口方案 B（嵌入 /agent 工作台，模式切换）
+
+  对评审者的说明：
+  - 本方案在现有「完整 Agent」页内加一个模式切换：对话 / 组合推荐。
+    改动面最小（不动导航、不动首页），复用用户对 Agent 页的既有心智。
+  - 左栏是会话区示意（对话模式内容，灰显），切到「组合推荐」时主区换成本工具。
+    切换为纯前端 tab 状态，不写入 URL 与历史。
+  - 与方案 A 的差异仅在「入口与容器」：表单、结果、状态组件与 A 完全一致（共享 _selection-demo-core.*）。
+  - 数据契约对齐 POST /api/portfolio-selections；subjectId / claimId / evidenceId 不渲染；
+    输入仅存内存，刷新即清空。底部 PROTOTYPE 控制条不是产品 UI。
+
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a;
+    --ink-text: #a99f91; --ink-text-hi: #e8ddce;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53; --red-on-ink: #d27d74;
+    --header-height: 66px; --content-width: 1180px;
+    --page-gutter: clamp(22px, 4vw, 48px);
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--red); color: var(--paper-hi); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 4px; border-radius: 2px; }
+  a { color: inherit; }
+  .page-shell { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); }
+
+  .dossier-header { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--header-height); background: rgba(244, 238, 228, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-bottom: 1px solid var(--rule); }
+  .dossier-header__inner { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--page-gutter); height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .dossier-mark { display: flex; align-items: baseline; gap: 14px; text-decoration: none; }
+  .dossier-mark__name { font-family: var(--serif); font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+  .dossier-mark__meta { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--red); }
+  .primary-nav { display: flex; align-items: center; gap: 4px; }
+  .primary-nav a { display: block; padding: 8px 13px; font-size: 12.5px; letter-spacing: 0.1em; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.25s, border-color 0.25s; }
+  .primary-nav a:hover { color: var(--ink); }
+  .primary-nav a.is-active { color: var(--red); border-bottom-color: var(--red); }
+  .primary-nav__agent { margin-left: 10px; padding: 7px 15px !important; border: 1px solid var(--rule) !important; color: var(--ink) !important; font-family: var(--mono); font-size: 10.5px !important; letter-spacing: 0.14em !important; }
+  .primary-nav__agent:hover, .primary-nav__agent.is-active { background: var(--ink); color: var(--paper-hi) !important; border-color: var(--ink) !important; }
+  .menu-trigger { display: none; background: none; border: 1px solid var(--rule); padding: 8px 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink); cursor: pointer; }
+  main { padding-top: var(--header-height); }
+
+  /* —— 工作台壳（示意 /agent 的结构，非逐像素复刻）—— */
+  .bench { display: grid; grid-template-columns: 300px 1fr; gap: clamp(24px, 3vw, 40px); padding: clamp(32px, 5vh, 56px) 0 clamp(48px, 8vh, 96px); align-items: start; }
+  .bench__side { border: 1px solid var(--rule); background: var(--paper-hi); padding: 22px; }
+  .bench__side-heading { font-family: var(--mono); font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
+  .bench__preset { display: block; width: 100%; text-align: left; background: none; border: 1px solid var(--rule); padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px; color: var(--muted); cursor: default; line-height: 1.6; }
+  .bench__side-note { margin-top: 14px; font-size: 11.5px; color: var(--faint); line-height: 1.8; }
+  .bench__main { min-width: 0; }
+  .mode-switch { display: inline-flex; border: 1px solid var(--ink); margin-bottom: 26px; }
+  .mode-switch button { appearance: none; border: 0; background: transparent; padding: 10px 22px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; color: var(--ink); cursor: pointer; transition: background 0.25s, color 0.25s; }
+  .mode-switch button + button { border-left: 1px solid var(--ink); }
+  .mode-switch button[aria-pressed="true"] { background: var(--ink); color: var(--paper-hi); }
+  .bench__dialogue-hint { border: 1px dashed var(--rule); padding: 40px 30px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--faint); line-height: 2; }
+  .result-mount { min-height: 160px; }
+  .result-idle { border: 1px dashed var(--rule); padding: 30px 26px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--faint); line-height: 2; }
+
+  .dossier-footer { background: var(--ink); color: var(--ink-text); }
+  .dossier-footer__inner { max-width: var(--content-width); margin: 0 auto; padding: 40px var(--page-gutter) 0; }
+  .dossier-footer__base { border-top: 1px solid var(--ink-2); padding: 20px 0 26px; display: flex; justify-content: space-between; gap: 16px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint); }
+
+  @media (max-width: 959.98px) {
+    .menu-trigger { display: block; }
+    .primary-nav { position: absolute; top: var(--header-height); left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; background: var(--paper-hi); border-bottom: 1px solid var(--rule); padding: 8px var(--page-gutter) 16px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: opacity 0.3s, transform 0.3s, visibility 0.3s; }
+    .primary-nav.is-open { opacity: 1; visibility: visible; transform: none; }
+    .primary-nav a { padding: 12px 4px; font-size: 13.5px; border-bottom: 1px solid var(--paper-low); }
+    .primary-nav__agent { margin: 10px 0 0; text-align: center; }
+    .bench { grid-template-columns: 1fr; }
+    .bench__side { display: none; } /* 移动端会话栏让位，与现工作台移动策略一致的简化 */
+  }
+</style>
+<link rel="stylesheet" href="_selection-demo-core.css">
+</head>
+<body>
+
+<header class="dossier-header">
+  <div class="dossier-header__inner">
+    <a class="dossier-mark" href="#">
+      <span class="dossier-mark__name">工程成长档案</span>
+      <span class="dossier-mark__meta">Engineering Dossier</span>
+    </a>
+    <button class="menu-trigger" id="menuTrigger" aria-expanded="false" aria-controls="primaryNav">MENU</button>
+    <nav class="primary-nav" id="primaryNav" aria-label="主导航">
+      <a href="#">案例</a>
+      <a href="#">项目</a>
+      <a href="#">时间线</a>
+      <a href="#">证据</a>
+      <a href="#" class="primary-nav__agent is-active" aria-current="page">完整 Agent</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page-shell">
+  <div class="bench">
+    <aside class="bench__side" aria-label="会话与预设（对话模式内容示意）">
+      <h2 class="bench__side-heading">Presets / 预设问题</h2>
+      <button class="bench__preset" type="button">他在 SQL 审计项目里具体做了什么？</button>
+      <button class="bench__preset" type="button">有哪些证据能证明后端工程能力？</button>
+      <button class="bench__preset" type="button">这段实习最大的工程难点是什么？</button>
+      <p class="bench__side-note">以上为「对话」模式内容示意。对话仅存于当前标签页内存，刷新即消失。</p>
+    </aside>
+
+    <section class="bench__main">
+      <div class="mode-switch" role="group" aria-label="Agent 模式">
+        <button type="button" id="modeDialogue" aria-pressed="false">对话</button>
+        <button type="button" id="modeSelection" aria-pressed="true">组合推荐</button>
+      </div>
+
+      <div id="paneSelection">
+        <form class="sel-form" id="selForm" novalidate></form>
+        <div class="result-mount" id="selResult">
+          <div class="result-idle">RESULT AREA — 提交需求后呈现资产组合、覆盖、互补与依据。</div>
+        </div>
+      </div>
+
+      <div id="paneDialogue" hidden>
+        <div class="bench__dialogue-hint">DIALOGUE PANE — 现有问答对话区（本原型不展开，切回「组合推荐」继续评审）。</div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="dossier-footer">
+  <div class="dossier-footer__inner">
+    <div class="dossier-footer__base" style="border-top: 0;">
+      <span>Volume 01 · 2026-07-29.1</span>
+      <span>Public · Desensitized · Human Reviewed</span>
+    </div>
+  </div>
+</footer>
+
+<div class="demo-rail" id="demoRail"></div>
+<div class="demo-rail-spacer"></div>
+
+<script src="_selection-demo-data.js"></script>
+<script src="_selection-demo-core.js"></script>
+<script>
+  var trigger = document.getElementById('menuTrigger');
+  var nav = document.getElementById('primaryNav');
+  trigger.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+  document.querySelectorAll('.dossier-header a').forEach(function (a) {
+    a.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+
+  // 模式切换（纯前端 tab 态，示意 /agent 页新增的 mode 状态）
+  var modeDialogue = document.getElementById('modeDialogue');
+  var modeSelection = document.getElementById('modeSelection');
+  var paneSelection = document.getElementById('paneSelection');
+  var paneDialogue = document.getElementById('paneDialogue');
+  function setMode(selection) {
+    modeSelection.setAttribute('aria-pressed', String(selection));
+    modeDialogue.setAttribute('aria-pressed', String(!selection));
+    paneSelection.hidden = !selection;
+    paneDialogue.hidden = selection;
+  }
+  modeSelection.addEventListener('click', function () { setMode(true); });
+  modeDialogue.addEventListener('click', function () { setMode(false); });
+
+  SelectionDemo.mount({
+    form: document.getElementById('selForm'),
+    result: document.getElementById('selResult'),
+    rail: document.getElementById('demoRail'),
+  });
+</script>
+</body>
+</html>
