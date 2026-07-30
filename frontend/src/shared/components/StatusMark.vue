@@ -14,6 +14,7 @@ const labels: Record<string, string> = {
   // AchievementStatus（case 用）
   IMPLEMENTED_TESTED: '已实现并测试',
   DESIGNED: '已完成设计',
+  INVESTIGATED: '已排查／参与处理',
   LEARNING: '学习记录',
   PLANNED: '已规划',
   UNKNOWN: '状态未定',

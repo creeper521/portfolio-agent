@@ -46,6 +46,17 @@ const linkedProject = computed(() => {
   return data.projects.find((p) => p.slug === slug) ?? null
 })
 
+/** 所属集合：按 collectionSlugs 反查集合标题；查不到的 slug 直接显示 slug。 */
+const linkedCollections = computed(() => {
+  const data = portfolio.value
+  const current = caseStudy.value
+  if (!data || !current) return []
+  return current.collectionSlugs.map((slug) => ({
+    slug,
+    title: data.collections.find((c) => c.slug === slug)?.title ?? slug,
+  }))
+})
+
 const evidenceTarget = computed(() => ({
   path: '/evidence',
   query: { case: props.slug },
@@ -168,6 +179,15 @@ watch(caseStudy, () => {
             <span class="case-cover__meta-val">{{ CASE_TYPE_LABEL[caseStudy.type] }}</span>
           </div>
           <div class="case-cover__meta-item">
+            <span class="case-cover__meta-key">工作状态</span>
+            <span class="case-cover__meta-val">
+              <span class="cover-status" :data-sg="statusGroupKey ?? ''">
+                <i class="cover-status__dot" aria-hidden="true" />
+                {{ ACHIEVEMENT_STATUS_LABEL[caseStudy.achievementStatus] }}
+              </span>
+            </span>
+          </div>
+          <div class="case-cover__meta-item">
             <span class="case-cover__meta-key">关联项目</span>
             <span v-if="caseStudy.projectSlug" class="case-cover__meta-val">
               <RouterLink :to="`/projects/${caseStudy.projectSlug}`">
@@ -175,6 +195,18 @@ watch(caseStudy, () => {
               </RouterLink>
             </span>
             <span v-else class="case-cover__meta-val case-cover__meta-val--muted">独立案例</span>
+          </div>
+          <div v-if="linkedCollections.length" class="case-cover__meta-item">
+            <span class="case-cover__meta-key">所属集合</span>
+            <span class="case-cover__meta-val case-cover__meta-val--collections">
+              <RouterLink
+                v-for="col in linkedCollections"
+                :key="col.slug"
+                :to="{ path: '/cases', query: { collection: col.slug, status: 'all' } }"
+              >
+                {{ col.title }} ↗
+              </RouterLink>
+            </span>
           </div>
           <div class="case-cover__meta-item">
             <span class="case-cover__meta-key">公开证据</span>
@@ -188,6 +220,7 @@ watch(caseStudy, () => {
               {{ claimCount }} CLAIMS
             </span>
           </div>
+          <p class="case-cover__meta-note">工作状态与证据强度是两个独立维度</p>
         </div>
       </div>
     </header>
@@ -426,6 +459,11 @@ watch(caseStudy, () => {
   background: var(--red-on-ink);
 }
 
+/* 半满圆点：已排查／参与处理——有实质进展但非独立交付 */
+.cover-status[data-sg='investigated'] .cover-status__dot {
+  background: linear-gradient(90deg, var(--red-on-ink) 50%, var(--ink) 50%);
+}
+
 .cover-status[data-sg='prototype'] .cover-status__dot {
   background: var(--ink);
   border-style: dashed;
@@ -519,6 +557,22 @@ watch(caseStudy, () => {
 
 .case-cover__meta-val a:hover {
   color: var(--paper);
+}
+
+.case-cover__meta-val--collections {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.case-cover__meta-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--ink-line);
+  color: var(--ink-text-faint);
+  font: 9.5px var(--mono);
+  letter-spacing: 0.08em;
 }
 
 /* ───────── 正文区 ───────── */

@@ -208,4 +208,37 @@ describe('CasePage', () => {
     })
     expect(backLinks.length).toBeGreaterThan(0)
   })
+
+  it('案卷信息区展示工作状态行与维度独立性说明', async () => {
+    const wrapper = mountCasePage('multilingual-image-preservation')
+    await flushPromises()
+
+    const meta = wrapper.find('.case-cover__meta')
+    expect(meta.text()).toContain('工作状态')
+    expect(meta.text()).toContain('已交付')
+    expect(meta.text()).toContain('工作状态与证据强度是两个独立维度')
+  })
+
+  it('有所属集合时渲染集合行，链接到 /cases?collection=<slug>&status=all', async () => {
+    const wrapper = mountCasePage('codegraph-evaluation')
+    await flushPromises()
+
+    const meta = wrapper.find('.case-cover__meta')
+    expect(meta.text()).toContain('所属集合')
+    expect(meta.text()).toContain('开源项目体验与测试')
+
+    const collectionLink = wrapper
+      .findAll('a')
+      .find((a) => (a.attributes('href') ?? '').startsWith('/cases?collection='))
+    expect(collectionLink).toBeDefined()
+    expect(collectionLink!.attributes('href')).toContain('collection=open-source-evaluation')
+    expect(collectionLink!.attributes('href')).toContain('status=all')
+  })
+
+  it('无所属集合时不渲染集合行', async () => {
+    const wrapper = mountCasePage('multilingual-image-preservation')
+    await flushPromises()
+
+    expect(wrapper.find('.case-cover__meta').text()).not.toContain('所属集合')
+  })
 })
