@@ -651,6 +651,450 @@ final class ModelExpressionProperties {
         throw 'Expected ModelExpressionProperties credential holder fixture to remain allowed.'
     }
 
+    $safeArchiveRoot = Join-Path $fixtureRoot 'safe-artifact'
+    New-Item -ItemType Directory -Force -Path `
+        (Join-Path $safeArchiveRoot 'META-INF') | Out-Null
+    New-Item -ItemType Directory -Force -Path `
+        (Join-Path $safeArchiveRoot 'org/apache/tomcat') | Out-Null
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'application.yml') `
+        -Value @'
+portfolio.public-database.enabled: false
+portfolio.database.public.password: ${PORTFOLIO_PUBLIC_DATABASE_PASSWORD:}
+portfolio:
+  database:
+    governance:
+      enabled: ${PORTFOLIO_GOVERNANCE_DATABASE_ENABLED:false}
+      url: ${PORTFOLIO_GOVERNANCE_DATABASE_URL:}
+      username: ${PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:}
+      password: ${PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:}
+'@ -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'META-INF/LICENSE.md') `
+        -Value '# Third-party license' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'META-INF/NOTICE-third-party.md') `
+        -Value '# Third-party notice' -Encoding UTF8
+    Set-Content -LiteralPath `
+        (Join-Path $safeArchiveRoot 'org/apache/tomcat/LocalStrings.properties') `
+        -Value 'pemFile.noPassword=A password is required to decrypt the private key' `
+        -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'public-config.json') `
+        -Value '{"password":"${PORTFOLIO_PUBLIC_DATABASE_PASSWORD:}"}' `
+        -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'token-model.json') `
+        -Value '{"token":{"kind":"model"}}' `
+        -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'portfolio-label.json') `
+        -Value '{"portfolio":"public","database":{"governance":"documentation-only"}}' `
+        -Encoding UTF8
+    $safeZip = Join-Path $fixtureRoot 'safe.zip'
+    $safeArchive = Join-Path $fixtureRoot 'safe.jar'
+    Compress-Archive -Path (Join-Path $safeArchiveRoot '*') -DestinationPath $safeZip
+    Move-Item -LiteralPath $safeZip -Destination $safeArchive
+    $safeArchiveOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $checker -Path $safeArchive 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or $safeArchiveOutput -notmatch '1 archive\(s\)') {
+        throw "Expected public artifact archive to pass privacy check. Output: $safeArchiveOutput"
+    }
+
+    $archiveCases = @(
+        @{ Name = 'knowledge-md'; Entry = 'private/knowledge.md'; Value = '# private'; Rule = 'artifact-private-markdown' },
+        @{ Name = 'absolute-path'; Entry = 'application.yml'; Value = 'source: C:\Users\owner\notes'; Rule = 'artifact-local-absolute-path' },
+        @{ Name = 'governance-secret'; Entry = 'governance.yml'; Value = 'password=real-value'; Rule = 'artifact-governance-config' },
+        @{ Name = 'governance-app-config'; Entry = 'config/application-prod.yml'; Value = 'portfolio.database.governance.enabled: true'; Rule = 'artifact-governance-config' },
+        @{ Name = 'governance-url-default'; Entry = 'config/application.yml'; Value = 'portfolio.database.governance.url: ${PORTFOLIO_GOVERNANCE_DATABASE_URL:jdbc:postgresql://localhost/private}'; Rule = 'artifact-governance-config' },
+        @{ Name = 'governance-username-default'; Entry = 'config/application.yml'; Value = 'portfolio.database.governance.username: ${PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:portfolio}'; Rule = 'artifact-governance-config' },
+        @{ Name = 'private-vector'; Entry = 'private/nested/vector-payload.csv'; Value = '0.1,0.2'; Rule = 'artifact-private-vector' },
+        @{ Name = 'html-path'; Entry = 'static/index.html'; Value = '<meta content="C:\code\private\index">'; Rule = 'artifact-local-absolute-path' },
+        @{ Name = 'sql-secret'; Entry = 'schema/data.sql'; Value = 'password=real-value'; Rule = 'artifact-credential' },
+        @{ Name = 'properties-db-password'; Entry = 'config/runtime.properties'; Value = 'spring.datasource.password=real-value'; Rule = 'artifact-credential' },
+        @{ Name = 'properties-password-default'; Entry = 'config/default.properties'; Value = 'spring.datasource.password=${DATABASE_PASSWORD:real-value}'; Rule = 'artifact-credential' },
+        @{ Name = 'json-password'; Entry = 'config/runtime-password.json'; Value = '{"password":"real-value"}'; Rule = 'artifact-credential' },
+        @{ Name = 'json-api-key'; Entry = 'config/runtime-api.json'; Value = '{"apiKey":"real-value"}'; Rule = 'artifact-credential' },
+        @{ Name = 'json-token'; Entry = 'config/runtime-token.json'; Value = '{"token":"real-value"}'; Rule = 'artifact-credential' },
+        @{ Name = 'json-secret'; Entry = 'config/runtime-secret.json'; Value = '{"secret":"real-value"}'; Rule = 'artifact-credential' },
+        @{ Name = 'json-nested-governance'; Entry = 'config/runtime.json'; Value = '{"portfolio":{"database":{"governance":{"enabled":true}}}}'; Rule = 'artifact-governance-config' },
+        @{ Name = 'json-governance-database'; Entry = 'config/settings.json'; Value = '{"governance":{"database":{"url":"jdbc:postgresql://localhost/private"}}}'; Rule = 'artifact-governance-config' },
+        @{ Name = 'governance-env'; Entry = 'config/runtime.env'; Value = 'PORTFOLIO_GOVERNANCE_DATABASE_URL=jdbc:postgresql://localhost/private'; Rule = 'artifact-governance-config' },
+        @{ Name = 'javascript-api-key'; Entry = 'static/runtime.js'; Value = 'const apiKey = "real-value";'; Rule = 'artifact-credential' },
+        @{ Name = 'html-api-key'; Entry = 'static/runtime.html'; Value = '<meta data-api-key="real-value">'; Rule = 'artifact-credential' },
+        @{ Name = 'application-privacy-md'; Entry = 'Privacy.md'; Value = '# Application privacy notes'; Rule = 'artifact-private-markdown' },
+        @{ Name = 'license-path'; Entry = 'META-INF/LICENSE.md'; Value = 'source: C:\Users\owner\notes'; Rule = 'artifact-local-absolute-path' },
+        @{ Name = 'license-secret'; Entry = 'META-INF/NOTICE.md'; Value = 'api_key=real-value'; Rule = 'artifact-credential' }
+    )
+    foreach ($archiveCase in $archiveCases) {
+        $caseDirectory = Join-Path $fixtureRoot ('archive-' + $archiveCase.Name)
+        $entryPath = Join-Path $caseDirectory $archiveCase.Entry
+        New-Item -ItemType Directory -Force -Path `
+            ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+        Set-Content -LiteralPath $entryPath -Value $archiveCase.Value -Encoding UTF8
+        $archivePath = Join-Path $fixtureRoot ($archiveCase.Name + '.zip')
+        Compress-Archive -Path (Join-Path $caseDirectory '*') -DestinationPath $archivePath
+        $archiveOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $checker -Path $archivePath 2>&1 | Out-String)
+        if ($LASTEXITCODE -eq 0 -or
+                $archiveOutput -notmatch [regex]::Escape($archiveCase.Rule)) {
+            throw "Expected archive fixture $($archiveCase.Name) to report $($archiveCase.Rule)."
+        }
+    }
+
+    $nestedRoot = Join-Path $fixtureRoot 'nested-archive'
+    $nestedPayload = Join-Path $nestedRoot 'payload'
+    New-Item -ItemType Directory -Force -Path $nestedPayload | Out-Null
+    Set-Content -LiteralPath (Join-Path $nestedPayload 'unsafe.js') `
+        -Value 'const source = "C:\workspace\private";' -Encoding UTF8
+    $nestedZip = Join-Path $nestedRoot 'nested.zip'
+    Compress-Archive -Path (Join-Path $nestedPayload '*') -DestinationPath $nestedZip
+    $outerZip = Join-Path $fixtureRoot 'outer.zip'
+    Compress-Archive -Path $nestedZip -DestinationPath $outerZip
+    $nestedOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $checker -Path $outerZip 2>&1 | Out-String)
+    if ($LASTEXITCODE -eq 0 -or $nestedOutput -notmatch 'artifact-local-absolute-path') {
+        throw 'Expected nested archive text content to be scanned recursively.'
+    }
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    function New-EmptyEntryArchive([string]$Path, [int]$EntryCount) {
+        $zip = [System.IO.Compression.ZipFile]::Open(
+            $Path,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            for ($index = 0; $index -lt $EntryCount; $index++) {
+                [void]$zip.CreateEntry(('entry-{0:D5}.bin' -f $index))
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
+
+    function New-UnsafeEntryArchive([string]$Path, [int]$EntryCount) {
+        $zip = [System.IO.Compression.ZipFile]::Open(
+            $Path,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            for ($index = 0; $index -lt $EntryCount; $index++) {
+                [void]$zip.CreateEntry(('../entry-{0:D5}.bin' -f $index))
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
+
+    function Assert-ArchiveRule([string]$Path, [string]$Rule, [string]$Message) {
+        $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $checker -Path $Path 2>&1 | Out-String)
+        if ($LASTEXITCODE -eq 0 -or $output -notmatch [regex]::Escape($Rule)) {
+            throw "$Message Output: $output"
+        }
+    }
+
+    function New-RandomBytes([int]$Length) {
+        $bytes = New-Object byte[] $Length
+        $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try {
+            $generator.GetBytes($bytes)
+        }
+        finally {
+            $generator.Dispose()
+        }
+        return $bytes
+    }
+
+    function New-SingleEntryArchive(
+            [string]$Path,
+            [string]$EntryName,
+            [byte[]]$Content
+    ) {
+        $zip = [System.IO.Compression.ZipFile]::Open(
+            $Path,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            $entry = $zip.CreateEntry(
+                $EntryName,
+                [System.IO.Compression.CompressionLevel]::NoCompression)
+            $stream = $entry.Open()
+            try {
+                $stream.Write($Content, 0, $Content.Length)
+            }
+            finally {
+                $stream.Dispose()
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
+
+    function New-NestedThirdPartyArchive(
+            [string]$OuterPath,
+            [string]$MarkdownContent
+    ) {
+        $innerPath = [System.IO.Path]::ChangeExtension($OuterPath, '.inner.zip')
+        $inner = [System.IO.Compression.ZipFile]::Open(
+            $innerPath,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            $privacyEntry = $inner.CreateEntry('Privacy.md')
+            $writer = New-Object System.IO.StreamWriter($privacyEntry.Open())
+            try {
+                $writer.Write($MarkdownContent)
+            }
+            finally {
+                $writer.Dispose()
+            }
+        }
+        finally {
+            $inner.Dispose()
+        }
+        $outer = [System.IO.Compression.ZipFile]::Open(
+            $OuterPath,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $outer,
+                $innerPath,
+                'BOOT-INF/lib/vendor.jar',
+                [System.IO.Compression.CompressionLevel]::NoCompression) | Out-Null
+        }
+        finally {
+            $outer.Dispose()
+        }
+    }
+
+    $safeThirdPartyPrivacy = Join-Path $fixtureRoot 'safe-third-party-privacy.jar'
+    New-NestedThirdPartyArchive $safeThirdPartyPrivacy '# Vendor privacy statement'
+    $thirdPartyPrivacyOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $checker -Path $safeThirdPartyPrivacy 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        throw "A safe nested third-party root Privacy.md must pass. Output: $thirdPartyPrivacyOutput"
+    }
+
+    $unsafeThirdPartyPrivacy = Join-Path $fixtureRoot 'unsafe-third-party-privacy.jar'
+    New-NestedThirdPartyArchive $unsafeThirdPartyPrivacy 'api_key=real-value'
+    Assert-ArchiveRule $unsafeThirdPartyPrivacy 'artifact-credential' `
+        'Nested third-party Privacy.md content must still be scanned.'
+
+    $unsafeEntryNames = @(
+        '../escape.txt',
+        '/rooted.txt',
+        'C:/drive-qualified.txt',
+        '..\backslash-escape.txt'
+    )
+    foreach ($unsafeEntryName in $unsafeEntryNames) {
+        $unsafePathArchive = Join-Path $fixtureRoot `
+            ('unsafe-entry-' + [guid]::NewGuid() + '.zip')
+        New-SingleEntryArchive $unsafePathArchive $unsafeEntryName ([byte[]]@(65))
+        Assert-ArchiveRule $unsafePathArchive 'artifact-archive-entry-path' `
+            "Unsafe archive entry path $unsafeEntryName must fail closed."
+    }
+
+    $nestedUnsafeInner = Join-Path $fixtureRoot 'nested-unsafe-entry-inner.zip'
+    New-SingleEntryArchive $nestedUnsafeInner '../escape.txt' ([byte[]]@(65))
+    $nestedUnsafeOuter = Join-Path $fixtureRoot 'nested-unsafe-entry-outer.zip'
+    $nestedUnsafeZip = [System.IO.Compression.ZipFile]::Open(
+        $nestedUnsafeOuter,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $nestedUnsafeZip,
+            $nestedUnsafeInner,
+            'BOOT-INF/lib/unsafe.jar',
+            [System.IO.Compression.CompressionLevel]::NoCompression) | Out-Null
+    }
+    finally {
+        $nestedUnsafeZip.Dispose()
+    }
+    Assert-ArchiveRule $nestedUnsafeOuter 'artifact-archive-entry-path' `
+        'Unsafe nested archive entry paths must fail closed.'
+
+    $corruptTopLevel = Join-Path $fixtureRoot 'corrupt-top-level.zip'
+    [System.IO.File]::WriteAllBytes(
+        $corruptTopLevel,
+        [System.Text.Encoding]::UTF8.GetBytes('not a zip archive'))
+    Assert-ArchiveRule $corruptTopLevel 'artifact-archive-unreadable' `
+        'A corrupt top-level archive must become a stable finding.'
+
+    $corruptNested = Join-Path $fixtureRoot 'corrupt-nested.zip'
+    New-SingleEntryArchive $corruptNested 'BOOT-INF/lib/corrupt.jar' `
+        ([System.Text.Encoding]::UTF8.GetBytes('not a nested archive'))
+    Assert-ArchiveRule $corruptNested 'artifact-archive-unreadable' `
+        'A corrupt nested archive must become a stable finding.'
+
+    $perArchiveBudget = Join-Path $fixtureRoot 'per-archive-budget.zip'
+    New-EmptyEntryArchive $perArchiveBudget 4097
+    Assert-ArchiveRule $perArchiveBudget 'artifact-archive-entry-limit' `
+        'An archive above the bounded per-archive entry budget must fail closed.'
+
+    $nestedBudgetPayload = Join-Path $fixtureRoot 'global-budget-payload.zip'
+    New-EmptyEntryArchive $nestedBudgetPayload 4000
+    $globalBudgetArchive = Join-Path $fixtureRoot 'global-entry-budget.zip'
+    $globalZip = [System.IO.Compression.ZipFile]::Open(
+        $globalBudgetArchive,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        for ($index = 0; $index -lt 9; $index++) {
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $globalZip,
+                $nestedBudgetPayload,
+                ('nested-{0:D2}.zip' -f $index),
+                [System.IO.Compression.CompressionLevel]::NoCompression) | Out-Null
+        }
+    }
+    finally {
+        $globalZip.Dispose()
+    }
+    Assert-ArchiveRule $globalBudgetArchive 'artifact-archive-global-entry-limit' `
+        'Nested archives above the bounded global entry budget must fail closed.'
+
+    $multiArchiveBudgetRoot = Join-Path $fixtureRoot 'multi-archive-entry-budget'
+    New-Item -ItemType Directory -Force -Path $multiArchiveBudgetRoot | Out-Null
+    for ($index = 0; $index -lt 9; $index++) {
+        Copy-Item -LiteralPath $nestedBudgetPayload -Destination `
+            (Join-Path $multiArchiveBudgetRoot ('archive-{0:D2}.zip' -f $index))
+    }
+    Assert-ArchiveRule $multiArchiveBudgetRoot 'artifact-archive-global-entry-limit' `
+        'The global entry budget must be shared across top-level archives.'
+
+    $unsafeBudgetPayload = Join-Path $fixtureRoot 'unsafe-global-budget-payload.zip'
+    New-UnsafeEntryArchive $unsafeBudgetPayload 4000
+    $unsafeMultiArchiveBudgetRoot = Join-Path $fixtureRoot 'unsafe-multi-archive-entry-budget'
+    New-Item -ItemType Directory -Force -Path $unsafeMultiArchiveBudgetRoot | Out-Null
+    for ($index = 0; $index -lt 9; $index++) {
+        Copy-Item -LiteralPath $unsafeBudgetPayload -Destination `
+            (Join-Path $unsafeMultiArchiveBudgetRoot ('archive-{0:D2}.zip' -f $index))
+    }
+    Assert-ArchiveRule $unsafeMultiArchiveBudgetRoot 'artifact-archive-global-entry-limit' `
+        'Unsafe archive paths must still count against the invocation-global entry budget.'
+
+    $compressionBomb = Join-Path $fixtureRoot 'compression-bomb.zip'
+    $compressionZip = [System.IO.Compression.ZipFile]::Open(
+        $compressionBomb,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $entry = $compressionZip.CreateEntry(
+            'highly-compressible.txt',
+            [System.IO.Compression.CompressionLevel]::Optimal)
+        $writer = New-Object System.IO.StreamWriter($entry.Open())
+        try {
+            $writer.Write(('A' * (1024 * 1024)))
+        }
+        finally {
+            $writer.Dispose()
+        }
+    }
+    finally {
+        $compressionZip.Dispose()
+    }
+    Assert-ArchiveRule $compressionBomb 'artifact-archive-compression-limit' `
+        'A high-ratio compressed payload must fail closed.'
+
+    $largeEntryArchive = Join-Path $fixtureRoot 'large-entry.zip'
+    $largeEntryZip = [System.IO.Compression.ZipFile]::Open(
+        $largeEntryArchive,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $entry = $largeEntryZip.CreateEntry(
+            'oversized.bin',
+            [System.IO.Compression.CompressionLevel]::NoCompression)
+        $stream = $entry.Open()
+        try {
+            $bytes = New-RandomBytes (1024 * 1024)
+            for ($chunk = 0; $chunk -lt 65; $chunk++) {
+                $stream.Write($bytes, 0, $bytes.Length)
+            }
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $largeEntryZip.Dispose()
+    }
+    Assert-ArchiveRule $largeEntryArchive 'artifact-archive-size-limit' `
+        'An entry above the per-entry byte budget must fail closed.'
+
+    $textBudgetArchive = Join-Path $fixtureRoot 'text-budget.zip'
+    $textBudgetZip = [System.IO.Compression.ZipFile]::Open(
+        $textBudgetArchive,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        for ($index = 0; $index -lt 17; $index++) {
+            $entry = $textBudgetZip.CreateEntry(
+                ('random-{0:D2}.txt' -f $index),
+                [System.IO.Compression.CompressionLevel]::NoCompression)
+            $stream = $entry.Open()
+            try {
+                $bytes = New-RandomBytes (1024 * 1024)
+                $stream.Write($bytes, 0, $bytes.Length)
+            }
+            finally {
+                $stream.Dispose()
+            }
+        }
+    }
+    finally {
+        $textBudgetZip.Dispose()
+    }
+    Assert-ArchiveRule $textBudgetArchive 'artifact-archive-text-size-limit' `
+        'Text expansion above the global text byte budget must fail closed.'
+
+    $multiTextBudgetRoot = Join-Path $fixtureRoot 'multi-archive-text-budget'
+    New-Item -ItemType Directory -Force -Path $multiTextBudgetRoot | Out-Null
+    $nineMegabytes = New-RandomBytes (9 * 1024 * 1024)
+    New-SingleEntryArchive (Join-Path $multiTextBudgetRoot 'first.zip') `
+        'first.txt' $nineMegabytes
+    New-SingleEntryArchive (Join-Path $multiTextBudgetRoot 'second.zip') `
+        'second.txt' $nineMegabytes
+    Assert-ArchiveRule $multiTextBudgetRoot 'artifact-archive-text-size-limit' `
+        'The global text byte budget must be shared across top-level archives.'
+
+    $deepArchive = Join-Path $fixtureRoot 'depth-0.zip'
+    $depthZip = [System.IO.Compression.ZipFile]::Open(
+        $deepArchive,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        [void]$depthZip.CreateEntry('safe.bin')
+    }
+    finally {
+        $depthZip.Dispose()
+    }
+    for ($depth = 1; $depth -le 4; $depth++) {
+        $wrappedArchive = Join-Path $fixtureRoot ('depth-{0}.zip' -f $depth)
+        $wrapper = [System.IO.Compression.ZipFile]::Open(
+            $wrappedArchive,
+            [System.IO.Compression.ZipArchiveMode]::Create)
+        try {
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $wrapper,
+                $deepArchive,
+                ('nested-{0}.zip' -f $depth),
+                [System.IO.Compression.CompressionLevel]::NoCompression) | Out-Null
+        }
+        finally {
+            $wrapper.Dispose()
+        }
+        $deepArchive = $wrappedArchive
+    }
+    Assert-ArchiveRule $deepArchive 'artifact-archive-depth-limit' `
+        'Nested archives above the recursion depth budget must fail closed.'
+
+    $reparseRoot = Join-Path $fixtureRoot 'reparse-root'
+    $reparseTarget = Join-Path $fixtureRoot 'reparse-target'
+    New-Item -ItemType Directory -Force -Path $reparseRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path $reparseTarget | Out-Null
+    Set-Content -LiteralPath (Join-Path $reparseTarget 'private.md') `
+        -Value '# Must not be followed' -Encoding UTF8
+    $junctionPath = Join-Path $reparseRoot 'linked-directory'
+    New-Item -ItemType Junction -Path $junctionPath -Target $reparseTarget | Out-Null
+    $reparseOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $checker -Path $reparseRoot 2>&1 | Out-String)
+    if ($LASTEXITCODE -eq 0 -or
+            $reparseOutput -notmatch 'filesystem-reparse-point') {
+        throw "Directory reparse points must fail closed. Output: $reparseOutput"
+    }
+
     Write-Output 'privacy-check tests passed'
 }
 finally {

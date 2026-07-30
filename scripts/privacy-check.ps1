@@ -402,19 +402,343 @@ function Get-JavaLoggerReceiverNames([string]$LexicalSource) {
     return $receiverNames
 }
 
+$findings = [System.Collections.Generic.List[object]]::new()
+$archivePaths = [System.Collections.Generic.List[string]]::new()
+$archiveInvocationState = @{
+    GlobalEntryCount = 0
+    GlobalExpandedBytes = [long]0
+    GlobalTextBytes = [long]0
+    BudgetExceeded = $false
+    MaximumGlobalEntries = 32768
+    MaximumExpandedBytes = [long](512 * 1024 * 1024)
+    MaximumTextBytes = [long](16 * 1024 * 1024)
+    MaximumEntryBytes = [long](64 * 1024 * 1024)
+    MaximumDepth = 3
+    MaximumCompressionRatio = 200.0
+}
+
+function Add-ArchivePrivacyFindings(
+        [string]$ArchivePath,
+        [System.Collections.Generic.List[object]]$FindingList,
+        [hashtable]$InvocationState
+) {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $textExtensions = @(
+        '.html', '.js', '.map', '.json', '.jsonl', '.yml', '.yaml', '.properties',
+        '.xml', '.txt', '.md', '.java', '.sql', '.csv', '.env', '.conf'
+    )
+    $archiveCredentialAssignmentRegex =
+            '(?im)(?<![A-Z0-9$])' +
+            '(?:password|passwd|secret|api[-_]?key|' +
+            '(?:(?:access|auth|bearer|provider|client|refresh)[-_]?)?token)' +
+            '["'']?\s*[:=]\s*' +
+            '(?!["'']?\$\{)(?!["'']?<)(?!["'']?\{[0-9]+\})' +
+            '(?![\{\[])' +
+            '(?:"[^"\r\n]+"|''[^''\r\n]+''|[^\s,;#<>"'']+)' +
+            '(?=\s*(?:[,;}>]|\r?$))'
+    $maximumEntriesPerArchive = 4096
+
+    function Add-ArchiveFinding(
+            [string]$DisplayPath,
+            [string]$Rule
+    ) {
+        [void]$FindingList.Add([pscustomobject]@{
+            File = $DisplayPath
+            Line = 1
+            Rule = $Rule
+        })
+    }
+
+    function Get-JsonPropertyValue(
+            [object]$Node,
+            [string]$Name
+    ) {
+        if ($null -eq $Node -or
+                $Node -isnot [System.Management.Automation.PSCustomObject]) {
+            return $null
+        }
+        foreach ($property in $Node.PSObject.Properties) {
+            if ($property.Name -ieq $Name) {
+                return $property.Value
+            }
+        }
+        return $null
+    }
+
+    function Test-JsonPropertyExists(
+            [object]$Node,
+            [string]$Name
+    ) {
+        if ($null -eq $Node -or
+                $Node -isnot [System.Management.Automation.PSCustomObject]) {
+            return $false
+        }
+        foreach ($property in $Node.PSObject.Properties) {
+            if ($property.Name -ieq $Name) {
+                return $true
+            }
+        }
+        return $false
+    }
+
+    function Test-GovernanceJsonNode(
+            [object]$Node,
+            [int]$Depth
+    ) {
+        if ($null -eq $Node -or $Depth -gt 32) {
+            return $false
+        }
+        if ($Node -is [System.Array]) {
+            foreach ($item in $Node) {
+                if (Test-GovernanceJsonNode $item ($Depth + 1)) {
+                    return $true
+                }
+            }
+            return $false
+        }
+        if ($Node -isnot [System.Management.Automation.PSCustomObject]) {
+            return $false
+        }
+        if (Test-JsonPropertyExists $Node 'portfolio.database.governance') {
+            return $true
+        }
+        $portfolio = Get-JsonPropertyValue $Node 'portfolio'
+        $database = Get-JsonPropertyValue $portfolio 'database'
+        if (Test-JsonPropertyExists $database 'governance') {
+            return $true
+        }
+        $governance = Get-JsonPropertyValue $Node 'governance'
+        if (Test-JsonPropertyExists $governance 'database') {
+            return $true
+        }
+        foreach ($property in $Node.PSObject.Properties) {
+            if (Test-GovernanceJsonNode $property.Value ($Depth + 1)) {
+                return $true
+            }
+        }
+        return $false
+    }
+
+    function Scan-ZipArchive(
+            [System.IO.Compression.ZipArchive]$Zip,
+            [string]$DisplayRoot,
+            [int]$Depth
+    ) {
+        if ($InvocationState.BudgetExceeded) {
+            return
+        }
+        if ($Depth -gt $InvocationState.MaximumDepth) {
+            Add-ArchiveFinding $DisplayRoot 'artifact-archive-depth-limit'
+            return
+        }
+        if ($Zip.Entries.Count -gt $maximumEntriesPerArchive) {
+            Add-ArchiveFinding $DisplayRoot 'artifact-archive-entry-limit'
+            return
+        }
+        foreach ($entry in $Zip.Entries) {
+            if ($InvocationState.BudgetExceeded) {
+                return
+            }
+            $InvocationState.GlobalEntryCount++
+            if ($InvocationState.GlobalEntryCount -gt
+                    $InvocationState.MaximumGlobalEntries) {
+                Add-ArchiveFinding $DisplayRoot 'artifact-archive-global-entry-limit'
+                $InvocationState.BudgetExceeded = $true
+                return
+            }
+            $rawEntryName = $entry.FullName
+            $entryName = $rawEntryName.Replace('\', '/')
+            $displayPath = $DisplayRoot + '!/' + $entryName
+            $hasUnsafeEntryPath =
+                    $entryName -match '^(?:/|[A-Za-z]:)' -or
+                    @($entryName.Split('/')) -contains '..'
+            if ($hasUnsafeEntryPath) {
+                Add-ArchiveFinding $displayPath 'artifact-archive-entry-path'
+                continue
+            }
+            if ($entry.Length -gt $InvocationState.MaximumEntryBytes) {
+                Add-ArchiveFinding $displayPath 'artifact-archive-size-limit'
+                continue
+            }
+            if ($InvocationState.GlobalExpandedBytes + $entry.Length -gt
+                    $InvocationState.MaximumExpandedBytes) {
+                Add-ArchiveFinding $displayPath 'artifact-archive-size-limit'
+                $InvocationState.BudgetExceeded = $true
+                return
+            }
+            if ($entry.Length -gt 0 -and
+                    $entry.Length / [Math]::Max(1.0, [double]$entry.CompressedLength) -gt
+                    $InvocationState.MaximumCompressionRatio) {
+                Add-ArchiveFinding $displayPath 'artifact-archive-compression-limit'
+                continue
+            }
+            $InvocationState.GlobalExpandedBytes += $entry.Length
+            $extension = [System.IO.Path]::GetExtension($entryName).ToLowerInvariant()
+            $isMetadataLicenseOrNotice =
+                    $entryName -match '(?i)(?:^|/)META-INF/(?:LICENSE|NOTICE)[^/]*\.md$'
+            $isNestedThirdPartyRootPrivacy =
+                    $Depth -eq 1 -and
+                    $DisplayRoot -match '(?i)!/BOOT-INF/lib/[^/]+\.jar$' -and
+                    $entryName -match '(?i)^Privacy\.md$'
+            if ($entryName -match '(?i)\.md$' -and
+                    -not $isMetadataLicenseOrNotice -and
+                    -not $isNestedThirdPartyRootPrivacy) {
+                Add-ArchiveFinding $displayPath 'artifact-private-markdown'
+            }
+            if ($entryName -match '(?i)(?:^|/)private(?:/[^/]+)*/vector[^/]*(?:/|$|\.(?:json|jsonl|bin|dat|npy|csv|txt))' -or
+                    $entryName -match '(?i)(?:^|/)governance(?:/[^/]+)*/(?:vector|embedding)[^/]*') {
+                Add-ArchiveFinding $displayPath 'artifact-private-vector'
+            }
+            if ($extension -in @('.jar', '.zip')) {
+                $memory = New-Object System.IO.MemoryStream
+                $nestedStream = $entry.Open()
+                try {
+                    $nestedStream.CopyTo($memory)
+                    $memory.Position = 0
+                    $nestedArchive = New-Object System.IO.Compression.ZipArchive(
+                        $memory,
+                        [System.IO.Compression.ZipArchiveMode]::Read,
+                        $true)
+                    try {
+                        Scan-ZipArchive $nestedArchive $displayPath ($Depth + 1)
+                    }
+                    finally {
+                        $nestedArchive.Dispose()
+                    }
+                }
+                catch {
+                    Add-ArchiveFinding $displayPath 'artifact-archive-unreadable'
+                }
+                finally {
+                    $nestedStream.Dispose()
+                    $memory.Dispose()
+                }
+                continue
+            }
+            if ($extension -notin $textExtensions) {
+                continue
+            }
+            if ($InvocationState.GlobalTextBytes + $entry.Length -gt
+                    $InvocationState.MaximumTextBytes) {
+                Add-ArchiveFinding $displayPath 'artifact-archive-text-size-limit'
+                $InvocationState.BudgetExceeded = $true
+                return
+            }
+            $InvocationState.GlobalTextBytes += $entry.Length
+            $reader = New-Object System.IO.StreamReader(
+                $entry.Open(), [System.Text.Encoding]::UTF8, $true, 1024, $false)
+            try {
+                $content = $reader.ReadToEnd()
+            }
+            finally {
+                $reader.Dispose()
+            }
+            if ($content -match '(?i)[a-z]:\\(?:users|code|work|workspace)\\' -or
+                    $content -match '(?i)/(?:data|home|opt|srv)/(?:server|internal|company|private|prod)(?:/|\b)') {
+                Add-ArchiveFinding $displayPath 'artifact-local-absolute-path'
+            }
+            $credentialScanContent = [regex]::Replace(
+                $content,
+                '(?i)\$\{[A-Z0-9_]+:?\}',
+                '<ENV>')
+            $hasCredential = $credentialScanContent -match
+                    $archiveCredentialAssignmentRegex
+            if ($hasCredential) {
+                Add-ArchiveFinding $displayPath 'artifact-credential'
+            }
+            $hasGovernanceJson = $false
+            if ($extension -eq '.json') {
+                try {
+                    $jsonValue = ConvertFrom-Json -InputObject $content -ErrorAction Stop
+                    $hasGovernanceJson = Test-GovernanceJsonNode $jsonValue 0
+                }
+                catch {
+                    $hasGovernanceJson =
+                            $content -match '(?i)"portfolio\.database\.governance"\s*:'
+                }
+            }
+            $governanceConfigurationContent = $content
+            if ($entryName -match
+                    '(?i)(?:^|/)application[^/]*\.(?:yml|yaml)$') {
+                $safeGovernanceYamlBlock =
+                        '(?ms)^    governance:\s*\r?\n' +
+                        '      enabled:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_ENABLED:false\}\s*\r?\n' +
+                        '      url:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_URL:\}\s*\r?\n' +
+                        '      username:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:\}\s*\r?\n' +
+                        '      password:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:\}\s*' +
+                        '(?=\r?\n {0,4}\S|\z)'
+                $governanceConfigurationContent = [regex]::Replace(
+                        $governanceConfigurationContent,
+                        $safeGovernanceYamlBlock,
+                        '')
+            }
+            $isGovernanceConfiguration =
+                    $entryName -match '(?i)(?:^|/)[^/]*governance[^/]*\.(?:yml|yaml|properties|json|env|conf)$' -or
+                    $governanceConfigurationContent -match '(?i)\bPORTFOLIO_GOVERNANCE_DATABASE_(?:URL|USERNAME|PASSWORD|ENABLED)\b' -or
+                    $hasGovernanceJson -or
+                    (
+                        $entryName -match '(?i)(?:^|/)application[^/]*\.(?:yml|yaml|properties)$' -and
+                        $governanceConfigurationContent -match '(?is)portfolio(?:\.|:|\s){1,16}database(?:\.|:|\s){1,16}governance'
+                    )
+            if ($isGovernanceConfiguration) {
+                Add-ArchiveFinding $displayPath 'artifact-governance-config'
+            }
+            if ($hasCredential -and $entryName -match '(?i)governance') {
+                Add-ArchiveFinding $displayPath 'artifact-governance-config'
+            }
+        }
+    }
+
+    $archive = $null
+    try {
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($ArchivePath)
+        Scan-ZipArchive $archive $ArchivePath 0
+    }
+    catch {
+        [void]$FindingList.Add([pscustomobject]@{
+            File = $ArchivePath
+            Line = 1
+            Rule = 'artifact-archive-unreadable'
+        })
+    }
+    finally {
+        if ($null -ne $archive) {
+            $archive.Dispose()
+        }
+    }
+}
+
 $item = Get-Item -LiteralPath $resolvedPath
-if ($item.PSIsContainer) {
+if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    [void]$findings.Add([pscustomobject]@{
+        File = $item.FullName
+        Line = 1
+        Rule = 'filesystem-reparse-point'
+    })
+    $files = @()
+}
+elseif ($item.PSIsContainer) {
     $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
     $pending = [System.Collections.Generic.Stack[System.IO.DirectoryInfo]]::new()
     $pending.Push([System.IO.DirectoryInfo]$item)
     while ($pending.Count -gt 0) {
         $directory = $pending.Pop()
         foreach ($child in Get-ChildItem -LiteralPath $directory.FullName -Force) {
-            if ($child.PSIsContainer) {
-                if ($excludedDirectoryNames -notcontains $child.Name -and
-                        -not ($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            if ($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                [void]$findings.Add([pscustomobject]@{
+                    File = $child.FullName
+                    Line = 1
+                    Rule = 'filesystem-reparse-point'
+                })
+            }
+            elseif ($child.PSIsContainer) {
+                if ($excludedDirectoryNames -notcontains $child.Name) {
                     $pending.Push([System.IO.DirectoryInfo]$child)
                 }
+            }
+            elseif (([string]$child.Extension).ToLowerInvariant() -in @('.jar', '.zip')) {
+                $archivePaths.Add($child.FullName)
             }
             elseif ($allowedExtensions -contains
                     ([string]$child.Extension).ToLowerInvariant() -and
@@ -425,10 +749,18 @@ if ($item.PSIsContainer) {
     }
 }
 else {
-    $files = @($item)
+    if (([string]$item.Extension).ToLowerInvariant() -in @('.jar', '.zip')) {
+        $files = @()
+        $archivePaths.Add($item.FullName)
+    }
+    else {
+        $files = @($item)
+    }
 }
 
-$findings = [System.Collections.Generic.List[object]]::new()
+foreach ($archivePath in $archivePaths) {
+    Add-ArchivePrivacyFindings $archivePath $findings $archiveInvocationState
+}
 foreach ($file in $files) {
     $extension = ([string]$file.Extension).ToLowerInvariant()
     $isSourceFile = $extension -in @('.java', '.js', '.ts', '.tsx', '.vue')
@@ -698,5 +1030,5 @@ if ($findings.Count -gt 0) {
     exit 1
 }
 
-Write-Output "Privacy check passed for $($files.Count) file(s)."
+Write-Output "Privacy check passed for $($files.Count) file(s), $($archivePaths.Count) archive(s)."
 exit 0
