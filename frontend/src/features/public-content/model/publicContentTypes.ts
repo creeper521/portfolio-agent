@@ -6,9 +6,14 @@ export type AchievementStatus =
   | 'IMPLEMENTED_TESTED'
   | 'PROTOTYPE'
   | 'DESIGNED'
+  | 'INVESTIGATED'
   | 'LEARNING'
   | 'PLANNED'
   | 'UNKNOWN'
+
+export type CareerTrack = 'JAVA_BACKEND' | 'AGENT' | 'UNCLASSIFIED'
+export type ProjectNature = 'TOOL' | 'WORKSTREAM' | 'INTEGRATION_PROTOTYPE' | 'UNCLASSIFIED'
+export type ProjectDisplayTier = 'PRIMARY' | 'SECONDARY'
 
 export interface PublicOwner {
   name: string
@@ -56,6 +61,25 @@ export interface PublicClaimEvidenceLink {
 
 export type CaseType = 'FEATURE' | 'EVALUATION' | 'INCIDENT'
 
+export interface PublicCaseCollection {
+  slug: string
+  title: string
+  summary: string
+  displayOrder: number
+}
+
+export interface PublicCaseSummary {
+  slug: string
+  code: string
+  type: CaseType
+  title: string
+  summary: string
+  achievementStatus: AchievementStatus
+  contributionType: ContributionType
+  projectSlug: string | null
+  collectionSlugs: string[]
+}
+
 export interface PublicCase {
   id: string
   slug: string
@@ -72,6 +96,7 @@ export interface PublicCase {
   achievementStatus: AchievementStatus
   contributionType: ContributionType
   projectSlug: string | null
+  collectionSlugs: string[]
   evidence: PublicEvidence[]
   suggestedQuestions: string[]
 }
@@ -92,7 +117,13 @@ export interface PublicProject {
   handoff: string
   status: ProjectStatus
   contributionType: ContributionType
+  careerTrack: CareerTrack
+  projectNature: ProjectNature
+  displayTier: ProjectDisplayTier
+  caseCount: number
+  featuredCases: PublicCaseSummary[]
   evidenceIds: string[]
+  evidence: PublicEvidence[]
   suggestedQuestions: string[]
 }
 
@@ -120,6 +151,7 @@ export interface PublicPortfolio {
   runtimeBundleHash: string
   publishedAt: string
   owner: PublicOwner
+  collections: PublicCaseCollection[]
   projects: PublicProject[]
   cases: PublicCase[]
   claims: PublicClaim[]

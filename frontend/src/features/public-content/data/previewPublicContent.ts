@@ -1,5 +1,19 @@
 import type { PublicPortfolio } from '../model/publicContentTypes'
 
+const deliveryEvidence = {
+  id: 'sql-audit-delivery-set',
+  code: 'E-01',
+  title: 'SQL 审计工具交付证据集',
+  type: 'COLLECTION' as const,
+  periodStart: '2026-06-02',
+  periodEnd: '2026-07-10',
+  sourceCount: 7,
+  summary: '由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。',
+  claimIds: ['claim-sql-audit-delivered'],
+  publicStatus: 'APPROVED' as const,
+  projectSlugs: ['sql-audit'],
+}
+
 const sqlAuditProject = {
   id: 'sql-audit-project',
   slug: 'sql-audit',
@@ -33,26 +47,41 @@ const sqlAuditProject = {
   handoff: '本人主导核心功能及多轮迭代，后续部分环境适配和优化由同事继续接手。',
   status: 'DELIVERED' as const,
   contributionType: 'PRIMARY' as const,
+  careerTrack: 'JAVA_BACKEND' as const,
+  projectNature: 'TOOL' as const,
+  displayTier: 'PRIMARY' as const,
+  caseCount: 2,
+  featuredCases: [
+    {
+      slug: 'query-archive-reuse',
+      code: 'CASE-02',
+      type: 'FEATURE' as const,
+      title: '审计查询归档策略复用',
+      summary: '复用既有查询归档能力承载审计结果，避免新增存储链路。',
+      achievementStatus: 'DELIVERED' as const,
+      contributionType: 'PRIMARY' as const,
+      projectSlug: 'sql-audit',
+      collectionSlugs: [],
+    },
+    {
+      slug: 'websocket-progress-degrade',
+      code: 'CASE-04',
+      type: 'INCIDENT' as const,
+      title: 'WebSocket 进度推送降级排查',
+      summary: '定位进度推送中断的代理层原因，改为轮询降级并完成复验。',
+      achievementStatus: 'INVESTIGATED' as const,
+      contributionType: 'COLLABORATIVE' as const,
+      projectSlug: 'sql-audit',
+      collectionSlugs: [],
+    },
+  ],
   evidenceIds: ['sql-audit-delivery-set'],
+  evidence: [deliveryEvidence],
   suggestedQuestions: [
     '请介绍 SQL 审计工具的完整迭代过程。',
     '这个项目中最关键的技术决策是什么？',
     '你如何验证查询、进度和归档链路？',
   ],
-}
-
-const deliveryEvidence = {
-  id: 'sql-audit-delivery-set',
-  code: 'E-01',
-  title: 'SQL 审计工具交付证据集',
-  type: 'COLLECTION' as const,
-  periodStart: '2026-06-02',
-  periodEnd: '2026-07-10',
-  sourceCount: 7,
-  summary: '由连续开发记录、需求设计、功能验证和最终使用攻略脱敏汇总，覆盖从固定路径工具到多目标、异步查询、导出与归档闭环的演进。',
-  claimIds: ['claim-sql-audit-delivered'],
-  publicStatus: 'APPROVED' as const,
-  projectSlugs: ['sql-audit'],
 }
 
 // —— 两个代表性 Case：一个功能修复（已交付），一个工具评测（原型） ——
@@ -103,6 +132,7 @@ const multilingualCase = {
   achievementStatus: 'DELIVERED' as const,
   contributionType: 'PRIMARY' as const,
   projectSlug: null,
+  collectionSlugs: [],
   evidence: [multilingualEvidence],
   suggestedQuestions: [
     '多语言图片分次上传为什么会覆盖既有结果，最终如何修复并验证？',
@@ -154,6 +184,7 @@ const codegraphCase = {
   achievementStatus: 'PROTOTYPE' as const,
   contributionType: 'PRIMARY' as const,
   projectSlug: null,
+  collectionSlugs: ['open-source-evaluation'],
   evidence: [codegraphEvidence],
   suggestedQuestions: [
     '代码图谱评测发现了哪些收益、失效边界和组合使用策略？',
@@ -169,6 +200,26 @@ export const previewPublicContent: PublicPortfolio = {
     role: 'Java 后端开发实习生',
     summary: '我关注真实工程问题的拆解、实现与验证，并用可追溯证据说明自己的贡献。',
   },
+  collections: [
+    {
+      slug: 'open-source-evaluation',
+      title: '开源项目体验与测试',
+      summary: '以真实使用者身份体验并评测开源工具，公开评测过程与结论边界。',
+      displayOrder: 1,
+    },
+    {
+      slug: 'engineering-operations',
+      title: '工程操作与实践',
+      summary: '环境、部署、压测与仓库操作等工程实践的记录与复盘。',
+      displayOrder: 2,
+    },
+    {
+      slug: 'technical-writing',
+      title: '技术写作与分享',
+      summary: '把排查与实践经验整理成可复用的技术文章。',
+      displayOrder: 3,
+    },
+  ],
   projects: [sqlAuditProject],
   cases: [multilingualCase, codegraphCase],
   claims: [
