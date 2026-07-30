@@ -1,0 +1,50 @@
+{
+  "releaseVersion": "2026-07-29.1",
+  "cases": [
+    {
+      "id": "PORTFOLIO-CAL-001",
+      "split": "CALIBRATION",
+      "target": {
+        "careerTrack": "JAVA_BACKEND",
+        "audienceRole": "HR",
+        "capabilityCodes": ["DELIVERY", "VERIFICATION"],
+        "goal": "backend delivery evidence",
+        "requestedSize": 2
+      },
+      "acceptableSubjectSets": [
+        ["sql-audit-project", "case-role-reset"],
+        ["sql-audit-project", "role-reset-tool-project"]
+      ],
+      "requiredCapabilities": ["DELIVERY", "VERIFICATION"]
+    },
+    {
+      "id": "PORTFOLIO-HOLD-001",
+      "split": "HOLDOUT",
+      "target": {
+        "careerTrack": "JAVA_BACKEND",
+        "audienceRole": "INTERVIEWER",
+        "capabilityCodes": ["ASYNC_TASK", "FAILURE_ISOLATION"],
+        "goal": "reliable asynchronous backend",
+        "requestedSize": 2
+      },
+      "acceptableSubjectSets": [["sql-audit-project", "case-public-a-01"]],
+      "requiredCapabilities": ["ASYNC_TASK", "FAILURE_ISOLATION"]
+    },
+    {
+      "id": "PORTFOLIO-REG-001",
+      "split": "REGRESSION",
+      "target": {
+        "careerTrack": null,
+        "audienceRole": "TECH_INTERVIEWER",
+        "capabilityCodes": ["EVALUATION", "CODE_NAVIGATION"],
+        "goal": "engineering evaluation",
+        "requestedSize": 2
+      },
+      "acceptableSubjectSets": [
+        ["case-codegraph-evaluation", "personal-agent-platform-project"],
+        ["case-codegraph-evaluation", "case-public-k-02"]
+      ],
+      "requiredCapabilities": ["EVALUATION", "CODE_NAVIGATION"]
+    }
+  ]
+}
