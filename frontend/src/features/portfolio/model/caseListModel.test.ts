@@ -31,6 +31,7 @@ function makeCase(overrides: Partial<PublicCase> = {}): PublicCase {
     achievementStatus: 'DELIVERED',
     contributionType: 'PRIMARY',
     projectSlug: null,
+    collectionSlugs: [],
     evidence: [],
     suggestedQuestions: [],
     ...overrides,
@@ -50,6 +51,10 @@ describe('caseListModel · caseStatusGroup', () => {
     expect(caseStatusGroup('PROTOTYPE')).toBe('prototype')
   })
 
+  it('把 INVESTIGATED 归入 investigated 组', () => {
+    expect(caseStatusGroup('INVESTIGATED')).toBe('investigated')
+  })
+
   it('把 LEARNING 归入 learning 组', () => {
     expect(caseStatusGroup('LEARNING')).toBe('learning')
   })
@@ -62,14 +67,15 @@ describe('caseListModel · caseStatusGroup', () => {
 })
 
 describe('caseListModel · buildCaseStatusGroups', () => {
-  it('按 delivered → prototype → learning 固定顺序返回非空组', () => {
+  it('按 delivered → investigated → prototype → learning 固定顺序返回非空组', () => {
     const cases = [
       makeCase({ slug: 'c-learning', achievementStatus: 'LEARNING' }),
       makeCase({ slug: 'c-proto', achievementStatus: 'PROTOTYPE' }),
+      makeCase({ slug: 'c-investigated', achievementStatus: 'INVESTIGATED' }),
       makeCase({ slug: 'c-delivered', achievementStatus: 'DELIVERED' }),
     ]
     const groups = buildCaseStatusGroups(cases)
-    expect(groups.map((g) => g.key)).toEqual(['delivered', 'prototype', 'learning'])
+    expect(groups.map((g) => g.key)).toEqual(['delivered', 'investigated', 'prototype', 'learning'])
   })
 
   it('把 DELIVERED 与 IMPLEMENTED_TESTED 都收进 delivered 组', () => {
@@ -118,7 +124,7 @@ describe('caseListModel · buildCaseStatusGroups', () => {
 })
 
 describe('caseListModel · 文案映射', () => {
-  it('CASE_STATUS_GROUP_INFO 覆盖三个状态组且带 code/label/note', () => {
+  it('CASE_STATUS_GROUP_INFO 覆盖全部状态组且带 code/label/note', () => {
     for (const key of CASE_STATUS_GROUP_ORDER) {
       const info = CASE_STATUS_GROUP_INFO[key]
       expect(typeof info.code).toBe('string')
@@ -128,6 +134,12 @@ describe('caseListModel · 文案映射', () => {
       expect(typeof info.note).toBe('string')
       expect(info.note.length).toBeGreaterThan(0)
     }
+  })
+
+  it('investigated 组标注「已排查／参与处理」，并说明不宣称最终修复', () => {
+    const info = CASE_STATUS_GROUP_INFO.investigated
+    expect(info.label).toBe('已排查／参与处理')
+    expect(info.note).toContain('排查')
   })
 
   it('CASE_TYPE_LABEL 覆盖三种 CaseType', () => {
@@ -142,6 +154,7 @@ describe('caseListModel · 文案映射', () => {
       'IMPLEMENTED_TESTED',
       'PROTOTYPE',
       'DESIGNED',
+      'INVESTIGATED',
       'LEARNING',
       'PLANNED',
       'UNKNOWN',

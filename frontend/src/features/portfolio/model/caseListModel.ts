@@ -8,15 +8,17 @@ import type {
 /**
  * Case 列表页的状态分组模型。
  *
- * 列表页用「交付状态」做 tab（已确认决策），而非现有 buildDossierIndex 的「按 CaseType 分组」。
- * 7 个 AchievementStatus 合并成 3 个展示组，避免零散状态把 tab 撕碎：
- *   - delivered  : DELIVERED + IMPLEMENTED_TESTED（真正交付并验证的）
- *   - prototype  : PROTOTYPE（可运行原型，未生产验证）
- *   - learning   : 其余（DESIGNED / LEARNING / PLANNED / UNKNOWN）
+ * 列表页用「交付状态」做筛选维度（已确认决策），而非现有 buildDossierIndex 的「按 CaseType 分组」。
+ * 8 个 AchievementStatus 合并成 4 个展示组，避免零散状态把筛选撕碎：
+ *   - delivered    : DELIVERED + IMPLEMENTED_TESTED（真正交付并验证的）
+ *   - investigated : INVESTIGATED（定位与排查过程公开，不宣称最终修复）
+ *   - prototype    : PROTOTYPE（可运行原型，未生产验证）
+ *   - learning     : 其余（DESIGNED / LEARNING / PLANNED / UNKNOWN）
  *
  * learning 是保守降级：不夸大成熟度，未明确交付的统一归入「学习整理」。
+ * 「已排查」与「已修复」是两个概念，investigated 组独立成组正是为了这条诚实红线。
  */
-export type CaseStatusGroupKey = 'delivered' | 'prototype' | 'learning'
+export type CaseStatusGroupKey = 'delivered' | 'investigated' | 'prototype' | 'learning'
 
 export interface CaseStatusGroup {
   key: CaseStatusGroupKey
@@ -26,9 +28,10 @@ export interface CaseStatusGroup {
   cases: PublicCase[]
 }
 
-/** 固定展示顺序：先亮交付实力，再原型，最后学习沉淀。 */
+/** 固定展示顺序：先亮交付实力，再排查经历，再原型，最后学习沉淀。 */
 export const CASE_STATUS_GROUP_ORDER: readonly CaseStatusGroupKey[] = [
   'delivered',
+  'investigated',
   'prototype',
   'learning',
 ] as const
@@ -41,6 +44,11 @@ export const CASE_STATUS_GROUP_INFO: Record<
     code: 'DELIVERED',
     label: '已交付',
     note: '已交付并验证的真实产出——这些是「做过且 ship 了」的。',
+  },
+  investigated: {
+    code: 'INVESTIGATED',
+    label: '已排查／参与处理',
+    note: '定位与排查过程公开，不宣称最终修复。',
   },
   prototype: {
     code: 'PROTOTYPE',
@@ -67,6 +75,7 @@ export const ACHIEVEMENT_STATUS_LABEL: Record<AchievementStatus, string> = {
   IMPLEMENTED_TESTED: '已实现并测试',
   PROTOTYPE: '原型验证',
   DESIGNED: '已完成设计',
+  INVESTIGATED: '已排查／参与处理',
   LEARNING: '学习整理',
   PLANNED: '已规划',
   UNKNOWN: '状态未定',
@@ -81,22 +90,25 @@ export const CONTRIBUTION_LABEL: Record<ContributionType, string> = {
 }
 
 /**
- * 把 AchievementStatus 映射成三个展示组之一。
- * DELIVERED 与 IMPLEMENTED_TESTED 都算交付；PROTOTYPE 单列；其余保守降级到 learning。
+ * 把 AchievementStatus 映射成四个展示组之一。
+ * DELIVERED 与 IMPLEMENTED_TESTED 都算交付；INVESTIGATED 与 PROTOTYPE 各自单列；
+ * 其余保守降级到 learning。
  */
 export function caseStatusGroup(status: AchievementStatus): CaseStatusGroupKey {
   if (status === 'DELIVERED' || status === 'IMPLEMENTED_TESTED') return 'delivered'
+  if (status === 'INVESTIGATED') return 'investigated'
   if (status === 'PROTOTYPE') return 'prototype'
   return 'learning'
 }
 
 /**
- * 把 cases 按交付状态分成 delivered / prototype / learning 三组。
- * 空组不返回（对应 tab 不出现），组内保持源数据顺序。
+ * 把 cases 按交付状态分成 delivered / investigated / prototype / learning 四组。
+ * 空组不返回（对应筛选项不强调），组内保持源数据顺序。
  */
 export function buildCaseStatusGroups(cases: ReadonlyArray<PublicCase>): CaseStatusGroup[] {
   const buckets: Record<CaseStatusGroupKey, PublicCase[]> = {
     delivered: [],
+    investigated: [],
     prototype: [],
     learning: [],
   }
