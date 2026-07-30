@@ -167,6 +167,10 @@ MDC 必须在 `finally` 中清理，防止 Servlet 线程复用导致上下文�
 `turnId` 在请求体通过 DTO 校验后才补充到当前 `RequestContext`。HTTP Filter 不解析或记录
 请求体。
 
+当前 v2 生产链路通过虚拟线程执行回答。提交任务前必须复制当前 `RequestContext`，在虚拟
+线程中显式安装对应 ThreadLocal 与 MDC，并在任务结束后清理；不能假设 Servlet 线程的
+MDC 会自动传播。
+
 ## 7. 诊断事件契约
 
 统一事件信封包含：
@@ -272,23 +276,26 @@ frontend.runtime.failed
 `ApiErrorCode` 只描述会形成非成功 HTTP 响应、且前端需要恢复动作的错误。
 
 ```text
-COMMON_VALIDATION_ERROR          400
-COMMON_NOT_FOUND                 404
-COMMON_METHOD_NOT_ALLOWED        405
-COMMON_UNSUPPORTED_MEDIA_TYPE    415
+VALIDATION_ERROR                 400
+NOT_FOUND                        404
+METHOD_NOT_ALLOWED               405
+UNSUPPORTED_MEDIA_TYPE           415
 
-PUBLIC_PROJECT_NOT_FOUND         404
-PUBLIC_CASE_NOT_FOUND            404
+PROJECT_NOT_FOUND                404
+CASE_NOT_FOUND                   404
 
-ANSWER_INVALID_CONTEXT           400
+INVALID_ANSWER_CONTEXT           400
 ANSWER_REQUEST_INVALID           400
 ANSWER_RATE_LIMITED              429
 ANSWER_CONCURRENCY_LIMITED       429
-ANSWER_REQUEST_TIMEOUT           504
-ANSWER_INTERNAL_ERROR            500
+ANSWER_REQUEST_TIMEOUT           503
+INTERNAL_ERROR                   500
 ```
 
-公开项目和案例错误统一归属 `PUBLIC_*`，移除 answer 与 portfolio 模块中的重复错误码。
+上述无领域前缀的 wire code 已经由当前 API、测试和前端页面使用，实施时必须保持兼容。
+公开项目和案例错误在 Java 中统一到一个共享的错误码所有者，移除 answer 与 portfolio
+模块中的重复定义，但 JSON 中继续返回 `PROJECT_NOT_FOUND` 和 `CASE_NOT_FOUND`。
+未来新增错误码必须使用领域前缀。
 
 错误码发布后视为 HTTP 契约，不随 Java 类型名称变化。
 
@@ -362,6 +369,11 @@ Filter 进入时 Spring MVC 尚未完成 Handler 匹配，因此开始事件中�
 `UNRESOLVED`，不能退回记录真实请求路径。请求结束时从
 `HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE` 读取路由模板；无法解析时使用
 `UNMATCHED`。
+
+异常处理器只把稳定错误码或经过安全渲染的失败信息附加到当前 request attribute，不直接
+输出第二条异常日志。Filter 在 `finally` 中统一选择 `http.request.completed`、
+`http.request.rejected` 或 `http.request.failed`，保证一次 HTTP 请求只有一个结束事件，
+未预期异常堆栈只出现一次。
 
 Controller、Mapper 和普通领域对象不重复打印入口、出口日志。
 
@@ -444,8 +456,8 @@ responsePresent
 ```
 
 `providerOperation` 的封闭值为 `CLASSIFY`、`PLAN_TOOLS`、`GENERATE`、
-`SUMMARIZE` 和 `SUGGEST`。不记录 Provider 名称、URL、输入、输出、token 或原始异常
-message。
+`REVIEW`、`SUMMARIZE`、`SUGGEST` 和 `EXPRESS`。不记录 Provider 名称、URL、输入、
+输出、token 或原始异常 message。
 
 ### 10.7 校验与 fallback
 
