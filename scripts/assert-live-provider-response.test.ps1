@@ -69,12 +69,14 @@ function Write-ResponseFixture(
     [string]$ContentVersion = $expectedContentVersion,
     [bool]$Degraded = $false,
     [string]$Resolution = 'ANSWERED',
+    [AllowNull()][string]$GenerationMode = 'MODEL',
     [object[]]$Blocks = @([pscustomobject]@{ content = $contentSentinel })
 ) {
     $response = [pscustomobject]@{
         contentVersion = $ContentVersion
         degraded = $Degraded
         resolution = $Resolution
+        generationMode = $GenerationMode
         blocks = $Blocks
     }
     [System.IO.File]::WriteAllText(
@@ -164,12 +166,14 @@ try {
             'Approved output must name the content version.'
         Assert-True ($result.Output -match 'resolution=ANSWERED') `
             'Approved output must name the resolution.'
+        Assert-True ($result.Output -match 'generationMode=MODEL') `
+            'Approved output must prove model generation.'
         Assert-True ($result.Output -match 'blocks=1') `
             'Approved output must name the block count.'
         Assert-True ($result.Output -match (
                 '^Live Provider verification passed: provider=' + [regex]::Escape($provider) +
                 '; contentVersion=' + [regex]::Escape($expectedContentVersion) +
-                '; resolution=ANSWERED; blocks=1\.\s*$'
+                '; generationMode=MODEL; resolution=ANSWERED; blocks=1\.\s*$'
             )) 'Approved output must contain only the permitted assertion summary.'
         Assert-NoSensitiveOutput $result "approved $provider"
     }
@@ -217,6 +221,14 @@ try {
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'degraded=true must fail.'
     Assert-NoSensitiveOutput $result 'degraded response'
+
+    foreach ($mode in @($null, '', 'DETERMINISTIC', 'FALLBACK')) {
+        Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+        Write-ResponseFixture -GenerationMode $mode
+        $result = Invoke-Checker
+        Assert-True ($result.ExitCode -ne 0) "generationMode=$mode must fail."
+        Assert-NoSensitiveOutput $result "generationMode=$mode"
+    }
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
     Write-ResponseFixture -Resolution 'NEEDS_CLARIFICATION'
