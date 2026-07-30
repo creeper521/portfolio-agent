@@ -1,0 +1,522 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$SecretsFile,
+    [switch]$CheckOnly,
+    [ValidateRange(1, 65535)]
+    [int]$BackendPort = 8080,
+    [ValidateRange(1, 65535)]
+    [int]$FrontendPort = 5174,
+    [string]$MavenExecutable = '',
+    [string]$NpmExecutable = 'npm.cmd',
+    [switch]$ExitAfterProbe,
+    [ValidateRange(1, 300)]
+    [int]$ReadinessTimeoutSeconds = 60,
+    [ValidateSet('', 'BACKEND_MODEL', 'BACKEND_FALLBACK')]
+    [string]$BackendFixtureMode = '',
+    [switch]$FrontendFixture
+)
+
+$ErrorActionPreference = 'Stop'
+$script:repositoryRoot = Split-Path -Parent $PSScriptRoot
+$script:allowedNames = @(
+    'PORTFOLIO_MODEL_ENABLED',
+    'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
+    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
+    'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED',
+    'PORTFOLIO_MODEL_PROVIDER',
+    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+    'PORTFOLIO_AGENT_GLM_API_KEY',
+    'PORTFOLIO_MODEL_TIMEOUT',
+    'PORTFOLIO_MODEL_MAX_TOKENS'
+)
+
+function Stop-WithCode([string]$Code) {
+    throw $Code
+}
+
+function Test-IsChildPath([string]$Parent, [string]$Candidate) {
+    $prefix = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\') + '\'
+    return [System.IO.Path]::GetFullPath($Candidate).StartsWith(
+        $prefix,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
+
+function Read-LocalSecrets([string]$Path) {
+    if (-not [System.IO.Path]::IsPathRooted($Path) -or
+            -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Stop-WithCode 'LOCAL_CONFIG_FILE_INVALID'
+    }
+    $resolved = (Resolve-Path -LiteralPath $Path).Path
+    if (Test-IsChildPath $script:repositoryRoot $resolved) {
+        Stop-WithCode 'LOCAL_CONFIG_MUST_BE_OUTSIDE_REPOSITORY'
+    }
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $resolved -Encoding UTF8) {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) {
+            continue
+        }
+        $separator = $trimmed.IndexOf('=')
+        if ($separator -le 0) {
+            Stop-WithCode 'LOCAL_CONFIG_FORMAT_INVALID'
+        }
+        $name = $trimmed.Substring(0, $separator).Trim()
+        $value = $trimmed.Substring($separator + 1)
+        if ($name -notin $script:allowedNames -or
+                $values.ContainsKey($name)) {
+            Stop-WithCode 'LOCAL_CONFIG_FIELD_INVALID'
+        }
+        if ($value -match '(`|\$\(|\$\{|;|\||&&)') {
+            Stop-WithCode 'LOCAL_CONFIG_VALUE_INVALID'
+        }
+        $values[$name] = $value
+    }
+    return $values
+}
+
+function Assert-TrueFlag([hashtable]$Values, [string]$Name) {
+    if (-not $Values.ContainsKey($Name) -or
+            -not [string]::Equals(
+                [string]$Values[$Name],
+                'true',
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+        Stop-WithCode "LOCAL_CONFIG_REQUIRED_FLAG_MISSING:$Name"
+    }
+}
+
+function Assert-LocalConfiguration([hashtable]$Values) {
+    foreach ($name in @(
+        'PORTFOLIO_MODEL_ENABLED',
+        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
+        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
+        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
+    )) {
+        Assert-TrueFlag $Values $name
+    }
+
+    $provider = [string]$Values.PORTFOLIO_MODEL_PROVIDER
+    $keyName = switch ($provider) {
+        'DEEPSEEK_V4_FLASH' { 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' }
+        'GLM_4_7' { 'PORTFOLIO_AGENT_GLM_API_KEY' }
+        default { Stop-WithCode 'LOCAL_CONFIG_PROVIDER_INVALID' }
+    }
+    if (-not $Values.ContainsKey($keyName) -or
+            [string]::IsNullOrWhiteSpace([string]$Values[$keyName])) {
+        Stop-WithCode "LOCAL_CONFIG_PROVIDER_KEY_MISSING:$keyName"
+    }
+}
+
+function Resolve-CommandPath([string]$Command, [string]$FailureCode) {
+    $resolved = Get-Command $Command -ErrorAction SilentlyContinue
+    if ($null -eq $resolved) {
+        Stop-WithCode $FailureCode
+    }
+    return $resolved.Source
+}
+
+function Resolve-Maven {
+    if (-not [string]::IsNullOrWhiteSpace($MavenExecutable)) {
+        if (Test-Path -LiteralPath $MavenExecutable -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $MavenExecutable).Path
+        }
+        return Resolve-CommandPath $MavenExecutable 'LOCAL_MAVEN_MISSING'
+    }
+    foreach ($candidate in @(
+        'mvn.cmd',
+        'mvn',
+        'C:\tools\apache-maven-3.9.9\bin\mvn.cmd'
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+        $resolved = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($null -ne $resolved) {
+            return $resolved.Source
+        }
+    }
+    Stop-WithCode 'LOCAL_MAVEN_MISSING'
+}
+
+function Assert-Java21([string]$JavaExecutable) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $versionText = (& $JavaExecutable -version 2>&1 | Out-String)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($exitCode -ne 0 -or
+            $versionText -notmatch 'version "(?:1\.)?21(?:[.\-_"]|$)') {
+        Stop-WithCode 'LOCAL_JAVA_21_REQUIRED'
+    }
+}
+
+function Assert-Toolchain {
+    $java = Resolve-CommandPath 'java.exe' 'LOCAL_JAVA_MISSING'
+    Assert-Java21 $java
+    $maven = Resolve-Maven
+    $node = Resolve-CommandPath 'node.exe' 'LOCAL_NODE_MISSING'
+    $npm = Resolve-CommandPath $NpmExecutable 'LOCAL_NPM_MISSING'
+    $frontendDependencies = Join-Path $script:repositoryRoot `
+        'frontend\node_modules'
+    if (-not (Test-Path -LiteralPath $frontendDependencies `
+            -PathType Container)) {
+        Stop-WithCode 'LOCAL_FRONTEND_DEPENDENCIES_MISSING'
+    }
+    return @{
+        Java = $java
+        Maven = $maven
+        Node = $node
+        Npm = $npm
+    }
+}
+
+function Assert-PortAvailable([int]$Port) {
+    $listener = [System.Net.NetworkInformation.IPGlobalProperties]::
+        GetIPGlobalProperties().GetActiveTcpListeners() |
+        Where-Object { $_.Port -eq $Port } |
+        Select-Object -First 1
+    if ($null -ne $listener) {
+        Stop-WithCode "LOCAL_PORT_OCCUPIED:$Port"
+    }
+}
+
+function Set-TemporaryProcessEnvironment([hashtable]$Values) {
+    $snapshot = @{}
+    foreach ($name in $script:allowedNames) {
+        $snapshot[$name] = [Environment]::GetEnvironmentVariable(
+            $name,
+            [EnvironmentVariableTarget]::Process
+        )
+        $value = if ($Values.ContainsKey($name)) {
+            [string]$Values[$name]
+        }
+        else {
+            $null
+        }
+        [Environment]::SetEnvironmentVariable(
+            $name,
+            $value,
+            [EnvironmentVariableTarget]::Process
+        )
+    }
+    return $snapshot
+}
+
+function Restore-ProcessEnvironment([hashtable]$Snapshot) {
+    foreach ($name in $script:allowedNames) {
+        [Environment]::SetEnvironmentVariable(
+            $name,
+            $Snapshot[$name],
+            [EnvironmentVariableTarget]::Process
+        )
+    }
+}
+
+function Start-OwnedProcess(
+    [string]$Executable,
+    [string[]]$Arguments,
+    [hashtable]$EnvironmentValues
+) {
+    $environmentSnapshot = Set-TemporaryProcessEnvironment $EnvironmentValues
+    try {
+        return Start-Process -FilePath $Executable `
+            -ArgumentList $Arguments `
+            -WorkingDirectory $script:repositoryRoot `
+            -PassThru `
+            -WindowStyle Hidden
+    }
+    finally {
+        Restore-ProcessEnvironment $environmentSnapshot
+    }
+}
+
+function Stop-OwnedProcess([System.Diagnostics.Process]$Process) {
+    if ($null -eq $Process) {
+        return
+    }
+    $Process.Refresh()
+    if ($Process.HasExited) {
+        return
+    }
+    $taskkill = Get-Command 'taskkill.exe' -ErrorAction SilentlyContinue
+    if ($null -ne $taskkill) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $taskkill.Source /PID $Process.Id /T /F 2>&1 | Out-Null
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+    }
+    else {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    }
+    [void]$Process.WaitForExit(5000)
+}
+
+function Wait-ForHttp(
+    [string]$Uri,
+    [System.Diagnostics.Process]$Process,
+    [int]$TimeoutSeconds
+) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            Stop-WithCode 'LOCAL_CHILD_EXITED_BEFORE_READY'
+        }
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $Uri `
+                -TimeoutSec 2
+            if ($response.StatusCode -eq 200) {
+                return $response
+            }
+        }
+        catch {
+            $Process.Refresh()
+            if ($Process.HasExited) {
+                Stop-WithCode 'LOCAL_CHILD_EXITED_BEFORE_READY'
+            }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    Stop-WithCode 'LOCAL_READINESS_TIMEOUT'
+}
+
+function Get-DegradedCategory([object]$Response) {
+    $noticeCode = [string]$Response.noticeCode
+    $category = switch ($noticeCode) {
+        'PROVIDER_AUTH_FAILED' { 'PROVIDER_AUTH_FAILED' }
+        'PROVIDER_TIMEOUT' { 'PROVIDER_TIMEOUT' }
+        'PROVIDER_CONNECTION_FAILED' { 'PROVIDER_UNAVAILABLE' }
+        'PROVIDER_EMPTY_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
+        'PROVIDER_INVALID_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
+        'PROVIDER_DRAFT_REJECTED' { 'PROVIDER_DRAFT_REJECTED' }
+        'PROVIDER_DISABLED' { 'PROVIDER_POLICY_INCOMPATIBLE' }
+        default { 'PROVIDER_RESPONSE_INVALID' }
+    }
+    return $category
+}
+
+function Invoke-ProviderProbe(
+    [string]$BackendBaseUrl,
+    [string]$ContentVersion,
+    [hashtable]$Settings
+) {
+    $probePath = Join-Path ([System.IO.Path]::GetTempPath()) `
+        ('portfolio-provider-probe-' + [guid]::NewGuid().ToString('N') + '.json')
+    $probeBody = @{
+        turnId = [guid]::NewGuid()
+        requestToken = [guid]::NewGuid()
+        question = 'Please introduce the SQL audit and troubleshooting project in detail.'
+        messages = @()
+        context = @{
+            projectSlug = 'sql-audit'
+            caseSlug = $null
+            audienceRole = 'INTERVIEWER'
+            source = 'AGENT_PAGE'
+        }
+    } | ConvertTo-Json -Depth 6 -Compress
+
+    try {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing `
+                -Uri "$BackendBaseUrl/api/v2/answers" `
+                -Method Post `
+                -ContentType 'application/json; charset=utf-8' `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($probeBody)) `
+                -TimeoutSec $ReadinessTimeoutSeconds
+            $responseObject = $response.Content | ConvertFrom-Json
+        }
+        catch {
+            return 'PROVIDER_UNAVAILABLE'
+        }
+        [System.IO.File]::WriteAllText(
+            $probePath,
+            [string]$response.Content,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+
+        $environmentSnapshot = Set-TemporaryProcessEnvironment $Settings
+        try {
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                    -File (Join-Path $PSScriptRoot `
+                        'assert-live-provider-response.ps1') `
+                    -ResponsePath $probePath `
+                    -ExpectedContentVersion $ContentVersion 2>&1 |
+                    Out-Null
+                $assertionExitCode = $LASTEXITCODE
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+        }
+        finally {
+            Restore-ProcessEnvironment $environmentSnapshot
+        }
+        if ($assertionExitCode -eq 0) {
+            return 'CONNECTED'
+        }
+        return Get-DegradedCategory $responseObject
+    }
+    finally {
+        if (Test-Path -LiteralPath $probePath) {
+            Remove-Item -LiteralPath $probePath -Force
+        }
+    }
+}
+
+try {
+    $testMode = [string]::Equals(
+        [Environment]::GetEnvironmentVariable(
+            'PORTFOLIO_START_LOCAL_TEST_MODE',
+            [EnvironmentVariableTarget]::Process
+        ),
+        'true',
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+    if (($BackendFixtureMode -ne '' -or $FrontendFixture) -and
+            -not $testMode) {
+        Stop-WithCode 'LOCAL_TEST_SEAM_FORBIDDEN'
+    }
+    if ($BackendPort -eq $FrontendPort) {
+        Stop-WithCode "LOCAL_PORT_OCCUPIED:$BackendPort"
+    }
+    $settings = Read-LocalSecrets $SecretsFile
+    Assert-LocalConfiguration $settings
+    $toolchain = Assert-Toolchain
+    Assert-PortAvailable $BackendPort
+    Assert-PortAvailable $FrontendPort
+    Write-Output (
+        'LOCAL_CONFIG_VALID provider=' +
+        [string]$settings.PORTFOLIO_MODEL_PROVIDER +
+        ' checks=6'
+    )
+    Write-Output 'LOCAL_PREFLIGHT_VALID java=21 maven=ready node=ready frontendDependencies=ready ports=ready'
+    if ($CheckOnly) {
+        exit 0
+    }
+
+    $fixtureScript = Join-Path $PSScriptRoot `
+        'test-fixtures\start-local-fake-server.ps1'
+    $backendExecutable = if ($BackendFixtureMode -ne '') {
+        'powershell.exe'
+    }
+    else {
+        [string]$toolchain.Maven
+    }
+    $backendArguments = if ($BackendFixtureMode -ne '') {
+        @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', $fixtureScript,
+            '-Port', "$BackendPort",
+            '-Mode', $BackendFixtureMode
+        )
+    }
+    else {
+        @(
+            '-f', (Join-Path $script:repositoryRoot 'backend\pom.xml'),
+            'spring-boot:run',
+            '-Dspring-boot.run.profiles=local',
+            "-Dspring-boot.run.arguments=--server.port=$BackendPort"
+        )
+    }
+
+    $backend = $null
+    $frontend = $null
+    try {
+        $backend = Start-OwnedProcess $backendExecutable `
+            $backendArguments $settings
+        $backendBaseUrl = "http://127.0.0.1:$BackendPort"
+        $publicContentResponse = Wait-ForHttp `
+            "$backendBaseUrl/api/v1/public-content" `
+            $backend `
+            $ReadinessTimeoutSeconds
+        try {
+            $publicContent = $publicContentResponse.Content | ConvertFrom-Json
+        }
+        catch {
+            Stop-WithCode 'LOCAL_PUBLIC_CONTENT_INVALID'
+        }
+        if ([string]::IsNullOrWhiteSpace(
+                [string]$publicContent.contentVersion)) {
+            Stop-WithCode 'LOCAL_PUBLIC_CONTENT_INVALID'
+        }
+
+        $frontendExecutable = if ($FrontendFixture) {
+            'powershell.exe'
+        }
+        else {
+            [string]$toolchain.Npm
+        }
+        $frontendArguments = if ($FrontendFixture) {
+            @(
+                '-NoProfile',
+                '-ExecutionPolicy', 'Bypass',
+                '-File', $fixtureScript,
+                '-Port', "$FrontendPort",
+                '-Mode', 'FRONTEND'
+            )
+        }
+        else {
+            @(
+                '--prefix', (Join-Path $script:repositoryRoot 'frontend'),
+                'run', 'dev', '--',
+                '--host', '127.0.0.1',
+                '--port', "$FrontendPort"
+            )
+        }
+        $frontend = Start-OwnedProcess $frontendExecutable `
+            $frontendArguments @{}
+        $frontendBaseUrl = "http://127.0.0.1:$FrontendPort"
+        [void](Wait-ForHttp $frontendBaseUrl $frontend `
+            $ReadinessTimeoutSeconds)
+
+        $probeStatus = Invoke-ProviderProbe $backendBaseUrl `
+            ([string]$publicContent.contentVersion) `
+            $settings
+        if ($probeStatus -eq 'CONNECTED') {
+            Write-Output (
+                'AI_CONNECTED provider=' +
+                [string]$settings.PORTFOLIO_MODEL_PROVIDER +
+                " backend=$backendBaseUrl frontend=$frontendBaseUrl"
+            )
+        }
+        else {
+            Write-Output "AI_DEGRADED:$probeStatus"
+        }
+
+        if (-not $ExitAfterProbe) {
+            while ($true) {
+                Start-Sleep -Milliseconds 250
+                $backend.Refresh()
+                $frontend.Refresh()
+                if ($backend.HasExited) {
+                    Stop-WithCode 'LOCAL_CHILD_EXITED:BACKEND'
+                }
+                if ($frontend.HasExited) {
+                    Stop-WithCode 'LOCAL_CHILD_EXITED:FRONTEND'
+                }
+            }
+        }
+    }
+    finally {
+        Stop-OwnedProcess $frontend
+        Stop-OwnedProcess $backend
+    }
+}
+catch {
+    [Console]::Error.WriteLine([string]$_.Exception.Message)
+    exit 1
+}
