@@ -9,6 +9,7 @@ import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationIntentRouter;
+import com.portfolio.agent.answer.service.ConversationProgressClassifier;
 import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
@@ -152,6 +153,11 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
+    ConversationProgressClassifier conversationProgressClassifier() {
+        return new ConversationProgressClassifier();
+    }
+
+    @Bean
     ConversationalAgentRuntime conversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
             ConversationWindowManager windowManager,
@@ -164,6 +170,7 @@ public class ConversationalAgentConfiguration {
             DeterministicConversationFallback fallback,
             ConversationProviderAccess providerAccess,
             ConversationSubjectGuard subjectGuard,
+            ConversationProgressClassifier progressClassifier,
             ConversationDecisionPublisher decisionPublisher,
             DiagnosticEventPublisher diagnosticEventPublisher
     ) {
@@ -179,6 +186,7 @@ public class ConversationalAgentConfiguration {
                 fallback,
                 providerAccess,
                 subjectGuard,
+                progressClassifier,
                 decisionPublisher,
                 diagnosticEventPublisher);
     }

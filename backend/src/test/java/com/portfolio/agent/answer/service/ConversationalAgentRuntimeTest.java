@@ -57,6 +57,8 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
         assertThat(result.isDegraded()).isFalse();
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getSuggestedQuestions()).hasSize(3);
+        assertThat(result.getProgress()).isNotNull();
         verifyNoInteractions(fixture.router, fixture.modelPort);
         assertPublishedDecision(fixture, result);
     }
@@ -72,6 +74,9 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getResolution()).isEqualTo(AnswerResolution.BOUNDARY);
         assertThat(result.isDegraded()).isFalse();
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getSuggestedQuestions()).hasSize(3);
+        assertThat(result.getProgress().getStage())
+                .isEqualTo(com.portfolio.agent.answer.domain.ConversationGuidanceStage.EXPLORE_OTHERS);
         assertThat(result.getBlocks()).singleElement().satisfies(block -> {
             assertThat(block.getSourceScope()).isEqualTo(ConversationSourceScope.PORTFOLIO);
             assertThat(block.getClaimIds()).isEmpty();
@@ -91,12 +96,10 @@ class ConversationalAgentRuntimeTest {
                 .thenReturn(ConversationModelResult.success(draft));
         when(fixture.draftValidator.validate(any(), any(), any()))
                 .thenReturn(ConversationDraftValidationResult.valid(draft, List.of()));
-        when(fixture.questionService.generate(any(), any(), any(), any()))
-                .thenReturn(List.<ConversationSuggestedQuestion>of());
-
         ConversationAnswerResult result = fixture.runtime.answer(request("Explain validation"));
 
         assertThat(result.isDegraded()).isFalse();
+        assertThat(result.getSuggestedQuestions()).hasSize(3);
         assertThat(fixture.events).singleElement().satisfies(event -> {
             assertThat(event.getName()).isEqualTo("answer.validation.completed");
             assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.DEBUG);
@@ -128,6 +131,7 @@ class ConversationalAgentRuntimeTest {
         ConversationAnswerResult result = fixture.runtime.answer(request("token"));
 
         assertThat(result.getResolution()).isEqualTo(AnswerResolution.REJECTED);
+        assertThat(result.getSuggestedQuestions()).hasSize(3);
         assertPublishedDecision(fixture, result);
     }
 
@@ -140,6 +144,7 @@ class ConversationalAgentRuntimeTest {
         ConversationAnswerResult result = fixture.runtime.answer(request("Explain validation"));
 
         assertThat(result.isDegraded()).isTrue();
+        assertThat(result.getSuggestedQuestions()).hasSize(3);
         assertThat(fixture.events).singleElement().satisfies(event -> {
             assertThat(event.getName()).isEqualTo("answer.fallback.selected");
             assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.WARN);
@@ -265,6 +270,11 @@ class ConversationalAgentRuntimeTest {
         ConversationalModelPort modelPort = mock(ConversationalModelPort.class);
         ConversationIntentRouter router = new ConversationIntentRouter(
                 modelPort, 0.65, diagnosticPublisher);
+        DynamicQuestionService questionService =
+                mock(DynamicQuestionService.class);
+        when(questionService.generate(
+                any(), any(), any(), any(), any(), any(), any(Boolean.class)))
+                .thenReturn(suggestions());
         ConversationalAgentRuntime runtime = new ConversationalAgentRuntime(
                 knowledgeGateway,
                 windowManager,
@@ -273,10 +283,11 @@ class ConversationalAgentRuntimeTest {
                 mock(ConversationToolService.class),
                 modelPort,
                 mock(ConversationDraftValidator.class),
-                mock(DynamicQuestionService.class),
+                questionService,
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(true),
                 new ConversationSubjectGuard(),
+                new ConversationProgressClassifier(),
                 new LoggingConversationDecisionPublisher(diagnosticPublisher),
                 diagnosticPublisher);
 
@@ -354,6 +365,9 @@ class ConversationalAgentRuntimeTest {
         ConversationalModelPort modelPort = mock(ConversationalModelPort.class);
         ConversationDraftValidator draftValidator = mock(ConversationDraftValidator.class);
         DynamicQuestionService questionService = mock(DynamicQuestionService.class);
+        when(questionService.generate(
+                any(), any(), any(), any(), any(), any(), any(Boolean.class)))
+                .thenReturn(suggestions());
         ConversationDecisionPublisher decisionPublisher = mock(ConversationDecisionPublisher.class);
         ConversationalAgentRuntime runtime = new ConversationalAgentRuntime(
                 knowledgeGateway,
@@ -367,6 +381,7 @@ class ConversationalAgentRuntimeTest {
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(providerAllowed),
                 new ConversationSubjectGuard(),
+                new ConversationProgressClassifier(),
                 decisionPublisher,
                 diagnosticEventPublisher);
         return new RuntimeFixture(
@@ -414,6 +429,25 @@ class ConversationalAgentRuntimeTest {
 
     private ConversationWindow window() {
         return new ConversationWindow(null, List.of(), 0);
+    }
+
+    private static List<ConversationSuggestedQuestion> suggestions() {
+        return List.of(
+                new ConversationSuggestedQuestion(
+                        "继续了解项目背景？",
+                        "project-1",
+                        null,
+                        PortfolioKnowledgeFacet.OVERVIEW),
+                new ConversationSuggestedQuestion(
+                        "继续了解实现方案？",
+                        "project-1",
+                        null,
+                        PortfolioKnowledgeFacet.IMPLEMENTATION),
+                new ConversationSuggestedQuestion(
+                        "继续了解验证结果？",
+                        "project-1",
+                        null,
+                        PortfolioKnowledgeFacet.VERIFICATION));
     }
 
     private ConversationAnswerRequest request(String question) {

@@ -35,6 +35,7 @@ import com.portfolio.agent.answer.service.AnswerIdempotencyCoordinator;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationIntentRouter;
+import com.portfolio.agent.answer.service.ConversationProgressClassifier;
 import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
@@ -313,6 +314,7 @@ class RuntimeCompositePrivacyTest {
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(true),
                 new ConversationSubjectGuard(),
+                new ConversationProgressClassifier(),
                 new LoggingConversationDecisionPublisher(publisher),
                 publisher);
         return new RuntimeSeams(runtime, server);

@@ -5,8 +5,11 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDecision;
 import com.portfolio.agent.answer.domain.ConversationDraft;
 import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
+import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
+import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
+import com.portfolio.agent.answer.domain.ConversationProgress;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
@@ -40,6 +43,7 @@ public final class ConversationalAgentRuntime {
     private final DeterministicConversationFallback fallback;
     private final ConversationProviderAccess providerAccess;
     private final ConversationSubjectGuard subjectGuard;
+    private final ConversationProgressClassifier progressClassifier;
     private final ConversationDecisionPublisher decisionPublisher;
     private final DiagnosticEventPublisher diagnosticEventPublisher;
 
@@ -55,6 +59,7 @@ public final class ConversationalAgentRuntime {
             DeterministicConversationFallback fallback,
             ConversationProviderAccess providerAccess,
             ConversationSubjectGuard subjectGuard,
+            ConversationProgressClassifier progressClassifier,
             ConversationDecisionPublisher decisionPublisher,
             DiagnosticEventPublisher diagnosticEventPublisher
     ) {
@@ -69,6 +74,9 @@ public final class ConversationalAgentRuntime {
         this.fallback = fallback;
         this.providerAccess = providerAccess;
         this.subjectGuard = subjectGuard;
+        this.progressClassifier = Objects.requireNonNull(
+                progressClassifier,
+                "progressClassifier");
         this.decisionPublisher = decisionPublisher;
         this.diagnosticEventPublisher = Objects.requireNonNull(
                 diagnosticEventPublisher,
@@ -84,20 +92,44 @@ public final class ConversationalAgentRuntime {
 
     private ConversationAnswerResult answerInternal(ConversationAnswerRequest request) {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
-        if (!subjectGuard.accepts(request.getContext(), content)) {
-            return fallback.unknownSubject(request, content);
-        }
-        if (!providerAccess.isAllowed()) {
-            return fallback.answer(request, content);
-        }
         ConversationWindow window = windowManager.prepare(
                 request.getMessages(), request.getQuestion());
+        if (!subjectGuard.accepts(request.getContext(), content)) {
+            ConversationAnswerResult base =
+                    fallback.unknownSubject(request, content);
+            return finalizeTurn(
+                    base,
+                    content,
+                    safeRoute(request, true),
+                    window,
+                    request,
+                    true);
+        }
+        if (!providerAccess.isAllowed()) {
+            ConversationAnswerResult base = fallback.answer(request, content);
+            return finalizeTurn(
+                    base,
+                    content,
+                    safeRoute(request, false),
+                    window,
+                    request,
+                    false);
+        }
         ConversationRoute route = intentRouter.route(content, window, request);
+        ConversationRoute guidanceRoute = withRequestSubject(route, request);
         if (route.getIntent()
                 == com.portfolio.agent.answer.domain.ConversationIntent.TIME_SENSITIVE
                 || route.getIntent()
                 == com.portfolio.agent.answer.domain.ConversationIntent.UNSUPPORTED_OR_UNSAFE) {
-            return fallback.answer(request, content, route);
+            ConversationAnswerResult base =
+                    fallback.answer(request, content, route);
+            return finalizeTurn(
+                    base,
+                    content,
+                    guidanceRoute,
+                    window,
+                    request,
+                    false);
         }
         PortfolioGroundingContext grounding = groundingAssembler.assemble(
                 content, route, request.getQuestion());
@@ -114,7 +146,13 @@ public final class ConversationalAgentRuntime {
             publishFallback(
                     FallbackTrigger.PROVIDER_FAILURE,
                     ProviderFailureCodeMapper.map(failureCode));
-            return fallbackResult;
+            return finalizeTurn(
+                    fallbackResult,
+                    content,
+                    guidanceRoute,
+                    window,
+                    request,
+                    false);
         }
         long validationStartedAt = System.nanoTime();
         ConversationDraftValidationResult validated;
@@ -129,7 +167,13 @@ public final class ConversationalAgentRuntime {
             publishFallback(
                     FallbackTrigger.VALIDATION_EXCEPTION,
                     ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return fallbackResult;
+            return finalizeTurn(
+                    fallbackResult,
+                    content,
+                    guidanceRoute,
+                    window,
+                    request,
+                    false);
         }
         publishValidation(validated, validationStartedAt);
         if (!validated.isValid()) {
@@ -138,11 +182,15 @@ public final class ConversationalAgentRuntime {
             publishFallback(
                     FallbackTrigger.VALIDATION_REJECTED,
                     ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return fallbackResult;
+            return finalizeTurn(
+                    fallbackResult,
+                    content,
+                    guidanceRoute,
+                    window,
+                    request,
+                    false);
         }
-        List<ConversationSuggestedQuestion> suggestions = questionService.generate(
-                content, route, window, validated.getAcceptedBlocks());
-        return new ConversationAnswerResult(
+        ConversationAnswerResult base = new ConversationAnswerResult(
                 request.getTurnId(),
                 content.getContentVersion(),
                 route.getIntent(),
@@ -150,7 +198,7 @@ public final class ConversationalAgentRuntime {
                 validated.getResolution(),
                 validated.getTitle(),
                 validated.getAcceptedBlocks(),
-                suggestions,
+                List.of(),
                 false,
                 GenerationMode.MODEL,
                 route.getAnswerScope() == ConversationAnswerScope.PORTFOLIO
@@ -158,6 +206,81 @@ public final class ConversationalAgentRuntime {
                         ? AnswerSource.RETRIEVAL
                         : null,
                 null);
+        return finalizeTurn(
+                base,
+                content,
+                guidanceRoute,
+                window,
+                request,
+                false);
+    }
+
+    private ConversationAnswerResult finalizeTurn(
+            ConversationAnswerResult base,
+            RuntimeAnswerContent content,
+            ConversationRoute route,
+            ConversationWindow window,
+            ConversationAnswerRequest request,
+            boolean forceExploreOthers
+    ) {
+        ConversationProgress progress = progressClassifier.classify(
+                request.getContext().getCoveredTopics(),
+                request.getQuestion(),
+                route.getFacet());
+        if (forceExploreOthers
+                || (route.getProjectSlug() == null
+                && route.getCaseSlug() == null)) {
+            progress = new ConversationProgress(
+                    progress.getCoveredTopics(),
+                    ConversationGuidanceStage.EXPLORE_OTHERS);
+        }
+        List<ConversationSuggestedQuestion> suggestions =
+                questionService.generate(
+                        content,
+                        route,
+                        window,
+                        base.getBlocks(),
+                        progress,
+                        request.getQuestion(),
+                        base.getGenerationMode() == GenerationMode.MODEL);
+        return base.withGuidance(suggestions, progress);
+    }
+
+    private ConversationRoute safeRoute(
+            ConversationAnswerRequest request,
+            boolean clearSubject
+    ) {
+        String projectSlug = clearSubject
+                ? null
+                : request.getContext().getProjectSlug();
+        String caseSlug = clearSubject
+                ? null
+                : request.getContext().getCaseSlug();
+        return new ConversationRoute(
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                1.0d,
+                projectSlug,
+                caseSlug,
+                progressClassifier.inferFacet(request.getQuestion()),
+                false);
+    }
+
+    private ConversationRoute withRequestSubject(
+            ConversationRoute route,
+            ConversationAnswerRequest request
+    ) {
+        if (route.getProjectSlug() != null || route.getCaseSlug() != null) {
+            return route;
+        }
+        return new ConversationRoute(
+                route.getIntent(),
+                route.getAnswerScope(),
+                route.getConfidence(),
+                request.getContext().getProjectSlug(),
+                request.getContext().getCaseSlug(),
+                route.getFacet(),
+                route.isClarificationRequired());
     }
 
     private void publishBestEffort(ConversationAnswerResult result, long startedAt) {
