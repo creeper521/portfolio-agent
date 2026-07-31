@@ -20,7 +20,7 @@ $homeDirectory = 'C:\Users\local-log-user'
 $fixedNow = [DateTimeOffset]::Parse('2026-07-31T12:34:56.789+08:00')
 $modulePath = Join-Path $PSScriptRoot 'logging\LocalLogRouter.psm1'
 
-Import-Module $modulePath -Force
+Import-Module $modulePath -Force -DisableNameChecking
 
 $cases = @(
     @{
@@ -133,5 +133,87 @@ Assert-True $longRecord.Redacted 'Truncated line must be marked redacted'
 
 $ignoreFile = Get-Content -LiteralPath (Join-Path $repositoryRoot '.gitignore') -Raw
 Assert-True ($ignoreFile -match '(?m)^/logs/$') '/logs/ must be ignored'
+
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('local-log-router-' + [guid]::NewGuid())
+$router = $null
+$pressureRouter = $null
+try {
+    $logRoot = Join-Path $tempRoot 'logs'
+    $router = New-LocalLogRouter `
+        -RepositoryRoot $repositoryRoot `
+        -LogDirectory $logRoot `
+        -Clock { $fixedNow } `
+        -MaxFileBytes 1024 `
+        -MaxSegments 3 `
+        -QueueCapacity 128
+
+    Submit-LocalLogLine -Router $router -Stream BACKEND_STDOUT `
+        -Line 'INFO backend-info-sentinel'
+    Submit-LocalLogLine -Router $router -Stream BACKEND_STDERR `
+        -Line 'ERROR backend-error-sentinel'
+    Submit-LocalLogLine -Router $router -Stream BACKEND_STDOUT `
+        -Line 'INFO event.origin=browser browser-info-sentinel'
+    Submit-LocalLogLine -Router $router -Stream VITE_STDERR `
+        -Line 'ERROR vite-error-sentinel'
+    Flush-LocalLogRouter -Router $router
+
+    $current = Join-Path $logRoot 'current'
+    $backendInfo = Get-Content -LiteralPath (Join-Path $current 'backend-info.log') -Raw
+    $backendError = Get-Content -LiteralPath (Join-Path $current 'backend-error.log') -Raw
+    $frontendInfo = Get-Content -LiteralPath (Join-Path $current 'frontend-info.log') -Raw
+    $frontendError = Get-Content -LiteralPath (Join-Path $current 'frontend-error.log') -Raw
+    Assert-True $backendInfo.Contains('backend-info-sentinel') 'Backend INFO route'
+    Assert-True (-not $backendInfo.Contains('backend-error-sentinel')) 'Backend ERROR must not duplicate'
+    Assert-True $backendError.Contains('backend-error-sentinel') 'Backend ERROR route'
+    Assert-True $frontendInfo.Contains('browser-info-sentinel') 'Browser INFO route'
+    Assert-True $frontendError.Contains('vite-error-sentinel') 'Vite ERROR route'
+
+    1..80 | ForEach-Object {
+        Submit-LocalLogLine -Router $router -Stream BACKEND_STDOUT `
+            -Line ("INFO segment-sentinel-{0:D3} {1}" -f $_, ('x' * 100))
+    }
+    Flush-LocalLogRouter -Router $router
+    Assert-True (Test-Path (Join-Path $current 'backend-info.1.log')) 'First segment must exist'
+    Assert-True (Test-Path (Join-Path $current 'backend-info.2.log')) 'Second segment must exist'
+    Assert-True (-not (Test-Path (Join-Path $current 'backend-info.3.log'))) 'Old segment must be removed'
+    $activeBytes = (Get-Item -LiteralPath (Join-Path $current 'backend-info.log')).Length
+    Assert-True ($activeBytes -le 1024) 'Active file must respect segment limit'
+
+    Stop-LocalLogRouter -Router $router
+    Assert-Equal 'STOPPED' $router.StatusCode 'Router stop status'
+
+    $pressureRoot = Join-Path $tempRoot 'pressure'
+    $pressureRouter = New-LocalLogRouter `
+        -RepositoryRoot $repositoryRoot `
+        -LogDirectory $pressureRoot `
+        -Clock { $fixedNow } `
+        -MaxFileBytes 4096 `
+        -MaxSegments 3 `
+        -QueueCapacity 2
+    1..2000 | ForEach-Object {
+        Submit-LocalLogLine -Router $pressureRouter -Stream VITE_STDOUT `
+            -Line "DEBUG pressure-$_"
+    }
+    Submit-LocalLogLine -Router $pressureRouter -Stream BACKEND_STDERR `
+        -Line 'ERROR priority-sentinel'
+    Flush-LocalLogRouter -Router $pressureRouter
+    Stop-LocalLogRouter -Router $pressureRouter
+    Assert-True ($pressureRouter.DroppedDebug -gt 0) 'Queue pressure must drop DEBUG'
+    Assert-Equal 0 $pressureRouter.DroppedError 'ERROR must survive while DEBUG can be dropped'
+
+    $allBytes = [System.IO.File]::ReadAllBytes((Join-Path $current 'frontend-info.log'))
+    Assert-True (-not ($allBytes.Length -ge 3 -and $allBytes[0] -eq 0xEF -and $allBytes[1] -eq 0xBB -and $allBytes[2] -eq 0xBF)) `
+        'Log files must be UTF-8 without BOM'
+} finally {
+    if ($null -ne $router -and $router.StatusCode -ne 'STOPPED') {
+        Stop-LocalLogRouter -Router $router
+    }
+    if ($null -ne $pressureRouter -and $pressureRouter.StatusCode -ne 'STOPPED') {
+        Stop-LocalLogRouter -Router $pressureRouter
+    }
+    if (Test-Path -LiteralPath $tempRoot) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}
 
 Write-Output 'local-log-router tests passed'
