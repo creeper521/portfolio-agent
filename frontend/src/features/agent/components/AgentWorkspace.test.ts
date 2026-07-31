@@ -1084,4 +1084,61 @@ describe('AgentWorkspace', () => {
     expect(diagnosticPayload).not.toContain('唯一的后端建议')
     expect(diagnosticPayload).not.toContain('诊断补足测试问题')
   })
+
+  it('treats a fallback answer as a successful response with its own suggestions', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      generationMode: 'FALLBACK',
+      degraded: true,
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('触发降级的问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[data-degraded-notice]').text()).toBe('已切换到基础回答')
+    const suggestions = wrapper.findAll('[data-suggested-follow-up]')
+    expect(suggestions).toHaveLength(3)
+
+    await suggestions[0]?.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ question: '当前项目追问', projectSlug: 'sql-audit' }),
+    )
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('offers local suggested questions alongside retry after a network failure', async () => {
+    askQuestionMock.mockRejectedValueOnce(new Error('network down'))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('网络失败时的问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(true)
+    const suggestions = wrapper.findAll('[data-failure-suggestion]')
+    expect(suggestions).toHaveLength(3)
+    expect(suggestions.map((button) => button.text())).toEqual([
+      '请介绍 SQL 审计工具的完整迭代过程。',
+      '这个项目中最关键的技术决策是什么？',
+      '你如何验证查询、进度和归档链路？',
+    ])
+
+    await suggestions[0]?.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        question: '请介绍 SQL 审计工具的完整迭代过程。',
+        projectSlug: 'sql-audit',
+        caseSlug: null,
+      }),
+    )
+  })
 })

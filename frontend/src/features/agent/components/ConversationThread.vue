@@ -43,6 +43,7 @@ const props = defineProps<{
   evidenceOpen?: boolean
   pending: boolean
   failure?: AnswerFailureView | null
+  failureSuggestions?: ReadonlyArray<ConversationSuggestedQuestion>
   focusTarget?: AnswerFocusTarget | null
 }>()
 
@@ -514,6 +515,17 @@ function inspectMessageEvidence(
               type="button"
               @click="$emit('navigateBack')"
             >返回作品集</button>
+          </div>
+          <div v-if="failureSuggestions?.length" class="dynamic-suggestions">
+            <button
+              v-for="(q, qi) in failureSuggestions"
+              :key="qi"
+              data-failure-suggestion
+              type="button"
+              :disabled="pending"
+              :title="q.text"
+              @click="submitSuggested(q)"
+            >{{ q.text }}</button>
           </div>
         </div>
       </div>

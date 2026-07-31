@@ -254,6 +254,25 @@ function toAnswerFailure(error: unknown): AnswerFailureView {
   }
 }
 
+const failureSuggestions = computed<ConversationSuggestedQuestion[]>(() => {
+  if (!answerFailure.value) return []
+  const project = activeProject.value
+  if (!project) return []
+  const local = project.suggestedQuestions.map((text) => ({
+    text,
+    projectSlug: project.slug,
+    caseSlug: null,
+    facet: null,
+  }))
+  return completeSuggestedQuestions(local, props.portfolio, {
+    currentQuestion: failedRequest.value?.question,
+    recentQuestions: (sessions.activeSession.value?.messages ?? [])
+      .filter((message) => message.role === 'USER')
+      .slice(-6)
+      .map((message) => message.content),
+  }).questions
+})
+
 function invalidatePendingRequest() {
   activeRequestController?.abort()
   activeRequestController = null
@@ -709,6 +728,7 @@ onBeforeUnmount(() => {
       :evidence-open="evidenceDrawerOpen"
       :pending="pending"
       :failure="answerFailure"
+      :failure-suggestions="failureSuggestions"
       :focus-target="answerFocusTarget"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
