@@ -189,3 +189,53 @@ export async function installDiagnosticsApiMock(
   })
   return capture
 }
+
+export interface GuidedAnswerTurn {
+  coveredTopics?: string[]
+  guidanceStage?: string
+  generationMode?: string
+  degraded?: boolean
+  suggestedQuestions?: Array<{
+    text: string
+    projectSlug?: string | null
+    caseSlug?: string | null
+    facet?: string | null
+  }>
+}
+
+export async function installGuidedAnswerMock(
+  page: Page,
+  turns: GuidedAnswerTurn[],
+  onRequest?: (body: Record<string, unknown>, index: number) => void,
+) {
+  let index = 0
+  await page.route('**/api/v2/answers', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    onRequest?.(body, index)
+    const turn = (
+      turns.length ? turns[Math.min(index, turns.length - 1)] : {}
+    ) as GuidedAnswerTurn
+    index += 1
+    const base = answerResponse(
+      typeof body.question === 'string' ? body.question : '',
+      typeof body.questionPresetId === 'string' ? body.questionPresetId : undefined,
+      body.contextEnvelope as Record<string, unknown> | undefined,
+    )
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      json: {
+        ...base,
+        generationMode: turn.generationMode ?? base.generationMode,
+        degraded: turn.degraded === true,
+        coveredTopics: turn.coveredTopics ?? ['BACKGROUND'],
+        guidanceStage: turn.guidanceStage ?? 'OPENING',
+        suggestedQuestions: turn.suggestedQuestions ?? [],
+      },
+    })
+  })
+}
