@@ -1,7 +1,7 @@
 # Agent 作品集智能检索与确定性推荐设计
 
 日期：2026-07-31  
-状态：已批准，等待实施计划
+状态：已批准，实施计划已编写
 
 ## 1. 背景
 
@@ -63,10 +63,10 @@ PortfolioIntelligenceResult resolve(PortfolioTask task)
 ```text
 PortfolioTask
   turnId
-  conversationId
   query
   intentCandidate
   extractedConditions
+  recommendationBatchId?
   previousRecommendationContext?
 ```
 
@@ -170,7 +170,6 @@ requestedSize
 
 ```text
 RecommendationContext
-  conversationId
   recommendationBatchId
   normalizedConditions
   selectedPortfolioIds
@@ -178,11 +177,14 @@ RecommendationContext
   contentVersion
 ```
 
-“第二个不错，换掉第一个”“再偏后端一点”等后续输入默认继承最近一次有效上下文，进入 `REFINE_RECOMMENDATION`。
+默认上下文注册表只保留公开领域数据，使用随机 `rec_<32位十六进制>` 批次标识，保存 30 分钟，最多保留 1000 个批次；过期清理和容量淘汰都不能影响普通问答。该注册表是单实例内存实现，不承诺跨实例共享。
+
+“第二个不错，换掉第一个”“再偏后端一点”等后续输入通过请求上下文回传的 `recommendationBatchId` 读取对应推荐上下文，进入 `REFINE_RECOMMENDATION`。批次标识由后端生成，前端不得自行构造。
 
 以下情况不直接继承：
 
-- 没有该会话的成功推荐记录。
+- 批次标识没有对应的成功推荐记录。
+- 请求未携带有效 `recommendationBatchId`，且仅凭消息内容无法确定所指推荐。
 - 用户指代无法映射到现有结果。
 - 内容版本变化使原候选不可继续使用。
 - 新旧条件冲突且无法按确定性规则消解。
@@ -231,13 +233,14 @@ RecommendationContext
 ```json
 {
   "portfolioRecommendation": {
-    "recommendationBatchId": "rec-...",
+    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef",
     "items": [
       {
-        "portfolioId": "portfolio-...",
+        "portfolioId": "project-1",
         "title": "项目名称",
+        "route": "/projects/project-slug",
         "matchReasons": ["匹配后端能力要求"],
-        "evidenceIds": ["evidence-..."]
+        "evidenceIds": ["evidence-1"]
       }
     ],
     "satisfiedConstraints": ["audienceRole", "requestedSize"],
@@ -256,6 +259,8 @@ RecommendationContext
 - 公共字段名使用 `portfolioRecommendation`，不得使用 `selection`。
 
 省略该字段可以保持向后兼容，并避免无意义的 `null`。
+
+`ConversationAnswerContextRequest` 增加可选的 `recommendationBatchId`，格式限制为 `[A-Za-z0-9_-]{1,100}`。普通问答和首次推荐不需要该字段；继续调整推荐时，前端把最近一次结构化推荐响应中的批次标识原样回传。无效或过期批次不触发猜测式调整，而是进入 `CLARIFICATION_REQUIRED`。
 
 ## 9. 删除与迁移
 
@@ -291,6 +296,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - 为 `AnswerResponse` 与 `MappedAnswer` 增加可选 `portfolioRecommendation`。
 - 在 `mapAnswerResponse.ts` 中深拷贝并保留该字段，防止映射阶段丢失。
 - 在本地会话持久化与恢复链路中保留完整推荐结构。
+- 发送推荐后续问题时，在请求 `context.recommendationBatchId` 中原样回传当前批次标识。
 - 在 `ConversationThread.vue` 的结构化回答区域渲染推荐卡片。
 - 在现有 Agent 样式体系中补充卡片、约束状态和窄屏布局。
 
@@ -318,7 +324,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - `再偏后端一点`
 - `把数量改成 2 个`
 
-前端可以附带已有的会话上下文信封，但不能自行修改 `portfolioRecommendation.items`，也不能指定内部策略。
+前端必须通过 `context.recommendationBatchId` 回传当前推荐批次；不能自行构造批次标识、修改 `portfolioRecommendation.items` 或指定内部策略。
 
 ### 10.4 渲染状态
 
@@ -337,6 +343,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - 多个推荐项保持后端顺序。
 - 空推荐正确显示未满足约束。
 - 推荐操作继续调用 `/api/v2/answers`，不出现其他推荐接口请求。
+- 推荐调整请求原样回传当前 `recommendationBatchId`。
 - 刷新或恢复本地会话后，推荐卡片与批次上下文仍存在。
 - 窄屏下卡片可读且不横向溢出。
 - 非法结构化字段不会导致整条 Agent 消息无法显示。
@@ -363,7 +370,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 
 每次 `PortfolioIntelligence.resolve` 至少记录：
 
-- `turnId`、`conversationId`
+- `turnId`
 - 规则命中的意图及是否调用模型补充
 - 模型分类结果、置信度和是否被拒绝
 - 最终硬路由模式
