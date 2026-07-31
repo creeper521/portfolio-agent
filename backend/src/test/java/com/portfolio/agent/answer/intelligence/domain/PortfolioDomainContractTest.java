@@ -111,6 +111,39 @@ class PortfolioDomainContractTest {
                 .containsExactly("evidence-1");
     }
 
+    @Test
+    void keepsRetrievalWindowSeparateFromRecommendationSize() {
+        PortfolioRetrievalRequest defaultRequest = new PortfolioRetrievalRequest(
+                "find PostgreSQL work", PortfolioTaskMode.FACT_LOOKUP,
+                PortfolioConditions.empty());
+        PortfolioRetrievalRequest explicitRequest = new PortfolioRetrievalRequest(
+                "compare projects", PortfolioTaskMode.COMPARISON,
+                new PortfolioConditions(null, "INTERVIEWER", Set.of(), null, 2), 50);
+
+        assertThat(defaultRequest.getLimit()).isEqualTo(20);
+        assertThat(explicitRequest.getLimit()).isEqualTo(50);
+        assertThat(explicitRequest.getConditions().getRequestedSize()).isEqualTo(2);
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortfolioRetrievalRequest(
+                "too many", PortfolioTaskMode.FACT_LOOKUP, PortfolioConditions.empty(), 51));
+    }
+
+    @Test
+    void exposesRetrievalFactsWithoutCouplingThemToRecommendationItems() {
+        PortfolioRetrievedSubject subject = new PortfolioRetrievedSubject(
+                "project-1", "PROJECT", "Project one", "Public summary", "/projects/project-1",
+                Set.of("POSTGRESQL"));
+        PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
+                "project-1#claim-1", "project-1", "claim-1", "Public verified fact",
+                List.of("evidence-1"));
+        PortfolioRetrievalResult result = new PortfolioRetrievalResult(
+                "public-2026-07-31", List.of(subject), List.of(passage),
+                new PortfolioRetrievalSource("BUNDLE"), false, null);
+
+        assertThat(result.getSubjects()).containsExactly(subject);
+        assertThat(result.getPassages()).containsExactly(passage);
+        assertThat(result.getSource().getAdapterId()).isEqualTo("BUNDLE");
+    }
+
     private PortfolioRecommendationContext context() {
         return new PortfolioRecommendationContext(
                 batchId(), "public-2026-07-31", "BACKEND", "INTERVIEWER",

@@ -6,26 +6,34 @@ import java.util.Objects;
 public final class PortfolioRetrievalResult {
 
     private final String contentVersion;
-    private final List<PortfolioRecommendationItem> items;
+    private final List<PortfolioRetrievedSubject> subjects;
+    private final List<PortfolioRetrievedPassage> passages;
+    private final PortfolioRetrievalSource source;
     private final boolean degraded;
     private final String noticeCode;
 
     public PortfolioRetrievalResult(
             String contentVersion,
-            List<PortfolioRecommendationItem> items,
+            List<PortfolioRetrievedSubject> subjects,
+            List<PortfolioRetrievedPassage> passages,
+            PortfolioRetrievalSource source,
             boolean degraded,
             String noticeCode) {
         if (contentVersion == null || contentVersion.isBlank()) {
             throw new IllegalArgumentException("contentVersion is required");
         }
         this.contentVersion = contentVersion.trim();
-        this.items = List.copyOf(Objects.requireNonNull(items, "items"));
+        this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+        this.passages = List.copyOf(Objects.requireNonNull(passages, "passages"));
+        this.source = Objects.requireNonNull(source, "source");
         this.degraded = degraded;
         this.noticeCode = normalizeNullable(noticeCode);
     }
 
     public String getContentVersion() { return contentVersion; }
-    public List<PortfolioRecommendationItem> getItems() { return items; }
+    public List<PortfolioRetrievedSubject> getSubjects() { return subjects; }
+    public List<PortfolioRetrievedPassage> getPassages() { return passages; }
+    public PortfolioRetrievalSource getSource() { return source; }
     public boolean isDegraded() { return degraded; }
     public String getNoticeCode() { return noticeCode; }
 
@@ -35,17 +43,22 @@ public final class PortfolioRetrievalResult {
         if (!(other instanceof PortfolioRetrievalResult that)) { return false; }
         return degraded == that.degraded
                 && Objects.equals(contentVersion, that.contentVersion)
-                && Objects.equals(items, that.items)
+                && Objects.equals(subjects, that.subjects)
+                && Objects.equals(passages, that.passages)
+                && Objects.equals(source, that.source)
                 && Objects.equals(noticeCode, that.noticeCode);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(contentVersion, items, degraded, noticeCode); }
+    public int hashCode() {
+        return Objects.hash(contentVersion, subjects, passages, source, degraded, noticeCode);
+    }
 
     @Override
     public String toString() {
         return "PortfolioRetrievalResult{" + "contentVersion='" + contentVersion + '\''
-                + ", itemCount=" + items.size() + ", degraded=" + degraded
+                + ", subjectCount=" + subjects.size() + ", passageCount=" + passages.size()
+                + ", source=" + source + ", degraded=" + degraded
                 + ", noticeCode='" + noticeCode + '\'' + '}';
     }
 
