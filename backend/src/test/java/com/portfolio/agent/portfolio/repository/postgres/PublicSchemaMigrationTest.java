@@ -27,15 +27,22 @@ class PublicSchemaMigrationTest {
     }
 
     @Test
-    void removesCapabilitiesWithoutAVerifiedSupportingClaim() throws IOException {
+    void rebuildsNormalizedCapabilitiesFromVerifiedSnapshotAndLegacyClaims() throws IOException {
         String migration = readResource(
                 "db/public/V3__restrict_capabilities_to_verified_claims.sql");
 
         assertThat(migration)
+                .contains("CREATE TEMPORARY TABLE capability_projection_v3")
+                .contains("release_runtime_snapshot")
+                .contains("jsonb_array_elements")
+                .contains("jsonb_array_elements_text")
+                .contains("upper(btrim(")
+                .contains("min(")
                 .contains("DELETE FROM subject_capability")
                 .contains("NOT EXISTS")
                 .contains("supporting_claim_stable_id")
-                .contains("verification_status = 'VERIFIED'");
+                .contains("verification_status = 'VERIFIED'")
+                .contains("INSERT INTO subject_capability");
     }
 
     private String readResource(String path) throws IOException {
