@@ -74,6 +74,24 @@ class PortfolioRecommendationPolicyTest {
                 .containsExactly("PROJECT-B", "PROJECT-C");
     }
 
+    @Test
+    void excludesCandidatesWhenApprovedAndPendingEvidenceAreMixed() {
+        PortfolioConditions conditions = new PortfolioConditions(
+                "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2);
+
+        PortfolioRecommendation recommendation = policy.recommend(
+                "public-2026-07-31",
+                conditions,
+                List.of(
+                        candidateWithMixedEvidence("PROJECT-A", Set.of("JAVA"), 0.99),
+                        candidate("PROJECT-B", Set.of("JAVA"), 0.8),
+                        candidate("PROJECT-C", Set.of("JAVA"), 0.7)),
+                Set.of());
+
+        assertThat(recommendation.getItems()).extracting(item -> item.getPortfolioId())
+                .containsExactly("PROJECT-B", "PROJECT-C");
+    }
+
     private SelectionCandidate candidate(String id, Set<String> capabilityCodes, double fit) {
         return new SelectionCandidate(
                 id,
@@ -99,6 +117,30 @@ class PortfolioRecommendationPolicyTest {
                 "JAVA_BACKEND",
                 capabilityCodes,
                 List.of(),
+                fit,
+                0.9,
+                0.0);
+    }
+
+    private SelectionCandidate candidateWithMixedEvidence(
+            String id,
+            Set<String> capabilityCodes,
+            double fit) {
+        return new SelectionCandidate(
+                id,
+                PortfolioSubjectKind.PROJECT,
+                "Title " + id,
+                "Summary " + id,
+                "/projects/" + id.toLowerCase(),
+                "JAVA_BACKEND",
+                capabilityCodes,
+                List.of(
+                        new EvidenceReference("claim-approved-" + id, "evidence-approved-" + id, "Approved"),
+                        new EvidenceReference(
+                                "claim-pending-" + id,
+                                "evidence-pending-" + id,
+                                "Pending",
+                                "PENDING")),
                 fit,
                 0.9,
                 0.0);

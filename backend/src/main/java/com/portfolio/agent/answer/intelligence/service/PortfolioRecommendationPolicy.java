@@ -103,7 +103,9 @@ public final class PortfolioRecommendationPolicy {
                     && !conditions.getCareerTrack().equals(candidate.getCareerTrack())) {
                 continue;
             }
-            if (candidate.getEvidenceReferences().stream().noneMatch(reference -> reference.isApproved())) {
+            if (candidate.getEvidenceReferences().isEmpty()
+                    || !candidate.getEvidenceReferences().stream()
+                    .allMatch(reference -> reference.isApproved())) {
                 continue;
             }
             eligible.add(candidate);
