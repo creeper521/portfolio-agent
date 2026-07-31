@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Objects;
@@ -15,12 +17,13 @@ public final class PortfolioConditions {
     private final String goal;
     private final Integer requestedSize;
 
+    @JsonCreator
     public PortfolioConditions(
-            String careerTrack,
-            String audienceRole,
-            Set<String> capabilityCodes,
-            String goal,
-            Integer requestedSize) {
+            @JsonProperty("careerTrack") String careerTrack,
+            @JsonProperty("audienceRole") String audienceRole,
+            @JsonProperty("capabilityCodes") Set<String> capabilityCodes,
+            @JsonProperty("goal") String goal,
+            @JsonProperty("requestedSize") Integer requestedSize) {
         if (requestedSize != null && (requestedSize < 2 || requestedSize > 5)) {
             throw new IllegalArgumentException("requestedSize must be between 2 and 5");
         }

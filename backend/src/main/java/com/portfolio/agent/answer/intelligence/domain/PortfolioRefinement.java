@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -9,7 +11,10 @@ public final class PortfolioRefinement {
     private final PortfolioConditions conditions;
     private final Set<String> excludedPortfolioIds;
 
-    public PortfolioRefinement(PortfolioConditions conditions, Set<String> excludedPortfolioIds) {
+    @JsonCreator
+    public PortfolioRefinement(
+            @JsonProperty("conditions") PortfolioConditions conditions,
+            @JsonProperty("excludedPortfolioIds") Set<String> excludedPortfolioIds) {
         this.conditions = Objects.requireNonNull(conditions, "conditions");
         this.excludedPortfolioIds = Set.copyOf(new LinkedHashSet<>(
                 Objects.requireNonNull(excludedPortfolioIds, "excludedPortfolioIds")));

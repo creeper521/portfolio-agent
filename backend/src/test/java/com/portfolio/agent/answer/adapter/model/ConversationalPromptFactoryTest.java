@@ -42,6 +42,10 @@ class ConversationalPromptFactoryTest {
                 Arguments.of("intent", List.of(
                         "intent", "answerScope", "confidence", "projectSlug",
                         "caseSlug", "facet", "clarificationRequired")),
+                Arguments.of("portfolio_task", List.of(
+                        "mode", "FACT_LOOKUP", "COMPARISON", "RECOMMENDATION",
+                        "REFINE_RECOMMENDATION", "CLARIFICATION_REQUIRED", "conditions",
+                        "refinement", "confidence", "requestedSize")),
                 Arguments.of("tool_plan", List.of(
                         "calls", "kind", "projectSlugs", "caseSlugs",
                         "claimIds", "sectionType")),
