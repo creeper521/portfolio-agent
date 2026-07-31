@@ -58,8 +58,8 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         List<SubjectMaterial> materials = retrievePublishedSubjects(content, corpus, request);
         return new PortfolioRetrievalResult(
                 content.getContentVersion(),
-                materials.stream().map(SubjectMaterial::subject).toList(),
-                materials.stream().flatMap(material -> material.passages().stream()).toList(),
+                materials.stream().map(SubjectMaterial::getSubject).toList(),
+                materials.stream().flatMap(material -> material.getPassages().stream()).toList(),
                 SOURCE,
                 false,
                 null);
@@ -92,6 +92,11 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             AnswerKnowledge knowledge,
             AnswerRetrievalCorpus corpus,
             PortfolioRetrievalRequest request) {
+        String requestedCareerTrack = request.getConditions().getCareerTrack();
+        if (requestedCareerTrack != null
+                && !requestedCareerTrack.equals(knowledge.getCareerTrack())) {
+            return null;
+        }
         List<AnswerEvidence> approvedEvidence = knowledge.getEvidence().stream()
                 .filter(this::isApprovedPublicEvidence)
                 .toList();
@@ -107,7 +112,7 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             return null;
         }
         RetrievalDecision decision = retrievalCoordinator.retrieve(
-                request.getQuery(),
+                controlledRetrievalText(request),
                 knowledge.getSlug(),
                 knowledge.getSubjectType(),
                 corpus,
@@ -124,6 +129,18 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             return null;
         }
         return new SubjectMaterial(toSubject(knowledge), passages);
+    }
+
+    private String controlledRetrievalText(PortfolioRetrievalRequest request) {
+        List<String> parts = new ArrayList<>();
+        parts.add(request.getQuery());
+        if (request.getConditions().getCareerTrack() != null) {
+            parts.add(request.getConditions().getCareerTrack());
+        }
+        request.getConditions().getCapabilityCodes().stream()
+                .sorted()
+                .forEach(parts::add);
+        return String.join(" ", parts);
     }
 
     private List<PortfolioRetrievedPassage> selectedPassages(
@@ -149,7 +166,7 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                 if (claim != null && selectedClaimIds.contains(claimId)) {
                     passages.add(new PortfolioRetrievedPassage(
                             chunkId + "#" + claimId,
-                            knowledge.getSlug(),
+                            knowledge.getStableId(),
                             claimId,
                             chunk.getText(),
                             claim.getDirectEvidenceIds()));
@@ -163,8 +180,9 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         String routePrefix = knowledge.getSubjectType() == AnswerSubjectType.CASE
                 ? "/cases/" : "/projects/";
         return new PortfolioRetrievedSubject(
-                knowledge.getSlug(), knowledge.getSubjectType().name(), knowledge.getTitle(),
-                knowledge.getSummary(), routePrefix + knowledge.getSlug(), Set.of());
+                knowledge.getStableId(), knowledge.getSubjectType().name(), knowledge.getTitle(),
+                knowledge.getSummary(), routePrefix + knowledge.getSlug(),
+                knowledge.getCapabilityCodes());
     }
 
     private boolean isApprovedPublicEvidence(AnswerEvidence evidence) {
@@ -181,7 +199,7 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             this.passages = List.copyOf(passages);
         }
 
-        private PortfolioRetrievedSubject subject() { return subject; }
-        private List<PortfolioRetrievedPassage> passages() { return passages; }
+        private PortfolioRetrievedSubject getSubject() { return subject; }
+        private List<PortfolioRetrievedPassage> getPassages() { return passages; }
     }
 }

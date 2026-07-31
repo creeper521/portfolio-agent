@@ -32,6 +32,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -113,8 +115,17 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         claim.getTopics(),
                         directEvidenceByClaimId.getOrDefault(claim.getId(), List.of())))
                 .toList();
+        ProjectProfile parentProject = snapshot.getProjects().stream()
+                .filter(project -> Objects.equals(project.getId(), value.getProjectId()))
+                .findFirst()
+                .orElse(null);
+        List<String> inheritedTechnologies = parentProject == null
+                ? List.of() : parentProject.getTechnologies();
+        String inheritedCareerTrack = parentProject == null
+                ? null : parentProject.getCareerTrack().name();
         return new AnswerKnowledge(
                 AnswerSubjectType.CASE,
+                value.getId(),
                 value.getSlug(),
                 value.getTitle(),
                 value.getSummary(),
@@ -126,6 +137,8 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 value.getOutcome(),
                 String.join(" ", value.getLimitations()),
                 value.getAchievementStatus().name(),
+                inheritedCareerTrack,
+                capabilityCodes(inheritedTechnologies, claims),
                 questions,
                 evidence,
                 claims);
@@ -263,6 +276,8 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .toList();
 
         return new AnswerKnowledge(
+                AnswerSubjectType.PROJECT,
+                value.getId(),
                 value.getSlug(),
                 value.getTitle(),
                 value.getSummary(),
@@ -274,10 +289,35 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 value.getOutcome(),
                 value.getHandoff(),
                 value.getStatus().name(),
+                value.getCareerTrack().name(),
+                capabilityCodes(value.getTechnologies(), claims),
                 questions,
                 evidence,
                 claims
         );
+    }
+
+    private Set<String> capabilityCodes(
+            List<String> technologies,
+            List<AnswerClaimProjection> claims
+    ) {
+        Set<String> capabilityCodes = new LinkedHashSet<>();
+        technologies.stream()
+                .map(this::normalizeCapabilityCode)
+                .filter(code -> !code.isEmpty())
+                .forEach(capabilityCodes::add);
+        claims.stream()
+                .filter(claim -> claim.getVerificationStatus()
+                        == AnswerClaimVerificationStatus.VERIFIED)
+                .flatMap(claim -> claim.getTopics().stream())
+                .map(this::normalizeCapabilityCode)
+                .filter(code -> !code.isEmpty())
+                .forEach(capabilityCodes::add);
+        return Set.copyOf(capabilityCodes);
+    }
+
+    private String normalizeCapabilityCode(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
     private AnswerQuestion toQuestion(QuestionDefinition question) {
