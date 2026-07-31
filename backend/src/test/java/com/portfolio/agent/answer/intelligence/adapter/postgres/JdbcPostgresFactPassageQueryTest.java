@@ -35,6 +35,8 @@ class JdbcPostgresFactPassageQueryTest {
                 parameters.capture());
         assertThat(sql.getValue())
                 .contains("c.statement")
+                .contains("e.label")
+                .contains("e.public_status")
                 .contains("c.verification_status = 'VERIFIED'")
                 .contains("e.public_status = 'APPROVED'")
                 .contains("cel.support_type = 'DIRECT'")

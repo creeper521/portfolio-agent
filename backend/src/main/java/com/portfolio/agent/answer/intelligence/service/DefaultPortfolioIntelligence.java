@@ -76,8 +76,9 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         PortfolioConditions baseConditions = new PortfolioConditions(
                 context.getCareerTrack(), context.getAudienceRole(), context.getCapabilityCodes(), null,
                 context.getRequestedSize());
-        PortfolioRetrievalResult validationRetrieval = retrieve(
-                task.getQuestion(), PortfolioTaskMode.REFINE_RECOMMENDATION, baseConditions);
+        PortfolioRetrievalResult validationRetrieval = retriever.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        baseConditions, context.getSelectedPortfolioIds()));
         RecommendationContextValidation contextValidation = contextValidator.validate(
                 context, validationRetrieval.getContentVersion(), baseConditions, candidates(validationRetrieval));
         if (!contextValidation.isValid()) {
@@ -156,19 +157,21 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             List<PortfolioRetrievedPassage> passages) {
         Map<String, EvidenceReference> evidenceByClaimAndId = new LinkedHashMap<>();
         for (PortfolioRetrievedPassage passage : passages) {
-            for (String evidenceId : passage.getEvidenceIds()) {
-                String key = passage.getClaimId() + "\u0000" + evidenceId;
+            for (com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference
+                    retrievedEvidence : passage.getEvidenceReferences()) {
+                String key = passage.getClaimId() + "\u0000" + retrievedEvidence.getEvidenceId();
                 evidenceByClaimAndId.putIfAbsent(key, new EvidenceReference(
-                        passage.getClaimId(), evidenceId, passage.getClaimId()));
+                        passage.getClaimId(), retrievedEvidence.getEvidenceId(),
+                        retrievedEvidence.getLabel(), retrievedEvidence.getPublicStatus()));
             }
         }
         List<EvidenceReference> evidence = new ArrayList<>(evidenceByClaimAndId.values());
         evidence.sort(Comparator.comparing(EvidenceReference::getClaimId)
                 .thenComparing(EvidenceReference::getEvidenceId));
-        double evidenceQuality = Math.min(1.0d, evidence.size() / 3.0d);
         return new SelectionCandidate(
                 subject.getSubjectId(), PortfolioSubjectKind.valueOf(subject.getSubjectType()),
                 subject.getTitle(), subject.getSummary(), subject.getRoute(), subject.getCareerTrack(),
-                subject.getCapabilityCodes(), evidence, 1.0d, evidenceQuality, 0.0d);
+                subject.getCapabilityCodes(), evidence, subject.getTargetFit(),
+                subject.getEvidenceQuality(), subject.getConflictPenalty());
     }
 }

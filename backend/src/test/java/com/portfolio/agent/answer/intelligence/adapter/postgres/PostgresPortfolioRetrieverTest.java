@@ -28,16 +28,24 @@ class PostgresPortfolioRetrieverTest {
                                 candidate("project-1", "claim-1", "evidence-1"))),
                         List.of(new PostgresKnowledgePassageRow(
                                 "project-1", "claim-1", "Actual verified PostgreSQL claim",
-                                List.of("evidence-1")))));
+                                List.of(new EvidenceReference(
+                                        "claim-1", "evidence-1", "Approved evidence", "APPROVED"))))));
 
         assertThat(retriever.retrieve(request()).getSubjects()).singleElement().satisfies(subject -> {
             assertThat(subject.getPortfolioId()).isEqualTo("project-1");
             assertThat(subject.getRoute()).isEqualTo("/projects/project-1");
             assertThat(subject.getCareerTrack()).isEqualTo("BACKEND");
+            assertThat(subject.getTargetFit()).isEqualTo(0.61d);
+            assertThat(subject.getEvidenceQuality()).isEqualTo(0.83d);
+            assertThat(subject.getConflictPenalty()).isEqualTo(0.2d);
         });
         assertThat(retriever.retrieve(request()).getPassages()).singleElement().satisfies(passage -> {
             assertThat(passage.getClaimId()).isEqualTo("claim-1");
             assertThat(passage.getEvidenceIds()).containsExactly("evidence-1");
+            assertThat(passage.getEvidenceReferences()).singleElement().satisfies(reference -> {
+                assertThat(reference.getLabel()).isEqualTo("Approved evidence");
+                assertThat(reference.getPublicStatus()).isEqualTo("APPROVED");
+            });
             assertThat(passage.getContent()).isEqualTo("Actual verified PostgreSQL claim");
             assertThat(passage.getContent()).isNotEqualTo("Public summary");
         });
@@ -75,6 +83,6 @@ class PostgresPortfolioRetrieverTest {
         return new SelectionCandidate(
                 subjectId, PortfolioSubjectKind.PROJECT, "PostgreSQL audit", "Public summary",
                 "/projects/" + subjectId, "BACKEND", Set.of("POSTGRESQL"),
-                List.of(new EvidenceReference(claimId, evidenceId, "Approved evidence")), 1.0, 1.0, 0.0);
+                List.of(new EvidenceReference(claimId, evidenceId, "Approved evidence")), 0.61, 0.83, 0.2);
     }
 }

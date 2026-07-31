@@ -134,7 +134,8 @@ class PortfolioDomainContractTest {
                 Set.of("POSTGRESQL"));
         PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
                 "project-1#claim-1", "project-1", "claim-1", "Public verified fact",
-                List.of("evidence-1"));
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-1", "Approved evidence", "APPROVED")));
         PortfolioRetrievalResult result = new PortfolioRetrievalResult(
                 "public-2026-07-31", List.of(subject), List.of(passage),
                 new PortfolioRetrievalSource("BUNDLE"), false, null);

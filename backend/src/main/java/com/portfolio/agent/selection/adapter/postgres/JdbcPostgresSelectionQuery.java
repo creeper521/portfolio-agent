@@ -113,7 +113,8 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                    caps.capabilities,
                    c.stable_id AS claim_id,
                    e.stable_id AS evidence_id,
-                   e.label AS evidence_label
+                   e.label AS evidence_label,
+                   e.public_status AS evidence_public_status
             FROM ranked r
             JOIN portfolio_subject ps
               ON ps.release_id = CAST(? AS uuid)
@@ -216,7 +217,8 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                    caps.capabilities,
                    c.stable_id AS claim_id,
                    e.stable_id AS evidence_id,
-                   e.label AS evidence_label
+                   e.label AS evidence_label,
+                   e.public_status AS evidence_public_status
             FROM ranked r
             JOIN portfolio_subject ps
               ON ps.release_id = CAST(? AS uuid)
@@ -239,6 +241,50 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
              AND e.stable_id = cel.evidence_stable_id
              AND e.public_status = 'APPROVED'
             ORDER BY r.distance, r.display_order, ps.stable_id, c.stable_id, e.stable_id
+            """;
+
+    private static final String EXACT_IDS_SQL = """
+            SELECT ps.stable_id,
+                   ps.subject_kind,
+                   ps.title,
+                   ps.summary,
+                   ps.public_route,
+                   COALESCE(owner.career_track, ps.career_track) AS career_track,
+                   caps.capabilities,
+                   c.stable_id AS claim_id,
+                   e.stable_id AS evidence_id,
+                   e.label AS evidence_label,
+                   e.public_status AS evidence_public_status
+            FROM portfolio_subject ps
+            LEFT JOIN case_study cs
+              ON cs.release_id = ps.release_id
+             AND cs.stable_id = ps.stable_id
+             AND ps.subject_kind = 'CASE'
+            LEFT JOIN portfolio_subject owner
+              ON owner.release_id = ps.release_id
+             AND owner.stable_id = cs.project_stable_id
+             AND owner.subject_kind = 'PROJECT'
+            LEFT JOIN LATERAL (
+                SELECT array_agg(sc.capability_code ORDER BY sc.capability_code) AS capabilities
+                FROM subject_capability sc
+                WHERE sc.release_id = ps.release_id
+                  AND sc.subject_stable_id = ps.stable_id
+            ) caps ON true
+            JOIN claim c
+              ON c.release_id = ps.release_id
+             AND c.subject_stable_id = ps.stable_id
+             AND c.verification_status = 'VERIFIED'
+            JOIN claim_evidence_link cel
+              ON cel.release_id = ps.release_id
+             AND cel.claim_stable_id = c.stable_id
+             AND cel.support_type = 'DIRECT'
+            JOIN evidence e
+              ON e.release_id = ps.release_id
+             AND e.stable_id = cel.evidence_stable_id
+             AND e.public_status = 'APPROVED'
+            WHERE ps.release_id = CAST(? AS uuid)
+              AND ps.stable_id = ANY(CAST(? AS text[]))
+            ORDER BY array_position(CAST(? AS text[]), ps.stable_id), c.stable_id, e.stable_id
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -300,6 +346,20 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 releaseId);
     }
 
+    @Override
+    public List<PostgresSelectionRow> findByIds(String releaseId, List<String> subjectIds) {
+        if (subjectIds.isEmpty()) {
+            return List.of();
+        }
+        String subjectArray = arrayLiteral(subjectIds);
+        return jdbcTemplate.query(
+                EXACT_IDS_SQL,
+                this::mapRows,
+                releaseId,
+                subjectArray,
+                subjectArray);
+    }
+
     private List<PostgresSelectionRow> mapRows(ResultSet resultSet) throws SQLException {
         Map<String, MutableRow> rows = new LinkedHashMap<>();
         while (resultSet.next()) {
@@ -319,7 +379,8 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             row.addEvidence(new EvidenceReference(
                     resultSet.getString("claim_id"),
                     resultSet.getString("evidence_id"),
-                    resultSet.getString("evidence_label")));
+                    resultSet.getString("evidence_label"),
+                    resultSet.getString("evidence_public_status")));
         }
         return rows.values().stream().map(MutableRow::toRow).toList();
     }
@@ -378,6 +439,12 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             builder.append(Float.toString(embedding[index]));
         }
         return builder.append(']').toString();
+    }
+
+    private String arrayLiteral(List<String> values) {
+        return values.stream()
+                .map(value -> "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                .collect(Collectors.joining(",", "{", "}"));
     }
 
     private static final class MutableRow {

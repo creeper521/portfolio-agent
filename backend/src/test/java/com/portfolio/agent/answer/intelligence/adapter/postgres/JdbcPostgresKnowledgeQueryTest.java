@@ -26,7 +26,8 @@ class JdbcPostgresKnowledgeQueryTest {
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
                 (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
                         "project-1", "claim-1", "Actual verified PostgreSQL claim",
-                        List.of("evidence-1"))));
+                        List.of(new EvidenceReference(
+                                "claim-1", "evidence-1", "Approved evidence", "APPROVED")))));
 
         PortfolioRetrievalRequest request = new PortfolioRetrievalRequest(
                 "PostgreSQL audit", PortfolioTaskMode.FACT_LOOKUP,
@@ -50,10 +51,35 @@ class JdbcPostgresKnowledgeQueryTest {
         });
     }
 
+    @Test
+    void validatesReturnedContextByExactIdsInTheCurrentRelease() {
+        RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
+        JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
+                selectionQuery,
+                text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
+                (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
+                        "project-1", "claim-1", "Verified claim",
+                        List.of(new EvidenceReference(
+                                "claim-1", "evidence-1", "Approved evidence", "APPROVED")))));
+
+        PostgresKnowledgeQueryResult result = query.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        new PortfolioConditions(
+                                "BACKEND", "INTERVIEWER", Set.of("POSTGRESQL"), null, 2),
+                        List.of("project-1")));
+
+        assertThat(selectionQuery.exactSubjectIds).containsExactly(List.of("project-1"));
+        assertThat(selectionQuery.targets).isEmpty();
+        assertThat(result.getCandidates().getCandidates())
+                .extracting(candidate -> candidate.getSubjectId())
+                .containsExactly("project-1");
+    }
+
     private static final class RecordingSelectionQuery implements PostgresSelectionQuery {
 
         private final List<String> releaseIds = new java.util.ArrayList<>();
         private final List<SelectionTarget> targets = new java.util.ArrayList<>();
+        private final List<List<String>> exactSubjectIds = new java.util.ArrayList<>();
 
         @Override
         public ActiveRelease activeRelease() {
@@ -72,6 +98,13 @@ class JdbcPostgresKnowledgeQueryTest {
                 String releaseId, float[] embedding, SelectionTarget target, int limit) {
             releaseIds.add(releaseId);
             targets.add(target);
+            return List.of(row());
+        }
+
+        @Override
+        public List<PostgresSelectionRow> findByIds(String releaseId, List<String> subjectIds) {
+            releaseIds.add(releaseId);
+            exactSubjectIds.add(List.copyOf(subjectIds));
             return List.of(row());
         }
 

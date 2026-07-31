@@ -65,6 +65,15 @@ class BundlePortfolioRetrieverTest {
         assertThat(result.getSubjects().getFirst().getCapabilityCodes())
                 .containsExactly("POSTGRESQL");
         assertThat(result.getSubjects().getFirst().getCareerTrack()).isEqualTo("JAVA_BACKEND");
+        assertThat(result.getSubjects().getFirst().getTargetFit()).isEqualTo(1.0d);
+        assertThat(result.getSubjects().getFirst().getEvidenceQuality()).isEqualTo(1.0d);
+        assertThat(result.getSubjects().getFirst().getConflictPenalty()).isEqualTo(0.0d);
+        assertThat(result.getPassages().getFirst().getEvidenceReferences()).singleElement()
+                .satisfies(reference -> {
+                    assertThat(reference.getEvidenceId()).isEqualTo("evidence-1");
+                    assertThat(reference.getLabel()).isEqualTo("Approved public evidence");
+                    assertThat(reference.getPublicStatus()).isEqualTo("APPROVED");
+                });
     }
 
     @Test
@@ -107,6 +116,29 @@ class BundlePortfolioRetrieverTest {
         assertThat(result.getPassages()).isEmpty();
         assertThat(result.isDegraded()).isTrue();
         assertThat(result.getNoticeCode()).isEqualTo("BUNDLE_RETRIEVAL_UNAVAILABLE");
+    }
+
+    @Test
+    void validatesReturnedContextByExactStableIdsWithoutUsingContinuationTextForRecall() {
+        AnswerKnowledge subject = knowledge(
+                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL"),
+                verifiedClaim("claim-1", "evidence-1"), approved("evidence-1"));
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "public-2026-07-31", "hash", List.of(subject), corpus());
+        BundlePortfolioRetriever retriever = new BundlePortfolioRetriever(
+                () -> content, keywordOnlyCoordinator(), RetrievalPolicy.currentRelease());
+
+        PortfolioRetrievalResult result = retriever.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        new PortfolioConditions(
+                                "JAVA_BACKEND", "INTERVIEWER", Set.of("POSTGRESQL"), null, 2),
+                        List.of("project-1")));
+
+        assertThat(result.getSubjects()).extracting(item -> item.getPortfolioId())
+                .containsExactly("project-1");
+        assertThat(result.getPassages())
+                .isNotEmpty()
+                .allSatisfy(item -> assertThat(item.getClaimId()).isEqualTo("claim-1"));
     }
 
     private LocalRetrievalCoordinator coordinator() {

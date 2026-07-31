@@ -9,20 +9,23 @@ public final class PortfolioRetrievedPassage {
     private final String subjectId;
     private final String claimId;
     private final String content;
-    private final List<String> evidenceIds;
+    private final List<PortfolioRetrievedEvidenceReference> evidenceReferences;
 
     public PortfolioRetrievedPassage(
             String passageId,
             String subjectId,
             String claimId,
             String content,
-            List<String> evidenceIds) {
+            List<PortfolioRetrievedEvidenceReference> evidenceReferences) {
         this.passageId = requireText(passageId, "passageId");
         this.subjectId = requireText(subjectId, "subjectId");
         this.claimId = requireText(claimId, "claimId");
         this.content = requireText(content, "content");
-        this.evidenceIds = List.copyOf(Objects.requireNonNull(evidenceIds, "evidenceIds"));
-        if (this.evidenceIds.isEmpty()) { throw new IllegalArgumentException("evidenceIds are required"); }
+        this.evidenceReferences = List.copyOf(
+                Objects.requireNonNull(evidenceReferences, "evidenceReferences"));
+        if (this.evidenceReferences.isEmpty()) {
+            throw new IllegalArgumentException("evidenceReferences are required");
+        }
     }
 
     public String getPassageId() { return passageId; }
@@ -30,7 +33,14 @@ public final class PortfolioRetrievedPassage {
     public String getSubjectId() { return subjectId; }
     public String getClaimId() { return claimId; }
     public String getContent() { return content; }
-    public List<String> getEvidenceIds() { return evidenceIds; }
+    public List<PortfolioRetrievedEvidenceReference> getEvidenceReferences() {
+        return evidenceReferences;
+    }
+    public List<String> getEvidenceIds() {
+        return evidenceReferences.stream()
+                .map(PortfolioRetrievedEvidenceReference::getEvidenceId)
+                .toList();
+    }
 
     @Override
     public boolean equals(Object other) {
@@ -40,11 +50,13 @@ public final class PortfolioRetrievedPassage {
                 && Objects.equals(subjectId, that.subjectId)
                 && Objects.equals(claimId, that.claimId)
                 && Objects.equals(content, that.content)
-                && Objects.equals(evidenceIds, that.evidenceIds);
+                && Objects.equals(evidenceReferences, that.evidenceReferences);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(passageId, subjectId, claimId, content, evidenceIds); }
+    public int hashCode() {
+        return Objects.hash(passageId, subjectId, claimId, content, evidenceReferences);
+    }
 
     @Override
     public String toString() {

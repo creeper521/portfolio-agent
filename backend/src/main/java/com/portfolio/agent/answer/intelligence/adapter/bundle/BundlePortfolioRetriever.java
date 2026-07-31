@@ -14,6 +14,7 @@ import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
@@ -92,6 +93,10 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             AnswerKnowledge knowledge,
             AnswerRetrievalCorpus corpus,
             PortfolioRetrievalRequest request) {
+        if (request.isExactPortfolioLookup()
+                && !request.getRequiredPortfolioIds().contains(knowledge.getStableId())) {
+            return null;
+        }
         String requestedCareerTrack = request.getConditions().getCareerTrack();
         if (requestedCareerTrack != null
                 && !requestedCareerTrack.equals(knowledge.getCareerTrack())) {
@@ -111,6 +116,13 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         if (verifiedClaims.isEmpty()) {
             return null;
         }
+        if (request.isExactPortfolioLookup()) {
+            List<PortfolioRetrievedPassage> exactPassages = exactPassages(
+                    knowledge, corpus, verifiedClaims);
+            return exactPassages.isEmpty()
+                    ? null
+                    : new SubjectMaterial(toSubject(knowledge, request), exactPassages);
+        }
         RetrievalDecision decision = retrievalCoordinator.retrieve(
                 controlledRetrievalText(request),
                 knowledge.getSlug(),
@@ -128,7 +140,43 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         if (passages.isEmpty()) {
             return null;
         }
-        return new SubjectMaterial(toSubject(knowledge), passages);
+        return new SubjectMaterial(toSubject(knowledge, request), passages);
+    }
+
+    private List<PortfolioRetrievedPassage> exactPassages(
+            AnswerKnowledge knowledge,
+            AnswerRetrievalCorpus corpus,
+            List<AnswerClaimProjection> verifiedClaims) {
+        Map<String, AnswerClaimProjection> claimsById = verifiedClaims.stream()
+                .collect(Collectors.toMap(AnswerClaimProjection::getId, claim -> claim));
+        List<PortfolioRetrievedPassage> passages = new ArrayList<>();
+        corpus.getChunks().values().stream()
+                .filter(chunk -> belongsToSubject(chunk, knowledge))
+                .sorted(java.util.Comparator.comparing(AnswerRetrievalChunk::getChunkId))
+                .forEach(chunk -> {
+                    for (String claimId : chunk.getClaimIds()) {
+                        AnswerClaimProjection claim = claimsById.get(claimId);
+                        if (claim != null && chunk.getText() != null && !chunk.getText().isBlank()) {
+                            passages.add(new PortfolioRetrievedPassage(
+                                    chunk.getChunkId() + "#" + claimId,
+                                    knowledge.getStableId(),
+                                    claimId,
+                                    chunk.getText(),
+                                    claim.getDirectEvidenceIds().stream()
+                                            .map(evidenceId -> evidenceReference(knowledge, evidenceId))
+                                            .toList()));
+                        }
+                    }
+                });
+        return List.copyOf(passages);
+    }
+
+    private boolean belongsToSubject(
+            AnswerRetrievalChunk chunk,
+            AnswerKnowledge knowledge) {
+        return knowledge.getSubjectType() == AnswerSubjectType.CASE
+                ? chunk.getCaseSlugs().contains(knowledge.getSlug())
+                : chunk.getProjectSlugs().contains(knowledge.getSlug());
     }
 
     private String controlledRetrievalText(PortfolioRetrievalRequest request) {
@@ -169,21 +217,55 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                             knowledge.getStableId(),
                             claimId,
                             chunk.getText(),
-                            claim.getDirectEvidenceIds()));
+                            claim.getDirectEvidenceIds().stream()
+                                    .map(evidenceId -> evidenceReference(knowledge, evidenceId))
+                                    .toList()));
                 }
             }
         }
         return List.copyOf(passages);
     }
 
-    private PortfolioRetrievedSubject toSubject(AnswerKnowledge knowledge) {
+    private PortfolioRetrievedSubject toSubject(
+            AnswerKnowledge knowledge,
+            PortfolioRetrievalRequest request) {
         String routePrefix = knowledge.getSubjectType() == AnswerSubjectType.CASE
                 ? "/cases/" : "/projects/";
         return new PortfolioRetrievedSubject(
                 knowledge.getStableId(), knowledge.getSubjectType().name(), knowledge.getTitle(),
                 knowledge.getSummary(), routePrefix + knowledge.getSlug(),
                 knowledge.getCareerTrack(),
-                knowledge.getCapabilityCodes());
+                knowledge.getCapabilityCodes(),
+                targetFit(knowledge, request),
+                1.0d,
+                0.0d);
+    }
+
+    private PortfolioRetrievedEvidenceReference evidenceReference(
+            AnswerKnowledge knowledge,
+            String evidenceId) {
+        AnswerEvidence evidence = knowledge.getEvidence().stream()
+                .filter(candidate -> candidate.getId().equals(evidenceId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "retrieved claim references missing evidence"));
+        return new PortfolioRetrievedEvidenceReference(
+                evidence.getId(), evidence.getTitle(), evidence.getPublicStatus());
+    }
+
+    private double targetFit(AnswerKnowledge knowledge, PortfolioRetrievalRequest request) {
+        double careerFit = request.getConditions().getCareerTrack() == null
+                || request.getConditions().getCareerTrack().equals(knowledge.getCareerTrack())
+                ? 1.0d : 0.0d;
+        Set<String> requestedCapabilities = request.getConditions().getCapabilityCodes();
+        if (requestedCapabilities.isEmpty()) {
+            return careerFit;
+        }
+        long matchedCapabilities = requestedCapabilities.stream()
+                .filter(knowledge.getCapabilityCodes()::contains)
+                .count();
+        double capabilityFit = (double) matchedCapabilities / requestedCapabilities.size();
+        return (careerFit + capabilityFit) / 2.0d;
     }
 
     private boolean isApprovedPublicEvidence(AnswerEvidence evidence) {

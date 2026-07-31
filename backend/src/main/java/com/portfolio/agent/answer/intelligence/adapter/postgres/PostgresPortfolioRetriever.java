@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.intelligence.adapter.postgres;
 
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
@@ -66,12 +67,18 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
         return new PortfolioRetrievedSubject(
                 candidate.getSubjectId(), candidate.getSubjectKind().name(), candidate.getTitle(),
                 candidate.getSummary(), candidate.getRoute(), candidate.getCareerTrack(),
-                candidate.getCapabilityCodes());
+                candidate.getCapabilityCodes(), candidate.getTargetFit(),
+                candidate.getEvidenceQuality(), candidate.getConflictPenalty());
     }
 
     private PortfolioRetrievedPassage toPassage(PostgresKnowledgePassageRow row) {
         return new PortfolioRetrievedPassage(
                 row.getSubjectId() + "#" + row.getClaimId(),
-                row.getSubjectId(), row.getClaimId(), row.getContent(), row.getEvidenceIds());
+                row.getSubjectId(), row.getClaimId(), row.getContent(),
+                row.getEvidenceReferences().stream()
+                        .map(reference -> new PortfolioRetrievedEvidenceReference(
+                                reference.getEvidenceId(), reference.getLabel(),
+                                reference.getPublicStatus()))
+                        .toList());
     }
 }

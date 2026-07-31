@@ -183,4 +183,30 @@ class JdbcPostgresSelectionQueryTest {
                 .contains("CAST(? AS text[]) IS NOT NULL")
                 .contains("neutral_capability");
     }
+
+    @Test
+    void findsExactIdsWithinOneReleaseAndKeepsEvidenceGates() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(
+                        anyString(),
+                        any(ResultSetExtractor.class),
+                        any(Object[].class)))
+                .thenReturn(List.of());
+        JdbcPostgresSelectionQuery query = new JdbcPostgresSelectionQuery(jdbcTemplate);
+
+        query.findByIds(
+                "9d1bca16-1e9a-4d54-a692-b7f7c68dbc20",
+                List.of("project-1", "case-2"));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(
+                sql.capture(),
+                any(ResultSetExtractor.class),
+                any(Object[].class));
+        assertThat(sql.getValue())
+                .contains("ps.release_id = CAST(? AS uuid)")
+                .contains("ps.stable_id = ANY(CAST(? AS text[]))")
+                .contains("c.verification_status = 'VERIFIED'")
+                .contains("e.public_status = 'APPROVED'");
+    }
 }

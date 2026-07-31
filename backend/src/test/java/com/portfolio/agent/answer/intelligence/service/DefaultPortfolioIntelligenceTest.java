@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRefinement;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
@@ -69,6 +70,54 @@ class DefaultPortfolioIntelligenceTest {
     }
 
     @Test
+    void doesNotPromotePendingRetrievedEvidenceToApproved() {
+        PortfolioRetrievedSubject subject = subject("project-a", "Project A");
+        PortfolioRetrievedPassage pendingPassage = new PortfolioRetrievedPassage(
+                "project-a#claim-a", "project-a", "claim-a", "Pending claim",
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-a", "Pending evidence", "PENDING")));
+        RecordingRetriever retriever = new RecordingRetriever(new PortfolioRetrievalResult(
+                "public-1", List.of(subject), List.of(pendingPassage),
+                new PortfolioRetrievalSource("TEST"), false, null));
+
+        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
+                PortfolioTaskMode.RECOMMENDATION,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null));
+
+        assertThat(result.getPortfolioRecommendation().getItems()).isEmpty();
+    }
+
+    @Test
+    void preservesRetrieverScoresWhenBuildingSelectionCandidates() {
+        List<PortfolioRetrievedSubject> subjects = List.of(
+                subject("project-a", "Project A", 0.1d),
+                subject("project-b", "Project B", 0.9d),
+                subject("project-c", "Project C", 0.8d));
+        RecordingRetriever retriever = new RecordingRetriever(new PortfolioRetrievalResult(
+                "public-1",
+                subjects,
+                List.of(
+                        passage("project-a", "claim-a", "evidence-a"),
+                        passage("project-b", "claim-b", "evidence-b"),
+                        passage("project-c", "claim-c", "evidence-c")),
+                new PortfolioRetrievalSource("TEST"),
+                false,
+                null));
+
+        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
+                PortfolioTaskMode.RECOMMENDATION,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null));
+
+        assertThat(result.getPortfolioRecommendation().getItems())
+                .extracting(item -> item.getPortfolioId())
+                .containsExactly("project-b", "project-c");
+    }
+
+    @Test
     void validatesReturnedContextBeforeApplyingRefinementAndRecomputingRecommendation() {
         RecordingRetriever retriever = new RecordingRetriever(retrieval());
         DefaultPortfolioIntelligence intelligence = intelligence(retriever);
@@ -80,6 +129,11 @@ class DefaultPortfolioIntelligenceTest {
                 PortfolioConditions.empty(), TestRecommendationContexts.context(), refinement));
 
         assertThat(retriever.requests).hasSize(2);
+        assertThat(retriever.requests.get(0).getRequiredPortfolioIds())
+                .containsExactly("project-a", "project-b");
+        assertThat(retriever.requests.get(0).getQuery())
+                .isEqualTo("portfolio-context-validation")
+                .doesNotContain("question");
         assertThat(result.getPortfolioRecommendation().getItems())
                 .extracting(item -> item.getPortfolioId())
                 .containsExactly("project-b", "project-c");
@@ -137,15 +191,20 @@ class DefaultPortfolioIntelligenceTest {
     }
 
     private PortfolioRetrievedSubject subject(String id, String title) {
+        return subject(id, title, 0.75d);
+    }
+
+    private PortfolioRetrievedSubject subject(String id, String title, double targetFit) {
         return new PortfolioRetrievedSubject(
                 id, "PROJECT", title, "Summary " + id, "/projects/" + id,
-                "BACKEND", Set.of("JAVA"));
+                "BACKEND", Set.of("JAVA"), targetFit, 0.9d, 0.1d);
     }
 
     private PortfolioRetrievedPassage passage(String subjectId, String claimId, String evidenceId) {
         return new PortfolioRetrievedPassage(
                 subjectId + "#" + claimId, subjectId, claimId, "Verified " + claimId,
-                List.of(evidenceId));
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        evidenceId, "Approved " + evidenceId, "APPROVED")));
     }
 
     private static final class RecordingRetriever implements PortfolioRetriever {
