@@ -115,14 +115,6 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                         claim.getTopics(),
                         directEvidenceByClaimId.getOrDefault(claim.getId(), List.of())))
                 .toList();
-        ProjectProfile parentProject = snapshot.getProjects().stream()
-                .filter(project -> Objects.equals(project.getId(), value.getProjectId()))
-                .findFirst()
-                .orElse(null);
-        List<String> inheritedTechnologies = parentProject == null
-                ? List.of() : parentProject.getTechnologies();
-        String inheritedCareerTrack = parentProject == null
-                ? null : parentProject.getCareerTrack().name();
         return new AnswerKnowledge(
                 AnswerSubjectType.CASE,
                 value.getId(),
@@ -137,8 +129,8 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 value.getOutcome(),
                 String.join(" ", value.getLimitations()),
                 value.getAchievementStatus().name(),
-                inheritedCareerTrack,
-                capabilityCodes(inheritedTechnologies, claims),
+                null,
+                capabilityCodes(claims),
                 questions,
                 evidence,
                 claims);
@@ -290,22 +282,15 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 value.getHandoff(),
                 value.getStatus().name(),
                 value.getCareerTrack().name(),
-                capabilityCodes(value.getTechnologies(), claims),
+                capabilityCodes(claims),
                 questions,
                 evidence,
                 claims
         );
     }
 
-    private Set<String> capabilityCodes(
-            List<String> technologies,
-            List<AnswerClaimProjection> claims
-    ) {
+    private Set<String> capabilityCodes(List<AnswerClaimProjection> claims) {
         Set<String> capabilityCodes = new LinkedHashSet<>();
-        technologies.stream()
-                .map(this::normalizeCapabilityCode)
-                .filter(code -> !code.isEmpty())
-                .forEach(capabilityCodes::add);
         claims.stream()
                 .filter(claim -> claim.getVerificationStatus()
                         == AnswerClaimVerificationStatus.VERIFIED)

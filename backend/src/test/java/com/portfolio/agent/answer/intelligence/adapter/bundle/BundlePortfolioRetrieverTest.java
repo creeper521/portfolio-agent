@@ -2,9 +2,11 @@ package com.portfolio.agent.answer.intelligence.adapter.bundle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerClaimProjection;
 import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
 import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKeywordIndex;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
@@ -40,7 +42,7 @@ class BundlePortfolioRetrieverTest {
         AnswerClaimProjection claim = verifiedClaim("claim-1", "evidence-1");
         AnswerEvidence evidence = approved("evidence-1");
         AnswerKnowledge subject = knowledge(
-                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL", "RAG"),
+                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL"),
                 claim, evidence);
         RuntimeAnswerContent content = new RuntimeAnswerContent(
                 "public-2026-07-31", "hash", List.of(subject), corpus());
@@ -61,13 +63,13 @@ class BundlePortfolioRetrieverTest {
         });
         assertThat(result.getSubjects().getFirst().getRoute()).isEqualTo("/projects/sql-audit");
         assertThat(result.getSubjects().getFirst().getCapabilityCodes())
-                .containsExactlyInAnyOrder("POSTGRESQL", "RAG");
+                .containsExactly("POSTGRESQL");
     }
 
     @Test
     void consumesCareerAndCapabilityConditionsWithoutUsingAudienceAsAnAlgorithmSwitch() {
         AnswerKnowledge subject = knowledge(
-                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL", "RAG"),
+                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL"),
                 verifiedClaim("claim-1", "evidence-1"), approved("evidence-1"));
         RuntimeAnswerContent content = new RuntimeAnswerContent(
                 "public-2026-07-31", "hash", List.of(subject), corpus());
@@ -84,7 +86,7 @@ class BundlePortfolioRetrieverTest {
 
         assertThat(matched.getSubjects()).singleElement().satisfies(item -> {
             assertThat(item.getPortfolioId()).isEqualTo("project-1");
-            assertThat(item.getCapabilityCodes()).containsExactlyInAnyOrder("POSTGRESQL", "RAG");
+            assertThat(item.getCapabilityCodes()).containsExactly("POSTGRESQL");
         });
         assertThat(careerMismatch.getSubjects()).isEmpty();
     }
@@ -179,8 +181,17 @@ class BundlePortfolioRetrieverTest {
 
     private AnswerClaimProjection verifiedClaim(String claimId, String evidenceId) {
         return new AnswerClaimProjection(
-                claimId, AnswerClaimCategory.OUTCOME, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
-                AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY, List.of(evidenceId));
+                claimId,
+                AnswerClaimCategory.OUTCOME,
+                "Verified PostgreSQL outcome",
+                "Public claim detail",
+                AnswerAchievementStatus.DELIVERED,
+                AnswerContributionType.PRIMARY,
+                AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                AnswerClaimVerificationStatus.VERIFIED,
+                AnswerMateriality.KEY,
+                List.of("POSTGRESQL"),
+                List.of(evidenceId));
     }
 
     private AnswerEvidence approved(String evidenceId) {

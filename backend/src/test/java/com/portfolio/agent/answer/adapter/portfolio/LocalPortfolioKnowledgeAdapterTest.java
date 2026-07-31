@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,7 +55,8 @@ class LocalPortfolioKnowledgeAdapterTest {
 
     @Test
     void projectsExposeStableIdsAndRecommendationMetadata() {
-        Claim projectClaim = claim("claim-project", ClaimSubjectType.PROJECT, "project-1");
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
         ProjectProfile project = metadataProject(projectClaim);
         PortfolioSnapshot snapshot = metadataSnapshot(
                 List.of(project), List.of(), List.of(projectClaim));
@@ -69,13 +69,16 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(knowledge.getStableId()).isEqualTo("project-1");
         assertThat(knowledge.getSlug()).isEqualTo("sql-audit");
         assertThat(knowledge.getCareerTrack()).isEqualTo("JAVA_BACKEND");
-        assertThat(knowledge.getCapabilityCodes()).containsExactlyInAnyOrder("JAVA", "DELIVERY");
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("PROJECT_DELIVERY");
+        assertThat(knowledge.getCapabilityCodes()).doesNotContain("JAVA");
     }
 
     @Test
-    void casesInheritProjectRecommendationMetadataAndKeepTheirOwnStableIds() {
-        Claim projectClaim = claim("claim-project", ClaimSubjectType.PROJECT, "project-1");
-        Claim caseClaim = claim("claim-case", ClaimSubjectType.CASE, "case-role-reset");
+    void casesExposeOnlyTheirOwnClaimTopicsAndKeepTheirOwnStableIds() {
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
+        Claim caseClaim = claim(
+                "claim-case", ClaimSubjectType.CASE, "case-role-reset", "CASE_RECOVERY");
         ProjectProfile project = metadataProject(projectClaim);
         CaseStudy caseStudy = new CaseStudy(
                 "case-role-reset",
@@ -109,8 +112,10 @@ class LocalPortfolioKnowledgeAdapterTest {
 
         assertThat(knowledge.getStableId()).isEqualTo("case-role-reset");
         assertThat(knowledge.getSlug()).isEqualTo("test-role-reset");
-        assertThat(knowledge.getCareerTrack()).isEqualTo("JAVA_BACKEND");
-        assertThat(knowledge.getCapabilityCodes()).containsExactlyInAnyOrder("JAVA", "DELIVERY");
+        assertThat(knowledge.getCareerTrack()).isNull();
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("CASE_RECOVERY");
+        assertThat(knowledge.getCapabilityCodes())
+                .doesNotContain("JAVA", "PROJECT_DELIVERY");
     }
 
     @Test
@@ -523,6 +528,15 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     private static Claim claim(String id, ClaimSubjectType subjectType, String subjectId) {
+        return claim(id, subjectType, subjectId, "DELIVERY");
+    }
+
+    private static Claim claim(
+            String id,
+            ClaimSubjectType subjectType,
+            String subjectId,
+            String topic
+    ) {
         return new Claim(
                 id,
                 subjectType,
@@ -535,7 +549,7 @@ class LocalPortfolioKnowledgeAdapterTest {
                 VerificationBasis.EVIDENCE_SUPPORTED,
                 ClaimVerificationStatus.VERIFIED,
                 Materiality.KEY,
-                List.of("DELIVERY"),
+                List.of(topic),
                 Map.of("INTERVIEWER", 100)
         );
     }
