@@ -1,6 +1,5 @@
 package com.portfolio.agent.answer.intelligence.service;
 
-import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
 import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
@@ -13,6 +12,7 @@ import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPo
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PortfolioTaskResolverTest {
 
@@ -48,6 +49,40 @@ class PortfolioTaskResolverTest {
         PortfolioTask result = resolver.resolve("turn-1", "换掉第一个推荐", null);
 
         assertThat(result.getMode()).isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(classifier.getInvocationCount()).isZero();
+    }
+
+    @Test
+    void extractsControlledConditionsFromRuleResolvedRecommendationWithoutCallingModel() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTask result = resolver.resolve(
+                "turn-1",
+                "给面试官推荐2个Java后端/RAG作品",
+                null);
+
+        assertThat(result.getMode()).isEqualTo(PortfolioTaskMode.RECOMMENDATION);
+        assertThat(result.getConditions().getAudienceRole()).isEqualTo("INTERVIEWER");
+        assertThat(result.getConditions().getCareerTrack()).isEqualTo("BACKEND");
+        assertThat(result.getConditions().getCapabilityCodes())
+                .contains("JAVA", "RAG");
+        assertThat(result.getConditions().hasRequestedSize()).isTrue();
+        assertThat(result.getConditions().getRequestedSize()).isEqualTo(2);
+        assertThat(classifier.getInvocationCount()).isZero();
+    }
+
+    @Test
+    void ordinalWithoutRefinementActionRemainsFactLookup() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTask result = resolver.resolve(
+                "turn-1",
+                "第一个项目用了什么技术栈？",
+                null);
+
+        assertThat(result.getMode()).isEqualTo(PortfolioTaskMode.FACT_LOOKUP);
         assertThat(classifier.getInvocationCount()).isZero();
     }
 
@@ -109,6 +144,21 @@ class PortfolioTaskResolverTest {
         assertThat(result.getRecommendationContext()).isNull();
     }
 
+    @ParameterizedTest
+    @ValueSource(doubles = {
+            Double.NaN,
+            Double.POSITIVE_INFINITY,
+            -0.01d,
+            1.01d
+    })
+    void rejectsNonFiniteOrOutOfRangeConfidenceThreshold(double threshold) {
+        RecordingClassifier classifier = new RecordingClassifier();
+
+        assertThatThrownBy(() -> new PortfolioTaskResolver(classifier, threshold))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("confidenceThreshold");
+    }
+
     private static Stream<Arguments> ruleResolvedQuestions() {
         return Stream.of(
                 Arguments.of("这个项目做了什么？", null, PortfolioTaskMode.FACT_LOOKUP),
@@ -118,8 +168,7 @@ class PortfolioTaskResolverTest {
     }
 
     private PortfolioTaskResolver resolver(RecordingClassifier classifier) {
-        ConversationalAgentProperties properties = new ConversationalAgentProperties();
-        return new PortfolioTaskResolver(classifier, properties);
+        return new PortfolioTaskResolver(classifier, 0.80d);
     }
 
     private static PortfolioTaskClassification classification(PortfolioTaskMode mode, double confidence) {
