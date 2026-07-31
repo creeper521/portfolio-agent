@@ -18,6 +18,7 @@ public final class FrontendDiagnosticEventRequest {
             "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$";
     private static final String ERROR_CODE_PATTERN = "^[A-Z][A-Z0-9_]{0,63}$";
     private static final String FINGERPRINT_PATTERN = "^[0-9a-f]{64}$";
+    private static final String CONTENT_VERSION_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$";
 
     @NotNull
     @Min(1)
@@ -62,6 +63,26 @@ public final class FrontendDiagnosticEventRequest {
 
     private final DurationBucket durationBucket;
 
+    @Min(100)
+    @Max(599)
+    private final Integer httpStatus;
+
+    private final GenerationMode generationMode;
+    private final Boolean degraded;
+    private final GuidanceStage guidanceStage;
+
+    @Min(0)
+    @Max(3)
+    private final Integer suggestedQuestionCount;
+
+    @Size(max = 64)
+    @Pattern(regexp = CONTENT_VERSION_PATTERN)
+    private final String contentVersion;
+
+    @Min(0)
+    @Max(3)
+    private final Integer recoveredCount;
+
     @JsonCreator
     public FrontendDiagnosticEventRequest(
             @JsonProperty("schemaVersion") Integer schemaVersion,
@@ -74,7 +95,14 @@ public final class FrontendDiagnosticEventRequest {
             @JsonProperty("errorCode") String errorCode,
             @JsonProperty("errorKind") ErrorKind errorKind,
             @JsonProperty("errorFingerprint") String errorFingerprint,
-            @JsonProperty("durationBucket") DurationBucket durationBucket
+            @JsonProperty("durationBucket") DurationBucket durationBucket,
+            @JsonProperty("httpStatus") Integer httpStatus,
+            @JsonProperty("generationMode") GenerationMode generationMode,
+            @JsonProperty("degraded") Boolean degraded,
+            @JsonProperty("guidanceStage") GuidanceStage guidanceStage,
+            @JsonProperty("suggestedQuestionCount") Integer suggestedQuestionCount,
+            @JsonProperty("contentVersion") String contentVersion,
+            @JsonProperty("recoveredCount") Integer recoveredCount
     ) {
         this.schemaVersion = schemaVersion;
         this.eventName = eventName;
@@ -87,6 +115,13 @@ public final class FrontendDiagnosticEventRequest {
         this.errorKind = errorKind;
         this.errorFingerprint = errorFingerprint;
         this.durationBucket = durationBucket;
+        this.httpStatus = httpStatus;
+        this.generationMode = generationMode;
+        this.degraded = degraded;
+        this.guidanceStage = guidanceStage;
+        this.suggestedQuestionCount = suggestedQuestionCount;
+        this.contentVersion = contentVersion;
+        this.recoveredCount = recoveredCount;
     }
 
     public Integer getSchemaVersion() {
@@ -133,6 +168,34 @@ public final class FrontendDiagnosticEventRequest {
         return durationBucket;
     }
 
+    public Integer getHttpStatus() {
+        return httpStatus;
+    }
+
+    public GenerationMode getGenerationMode() {
+        return generationMode;
+    }
+
+    public Boolean getDegraded() {
+        return degraded;
+    }
+
+    public GuidanceStage getGuidanceStage() {
+        return guidanceStage;
+    }
+
+    public Integer getSuggestedQuestionCount() {
+        return suggestedQuestionCount;
+    }
+
+    public String getContentVersion() {
+        return contentVersion;
+    }
+
+    public Integer getRecoveredCount() {
+        return recoveredCount;
+    }
+
     public enum ErrorKind {
         HTTP,
         TIMEOUT,
@@ -147,5 +210,18 @@ public final class FrontendDiagnosticEventRequest {
         LT_1000_MS,
         FROM_1000_TO_4999_MS,
         GE_5000_MS
+    }
+
+    public enum GenerationMode {
+        DETERMINISTIC,
+        MODEL,
+        FALLBACK
+    }
+
+    public enum GuidanceStage {
+        OPENING,
+        DEEPENING,
+        WRAP_UP,
+        EXPLORE_OTHERS
     }
 }

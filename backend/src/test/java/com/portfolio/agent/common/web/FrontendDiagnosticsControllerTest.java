@@ -58,7 +58,7 @@ class FrontendDiagnosticsControllerTest {
         assertThat(events).hasSize(1);
         DiagnosticEvent event = events.get(0);
         assertThat(event.getName()).isEqualTo("frontend.agent.request.failed");
-        assertThat(event.getLevel().name()).isEqualTo("WARN");
+        assertThat(event.getLevel().name()).isEqualTo("ERROR");
         assertThat(event.getFields())
                 .containsEntry("event.origin", "browser")
                 .containsEntry("client.session.id", CLIENT_SESSION_ID)
