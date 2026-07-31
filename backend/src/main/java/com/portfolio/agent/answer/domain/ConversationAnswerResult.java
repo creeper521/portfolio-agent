@@ -17,6 +17,7 @@ public final class ConversationAnswerResult {
     private final GenerationMode generationMode;
     private final AnswerSource answerSource;
     private final String noticeCode;
+    private final ConversationProgress progress;
 
     public ConversationAnswerResult(
             String turnId,
@@ -33,7 +34,10 @@ public final class ConversationAnswerResult {
                 blocks, suggestedQuestions, degraded,
                 degraded ? GenerationMode.FALLBACK : GenerationMode.DETERMINISTIC,
                 null,
-                degraded ? "MODEL_UNAVAILABLE_FALLBACK" : null);
+                degraded ? "MODEL_UNAVAILABLE_FALLBACK" : null,
+                new ConversationProgress(
+                        List.of(),
+                        ConversationGuidanceStage.OPENING));
     }
 
     public ConversationAnswerResult(
@@ -50,6 +54,28 @@ public final class ConversationAnswerResult {
             AnswerSource answerSource,
             String noticeCode
     ) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title,
+                blocks, suggestedQuestions, degraded, generationMode,
+                answerSource, noticeCode, new ConversationProgress(
+                        List.of(),
+                        ConversationGuidanceStage.OPENING));
+    }
+
+    public ConversationAnswerResult(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlock> blocks,
+            List<ConversationSuggestedQuestion> suggestedQuestions,
+            boolean degraded,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String noticeCode,
+            ConversationProgress progress
+    ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
         this.intent = Objects.requireNonNull(intent, "intent");
@@ -62,6 +88,7 @@ public final class ConversationAnswerResult {
         this.generationMode = Objects.requireNonNull(generationMode, "generationMode");
         this.answerSource = answerSource;
         this.noticeCode = noticeCode;
+        this.progress = Objects.requireNonNull(progress, "progress");
     }
 
     public String getTurnId() { return turnId; }
@@ -78,4 +105,25 @@ public final class ConversationAnswerResult {
     public GenerationMode getGenerationMode() { return generationMode; }
     public AnswerSource getAnswerSource() { return answerSource; }
     public String getNoticeCode() { return noticeCode; }
+    public ConversationProgress getProgress() { return progress; }
+
+    public ConversationAnswerResult withGuidance(
+            List<ConversationSuggestedQuestion> questions,
+            ConversationProgress newProgress
+    ) {
+        return new ConversationAnswerResult(
+                turnId,
+                contentVersion,
+                intent,
+                answerScope,
+                resolution,
+                title,
+                blocks,
+                questions,
+                degraded,
+                generationMode,
+                answerSource,
+                noticeCode,
+                newProgress);
+    }
 }

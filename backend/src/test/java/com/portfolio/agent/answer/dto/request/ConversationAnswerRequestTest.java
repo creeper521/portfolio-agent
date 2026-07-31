@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.dto.request;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ConversationMessageRole;
+import com.portfolio.agent.answer.domain.ConversationTopic;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -91,6 +92,30 @@ class ConversationAnswerRequestTest {
         assertThat(request.getContext().getSource()).isEqualTo(AnswerRequestSource.CASE);
         assertThat(request.getContext().getCaseSlug())
                 .isEqualTo("multilingual-image-preservation");
+    }
+
+    @Test
+    void deserializesCoveredTopicsWithoutPersistingConversationText()
+            throws Exception {
+        ConversationAnswerRequest request = new ObjectMapper().readValue("""
+                {
+                  "turnId": "turn-progress",
+                  "requestToken": "6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
+                  "question": "继续介绍",
+                  "messages": [],
+                  "context": {
+                    "projectSlug": "sql-audit",
+                    "audienceRole": "INTERVIEWER",
+                    "source": "AGENT_PAGE",
+                    "coveredTopics": ["BACKGROUND", "SOLUTION"]
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThat(request.getContext().getCoveredTopics())
+                .containsExactly(
+                        ConversationTopic.BACKGROUND,
+                        ConversationTopic.SOLUTION);
     }
 
     @Test

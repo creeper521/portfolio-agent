@@ -3,7 +3,9 @@ package com.portfolio.agent.answer.dto.response;
 import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
 import com.portfolio.agent.answer.domain.ConversationIntent;
+import com.portfolio.agent.answer.domain.ConversationTopic;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.GenerationMode;
 
@@ -23,6 +25,8 @@ public final class ConversationAnswerResponse {
     private final GenerationMode generationMode;
     private final AnswerSource answerSource;
     private final String noticeCode;
+    private final List<ConversationTopic> coveredTopics;
+    private final ConversationGuidanceStage guidanceStage;
 
     public ConversationAnswerResponse(ConversationAnswerResult result) {
         this.turnId = result.getTurnId();
@@ -41,6 +45,8 @@ public final class ConversationAnswerResponse {
         this.generationMode = result.getGenerationMode();
         this.answerSource = result.getAnswerSource();
         this.noticeCode = result.getNoticeCode();
+        this.coveredTopics = result.getProgress().getCoveredTopics();
+        this.guidanceStage = result.getProgress().getStage();
     }
 
     public String getTurnId() { return turnId; }
@@ -57,4 +63,6 @@ public final class ConversationAnswerResponse {
     public GenerationMode getGenerationMode() { return generationMode; }
     public AnswerSource getAnswerSource() { return answerSource; }
     public String getNoticeCode() { return noticeCode; }
+    public List<ConversationTopic> getCoveredTopics() { return coveredTopics; }
+    public ConversationGuidanceStage getGuidanceStage() { return guidanceStage; }
 }
