@@ -38,6 +38,29 @@ class DefaultPortfolioIntelligenceTest {
     }
 
     @Test
+    void constrainsAContextualFactLookupToTheValidatedStableSubjectId() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        DefaultPortfolioIntelligence intelligence = intelligence(retriever);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "How was this verified?",
+                PortfolioTaskMode.FACT_LOOKUP,
+                1.0d,
+                PortfolioConditions.empty(),
+                null,
+                null,
+                "project-a");
+
+        intelligence.resolve(task);
+
+        assertThat(retriever.requests).singleElement().satisfies(request -> {
+            assertThat(request.isExactPortfolioLookup()).isTrue();
+            assertThat(request.getRequiredPortfolioIds()).containsExactly("project-a");
+            assertThat(request.getQuery()).isEqualTo("How was this verified?");
+        });
+    }
+
+    @Test
     void returnsOneClarificationWithoutCallingRetrieverWhenRecommendationAudienceIsMissing() {
         RecordingRetriever retriever = new RecordingRetriever(retrieval());
         DefaultPortfolioIntelligence intelligence = intelligence(retriever);

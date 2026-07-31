@@ -1,6 +1,16 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
+import com.portfolio.agent.answer.domain.AnswerEvidence;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
@@ -8,6 +18,8 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
+import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
@@ -15,6 +27,8 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 public final class PortfolioIntelligenceAnswerAssembler {
@@ -23,6 +37,20 @@ public final class PortfolioIntelligenceAnswerAssembler {
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
             PortfolioIntelligenceResult intelligenceResult) {
+        return assemble(
+                request,
+                content,
+                intelligenceResult,
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO);
+    }
+
+    public ConversationAnswerResult assemble(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            PortfolioIntelligenceResult intelligenceResult,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(content, "content");
         Objects.requireNonNull(intelligenceResult, "intelligenceResult");
@@ -34,8 +62,8 @@ public final class PortfolioIntelligenceAnswerAssembler {
         return new ConversationAnswerResult(
                 request.getTurnId(),
                 contentVersion(content, intelligenceResult),
-                ConversationIntent.PORTFOLIO_GROUNDED,
-                ConversationAnswerScope.PORTFOLIO,
+                intent,
+                answerScope,
                 clarification ? AnswerResolution.BOUNDARY : AnswerResolution.ANSWERED,
                 title(intelligenceResult.getResolvedIntent()),
                 blocks,
@@ -48,6 +76,63 @@ public final class PortfolioIntelligenceAnswerAssembler {
                         List.of(),
                         com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
                 intelligenceResult.getPortfolioRecommendation());
+    }
+
+    public PortfolioGroundingContext grounding(PortfolioIntelligenceResult result) {
+        Objects.requireNonNull(result, "result");
+        ConversationSubjectOption subject = result.getSubjects().isEmpty()
+                ? null
+                : subject(result.getSubjects().getFirst());
+        Map<String, AnswerClaimProjection> claimsById = new LinkedHashMap<>();
+        result.getEvidence().forEach(passage -> claimsById.putIfAbsent(
+                passage.getClaimId(),
+                new AnswerClaimProjection(
+                        passage.getClaimId(),
+                        AnswerClaimCategory.IMPLEMENTATION,
+                        passage.getContent(),
+                        passage.getContent(),
+                        AnswerAchievementStatus.UNKNOWN,
+                        AnswerContributionType.PRIMARY,
+                        AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                        AnswerClaimVerificationStatus.VERIFIED,
+                        AnswerMateriality.KEY,
+                        passage.getEvidenceIds())));
+        Map<String, AnswerEvidence> evidenceById = new LinkedHashMap<>();
+        result.getEvidence().forEach(passage -> passage.getEvidenceReferences().forEach(reference ->
+                evidenceById.putIfAbsent(reference.getEvidenceId(), new AnswerEvidence(
+                        reference.getEvidenceId(),
+                        reference.getLabel(),
+                        "PUBLIC_REFERENCE",
+                        null,
+                        null,
+                        1,
+                        reference.getLabel(),
+                        reference.getPublicStatus(),
+                        false))));
+        List<AnswerRetrievalChunk> chunks = result.getEvidence().stream()
+                .map(passage -> new AnswerRetrievalChunk(
+                        passage.getPassageId(),
+                        List.of(),
+                        List.of(),
+                        List.of(passage.getClaimId()),
+                        List.of(),
+                        passage.getContent(),
+                        passage.getContent().length()))
+                .toList();
+        return new PortfolioGroundingContext(
+                subject,
+                List.copyOf(claimsById.values()),
+                List.copyOf(evidenceById.values()),
+                chunks);
+    }
+
+    private ConversationSubjectOption subject(
+            com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject subject) {
+        return new ConversationSubjectOption(
+                AnswerSubjectType.valueOf(subject.getSubjectType()),
+                subject.getPortfolioId(),
+                subject.getTitle(),
+                subject.getSummary());
     }
 
     private List<ConversationAnswerBlock> clarificationBlocks(

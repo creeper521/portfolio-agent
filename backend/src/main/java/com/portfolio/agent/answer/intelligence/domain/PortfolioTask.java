@@ -11,6 +11,7 @@ public final class PortfolioTask {
     private final PortfolioConditions conditions;
     private final PortfolioRecommendationContext recommendationContext;
     private final PortfolioRefinement refinement;
+    private final String subjectId;
 
     public PortfolioTask(
             String turnId,
@@ -20,6 +21,19 @@ public final class PortfolioTask {
             PortfolioConditions conditions,
             PortfolioRecommendationContext recommendationContext,
             PortfolioRefinement refinement) {
+        this(turnId, question, mode, confidence, conditions,
+                recommendationContext, refinement, null);
+    }
+
+    public PortfolioTask(
+            String turnId,
+            String question,
+            PortfolioTaskMode mode,
+            double confidence,
+            PortfolioConditions conditions,
+            PortfolioRecommendationContext recommendationContext,
+            PortfolioRefinement refinement,
+            String subjectId) {
         this.turnId = requireText(turnId, "turnId");
         this.question = requireText(question, "question");
         this.mode = Objects.requireNonNull(mode, "mode");
@@ -30,6 +44,7 @@ public final class PortfolioTask {
         this.conditions = Objects.requireNonNull(conditions, "conditions");
         this.recommendationContext = recommendationContext;
         this.refinement = refinement;
+        this.subjectId = normalizeText(subjectId);
     }
 
     public String getTurnId() { return turnId; }
@@ -39,6 +54,7 @@ public final class PortfolioTask {
     public PortfolioConditions getConditions() { return conditions; }
     public PortfolioRecommendationContext getRecommendationContext() { return recommendationContext; }
     public PortfolioRefinement getRefinement() { return refinement; }
+    public String getSubjectId() { return subjectId; }
 
     @Override
     public boolean equals(Object other) {
@@ -50,13 +66,14 @@ public final class PortfolioTask {
                 && mode == that.mode
                 && Objects.equals(conditions, that.conditions)
                 && Objects.equals(recommendationContext, that.recommendationContext)
-                && Objects.equals(refinement, that.refinement);
+                && Objects.equals(refinement, that.refinement)
+                && Objects.equals(subjectId, that.subjectId);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(turnId, question, mode, confidence, conditions,
-                recommendationContext, refinement);
+                recommendationContext, refinement, subjectId);
     }
 
     @Override
@@ -65,11 +82,16 @@ public final class PortfolioTask {
                 + ", question='<redacted>'"
                 + ", mode=" + mode + ", confidence=" + confidence
                 + ", hasRecommendationContext=" + (recommendationContext != null)
-                + ", hasRefinement=" + (refinement != null) + '}';
+                + ", hasRefinement=" + (refinement != null)
+                + ", hasSubjectConstraint=" + (subjectId != null) + '}';
     }
 
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) { throw new IllegalArgumentException(name + " is required"); }
         return value.trim();
+    }
+
+    private static String normalizeText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

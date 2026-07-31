@@ -2,6 +2,8 @@ package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.adapter.observability.LoggingConversationDecisionPublisher;
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerKnowledge;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDraft;
@@ -106,7 +108,29 @@ class ConversationalAgentRuntimeTest {
                     .containsEntry("validation.result", "ACCEPTED");
             assertThat(event.getFields().toString()).doesNotContain("鎺ㄨ崘浣滃搧");
         });
-        verifyNoInteractions(fixture.router, fixture.modelPort);
+        verify(fixture.router).routeBoundary(any());
+        verifyNoInteractions(fixture.modelPort);
+    }
+
+    @Test
+    void timeSensitiveBoundaryRunsBeforeAnyPortfolioHardRoute() {
+        RuntimeFixture fixture = fixture(false);
+        ConversationRoute boundary = new ConversationRoute(
+                ConversationIntent.TIME_SENSITIVE,
+                ConversationAnswerScope.GENERAL,
+                1.0d,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
+        when(fixture.router.routeBoundary(any())).thenReturn(boundary);
+        when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
+
+        ConversationAnswerResult result = fixture.runtime.answer(request("最新推荐作品"));
+
+        assertThat(result.getIntent()).isEqualTo(ConversationIntent.TIME_SENSITIVE);
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.BOUNDARY);
+        verifyNoInteractions(fixture.portfolioIntelligence, fixture.modelPort);
     }
 
     @Test
@@ -137,7 +161,27 @@ class ConversationalAgentRuntimeTest {
                 ArgumentCaptor.forClass(PortfolioRecommendationContext.class);
         verify(fixture.taskResolver).resolve(any(), any(), contextCaptor.capture());
         assertThat(contextCaptor.getValue()).isEqualTo(expectedContext);
-        verifyNoInteractions(fixture.router, fixture.modelPort);
+        verify(fixture.router).routeBoundary(any());
+        verifyNoInteractions(fixture.modelPort);
+    }
+
+    @Test
+    void projectSlugIsResolvedToAStableSubjectConstraintBeforeRetrieval() {
+        RuntimeFixture fixture = fixture(false);
+        when(fixture.knowledgeGateway.getContent()).thenReturn(contentWithProject());
+        PortfolioTask unresolved = new PortfolioTask(
+                "turn-1", "How was this verified?", PortfolioTaskMode.FACT_LOOKUP,
+                1.0d, PortfolioConditions.empty(), null, null);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(unresolved);
+        when(fixture.portfolioIntelligence.resolve(any())).thenReturn(
+                PortfolioIntelligenceResult.clarification(new PortfolioClarification(
+                        "Which verification detail matters most?", "facet")));
+
+        fixture.runtime.answer(requestForProject("project-one"));
+
+        ArgumentCaptor<PortfolioTask> taskCaptor = ArgumentCaptor.forClass(PortfolioTask.class);
+        verify(fixture.portfolioIntelligence).resolve(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getSubjectId()).isEqualTo("stable-project-1");
     }
 
     @Test
@@ -183,6 +227,106 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         assertThat(result.getContentVersion()).isEqualTo("intelligence-v2");
         verifyNoInteractions(fixture.groundingAssembler, fixture.toolService, fixture.modelPort);
+    }
+
+    @Test
+    void hybridRouteUsesIntelligenceGroundingAndPreservesHybridModelResult() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "Relate this implementation to the general pattern",
+                PortfolioTaskMode.FACT_LOOKUP, 0.91d,
+                PortfolioConditions.empty(), null, null);
+        PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
+                "passage-hybrid",
+                "project-1",
+                "claim-hybrid",
+                "Unified intelligence material",
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-hybrid", "Public evidence", "APPROVED")));
+        PortfolioIntelligenceResult intelligenceResult = new PortfolioIntelligenceResult(
+                PortfolioTaskMode.FACT_LOOKUP,
+                List.of(retrievedSubject()),
+                List.of(passage),
+                null,
+                null,
+                "intelligence-v3",
+                false,
+                null);
+        ConversationDraft draft = new ConversationDraft(
+                "Hybrid explanation", AnswerResolution.ANSWERED, List.of());
+        com.portfolio.agent.answer.domain.ConversationAnswerBlock acceptedBlock =
+                new com.portfolio.agent.answer.domain.ConversationAnswerBlock(
+                        ConversationSourceScope.PORTFOLIO,
+                        "Validated hybrid explanation",
+                        List.of("claim-hybrid"),
+                        List.of("evidence-hybrid"));
+        when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
+        when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(intelligenceResult);
+        when(fixture.modelPort.generate(any(), any(), any(), any()))
+                .thenReturn(ConversationModelResult.success(draft));
+        when(fixture.draftValidator.validate(any(), any(), any()))
+                .thenReturn(ConversationDraftValidationResult.valid(
+                        draft, List.of(acceptedBlock)));
+
+        ConversationAnswerResult result = fixture.runtime.answer(
+                request("Relate this implementation to the general pattern"));
+
+        assertThat(result.getIntent()).isEqualTo(ConversationIntent.HYBRID);
+        assertThat(result.getAnswerScope()).isEqualTo(ConversationAnswerScope.HYBRID);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.MODEL);
+        assertThat(result.getContentVersion()).isEqualTo("intelligence-v3");
+        ArgumentCaptor<PortfolioGroundingContext> groundingCaptor =
+                ArgumentCaptor.forClass(PortfolioGroundingContext.class);
+        verify(fixture.modelPort).generate(any(), any(), any(), groundingCaptor.capture());
+        assertThat(groundingCaptor.getValue().getClaims()).singleElement()
+                .satisfies(claim -> {
+                    assertThat(claim.getId()).isEqualTo("claim-hybrid");
+                    assertThat(claim.getStatement()).isEqualTo("Unified intelligence material");
+                });
+        verifyNoInteractions(fixture.groundingAssembler, fixture.toolService);
+    }
+
+    @Test
+    void hybridProviderFailureFallsBackToDeterministicIntelligenceMaterial() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "Relate implementation and theory", PortfolioTaskMode.FACT_LOOKUP,
+                0.91d, PortfolioConditions.empty(), null, null);
+        PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
+                "passage-hybrid", "project-1", "claim-hybrid",
+                "Safe deterministic intelligence fallback",
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-hybrid", "Public evidence", "APPROVED")));
+        when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
+        when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(
+                new PortfolioIntelligenceResult(
+                        PortfolioTaskMode.FACT_LOOKUP,
+                        List.of(retrievedSubject()),
+                        List.of(passage),
+                        null,
+                        null,
+                        "intelligence-v3",
+                        false,
+                        null));
+        when(fixture.modelPort.generate(any(), any(), any(), any())).thenReturn(
+                ConversationModelResult.failure(ConversationModelFailureCode.PROVIDER_ERROR));
+
+        ConversationAnswerResult result = fixture.runtime.answer(
+                request("Relate implementation and theory"));
+
+        assertThat(result.getIntent()).isEqualTo(ConversationIntent.HYBRID);
+        assertThat(result.getAnswerScope()).isEqualTo(ConversationAnswerScope.HYBRID);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.FALLBACK);
+        assertThat(result.isDegraded()).isTrue();
+        assertThat(result.getNoticeCode()).isEqualTo("MODEL_UNAVAILABLE_FALLBACK");
+        assertThat(result.getBlocks()).singleElement()
+                .extracting(block -> block.getContent())
+                .isEqualTo("Safe deterministic intelligence fallback");
+        verifyNoInteractions(fixture.groundingAssembler, fixture.toolService);
     }
 
     @Test
@@ -253,7 +397,8 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         assertThat(result.getSuggestedQuestions()).hasSize(3);
         assertThat(result.getProgress()).isNotNull();
-        verifyNoInteractions(fixture.router, fixture.modelPort);
+        verify(fixture.router).routeBoundary(any());
+        verifyNoInteractions(fixture.modelPort);
         assertPublishedDecision(fixture, result);
     }
 
@@ -276,7 +421,8 @@ class ConversationalAgentRuntimeTest {
             assertThat(block.getClaimIds()).isEmpty();
             assertThat(block.getEvidenceIds()).isEmpty();
         });
-        verifyNoInteractions(fixture.router, fixture.toolService, fixture.modelPort);
+        verify(fixture.router).routeBoundary(any());
+        verifyNoInteractions(fixture.toolService, fixture.modelPort);
         assertPublishedDecision(fixture, result);
     }
 
@@ -587,7 +733,7 @@ class ConversationalAgentRuntimeTest {
                 decisionPublisher,
                 diagnosticEventPublisher);
         return new RuntimeFixture(
-                runtime, windowManager, router, groundingAssembler, toolService, modelPort,
+                runtime, knowledgeGateway, windowManager, router, groundingAssembler, toolService, modelPort,
                 draftValidator, questionService, taskResolver, portfolioIntelligence,
                 decisionPublisher, events);
     }
@@ -653,6 +799,29 @@ class ConversationalAgentRuntimeTest {
                         PortfolioKnowledgeFacet.VERIFICATION));
     }
 
+    private ConversationRoute hybridRoute() {
+        return new ConversationRoute(
+                ConversationIntent.HYBRID,
+                ConversationAnswerScope.HYBRID,
+                1.0,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
+    }
+
+    private com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject
+            retrievedSubject() {
+        return new com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject(
+                "project-1",
+                "PROJECT",
+                "Project one",
+                "Public summary",
+                "/projects/project-one",
+                "BACKEND",
+                Set.of("JAVA"));
+    }
+
     private PortfolioRecommendation recommendation() {
         PortfolioRecommendationContext context = new PortfolioRecommendationContext(
                 "rec_" + "a".repeat(64),
@@ -709,6 +878,41 @@ class ConversationalAgentRuntimeTest {
                         AnswerRequestSource.CASE));
     }
 
+    private ConversationAnswerRequest requestForProject(String projectSlug) {
+        return new ConversationAnswerRequest(
+                "turn-1",
+                "How was this verified?",
+                List.of(),
+                new ConversationAnswerContextRequest(
+                        projectSlug,
+                        null,
+                        AudienceRole.INTERVIEWER,
+                        AnswerRequestSource.PROJECT));
+    }
+
+    private RuntimeAnswerContent contentWithProject() {
+        AnswerKnowledge project = new AnswerKnowledge(
+                AnswerSubjectType.PROJECT,
+                "stable-project-1",
+                "project-one",
+                "Project one",
+                "Public summary",
+                "Public background",
+                List.of(),
+                "Public solution",
+                List.of(),
+                List.of(),
+                "Public outcome",
+                "Public handoff",
+                "PUBLISHED",
+                "BACKEND",
+                Set.of("JAVA"),
+                List.of(),
+                List.of(),
+                List.of());
+        return new RuntimeAnswerContent("v1", "hash", List.of(project));
+    }
+
     private ConversationAnswerRequest requestWithRecommendationContext() {
         PortfolioRecommendationContext context = recommendation().getContext();
         PortfolioRecommendationContextRequest contextRequest =
@@ -735,6 +939,7 @@ class ConversationalAgentRuntimeTest {
 
     private static final class RuntimeFixture {
         private final ConversationalAgentRuntime runtime;
+        private final PortfolioKnowledgeGateway knowledgeGateway;
         private final ConversationWindowManager windowManager;
         private final ConversationIntentRouter router;
         private final PortfolioGroundingAssembler groundingAssembler;
@@ -749,6 +954,7 @@ class ConversationalAgentRuntimeTest {
 
         private RuntimeFixture(
                 ConversationalAgentRuntime runtime,
+                PortfolioKnowledgeGateway knowledgeGateway,
                 ConversationWindowManager windowManager,
                 ConversationIntentRouter router,
                 PortfolioGroundingAssembler groundingAssembler,
@@ -762,6 +968,7 @@ class ConversationalAgentRuntimeTest {
                 List<DiagnosticEvent> events
         ) {
             this.runtime = runtime;
+            this.knowledgeGateway = knowledgeGateway;
             this.windowManager = windowManager;
             this.router = router;
             this.groundingAssembler = groundingAssembler;

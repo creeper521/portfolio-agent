@@ -50,15 +50,9 @@ public final class ConversationIntentRouter {
         long startedAt = System.nanoTime();
         String question = request.getQuestion().strip();
         String normalized = question.toLowerCase(Locale.ROOT);
-        if (isUnsafe(normalized)) {
-            return decided(deterministic(
-                    ConversationIntent.UNSUPPORTED_OR_UNSAFE,
-                    ConversationAnswerScope.CONVERSATION), "DETERMINISTIC", startedAt);
-        }
-        if (isTimeSensitive(normalized)) {
-            return decided(deterministic(
-                    ConversationIntent.TIME_SENSITIVE,
-                    ConversationAnswerScope.GENERAL), "DETERMINISTIC", startedAt);
+        ConversationRoute boundary = routeBoundary(question);
+        if (boundary != null) {
+            return boundary;
         }
         if (isConversation(normalized)) {
             return decided(deterministic(
@@ -83,6 +77,22 @@ public final class ConversationIntentRouter {
             return decided(clarificationRoute(), "DETERMINISTIC", startedAt);
         }
         return decided(candidate, "MODEL", startedAt);
+    }
+
+    public ConversationRoute routeBoundary(String question) {
+        long startedAt = System.nanoTime();
+        String normalized = question.strip().toLowerCase(Locale.ROOT);
+        if (isUnsafe(normalized)) {
+            return decided(deterministic(
+                    ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                    ConversationAnswerScope.CONVERSATION), "DETERMINISTIC", startedAt);
+        }
+        if (isTimeSensitive(normalized)) {
+            return decided(deterministic(
+                    ConversationIntent.TIME_SENSITIVE,
+                    ConversationAnswerScope.GENERAL), "DETERMINISTIC", startedAt);
+        }
+        return null;
     }
 
     private ConversationRoute decided(

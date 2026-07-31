@@ -72,6 +72,23 @@ public final class PortfolioRetrievalRequest {
                 true);
     }
 
+    public static PortfolioRetrievalRequest subjectScope(
+            String query,
+            PortfolioTaskMode mode,
+            PortfolioConditions conditions,
+            String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) {
+            throw new IllegalArgumentException("subjectId is required");
+        }
+        return new PortfolioRetrievalRequest(
+                query,
+                mode,
+                conditions,
+                DEFAULT_LIMIT,
+                List.of(subjectId.trim()),
+                true);
+    }
+
     public String getQuery() { return query; }
     public PortfolioTaskMode getMode() { return mode; }
     public PortfolioConditions getConditions() { return conditions; }

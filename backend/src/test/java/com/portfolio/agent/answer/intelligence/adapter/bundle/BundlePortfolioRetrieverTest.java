@@ -155,6 +155,30 @@ class BundlePortfolioRetrieverTest {
         assertThat(capabilityMismatch.getSubjects()).isEmpty();
     }
 
+    @Test
+    void subjectScopeUsesTheStableIdBoundaryForBundleRetrieval() {
+        AnswerKnowledge subject = knowledge(
+                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL"),
+                verifiedClaim("claim-1", "evidence-1"), approved("evidence-1"));
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "public-2026-07-31", "hash", List.of(subject), corpus());
+        BundlePortfolioRetriever retriever = new BundlePortfolioRetriever(
+                () -> content, keywordOnlyCoordinator(), RetrievalPolicy.currentRelease());
+
+        PortfolioRetrievalResult result = retriever.retrieve(
+                PortfolioRetrievalRequest.subjectScope(
+                        "How was this verified?",
+                        PortfolioTaskMode.FACT_LOOKUP,
+                        PortfolioConditions.empty(),
+                        "project-1"));
+
+        assertThat(result.getSubjects()).extracting(item -> item.getPortfolioId())
+                .containsExactly("project-1");
+        assertThat(result.getPassages()).isNotEmpty()
+                .allSatisfy(passage -> assertThat(passage.getSubjectId())
+                        .isEqualTo("project-1"));
+    }
+
     private LocalRetrievalCoordinator coordinator() {
         return new LocalRetrievalCoordinator(
                 new RetrievalQueryNormalizer(),
