@@ -65,7 +65,7 @@ export function useLocalSessions() {
     if (!normalized) return
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) return
-    session.title = normalized.slice(0, 40)
+    session.title = normalized
     session.updatedAt = Date.now()
     manuallyRenamedSessionIds.add(sessionId)
     sessions.value = [...sessions.value]
@@ -87,7 +87,7 @@ export function useLocalSessions() {
       session.messages = session.messages.slice(-messageLimit)
     }
     if (session.messages[0]?.role === 'USER' && !manuallyRenamedSessionIds.has(sessionId)) {
-      session.title = session.messages[0].content.slice(0, 24)
+      session.title = session.messages[0].content.trim()
     }
     sessions.value = [...sessions.value]
   }

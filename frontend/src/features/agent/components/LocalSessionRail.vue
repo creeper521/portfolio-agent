@@ -82,7 +82,6 @@ function confirmClear() {
             ref="renameInput"
             v-model="draftTitle"
             data-session-rename-input
-            maxlength="40"
             aria-label="会话标题"
             @keydown.esc="editingId = ''"
           />
@@ -91,6 +90,7 @@ function confirmClear() {
           v-else
           class="session-select"
           type="button"
+          :title="session.title"
           :aria-current="session.id === activeId ? 'true' : undefined"
           @click="emit('select', session.id)"
         >

@@ -277,9 +277,9 @@ function inspectMessageEvidence(
 <template>
   <section class="conversation">
     <header class="conversation__head">
-      <div>
+      <div class="conversation__title">
         <p>AGENT CONVERSATION · Agent 对话</p>
-        <h1>{{ session.title }}</h1>
+        <h1 :title="session.title" :aria-label="session.title">{{ session.title }}</h1>
         <div
           v-if="caseContextTitle"
           class="conversation__case-context"
@@ -625,9 +625,17 @@ function inspectMessageEvidence(
   letter-spacing: 0.06em;
 }
 
+.conversation__title {
+  min-width: 0;
+}
+
 .conversation__head h1 {
+  display: -webkit-box;
   margin: 0;
+  overflow: hidden;
   font: 500 22px var(--serif);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .conversation__case-context {
