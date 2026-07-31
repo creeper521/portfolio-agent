@@ -4,6 +4,13 @@ import com.portfolio.agent.answer.domain.AnswerClaimProjection;
 import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
 import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
+import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
+import com.portfolio.agent.answer.domain.AnswerRetrievalCorpus;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
+import com.portfolio.agent.answer.domain.RetrievalDecision;
+import com.portfolio.agent.answer.domain.RetrievalDecisionType;
+import com.portfolio.agent.answer.domain.RetrievalMode;
+import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
@@ -12,46 +19,67 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
+import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class BundlePortfolioRetriever implements PortfolioRetriever {
 
     private static final PortfolioRetrievalSource SOURCE = new PortfolioRetrievalSource("BUNDLE");
-    private static final Pattern WORD_PATTERN = Pattern.compile("[\\p{L}\\p{N}]+");
+    private static final String UNAVAILABLE_NOTICE = "BUNDLE_RETRIEVAL_UNAVAILABLE";
 
     private final PortfolioKnowledgeGateway knowledgeGateway;
+    private final LocalRetrievalCoordinator retrievalCoordinator;
+    private final RetrievalPolicy retrievalPolicy;
 
-    public BundlePortfolioRetriever(PortfolioKnowledgeGateway knowledgeGateway) {
+    public BundlePortfolioRetriever(
+            PortfolioKnowledgeGateway knowledgeGateway,
+            LocalRetrievalCoordinator retrievalCoordinator,
+            RetrievalPolicy retrievalPolicy) {
         this.knowledgeGateway = Objects.requireNonNull(knowledgeGateway, "knowledgeGateway");
+        this.retrievalCoordinator = Objects.requireNonNull(retrievalCoordinator, "retrievalCoordinator");
+        this.retrievalPolicy = Objects.requireNonNull(retrievalPolicy, "retrievalPolicy");
     }
 
     @Override
     public PortfolioRetrievalResult retrieve(PortfolioRetrievalRequest request) {
         Objects.requireNonNull(request, "request");
         RuntimeAnswerContent content = knowledgeGateway.getContent();
-        List<SubjectMaterial> matched = allKnowledge(content).stream()
-                .filter(knowledge -> matches(request.getQuery(), knowledge))
-                .map(this::toMaterial)
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(material -> material.subject().getSubjectId()))
-                .limit(request.getLimit())
-                .toList();
-        List<PortfolioRetrievedSubject> subjects = matched.stream()
-                .map(SubjectMaterial::subject)
-                .toList();
-        List<PortfolioRetrievedPassage> passages = matched.stream()
-                .flatMap(material -> material.passages().stream())
-                .toList();
+        if (content.getRetrievalCorpus().isEmpty()) {
+            return new PortfolioRetrievalResult(
+                    content.getContentVersion(), List.of(), List.of(), SOURCE, true, UNAVAILABLE_NOTICE);
+        }
+        AnswerRetrievalCorpus corpus = content.getRetrievalCorpus().orElseThrow();
+        List<SubjectMaterial> materials = retrievePublishedSubjects(content, corpus, request);
         return new PortfolioRetrievalResult(
-                content.getContentVersion(), subjects, passages, SOURCE, false, null);
+                content.getContentVersion(),
+                materials.stream().map(SubjectMaterial::subject).toList(),
+                materials.stream().flatMap(material -> material.passages().stream()).toList(),
+                SOURCE,
+                false,
+                null);
+    }
+
+    private List<SubjectMaterial> retrievePublishedSubjects(
+            RuntimeAnswerContent content,
+            AnswerRetrievalCorpus corpus,
+            PortfolioRetrievalRequest request) {
+        List<SubjectMaterial> materials = new ArrayList<>();
+        for (AnswerKnowledge knowledge : allKnowledge(content)) {
+            SubjectMaterial material = retrieveSubject(knowledge, corpus, request);
+            if (material != null) {
+                materials.add(material);
+            }
+            if (materials.size() == request.getLimit()) {
+                break;
+            }
+        }
+        return List.copyOf(materials);
     }
 
     private List<AnswerKnowledge> allKnowledge(RuntimeAnswerContent content) {
@@ -60,73 +88,87 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         return List.copyOf(all);
     }
 
-    private SubjectMaterial toMaterial(AnswerKnowledge knowledge) {
-        Set<String> approvedEvidenceIds = knowledge.getEvidence().stream()
+    private SubjectMaterial retrieveSubject(
+            AnswerKnowledge knowledge,
+            AnswerRetrievalCorpus corpus,
+            PortfolioRetrievalRequest request) {
+        List<AnswerEvidence> approvedEvidence = knowledge.getEvidence().stream()
                 .filter(this::isApprovedPublicEvidence)
+                .toList();
+        Set<String> approvedEvidenceIds = approvedEvidence.stream()
                 .map(AnswerEvidence::getId)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        List<AnswerClaimProjection> claims = knowledge.getClaims().stream()
+                .collect(Collectors.toUnmodifiableSet());
+        List<AnswerClaimProjection> verifiedClaims = knowledge.getClaims().stream()
                 .filter(claim -> claim.getVerificationStatus() == AnswerClaimVerificationStatus.VERIFIED)
                 .filter(claim -> !claim.getDirectEvidenceIds().isEmpty())
                 .filter(claim -> approvedEvidenceIds.containsAll(claim.getDirectEvidenceIds()))
-                .sorted(Comparator.comparing(AnswerClaimProjection::getId))
                 .toList();
-        if (claims.isEmpty()) {
+        if (verifiedClaims.isEmpty()) {
             return null;
         }
-        String routePrefix = knowledge.getSubjectType().name().equals("CASE") ? "/cases/" : "/projects/";
-        PortfolioRetrievedSubject subject = new PortfolioRetrievedSubject(
+        RetrievalDecision decision = retrievalCoordinator.retrieve(
+                request.getQuery(),
+                knowledge.getSlug(),
+                knowledge.getSubjectType(),
+                corpus,
+                verifiedClaims,
+                approvedEvidence,
+                RetrievalMode.HYBRID_ENABLED,
+                retrievalPolicy);
+        if (decision.getType() != RetrievalDecisionType.SUFFICIENT) {
+            return null;
+        }
+        List<PortfolioRetrievedPassage> passages = selectedPassages(
+                knowledge, corpus, verifiedClaims, decision);
+        if (passages.isEmpty()) {
+            return null;
+        }
+        return new SubjectMaterial(toSubject(knowledge), passages);
+    }
+
+    private List<PortfolioRetrievedPassage> selectedPassages(
+            AnswerKnowledge knowledge,
+            AnswerRetrievalCorpus corpus,
+            List<AnswerClaimProjection> verifiedClaims,
+            RetrievalDecision decision) {
+        Map<String, AnswerClaimProjection> claimsById = verifiedClaims.stream()
+                .collect(Collectors.toMap(
+                        AnswerClaimProjection::getId,
+                        claim -> claim,
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Set<String> selectedClaimIds = Set.copyOf(decision.getSelectedClaimIds());
+        List<PortfolioRetrievedPassage> passages = new ArrayList<>();
+        for (String chunkId : decision.getSelectedChunkIds()) {
+            AnswerRetrievalChunk chunk = corpus.getChunks().get(chunkId);
+            if (chunk == null || chunk.getText() == null || chunk.getText().isBlank()) {
+                continue;
+            }
+            for (String claimId : chunk.getClaimIds()) {
+                AnswerClaimProjection claim = claimsById.get(claimId);
+                if (claim != null && selectedClaimIds.contains(claimId)) {
+                    passages.add(new PortfolioRetrievedPassage(
+                            chunkId + "#" + claimId,
+                            knowledge.getSlug(),
+                            claimId,
+                            chunk.getText(),
+                            claim.getDirectEvidenceIds()));
+                }
+            }
+        }
+        return List.copyOf(passages);
+    }
+
+    private PortfolioRetrievedSubject toSubject(AnswerKnowledge knowledge) {
+        String routePrefix = knowledge.getSubjectType() == AnswerSubjectType.CASE
+                ? "/cases/" : "/projects/";
+        return new PortfolioRetrievedSubject(
                 knowledge.getSlug(), knowledge.getSubjectType().name(), knowledge.getTitle(),
                 knowledge.getSummary(), routePrefix + knowledge.getSlug(), Set.of());
-        List<PortfolioRetrievedPassage> passages = claims.stream()
-                .map(claim -> new PortfolioRetrievedPassage(
-                        knowledge.getSlug() + "#" + claim.getId(), knowledge.getSlug(), claim.getId(),
-                        passageContent(claim, knowledge), claim.getDirectEvidenceIds()))
-                .toList();
-        return new SubjectMaterial(subject, passages);
     }
 
     private boolean isApprovedPublicEvidence(AnswerEvidence evidence) {
         return "APPROVED".equals(evidence.getPublicStatus()) && !evidence.isRawContentPublic();
-    }
-
-    private String passageContent(AnswerClaimProjection claim, AnswerKnowledge knowledge) {
-        return claim.getStatement() == null || claim.getStatement().isBlank()
-                ? knowledge.getSummary() : claim.getStatement();
-    }
-
-    private boolean matches(String query, AnswerKnowledge knowledge) {
-        Set<String> terms = tokenize(query);
-        if (terms.isEmpty()) {
-            return true;
-        }
-        StringBuilder searchable = new StringBuilder();
-        append(searchable, knowledge.getTitle());
-        append(searchable, knowledge.getSummary());
-        for (AnswerClaimProjection claim : knowledge.getClaims()) {
-            append(searchable, claim.getStatement());
-            append(searchable, claim.getDetail());
-            for (String topic : claim.getTopics()) {
-                append(searchable, topic);
-            }
-        }
-        String text = searchable.toString().toLowerCase(Locale.ROOT);
-        return terms.stream().anyMatch(text::contains);
-    }
-
-    private Set<String> tokenize(String query) {
-        Set<String> terms = new LinkedHashSet<>();
-        Matcher matcher = WORD_PATTERN.matcher(query.toLowerCase(Locale.ROOT));
-        while (matcher.find()) {
-            terms.add(matcher.group());
-        }
-        return Set.copyOf(terms);
-    }
-
-    private void append(StringBuilder builder, String value) {
-        if (value != null) {
-            builder.append(' ').append(value);
-        }
     }
 
     private static final class SubjectMaterial {

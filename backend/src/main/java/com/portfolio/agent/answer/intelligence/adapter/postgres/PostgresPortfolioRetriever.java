@@ -11,8 +11,9 @@ import com.portfolio.agent.selection.domain.CandidateRetrievalResult;
 import com.portfolio.agent.selection.domain.EvidenceReference;
 import com.portfolio.agent.selection.domain.SelectionCandidate;
 import com.portfolio.agent.selection.gateway.CandidateRetrievalException;
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.dao.DataAccessException;
 
@@ -29,7 +30,7 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
     @Override
     public PortfolioRetrievalResult retrieve(PortfolioRetrievalRequest request) {
         Objects.requireNonNull(request, "request");
-        CandidateRetrievalResult result;
+        PostgresKnowledgeQueryResult result;
         try {
             result = knowledgeQuery.retrieve(request);
         } catch (PortfolioRetrievalException exception) {
@@ -39,20 +40,26 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
         } catch (DataAccessException exception) {
             throw new PortfolioRetrievalException("PostgreSQL public retrieval is unavailable", exception);
         }
-        List<SelectionCandidate> candidates = result.getCandidates().stream()
-                .filter(candidate -> !candidate.getEvidenceReferences().isEmpty())
+        CandidateRetrievalResult candidateResult = result.getCandidates();
+        Map<String, List<PostgresKnowledgePassageRow>> passagesBySubject = result.getPassages().stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        PostgresKnowledgePassageRow::getSubjectId,
+                        LinkedHashMap::new,
+                        java.util.stream.Collectors.toList()));
+        List<SelectionCandidate> candidates = candidateResult.getCandidates().stream()
+                .filter(candidate -> candidate.getEvidenceReferences().stream()
+                        .anyMatch(EvidenceReference::isApproved))
+                .filter(candidate -> passagesBySubject.containsKey(candidate.getSubjectId()))
                 .toList();
         List<PortfolioRetrievedSubject> subjects = candidates.stream()
                 .map(this::toSubject)
                 .toList();
         List<PortfolioRetrievedPassage> passages = candidates.stream()
-                .flatMap(candidate -> candidate.getEvidenceReferences().stream()
-                        .sorted(Comparator.comparing(EvidenceReference::getClaimId)
-                                .thenComparing(EvidenceReference::getEvidenceId))
-                        .map(reference -> toPassage(candidate, reference)))
+                .flatMap(candidate -> passagesBySubject.get(candidate.getSubjectId()).stream()
+                        .map(this::toPassage))
                 .toList();
         return new PortfolioRetrievalResult(
-                result.getReleaseVersion(), subjects, passages, SOURCE, false, null);
+                candidateResult.getReleaseVersion(), subjects, passages, SOURCE, false, null);
     }
 
     private PortfolioRetrievedSubject toSubject(SelectionCandidate candidate) {
@@ -61,12 +68,9 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
                 candidate.getSummary(), candidate.getRoute(), candidate.getCapabilityCodes());
     }
 
-    private PortfolioRetrievedPassage toPassage(
-            SelectionCandidate candidate,
-            EvidenceReference reference) {
+    private PortfolioRetrievedPassage toPassage(PostgresKnowledgePassageRow row) {
         return new PortfolioRetrievedPassage(
-                candidate.getSubjectId() + "#" + reference.getClaimId() + "#" + reference.getEvidenceId(),
-                candidate.getSubjectId(), reference.getClaimId(), candidate.getSummary(),
-                List.of(reference.getEvidenceId()));
+                row.getSubjectId() + "#" + row.getClaimId(),
+                row.getSubjectId(), row.getClaimId(), row.getContent(), row.getEvidenceIds());
     }
 }

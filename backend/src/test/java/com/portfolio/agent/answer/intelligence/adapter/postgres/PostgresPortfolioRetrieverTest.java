@@ -23,8 +23,12 @@ class PostgresPortfolioRetrieverTest {
     @Test
     void mapsOnlyApprovedEvidenceBackedCandidatesToTheUnifiedRetrievalShape() {
         PostgresPortfolioRetriever retriever = new PostgresPortfolioRetriever(request ->
-                new CandidateRetrievalResult("public-2026-07-31", RetrievalMode.HYBRID, List.of(
-                        candidate("project-1", "claim-1", "evidence-1"))));
+                new PostgresKnowledgeQueryResult(
+                        new CandidateRetrievalResult("public-2026-07-31", RetrievalMode.HYBRID, List.of(
+                                candidate("project-1", "claim-1", "evidence-1"))),
+                        List.of(new PostgresKnowledgePassageRow(
+                                "project-1", "claim-1", "Actual verified PostgreSQL claim",
+                                List.of("evidence-1")))));
 
         assertThat(retriever.retrieve(request()).getSubjects()).singleElement().satisfies(subject -> {
             assertThat(subject.getPortfolioId()).isEqualTo("project-1");
@@ -33,6 +37,8 @@ class PostgresPortfolioRetrieverTest {
         assertThat(retriever.retrieve(request()).getPassages()).singleElement().satisfies(passage -> {
             assertThat(passage.getClaimId()).isEqualTo("claim-1");
             assertThat(passage.getEvidenceIds()).containsExactly("evidence-1");
+            assertThat(passage.getContent()).isEqualTo("Actual verified PostgreSQL claim");
+            assertThat(passage.getContent()).isNotEqualTo("Public summary");
         });
         assertThat(retriever.retrieve(request()).getSource().getAdapterId()).isEqualTo("POSTGRES_PGVECTOR");
     }

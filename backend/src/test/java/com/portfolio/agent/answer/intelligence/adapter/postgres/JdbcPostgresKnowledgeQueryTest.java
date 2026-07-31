@@ -9,6 +9,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.selection.adapter.postgres.ActiveRelease;
 import com.portfolio.agent.selection.adapter.postgres.PostgresSelectionQuery;
 import com.portfolio.agent.selection.domain.PortfolioSubjectKind;
+import com.portfolio.agent.selection.domain.EvidenceReference;
 import com.portfolio.agent.selection.domain.PostgresSelectionRow;
 import com.portfolio.agent.selection.domain.SelectionTarget;
 import java.util.List;
@@ -21,16 +22,26 @@ class JdbcPostgresKnowledgeQueryTest {
     void reusesPinnedHybridSelectionQueryWithAFixedRetrievalTarget() {
         RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
         JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
-                selectionQuery, text -> new EmbeddingVector(new float[]{0.1f, 0.2f}));
+                selectionQuery,
+                text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
+                (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
+                        "project-1", "claim-1", "Actual verified PostgreSQL claim",
+                        List.of("evidence-1"))));
 
         PortfolioRetrievalRequest request = new PortfolioRetrievalRequest(
                 "PostgreSQL audit", PortfolioTaskMode.FACT_LOOKUP,
                 new PortfolioConditions("BACKEND", null, Set.of("POSTGRESQL"), null, null), 20);
 
-        assertThat(query.retrieve(request).getReleaseVersion()).isEqualTo("public-2026-07-31");
-        assertThat(query.retrieve(request).getCandidates())
+        PostgresKnowledgeQueryResult result = query.retrieve(request);
+
+        assertThat(result.getCandidates().getReleaseVersion()).isEqualTo("public-2026-07-31");
+        assertThat(result.getCandidates().getCandidates())
                 .extracting(candidate -> candidate.getSubjectId())
                 .containsExactly("project-1");
+        assertThat(result.getPassages()).singleElement().satisfies(passage -> {
+            assertThat(passage.getContent()).isEqualTo("Actual verified PostgreSQL claim");
+            assertThat(passage.getContent()).isNotEqualTo("Public summary");
+        });
         assertThat(selectionQuery.releaseIds).containsOnly("release-id");
         assertThat(selectionQuery.targets).allSatisfy(target -> {
             assertThat(target.getCareerTrack()).isEqualTo("BACKEND");
@@ -67,7 +78,8 @@ class JdbcPostgresKnowledgeQueryTest {
         private PostgresSelectionRow row() {
             return new PostgresSelectionRow(
                     "project-1", PortfolioSubjectKind.PROJECT, "PostgreSQL audit", "Public summary",
-                    "/projects/project-1", "BACKEND", Set.of("POSTGRESQL"), List.of(), 1.0);
+                    "/projects/project-1", "BACKEND", Set.of("POSTGRESQL"),
+                    List.of(new EvidenceReference("claim-1", "evidence-1", "Approved evidence")), 1.0);
         }
     }
 }
