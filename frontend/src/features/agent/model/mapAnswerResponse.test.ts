@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { ConversationTopic } from './answerTypes'
 import { mapAnswerResponse } from './mapAnswerResponse'
 
 describe('mapAnswerResponse', () => {
@@ -105,5 +106,27 @@ describe('mapAnswerResponse', () => {
     }])
     expect(mapped.evidenceIds).toEqual(['evidence-1'])
     expect(mapped.degraded).toBe(true)
+  })
+
+  it('carries conversation progress fields with a defensive copy', () => {
+    const source = {
+      ...response(),
+      coveredTopics: ['BACKGROUND', 'SOLUTION'] as ConversationTopic[],
+      guidanceStage: 'DEEPENING' as const,
+    }
+
+    const mapped = mapAnswerResponse(source)
+
+    expect(mapped.turnId).toBe('turn-1')
+    expect(mapped.coveredTopics).toEqual(['BACKGROUND', 'SOLUTION'])
+    expect(mapped.coveredTopics).not.toBe(source.coveredTopics)
+    expect(mapped.guidanceStage).toBe('DEEPENING')
+  })
+
+  it('defaults missing progress fields to an empty topic list and no stage', () => {
+    const mapped = mapAnswerResponse(response())
+
+    expect(mapped.coveredTopics).toEqual([])
+    expect(mapped.guidanceStage).toBeNull()
   })
 })

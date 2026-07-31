@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { ConversationTopic } from '../model/answerTypes'
 import type { AgentRouteSeed } from '../model/sessionTypes'
 import { useLocalSessions } from './useLocalSessions'
 
 const mappedAnswer = {
+  turnId: 'turn-1',
   title: '项目说明',
   summary: '公开摘要',
   sections: [{ type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] }],
@@ -14,6 +16,8 @@ const mappedAnswer = {
   evidenceIds: ['sql-audit-delivery-set'],
   suggestedQuestionPresetIds: ['sql-audit-overview'],
   suggestedQuestions: [],
+  coveredTopics: ['BACKGROUND' as const],
+  guidanceStage: 'OPENING' as const,
 }
 
 describe('useLocalSessions', () => {
@@ -151,5 +155,103 @@ describe('useLocalSessions', () => {
     expect(sessionStorage.length).toBe(0)
     // IndexedDB 在 jsdom 中不可用，但代码不应引用它
     expect(typeof indexedDB).toBe('undefined')
+  })
+
+  it('keeps the full text of the first question as the session title', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+    const longQuestion = '请完整介绍一下你在 SQL 审计工具项目中负责的模块边界、关键取舍与最终验证方式'
+
+    store.appendMessage(session.id, {
+      role: 'USER',
+      content: longQuestion,
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(store.activeSession.value?.title).toBe(longQuestion)
+  })
+
+  it('trims the first question without collapsing inner whitespace', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+
+    store.appendMessage(session.id, {
+      role: 'USER',
+      content: '  第一行问题\n\n第二行问题  ',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(store.activeSession.value?.title).toBe('第一行问题\n\n第二行问题')
+  })
+
+  it('keeps a manually renamed title longer than forty characters', () => {
+    const store = useLocalSessions()
+    const session = store.createSession({ title: '原标题' })
+    const longTitle = '这是一段明显超过四十个字符的手动会话标题用于验证重命名流程不会再被静默截断掉任何内容'
+
+    store.renameSession(session.id, longTitle)
+
+    expect(store.activeSession.value?.title).toBe(longTitle)
+  })
+
+  it('starts every session with an empty coveredTopics list', () => {
+    const store = useLocalSessions()
+    const first = store.createSession()
+    const second = store.createSession()
+
+    expect(first.coveredTopics).toEqual([])
+    expect(second.coveredTopics).toEqual([])
+  })
+
+  it('replaces coveredTopics with the full list from the latest answer', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+    const firstTopics: ConversationTopic[] = ['BACKGROUND', 'SOLUTION']
+
+    store.applyAnswerProgress(session.id, { ...mappedAnswer, coveredTopics: firstTopics })
+
+    expect(store.activeSession.value?.coveredTopics).toEqual(['BACKGROUND', 'SOLUTION'])
+    expect(store.activeSession.value?.coveredTopics).not.toBe(firstTopics)
+
+    store.applyAnswerProgress(session.id, { ...mappedAnswer, coveredTopics: ['OUTCOME'] })
+
+    expect(store.activeSession.value?.coveredTopics).toEqual(['OUTCOME'])
+  })
+
+  it('keeps coveredTopics isolated between sessions', () => {
+    const store = useLocalSessions()
+    const first = store.createSession()
+    store.appendMessage(first.id, {
+      role: 'USER',
+      content: '第一个会话的问题',
+      answer: null,
+      evidenceIds: [],
+    })
+    const second = store.createSession()
+
+    store.applyAnswerProgress(first.id, { ...mappedAnswer, coveredTopics: ['BACKGROUND'] })
+
+    expect(store.sessions.value.find((item) => item.id === first.id)?.coveredTopics)
+      .toEqual(['BACKGROUND'])
+    expect(store.sessions.value.find((item) => item.id === second.id)?.coveredTopics)
+      .toEqual([])
+  })
+
+  it('adopts the seed answer coveredTopics for a homepage-seeded session', () => {
+    const store = useLocalSessions()
+    const seed: AgentRouteSeed = {
+      role: 'INTERVIEWER',
+      question: '介绍 SQL 审计工具的完整迭代。',
+      answer: { ...mappedAnswer, coveredTopics: ['BACKGROUND', 'SOLUTION'] },
+      projectSlug: 'sql-audit',
+      evidenceIds: ['sql-audit-delivery-set'],
+      source: 'HOME',
+    }
+
+    const session = store.seedSession(seed)
+
+    expect(session.coveredTopics).toEqual(['BACKGROUND', 'SOLUTION'])
   })
 })

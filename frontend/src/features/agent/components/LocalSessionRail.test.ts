@@ -14,6 +14,7 @@ const sessions: AgentSession[] = [{
   createdAt: 1,
   updatedAt: 2,
   messages: [],
+  coveredTopics: [],
 }]
 
 describe('LocalSessionRail', () => {
@@ -63,5 +64,28 @@ describe('LocalSessionRail', () => {
     await wrapper.get('[data-session-clear-confirm]').trigger('click')
     expect(wrapper.emitted('clear')).toEqual([[]])
     wrapper.unmount()
+  })
+
+  it('exposes the full session title on the row for truncated titles', () => {
+    const longTitle = '这是一段超过二十四个字符的会话标题用来验证悬停时可以读到完整内容'
+    const wrapper = mount(LocalSessionRail, {
+      props: {
+        sessions: [{ ...sessions[0]!, title: longTitle }],
+        activeId: 'session-1',
+      },
+    })
+
+    expect(wrapper.get('.session-select').attributes('title')).toBe(longTitle)
+  })
+
+  it('does not cap the rename input length', async () => {
+    const wrapper = mount(LocalSessionRail, {
+      props: { sessions, activeId: 'session-1' },
+    })
+
+    await wrapper.get('[data-session-menu]').trigger('click')
+    await wrapper.get('[data-session-rename]').trigger('click')
+
+    expect(wrapper.get('[data-session-rename-input]').attributes('maxlength')).toBeUndefined()
   })
 })

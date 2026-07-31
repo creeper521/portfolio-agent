@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { ConversationTopic } from '../model/answerTypes'
 import { askQuestion } from './answerApi'
 
 function input(question: string) {
@@ -54,9 +55,49 @@ describe('answer api', () => {
           caseSlug: 'some-case',
           audienceRole: 'INTERVIEWER',
           source: 'AGENT_PAGE',
+          coveredTopics: [],
         },
       }),
     })
+  })
+
+  it('sends deduplicated coveredTopics inside the request context only', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('继续深入'),
+      coveredTopics: ['BACKGROUND', 'SOLUTION', 'BACKGROUND'] as ConversationTopic[],
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.context.coveredTopics).toEqual(['BACKGROUND', 'SOLUTION'])
+    expect(body.coveredTopics).toBeUndefined()
+  })
+
+  it('strips extra fields from forwarded messages', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('继续深入'),
+      messages: [
+        { role: 'USER', content: '之前的问题', id: 'message-1', answer: { title: 'x' } } as never,
+      ],
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.messages).toEqual([{ role: 'USER', content: '之前的问题' }])
   })
 
   it('uses a stable local message for a non-success response', async () => {
