@@ -185,7 +185,7 @@ class JdbcPostgresSelectionQueryTest {
     }
 
     @Test
-    void findsExactIdsWithinOneReleaseAndKeepsEvidenceGates() {
+    void exactIdsKeepProjectCareerAndRejectCaseCareerInheritance() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(
                         anyString(),
@@ -210,7 +210,10 @@ class JdbcPostgresSelectionQueryTest {
                 .contains("ps.stable_id = ANY(CAST(? AS text[]))")
                 .contains("c.verification_status = 'VERIFIED'")
                 .contains("e.public_status = 'APPROVED'")
-                .contains("COALESCE(owner.career_track, ps.career_track) = ?")
-                .contains("sc.capability_code = ANY");
+                .contains("ps.career_track AS career_track")
+                .contains("ps.career_track = ?")
+                .contains("sc.capability_code = ANY")
+                .doesNotContain("owner.career_track")
+                .doesNotContain("owner.stable_id = cs.project_stable_id");
     }
 }

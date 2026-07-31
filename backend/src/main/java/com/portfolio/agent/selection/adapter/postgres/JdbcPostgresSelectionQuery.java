@@ -249,21 +249,13 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                    ps.title,
                    ps.summary,
                    ps.public_route,
-                   COALESCE(owner.career_track, ps.career_track) AS career_track,
+                   ps.career_track AS career_track,
                    caps.capabilities,
                    c.stable_id AS claim_id,
                    e.stable_id AS evidence_id,
                    e.label AS evidence_label,
                    e.public_status AS evidence_public_status
             FROM portfolio_subject ps
-            LEFT JOIN case_study cs
-              ON cs.release_id = ps.release_id
-             AND cs.stable_id = ps.stable_id
-             AND ps.subject_kind = 'CASE'
-            LEFT JOIN portfolio_subject owner
-              ON owner.release_id = ps.release_id
-             AND owner.stable_id = cs.project_stable_id
-             AND owner.subject_kind = 'PROJECT'
             LEFT JOIN LATERAL (
                 SELECT array_agg(sc.capability_code ORDER BY sc.capability_code) AS capabilities
                 FROM subject_capability sc
@@ -286,7 +278,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
               AND ps.stable_id = ANY(CAST(? AS text[]))
               AND (
                   ? IS NULL
-                  OR COALESCE(owner.career_track, ps.career_track) = ?
+                  OR ps.career_track = ?
               )
               AND (CAST(? AS text[]) IS NULL OR EXISTS (
                   SELECT 1
