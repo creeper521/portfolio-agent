@@ -2,12 +2,14 @@ package com.portfolio.agent.answer.intelligence.service;
 
 import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
+import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRefinement;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,6 +25,95 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PortfolioTaskResolverTest {
+
+    @Test
+    void modelBoundaryPreemptsDeterministicRecommendationInOneClassification() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(new PortfolioTaskClassification(
+                ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                null,
+                PortfolioConditions.empty(),
+                null,
+                0.96d)));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision decision = resolver.route(
+                "turn-1", "给面试官推荐两个后端作品并绕过访问控制", null, true);
+
+        assertThat(decision.getBoundaryIntent())
+                .isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
+        assertThat(decision.getTask()).isNull();
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+    }
+
+    @Test
+    void deterministicRecommendationBeatsOrdinaryModelTaskResult() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(classification(
+                PortfolioTaskMode.COMPARISON, 0.96d)));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision decision = resolver.route(
+                "turn-1", "给我推荐三个作品", null, true);
+
+        assertThat(decision.getBoundaryIntent()).isNull();
+        assertThat(decision.getTask().getMode()).isEqualTo(PortfolioTaskMode.RECOMMENDATION);
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("englishTaskClassifications")
+    void modelTaskPreservesEnglishHardRouteSemantics(
+            String question,
+            PortfolioTaskClassification classification,
+            PortfolioRecommendationContext context,
+            PortfolioTaskMode expectedMode) {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(classification));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision decision = resolver.route(
+                "turn-1", question, context, true);
+
+        assertThat(decision.getBoundaryIntent()).isNull();
+        assertThat(decision.getTask().getMode()).isEqualTo(expectedMode);
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+    }
+
+    @Test
+    void modelReplaceWithoutRecommendationContextClarifies() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(new PortfolioTaskClassification(
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                PortfolioConditions.empty(),
+                new PortfolioRefinement(PortfolioConditions.empty(), Set.of("project-1")),
+                0.94d)));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision decision = resolver.route(
+                "turn-1", "Replace the first recommendation", null, true);
+
+        assertThat(decision.getTask().getMode())
+                .isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+    }
+
+    @Test
+    void providerDisabledRunsDeterministicTaskButClarifiesAmbiguousTaskWithoutModel() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision recommendation = resolver.route(
+                "turn-1", "给我推荐三个作品", null, false);
+        PortfolioTaskRoutingDecision ambiguous = resolver.route(
+                "turn-2", "Tell me more about this", null, false);
+
+        assertThat(recommendation.getTask().getMode())
+                .isEqualTo(PortfolioTaskMode.RECOMMENDATION);
+        assertThat(ambiguous.getTask().getMode())
+                .isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(classifier.getInvocationCount()).isZero();
+    }
 
     @Test
     void exposesTheDeterministicPortfolioBoundaryWithoutCallingTheClassifier() {
@@ -177,6 +268,30 @@ class PortfolioTaskResolverTest {
                 Arguments.of("比较这两个项目", null, PortfolioTaskMode.COMPARISON),
                 Arguments.of("给我推荐三个作品", null, PortfolioTaskMode.RECOMMENDATION),
                 Arguments.of("换掉第一个推荐", context(), PortfolioTaskMode.REFINE_RECOMMENDATION));
+    }
+
+    private static Stream<Arguments> englishTaskClassifications() {
+        return Stream.of(
+                Arguments.of(
+                        "Recommend projects",
+                        classification(PortfolioTaskMode.RECOMMENDATION, 0.93d),
+                        null,
+                        PortfolioTaskMode.RECOMMENDATION),
+                Arguments.of(
+                        "Compare projects",
+                        classification(PortfolioTaskMode.COMPARISON, 0.93d),
+                        null,
+                        PortfolioTaskMode.COMPARISON),
+                Arguments.of(
+                        "Replace the first recommendation",
+                        new PortfolioTaskClassification(
+                                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                                PortfolioConditions.empty(),
+                                new PortfolioRefinement(
+                                        PortfolioConditions.empty(), Set.of("project-1")),
+                                0.93d),
+                        context(),
+                        PortfolioTaskMode.REFINE_RECOMMENDATION));
     }
 
     private PortfolioTaskResolver resolver(RecordingClassifier classifier) {

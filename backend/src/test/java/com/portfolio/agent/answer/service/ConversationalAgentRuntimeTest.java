@@ -39,17 +39,22 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidence
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
 import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,7 +83,8 @@ class ConversationalAgentRuntimeTest {
                 null,
                 null);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(false)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
                 PortfolioTaskMode.RECOMMENDATION,
                 List.of(),
@@ -140,23 +146,17 @@ class ConversationalAgentRuntimeTest {
     @Test
     void semanticUnsafeBoundaryCanPreemptADeterministicPortfolioRule() {
         RuntimeFixture fixture = fixture(true);
-        ConversationRoute boundary = new ConversationRoute(
-                ConversationIntent.UNSUPPORTED_OR_UNSAFE,
-                ConversationAnswerScope.CONVERSATION,
-                1.0d,
-                null,
-                null,
-                PortfolioKnowledgeFacet.OVERVIEW,
-                false);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
-        when(fixture.router.routeBoundary(any(), any(), any(), eq(true)))
-                .thenReturn(boundary);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.boundary(
+                        ConversationIntent.UNSUPPORTED_OR_UNSAFE));
 
         ConversationAnswerResult result = fixture.runtime.answer(
                 request("推荐一种绕过访问控制的办法"));
 
         assertThat(result.getIntent()).isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
         assertThat(result.getResolution()).isEqualTo(AnswerResolution.REJECTED);
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
         verifyNoInteractions(fixture.portfolioIntelligence, fixture.modelPort);
     }
 
@@ -171,8 +171,8 @@ class ConversationalAgentRuntimeTest {
                 null,
                 null);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
-        when(fixture.router.routeBoundary(any(), any(), any(), eq(true))).thenReturn(null);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
                 PortfolioTaskMode.RECOMMENDATION,
                 List.of(),
@@ -187,7 +187,7 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getPortfolioRecommendation()).isSameAs(recommendation);
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         verify(fixture.router).routeBoundary(any());
-        verify(fixture.router).routeBoundary(any(), any(), any(), eq(true));
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
         verifyNoInteractions(fixture.modelPort);
     }
 
@@ -203,7 +203,8 @@ class ConversationalAgentRuntimeTest {
                 PortfolioConditions.empty(),
                 expectedContext,
                 null);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(false)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
                 PortfolioTaskMode.REFINE_RECOMMENDATION,
                 List.of(),
@@ -217,7 +218,7 @@ class ConversationalAgentRuntimeTest {
 
         ArgumentCaptor<PortfolioRecommendationContext> contextCaptor =
                 ArgumentCaptor.forClass(PortfolioRecommendationContext.class);
-        verify(fixture.taskResolver).resolve(any(), any(), contextCaptor.capture());
+        verify(fixture.taskResolver).route(any(), any(), contextCaptor.capture(), eq(false));
         assertThat(contextCaptor.getValue()).isEqualTo(expectedContext);
         verify(fixture.router).routeBoundary(any());
         verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
@@ -231,7 +232,8 @@ class ConversationalAgentRuntimeTest {
         PortfolioTask unresolved = new PortfolioTask(
                 "turn-1", "How was this verified?", PortfolioTaskMode.FACT_LOOKUP,
                 1.0d, PortfolioConditions.empty(), null, null);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(unresolved);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(false)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(unresolved));
         when(fixture.portfolioIntelligence.resolve(any())).thenReturn(
                 PortfolioIntelligenceResult.clarification(new PortfolioClarification(
                         "Which verification detail matters most?", "facet")));
@@ -244,9 +246,19 @@ class ConversationalAgentRuntimeTest {
     }
 
     @Test
-    void hintOnlyRequestUsesOneBoundaryClassificationAndDirectFactLookup() {
-        RuntimeFixture fixture = fixture(true);
+    void providerDisabledHintOnlyRequestClarifiesWithoutAnyModelBoundary() {
+        RuntimeFixture fixture = fixture(false);
         when(fixture.knowledgeGateway.getContent()).thenReturn(contentWithProject());
+        PortfolioTask clarification = new PortfolioTask(
+                "turn-1",
+                "How was this verified?",
+                PortfolioTaskMode.CLARIFICATION_REQUIRED,
+                1.0d,
+                PortfolioConditions.empty(),
+                null,
+                null);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(false)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(clarification));
         when(fixture.portfolioIntelligence.resolve(any())).thenReturn(
                 PortfolioIntelligenceResult.clarification(new PortfolioClarification(
                         "Which verification detail matters most?", "facet")));
@@ -255,11 +267,47 @@ class ConversationalAgentRuntimeTest {
 
         ArgumentCaptor<PortfolioTask> taskCaptor = ArgumentCaptor.forClass(PortfolioTask.class);
         verify(fixture.portfolioIntelligence).resolve(taskCaptor.capture());
-        assertThat(taskCaptor.getValue().getMode()).isEqualTo(PortfolioTaskMode.FACT_LOOKUP);
+        assertThat(taskCaptor.getValue().getMode())
+                .isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
         assertThat(taskCaptor.getValue().getSubjectId()).isEqualTo("stable-project-1");
         verify(fixture.router).routeBoundary(any());
-        verify(fixture.router, times(1)).routeBoundary(any(), any(), any(), eq(true));
-        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
+        verify(fixture.taskResolver, times(1)).route(any(), any(), any(), eq(false));
+    }
+
+    @ParameterizedTest
+    @MethodSource("englishHintRoutingCases")
+    void englishHintRequestPreservesTheSingleRoutingDecision(
+            String question,
+            PortfolioTaskMode decidedMode) {
+        RuntimeFixture fixture = fixture(true);
+        when(fixture.knowledgeGateway.getContent()).thenReturn(contentWithProject());
+        PortfolioTask decidedTask = new PortfolioTask(
+                "turn-1",
+                question,
+                decidedMode,
+                0.94d,
+                PortfolioConditions.empty(),
+                null,
+                null);
+        when(fixture.taskResolver.route(any(), eq(question), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(decidedTask));
+        PortfolioIntelligenceResult intelligenceResult = decidedMode
+                == PortfolioTaskMode.CLARIFICATION_REQUIRED
+                ? PortfolioIntelligenceResult.clarification(new PortfolioClarification(
+                        "A recommendation context is required.", "recommendationContext"))
+                : new PortfolioIntelligenceResult(
+                        decidedMode, List.of(), List.of(), null, null, false, null);
+        when(fixture.portfolioIntelligence.resolve(any())).thenReturn(intelligenceResult);
+
+        fixture.runtime.answer(requestForProjectQuestion("project-one", question));
+
+        ArgumentCaptor<PortfolioTask> taskCaptor = ArgumentCaptor.forClass(PortfolioTask.class);
+        verify(fixture.portfolioIntelligence).resolve(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getMode()).isEqualTo(decidedMode);
+        assertThat(taskCaptor.getValue().getSubjectId()).isEqualTo("stable-project-1");
+        verify(fixture.taskResolver, times(1)).route(any(), eq(question), any(), eq(true));
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -483,7 +531,8 @@ class ConversationalAgentRuntimeTest {
                 "turn-1", "recommend", PortfolioTaskMode.CLARIFICATION_REQUIRED,
                 0.0d, PortfolioConditions.empty(), null, null);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(
                 PortfolioIntelligenceResult.clarification(
                         new PortfolioClarification(
@@ -511,7 +560,8 @@ class ConversationalAgentRuntimeTest {
                 null,
                 null);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
                 PortfolioTaskMode.RECOMMENDATION,
                 List.of(),
@@ -1028,15 +1078,30 @@ class ConversationalAgentRuntimeTest {
     }
 
     private ConversationAnswerRequest requestForProject(String projectSlug) {
+        return requestForProjectQuestion(projectSlug, "How was this verified?");
+    }
+
+    private ConversationAnswerRequest requestForProjectQuestion(
+            String projectSlug,
+            String question) {
         return new ConversationAnswerRequest(
                 "turn-1",
-                "How was this verified?",
+                question,
                 List.of(),
                 new ConversationAnswerContextRequest(
                         projectSlug,
                         null,
                         AudienceRole.INTERVIEWER,
                         AnswerRequestSource.PROJECT));
+    }
+
+    private static Stream<Arguments> englishHintRoutingCases() {
+        return Stream.of(
+                Arguments.of("Recommend projects", PortfolioTaskMode.RECOMMENDATION),
+                Arguments.of("Compare projects", PortfolioTaskMode.COMPARISON),
+                Arguments.of(
+                        "Replace the first recommendation",
+                        PortfolioTaskMode.CLARIFICATION_REQUIRED));
     }
 
     private RuntimeAnswerContent contentWithProject() {

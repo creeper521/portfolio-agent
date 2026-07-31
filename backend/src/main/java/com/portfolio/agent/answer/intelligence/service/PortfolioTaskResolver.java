@@ -7,6 +7,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRefinement;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
 
 import java.util.Locale;
@@ -78,6 +79,45 @@ public final class PortfolioTaskResolver {
         return resolveWithClassifier(turnId, question, recommendationContext);
     }
 
+    public PortfolioTaskRoutingDecision route(
+            String turnId,
+            String question,
+            PortfolioRecommendationContext recommendationContext,
+            boolean providerAllowed) {
+        PortfolioTaskMode ruleMode = resolveRule(question);
+        PortfolioTaskClassification classification = providerAllowed
+                ? classify(turnId, question, recommendationContext)
+                : null;
+        if (classification != null
+                && classification.getBoundaryIntent() != null
+                && classification.getConfidence() >= confidenceThreshold) {
+            return PortfolioTaskRoutingDecision.boundary(classification.getBoundaryIntent());
+        }
+        if (ruleMode != null) {
+            return PortfolioTaskRoutingDecision.task(resolveRuleTask(
+                    turnId, question, recommendationContext, ruleMode));
+        }
+        if (classification == null
+                || classification.getBoundaryIntent() != null
+                || classification.getConfidence() < confidenceThreshold) {
+            return PortfolioTaskRoutingDecision.task(
+                    clarification(turnId, question, recommendationContext));
+        }
+        if (classification.getMode() == PortfolioTaskMode.REFINE_RECOMMENDATION
+                && recommendationContext == null) {
+            return PortfolioTaskRoutingDecision.task(
+                    clarification(turnId, question, recommendationContext));
+        }
+        return PortfolioTaskRoutingDecision.task(task(
+                turnId,
+                question,
+                classification.getMode(),
+                classification.getConfidence(),
+                classification.getConditions(),
+                recommendationContext,
+                classification.getRefinement()));
+    }
+
     public boolean matchesDeterministicRule(String question) {
         return resolveRule(question) != null;
     }
@@ -107,6 +147,37 @@ public final class PortfolioTaskResolver {
                 classification.getConditions(),
                 recommendationContext,
                 classification.getRefinement());
+    }
+
+    private PortfolioTaskClassification classify(
+            String turnId,
+            String question,
+            PortfolioRecommendationContext recommendationContext) {
+        ConversationModelResult<PortfolioTaskClassification> result =
+                classifier.classifyPortfolioTask(turnId, question, recommendationContext);
+        return result != null && result.isSuccessful() ? result.getValue() : null;
+    }
+
+    private PortfolioTask resolveRuleTask(
+            String turnId,
+            String question,
+            PortfolioRecommendationContext recommendationContext,
+            PortfolioTaskMode ruleMode) {
+        if (ruleMode == PortfolioTaskMode.REFINE_RECOMMENDATION
+                && recommendationContext == null) {
+            return clarification(turnId, question, recommendationContext);
+        }
+        PortfolioConditions conditions = ruleMode == PortfolioTaskMode.RECOMMENDATION
+                ? extractControlledConditions(question)
+                : PortfolioConditions.empty();
+        return task(
+                turnId,
+                question,
+                ruleMode,
+                1.0d,
+                conditions,
+                recommendationContext,
+                null);
     }
 
     private PortfolioTaskMode resolveRule(String question) {

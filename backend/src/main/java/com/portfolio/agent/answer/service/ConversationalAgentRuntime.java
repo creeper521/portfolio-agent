@@ -17,17 +17,17 @@ import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
+import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequest;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
 import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
@@ -173,12 +173,14 @@ public final class ConversationalAgentRuntime {
                 && portfolioTaskResolver.matchesDeterministicRule(request.getQuestion());
         boolean portfolioHardRoute = usesPortfolioIntelligence(
                 request, deterministicPortfolioRule);
-        boolean directSubjectFactLookup = hasSubjectHint(request)
-                && request.getContext().getRecommendationContext() == null
-                && !deterministicPortfolioRule;
-        if (providerAccess.isAllowed() && portfolioHardRoute) {
-            boundary = intentRouter.routeBoundary(content, window, request, true);
-            if (boundary != null) {
+        if (portfolioHardRoute) {
+            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
+                    request.getTurnId(),
+                    request.getQuestion(),
+                    recommendationContext(request),
+                    providerAccess.isAllowed());
+            if (decision.getBoundaryIntent() != null) {
+                boundary = portfolioBoundary(decision.getBoundaryIntent());
                 ConversationAnswerResult base = fallback.answer(request, content, boundary);
                 return finalizeTurn(
                         base,
@@ -188,14 +190,12 @@ public final class ConversationalAgentRuntime {
                         request,
                         false);
             }
-        }
-        if (portfolioHardRoute) {
             return answerWithPortfolioIntelligence(
                     request,
                     content,
                     window,
                     safeRoute(request, false),
-                    directSubjectFactLookup);
+                    decision.getTask());
         }
         if (!providerAccess.isAllowed()) {
             ConversationAnswerResult base = fallback.answer(request, content);
@@ -226,7 +226,7 @@ public final class ConversationalAgentRuntime {
         if (hasPortfolioIntelligence()
                 && route.getIntent() == ConversationIntent.PORTFOLIO_GROUNDED) {
             return answerWithPortfolioIntelligence(
-                    request, content, window, guidanceRoute, false);
+                    request, content, window, guidanceRoute, null);
         }
         if (hasPortfolioIntelligence() && route.getIntent() == ConversationIntent.HYBRID) {
             return answerHybridWithPortfolioIntelligence(
@@ -343,9 +343,9 @@ public final class ConversationalAgentRuntime {
             RuntimeAnswerContent content,
             ConversationWindow window,
             ConversationRoute guidanceRoute,
-            boolean directSubjectFactLookup) {
+            PortfolioTask decidedTask) {
         PortfolioIntelligenceResult intelligenceResult = resolvePortfolioIntelligence(
-                request, content, guidanceRoute, directSubjectFactLookup);
+                request, content, guidanceRoute, decidedTask);
         ConversationAnswerResult base = portfolioAnswerAssembler.assemble(
                 request, content, intelligenceResult);
         return finalizeTurn(
@@ -361,29 +361,22 @@ public final class ConversationalAgentRuntime {
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
             ConversationRoute guidanceRoute) {
-        return resolvePortfolioIntelligence(request, content, guidanceRoute, false);
+        return resolvePortfolioIntelligence(request, content, guidanceRoute, null);
     }
 
     private PortfolioIntelligenceResult resolvePortfolioIntelligence(
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
             ConversationRoute guidanceRoute,
-            boolean directSubjectFactLookup) {
+            PortfolioTask decidedTask) {
         long startedAt = System.nanoTime();
         boolean contextPresent = request.getContext().getRecommendationContext() != null;
-        PortfolioTask task = directSubjectFactLookup
-                ? new PortfolioTask(
+        PortfolioTask task = decidedTask == null
+                ? portfolioTaskResolver.resolve(
                         request.getTurnId(),
                         request.getQuestion(),
-                        PortfolioTaskMode.FACT_LOOKUP,
-                        1.0d,
-                        PortfolioConditions.empty(),
-                        null,
-                        null)
-                : portfolioTaskResolver.resolve(
-                        request.getTurnId(),
-                        request.getQuestion(),
-                        recommendationContext(request));
+                        recommendationContext(request))
+                : decidedTask;
         task = withSubjectConstraint(task, content, guidanceRoute);
         PortfolioIntelligenceResult intelligenceResult = portfolioIntelligence.resolve(task);
         publishPortfolioIntelligence(intelligenceResult, contextPresent, startedAt);
@@ -616,6 +609,20 @@ public final class ConversationalAgentRuntime {
                 projectSlug,
                 caseSlug,
                 progressClassifier.inferFacet(request.getQuestion()),
+                false);
+    }
+
+    private ConversationRoute portfolioBoundary(ConversationIntent intent) {
+        ConversationAnswerScope scope = intent == ConversationIntent.TIME_SENSITIVE
+                ? ConversationAnswerScope.GENERAL
+                : ConversationAnswerScope.CONVERSATION;
+        return new ConversationRoute(
+                intent,
+                scope,
+                1.0d,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
                 false);
     }
 
