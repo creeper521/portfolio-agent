@@ -114,7 +114,9 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioTask task,
             PortfolioTaskMode mode,
             PortfolioConditions conditions) {
-        PortfolioRetrievalRequest request = task.getSubjectId() == null
+        boolean singleSubjectFactLookup = mode == PortfolioTaskMode.FACT_LOOKUP
+                && task.getSubjectId() != null;
+        PortfolioRetrievalRequest request = !singleSubjectFactLookup
                 ? new PortfolioRetrievalRequest(task.getQuestion(), mode, conditions)
                 : PortfolioRetrievalRequest.subjectScope(
                         task.getQuestion(), mode, conditions, task.getSubjectId());

@@ -50,7 +50,7 @@ public final class ConversationIntentRouter {
         long startedAt = System.nanoTime();
         String question = request.getQuestion().strip();
         String normalized = question.toLowerCase(Locale.ROOT);
-        ConversationRoute boundary = routeBoundary(question);
+        ConversationRoute boundary = routeBoundary(content, window, request, false);
         if (boundary != null) {
             return boundary;
         }
@@ -91,6 +91,45 @@ public final class ConversationIntentRouter {
             return decided(deterministic(
                     ConversationIntent.TIME_SENSITIVE,
                     ConversationAnswerScope.GENERAL), "DETERMINISTIC", startedAt);
+        }
+        return null;
+    }
+
+    public ConversationRoute routeBoundary(
+            RuntimeAnswerContent content,
+            ConversationWindow window,
+            ConversationAnswerRequest request,
+            boolean allowModelBoundary
+    ) {
+        ConversationRoute deterministicBoundary = routeBoundary(request.getQuestion());
+        if (deterministicBoundary != null || !allowModelBoundary) {
+            return deterministicBoundary;
+        }
+
+        long startedAt = System.nanoTime();
+        ConversationModelResult<ConversationRoute> classified;
+        try {
+            classified = modelPort.classify(
+                    request.getQuestion().strip(), window, publicSubjects(content));
+        } catch (RuntimeException exception) {
+            return null;
+        }
+        if (classified == null || !classified.isSuccessful()) {
+            return null;
+        }
+        ConversationRoute candidate = classified.getValue();
+        if (candidate == null || candidate.getConfidence() < minimumConfidence) {
+            return null;
+        }
+        if (candidate.getIntent() == ConversationIntent.UNSUPPORTED_OR_UNSAFE) {
+            return decided(deterministic(
+                    ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                    ConversationAnswerScope.CONVERSATION), "MODEL_BOUNDARY", startedAt);
+        }
+        if (candidate.getIntent() == ConversationIntent.TIME_SENSITIVE) {
+            return decided(deterministic(
+                    ConversationIntent.TIME_SENSITIVE,
+                    ConversationAnswerScope.GENERAL), "MODEL_BOUNDARY", startedAt);
         }
         return null;
     }

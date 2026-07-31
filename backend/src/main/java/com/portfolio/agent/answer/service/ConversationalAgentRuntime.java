@@ -145,7 +145,9 @@ public final class ConversationalAgentRuntime {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
         ConversationWindow window = windowManager.prepare(
                 request.getMessages(), request.getQuestion());
-        ConversationRoute boundary = intentRouter.routeBoundary(request.getQuestion());
+        boolean portfolioHardRoute = usesPortfolioIntelligence(request);
+        ConversationRoute boundary = intentRouter.routeBoundary(
+                content, window, request, portfolioHardRoute);
         if (boundary != null) {
             ConversationAnswerResult base = fallback.answer(request, content, boundary);
             return finalizeTurn(
@@ -167,7 +169,7 @@ public final class ConversationalAgentRuntime {
                     request,
                     true);
         }
-        if (usesPortfolioIntelligence(request)) {
+        if (portfolioHardRoute) {
             return answerWithPortfolioIntelligence(
                     request, content, window, safeRoute(request, false));
         }
@@ -352,7 +354,7 @@ public final class ConversationalAgentRuntime {
                 content,
                 intelligenceResult,
                 ConversationIntent.HYBRID,
-                ConversationAnswerScope.HYBRID);
+                ConversationAnswerScope.PORTFOLIO);
         if (intelligenceResult.getResolvedIntent()
                 == com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode.CLARIFICATION_REQUIRED
                 || intelligenceResult.getEvidence().isEmpty()) {
@@ -422,7 +424,7 @@ public final class ConversationalAgentRuntime {
                 deterministic.getTurnId(),
                 deterministic.getContentVersion(),
                 ConversationIntent.HYBRID,
-                ConversationAnswerScope.HYBRID,
+                ConversationAnswerScope.PORTFOLIO,
                 deterministic.getResolution(),
                 deterministic.getTitle(),
                 deterministic.getBlocks(),
