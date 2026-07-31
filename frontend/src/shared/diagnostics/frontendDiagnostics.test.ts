@@ -83,6 +83,19 @@ describe('frontend diagnostic event contract', () => {
     expect(JSON.stringify(sanitized)).not.toContain('visitor-answer-sentinel')
   })
 
+  it('keeps the recovery count and guidance stage when both are well formed', () => {
+    const event = {
+      ...createEvent(),
+      eventName: 'frontend.response.invalid' as const,
+      errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
+      errorKind: 'INVALID_RESPONSE' as const,
+      recoveredCount: 2,
+      guidanceStage: 'OPENING' as const,
+    }
+
+    expect(serializeFrontendEvent(event)).toEqual(event)
+  })
+
   it.each([
     ['event name', { eventName: 'frontend.not-approved' }],
     ['schema version', { schemaVersion: 2 }],
@@ -95,6 +108,10 @@ describe('frontend diagnostic event contract', () => {
     ['error kind enum', { errorKind: 'NOT_APPROVED' }],
     ['fingerprint shape', { errorFingerprint: ['nested-secret'] }],
     ['duration bucket enum', { durationBucket: 'NOT_APPROVED' }],
+    ['recovered count type', { recoveredCount: 'two' }],
+    ['recovered count negative', { recoveredCount: -1 }],
+    ['recovered count fraction', { recoveredCount: 1.5 }],
+    ['guidance stage enum', { guidanceStage: 'NOT_A_STAGE' }],
   ])('rejects an invalid runtime %s', (_label, invalidField) => {
     expect(serializeFrontendEvent({ ...createEvent(), ...invalidField } as never)).toBeUndefined()
   })

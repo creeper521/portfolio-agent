@@ -366,6 +366,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
         errorKind: 'INVALID_RESPONSE',
         turnId: mapped.turnId,
+        recoveredCount: completed.recoveredCount,
+        ...(mapped.guidanceStage === null ? {} : { guidanceStage: mapped.guidanceStage }),
       }))
     }
     sessions.appendMessage(session.id, {

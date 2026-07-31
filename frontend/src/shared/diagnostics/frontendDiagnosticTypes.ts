@@ -10,6 +10,8 @@ export type FrontendDiagnosticEventName =
 
 export type FrontendDurationBucket = 'LT_1000_MS' | 'FROM_1000_TO_4999_MS' | 'GE_5000_MS'
 
+export type FrontendGuidanceStage = 'OPENING' | 'DEEPENING' | 'WRAP_UP' | 'EXPLORE_OTHERS'
+
 export interface ReportableFrontendEvent {
   schemaVersion: 1
   eventName: FrontendDiagnosticEventName
@@ -22,6 +24,8 @@ export interface ReportableFrontendEvent {
   errorKind?: string
   errorFingerprint?: string
   durationBucket?: FrontendDurationBucket
+  recoveredCount?: number
+  guidanceStage?: FrontendGuidanceStage
 }
 
 export type SafeFrontendEvent = ReportableFrontendEvent
@@ -38,6 +42,12 @@ const DURATION_BUCKETS = new Set<FrontendDurationBucket>([
   'LT_1000_MS',
   'FROM_1000_TO_4999_MS',
   'GE_5000_MS',
+])
+const GUIDANCE_STAGES = new Set<FrontendGuidanceStage>([
+  'OPENING',
+  'DEEPENING',
+  'WRAP_UP',
+  'EXPLORE_OTHERS',
 ])
 const ERROR_KINDS = new Set([
   'HTTP',
@@ -61,6 +71,8 @@ export interface FrontendDiagnosticEventInput {
   errorKind?: string
   errorFingerprint?: string
   durationBucket?: FrontendDurationBucket
+  recoveredCount?: number
+  guidanceStage?: FrontendGuidanceStage
 }
 
 export function createFrontendDiagnosticEvent(input: FrontendDiagnosticEventInput): ReportableFrontendEvent {
@@ -76,6 +88,8 @@ export function createFrontendDiagnosticEvent(input: FrontendDiagnosticEventInpu
     ...(input.errorKind === undefined ? {} : { errorKind: input.errorKind }),
     ...(input.errorFingerprint === undefined ? {} : { errorFingerprint: input.errorFingerprint }),
     ...(input.durationBucket === undefined ? {} : { durationBucket: input.durationBucket }),
+    ...(input.recoveredCount === undefined ? {} : { recoveredCount: input.recoveredCount }),
+    ...(input.guidanceStage === undefined ? {} : { guidanceStage: input.guidanceStage }),
   }
 }
 
@@ -106,6 +120,8 @@ export function serializeFrontendEvent(event: unknown): ReportableFrontendEvent 
     if (!copyOptionalString(event, sanitized, 'errorKind', (value) => ERROR_KINDS.has(value))) return undefined
     if (!copyOptionalString(event, sanitized, 'errorFingerprint', (value) => FINGERPRINT_PATTERN.test(value))) return undefined
     if (!copyOptionalString(event, sanitized, 'durationBucket', (value) => DURATION_BUCKETS.has(value as FrontendDurationBucket))) return undefined
+    if (!copyOptionalNumber(event, sanitized, 'recoveredCount', (value) => Number.isInteger(value) && value >= 0)) return undefined
+    if (!copyOptionalString(event, sanitized, 'guidanceStage', (value) => GUIDANCE_STAGES.has(value as FrontendGuidanceStage))) return undefined
     return sanitized
   } catch {
     return undefined
@@ -156,12 +172,25 @@ function isCanonicalInstant(value: string): boolean {
 function copyOptionalString(
   source: Record<string, unknown>,
   target: ReportableFrontendEvent,
-  key: 'serverRequestId' | 'turnId' | 'errorCode' | 'errorKind' | 'errorFingerprint' | 'durationBucket',
+  key: 'serverRequestId' | 'turnId' | 'errorCode' | 'errorKind' | 'errorFingerprint' | 'durationBucket' | 'guidanceStage',
   accepts: (value: string) => boolean,
 ): boolean {
   if (!Object.prototype.hasOwnProperty.call(source, key)) return true
   const value = source[key]
   if (typeof value !== 'string' || !accepts(value)) return false
+  Object.assign(target, { [key]: value })
+  return true
+}
+
+function copyOptionalNumber(
+  source: Record<string, unknown>,
+  target: ReportableFrontendEvent,
+  key: 'recoveredCount',
+  accepts: (value: number) => boolean,
+): boolean {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return true
+  const value = source[key]
+  if (typeof value !== 'number' || !accepts(value)) return false
   Object.assign(target, { [key]: value })
   return true
 }

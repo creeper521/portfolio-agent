@@ -1079,6 +1079,8 @@ describe('AgentWorkspace', () => {
       eventName: 'frontend.response.invalid',
       errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
       errorKind: 'INVALID_RESPONSE',
+      recoveredCount: 2,
+      guidanceStage: 'OPENING',
     }))
     const diagnosticPayload = JSON.stringify(reportSpy.mock.calls.map((call) => call[0]))
     expect(diagnosticPayload).not.toContain('唯一的后端建议')
