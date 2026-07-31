@@ -5,13 +5,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.portfolio.agent.PortfolioAgentApplication;
-import com.portfolio.agent.selection.adapter.postgres.PostgresSelectionConfiguration;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -43,6 +39,9 @@ class PortfolioSelectionSurfaceRemovalTest {
                 .doesNotExist();
         assertThat(SELECTION_SOURCE.resolve("mapper/PortfolioSelectionResponseMapper.java"))
                 .doesNotExist();
+        assertThat(SELECTION_SOURCE.resolve(
+                "adapter/postgres/PostgresSelectionConfiguration.java"))
+                .doesNotExist();
         try (java.util.stream.Stream<Path> files = Files.walk(SELECTION_SOURCE)) {
             List<Path> javaFiles = files
                     .filter(path -> path.toString().endsWith(".java"))
@@ -55,24 +54,6 @@ class PortfolioSelectionSurfaceRemovalTest {
                     content.contains("/api/portfolio-selections")
                             || content.contains("PortfolioSelectionResponseMapper"));
         }
-    }
-
-    @Test
-    void postgresConfigurationKeepsOnlyInternalRetrievalBeans() {
-        Set<String> beanTypes = Arrays.stream(PostgresSelectionConfiguration.class.getDeclaredMethods())
-                .filter(method -> method.isAnnotationPresent(org.springframework.context.annotation.Bean.class))
-                .map(Method::getReturnType)
-                .map(Class::getName)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-
-        assertThat(beanTypes)
-                .contains(
-                        "com.portfolio.agent.selection.adapter.postgres.JdbcPostgresSelectionQuery",
-                        "com.portfolio.agent.selection.gateway.CandidateRetrievalPort")
-                .doesNotContain(
-                        "com.portfolio.agent.selection.service.PortfolioSelectionService",
-                        "com.portfolio.agent.selection.service.SelectionStrategy",
-                        "com.portfolio.agent.selection.mapper.PortfolioSelectionResponseMapper");
     }
 
     private String read(Path path) {
