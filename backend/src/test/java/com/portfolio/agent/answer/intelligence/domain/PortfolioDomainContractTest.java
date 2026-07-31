@@ -34,6 +34,18 @@ class PortfolioDomainContractTest {
     }
 
     @Test
+    void suppliesDefaultRequestedSizeWithoutMarkingItExplicitlySpecified() {
+        PortfolioConditions empty = PortfolioConditions.empty();
+        PortfolioConditions explicitDefault = new PortfolioConditions(
+                null, null, Set.of(), null, 3);
+
+        assertThat(empty.getRequestedSize()).isEqualTo(3);
+        assertThat(empty.hasRequestedSize()).isFalse();
+        assertThat(explicitDefault.hasRequestedSize()).isTrue();
+        assertThat(empty).isNotEqualTo(explicitDefault);
+    }
+
+    @Test
     void rejectsInvalidRecommendationContextInputs() {
         assertThatIllegalArgumentException().isThrownBy(() -> new PortfolioRecommendationContext(
                 "invalid", "public-2026-07-31", "BACKEND", "INTERVIEWER",

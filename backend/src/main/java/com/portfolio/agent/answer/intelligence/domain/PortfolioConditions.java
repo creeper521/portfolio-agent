@@ -7,6 +7,8 @@ import java.util.Set;
 
 public final class PortfolioConditions {
 
+    private static final int DEFAULT_REQUESTED_SIZE = 3;
+
     private final String careerTrack;
     private final String audienceRole;
     private final Set<String> capabilityCodes;
@@ -49,7 +51,11 @@ public final class PortfolioConditions {
     public String getAudienceRole() { return audienceRole; }
     public Set<String> getCapabilityCodes() { return capabilityCodes; }
     public String getGoal() { return goal; }
-    public Integer getRequestedSize() { return requestedSize; }
+    public int getRequestedSize() {
+        return requestedSize == null ? DEFAULT_REQUESTED_SIZE : requestedSize;
+    }
+
+    public boolean hasRequestedSize() { return requestedSize != null; }
 
     @Override
     public boolean equals(Object other) {
