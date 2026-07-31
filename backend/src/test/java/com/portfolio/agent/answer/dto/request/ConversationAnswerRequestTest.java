@@ -119,6 +119,69 @@ class ConversationAnswerRequestTest {
     }
 
     @Test
+    void deserializesRecommendationContextForStatelessRecommendationRefinement()
+            throws Exception {
+        ConversationAnswerRequest request = new ObjectMapper().readValue("""
+                {
+                  "turnId": "turn-refinement",
+                  "requestToken": "6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
+                  "question": "Replace the first one",
+                  "messages": [],
+                  "context": {
+                    "audienceRole": "INTERVIEWER",
+                    "source": "AGENT_PAGE",
+                    "recommendationContext": {
+                      "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                      "contentVersion": "public-2026-07-31",
+                      "careerTrack": "BACKEND",
+                      "audienceRole": "INTERVIEWER",
+                      "capabilityCodes": ["POSTGRESQL", "RAG"],
+                      "requestedSize": 2,
+                      "selectedPortfolioIds": ["project-1", "case-2"]
+                    }
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        PortfolioRecommendationContextRequest recommendationContext = request.getContext()
+                .getRecommendationContext();
+        assertThat(recommendationContext.getRecommendationBatchId()).startsWith("rec_");
+        assertThat(recommendationContext.getSelectedPortfolioIds())
+                .containsExactly("project-1", "case-2");
+    }
+
+    @Test
+    void rejectsInvalidRecommendationContextFromJson() throws Exception {
+        ConversationAnswerRequest request = new ObjectMapper().readValue("""
+                {
+                  "turnId": "turn-refinement",
+                  "requestToken": "6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
+                  "question": "Replace the first one",
+                  "messages": [],
+                  "context": {
+                    "audienceRole": "INTERVIEWER",
+                    "source": "AGENT_PAGE",
+                    "recommendationContext": {
+                      "recommendationBatchId": "rec_not-a-sha256",
+                      "contentVersion": "",
+                      "audienceRole": "INTERVIEWER",
+                      "capabilityCodes": [],
+                      "requestedSize": 6,
+                      "selectedPortfolioIds": []
+                    }
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThat(validator.validate(request))
+                .extracting(ConstraintViolation::getMessage)
+                .contains(
+                        "recommendationBatchId format is invalid",
+                        "contentVersion is required",
+                        "requestedSize must be between 2 and 5");
+    }
+
+    @Test
     void rejectsMissingRequestTokenFromJson() throws Exception {
         ConversationAnswerRequest request = new ObjectMapper().readValue("""
                 {
