@@ -128,10 +128,13 @@ public final class PortfolioTaskResolver {
             PortfolioRecommendationContext recommendationContext) {
         ConversationModelResult<PortfolioTaskClassification> result =
                 classifier.classifyPortfolioTask(turnId, question, recommendationContext);
-        if (!result.isSuccessful()) {
+        if (result == null || !result.isSuccessful()) {
             return clarification(turnId, question, recommendationContext);
         }
         PortfolioTaskClassification classification = result.getValue();
+        if (classification == null || classification.getBoundaryIntent() != null) {
+            return clarification(turnId, question, recommendationContext);
+        }
         if (classification.getConfidence() < confidenceThreshold) {
             return clarification(turnId, question, recommendationContext);
         }

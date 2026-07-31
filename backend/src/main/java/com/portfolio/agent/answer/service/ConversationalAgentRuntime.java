@@ -225,12 +225,34 @@ public final class ConversationalAgentRuntime {
         }
         if (hasPortfolioIntelligence()
                 && route.getIntent() == ConversationIntent.PORTFOLIO_GROUNDED) {
+            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
+                    request.getTurnId(),
+                    request.getQuestion(),
+                    recommendationContext(request),
+                    providerAccess.isAllowed());
+            if (decision.getBoundaryIntent() != null) {
+                boundary = portfolioBoundary(decision.getBoundaryIntent());
+                ConversationAnswerResult base = fallback.answer(request, content, boundary);
+                return finalizeTurn(
+                        base, content, boundary, window, request, false);
+            }
             return answerWithPortfolioIntelligence(
-                    request, content, window, guidanceRoute, null);
+                    request, content, window, guidanceRoute, decision.getTask());
         }
         if (hasPortfolioIntelligence() && route.getIntent() == ConversationIntent.HYBRID) {
+            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
+                    request.getTurnId(),
+                    request.getQuestion(),
+                    recommendationContext(request),
+                    providerAccess.isAllowed());
+            if (decision.getBoundaryIntent() != null) {
+                boundary = portfolioBoundary(decision.getBoundaryIntent());
+                ConversationAnswerResult base = fallback.answer(request, content, boundary);
+                return finalizeTurn(
+                        base, content, boundary, window, request, false);
+            }
             return answerHybridWithPortfolioIntelligence(
-                    request, content, window, guidanceRoute);
+                    request, content, window, guidanceRoute, decision.getTask());
         }
         PortfolioGroundingContext grounding = groundingAssembler.assemble(
                 content, route, request.getQuestion());
@@ -360,23 +382,11 @@ public final class ConversationalAgentRuntime {
     private PortfolioIntelligenceResult resolvePortfolioIntelligence(
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
-            ConversationRoute guidanceRoute) {
-        return resolvePortfolioIntelligence(request, content, guidanceRoute, null);
-    }
-
-    private PortfolioIntelligenceResult resolvePortfolioIntelligence(
-            ConversationAnswerRequest request,
-            RuntimeAnswerContent content,
             ConversationRoute guidanceRoute,
             PortfolioTask decidedTask) {
         long startedAt = System.nanoTime();
         boolean contextPresent = request.getContext().getRecommendationContext() != null;
-        PortfolioTask task = decidedTask == null
-                ? portfolioTaskResolver.resolve(
-                        request.getTurnId(),
-                        request.getQuestion(),
-                        recommendationContext(request))
-                : decidedTask;
+        PortfolioTask task = Objects.requireNonNull(decidedTask, "decidedTask");
         task = withSubjectConstraint(task, content, guidanceRoute);
         PortfolioIntelligenceResult intelligenceResult = portfolioIntelligence.resolve(task);
         publishPortfolioIntelligence(intelligenceResult, contextPresent, startedAt);
@@ -387,9 +397,10 @@ public final class ConversationalAgentRuntime {
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
             ConversationWindow window,
-            ConversationRoute route) {
+            ConversationRoute route,
+            PortfolioTask decidedTask) {
         PortfolioIntelligenceResult intelligenceResult = resolvePortfolioIntelligence(
-                request, content, route);
+                request, content, route, decidedTask);
         ConversationAnswerResult deterministic = portfolioAnswerAssembler.assemble(
                 request,
                 content,

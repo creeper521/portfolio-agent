@@ -232,6 +232,24 @@ class PortfolioTaskResolverTest {
     }
 
     @Test
+    void legacyResolveClarifiesBoundaryOnlyClassification() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(new PortfolioTaskClassification(
+                ConversationIntent.TIME_SENSITIVE,
+                null,
+                PortfolioConditions.empty(),
+                null,
+                0.96d)));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTask result = resolver.resolve(
+                "turn-1", "Tell me about this project right now", null);
+
+        assertThat(result.getMode()).isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+    }
+
+    @Test
     void rejectsModelRefinementWhenCompleteRecommendationContextIsAbsent() {
         RecordingClassifier classifier = new RecordingClassifier();
         classifier.setResult(ConversationModelResult.success(new PortfolioTaskClassification(

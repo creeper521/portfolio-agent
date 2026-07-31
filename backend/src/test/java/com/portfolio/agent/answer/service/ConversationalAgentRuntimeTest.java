@@ -330,7 +330,8 @@ class ConversationalAgentRuntimeTest {
                         "evidence-new-seam", "Public evidence", "APPROVED")));
         when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
         when(fixture.router.route(any(), any(), any())).thenReturn(portfolioRoute());
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
                 PortfolioTaskMode.FACT_LOOKUP,
                 List.of(),
@@ -353,6 +354,27 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         assertThat(result.getContentVersion()).isEqualTo("intelligence-v2");
         verifyNoInteractions(fixture.groundingAssembler, fixture.toolService, fixture.modelPort);
+        verify(fixture.taskResolver, times(1)).route(any(), any(), any(), eq(true));
+        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    void outerPortfolioBoundaryDecisionReturnsSafelyWithoutIntelligence() {
+        RuntimeFixture fixture = fixture(true);
+        when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
+        when(fixture.router.route(any(), any(), any())).thenReturn(portfolioRoute());
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.boundary(
+                        ConversationIntent.TIME_SENSITIVE));
+
+        ConversationAnswerResult result = fixture.runtime.answer(
+                request("Explain the current portfolio implementation"));
+
+        assertThat(result.getIntent()).isEqualTo(ConversationIntent.TIME_SENSITIVE);
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.BOUNDARY);
+        verify(fixture.taskResolver, times(1)).route(any(), any(), any(), eq(true));
+        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
+        verifyNoInteractions(fixture.portfolioIntelligence, fixture.modelPort);
     }
 
     @Test
@@ -388,7 +410,8 @@ class ConversationalAgentRuntimeTest {
                         List.of("evidence-hybrid"));
         when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
         when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(intelligenceResult);
         when(fixture.modelPort.generate(any(), any(), any(), any()))
                 .thenReturn(ConversationModelResult.success(draft));
@@ -412,6 +435,27 @@ class ConversationalAgentRuntimeTest {
                     assertThat(claim.getStatement()).isEqualTo("Unified intelligence material");
                 });
         verifyNoInteractions(fixture.groundingAssembler, fixture.toolService);
+        verify(fixture.taskResolver, times(1)).route(any(), any(), any(), eq(true));
+        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    void outerHybridBoundaryDecisionReturnsSafelyWithoutIntelligenceOrGeneration() {
+        RuntimeFixture fixture = fixture(true);
+        when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
+        when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.boundary(
+                        ConversationIntent.UNSUPPORTED_OR_UNSAFE));
+
+        ConversationAnswerResult result = fixture.runtime.answer(
+                request("Relate this implementation to an unsafe bypass"));
+
+        assertThat(result.getIntent()).isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.REJECTED);
+        verify(fixture.taskResolver, times(1)).route(any(), any(), any(), eq(true));
+        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
+        verifyNoInteractions(fixture.portfolioIntelligence, fixture.modelPort);
     }
 
     @Test
@@ -427,7 +471,8 @@ class ConversationalAgentRuntimeTest {
                         "evidence-hybrid", "Public evidence", "APPROVED")));
         when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
         when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(
                 new PortfolioIntelligenceResult(
                         PortfolioTaskMode.FACT_LOOKUP,
@@ -467,7 +512,8 @@ class ConversationalAgentRuntimeTest {
                 PortfolioConditions.empty(), null, null);
         when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
         when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(
                 PortfolioIntelligenceResult.clarification(new PortfolioClarification(
                         "Which implementation detail should be related?", "facet")));
@@ -506,7 +552,8 @@ class ConversationalAgentRuntimeTest {
                 null);
         when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
         when(fixture.router.route(any(), any(), any())).thenReturn(hybridRoute());
-        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.taskResolver.route(any(), any(), any(), eq(true)))
+                .thenReturn(PortfolioTaskRoutingDecision.task(task));
         when(fixture.portfolioIntelligence.resolve(task)).thenReturn(intelligenceResult);
 
         ConversationAnswerResult result = fixture.runtime.answer(
