@@ -23,7 +23,7 @@ public final class PortfolioTask {
         this.turnId = requireText(turnId, "turnId");
         this.question = requireText(question, "question");
         this.mode = Objects.requireNonNull(mode, "mode");
-        if (confidence < 0.0d || confidence > 1.0d) {
+        if (!Double.isFinite(confidence) || confidence < 0.0d || confidence > 1.0d) {
             throw new IllegalArgumentException("confidence must be between 0 and 1");
         }
         this.confidence = confidence;

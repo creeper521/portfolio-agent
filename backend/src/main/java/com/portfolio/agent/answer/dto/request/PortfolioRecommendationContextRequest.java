@@ -49,9 +49,9 @@ public final class PortfolioRecommendationContextRequest {
         this.contentVersion = contentVersion;
         this.careerTrack = careerTrack;
         this.audienceRole = audienceRole;
-        this.capabilityCodes = capabilityCodes == null ? Set.of() : Set.copyOf(capabilityCodes);
+        this.capabilityCodes = capabilityCodes == null ? null : Set.copyOf(capabilityCodes);
         this.requestedSize = requestedSize;
-        this.selectedPortfolioIds = selectedPortfolioIds == null ? List.of() : List.copyOf(selectedPortfolioIds);
+        this.selectedPortfolioIds = selectedPortfolioIds == null ? null : List.copyOf(selectedPortfolioIds);
     }
 
     public String getRecommendationBatchId() { return recommendationBatchId; }

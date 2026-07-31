@@ -16,7 +16,7 @@ class PortfolioDomainContractTest {
     void mergesConditionsWithoutMutatingEitherInput() {
         Set<String> capabilityCodes = new LinkedHashSet<>(List.of("POSTGRESQL"));
         PortfolioConditions base = new PortfolioConditions(
-                "BACKEND", "INTERVIEWER", capabilityCodes, "prepare interview", 3);
+                "BACKEND", "INTERVIEWER", capabilityCodes, "prepare interview", 2);
         PortfolioConditions refinement = new PortfolioConditions(
                 null, "MENTOR", Set.of("RAG"), null, 2);
 
@@ -30,6 +30,7 @@ class PortfolioDomainContractTest {
         assertThat(merged.getGoal()).isEqualTo("prepare interview");
         assertThat(merged.getRequestedSize()).isEqualTo(2);
         assertThat(PortfolioConditions.empty().merge(base)).isEqualTo(base);
+        assertThat(base.merge(PortfolioConditions.empty())).isEqualTo(base);
     }
 
     @Test
@@ -71,6 +72,13 @@ class PortfolioDomainContractTest {
     }
 
     @Test
+    void rejectsNonFiniteTaskConfidence() {
+        assertThatIllegalArgumentException().isThrownBy(() -> task(Double.NaN));
+        assertThatIllegalArgumentException().isThrownBy(() -> task(Double.POSITIVE_INFINITY));
+        assertThatIllegalArgumentException().isThrownBy(() -> task(Double.NEGATIVE_INFINITY));
+    }
+
+    @Test
     void recommendationValueObjectsDoNotExposeMutableCollections() {
         List<String> reasons = new ArrayList<>(List.of("matches backend skills"));
         List<String> evidenceIds = new ArrayList<>(List.of("evidence-1"));
@@ -99,5 +107,11 @@ class PortfolioDomainContractTest {
 
     private String batchId() {
         return "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    }
+
+    private PortfolioTask task(double confidence) {
+        return new PortfolioTask(
+                "turn-1", "recommend something", PortfolioTaskMode.RECOMMENDATION,
+                confidence, PortfolioConditions.empty(), null, null);
     }
 }

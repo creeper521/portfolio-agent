@@ -7,21 +7,19 @@ import java.util.Set;
 
 public final class PortfolioConditions {
 
-    private static final int DEFAULT_REQUESTED_SIZE = 3;
-
     private final String careerTrack;
     private final String audienceRole;
     private final Set<String> capabilityCodes;
     private final String goal;
-    private final int requestedSize;
+    private final Integer requestedSize;
 
     public PortfolioConditions(
             String careerTrack,
             String audienceRole,
             Set<String> capabilityCodes,
             String goal,
-            int requestedSize) {
-        if (requestedSize < 2 || requestedSize > 5) {
+            Integer requestedSize) {
+        if (requestedSize != null && (requestedSize < 2 || requestedSize > 5)) {
             throw new IllegalArgumentException("requestedSize must be between 2 and 5");
         }
         this.careerTrack = normalizeControlledValue(careerTrack);
@@ -32,7 +30,7 @@ public final class PortfolioConditions {
     }
 
     public static PortfolioConditions empty() {
-        return new PortfolioConditions(null, null, Set.of(), null, DEFAULT_REQUESTED_SIZE);
+        return new PortfolioConditions(null, null, Set.of(), null, null);
     }
 
     public PortfolioConditions merge(PortfolioConditions overrides) {
@@ -44,24 +42,24 @@ public final class PortfolioConditions {
                 firstPresent(overrides.audienceRole, audienceRole),
                 mergedCapabilityCodes,
                 firstPresent(overrides.goal, goal),
-                overrides.requestedSize);
+                overrides.requestedSize == null ? requestedSize : overrides.requestedSize);
     }
 
     public String getCareerTrack() { return careerTrack; }
     public String getAudienceRole() { return audienceRole; }
     public Set<String> getCapabilityCodes() { return capabilityCodes; }
     public String getGoal() { return goal; }
-    public int getRequestedSize() { return requestedSize; }
+    public Integer getRequestedSize() { return requestedSize; }
 
     @Override
     public boolean equals(Object other) {
         if (this == other) { return true; }
         if (!(other instanceof PortfolioConditions that)) { return false; }
-        return requestedSize == that.requestedSize
-                && Objects.equals(careerTrack, that.careerTrack)
+        return Objects.equals(careerTrack, that.careerTrack)
                 && Objects.equals(audienceRole, that.audienceRole)
                 && Objects.equals(capabilityCodes, that.capabilityCodes)
-                && Objects.equals(goal, that.goal);
+                && Objects.equals(goal, that.goal)
+                && Objects.equals(requestedSize, that.requestedSize);
     }
 
     @Override
