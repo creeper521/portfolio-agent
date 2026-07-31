@@ -1,5 +1,6 @@
 package com.portfolio.agent.answer.domain;
 
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,6 +19,7 @@ public final class ConversationAnswerResult {
     private final AnswerSource answerSource;
     private final String noticeCode;
     private final ConversationProgress progress;
+    private final PortfolioRecommendation portfolioRecommendation;
 
     public ConversationAnswerResult(
             String turnId,
@@ -76,6 +78,27 @@ public final class ConversationAnswerResult {
             String noticeCode,
             ConversationProgress progress
     ) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks,
+                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
+                progress, null);
+    }
+
+    public ConversationAnswerResult(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlock> blocks,
+            List<ConversationSuggestedQuestion> suggestedQuestions,
+            boolean degraded,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String noticeCode,
+            ConversationProgress progress,
+            PortfolioRecommendation portfolioRecommendation
+    ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
         this.intent = Objects.requireNonNull(intent, "intent");
@@ -89,6 +112,7 @@ public final class ConversationAnswerResult {
         this.answerSource = answerSource;
         this.noticeCode = noticeCode;
         this.progress = Objects.requireNonNull(progress, "progress");
+        this.portfolioRecommendation = portfolioRecommendation;
     }
 
     public String getTurnId() { return turnId; }
@@ -106,6 +130,7 @@ public final class ConversationAnswerResult {
     public AnswerSource getAnswerSource() { return answerSource; }
     public String getNoticeCode() { return noticeCode; }
     public ConversationProgress getProgress() { return progress; }
+    public PortfolioRecommendation getPortfolioRecommendation() { return portfolioRecommendation; }
 
     public ConversationAnswerResult withGuidance(
             List<ConversationSuggestedQuestion> questions,
@@ -124,6 +149,7 @@ public final class ConversationAnswerResult {
                 generationMode,
                 answerSource,
                 noticeCode,
-                newProgress);
+                newProgress,
+                portfolioRecommendation);
     }
 }

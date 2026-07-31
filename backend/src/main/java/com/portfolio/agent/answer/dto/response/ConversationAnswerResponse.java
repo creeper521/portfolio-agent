@@ -1,5 +1,6 @@
 package com.portfolio.agent.answer.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
@@ -27,6 +28,7 @@ public final class ConversationAnswerResponse {
     private final String noticeCode;
     private final List<ConversationTopic> coveredTopics;
     private final ConversationGuidanceStage guidanceStage;
+    private final PortfolioRecommendationResponse portfolioRecommendation;
 
     public ConversationAnswerResponse(ConversationAnswerResult result) {
         this.turnId = result.getTurnId();
@@ -47,6 +49,9 @@ public final class ConversationAnswerResponse {
         this.noticeCode = result.getNoticeCode();
         this.coveredTopics = result.getProgress().getCoveredTopics();
         this.guidanceStage = result.getProgress().getStage();
+        this.portfolioRecommendation = result.getPortfolioRecommendation() == null
+                ? null
+                : PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
     }
 
     public String getTurnId() { return turnId; }
@@ -65,4 +70,8 @@ public final class ConversationAnswerResponse {
     public String getNoticeCode() { return noticeCode; }
     public List<ConversationTopic> getCoveredTopics() { return coveredTopics; }
     public ConversationGuidanceStage getGuidanceStage() { return guidanceStage; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public PortfolioRecommendationResponse getPortfolioRecommendation() {
+        return portfolioRecommendation;
+    }
 }
