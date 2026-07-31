@@ -22,7 +22,8 @@ class ConversationAnswerResultTest {
                 recommendation);
 
         ConversationAnswerResult rebuilt = result.withGuidance(
-                List.of(), new ConversationProgress(List.of(), ConversationGuidanceStage.EXPLORING));
+                List.of(), new ConversationProgress(
+                        List.of(), ConversationGuidanceStage.EXPLORE_OTHERS));
 
         assertThat(rebuilt.getPortfolioRecommendation()).isSameAs(recommendation);
     }
