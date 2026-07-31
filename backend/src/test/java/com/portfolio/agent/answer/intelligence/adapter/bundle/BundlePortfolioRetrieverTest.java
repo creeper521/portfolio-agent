@@ -139,6 +139,20 @@ class BundlePortfolioRetrieverTest {
         assertThat(result.getPassages())
                 .isNotEmpty()
                 .allSatisfy(item -> assertThat(item.getClaimId()).isEqualTo("claim-1"));
+
+        PortfolioRetrievalResult careerMismatch = retriever.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        new PortfolioConditions(
+                                "FRONTEND", "INTERVIEWER", Set.of("POSTGRESQL"), null, 2),
+                        List.of("project-1")));
+        PortfolioRetrievalResult capabilityMismatch = retriever.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        new PortfolioConditions(
+                                "JAVA_BACKEND", "INTERVIEWER", Set.of("PYTHON"), null, 2),
+                        List.of("project-1")));
+
+        assertThat(careerMismatch.getSubjects()).isEmpty();
+        assertThat(capabilityMismatch.getSubjects()).isEmpty();
     }
 
     private LocalRetrievalCoordinator coordinator() {

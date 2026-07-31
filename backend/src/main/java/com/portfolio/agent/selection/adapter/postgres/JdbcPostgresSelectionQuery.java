@@ -284,6 +284,17 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
              AND e.public_status = 'APPROVED'
             WHERE ps.release_id = CAST(? AS uuid)
               AND ps.stable_id = ANY(CAST(? AS text[]))
+              AND (
+                  ? IS NULL
+                  OR COALESCE(owner.career_track, ps.career_track) = ?
+              )
+              AND (CAST(? AS text[]) IS NULL OR EXISTS (
+                  SELECT 1
+                  FROM subject_capability sc
+                  WHERE sc.release_id = ps.release_id
+                    AND sc.subject_stable_id = ps.stable_id
+                    AND sc.capability_code = ANY(CAST(? AS text[]))
+              ))
             ORDER BY array_position(CAST(? AS text[]), ps.stable_id), c.stable_id, e.stable_id
             """;
 
@@ -347,16 +358,24 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
     }
 
     @Override
-    public List<PostgresSelectionRow> findByIds(String releaseId, List<String> subjectIds) {
+    public List<PostgresSelectionRow> findByIds(
+            String releaseId,
+            List<String> subjectIds,
+            SelectionTarget target) {
         if (subjectIds.isEmpty()) {
             return List.of();
         }
         String subjectArray = arrayLiteral(subjectIds);
+        String capabilityFilter = capabilityArrayLiteral(target);
         return jdbcTemplate.query(
                 EXACT_IDS_SQL,
                 this::mapRows,
                 releaseId,
                 subjectArray,
+                target.getCareerTrack(),
+                target.getCareerTrack(),
+                capabilityFilter,
+                capabilityFilter,
                 subjectArray);
     }
 

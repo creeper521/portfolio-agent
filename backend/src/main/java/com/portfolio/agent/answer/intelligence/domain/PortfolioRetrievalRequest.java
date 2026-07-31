@@ -1,5 +1,6 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -13,9 +14,10 @@ public final class PortfolioRetrievalRequest {
     private final PortfolioConditions conditions;
     private final int limit;
     private final List<String> requiredPortfolioIds;
+    private final boolean exactPortfolioLookup;
 
     public PortfolioRetrievalRequest(String query, PortfolioTaskMode mode, PortfolioConditions conditions) {
-        this(query, mode, conditions, DEFAULT_LIMIT, List.of());
+        this(query, mode, conditions, DEFAULT_LIMIT, List.of(), false);
     }
 
     public PortfolioRetrievalRequest(
@@ -23,7 +25,7 @@ public final class PortfolioRetrievalRequest {
             PortfolioTaskMode mode,
             PortfolioConditions conditions,
             int limit) {
-        this(query, mode, conditions, limit, List.of());
+        this(query, mode, conditions, limit, List.of(), false);
     }
 
     private PortfolioRetrievalRequest(
@@ -31,7 +33,8 @@ public final class PortfolioRetrievalRequest {
             PortfolioTaskMode mode,
             PortfolioConditions conditions,
             int limit,
-            List<String> requiredPortfolioIds) {
+            List<String> requiredPortfolioIds,
+            boolean exactPortfolioLookup) {
         if (query == null || query.isBlank()) { throw new IllegalArgumentException("query is required"); }
         if (limit < 1 || limit > MAX_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_LIMIT);
@@ -42,20 +45,31 @@ public final class PortfolioRetrievalRequest {
         this.limit = limit;
         this.requiredPortfolioIds = List.copyOf(
                 Objects.requireNonNull(requiredPortfolioIds, "requiredPortfolioIds"));
+        this.exactPortfolioLookup = exactPortfolioLookup;
     }
 
     public static PortfolioRetrievalRequest contextValidation(
             PortfolioConditions conditions,
             List<String> selectedPortfolioIds) {
-        if (selectedPortfolioIds == null || selectedPortfolioIds.isEmpty()) {
-            throw new IllegalArgumentException("selectedPortfolioIds are required");
+        Objects.requireNonNull(conditions, "conditions");
+        Objects.requireNonNull(selectedPortfolioIds, "selectedPortfolioIds");
+        if (selectedPortfolioIds.size() > 5
+                || selectedPortfolioIds.size() > conditions.getRequestedSize()) {
+            throw new IllegalArgumentException("selectedPortfolioIds exceed the requested size");
+        }
+        if (new HashSet<>(selectedPortfolioIds).size() != selectedPortfolioIds.size()) {
+            throw new IllegalArgumentException("selectedPortfolioIds must be unique");
+        }
+        if (selectedPortfolioIds.stream().anyMatch(id -> id == null || id.isBlank())) {
+            throw new IllegalArgumentException("selectedPortfolioIds must not contain blank values");
         }
         return new PortfolioRetrievalRequest(
                 "portfolio-context-validation",
                 PortfolioTaskMode.REFINE_RECOMMENDATION,
                 conditions,
-                Math.min(MAX_LIMIT, selectedPortfolioIds.size()),
-                selectedPortfolioIds);
+                Math.max(1, selectedPortfolioIds.size()),
+                selectedPortfolioIds,
+                true);
     }
 
     public String getQuery() { return query; }
@@ -63,7 +77,7 @@ public final class PortfolioRetrievalRequest {
     public PortfolioConditions getConditions() { return conditions; }
     public int getLimit() { return limit; }
     public List<String> getRequiredPortfolioIds() { return requiredPortfolioIds; }
-    public boolean isExactPortfolioLookup() { return !requiredPortfolioIds.isEmpty(); }
+    public boolean isExactPortfolioLookup() { return exactPortfolioLookup; }
 
     @Override
     public boolean equals(Object other) {
@@ -71,11 +85,14 @@ public final class PortfolioRetrievalRequest {
         if (!(other instanceof PortfolioRetrievalRequest that)) { return false; }
         return Objects.equals(query, that.query) && mode == that.mode
                 && Objects.equals(conditions, that.conditions) && limit == that.limit
-                && Objects.equals(requiredPortfolioIds, that.requiredPortfolioIds);
+                && Objects.equals(requiredPortfolioIds, that.requiredPortfolioIds)
+                && exactPortfolioLookup == that.exactPortfolioLookup;
     }
 
     @Override
-    public int hashCode() { return Objects.hash(query, mode, conditions, limit, requiredPortfolioIds); }
+    public int hashCode() {
+        return Objects.hash(query, mode, conditions, limit, requiredPortfolioIds, exactPortfolioLookup);
+    }
 
     @Override
     public String toString() {

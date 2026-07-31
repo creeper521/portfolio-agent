@@ -102,6 +102,13 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                 && !requestedCareerTrack.equals(knowledge.getCareerTrack())) {
             return null;
         }
+        if (request.isExactPortfolioLookup()
+                && !request.getConditions().getCapabilityCodes().isEmpty()
+                && java.util.Collections.disjoint(
+                        request.getConditions().getCapabilityCodes(),
+                        knowledge.getCapabilityCodes())) {
+            return null;
+        }
         List<AnswerEvidence> approvedEvidence = knowledge.getEvidence().stream()
                 .filter(this::isApprovedPublicEvidence)
                 .toList();

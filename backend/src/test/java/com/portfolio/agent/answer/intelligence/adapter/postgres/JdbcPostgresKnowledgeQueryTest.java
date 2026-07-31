@@ -69,10 +69,34 @@ class JdbcPostgresKnowledgeQueryTest {
                         List.of("project-1")));
 
         assertThat(selectionQuery.exactSubjectIds).containsExactly(List.of("project-1"));
+        assertThat(selectionQuery.exactTargets).singleElement().satisfies(target -> {
+            assertThat(target.getCareerTrack()).isEqualTo("BACKEND");
+            assertThat(target.getCapabilityCodes()).containsExactly("POSTGRESQL");
+        });
         assertThat(selectionQuery.targets).isEmpty();
         assertThat(result.getCandidates().getCandidates())
                 .extracting(candidate -> candidate.getSubjectId())
                 .containsExactly("project-1");
+    }
+
+    @Test
+    void validatesAnEmptyRecommendationWithoutIssuingAnArrayQuery() {
+        RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
+        JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
+                selectionQuery,
+                text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
+                (releaseId, subjectIds) -> List.of());
+
+        PostgresKnowledgeQueryResult result = query.retrieve(
+                PortfolioRetrievalRequest.contextValidation(
+                        new PortfolioConditions(
+                                "BACKEND", "INTERVIEWER", Set.of("POSTGRESQL"), null, 2),
+                        List.of()));
+
+        assertThat(selectionQuery.exactSubjectIds).isEmpty();
+        assertThat(result.getCandidates().getReleaseVersion()).isEqualTo("public-2026-07-31");
+        assertThat(result.getCandidates().getCandidates()).isEmpty();
+        assertThat(result.getPassages()).isEmpty();
     }
 
     private static final class RecordingSelectionQuery implements PostgresSelectionQuery {
@@ -80,6 +104,7 @@ class JdbcPostgresKnowledgeQueryTest {
         private final List<String> releaseIds = new java.util.ArrayList<>();
         private final List<SelectionTarget> targets = new java.util.ArrayList<>();
         private final List<List<String>> exactSubjectIds = new java.util.ArrayList<>();
+        private final List<SelectionTarget> exactTargets = new java.util.ArrayList<>();
 
         @Override
         public ActiveRelease activeRelease() {
@@ -102,9 +127,13 @@ class JdbcPostgresKnowledgeQueryTest {
         }
 
         @Override
-        public List<PostgresSelectionRow> findByIds(String releaseId, List<String> subjectIds) {
+        public List<PostgresSelectionRow> findByIds(
+                String releaseId,
+                List<String> subjectIds,
+                SelectionTarget target) {
             releaseIds.add(releaseId);
             exactSubjectIds.add(List.copyOf(subjectIds));
+            exactTargets.add(target);
             return List.of(row());
         }
 

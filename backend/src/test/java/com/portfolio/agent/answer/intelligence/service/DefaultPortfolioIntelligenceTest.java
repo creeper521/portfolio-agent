@@ -155,6 +155,58 @@ class DefaultPortfolioIntelligenceTest {
         assertThat(result.getClarification().getMissingCondition()).isEqualTo("recommendationContext");
     }
 
+    @Test
+    void safelyRecomputesAfterAValidEmptyRecommendationContext() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        PortfolioRefinement refinement = new PortfolioRefinement(
+                PortfolioConditions.empty(), Set.of());
+
+        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                PortfolioConditions.empty(),
+                TestRecommendationContexts.context(List.of(), 2),
+                refinement));
+
+        assertThat(retriever.requests).hasSize(2);
+        assertThat(retriever.requests.get(0).isExactPortfolioLookup()).isTrue();
+        assertThat(retriever.requests.get(0).getRequiredPortfolioIds()).isEmpty();
+        assertThat(result.getResolvedIntent()).isEqualTo(PortfolioTaskMode.REFINE_RECOMMENDATION);
+        assertThat(result.getPortfolioRecommendation()).isNotNull();
+    }
+
+    @Test
+    void turnsDuplicateContextIdsIntoAClarificationBeforeRetrieval() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+
+        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                PortfolioConditions.empty(),
+                TestRecommendationContexts.context(List.of("project-a", "project-a"), 2),
+                new PortfolioRefinement(PortfolioConditions.empty(), Set.of())));
+
+        assertThat(retriever.requests).isEmpty();
+        assertThat(result.getResolvedIntent()).isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(result.getClarification().getMissingCondition())
+                .isEqualTo("recommendationContext");
+    }
+
+    @Test
+    void turnsOversizedContextIdsIntoAClarificationBeforeRetrieval() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+
+        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                PortfolioConditions.empty(),
+                TestRecommendationContexts.context(
+                        List.of("a", "b", "c", "d", "e", "f"), 5),
+                new PortfolioRefinement(PortfolioConditions.empty(), Set.of())));
+
+        assertThat(retriever.requests).isEmpty();
+        assertThat(result.getResolvedIntent()).isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(result.getClarification().getMissingCondition())
+                .isEqualTo("recommendationContext");
+    }
+
     private DefaultPortfolioIntelligence intelligence(PortfolioRetriever retriever) {
         return new DefaultPortfolioIntelligence(
                 new PortfolioTaskValidator(), retriever, new PortfolioRecommendationPolicy(),

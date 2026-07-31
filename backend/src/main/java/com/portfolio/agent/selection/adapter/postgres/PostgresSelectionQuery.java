@@ -21,7 +21,8 @@ public interface PostgresSelectionQuery {
 
     default List<PostgresSelectionRow> findByIds(
             String releaseId,
-            List<String> subjectIds) {
+            List<String> subjectIds,
+            SelectionTarget target) {
         throw new UnsupportedOperationException("exact subject lookup is not implemented");
     }
 }

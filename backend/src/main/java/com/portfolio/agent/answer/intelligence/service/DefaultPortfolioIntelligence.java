@@ -76,14 +76,18 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         PortfolioConditions baseConditions = new PortfolioConditions(
                 context.getCareerTrack(), context.getAudienceRole(), context.getCapabilityCodes(), null,
                 context.getRequestedSize());
-        PortfolioRetrievalResult validationRetrieval = retriever.retrieve(
-                PortfolioRetrievalRequest.contextValidation(
-                        baseConditions, context.getSelectedPortfolioIds()));
+        PortfolioRetrievalRequest validationRequest;
+        try {
+            validationRequest = PortfolioRetrievalRequest.contextValidation(
+                    baseConditions, context.getSelectedPortfolioIds());
+        } catch (IllegalArgumentException exception) {
+            return invalidRecommendationContext();
+        }
+        PortfolioRetrievalResult validationRetrieval = retriever.retrieve(validationRequest);
         RecommendationContextValidation contextValidation = contextValidator.validate(
                 context, validationRetrieval.getContentVersion(), baseConditions, candidates(validationRetrieval));
         if (!contextValidation.isValid()) {
-            return PortfolioIntelligenceResult.clarification(new PortfolioClarification(
-                    "当前推荐结果已变化，请重新说明希望推荐的受众。", "recommendationContext"));
+            return invalidRecommendationContext();
         }
         PortfolioConditions mergedConditions = baseConditions
                 .merge(task.getConditions())
@@ -99,6 +103,11 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                 candidates(recommendationRetrieval), task.getRefinement().getExcludedPortfolioIds());
         return recommendationResult(
                 PortfolioTaskMode.REFINE_RECOMMENDATION, recommendationRetrieval, recommendation);
+    }
+
+    private PortfolioIntelligenceResult invalidRecommendationContext() {
+        return PortfolioIntelligenceResult.clarification(new PortfolioClarification(
+                "当前推荐结果已变化，请重新说明希望推荐的受众。", "recommendationContext"));
     }
 
     private PortfolioRetrievalResult retrieve(

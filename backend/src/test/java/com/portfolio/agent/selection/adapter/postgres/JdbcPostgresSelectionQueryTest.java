@@ -196,7 +196,9 @@ class JdbcPostgresSelectionQueryTest {
 
         query.findByIds(
                 "9d1bca16-1e9a-4d54-a692-b7f7c68dbc20",
-                List.of("project-1", "case-2"));
+                List.of("project-1", "case-2"),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(
@@ -207,6 +209,8 @@ class JdbcPostgresSelectionQueryTest {
                 .contains("ps.release_id = CAST(? AS uuid)")
                 .contains("ps.stable_id = ANY(CAST(? AS text[]))")
                 .contains("c.verification_status = 'VERIFIED'")
-                .contains("e.public_status = 'APPROVED'");
+                .contains("e.public_status = 'APPROVED'")
+                .contains("COALESCE(owner.career_track, ps.career_track) = ?")
+                .contains("sc.capability_code = ANY");
     }
 }

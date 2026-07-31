@@ -57,7 +57,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
             com.portfolio.agent.selection.adapter.postgres.ActiveRelease release =
                     selectionQuery.activeRelease();
             if (request.isExactPortfolioLookup()) {
-                return retrieveExact(release, request.getRequiredPortfolioIds());
+                return retrieveExact(release, request.getRequiredPortfolioIds(), target);
             }
             CandidateRetrievalResult candidates = candidateRetriever.retrieve(
                     release, target, request.getLimit());
@@ -76,9 +76,16 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
 
     private PostgresKnowledgeQueryResult retrieveExact(
             com.portfolio.agent.selection.adapter.postgres.ActiveRelease release,
-            List<String> subjectIds) {
+            List<String> subjectIds,
+            SelectionTarget target) {
+        if (subjectIds.isEmpty()) {
+            return new PostgresKnowledgeQueryResult(
+                    new CandidateRetrievalResult(
+                            release.getReleaseVersion(), RetrievalMode.FTS_ONLY, List.of()),
+                    List.of());
+        }
         List<SelectionCandidate> candidates = selectionQuery.findByIds(
-                        release.getReleaseId(), subjectIds).stream()
+                        release.getReleaseId(), subjectIds, target).stream()
                 .map(this::exactCandidate)
                 .toList();
         CandidateRetrievalResult candidateResult = new CandidateRetrievalResult(
