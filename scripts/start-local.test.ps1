@@ -88,6 +88,7 @@ function Invoke-Orchestration(
     [int]$BackendPort,
     [int]$FrontendPort
 ) {
+    $logDirectory = Join-Path $fixtureRoot "logs-$BackendPort"
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -98,11 +99,13 @@ function Invoke-Orchestration(
             -FrontendPort $FrontendPort `
             -BackendFixtureMode $BackendFixtureMode `
             -FrontendFixture `
+            -LogDirectory $logDirectory `
             -ReadinessTimeoutSeconds 10 `
             -ExitAfterProbe 2>&1 | Out-String)
         return @{
             ExitCode = $LASTEXITCODE
             Output = $output
+            LogDirectory = $logDirectory
         }
     }
     finally {
@@ -230,6 +233,25 @@ try {
             'MODEL fixture did not report AI_CONNECTED.'
         Assert-True ($modelResult.Output -notmatch [regex]::Escape($keySentinel)) `
             'MODEL fixture leaked the key.'
+        Assert-True ($modelResult.Output -match 'LOG_DIRECTORY') `
+            'MODEL fixture did not report the log directory.'
+        $backendInfo = Get-Content -LiteralPath `
+            (Join-Path $modelResult.LogDirectory 'current\backend-info.log') -Raw
+        $backendError = Get-Content -LiteralPath `
+            (Join-Path $modelResult.LogDirectory 'current\backend-error.log') -Raw
+        $frontendInfo = Get-Content -LiteralPath `
+            (Join-Path $modelResult.LogDirectory 'current\frontend-info.log') -Raw
+        $frontendError = Get-Content -LiteralPath `
+            (Join-Path $modelResult.LogDirectory 'current\frontend-error.log') -Raw
+        Assert-True $backendInfo.Contains('backend-fixture-info') 'Backend INFO capture'
+        Assert-True (-not $backendInfo.Contains('backend-fixture-error')) `
+            'Backend ERROR must not duplicate into INFO'
+        Assert-True $backendError.Contains('backend-fixture-error') 'Backend ERROR capture'
+        Assert-True $frontendInfo.Contains('browser-fixture-info') 'Browser INFO capture'
+        Assert-True $frontendInfo.Contains('vite-fixture-info') 'Vite INFO capture'
+        Assert-True $frontendError.Contains('vite-fixture-error') 'Vite ERROR capture'
+        $allLogs = $backendInfo + $backendError + $frontendInfo + $frontendError
+        Assert-True (-not $allLogs.Contains($keySentinel)) 'Log files leaked the key'
         Assert-True (-not (Test-PortOpen $backendPort)) `
             "Owned backend survived ExitAfterProbe on port $backendPort."
         Assert-True (-not (Test-PortOpen $frontendPort)) `

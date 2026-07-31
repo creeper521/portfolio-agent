@@ -13,11 +13,14 @@ param(
     [int]$ReadinessTimeoutSeconds = 60,
     [ValidateSet('', 'BACKEND_MODEL', 'BACKEND_FALLBACK')]
     [string]$BackendFixtureMode = '',
-    [switch]$FrontendFixture
+    [switch]$FrontendFixture,
+    [string]$LogDirectory = '',
+    [switch]$FollowLogs
 )
 
 $ErrorActionPreference = 'Stop'
 $script:repositoryRoot = Split-Path -Parent $PSScriptRoot
+$script:processReaders = @{}
 $script:allowedNames = @(
     'PORTFOLIO_MODEL_ENABLED',
     'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
@@ -221,19 +224,81 @@ function Restore-ProcessEnvironment([hashtable]$Snapshot) {
 function Start-OwnedProcess(
     [string]$Executable,
     [string[]]$Arguments,
-    [hashtable]$EnvironmentValues
+    [hashtable]$EnvironmentValues,
+    [pscustomobject]$LogRouter,
+    [string]$StandardOutputStream,
+    [string]$StandardErrorStream
 ) {
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.Arguments = (($Arguments | ForEach-Object {
+        '"' + ([string]$_).Replace('"', '\"') + '"'
+    }) -join ' ')
+    $startInfo.WorkingDirectory = $script:repositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
     $environmentSnapshot = Set-TemporaryProcessEnvironment $EnvironmentValues
+    $diagnosticsName = 'PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED'
+    $diagnosticsSnapshot = [Environment]::GetEnvironmentVariable(
+        $diagnosticsName,
+        [EnvironmentVariableTarget]::Process
+    )
     try {
-        return Start-Process -FilePath $Executable `
-            -ArgumentList $Arguments `
-            -WorkingDirectory $script:repositoryRoot `
-            -PassThru `
-            -WindowStyle Hidden
-    }
-    finally {
+        $diagnosticsValue = if ($EnvironmentValues.ContainsKey($diagnosticsName)) {
+            [string]$EnvironmentValues[$diagnosticsName]
+        } else {
+            $null
+        }
+        [Environment]::SetEnvironmentVariable(
+            $diagnosticsName,
+            $diagnosticsValue,
+            [EnvironmentVariableTarget]::Process
+        )
+        if (-not $process.Start()) {
+            Stop-WithCode 'LOCAL_CHILD_START_FAILED'
+        }
+    } finally {
         Restore-ProcessEnvironment $environmentSnapshot
+        [Environment]::SetEnvironmentVariable(
+            $diagnosticsName,
+            $diagnosticsSnapshot,
+            [EnvironmentVariableTarget]::Process
+        )
     }
+
+    $readerScript = {
+        param($Reader, $Router, $Stream, $ModulePath)
+        Import-Module $ModulePath -Force -DisableNameChecking
+        while ($null -ne ($line = $Reader.ReadLine())) {
+            if ($null -ne $Router) {
+                Submit-LocalLogLine -Router $Router -Stream $Stream -Line $line
+            }
+        }
+    }
+    $modulePath = Join-Path $PSScriptRoot 'logging\LocalLogRouter.psm1'
+    $readers = @()
+    foreach ($readerDefinition in @(
+        @{ Reader = $process.StandardOutput; Stream = $StandardOutputStream },
+        @{ Reader = $process.StandardError; Stream = $StandardErrorStream }
+    )) {
+        $readerPowerShell = [powershell]::Create()
+        [void]$readerPowerShell.AddScript($readerScript).
+            AddArgument($readerDefinition.Reader).
+            AddArgument($LogRouter).
+            AddArgument($readerDefinition.Stream).
+            AddArgument($modulePath)
+        $readers += [pscustomobject]@{
+            PowerShell = $readerPowerShell
+            AsyncResult = $readerPowerShell.BeginInvoke()
+        }
+    }
+    $script:processReaders[$process.Id] = $readers
+    return $process
 }
 
 function Stop-OwnedProcess([System.Diagnostics.Process]$Process) {
@@ -241,28 +306,41 @@ function Stop-OwnedProcess([System.Diagnostics.Process]$Process) {
         return
     }
     $Process.Refresh()
-    if ($Process.HasExited) {
-        return
-    }
-    $taskkill = Get-Command 'taskkill.exe' -ErrorAction SilentlyContinue
-    if ($null -ne $taskkill) {
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            & $taskkill.Source /PID $Process.Id /T /F 2>&1 | Out-Null
-        }
-        finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-        }
-    }
-    $Process.Refresh()
     if (-not $Process.HasExited) {
-        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        $taskkill = Get-Command 'taskkill.exe' -ErrorAction SilentlyContinue
+        if ($null -ne $taskkill) {
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $taskkill.Source /PID $Process.Id /T /F 2>&1 | Out-Null
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+        }
+        $Process.Refresh()
+        if (-not $Process.HasExited) {
+            Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        }
     }
     [void]$Process.WaitForExit(5000)
     $Process.Refresh()
     if (-not $Process.HasExited) {
         Stop-WithCode "LOCAL_CHILD_CLEANUP_FAILED:$($Process.Id)"
+    }
+    if ($script:processReaders.ContainsKey($Process.Id)) {
+        foreach ($reader in @($script:processReaders[$Process.Id])) {
+            if (-not $reader.AsyncResult.AsyncWaitHandle.WaitOne(5000)) {
+                $reader.PowerShell.Stop()
+            }
+            try {
+                [void]$reader.PowerShell.EndInvoke($reader.AsyncResult)
+            }
+            finally {
+                $reader.PowerShell.Dispose()
+            }
+        }
+        $script:processReaders.Remove($Process.Id)
     }
 }
 
@@ -412,6 +490,31 @@ try {
         exit 0
     }
 
+    if ([string]::IsNullOrWhiteSpace($LogDirectory)) {
+        $LogDirectory = Join-Path $script:repositoryRoot 'logs'
+    }
+    $LogDirectory = [System.IO.Path]::GetFullPath($LogDirectory)
+    Import-Module (Join-Path $PSScriptRoot 'logging\LocalLogRouter.psm1') `
+        -Force `
+        -DisableNameChecking
+    $logRouter = $null
+    try {
+        $logRouter = New-LocalLogRouter `
+            -RepositoryRoot $script:repositoryRoot `
+            -LogDirectory $LogDirectory
+        Invoke-LocalLogMaintenance -Router $logRouter
+        Submit-LocalLogLine -Router $logRouter -Stream LAUNCHER `
+            -Line 'INFO event.name=local.session.started'
+        Write-Output "LOG_DIRECTORY path=$LogDirectory"
+        Write-Output (
+            'LOG_WATCH_COMMAND command=powershell.exe -NoProfile ' +
+            '-ExecutionPolicy Bypass -File scripts\watch-local-logs.ps1'
+        )
+    }
+    catch {
+        Write-Output 'LOG_ROUTER_DEGRADED:INITIALIZATION_FAILED'
+    }
+
     $fixtureScript = Join-Path $PSScriptRoot `
         'test-fixtures\start-local-fake-server.ps1'
     $backendExecutable = if ($BackendFixtureMode -ne '') {
@@ -441,8 +544,17 @@ try {
     $backend = $null
     $frontend = $null
     try {
+        $backendEnvironment = @{}
+        foreach ($entry in $settings.GetEnumerator()) {
+            $backendEnvironment[$entry.Key] = $entry.Value
+        }
+        $backendEnvironment.PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED = 'true'
         $backend = Start-OwnedProcess $backendExecutable `
-            $backendArguments $settings
+            $backendArguments `
+            $backendEnvironment `
+            $logRouter `
+            'BACKEND_STDOUT' `
+            'BACKEND_STDERR'
         $backendBaseUrl = "http://127.0.0.1:$BackendPort"
         $publicContentResponse = Wait-ForHttp `
             "$backendBaseUrl/api/v1/public-content" `
@@ -483,7 +595,11 @@ try {
             )
         }
         $frontend = Start-OwnedProcess $frontendExecutable `
-            $frontendArguments @{}
+            $frontendArguments `
+            @{} `
+            $logRouter `
+            'VITE_STDOUT' `
+            'VITE_STDERR'
         $frontendBaseUrl = "http://127.0.0.1:$FrontendPort"
         [void](Wait-ForHttp $frontendBaseUrl $frontend `
             $ReadinessTimeoutSeconds)
@@ -502,7 +618,11 @@ try {
             Write-Output "AI_DEGRADED:$probeStatus"
         }
 
-        if (-not $ExitAfterProbe) {
+        if (-not $ExitAfterProbe -and $FollowLogs) {
+            & (Join-Path $PSScriptRoot 'watch-local-logs.ps1') `
+                -LogDirectory $LogDirectory
+        }
+        elseif (-not $ExitAfterProbe) {
             while ($true) {
                 Start-Sleep -Milliseconds 250
                 $backend.Refresh()
@@ -519,9 +639,24 @@ try {
     finally {
         Stop-OwnedProcess $frontend
         Stop-OwnedProcess $backend
+        if ($null -ne $logRouter) {
+            try {
+                Submit-LocalLogLine -Router $logRouter -Stream LAUNCHER `
+                    -Line 'INFO event.name=local.session.stopped'
+                Stop-LocalLogRouter -Router $logRouter
+            }
+            catch {
+                Write-Output 'LOG_ROUTER_DEGRADED:CLEANUP_FAILED'
+            }
+        }
     }
 }
 catch {
     [Console]::Error.WriteLine([string]$_.Exception.Message)
+    if ($testMode) {
+        [Console]::Error.WriteLine(
+            "LOCAL_TEST_FAILURE_POSITION line=$($_.InvocationInfo.ScriptLineNumber)"
+        )
+    }
     exit 1
 }
