@@ -182,6 +182,7 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
         return new PortfolioRetrievedSubject(
                 knowledge.getStableId(), knowledge.getSubjectType().name(), knowledge.getTitle(),
                 knowledge.getSummary(), routePrefix + knowledge.getSlug(),
+                knowledge.getCareerTrack(),
                 knowledge.getCapabilityCodes());
     }
 

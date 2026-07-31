@@ -65,7 +65,8 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
     private PortfolioRetrievedSubject toSubject(SelectionCandidate candidate) {
         return new PortfolioRetrievedSubject(
                 candidate.getSubjectId(), candidate.getSubjectKind().name(), candidate.getTitle(),
-                candidate.getSummary(), candidate.getRoute(), candidate.getCapabilityCodes());
+                candidate.getSummary(), candidate.getRoute(), candidate.getCareerTrack(),
+                candidate.getCapabilityCodes());
     }
 
     private PortfolioRetrievedPassage toPassage(PostgresKnowledgePassageRow row) {

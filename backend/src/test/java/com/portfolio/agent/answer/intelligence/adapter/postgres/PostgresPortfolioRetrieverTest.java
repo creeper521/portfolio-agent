@@ -33,6 +33,7 @@ class PostgresPortfolioRetrieverTest {
         assertThat(retriever.retrieve(request()).getSubjects()).singleElement().satisfies(subject -> {
             assertThat(subject.getPortfolioId()).isEqualTo("project-1");
             assertThat(subject.getRoute()).isEqualTo("/projects/project-1");
+            assertThat(subject.getCareerTrack()).isEqualTo("BACKEND");
         });
         assertThat(retriever.retrieve(request()).getPassages()).singleElement().satisfies(passage -> {
             assertThat(passage.getClaimId()).isEqualTo("claim-1");

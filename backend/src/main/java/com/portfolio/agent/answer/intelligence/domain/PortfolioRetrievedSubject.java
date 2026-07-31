@@ -10,6 +10,7 @@ public final class PortfolioRetrievedSubject {
     private final String title;
     private final String summary;
     private final String route;
+    private final String careerTrack;
     private final Set<String> capabilityCodes;
 
     public PortfolioRetrievedSubject(
@@ -19,11 +20,23 @@ public final class PortfolioRetrievedSubject {
             String summary,
             String route,
             Set<String> capabilityCodes) {
+        this(portfolioId, subjectType, title, summary, route, null, capabilityCodes);
+    }
+
+    public PortfolioRetrievedSubject(
+            String portfolioId,
+            String subjectType,
+            String title,
+            String summary,
+            String route,
+            String careerTrack,
+            Set<String> capabilityCodes) {
         this.portfolioId = requireText(portfolioId, "portfolioId");
         this.subjectType = requireText(subjectType, "subjectType");
         this.title = requireText(title, "title");
         this.summary = requireText(summary, "summary");
         this.route = requireText(route, "route");
+        this.careerTrack = normalizeControlledValue(careerTrack);
         this.capabilityCodes = Set.copyOf(Objects.requireNonNull(capabilityCodes, "capabilityCodes"));
     }
 
@@ -33,6 +46,7 @@ public final class PortfolioRetrievedSubject {
     public String getTitle() { return title; }
     public String getSummary() { return summary; }
     public String getRoute() { return route; }
+    public String getCareerTrack() { return careerTrack; }
     public Set<String> getCapabilityCodes() { return capabilityCodes; }
 
     @Override
@@ -44,11 +58,12 @@ public final class PortfolioRetrievedSubject {
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(route, that.route)
+                && Objects.equals(careerTrack, that.careerTrack)
                 && Objects.equals(capabilityCodes, that.capabilityCodes);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(portfolioId, subjectType, title, summary, route, capabilityCodes); }
+    public int hashCode() { return Objects.hash(portfolioId, subjectType, title, summary, route, careerTrack, capabilityCodes); }
 
     @Override
     public String toString() {
@@ -59,5 +74,9 @@ public final class PortfolioRetrievedSubject {
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) { throw new IllegalArgumentException(fieldName + " is required"); }
         return value.trim();
+    }
+
+    private static String normalizeControlledValue(String value) {
+        return value == null || value.isBlank() ? null : value.trim().toUpperCase(java.util.Locale.ROOT);
     }
 }

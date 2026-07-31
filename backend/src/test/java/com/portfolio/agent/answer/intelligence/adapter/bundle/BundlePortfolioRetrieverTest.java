@@ -64,6 +64,7 @@ class BundlePortfolioRetrieverTest {
         assertThat(result.getSubjects().getFirst().getRoute()).isEqualTo("/projects/sql-audit");
         assertThat(result.getSubjects().getFirst().getCapabilityCodes())
                 .containsExactly("POSTGRESQL");
+        assertThat(result.getSubjects().getFirst().getCareerTrack()).isEqualTo("JAVA_BACKEND");
     }
 
     @Test
