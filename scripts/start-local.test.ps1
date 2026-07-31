@@ -201,17 +201,12 @@ try {
     Assert-SafeFailure $relativeResult 'LOCAL_CONFIG_FILE_INVALID' `
         'relative secret path'
 
-    $repositorySecret = Join-Path $repositoryRoot `
-        ('forbidden-' + [guid]::NewGuid().ToString('N') + '.env')
-    Write-Secrets $repositorySecret (Valid-Lines)
-    try {
-        Assert-SafeFailure (Invoke-Launcher $repositorySecret) `
-            'LOCAL_CONFIG_MUST_BE_OUTSIDE_REPOSITORY' `
-            'repository-local secret path'
-    }
-    finally {
-        Remove-Item -LiteralPath $repositorySecret -Force
-    }
+    $repositorySecret = Join-Path $repositoryRoot '.env.example'
+    Assert-True (Test-Path -LiteralPath $repositorySecret -PathType Leaf) `
+        'Repository-local rejection fixture is missing.'
+    Assert-SafeFailure (Invoke-Launcher $repositorySecret) `
+        'LOCAL_CONFIG_MUST_BE_OUTSIDE_REPOSITORY' `
+        'repository-local secret path'
 
     $orchestrationSecrets = Join-Path $fixtureRoot 'orchestration.env'
     Write-Secrets $orchestrationSecrets (Valid-Lines)
@@ -236,9 +231,9 @@ try {
         Assert-True ($modelResult.Output -notmatch [regex]::Escape($keySentinel)) `
             'MODEL fixture leaked the key.'
         Assert-True (-not (Test-PortOpen $backendPort)) `
-            'Owned backend survived ExitAfterProbe.'
+            "Owned backend survived ExitAfterProbe on port $backendPort."
         Assert-True (-not (Test-PortOpen $frontendPort)) `
-            'Owned frontend survived ExitAfterProbe.'
+            "Owned frontend survived ExitAfterProbe on port $frontendPort."
 
         $backendPort = Get-FreePort
         $frontendPort = Get-FreePort

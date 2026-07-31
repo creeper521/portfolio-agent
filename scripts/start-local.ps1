@@ -255,10 +255,15 @@ function Stop-OwnedProcess([System.Diagnostics.Process]$Process) {
             $ErrorActionPreference = $previousErrorActionPreference
         }
     }
-    else {
+    $Process.Refresh()
+    if (-not $Process.HasExited) {
         Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
     }
     [void]$Process.WaitForExit(5000)
+    $Process.Refresh()
+    if (-not $Process.HasExited) {
+        Stop-WithCode "LOCAL_CHILD_CLEANUP_FAILED:$($Process.Id)"
+    }
 }
 
 function Wait-ForHttp(
