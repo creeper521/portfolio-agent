@@ -53,9 +53,11 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -109,7 +111,8 @@ class ConversationalAgentRuntimeTest {
                     .containsEntry("validation.result", "ACCEPTED");
             assertThat(event.getFields().toString()).doesNotContain("鎺ㄨ崘浣滃搧");
         });
-        verify(fixture.router).routeBoundary(any(), any(), any(), eq(true));
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), eq(true));
         verifyNoInteractions(fixture.modelPort);
     }
 
@@ -124,8 +127,7 @@ class ConversationalAgentRuntimeTest {
                 null,
                 PortfolioKnowledgeFacet.OVERVIEW,
                 false);
-        when(fixture.router.routeBoundary(any(), any(), any(), eq(true)))
-                .thenReturn(boundary);
+        when(fixture.router.routeBoundary(any())).thenReturn(boundary);
         when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
 
         ConversationAnswerResult result = fixture.runtime.answer(request("最新推荐作品"));
@@ -159,6 +161,37 @@ class ConversationalAgentRuntimeTest {
     }
 
     @Test
+    void failedModelBoundaryStillRunsDeterministicRecommendation() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioRecommendation recommendation = recommendation();
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "Recommend projects", PortfolioTaskMode.RECOMMENDATION,
+                1.0d,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null);
+        when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.router.routeBoundary(any(), any(), any(), eq(true))).thenReturn(null);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
+                PortfolioTaskMode.RECOMMENDATION,
+                List.of(),
+                List.of(),
+                recommendation,
+                null,
+                false,
+                null));
+
+        ConversationAnswerResult result = fixture.runtime.answer(request("Recommend projects"));
+
+        assertThat(result.getPortfolioRecommendation()).isSameAs(recommendation);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router).routeBoundary(any(), any(), any(), eq(true));
+        verifyNoInteractions(fixture.modelPort);
+    }
+
+    @Test
     void refinementPassesTheCompleteRecommendationContextToTheResolver() {
         RuntimeFixture fixture = fixture(false);
         PortfolioRecommendationContext expectedContext = recommendation().getContext();
@@ -186,7 +219,8 @@ class ConversationalAgentRuntimeTest {
                 ArgumentCaptor.forClass(PortfolioRecommendationContext.class);
         verify(fixture.taskResolver).resolve(any(), any(), contextCaptor.capture());
         assertThat(contextCaptor.getValue()).isEqualTo(expectedContext);
-        verify(fixture.router).routeBoundary(any(), any(), any(), eq(true));
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
         verifyNoInteractions(fixture.modelPort);
     }
 
@@ -207,6 +241,25 @@ class ConversationalAgentRuntimeTest {
         ArgumentCaptor<PortfolioTask> taskCaptor = ArgumentCaptor.forClass(PortfolioTask.class);
         verify(fixture.portfolioIntelligence).resolve(taskCaptor.capture());
         assertThat(taskCaptor.getValue().getSubjectId()).isEqualTo("stable-project-1");
+    }
+
+    @Test
+    void hintOnlyRequestUsesOneBoundaryClassificationAndDirectFactLookup() {
+        RuntimeFixture fixture = fixture(true);
+        when(fixture.knowledgeGateway.getContent()).thenReturn(contentWithProject());
+        when(fixture.portfolioIntelligence.resolve(any())).thenReturn(
+                PortfolioIntelligenceResult.clarification(new PortfolioClarification(
+                        "Which verification detail matters most?", "facet")));
+
+        fixture.runtime.answer(requestForProject("project-one"));
+
+        ArgumentCaptor<PortfolioTask> taskCaptor = ArgumentCaptor.forClass(PortfolioTask.class);
+        verify(fixture.portfolioIntelligence).resolve(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getMode()).isEqualTo(PortfolioTaskMode.FACT_LOOKUP);
+        assertThat(taskCaptor.getValue().getSubjectId()).isEqualTo("stable-project-1");
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router, times(1)).routeBoundary(any(), any(), any(), eq(true));
+        verify(fixture.taskResolver, never()).resolve(any(), any(), any());
     }
 
     @Test
@@ -491,7 +544,8 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
         assertThat(result.getSuggestedQuestions()).hasSize(3);
         assertThat(result.getProgress()).isNotNull();
-        verify(fixture.router).routeBoundary(any(), any(), any(), eq(false));
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
         verifyNoInteractions(fixture.modelPort);
         assertPublishedDecision(fixture, result);
     }
@@ -515,7 +569,8 @@ class ConversationalAgentRuntimeTest {
             assertThat(block.getClaimIds()).isEmpty();
             assertThat(block.getEvidenceIds()).isEmpty();
         });
-        verify(fixture.router).routeBoundary(any(), any(), any(), eq(true));
+        verify(fixture.router).routeBoundary(any());
+        verify(fixture.router, never()).routeBoundary(any(), any(), any(), anyBoolean());
         verifyNoInteractions(fixture.toolService, fixture.modelPort);
         assertPublishedDecision(fixture, result);
     }
