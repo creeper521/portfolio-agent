@@ -100,6 +100,23 @@ export interface AnswerBlock {
   evidenceIds: string[]
 }
 
+// 结构化作品推荐（可选字段，仅推荐类回答出现）。
+// items 顺序是后端权威顺序，前端不得重排/去重/增删。
+export interface PortfolioRecommendationItem {
+  portfolioId: string
+  title: string
+  route: string
+  matchReasons: string[]
+  evidenceIds: string[]
+}
+
+export interface PortfolioRecommendation {
+  recommendationBatchId: string
+  items: PortfolioRecommendationItem[]
+  satisfiedConstraints: string[]
+  unsatisfiedConstraints: string[]
+}
+
 export interface AnswerResponse {
   requestId?: string
   turnId: string
@@ -124,6 +141,7 @@ export interface AnswerResponse {
   noticeCode?: string
   contextEnvelope?: ContextEnvelope
   contextVersionUpdated?: boolean
+  portfolioRecommendation?: PortfolioRecommendation
 }
 
 export interface MappedAnswer {
@@ -146,4 +164,5 @@ export interface MappedAnswer {
   degraded?: boolean
   contextEnvelope?: ContextEnvelope
   contextVersionUpdated?: boolean
+  portfolioRecommendation?: PortfolioRecommendation
 }

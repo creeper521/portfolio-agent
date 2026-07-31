@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import type { ConversationTopic } from './answerTypes'
+import type { ConversationTopic, PortfolioRecommendation } from './answerTypes'
 import { mapAnswerResponse } from './mapAnswerResponse'
+import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
 describe('mapAnswerResponse', () => {
   function response(resolution: 'ANSWERED' | 'BOUNDARY' = 'ANSWERED') {
@@ -128,5 +129,90 @@ describe('mapAnswerResponse', () => {
 
     expect(mapped.coveredTopics).toEqual([])
     expect(mapped.guidanceStage).toBeNull()
+  })
+
+  // —— 结构化作品推荐映射 ——
+  function portfolioRecommendation() {
+    return {
+      recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+      items: [
+        {
+          portfolioId: 'project-1',
+          title: '项目一',
+          route: '/projects/project-one',
+          matchReasons: ['匹配后端能力要求'],
+          evidenceIds: ['evidence-1'],
+        },
+        {
+          portfolioId: 'case-2',
+          title: '案例二',
+          route: '/cases/case-two',
+          matchReasons: ['补充 PostgreSQL 与验证能力'],
+          evidenceIds: ['evidence-2'],
+        },
+      ],
+      satisfiedConstraints: ['audienceRole', 'requestedSize'],
+      unsatisfiedConstraints: [],
+    }
+  }
+
+  it('leaves portfolioRecommendation undefined for a plain answer', () => {
+    const mapped = mapAnswerResponse(response())
+
+    expect(mapped.portfolioRecommendation).toBeUndefined()
+  })
+
+  it('deep-copies a complete portfolioRecommendation and preserves backend order', () => {
+    const source = { ...response(), portfolioRecommendation: portfolioRecommendation() }
+    const mapped = mapAnswerResponse(source)
+
+    expect(mapped.portfolioRecommendation).toEqual(source.portfolioRecommendation)
+    // 顺序必须保持后端权威顺序，不重排
+    expect(mapped.portfolioRecommendation?.items.map((item) => item.portfolioId))
+      .toEqual(['project-1', 'case-2'])
+  })
+
+  it('does not share nested array references with the source response', () => {
+    const source = { ...response(), portfolioRecommendation: portfolioRecommendation() }
+    const mapped = mapAnswerResponse(source)
+    const rec = mapped.portfolioRecommendation!
+
+    expect(rec.items).not.toBe(source.portfolioRecommendation!.items)
+    expect(rec.items[0]!.matchReasons).not.toBe(source.portfolioRecommendation!.items[0]!.matchReasons)
+    expect(rec.items[0]!.evidenceIds).not.toBe(source.portfolioRecommendation!.items[0]!.evidenceIds)
+    expect(rec.satisfiedConstraints).not.toBe(source.portfolioRecommendation!.satisfiedConstraints)
+    expect(rec.unsatisfiedConstraints).not.toBe(source.portfolioRecommendation!.unsatisfiedConstraints)
+
+    // 修改映射结果不应回写源响应
+    rec.items[0]!.matchReasons.push('篡改理由')
+    expect(source.portfolioRecommendation!.items[0]!.matchReasons)
+      .not.toContain('篡改理由')
+  })
+
+  it('drops an invalid portfolioRecommendation without breaking the trusted text answer', () => {
+    const reportSpy = vi.spyOn(frontendDiagnostics, 'report')
+    const source = {
+      ...response(),
+      // 故意构造非法结构测试校验：用 as unknown as 绕过类型检查
+      portfolioRecommendation: {
+        recommendationBatchId: '', // 非法：缺批次 ID
+        items: '不是数组',
+      } as unknown as PortfolioRecommendation,
+    }
+
+    const mapped = mapAnswerResponse(source)
+
+    // 可信文本回答仍保留
+    expect(mapped.sections[0]?.content).toBe('结构化内容')
+    // 非法推荐结构被忽略，不留半成品
+    expect(mapped.portfolioRecommendation).toBeUndefined()
+    // 调用现有安全诊断入口，且不泄露问题/批次 ID/作品内容
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.response.invalid',
+      errorKind: 'INVALID_RESPONSE',
+    }))
+    const payload = JSON.stringify(reportSpy.mock.calls[0]?.[0])
+    expect(payload).not.toContain('rec_')
+    expect(payload).not.toContain('项目一')
   })
 })
