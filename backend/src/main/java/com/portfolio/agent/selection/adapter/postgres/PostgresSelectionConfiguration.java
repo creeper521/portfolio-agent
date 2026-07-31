@@ -2,10 +2,6 @@ package com.portfolio.agent.selection.adapter.postgres;
 
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.selection.gateway.CandidateRetrievalPort;
-import com.portfolio.agent.selection.mapper.PortfolioSelectionResponseMapper;
-import com.portfolio.agent.selection.service.ExhaustiveSelectionStrategy;
-import com.portfolio.agent.selection.service.PortfolioSelectionService;
-import com.portfolio.agent.selection.service.SelectionStrategy;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -32,20 +28,4 @@ public class PostgresSelectionConfiguration {
         return new PostgresHybridCandidateRetriever(query, embeddingPort);
     }
 
-    @Bean
-    SelectionStrategy selectionStrategy() {
-        return new ExhaustiveSelectionStrategy();
-    }
-
-    @Bean
-    PortfolioSelectionService portfolioSelectionService(
-            CandidateRetrievalPort retrievalPort,
-            SelectionStrategy strategy) {
-        return new PortfolioSelectionService(retrievalPort, strategy);
-    }
-
-    @Bean
-    PortfolioSelectionResponseMapper portfolioSelectionResponseMapper() {
-        return new PortfolioSelectionResponseMapper();
-    }
 }

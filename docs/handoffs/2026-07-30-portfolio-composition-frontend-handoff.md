@@ -1,5 +1,9 @@
 # 资产包组合推荐前端变更 Handoff
 
+> **状态：已被取代。** 独立组合推荐 HTTP 表面已移除。当前前端契约以
+> [`agent-portfolio-recommendation-frontend-ai-prompt.md`](agent-portfolio-recommendation-frontend-ai-prompt.md)
+> 为准：所有推荐和调整都通过 `POST /api/v2/answers`，并在 Agent 消息内展示。
+
 **日期：** 2026-07-30
 **面向：** 后续负责前端设计与开发的 AI
 **后端设计：** `docs/superpowers/specs/2026-07-30-postgresql-portfolio-composition-design.md`
@@ -12,7 +16,7 @@
 
 ## 2. 必须适配：公开组合推荐结果
 
-后端将提供一个只读组合推荐接口。前端需要能够表达：
+以下是历史响应草案，不再对应可调用的独立接口；现行 Agent 推荐字段仍需要表达其中适用的公开信息：
 
 - 推荐状态：`READY`、`INSUFFICIENT`、`TEMPORARILY_UNAVAILABLE`；
 - 实际选择数量：2–5，默认 3；
@@ -75,7 +79,7 @@
 }
 ```
 
-字段名称最终以后端 OpenAPI/DTO 为准；设计时不得擅自增加未经后端支持的事实字段。
+该历史字段列表不再是现行 DTO 契约；现行字段以后端 Agent 回答契约为准，设计时不得擅自增加未经后端支持的事实字段。
 
 ## 3. 推荐交互入口
 

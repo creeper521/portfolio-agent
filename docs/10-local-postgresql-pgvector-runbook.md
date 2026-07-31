@@ -155,6 +155,10 @@ $env:PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD = '<从本机 env 读取>'
 
 本地 owner 账号用于 Flyway 和导入。生产环境未来应拆分 migration、importer 和 runtime reader 凭据；公网运行时不得使用 owner 账号。
 
+启用公开库后，作品集检索通过唯一公开 Agent 入口 `POST /api/v2/answers` 使用
+PostgreSQL/pgvector 主检索，并在基础设施不可用时受控降级到随包 Bundle。不存在独立的
+Selection HTTP 接口；选择策略、服务和 benchmark 仅供 Agent 内部与离线回归使用。
+
 ## 8. DBeaver、pgAdmin 和 DataGrip
 
 先运行：
