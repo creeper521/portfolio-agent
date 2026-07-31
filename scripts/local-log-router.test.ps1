@@ -131,8 +131,8 @@ Assert-True ($longRecord.Text.Length -le 8192) 'Log text must be capped at 8 KB'
 Assert-True $longRecord.Text.EndsWith('...[TRUNCATED]') 'Long line must have a truncation marker'
 Assert-True $longRecord.Redacted 'Truncated line must be marked redacted'
 
-$ignoreFile = Get-Content -LiteralPath (Join-Path $repositoryRoot '.gitignore') -Raw
-Assert-True ($ignoreFile -match '(?m)^/logs/$') '/logs/ must be ignored'
+$ignoreLines = @(Get-Content -LiteralPath (Join-Path $repositoryRoot '.gitignore'))
+Assert-True ($ignoreLines -contains '/logs/') '/logs/ must be ignored'
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('local-log-router-' + [guid]::NewGuid())
 $router = $null
