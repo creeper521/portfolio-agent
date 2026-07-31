@@ -9,6 +9,22 @@ public final class AnswerQuestion {
     private final String canonicalQuestion;
     private final List<String> aliases;
     private final String suggestion;
+    private final List<AnswerClaimCategory> preferredClaimCategories;
+
+    public AnswerQuestion(
+            String id,
+            String canonicalQuestion,
+            List<String> aliases,
+            String suggestion,
+            List<AnswerClaimCategory> preferredClaimCategories
+    ) {
+        this.id = id;
+        this.canonicalQuestion = canonicalQuestion;
+        this.aliases = List.copyOf(aliases);
+        this.suggestion = suggestion;
+        this.preferredClaimCategories =
+                List.copyOf(preferredClaimCategories);
+    }
 
     public AnswerQuestion(
             String id,
@@ -16,14 +32,11 @@ public final class AnswerQuestion {
             List<String> aliases,
             String suggestion
     ) {
-        this.id = id;
-        this.canonicalQuestion = canonicalQuestion;
-        this.aliases = List.copyOf(aliases);
-        this.suggestion = suggestion;
+        this(id, canonicalQuestion, aliases, suggestion, List.of());
     }
 
     public AnswerQuestion(String canonicalQuestion, List<String> aliases, String suggestion) {
-        this("legacy-preset", canonicalQuestion, aliases, suggestion);
+        this("legacy-preset", canonicalQuestion, aliases, suggestion, List.of());
     }
 
     public String getId() {
@@ -42,6 +55,10 @@ public final class AnswerQuestion {
         return suggestion;
     }
 
+    public List<AnswerClaimCategory> getPreferredClaimCategories() {
+        return preferredClaimCategories;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -53,12 +70,20 @@ public final class AnswerQuestion {
         return Objects.equals(id, that.id)
                 && Objects.equals(canonicalQuestion, that.canonicalQuestion)
                 && Objects.equals(aliases, that.aliases)
-                && Objects.equals(suggestion, that.suggestion);
+                && Objects.equals(suggestion, that.suggestion)
+                && Objects.equals(
+                        preferredClaimCategories,
+                        that.preferredClaimCategories);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, canonicalQuestion, aliases, suggestion);
+        return Objects.hash(
+                id,
+                canonicalQuestion,
+                aliases,
+                suggestion,
+                preferredClaimCategories);
     }
 
     @Override
@@ -68,6 +93,7 @@ public final class AnswerQuestion {
                 ", canonicalQuestion='" + canonicalQuestion + '\'' +
                 ", aliases=" + aliases +
                 ", suggestion='" + suggestion + '\'' +
+                ", preferredClaimCategories=" + preferredClaimCategories +
                 '}';
     }
 }

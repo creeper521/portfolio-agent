@@ -164,6 +164,8 @@ public final class PortfolioGroundingAssembler {
                 new EnumMap<>(PortfolioKnowledgeFacet.class);
         map.put(PortfolioKnowledgeFacet.OVERVIEW,
                 EnumSet.allOf(AnswerClaimCategory.class));
+        map.put(PortfolioKnowledgeFacet.RESPONSIBILITY,
+                Set.of(AnswerClaimCategory.RESPONSIBILITY));
         map.put(PortfolioKnowledgeFacet.IMPLEMENTATION,
                 Set.of(AnswerClaimCategory.IMPLEMENTATION,
                         AnswerClaimCategory.TECHNICAL_DECISION));
@@ -181,6 +183,9 @@ public final class PortfolioGroundingAssembler {
         map.put(PortfolioKnowledgeFacet.LIMITATION,
                 Set.of(AnswerClaimCategory.LIMITATION));
         map.put(PortfolioKnowledgeFacet.LEARNING,
+                Set.of(AnswerClaimCategory.OUTCOME,
+                        AnswerClaimCategory.LIMITATION));
+        map.put(PortfolioKnowledgeFacet.OUTCOME,
                 Set.of(AnswerClaimCategory.OUTCOME,
                         AnswerClaimCategory.LIMITATION));
         return Map.copyOf(map);

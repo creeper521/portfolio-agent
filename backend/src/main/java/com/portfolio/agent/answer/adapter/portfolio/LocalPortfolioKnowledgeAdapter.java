@@ -285,7 +285,11 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 question.getId(),
                 question.getText(),
                 question.getAliases(),
-                question.getText()
+                question.getText(),
+                question.getPreferredClaimCategories().stream()
+                        .map(category -> AnswerClaimCategory.valueOf(
+                                category.name()))
+                        .toList()
         );
     }
 

@@ -79,7 +79,7 @@ public final class ConversationalPromptFactory {
                     confidence: 0 到 1 的数字
                     projectSlug: 字符串或 null
                     caseSlug: 字符串或 null
-                    facet: OVERVIEW|IMPLEMENTATION|DECISION|CHALLENGE|INCIDENT|VERIFICATION|LIMITATION|LEARNING
+                    facet: OVERVIEW|RESPONSIBILITY|IMPLEMENTATION|DECISION|CHALLENGE|INCIDENT|VERIFICATION|LIMITATION|LEARNING|OUTCOME
                     clarificationRequired: boolean
                     示例：{"intent":"GENERAL_KNOWLEDGE","answerScope":"GENERAL","confidence":0.98,"projectSlug":null,"caseSlug":null,"facet":"OVERVIEW","clarificationRequired":false}
                     不要输出未声明字段。

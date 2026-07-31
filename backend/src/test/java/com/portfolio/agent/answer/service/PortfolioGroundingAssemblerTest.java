@@ -52,6 +52,28 @@ class PortfolioGroundingAssemblerTest {
                 .containsExactly("e-implementation", "e-decision");
     }
 
+    @Test
+    void responsibilityAndOutcomeFacetsUseTheirOwnClaimCategories() {
+        PortfolioGroundingAssembler assembler =
+                new PortfolioGroundingAssembler(6, 12, 12000);
+
+        PortfolioGroundingContext outcome = assembler.assemble(
+                content(),
+                new ConversationRoute(
+                        ConversationIntent.PORTFOLIO_GROUNDED,
+                        ConversationAnswerScope.PORTFOLIO,
+                        0.98,
+                        null,
+                        "codegraph-evaluation",
+                        PortfolioKnowledgeFacet.OUTCOME,
+                        false),
+                "最终结果是什么");
+
+        assertThat(outcome.getClaims())
+                .extracting(AnswerClaimProjection::getCategory)
+                .containsExactly(AnswerClaimCategory.OUTCOME);
+    }
+
     private RuntimeAnswerContent content() {
         AnswerKnowledge caseItem = new AnswerKnowledge(
                 AnswerSubjectType.CASE,
