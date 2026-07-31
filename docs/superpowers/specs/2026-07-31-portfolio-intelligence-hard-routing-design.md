@@ -67,8 +67,7 @@ PortfolioTask
   query
   intentCandidate
   extractedConditions
-  recommendationBatchId?
-  previousRecommendationContext?
+  recommendationContext?
 ```
 
 建议的领域输出：
@@ -96,7 +95,7 @@ PortfolioIntelligenceResult
 - `PortfolioRetriever` seam：统一事实、比较和推荐的召回接口。
 - `RecommendationPolicy`：封装现有候选选择、Top-K、穷举及硬约束。
 - `EvidenceAssembler`：组装可引用证据并执行公开 Release、Evidence 和隐私门禁。
-- `RecommendationContextStore`：保存最近一次有效推荐的条件、结果和批次标识。
+- `RecommendationContextValidator`：把当前标签页回传的推荐上下文视为不可信输入，重新校验内容版本、条件、公开作品 ID 和批次指纹。
 
 `PortfolioRetriever` seam 有两个真实 Adapter：
 
@@ -167,27 +166,34 @@ requestedSize
 - 其他条件可作为硬约束或软偏好进入领域任务，由 `TaskValidator` 和 `RecommendationPolicy` 明确处理，不能由提示词临时解释。
 - 追问只询问当前缺失的一个最关键条件，已经获得的条件继续保留。
 
-每次成功推荐后保存：
+每次成功推荐后返回：
 
 ```text
-RecommendationContext
+PortfolioRecommendationContext
   recommendationBatchId
-  normalizedConditions
-  selectedPortfolioIds
-  createdAt
   contentVersion
+  careerTrack
+  audienceRole
+  capabilityCodes
+  requestedSize
+  selectedPortfolioIds
 ```
 
-默认上下文注册表只保留公开领域数据，使用随机 `rec_<32位十六进制>` 批次标识，保存 30 分钟，最多保留 1000 个批次；过期清理和容量淘汰都不能影响普通问答。该注册表是单实例内存实现，不承诺跨实例共享。
+该上下文只存在当前标签页的 Agent 会话内存中；刷新、关闭标签页或创建新标签页会话后即消失。浏览器不得把它写入 `localStorage`、`sessionStorage`、IndexedDB、URL 或历史记录，后端也不得建立 Registry、Session 或其他持久化副本。
 
-“第二个不错，换掉第一个”“再偏后端一点”等后续输入通过请求上下文回传的 `recommendationBatchId` 读取对应推荐上下文，进入 `REFINE_RECOMMENDATION`。批次标识由后端生成，前端不得自行构造。
+`recommendationBatchId` 是后端根据规范化条件、`contentVersion` 和有序作品 ID 计算的确定性 SHA-256 指纹，前缀为 `rec_`。它用于检测上下文是否完整一致，不是认证或授权凭据。
+
+“第二个不错，换掉第一个”“再偏后端一点”等后续输入通过请求 `context.recommendationContext` 原样回传最近一次结构化推荐上下文，进入 `REFINE_RECOMMENDATION`。后端必须把该对象视为不可信输入，重新计算批次指纹并校验当前公开 Release、Evidence 门禁、作品 ID、条件和内容版本；不得仅凭批次标识恢复服务端状态。
+
+原始问题和自由文本 `goal` 不进入推荐上下文。可继续使用的偏好必须在首次解析时规范化为受控的 `careerTrack`、`audienceRole` 和 `capabilityCodes`。
 
 以下情况不直接继承：
 
-- 批次标识没有对应的成功推荐记录。
-- 请求未携带有效 `recommendationBatchId`，且仅凭消息内容无法确定所指推荐。
+- 请求未携带完整且有效的 `recommendationContext`，且仅凭消息内容无法确定所指推荐。
+- 批次指纹与规范化上下文不一致。
 - 用户指代无法映射到现有结果。
 - 内容版本变化使原候选不可继续使用。
+- 上下文中的作品 ID 已不属于当前公开 Release 或未通过 Evidence 门禁。
 - 新旧条件冲突且无法按确定性规则消解。
 
 此时进入 `CLARIFICATION_REQUIRED`，不静默覆盖旧条件。
@@ -234,7 +240,15 @@ RecommendationContext
 ```json
 {
   "portfolioRecommendation": {
-    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef",
+    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "context": {
+      "contentVersion": "public-2026-07-31",
+      "careerTrack": "BACKEND",
+      "audienceRole": "INTERVIEWER",
+      "capabilityCodes": ["POSTGRESQL", "RAG"],
+      "requestedSize": 2,
+      "selectedPortfolioIds": ["project-1", "case-2"]
+    },
     "items": [
       {
         "portfolioId": "project-1",
@@ -261,7 +275,25 @@ RecommendationContext
 
 省略该字段可以保持向后兼容，并避免无意义的 `null`。
 
-`ConversationAnswerContextRequest` 增加可选的 `recommendationBatchId`，格式限制为 `[A-Za-z0-9_-]{1,100}`。普通问答和首次推荐不需要该字段；继续调整推荐时，前端把最近一次结构化推荐响应中的批次标识原样回传。无效或过期批次不触发猜测式调整，而是进入 `CLARIFICATION_REQUIRED`。
+`ConversationAnswerContextRequest` 增加可选的 `recommendationContext` 对象。普通问答和首次推荐不需要该字段；继续调整推荐时，前端把最近一次 `portfolioRecommendation` 中的批次标识和 `context` 字段原样组合回传。后端重新计算指纹并按当前公开数据验证；不完整、失配或已失效的上下文不触发猜测式调整，而是进入 `CLARIFICATION_REQUIRED`。
+
+请求示例：
+
+```json
+{
+  "context": {
+    "recommendationContext": {
+      "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "contentVersion": "public-2026-07-31",
+      "careerTrack": "BACKEND",
+      "audienceRole": "INTERVIEWER",
+      "capabilityCodes": ["POSTGRESQL", "RAG"],
+      "requestedSize": 2,
+      "selectedPortfolioIds": ["project-1", "case-2"]
+    }
+  }
+}
+```
 
 ## 9. 删除与迁移
 
@@ -296,8 +328,8 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - 在 `answerTypes.ts` 中定义推荐批次、推荐项、匹配理由和约束状态类型。
 - 为 `AnswerResponse` 与 `MappedAnswer` 增加可选 `portfolioRecommendation`。
 - 在 `mapAnswerResponse.ts` 中深拷贝并保留该字段，防止映射阶段丢失。
-- 在本地会话持久化与恢复链路中保留完整推荐结构。
-- 发送推荐后续问题时，在请求 `context.recommendationBatchId` 中原样回传当前批次标识。
+- 在当前标签页的内存会话中保留完整推荐结构；不得增加任何浏览器持久化。
+- 发送推荐后续问题时，在请求 `context.recommendationContext` 中原样回传当前批次标识及结构化上下文。
 - 在 `ConversationThread.vue` 的结构化回答区域渲染推荐卡片。
 - 在现有 Agent 样式体系中补充卡片、约束状态和窄屏布局。
 
@@ -314,7 +346,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 
 整组推荐可以显示已满足约束；未满足约束仅在存在时显示，并使用说明性语言，不能伪装成成功命中。
 
-推荐批次标识只用于状态关联、诊断和后续操作，不直接作为主要视觉内容展示。
+推荐批次标识只用于当前标签页内的上下文一致性校验和后续操作，不直接作为主要视觉内容展示，也不得写入前端诊断事件。
 
 ### 10.3 继续对话
 
@@ -325,7 +357,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - `再偏后端一点`
 - `把数量改成 2 个`
 
-前端必须通过 `context.recommendationBatchId` 回传当前推荐批次；不能自行构造批次标识、修改 `portfolioRecommendation.items` 或指定内部策略。
+前端必须通过 `context.recommendationContext` 原样回传当前推荐批次标识和结构化上下文；不能自行构造或解析批次标识、修改 `portfolioRecommendation.items`、筛选 ID 或指定内部策略。
 
 ### 10.4 渲染状态
 
@@ -344,8 +376,8 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - 多个推荐项保持后端顺序。
 - 空推荐正确显示未满足约束。
 - 推荐操作继续调用 `/api/v2/answers`，不出现其他推荐接口请求。
-- 推荐调整请求原样回传当前 `recommendationBatchId`。
-- 刷新或恢复本地会话后，推荐卡片与批次上下文仍存在。
+- 推荐调整请求原样回传当前 `recommendationContext`。
+- 刷新、关闭标签页或创建新标签页会话后，不恢复推荐卡片与推荐上下文。
 - 窄屏下卡片可读且不横向溢出。
 - 非法结构化字段不会导致整条 Agent 消息无法显示。
 
@@ -377,7 +409,7 @@ Benchmark 可以继续作为开发和回归工具存在，但不是线上产品�
 - 最终硬路由模式
 - 使用的检索 Adapter 和是否降级
 - 候选数量、门禁排除数量、最终数量
-- `recommendationBatchId`
+- 是否携带推荐上下文及其校验结果；不得记录批次标识或上下文内容
 - 内容版本和耗时
 - 对外 `noticeCode`
 

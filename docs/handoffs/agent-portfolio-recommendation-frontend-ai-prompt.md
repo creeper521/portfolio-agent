@@ -84,7 +84,15 @@
   "generationMode": "DETERMINISTIC",
   "answerSource": "RETRIEVAL",
   "portfolioRecommendation": {
-    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef",
+    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "context": {
+      "contentVersion": "public-2026-07-31",
+      "careerTrack": "BACKEND",
+      "audienceRole": "INTERVIEWER",
+      "capabilityCodes": ["POSTGRESQL", "RAG"],
+      "requestedSize": 2,
+      "selectedPortfolioIds": ["project-1", "case-2"]
+    },
     "items": [
       {
         "portfolioId": "project-1",
@@ -111,11 +119,19 @@
 
 ```json
 {
-  "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef"
+  "recommendationContext": {
+    "recommendationBatchId": "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "contentVersion": "public-2026-07-31",
+    "careerTrack": "BACKEND",
+    "audienceRole": "INTERVIEWER",
+    "capabilityCodes": ["POSTGRESQL", "RAG"],
+    "requestedSize": 2,
+    "selectedPortfolioIds": ["project-1", "case-2"]
+  }
 }
 ```
 
-不得自行构造、修改或解析批次 ID。
+`recommendationContext` 只保存在当前标签页内存中。不得自行构造、修改或解析批次 ID，不得筛选、重排或改写上下文字段；后端会把整个对象视为不可信输入并按当前公开数据重新校验。
 
 ## TypeScript 类型
 
@@ -130,11 +146,26 @@ export interface PortfolioRecommendationItem {
   evidenceIds: string[]
 }
 
+export interface PortfolioRecommendationContext {
+  contentVersion: string
+  careerTrack?: string
+  audienceRole: string
+  capabilityCodes: string[]
+  requestedSize: number
+  selectedPortfolioIds: string[]
+}
+
 export interface PortfolioRecommendation {
   recommendationBatchId: string
+  context: PortfolioRecommendationContext
   items: PortfolioRecommendationItem[]
   satisfiedConstraints: string[]
   unsatisfiedConstraints: string[]
+}
+
+export interface PortfolioRecommendationContextRequest
+  extends PortfolioRecommendationContext {
+  recommendationBatchId: string
 }
 ```
 
@@ -147,7 +178,7 @@ portfolioRecommendation?: PortfolioRecommendation
 给发往 `/api/v2/answers` 的上下文类型增加：
 
 ```ts
-recommendationBatchId?: string
+recommendationContext?: PortfolioRecommendationContextRequest
 ```
 
 保持该字段可选，不能破坏普通问答和旧响应。
@@ -157,7 +188,7 @@ recommendationBatchId?: string
 在 `mapAnswerResponse.ts` 中：
 
 - 缺少 `portfolioRecommendation` 时保持 `undefined`。
-- 深拷贝 `items`、`matchReasons`、`evidenceIds`、`satisfiedConstraints` 和 `unsatisfiedConstraints`。
+- 深拷贝 `context`、`capabilityCodes`、`selectedPortfolioIds`、`items`、`matchReasons`、`evidenceIds`、`satisfiedConstraints` 和 `unsatisfiedConstraints`。
 - 不排序、不去重、不重写后端 `items`。
 - 结构化字段不合法时，不允许整条文本回答崩溃；保留可信的 `blocks`，忽略非法推荐结构，并调用现有安全诊断入口。
 - 诊断中不能包含完整响应、问题、批次 ID 或作品内容。
@@ -212,7 +243,7 @@ recommendationBatchId?: string
 点击后只做两件事：
 
 1. 生成自然语言问题，例如第 2 张卡片点击“换掉这个”时发送 `换掉第二个`；
-2. 在请求 `context.recommendationBatchId` 中回传当前批次 ID。
+2. 在请求 `context.recommendationContext` 中原样回传当前批次 ID 和响应中的完整 `portfolioRecommendation.context`。
 
 仍然调用现有 `askQuestion()` / `/api/v2/answers` 链路。
 
@@ -227,7 +258,7 @@ recommendationBatchId?: string
 ### `mapAnswerResponse.test.ts`
 
 - 普通回答映射后无推荐字段。
-- 推荐字段完整深拷贝。
+- 推荐字段和无状态上下文完整深拷贝。
 - 后端顺序不变。
 - 修改映射结果数组不会改变原响应。
 - 非法推荐结构不影响可信文本回答。
@@ -244,9 +275,9 @@ recommendationBatchId?: string
 ### `AgentWorkspace.test.ts`
 
 - 点击“换掉这个”仍调用 `/api/v2/answers`。
-- 请求包含当前 `recommendationBatchId`。
+- 请求包含当前完整 `recommendationContext`，其批次 ID、内容版本、条件和作品 ID 与响应一致。
 - 下一批推荐替换旧批次，不混合两个批次。
-- 普通问题不携带陈旧批次 ID。
+- 普通问题不携带陈旧推荐上下文。
 - 刷新或创建新标签会话后不恢复批次上下文。
 - 不产生 `/api/portfolio-selections` 请求。
 
