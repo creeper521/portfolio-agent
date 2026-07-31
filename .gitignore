@@ -45,6 +45,7 @@ privacy-reports/
 Thumbs.db
 
 # Logs and runtime files
+/logs/
 *.log
 *.pid
 runtime-models/
