@@ -178,6 +178,8 @@ try {
     Assert-True (-not (Test-Path (Join-Path $current 'backend-info.3.log'))) 'Old segment must be removed'
     $activeBytes = (Get-Item -LiteralPath (Join-Path $current 'backend-info.log')).Length
     Assert-True ($activeBytes -le 1024) 'Active file must respect segment limit'
+    Assert-True $router.Truncated 'Segment overwrite must be recorded'
+    Assert-True ($router.DiscardedSegmentCount -gt 0) 'Discarded segment count must be recorded'
 
     Stop-LocalLogRouter -Router $router
     Assert-Equal 'STOPPED' $router.StatusCode 'Router stop status'

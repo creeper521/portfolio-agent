@@ -223,6 +223,21 @@ function New-LocalLogRouter {
     $resolvedLogDirectory = Assert-SafeLocalLogDirectory -LogDirectory $LogDirectory
     $currentDirectory = Join-Path $resolvedLogDirectory 'current'
     [System.IO.Directory]::CreateDirectory($currentDirectory) | Out-Null
+    $initialNow = & $Clock
+    $activeDatePath = Join-Path $currentDirectory '.active-date'
+    $activeDate = if ([System.IO.File]::Exists($activeDatePath)) {
+        [System.IO.File]::ReadAllText($activeDatePath).Trim()
+    } else {
+        $initialNow.ToString('yyyy-MM-dd')
+    }
+    if ($activeDate -notmatch '^\d{4}-\d{2}-\d{2}$') {
+        throw 'LOCAL_LOG_ACTIVE_DATE_INVALID'
+    }
+    [System.IO.File]::WriteAllText(
+        $activeDatePath,
+        $activeDate,
+        [System.Text.UTF8Encoding]::new($false)
+    )
     foreach ($name in @('backend-info', 'backend-error', 'frontend-info', 'frontend-error')) {
         $path = Join-Path $currentDirectory "$name.log"
         if (-not [System.IO.File]::Exists($path)) {
@@ -241,6 +256,8 @@ function New-LocalLogRouter {
         MaxSegments = $MaxSegments
         Clock = $Clock
         SyncRoot = [object]::new()
+        MaintenanceRoot = [object]::new()
+        ActiveDate = $activeDate
         StopRequested = $false
         IsWriting = $false
         StatusCode = 'STARTING'
@@ -248,6 +265,8 @@ function New-LocalLogRouter {
         DroppedInfo = 0L
         DroppedWarn = 0L
         DroppedError = 0L
+        Truncated = $false
+        DiscardedSegmentCount = 0L
         WriterPowerShell = $null
         WriterAsyncResult = $null
     }
@@ -271,6 +290,8 @@ function New-LocalLogRouter {
             $oldest = Get-SegmentPath -Index $lastIndex
             if ([System.IO.File]::Exists($oldest)) {
                 [System.IO.File]::Delete($oldest)
+                $State.Truncated = $true
+                $State.DiscardedSegmentCount++
             }
             for ($index = $lastIndex - 1; $index -ge 1; $index--) {
                 $source = Get-SegmentPath -Index $index
@@ -391,59 +412,70 @@ function Submit-LocalLogLine {
         [string]$Line
     )
 
-    if ($Router.StopRequested -or $Router.StatusCode -notin @('READY', 'STARTING')) {
-        return
-    }
-
-    $record = ConvertTo-LocalLogRecord `
-        -Stream $Stream `
-        -Line $Line `
-        -RepositoryRoot $Router.RepositoryRoot `
-        -HomeDirectory ([Environment]::GetFolderPath('UserProfile')) `
-        -Now (& $Router.Clock)
-    $item = [pscustomobject]@{
-        Level = $record.Level
-        BaseName = Get-LocalLogBaseName -Record $record
-        Formatted = Format-LocalLogRecord -Record $record
-    }
-
-    $accepted = $false
-    [System.Threading.Monitor]::Enter($Router.SyncRoot)
+    [System.Threading.Monitor]::Enter($Router.MaintenanceRoot)
     try {
-        if ($Router.Queue.Count -lt $Router.QueueCapacity) {
-            $Router.Queue.Enqueue($item)
-            $accepted = $true
-        } elseif ($record.Level -in @('DEBUG', 'INFO')) {
-            Add-DroppedLocalLogRecord -Router $Router -Level $record.Level
-        } else {
-            $preserved = [System.Collections.Generic.List[object]]::new()
-            $candidate = $null
-            $removedLowerPriority = $false
-            while ($Router.Queue.TryDequeue([ref]$candidate)) {
-                if (-not $removedLowerPriority -and $candidate.Level -in @('DEBUG', 'INFO')) {
-                    Add-DroppedLocalLogRecord -Router $Router -Level $candidate.Level
-                    $removedLowerPriority = $true
-                } else {
-                    $preserved.Add($candidate)
-                }
-                $candidate = $null
-            }
-            foreach ($existing in $preserved) {
-                $Router.Queue.Enqueue($existing)
-            }
-            if ($removedLowerPriority) {
+        if ($Router.StopRequested -or $Router.StatusCode -notin @('READY', 'STARTING')) {
+            return
+        }
+
+        $now = & $Router.Clock
+        $currentDate = $now.ToString('yyyy-MM-dd')
+        if ($currentDate -gt $Router.ActiveDate) {
+            Invoke-LocalLogDateRollover -Router $Router -NewDate $currentDate
+        }
+
+        $record = ConvertTo-LocalLogRecord `
+            -Stream $Stream `
+            -Line $Line `
+            -RepositoryRoot $Router.RepositoryRoot `
+            -HomeDirectory ([Environment]::GetFolderPath('UserProfile')) `
+            -Now $now
+        $item = [pscustomobject]@{
+            Level = $record.Level
+            BaseName = Get-LocalLogBaseName -Record $record
+            Formatted = Format-LocalLogRecord -Record $record
+        }
+
+        $accepted = $false
+        [System.Threading.Monitor]::Enter($Router.SyncRoot)
+        try {
+            if ($Router.Queue.Count -lt $Router.QueueCapacity) {
                 $Router.Queue.Enqueue($item)
                 $accepted = $true
-            } else {
+            } elseif ($record.Level -in @('DEBUG', 'INFO')) {
                 Add-DroppedLocalLogRecord -Router $Router -Level $record.Level
+            } else {
+                $preserved = [System.Collections.Generic.List[object]]::new()
+                $candidate = $null
+                $removedLowerPriority = $false
+                while ($Router.Queue.TryDequeue([ref]$candidate)) {
+                    if (-not $removedLowerPriority -and $candidate.Level -in @('DEBUG', 'INFO')) {
+                        Add-DroppedLocalLogRecord -Router $Router -Level $candidate.Level
+                        $removedLowerPriority = $true
+                    } else {
+                        $preserved.Add($candidate)
+                    }
+                    $candidate = $null
+                }
+                foreach ($existing in $preserved) {
+                    $Router.Queue.Enqueue($existing)
+                }
+                if ($removedLowerPriority) {
+                    $Router.Queue.Enqueue($item)
+                    $accepted = $true
+                } else {
+                    Add-DroppedLocalLogRecord -Router $Router -Level $record.Level
+                }
             }
+        } finally {
+            [System.Threading.Monitor]::Exit($Router.SyncRoot)
+        }
+
+        if ($accepted) {
+            [void]$Router.QueueSignal.Set()
         }
     } finally {
-        [System.Threading.Monitor]::Exit($Router.SyncRoot)
-    }
-
-    if ($accepted) {
-        [void]$Router.QueueSignal.Set()
+        [System.Threading.Monitor]::Exit($Router.MaintenanceRoot)
     }
 }
 
@@ -498,10 +530,379 @@ function Stop-LocalLogRouter {
     }
 }
 
+function Get-LocalLogSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function Assert-LocalLogChildPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $root = [System.IO.Path]::GetFullPath($LogDirectory).TrimEnd('\', '/')
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    if (-not $resolved.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'LOCAL_LOG_PATH_ESCAPE'
+    }
+    $cursor = $resolved
+    while (-not [string]::IsNullOrWhiteSpace($cursor) -and $cursor.Length -ge $root.Length) {
+        if ([System.IO.Directory]::Exists($cursor)) {
+            $attributes = [System.IO.File]::GetAttributes($cursor)
+            if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw 'LOCAL_LOG_REPARSE_POINT_REJECTED'
+            }
+        }
+        if ($cursor -eq $root) { break }
+        $cursor = [System.IO.Path]::GetDirectoryName($cursor)
+    }
+    return $resolved
+}
+
+function New-LocalLogManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$ArchiveDate,
+        [Parameter(Mandatory = $true)][DateTimeOffset]$CreatedAt,
+        [pscustomobject]$Router
+    )
+
+    $files = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $SourceDirectory -File -Filter '*.log' | Sort-Object Name)) {
+        $lineCount = 0L
+        foreach ($unused in [System.IO.File]::ReadLines($file.FullName)) { $lineCount++ }
+        $files += [ordered]@{
+            name = $file.Name
+            bytes = $file.Length
+            sha256 = Get-LocalLogSha256 -Path $file.FullName
+            lineCount = $lineCount
+        }
+    }
+    return [ordered]@{
+        schemaVersion = 1
+        archiveDate = $ArchiveDate
+        timezone = $CreatedAt.ToString('zzz')
+        createdAt = $CreatedAt.ToString('o')
+        files = $files
+        truncated = if ($null -eq $Router) { $false } else { $Router.Truncated }
+        discardedSegmentCount = if ($null -eq $Router) { 0 } else { $Router.DiscardedSegmentCount }
+        dropped = [ordered]@{
+            debug = if ($null -eq $Router) { 0 } else { $Router.DroppedDebug }
+            info = if ($null -eq $Router) { 0 } else { $Router.DroppedInfo }
+            warn = if ($null -eq $Router) { 0 } else { $Router.DroppedWarn }
+            error = if ($null -eq $Router) { 0 } else { $Router.DroppedError }
+        }
+    }
+}
+
+function Test-VerifiedLocalLogArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$ArchivePath,
+        [Parameter(Mandatory = $true)][string]$SourceDirectory
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    try {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($ArchivePath)
+        try {
+            $manifestEntry = $zip.GetEntry('manifest.json')
+            if ($null -eq $manifestEntry) { return $false }
+            $reader = [System.IO.StreamReader]::new($manifestEntry.Open(), [System.Text.Encoding]::UTF8)
+            try {
+                $manifest = $reader.ReadToEnd() | ConvertFrom-Json
+            } finally {
+                $reader.Dispose()
+            }
+            foreach ($file in @($manifest.files)) {
+                if ($file.name -match '[/\\]' -or $file.name -eq '..') { return $false }
+                $entry = $zip.GetEntry([string]$file.name)
+                if ($null -eq $entry -or $entry.Length -ne [long]$file.bytes) { return $false }
+                $algorithm = [System.Security.Cryptography.SHA256]::Create()
+                $stream = $entry.Open()
+                try {
+                    $hash = ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+                } finally {
+                    $stream.Dispose()
+                    $algorithm.Dispose()
+                }
+                if ($hash -ne [string]$file.sha256) { return $false }
+                $sourcePath = Join-Path $SourceDirectory ([string]$file.name)
+                if ([System.IO.File]::Exists($sourcePath) -and
+                    (Get-LocalLogSha256 -Path $sourcePath) -ne [string]$file.sha256) {
+                    return $false
+                }
+            }
+            return $true
+        } finally {
+            $zip.Dispose()
+        }
+    } catch {
+        return $false
+    }
+}
+
+function New-VerifiedLocalLogArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$FinalPath,
+        [Parameter(Mandatory = $true)][string]$ArchiveDate,
+        [Parameter(Mandatory = $true)][DateTimeOffset]$CreatedAt,
+        [pscustomobject]$Router
+    )
+
+    $safeSource = Assert-LocalLogChildPath -LogDirectory $LogDirectory -Path $SourceDirectory
+    $safeFinal = Assert-LocalLogChildPath -LogDirectory $LogDirectory -Path $FinalPath
+    [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($safeFinal)) | Out-Null
+    $manifest = New-LocalLogManifest `
+        -SourceDirectory $safeSource `
+        -ArchiveDate $ArchiveDate `
+        -CreatedAt $CreatedAt `
+        -Router $Router
+    $manifestPath = Join-Path $safeSource 'manifest.json'
+    [System.IO.File]::WriteAllText(
+        $manifestPath,
+        ($manifest | ConvertTo-Json -Depth 8),
+        [System.Text.UTF8Encoding]::new($false)
+    )
+
+    if ([System.IO.File]::Exists($safeFinal)) {
+        if (Test-VerifiedLocalLogArchive -ArchivePath $safeFinal -SourceDirectory $safeSource) {
+            Remove-Item -LiteralPath $safeSource -Recurse -Force
+            return $safeFinal
+        }
+        throw 'LOG_ARCHIVE_CONFLICT'
+    }
+
+    $temporaryPath = "$safeFinal.tmp"
+    if ([System.IO.File]::Exists($temporaryPath)) {
+        [System.IO.File]::Delete($temporaryPath)
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $safeSource,
+        $temporaryPath,
+        [System.IO.Compression.CompressionLevel]::Optimal,
+        $false
+    )
+    if (-not (Test-VerifiedLocalLogArchive -ArchivePath $temporaryPath -SourceDirectory $safeSource)) {
+        throw 'LOG_ARCHIVE_VERIFICATION_FAILED'
+    }
+    [System.IO.File]::Move($temporaryPath, $safeFinal)
+    Remove-Item -LiteralPath $safeSource -Recurse -Force
+    return $safeFinal
+}
+
+function Invoke-LocalLogDateRollover {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Router,
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^\d{4}-\d{2}-\d{2}$')]
+        [string]$NewDate
+    )
+
+    [System.Threading.Monitor]::Enter($Router.MaintenanceRoot)
+    try {
+        if ($NewDate -le $Router.ActiveDate) { return }
+        Flush-LocalLogRouter -Router $Router
+        $oldDate = $Router.ActiveDate
+        $logFiles = @(Get-ChildItem -LiteralPath $Router.CurrentDirectory -File -Filter '*.log')
+        $hasContent = @($logFiles | Where-Object Length -gt 0).Count -gt 0
+        if ($hasContent) {
+            $stagingDirectory = Join-Path $Router.LogDirectory "staging\$oldDate"
+            $safeStaging = Assert-LocalLogChildPath -LogDirectory $Router.LogDirectory -Path $stagingDirectory
+            if ([System.IO.Directory]::Exists($safeStaging)) {
+                throw 'LOG_ARCHIVE_STAGING_CONFLICT'
+            }
+            [System.IO.Directory]::CreateDirectory($safeStaging) | Out-Null
+            foreach ($file in $logFiles) {
+                if ($file.Name -notmatch '^(backend-info|backend-error|frontend-info|frontend-error)(?:\.(\d+))?\.log$') {
+                    continue
+                }
+                $segment = if ([string]::IsNullOrWhiteSpace($Matches[2])) { '' } else { ".$($Matches[2])" }
+                $destination = Join-Path $safeStaging "$($Matches[1])-$oldDate$segment.log"
+                [System.IO.File]::Move($file.FullName, $destination)
+            }
+        }
+
+        foreach ($name in @('backend-info', 'backend-error', 'frontend-info', 'frontend-error')) {
+            [System.IO.File]::WriteAllText(
+                (Join-Path $Router.CurrentDirectory "$name.log"),
+                '',
+                [System.Text.UTF8Encoding]::new($false)
+            )
+        }
+        $Router.ActiveDate = $NewDate
+        [System.IO.File]::WriteAllText(
+            (Join-Path $Router.CurrentDirectory '.active-date'),
+            $NewDate,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+
+        if ($hasContent) {
+            $finalPath = Join-Path $Router.LogDirectory "archive\portfolio-agent-$oldDate.zip"
+            [void](New-VerifiedLocalLogArchive `
+                -LogDirectory $Router.LogDirectory `
+                -SourceDirectory $safeStaging `
+                -FinalPath $finalPath `
+                -ArchiveDate $oldDate `
+                -CreatedAt (& $Router.Clock) `
+                -Router $Router)
+        }
+    } finally {
+        [System.Threading.Monitor]::Exit($Router.MaintenanceRoot)
+    }
+}
+
+function Invoke-LocalLogRetention {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^\d{4}-\d{2}-\d{2}$')]
+        [string]$Today,
+        [ValidateRange(1, 365)][int]$RetentionDays = 7,
+        [ValidateRange(1, [long]::MaxValue)][long]$TotalArchiveBytes = 2GB
+    )
+
+    $todayDate = [datetime]::ParseExact($Today, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    $oldestKept = $todayDate.AddDays(-$RetentionDays)
+    $archiveDirectory = Join-Path $LogDirectory 'archive'
+    $snapshotDirectory = Join-Path $LogDirectory 'snapshots'
+    $daily = @()
+    if ([System.IO.Directory]::Exists($archiveDirectory)) {
+        $daily = @(Get-ChildItem -LiteralPath $archiveDirectory -File | Where-Object {
+            $_.Name -match '^portfolio-agent-(\d{4}-\d{2}-\d{2})\.zip$'
+        } | ForEach-Object {
+            [pscustomobject]@{
+                File = $_
+                Date = [datetime]::ParseExact(
+                    ([regex]::Match($_.Name, '\d{4}-\d{2}-\d{2}').Value),
+                    'yyyy-MM-dd',
+                    [Globalization.CultureInfo]::InvariantCulture
+                )
+            }
+        })
+    }
+    foreach ($item in @($daily | Where-Object Date -lt $oldestKept)) {
+        $safe = Assert-LocalLogChildPath -LogDirectory $LogDirectory -Path $item.File.FullName
+        [System.IO.File]::Delete($safe)
+    }
+
+    $managed = @()
+    if ([System.IO.Directory]::Exists($archiveDirectory)) {
+        $managed += @(Get-ChildItem -LiteralPath $archiveDirectory -File | Where-Object {
+            $_.Name -match '^portfolio-agent-\d{4}-\d{2}-\d{2}\.zip$'
+        })
+    }
+    if ([System.IO.Directory]::Exists($snapshotDirectory)) {
+        $managed += @(Get-ChildItem -LiteralPath $snapshotDirectory -File | Where-Object {
+            $_.Name -match '^portfolio-agent-\d{4}-\d{2}-\d{2}-\d{6}\.zip$'
+        })
+    }
+    $total = if ($managed.Count -eq 0) {
+        0L
+    } else {
+        [long](($managed | Measure-Object -Property Length -Sum).Sum)
+    }
+    $ordered = @($managed | Sort-Object @{
+        Expression = { if ($_.DirectoryName -eq $archiveDirectory) { 0 } else { 1 } }
+    }, LastWriteTimeUtc, Name)
+    foreach ($file in $ordered) {
+        if ($total -le $TotalArchiveBytes) { break }
+        $safe = Assert-LocalLogChildPath -LogDirectory $LogDirectory -Path $file.FullName
+        $length = $file.Length
+        [System.IO.File]::Delete($safe)
+        $total -= $length
+    }
+}
+
+function Invoke-LocalLogMaintenance {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Router,
+        [ValidateRange(1, 365)][int]$RetentionDays = 7,
+        [ValidateRange(1, [long]::MaxValue)][long]$TotalArchiveBytes = 2GB
+    )
+
+    $now = & $Router.Clock
+    $today = $now.ToString('yyyy-MM-dd')
+    if ($Router.ActiveDate -lt $today) {
+        Invoke-LocalLogDateRollover -Router $Router -NewDate $today
+    }
+    $stagingRoot = Join-Path $Router.LogDirectory 'staging'
+    if ([System.IO.Directory]::Exists($stagingRoot)) {
+        foreach ($directory in @(Get-ChildItem -LiteralPath $stagingRoot -Directory | Where-Object {
+            $_.Name -match '^\d{4}-\d{2}-\d{2}$'
+        })) {
+            $finalPath = Join-Path $Router.LogDirectory "archive\portfolio-agent-$($directory.Name).zip"
+            [void](New-VerifiedLocalLogArchive `
+                -LogDirectory $Router.LogDirectory `
+                -SourceDirectory $directory.FullName `
+                -FinalPath $finalPath `
+                -ArchiveDate $directory.Name `
+                -CreatedAt $now `
+                -Router $Router)
+        }
+    }
+    Invoke-LocalLogRetention `
+        -LogDirectory $Router.LogDirectory `
+        -Today $today `
+        -RetentionDays $RetentionDays `
+        -TotalArchiveBytes $TotalArchiveBytes
+}
+
+function New-LocalLogSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)][DateTimeOffset]$Now
+    )
+
+    $resolvedLogDirectory = Assert-SafeLocalLogDirectory -LogDirectory $LogDirectory
+    $currentDirectory = Join-Path $resolvedLogDirectory 'current'
+    $snapshotName = "portfolio-agent-$($Now.ToString('yyyy-MM-dd-HHmmss')).zip"
+    $sourceDirectory = Join-Path $resolvedLogDirectory "staging\snapshot-$([guid]::NewGuid().ToString('N'))"
+    [System.IO.Directory]::CreateDirectory($sourceDirectory) | Out-Null
+    try {
+        foreach ($file in @(Get-ChildItem -LiteralPath $currentDirectory -File -Filter '*.log')) {
+            [System.IO.File]::Copy($file.FullName, (Join-Path $sourceDirectory $file.Name))
+        }
+        $finalPath = Join-Path $resolvedLogDirectory "snapshots\$snapshotName"
+        return New-VerifiedLocalLogArchive `
+            -LogDirectory $resolvedLogDirectory `
+            -SourceDirectory $sourceDirectory `
+            -FinalPath $finalPath `
+            -ArchiveDate $Now.ToString('yyyy-MM-dd') `
+            -CreatedAt $Now `
+            -Router $null
+    } catch {
+        if ([System.IO.Directory]::Exists($sourceDirectory)) {
+            Remove-Item -LiteralPath $sourceDirectory -Recurse -Force
+        }
+        throw
+    }
+}
+
 Export-ModuleMember -Function `
     ConvertTo-LocalLogRecord, `
     Format-LocalLogRecord, `
     New-LocalLogRouter, `
     Submit-LocalLogLine, `
     Flush-LocalLogRouter, `
-    Stop-LocalLogRouter
+    Stop-LocalLogRouter, `
+    Invoke-LocalLogMaintenance, `
+    Invoke-LocalLogDateRollover, `
+    Invoke-LocalLogRetention, `
+    New-LocalLogSnapshot
