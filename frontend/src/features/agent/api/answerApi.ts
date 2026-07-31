@@ -1,5 +1,5 @@
 import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
-import type { AnswerResponse, ContextEnvelope } from '../model/answerTypes'
+import type { AnswerResponse, ContextEnvelope, ConversationTopic } from '../model/answerTypes'
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import { createRequestToken } from './createRequestToken'
 
@@ -15,6 +15,7 @@ export interface AnswerApiRequest {
   questionPresetId?: string
   question?: string
   messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
+  coveredTopics?: readonly ConversationTopic[]
   contextEnvelope?: ContextEnvelope
 }
 
@@ -33,12 +34,16 @@ export function askQuestion(
       turnId: input.turnId,
       requestToken: input.requestToken ?? createRequestToken(),
       question: input.question,
-      messages: input.messages,
+      messages: input.messages?.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
       context: {
         projectSlug: input.projectSlug ?? null,
         caseSlug: input.caseSlug ?? null,
         audienceRole: input.audienceRole,
         source: input.source,
+        coveredTopics: [...new Set(input.coveredTopics ?? [])],
       },
     }),
   }, {

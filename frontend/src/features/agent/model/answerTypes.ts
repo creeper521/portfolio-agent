@@ -37,13 +37,30 @@ export type AnswerScope = 'CONVERSATION' | 'GENERAL' | 'PORTFOLIO' | 'HYBRID'
 export type BlockSourceScope = 'GENERAL' | 'PORTFOLIO'
 export type PortfolioKnowledgeFacet =
   | 'OVERVIEW'
+  | 'RESPONSIBILITY'
   | 'IMPLEMENTATION'
   | 'DECISION'
   | 'CHALLENGE'
   | 'INCIDENT'
   | 'VERIFICATION'
+  | 'OUTCOME'
   | 'LIMITATION'
   | 'LEARNING'
+
+export type ConversationTopic =
+  | 'BACKGROUND'
+  | 'RESPONSIBILITY'
+  | 'SOLUTION'
+  | 'TRADEOFF'
+  | 'FAILURE'
+  | 'VERIFICATION'
+  | 'OUTCOME'
+
+export type ConversationGuidanceStage =
+  | 'OPENING'
+  | 'DEEPENING'
+  | 'WRAP_UP'
+  | 'EXPLORE_OTHERS'
 
 export interface ConversationSuggestedQuestion {
   text: string
@@ -101,6 +118,8 @@ export interface AnswerResponse {
   evidenceIds?: string[]
   suggestedQuestionPresetIds?: string[] // legacy v1
   suggestedQuestions?: Array<string | ConversationSuggestedQuestion>
+  coveredTopics?: ConversationTopic[]
+  guidanceStage?: ConversationGuidanceStage
   degraded?: boolean
   noticeCode?: string
   contextEnvelope?: ContextEnvelope
@@ -108,6 +127,7 @@ export interface AnswerResponse {
 }
 
 export interface MappedAnswer {
+  turnId: string
   title: string
   summary: string
   sections: AnswerSection[]
@@ -121,6 +141,8 @@ export interface MappedAnswer {
   evidenceIds: string[]
   suggestedQuestionPresetIds: string[]
   suggestedQuestions: ConversationSuggestedQuestion[]
+  coveredTopics: ConversationTopic[]
+  guidanceStage: ConversationGuidanceStage | null
   degraded?: boolean
   contextEnvelope?: ContextEnvelope
   contextVersionUpdated?: boolean

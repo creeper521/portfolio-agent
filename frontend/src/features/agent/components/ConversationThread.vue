@@ -392,16 +392,6 @@ function inspectMessageEvidence(
                 class="context-version-updated"
                 role="status"
               >公开内容已更新，本轮已按当前版本重新核对。</p>
-              <div v-if="dynamicSuggestions(message).length" class="dynamic-suggestions">
-                <button
-                  v-for="(q, qi) in dynamicSuggestions(message)"
-                  :key="qi"
-                  data-suggested-follow-up
-                  type="button"
-                  :disabled="pending"
-                  @click="submitSuggested(q)"
-                >{{ q.text }}</button>
-              </div>
             </template>
             <template v-else>
               <h3>{{ message.answer.title }}</h3>
@@ -462,6 +452,17 @@ function inspectMessageEvidence(
                 >对比项目</button>
               </div>
             </template>
+            <div v-if="dynamicSuggestions(message).length" class="dynamic-suggestions">
+              <button
+                v-for="(q, qi) in dynamicSuggestions(message)"
+                :key="qi"
+                data-suggested-follow-up
+                type="button"
+                :disabled="pending"
+                :title="q.text"
+                @click="submitSuggested(q)"
+              >{{ q.text }}</button>
+            </div>
           </div>
           <div v-else class="message__body">{{ message.content }}</div>
           <footer v-if="message.evidenceIds.length && !isV2Answer(message)">
@@ -738,6 +739,47 @@ function inspectMessageEvidence(
 .thread-empty__list button span {
   color: var(--workspace-accent, var(--red));
   font-family: var(--mono);
+}
+
+.dynamic-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dynamic-suggestions button {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  padding: 10px 14px;
+  gap: 8px;
+  color: var(--workspace-text, var(--ink));
+  text-align: left;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: var(--agent-radius-sm);
+  background: rgba(255, 255, 255, 0.35);
+  font: 13px/1.5 var(--sans);
+  cursor: pointer;
+  transition: border-color var(--agent-motion-fast) var(--ease),
+    color var(--agent-motion-fast) var(--ease);
+}
+
+.dynamic-suggestions button::before {
+  content: '↳';
+  flex: none;
+  color: var(--workspace-accent, var(--red));
+  font-family: var(--mono);
+}
+
+.dynamic-suggestions button:not(:disabled):hover {
+  border-color: var(--workspace-accent, var(--red));
+  color: var(--workspace-accent, var(--red));
+}
+
+.dynamic-suggestions button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .message {

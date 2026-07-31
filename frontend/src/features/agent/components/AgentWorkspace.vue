@@ -6,6 +6,10 @@ import type {
   PublicPortfolio,
 } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
+import {
+  createFrontendDiagnosticEvent,
+} from '../../../shared/diagnostics/frontendDiagnosticTypes'
+import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { askQuestion } from '../api/answerApi'
 import { createRequestToken } from '../api/createRequestToken'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
@@ -21,8 +25,10 @@ import type { AgentRouteSeed } from '../model/sessionTypes'
 import type {
   ContextEnvelope,
   ConversationSuggestedQuestion,
+  ConversationTopic,
   FollowUpAction,
 } from '../model/answerTypes'
+import { completeSuggestedQuestions } from '../model/completeSuggestedQuestions'
 import {
   buildEvidenceDeskContext,
   type AnswerFocusTarget,
@@ -37,10 +43,11 @@ import PaneResizer from './PaneResizer.vue'
 
 interface AnswerRequestContext {
   sessionId: string
-  projectSlug: string
+  projectSlug: string | null
   caseSlug?: string | null
   question: string
   questionPresetId?: string
+  coveredTopics?: readonly ConversationTopic[]
   contextEnvelope?: ContextEnvelope
   requestToken?: string
 }
@@ -257,15 +264,18 @@ function invalidatePendingRequest() {
 
 async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
   const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
-  const project = props.portfolio.projects.find((item) => item.slug === context.projectSlug)
-  if (!session || !project || pending.value || disposed) {
-    if (!session || !project) clearAnswerFailure()
+  if (!session || pending.value || disposed) {
+    if (!session) clearAnswerFailure()
     return
   }
 
   const preparedContext = context.requestToken
     ? context
-    : { ...context, requestToken: createRequestToken() }
+    : {
+        ...context,
+        coveredTopics: context.coveredTopics ?? [...session.coveredTopics],
+        requestToken: createRequestToken(),
+      }
   const controller = new AbortController()
   clearFocusedAnswer()
   if (appendUser) {
@@ -317,17 +327,35 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         questionPresetId: preparedContext.questionPresetId,
         question: preparedContext.question,
         messages: history,
+        coveredTopics: preparedContext.coveredTopics,
         contextEnvelope: preparedContext.contextEnvelope,
       }),
     )
     if (disposed || request !== requestVersion) return
     clearFocusedAnswer()
+    const completed = completeSuggestedQuestions(mapped.suggestedQuestions, props.portfolio, {
+      currentQuestion: preparedContext.question,
+      recentQuestions: session.messages
+        .filter((message) => message.role === 'USER')
+        .slice(-6)
+        .map((message) => message.content),
+    })
+    mapped.suggestedQuestions = completed.questions
+    if (completed.recoveredCount > 0) {
+      frontendDiagnostics.report(createFrontendDiagnosticEvent({
+        eventName: 'frontend.response.invalid',
+        errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
+        errorKind: 'INVALID_RESPONSE',
+        turnId: mapped.turnId,
+      }))
+    }
     sessions.appendMessage(session.id, {
       role: 'AGENT',
       content: mapped.summary,
       answer: mapped,
       evidenceIds: mapped.evidenceIds,
     })
+    sessions.applyAnswerProgress(session.id, mapped)
   } catch (error) {
     if (disposed || request !== requestVersion) return
     if (controller.signal.aborted
@@ -393,15 +421,12 @@ function submit(question: string) {
 
 function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
   const session = sessions.activeSession.value
-  const project = props.portfolio.projects.find(
-    (item) => item.slug === (suggestion.projectSlug || activeProject.value?.slug),
-  )
-  if (!session || !project) return
+  if (!session) return
   void requestAnswer(
     {
       sessionId: session.id,
-      projectSlug: project.slug,
-      caseSlug: suggestion.caseSlug,
+      projectSlug: suggestion.projectSlug ?? null,
+      caseSlug: suggestion.caseSlug ?? null,
       question: suggestion.text,
     },
     true,
@@ -420,10 +445,7 @@ function retryAnswer() {
   const context = failedRequest.value
   if (!context) return
   const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
-  const projectExists = props.portfolio.projects.some(
-    (item) => item.slug === context.projectSlug,
-  )
-  if (!sessionExists || !projectExists) {
+  if (!sessionExists) {
     clearAnswerFailure()
     return
   }

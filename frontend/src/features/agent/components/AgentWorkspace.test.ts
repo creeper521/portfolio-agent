@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
+import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { WORKSPACE_SPLIT_KEY } from '../composables/useWorkspaceSplit'
 import AgentWorkspace from './AgentWorkspace.vue'
 
@@ -37,6 +38,28 @@ function answerResponse(
     ],
     evidenceIds: [evidenceId],
     suggestedQuestionPresetIds: ['sql-audit-overview'],
+    coveredTopics: ['BACKGROUND'],
+    guidanceStage: 'OPENING',
+    suggestedQuestions: [
+      {
+        text: '当前项目追问',
+        projectSlug: 'sql-audit',
+        caseSlug: null,
+        facet: 'IMPLEMENTATION' as const,
+      },
+      {
+        text: '了解代码图谱评测项目',
+        projectSlug: 'codegraph-evaluation',
+        caseSlug: null,
+        facet: 'OVERVIEW' as const,
+      },
+      {
+        text: '开源评测案例怎么做的？',
+        projectSlug: null,
+        caseSlug: 'open-source-evaluation',
+        facet: null,
+      },
+    ],
     contextEnvelope: {
       previousContentVersion: '2026-07-21',
       projectSlugs: ['sql-audit'],
@@ -900,5 +923,165 @@ describe('AgentWorkspace', () => {
     expect(lastCall.messages.length % 2).toBe(0)
     expect(lastCall.messages[0]?.role).toBe('USER')
     expect(lastCall.messages.at(-1)?.role).toBe('ASSISTANT')
+  })
+
+  it('threads coveredTopics from each answer into the next request', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      coveredTopics: ['BACKGROUND', 'SOLUTION'],
+      guidanceStage: 'DEEPENING',
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('第一轮问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[0]?.[0].coveredTopics).toEqual([])
+
+    await wrapper.get('textarea').setValue('第二轮问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].coveredTopics).toEqual(['BACKGROUND', 'SOLUTION'])
+  })
+
+  it('keeps coveredTopics isolated between sessions', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      coveredTopics: ['BACKGROUND'],
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('会话 A 首轮')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(askQuestionMock.mock.calls[0]?.[0].coveredTopics).toEqual([])
+
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('textarea').setValue('会话 B 首轮')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].coveredTopics).toEqual([])
+  })
+
+  it('retries a failed turn with the coveredTopics snapshot from that turn', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      coveredTopics: ['BACKGROUND'],
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('第一轮问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    askQuestionMock.mockRejectedValueOnce(new Error('network down'))
+    await wrapper.get('textarea').setValue('第二轮问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].coveredTopics).toEqual(['BACKGROUND'])
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(true)
+
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[2]?.[0].coveredTopics).toEqual(['BACKGROUND'])
+    expect(askQuestionMock.mock.calls[2]?.[0].question).toBe('第二轮问题')
+  })
+
+  it('renders three suggested questions per answer and follows their own targets', async () => {
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('首轮问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const suggestions = wrapper.findAll('[data-suggested-follow-up]')
+    expect(suggestions).toHaveLength(3)
+    expect(suggestions[0]?.text()).toBe('当前项目追问')
+    expect(suggestions[0]?.attributes('title')).toBe('当前项目追问')
+
+    await suggestions[1]?.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        question: '了解代码图谱评测项目',
+        projectSlug: 'codegraph-evaluation',
+        caseSlug: null,
+        source: 'AGENT_PAGE',
+      }),
+    )
+
+    const refreshed = wrapper.findAll('[data-suggested-follow-up]')
+    await refreshed[2]?.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[2]?.[0]).toEqual(
+      expect.objectContaining({
+        question: '开源评测案例怎么做的？',
+        projectSlug: null,
+        caseSlug: 'open-source-evaluation',
+        source: 'CASE',
+      }),
+    )
+  })
+
+  it('recovers incomplete suggested questions from public presets with a sanitized diagnostic', async () => {
+    const reportSpy = vi.spyOn(frontendDiagnostics, 'report')
+    const portfolio = {
+      ...previewPublicContent,
+      questionPresets: [
+        {
+          id: 'agent-preset-1',
+          projectSlug: 'sql-audit',
+          text: '补足预设一',
+          audiences: ['HR' as const],
+          placements: ['AGENT' as const],
+        },
+        {
+          id: 'agent-preset-2',
+          projectSlug: 'sql-audit',
+          text: '补足预设二',
+          audiences: ['HR' as const],
+          placements: ['AGENT' as const],
+        },
+      ],
+    }
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      turnId: '123e4567-e89b-42d3-a456-426614174000',
+      suggestedQuestions: [
+        { text: '唯一的后端建议', projectSlug: 'sql-audit', caseSlug: null, facet: null },
+        { text: '   ', projectSlug: 'sql-audit', caseSlug: null, facet: null },
+        {
+          text: '非法建议',
+          projectSlug: 'sql-audit',
+          caseSlug: 'multilingual-image-preservation',
+          facet: null,
+        },
+      ],
+    })
+    const wrapper = mountWorkspace(portfolio)
+
+    await wrapper.get('textarea').setValue('诊断补足测试问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const labels = wrapper.findAll('[data-suggested-follow-up]').map((button) => button.text())
+    expect(labels).toEqual(['唯一的后端建议', '补足预设一', '补足预设二'])
+
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.response.invalid',
+      errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
+      errorKind: 'INVALID_RESPONSE',
+    }))
+    const diagnosticPayload = JSON.stringify(reportSpy.mock.calls.map((call) => call[0]))
+    expect(diagnosticPayload).not.toContain('唯一的后端建议')
+    expect(diagnosticPayload).not.toContain('诊断补足测试问题')
   })
 })

@@ -1,5 +1,5 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
-import type { MappedAnswer } from './answerTypes'
+import type { ConversationTopic, MappedAnswer } from './answerTypes'
 
 export interface AgentMessage {
   id: string
@@ -20,6 +20,7 @@ export interface AgentSession {
   createdAt: number
   updatedAt: number
   messages: AgentMessage[]
+  coveredTopics: ConversationTopic[]
 }
 
 export interface SessionSeed {

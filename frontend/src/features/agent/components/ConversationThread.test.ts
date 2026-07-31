@@ -19,6 +19,9 @@ const answerMessageFixture: AgentSession['messages'][number] = {
     answerSource: 'PRESET',
     generationMode: 'DETERMINISTIC',
     verification: 'VERIFIED',
+    turnId: 'turn-agent-1',
+    coveredTopics: [],
+    guidanceStage: null,
     evidenceIds: ['sql-audit-delivery-set'],
     suggestedQuestionPresetIds: [],
     suggestedQuestions: [],
@@ -46,6 +49,7 @@ function session(messages: AgentSession['messages'] = []): AgentSession {
     projectSlug: 'sql-audit',
     evidenceId: null,
     seedFingerprint: null,
+    coveredTopics: [],
     createdAt: 1,
     updatedAt: 1,
     messages,
@@ -180,6 +184,9 @@ describe('ConversationThread', () => {
               evidenceIds: [],
             },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: [],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],
@@ -218,6 +225,9 @@ describe('ConversationThread', () => {
               evidenceIds: ['sql-audit-delivery-set'],
             },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: ['sql-audit-delivery-set'],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],
@@ -264,6 +274,9 @@ describe('ConversationThread', () => {
               evidenceIds: ['sql-audit-delivery-set'],
             },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: ['sql-audit-delivery-set'],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],
@@ -304,6 +317,9 @@ describe('ConversationThread', () => {
           blocks: [
             { sourceScope: 'GENERAL' as const, content: '一些通用内容', claimIds: [], evidenceIds: [] },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: [],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [
@@ -337,6 +353,35 @@ describe('ConversationThread', () => {
     ]])
   })
 
+  it('renders three suggested questions on a legacy sections answer with the full text as title', async () => {
+    const answer = answerMessageFixture.answer
+    if (!answer) throw new Error('fixture answer missing')
+    const wrapper = mountThread([
+      {
+        ...answerMessageFixture,
+        answer: {
+          ...answer,
+          suggestedQuestions: [
+            { text: '建议问题一', projectSlug: 'sql-audit', caseSlug: null, facet: null },
+            { text: '建议问题二', projectSlug: null, caseSlug: 'multilingual-image-preservation', facet: null },
+            { text: '建议问题三', projectSlug: 'codegraph-evaluation', caseSlug: null, facet: null },
+          ],
+        },
+      },
+    ])
+
+    const followups = wrapper.findAll('[data-suggested-follow-up]')
+    expect(followups).toHaveLength(3)
+    expect(followups[0]?.attributes('title')).toBe('建议问题一')
+    expect(followups[1]?.attributes('title')).toBe('建议问题二')
+    expect(followups[2]?.attributes('title')).toBe('建议问题三')
+
+    await followups[1]?.trigger('click')
+    expect(wrapper.emitted('submitSuggestion')).toEqual([[
+      { text: '建议问题二', projectSlug: null, caseSlug: 'multilingual-image-preservation', facet: null },
+    ]])
+  })
+
   it('shows a restrained degraded notice when generationMode is FALLBACK', () => {
     const wrapper = mountThread([
       {
@@ -356,6 +401,9 @@ describe('ConversationThread', () => {
           answerScope: 'PORTFOLIO',
           sections: [],
           blocks: [],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: [],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],
@@ -389,6 +437,9 @@ describe('ConversationThread', () => {
           blocks: [
             { sourceScope: 'GENERAL' as const, content: '我目前无法访问实时网络信息。', claimIds: [], evidenceIds: [] },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: [],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],
@@ -421,6 +472,9 @@ describe('ConversationThread', () => {
           blocks: [
             { sourceScope: 'GENERAL' as const, content: '这个请求涉及私密信息，无法处理。', claimIds: [], evidenceIds: [] },
           ],
+          turnId: 'turn-inline',
+          coveredTopics: [],
+          guidanceStage: null,
           evidenceIds: [],
           suggestedQuestionPresetIds: [],
           suggestedQuestions: [],

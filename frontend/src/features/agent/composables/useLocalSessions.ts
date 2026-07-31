@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 
+import type { MappedAnswer } from '../model/answerTypes'
 import type {
   AgentMessage,
   AgentRouteSeed,
@@ -38,6 +39,7 @@ export function useLocalSessions() {
       createdAt,
       updatedAt: createdAt,
       messages: [],
+      coveredTopics: [],
     }
     const retainedSessions = sessions.value.filter(
       (item) => item.messages.some((message) => message.role === 'USER'),
@@ -133,7 +135,15 @@ export function useLocalSessions() {
       answer: input.answer,
       evidenceIds: input.evidenceIds,
     })
+    applyAnswerProgress(session.id, input.answer)
     return sessions.value.find((item) => item.id === session.id) ?? session
+  }
+
+  function applyAnswerProgress(sessionId: string, answer: MappedAnswer) {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.coveredTopics = [...answer.coveredTopics]
+    sessions.value = [...sessions.value]
   }
 
   return {
@@ -146,6 +156,7 @@ export function useLocalSessions() {
     renameSession,
     appendMessage,
     seedSession,
+    applyAnswerProgress,
     removeSession,
     clearSessions,
   }

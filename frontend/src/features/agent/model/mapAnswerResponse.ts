@@ -18,6 +18,7 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     [...new Set((blocks ?? []).flatMap((block) => block.evidenceIds))]
 
   return {
+    turnId: response.turnId,
     title: response.title || '',
     summary: response.summary || '',
     intent: response.intent,
@@ -44,6 +45,8 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
           }
         : { ...suggestion },
     ),
+    coveredTopics: [...new Set(response.coveredTopics ?? [])],
+    guidanceStage: response.guidanceStage ?? null,
     degraded: response.degraded === true,
     contextEnvelope: response.contextEnvelope
       ? {
