@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -76,6 +77,62 @@ class PostgresPublicPortfolioRepositoryIntegrationTest {
         assertThat(actual).usingRecursiveComparison().isEqualTo(expected);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM release_runtime_snapshot", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void migrationRemovesCapabilitiesBackedByNonVerifiedClaims() {
+        Flyway beforeRestriction = Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/public")
+                .table("flyway_schema_history_public")
+                .target(MigrationVersion.fromVersion("2"))
+                .cleanDisabled(false)
+                .load();
+        beforeRestriction.clean();
+        beforeRestriction.migrate();
+        String releaseId = "11111111-1111-1111-1111-111111111111";
+        jdbcTemplate.update("""
+                INSERT INTO content_release
+                    (release_id, release_version, schema_version, content_hash, status)
+                VALUES (CAST(? AS uuid), 'migration-test', '2.0', ?, 'VERIFIED')
+                """, releaseId, "a".repeat(64));
+        jdbcTemplate.update("""
+                INSERT INTO portfolio_subject
+                    (release_id, stable_id, subject_kind, slug, title, summary,
+                     public_route, display_order)
+                VALUES (CAST(? AS uuid), 'project-1', 'PROJECT', 'project-1',
+                        'Project', 'Summary', '/projects/project-1', 1)
+                """, releaseId);
+        jdbcTemplate.update("""
+                INSERT INTO claim
+                    (release_id, stable_id, subject_stable_id, subject_kind, category,
+                     statement, verification_status, display_order)
+                VALUES
+                    (CAST(? AS uuid), 'claim-verified', 'project-1', 'PROJECT',
+                     'OUTCOME', 'Verified', 'VERIFIED', 1),
+                    (CAST(? AS uuid), 'claim-partial', 'project-1', 'PROJECT',
+                     'OUTCOME', 'Partial', 'PARTIALLY_VERIFIED', 2)
+                """, releaseId, releaseId);
+        jdbcTemplate.update("""
+                INSERT INTO subject_capability
+                    (release_id, subject_stable_id, capability_code, supporting_claim_stable_id)
+                VALUES
+                    (CAST(? AS uuid), 'project-1', 'VERIFIED_TOPIC', 'claim-verified'),
+                    (CAST(? AS uuid), 'project-1', 'PARTIAL_TOPIC', 'claim-partial')
+                """, releaseId, releaseId);
+
+        Flyway completeMigration = Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/public")
+                .table("flyway_schema_history_public")
+                .cleanDisabled(false)
+                .load();
+        completeMigration.migrate();
+        completeMigration.migrate();
+
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT capability_code FROM subject_capability", String.class))
+                .containsExactly("VERIFIED_TOPIC");
     }
 
     @Test

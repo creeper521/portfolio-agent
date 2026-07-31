@@ -26,6 +26,18 @@ class PublicSchemaMigrationTest {
                 .contains("CREATE TABLE active_release");
     }
 
+    @Test
+    void removesCapabilitiesWithoutAVerifiedSupportingClaim() throws IOException {
+        String migration = readResource(
+                "db/public/V3__restrict_capabilities_to_verified_claims.sql");
+
+        assertThat(migration)
+                .contains("DELETE FROM subject_capability")
+                .contains("NOT EXISTS")
+                .contains("supporting_claim_stable_id")
+                .contains("verification_status = 'VERIFIED'");
+    }
+
     private String readResource(String path) throws IOException {
         InputStream stream = getClass().getClassLoader().getResourceAsStream(path);
         assertThat(stream).as("migration resource %s", path).isNotNull();
