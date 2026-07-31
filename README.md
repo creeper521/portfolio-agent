@@ -68,6 +68,22 @@ IDE 的受保护环境配置、部署平台 Secret 或仓库外的本机 Secret 
 真实 API Key 写入 `.env.example`、其他受版本控制文件、聊天或日志；曾经暴露的密钥
 必须先吊销再重新签发。
 
+本地对话式 Agent 推荐使用仓库外 Secret 文件和统一启动入口。Spring Boot、Maven 与
+`java -jar` 不会自动读取仓库根目录 `.env`，项目也不会隐式加载它：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/start-local.ps1 `
+  -SecretsFile C:\secrets\portfolio-agent-model.env
+```
+
+Secret 文件必须位于仓库外，内容为受限 `KEY=VALUE` 格式，并同时提供四个批准开关、
+`PORTFOLIO_MODEL_PROVIDER` 和所选 Provider 对应的密钥。脚本在创建子进程前检查
+Java 21、Maven、Node、前端依赖与端口，只把白名单变量注入本次后端进程。只有固定公开
+问题得到 `generationMode=MODEL`、`degraded=false`、`resolution=ANSWERED` 且包含
+回答块时才输出 `AI_CONNECTED`；否则服务保持运行并输出
+`AI_DEGRADED:<安全类别>`。仅检查配置可增加 `-CheckOnly`。
+
 DeepSeek V4 Flash：
 
 ```powershell
