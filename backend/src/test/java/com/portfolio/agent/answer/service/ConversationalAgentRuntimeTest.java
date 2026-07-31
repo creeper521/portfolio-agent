@@ -23,9 +23,22 @@ import com.portfolio.agent.answer.dto.request.AnswerRequestSource;
 import com.portfolio.agent.answer.dto.request.AudienceRole;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
+import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequest;
 import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioClarification;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationItem;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
+import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
@@ -34,6 +47,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,6 +59,186 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ConversationalAgentRuntimeTest {
+
+    @Test
+    void explicitRecommendationUsesHardRoutingEvenWhenTheProviderIsDisabled() {
+        RuntimeFixture fixture = fixture(false);
+        PortfolioRecommendation recommendation = recommendation();
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "推荐作品",
+                PortfolioTaskMode.RECOMMENDATION,
+                1.0d,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null);
+        when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
+                PortfolioTaskMode.RECOMMENDATION,
+                List.of(),
+                List.of(),
+                recommendation,
+                null,
+                false,
+                null));
+
+        ConversationAnswerResult result = fixture.runtime.answer(request("推荐作品"));
+
+        assertThat(result.getPortfolioRecommendation()).isSameAs(recommendation);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getAnswerSource())
+                .isEqualTo(com.portfolio.agent.answer.domain.AnswerSource.RETRIEVAL);
+        assertThat(fixture.events).singleElement().satisfies(event -> {
+            assertThat(event.getName()).isEqualTo("portfolio.intelligence.completed");
+            assertThat(event.getFields()).containsOnlyKeys(
+                    "task.mode",
+                    "subject.count",
+                    "evidence.count",
+                    "recommendation.count",
+                    "context.present",
+                    "validation.result",
+                    "duration.bucket");
+            assertThat(event.getFields())
+                    .containsEntry("task.mode", "RECOMMENDATION")
+                    .containsEntry("context.present", false)
+                    .containsEntry("recommendation.count", 1)
+                    .containsEntry("validation.result", "ACCEPTED");
+            assertThat(event.getFields().toString()).doesNotContain("鎺ㄨ崘浣滃搧");
+        });
+        verifyNoInteractions(fixture.router, fixture.modelPort);
+    }
+
+    @Test
+    void refinementPassesTheCompleteRecommendationContextToTheResolver() {
+        RuntimeFixture fixture = fixture(false);
+        PortfolioRecommendationContext expectedContext = recommendation().getContext();
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "调整推荐",
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                1.0d,
+                PortfolioConditions.empty(),
+                expectedContext,
+                null);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                List.of(),
+                List.of(),
+                recommendation(),
+                null,
+                false,
+                null));
+
+        fixture.runtime.answer(requestWithRecommendationContext());
+
+        ArgumentCaptor<PortfolioRecommendationContext> contextCaptor =
+                ArgumentCaptor.forClass(PortfolioRecommendationContext.class);
+        verify(fixture.taskResolver).resolve(any(), any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue()).isEqualTo(expectedContext);
+        verifyNoInteractions(fixture.router, fixture.modelPort);
+    }
+
+    @Test
+    void outerPortfolioRouteTransfersToIntelligenceBeforeLegacyGroundingAndModel() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "Explain the strongest implementation detail",
+                PortfolioTaskMode.FACT_LOOKUP,
+                0.91d,
+                PortfolioConditions.empty(),
+                null,
+                null);
+        PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
+                "passage-new-seam",
+                "project-1",
+                "claim-new-seam",
+                "Material returned only by PortfolioIntelligence",
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-new-seam", "Public evidence", "APPROVED")));
+        when(fixture.windowManager.prepare(any(), any())).thenReturn(window());
+        when(fixture.router.route(any(), any(), any())).thenReturn(portfolioRoute());
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
+                PortfolioTaskMode.FACT_LOOKUP,
+                List.of(),
+                List.of(passage),
+                null,
+                null,
+                "intelligence-v2",
+                false,
+                null));
+
+        ConversationAnswerResult result = fixture.runtime.answer(
+                request("Explain the strongest implementation detail"));
+
+        assertThat(result.getBlocks()).singleElement().satisfies(block -> {
+            assertThat(block.getContent()).isEqualTo(
+                    "Material returned only by PortfolioIntelligence");
+            assertThat(block.getClaimIds()).containsExactly("claim-new-seam");
+            assertThat(block.getEvidenceIds()).containsExactly("evidence-new-seam");
+        });
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        assertThat(result.getContentVersion()).isEqualTo("intelligence-v2");
+        verifyNoInteractions(fixture.groundingAssembler, fixture.toolService, fixture.modelPort);
+    }
+
+    @Test
+    void clarificationReturnsExactlyOneCriticalQuestionWithoutCallingTheModel() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "recommend", PortfolioTaskMode.CLARIFICATION_REQUIRED,
+                0.0d, PortfolioConditions.empty(), null, null);
+        when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(
+                PortfolioIntelligenceResult.clarification(
+                        new PortfolioClarification(
+                                "Which audience should this recommendation target?",
+                                "audienceRole")));
+
+        ConversationAnswerResult result = fixture.runtime.answer(request("recommend"));
+
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.BOUNDARY);
+        assertThat(result.getBlocks()).singleElement()
+                .extracting(block -> block.getContent())
+                .isEqualTo("Which audience should this recommendation target?");
+        assertThat(result.getPortfolioRecommendation()).isNull();
+        verifyNoInteractions(fixture.modelPort);
+    }
+
+    @Test
+    void enabledProviderCannotReplaceOrReorderAnEmptyStructuredRecommendation() {
+        RuntimeFixture fixture = fixture(true);
+        PortfolioRecommendation source = emptyRecommendation();
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "recommend", PortfolioTaskMode.RECOMMENDATION,
+                1.0d,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null);
+        when(fixture.taskResolver.matchesDeterministicRule(any())).thenReturn(true);
+        when(fixture.taskResolver.resolve(any(), any(), any())).thenReturn(task);
+        when(fixture.portfolioIntelligence.resolve(task)).thenReturn(new PortfolioIntelligenceResult(
+                PortfolioTaskMode.RECOMMENDATION,
+                List.of(),
+                List.of(),
+                source,
+                null,
+                true,
+                "NO_MATCHING_PORTFOLIO"));
+
+        ConversationAnswerResult result = fixture.runtime.answer(request("recommend"));
+
+        assertThat(result.getPortfolioRecommendation()).isSameAs(source);
+        assertThat(result.getPortfolioRecommendation().getItems()).isEmpty();
+        assertThat(result.isDegraded()).isTrue();
+        assertThat(result.getNoticeCode()).isEqualTo("NO_MATCHING_PORTFOLIO");
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.DETERMINISTIC);
+        verifyNoInteractions(fixture.modelPort);
+    }
 
     @Test
     void publishesDecisionForProviderDisabledFallback() {
@@ -89,7 +283,7 @@ class ConversationalAgentRuntimeTest {
     @Test
     void publishesDecisionForModelSuccess() {
         RuntimeFixture fixture = readyForGeneration();
-        when(fixture.router.route(any(), any(), any())).thenReturn(portfolioRoute());
+        when(fixture.router.route(any(), any(), any())).thenReturn(generalRoute());
         ConversationDraft draft = new ConversationDraft(
                 "Model answer", AnswerResolution.ANSWERED, List.of());
         when(fixture.modelPort.generate(any(), any(), any(), any()))
@@ -287,6 +481,9 @@ class ConversationalAgentRuntimeTest {
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(true),
                 new ConversationSubjectGuard(),
+                mock(PortfolioTaskResolver.class),
+                mock(PortfolioIntelligence.class),
+                new PortfolioIntelligenceAnswerAssembler(),
                 new ConversationProgressClassifier(),
                 new LoggingConversationDecisionPublisher(diagnosticPublisher),
                 diagnosticPublisher);
@@ -369,6 +566,8 @@ class ConversationalAgentRuntimeTest {
                 any(), any(), any(), any(), any(), any(), any(Boolean.class)))
                 .thenReturn(suggestions());
         ConversationDecisionPublisher decisionPublisher = mock(ConversationDecisionPublisher.class);
+        PortfolioTaskResolver taskResolver = mock(PortfolioTaskResolver.class);
+        PortfolioIntelligence portfolioIntelligence = mock(PortfolioIntelligence.class);
         ConversationalAgentRuntime runtime = new ConversationalAgentRuntime(
                 knowledgeGateway,
                 windowManager,
@@ -381,12 +580,16 @@ class ConversationalAgentRuntimeTest {
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(providerAllowed),
                 new ConversationSubjectGuard(),
+                taskResolver,
+                portfolioIntelligence,
+                new PortfolioIntelligenceAnswerAssembler(),
                 new ConversationProgressClassifier(),
                 decisionPublisher,
                 diagnosticEventPublisher);
         return new RuntimeFixture(
                 runtime, windowManager, router, groundingAssembler, toolService, modelPort,
-                draftValidator, questionService, decisionPublisher, events);
+                draftValidator, questionService, taskResolver, portfolioIntelligence,
+                decisionPublisher, events);
     }
 
     private void assertPublishedDecision(
@@ -450,6 +653,38 @@ class ConversationalAgentRuntimeTest {
                         PortfolioKnowledgeFacet.VERIFICATION));
     }
 
+    private PortfolioRecommendation recommendation() {
+        PortfolioRecommendationContext context = new PortfolioRecommendationContext(
+                "rec_" + "a".repeat(64),
+                "portfolio-v2",
+                "BACKEND",
+                "INTERVIEWER",
+                Set.of("JAVA"),
+                2,
+                List.of("project-1"));
+        return new PortfolioRecommendation(
+                context.getRecommendationBatchId(),
+                context,
+                List.of(new PortfolioRecommendationItem(
+                        "project-1",
+                        "Project one",
+                        "/projects/project-one",
+                        List.of("Matches Java backend"),
+                        List.of("evidence-1"))),
+                List.of("audienceRole", "requestedSize"),
+                List.of());
+    }
+
+    private PortfolioRecommendation emptyRecommendation() {
+        PortfolioRecommendation recommendation = recommendation();
+        return new PortfolioRecommendation(
+                recommendation.getRecommendationBatchId(),
+                recommendation.getContext(),
+                List.of(),
+                recommendation.getSatisfiedConstraints(),
+                recommendation.getUnsatisfiedConstraints());
+    }
+
     private ConversationAnswerRequest request(String question) {
         return new ConversationAnswerRequest(
                 "turn-1",
@@ -474,6 +709,30 @@ class ConversationalAgentRuntimeTest {
                         AnswerRequestSource.CASE));
     }
 
+    private ConversationAnswerRequest requestWithRecommendationContext() {
+        PortfolioRecommendationContext context = recommendation().getContext();
+        PortfolioRecommendationContextRequest contextRequest =
+                new PortfolioRecommendationContextRequest(
+                        context.getRecommendationBatchId(),
+                        context.getContentVersion(),
+                        context.getCareerTrack(),
+                        context.getAudienceRole(),
+                        context.getCapabilityCodes(),
+                        context.getRequestedSize(),
+                        context.getSelectedPortfolioIds());
+        return new ConversationAnswerRequest(
+                "turn-1",
+                "调整推荐",
+                List.of(),
+                new ConversationAnswerContextRequest(
+                        null,
+                        null,
+                        AudienceRole.INTERVIEWER,
+                        AnswerRequestSource.AGENT_PAGE,
+                        List.of(),
+                        contextRequest));
+    }
+
     private static final class RuntimeFixture {
         private final ConversationalAgentRuntime runtime;
         private final ConversationWindowManager windowManager;
@@ -483,6 +742,8 @@ class ConversationalAgentRuntimeTest {
         private final ConversationalModelPort modelPort;
         private final ConversationDraftValidator draftValidator;
         private final DynamicQuestionService questionService;
+        private final PortfolioTaskResolver taskResolver;
+        private final PortfolioIntelligence portfolioIntelligence;
         private final ConversationDecisionPublisher decisionPublisher;
         private final List<DiagnosticEvent> events;
 
@@ -495,6 +756,8 @@ class ConversationalAgentRuntimeTest {
                 ConversationalModelPort modelPort,
                 ConversationDraftValidator draftValidator,
                 DynamicQuestionService questionService,
+                PortfolioTaskResolver taskResolver,
+                PortfolioIntelligence portfolioIntelligence,
                 ConversationDecisionPublisher decisionPublisher,
                 List<DiagnosticEvent> events
         ) {
@@ -506,6 +769,8 @@ class ConversationalAgentRuntimeTest {
             this.modelPort = modelPort;
             this.draftValidator = draftValidator;
             this.questionService = questionService;
+            this.taskResolver = taskResolver;
+            this.portfolioIntelligence = portfolioIntelligence;
             this.decisionPublisher = decisionPublisher;
             this.events = events;
         }

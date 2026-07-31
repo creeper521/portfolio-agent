@@ -78,6 +78,10 @@ public final class PortfolioTaskResolver {
         return resolveWithClassifier(turnId, question, recommendationContext);
     }
 
+    public boolean matchesDeterministicRule(String question) {
+        return resolveRule(question) != null;
+    }
+
     private PortfolioTask resolveWithClassifier(
             String turnId,
             String question,

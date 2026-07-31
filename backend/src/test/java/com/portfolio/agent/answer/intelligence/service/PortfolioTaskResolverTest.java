@@ -24,6 +24,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PortfolioTaskResolverTest {
 
+    @Test
+    void exposesTheDeterministicPortfolioBoundaryWithoutCallingTheClassifier() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        assertThat(resolver.matchesDeterministicRule("给面试官推荐两个 Java 后端作品")).isTrue();
+        assertThat(resolver.matchesDeterministicRule("介绍这个项目")).isTrue();
+        assertThat(resolver.matchesDeterministicRule("你好")).isFalse();
+        assertThat(resolver.matchesDeterministicRule("今天 Java 最新版本是什么")).isFalse();
+        assertThat(classifier.getInvocationCount()).isZero();
+    }
+
     @ParameterizedTest
     @MethodSource("ruleResolvedQuestions")
     void resolvesUnambiguousRulesWithoutCallingTheModel(

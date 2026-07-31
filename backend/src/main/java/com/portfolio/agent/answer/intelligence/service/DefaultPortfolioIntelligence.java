@@ -122,7 +122,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioRetrievalResult retrieval) {
         return new PortfolioIntelligenceResult(
                 mode, retrieval.getSubjects(), retrieval.getPassages(), null, null,
-                retrieval.isDegraded(), retrieval.getNoticeCode());
+                retrieval.getContentVersion(), retrieval.isDegraded(), retrieval.getNoticeCode());
     }
 
     private PortfolioIntelligenceResult recommendationResult(
@@ -131,7 +131,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioRecommendation recommendation) {
         return new PortfolioIntelligenceResult(
                 mode, retrieval.getSubjects(), retrieval.getPassages(), recommendation, null,
-                retrieval.isDegraded(), retrieval.getNoticeCode());
+                retrieval.getContentVersion(), retrieval.isDegraded(), retrieval.getNoticeCode());
     }
 
     private List<SelectionCandidate> candidates(PortfolioRetrievalResult retrieval) {

@@ -1,9 +1,11 @@
 package com.portfolio.agent.answer.intelligence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter;
+import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
@@ -14,8 +16,16 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
+import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
+import com.portfolio.agent.answer.intelligence.service.DefaultPortfolioIntelligence;
+import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
+import com.portfolio.agent.answer.intelligence.service.PortfolioRecommendationPolicy;
+import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
+import com.portfolio.agent.answer.intelligence.service.PortfolioTaskValidator;
+import com.portfolio.agent.answer.intelligence.service.RecommendationContextValidator;
 import com.portfolio.agent.answer.service.KeywordRetriever;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
+import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
@@ -50,6 +60,7 @@ class PortfolioIntelligenceConfigurationTest {
                     assertThat(retrievers).hasSize(1);
                     assertThat(retrievers.values()).singleElement()
                             .isInstanceOf(BundlePortfolioRetriever.class);
+                    assertIntelligenceBeans(context);
                 });
     }
 
@@ -64,6 +75,7 @@ class PortfolioIntelligenceConfigurationTest {
                     assertThat(retrievers).hasSize(1);
                     assertThat(retrievers.values()).singleElement()
                             .isInstanceOf(FailoverPortfolioRetriever.class);
+                    assertIntelligenceBeans(context);
                 });
     }
 
@@ -87,6 +99,18 @@ class PortfolioIntelligenceConfigurationTest {
                     assertThat(context.getBean(AtomicInteger.class)).hasValue(0);
                     assertThat(context).hasSingleBean(PortfolioRetriever.class);
                 });
+    }
+
+    private void assertIntelligenceBeans(
+            org.springframework.context.ApplicationContext context) {
+        assertThat(context.getBeansOfType(PortfolioTaskResolver.class)).hasSize(1);
+        assertThat(context.getBeansOfType(PortfolioTaskValidator.class)).hasSize(1);
+        assertThat(context.getBeansOfType(PortfolioRecommendationPolicy.class)).hasSize(1);
+        assertThat(context.getBeansOfType(RecommendationContextValidator.class)).hasSize(1);
+        assertThat(context.getBeansOfType(PortfolioIntelligence.class)).hasSize(1);
+        assertThat(context.getBean(PortfolioIntelligence.class))
+                .isInstanceOf(DefaultPortfolioIntelligence.class);
+        assertThat(context.getBeansOfType(PortfolioIntelligenceAnswerAssembler.class)).hasSize(1);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -129,6 +153,16 @@ class PortfolioIntelligenceConfigurationTest {
         @Bean
         RetrievalPolicy retrievalPolicy() {
             return RetrievalPolicy.currentRelease();
+        }
+
+        @Bean
+        PortfolioTaskClassifierPort portfolioTaskClassifierPort() {
+            return mock(PortfolioTaskClassifierPort.class);
+        }
+
+        @Bean
+        ConversationalAgentProperties conversationalAgentProperties() {
+            return new ConversationalAgentProperties();
         }
 
         @Bean
