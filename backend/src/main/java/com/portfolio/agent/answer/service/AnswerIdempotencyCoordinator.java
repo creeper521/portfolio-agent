@@ -42,19 +42,19 @@ public final class AnswerIdempotencyCoordinator<T> {
     }
 
     public T execute(String sourceHash, UUID requestToken, Supplier<T> operation) {
-        var key = new RequestKey(
+        RequestKey key = new RequestKey(
                 Objects.requireNonNull(sourceHash, "sourceHash must not be null"),
                 Objects.requireNonNull(requestToken, "requestToken must not be null")
         );
         Objects.requireNonNull(operation, "operation must not be null");
 
         while (true) {
-            var now = clock.instant();
+            Instant now = clock.instant();
             Entry<T> selected;
             boolean producer;
             synchronized (entries) {
                 cleanupExpired(now, false);
-                var existing = entries.get(key);
+                Entry<T> existing = entries.get(key);
                 if (existing == null) {
                     if (entries.size() >= maxEntries) {
                         cleanupExpired(now, true);
@@ -86,8 +86,8 @@ public final class AnswerIdempotencyCoordinator<T> {
         while (!expiries.isEmpty()
                 && !now.isBefore(expiries.peekFirst().expiresAt())
                 && inspected < CLEANUP_BATCH_SIZE) {
-            var expiry = expiries.removeFirst();
-            var entry = entries.get(expiry.key());
+            EntryExpiry expiry = expiries.removeFirst();
+            Entry<T> entry = entries.get(expiry.key());
             if (entry != null
                     && entry.result.isDone()
                     && entry.completedAt != null
@@ -131,10 +131,52 @@ public final class AnswerIdempotencyCoordinator<T> {
         }
     }
 
-    private record RequestKey(String sourceHash, UUID requestToken) {
+    private static final class RequestKey {
+
+        private final String sourceHash;
+        private final UUID requestToken;
+
+        private RequestKey(String sourceHash, UUID requestToken) {
+            this.sourceHash = sourceHash;
+            this.requestToken = requestToken;
+        }
+
+        @Override
+        public boolean equals(Object candidate) {
+            if (this == candidate) {
+                return true;
+            }
+            if (!(candidate instanceof RequestKey)) {
+                return false;
+            }
+            RequestKey other = (RequestKey) candidate;
+            return sourceHash.equals(other.sourceHash)
+                    && requestToken.equals(other.requestToken);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(sourceHash, requestToken);
+        }
     }
 
-    private record EntryExpiry(RequestKey key, Instant expiresAt) {
+    private static final class EntryExpiry {
+
+        private final RequestKey key;
+        private final Instant expiresAt;
+
+        private EntryExpiry(RequestKey key, Instant expiresAt) {
+            this.key = key;
+            this.expiresAt = expiresAt;
+        }
+
+        private RequestKey key() {
+            return key;
+        }
+
+        private Instant expiresAt() {
+            return expiresAt;
+        }
     }
 
     private static final class Entry<T> {

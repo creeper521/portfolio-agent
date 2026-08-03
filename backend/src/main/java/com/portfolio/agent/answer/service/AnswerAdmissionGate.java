@@ -56,7 +56,7 @@ public final class AnswerAdmissionGate {
     public AnswerAdmission acquire(String sourceHash, UUID requestToken) {
         Objects.requireNonNull(sourceHash, "sourceHash must not be null");
         Objects.requireNonNull(requestToken, "requestToken must not be null");
-        var now = clock.instant();
+        Instant now = clock.instant();
 
         synchronized (states) {
             cleanupExpired(now, false);
@@ -67,7 +67,7 @@ public final class AnswerAdmissionGate {
                 throw new AnswerAdmissionRejectedException(
                         AnswerErrorCode.ANSWER_RATE_LIMITED, 60);
             }
-            var state = states.get(sourceHash);
+            SourceState state = states.get(sourceHash);
             if (state == null) {
                 state = new SourceState(now);
                 states.put(sourceHash, state);
@@ -104,8 +104,8 @@ public final class AnswerAdmissionGate {
         while (!expiries.isEmpty()
                 && !now.isBefore(expiries.peekFirst().expiresAt())
                 && inspected < CLEANUP_BATCH_SIZE) {
-            var expiry = expiries.removeFirst();
-            var state = states.get(expiry.sourceHash());
+            SourceExpiry expiry = expiries.removeFirst();
+            SourceState state = states.get(expiry.sourceHash());
             if (state != null
                     && state.active == 0
                     && state.windowStartedAt.plus(WINDOW).equals(expiry.expiresAt())) {
@@ -130,7 +130,7 @@ public final class AnswerAdmissionGate {
 
     private void release(String sourceHash) {
         synchronized (states) {
-            var state = states.get(sourceHash);
+            SourceState state = states.get(sourceHash);
             if (state != null && state.active > 0) {
                 state.active--;
                 if (state.active == 0
@@ -161,6 +161,22 @@ public final class AnswerAdmissionGate {
         }
     }
 
-    private record SourceExpiry(String sourceHash, Instant expiresAt) {
+    private static final class SourceExpiry {
+
+        private final String sourceHash;
+        private final Instant expiresAt;
+
+        private SourceExpiry(String sourceHash, Instant expiresAt) {
+            this.sourceHash = sourceHash;
+            this.expiresAt = expiresAt;
+        }
+
+        private String sourceHash() {
+            return sourceHash;
+        }
+
+        private Instant expiresAt() {
+            return expiresAt;
+        }
     }
 }

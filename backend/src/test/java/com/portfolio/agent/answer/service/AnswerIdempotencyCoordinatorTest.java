@@ -9,7 +9,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -19,23 +21,23 @@ class AnswerIdempotencyCoordinatorTest {
 
     @Test
     void concurrentDuplicateRequestsShareOneExecution() throws Exception {
-        var coordinator = new AnswerIdempotencyCoordinator<String>(
+        AnswerIdempotencyCoordinator<String> coordinator = new AnswerIdempotencyCoordinator<String>(
                 Clock.systemUTC(), Duration.ofMinutes(2));
-        var token = UUID.randomUUID();
-        var executions = new AtomicInteger();
-        var started = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        var executor = Executors.newFixedThreadPool(2);
+        UUID token = UUID.randomUUID();
+        AtomicInteger executions = new AtomicInteger();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
 
         try {
-            var first = executor.submit(() -> coordinator.execute("source", token, () -> {
+            Future<String> first = executor.submit(() -> coordinator.execute("source", token, () -> {
                 executions.incrementAndGet();
                 started.countDown();
                 await(release);
                 return "answer";
             }));
             assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
-            var duplicate = executor.submit(
+            Future<String> duplicate = executor.submit(
                     () -> coordinator.execute("source", token, () -> "duplicate"));
 
             release.countDown();
@@ -50,11 +52,11 @@ class AnswerIdempotencyCoordinatorTest {
 
     @Test
     void reusesACompletedResultUntilItsTtlExpires() {
-        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
-        var coordinator = new AnswerIdempotencyCoordinator<String>(
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        AnswerIdempotencyCoordinator<String> coordinator = new AnswerIdempotencyCoordinator<String>(
                 clock, Duration.ofMinutes(2));
-        var token = UUID.randomUUID();
-        var executions = new AtomicInteger();
+        UUID token = UUID.randomUUID();
+        AtomicInteger executions = new AtomicInteger();
 
         assertThat(coordinator.execute(
                 "source", token, () -> "answer-" + executions.incrementAndGet()))
@@ -72,8 +74,8 @@ class AnswerIdempotencyCoordinatorTest {
 
     @Test
     void removesExpiredEntriesGloballyAndBoundsCompletedResults() {
-        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
-        var coordinator = new AnswerIdempotencyCoordinator<String>(
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        AnswerIdempotencyCoordinator<String> coordinator = new AnswerIdempotencyCoordinator<String>(
                 clock, Duration.ofMinutes(2), 2);
         coordinator.execute("source", UUID.randomUUID(), () -> "one");
         coordinator.execute("source", UUID.randomUUID(), () -> "two");

@@ -18,8 +18,8 @@ class AnswerAdmissionGateTest {
 
     @Test
     void rejectsTheEleventhRequestInsideTheSameMinute() {
-        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
-        var gate = new AnswerAdmissionGate(clock, 10, 2);
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(clock, 10, 2);
 
         for (int index = 0; index < 10; index++) {
             gate.acquire("source-a", UUID.randomUUID()).close();
@@ -34,26 +34,26 @@ class AnswerAdmissionGateTest {
 
     @Test
     void startsANewRequestWindowAfterSixtySeconds() {
-        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
-        var gate = new AnswerAdmissionGate(clock, 1, 2);
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(clock, 1, 2);
 
         gate.acquire("source-a", UUID.randomUUID()).close();
         clock.advance(Duration.ofSeconds(60));
 
-        try (var ignored = gate.acquire("source-a", UUID.randomUUID())) {
+        try (AnswerAdmission ignored = gate.acquire("source-a", UUID.randomUUID())) {
             assertThat(ignored).isNotNull();
         }
     }
 
     @Test
     void rejectsMoreThanTheConfiguredConcurrentRequests() {
-        var gate = new AnswerAdmissionGate(
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(
                 Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneOffset.UTC),
                 10,
                 2
         );
-        var first = gate.acquire("source-a", UUID.randomUUID());
-        var second = gate.acquire("source-a", UUID.randomUUID());
+        AnswerAdmission first = gate.acquire("source-a", UUID.randomUUID());
+        AnswerAdmission second = gate.acquire("source-a", UUID.randomUUID());
 
         assertThatThrownBy(() -> gate.acquire("source-a", UUID.randomUUID()))
                 .isInstanceOfSatisfying(AnswerAdmissionRejectedException.class, exception -> {
@@ -67,39 +67,39 @@ class AnswerAdmissionGateTest {
 
     @Test
     void releasingAnAdmissionRestoresConcurrentCapacity() {
-        var gate = new AnswerAdmissionGate(
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(
                 Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneOffset.UTC),
                 10,
                 1
         );
-        var first = gate.acquire("source-a", UUID.randomUUID());
+        AnswerAdmission first = gate.acquire("source-a", UUID.randomUUID());
 
         first.close();
         first.close();
 
-        try (var ignored = gate.acquire("source-a", UUID.randomUUID())) {
+        try (AnswerAdmission ignored = gate.acquire("source-a", UUID.randomUUID())) {
             assertThat(ignored).isNotNull();
         }
     }
 
     @Test
     void tracksDifferentSourcesIndependently() {
-        var gate = new AnswerAdmissionGate(
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(
                 Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneOffset.UTC),
                 1,
                 1
         );
         gate.acquire("source-a", UUID.randomUUID()).close();
 
-        try (var ignored = gate.acquire("source-b", UUID.randomUUID())) {
+        try (AnswerAdmission ignored = gate.acquire("source-b", UUID.randomUUID())) {
             assertThat(ignored).isNotNull();
         }
     }
 
     @Test
     void evictsInactiveSourceStateAfterItsWindowExpires() {
-        var clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
-        var gate = new AnswerAdmissionGate(clock, 10, 2, 2);
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-28T00:00:00Z"));
+        AnswerAdmissionGate gate = new AnswerAdmissionGate(clock, 10, 2, 2);
         gate.acquire("source-a", UUID.randomUUID()).close();
         gate.acquire("source-b", UUID.randomUUID()).close();
 
