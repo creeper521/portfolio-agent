@@ -304,7 +304,12 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
             } else { [string]$asset.contributionType }
             if ([string]$caseStudy.achievementStatus -ne $expectedCaseStatus -or
                     [string]$caseStudy.contributionType -ne $expectedContribution) {
-                Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' 'Public Case status exceeds or differs from source inventory.'
+                Write-Failure 'DECISION_LEDGER_STATUS_UPGRADE' (
+                    "Public Case '$slug' mapped from asset '$($asset.assetId)' differs from " +
+                    "source inventory: actual=$($caseStudy.achievementStatus)/" +
+                    "$($caseStudy.contributionType), expected=$expectedCaseStatus/" +
+                    "$expectedContribution."
+                )
             }
         }
         foreach ($evidenceId in @($asset.evidenceIds)) {
@@ -327,10 +332,21 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
     $ledgerProjectSlugs = @($Assets | ForEach-Object { @($_.projectSlugs) })
     $ledgerCaseSlugs = @($Assets | ForEach-Object { @($_.caseSlugs) })
     $ledgerEvidenceIds = @($Assets | ForEach-Object { @($_.evidenceIds) })
-    if (@($projectsBySlug.Keys | Where-Object { $ledgerProjectSlugs -notcontains $_ }).Count -gt 0 -or
-            @($casesBySlug.Keys | Where-Object { $ledgerCaseSlugs -notcontains $_ }).Count -gt 0 -or
-            @($evidenceById.Keys | Where-Object { $ledgerEvidenceIds -notcontains $_ }).Count -gt 0) {
-        Write-Failure 'DECISION_LEDGER_REVERSE_REFERENCE_INVALID' 'Public content lacks a reverse decision-ledger mapping.'
+    $missingProjectSlugs = @($projectsBySlug.Keys |
+        Where-Object { $ledgerProjectSlugs -notcontains $_ })
+    $missingCaseSlugs = @($casesBySlug.Keys |
+        Where-Object { $ledgerCaseSlugs -notcontains $_ })
+    $missingEvidenceIds = @($evidenceById.Keys |
+        Where-Object { $ledgerEvidenceIds -notcontains $_ })
+    if ($missingProjectSlugs.Count -gt 0 -or
+            $missingCaseSlugs.Count -gt 0 -or
+            $missingEvidenceIds.Count -gt 0) {
+        Write-Failure 'DECISION_LEDGER_REVERSE_REFERENCE_INVALID' (
+            'Public content lacks a reverse decision-ledger mapping: ' +
+            "projects=$($missingProjectSlugs -join ','), " +
+            "cases=$($missingCaseSlugs -join ','), " +
+            "evidence=$($missingEvidenceIds -join ',')."
+        )
     }
 }
 function Test-SupportedPublicSchemaVersion([object]$Value) {

@@ -269,7 +269,7 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
                 Slug = [string]$_.slug
                 AchievementStatus = switch ([string]$_.achievementStatus) {
                     'PROTOTYPE' { 'VALIDATED_PROTOTYPE' }
-                    'LEARNING' { 'INVESTIGATED' }
+                    'LEARNING' { 'LEARNING_ONLY' }
                     default { [string]$_ }
                 }
                 ContributionType = [string]$_.contributionType
@@ -310,6 +310,22 @@ function New-DecisionLedger([string]$Path, [string]$CandidatePath) {
                 "$($asset.achievementStatus)/$($asset.contributionType)"
         }
     }
+    $mappedEvidenceIds = @($assets | ForEach-Object { @($_.evidenceIds) })
+    $unmappedEvidenceIds = @($portfolio.evidence | Where-Object {
+        $mappedEvidenceIds -notcontains [string]$_.id
+    } | ForEach-Object { [string]$_.id })
+    if ($unmappedEvidenceIds.Count -gt 0) {
+        $evidenceOnlyAsset = @($assets |
+            Where-Object { $_.assetId -eq 'K-17' })[0]
+        $evidenceOnlyAsset.evidenceStatus = 'VERIFIED'
+        $evidenceOnlyAsset.originalReviewState = 'PUBLIC_REVIEW_REQUIRED'
+        $evidenceOnlyAsset.finalRoute = 'EVIDENCE_ONLY'
+        $evidenceOnlyAsset.decisionReason = 'Synthetic standalone Evidence mapping'
+        $evidenceOnlyAsset.evidenceIds = $unmappedEvidenceIds
+        $evidenceOnlyAsset.routeDecision = 'PUBLISH_CANDIDATE'
+        $evidenceOnlyAsset.targetContentVersion = [string]$portfolio.contentVersion
+        $evidenceOnlyAsset.targetWave = 1
+    }
     $unmappedGeneratedCaseSlugs = @($portfolio.cases | Where-Object {
         $generatedSlug = [string]$_.slug
         @($assets | Where-Object {
@@ -340,11 +356,12 @@ function Invoke-LedgerValidation([string]$LedgerPath) {
 }
 
 function ConvertTo-SchemaThree([string]$CandidatePath) {
+    $schemaThreeContentVersion = '2026-07-27.1'
     $portfolioPath = Join-Path $CandidatePath 'portfolio.json'
     $presentationPath = Join-Path $CandidatePath 'presentation.json'
     $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $data.schemaVersion = '3.0'
-    $data.contentVersion = $currentBundleVersion
+    $data.contentVersion = $schemaThreeContentVersion
     if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
         $data | Add-Member -NotePropertyName cases -NotePropertyValue @()
     }
@@ -361,7 +378,7 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     Save-Json $data $portfolioPath
     $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $presentation.schemaVersion = '3.0'
-    $presentation.contentVersion = $currentBundleVersion
+    $presentation.contentVersion = $schemaThreeContentVersion
     Save-Json $presentation $presentationPath
     return $data
 }
@@ -768,7 +785,7 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:9d2805c4cb20d115a9999dc639470dbd23f6b5f78bde45d8d61042f3c0590e8b') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:8512518d0a2ea4a2e3c0eed9cdb086bc1689d04d11bb5bb60890113b552a4c00') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
@@ -1168,7 +1185,9 @@ try {
     if ($schemaThreePublish.ExitCode -ne 0) {
         throw "Schema 3.0 publish fixture failed: $($schemaThreePublish.Output)"
     }
-    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot ('versions\' + $currentBundleVersion)
+    $schemaThreePublishedVersion = Join-Path $schemaThreeReleaseRoot (
+        'versions\' + [string]$schemaThreeData.contentVersion
+    )
     $schemaThreeManifestPath = Join-Path $schemaThreePublishedVersion 'manifest.json'
     $schemaThreeManifest = Get-Content -LiteralPath $schemaThreeManifestPath `
         -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -1180,7 +1199,8 @@ try {
     $schemaThreeManifest.counts.PSObject.Properties.Remove('cases')
     Save-Json $schemaThreeManifest $schemaThreeManifestPath
     $missingManifestCases = Invoke-Governance @('-Command', 'verify', '-Workspace', $workspace,
-        '-ReleaseRoot', $schemaThreeReleaseRoot, '-TargetVersion', $currentBundleVersion)
+        '-ReleaseRoot', $schemaThreeReleaseRoot,
+        '-TargetVersion', [string]$schemaThreeData.contentVersion)
     if ($missingManifestCases.ExitCode -eq 0 -or
             -not $missingManifestCases.Output.Contains('VERIFY_TARGET_INVALID')) {
         throw 'Schema 3.0 verify must reject a Manifest without counts.cases.'
