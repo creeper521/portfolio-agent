@@ -58,6 +58,7 @@ const emit = defineEmits<{
   cancel: []
   followUp: [action: FollowUpAction]
   clearCaseContext: []
+  refineRecommendation: [action: { question: string; recommendationBatchId: string }]
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -273,6 +274,44 @@ function inspectMessageEvidence(
     evidenceIds: [evidenceId],
   })
 }
+
+// 中文序数：用于「换掉第N个」自然语言问题（1→一，2→二，依此类推）。
+const ORDINAL_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+
+function ordinalLabel(index: number): string {
+  return ORDINAL_CN[index] ?? String(index + 1)
+}
+
+// 推荐调整：只做两件事——生成自然语言问题，并在请求 context 中回传当前批次 ID。
+// 仍然走现有 /api/v2/answers 链路；不在客户端计算替换结果，也不把作品 ID 写进问题。
+type RecommendationRefine = 'REPLACE' | 'EXPLAIN'
+
+function refineRecommendation(
+  message: AgentSession['messages'][number],
+  index: number,
+  intent: RecommendationRefine,
+) {
+  const recommendation = message.answer?.portfolioRecommendation
+  if (!recommendation || props.pending) return
+  const ordinal = ordinalLabel(index)
+  const question = intent === 'REPLACE' ? `换掉第${ordinal}个` : `为什么推荐第${ordinal}个？`
+  emit('refineRecommendation', {
+    question,
+    recommendationBatchId: recommendation.recommendationBatchId,
+  })
+}
+
+function refineWhole(
+  message: AgentSession['messages'][number],
+  question: string,
+) {
+  const recommendation = message.answer?.portfolioRecommendation
+  if (!recommendation || props.pending) return
+  emit('refineRecommendation', {
+    question,
+    recommendationBatchId: recommendation.recommendationBatchId,
+  })
+}
 </script>
 
 <template>
@@ -393,6 +432,102 @@ function inspectMessageEvidence(
                 class="context-version-updated"
                 role="status"
               >公开内容已更新，本轮已按当前版本重新核对。</p>
+              <!-- 结构化作品推荐卡组（可选；items 顺序是后端权威顺序，前端不重排）-->
+              <section
+                v-if="message.answer.portfolioRecommendation"
+                class="portfolio-recommendation"
+                data-portfolio-recommendation
+                :aria-label="`作品推荐 · ${message.answer.portfolioRecommendation.items.length} 项`"
+              >
+                <p
+                  v-if="message.answer.portfolioRecommendation.satisfiedConstraints.length"
+                  class="reco-satisfied"
+                >
+                  <span class="reco-satisfied__code">已满足</span>
+                  <span>{{
+                    message.answer.portfolioRecommendation.satisfiedConstraints.join(' · ')
+                  }}</span>
+                </p>
+                <p
+                  v-if="message.answer.portfolioRecommendation.unsatisfiedConstraints.length"
+                  class="reco-unsatisfied"
+                  data-recommendation-unsatisfied
+                  role="status"
+                >
+                  <span class="reco-unsatisfied__code">未满足</span>
+                  <span>{{
+                    message.answer.portfolioRecommendation.unsatisfiedConstraints.join(' · ')
+                  }}</span>
+                </p>
+                <div
+                  v-if="message.answer.portfolioRecommendation.items.length"
+                  class="reco-grid"
+                >
+                  <div
+                    v-for="(item, itemIndex) in message.answer.portfolioRecommendation.items"
+                    :key="item.portfolioId"
+                    class="reco-card"
+                    :data-recommendation-item="item.portfolioId"
+                    :data-portfolio-id="item.portfolioId"
+                  >
+                    <div class="reco-card__top">
+                      <span class="reco-card__no">{{ String(itemIndex + 1).padStart(2, '0') }}</span>
+                      <span class="reco-card__title">{{ item.title }}</span>
+                    </div>
+                    <p v-if="item.matchReasons.length" class="reco-card__reason">
+                      {{ item.matchReasons.join('；') }}
+                    </p>
+                    <div v-if="item.evidenceIds.length" class="reco-card__evidence">
+                      <button
+                        v-for="eid in item.evidenceIds"
+                        :key="eid"
+                        class="reco-evi"
+                        :data-recommendation-evidence="eid"
+                        type="button"
+                        @click="inspectMessageEvidence(message, eid)"
+                      >EVIDENCE · {{ eid }}</button>
+                    </div>
+                    <a
+                      class="reco-card__link"
+                      data-recommendation-link
+                      :href="item.route"
+                      @click.prevent
+                    >查看作品 →</a>
+                    <div class="reco-card__actions">
+                      <button
+                        class="reco-card__action"
+                        data-recommendation-refine="replace"
+                        type="button"
+                        :disabled="pending"
+                        @click="refineRecommendation(message, itemIndex, 'REPLACE')"
+                      >换掉这个</button>
+                      <button
+                        class="reco-card__action"
+                        data-recommendation-refine="explain"
+                        type="button"
+                        :disabled="pending"
+                        @click="refineRecommendation(message, itemIndex, 'EXPLAIN')"
+                      >为什么推荐这个？</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="reco-card__actions reco-card__actions--group">
+                  <button
+                    class="reco-card__action"
+                    data-recommendation-refine="shift-backend"
+                    type="button"
+                    :disabled="pending"
+                    @click="refineWhole(message, '再偏后端一点')"
+                  >再偏后端一点</button>
+                  <button
+                    class="reco-card__action"
+                    data-recommendation-refine="resize"
+                    type="button"
+                    :disabled="pending"
+                    @click="refineWhole(message, '把数量改成 2 个')"
+                  >把数量改成 2 个</button>
+                </div>
+              </section>
             </template>
             <template v-else>
               <h3>{{ message.answer.title }}</h3>
@@ -916,6 +1051,203 @@ function inspectMessageEvidence(
 .follow-up-actions button:disabled {
   cursor: wait;
   opacity: 0.55;
+}
+
+/* —— 结构化作品推荐卡组（复刻证据卡 / 资产卡底盘，沿用现有 token）—— */
+.portfolio-recommendation {
+  margin-top: 18px;
+}
+
+.reco-satisfied {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 9px 13px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  background: var(--workspace-surface-subtle, var(--paper-low));
+  font: 12px/1.6 var(--mono);
+  color: var(--workspace-text-secondary, var(--muted));
+}
+
+.reco-satisfied__code {
+  color: var(--workspace-text-faint, var(--faint));
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.reco-unsatisfied {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 11px 15px;
+  border: 1px solid var(--workspace-accent, var(--red));
+  background: var(--paper-hi);
+  font: 12.5px/1.6 var(--mono);
+  color: var(--ink-2);
+}
+
+.reco-unsatisfied::before {
+  content: "";
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  background: var(--workspace-accent, var(--red));
+  transform: rotate(45deg);
+}
+
+.reco-unsatisfied__code {
+  color: var(--workspace-accent, var(--red));
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+/* 卡组网格：发丝线分隔，2 列（与 .sel-bundle 同源） */
+.reco-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--workspace-rule, var(--rule));
+  border: 1px solid var(--workspace-rule, var(--rule));
+}
+
+.reco-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px 16px;
+  background: var(--paper-hi);
+  transition: background var(--agent-motion-fast) var(--ease);
+}
+
+.reco-card:hover {
+  background: var(--paper);
+}
+
+.reco-card__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reco-card__no {
+  flex: none;
+  color: var(--workspace-accent, var(--red));
+  font: 500 18px var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.reco-card__title {
+  flex: 1;
+  color: var(--workspace-text, var(--ink));
+  font: 500 18px/1.3 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.reco-card__reason {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--workspace-rule, var(--rule));
+  color: var(--muted);
+  font: 13px/1.7 var(--serif);
+}
+
+.reco-card__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reco-evi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--muted);
+  font: 10.5px/1.55 var(--mono);
+  letter-spacing: 0.02em;
+  transition: color var(--agent-motion-fast) var(--ease);
+}
+
+.reco-evi::before {
+  content: "";
+  flex: none;
+  align-self: center;
+  width: 5px;
+  height: 5px;
+  background: var(--red-hi);
+  transform: rotate(45deg);
+}
+
+.reco-evi:hover {
+  color: var(--workspace-accent, var(--red));
+}
+
+.reco-card__link {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 4px;
+  border-bottom: 1px solid transparent;
+  color: var(--workspace-accent, var(--red));
+  text-decoration: none;
+  font: 11px var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: border-color var(--agent-motion-fast) var(--ease);
+}
+
+.reco-card__link:hover {
+  border-bottom-color: var(--workspace-accent, var(--red));
+}
+
+/* 继续对话操作：沿用现有 follow-up-actions 描边按钮语汇 */
+.reco-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reco-card__actions--group {
+  margin-top: 12px;
+}
+
+.reco-card__action {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11px var(--mono);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color var(--agent-motion-fast) var(--ease),
+    color var(--agent-motion-fast) var(--ease);
+}
+
+.reco-card__action:not(:disabled):hover {
+  border-color: var(--workspace-accent, var(--red));
+  color: var(--workspace-accent, var(--red));
+}
+
+.reco-card__action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 620px) {
+  .reco-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .answer-state {

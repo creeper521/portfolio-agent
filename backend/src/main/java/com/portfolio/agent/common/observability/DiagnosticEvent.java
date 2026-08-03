@@ -56,7 +56,14 @@ public final class DiagnosticEvent {
             "error.code",
             "error.kind",
             "error.fingerprint",
-            "duration.bucket");
+            "duration.bucket",
+            "http.status_code",
+            "generation.mode",
+            "answer.degraded",
+            "guidance.stage",
+            "suggestion.count",
+            "content.version",
+            "recovery.count");
     private static final Map<String, Set<String>> APPROVED_FIELDS_BY_EVENT =
             Map.ofEntries(
                     Map.entry("application.started", fields(
@@ -166,6 +173,9 @@ public final class DiagnosticEvent {
                             "verification.status",
                             "duration.bucket",
                             "error.code")),
+                    Map.entry("frontend.application.started", FRONTEND_FIELDS),
+                    Map.entry("frontend.content.load.completed", FRONTEND_FIELDS),
+                    Map.entry("frontend.agent.request.completed", FRONTEND_FIELDS),
                     Map.entry("frontend.content.load.failed", FRONTEND_FIELDS),
                     Map.entry("frontend.agent.request.failed", FRONTEND_FIELDS),
                     Map.entry("frontend.agent.request.slow", FRONTEND_FIELDS),

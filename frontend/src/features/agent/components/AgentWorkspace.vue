@@ -50,6 +50,7 @@ interface AnswerRequestContext {
   coveredTopics?: readonly ConversationTopic[]
   contextEnvelope?: ContextEnvelope
   requestToken?: string
+  recommendationBatchId?: string
 }
 
 interface AnswerFailureView {
@@ -348,6 +349,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
         contextEnvelope: preparedContext.contextEnvelope,
+        recommendationBatchId: preparedContext.recommendationBatchId,
       }),
     )
     if (disposed || request !== requestVersion) return
@@ -558,6 +560,24 @@ function submitFollowUp(action: FollowUpAction) {
   )
 }
 
+// 推荐调整：只回传当前批次 ID，仍走 /api/v2/answers。
+// 普通问题（submit / submitSuggestion / submitFollowUp）不构造 recommendationBatchId，
+// 因此不会携带陈旧批次上下文（满足「普通问题不携带陈旧批次 ID」）。
+function refineRecommendation(action: { question: string; recommendationBatchId: string }) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  if (!session || !project) return
+  void requestAnswer(
+    {
+      sessionId: session.id,
+      projectSlug: project.slug,
+      question: action.question,
+      recommendationBatchId: action.recommendationBatchId,
+    },
+    true,
+  )
+}
+
 function toggleEvidence() {
   evidenceDrawerOpen.value = !evidenceDrawerOpen.value
   drawerReturnFocus = null
@@ -735,6 +755,7 @@ onBeforeUnmount(() => {
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
+      @refine-recommendation="refineRecommendation"
       @retry="retryAnswer"
       @navigate-back="navigateBackFromFailure"
       @cancel="cancelAnswer"

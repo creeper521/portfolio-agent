@@ -1143,4 +1143,117 @@ describe('AgentWorkspace', () => {
       }),
     )
   })
+
+  // —— 结构化作品推荐：批次 ID 回传与会话隔离 ——
+  function recommendationResponse(batchId = 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') {
+    return {
+      ...answerResponse(),
+      intent: 'PORTFOLIO_GROUNDED' as const,
+      answerScope: 'PORTFOLIO' as const,
+      answerSource: 'RETRIEVAL' as const,
+      portfolioRecommendation: {
+        recommendationBatchId: batchId,
+        items: [
+          {
+            portfolioId: 'project-1',
+            title: '项目一',
+            route: '/projects/project-one',
+            matchReasons: ['匹配后端能力要求'],
+            evidenceIds: ['sql-audit-delivery-set'],
+          },
+          {
+            portfolioId: 'case-2',
+            title: '案例二',
+            route: '/cases/case-two',
+            matchReasons: ['补充 PostgreSQL 与验证能力'],
+            evidenceIds: ['sql-audit-delivery-set'],
+          },
+        ],
+        satisfiedConstraints: ['受众角色', '数量'],
+        unsatisfiedConstraints: [],
+      },
+    }
+  }
+
+  it('echoes the current recommendation batch id when refining a recommendation', async () => {
+    askQuestionMock.mockResolvedValueOnce(recommendationResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('给我挑 2 个后端作品')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 第一轮不应携带批次 ID（普通问题）
+    expect(askQuestionMock.mock.calls[0]?.[0].recommendationBatchId).toBeUndefined()
+
+    // 点击第 2 张卡片的「换掉这个」→ 仍调用 /api/v2/answers 且回传批次 ID
+    const replaceActions = wrapper.findAll('[data-recommendation-refine="replace"]')
+    await replaceActions[1]?.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        question: '换掉第二个',
+        recommendationBatchId: 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }),
+    )
+    // 上下文里也回传，不是只挂在顶层
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('does not carry a stale batch id on a plain follow-up question', async () => {
+    askQuestionMock.mockResolvedValueOnce(recommendationResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('给我挑 2 个后端作品')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 现在有推荐批次；但用户在输入框打了一个普通问题
+    await wrapper.get('textarea').setValue('这两个作品有什么区别？')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].recommendationBatchId).toBeUndefined()
+    expect(askQuestionMock.mock.calls[1]?.[0].question).toBe('这两个作品有什么区别？')
+  })
+
+  it('does not restore recommendation context after starting a new session', async () => {
+    askQuestionMock.mockResolvedValueOnce(recommendationResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('给我挑 2 个后端作品')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 新建会话后，批次上下文应消失——不随新标签恢复
+    await wrapper.get('.session-rail__new').trigger('click')
+    await wrapper.get('textarea').setValue('新会话的问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].recommendationBatchId).toBeUndefined()
+    // 新会话内不残留上一批推荐卡
+    expect(wrapper.find('[data-portfolio-recommendation]').exists()).toBe(false)
+  })
+
+  it('does not issue a portfolio-selections request for recommendation refinement', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    askQuestionMock.mockResolvedValueOnce(recommendationResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('给我挑 2 个后端作品')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('[data-recommendation-refine="shift-backend"]').trigger('click')
+    await flushPromises()
+
+    const selectionCalls = fetchSpy.mock.calls.filter(([url]) =>
+      String(url).includes('/api/portfolio-selections'),
+    )
+    expect(selectionCalls).toHaveLength(0)
+    fetchSpy.mockRestore()
+  })
 })

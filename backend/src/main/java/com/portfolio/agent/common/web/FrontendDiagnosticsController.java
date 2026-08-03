@@ -76,6 +76,14 @@ public final class FrontendDiagnosticsController {
         addOptionalEnumField(builder, "error.kind", request.getErrorKind());
         addOptionalField(builder, "error.fingerprint", request.getErrorFingerprint());
         addOptionalEnumField(builder, "duration.bucket", request.getDurationBucket());
+        addOptionalNumberField(builder, "http.status_code", request.getHttpStatus());
+        addOptionalEnumField(builder, "generation.mode", request.getGenerationMode());
+        addOptionalBooleanField(builder, "answer.degraded", request.getDegraded());
+        addOptionalEnumField(builder, "guidance.stage", request.getGuidanceStage());
+        addOptionalNumberField(
+                builder, "suggestion.count", request.getSuggestedQuestionCount());
+        addOptionalField(builder, "content.version", request.getContentVersion());
+        addOptionalNumberField(builder, "recovery.count", request.getRecoveredCount());
         return builder.build();
     }
 
@@ -93,6 +101,26 @@ public final class FrontendDiagnosticsController {
             DiagnosticEvent.Builder builder,
             String key,
             Enum<?> value
+    ) {
+        if (value != null) {
+            builder.field(key, value);
+        }
+    }
+
+    private void addOptionalNumberField(
+            DiagnosticEvent.Builder builder,
+            String key,
+            Number value
+    ) {
+        if (value != null) {
+            builder.field(key, value);
+        }
+    }
+
+    private void addOptionalBooleanField(
+            DiagnosticEvent.Builder builder,
+            String key,
+            Boolean value
     ) {
         if (value != null) {
             builder.field(key, value);

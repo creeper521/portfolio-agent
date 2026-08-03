@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>作品推荐卡片 · V1 保守（复刻证据卡片底盘）· 原型</title>
+<!--
+
+  原型：Agent 对话内 · 结构化作品推荐 · 变体 V1（保守）
+
+  对评审者的说明：
+  - 本变体是三版中「最稳」的一版：推荐卡组直接复用现有资产卡 / 证据卡的视觉底盘
+    （序号 + serif 标题 + 虚线分隔的理由 + 菱形点证据 + 「查看作品 →」红字链接），
+    与现有证据桌面卡片同源，落地风险最低。
+  - 只渲染聚焦的对话流（一条用户提问 + 一条 Agent 消息），不渲染左右两栏，
+    便于三版横向对比「推荐卡组在对话里的真实观感」。
+  - 严格复刻 tokens.css / AgentWorkspace.vue 的设计变量：暖纸 thread 背景、墨色文字、
+    单一牛血红 accent、serif(正文) + sans(用户消息) + mono(标签/序号/证据)。
+    未引入任何新颜色。
+  - 数据样本对齐新提示词契约（recommendationBatchId / items / matchReasons /
+    evidenceIds / satisfiedConstraints / unsatisfiedConstraints）。
+  - 底部 demo-rail 为非产品评审控制条：可切换「正常 2 条 / 空推荐+未满足条件」空态。
+  - DESIGN DEMO · 非生产代码。
+
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* —— 与 tokens.css / AgentWorkspace.vue 完全一致 —— */
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a; --ink-line: #4a433b;
+    --ink-text: #a99f91; --ink-text-hi: #e8ddce; --ink-text-faint: #94897c;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53; --red-on-ink: #d27d74;
+    --agent-stage: #1e1b17;
+    --agent-shell-paper: #f3eadb;
+    --agent-rail-paper: #f0e9de;
+    --agent-thread-paper: #f5e8d1;
+    --agent-evidence-paper: #f8f3ea;
+    --agent-hairline: rgba(104, 84, 60, 0.22);
+    --agent-radius-sm: 8px;
+    --agent-radius-md: 12px;
+    --agent-radius-shell: 20px;
+    --agent-motion-fast: 160ms;
+    --agent-motion-state: 220ms;
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+    /* —— workspace 局部 token（AgentWorkspace.vue 的 --workspace-* 映射）—— */
+    --workspace-thread-bg: var(--agent-thread-paper);
+    --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
+    --workspace-text: var(--ink);
+    --workspace-text-secondary: var(--muted);
+    --workspace-text-faint: var(--faint);
+    --workspace-rule: var(--agent-hairline);
+    --workspace-accent: var(--red);
+    --workspace-accent-soft: color-mix(in srgb, var(--red) 68%, white);
+    --workspace-primary-bg: var(--ink);
+    --workspace-primary-text: var(--paper-hi);
+    --workspace-action-bg: var(--red);
+    --workspace-action-bg-hover: color-mix(in srgb, var(--red) 82%, black);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--agent-stage);            /* 对话区外圈的深底（#app 的深色负空间）*/
+    color: var(--workspace-text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--red); color: var(--paper-hi); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 4px; border-radius: 2px; }
+  button { font: inherit; color: inherit; }
+
+  /* —— 模拟「聚焦对话流」：只渲染 thread 列，居中限宽 —— */
+  .thread {
+    background: var(--workspace-thread-bg);
+    min-height: 100%;
+    padding: 28px 24px 120px;
+  }
+  .thread__inner {
+    width: min(820px, calc(100% - 48px));
+    margin: 24px auto 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  /* —— 用户消息：右对齐、无气泡、2px 左 accent 文本流（被测试约束）—— */
+  .message--user {
+    width: fit-content;
+    max-width: 64%;
+    margin-left: auto;
+  }
+  .message--user .message__meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--workspace-accent-soft);
+    letter-spacing: 0.13em;
+  }
+  .message--user .message__body {
+    padding: 4px 0 4px 14px;
+    border-left: 2px solid var(--workspace-accent);
+    font: 16px/1.7 var(--sans);
+    color: var(--workspace-text);
+  }
+
+  /* —— Agent 消息：无气泡，meta + 结构化回答 + 卡组 + 证据 + 建议问题 —— */
+  .message--agent { max-width: 760px; }
+  .message__meta {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .message__meta-prefix { color: var(--workspace-accent-soft); letter-spacing: 0.13em; }
+  .message__meta-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .message__meta-tag {
+    padding: 2px 7px;
+    color: var(--workspace-accent);
+    border: 1px solid var(--workspace-rule);
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .message__meta-tag[data-verification='VERIFIED'] {
+    color: var(--workspace-primary-text);
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent);
+  }
+  .message__meta-tail { color: var(--faint); font-size: 10px; letter-spacing: 0.06em; }
+
+  /* —— 标题 / 摘要 / blocks —— */
+  .structured-answer h3 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--workspace-text);
+    margin-bottom: 10px;
+  }
+  .answer-block { margin-top: 6px; }
+  .answer-block__scope {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-accent-soft);
+    margin-bottom: 4px;
+  }
+  .answer-block__content {
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.85;
+    color: var(--workspace-text);
+  }
+  .answer-block__citations { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .answer-block__citations button,
+  .evi-inline {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--workspace-accent);
+    background: rgba(255,255,255,0.35);
+    border: 1px solid var(--workspace-rule);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast), color var(--agent-motion-fast);
+  }
+  .answer-block__citations button:hover,
+  .evi-inline:hover { border-color: var(--workspace-accent); color: var(--workspace-accent); }
+
+  /* ============================================================
+     ★ 推荐卡组 · V1 保守（复刻 .sel-asset 底盘）★
+     ============================================================ */
+  .reco { margin-top: 22px; }
+
+  /* satisfiedConstraints 低强调信息条（置顶） */
+  .reco__satisfied {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--workspace-text-secondary);
+  }
+  .reco__satisfied-code {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+  }
+  .reco__satisfied b { font-weight: 400; color: var(--ink-2); }
+
+  /* unsatisfiedConstraints：只有存在时才展示（空态分支用） */
+  .reco__unsatisfied {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--workspace-accent);
+    background: var(--paper-hi);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+  .reco__unsatisfied::before {
+    content: "";
+    width: 7px; height: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+    flex-shrink: 0; align-self: center;
+  }
+  .reco__unsatisfied-code {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--red);
+  }
+
+  /* 卡组网格（沿用 .sel-bundle 的发丝线网格，2 张走 2 列） */
+  .reco__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--workspace-rule);
+    border: 1px solid var(--workspace-rule);
+  }
+
+  /* 单卡 · 复刻 .sel-asset */
+  .reco-card {
+    background: var(--paper-hi);
+    padding: 22px 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    transition: background var(--agent-motion-fast);
+  }
+  .reco-card:hover { background: var(--paper); }
+  .reco-card__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .reco-card__no {
+    font-family: var(--mono);
+    font-size: 20px;
+    letter-spacing: 0.04em;
+    color: var(--red);
+  }
+  .reco-card__title {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 19px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--workspace-text);
+    flex: 1;
+  }
+  .reco-card__reason {
+    font-family: var(--serif);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--muted);
+    border-top: 1px dashed var(--workspace-rule);
+    padding-top: 11px;
+  }
+  .reco-card__reason b { font-weight: 400; color: var(--ink-2); }
+  /* 证据：菱形点 + mono 代码（与证据桌面兼容的入口） */
+  .reco-card__evidence { display: flex; flex-direction: column; gap: 6px; }
+  .reco-evi {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    line-height: 1.55;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+  .reco-evi::before {
+    content: "";
+    width: 5px; height: 5px;
+    background: var(--red-hi);
+    transform: rotate(45deg);
+    flex-shrink: 0; align-self: center;
+  }
+  .reco-evi:hover { color: var(--red); }
+  /* 「查看作品 →」红字链接 */
+  .reco-card__link {
+    margin-top: auto;
+    align-self: flex-start;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--red);
+    text-decoration: none;
+    padding-top: 4px;
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--agent-motion-fast);
+  }
+  .reco-card__link:hover { border-bottom-color: var(--red); }
+
+  /* 继续对话操作：描边小按钮组（沿用现有 follow-up-actions 描边按钮） */
+  .reco-card__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .reco-card__action {
+    min-height: 32px;
+    padding: 6px 10px;
+    color: var(--workspace-text-secondary);
+    border: 1px solid var(--workspace-rule);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.35);
+    font: 11px var(--mono);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast), color var(--agent-motion-fast);
+  }
+  .reco-card__action:hover { border-color: var(--workspace-accent); color: var(--workspace-accent); }
+
+  /* 证据入口（消息级）*/
+  .evidence-entries { margin-top: 16px; }
+  .evidence-entries__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-text-faint);
+    margin-bottom: 8px;
+  }
+
+  /* 建议问题：↳ 红字 mono 前缀 + 描边全宽按钮 */
+  .dynamic-suggestions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .dynamic-suggestions button {
+    text-align: left;
+    padding: 11px 14px;
+    border: 1px solid var(--workspace-rule);
+    border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.35);
+    font: 13px/1.5 var(--sans);
+    color: var(--workspace-text-secondary);
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast), color var(--agent-motion-fast);
+  }
+  .dynamic-suggestions button::before {
+    content: "↳";
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--workspace-accent);
+    font-family: var(--mono);
+  }
+  .dynamic-suggestions button:hover { border-color: var(--workspace-accent); color: var(--workspace-accent); }
+
+  /* 隐私说明（低强调）*/
+  .privacy-note {
+    margin-top: 34px;
+    padding-top: 14px;
+    border-top: 1px solid var(--workspace-rule);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    color: var(--faint);
+  }
+
+  /* —— 非产品评审控制条 —— */
+  .demo-rail {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+    background: var(--ink); color: var(--ink-text);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px clamp(22px, 4vw, 48px);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .demo-rail__tag { color: var(--red-on-ink); margin-right: 10px; flex-shrink: 0; }
+  .demo-rail__demo { color: var(--ink-text-faint); margin-right: auto; }
+  .demo-rail button {
+    color: var(--ink-text); padding: 6px 11px; border: 1px solid transparent;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    transition: color var(--agent-motion-fast), border-color var(--agent-motion-fast);
+    cursor: pointer; background: none;
+  }
+  .demo-rail button:hover { color: var(--ink-text-hi); }
+  .demo-rail button.is-on { color: var(--ink-text-hi); border-color: var(--red-on-ink); }
+
+  /* 流向示意：点击操作后追加的用户消息（demo 内不调真实 API）*/
+  .flow-preview {
+    display: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--faint);
+    line-height: 1.7;
+    padding: 10px 14px;
+    border: 1px dashed var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+    margin-top: 14px;
+  }
+  .flow-preview.is-on { display: block; }
+  .flow-preview b { color: var(--red); font-weight: 400; }
+
+  /* —— 响应式 —— */
+  @media (max-width: 620px) {
+    .thread { padding: 22px 14px 110px; }
+    .thread__inner { width: calc(100% - 36px); }
+    .message--user { max-width: 85%; }
+    .reco__grid { grid-template-columns: 1fr; }
+    .message--user { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="thread">
+  <div class="thread__inner">
+
+    <!-- 用户提问 -->
+    <div class="message--user">
+      <p class="message__meta"><span>YOU</span></p>
+      <div class="message__body">我在招一个偏后端的 Java 实习生，给我挑 2 个最能体现后端能力的作品。</div>
+    </div>
+
+    <!-- Agent 消息 -->
+    <article class="message--agent">
+      <!-- 1. meta -->
+      <p class="message__meta">
+        <span class="message__meta-prefix">AGENT · 已核验回答</span>
+        <span class="message__meta-tags">
+          <span class="message__meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+          <span class="message__meta-tag" data-verification="VERIFIED">已核验</span>
+          <span class="message__meta-tag">资料检索</span>
+          <span class="message__meta-tag">确定性回答</span>
+        </span>
+        <span class="message__meta-tail">ANSWERED · DETERMINISTIC</span>
+      </p>
+
+      <!-- 2. 标题 + blocks -->
+      <div class="structured-answer">
+        <h3>推荐结果</h3>
+        <section class="answer-block">
+          <p class="answer-block__scope">作品集</p>
+          <p class="answer-block__content">我按公开证据和你给出的条件（受众：招聘方 · 方向：后端 · 数量：2）选出了 2 个作品。</p>
+          <div class="answer-block__citations">
+            <button type="button">[E001]</button>
+          </div>
+        </section>
+
+        <!-- 3. ★ 推荐卡组（V1 保守）★ -->
+        <div class="reco" id="recoNormal">
+          <p class="reco__satisfied">
+            <span class="reco__satisfied-code">已满足</span>
+            <span><b>受众角色</b> · <b>数量</b></span>
+          </p>
+          <div class="reco__grid">
+            <!-- 卡 1 -->
+            <div class="reco-card">
+              <div class="reco-card__top">
+                <span class="reco-card__no">01</span>
+                <span class="reco-card__title">项目一 · SQL 审计平台</span>
+              </div>
+              <p class="reco-card__reason"><b>匹配理由</b> · 匹配后端能力要求，覆盖审计规则引擎与数据访问层实现。</p>
+              <div class="reco-card__evidence">
+                <button class="reco-evi" type="button">EVIDENCE · E001 · 审计规则实现与单元测试</button>
+              </div>
+              <a class="reco-card__link" href="#">查看作品 →</a>
+              <div class="reco-card__actions">
+                <button class="reco-card__action" data-flow="换掉第一个" type="button">换掉这个</button>
+                <button class="reco-card__action" data-flow="为什么推荐第一个？" type="button">为什么推荐这个？</button>
+              </div>
+            </div>
+            <!-- 卡 2 -->
+            <div class="reco-card">
+              <div class="reco-card__top">
+                <span class="reco-card__no">02</span>
+                <span class="reco-card__title">案例二 · 数据校验服务</span>
+              </div>
+              <p class="reco-card__reason"><b>匹配理由</b> · 补充 PostgreSQL 与验证能力，覆盖数据完整性约束与回归测试。</p>
+              <div class="reco-card__evidence">
+                <button class="reco-evi" type="button">EVIDENCE · E002 · 校验逻辑与覆盖率报告</button>
+              </div>
+              <a class="reco-card__link" href="#">查看作品 →</a>
+              <div class="reco-card__actions">
+                <button class="reco-card__action" data-flow="换掉第二个" type="button">换掉这个</button>
+                <button class="reco-card__action" data-flow="为什么推荐第二个？" type="button">为什么推荐这个？</button>
+              </div>
+            </div>
+          </div>
+          <!-- 整组继续对话操作 -->
+          <div class="reco-card__actions" style="margin-top:14px;">
+            <button class="reco-card__action" data-flow="再偏后端一点" type="button">再偏后端一点</button>
+            <button class="reco-card__action" data-flow="把数量改成 3 个" type="button">把数量改成 3 个</button>
+          </div>
+          <div class="flow-preview" id="flowPreview">
+            点击操作 → 生成自然语言问题 <b id="flowText"></b>，并在下一次请求 <code>context.recommendationBatchId</code> 中回传当前批次 ID（本原型仅示意，不调用真实接口）。
+          </div>
+        </div>
+
+        <!-- 3b. 空态分支（默认隐藏，demo-rail 可切换） -->
+        <div class="reco" id="recoEmpty" hidden>
+          <p class="reco__unsatisfied">
+            <span class="reco__unsatisfied-code">未满足</span>
+            <span>当前公开证据中暂无完全匹配「后端 + 数量 2」的组合。已展示最接近的文本回答，未生成作品卡片。</span>
+          </p>
+        </div>
+
+        <!-- 4. 证据入口 -->
+        <div class="evidence-entries">
+          <p class="evidence-entries__label">本轮证据 · 点击在证据桌面打开</p>
+          <button class="evi-inline" type="button">[E001]</button>
+          <button class="evi-inline" type="button" style="margin-left:8px;">[E002]</button>
+        </div>
+
+        <!-- 5. 建议问题 -->
+        <div class="dynamic-suggestions">
+          <button type="button">这两个作品之间的能力有什么区别？</button>
+          <button type="button">有没有更偏数据库设计的作品？</button>
+          <button type="button">能展示其中一个的完整验证过程吗？</button>
+        </div>
+      </div>
+
+      <p class="privacy-note">对话与推荐上下文仅存于当前标签页内存，刷新或关闭后消失。</p>
+    </article>
+
+  </div>
+</div>
+
+<!-- 非产品评审控制条 -->
+<div class="demo-rail">
+  <span class="demo-rail__tag">DESIGN DEMO · V1 保守</span>
+  <span class="demo-rail__demo">非生产代码 · 仅评审</span>
+  <button type="button" id="btnNormal" class="is-on" aria-pressed="true">正常 · 2 条</button>
+  <button type="button" id="btnEmpty" aria-pressed="false">空态 · 未满足条件</button>
+</div>
+
+<script>
+  // 切换 正常 / 空态（纯前端演示，不写 URL / 不持久化）
+  var btnNormal = document.getElementById('btnNormal');
+  var btnEmpty = document.getElementById('btnEmpty');
+  var recoNormal = document.getElementById('recoNormal');
+  var recoEmpty = document.getElementById('recoEmpty');
+  function show(which) {
+    var isNormal = which === 'normal';
+    btnNormal.classList.toggle('is-on', isNormal);
+    btnEmpty.classList.toggle('is-on', !isNormal);
+    btnNormal.setAttribute('aria-pressed', String(isNormal));
+    btnEmpty.setAttribute('aria-pressed', String(!isNormal));
+    recoNormal.hidden = !isNormal;
+    recoEmpty.hidden = isNormal;
+  }
+  btnNormal.addEventListener('click', function () { show('normal'); });
+  btnEmpty.addEventListener('click', function () { show('empty'); });
+
+  // 继续对话操作：点击 → 追加流向示意（不调真实 API）
+  var flowPreview = document.getElementById('flowPreview');
+  var flowText = document.getElementById('flowText');
+  document.querySelectorAll('[data-flow]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      flowText.textContent = '「' + btn.getAttribute('data-flow') + '」';
+      flowPreview.classList.add('is-on');
+    });
+  });
+  // 链接与建议问题不跳转
+  document.querySelectorAll('a, .dynamic-suggestions button, .reco-evi, .answer-block__citations button, .evi-inline').forEach(function (el) {
+    el.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+</script>
+</body>
+</html>

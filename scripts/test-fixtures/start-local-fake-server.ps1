@@ -8,6 +8,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Mode -eq 'FRONTEND') {
+    Write-Output '[vite] ready vite-fixture-info'
+    [Console]::Error.WriteLine('[vite] Internal server error vite-fixture-error')
+}
+else {
+    Write-Output 'INFO backend-fixture-info'
+    [Console]::Error.WriteLine('ERROR backend-fixture-error')
+    Write-Output 'INFO event.origin=browser browser-fixture-info'
+}
 $listener = [System.Net.Sockets.TcpListener]::new(
     [System.Net.IPAddress]::Loopback,
     $Port

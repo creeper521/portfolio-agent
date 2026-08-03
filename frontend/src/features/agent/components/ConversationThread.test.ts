@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
 import type { AnswerFocusTarget } from '../model/evidenceDeskModel'
-import type { AgentSession } from '../model/sessionTypes'
+import type { AgentMessage, AgentSession } from '../model/sessionTypes'
 import ConversationThread from './ConversationThread.vue'
 
 const answerMessageFixture: AgentSession['messages'][number] = {
@@ -484,6 +484,133 @@ describe('ConversationThread', () => {
 
     expect(wrapper.text()).toContain('无法处理该请求')
     expect(wrapper.text()).not.toContain('已核验回答')
+  })
+
+  // —— 结构化作品推荐卡片 ——
+  function recommendationMessage(overrides: Record<string, unknown> = {}): AgentMessage {
+    return {
+      id: 'agent-reco',
+      role: 'AGENT',
+      content: '选出了 2 个作品。',
+      createdAt: 2,
+      evidenceIds: ['evidence-1', 'evidence-2'],
+      answer: {
+        title: '推荐结果',
+        summary: '',
+        resolution: 'ANSWERED',
+        answerSource: 'RETRIEVAL',
+        generationMode: 'DETERMINISTIC',
+        verification: 'VERIFIED',
+        intent: 'PORTFOLIO_GROUNDED',
+        answerScope: 'PORTFOLIO',
+        sections: [],
+        blocks: [
+          { sourceScope: 'PORTFOLIO' as const, content: '我按公开证据选出了 2 个作品。', claimIds: [], evidenceIds: ['evidence-1'] },
+        ],
+        turnId: 'turn-reco',
+        coveredTopics: [],
+        guidanceStage: null,
+        evidenceIds: ['evidence-1', 'evidence-2'],
+        suggestedQuestionPresetIds: [],
+        suggestedQuestions: [],
+        portfolioRecommendation: {
+          recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+          items: [
+            {
+              portfolioId: 'project-1',
+              title: '项目一',
+              route: '/projects/project-one',
+              matchReasons: ['匹配后端能力要求'],
+              evidenceIds: ['evidence-1'],
+            },
+            {
+              portfolioId: 'case-2',
+              title: '案例二',
+              route: '/cases/case-two',
+              matchReasons: ['补充 PostgreSQL 与验证能力'],
+              evidenceIds: ['evidence-2'],
+            },
+          ],
+          satisfiedConstraints: ['受众角色', '数量'],
+          unsatisfiedConstraints: [],
+        },
+        ...overrides,
+      },
+    }
+  }
+
+  it('does not render a recommendation container on a plain answer', () => {
+    const wrapper = mountThread([answerMessageFixture])
+
+    expect(wrapper.find('[data-portfolio-recommendation]').exists()).toBe(false)
+  })
+
+  it('renders recommendation items in backend order with reasons and portfolio links', () => {
+    const wrapper = mountThread([recommendationMessage()])
+
+    const cards = wrapper.findAll('[data-recommendation-item]')
+    expect(cards).toHaveLength(2)
+    expect(cards.map((card) => card.attributes('data-portfolio-id')))
+      .toEqual(['project-1', 'case-2'])
+    expect(cards[0]?.text()).toContain('项目一')
+    expect(cards[0]?.text()).toContain('匹配后端能力要求')
+    expect(cards[1]?.text()).toContain('案例二')
+    // 查看作品按钮使用后端 route
+    expect(cards[0]?.get('[data-recommendation-link]').attributes('href')).toBe('/projects/project-one')
+  })
+
+  it('shows unsatisfied constraints without fabricating fake cards when items is empty', () => {
+    const wrapper = mountThread([
+      recommendationMessage({
+        portfolioRecommendation: {
+          recommendationBatchId: 'rec_empty_batch',
+          items: [],
+          satisfiedConstraints: [],
+          unsatisfiedConstraints: ['没有完全匹配的组合'],
+        },
+      }),
+    ])
+
+    expect(wrapper.findAll('[data-recommendation-item]')).toHaveLength(0)
+    expect(wrapper.get('[data-recommendation-unsatisfied]').text())
+      .toContain('没有完全匹配的组合')
+  })
+
+  it('keeps showing the recommendation cards on a degraded answer', () => {
+    const wrapper = mountThread([
+      recommendationMessage({
+        generationMode: 'FALLBACK',
+        degraded: true,
+      }),
+    ])
+
+    expect(wrapper.get('[data-degraded-notice]').text()).toBe('已切换到基础回答')
+    expect(wrapper.findAll('[data-recommendation-item]')).toHaveLength(2)
+  })
+
+  it('emits a refine action with the batch id and a natural-language question', async () => {
+    const wrapper = mountThread([recommendationMessage()])
+
+    // 第 2 张卡片点击「换掉这个」→ 发送「换掉第二个」并回传批次 ID
+    const actions = wrapper.findAll('[data-recommendation-refine="replace"]')
+    await actions[1]?.trigger('click')
+
+    expect(wrapper.emitted('refineRecommendation')).toEqual([[
+      {
+        question: '换掉第二个',
+        recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+      },
+    ]])
+  })
+
+  it('renders recommendations inside the agent message without overflowing on narrow screens', () => {
+    const wrapper = mountThread([recommendationMessage()])
+
+    // 推荐容器复用现有响应式类，不产生额外页面或横向滚动结构
+    const container = wrapper.get('[data-portfolio-recommendation]')
+    expect(container.classes()).toContain('portfolio-recommendation')
+    const grid = wrapper.find('[data-portfolio-recommendation] .reco-grid')
+    expect(grid.exists()).toBe(true)
   })
 
   it('focuses the exact answer section without smooth scrolling under reduced motion', async () => {
