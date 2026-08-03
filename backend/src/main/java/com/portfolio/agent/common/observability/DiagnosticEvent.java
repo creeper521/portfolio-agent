@@ -159,6 +159,14 @@ public final class DiagnosticEvent {
                     Map.entry("answer.fallback.selected", fields(
                             "fallback.trigger",
                             "failure.code")),
+                    Map.entry("portfolio.intelligence.completed", fields(
+                            "task.mode",
+                            "subject.count",
+                            "evidence.count",
+                            "recommendation.count",
+                            "context.present",
+                            "validation.result",
+                            "duration.bucket")),
                     Map.entry("agent.request.completed", fields(
                             "content.version",
                             "question.kind",

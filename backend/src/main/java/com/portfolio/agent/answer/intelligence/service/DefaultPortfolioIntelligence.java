@@ -59,13 +59,13 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     }
 
     private PortfolioIntelligenceResult retrieveMaterial(PortfolioTask task) {
-        PortfolioRetrievalResult retrieval = retrieve(task.getQuestion(), task.getMode(), task.getConditions());
+        PortfolioRetrievalResult retrieval = retrieve(task, task.getMode(), task.getConditions());
         return material(task.getMode(), retrieval);
     }
 
     private PortfolioIntelligenceResult recommend(PortfolioTask task) {
         PortfolioRetrievalResult retrieval = retrieve(
-                task.getQuestion(), PortfolioTaskMode.RECOMMENDATION, task.getConditions());
+                task, PortfolioTaskMode.RECOMMENDATION, task.getConditions());
         PortfolioRecommendation recommendation = recommendationPolicy.recommend(
                 retrieval.getContentVersion(), task.getConditions(), candidates(retrieval), Set.of());
         return recommendationResult(PortfolioTaskMode.RECOMMENDATION, retrieval, recommendation);
@@ -97,7 +97,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                     "请说明推荐将面向哪类受众。", "audienceRole"));
         }
         PortfolioRetrievalResult recommendationRetrieval = retrieve(
-                task.getQuestion(), PortfolioTaskMode.REFINE_RECOMMENDATION, mergedConditions);
+                task, PortfolioTaskMode.REFINE_RECOMMENDATION, mergedConditions);
         PortfolioRecommendation recommendation = recommendationPolicy.recommend(
                 recommendationRetrieval.getContentVersion(), mergedConditions,
                 candidates(recommendationRetrieval), task.getRefinement().getExcludedPortfolioIds());
@@ -111,10 +111,16 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     }
 
     private PortfolioRetrievalResult retrieve(
-            String question,
+            PortfolioTask task,
             PortfolioTaskMode mode,
             PortfolioConditions conditions) {
-        return retriever.retrieve(new PortfolioRetrievalRequest(question, mode, conditions));
+        boolean singleSubjectFactLookup = mode == PortfolioTaskMode.FACT_LOOKUP
+                && task.getSubjectId() != null;
+        PortfolioRetrievalRequest request = !singleSubjectFactLookup
+                ? new PortfolioRetrievalRequest(task.getQuestion(), mode, conditions)
+                : PortfolioRetrievalRequest.subjectScope(
+                        task.getQuestion(), mode, conditions, task.getSubjectId());
+        return retriever.retrieve(request);
     }
 
     private PortfolioIntelligenceResult material(
@@ -122,7 +128,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioRetrievalResult retrieval) {
         return new PortfolioIntelligenceResult(
                 mode, retrieval.getSubjects(), retrieval.getPassages(), null, null,
-                retrieval.isDegraded(), retrieval.getNoticeCode());
+                retrieval.getContentVersion(), retrieval.isDegraded(), retrieval.getNoticeCode());
     }
 
     private PortfolioIntelligenceResult recommendationResult(
@@ -131,7 +137,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioRecommendation recommendation) {
         return new PortfolioIntelligenceResult(
                 mode, retrieval.getSubjects(), retrieval.getPassages(), recommendation, null,
-                retrieval.isDegraded(), retrieval.getNoticeCode());
+                retrieval.getContentVersion(), retrieval.isDegraded(), retrieval.getNoticeCode());
     }
 
     private List<SelectionCandidate> candidates(PortfolioRetrievalResult retrieval) {

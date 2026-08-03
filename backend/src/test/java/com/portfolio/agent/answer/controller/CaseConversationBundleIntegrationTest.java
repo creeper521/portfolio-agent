@@ -46,9 +46,12 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.turnId").value("turn-known-case"))
                 .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
-                .andExpect(jsonPath("$.intent").value("GENERAL_KNOWLEDGE"))
+                .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
+                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
+                .andExpect(jsonPath("$.generationMode").value("DETERMINISTIC"))
+                .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
                 .andExpect(jsonPath("$.blocks").isNotEmpty())
-                .andExpect(jsonPath("$.degraded").value(true));
+                .andExpect(jsonPath("$.degraded").value(false));
 
         mockMvc.perform(post("/api/v2/answers")
                         .contentType(MediaType.APPLICATION_JSON)

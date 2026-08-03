@@ -89,7 +89,9 @@ public final class ConversationalPromptFactory {
                     不要输出未声明字段。
                     """;
             case "portfolio_task" -> """
-                    只输出一个 JSON 对象，字段必须且只能是：mode、conditions、refinement、confidence。
+                    只输出一个 JSON 对象，字段必须且只能是：boundaryIntent、mode、conditions、refinement、confidence。
+                    boundaryIntent 只能是 TIME_SENSITIVE|UNSUPPORTED_OR_UNSAFE|null。
+                    boundaryIntent 非 null 时，mode 必须为 null；boundaryIntent 为 null 时，mode 必须非 null。
                     mode 只能是 FACT_LOOKUP|COMPARISON|RECOMMENDATION|REFINE_RECOMMENDATION|CLARIFICATION_REQUIRED。
                     conditions 的字段必须且只能是 careerTrack、audienceRole、capabilityCodes、goal、requestedSize。
                     careerTrack、audienceRole、goal 没有值时使用 null；capabilityCodes 必须是字符串数组；requestedSize 必须是 2 到 5 的整数或 null。

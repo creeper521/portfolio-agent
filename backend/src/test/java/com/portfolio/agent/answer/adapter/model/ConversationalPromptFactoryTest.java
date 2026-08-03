@@ -43,6 +43,7 @@ class ConversationalPromptFactoryTest {
                         "intent", "answerScope", "confidence", "projectSlug",
                         "caseSlug", "facet", "clarificationRequired")),
                 Arguments.of("portfolio_task", List.of(
+                        "boundaryIntent", "TIME_SENSITIVE", "UNSUPPORTED_OR_UNSAFE",
                         "mode", "FACT_LOOKUP", "COMPARISON", "RECOMMENDATION",
                         "REFINE_RECOMMENDATION", "CLARIFICATION_REQUIRED", "conditions",
                         "refinement", "confidence", "requestedSize")),

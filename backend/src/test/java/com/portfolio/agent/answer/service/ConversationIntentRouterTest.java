@@ -80,6 +80,65 @@ class ConversationIntentRouterTest {
     }
 
     @Test
+    void constrainedPortfolioBoundaryClassificationOnlyAllowsUnsafeToPreempt() {
+        String question = "推荐一种绕过访问控制的办法";
+        ConversationRoute unsafe = new ConversationRoute(
+                ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                ConversationAnswerScope.CONVERSATION,
+                0.95d,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
+        when(modelPort.classify(eq(question), any(), anyList()))
+                .thenReturn(ConversationModelResult.success(unsafe));
+
+        ConversationRoute route = router.routeBoundary(
+                content(), window(), request(question), true);
+
+        assertThat(route.getIntent()).isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
+        assertRouteEvent(
+                ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                ConversationAnswerScope.CONVERSATION,
+                "MODEL_BOUNDARY");
+    }
+
+    @Test
+    void failedConstrainedBoundaryClassificationDoesNotBlockPortfolioHardRoute() {
+        String question = "推荐两个后端作品";
+        when(modelPort.classify(eq(question), any(), anyList()))
+                .thenReturn(ConversationModelResult.failure(
+                        ConversationModelFailureCode.PROVIDER_ERROR));
+
+        ConversationRoute route = router.routeBoundary(
+                content(), window(), request(question), true);
+
+        assertThat(route).isNull();
+        assertThat(events).isEmpty();
+    }
+
+    @Test
+    void nonBoundaryClassificationDoesNotReplacePortfolioHardRoute() {
+        String question = "Recommend two backend projects";
+        ConversationRoute recommendation = new ConversationRoute(
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                0.96d,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
+        when(modelPort.classify(eq(question), any(), anyList()))
+                .thenReturn(ConversationModelResult.success(recommendation));
+
+        ConversationRoute route = router.routeBoundary(
+                content(), window(), request(question), true);
+
+        assertThat(route).isNull();
+        assertThat(events).isEmpty();
+    }
+
+    @Test
     void acceptsClosedModelClassificationForGeneralKnowledge() {
         ConversationRoute classified = new ConversationRoute(
                 ConversationIntent.GENERAL_KNOWLEDGE,

@@ -38,6 +38,87 @@ class DefaultPortfolioIntelligenceTest {
     }
 
     @Test
+    void constrainsAContextualFactLookupToTheValidatedStableSubjectId() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        DefaultPortfolioIntelligence intelligence = intelligence(retriever);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "How was this verified?",
+                PortfolioTaskMode.FACT_LOOKUP,
+                1.0d,
+                PortfolioConditions.empty(),
+                null,
+                null,
+                "project-a");
+
+        intelligence.resolve(task);
+
+        assertThat(retriever.requests).singleElement().satisfies(request -> {
+            assertThat(request.isExactPortfolioLookup()).isTrue();
+            assertThat(request.getRequiredPortfolioIds()).containsExactly("project-a");
+            assertThat(request.getQuery()).isEqualTo("How was this verified?");
+        });
+    }
+
+    @Test
+    void activeSubjectDoesNotNarrowRecommendationCandidates() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        DefaultPortfolioIntelligence intelligence = intelligence(retriever);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "Recommend two projects", PortfolioTaskMode.RECOMMENDATION,
+                1.0d,
+                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
+                null,
+                null,
+                "project-a");
+
+        intelligence.resolve(task);
+
+        assertThat(retriever.requests).singleElement().satisfies(request -> {
+            assertThat(request.isExactPortfolioLookup()).isFalse();
+            assertThat(request.getRequiredPortfolioIds()).isEmpty();
+        });
+    }
+
+    @Test
+    void activeSubjectDoesNotTurnComparisonIntoSingleSubjectLookup() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        DefaultPortfolioIntelligence intelligence = intelligence(retriever);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1", "Compare the projects", PortfolioTaskMode.COMPARISON,
+                1.0d, PortfolioConditions.empty(), null, null, "project-a");
+
+        intelligence.resolve(task);
+
+        assertThat(retriever.requests).singleElement().satisfies(request -> {
+            assertThat(request.isExactPortfolioLookup()).isFalse();
+            assertThat(request.getRequiredPortfolioIds()).isEmpty();
+        });
+    }
+
+    @Test
+    void activeSubjectDoesNotNarrowRefinementRecomputation() {
+        RecordingRetriever retriever = new RecordingRetriever(retrieval());
+        DefaultPortfolioIntelligence intelligence = intelligence(retriever);
+        PortfolioTask task = new PortfolioTask(
+                "turn-1",
+                "Replace one recommendation",
+                PortfolioTaskMode.REFINE_RECOMMENDATION,
+                1.0d,
+                PortfolioConditions.empty(),
+                TestRecommendationContexts.context(),
+                new PortfolioRefinement(PortfolioConditions.empty(), Set.of("project-a")),
+                "project-a");
+
+        intelligence.resolve(task);
+
+        assertThat(retriever.requests).hasSize(2);
+        assertThat(retriever.requests.get(0).isExactPortfolioLookup()).isTrue();
+        assertThat(retriever.requests.get(1).isExactPortfolioLookup()).isFalse();
+        assertThat(retriever.requests.get(1).getRequiredPortfolioIds()).isEmpty();
+    }
+
+    @Test
     void returnsOneClarificationWithoutCallingRetrieverWhenRecommendationAudienceIsMissing() {
         RecordingRetriever retriever = new RecordingRetriever(retrieval());
         DefaultPortfolioIntelligence intelligence = intelligence(retriever);
