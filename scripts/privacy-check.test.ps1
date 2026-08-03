@@ -458,6 +458,21 @@ final class SafeLoggerMethodReturn {
     }
 }
 '@
+    },
+    @{
+        File = 'safe-secret-references.sh'
+        Source = @'
+psql \
+  --set=public_password="$PORTFOLIO_PUBLIC_DATABASE_PASSWORD" \
+  --set=governance_password="$PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD"
+'@
+    },
+    @{
+        File = 'safe-local-config-paths.ps1'
+        Source = @'
+$composeFile = 'compose.postgres.local.yml'
+$environmentFile = '.env.postgres.local'
+'@
     }
 )
 

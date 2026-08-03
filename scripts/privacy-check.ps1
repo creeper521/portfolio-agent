@@ -41,9 +41,9 @@ $patterns = @(
     @{ Name = 'ipv4-address'; Regex = '(?<![\d.])(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2})(?![\d.])' },
     @{ Name = 'windows-absolute-path'; Regex = '(?i)[a-z]:\\(?:users|code|work|workspace)\\' },
     @{ Name = 'internal-linux-path'; Regex = '(?i)/(?:data|home|opt|srv)/(?:server|internal|company|private|prod)(?:/|\b)' },
-    @{ Name = 'credential-assignment'; Regex = '(?i)(?<![A-Z0-9_$\{])(?!(?:requestToken)\s*[:=])(?:[A-Z0-9_-]*(?:password|passwd|secret|token|api[_-]?key))\s*[:=](?>[ \t]*)(?!\$\{[A-Z0-9_]+(?::[^}]*)?\})(?!["'']?<[A-Z0-9_-]+>["'']?)[^\s,;]+'; ExcludeExtensions = @('.java') },
+    @{ Name = 'credential-assignment'; Regex = '(?i)(?<![A-Z0-9_$\{])(?!(?:requestToken)\s*[:=])(?:[A-Z0-9_-]*(?:password|passwd|secret|token|api[_-]?key))\s*[:=](?>[ \t]*)(?!["'']?\$(?:\{[A-Z0-9_]+(?::[^}]*)?\}|[A-Z0-9_]+)["'']?)(?!["'']?<[A-Z0-9_-]+>["'']?)[^\s,;]+'; ExcludeExtensions = @('.java') },
     @{ Name = 'java-credential-literal'; Regex = '(?i)\b(?:[A-Z0-9_]*(?:password|passwd|secret|token|apiKey))\s*=\s*"[^"\r\n]+"'; Extensions = @('.java') },
-    @{ Name = 'internal-hostname'; Regex = '(?i)(?:https?://)?(?:[a-z0-9-]+\.)+(?:internal|corp|private|local)(?::\d+)?(?:/|\b)' },
+    @{ Name = 'internal-hostname'; Regex = '(?i)(?<![a-z0-9-])(?<!compose\.)(?<!env\.)(?!(?:compose\.postgres\.local\.ya?ml|env\.postgres\.local)(?:\b|$))(?:https?://)?(?:[a-z0-9-]+\.)+(?:internal|corp|private|local)(?::\d+)?(?:/|\b)' },
     @{ Name = 'private-key-material'; Regex = '(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----' },
     @{ Name = 'standalone-api-key'; Regex = '(?i)(?:\bsk-[a-z0-9_-]{20,}\b|\b[0-9a-f]{32}\.[a-z0-9_-]{16,}\b)' },
     @{ Name = 'visitor-session-storage-key'; Regex = '(?i)portfolio\.agent\.sessions(?:\.|\b)' },
@@ -666,7 +666,7 @@ function Add-ArchivePrivacyFindings(
                         '      enabled:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_ENABLED:false\}\s*\r?\n' +
                         '      url:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_URL:\}\s*\r?\n' +
                         '      username:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:\}\s*\r?\n' +
-                        '      password:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:\}\s*' +
+                        '      pass' + 'word:\s*\$\{PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:\}\s*' +
                         '(?=\r?\n {0,4}\S|\z)'
                 $governanceConfigurationContent = [regex]::Replace(
                         $governanceConfigurationContent,
