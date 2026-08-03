@@ -514,7 +514,16 @@ describe('ConversationThread', () => {
         suggestedQuestionPresetIds: [],
         suggestedQuestions: [],
         portfolioRecommendation: {
-          recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+          recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          context: {
+            recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            contentVersion: 'public-2026-07-31',
+            careerTrack: null,
+            audienceRole: 'INTERVIEWER',
+            capabilityCodes: ['POSTGRESQL', 'RAG'],
+            requestedSize: 2,
+            selectedPortfolioIds: ['project-1', 'case-2'],
+          },
           items: [
             {
               portfolioId: 'project-1',
@@ -536,7 +545,7 @@ describe('ConversationThread', () => {
         },
         ...overrides,
       },
-    }
+    } as unknown as AgentMessage
   }
 
   it('does not render a recommendation container on a plain answer', () => {
@@ -563,7 +572,16 @@ describe('ConversationThread', () => {
     const wrapper = mountThread([
       recommendationMessage({
         portfolioRecommendation: {
-          recommendationBatchId: 'rec_empty_batch',
+          recommendationBatchId: 'rec_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          context: {
+            recommendationBatchId: 'rec_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+            contentVersion: 'public-2026-07-31',
+            careerTrack: null,
+            audienceRole: 'INTERVIEWER',
+            capabilityCodes: ['POSTGRESQL'],
+            requestedSize: 2,
+            selectedPortfolioIds: [],
+          },
           items: [],
           satisfiedConstraints: [],
           unsatisfiedConstraints: ['没有完全匹配的组合'],
@@ -598,7 +616,15 @@ describe('ConversationThread', () => {
     expect(wrapper.emitted('refineRecommendation')).toEqual([[
       {
         question: '换掉第二个',
-        recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+        recommendationContext: {
+          recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          contentVersion: 'public-2026-07-31',
+          careerTrack: null,
+          audienceRole: 'INTERVIEWER',
+          capabilityCodes: ['POSTGRESQL', 'RAG'],
+          requestedSize: 2,
+          selectedPortfolioIds: ['project-1', 'case-2'],
+        },
       },
     ]])
   })

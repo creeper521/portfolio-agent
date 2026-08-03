@@ -110,8 +110,21 @@ export interface PortfolioRecommendationItem {
   evidenceIds: string[]
 }
 
+export interface PortfolioRecommendationContext {
+  recommendationBatchId: string
+  contentVersion: string
+  careerTrack: string | null
+  audienceRole: string
+  capabilityCodes: string[]
+  requestedSize: number
+  selectedPortfolioIds: string[]
+}
+
+export type PortfolioRecommendationContextRequest = PortfolioRecommendationContext
+
 export interface PortfolioRecommendation {
   recommendationBatchId: string
+  context: PortfolioRecommendationContext
   items: PortfolioRecommendationItem[]
   satisfiedConstraints: string[]
   unsatisfiedConstraints: string[]
