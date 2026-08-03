@@ -122,6 +122,9 @@ class PortfolioTaskResolverTest {
 
         assertThat(resolver.matchesDeterministicRule("给面试官推荐两个 Java 后端作品")).isTrue();
         assertThat(resolver.matchesDeterministicRule("介绍这个项目")).isTrue();
+        assertThat(resolver.matchesDeterministicRule(
+                "请详细介绍 SQL 审计与故障排查工具项目：背景、职责、技术方案和验证过程"))
+                .isTrue();
         assertThat(resolver.matchesDeterministicRule("你好")).isFalse();
         assertThat(resolver.matchesDeterministicRule("今天 Java 最新版本是什么")).isFalse();
         assertThat(classifier.getInvocationCount()).isZero();

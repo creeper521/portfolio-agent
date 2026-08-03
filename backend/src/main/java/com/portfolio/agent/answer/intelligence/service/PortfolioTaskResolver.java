@@ -194,7 +194,7 @@ public final class PortfolioTaskResolver {
         if (containsAny(normalized, "推荐", "适合我的作品", "适合我展示")) {
             return PortfolioTaskMode.RECOMMENDATION;
         }
-        if (containsAny(normalized, "做了什么", "做过什么", "介绍这个项目", "介绍这个案例", "技术栈", "怎么实现")) {
+        if (containsAny(normalized, "做了什么", "做过什么", "详细介绍", "介绍这个项目", "介绍这个案例", "技术栈", "怎么实现")) {
             return PortfolioTaskMode.FACT_LOOKUP;
         }
         return null;
