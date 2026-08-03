@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -20,6 +21,9 @@ public final class ConversationAnswerRequest {
 
     @NotNull(message = "requestToken is required")
     private final UUID requestToken;
+
+    @Pattern(regexp = "[a-z0-9-]{1,100}", message = "questionPresetId format is invalid")
+    private final String questionPresetId;
 
     @NotBlank(message = "question is required")
     @Size(max = 2000, message = "question must not exceed 2000 characters")
@@ -38,15 +42,27 @@ public final class ConversationAnswerRequest {
     public ConversationAnswerRequest(
             @JsonProperty("turnId") String turnId,
             @JsonProperty("requestToken") UUID requestToken,
+            @JsonProperty("questionPresetId") String questionPresetId,
             @JsonProperty("question") String question,
             @JsonProperty("messages") List<ConversationMessageRequest> messages,
             @JsonProperty("context") ConversationAnswerContextRequest context
     ) {
         this.turnId = turnId;
         this.requestToken = requestToken;
+        this.questionPresetId = questionPresetId;
         this.question = question;
         this.messages = messages == null ? List.of() : List.copyOf(messages);
         this.context = context;
+    }
+
+    public ConversationAnswerRequest(
+            String turnId,
+            UUID requestToken,
+            String question,
+            List<ConversationMessageRequest> messages,
+            ConversationAnswerContextRequest context
+    ) {
+        this(turnId, requestToken, null, question, messages, context);
     }
 
     public ConversationAnswerRequest(
@@ -57,11 +73,12 @@ public final class ConversationAnswerRequest {
     ) {
         this(turnId, UUID.nameUUIDFromBytes(
                 String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                question, messages, context);
+                null, question, messages, context);
     }
 
     public String getTurnId() { return turnId; }
     public UUID getRequestToken() { return requestToken; }
+    public String getQuestionPresetId() { return questionPresetId; }
     public String getQuestion() { return question; }
     public List<ConversationMessageRequest> getMessages() { return messages; }
     public ConversationAnswerContextRequest getContext() { return context; }

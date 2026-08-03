@@ -8,6 +8,7 @@ import java.util.Objects;
 
 public final class PortfolioTaskClassification {
 
+    private final boolean portfolioRelevant;
     private final ConversationIntent boundaryIntent;
     private final PortfolioTaskMode mode;
     private final PortfolioConditions conditions;
@@ -16,12 +17,20 @@ public final class PortfolioTaskClassification {
 
     @JsonCreator
     public PortfolioTaskClassification(
+            @JsonProperty("portfolioRelevant") Boolean portfolioRelevant,
             @JsonProperty("boundaryIntent") ConversationIntent boundaryIntent,
             @JsonProperty("mode") PortfolioTaskMode mode,
             @JsonProperty("conditions") PortfolioConditions conditions,
             @JsonProperty("refinement") PortfolioRefinement refinement,
             @JsonProperty("confidence") double confidence) {
-        if ((boundaryIntent == null) == (mode == null)) {
+        this.portfolioRelevant = portfolioRelevant == null
+                ? boundaryIntent != null || mode != null
+                : portfolioRelevant;
+        if (!this.portfolioRelevant && (boundaryIntent != null || mode != null)) {
+            throw new IllegalArgumentException(
+                    "not-portfolio classification cannot carry boundaryIntent or mode");
+        }
+        if (this.portfolioRelevant && (boundaryIntent == null) == (mode == null)) {
             throw new IllegalArgumentException(
                     "exactly one of boundaryIntent or mode is required");
         }
@@ -47,12 +56,28 @@ public final class PortfolioTaskClassification {
     }
 
     public PortfolioTaskClassification(
+            ConversationIntent boundaryIntent,
             PortfolioTaskMode mode,
             PortfolioConditions conditions,
             PortfolioRefinement refinement,
             double confidence) {
-        this(null, mode, conditions, refinement, confidence);
+        this(true, boundaryIntent, mode, conditions, refinement, confidence);
     }
+
+    public PortfolioTaskClassification(
+            PortfolioTaskMode mode,
+            PortfolioConditions conditions,
+            PortfolioRefinement refinement,
+            double confidence) {
+        this(true, null, mode, conditions, refinement, confidence);
+    }
+
+    public static PortfolioTaskClassification notPortfolio(double confidence) {
+        return new PortfolioTaskClassification(
+                false, null, null, PortfolioConditions.empty(), null, confidence);
+    }
+
+    public boolean isPortfolioRelevant() { return portfolioRelevant; }
 
     public ConversationIntent getBoundaryIntent() {
         return boundaryIntent;
@@ -82,7 +107,8 @@ public final class PortfolioTaskClassification {
         if (!(other instanceof PortfolioTaskClassification classification)) {
             return false;
         }
-        return Double.compare(confidence, classification.confidence) == 0
+        return portfolioRelevant == classification.portfolioRelevant
+                && Double.compare(confidence, classification.confidence) == 0
                 && boundaryIntent == classification.boundaryIntent
                 && mode == classification.mode
                 && Objects.equals(conditions, classification.conditions)
@@ -91,12 +117,13 @@ public final class PortfolioTaskClassification {
 
     @Override
     public int hashCode() {
-        return Objects.hash(boundaryIntent, mode, conditions, refinement, confidence);
+        return Objects.hash(portfolioRelevant, boundaryIntent, mode, conditions, refinement, confidence);
     }
 
     @Override
     public String toString() {
-        return "PortfolioTaskClassification{" + "boundaryIntent=" + boundaryIntent
+        return "PortfolioTaskClassification{" + "portfolioRelevant=" + portfolioRelevant
+                + ", boundaryIntent=" + boundaryIntent
                 + ", mode=" + mode
                 + ", confidence=" + confidence
                 + ", conditions=" + conditions

@@ -85,17 +85,24 @@ public final class PortfolioTaskResolver {
             PortfolioRecommendationContext recommendationContext,
             boolean providerAllowed) {
         PortfolioTaskMode ruleMode = resolveRule(question);
-        PortfolioTaskClassification classification = providerAllowed
-                ? classify(turnId, question, recommendationContext)
-                : null;
+        if (ruleMode != null) {
+            return PortfolioTaskRoutingDecision.task(resolveRuleTask(
+                    turnId, question, recommendationContext, ruleMode));
+        }
+        if (!providerAllowed) {
+            return PortfolioTaskRoutingDecision.notPortfolio();
+        }
+        PortfolioTaskClassification classification = classify(
+                turnId, question, recommendationContext);
+        if (classification != null
+                && !classification.isPortfolioRelevant()
+                && classification.getConfidence() >= confidenceThreshold) {
+            return PortfolioTaskRoutingDecision.notPortfolio();
+        }
         if (classification != null
                 && classification.getBoundaryIntent() != null
                 && classification.getConfidence() >= confidenceThreshold) {
             return PortfolioTaskRoutingDecision.boundary(classification.getBoundaryIntent());
-        }
-        if (ruleMode != null) {
-            return PortfolioTaskRoutingDecision.task(resolveRuleTask(
-                    turnId, question, recommendationContext, ruleMode));
         }
         if (classification == null
                 || classification.getBoundaryIntent() != null

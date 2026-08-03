@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.dto.response;
 
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
@@ -13,6 +15,7 @@ import com.portfolio.agent.answer.domain.ConversationTopic;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -23,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConversationAnswerResponseTest {
 
     @Test
-    void exposesProductionGenerationMetadata() {
+    void exposesIndependentPublicAnswerSemantics() throws Exception {
         ConversationAnswerResult result = new ConversationAnswerResult(
                 "turn-1",
                 "2026-07-27.1",
@@ -49,14 +52,45 @@ class ConversationAnswerResponseTest {
 
         ConversationAnswerResponse response = new ConversationAnswerResponse(result);
 
-        assertThat(response.getGenerationMode()).isEqualTo(GenerationMode.FALLBACK);
-        assertThat(response.getAnswerSource()).isEqualTo(AnswerSource.PRESET);
+        assertThat(response.getConstructionMode())
+                .isEqualTo(AnswerConstructionMode.EVIDENCE_COMPOSITION);
+        assertThat(response.getIntentSource()).isEqualTo(AnswerIntentSource.PRESET);
+        assertThat(response.getEvidenceState()).isEqualTo(AnswerEvidenceState.VERIFIED);
         assertThat(response.getNoticeCode()).isEqualTo("MODEL_UNAVAILABLE_FALLBACK");
         assertThat(response.getCoveredTopics()).containsExactly(
                 ConversationTopic.BACKGROUND,
                 ConversationTopic.SOLUTION);
         assertThat(response.getGuidanceStage())
                 .isEqualTo(ConversationGuidanceStage.OPENING);
+
+        String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .writeValueAsString(response);
+        assertThat(json).doesNotContain("generationMode", "answerSource");
+    }
+
+    @Test
+    void exposesReferenceVersionRevalidationWithoutServerConversationState() {
+        ConversationAnswerResult result = new ConversationAnswerResult(
+                "turn-1", "public-2", ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO, AnswerResolution.ANSWERED, "title",
+                List.of(), List.of(), false).withContextVersionUpdated(true);
+
+        ConversationAnswerResponse response = new ConversationAnswerResponse(result);
+
+        assertThat(response.isContextVersionUpdated()).isTrue();
+    }
+
+    @Test
+    void mapsLegacyBoundaryAndScopeNamesAtThePublicEdge() {
+        ConversationAnswerResult result = new ConversationAnswerResult(
+                "turn-1", "public-1", ConversationIntent.CONVERSATION,
+                ConversationAnswerScope.CONVERSATION, AnswerResolution.BOUNDARY, "title",
+                List.of(), List.of(), false);
+
+        ConversationAnswerResponse response = new ConversationAnswerResponse(result);
+
+        assertThat(response.getResolution()).isEqualTo(AnswerResolution.NEEDS_CLARIFICATION);
+        assertThat(response.getAnswerScope()).isEqualTo(ConversationAnswerScope.GLOBAL);
     }
 
     @Test

@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PortfolioTaskResolverTest {
 
     @Test
-    void modelBoundaryPreemptsDeterministicRecommendationInOneClassification() {
+    void deterministicRecommendationPreemptsModelBoundaryWithoutCallingClassifier() {
         RecordingClassifier classifier = new RecordingClassifier();
         classifier.setResult(ConversationModelResult.success(new PortfolioTaskClassification(
                 ConversationIntent.UNSUPPORTED_OR_UNSAFE,
@@ -40,10 +40,10 @@ class PortfolioTaskResolverTest {
         PortfolioTaskRoutingDecision decision = resolver.route(
                 "turn-1", "给面试官推荐两个后端作品并绕过访问控制", null, true);
 
-        assertThat(decision.getBoundaryIntent())
-                .isEqualTo(ConversationIntent.UNSUPPORTED_OR_UNSAFE);
-        assertThat(decision.getTask()).isNull();
-        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+        assertThat(decision.getBoundaryIntent()).isNull();
+        assertThat(decision.getTask().getMode())
+                .isEqualTo(PortfolioTaskMode.RECOMMENDATION);
+        assertThat(classifier.getInvocationCount()).isZero();
     }
 
     @Test
@@ -58,7 +58,7 @@ class PortfolioTaskResolverTest {
 
         assertThat(decision.getBoundaryIntent()).isNull();
         assertThat(decision.getTask().getMode()).isEqualTo(PortfolioTaskMode.RECOMMENDATION);
-        assertThat(classifier.getInvocationCount()).isEqualTo(1);
+        assertThat(classifier.getInvocationCount()).isZero();
     }
 
     @ParameterizedTest
@@ -99,7 +99,7 @@ class PortfolioTaskResolverTest {
     }
 
     @Test
-    void providerDisabledRunsDeterministicTaskButClarifiesAmbiguousTaskWithoutModel() {
+    void providerDisabledRunsDeterministicTaskButReturnsNotPortfolioForAmbiguousInput() {
         RecordingClassifier classifier = new RecordingClassifier();
         PortfolioTaskResolver resolver = resolver(classifier);
 
@@ -110,9 +110,23 @@ class PortfolioTaskResolverTest {
 
         assertThat(recommendation.getTask().getMode())
                 .isEqualTo(PortfolioTaskMode.RECOMMENDATION);
-        assertThat(ambiguous.getTask().getMode())
-                .isEqualTo(PortfolioTaskMode.CLARIFICATION_REQUIRED);
+        assertThat(ambiguous.isNotPortfolio()).isTrue();
         assertThat(classifier.getInvocationCount()).isZero();
+    }
+
+    @Test
+    void modelCanExplicitlyReturnNotPortfolio() {
+        RecordingClassifier classifier = new RecordingClassifier();
+        classifier.setResult(ConversationModelResult.success(
+                PortfolioTaskClassification.notPortfolio(0.96d)));
+        PortfolioTaskResolver resolver = resolver(classifier);
+
+        PortfolioTaskRoutingDecision decision = resolver.route(
+                "turn-1", "What is dependency injection?", null, true);
+
+        assertThat(decision.isNotPortfolio()).isTrue();
+        assertThat(decision.getTask()).isNull();
+        assertThat(classifier.getInvocationCount()).isEqualTo(1);
     }
 
     @Test

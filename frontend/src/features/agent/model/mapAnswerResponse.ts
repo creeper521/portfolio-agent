@@ -44,6 +44,9 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     resolution: response.resolution,
     answerSource: response.answerSource ?? null,
     generationMode: response.generationMode,
+    constructionMode: response.constructionMode ?? legacyConstructionMode(response),
+    intentSource: response.intentSource ?? legacyIntentSource(response),
+    evidenceState: response.evidenceState ?? legacyEvidenceState(response),
     verification: response.verification,
     evidenceIds: [...evidenceIds],
     suggestedQuestionPresetIds: [...(response.suggestedQuestionPresetIds || [])],
@@ -60,17 +63,40 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     coveredTopics: [...new Set(response.coveredTopics ?? [])],
     guidanceStage: response.guidanceStage ?? null,
     degraded: response.degraded === true,
-    contextEnvelope: response.contextEnvelope
+    referenceContext: response.referenceContext
       ? {
-          ...response.contextEnvelope,
-          projectSlugs: response.contextEnvelope.projectSlugs ? [...response.contextEnvelope.projectSlugs] : undefined,
-          caseSlugs: response.contextEnvelope.caseSlugs ? [...response.contextEnvelope.caseSlugs] : undefined,
-          referencedClaimIds: [...response.contextEnvelope.referencedClaimIds],
+          ...response.referenceContext,
+          projectSlugs: response.referenceContext.projectSlugs ? [...response.referenceContext.projectSlugs] : undefined,
+          caseSlugs: response.referenceContext.caseSlugs ? [...response.referenceContext.caseSlugs] : undefined,
+          referencedClaimIds: [...response.referenceContext.referencedClaimIds],
         }
       : undefined,
     contextVersionUpdated: response.contextVersionUpdated === true,
     portfolioRecommendation,
   }
+}
+
+function legacyConstructionMode(response: AnswerResponse) {
+  if (response.generationMode === 'MODEL') {
+    return response.answerSource === undefined ? 'GENERAL_MODEL' as const : 'MODEL_GROUNDED' as const
+  }
+  return response.answerSource === undefined ? 'TEMPLATE' as const : 'EVIDENCE_COMPOSITION' as const
+}
+
+function legacyIntentSource(response: AnswerResponse) {
+  if (response.answerSource === 'PRESET') return 'PRESET' as const
+  if (response.answerSource !== undefined) return 'RULE' as const
+  return 'GLOBAL' as const
+}
+
+function legacyEvidenceState(response: AnswerResponse) {
+  if (response.resolution === 'NOT_SUPPORTED') return 'INSUFFICIENT' as const
+  const evidenceIds = response.evidenceIds ?? response.blocks?.flatMap((block) => block.evidenceIds) ?? []
+  if (evidenceIds.length > 0) return 'VERIFIED' as const
+  if (response.answerScope === 'PORTFOLIO'
+    || response.answerScope === 'MIXED'
+    || response.answerScope === 'HYBRID') return 'INSUFFICIENT' as const
+  return 'NOT_REQUIRED' as const
 }
 
 // 小型运行时校验：不引入新 schema 库。

@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+
+import java.util.List;
 import java.util.Objects;
 
 public final class PortfolioTask {
@@ -12,6 +15,7 @@ public final class PortfolioTask {
     private final PortfolioRecommendationContext recommendationContext;
     private final PortfolioRefinement refinement;
     private final String subjectId;
+    private final List<AnswerClaimCategory> preferredClaimCategories;
 
     public PortfolioTask(
             String turnId,
@@ -22,7 +26,7 @@ public final class PortfolioTask {
             PortfolioRecommendationContext recommendationContext,
             PortfolioRefinement refinement) {
         this(turnId, question, mode, confidence, conditions,
-                recommendationContext, refinement, null);
+                recommendationContext, refinement, null, List.of());
     }
 
     public PortfolioTask(
@@ -34,6 +38,20 @@ public final class PortfolioTask {
             PortfolioRecommendationContext recommendationContext,
             PortfolioRefinement refinement,
             String subjectId) {
+        this(turnId, question, mode, confidence, conditions,
+                recommendationContext, refinement, subjectId, List.of());
+    }
+
+    public PortfolioTask(
+            String turnId,
+            String question,
+            PortfolioTaskMode mode,
+            double confidence,
+            PortfolioConditions conditions,
+            PortfolioRecommendationContext recommendationContext,
+            PortfolioRefinement refinement,
+            String subjectId,
+            List<AnswerClaimCategory> preferredClaimCategories) {
         this.turnId = requireText(turnId, "turnId");
         this.question = requireText(question, "question");
         this.mode = Objects.requireNonNull(mode, "mode");
@@ -45,6 +63,8 @@ public final class PortfolioTask {
         this.recommendationContext = recommendationContext;
         this.refinement = refinement;
         this.subjectId = normalizeText(subjectId);
+        this.preferredClaimCategories = List.copyOf(Objects.requireNonNull(
+                preferredClaimCategories, "preferredClaimCategories"));
     }
 
     public String getTurnId() { return turnId; }
@@ -55,6 +75,9 @@ public final class PortfolioTask {
     public PortfolioRecommendationContext getRecommendationContext() { return recommendationContext; }
     public PortfolioRefinement getRefinement() { return refinement; }
     public String getSubjectId() { return subjectId; }
+    public List<AnswerClaimCategory> getPreferredClaimCategories() {
+        return preferredClaimCategories;
+    }
 
     @Override
     public boolean equals(Object other) {
@@ -67,13 +90,14 @@ public final class PortfolioTask {
                 && Objects.equals(conditions, that.conditions)
                 && Objects.equals(recommendationContext, that.recommendationContext)
                 && Objects.equals(refinement, that.refinement)
-                && Objects.equals(subjectId, that.subjectId);
+                && Objects.equals(subjectId, that.subjectId)
+                && Objects.equals(preferredClaimCategories, that.preferredClaimCategories);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(turnId, question, mode, confidence, conditions,
-                recommendationContext, refinement, subjectId);
+                recommendationContext, refinement, subjectId, preferredClaimCategories);
     }
 
     @Override

@@ -1,37 +1,39 @@
 import type { MappedAnswer } from './answerTypes'
 
-// 回答元信息的人话标签：Agent 对话与首页轻回答共用同一套分层。
-// 人话状态做视觉重点，技术枚举由 answerTechTail 降级为尾注。
-// 所有函数接受空值并返回空串，由调用方决定缺省时是否渲染。
-
 type AnswerLabelInput = Pick<
   MappedAnswer,
   | 'intent'
   | 'answerScope'
   | 'resolution'
-  | 'answerSource'
-  | 'generationMode'
-  | 'verification'
+  | 'intentSource'
+  | 'constructionMode'
+  | 'evidenceState'
   | 'degraded'
 >
 
 export function answerStatusLabel(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
   if (answer.intent === 'TIME_SENSITIVE') return '暂时不可用'
-  if (answer.intent === 'UNSUPPORTED_OR_UNSAFE') return '无法处理该请求'
-  if (answer.resolution === 'BOUNDARY') return '当前能力边界'
-  if (answer.resolution === 'REJECTED') return '无法处理该请求'
+  if (answer.intent === 'UNSUPPORTED_OR_UNSAFE' || answer.resolution === 'REJECTED') {
+    return '无法处理该请求'
+  }
+  if (answer.resolution === 'NEEDS_CLARIFICATION' || answer.resolution === 'BOUNDARY') {
+    return '需要补充信息'
+  }
+  if (answer.resolution === 'NOT_SUPPORTED') return '当前公开证据不足'
+  if (answer.resolution === 'CAPABILITY_UNAVAILABLE') return '服务暂不可用'
   if (answer.intent) return '回答'
-  if (answer.verification === 'VERIFIED') return '已核验回答'
-  if (answer.verification === 'PARTIALLY_VERIFIED') return '部分事实已核验'
-  return '尚未核验'
+  if (answer.evidenceState === 'VERIFIED') return '已验证回答'
+  if (answer.evidenceState === 'INSUFFICIENT') return '当前公开证据不足'
+  return '回答'
 }
 
 export function answerScopeTag(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
   if (answer.answerScope === 'GENERAL') return '通用知识'
   if (answer.answerScope === 'PORTFOLIO') return '作品集资料'
-  if (answer.answerScope === 'HYBRID') return '混合回答'
+  if (answer.answerScope === 'MIXED' || answer.answerScope === 'HYBRID') return '混合回答'
+  if (answer.answerScope === 'GLOBAL' || answer.answerScope === 'CONVERSATION') return '通用对话'
   return ''
 }
 
@@ -41,37 +43,37 @@ export function blockScopeTag(scope: 'GENERAL' | 'PORTFOLIO'): string {
 
 export function answerSourceTag(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
-  if (answer.answerSource === 'RETRIEVAL') return '资料检索'
-  if (answer.answerSource === 'PRESET') return '预设问题'
+  if (answer.intentSource === 'PRESET') return '预设问题'
+  if (answer.intentSource === 'REFERENCE') return '引用追问'
+  if (answer.intentSource === 'RULE') return '规则识别'
+  if (answer.intentSource === 'MODEL') return '模型识别'
   return ''
 }
 
 export function answerVerificationTag(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
-  if (answer.verification === 'VERIFIED') return '已核验'
-  if (answer.verification === 'PARTIALLY_VERIFIED') return '部分核验'
-  if (answer.verification === 'UNVERIFIED') return '未核验'
+  if (answer.evidenceState === 'VERIFIED') return '已验证证据'
+  if (answer.evidenceState === 'INSUFFICIENT') return '证据不足'
   return ''
 }
 
 export function answerGenerationTag(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
   if (answer.resolution === 'REJECTED') return '拒答'
-  if (answer.degraded || answer.generationMode === 'FALLBACK') return '降级回答'
-  if (answer.answerSource === 'RETRIEVAL' || answer.answerSource === 'TOOL') return '检索增强'
-  if (answer.generationMode === 'MODEL') return '模型生成'
-  if (answer.generationMode === 'DETERMINISTIC') return '确定性回答'
+  if (answer.degraded) return '降级回答'
+  if (answer.constructionMode === 'EVIDENCE_COMPOSITION') return '确定性组装'
+  if (answer.constructionMode === 'MODEL_GROUNDED') return '基于证据表达'
+  if (answer.constructionMode === 'GENERAL_MODEL') return '模型回答'
+  if (answer.constructionMode === 'TEMPLATE') return '确定性模板'
   return ''
 }
 
-// 技术枚举尾注：resolution + generationMode，价值低，降级展示
 export function answerTechTail(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
-  return [answer.resolution, answer.generationMode].filter(Boolean).join(' · ')
+  return [answer.resolution, answer.constructionMode].filter(Boolean).join(' · ')
 }
 
 export function degradedNotice(answer: AnswerLabelInput | null | undefined): string {
-  if (!answer) return ''
-  if (!answer.degraded && answer.generationMode !== 'FALLBACK') return ''
+  if (!answer?.degraded) return ''
   return '已切换到基础回答'
 }

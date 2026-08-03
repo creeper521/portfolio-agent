@@ -2,13 +2,14 @@ package com.portfolio.agent.answer.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationTopic;
-import com.portfolio.agent.answer.domain.AnswerSource;
-import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 
 import java.util.List;
 
@@ -23,19 +24,21 @@ public final class ConversationAnswerResponse {
     private final List<ConversationAnswerBlockResponse> blocks;
     private final List<ConversationSuggestedQuestionResponse> suggestedQuestions;
     private final boolean degraded;
-    private final GenerationMode generationMode;
-    private final AnswerSource answerSource;
+    private final AnswerConstructionMode constructionMode;
+    private final AnswerIntentSource intentSource;
+    private final AnswerEvidenceState evidenceState;
     private final String noticeCode;
     private final List<ConversationTopic> coveredTopics;
     private final ConversationGuidanceStage guidanceStage;
     private final PortfolioRecommendationResponse portfolioRecommendation;
+    private final boolean contextVersionUpdated;
 
     public ConversationAnswerResponse(ConversationAnswerResult result) {
         this.turnId = result.getTurnId();
         this.contentVersion = result.getContentVersion();
         this.intent = result.getIntent();
-        this.answerScope = result.getAnswerScope();
-        this.resolution = result.getResolution();
+        this.answerScope = publicScope(result.getAnswerScope());
+        this.resolution = publicResolution(result.getResolution());
         this.title = result.getTitle();
         this.blocks = result.getBlocks().stream()
                 .map(ConversationAnswerBlockResponse::from)
@@ -44,14 +47,16 @@ public final class ConversationAnswerResponse {
                 .map(ConversationSuggestedQuestionResponse::from)
                 .toList();
         this.degraded = result.isDegraded();
-        this.generationMode = result.getGenerationMode();
-        this.answerSource = result.getAnswerSource();
+        this.constructionMode = result.getConstructionMode();
+        this.intentSource = result.getIntentSource();
+        this.evidenceState = result.getEvidenceState();
         this.noticeCode = result.getNoticeCode();
         this.coveredTopics = result.getProgress().getCoveredTopics();
         this.guidanceStage = result.getProgress().getStage();
         this.portfolioRecommendation = result.getPortfolioRecommendation() == null
                 ? null
                 : PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+        this.contextVersionUpdated = result.isContextVersionUpdated();
     }
 
     public String getTurnId() { return turnId; }
@@ -65,13 +70,30 @@ public final class ConversationAnswerResponse {
         return suggestedQuestions;
     }
     public boolean isDegraded() { return degraded; }
-    public GenerationMode getGenerationMode() { return generationMode; }
-    public AnswerSource getAnswerSource() { return answerSource; }
+    public AnswerConstructionMode getConstructionMode() { return constructionMode; }
+    public AnswerIntentSource getIntentSource() { return intentSource; }
+    public AnswerEvidenceState getEvidenceState() { return evidenceState; }
     public String getNoticeCode() { return noticeCode; }
     public List<ConversationTopic> getCoveredTopics() { return coveredTopics; }
     public ConversationGuidanceStage getGuidanceStage() { return guidanceStage; }
+    public boolean isContextVersionUpdated() { return contextVersionUpdated; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public PortfolioRecommendationResponse getPortfolioRecommendation() {
         return portfolioRecommendation;
     }
+
+    private static AnswerResolution publicResolution(AnswerResolution resolution) {
+        return resolution == AnswerResolution.BOUNDARY
+                ? AnswerResolution.NEEDS_CLARIFICATION
+                : resolution;
+    }
+
+    private static ConversationAnswerScope publicScope(ConversationAnswerScope scope) {
+        return switch (scope) {
+            case CONVERSATION -> ConversationAnswerScope.GLOBAL;
+            case HYBRID -> ConversationAnswerScope.MIXED;
+            case GENERAL, PORTFOLIO, GLOBAL, MIXED -> scope;
+        };
+    }
+
 }

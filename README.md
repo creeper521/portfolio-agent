@@ -16,14 +16,14 @@
 - 首页轻问答、Agent 真实 API 接线、错误重试、页面内存会话和响应式抽屉
 - 请求关联 ID、结构化生产日志、封闭错误码和默认关闭的前端诊断入口
 - 单个可执行 JAR、Docker 构建定义和 packaged-JAR Playwright 联调
-- 可选的 DeepSeek V4 Flash 或 GLM-4.7 单 Provider 表达；只接收公开 `AnswerPlan`，完整校验失败即整轮确定性回退
+- 可选的 DeepSeek V4 Flash 或 GLM-4.7 单 Provider；用于受约束分类、通用对话或基于已验证公开材料的表达，完整校验失败即安全降级
 - 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；随包使用 `retrieval-policy-v2.1-query-risk`，文档向量在发布期生成，访客查询只在本机向量化
 - 固定六类只读公开工具与页面内存引用式多轮；只传稳定公开 ID 和意图，不传历史问答正文
 - 默认关闭的 PostgreSQL/pgvector 双库：公开运行库只读 active release，私有治理库负责显式 Markdown 扫描与增量导入
 - Agent 内部确定性资产组合推荐：PostgreSQL 候选召回、2～5 项受约束组合、迁移完整度和 R0～R4 同口径基准
 - 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 
-默认配置不连接大模型。即使显式启用 C1，外部 Provider 也只接收从已批准公开内容构建的白名单 `AnswerPlan`，不接收访客原问题、会话、`turnId`、`requestId` 或私有知识。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
+默认配置不连接大模型。显式启用后，外部 Provider 可接收本轮问题用于受约束分类或通用对话，也可接收由已批准公开材料构建的表达输入；不会接收历史回答正文、`turnId`、`requestId`、检索词项、向量、内部工具数据或私有知识。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
 
 ## 环境要求
 
@@ -50,7 +50,12 @@ npm.cmd --prefix frontend ci
 mvn.cmd -f backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-`local` Profile 输出便于本机阅读的文本日志；生产运行使用结构化 JSON 日志。生产制品构建完成后，
+`local` Profile 输出便于本机阅读的文本日志，并在仓库根目录创建 `logs/current/`。直接从 IntelliJ、
+Maven 启动或使用 `scripts/start-local.ps1` 都遵守同一路径规则：Logback 独占
+`backend-info.log`、`backend-error.log`，启动器独占 `frontend-info.log`、
+`frontend-error.log`、`launcher.log`。可用仓库外绝对路径 `PORTFOLIO_LOG_DIRECTORY` 显式覆盖；
+自动定位要求同一目录包含 `.git`、`backend/pom.xml` 与 `frontend/package.json`。日志目录已被 Git
+忽略，可用 `scripts/watch-local-logs.ps1` 跟踪。生产运行使用结构化 JSON 日志。生产制品构建完成后，
 显式启用 `prod` Profile 再启动：
 
 ```powershell
@@ -80,8 +85,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 Secret 文件必须位于仓库外，内容为受限 `KEY=VALUE` 格式，并同时提供四个批准开关、
 `PORTFOLIO_MODEL_PROVIDER` 和所选 Provider 对应的密钥。脚本在创建子进程前检查
 Java 21、Maven、Node、前端依赖与端口，只把白名单变量注入本次后端进程。只有固定公开
-问题得到 `generationMode=MODEL`、`degraded=false`、`resolution=ANSWERED` 且包含
-回答块时才输出 `AI_CONNECTED`；否则服务保持运行并输出
+问题得到 `intentSource=MODEL`、`constructionMode=EVIDENCE_COMPOSITION`、
+`evidenceState=VERIFIED`、`degraded=false`、`resolution=ANSWERED` 且包含回答块时才输出
+`AI_CONNECTED`；否则服务保持运行并输出
 `AI_DEGRADED:<安全类别>`。仅检查配置可增加 `-CheckOnly`。
 
 DeepSeek V4 Flash：
@@ -114,9 +120,9 @@ $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = "true"
 $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = "true"
 ```
 
-任一开关、审批、兼容 Registry 或所选 Provider 密钥缺失时，v2 都 fail-closed：问候和可匹配的已发布作品集预设仍可确定性降级，其余自由问题明确返回能力边界。关闭 `PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED` 即可单独回滚 v2，不影响 `/api/v1/answers`。
+任一开关、审批、兼容 Registry 或所选 Provider 密钥缺失时，v2 都 fail-closed：问候、正式预设、高精度规则和本地公开检索仍可确定性执行；必须依赖通用模型的自由问题返回 `CAPABILITY_UNAVAILABLE`。当前不再存在 `/api/v1/answers` 回退入口，回滚按模型、数据库或检索能力分别关闭。
 
-### Agent V1 生产保护
+### Agent v2 生产保护
 
 `POST /api/v2/answers` 使用稳定的单次 JSON 响应。每次请求必须携带 UUID
 `requestToken`；同一匿名来源和令牌在 2 分钟内复用同一执行结果，避免重复调用
@@ -124,8 +130,8 @@ Provider。默认每个匿名来源每分钟最多 10 次请求、最多 2 个�
 `429`，并在 `Retry-After` 响应头和错误 JSON 中给出重试秒数。
 
 默认时间预算为 Provider 8 秒、后端总处理 12 秒、Agent 前端 15 秒。前端支持主动取消，
-失败重试复用原令牌。回答 JSON 明确返回 `resolution`、`generationMode`、
-`answerSource`、`degraded` 和 `noticeCode`；Provider 不可用或输出为空、超长、结构非法、
+失败重试复用原令牌。回答 JSON 明确返回 `resolution`、`answerScope`、
+`constructionMode`、`intentSource`、`evidenceState`、`degraded` 和 `noticeCode`；Provider 不可用或输出为空、超长、结构非法、
 缺少公开引用时，不展示不完整模型结果，而是返回可用的确定性降级回答或明确能力边界。
 
 可通过以下服务端环境变量调整生产预算：
@@ -165,15 +171,15 @@ $env:PORTFOLIO_RETRIEVAL_PROFILE = "HYBRID"
 $env:PORTFOLIO_RETRIEVAL_MODEL_DIR = "<local-model-directory>"
 ```
 
-`DISABLED` 是默认值；`KEYWORD_ONLY` 只用于显式开发诊断。Preset 始终优先并跳过检索。自由问题只有通过 Grounding Gate 才返回 `ANSWERED + RETRIEVAL`，否则保持安全 `BOUNDARY`。查询、词项、向量、分数和候选不写日志、不持久化，也不发送给 DeepSeek、GLM 或任何外部 Embedding Provider。
+`DISABLED` 是默认值；`KEYWORD_ONLY` 只用于显式开发诊断。正式 Preset 和主体约束仍经过统一的相关性与证据充分性校验。自由问题只有通过 Grounding Gate 才返回 `ANSWERED + VERIFIED`，材料不足返回 `NOT_SUPPORTED + INSUFFICIENT`。查询、词项、向量、分数和候选不写日志、不持久化，也不发送给 DeepSeek、GLM 或任何外部 Embedding Provider。
 
 C2 候选先在仓库外私有工作区运行 `scripts/build-retrieval-bundle.ps1` 生成 canonical `rag-documents.jsonl`，再进行人工 review/Approval。服务器发布端逐字节复核已批准 RAG，只派生 keyword/vector 索引；候选不得携带预构建索引。
 
-### C2b 固定只读工具与引用式多轮
+### 显式引用式多轮
 
-后端只允许 `getProject`、`getClaims`、`getEvidenceForClaims`、`getTimeline`、`searchPublicContent` 和 `compareProjects` 六类固定读操作。`ToolPlan` 在模型调用前由服务端根据封闭 `FollowUpIntent` 确定，最多四次调用，全部读取同一个 `RuntimeAnswerContent`；工具不能访问文件系统、网络、私有治理目录或写接口，模型只接收最终白名单 `AnswerPlan`。
+旧 `ToolPlan`、`FollowUpIntent` 和 `ContextEnvelope` 决策链已删除。现在由 `PortfolioIntelligence` 校验显式 `PortfolioReferenceContext`，并通过 `PortfolioRetrievalPlanner` 生成受控检索请求。只有用户点击回答上的结构化追问按钮时才发送引用上下文；普通自由输入不会继承上一条回答的引用。
 
-前端只有在回答返回 `ContextEnvelope` 时才展示追问操作。Envelope 只包含当前公开内容版本、Project/Claim/Preset/Section 稳定引用和追问意图；不包含历史问题、回答正文、会话、身份或 Provider thread。刷新后引用式上下文随页面内存会话一起消失；内容版本变化时重新按稳定 ID 核对并明确提示，引用失效则返回 `BOUNDARY`。
+引用只包含公开内容版本、Project/Case/Claim/Preset/Section 稳定引用和封闭 `followUpAction`，不包含历史问题、回答正文、身份或 Provider thread。刷新后引用随页面内存会话清空；内容版本变化时按当前公开快照重新校验，引用仍有效则返回 `contextVersionUpdated=true`，引用失效则返回 `NEEDS_CLARIFICATION`。
 
 ### PostgreSQL 公开运行库与私有治理库（默认关闭）
 
@@ -305,11 +311,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - `GET /api/v1/projects/{slug}`：项目详情
 - `GET /api/v1/cases`：公开案例摘要列表
 - `GET /api/v1/cases/{slug}`：公开案例详情
-- `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
 - `POST /api/v2/answers`：唯一公开 Agent 入口；支持自然交流、通用知识、作品集检索、比较、推荐和动态追问。对话与推荐上下文由当前标签页内存随请求传入，刷新即清空，后端不保存会话状态
 - `POST /api/v1/client-diagnostics`：默认关闭的前端诊断批量入口，只接受封闭且不持久化的事件契约
 
-`GET /api/v1/public-content` 提供顶层 `cases`、`collections` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已经实现 `/cases`、`/cases/:slug`、旧项目地址规范重定向和 Case → Agent 交接；剩余缺口是生产部署、线上数据验证和完整生产验收。
+`GET /api/v1/public-content` 提供顶层 `cases`、`collections` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v2/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一及可选 `referenceContext`。`source=CASE` 时 Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已经实现 `/cases`、`/cases/:slug`、旧项目地址规范重定向和 Case → Agent 交接；剩余缺口是生产部署、线上数据验证和完整生产验收。
 
 除浏览器诊断入口外，公开 API 只读取版本化 JSON 快照，不读取私有知识库，也不保存访客问题。
 `POST /api/v1/client-diagnostics` 是只读公开端点的唯一例外：它只接受封闭、限流且不持久化的
@@ -335,7 +340,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 }
 ```
 
-响应以 `intent` 区分 `CONVERSATION`、`GENERAL_KNOWLEDGE`、`PORTFOLIO_GROUNDED`、`HYBRID`、`TIME_SENSITIVE` 和 `UNSUPPORTED_OR_UNSAFE`；`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端已接入 v2，Case 页面流程和 packaged-JAR 本地联调已完成；生产验收仍未完成。
+响应使用 `ANSWERED / NEEDS_CLARIFICATION / NOT_SUPPORTED / CAPABILITY_UNAVAILABLE / REJECTED` 区分结果，使用 `GLOBAL / GENERAL / PORTFOLIO / MIXED` 区分范围，并分别返回构造方式、意图来源和证据状态。`blocks[].sourceScope` 明确标记 `GENERAL` 或 `PORTFOLIO`，作品集 block 同时返回 Claim/Evidence ID。`suggestedQuestions` 是本轮动态生成且经可回答性校验的 0～3 个问题。前端已接入 v2，Case 页面流程和 packaged-JAR 本地联调已完成；生产验收仍未完成。
 
 ## 目录结构
 
@@ -370,11 +375,12 @@ selection/adapter|benchmark|controller|domain|dto|gateway|mapper|service
 当前模块通信通过 Java Gateway 接口在同一进程内完成：
 
 ```text
-AnswerService
-→ PortfolioKnowledgeGateway
-→ LocalPortfolioKnowledgeAdapter
-→ PublicPortfolioRepository
-→ JsonPublicPortfolioRepository（默认）或 PostgresPublicPortfolioRepository（显式启用）
+ConversationAnswerController
+→ ProductionConversationService
+→ ConversationalAgentRuntime（全局安全/通用对话）
+→ PortfolioIntelligence.tryResolve（作品集唯一语义入口）
+→ PortfolioRetriever
+→ Bundle（默认）或 PostgreSQL 主检索 + Bundle 故障切换（显式启用）
 ```
 
 项目当前不使用 Feign，也不通过 HTTP 或 localhost 对自身模块发起远程调用。

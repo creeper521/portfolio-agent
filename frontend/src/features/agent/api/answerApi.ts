@@ -1,7 +1,7 @@
 import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
 import type {
   AnswerResponse,
-  ContextEnvelope,
+  PortfolioReferenceContext,
   ConversationTopic,
   PortfolioRecommendationContextRequest,
 } from '../model/answerTypes'
@@ -21,7 +21,7 @@ export interface AnswerApiRequest {
   question?: string
   messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
   coveredTopics?: readonly ConversationTopic[]
-  contextEnvelope?: ContextEnvelope
+  referenceContext?: PortfolioReferenceContext
   recommendationContext?: PortfolioRecommendationContextRequest
 }
 
@@ -39,6 +39,9 @@ export function askQuestion(
     body: JSON.stringify({
       turnId: input.turnId,
       requestToken: input.requestToken ?? createRequestToken(),
+      ...(input.questionPresetId === undefined
+        ? {}
+        : { questionPresetId: input.questionPresetId }),
       question: input.question,
       messages: input.messages?.map((message) => ({
         role: message.role,
@@ -50,6 +53,19 @@ export function askQuestion(
         audienceRole: input.audienceRole,
         source: input.source,
         coveredTopics: [...new Set(input.coveredTopics ?? [])],
+        ...(input.referenceContext === undefined
+          ? {}
+          : {
+              referenceContext: {
+                previousContentVersion: input.referenceContext.previousContentVersion,
+                projectSlugs: [...(input.referenceContext.projectSlugs ?? [])],
+                caseSlugs: [...(input.referenceContext.caseSlugs ?? [])],
+                questionPresetId: input.referenceContext.questionPresetId,
+                referencedClaimIds: [...input.referenceContext.referencedClaimIds],
+                selectedSectionType: input.referenceContext.selectedSectionType,
+                followUpAction: input.referenceContext.followUpAction,
+              },
+            }),
         ...(input.recommendationContext === undefined
           ? {}
           : {

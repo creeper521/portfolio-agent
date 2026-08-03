@@ -32,6 +32,9 @@ public final class ConversationAnswerContextRequest {
     @Valid
     private final PortfolioRecommendationContextRequest recommendationContext;
 
+    @Valid
+    private final PortfolioReferenceContextRequest referenceContext;
+
     @JsonCreator
     public ConversationAnswerContextRequest(
             @JsonProperty("projectSlug") String projectSlug,
@@ -39,7 +42,8 @@ public final class ConversationAnswerContextRequest {
             @JsonProperty("audienceRole") AudienceRole audienceRole,
             @JsonProperty("source") AnswerRequestSource source,
             @JsonProperty("coveredTopics") List<ConversationTopic> coveredTopics,
-            @JsonProperty("recommendationContext") PortfolioRecommendationContextRequest recommendationContext
+            @JsonProperty("recommendationContext") PortfolioRecommendationContextRequest recommendationContext,
+            @JsonProperty("referenceContext") PortfolioReferenceContextRequest referenceContext
     ) {
         this.projectSlug = projectSlug;
         this.caseSlug = caseSlug;
@@ -49,6 +53,19 @@ public final class ConversationAnswerContextRequest {
                 ? List.of()
                 : List.copyOf(coveredTopics);
         this.recommendationContext = recommendationContext;
+        this.referenceContext = referenceContext;
+    }
+
+    public ConversationAnswerContextRequest(
+            String projectSlug,
+            String caseSlug,
+            AudienceRole audienceRole,
+            AnswerRequestSource source,
+            List<ConversationTopic> coveredTopics,
+            PortfolioRecommendationContextRequest recommendationContext
+    ) {
+        this(projectSlug, caseSlug, audienceRole, source, coveredTopics,
+                recommendationContext, null);
     }
 
     public ConversationAnswerContextRequest(
@@ -58,7 +75,7 @@ public final class ConversationAnswerContextRequest {
             AnswerRequestSource source,
             List<ConversationTopic> coveredTopics
     ) {
-        this(projectSlug, caseSlug, audienceRole, source, coveredTopics, null);
+        this(projectSlug, caseSlug, audienceRole, source, coveredTopics, null, null);
     }
 
     public ConversationAnswerContextRequest(
@@ -67,7 +84,7 @@ public final class ConversationAnswerContextRequest {
             AudienceRole audienceRole,
             AnswerRequestSource source
     ) {
-        this(projectSlug, caseSlug, audienceRole, source, List.of(), null);
+        this(projectSlug, caseSlug, audienceRole, source, List.of(), null, null);
     }
 
     public String getProjectSlug() { return projectSlug; }
@@ -78,6 +95,7 @@ public final class ConversationAnswerContextRequest {
     public PortfolioRecommendationContextRequest getRecommendationContext() {
         return recommendationContext;
     }
+    public PortfolioReferenceContextRequest getReferenceContext() { return referenceContext; }
 
     @AssertTrue(message = "projectSlug and caseSlug cannot both be set")
     public boolean isSubjectHintValid() {

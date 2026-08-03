@@ -3,11 +3,12 @@ package com.portfolio.agent.answer.intelligence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter;
 import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
+import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
+import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
+import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.adapter.bundle.BundlePortfolioRetriever;
@@ -30,17 +31,16 @@ import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
-import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
-import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
-import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 
@@ -92,7 +92,7 @@ class PortfolioIntelligenceConfigurationTest {
                             PortfolioConditions.empty()));
 
                     assertThat(result.getSource().getAdapterId()).isEqualTo("BUNDLE");
-                    assertThat(result.getContentVersion()).isEqualTo("2026-07-29.1");
+                    assertThat(result.getContentVersion()).isEqualTo("test-bundle");
                     assertThat(result.isDegraded()).isTrue();
                     assertThat(result.getNoticeCode())
                             .isEqualTo(FailoverPortfolioRetriever.POSTGRES_RETRIEVAL_UNAVAILABLE);
@@ -122,16 +122,18 @@ class PortfolioIntelligenceConfigurationTest {
         }
 
         @Bean
-        PublicPortfolioRepository publicPortfolioRepository(AtomicInteger databaseGatewayCalls) {
+        @Primary
+        PortfolioKnowledgeGateway portfolioKnowledgeGateway(AtomicInteger databaseGatewayCalls) {
             return () -> {
                 databaseGatewayCalls.incrementAndGet();
                 throw new IllegalStateException("database-backed gateway unavailable");
             };
         }
 
-        @Bean
-        PortfolioKnowledgeGateway portfolioKnowledgeGateway(PublicPortfolioRepository repository) {
-            return new LocalPortfolioKnowledgeAdapter(repository);
+        @Bean(name = "bundledPortfolioKnowledgeGateway")
+        PortfolioKnowledgeGateway bundledPortfolioKnowledgeGateway() {
+            return () -> new RuntimeAnswerContent(
+                    "test-bundle", "test-hash", List.of());
         }
 
         @Bean
@@ -166,19 +168,13 @@ class PortfolioIntelligenceConfigurationTest {
         }
 
         @Bean
-        ObjectMapper objectMapper() {
-            return new ObjectMapper().findAndRegisterModules();
+        QuestionNormalizer questionNormalizer() {
+            return new QuestionNormalizer();
         }
 
         @Bean
-        PortfolioSnapshotValidator portfolioSnapshotValidator() {
-            return new PortfolioSnapshotValidator();
-        }
-
-        @Bean
-        ApplicationStartupDiagnostics applicationStartupDiagnostics() {
-            return new ApplicationStartupDiagnostics(
-                    event -> { }, false, false, "DISABLED", 12000, 10, 2);
+        ConversationProviderAccess conversationProviderAccess() {
+            return new ConversationProviderAccess(false);
         }
 
         @Bean(name = "publicPortfolioJdbcTemplate")

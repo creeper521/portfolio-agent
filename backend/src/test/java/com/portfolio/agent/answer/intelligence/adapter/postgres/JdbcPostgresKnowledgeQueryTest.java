@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.intelligence.adapter.postgres;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.agent.answer.domain.EmbeddingVector;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
@@ -57,10 +58,17 @@ class JdbcPostgresKnowledgeQueryTest {
         JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
                 selectionQuery,
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
-                (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
-                        "project-1", "claim-1", "Verified claim",
-                        List.of(new EvidenceReference(
-                                "claim-1", "evidence-1", "Approved evidence", "APPROVED")))));
+                (releaseId, subjectIds) -> List.of(
+                        new PostgresKnowledgePassageRow(
+                                "project-1", "claim-1", "PostgreSQL verification details",
+                                AnswerClaimCategory.VERIFICATION,
+                                List.of(new EvidenceReference(
+                                        "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
+                        new PostgresKnowledgePassageRow(
+                                "project-1", "claim-2", "PostgreSQL verification outcome",
+                                AnswerClaimCategory.OUTCOME,
+                                List.of(new EvidenceReference(
+                                        "claim-2", "evidence-2", "Approved evidence", "APPROVED")))));
 
         PostgresKnowledgeQueryResult result = query.retrieve(
                 PortfolioRetrievalRequest.contextValidation(
@@ -85,23 +93,34 @@ class JdbcPostgresKnowledgeQueryTest {
         JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
                 selectionQuery,
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
-                (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
-                        "project-1", "claim-1", "Verified claim",
-                        List.of(new EvidenceReference(
-                                "claim-1", "evidence-1", "Approved evidence", "APPROVED")))));
+                (releaseId, subjectIds) -> List.of(
+                        new PostgresKnowledgePassageRow(
+                                "project-1", "claim-1", "PostgreSQL verification details",
+                                AnswerClaimCategory.VERIFICATION,
+                                List.of(new EvidenceReference(
+                                        "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
+                        new PostgresKnowledgePassageRow(
+                                "project-1", "claim-2", "PostgreSQL verification outcome",
+                                AnswerClaimCategory.OUTCOME,
+                                List.of(new EvidenceReference(
+                                        "claim-2", "evidence-2", "Approved evidence", "APPROVED")))));
 
         PostgresKnowledgeQueryResult result = query.retrieve(
                 PortfolioRetrievalRequest.subjectScope(
-                        "How was this verified?",
+                        "PostgreSQL verification",
                         PortfolioTaskMode.FACT_LOOKUP,
                         PortfolioConditions.empty(),
-                        "project-1"));
+                        "project-1",
+                        List.of(AnswerClaimCategory.VERIFICATION)));
 
         assertThat(selectionQuery.exactSubjectIds).containsExactly(List.of("project-1"));
         assertThat(selectionQuery.targets).isEmpty();
         assertThat(result.getCandidates().getCandidates())
                 .extracting(candidate -> candidate.getSubjectId())
                 .containsExactly("project-1");
+        assertThat(result.getPassages())
+                .extracting(PostgresKnowledgePassageRow::getClaimId)
+                .containsExactly("claim-1");
     }
 
     @Test

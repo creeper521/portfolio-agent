@@ -235,22 +235,23 @@ try {
             'MODEL fixture leaked the key.'
         Assert-True ($modelResult.Output -match 'LOG_DIRECTORY') `
             'MODEL fixture did not report the log directory.'
-        $backendInfo = Get-Content -LiteralPath `
-            (Join-Path $modelResult.LogDirectory 'current\backend-info.log') -Raw
-        $backendError = Get-Content -LiteralPath `
-            (Join-Path $modelResult.LogDirectory 'current\backend-error.log') -Raw
         $frontendInfo = Get-Content -LiteralPath `
             (Join-Path $modelResult.LogDirectory 'current\frontend-info.log') -Raw
         $frontendError = Get-Content -LiteralPath `
             (Join-Path $modelResult.LogDirectory 'current\frontend-error.log') -Raw
-        Assert-True $backendInfo.Contains('backend-fixture-info') 'Backend INFO capture'
-        Assert-True (-not $backendInfo.Contains('backend-fixture-error')) `
-            'Backend ERROR must not duplicate into INFO'
-        Assert-True $backendError.Contains('backend-fixture-error') 'Backend ERROR capture'
+        $launcherLog = Get-Content -LiteralPath `
+            (Join-Path $modelResult.LogDirectory 'current\launcher.log') -Raw
+        Assert-True (-not (Test-Path -LiteralPath `
+                (Join-Path $modelResult.LogDirectory 'current\backend-info.log'))) `
+            'Fixture launcher must leave backend INFO ownership to Logback'
+        Assert-True (-not (Test-Path -LiteralPath `
+                (Join-Path $modelResult.LogDirectory 'current\backend-error.log'))) `
+            'Fixture launcher must leave backend ERROR ownership to Logback'
         Assert-True $frontendInfo.Contains('browser-fixture-info') 'Browser INFO capture'
         Assert-True $frontendInfo.Contains('vite-fixture-info') 'Vite INFO capture'
         Assert-True $frontendError.Contains('vite-fixture-error') 'Vite ERROR capture'
-        $allLogs = $backendInfo + $backendError + $frontendInfo + $frontendError
+        Assert-True $launcherLog.Contains('local.session.started') 'Launcher capture'
+        $allLogs = $launcherLog + $frontendInfo + $frontendError
         Assert-True (-not $allLogs.Contains($keySentinel)) 'Log files leaked the key'
         Assert-True (-not (Test-PortOpen $backendPort)) `
             "Owned backend survived ExitAfterProbe on port $backendPort."

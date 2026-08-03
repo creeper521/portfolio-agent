@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.service;
 
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
+import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDecision;
@@ -14,7 +17,6 @@ import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
 import com.portfolio.agent.answer.domain.ConversationWindow;
-import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
@@ -24,12 +26,14 @@ import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequ
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioReferenceContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
-import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
@@ -50,8 +54,6 @@ public final class ConversationalAgentRuntime {
     private final DynamicQuestionService questionService;
     private final DeterministicConversationFallback fallback;
     private final ConversationProviderAccess providerAccess;
-    private final ConversationSubjectGuard subjectGuard;
-    private final PortfolioTaskResolver portfolioTaskResolver;
     private final PortfolioIntelligence portfolioIntelligence;
     private final PortfolioIntelligenceAnswerAssembler portfolioAnswerAssembler;
     private final ConversationProgressClassifier progressClassifier;
@@ -69,74 +71,35 @@ public final class ConversationalAgentRuntime {
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
             ConversationProviderAccess providerAccess,
-            ConversationSubjectGuard subjectGuard,
-            ConversationProgressClassifier progressClassifier,
-            ConversationDecisionPublisher decisionPublisher,
-            DiagnosticEventPublisher diagnosticEventPublisher
-    ) {
-        this(
-                knowledgeGateway,
-                windowManager,
-                intentRouter,
-                groundingAssembler,
-                toolService,
-                modelPort,
-                draftValidator,
-                questionService,
-                fallback,
-                providerAccess,
-                subjectGuard,
-                null,
-                null,
-                null,
-                progressClassifier,
-                decisionPublisher,
-                diagnosticEventPublisher);
-    }
-
-    public ConversationalAgentRuntime(
-            PortfolioKnowledgeGateway knowledgeGateway,
-            ConversationWindowManager windowManager,
-            ConversationIntentRouter intentRouter,
-            PortfolioGroundingAssembler groundingAssembler,
-            ConversationToolService toolService,
-            ConversationalModelPort modelPort,
-            ConversationDraftValidator draftValidator,
-            DynamicQuestionService questionService,
-            DeterministicConversationFallback fallback,
-            ConversationProviderAccess providerAccess,
-            ConversationSubjectGuard subjectGuard,
-            PortfolioTaskResolver portfolioTaskResolver,
             PortfolioIntelligence portfolioIntelligence,
             PortfolioIntelligenceAnswerAssembler portfolioAnswerAssembler,
             ConversationProgressClassifier progressClassifier,
             ConversationDecisionPublisher decisionPublisher,
             DiagnosticEventPublisher diagnosticEventPublisher
     ) {
-        this.knowledgeGateway = knowledgeGateway;
-        this.windowManager = windowManager;
-        this.intentRouter = intentRouter;
-        this.groundingAssembler = groundingAssembler;
-        this.toolService = toolService;
-        this.modelPort = modelPort;
-        this.draftValidator = draftValidator;
-        this.questionService = questionService;
-        this.fallback = fallback;
-        this.providerAccess = providerAccess;
-        this.subjectGuard = subjectGuard;
-        this.portfolioTaskResolver = portfolioTaskResolver;
-        this.portfolioIntelligence = portfolioIntelligence;
-        this.portfolioAnswerAssembler = portfolioAnswerAssembler;
+        this.knowledgeGateway = Objects.requireNonNull(knowledgeGateway, "knowledgeGateway");
+        this.windowManager = Objects.requireNonNull(windowManager, "windowManager");
+        this.intentRouter = Objects.requireNonNull(intentRouter, "intentRouter");
+        this.groundingAssembler = Objects.requireNonNull(groundingAssembler, "groundingAssembler");
+        this.toolService = Objects.requireNonNull(toolService, "toolService");
+        this.modelPort = Objects.requireNonNull(modelPort, "modelPort");
+        this.draftValidator = Objects.requireNonNull(draftValidator, "draftValidator");
+        this.questionService = Objects.requireNonNull(questionService, "questionService");
+        this.fallback = Objects.requireNonNull(fallback, "fallback");
+        this.providerAccess = Objects.requireNonNull(providerAccess, "providerAccess");
+        this.portfolioIntelligence = Objects.requireNonNull(
+                portfolioIntelligence, "portfolioIntelligence");
+        this.portfolioAnswerAssembler = Objects.requireNonNull(
+                portfolioAnswerAssembler, "portfolioAnswerAssembler");
         this.progressClassifier = Objects.requireNonNull(
-                progressClassifier,
-                "progressClassifier");
-        this.decisionPublisher = decisionPublisher;
+                progressClassifier, "progressClassifier");
+        this.decisionPublisher = Objects.requireNonNull(decisionPublisher, "decisionPublisher");
         this.diagnosticEventPublisher = Objects.requireNonNull(
-                diagnosticEventPublisher,
-                "diagnosticEventPublisher");
+                diagnosticEventPublisher, "diagnosticEventPublisher");
     }
 
     public ConversationAnswerResult answer(ConversationAnswerRequest request) {
+        Objects.requireNonNull(request, "request");
         long startedAt = System.nanoTime();
         ConversationAnswerResult result = answerInternal(request);
         publishBestEffort(result, startedAt);
@@ -147,112 +110,60 @@ public final class ConversationalAgentRuntime {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
         ConversationWindow window = windowManager.prepare(
                 request.getMessages(), request.getQuestion());
-        ConversationRoute boundary = intentRouter.routeBoundary(request.getQuestion());
-        if (boundary != null) {
-            ConversationAnswerResult base = fallback.answer(request, content, boundary);
+        ConversationRoute globalRoute = intentRouter.routeBoundary(request.getQuestion());
+        if (globalRoute != null) {
             return finalizeTurn(
-                    base,
+                    fallback.answer(request, content, globalRoute),
                     content,
-                    boundary,
+                    globalRoute,
                     window,
                     request,
                     false);
         }
-        if (!subjectGuard.accepts(request.getContext(), content)) {
-            ConversationAnswerResult base =
-                    fallback.unknownSubject(request, content);
+
+        long portfolioStartedAt = System.nanoTime();
+        PortfolioDecision decision = portfolioIntelligence.tryResolve(
+                portfolioTurn(request, window));
+        if (decision.getDisposition() != PortfolioDisposition.NOT_PORTFOLIO) {
+            PortfolioIntelligenceResult material = decision.getMaterial().orElseThrow();
+            publishPortfolioIntelligence(
+                    material,
+                    request.getContext().getRecommendationContext() != null,
+                    portfolioStartedAt);
+            ConversationAnswerResult result = portfolioAnswerAssembler.assemble(
+                    request, content, decision);
             return finalizeTurn(
-                    base,
+                    result,
                     content,
-                    safeRoute(request, true),
+                    portfolioGuidanceRoute(request, !material.getSubjects().isEmpty()),
                     window,
                     request,
-                    true);
+                    false);
         }
-        boolean deterministicPortfolioRule = hasPortfolioIntelligence()
-                && portfolioTaskResolver.matchesDeterministicRule(request.getQuestion());
-        boolean portfolioHardRoute = usesPortfolioIntelligence(
-                request, deterministicPortfolioRule);
-        if (portfolioHardRoute) {
-            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
-                    request.getTurnId(),
-                    request.getQuestion(),
-                    recommendationContext(request),
-                    providerAccess.isAllowed());
-            if (decision.getBoundaryIntent() != null) {
-                boundary = portfolioBoundary(decision.getBoundaryIntent());
-                ConversationAnswerResult base = fallback.answer(request, content, boundary);
-                return finalizeTurn(
-                        base,
-                        content,
-                        boundary,
-                        window,
-                        request,
-                        false);
-            }
-            return answerWithPortfolioIntelligence(
-                    request,
-                    content,
-                    window,
-                    safeRoute(request, false),
-                    decision.getTask());
-        }
+        return answerGeneral(request, content, window);
+    }
+
+    private ConversationAnswerResult answerGeneral(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            ConversationWindow window
+    ) {
+        ConversationRoute route = new ConversationRoute(
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                1.0d,
+                null,
+                null,
+                PortfolioKnowledgeFacet.OVERVIEW,
+                false);
         if (!providerAccess.isAllowed()) {
-            ConversationAnswerResult base = fallback.answer(request, content);
             return finalizeTurn(
-                    base,
+                    fallback.capabilityUnavailable(request, content),
                     content,
-                    safeRoute(request, false),
+                    route,
                     window,
                     request,
                     false);
-        }
-        ConversationRoute route = intentRouter.route(content, window, request);
-        ConversationRoute guidanceRoute = withRequestSubject(route, request);
-        if (route.getIntent()
-                == com.portfolio.agent.answer.domain.ConversationIntent.TIME_SENSITIVE
-                || route.getIntent()
-                == com.portfolio.agent.answer.domain.ConversationIntent.UNSUPPORTED_OR_UNSAFE) {
-            ConversationAnswerResult base =
-                    fallback.answer(request, content, route);
-            return finalizeTurn(
-                    base,
-                    content,
-                    guidanceRoute,
-                    window,
-                    request,
-                    false);
-        }
-        if (hasPortfolioIntelligence()
-                && route.getIntent() == ConversationIntent.PORTFOLIO_GROUNDED) {
-            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
-                    request.getTurnId(),
-                    request.getQuestion(),
-                    recommendationContext(request),
-                    providerAccess.isAllowed());
-            if (decision.getBoundaryIntent() != null) {
-                boundary = portfolioBoundary(decision.getBoundaryIntent());
-                ConversationAnswerResult base = fallback.answer(request, content, boundary);
-                return finalizeTurn(
-                        base, content, boundary, window, request, false);
-            }
-            return answerWithPortfolioIntelligence(
-                    request, content, window, guidanceRoute, decision.getTask());
-        }
-        if (hasPortfolioIntelligence() && route.getIntent() == ConversationIntent.HYBRID) {
-            PortfolioTaskRoutingDecision decision = portfolioTaskResolver.route(
-                    request.getTurnId(),
-                    request.getQuestion(),
-                    recommendationContext(request),
-                    providerAccess.isAllowed());
-            if (decision.getBoundaryIntent() != null) {
-                boundary = portfolioBoundary(decision.getBoundaryIntent());
-                ConversationAnswerResult base = fallback.answer(request, content, boundary);
-                return finalizeTurn(
-                        base, content, boundary, window, request, false);
-            }
-            return answerHybridWithPortfolioIntelligence(
-                    request, content, window, guidanceRoute, decision.getTask());
         }
         PortfolioGroundingContext grounding = groundingAssembler.assemble(
                 content, route, request.getQuestion());
@@ -264,51 +175,24 @@ public final class ConversationalAgentRuntime {
             ConversationModelFailureCode failureCode = generated == null
                     ? ConversationModelFailureCode.INVALID_RESPONSE
                     : generated.getFailureCode();
-            ConversationAnswerResult fallbackResult =
-                    fallback.answer(request, content, route);
             publishFallback(
                     FallbackTrigger.PROVIDER_FAILURE,
                     ProviderFailureCodeMapper.map(failureCode));
             return finalizeTurn(
-                    fallbackResult,
+                    fallback.capabilityUnavailable(request, content),
                     content,
-                    guidanceRoute,
+                    route,
                     window,
                     request,
                     false);
         }
-        long validationStartedAt = System.nanoTime();
-        ConversationDraftValidationResult validated;
-        try {
-            validated = draftValidator.validate(
-                    generated.getValue(),
-                    route.getAnswerScope(),
-                    grounding);
-        } catch (RuntimeException exception) {
-            ConversationAnswerResult fallbackResult =
-                    fallback.answer(request, content, route);
-            publishFallback(
-                    FallbackTrigger.VALIDATION_EXCEPTION,
-                    ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
+        ConversationDraftValidationResult validated = validateDraft(
+                generated.getValue(), grounding);
+        if (validated == null || !validated.isValid()) {
             return finalizeTurn(
-                    fallbackResult,
+                    fallback.capabilityUnavailable(request, content),
                     content,
-                    guidanceRoute,
-                    window,
-                    request,
-                    false);
-        }
-        publishValidation(validated, validationStartedAt);
-        if (!validated.isValid()) {
-            ConversationAnswerResult fallbackResult =
-                    fallback.answer(request, content, route);
-            publishFallback(
-                    FallbackTrigger.VALIDATION_REJECTED,
-                    ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return finalizeTurn(
-                    fallbackResult,
-                    content,
-                    guidanceRoute,
+                    route,
                     window,
                     request,
                     false);
@@ -316,247 +200,82 @@ public final class ConversationalAgentRuntime {
         ConversationAnswerResult base = new ConversationAnswerResult(
                 request.getTurnId(),
                 content.getContentVersion(),
-                route.getIntent(),
-                route.getAnswerScope(),
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
                 validated.getResolution(),
                 validated.getTitle(),
                 validated.getAcceptedBlocks(),
                 List.of(),
                 false,
                 GenerationMode.MODEL,
-                route.getAnswerScope() == ConversationAnswerScope.PORTFOLIO
-                        || route.getAnswerScope() == ConversationAnswerScope.HYBRID
-                        ? AnswerSource.RETRIEVAL
-                        : null,
-                null);
-        return finalizeTurn(
-                base,
-                content,
-                guidanceRoute,
-                window,
-                request,
-                false);
+                null,
+                null,
+                new ConversationProgress(List.of(), ConversationGuidanceStage.OPENING),
+                null,
+                AnswerConstructionMode.GENERAL_MODEL,
+                AnswerIntentSource.GLOBAL,
+                AnswerEvidenceState.NOT_REQUIRED);
+        return finalizeTurn(base, content, route, window, request, false);
     }
 
-    private boolean usesPortfolioIntelligence(
-            ConversationAnswerRequest request,
-            boolean deterministicPortfolioRule) {
-        if (!hasPortfolioIntelligence()) {
-            return false;
-        }
-        return request.getContext().getRecommendationContext() != null
-                || hasSubjectHint(request)
-                || deterministicPortfolioRule;
-    }
-
-    private boolean hasSubjectHint(ConversationAnswerRequest request) {
-        return hasText(request.getContext().getProjectSlug())
-                || hasText(request.getContext().getCaseSlug());
-    }
-
-    private boolean hasPortfolioIntelligence() {
-        return portfolioTaskResolver != null
-                && portfolioIntelligence != null
-                && portfolioAnswerAssembler != null;
-    }
-
-    private ConversationAnswerResult answerWithPortfolioIntelligence(
-            ConversationAnswerRequest request,
-            RuntimeAnswerContent content,
-            ConversationWindow window,
-            ConversationRoute guidanceRoute,
-            PortfolioTask decidedTask) {
-        PortfolioIntelligenceResult intelligenceResult = resolvePortfolioIntelligence(
-                request, content, guidanceRoute, decidedTask);
-        ConversationAnswerResult base = portfolioAnswerAssembler.assemble(
-                request, content, intelligenceResult);
-        return finalizeTurn(
-                base,
-                content,
-                guidanceRoute,
-                window,
-                request,
-                false);
-    }
-
-    private PortfolioIntelligenceResult resolvePortfolioIntelligence(
-            ConversationAnswerRequest request,
-            RuntimeAnswerContent content,
-            ConversationRoute guidanceRoute,
-            PortfolioTask decidedTask) {
+    private ConversationDraftValidationResult validateDraft(
+            ConversationDraft draft,
+            PortfolioGroundingContext grounding
+    ) {
         long startedAt = System.nanoTime();
-        boolean contextPresent = request.getContext().getRecommendationContext() != null;
-        PortfolioTask task = Objects.requireNonNull(decidedTask, "decidedTask");
-        task = withSubjectConstraint(task, content, guidanceRoute);
-        PortfolioIntelligenceResult intelligenceResult = portfolioIntelligence.resolve(task);
-        publishPortfolioIntelligence(intelligenceResult, contextPresent, startedAt);
-        return intelligenceResult;
-    }
-
-    private ConversationAnswerResult answerHybridWithPortfolioIntelligence(
-            ConversationAnswerRequest request,
-            RuntimeAnswerContent content,
-            ConversationWindow window,
-            ConversationRoute route,
-            PortfolioTask decidedTask) {
-        PortfolioIntelligenceResult intelligenceResult = resolvePortfolioIntelligence(
-                request, content, route, decidedTask);
-        ConversationAnswerResult deterministic = portfolioAnswerAssembler.assemble(
-                request,
-                content,
-                intelligenceResult,
-                ConversationIntent.HYBRID,
-                ConversationAnswerScope.PORTFOLIO);
-        if (intelligenceResult.getResolvedIntent()
-                == com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode.CLARIFICATION_REQUIRED
-                || intelligenceResult.getEvidence().isEmpty()) {
-            return finalizeTurn(deterministic, content, route, window, request, false);
-        }
-        PortfolioGroundingContext grounding = portfolioAnswerAssembler.grounding(intelligenceResult);
-        ConversationModelResult<ConversationDraft> generated = modelPort.generate(
-                request.getQuestion(), window, route, grounding);
-        if (generated == null || !generated.isSuccessful()) {
-            ConversationModelFailureCode failureCode = generated == null
-                    ? ConversationModelFailureCode.INVALID_RESPONSE
-                    : generated.getFailureCode();
-            publishFallback(
-                    FallbackTrigger.PROVIDER_FAILURE,
-                    ProviderFailureCodeMapper.map(failureCode));
-            return finalizeTurn(
-                    hybridFallback(deterministic, intelligenceResult),
-                    content, route, window, request, false);
-        }
-        long validationStartedAt = System.nanoTime();
-        ConversationDraftValidationResult validated;
         try {
-            validated = draftValidator.validate(
-                    generated.getValue(), ConversationAnswerScope.HYBRID, grounding);
+            ConversationDraftValidationResult validated = draftValidator.validate(
+                    draft, ConversationAnswerScope.GENERAL, grounding);
+            publishValidation(validated, startedAt);
+            if (!validated.isValid()) {
+                publishFallback(
+                        FallbackTrigger.VALIDATION_REJECTED,
+                        ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
+            }
+            return validated;
         } catch (RuntimeException exception) {
             publishFallback(
                     FallbackTrigger.VALIDATION_EXCEPTION,
                     ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return finalizeTurn(
-                    hybridFallback(deterministic, intelligenceResult),
-                    content, route, window, request, false);
-        }
-        publishValidation(validated, validationStartedAt);
-        if (!validated.isValid()) {
-            publishFallback(
-                    FallbackTrigger.VALIDATION_REJECTED,
-                    ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return finalizeTurn(
-                    hybridFallback(deterministic, intelligenceResult),
-                    content, route, window, request, false);
-        }
-        ConversationAnswerResult modelResult = new ConversationAnswerResult(
-                request.getTurnId(),
-                deterministic.getContentVersion(),
-                ConversationIntent.HYBRID,
-                ConversationAnswerScope.HYBRID,
-                validated.getResolution(),
-                validated.getTitle(),
-                validated.getAcceptedBlocks(),
-                List.of(),
-                intelligenceResult.isDegraded(),
-                GenerationMode.MODEL,
-                AnswerSource.RETRIEVAL,
-                intelligenceResult.getNoticeCode(),
-                deterministic.getProgress(),
-                intelligenceResult.getPortfolioRecommendation());
-        return finalizeTurn(modelResult, content, route, window, request, false);
-    }
-
-    private ConversationAnswerResult hybridFallback(
-            ConversationAnswerResult deterministic,
-            PortfolioIntelligenceResult intelligenceResult) {
-        String noticeCode = intelligenceResult.getNoticeCode() == null
-                ? "MODEL_UNAVAILABLE_FALLBACK"
-                : intelligenceResult.getNoticeCode();
-        return new ConversationAnswerResult(
-                deterministic.getTurnId(),
-                deterministic.getContentVersion(),
-                ConversationIntent.HYBRID,
-                ConversationAnswerScope.PORTFOLIO,
-                deterministic.getResolution(),
-                deterministic.getTitle(),
-                deterministic.getBlocks(),
-                List.of(),
-                true,
-                GenerationMode.FALLBACK,
-                AnswerSource.RETRIEVAL,
-                noticeCode,
-                deterministic.getProgress(),
-                deterministic.getPortfolioRecommendation());
-    }
-
-    private PortfolioTask withSubjectConstraint(
-            PortfolioTask task,
-            RuntimeAnswerContent content,
-            ConversationRoute route) {
-        String subjectId = null;
-        if (hasText(route.getProjectSlug())) {
-            subjectId = content.getProjects().stream()
-                    .filter(project -> route.getProjectSlug().equals(project.getSlug()))
-                    .map(project -> project.getStableId())
-                    .findFirst()
-                    .orElse(null);
-        } else if (hasText(route.getCaseSlug())) {
-            subjectId = content.getCases().stream()
-                    .filter(caseItem -> route.getCaseSlug().equals(caseItem.getSlug()))
-                    .map(caseItem -> caseItem.getStableId())
-                    .findFirst()
-                    .orElse(null);
-        }
-        if (subjectId == null) {
-            return task;
-        }
-        return new PortfolioTask(
-                task.getTurnId(),
-                task.getQuestion(),
-                task.getMode(),
-                task.getConfidence(),
-                task.getConditions(),
-                task.getRecommendationContext(),
-                task.getRefinement(),
-                subjectId);
-    }
-
-    private void publishPortfolioIntelligence(
-            PortfolioIntelligenceResult result,
-            boolean contextPresent,
-            long startedAt) {
-        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-        int recommendationCount = result.getPortfolioRecommendation() == null
-                ? 0
-                : result.getPortfolioRecommendation().getItems().size();
-        String validationResult = result.getResolvedIntent()
-                == com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode.CLARIFICATION_REQUIRED
-                ? "CLARIFICATION_REQUIRED"
-                : "ACCEPTED";
-        try {
-            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
-                            "portfolio.intelligence.completed",
-                            result.isDegraded() ? DiagnosticLevel.WARN : DiagnosticLevel.DEBUG)
-                    .field("task.mode", result.getResolvedIntent())
-                    .field("subject.count", result.getSubjects().size())
-                    .field("evidence.count", result.getEvidence().size())
-                    .field("recommendation.count", recommendationCount)
-                    .field("context.present", contextPresent)
-                    .field("validation.result", validationResult)
-                    .field(
-                            "duration.bucket",
-                            DurationBuckets.fromElapsedMillis(elapsedMillis))
-                    .build());
-        } catch (RuntimeException ignored) {
-            // Diagnostics must never change answer selection.
+            return null;
         }
     }
 
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+    private PortfolioTurn portfolioTurn(
+            ConversationAnswerRequest request,
+            ConversationWindow window
+    ) {
+        return PortfolioTurn.builder(request.getTurnId(), request.getQuestion())
+                .questionPresetId(request.getQuestionPresetId())
+                .window(window)
+                .projectSlug(request.getContext().getProjectSlug())
+                .caseSlug(request.getContext().getCaseSlug())
+                .recommendationContext(recommendationContext(request))
+                .referenceContext(referenceContext(request))
+                .audienceRole(request.getContext().getAudienceRole().name())
+                .source(request.getContext().getSource().name())
+                .build();
     }
 
-    private PortfolioRecommendationContext recommendationContext(ConversationAnswerRequest request) {
+    private PortfolioReferenceContext referenceContext(ConversationAnswerRequest request) {
+        com.portfolio.agent.answer.dto.request.PortfolioReferenceContextRequest reference =
+                request.getContext().getReferenceContext();
+        if (reference == null) {
+            return null;
+        }
+        return new PortfolioReferenceContext(
+                reference.getPreviousContentVersion(),
+                reference.getProjectSlugs(),
+                reference.getCaseSlugs(),
+                reference.getQuestionPresetId(),
+                reference.getReferencedClaimIds(),
+                reference.getSelectedSectionType(),
+                reference.getFollowUpAction());
+    }
+
+    private PortfolioRecommendationContext recommendationContext(
+            ConversationAnswerRequest request
+    ) {
         PortfolioRecommendationContextRequest context =
                 request.getContext().getRecommendationContext();
         if (context == null) {
@@ -585,73 +304,62 @@ public final class ConversationalAgentRuntime {
                 request.getQuestion(),
                 route.getFacet());
         if (forceExploreOthers
-                || (route.getProjectSlug() == null
-                && route.getCaseSlug() == null)) {
+                || (route.getProjectSlug() == null && route.getCaseSlug() == null)) {
             progress = new ConversationProgress(
                     progress.getCoveredTopics(),
                     ConversationGuidanceStage.EXPLORE_OTHERS);
         }
-        List<ConversationSuggestedQuestion> suggestions =
-                questionService.generate(
-                        content,
-                        route,
-                        window,
-                        base.getBlocks(),
-                        progress,
-                        request.getQuestion(),
-                        base.getGenerationMode() == GenerationMode.MODEL);
+        List<ConversationSuggestedQuestion> suggestions = questionService.generate(
+                content,
+                route,
+                window,
+                base.getBlocks(),
+                progress,
+                request.getQuestion(),
+                base.getConstructionMode() == AnswerConstructionMode.GENERAL_MODEL
+                        || base.getConstructionMode() == AnswerConstructionMode.MODEL_GROUNDED);
         return base.withGuidance(suggestions, progress);
     }
 
-    private ConversationRoute safeRoute(
+    private ConversationRoute portfolioGuidanceRoute(
             ConversationAnswerRequest request,
-            boolean clearSubject
+            boolean hasResolvedSubject
     ) {
-        String projectSlug = clearSubject
-                ? null
-                : request.getContext().getProjectSlug();
-        String caseSlug = clearSubject
-                ? null
-                : request.getContext().getCaseSlug();
         return new ConversationRoute(
                 ConversationIntent.PORTFOLIO_GROUNDED,
                 ConversationAnswerScope.PORTFOLIO,
                 1.0d,
-                projectSlug,
-                caseSlug,
+                hasResolvedSubject ? request.getContext().getProjectSlug() : null,
+                hasResolvedSubject ? request.getContext().getCaseSlug() : null,
                 progressClassifier.inferFacet(request.getQuestion()),
                 false);
     }
 
-    private ConversationRoute portfolioBoundary(ConversationIntent intent) {
-        ConversationAnswerScope scope = intent == ConversationIntent.TIME_SENSITIVE
-                ? ConversationAnswerScope.GENERAL
-                : ConversationAnswerScope.CONVERSATION;
-        return new ConversationRoute(
-                intent,
-                scope,
-                1.0d,
-                null,
-                null,
-                PortfolioKnowledgeFacet.OVERVIEW,
-                false);
-    }
-
-    private ConversationRoute withRequestSubject(
-            ConversationRoute route,
-            ConversationAnswerRequest request
+    private void publishPortfolioIntelligence(
+            PortfolioIntelligenceResult result,
+            boolean contextPresent,
+            long startedAt
     ) {
-        if (route.getProjectSlug() != null || route.getCaseSlug() != null) {
-            return route;
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+        int recommendationCount = result.getPortfolioRecommendation() == null
+                ? 0
+                : result.getPortfolioRecommendation().getItems().size();
+        try {
+            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
+                            "portfolio.intelligence.completed",
+                            result.isDegraded() ? DiagnosticLevel.WARN : DiagnosticLevel.INFO)
+                    .field("intent.source", result.getIntentSource())
+                    .field("task.mode", result.getResolvedIntent())
+                    .field("subject.count", result.getSubjects().size())
+                    .field("evidence.count", result.getEvidence().size())
+                    .field("recommendation.count", recommendationCount)
+                    .field("context.present", contextPresent)
+                    .field("degraded", result.isDegraded())
+                    .field("duration.bucket", DurationBuckets.fromElapsedMillis(elapsedMillis))
+                    .build());
+        } catch (RuntimeException ignored) {
+            // Diagnostics must never change answer selection.
         }
-        return new ConversationRoute(
-                route.getIntent(),
-                route.getAnswerScope(),
-                route.getConfidence(),
-                request.getContext().getProjectSlug(),
-                request.getContext().getCaseSlug(),
-                route.getFacet(),
-                route.isClarificationRequired());
     }
 
     private void publishBestEffort(ConversationAnswerResult result, long startedAt) {
@@ -677,20 +385,14 @@ public final class ConversationalAgentRuntime {
             long startedAt
     ) {
         long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-        String failureCode = validation.isValid()
-                ? "NONE"
-                : validation.getFailureCode();
+        String failureCode = validation.isValid() ? "NONE" : validation.getFailureCode();
         try {
             diagnosticEventPublisher.publish(DiagnosticEvent.builder(
                             "answer.validation.completed",
-                            validation.isValid()
-                                    ? DiagnosticLevel.DEBUG
-                                    : DiagnosticLevel.WARN)
+                            validation.isValid() ? DiagnosticLevel.DEBUG : DiagnosticLevel.WARN)
                     .field("validation.accepted", validation.isValid())
                     .field("failure.code", failureCode)
-                    .field(
-                            "duration.bucket",
-                            DurationBuckets.fromElapsedMillis(elapsedMillis))
+                    .field("duration.bucket", DurationBuckets.fromElapsedMillis(elapsedMillis))
                     .build());
         } catch (RuntimeException ignored) {
             // Diagnostics must never change answer selection.
@@ -703,8 +405,7 @@ public final class ConversationalAgentRuntime {
     ) {
         try {
             diagnosticEventPublisher.publish(DiagnosticEvent.builder(
-                            "answer.fallback.selected",
-                            DiagnosticLevel.WARN)
+                            "answer.fallback.selected", DiagnosticLevel.WARN)
                     .field("fallback.trigger", fallbackTrigger)
                     .field("failure.code", failureCode)
                     .build());

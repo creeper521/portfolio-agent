@@ -14,6 +14,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
     private static final String FACT_PASSAGE_SQL = """
             SELECT ps.stable_id AS subject_id,
                    c.stable_id AS claim_id,
+                   c.category AS claim_category,
                    c.statement AS content,
                    array_agg(e.stable_id ORDER BY e.stable_id) AS evidence_ids,
                    array_agg(e.label ORDER BY e.stable_id) AS evidence_labels,
@@ -34,7 +35,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
             WHERE ps.release_id = CAST(? AS uuid)
               AND ps.stable_id = ANY(CAST(? AS text[]))
               AND NULLIF(BTRIM(c.statement), '') IS NOT NULL
-            GROUP BY ps.stable_id, c.stable_id, c.statement
+            GROUP BY ps.stable_id, c.stable_id, c.category, c.statement
             ORDER BY array_position(CAST(? AS text[]), ps.stable_id), c.stable_id
             """;
 
@@ -72,6 +73,8 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                     resultSet.getString("subject_id"),
                     resultSet.getString("claim_id"),
                     resultSet.getString("content"),
+                    com.portfolio.agent.answer.domain.AnswerClaimCategory.valueOf(
+                            resultSet.getString("claim_category")),
                     evidenceReferences(
                             resultSet.getString("claim_id"),
                             evidenceIds,

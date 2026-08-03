@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.domain;
 
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,6 +21,10 @@ public final class ConversationAnswerResult {
     private final String noticeCode;
     private final ConversationProgress progress;
     private final PortfolioRecommendation portfolioRecommendation;
+    private final AnswerConstructionMode constructionMode;
+    private final AnswerIntentSource intentSource;
+    private final AnswerEvidenceState evidenceState;
+    private final boolean contextVersionUpdated;
 
     public ConversationAnswerResult(
             String turnId,
@@ -99,6 +104,71 @@ public final class ConversationAnswerResult {
             ConversationProgress progress,
             PortfolioRecommendation portfolioRecommendation
     ) {
+        this(
+                turnId,
+                contentVersion,
+                intent,
+                answerScope,
+                resolution,
+                title,
+                blocks,
+                suggestedQuestions,
+                degraded,
+                generationMode,
+                answerSource,
+                noticeCode,
+                progress,
+                portfolioRecommendation,
+                deriveConstructionMode(generationMode, answerSource),
+                deriveIntentSource(answerSource),
+                deriveEvidenceState(answerScope, resolution, blocks));
+    }
+
+    public ConversationAnswerResult(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlock> blocks,
+            List<ConversationSuggestedQuestion> suggestedQuestions,
+            boolean degraded,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String noticeCode,
+            ConversationProgress progress,
+            PortfolioRecommendation portfolioRecommendation,
+            AnswerConstructionMode constructionMode,
+            AnswerIntentSource intentSource,
+            AnswerEvidenceState evidenceState
+    ) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks,
+                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
+                progress, portfolioRecommendation, constructionMode, intentSource,
+                evidenceState, false);
+    }
+
+    private ConversationAnswerResult(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlock> blocks,
+            List<ConversationSuggestedQuestion> suggestedQuestions,
+            boolean degraded,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String noticeCode,
+            ConversationProgress progress,
+            PortfolioRecommendation portfolioRecommendation,
+            AnswerConstructionMode constructionMode,
+            AnswerIntentSource intentSource,
+            AnswerEvidenceState evidenceState,
+            boolean contextVersionUpdated
+    ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
         this.intent = Objects.requireNonNull(intent, "intent");
@@ -113,6 +183,11 @@ public final class ConversationAnswerResult {
         this.noticeCode = noticeCode;
         this.progress = Objects.requireNonNull(progress, "progress");
         this.portfolioRecommendation = portfolioRecommendation;
+        this.constructionMode = Objects.requireNonNull(
+                constructionMode, "constructionMode");
+        this.intentSource = Objects.requireNonNull(intentSource, "intentSource");
+        this.evidenceState = Objects.requireNonNull(evidenceState, "evidenceState");
+        this.contextVersionUpdated = contextVersionUpdated;
     }
 
     public String getTurnId() { return turnId; }
@@ -131,6 +206,10 @@ public final class ConversationAnswerResult {
     public String getNoticeCode() { return noticeCode; }
     public ConversationProgress getProgress() { return progress; }
     public PortfolioRecommendation getPortfolioRecommendation() { return portfolioRecommendation; }
+    public AnswerConstructionMode getConstructionMode() { return constructionMode; }
+    public AnswerIntentSource getIntentSource() { return intentSource; }
+    public AnswerEvidenceState getEvidenceState() { return evidenceState; }
+    public boolean isContextVersionUpdated() { return contextVersionUpdated; }
 
     public ConversationAnswerResult withGuidance(
             List<ConversationSuggestedQuestion> questions,
@@ -150,6 +229,58 @@ public final class ConversationAnswerResult {
                 answerSource,
                 noticeCode,
                 newProgress,
-                portfolioRecommendation);
+                portfolioRecommendation,
+                constructionMode,
+                intentSource,
+                evidenceState,
+                contextVersionUpdated);
+    }
+
+    public ConversationAnswerResult withContextVersionUpdated(boolean updated) {
+        return new ConversationAnswerResult(
+                turnId, contentVersion, intent, answerScope, resolution, title, blocks,
+                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
+                progress, portfolioRecommendation, constructionMode, intentSource,
+                evidenceState, updated);
+    }
+
+    private static AnswerConstructionMode deriveConstructionMode(
+            GenerationMode mode,
+            AnswerSource source
+    ) {
+        if (mode == GenerationMode.MODEL) {
+            return source == null
+                    ? AnswerConstructionMode.GENERAL_MODEL
+                    : AnswerConstructionMode.MODEL_GROUNDED;
+        }
+        return source == null
+                ? AnswerConstructionMode.TEMPLATE
+                : AnswerConstructionMode.EVIDENCE_COMPOSITION;
+    }
+
+    private static AnswerIntentSource deriveIntentSource(AnswerSource source) {
+        if (source == AnswerSource.PRESET) {
+            return AnswerIntentSource.PRESET;
+        }
+        return source == null ? AnswerIntentSource.GLOBAL : AnswerIntentSource.RULE;
+    }
+
+    private static AnswerEvidenceState deriveEvidenceState(
+            ConversationAnswerScope scope,
+            AnswerResolution resolution,
+            List<ConversationAnswerBlock> blocks
+    ) {
+        if (resolution == AnswerResolution.NOT_SUPPORTED) {
+            return AnswerEvidenceState.INSUFFICIENT;
+        }
+        if (blocks.stream().anyMatch(block -> !block.getEvidenceIds().isEmpty())) {
+            return AnswerEvidenceState.VERIFIED;
+        }
+        if (scope == ConversationAnswerScope.PORTFOLIO
+                || scope == ConversationAnswerScope.HYBRID
+                || scope == ConversationAnswerScope.MIXED) {
+            return AnswerEvidenceState.INSUFFICIENT;
+        }
+        return AnswerEvidenceState.NOT_REQUIRED;
     }
 }

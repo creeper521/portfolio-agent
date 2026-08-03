@@ -40,14 +40,14 @@ class ConversationIntentRouterTest {
             modelPort, 0.65, diagnosticPublisher);
 
     @Test
-    void greetingIsConversationInsteadOfBoundary() {
+    void greetingIsHandledByTheGlobalRoute() {
         ConversationRoute route = router.route(content(), window(), request("hello"));
 
         assertThat(route.getIntent()).isEqualTo(ConversationIntent.CONVERSATION);
-        assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
+        assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.GLOBAL);
         assertRouteEvent(
                 ConversationIntent.CONVERSATION,
-                ConversationAnswerScope.CONVERSATION,
+                ConversationAnswerScope.GLOBAL,
                 "DETERMINISTIC");
         verifyNoInteractions(modelPort);
     }
@@ -230,7 +230,7 @@ class ConversationIntentRouterTest {
                 content(), window(), request("hello"));
 
         assertThat(route.getIntent()).isEqualTo(ConversationIntent.CONVERSATION);
-        assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.CONVERSATION);
+        assertThat(route.getAnswerScope()).isEqualTo(ConversationAnswerScope.GLOBAL);
         assertThat(route.getConfidence()).isEqualTo(1.0);
         assertThat(route.isClarificationRequired()).isFalse();
         verifyNoInteractions(modelPort);

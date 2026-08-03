@@ -19,6 +19,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedSubject;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import java.util.ArrayList;
@@ -117,13 +118,18 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                 .collect(Collectors.toUnmodifiableSet());
         List<AnswerClaimProjection> verifiedClaims = knowledge.getClaims().stream()
                 .filter(claim -> claim.getVerificationStatus() == AnswerClaimVerificationStatus.VERIFIED)
+                .filter(claim -> request.getRequiredClaimIds().isEmpty()
+                        || request.getRequiredClaimIds().contains(claim.getId()))
+                .filter(claim -> request.getPreferredClaimCategories().isEmpty()
+                        || request.getPreferredClaimCategories().contains(claim.getCategory()))
                 .filter(claim -> !claim.getDirectEvidenceIds().isEmpty())
                 .filter(claim -> approvedEvidenceIds.containsAll(claim.getDirectEvidenceIds()))
                 .toList();
         if (verifiedClaims.isEmpty()) {
             return null;
         }
-        if (request.isExactPortfolioLookup()) {
+        if (request.getStrategy() == PortfolioRetrievalStrategy.CONTEXT_VALIDATION
+                || request.getStrategy() == PortfolioRetrievalStrategy.REFERENCE_SCOPED) {
             List<PortfolioRetrievedPassage> exactPassages = exactPassages(
                     knowledge, corpus, verifiedClaims);
             return exactPassages.isEmpty()

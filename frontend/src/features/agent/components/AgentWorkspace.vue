@@ -24,7 +24,7 @@ import {
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed } from '../model/sessionTypes'
 import type {
-  ContextEnvelope,
+  PortfolioReferenceContext,
   ConversationSuggestedQuestion,
   ConversationTopic,
   FollowUpAction,
@@ -50,7 +50,7 @@ interface AnswerRequestContext {
   question: string
   questionPresetId?: string
   coveredTopics?: readonly ConversationTopic[]
-  contextEnvelope?: ContextEnvelope
+  referenceContext?: PortfolioReferenceContext
   requestToken?: string
   recommendationContext?: PortfolioRecommendationContextRequest
 }
@@ -351,11 +351,28 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         question: preparedContext.question,
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
-        contextEnvelope: preparedContext.contextEnvelope,
+        referenceContext: preparedContext.referenceContext,
         recommendationContext: preparedContext.recommendationContext,
       }),
     )
     if (disposed || request !== requestVersion) return
+    if (!mapped.referenceContext
+      && mapped.resolution === 'ANSWERED'
+      && (mapped.answerScope === 'PORTFOLIO' || mapped.answerScope === 'MIXED')
+      && (preparedContext.projectSlug || preparedContext.caseSlug)) {
+      const referencedClaimIds = [...new Set([
+        ...(mapped.blocks ?? []).flatMap((block) => block.claimIds),
+        ...mapped.sections.flatMap((section) => section.claimIds ?? []),
+      ])]
+      mapped.referenceContext = {
+        previousContentVersion: mapped.contentVersion,
+        projectSlugs: preparedContext.projectSlug ? [preparedContext.projectSlug] : [],
+        caseSlugs: preparedContext.caseSlug ? [preparedContext.caseSlug] : [],
+        questionPresetId: preparedContext.questionPresetId,
+        referencedClaimIds,
+        followUpAction: 'RELATED_QUESTION',
+      }
+    }
     clearFocusedAnswer()
     const completed = completeSuggestedQuestions(mapped.suggestedQuestions, props.portfolio, {
       currentQuestion: preparedContext.question,
@@ -572,7 +589,7 @@ function submitFollowUp(action: FollowUpAction) {
       sessionId: session.id,
       projectSlug: project.slug,
       question: action.question,
-      contextEnvelope: action.contextEnvelope,
+      referenceContext: action.referenceContext,
     },
     true,
   )

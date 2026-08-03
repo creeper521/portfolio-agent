@@ -8,7 +8,11 @@ public enum AnswerErrorCode implements ErrorCode {
 
     ANSWER_RATE_LIMITED("ANSWER_RATE_LIMITED", "请求过于频繁，请稍后再试。", 429),
     ANSWER_CONCURRENCY_LIMITED("ANSWER_CONCURRENCY_LIMITED", "当前请求较多，请稍后再试。", 429),
-    ANSWER_REQUEST_TIMEOUT("ANSWER_REQUEST_TIMEOUT", "回答处理超时，请稍后重试。", 503);
+    ANSWER_REQUEST_TIMEOUT("ANSWER_REQUEST_TIMEOUT", "回答处理超时，请稍后重试。", 503),
+    PORTFOLIO_RETRIEVAL_FAILED(
+            "PORTFOLIO_RETRIEVAL_FAILED",
+            "作品集检索暂不可用，请稍后重试",
+            503);
 
     private final String code;
     private final String defaultMessage;

@@ -144,9 +144,9 @@ describe('answer api', () => {
     })
   })
 
-  it('keeps frontend-only referential context out of the strict v2 payload', async () => {
+  it('sends preset identity and explicit reference context through v2', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ resolution: 'BOUNDARY' }), {
+      new Response(JSON.stringify({ resolution: 'NEEDS_CLARIFICATION' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -156,13 +156,14 @@ describe('answer api', () => {
     await askQuestion({
       ...input('查看当前状态'),
       messages: [{ role: 'ASSISTANT', content: 'previous answer' }],
-      contextEnvelope: {
+      questionPresetId: 'sql-audit-overview',
+      referenceContext: {
         previousContentVersion: '2026-07-21.1',
         projectSlugs: ['sql-audit'],
         questionPresetId: 'sql-audit-overview',
         referencedClaimIds: ['claim-sql-audit-delivered'],
         selectedSectionType: 'STATUS',
-        followUpIntent: 'CURRENT_STATUS',
+        followUpAction: 'CURRENT_STATUS',
       },
     })
 
@@ -170,8 +171,16 @@ describe('answer api', () => {
     expect(body.requestToken).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     )
-    expect(body.contextEnvelope).toBeUndefined()
-    expect(body.questionPresetId).toBeUndefined()
+    expect(body.questionPresetId).toBe('sql-audit-overview')
+    expect(body.context.referenceContext).toEqual({
+      previousContentVersion: '2026-07-21.1',
+      projectSlugs: ['sql-audit'],
+      caseSlugs: [],
+      questionPresetId: 'sql-audit-overview',
+      referencedClaimIds: ['claim-sql-audit-delivered'],
+      selectedSectionType: 'STATUS',
+      followUpAction: 'CURRENT_STATUS',
+    })
     expect(body.context.focusEvidenceIds).toBeUndefined()
     expect(body.messages).toEqual([{ role: 'ASSISTANT', content: 'previous answer' }])
   })

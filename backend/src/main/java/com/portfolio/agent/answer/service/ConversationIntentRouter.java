@@ -92,6 +92,11 @@ public final class ConversationIntentRouter {
                     ConversationIntent.TIME_SENSITIVE,
                     ConversationAnswerScope.GENERAL), "DETERMINISTIC", startedAt);
         }
+        if (isConversation(normalized)) {
+            return decided(deterministic(
+                    ConversationIntent.CONVERSATION,
+                    ConversationAnswerScope.GLOBAL), "DETERMINISTIC", startedAt);
+        }
         return null;
     }
 

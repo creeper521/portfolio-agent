@@ -29,7 +29,8 @@ $gateTests = @(
     'ReciprocalRankFusionTest',
     'RetrievalContextValidatorTest',
     'LocalRetrievalCoordinatorTest',
-    'PortfolioAgentRuntimeRetrievalTest'
+    'BundlePortfolioRetrieverTest',
+    'DefaultPortfolioIntelligenceRoutingTest'
 ) -join ','
 
 function Resolve-RepositoryPath([string]$Value) {

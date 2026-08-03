@@ -7,7 +7,7 @@ import type {
   AnswerSectionType,
   ConversationSuggestedQuestion,
   FollowUpAction,
-  FollowUpIntent,
+  PortfolioFollowUpAction,
   PortfolioRecommendation,
   PortfolioRecommendationContextRequest,
 } from '../model/answerTypes'
@@ -238,20 +238,20 @@ function dynamicSuggestions(message: AgentSession['messages'][number]) {
 function followUp(
   message: AgentSession['messages'][number],
   question: string,
-  intent: FollowUpIntent,
+  intent: PortfolioFollowUpAction,
   selectedSectionType?: AnswerSectionType,
   referencedClaimIds?: string[],
 ) {
-  const envelope = message.answer?.contextEnvelope
-  if (!envelope || props.pending) return
+  const reference = message.answer?.referenceContext
+  if (!reference || props.pending) return
   emit('followUp', {
     question,
-    contextEnvelope: {
-      ...envelope,
-      projectSlugs: envelope.projectSlugs ? [...envelope.projectSlugs] : undefined,
-      referencedClaimIds: [...(referencedClaimIds ?? envelope.referencedClaimIds)],
+    referenceContext: {
+      ...reference,
+      projectSlugs: reference.projectSlugs ? [...reference.projectSlugs] : undefined,
+      referencedClaimIds: [...(referencedClaimIds ?? reference.referencedClaimIds)],
       selectedSectionType,
-      followUpIntent: intent,
+      followUpAction: intent,
     },
   })
 }
@@ -403,7 +403,7 @@ function refineWhole(
             <span class="message__meta-prefix">AGENT · {{ answerStatusLabel(message.answer) }}</span>
             <span class="message__meta-tags">
               <span v-if="answerScopeTag(message.answer)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message.answer) }}</span>
-              <span v-if="message.answer.generationMode !== 'FALLBACK' && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.verification">{{ answerVerificationTag(message.answer) }}</span>
+              <span v-if="!message.answer.degraded && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.evidenceState">{{ answerVerificationTag(message.answer) }}</span>
               <span v-if="answerSourceTag(message.answer)" class="message__meta-tag">{{ answerSourceTag(message.answer) }}</span>
               <span v-if="answerGenerationTag(message.answer)" class="message__meta-tag" data-answer-generation>{{ answerGenerationTag(message.answer) }}</span>
             </span>
@@ -561,7 +561,7 @@ function refineWhole(
               >
                 <h4>{{ section.title }}</h4>
                 <p>{{ section.content }}</p>
-                <div v-if="message.answer.contextEnvelope" class="follow-up-actions">
+                <div v-if="message.answer.referenceContext" class="follow-up-actions">
                   <button
                     type="button"
                     :disabled="pending"
@@ -580,7 +580,7 @@ function refineWhole(
                   >说明判断</button>
                 </div>
               </section>
-              <div v-if="message.answer.contextEnvelope" class="follow-up-actions follow-up-actions--answer">
+              <div v-if="message.answer.referenceContext" class="follow-up-actions follow-up-actions--answer">
                 <button
                   data-follow-up="current-status"
                   type="button"
@@ -593,10 +593,10 @@ function refineWhole(
                   @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
                 >查看相关问题</button>
                 <button
-                  v-if="(message.answer.contextEnvelope.projectSlugs?.length ?? 0) > 1"
+                  v-if="(message.answer.referenceContext.projectSlugs?.length ?? 0) > 1"
                   type="button"
                   :disabled="pending"
-                  @click="followUp(message, '对比这些项目', 'COMPARE_PROJECTS')"
+                  @click="followUp(message, '对比这些项目', 'COMPARE_SUBJECTS')"
                 >对比项目</button>
               </div>
             </template>

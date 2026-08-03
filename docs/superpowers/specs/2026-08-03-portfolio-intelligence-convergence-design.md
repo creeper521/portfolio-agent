@@ -2,7 +2,7 @@
 
 日期：2026-08-03
 
-状态：待外部 AI 评审，尚未进入实施
+状态：外部 AI 评审意见已关闭，已实施并验证
 
 关联设计：`2026-07-31-portfolio-intelligence-hard-routing-design.md`
 
@@ -859,3 +859,91 @@ failure.kind
 - 保留用户现有未提交改动。
 - 不在未获得明确授权时创建提交。
 
+## 23. 外部评审关闭决议
+
+### 23.1 C2b 保留能力语义，删除旧执行框架
+
+保留用户可感知的引用式多轮能力：展开当前章节、查看当前结论证据、追问当前状态、引用上一回答主体进行比较。v2 使用新的 `PortfolioReferenceContext` 携带内容版本、主体、预设、Claim、章节与受控追问动作。
+
+`PortfolioIntelligence` 校验引用后，由 `PortfolioRetrievalPlanner` 将其转换成检索约束。新路径不迁移旧 `ToolPlanBuilder -> ToolPlan -> ToolPlanExecutor` 编排；新路径验收后删除仅服务 v1 C2b 的类型。现有公开工具中的只读查询和结果校验能力可以作为底层实现复用，但不能保留第二套作品集决策权。
+
+只有用户点击显式引用式追问动作时才发送 `PortfolioReferenceContext`。自由输入默认不绑定上一回答引用，避免把通用问题错误限制为作品集追问。
+
+### 23.2 补充能力不可用语义
+
+对外 resolution 增加：
+
+```text
+CAPABILITY_UNAVAILABLE
+```
+
+它表示完成问题所需的通用模型、混合回答或表达能力当前不可用。它不同于公开证据不足的 `NOT_SUPPORTED`，也不同于安全拒绝的 `REJECTED`。数据库与 bundle 均发生技术失败时仍使用标准 HTTP 错误，不返回成功响应。
+
+### 23.3 明确空证据出口
+
+当作品集 task 已形成、检索正常完成，但证据为空或未达到充分性门槛时，固定返回 `NOT_SUPPORTED`。只有用户补充一个明确主体、比较对象、章节或选择即可继续时，才返回 `NEEDS_CLARIFICATION`。
+
+### 23.4 Bundle 与 PostgreSQL 同步修复 exact 路径
+
+精确主体绕过相关性的问题同时存在于 Bundle 和 PostgreSQL adapter。两个 adapter 都必须遵守相同契约：subject scope 只限制候选主体，query、topic、claim category、相关性和充分性继续筛选 passage。不得只修复 Bundle。
+
+### 23.5 类型化检索失败
+
+检索失败分类为：
+
+```text
+CONNECTION_UNAVAILABLE
+TIMEOUT
+CONTRACT_VIOLATION
+INVALID_QUERY
+DATA_CORRUPTION
+```
+
+只有连接不可用和超时允许自动降级 bundle。契约错误、非法查询和数据损坏不得静默降级。最终失败转换为 `ApplicationException`，复用现有 `GlobalExceptionHandler` 输出安全错误，不新增第二套 Controller Advice。
+
+### 23.6 受约束模型表达是新增能力
+
+自由作品集事实问题的 `MODEL_GROUNDED` 表达链不是机械搬迁，而是新增生产能力。它必须作为独立实施和验收工作包，不能隐藏在运行时重构中。正式预设、比较、推荐和引用式追问不依赖该新增能力完成核心事实回答。
+
+### 23.7 结果与诊断补充
+
+- 保留封闭的 `noticeCode`，只表达降级或能力状态，不作为页面主要业务标签。
+- scope 映射固定为 `CONVERSATION -> GLOBAL`、`HYBRID -> MIXED`、`GENERAL -> GENERAL`、`PORTFOLIO -> PORTFOLIO`。
+- `PortfolioDecision` 不携带 `internalDiagnostics`；模块内部直接调用 `DiagnosticEventPublisher`。
+- 结构化引用式追问的公开 `intentSource` 使用 `REFERENCE`。
+- provider 可用性不作为 `PortfolioTurn` 的用户输入；PI 依赖受限分类、表达和通用知识 gateway，由 gateway 返回可用性结果。
+
+### 23.8 关键现有类处置
+
+| 当前类 | 目标处置 |
+|---|---|
+| `ConversationIntentRouter` | 只保留或拆出全局安全、时间、明确问候；删除作品集分类权 |
+| `PortfolioTaskResolver` | 删除外部服务身份，预设、规则、分类能力迁入 PI 内部 |
+| `DeterministicConversationFallback` | 删除作品集预设与 provider fallback 权力，剩余全局模板拆分后删除该类 |
+| `ConversationSubjectGuard` | 通用输入检查留外层，作品集主体校验迁入 PI |
+| `PortfolioTask` | 保留为 PI 内部不可变类型，外层不得构造 |
+| `PortfolioIntelligenceAnswerAssembler` | 迁入 PI 内部并使用新结果语义 |
+| `withSubjectConstraint` | 删除旧硬路由行为；task 形成后由 PI 生成 subject scope |
+| `ContextEnvelopeValidator / ToolPlanBuilder / ToolPlanExecutor` | 新引用路径验收后删除；按需迁移安全校验能力 |
+
+### 23.9 日志评审修订
+
+仓库根定义为：包含 `.git`，并同时包含 `backend/pom.xml` 与 `frontend/package.json` 的目录。显式安全日志目录仍有最高优先级。
+
+无法识别布局时不得阻断健康的 local 启动：退化为 console-only，并在控制台输出 `LOG_LAYOUT_UNRESOLVED reason=<safe-code>`。PowerShell 可以继续读取后端 stdout 用于控制台转发和 launcher 关键事件，但不得再写 `backend-info.log` 或 `backend-error.log`。
+
+### 23.10 补充验收不变量
+
+1. preset/rule/reference 命中时分类端口调用次数为零。
+2. 同一 `requestToken` 携带不同 `questionPresetId` 或不同 reference context 时拒绝幂等键复用。
+3. Project 页面通用问题返回 `GENERAL` 或 `GLOBAL`，且 `intentSource` 不是作品集规则。
+4. 引用式动作携带 reference context；自由输入不携带。
+5. 引用仍有效但内容版本更新时返回 `contextVersionUpdated=true`；引用全部失效时返回 `NEEDS_CLARIFICATION`。
+6. 删除旧 C2b 类型后，v2 引用式证据、章节、状态与比较路径仍通过端到端测试。
+7. 性能预算在实现 benchmark 后锁定；设计阶段先保证明确全局问题不进入 PI、确定性命中不调用模型、明确通用快速路径不执行作品集检索。
+
+## 24. 实施关闭记录
+
+本设计已在本地 `master` 工作区完成实现：v1 answers 与旧决策岛已删除，v2 新请求/响应语义、显式引用、统一检索规划、类型化双源失败、本地日志所有权和前端标签均已接通。页面布局与暖调视觉基线保持不变。
+
+关闭验证包括：后端 766 个测试通过（5 个跳过）、前端 41 个测试文件共 442 个测试通过、前端生产构建通过、本地日志路由/启动器/Provider 断言脚本通过，以及真实 local Spring Boot 启动成功创建后端日志文件。生产 Provider、真实 PostgreSQL 环境和正式部署仍属于运行环境验收，不在本地实现完成结论内。

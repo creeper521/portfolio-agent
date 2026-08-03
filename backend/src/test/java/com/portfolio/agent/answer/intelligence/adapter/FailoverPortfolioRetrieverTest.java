@@ -9,6 +9,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetrievalException;
+import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetrievalFailureKind;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,7 +38,10 @@ class FailoverPortfolioRetrieverTest {
     void fallsBackToBundleAndMarksTheResultDegradedWhenPostgresIsUnavailable() {
         AtomicInteger fallbackCalls = new AtomicInteger();
         PortfolioRetriever retriever = new FailoverPortfolioRetriever(
-                request -> { throw new PortfolioRetrievalException("postgres unavailable", null); },
+                request -> { throw new PortfolioRetrievalException(
+                        PortfolioRetrievalFailureKind.CONNECTION_UNAVAILABLE,
+                        "postgres unavailable",
+                        null); },
                 request -> {
                     fallbackCalls.incrementAndGet();
                     return result("BUNDLE", false, null);
@@ -64,6 +68,37 @@ class FailoverPortfolioRetrieverTest {
 
         assertThatThrownBy(() -> retriever.retrieve(request())).isSameAs(expected);
         assertThat(fallbackCalls).hasValue(0);
+    }
+
+    @Test
+    void fallsBackForTimeoutButNotForInvalidQuery() {
+        AtomicInteger timeoutFallbackCalls = new AtomicInteger();
+        PortfolioRetriever timeoutRetriever = new FailoverPortfolioRetriever(
+                request -> { throw new PortfolioRetrievalException(
+                        PortfolioRetrievalFailureKind.TIMEOUT, "timeout", null); },
+                request -> {
+                    timeoutFallbackCalls.incrementAndGet();
+                    return result("BUNDLE", false, null);
+                });
+
+        PortfolioRetrievalResult timeoutResult = timeoutRetriever.retrieve(request());
+
+        assertThat(timeoutFallbackCalls).hasValue(1);
+        assertThat(timeoutResult.isDegraded()).isTrue();
+
+        AtomicInteger invalidFallbackCalls = new AtomicInteger();
+        PortfolioRetrievalException invalidQuery = new PortfolioRetrievalException(
+                PortfolioRetrievalFailureKind.INVALID_QUERY, "invalid", null);
+        PortfolioRetriever invalidRetriever = new FailoverPortfolioRetriever(
+                request -> { throw invalidQuery; },
+                request -> {
+                    invalidFallbackCalls.incrementAndGet();
+                    return result("BUNDLE", false, null);
+                });
+
+        assertThatThrownBy(() -> invalidRetriever.retrieve(request()))
+                .isSameAs(invalidQuery);
+        assertThat(invalidFallbackCalls).hasValue(0);
     }
 
     private PortfolioRetrievalRequest request() {

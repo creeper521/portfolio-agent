@@ -29,6 +29,8 @@ import com.portfolio.agent.answer.domain.RetrievalMode;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.adapter.observability.LoggingConversationDecisionPublisher;
 import com.portfolio.agent.answer.service.AnswerAdmissionGate;
 import com.portfolio.agent.answer.service.AnswerIdempotencyCoordinator;
@@ -36,7 +38,6 @@ import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationIntentRouter;
 import com.portfolio.agent.answer.service.ConversationProgressClassifier;
-import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
 import com.portfolio.agent.answer.service.DeterministicConversationFallback;
@@ -46,6 +47,7 @@ import com.portfolio.agent.answer.service.LocalEmbeddingFailureException;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import com.portfolio.agent.answer.service.ProductionConversationService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
+import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
@@ -202,8 +204,6 @@ class RuntimeCompositePrivacyTest {
                     .contains(
                             "http.request.started",
                             "provider.call.failed",
-                            "retrieval.degraded",
-                            "answer.validation.completed",
                             "answer.fallback.selected",
                             "agent.request.completed",
                             "http.request.completed");
@@ -224,26 +224,6 @@ class RuntimeCompositePrivacyTest {
                 .andExpect(header("Authorization", "Bearer " + API_KEY_SENTINEL))
                 .andExpect(content().string(containsString(QUESTION_SENTINEL)))
                 .andExpect(content().string(containsString(HISTORY_SENTINEL)))
-                .andRespond(withSuccess(
-                        providerResponse("""
-                                {"calls":[{"kind":"GET_PROJECT",\
-"projectSlugs":["sql-audit"],"caseSlugs":[],"claimIds":[],\
-"sectionType":null}]}
-                                """),
-                        MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
-                .andExpect(header("Authorization", "Bearer " + API_KEY_SENTINEL))
-                .andExpect(content().string(containsString(QUESTION_SENTINEL)))
-                .andExpect(content().string(containsString(HISTORY_SENTINEL)))
-                .andRespond(withSuccess(
-                        providerResponse("""
-                                {"title":"%s","resolution":"ANSWERED","blocks":[{\
-"sourceScope":"PORTFOLIO","content":"Safe generated block",\
-"claimIds":["claim-1"],"evidenceIds":["evidence-1"]}]}
-                                """.formatted(PROVIDER_RESPONSE_SENTINEL)),
-                        MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
-                .andExpect(header("Authorization", "Bearer " + API_KEY_SENTINEL))
                 .andRespond(request -> {
                     throw new ResourceAccessException(EXCEPTION_MESSAGE_SENTINEL);
                 });
@@ -313,7 +293,8 @@ class RuntimeCompositePrivacyTest {
                 new DynamicQuestionService(adapter, groundingAssembler, 3),
                 new DeterministicConversationFallback(),
                 new ConversationProviderAccess(true),
-                new ConversationSubjectGuard(),
+                turn -> new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null),
+                new PortfolioIntelligenceAnswerAssembler(),
                 new ConversationProgressClassifier(),
                 new LoggingConversationDecisionPublisher(publisher),
                 publisher);

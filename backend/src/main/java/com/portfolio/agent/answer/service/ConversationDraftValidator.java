@@ -141,9 +141,9 @@ public final class ConversationDraftValidator {
                 .anyMatch(block -> block.getSourceScope()
                         == ConversationSourceScope.PORTFOLIO);
         return switch (scope) {
-            case CONVERSATION, GENERAL -> hasGeneral && !hasPortfolio;
+            case CONVERSATION, GLOBAL, GENERAL -> hasGeneral && !hasPortfolio;
             case PORTFOLIO -> hasPortfolio && !hasGeneral;
-            case HYBRID -> hasGeneral && hasPortfolio;
+            case HYBRID, MIXED -> hasGeneral && hasPortfolio;
         };
     }
 }

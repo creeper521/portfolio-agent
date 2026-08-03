@@ -176,11 +176,8 @@ function Get-LocalLogBaseName {
         [pscustomobject]$Record
     )
 
-    if ($Record.Domain -eq 'BACKEND' -and $Record.Level -eq 'ERROR') {
-        return 'backend-error'
-    }
-    if ($Record.Domain -eq 'BACKEND') {
-        return 'backend-info'
+    if ($Record.Source -eq 'LAUNCHER') {
+        return 'launcher'
     }
     if ($Record.Level -eq 'ERROR') {
         return 'frontend-error'
@@ -238,7 +235,7 @@ function New-LocalLogRouter {
         $activeDate,
         [System.Text.UTF8Encoding]::new($false)
     )
-    foreach ($name in @('backend-info', 'backend-error', 'frontend-info', 'frontend-error')) {
+    foreach ($name in @('frontend-info', 'frontend-error', 'launcher')) {
         $path = Join-Path $currentDirectory "$name.log"
         if (-not [System.IO.File]::Exists($path)) {
             [System.IO.File]::WriteAllText($path, '', [System.Text.UTF8Encoding]::new($false))
@@ -411,6 +408,11 @@ function Submit-LocalLogLine {
         [AllowEmptyString()]
         [string]$Line
     )
+
+    if ($Stream -in @('BACKEND_STDOUT', 'BACKEND_STDERR') -and
+        $Line -notmatch '(?:^|\s)event\.origin=browser(?:\s|$)') {
+        return
+    }
 
     [System.Threading.Monitor]::Enter($Router.MaintenanceRoot)
     try {
@@ -716,7 +718,10 @@ function Invoke-LocalLogDateRollover {
         if ($NewDate -le $Router.ActiveDate) { return }
         Flush-LocalLogRouter -Router $Router
         $oldDate = $Router.ActiveDate
-        $logFiles = @(Get-ChildItem -LiteralPath $Router.CurrentDirectory -File -Filter '*.log')
+        $logFiles = @(Get-ChildItem -LiteralPath $Router.CurrentDirectory -File -Filter '*.log' |
+            Where-Object {
+                $_.Name -match '^(frontend-info|frontend-error|launcher)(?:\.\d+)?\.log$'
+            })
         $hasContent = @($logFiles | Where-Object Length -gt 0).Count -gt 0
         if ($hasContent) {
             $stagingDirectory = Join-Path $Router.LogDirectory "staging\$oldDate"
@@ -726,7 +731,7 @@ function Invoke-LocalLogDateRollover {
             }
             [System.IO.Directory]::CreateDirectory($safeStaging) | Out-Null
             foreach ($file in $logFiles) {
-                if ($file.Name -notmatch '^(backend-info|backend-error|frontend-info|frontend-error)(?:\.(\d+))?\.log$') {
+                if ($file.Name -notmatch '^(frontend-info|frontend-error|launcher)(?:\.(\d+))?\.log$') {
                     continue
                 }
                 $segment = if ([string]::IsNullOrWhiteSpace($Matches[2])) { '' } else { ".$($Matches[2])" }
@@ -735,7 +740,7 @@ function Invoke-LocalLogDateRollover {
             }
         }
 
-        foreach ($name in @('backend-info', 'backend-error', 'frontend-info', 'frontend-error')) {
+        foreach ($name in @('frontend-info', 'frontend-error', 'launcher')) {
             [System.IO.File]::WriteAllText(
                 (Join-Path $Router.CurrentDirectory "$name.log"),
                 '',
@@ -876,7 +881,10 @@ function New-LocalLogSnapshot {
     $sourceDirectory = Join-Path $resolvedLogDirectory "staging\snapshot-$([guid]::NewGuid().ToString('N'))"
     [System.IO.Directory]::CreateDirectory($sourceDirectory) | Out-Null
     try {
-        foreach ($file in @(Get-ChildItem -LiteralPath $currentDirectory -File -Filter '*.log')) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $currentDirectory -File -Filter '*.log' |
+                Where-Object {
+                    $_.Name -match '^(frontend-info|frontend-error|launcher)(?:\.\d+)?\.log$'
+                })) {
             [System.IO.File]::Copy($file.FullName, (Join-Path $sourceDirectory $file.Name))
         }
         $finalPath = Join-Path $resolvedLogDirectory "snapshots\$snapshotName"

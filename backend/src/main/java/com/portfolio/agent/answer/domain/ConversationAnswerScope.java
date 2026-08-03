@@ -4,5 +4,7 @@ public enum ConversationAnswerScope {
     CONVERSATION,
     GENERAL,
     PORTFOLIO,
-    HYBRID
+    HYBRID,
+    GLOBAL,
+    MIXED
 }

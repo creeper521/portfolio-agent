@@ -19,6 +19,7 @@ import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
@@ -167,16 +168,16 @@ class BundlePortfolioRetrieverTest {
 
         PortfolioRetrievalResult result = retriever.retrieve(
                 PortfolioRetrievalRequest.subjectScope(
-                        "How was this verified?",
+                        "PostgreSQL verification",
                         PortfolioTaskMode.FACT_LOOKUP,
                         PortfolioConditions.empty(),
                         "project-1"));
 
         assertThat(result.getSubjects()).extracting(item -> item.getPortfolioId())
                 .containsExactly("project-1");
-        assertThat(result.getPassages()).isNotEmpty()
-                .allSatisfy(passage -> assertThat(passage.getSubjectId())
-                        .isEqualTo("project-1"));
+        assertThat(result.getPassages())
+                .extracting(PortfolioRetrievedPassage::getPassageId)
+                .containsExactly("chunk-relevant#claim-1");
     }
 
     private LocalRetrievalCoordinator coordinator() {

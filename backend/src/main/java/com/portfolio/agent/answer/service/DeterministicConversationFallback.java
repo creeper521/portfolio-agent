@@ -5,6 +5,8 @@ import com.portfolio.agent.answer.domain.AnswerEvidence;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
@@ -15,6 +17,7 @@ import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +34,7 @@ public final class DeterministicConversationFallback {
                 content,
                 ConversationIntent.PORTFOLIO_GROUNDED,
                 ConversationAnswerScope.PORTFOLIO,
-                AnswerResolution.BOUNDARY,
+                AnswerResolution.NOT_SUPPORTED,
                 "可公开范围",
                 "该项目或案例不在当前已发布作品集范围内，无法提供具体说明。",
                 List.of(),
@@ -49,7 +52,7 @@ public final class DeterministicConversationFallback {
                     request,
                     content,
                     ConversationIntent.CONVERSATION,
-                    ConversationAnswerScope.CONVERSATION,
+                    ConversationAnswerScope.GLOBAL,
                     AnswerResolution.ANSWERED,
                     "你好",
                     "你好，我可以回答通用技术问题，也可以结合公开作品集介绍项目实现、决策、困难和验证过程。",
@@ -71,7 +74,7 @@ public final class DeterministicConversationFallback {
                     request,
                     content,
                     ConversationIntent.TIME_SENSITIVE,
-                    AnswerResolution.BOUNDARY,
+                    AnswerResolution.CAPABILITY_UNAVAILABLE,
                     "这个问题需要实时联网核验；当前版本没有联网能力。",
                     false);
         }
@@ -83,7 +86,7 @@ public final class DeterministicConversationFallback {
                 request,
                 content,
                 ConversationIntent.GENERAL_KNOWLEDGE,
-                AnswerResolution.BOUNDARY,
+                AnswerResolution.CAPABILITY_UNAVAILABLE,
                 "当前 AI 生成能力暂不可用。你仍可以从已发布的作品集问题继续了解项目。",
                 true);
     }
@@ -107,7 +110,7 @@ public final class DeterministicConversationFallback {
                     request,
                     content,
                     ConversationIntent.TIME_SENSITIVE,
-                    AnswerResolution.BOUNDARY,
+                    AnswerResolution.CAPABILITY_UNAVAILABLE,
                     "这个问题需要实时联网核验；当前版本没有联网能力。",
                     false);
         }
@@ -122,9 +125,39 @@ public final class DeterministicConversationFallback {
                 request,
                 content,
                 route.getIntent(),
-                AnswerResolution.BOUNDARY,
+                AnswerResolution.CAPABILITY_UNAVAILABLE,
                 "当前 AI 生成能力暂不可用，且没有匹配到可安全降级的已发布答案。",
                 true);
+    }
+
+    public ConversationAnswerResult capabilityUnavailable(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content
+    ) {
+        return new ConversationAnswerResult(
+                request.getTurnId(),
+                content.getContentVersion(),
+                ConversationIntent.GENERAL_KNOWLEDGE,
+                ConversationAnswerScope.GENERAL,
+                AnswerResolution.CAPABILITY_UNAVAILABLE,
+                "通用回答暂不可用",
+                List.of(new ConversationAnswerBlock(
+                        ConversationSourceScope.GENERAL,
+                        "当前通用模型能力暂不可用，请稍后重试；已发布的作品集问题仍可继续查询。",
+                        List.of(),
+                        List.of())),
+                List.of(),
+                true,
+                GenerationMode.FALLBACK,
+                null,
+                "GENERAL_MODEL_UNAVAILABLE",
+                new com.portfolio.agent.answer.domain.ConversationProgress(
+                        List.of(),
+                        com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
+                null,
+                AnswerConstructionMode.TEMPLATE,
+                AnswerIntentSource.GLOBAL,
+                AnswerEvidenceState.NOT_REQUIRED);
     }
 
     private ConversationAnswerResult presetAnswer(
@@ -196,7 +229,7 @@ public final class DeterministicConversationFallback {
                 request,
                 content,
                 intent,
-                ConversationAnswerScope.CONVERSATION,
+                ConversationAnswerScope.GLOBAL,
                 resolution,
                 resolution == AnswerResolution.REJECTED ? "无法处理" : "能力边界",
                 message,

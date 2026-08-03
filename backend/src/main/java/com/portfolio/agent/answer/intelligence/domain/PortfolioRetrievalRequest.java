@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -14,10 +16,14 @@ public final class PortfolioRetrievalRequest {
     private final PortfolioConditions conditions;
     private final int limit;
     private final List<String> requiredPortfolioIds;
+    private final List<String> requiredClaimIds;
     private final boolean exactPortfolioLookup;
+    private final PortfolioRetrievalStrategy strategy;
+    private final List<AnswerClaimCategory> preferredClaimCategories;
 
     public PortfolioRetrievalRequest(String query, PortfolioTaskMode mode, PortfolioConditions conditions) {
-        this(query, mode, conditions, DEFAULT_LIMIT, List.of(), false);
+        this(query, mode, conditions, DEFAULT_LIMIT, List.of(), List.of(), false,
+                PortfolioRetrievalStrategy.RELEVANCE, List.of());
     }
 
     public PortfolioRetrievalRequest(
@@ -25,7 +31,8 @@ public final class PortfolioRetrievalRequest {
             PortfolioTaskMode mode,
             PortfolioConditions conditions,
             int limit) {
-        this(query, mode, conditions, limit, List.of(), false);
+        this(query, mode, conditions, limit, List.of(), List.of(), false,
+                PortfolioRetrievalStrategy.RELEVANCE, List.of());
     }
 
     private PortfolioRetrievalRequest(
@@ -34,7 +41,10 @@ public final class PortfolioRetrievalRequest {
             PortfolioConditions conditions,
             int limit,
             List<String> requiredPortfolioIds,
-            boolean exactPortfolioLookup) {
+            List<String> requiredClaimIds,
+            boolean exactPortfolioLookup,
+            PortfolioRetrievalStrategy strategy,
+            List<AnswerClaimCategory> preferredClaimCategories) {
         if (query == null || query.isBlank()) { throw new IllegalArgumentException("query is required"); }
         if (limit < 1 || limit > MAX_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_LIMIT);
@@ -45,7 +55,12 @@ public final class PortfolioRetrievalRequest {
         this.limit = limit;
         this.requiredPortfolioIds = List.copyOf(
                 Objects.requireNonNull(requiredPortfolioIds, "requiredPortfolioIds"));
+        this.requiredClaimIds = List.copyOf(
+                Objects.requireNonNull(requiredClaimIds, "requiredClaimIds"));
         this.exactPortfolioLookup = exactPortfolioLookup;
+        this.strategy = Objects.requireNonNull(strategy, "strategy");
+        this.preferredClaimCategories = List.copyOf(Objects.requireNonNull(
+                preferredClaimCategories, "preferredClaimCategories"));
     }
 
     public static PortfolioRetrievalRequest contextValidation(
@@ -69,7 +84,10 @@ public final class PortfolioRetrievalRequest {
                 conditions,
                 Math.max(1, selectedPortfolioIds.size()),
                 selectedPortfolioIds,
-                true);
+                List.of(),
+                true,
+                PortfolioRetrievalStrategy.CONTEXT_VALIDATION,
+                List.of());
     }
 
     public static PortfolioRetrievalRequest subjectScope(
@@ -77,6 +95,15 @@ public final class PortfolioRetrievalRequest {
             PortfolioTaskMode mode,
             PortfolioConditions conditions,
             String subjectId) {
+        return subjectScope(query, mode, conditions, subjectId, List.of());
+    }
+
+    public static PortfolioRetrievalRequest subjectScope(
+            String query,
+            PortfolioTaskMode mode,
+            PortfolioConditions conditions,
+            String subjectId,
+            List<AnswerClaimCategory> preferredClaimCategories) {
         if (subjectId == null || subjectId.isBlank()) {
             throw new IllegalArgumentException("subjectId is required");
         }
@@ -86,7 +113,44 @@ public final class PortfolioRetrievalRequest {
                 conditions,
                 DEFAULT_LIMIT,
                 List.of(subjectId.trim()),
-                true);
+                List.of(),
+                true,
+                PortfolioRetrievalStrategy.SUBJECT_SCOPED_RELEVANCE,
+                preferredClaimCategories);
+    }
+
+    public static PortfolioRetrievalRequest referenceScope(
+            String query,
+            PortfolioTaskMode mode,
+            PortfolioConditions conditions,
+            List<String> subjectIds,
+            List<String> claimIds,
+            List<AnswerClaimCategory> preferredClaimCategories) {
+        validateUniqueNonBlank(subjectIds, "subjectIds");
+        validateUniqueNonBlank(claimIds, "claimIds");
+        if (subjectIds.isEmpty()) {
+            throw new IllegalArgumentException("subjectIds are required");
+        }
+        return new PortfolioRetrievalRequest(
+                query,
+                mode,
+                conditions,
+                DEFAULT_LIMIT,
+                subjectIds,
+                claimIds,
+                true,
+                PortfolioRetrievalStrategy.REFERENCE_SCOPED,
+                preferredClaimCategories);
+    }
+
+    private static void validateUniqueNonBlank(List<String> values, String name) {
+        Objects.requireNonNull(values, name);
+        if (values.stream().anyMatch(value -> value == null || value.isBlank())) {
+            throw new IllegalArgumentException(name + " must not contain blank values");
+        }
+        if (new HashSet<>(values).size() != values.size()) {
+            throw new IllegalArgumentException(name + " must be unique");
+        }
     }
 
     public String getQuery() { return query; }
@@ -94,7 +158,12 @@ public final class PortfolioRetrievalRequest {
     public PortfolioConditions getConditions() { return conditions; }
     public int getLimit() { return limit; }
     public List<String> getRequiredPortfolioIds() { return requiredPortfolioIds; }
+    public List<String> getRequiredClaimIds() { return requiredClaimIds; }
     public boolean isExactPortfolioLookup() { return exactPortfolioLookup; }
+    public PortfolioRetrievalStrategy getStrategy() { return strategy; }
+    public List<AnswerClaimCategory> getPreferredClaimCategories() {
+        return preferredClaimCategories;
+    }
 
     @Override
     public boolean equals(Object other) {
@@ -103,12 +172,16 @@ public final class PortfolioRetrievalRequest {
         return Objects.equals(query, that.query) && mode == that.mode
                 && Objects.equals(conditions, that.conditions) && limit == that.limit
                 && Objects.equals(requiredPortfolioIds, that.requiredPortfolioIds)
-                && exactPortfolioLookup == that.exactPortfolioLookup;
+                && Objects.equals(requiredClaimIds, that.requiredClaimIds)
+                && exactPortfolioLookup == that.exactPortfolioLookup
+                && strategy == that.strategy
+                && Objects.equals(preferredClaimCategories, that.preferredClaimCategories);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(query, mode, conditions, limit, requiredPortfolioIds, exactPortfolioLookup);
+        return Objects.hash(query, mode, conditions, limit, requiredPortfolioIds,
+                requiredClaimIds, exactPortfolioLookup, strategy, preferredClaimCategories);
     }
 
     @Override

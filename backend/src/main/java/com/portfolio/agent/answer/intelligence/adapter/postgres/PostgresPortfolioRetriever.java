@@ -37,9 +37,15 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
         } catch (PortfolioRetrievalException exception) {
             throw exception;
         } catch (CandidateRetrievalException exception) {
-            throw new PortfolioRetrievalException("PostgreSQL public retrieval is unavailable", exception);
+            throw new PortfolioRetrievalException(
+                    PostgresRetrievalFailureClassifier.classify(exception),
+                    "PostgreSQL public retrieval failed",
+                    exception);
         } catch (DataAccessException exception) {
-            throw new PortfolioRetrievalException("PostgreSQL public retrieval is unavailable", exception);
+            throw new PortfolioRetrievalException(
+                    PostgresRetrievalFailureClassifier.classify(exception),
+                    "PostgreSQL public retrieval failed",
+                    exception);
         }
         CandidateRetrievalResult candidateResult = result.getCandidates();
         Map<String, List<PostgresKnowledgePassageRow>> passagesBySubject = result.getPassages().stream()

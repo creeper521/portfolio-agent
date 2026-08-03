@@ -5,16 +5,16 @@ import { mapAnswerResponse } from './mapAnswerResponse'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
 describe('mapAnswerResponse', () => {
-  function response(resolution: 'ANSWERED' | 'BOUNDARY' = 'ANSWERED') {
+  function response(resolution: 'ANSWERED' | 'NEEDS_CLARIFICATION' = 'ANSWERED') {
     return {
       requestId: 'request-1',
       turnId: 'turn-1',
       contentVersion: '2026-07-21',
       questionPresetId: resolution === 'ANSWERED' ? 'preset-1' : undefined,
       resolution,
-      answerSource: resolution === 'ANSWERED' ? ('PRESET' as const) : undefined,
-      generationMode: 'DETERMINISTIC' as const,
-      verification: resolution === 'ANSWERED' ? ('VERIFIED' as const) : ('NOT_APPLICABLE' as const),
+      constructionMode: 'EVIDENCE_COMPOSITION' as const,
+      intentSource: resolution === 'ANSWERED' ? ('PRESET' as const) : ('RULE' as const),
+      evidenceState: resolution === 'ANSWERED' ? ('VERIFIED' as const) : ('INSUFFICIENT' as const),
       title: '项目说明',
       summary: '公开摘要',
       sections: [{
@@ -26,11 +26,12 @@ describe('mapAnswerResponse', () => {
       }],
       evidenceIds: resolution === 'ANSWERED' ? ['evidence-1'] : [],
       suggestedQuestionPresetIds: ['preset-1'],
-      contextEnvelope: resolution === 'ANSWERED' ? {
+      referenceContext: resolution === 'ANSWERED' ? {
         previousContentVersion: '2026-07-21',
         projectSlugs: ['sql-audit'],
         questionPresetId: 'preset-1',
         referencedClaimIds: ['claim-1'],
+        followUpAction: 'RELATED_QUESTION' as const,
       } : undefined,
       contextVersionUpdated: resolution === 'ANSWERED',
     }
@@ -44,18 +45,18 @@ describe('mapAnswerResponse', () => {
     expect(mapped).toMatchObject({
       contentVersion: '2026-07-21',
       resolution: 'ANSWERED',
-      answerSource: 'PRESET',
-      generationMode: 'DETERMINISTIC',
-      verification: 'VERIFIED',
+      constructionMode: 'EVIDENCE_COMPOSITION',
+      intentSource: 'PRESET',
+      evidenceState: 'VERIFIED',
       evidenceIds: ['evidence-1'],
     })
     expect(mapped.sections[0].claimIds).toEqual(['claim-1'])
     expect(mapped.sections[0].claimIds).not.toBe(source.sections[0].claimIds)
-    expect(mapped.contextEnvelope).toEqual(source.contextEnvelope)
-    expect(mapped.contextEnvelope?.projectSlugs)
-      .not.toBe(source.contextEnvelope?.projectSlugs)
-    expect(mapped.contextEnvelope?.referencedClaimIds)
-      .not.toBe(source.contextEnvelope?.referencedClaimIds)
+    expect(mapped.referenceContext).toEqual(source.referenceContext)
+    expect(mapped.referenceContext?.projectSlugs)
+      .not.toBe(source.referenceContext?.projectSlugs)
+    expect(mapped.referenceContext?.referencedClaimIds)
+      .not.toBe(source.referenceContext?.referencedClaimIds)
     expect(mapped.contextVersionUpdated).toBe(true)
   })
 
@@ -68,12 +69,12 @@ describe('mapAnswerResponse', () => {
     expect(() => mapAnswerResponse(blank)).toThrowError('Answer response has no content')
   })
 
-  it('keeps a boundary unverified and without a fact source', () => {
-    const mapped = mapAnswerResponse(response('BOUNDARY'))
+  it('keeps a clarification explicitly evidence-insufficient', () => {
+    const mapped = mapAnswerResponse(response('NEEDS_CLARIFICATION'))
 
-    expect(mapped.resolution).toBe('BOUNDARY')
-    expect(mapped.answerSource).toBeNull()
-    expect(mapped.verification).toBe('NOT_APPLICABLE')
+    expect(mapped.resolution).toBe('NEEDS_CLARIFICATION')
+    expect(mapped.intentSource).toBe('RULE')
+    expect(mapped.evidenceState).toBe('INSUFFICIENT')
     expect(mapped.evidenceIds).toEqual([])
   })
 
@@ -84,6 +85,9 @@ describe('mapAnswerResponse', () => {
       intent: 'PORTFOLIO_GROUNDED',
       answerScope: 'PORTFOLIO',
       resolution: 'ANSWERED',
+      constructionMode: 'EVIDENCE_COMPOSITION',
+      intentSource: 'RULE',
+      evidenceState: 'VERIFIED',
       title: 'SQL audit tool',
       blocks: [{
         sourceScope: 'PORTFOLIO',

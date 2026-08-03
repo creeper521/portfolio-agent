@@ -74,12 +74,30 @@ class ConversationAnswerControllerTest {
                         .content(request))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.intent").value("CONVERSATION"))
-                .andExpect(jsonPath("$.answerScope").value("CONVERSATION"))
+                .andExpect(jsonPath("$.answerScope").value("GLOBAL"))
                 .andExpect(jsonPath("$.blocks[0].sourceScope").value("GENERAL"))
                 .andExpect(jsonPath("$.degraded").value(false))
                 .andExpect(jsonPath("$.portfolioRecommendation").doesNotExist());
 
         verify(service).answer(any(), eq("127.0.0.1"));
+    }
+
+    @Test
+    void legacyAnswerEndpointIsNotRegistered() throws Exception {
+        ProductionConversationService service = mock(ProductionConversationService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new ConversationAnswerController(
+                                service,
+                                new ClientAddressResolver(false, java.util.Set.of()),
+                                new ConversationAnswerResponseMapper()))
+                .build();
+
+        mvc.perform(post("/api/v1/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(service);
     }
 
     @Test

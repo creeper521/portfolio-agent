@@ -155,28 +155,33 @@ try {
         -Line 'INFO event.origin=browser browser-info-sentinel'
     Submit-LocalLogLine -Router $router -Stream VITE_STDERR `
         -Line 'ERROR vite-error-sentinel'
+    Submit-LocalLogLine -Router $router -Stream LAUNCHER `
+        -Line 'INFO launcher-info-sentinel'
     Flush-LocalLogRouter -Router $router
 
     $current = Join-Path $logRoot 'current'
-    $backendInfo = Get-Content -LiteralPath (Join-Path $current 'backend-info.log') -Raw
-    $backendError = Get-Content -LiteralPath (Join-Path $current 'backend-error.log') -Raw
     $frontendInfo = Get-Content -LiteralPath (Join-Path $current 'frontend-info.log') -Raw
     $frontendError = Get-Content -LiteralPath (Join-Path $current 'frontend-error.log') -Raw
-    Assert-True $backendInfo.Contains('backend-info-sentinel') 'Backend INFO route'
-    Assert-True (-not $backendInfo.Contains('backend-error-sentinel')) 'Backend ERROR must not duplicate'
-    Assert-True $backendError.Contains('backend-error-sentinel') 'Backend ERROR route'
+    $launcher = Get-Content -LiteralPath (Join-Path $current 'launcher.log') -Raw
+    Assert-True (-not (Test-Path (Join-Path $current 'backend-info.log'))) `
+        'Launcher router must not create Logback-owned backend INFO file'
+    Assert-True (-not (Test-Path (Join-Path $current 'backend-error.log'))) `
+        'Launcher router must not create Logback-owned backend ERROR file'
     Assert-True $frontendInfo.Contains('browser-info-sentinel') 'Browser INFO route'
     Assert-True $frontendError.Contains('vite-error-sentinel') 'Vite ERROR route'
+    Assert-True $launcher.Contains('launcher-info-sentinel') 'Launcher route'
+    Assert-True (-not $launcher.Contains('backend-info-sentinel')) `
+        'Backend stdout must not leak into launcher log'
 
     1..80 | ForEach-Object {
-        Submit-LocalLogLine -Router $router -Stream BACKEND_STDOUT `
+        Submit-LocalLogLine -Router $router -Stream VITE_STDOUT `
             -Line ("INFO segment-sentinel-{0:D3} {1}" -f $_, ('x' * 100))
     }
     Flush-LocalLogRouter -Router $router
-    Assert-True (Test-Path (Join-Path $current 'backend-info.1.log')) 'First segment must exist'
-    Assert-True (Test-Path (Join-Path $current 'backend-info.2.log')) 'Second segment must exist'
-    Assert-True (-not (Test-Path (Join-Path $current 'backend-info.3.log'))) 'Old segment must be removed'
-    $activeBytes = (Get-Item -LiteralPath (Join-Path $current 'backend-info.log')).Length
+    Assert-True (Test-Path (Join-Path $current 'frontend-info.1.log')) 'First segment must exist'
+    Assert-True (Test-Path (Join-Path $current 'frontend-info.2.log')) 'Second segment must exist'
+    Assert-True (-not (Test-Path (Join-Path $current 'frontend-info.3.log'))) 'Old segment must be removed'
+    $activeBytes = (Get-Item -LiteralPath (Join-Path $current 'frontend-info.log')).Length
     Assert-True ($activeBytes -le 1024) 'Active file must respect segment limit'
     Assert-True $router.Truncated 'Segment overwrite must be recorded'
     Assert-True ($router.DiscardedSegmentCount -gt 0) 'Discarded segment count must be recorded'
@@ -196,7 +201,7 @@ try {
         Submit-LocalLogLine -Router $pressureRouter -Stream VITE_STDOUT `
             -Line "DEBUG pressure-$_"
     }
-    Submit-LocalLogLine -Router $pressureRouter -Stream BACKEND_STDERR `
+    Submit-LocalLogLine -Router $pressureRouter -Stream VITE_STDERR `
         -Line 'ERROR priority-sentinel'
     Flush-LocalLogRouter -Router $pressureRouter
     Stop-LocalLogRouter -Router $pressureRouter

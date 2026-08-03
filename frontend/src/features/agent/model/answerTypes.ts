@@ -1,6 +1,19 @@
-export type AnswerResolution = 'ANSWERED' | 'BOUNDARY' | 'REJECTED'
+export type AnswerResolution =
+  | 'ANSWERED'
+  | 'NEEDS_CLARIFICATION'
+  | 'NOT_SUPPORTED'
+  | 'CAPABILITY_UNAVAILABLE'
+  | 'REJECTED'
+  | 'BOUNDARY'
 export type AnswerSource = 'PRESET' | 'RETRIEVAL' | 'TOOL'
 export type GenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
+export type AnswerConstructionMode =
+  | 'TEMPLATE'
+  | 'EVIDENCE_COMPOSITION'
+  | 'MODEL_GROUNDED'
+  | 'GENERAL_MODEL'
+export type AnswerIntentSource = 'PRESET' | 'RULE' | 'MODEL' | 'REFERENCE' | 'GLOBAL'
+export type AnswerEvidenceState = 'VERIFIED' | 'NOT_REQUIRED' | 'INSUFFICIENT'
 export type Verification =
   | 'VERIFIED'
   | 'PARTIALLY_VERIFIED'
@@ -17,11 +30,11 @@ export type AnswerSectionType =
   | 'REJECTED'
   | 'GENERAL' // added for compatibility, though sourceScope handles it better
 
-export type FollowUpIntent =
+export type PortfolioFollowUpAction =
   | 'EXPAND_SECTION'
   | 'SHOW_EVIDENCE'
   | 'EXPLAIN_DECISION'
-  | 'COMPARE_PROJECTS'
+  | 'COMPARE_SUBJECTS'
   | 'CURRENT_STATUS'
   | 'RELATED_QUESTION'
 
@@ -33,7 +46,13 @@ export type AnswerIntent =
   | 'TIME_SENSITIVE'
   | 'UNSUPPORTED_OR_UNSAFE'
 
-export type AnswerScope = 'CONVERSATION' | 'GENERAL' | 'PORTFOLIO' | 'HYBRID'
+export type AnswerScope =
+  | 'GLOBAL'
+  | 'GENERAL'
+  | 'PORTFOLIO'
+  | 'MIXED'
+  | 'CONVERSATION'
+  | 'HYBRID'
 export type BlockSourceScope = 'GENERAL' | 'PORTFOLIO'
 export type PortfolioKnowledgeFacet =
   | 'OVERVIEW'
@@ -69,19 +88,19 @@ export interface ConversationSuggestedQuestion {
   facet: PortfolioKnowledgeFacet | null
 }
 
-export interface ContextEnvelope {
+export interface PortfolioReferenceContext {
   previousContentVersion: string
   projectSlugs?: string[]
   caseSlugs?: string[]
   questionPresetId?: string
   referencedClaimIds: string[]
   selectedSectionType?: AnswerSectionType
-  followUpIntent?: FollowUpIntent
+  followUpAction: PortfolioFollowUpAction
 }
 
 export interface FollowUpAction {
   question: string
-  contextEnvelope: ContextEnvelope
+  referenceContext: PortfolioReferenceContext
 }
 
 // Keep AnswerSection for backward compatibility or map v2 blocks to it
@@ -140,6 +159,9 @@ export interface AnswerResponse {
   resolution: AnswerResolution
   answerSource?: AnswerSource
   generationMode?: GenerationMode
+  constructionMode?: AnswerConstructionMode
+  intentSource?: AnswerIntentSource
+  evidenceState?: AnswerEvidenceState
   verification?: Verification
   title: string
   summary?: string // maybe missing in v2
@@ -152,7 +174,7 @@ export interface AnswerResponse {
   guidanceStage?: ConversationGuidanceStage
   degraded?: boolean
   noticeCode?: string
-  contextEnvelope?: ContextEnvelope
+  referenceContext?: PortfolioReferenceContext
   contextVersionUpdated?: boolean
   portfolioRecommendation?: PortfolioRecommendation
 }
@@ -169,6 +191,9 @@ export interface MappedAnswer {
   resolution: AnswerResolution
   answerSource: AnswerSource | null
   generationMode?: GenerationMode
+  constructionMode?: AnswerConstructionMode
+  intentSource?: AnswerIntentSource
+  evidenceState?: AnswerEvidenceState
   verification?: Verification
   evidenceIds: string[]
   suggestedQuestionPresetIds: string[]
@@ -176,7 +201,7 @@ export interface MappedAnswer {
   coveredTopics: ConversationTopic[]
   guidanceStage: ConversationGuidanceStage | null
   degraded?: boolean
-  contextEnvelope?: ContextEnvelope
+  referenceContext?: PortfolioReferenceContext
   contextVersionUpdated?: boolean
   portfolioRecommendation?: PortfolioRecommendation
 }

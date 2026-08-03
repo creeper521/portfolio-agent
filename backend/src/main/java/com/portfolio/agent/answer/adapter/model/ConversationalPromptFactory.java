@@ -75,6 +75,21 @@ public final class ConversationalPromptFactory {
     }
 
     private String outputContract(String operation) {
+        if ("portfolio_task".equals(operation)) {
+            return """
+                    Return exactly one JSON object with these fields only:
+                    portfolioRelevant, boundaryIntent, mode, conditions, refinement, confidence.
+                    portfolioRelevant must be boolean. When false, boundaryIntent, mode and refinement must be null.
+                    When portfolioRelevant is true, exactly one of boundaryIntent or mode must be non-null.
+                    boundaryIntent may only be TIME_SENSITIVE, UNSUPPORTED_OR_UNSAFE or null.
+                    mode may only be FACT_LOOKUP, COMPARISON, RECOMMENDATION,
+                    REFINE_RECOMMENDATION, CLARIFICATION_REQUIRED or null.
+                    conditions must contain only careerTrack, audienceRole, capabilityCodes, goal and requestedSize.
+                    refinement is allowed only for REFINE_RECOMMENDATION; otherwise it must be null.
+                    confidence must be a number from 0 to 1.
+                    Do not output SQL, retrieval strategy, adapter names, portfolio IDs or undeclared fields.
+                    """;
+        }
         return switch (operation) {
             case "intent" -> """
                     只输出一个 JSON 对象，字段必须且只能是：

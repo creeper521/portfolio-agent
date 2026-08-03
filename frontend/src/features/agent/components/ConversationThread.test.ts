@@ -26,11 +26,12 @@ const answerMessageFixture: AgentSession['messages'][number] = {
     evidenceIds: ['sql-audit-delivery-set'],
     suggestedQuestionPresetIds: [],
     suggestedQuestions: [],
-    contextEnvelope: {
+    referenceContext: {
       previousContentVersion: '2026-07-21',
       projectSlugs: ['sql-audit'],
       questionPresetId: 'sql-audit-overview',
       referencedClaimIds: ['claim-sql-audit-delivered'],
+      followUpAction: 'RELATED_QUESTION',
     },
     sections: [{
       type: 'VERIFICATION',
@@ -387,7 +388,7 @@ describe('ConversationThread', () => {
     ]])
   })
 
-  it('shows a restrained degraded notice when generationMode is FALLBACK', () => {
+  it('shows a restrained degraded notice only when degraded is explicit', () => {
     const wrapper = mountThread([
       {
         id: 'agent-degraded',
@@ -401,6 +402,7 @@ describe('ConversationThread', () => {
           resolution: 'ANSWERED',
           answerSource: 'PRESET',
           generationMode: 'FALLBACK',
+          degraded: true,
           verification: 'VERIFIED',
           intent: 'PORTFOLIO_GROUNDED',
           answerScope: 'PORTFOLIO',

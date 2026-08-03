@@ -95,12 +95,13 @@ describe('AudienceDialogue', () => {
     expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
   })
 
-  it('labels retrieval independently from partial verification', async () => {
+  it('labels rule intent independently from insufficient evidence', async () => {
     askQuestionMock.mockResolvedValue({
       ...answerResponse(),
       questionPresetId: undefined,
-      answerSource: 'RETRIEVAL' as const,
-      verification: 'PARTIALLY_VERIFIED' as const,
+      intentSource: 'RULE' as const,
+      resolution: 'NOT_SUPPORTED' as const,
+      evidenceState: 'INSUFFICIENT' as const,
     })
     const wrapper = mountDialogue()
 
@@ -109,10 +110,8 @@ describe('AudienceDialogue', () => {
     await flushPromises()
 
     const panel = wrapper.get('[data-light-answer]').text()
-    expect(panel).toContain('资料检索')
-    expect(panel).not.toContain('RETRIEVAL · 来自公开资料检索')
-    expect(panel).toContain('部分事实已核验')
-    expect(panel).not.toContain('已核验回答')
+    expect(panel).toContain('规则识别')
+    expect(panel).toContain('当前公开证据不足')
     expect(panel).not.toContain('RESOLUTION')
     expect(panel).not.toContain('GENERATION')
     expect(panel).not.toContain('VERIFICATION')

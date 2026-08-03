@@ -1,9 +1,9 @@
 package com.portfolio.agent.answer.intelligence.adapter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.adapter.portfolio.LocalPortfolioKnowledgeAdapter;
 import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
+import com.portfolio.agent.answer.domain.ConversationProviderAccess;
+import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.adapter.bundle.BundlePortfolioRetriever;
@@ -14,21 +14,18 @@ import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPo
 import com.portfolio.agent.answer.intelligence.service.DefaultPortfolioIntelligence;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
 import com.portfolio.agent.answer.intelligence.service.PortfolioRecommendationPolicy;
+import com.portfolio.agent.answer.intelligence.service.PortfolioPresetResolver;
+import com.portfolio.agent.answer.intelligence.service.PortfolioReferenceContextValidator;
 import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.answer.intelligence.service.PortfolioTaskValidator;
 import com.portfolio.agent.answer.intelligence.service.RecommendationBatchFingerprint;
 import com.portfolio.agent.answer.intelligence.service.RecommendationContextValidator;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
-import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
-import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
-import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration(proxyBeanMethods = false)
@@ -45,6 +42,16 @@ public class PortfolioIntelligenceConfiguration {
     @Bean
     PortfolioTaskValidator portfolioTaskValidator() {
         return new PortfolioTaskValidator();
+    }
+
+    @Bean
+    PortfolioPresetResolver portfolioPresetResolver(QuestionNormalizer normalizer) {
+        return new PortfolioPresetResolver(normalizer);
+    }
+
+    @Bean
+    PortfolioReferenceContextValidator portfolioReferenceContextValidator() {
+        return new PortfolioReferenceContextValidator();
     }
 
     @Bean
@@ -68,9 +75,16 @@ public class PortfolioIntelligenceConfiguration {
             PortfolioTaskValidator taskValidator,
             PortfolioRetriever retriever,
             PortfolioRecommendationPolicy recommendationPolicy,
-            RecommendationContextValidator contextValidator) {
+            RecommendationContextValidator contextValidator,
+            PortfolioKnowledgeGateway knowledgeGateway,
+            PortfolioPresetResolver presetResolver,
+            PortfolioReferenceContextValidator referenceContextValidator,
+            PortfolioTaskResolver taskResolver,
+            ConversationProviderAccess providerAccess) {
         return new DefaultPortfolioIntelligence(
-                taskValidator, retriever, recommendationPolicy, contextValidator);
+                taskValidator, retriever, recommendationPolicy, contextValidator,
+                knowledgeGateway, presetResolver, referenceContextValidator,
+                taskResolver, providerAccess);
     }
 
     @Bean
@@ -101,30 +115,8 @@ public class PortfolioIntelligenceConfiguration {
             RetrievalPolicy retrievalPolicy,
             @Qualifier("publicPortfolioJdbcTemplate") JdbcTemplate jdbcTemplate,
             LocalEmbeddingPort embeddingPort,
-            ObjectMapper objectMapper,
-            @Value("classpath:public-data/bundle/manifest.json") Resource manifest,
-            @Value("classpath:public-data/bundle/portfolio.json") Resource portfolio,
-            @Value("classpath:public-data/bundle/presentation.json") Resource presentation,
-            @Value("classpath:public-data/bundle/rag-documents.jsonl") Resource ragDocuments,
-            @Value("classpath:public-data/bundle/keyword-index.json") Resource keywordIndex,
-            @Value("classpath:public-data/bundle/vector-index.bin") Resource vectorIndex,
-            @Value("classpath:public-data/bundle/checksums.json") Resource checksums,
-            PortfolioSnapshotValidator validator,
-            ApplicationStartupDiagnostics startupDiagnostics) {
-        JsonPublicPortfolioRepository bundledRepository = new JsonPublicPortfolioRepository(
-                objectMapper,
-                manifest,
-                portfolio,
-                presentation,
-                ragDocuments,
-                keywordIndex,
-                vectorIndex,
-                checksums,
-                "",
-                validator,
-                startupDiagnostics);
-        PortfolioKnowledgeGateway bundledKnowledgeGateway =
-                new LocalPortfolioKnowledgeAdapter(bundledRepository);
+            @Qualifier("bundledPortfolioKnowledgeGateway")
+            PortfolioKnowledgeGateway bundledKnowledgeGateway) {
         PortfolioRetriever bundleRetriever = new BundlePortfolioRetriever(
                 bundledKnowledgeGateway, retrievalCoordinator, retrievalPolicy);
         PortfolioRetriever postgresRetriever = new PostgresPortfolioRetriever(

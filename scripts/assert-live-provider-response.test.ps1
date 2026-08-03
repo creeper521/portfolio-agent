@@ -69,14 +69,18 @@ function Write-ResponseFixture(
     [string]$ContentVersion = $expectedContentVersion,
     [bool]$Degraded = $false,
     [string]$Resolution = 'ANSWERED',
-    [AllowNull()][string]$GenerationMode = 'MODEL',
+    [AllowNull()][string]$ConstructionMode = 'EVIDENCE_COMPOSITION',
+    [AllowNull()][string]$IntentSource = 'MODEL',
+    [AllowNull()][string]$EvidenceState = 'VERIFIED',
     [object[]]$Blocks = @([pscustomobject]@{ content = $contentSentinel })
 ) {
     $response = [pscustomobject]@{
         contentVersion = $ContentVersion
         degraded = $Degraded
         resolution = $Resolution
-        generationMode = $GenerationMode
+        constructionMode = $ConstructionMode
+        intentSource = $IntentSource
+        evidenceState = $EvidenceState
         blocks = $Blocks
     }
     [System.IO.File]::WriteAllText(
@@ -166,14 +170,15 @@ try {
             'Approved output must name the content version.'
         Assert-True ($result.Output -match 'resolution=ANSWERED') `
             'Approved output must name the resolution.'
-        Assert-True ($result.Output -match 'generationMode=MODEL') `
-            'Approved output must prove model generation.'
+        Assert-True ($result.Output -match 'intentSource=MODEL') `
+            'Approved output must prove model classification.'
         Assert-True ($result.Output -match 'blocks=1') `
             'Approved output must name the block count.'
         Assert-True ($result.Output -match (
                 '^Live Provider verification passed: provider=' + [regex]::Escape($provider) +
                 '; contentVersion=' + [regex]::Escape($expectedContentVersion) +
-                '; generationMode=MODEL; resolution=ANSWERED; blocks=1\.\s*$'
+                '; intentSource=MODEL; constructionMode=EVIDENCE_COMPOSITION' +
+                '; evidenceState=VERIFIED; resolution=ANSWERED; blocks=1\.\s*$'
             )) 'Approved output must contain only the permitted assertion summary.'
         Assert-NoSensitiveOutput $result "approved $provider"
     }
@@ -222,12 +227,28 @@ try {
     Assert-True ($result.ExitCode -ne 0) 'degraded=true must fail.'
     Assert-NoSensitiveOutput $result 'degraded response'
 
-    foreach ($mode in @($null, '', 'DETERMINISTIC', 'FALLBACK')) {
+    foreach ($mode in @($null, '', 'TEMPLATE', 'GENERAL_MODEL')) {
         Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
-        Write-ResponseFixture -GenerationMode $mode
+        Write-ResponseFixture -ConstructionMode $mode
         $result = Invoke-Checker
-        Assert-True ($result.ExitCode -ne 0) "generationMode=$mode must fail."
-        Assert-NoSensitiveOutput $result "generationMode=$mode"
+        Assert-True ($result.ExitCode -ne 0) "constructionMode=$mode must fail."
+        Assert-NoSensitiveOutput $result "constructionMode=$mode"
+    }
+
+    foreach ($source in @($null, '', 'RULE', 'PRESET', 'REFERENCE', 'GLOBAL')) {
+        Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+        Write-ResponseFixture -IntentSource $source
+        $result = Invoke-Checker
+        Assert-True ($result.ExitCode -ne 0) "intentSource=$source must fail."
+        Assert-NoSensitiveOutput $result "intentSource=$source"
+    }
+
+    foreach ($state in @($null, '', 'NOT_REQUIRED', 'INSUFFICIENT')) {
+        Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+        Write-ResponseFixture -EvidenceState $state
+        $result = Invoke-Checker
+        Assert-True ($result.ExitCode -ne 0) "evidenceState=$state must fail."
+        Assert-NoSensitiveOutput $result "evidenceState=$state"
     }
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'

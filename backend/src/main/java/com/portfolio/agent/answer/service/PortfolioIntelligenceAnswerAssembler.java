@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerClaimProjection;
@@ -23,6 +25,8 @@ import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
@@ -32,6 +36,53 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class PortfolioIntelligenceAnswerAssembler {
+
+    public ConversationAnswerResult assemble(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            PortfolioDecision decision
+    ) {
+        Objects.requireNonNull(decision, "decision");
+        if (decision.getDisposition() == PortfolioDisposition.NOT_PORTFOLIO) {
+            throw new IllegalArgumentException(
+                    "not-portfolio decision cannot be assembled as an answer");
+        }
+        PortfolioIntelligenceResult result = decision.getMaterial().orElseThrow();
+        AnswerResolution resolution = switch (decision.getDisposition()) {
+            case ANSWERED -> AnswerResolution.ANSWERED;
+            case NEEDS_CLARIFICATION -> AnswerResolution.NEEDS_CLARIFICATION;
+            case NOT_SUPPORTED -> AnswerResolution.NOT_SUPPORTED;
+            case NOT_PORTFOLIO -> throw new IllegalStateException(
+                    "not-portfolio decision cannot be assembled as an answer");
+        };
+        List<ConversationAnswerBlock> blocks = decision.getDisposition()
+                == PortfolioDisposition.NEEDS_CLARIFICATION
+                ? clarificationBlocks(result)
+                : materialBlocks(result);
+        return new ConversationAnswerResult(
+                request.getTurnId(),
+                contentVersion(content, result),
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                resolution,
+                title(result.getResolvedIntent()),
+                blocks,
+                List.of(),
+                result.isDegraded(),
+                GenerationMode.DETERMINISTIC,
+                AnswerSource.RETRIEVAL,
+                result.getNoticeCode(),
+                new com.portfolio.agent.answer.domain.ConversationProgress(
+                        List.of(),
+                        com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
+                result.getPortfolioRecommendation(),
+                AnswerConstructionMode.EVIDENCE_COMPOSITION,
+                Objects.requireNonNull(result.getIntentSource(), "intentSource"),
+                decision.getDisposition() == PortfolioDisposition.ANSWERED
+                        ? AnswerEvidenceState.VERIFIED
+                        : AnswerEvidenceState.INSUFFICIENT)
+                .withContextVersionUpdated(result.isContextVersionUpdated());
+    }
 
     public ConversationAnswerResult assemble(
             ConversationAnswerRequest request,

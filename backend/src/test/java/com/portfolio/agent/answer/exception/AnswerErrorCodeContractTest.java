@@ -41,7 +41,8 @@ class AnswerErrorCodeContractTest {
                         "INVALID_ANSWER_CONTEXT",
                         "ANSWER_RATE_LIMITED",
                         "ANSWER_CONCURRENCY_LIMITED",
-                        "ANSWER_REQUEST_TIMEOUT");
+                        "ANSWER_REQUEST_TIMEOUT",
+                        "PORTFOLIO_RETRIEVAL_FAILED");
     }
 
     @Test

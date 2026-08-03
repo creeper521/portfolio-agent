@@ -89,13 +89,15 @@ try {
             }
             elseif ($path -eq '/api/v2/answers') {
                 if ($Mode -eq 'BACKEND_MODEL') {
-                    $body = '{"contentVersion":"test-v1","generationMode":"MODEL",' +
+                    $body = '{"contentVersion":"test-v1","intentSource":"MODEL",' +
+                        '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"VERIFIED",' +
                         '"degraded":false,"resolution":"ANSWERED",' +
                         '"blocks":[{"content":"fixture"}]}'
                 }
                 else {
-                    $body = '{"contentVersion":"test-v1","generationMode":"FALLBACK",' +
-                        '"degraded":true,"resolution":"ANSWERED",' +
+                    $body = '{"contentVersion":"test-v1","intentSource":"GLOBAL",' +
+                        '"constructionMode":"TEMPLATE","evidenceState":"NOT_REQUIRED",' +
+                        '"degraded":true,"resolution":"CAPABILITY_UNAVAILABLE",' +
                         '"noticeCode":"PROVIDER_DRAFT_REJECTED",' +
                         '"blocks":[{"content":"fixture"}]}'
                 }

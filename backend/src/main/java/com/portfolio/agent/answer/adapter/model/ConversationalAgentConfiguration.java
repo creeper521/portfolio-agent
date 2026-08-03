@@ -19,7 +19,6 @@ import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
 import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
-import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -172,8 +171,6 @@ public class ConversationalAgentConfiguration {
             DynamicQuestionService questionService,
             DeterministicConversationFallback fallback,
             ConversationProviderAccess providerAccess,
-            ConversationSubjectGuard subjectGuard,
-            PortfolioTaskResolver portfolioTaskResolver,
             PortfolioIntelligence portfolioIntelligence,
             PortfolioIntelligenceAnswerAssembler portfolioAnswerAssembler,
             ConversationProgressClassifier progressClassifier,
@@ -191,8 +188,6 @@ public class ConversationalAgentConfiguration {
                 questionService,
                 fallback,
                 providerAccess,
-                subjectGuard,
-                portfolioTaskResolver,
                 portfolioIntelligence,
                 portfolioAnswerAssembler,
                 progressClassifier,

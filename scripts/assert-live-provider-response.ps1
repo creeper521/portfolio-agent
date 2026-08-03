@@ -67,8 +67,14 @@ try {
     if ($response.degraded -isnot [bool] -or $response.degraded -ne $false) {
         throw 'degraded'
     }
-    if ($response.generationMode -cne 'MODEL') {
-        throw 'generation mode'
+    if ($response.intentSource -cne 'MODEL') {
+        throw 'intent source'
+    }
+    if ($response.constructionMode -cne 'EVIDENCE_COMPOSITION') {
+        throw 'construction mode'
+    }
+    if ($response.evidenceState -cne 'VERIFIED') {
+        throw 'evidence state'
     }
     if ($response.resolution -cne 'ANSWERED') {
         throw 'resolution'
@@ -77,7 +83,7 @@ try {
         throw 'blocks'
     }
 
-    Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; generationMode=MODEL; resolution=ANSWERED; blocks=$($response.blocks.Count)."
+    Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; intentSource=MODEL; constructionMode=EVIDENCE_COMPOSITION; evidenceState=VERIFIED; resolution=ANSWERED; blocks=$($response.blocks.Count)."
 }
 catch {
     Write-Error 'Live Provider response assertion failed.'

@@ -1,7 +1,6 @@
 package com.portfolio.agent.answer.adapter.model;
 
 import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
-import com.portfolio.agent.answer.domain.ModelExpressionFailureCode;
 import com.portfolio.agent.answer.service.ProviderFailureCode;
 import com.portfolio.agent.answer.service.ProviderFailureCodeMapper;
 import com.portfolio.agent.common.observability.DiagnosticCode;
@@ -14,13 +13,6 @@ class ProviderFailureCodeMapperTest {
     @Test
     void mapsEveryConversationFailureToOneClosedProviderFailureCode() {
         assertThat(ConversationModelFailureCode.values()).allSatisfy(failureCode ->
-                assertThat(ProviderFailureCodeMapper.map(failureCode))
-                        .isEqualTo(expected(failureCode)));
-    }
-
-    @Test
-    void mapsEveryExpressionFailureToOneClosedProviderFailureCode() {
-        assertThat(ModelExpressionFailureCode.values()).allSatisfy(failureCode ->
                 assertThat(ProviderFailureCodeMapper.map(failureCode))
                         .isEqualTo(expected(failureCode)));
     }
@@ -57,24 +49,6 @@ class ProviderFailureCodeMapperTest {
             case REQUEST_BUILD_FAILED ->
                     ProviderFailureCode.PROVIDER_REQUEST_BUILD_FAILED;
             case DISABLED -> ProviderFailureCode.PROVIDER_DISABLED;
-        };
-    }
-
-    private ProviderFailureCode expected(
-            ModelExpressionFailureCode failureCode
-    ) {
-        return switch (failureCode) {
-            case TIMEOUT -> ProviderFailureCode.PROVIDER_TIMEOUT;
-            case PROVIDER_ERROR ->
-                    ProviderFailureCode.PROVIDER_CONNECTION_FAILED;
-            case EMPTY_RESPONSE ->
-                    ProviderFailureCode.PROVIDER_EMPTY_RESPONSE;
-            case INVALID_RESPONSE ->
-                    ProviderFailureCode.PROVIDER_INVALID_RESPONSE;
-            case REQUEST_BUILD_FAILED ->
-                    ProviderFailureCode.PROVIDER_REQUEST_BUILD_FAILED;
-            case DRAFT_REJECTED ->
-                    ProviderFailureCode.PROVIDER_DRAFT_REJECTED;
         };
     }
 }

@@ -48,8 +48,11 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
-                .andExpect(jsonPath("$.generationMode").value("DETERMINISTIC"))
-                .andExpect(jsonPath("$.answerSource").value("RETRIEVAL"))
+                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
+                .andExpect(jsonPath("$.constructionMode")
+                        .value("EVIDENCE_COMPOSITION"))
+                .andExpect(jsonPath("$.intentSource").value("RULE"))
+                .andExpect(jsonPath("$.evidenceState").value("VERIFIED"))
                 .andExpect(jsonPath("$.blocks").isNotEmpty())
                 .andExpect(jsonPath("$.degraded").value(false));
 
@@ -59,7 +62,8 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
-                .andExpect(jsonPath("$.resolution").value("BOUNDARY"))
+                .andExpect(jsonPath("$.resolution").value("NOT_SUPPORTED"))
+                .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
                 .andExpect(jsonPath("$.degraded").value(false))
                 .andExpect(jsonPath("$.blocks.length()").value(1))
                 .andExpect(jsonPath("$.blocks[0].sourceScope").value("PORTFOLIO"))
@@ -74,7 +78,7 @@ class CaseConversationBundleIntegrationTest {
                 {
                   "turnId": "%s",
                   "requestToken": "%s",
-                  "question": "How was this case verified?",
+                  "question": "这个案例如何验证？",
                   "messages": [],
                   "context": {
                     "caseSlug": "%s",

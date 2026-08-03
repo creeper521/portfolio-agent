@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.intelligence.adapter.postgres;
 
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetrievalException;
 import com.portfolio.agent.selection.adapter.postgres.JdbcPostgresSelectionQuery;
 import com.portfolio.agent.selection.adapter.postgres.PostgresHybridCandidateRetriever;
@@ -57,7 +58,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
             com.portfolio.agent.selection.adapter.postgres.ActiveRelease release =
                     selectionQuery.activeRelease();
             if (request.isExactPortfolioLookup()) {
-                return retrieveExact(release, request.getRequiredPortfolioIds(), target);
+                return retrieveExact(release, request, target);
             }
             CandidateRetrievalResult candidates = candidateRetriever.retrieve(
                     release, target, request.getLimit());
@@ -68,16 +69,23 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                     candidates,
                     passageQuery.findPassages(release.getReleaseId(), subjectIds));
         } catch (CandidateRetrievalException exception) {
-            throw new PortfolioRetrievalException("PostgreSQL public retrieval is unavailable", exception);
+            throw new PortfolioRetrievalException(
+                    PostgresRetrievalFailureClassifier.classify(exception),
+                    "PostgreSQL public retrieval failed",
+                    exception);
         } catch (DataAccessException exception) {
-            throw new PortfolioRetrievalException("PostgreSQL public retrieval is unavailable", exception);
+            throw new PortfolioRetrievalException(
+                    PostgresRetrievalFailureClassifier.classify(exception),
+                    "PostgreSQL public retrieval failed",
+                    exception);
         }
     }
 
     private PostgresKnowledgeQueryResult retrieveExact(
             com.portfolio.agent.selection.adapter.postgres.ActiveRelease release,
-            List<String> subjectIds,
+            PortfolioRetrievalRequest request,
             SelectionTarget target) {
+        List<String> subjectIds = request.getRequiredPortfolioIds();
         if (subjectIds.isEmpty()) {
             return new PostgresKnowledgeQueryResult(
                     new CandidateRetrievalResult(
@@ -90,9 +98,23 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 .toList();
         CandidateRetrievalResult candidateResult = new CandidateRetrievalResult(
                 release.getReleaseVersion(), RetrievalMode.FTS_ONLY, candidates);
-        return new PostgresKnowledgeQueryResult(
-                candidateResult,
-                passageQuery.findPassages(release.getReleaseId(), subjectIds));
+        List<PostgresKnowledgePassageRow> passages = request.getStrategy()
+                == PortfolioRetrievalStrategy.CONTEXT_VALIDATION
+                ? passageQuery.findPassages(release.getReleaseId(), subjectIds)
+                : request.getStrategy() == PortfolioRetrievalStrategy.REFERENCE_SCOPED
+                ? passageQuery.findPassages(release.getReleaseId(), subjectIds).stream()
+                        .filter(row -> request.getRequiredClaimIds().isEmpty()
+                                || request.getRequiredClaimIds().contains(row.getClaimId()))
+                        .filter(row -> request.getPreferredClaimCategories().isEmpty()
+                                || request.getPreferredClaimCategories().contains(
+                                        row.getClaimCategory()))
+                        .limit(request.getLimit())
+                        .toList()
+                : passageQuery.findRelevantPassages(
+                        release.getReleaseId(), subjectIds,
+                        request.getQuery(), request.getPreferredClaimCategories(),
+                        request.getLimit());
+        return new PostgresKnowledgeQueryResult(candidateResult, passages);
     }
 
     private SelectionCandidate exactCandidate(PostgresSelectionRow row) {

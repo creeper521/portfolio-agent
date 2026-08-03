@@ -549,6 +549,7 @@ try {
             $backendEnvironment[$entry.Key] = $entry.Value
         }
         $backendEnvironment.PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED = 'true'
+        $backendEnvironment.PORTFOLIO_LOG_DIRECTORY = $LogDirectory
         $backend = Start-OwnedProcess $backendExecutable `
             $backendArguments `
             $backendEnvironment `

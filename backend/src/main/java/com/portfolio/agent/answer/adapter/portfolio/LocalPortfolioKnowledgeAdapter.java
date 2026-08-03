@@ -28,6 +28,7 @@ import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Primary;
 
 import java.util.List;
 import java.util.Set;
@@ -38,6 +39,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
+@Primary
 public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway {
 
     private final PublicPortfolioRepository repository;

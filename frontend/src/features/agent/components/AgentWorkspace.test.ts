@@ -27,6 +27,9 @@ function answerResponse(
     contentVersion: '2026-07-21',
     questionPresetId: 'sql-audit-overview',
     resolution: 'ANSWERED' as const,
+    constructionMode: 'EVIDENCE_COMPOSITION' as const,
+    intentSource: 'PRESET' as const,
+    evidenceState: 'VERIFIED' as const,
     answerSource: 'PRESET' as const,
     generationMode: 'DETERMINISTIC' as const,
     verification: 'VERIFIED' as const,
@@ -60,11 +63,12 @@ function answerResponse(
         facet: null,
       },
     ],
-    contextEnvelope: {
+    referenceContext: {
       previousContentVersion: '2026-07-21',
       projectSlugs: ['sql-audit'],
       questionPresetId: 'sql-audit-overview',
       referencedClaimIds: ['claim-sql-audit-delivered'],
+      followUpAction: 'RELATED_QUESTION',
     },
   }
 }
@@ -515,7 +519,7 @@ describe('AgentWorkspace', () => {
 
     expect(wrapper.get('.message--agent').text()).toContain('项目说明')
     expect(wrapper.get('.message--agent').text()).toContain('背景内容')
-    expect(wrapper.get('.message--agent').text()).toContain('已核验回答')
+    expect(wrapper.get('.message--agent').text()).toContain('已验证回答')
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
@@ -564,19 +568,23 @@ describe('AgentWorkspace', () => {
     )
   })
 
-  it('shows retrieval provenance without turning a boundary into an applicable source', async () => {
+  it('shows rule provenance without turning a clarification into an applicable source', async () => {
     askQuestionMock
       .mockResolvedValueOnce({
         ...answerResponse(),
         questionPresetId: undefined,
         answerSource: 'RETRIEVAL' as const,
+        intentSource: 'RULE' as const,
         verification: 'PARTIALLY_VERIFIED' as const,
       })
       .mockResolvedValueOnce({
         ...answerResponse(),
         questionPresetId: undefined,
-        resolution: 'BOUNDARY' as const,
+        resolution: 'NEEDS_CLARIFICATION' as const,
         answerSource: undefined,
+        intentSource: 'GLOBAL' as const,
+        constructionMode: 'TEMPLATE' as const,
+        evidenceState: 'NOT_REQUIRED' as const,
         verification: 'NOT_APPLICABLE' as const,
       })
     const wrapper = mountWorkspace()
@@ -585,13 +593,13 @@ describe('AgentWorkspace', () => {
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
     expect(wrapper.findAll('.message--agent')[0].text())
-      .toContain('资料检索')
+      .toContain('规则识别')
 
     await wrapper.get('textarea').setValue('越界问题')
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
     const boundary = wrapper.findAll('.message--agent')[1].text()
-    expect(boundary).toContain('当前能力边界')
+    expect(boundary).toContain('需要补充信息')
     expect(boundary).not.toContain('来自公开资料检索')
     expect(boundary).not.toContain('PRESET')
     expect(boundary).not.toContain('RETRIEVAL')
@@ -611,25 +619,25 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
       question: '查看当前状态',
       questionPresetId: undefined,
-      contextEnvelope: {
+      referenceContext: {
         previousContentVersion: '2026-07-21',
         projectSlugs: ['sql-audit'],
         questionPresetId: 'sql-audit-overview',
         referencedClaimIds: ['claim-sql-audit-delivered'],
         selectedSectionType: undefined,
-        followUpIntent: 'CURRENT_STATUS',
+        followUpAction: 'CURRENT_STATUS',
       },
     }))
     const body = askQuestionMock.mock.calls[1]?.[0]
     expect(body.messages).toBeDefined()
     expect(body.messages.length).toBeGreaterThanOrEqual(2)
-    expect(body.contextEnvelope).toEqual({
+    expect(body.referenceContext).toEqual({
       previousContentVersion: '2026-07-21',
       projectSlugs: ['sql-audit'],
       questionPresetId: 'sql-audit-overview',
       referencedClaimIds: ['claim-sql-audit-delivered'],
       selectedSectionType: undefined,
-      followUpIntent: 'CURRENT_STATUS',
+      followUpAction: 'CURRENT_STATUS',
     })
     // 消息历史不应包含原始内部字段
     expect(JSON.stringify(body.messages)).not.toContain('claim-sql-audit-delivered')

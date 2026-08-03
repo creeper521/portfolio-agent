@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.dto.request;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ConversationMessageRole;
 import com.portfolio.agent.answer.domain.ConversationTopic;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioFollowUpAction;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -148,6 +149,42 @@ class ConversationAnswerRequestTest {
         assertThat(recommendationContext.getRecommendationBatchId()).startsWith("rec_");
         assertThat(recommendationContext.getSelectedPortfolioIds())
                 .containsExactly("project-1", "case-2");
+    }
+
+    @Test
+    void deserializesPresetIdAndExplicitPortfolioReferenceContext()
+            throws Exception {
+        ConversationAnswerRequest request = new ObjectMapper().readValue("""
+                {
+                  "turnId": "turn-reference",
+                  "requestToken": "6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
+                  "questionPresetId": "question-sql-audit-async-and-recovery",
+                  "question": "Show the evidence for this conclusion",
+                  "messages": [],
+                  "context": {
+                    "projectSlug": "sql-audit",
+                    "audienceRole": "INTERVIEWER",
+                    "source": "AGENT_PAGE",
+                    "referenceContext": {
+                      "previousContentVersion": "public-2026-07-31",
+                      "projectSlugs": ["sql-audit"],
+                      "caseSlugs": [],
+                      "questionPresetId": "question-sql-audit-async-and-recovery",
+                      "referencedClaimIds": ["claim-sql-audit-async-task"],
+                      "selectedSectionType": "VERIFICATION",
+                      "followUpAction": "SHOW_EVIDENCE"
+                    }
+                  }
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThat(request.getQuestionPresetId())
+                .isEqualTo("question-sql-audit-async-and-recovery");
+        assertThat(request.getContext().getReferenceContext().getFollowUpAction())
+                .isEqualTo(PortfolioFollowUpAction.SHOW_EVIDENCE);
+        assertThat(request.getContext().getReferenceContext().getReferencedClaimIds())
+                .containsExactly("claim-sql-audit-async-task");
+        assertThat(validator.validate(request)).isEmpty();
     }
 
     @Test
