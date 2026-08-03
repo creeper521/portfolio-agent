@@ -8,6 +8,7 @@ import type {
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
 import {
   createFrontendDiagnosticEvent,
+  durationBucketFor,
 } from '../../../shared/diagnostics/frontendDiagnosticTypes'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { askQuestion } from '../api/answerApi'
@@ -311,6 +312,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
   activeRequestController = controller
   pending.value = true
   clearAnswerFailure()
+  const requestStartedAt = Date.now()
   try {
     // Build conversation history from current session (last 40 messages = 20 rounds)
     const completedMessages = session.messages.at(-1)?.role === 'USER'
@@ -379,6 +381,21 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       evidenceIds: mapped.evidenceIds,
     })
     sessions.applyAnswerProgress(session.id, mapped)
+    frontendDiagnostics.report(createFrontendDiagnosticEvent({
+      eventName: 'frontend.agent.request.completed',
+      turnId: mapped.turnId,
+      durationBucket: durationBucketFor(Date.now() - requestStartedAt),
+      httpStatus: 200,
+      ...(mapped.generationMode === undefined
+        ? {}
+        : { generationMode: mapped.generationMode }),
+      degraded: mapped.degraded === true,
+      ...(mapped.guidanceStage === null
+        ? {}
+        : { guidanceStage: mapped.guidanceStage }),
+      suggestedQuestionCount: mapped.suggestedQuestions.length,
+      contentVersion: mapped.contentVersion,
+    }))
   } catch (error) {
     if (disposed || request !== requestVersion) return
     if (controller.signal.aborted

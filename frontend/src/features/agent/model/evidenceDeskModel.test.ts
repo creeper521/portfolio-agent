@@ -17,6 +17,7 @@ const messages: AgentMessage[] = [{
     generationMode: 'DETERMINISTIC',
     verification: 'VERIFIED',
     turnId: 'turn-1',
+    contentVersion: '2026-07-21',
     coveredTopics: [],
     guidanceStage: null,
     evidenceIds: ['evidence-a'],

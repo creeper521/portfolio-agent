@@ -42,6 +42,7 @@ describe('mapAnswerResponse', () => {
 
     expect(mapped.sections).toEqual(source.sections)
     expect(mapped).toMatchObject({
+      contentVersion: '2026-07-21',
       resolution: 'ANSWERED',
       answerSource: 'PRESET',
       generationMode: 'DETERMINISTIC',

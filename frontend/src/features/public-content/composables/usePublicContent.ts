@@ -7,6 +7,8 @@ import {
 } from '../repository/publicContentRepository'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
+import { createFrontendDiagnosticEvent } from '../../../shared/diagnostics/frontendDiagnosticTypes'
+import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
 export type PublicContentStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -44,6 +46,10 @@ export function createPublicContentState(repository: PublicContentRepository) {
       .then((loadedPortfolio) => {
         portfolio.value = loadedPortfolio
         status.value = 'ready'
+        frontendDiagnostics.report(createFrontendDiagnosticEvent({
+          eventName: 'frontend.content.load.completed',
+          contentVersion: loadedPortfolio.contentVersion,
+        }))
       })
       .catch((failure: unknown) => {
         status.value = 'error'

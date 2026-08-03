@@ -6,6 +6,7 @@ import { useLocalSessions } from './useLocalSessions'
 
 const mappedAnswer = {
   turnId: 'turn-1',
+  contentVersion: '2026-07-21',
   title: '项目说明',
   summary: '公开摘要',
   sections: [{ type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] }],

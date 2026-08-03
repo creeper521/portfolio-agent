@@ -1087,6 +1087,38 @@ describe('AgentWorkspace', () => {
     expect(diagnosticPayload).not.toContain('诊断补足测试问题')
   })
 
+  it('reports a completed answer with safe metadata only', async () => {
+    const reportSpy = vi.spyOn(frontendDiagnostics, 'report')
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      turnId: '123e4567-e89b-42d3-a456-426614174001',
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('不能进入诊断的访客问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(reportSpy).toHaveBeenCalledOnce()
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.agent.request.completed',
+      turnId: '123e4567-e89b-42d3-a456-426614174001',
+      httpStatus: 200,
+      generationMode: 'DETERMINISTIC',
+      degraded: false,
+      guidanceStage: 'OPENING',
+      suggestedQuestionCount: 3,
+      contentVersion: '2026-07-21',
+      durationBucket: expect.stringMatching(
+        /^(?:LT_1000_MS|FROM_1000_TO_4999_MS|GE_5000_MS)$/,
+      ),
+    }))
+    const payload = JSON.stringify(reportSpy.mock.calls)
+    expect(payload).not.toContain('不能进入诊断的访客问题')
+    expect(payload).not.toContain('公开摘要')
+    expect(payload).not.toContain('当前项目追问')
+  })
+
   it('treats a fallback answer as a successful response with its own suggestions', async () => {
     askQuestionMock.mockResolvedValueOnce({
       ...answerResponse(),

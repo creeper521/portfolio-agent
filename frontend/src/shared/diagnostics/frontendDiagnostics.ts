@@ -33,9 +33,16 @@ export const frontendDiagnostics: FrontendDiagnostics = {
   },
 }
 
+let runtimeDiagnosticsInstalled = false
+
 export function installRuntimeDiagnostics(): void {
+  if (runtimeDiagnosticsInstalled) return
+  runtimeDiagnosticsInstalled = true
   window.addEventListener('error', (event) => reportRuntimeFailure('ERROR_EVENT', event.error))
   window.addEventListener('unhandledrejection', (event) => reportRuntimeFailure('UNHANDLED_REJECTION', event.reason))
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.application.started',
+  }))
 }
 
 function reportRuntimeFailure(errorKind: 'ERROR_EVENT' | 'UNHANDLED_REJECTION', error: unknown): void {

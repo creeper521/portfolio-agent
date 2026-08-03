@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getClientSessionId } from './clientCorrelation'
 import { frontendDiagnostics, installRuntimeDiagnostics } from './frontendDiagnostics'
 import {
+  createFrontendDiagnosticEvent,
   createFirstPartyStackFingerprint,
   serializeFrontendEvent,
   type ReportableFrontendEvent,
@@ -96,6 +97,23 @@ describe('frontend diagnostic event contract', () => {
     expect(serializeFrontendEvent(event)).toEqual(event)
   })
 
+  it('serializes a completed answer with only safe lifecycle metadata', () => {
+    const event = createFrontendDiagnosticEvent({
+      eventName: 'frontend.agent.request.completed',
+      turnId: crypto.randomUUID(),
+      durationBucket: 'FROM_1000_TO_4999_MS',
+      httpStatus: 200,
+      generationMode: 'MODEL',
+      degraded: false,
+      guidanceStage: 'DEEPENING',
+      suggestedQuestionCount: 3,
+      contentVersion: '2026-07-29.1',
+    })
+
+    expect(serializeFrontendEvent(event)).toEqual(event)
+    expect(JSON.stringify(event)).not.toMatch(/"(?:question|answer|messages?|body)":/i)
+  })
+
   it.each([
     ['event name', { eventName: 'frontend.not-approved' }],
     ['schema version', { schemaVersion: 2 }],
@@ -111,7 +129,16 @@ describe('frontend diagnostic event contract', () => {
     ['recovered count type', { recoveredCount: 'two' }],
     ['recovered count negative', { recoveredCount: -1 }],
     ['recovered count fraction', { recoveredCount: 1.5 }],
+    ['recovered count above contract', { recoveredCount: 4 }],
     ['guidance stage enum', { guidanceStage: 'NOT_A_STAGE' }],
+    ['HTTP status below range', { httpStatus: 99 }],
+    ['HTTP status above range', { httpStatus: 600 }],
+    ['generation mode enum', { generationMode: 'NOT_A_MODE' }],
+    ['degraded type', { degraded: 'false' }],
+    ['suggestion count negative', { suggestedQuestionCount: -1 }],
+    ['suggestion count above contract', { suggestedQuestionCount: 4 }],
+    ['content version shape', { contentVersion: 'contains spaces' }],
+    ['content version length', { contentVersion: 'v'.repeat(65) }],
   ])('rejects an invalid runtime %s', (_label, invalidField) => {
     expect(serializeFrontendEvent({ ...createEvent(), ...invalidField } as never)).toBeUndefined()
   })
@@ -212,6 +239,18 @@ describe('frontend diagnostic event contract', () => {
     await expect(createFirstPartyStackFingerprint(maliciousStack as never)).resolves.toBeUndefined()
   })
 
+  it('reports application startup once when runtime diagnostics are installed repeatedly', () => {
+    const report = vi.spyOn(frontendDiagnostics, 'report')
+
+    installRuntimeDiagnostics()
+    installRuntimeDiagnostics()
+
+    expect(report).toHaveBeenCalledTimes(1)
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.application.started',
+    }))
+  })
+
   it('runtime listeners contain a throwing Error.stack getter without an unhandled rejection', async () => {
     const report = vi.spyOn(frontendDiagnostics, 'report')
     const maliciousError = Object.create(Error.prototype) as Error
@@ -229,4 +268,5 @@ describe('frontend diagnostic event contract', () => {
     await vi.waitFor(() => expect(report).toHaveBeenCalledOnce())
     expect(report).toHaveBeenCalledWith(expect.not.objectContaining({ errorFingerprint: expect.anything() }))
   })
+
 })

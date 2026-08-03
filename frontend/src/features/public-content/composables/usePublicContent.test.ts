@@ -5,6 +5,7 @@ import type { PublicPortfolio } from '../model/publicContentTypes'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { ApiPublicContentRepository } from '../repository/apiPublicContentRepository'
 import { createPublicContentState } from './usePublicContent'
+import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -16,6 +17,7 @@ function createDeferred<T>() {
 
 describe('createPublicContentState', () => {
   it('moves from loading to ready', async () => {
+    const report = vi.spyOn(frontendDiagnostics, 'report')
     const repository = new ApiPublicContentRepository(
       vi.fn().mockResolvedValue(previewPublicContent),
     )
@@ -27,6 +29,12 @@ describe('createPublicContentState', () => {
     await request
     expect(state.status.value).toBe('ready')
     expect(state.portfolio.value?.projects[0]?.slug).toBe('sql-audit')
+    expect(report).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.content.load.completed',
+      contentVersion: previewPublicContent.contentVersion,
+    }))
+    expect(JSON.stringify(report.mock.calls)).not.toContain('SQL 审计')
   })
 
   it('clears a failed cache before retrying', async () => {

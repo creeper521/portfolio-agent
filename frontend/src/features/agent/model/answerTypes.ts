@@ -146,6 +146,7 @@ export interface AnswerResponse {
 
 export interface MappedAnswer {
   turnId: string
+  contentVersion: string
   title: string
   summary: string
   sections: AnswerSection[]

@@ -1,6 +1,9 @@
 import { createClientRequestId, getClientSessionId } from './clientCorrelation'
 
 export type FrontendDiagnosticEventName =
+  | 'frontend.application.started'
+  | 'frontend.content.load.completed'
+  | 'frontend.agent.request.completed'
   | 'frontend.content.load.failed'
   | 'frontend.agent.request.failed'
   | 'frontend.agent.request.slow'
@@ -11,6 +14,7 @@ export type FrontendDiagnosticEventName =
 export type FrontendDurationBucket = 'LT_1000_MS' | 'FROM_1000_TO_4999_MS' | 'GE_5000_MS'
 
 export type FrontendGuidanceStage = 'OPENING' | 'DEEPENING' | 'WRAP_UP' | 'EXPLORE_OTHERS'
+export type FrontendGenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
 
 export interface ReportableFrontendEvent {
   schemaVersion: 1
@@ -26,11 +30,19 @@ export interface ReportableFrontendEvent {
   durationBucket?: FrontendDurationBucket
   recoveredCount?: number
   guidanceStage?: FrontendGuidanceStage
+  httpStatus?: number
+  generationMode?: FrontendGenerationMode
+  degraded?: boolean
+  suggestedQuestionCount?: number
+  contentVersion?: string
 }
 
 export type SafeFrontendEvent = ReportableFrontendEvent
 
 const FRONTEND_EVENT_NAMES = new Set<FrontendDiagnosticEventName>([
+  'frontend.application.started',
+  'frontend.content.load.completed',
+  'frontend.agent.request.completed',
   'frontend.content.load.failed',
   'frontend.agent.request.failed',
   'frontend.agent.request.slow',
@@ -49,6 +61,11 @@ const GUIDANCE_STAGES = new Set<FrontendGuidanceStage>([
   'WRAP_UP',
   'EXPLORE_OTHERS',
 ])
+const GENERATION_MODES = new Set<FrontendGenerationMode>([
+  'DETERMINISTIC',
+  'MODEL',
+  'FALLBACK',
+])
 const ERROR_KINDS = new Set([
   'HTTP',
   'TIMEOUT',
@@ -61,6 +78,7 @@ const ERROR_KINDS = new Set([
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/
 const FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/
+const CONTENT_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 export interface FrontendDiagnosticEventInput {
   eventName: FrontendDiagnosticEventName
@@ -73,6 +91,11 @@ export interface FrontendDiagnosticEventInput {
   durationBucket?: FrontendDurationBucket
   recoveredCount?: number
   guidanceStage?: FrontendGuidanceStage
+  httpStatus?: number
+  generationMode?: FrontendGenerationMode
+  degraded?: boolean
+  suggestedQuestionCount?: number
+  contentVersion?: string
 }
 
 export function createFrontendDiagnosticEvent(input: FrontendDiagnosticEventInput): ReportableFrontendEvent {
@@ -90,6 +113,13 @@ export function createFrontendDiagnosticEvent(input: FrontendDiagnosticEventInpu
     ...(input.durationBucket === undefined ? {} : { durationBucket: input.durationBucket }),
     ...(input.recoveredCount === undefined ? {} : { recoveredCount: input.recoveredCount }),
     ...(input.guidanceStage === undefined ? {} : { guidanceStage: input.guidanceStage }),
+    ...(input.httpStatus === undefined ? {} : { httpStatus: input.httpStatus }),
+    ...(input.generationMode === undefined ? {} : { generationMode: input.generationMode }),
+    ...(input.degraded === undefined ? {} : { degraded: input.degraded }),
+    ...(input.suggestedQuestionCount === undefined ? {} : {
+      suggestedQuestionCount: input.suggestedQuestionCount,
+    }),
+    ...(input.contentVersion === undefined ? {} : { contentVersion: input.contentVersion }),
   }
 }
 
@@ -120,8 +150,16 @@ export function serializeFrontendEvent(event: unknown): ReportableFrontendEvent 
     if (!copyOptionalString(event, sanitized, 'errorKind', (value) => ERROR_KINDS.has(value))) return undefined
     if (!copyOptionalString(event, sanitized, 'errorFingerprint', (value) => FINGERPRINT_PATTERN.test(value))) return undefined
     if (!copyOptionalString(event, sanitized, 'durationBucket', (value) => DURATION_BUCKETS.has(value as FrontendDurationBucket))) return undefined
-    if (!copyOptionalNumber(event, sanitized, 'recoveredCount', (value) => Number.isInteger(value) && value >= 0)) return undefined
+    if (!copyOptionalNumber(event, sanitized, 'recoveredCount', isQuestionCount)) return undefined
     if (!copyOptionalString(event, sanitized, 'guidanceStage', (value) => GUIDANCE_STAGES.has(value as FrontendGuidanceStage))) return undefined
+    if (!copyOptionalNumber(event, sanitized, 'httpStatus', (value) =>
+      Number.isInteger(value) && value >= 100 && value <= 599)) return undefined
+    if (!copyOptionalString(event, sanitized, 'generationMode', (value) =>
+      GENERATION_MODES.has(value as FrontendGenerationMode))) return undefined
+    if (!copyOptionalBoolean(event, sanitized, 'degraded')) return undefined
+    if (!copyOptionalNumber(event, sanitized, 'suggestedQuestionCount', isQuestionCount)) return undefined
+    if (!copyOptionalString(event, sanitized, 'contentVersion', (value) =>
+      CONTENT_VERSION_PATTERN.test(value))) return undefined
     return sanitized
   } catch {
     return undefined
@@ -172,7 +210,8 @@ function isCanonicalInstant(value: string): boolean {
 function copyOptionalString(
   source: Record<string, unknown>,
   target: ReportableFrontendEvent,
-  key: 'serverRequestId' | 'turnId' | 'errorCode' | 'errorKind' | 'errorFingerprint' | 'durationBucket' | 'guidanceStage',
+  key: 'serverRequestId' | 'turnId' | 'errorCode' | 'errorKind' | 'errorFingerprint' |
+    'durationBucket' | 'guidanceStage' | 'generationMode' | 'contentVersion',
   accepts: (value: string) => boolean,
 ): boolean {
   if (!Object.prototype.hasOwnProperty.call(source, key)) return true
@@ -185,7 +224,7 @@ function copyOptionalString(
 function copyOptionalNumber(
   source: Record<string, unknown>,
   target: ReportableFrontendEvent,
-  key: 'recoveredCount',
+  key: 'recoveredCount' | 'httpStatus' | 'suggestedQuestionCount',
   accepts: (value: number) => boolean,
 ): boolean {
   if (!Object.prototype.hasOwnProperty.call(source, key)) return true
@@ -193,4 +232,20 @@ function copyOptionalNumber(
   if (typeof value !== 'number' || !accepts(value)) return false
   Object.assign(target, { [key]: value })
   return true
+}
+
+function copyOptionalBoolean(
+  source: Record<string, unknown>,
+  target: ReportableFrontendEvent,
+  key: 'degraded',
+): boolean {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return true
+  const value = source[key]
+  if (typeof value !== 'boolean') return false
+  Object.assign(target, { [key]: value })
+  return true
+}
+
+function isQuestionCount(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 3
 }
