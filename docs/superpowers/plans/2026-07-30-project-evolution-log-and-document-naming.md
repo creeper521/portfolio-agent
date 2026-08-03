@@ -13,7 +13,7 @@
 - Preserve all user-owned uncommitted changes; modify overlapping untracked plans only at the exact old path literals required by the rename.
 - Do not stage, commit, push, reset, restore, or discard changes without explicit user authorization.
 - Keep `docs/decisions`, `docs/handoffs`, `docs/reports`, `docs/superpowers/specs`, and `docs/superpowers/plans` in their current locations.
-- Keep document numbers `05–11` and use the exact Chinese names approved in the design. `10` is reserved by the concurrently added local PostgreSQL / pgvector runbook.
+- Keep document numbers `05–11` and use the exact Chinese names approved in the design. `10` is the local PostgreSQL / pgvector runbook and is named `10-本地PostgreSQL与pgvector运行手册.md`.
 - The evolution log records capabilities, important behavior fixes, product decisions, and technology evolution; it does not record code steps, test procedures, commit hashes, or commit ranges.
 - Distinguish design from implementation and use the fixed states `提出`, `选定`, `已实现`, `受限启用`, `默认关闭`, `已取代`, and `未部署`.
 - Use relative Markdown links to real design, decision, handoff, or report files.

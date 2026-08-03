@@ -1,5 +1,8 @@
 # 本地 PostgreSQL / pgvector 运行手册
 
+> **状态：** 当前本地开发运行手册（2026-08-03）
+> **边界：** 双库、Markdown 显式导入和公开数据库主检索均已实现但默认关闭；本文不构成数据库、模型或生产环境已验收的声明。
+
 本文只描述本地开发环境。它使用一个 PostgreSQL 16 / pgvector 容器，但创建两个真正独立的数据库和两个 owner 账号：
 
 - `portfolio_public_dev`：公开 Release、Project、Case、Claim、Evidence、检索文档和公开向量。

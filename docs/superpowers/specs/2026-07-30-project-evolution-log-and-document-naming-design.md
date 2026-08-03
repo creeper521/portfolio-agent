@@ -25,7 +25,7 @@ docs/
 ├─ 07-模块化单体后端审核记录.md
 ├─ 08-当前实现状态.md
 ├─ 09-作品集资产库状态.md
-├─ 10-local-postgresql-pgvector-runbook.md
+├─ 10-本地PostgreSQL与pgvector运行手册.md
 ├─ 11-项目演进日志.md
 ├─ decisions/
 ├─ handoffs/
@@ -37,7 +37,7 @@ docs/
 
 `decisions`、`handoffs`、`reports`、`superpowers/specs` 和 `superpowers/plans` 均保留原位置。
 
-实施期间 `10-local-postgresql-pgvector-runbook.md` 已由并行工作正式进入 `master`，因此项目演进日志从原定的 `10` 顺延为 `11`，不覆盖或移动现有运行手册。
+实施期间本地 PostgreSQL / pgvector 运行手册已由并行工作正式进入 `master`，因此项目演进日志从原定的 `10` 顺延为 `11`，不覆盖或移动现有运行手册。该运行手册随后统一命名为 `10-本地PostgreSQL与pgvector运行手册.md`。
 
 ## 3. 文件重命名
 
