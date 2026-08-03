@@ -35,9 +35,22 @@ public final class PostgresHybridCandidateRetriever implements CandidateRetrieva
     @Override
     public CandidateRetrievalResult retrieve(SelectionTarget target, int limit) {
         ActiveRelease release;
-        List<PostgresSelectionRow> ftsRows;
         try {
             release = query.activeRelease();
+        } catch (RuntimeException exception) {
+            throw new CandidateRetrievalException(
+                    "public candidate retrieval is unavailable",
+                    exception);
+        }
+        return retrieve(release, target, limit);
+    }
+
+    public CandidateRetrievalResult retrieve(
+            ActiveRelease release,
+            SelectionTarget target,
+            int limit) {
+        List<PostgresSelectionRow> ftsRows;
+        try {
             ftsRows = query.searchFts(release.getReleaseId(), target, limit);
         } catch (RuntimeException exception) {
             throw new CandidateRetrievalException(

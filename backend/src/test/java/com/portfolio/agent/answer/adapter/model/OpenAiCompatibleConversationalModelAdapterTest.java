@@ -15,6 +15,8 @@ import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.ModelProviderKind;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
@@ -83,6 +85,93 @@ class OpenAiCompatibleConversationalModelAdapterTest {
         assertThat(result.isSuccessful()).isFalse();
         assertThat(result.getFailureCode())
                 .isEqualTo(ConversationModelFailureCode.INVALID_RESPONSE);
+        server.verify();
+    }
+
+    @Test
+    void classifiesPortfolioTaskUsingTheConstrainedStructuredContract() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder);
+        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
+                .andExpect(content().string(containsString("\\\"operation\\\":\\\"portfolio_task\\\"")))
+                .andRespond(withSuccess(providerResponse(
+                        "{\"boundaryIntent\":null,\"mode\":\"RECOMMENDATION\",\"conditions\":{\"careerTrack\":\"backend\",\"audienceRole\":\"interviewer\",\"capabilityCodes\":[\"rag\"],\"goal\":\"当前目标\",\"requestedSize\":null},\"refinement\":null,\"confidence\":0.91}"),
+                        MediaType.APPLICATION_JSON));
+
+        ConversationModelResult<PortfolioTaskClassification> result =
+                adapter.classifyPortfolioTask("turn-1", "请根据我的情况处理", null);
+
+        assertThat(result.isSuccessful()).isTrue();
+        assertThat(result.getValue().getMode()).isEqualTo(PortfolioTaskMode.RECOMMENDATION);
+        assertThat(result.getValue().getConditions().hasRequestedSize()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void decodesUnsafePortfolioTaskBoundaryFromTheStructuredContract() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        List<DiagnosticEvent> events = new ArrayList<>();
+        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder, events::add);
+        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
+                .andRespond(withSuccess(providerResponse(
+                        "{\"boundaryIntent\":\"UNSUPPORTED_OR_UNSAFE\",\"mode\":null,\"conditions\":{\"careerTrack\":null,\"audienceRole\":null,\"capabilityCodes\":[],\"goal\":null,\"requestedSize\":null},\"refinement\":null,\"confidence\":0.97}"),
+                        MediaType.APPLICATION_JSON));
+
+        ConversationModelResult<PortfolioTaskClassification> result =
+                adapter.classifyPortfolioTask(
+                        "turn-1", "semantic-unsafe-question-sentinel", null);
+
+        assertThat(result.isSuccessful()).isTrue();
+        assertThat(result.getValue().getBoundaryIntent())
+                .isEqualTo(com.portfolio.agent.answer.domain.ConversationIntent.UNSUPPORTED_OR_UNSAFE);
+        assertThat(result.getValue().getMode()).isNull();
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getFields()).containsOnlyKeys(
+                    "provider.operation",
+                    "event.outcome",
+                    "duration.bucket",
+                    "response.present");
+            assertThat(event.getFields().toString())
+                    .doesNotContain("semantic-unsafe-question-sentinel");
+        });
+        server.verify();
+    }
+
+    @Test
+    void rejectsPortfolioTaskBoundaryOutsideTheClosedSet() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder);
+        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
+                .andRespond(withSuccess(providerResponse(
+                        "{\"boundaryIntent\":\"GENERAL_KNOWLEDGE\",\"mode\":null,\"conditions\":{\"careerTrack\":null,\"audienceRole\":null,\"capabilityCodes\":[],\"goal\":null,\"requestedSize\":null},\"refinement\":null,\"confidence\":0.97}"),
+                        MediaType.APPLICATION_JSON));
+
+        ConversationModelResult<PortfolioTaskClassification> result =
+                adapter.classifyPortfolioTask("turn-1", "question", null);
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.getFailureCode()).isEqualTo(ConversationModelFailureCode.INVALID_RESPONSE);
+        server.verify();
+    }
+
+    @Test
+    void rejectsPortfolioTaskResponseWithAnIllegalMode() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder);
+        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
+                .andRespond(withSuccess(providerResponse(
+                        "{\"mode\":\"SELECT_SQL\",\"conditions\":{\"careerTrack\":null,\"audienceRole\":null,\"capabilityCodes\":[],\"goal\":null,\"requestedSize\":null},\"refinement\":null,\"confidence\":0.91}"),
+                        MediaType.APPLICATION_JSON));
+
+        ConversationModelResult<PortfolioTaskClassification> result =
+                adapter.classifyPortfolioTask("turn-1", "请根据我的情况处理", null);
+
+        assertThat(result.isSuccessful()).isFalse();
+        assertThat(result.getFailureCode()).isEqualTo(ConversationModelFailureCode.INVALID_RESPONSE);
         server.verify();
     }
 

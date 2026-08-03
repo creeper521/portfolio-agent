@@ -135,7 +135,16 @@ describe('mapAnswerResponse', () => {
   // —— 结构化作品推荐映射 ——
   function portfolioRecommendation() {
     return {
-      recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef',
+      recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      context: {
+        recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        contentVersion: 'public-2026-07-31',
+        careerTrack: null,
+        audienceRole: 'INTERVIEWER',
+        capabilityCodes: ['POSTGRESQL', 'RAG'],
+        requestedSize: 2,
+        selectedPortfolioIds: ['project-1', 'case-2'],
+      },
       items: [
         {
           portfolioId: 'project-1',
@@ -188,6 +197,67 @@ describe('mapAnswerResponse', () => {
     rec.items[0]!.matchReasons.push('篡改理由')
     expect(source.portfolioRecommendation!.items[0]!.matchReasons)
       .not.toContain('篡改理由')
+  })
+
+  it('deep-copies the recommendation context arrays', () => {
+    const source = { ...response(), portfolioRecommendation: portfolioRecommendation() }
+    const mapped = mapAnswerResponse(source)
+    const mappedContext = mapped.portfolioRecommendation as unknown as {
+      context: typeof source.portfolioRecommendation.context
+    }
+
+    expect(mappedContext.context).toEqual(source.portfolioRecommendation.context)
+    expect(mappedContext.context).not.toBe(source.portfolioRecommendation.context)
+    expect(mappedContext.context.capabilityCodes).not.toBe(source.portfolioRecommendation.context.capabilityCodes)
+    expect(mappedContext.context.selectedPortfolioIds).not.toBe(source.portfolioRecommendation.context.selectedPortfolioIds)
+  })
+
+  it.each([
+    ['a 32-hex batch id', { recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef' }],
+    ['mismatched nested batch id', {
+      context: { recommendationBatchId: 'rec_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' },
+    }],
+    ['an out-of-range requested size', { context: { requestedSize: 1 } }],
+    ['a non-string constraint', { satisfiedConstraints: ['audienceRole', 1] }],
+    ['items that disagree with selected portfolio order', {
+      context: { selectedPortfolioIds: ['case-2', 'project-1'] },
+    }],
+    ['duplicate selected portfolio ids', {
+      context: { selectedPortfolioIds: ['project-1', 'project-1'] },
+    }],
+    ['more selected ids than requested', {
+      context: {
+        requestedSize: 2,
+        selectedPortfolioIds: ['project-1', 'case-2', 'project-3'],
+      },
+    }],
+    ['an item without approved evidence ids', {
+      items: [
+        { ...portfolioRecommendation().items[0], evidenceIds: [] },
+        portfolioRecommendation().items[1],
+      ],
+    }],
+    ['a blank match reason', {
+      items: [
+        { ...portfolioRecommendation().items[0], matchReasons: [' '] },
+        portfolioRecommendation().items[1],
+      ],
+    }],
+  ])('drops a recommendation with %s', (_reason, override) => {
+    const recommendation = portfolioRecommendation()
+    const source = {
+      ...response(),
+      portfolioRecommendation: {
+        ...recommendation,
+        ...override,
+        context: {
+          ...recommendation.context,
+          ...((override as { context?: object }).context ?? {}),
+        },
+      } as unknown as PortfolioRecommendation,
+    }
+
+    expect(mapAnswerResponse(source).portfolioRecommendation).toBeUndefined()
   })
 
   it('drops an invalid portfolioRecommendation without breaking the trusted text answer', () => {

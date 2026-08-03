@@ -22,6 +22,9 @@ import com.portfolio.agent.answer.domain.PublicToolResult;
 import com.portfolio.agent.answer.domain.ToolKind;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
+import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
 import com.portfolio.agent.answer.service.DurationBuckets;
 import com.portfolio.agent.answer.service.ProviderFailureCodeMapper;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
@@ -41,7 +44,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 public final class OpenAiCompatibleConversationalModelAdapter
-        implements ConversationalModelPort, ConversationSummaryPort {
+        implements ConversationalModelPort, ConversationSummaryPort, PortfolioTaskClassifierPort {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -84,6 +87,22 @@ public final class OpenAiCompatibleConversationalModelAdapter
                         conversation(question, window),
                         publicSubjects),
                 objectMapper.constructType(ConversationRoute.class),
+                0.0);
+    }
+
+    @Override
+    public ConversationModelResult<PortfolioTaskClassification> classifyPortfolioTask(
+            String turnId,
+            String question,
+            PortfolioRecommendationContext recommendationContext) {
+        Map<String, Object> taskInput = new LinkedHashMap<>();
+        taskInput.put("turnId", turnId);
+        taskInput.put("question", question);
+        taskInput.put("recommendationContext", recommendationContext);
+        return post(
+                ProviderOperation.CLASSIFY_PORTFOLIO_TASK,
+                () -> promptFactory.portfolioTaskPrompt(taskInput),
+                objectMapper.constructType(PortfolioTaskClassification.class),
                 0.0);
     }
 

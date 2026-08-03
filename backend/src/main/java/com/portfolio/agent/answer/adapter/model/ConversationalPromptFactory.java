@@ -26,6 +26,10 @@ public final class ConversationalPromptFactory {
         return prompt("intent", conversation, publicSubjects);
     }
 
+    public String portfolioTaskPrompt(Object taskInput) {
+        return prompt("portfolio_task", taskInput, null);
+    }
+
     public String summaryPrompt(Object conversation) {
         return prompt("summary", conversation, null);
     }
@@ -82,6 +86,17 @@ public final class ConversationalPromptFactory {
                     facet: OVERVIEW|RESPONSIBILITY|IMPLEMENTATION|DECISION|CHALLENGE|INCIDENT|VERIFICATION|LIMITATION|LEARNING|OUTCOME
                     clarificationRequired: boolean
                     示例：{"intent":"GENERAL_KNOWLEDGE","answerScope":"GENERAL","confidence":0.98,"projectSlug":null,"caseSlug":null,"facet":"OVERVIEW","clarificationRequired":false}
+                    不要输出未声明字段。
+                    """;
+            case "portfolio_task" -> """
+                    只输出一个 JSON 对象，字段必须且只能是：boundaryIntent、mode、conditions、refinement、confidence。
+                    boundaryIntent 只能是 TIME_SENSITIVE|UNSUPPORTED_OR_UNSAFE|null。
+                    boundaryIntent 非 null 时，mode 必须为 null；boundaryIntent 为 null 时，mode 必须非 null。
+                    mode 只能是 FACT_LOOKUP|COMPARISON|RECOMMENDATION|REFINE_RECOMMENDATION|CLARIFICATION_REQUIRED。
+                    conditions 的字段必须且只能是 careerTrack、audienceRole、capabilityCodes、goal、requestedSize。
+                    careerTrack、audienceRole、goal 没有值时使用 null；capabilityCodes 必须是字符串数组；requestedSize 必须是 2 到 5 的整数或 null。
+                    refinement 只能在 mode 为 REFINE_RECOMMENDATION 时提供；其字段必须且只能是 conditions、excludedPortfolioIds；否则使用 null。
+                    confidence 必须是 0 到 1 的数字。不要输出 SQL、检索器、策略或作品 ID。
                     不要输出未声明字段。
                     """;
             case "tool_plan" -> """

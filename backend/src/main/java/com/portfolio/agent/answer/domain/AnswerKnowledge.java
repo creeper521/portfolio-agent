@@ -2,10 +2,12 @@ package com.portfolio.agent.answer.domain;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public final class AnswerKnowledge {
 
     private final AnswerSubjectType subjectType;
+    private final String stableId;
     private final String slug;
     private final String title;
     private final String summary;
@@ -17,6 +19,8 @@ public final class AnswerKnowledge {
     private final String outcome;
     private final String handoff;
     private final String status;
+    private final String careerTrack;
+    private final Set<String> capabilityCodes;
     private final List<AnswerQuestion> questions;
     private final List<AnswerEvidence> evidence;
     private final List<AnswerClaimProjection> claims;
@@ -59,7 +63,33 @@ public final class AnswerKnowledge {
             List<AnswerEvidence> evidence,
             List<AnswerClaimProjection> claims
     ) {
+        this(subjectType, slug, slug, title, summary, background, responsibilities,
+                solution, keyDecisions, verification, outcome, handoff, status,
+                null, Set.of(), questions, evidence, claims);
+    }
+
+    public AnswerKnowledge(
+            AnswerSubjectType subjectType,
+            String stableId,
+            String slug,
+            String title,
+            String summary,
+            String background,
+            List<String> responsibilities,
+            String solution,
+            List<String> keyDecisions,
+            List<String> verification,
+            String outcome,
+            String handoff,
+            String status,
+            String careerTrack,
+            Set<String> capabilityCodes,
+            List<AnswerQuestion> questions,
+            List<AnswerEvidence> evidence,
+            List<AnswerClaimProjection> claims
+    ) {
         this.subjectType = Objects.requireNonNull(subjectType, "subjectType");
+        this.stableId = Objects.requireNonNull(stableId, "stableId");
         this.slug = slug;
         this.title = title;
         this.summary = summary;
@@ -71,12 +101,15 @@ public final class AnswerKnowledge {
         this.outcome = outcome;
         this.handoff = handoff;
         this.status = status;
+        this.careerTrack = careerTrack;
+        this.capabilityCodes = Set.copyOf(capabilityCodes);
         this.claims = List.copyOf(claims);
         this.questions = List.copyOf(questions);
         this.evidence = List.copyOf(evidence);
     }
 
     public AnswerSubjectType getSubjectType() { return subjectType; }
+    public String getStableId() { return stableId; }
 
     public AnswerKnowledge(String slug, String title, String summary, String background,
             List<String> responsibilities, String solution, List<String> keyDecisions,
@@ -146,6 +179,10 @@ public final class AnswerKnowledge {
         return status;
     }
 
+    public String getCareerTrack() { return careerTrack; }
+
+    public Set<String> getCapabilityCodes() { return capabilityCodes; }
+
     public List<AnswerQuestion> getQuestions() {
         return questions;
     }
@@ -166,6 +203,7 @@ public final class AnswerKnowledge {
         }
         return Objects.equals(slug, that.slug)
                 && subjectType == that.subjectType
+                && Objects.equals(stableId, that.stableId)
                 && Objects.equals(title, that.title)
                 && Objects.equals(summary, that.summary)
                 && Objects.equals(background, that.background)
@@ -176,6 +214,8 @@ public final class AnswerKnowledge {
                 && Objects.equals(outcome, that.outcome)
                 && Objects.equals(handoff, that.handoff)
                 && Objects.equals(status, that.status)
+                && Objects.equals(careerTrack, that.careerTrack)
+                && Objects.equals(capabilityCodes, that.capabilityCodes)
                 && Objects.equals(questions, that.questions)
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(claims, that.claims);
@@ -183,14 +223,16 @@ public final class AnswerKnowledge {
 
     @Override
     public int hashCode() {
-        return Objects.hash(subjectType, slug, title, summary, background, responsibilities, solution, keyDecisions,
-                verification, outcome, handoff, status, questions, evidence, claims);
+        return Objects.hash(subjectType, stableId, slug, title, summary, background, responsibilities, solution,
+                keyDecisions, verification, outcome, handoff, status, careerTrack, capabilityCodes,
+                questions, evidence, claims);
     }
 
     @Override
     public String toString() {
         return "AnswerKnowledge{" +
-                "slug='" + slug + '\'' +
+                "stableId='" + stableId + '\'' +
+                ", slug='" + slug + '\'' +
                 ", title='" + title + '\'' +
                 ", summary='" + summary + '\'' +
                 ", background='" + background + '\'' +
@@ -201,6 +243,8 @@ public final class AnswerKnowledge {
                 ", outcome='" + outcome + '\'' +
                 ", handoff='" + handoff + '\'' +
                 ", status='" + status + '\'' +
+                ", careerTrack='" + careerTrack + '\'' +
+                ", capabilityCodes=" + capabilityCodes +
                 ", questions=" + questions +
                 ", evidence=" + evidence +
                 ", claims=" + claims +

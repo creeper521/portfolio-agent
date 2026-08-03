@@ -40,6 +40,10 @@ public final class EvidenceReference {
         return "APPROVED".equals(publicStatus);
     }
 
+    public String getPublicStatus() {
+        return publicStatus;
+    }
+
     private String requireText(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.isBlank()) {

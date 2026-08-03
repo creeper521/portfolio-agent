@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -76,6 +77,111 @@ class PostgresPublicPortfolioRepositoryIntegrationTest {
         assertThat(actual).usingRecursiveComparison().isEqualTo(expected);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM release_runtime_snapshot", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void migrationRebuildsSnapshotAndLegacyCapabilitiesFromVerifiedClaims() {
+        Flyway beforeRestriction = Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/public")
+                .table("flyway_schema_history_public")
+                .target(MigrationVersion.fromVersion("2"))
+                .cleanDisabled(false)
+                .load();
+        beforeRestriction.clean();
+        beforeRestriction.migrate();
+        String releaseId = "11111111-1111-1111-1111-111111111111";
+        String legacyReleaseId = "22222222-2222-2222-2222-222222222222";
+        jdbcTemplate.update("""
+                INSERT INTO content_release
+                    (release_id, release_version, schema_version, content_hash, status)
+                VALUES
+                    (CAST(? AS uuid), 'migration-test', '2.0', ?, 'VERIFIED'),
+                    (CAST(? AS uuid), 'legacy-test', '2.0', ?, 'VERIFIED')
+                """, releaseId, "a".repeat(64), legacyReleaseId, "b".repeat(64));
+        jdbcTemplate.update("""
+                INSERT INTO portfolio_subject
+                    (release_id, stable_id, subject_kind, slug, title, summary,
+                     public_route, display_order)
+                VALUES
+                    (CAST(? AS uuid), 'project-1', 'PROJECT', 'project-1',
+                     'Project', 'Summary', '/projects/project-1', 1),
+                    (CAST(? AS uuid), 'project-legacy', 'PROJECT', 'project-legacy',
+                     'Legacy', 'Summary', '/projects/project-legacy', 1)
+                """, releaseId, legacyReleaseId);
+        jdbcTemplate.update("""
+                INSERT INTO claim
+                    (release_id, stable_id, subject_stable_id, subject_kind, category,
+                     statement, verification_status, display_order)
+                VALUES
+                    (CAST(? AS uuid), 'claim-z-verified', 'project-1', 'PROJECT',
+                     'OUTCOME', 'Verified', 'VERIFIED', 1),
+                    (CAST(? AS uuid), 'claim-partial', 'project-1', 'PROJECT',
+                     'OUTCOME', 'Partial', 'PARTIALLY_VERIFIED', 2),
+                    (CAST(? AS uuid), 'claim-a-verified', 'project-1', 'PROJECT',
+                     'OUTCOME', 'Verified first', 'VERIFIED', 3),
+                    (CAST(? AS uuid), 'legacy-z', 'project-legacy', 'PROJECT',
+                     'OUTCOME', 'Legacy verified', 'VERIFIED', 1),
+                    (CAST(? AS uuid), 'legacy-a', 'project-legacy', 'PROJECT',
+                     'OUTCOME', 'Legacy verified first', 'VERIFIED', 2),
+                    (CAST(? AS uuid), 'legacy-partial', 'project-legacy', 'PROJECT',
+                     'OUTCOME', 'Legacy partial', 'PARTIALLY_VERIFIED', 3)
+                """, releaseId, releaseId, releaseId,
+                legacyReleaseId, legacyReleaseId, legacyReleaseId);
+        jdbcTemplate.update("""
+                INSERT INTO subject_capability
+                    (release_id, subject_stable_id, capability_code, supporting_claim_stable_id)
+                VALUES
+                    (CAST(? AS uuid), 'project-1', ' java ', 'claim-partial'),
+                    (CAST(? AS uuid), 'project-legacy', ' sql ', 'legacy-z'),
+                    (CAST(? AS uuid), 'project-legacy', 'SQL', 'legacy-a'),
+                    (CAST(? AS uuid), 'project-legacy', 'KEEP', 'legacy-z'),
+                    (CAST(? AS uuid), 'project-legacy', 'partial', 'legacy-partial')
+                """, releaseId, legacyReleaseId, legacyReleaseId,
+                legacyReleaseId, legacyReleaseId);
+        jdbcTemplate.update("""
+                INSERT INTO release_runtime_snapshot
+                    (release_id, payload, payload_checksum)
+                VALUES (CAST(? AS uuid), CAST(? AS jsonb), ?)
+                """, releaseId, """
+                {"content":{"claims":[
+                  {"id":"claim-partial","subjectId":"project-1",
+                   "verificationStatus":"PARTIALLY_VERIFIED","topics":[" java "]},
+                  {"id":"claim-z-verified","subjectId":"project-1",
+                   "verificationStatus":"VERIFIED","topics":[" Java ",""]},
+                  {"id":"claim-a-verified","subjectId":"project-1",
+                   "verificationStatus":"VERIFIED","topics":["JAVA"]}
+                ]}}
+                """, "c".repeat(64));
+
+        Flyway completeMigration = Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/public")
+                .table("flyway_schema_history_public")
+                .cleanDisabled(false)
+                .load();
+        completeMigration.migrate();
+        completeMigration.migrate();
+
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT release_id::text AS release_id, capability_code,
+                       supporting_claim_stable_id
+                FROM subject_capability
+                ORDER BY release_id, capability_code
+                """))
+                .containsExactly(
+                        Map.of(
+                                "release_id", releaseId,
+                                "capability_code", "JAVA",
+                                "supporting_claim_stable_id", "claim-a-verified"),
+                        Map.of(
+                                "release_id", legacyReleaseId,
+                                "capability_code", "KEEP",
+                                "supporting_claim_stable_id", "legacy-z"),
+                        Map.of(
+                                "release_id", legacyReleaseId,
+                                "capability_code", "SQL",
+                                "supporting_claim_stable_id", "legacy-a"));
     }
 
     @Test

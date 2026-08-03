@@ -17,6 +17,7 @@ public final class ConversationalAgentProperties {
     private int maxToolRounds = 2;
     private int maxSuggestedQuestions = 3;
     private double minimumIntentConfidence = 0.65;
+    private double minimumPortfolioTaskConfidence = 0.80;
 
     public boolean allowsProviderCalls(
             ModelPolicy modelPolicy,
@@ -64,5 +65,9 @@ public final class ConversationalAgentProperties {
     public double getMinimumIntentConfidence() { return minimumIntentConfidence; }
     public void setMinimumIntentConfidence(double minimumIntentConfidence) {
         this.minimumIntentConfidence = minimumIntentConfidence;
+    }
+    public double getMinimumPortfolioTaskConfidence() { return minimumPortfolioTaskConfidence; }
+    public void setMinimumPortfolioTaskConfidence(double minimumPortfolioTaskConfidence) {
+        this.minimumPortfolioTaskConfidence = minimumPortfolioTaskConfidence;
     }
 }

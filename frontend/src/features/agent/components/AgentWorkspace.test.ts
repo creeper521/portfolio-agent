@@ -1177,7 +1177,7 @@ describe('AgentWorkspace', () => {
   })
 
   // —— 结构化作品推荐：批次 ID 回传与会话隔离 ——
-  function recommendationResponse(batchId = 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') {
+  function recommendationResponse(batchId = 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') {
     return {
       ...answerResponse(),
       intent: 'PORTFOLIO_GROUNDED' as const,
@@ -1185,6 +1185,15 @@ describe('AgentWorkspace', () => {
       answerSource: 'RETRIEVAL' as const,
       portfolioRecommendation: {
         recommendationBatchId: batchId,
+        context: {
+          recommendationBatchId: batchId,
+          contentVersion: 'public-2026-07-31',
+          careerTrack: null,
+          audienceRole: 'INTERVIEWER',
+          capabilityCodes: ['POSTGRESQL', 'RAG'],
+          requestedSize: 2,
+          selectedPortfolioIds: ['project-1', 'case-2'],
+        },
         items: [
           {
             portfolioId: 'project-1',
@@ -1216,7 +1225,7 @@ describe('AgentWorkspace', () => {
     await flushPromises()
 
     // 第一轮不应携带批次 ID（普通问题）
-    expect(askQuestionMock.mock.calls[0]?.[0].recommendationBatchId).toBeUndefined()
+    expect(askQuestionMock.mock.calls[0]?.[0].recommendationContext).toBeUndefined()
 
     // 点击第 2 张卡片的「换掉这个」→ 仍调用 /api/v2/answers 且回传批次 ID
     const replaceActions = wrapper.findAll('[data-recommendation-refine="replace"]')
@@ -1227,7 +1236,15 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
         question: '换掉第二个',
-        recommendationBatchId: 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        recommendationContext: {
+          recommendationBatchId: 'rec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          contentVersion: 'public-2026-07-31',
+          careerTrack: null,
+          audienceRole: 'INTERVIEWER',
+          capabilityCodes: ['POSTGRESQL', 'RAG'],
+          requestedSize: 2,
+          selectedPortfolioIds: ['project-1', 'case-2'],
+        },
       }),
     )
     // 上下文里也回传，不是只挂在顶层
@@ -1247,7 +1264,7 @@ describe('AgentWorkspace', () => {
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
-    expect(askQuestionMock.mock.calls[1]?.[0].recommendationBatchId).toBeUndefined()
+    expect(askQuestionMock.mock.calls[1]?.[0].recommendationContext).toBeUndefined()
     expect(askQuestionMock.mock.calls[1]?.[0].question).toBe('这两个作品有什么区别？')
   })
 
@@ -1265,7 +1282,7 @@ describe('AgentWorkspace', () => {
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
-    expect(askQuestionMock.mock.calls[1]?.[0].recommendationBatchId).toBeUndefined()
+    expect(askQuestionMock.mock.calls[1]?.[0].recommendationContext).toBeUndefined()
     // 新会话内不残留上一批推荐卡
     expect(wrapper.find('[data-portfolio-recommendation]').exists()).toBe(false)
   })

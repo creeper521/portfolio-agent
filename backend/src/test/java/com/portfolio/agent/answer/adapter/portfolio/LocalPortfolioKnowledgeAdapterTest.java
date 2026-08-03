@@ -9,6 +9,7 @@ import com.portfolio.agent.answer.domain.AnswerTimelineEvent;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.CaseType;
+import com.portfolio.agent.portfolio.domain.CareerTrack;
 import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimCategory;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
@@ -22,6 +23,8 @@ import com.portfolio.agent.portfolio.domain.Materiality;
 import com.portfolio.agent.portfolio.domain.OwnerProfile;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.ProjectDisplayTier;
+import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.ReviewStatus;
@@ -49,6 +52,71 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalPortfolioKnowledgeAdapterTest {
+
+    @Test
+    void projectsExposeStableIdsAndRecommendationMetadata() {
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
+        ProjectProfile project = metadataProject(projectClaim);
+        PortfolioSnapshot snapshot = metadataSnapshot(
+                List.of(project), List.of(), List.of(projectClaim));
+
+        AnswerKnowledge knowledge = new LocalPortfolioKnowledgeAdapter(repository(snapshot))
+                .getContent()
+                .getProjects()
+                .getFirst();
+
+        assertThat(knowledge.getStableId()).isEqualTo("project-1");
+        assertThat(knowledge.getSlug()).isEqualTo("sql-audit");
+        assertThat(knowledge.getCareerTrack()).isEqualTo("JAVA_BACKEND");
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("PROJECT_DELIVERY");
+        assertThat(knowledge.getCapabilityCodes()).doesNotContain("JAVA");
+    }
+
+    @Test
+    void casesExposeOnlyTheirOwnClaimTopicsAndKeepTheirOwnStableIds() {
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
+        Claim caseClaim = claim(
+                "claim-case", ClaimSubjectType.CASE, "case-role-reset", "CASE_RECOVERY");
+        ProjectProfile project = metadataProject(projectClaim);
+        CaseStudy caseStudy = new CaseStudy(
+                "case-role-reset",
+                "C-01",
+                "test-role-reset",
+                CaseType.FEATURE,
+                "Role reset",
+                "Summary",
+                "Problem",
+                List.of("Action"),
+                List.of("Decision"),
+                List.of("Verified"),
+                "Outcome",
+                List.of("Limitation"),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                "project-1",
+                List.of(),
+                List.of(caseClaim.getId()),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+        PortfolioSnapshot snapshot = metadataSnapshot(
+                List.of(project), List.of(caseStudy), List.of(projectClaim, caseClaim));
+
+        AnswerKnowledge knowledge = new LocalPortfolioKnowledgeAdapter(repository(snapshot))
+                .getContent()
+                .getCases()
+                .getFirst();
+
+        assertThat(knowledge.getStableId()).isEqualTo("case-role-reset");
+        assertThat(knowledge.getSlug()).isEqualTo("test-role-reset");
+        assertThat(knowledge.getCareerTrack()).isNull();
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("CASE_RECOVERY");
+        assertThat(knowledge.getCapabilityCodes())
+                .doesNotContain("JAVA", "PROJECT_DELIVERY");
+    }
 
     @Test
     void answerClaimCategoriesCoverEveryPublicClaimCategory() {
@@ -460,6 +528,15 @@ class LocalPortfolioKnowledgeAdapterTest {
     }
 
     private static Claim claim(String id, ClaimSubjectType subjectType, String subjectId) {
+        return claim(id, subjectType, subjectId, "DELIVERY");
+    }
+
+    private static Claim claim(
+            String id,
+            ClaimSubjectType subjectType,
+            String subjectId,
+            String topic
+    ) {
         return new Claim(
                 id,
                 subjectType,
@@ -472,7 +549,7 @@ class LocalPortfolioKnowledgeAdapterTest {
                 VerificationBasis.EVIDENCE_SUPPORTED,
                 ClaimVerificationStatus.VERIFIED,
                 Materiality.KEY,
-                List.of("DELIVERY"),
+                List.of(topic),
                 Map.of("INTERVIEWER", 100)
         );
     }
@@ -614,6 +691,9 @@ class LocalPortfolioKnowledgeAdapterTest {
         assertThat(knowledge.getVerification()).containsExactly("Verified");
         assertThat(knowledge.getQuestions()).containsExactly(question);
         assertThat(knowledge.getEvidence()).containsExactly(evidence);
+        assertThat(knowledge.getStableId()).isEqualTo(knowledge.getSlug());
+        assertThat(knowledge.getCareerTrack()).isNull();
+        assertThat(knowledge.getCapabilityCodes()).isEmpty();
         assertThatThrownBy(() -> question.getAliases().add("Forbidden"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> knowledge.getResponsibilities().add("Forbidden"))
@@ -738,6 +818,53 @@ class LocalPortfolioKnowledgeAdapterTest {
                 ContributionType.PRIMARY,
                 List.of(),
                 evidenceIds,
+                List.of()
+        );
+    }
+
+    private static ProjectProfile metadataProject(Claim projectClaim) {
+        return new ProjectProfile(
+                "project-1",
+                "P-01",
+                "sql-audit",
+                "SQL Audit",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                CareerTrack.JAVA_BACKEND,
+                ProjectNature.UNCLASSIFIED,
+                ProjectDisplayTier.PRIMARY,
+                List.of(),
+                List.of(projectClaim.getId()),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private static PortfolioSnapshot metadataSnapshot(
+            List<ProjectProfile> projects,
+            List<CaseStudy> cases,
+            List<Claim> claims
+    ) {
+        return new PortfolioSnapshot(
+                "1.0",
+                "2026-07-31.1",
+                OffsetDateTime.parse("2026-07-31T12:00:00+08:00"),
+                null,
+                projects,
+                cases,
+                claims,
+                List.of(),
+                List.of(),
+                List.of(),
                 List.of()
         );
     }

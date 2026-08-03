@@ -83,6 +83,31 @@ class PublicBundleDatabaseImporterTest {
     }
 
     @Test
+    void importsNormalizedCapabilitiesOnlyFromVerifiedClaims() throws Exception {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        PublicBundleDatabaseImporter importer = new PublicBundleDatabaseImporter(
+                jdbcTemplate, immediateTransactions());
+
+        importer.importBundle(snapshot("APPROVED"));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate, atLeastOnce()).update(sql.capture(), parameters.capture());
+        List<Object[]> capabilityWrites = java.util.stream.IntStream
+                .range(0, sql.getAllValues().size())
+                .filter(index -> sql.getAllValues().get(index)
+                        .contains("INSERT INTO subject_capability"))
+                .mapToObj(index -> parameters.getAllValues().get(index))
+                .toList();
+        assertThat(capabilityWrites).singleElement().satisfies(values -> {
+            assertThat(values[1]).isEqualTo("project-1");
+            assertThat(values[2]).isEqualTo("DELIVERY");
+            assertThat(values[3]).isEqualTo("claim-1");
+        });
+    }
+
+    @Test
     void returnsTheExistingReleaseWithoutWritingDuplicateRows() throws Exception {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         TransactionOperations transactions = immediateTransactions();
@@ -276,7 +301,10 @@ class PublicBundleDatabaseImporterTest {
                 "owner":{"name":"","role":"Java backend intern","summary":"Public","githubUrl":null,"email":null,"resumeUrl":null},
                 "projects":[{"id":"project-1","code":"P-01","slug":"sql-audit","title":"SQL Audit","summary":"Summary","background":"Background","responsibilities":["Owner"],"solution":"Solution","keyDecisions":["Decision"],"technologies":["Java"],"verification":["Tested"],"outcome":"Delivered","handoff":"Handoff","status":"DELIVERED","contributionType":"PRIMARY","claimIds":["claim-1"],"evidenceIds":["evidence-1"],"timelineEventIds":[]}],
                 "cases":[],
-                "claims":[{"id":"claim-1","subjectType":"PROJECT","subjectId":"project-1","category":"OUTCOME","statement":"Delivered","detail":"Reviewed","achievementStatus":"DELIVERED","contributionType":"PRIMARY","verificationBasis":"EVIDENCE_SUPPORTED","verificationStatus":"VERIFIED","materiality":"KEY","topics":["delivery"],"audiencePriorities":{"INTERVIEWER":100}}],
+                "claims":[
+                  {"id":"claim-1","subjectType":"PROJECT","subjectId":"project-1","category":"OUTCOME","statement":"Delivered","detail":"Reviewed","achievementStatus":"DELIVERED","contributionType":"PRIMARY","verificationBasis":"EVIDENCE_SUPPORTED","verificationStatus":"VERIFIED","materiality":"KEY","topics":[" delivery ","  "],"audiencePriorities":{"INTERVIEWER":100}},
+                  {"id":"claim-2","subjectType":"PROJECT","subjectId":"project-1","category":"OUTCOME","statement":"Partial","detail":"Not fully reviewed","achievementStatus":"DELIVERED","contributionType":"PRIMARY","verificationBasis":"EVIDENCE_SUPPORTED","verificationStatus":"PARTIALLY_VERIFIED","materiality":"SUPPORTING","topics":["partial_topic"],"audiencePriorities":{"INTERVIEWER":50}}
+                ],
                 "evidence":[{"id":"evidence-1","code":"E-01","title":"Delivery evidence","type":"DOCUMENT","periodStart":"2026-07-01","periodEnd":"2026-07-20","sourceCount":1,"summary":"Reviewed evidence","publicStatus":"%s","rawContentPublic":false}],
                 "claimEvidenceLinks":[{"id":"link-1","claimId":"claim-1","evidenceId":"evidence-1","supportType":"DIRECT","scope":"Delivery only","reviewStatus":"APPROVED"}],
                 "timelineEvents":[],"questionPresets":[]}

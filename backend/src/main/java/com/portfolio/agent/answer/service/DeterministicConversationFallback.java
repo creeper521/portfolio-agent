@@ -93,9 +93,25 @@ public final class DeterministicConversationFallback {
             RuntimeAnswerContent content,
             ConversationRoute route
     ) {
-        if (route.getIntent() == ConversationIntent.TIME_SENSITIVE
-                || route.getIntent() == ConversationIntent.UNSUPPORTED_OR_UNSAFE
-                || route.getIntent() == ConversationIntent.CONVERSATION) {
+        if (route.getIntent() == ConversationIntent.UNSUPPORTED_OR_UNSAFE) {
+            return boundary(
+                    request,
+                    content,
+                    ConversationIntent.UNSUPPORTED_OR_UNSAFE,
+                    AnswerResolution.REJECTED,
+                    "这个请求涉及私密或越权信息，无法提供。",
+                    false);
+        }
+        if (route.getIntent() == ConversationIntent.TIME_SENSITIVE) {
+            return boundary(
+                    request,
+                    content,
+                    ConversationIntent.TIME_SENSITIVE,
+                    AnswerResolution.BOUNDARY,
+                    "这个问题需要实时联网核验；当前版本没有联网能力。",
+                    false);
+        }
+        if (route.getIntent() == ConversationIntent.CONVERSATION) {
             return answer(request, content);
         }
         ConversationAnswerResult preset = presetAnswer(request, content);

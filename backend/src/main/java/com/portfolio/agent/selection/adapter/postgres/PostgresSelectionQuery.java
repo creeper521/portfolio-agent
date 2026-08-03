@@ -18,4 +18,11 @@ public interface PostgresSelectionQuery {
             float[] embedding,
             SelectionTarget target,
             int limit);
+
+    default List<PostgresSelectionRow> findByIds(
+            String releaseId,
+            List<String> subjectIds,
+            SelectionTarget target) {
+        throw new UnsupportedOperationException("exact subject lookup is not implemented");
+    }
 }

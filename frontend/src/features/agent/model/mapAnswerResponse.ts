@@ -1,5 +1,9 @@
 import type { AnswerResponse, MappedAnswer } from './answerTypes'
-import type { PortfolioRecommendation, PortfolioRecommendationItem } from './answerTypes'
+import type {
+  PortfolioRecommendation,
+  PortfolioRecommendationContext,
+  PortfolioRecommendationItem,
+} from './answerTypes'
 import { createFrontendDiagnosticEvent } from '../../../shared/diagnostics/frontendDiagnosticTypes'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
@@ -75,46 +79,93 @@ function mapPortfolioRecommendation(response: AnswerResponse): PortfolioRecommen
   const raw = response.portfolioRecommendation
   if (raw === undefined) return undefined
 
-  if (!isNonEmptyString(raw.recommendationBatchId) || !Array.isArray(raw.items)) {
+  if (!isValidPortfolioRecommendation(raw)) {
     reportInvalidRecommendation(response.turnId)
     return undefined
   }
 
-  const items: PortfolioRecommendationItem[] = []
-  for (const candidate of raw.items) {
-    if (!isValidRecommendationItem(candidate)) {
-      reportInvalidRecommendation(response.turnId)
-      return undefined
-    }
-    items.push({
+  return {
+    recommendationBatchId: raw.recommendationBatchId,
+    context: {
+      recommendationBatchId: raw.context.recommendationBatchId,
+      contentVersion: raw.context.contentVersion,
+      careerTrack: raw.context.careerTrack,
+      audienceRole: raw.context.audienceRole,
+      capabilityCodes: [...raw.context.capabilityCodes],
+      requestedSize: raw.context.requestedSize,
+      selectedPortfolioIds: [...raw.context.selectedPortfolioIds],
+    },
+    items: raw.items.map((candidate) => ({
       portfolioId: candidate.portfolioId,
       title: candidate.title,
       route: candidate.route,
       matchReasons: [...candidate.matchReasons],
       evidenceIds: [...candidate.evidenceIds],
-    })
+    })),
+    satisfiedConstraints: [...raw.satisfiedConstraints],
+    unsatisfiedConstraints: [...raw.unsatisfiedConstraints],
   }
+}
 
-  return {
-    recommendationBatchId: raw.recommendationBatchId,
-    items,
-    satisfiedConstraints: Array.isArray(raw.satisfiedConstraints) ? [...raw.satisfiedConstraints] : [],
-    unsatisfiedConstraints: Array.isArray(raw.unsatisfiedConstraints) ? [...raw.unsatisfiedConstraints] : [],
-  }
+function isValidPortfolioRecommendation(value: unknown): value is PortfolioRecommendation {
+  if (typeof value !== 'object' || value === null) return false
+  const recommendation = value as Record<string, unknown>
+  return isBatchId(recommendation.recommendationBatchId)
+    && isValidRecommendationContext(recommendation.context)
+    && recommendation.recommendationBatchId === recommendation.context.recommendationBatchId
+    && Array.isArray(recommendation.items) && recommendation.items.every(isValidRecommendationItem)
+    && recommendationMatchesContext(recommendation.items, recommendation.context)
+    && isNonBlankStringArray(recommendation.satisfiedConstraints)
+    && isNonBlankStringArray(recommendation.unsatisfiedConstraints)
+}
+
+function recommendationMatchesContext(
+  items: PortfolioRecommendationItem[],
+  context: PortfolioRecommendationContext,
+): boolean {
+  const selectedIds = context.selectedPortfolioIds
+  return selectedIds.length <= context.requestedSize
+    && new Set(selectedIds).size === selectedIds.length
+    && selectedIds.length === items.length
+    && selectedIds.every((portfolioId, index) => portfolioId === items[index]?.portfolioId)
+}
+
+function isValidRecommendationContext(value: unknown): value is PortfolioRecommendationContext {
+  if (typeof value !== 'object' || value === null) return false
+  const context = value as Record<string, unknown>
+  return isBatchId(context.recommendationBatchId)
+    && isNonEmptyString(context.contentVersion)
+    && (context.careerTrack === null || isNonEmptyString(context.careerTrack))
+    && isNonEmptyString(context.audienceRole)
+    && isNonBlankStringArray(context.capabilityCodes)
+    && Number.isInteger(context.requestedSize)
+    && Number(context.requestedSize) >= 2
+    && Number(context.requestedSize) <= 5
+    && isNonBlankStringArray(context.selectedPortfolioIds)
 }
 
 function isValidRecommendationItem(value: unknown): value is PortfolioRecommendationItem {
   if (typeof value !== 'object' || value === null) return false
   const item = value as Record<string, unknown>
   return isNonEmptyString(item.portfolioId)
-    && typeof item.title === 'string'
-    && typeof item.route === 'string'
-    && Array.isArray(item.matchReasons) && item.matchReasons.every(isString)
-    && Array.isArray(item.evidenceIds) && item.evidenceIds.every(isString)
+    && isNonEmptyString(item.title)
+    && isNonEmptyString(item.route)
+    && isNonBlankStringArray(item.matchReasons)
+    && isNonEmptyNonBlankStringArray(item.evidenceIds)
 }
 
-function isString(value: unknown): value is string {
-  return typeof value === 'string'
+const BATCH_ID_PATTERN = /^rec_[0-9a-f]{64}$/
+
+function isBatchId(value: unknown): value is string {
+  return typeof value === 'string' && BATCH_ID_PATTERN.test(value)
+}
+
+function isNonBlankStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isNonEmptyString)
+}
+
+function isNonEmptyNonBlankStringArray(value: unknown): value is string[] {
+  return isNonBlankStringArray(value) && value.length > 0
 }
 
 function isNonEmptyString(value: unknown): value is string {

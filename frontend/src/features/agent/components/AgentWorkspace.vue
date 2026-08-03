@@ -28,6 +28,7 @@ import type {
   ConversationSuggestedQuestion,
   ConversationTopic,
   FollowUpAction,
+  PortfolioRecommendationContextRequest,
 } from '../model/answerTypes'
 import { completeSuggestedQuestions } from '../model/completeSuggestedQuestions'
 import {
@@ -51,7 +52,7 @@ interface AnswerRequestContext {
   coveredTopics?: readonly ConversationTopic[]
   contextEnvelope?: ContextEnvelope
   requestToken?: string
-  recommendationBatchId?: string
+  recommendationContext?: PortfolioRecommendationContextRequest
 }
 
 interface AnswerFailureView {
@@ -351,7 +352,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
         contextEnvelope: preparedContext.contextEnvelope,
-        recommendationBatchId: preparedContext.recommendationBatchId,
+        recommendationContext: preparedContext.recommendationContext,
       }),
     )
     if (disposed || request !== requestVersion) return
@@ -577,10 +578,13 @@ function submitFollowUp(action: FollowUpAction) {
   )
 }
 
-// 推荐调整：只回传当前批次 ID，仍走 /api/v2/answers。
-// 普通问题（submit / submitSuggestion / submitFollowUp）不构造 recommendationBatchId，
-// 因此不会携带陈旧批次上下文（满足「普通问题不携带陈旧批次 ID」）。
-function refineRecommendation(action: { question: string; recommendationBatchId: string }) {
+// 推荐调整原样回传当前回答的完整 recommendationContext，仍走 /api/v2/answers。
+// 普通问题（submit / submitSuggestion / submitFollowUp）不构造 recommendationContext，
+// 因此不会携带陈旧推荐上下文。
+function refineRecommendation(action: {
+  question: string
+  recommendationContext: PortfolioRecommendationContextRequest
+}) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   if (!session || !project) return
@@ -589,7 +593,7 @@ function refineRecommendation(action: { question: string; recommendationBatchId:
       sessionId: session.id,
       projectSlug: project.slug,
       question: action.question,
-      recommendationBatchId: action.recommendationBatchId,
+      recommendationContext: action.recommendationContext,
     },
     true,
   )

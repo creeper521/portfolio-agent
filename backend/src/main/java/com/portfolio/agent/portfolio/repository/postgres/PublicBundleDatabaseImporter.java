@@ -5,6 +5,7 @@ import com.portfolio.agent.portfolio.domain.CaseCollection;
 import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
 import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
+import com.portfolio.agent.portfolio.domain.ClaimVerificationStatus;
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -205,9 +207,19 @@ public final class PublicBundleDatabaseImporter {
 
     private void insertCapabilities(List<Claim> claims, String releaseId) {
         for (Claim claim : claims) {
+            if (claim.getVerificationStatus() != ClaimVerificationStatus.VERIFIED) {
+                continue;
+            }
             for (String topic : claim.getTopics()) {
-                if (!topic.isBlank()) {
-                    jdbcTemplate.update(INSERT_CAPABILITY_SQL, releaseId, claim.getSubjectId(), topic.strip(), claim.getId());
+                String capabilityCode = topic == null
+                        ? "" : topic.trim().toUpperCase(Locale.ROOT);
+                if (!capabilityCode.isEmpty()) {
+                    jdbcTemplate.update(
+                            INSERT_CAPABILITY_SQL,
+                            releaseId,
+                            claim.getSubjectId(),
+                            capabilityCode,
+                            claim.getId());
                 }
             }
         }

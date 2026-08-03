@@ -8,6 +8,8 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
 import com.portfolio.agent.answer.service.ProductionConversationService;
 import com.portfolio.agent.common.web.ClientAddressResolver;
@@ -21,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,7 +76,8 @@ class ConversationAnswerControllerTest {
                 .andExpect(jsonPath("$.intent").value("CONVERSATION"))
                 .andExpect(jsonPath("$.answerScope").value("CONVERSATION"))
                 .andExpect(jsonPath("$.blocks[0].sourceScope").value("GENERAL"))
-                .andExpect(jsonPath("$.degraded").value(false));
+                .andExpect(jsonPath("$.degraded").value(false))
+                .andExpect(jsonPath("$.portfolioRecommendation").doesNotExist());
 
         verify(service).answer(any(), eq("127.0.0.1"));
     }
@@ -94,6 +98,40 @@ class ConversationAnswerControllerTest {
         verifyNoInteractions(service);
     }
 
+    @Test
+    void returnsRecommendationContextEvenWhenRecommendationListsAreEmpty() throws Exception {
+        ProductionConversationService service = mock(ProductionConversationService.class);
+        when(service.answer(any(), any())).thenReturn(recommendationResult());
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new ConversationAnswerController(
+                                service,
+                                new ClientAddressResolver(false, java.util.Set.of()),
+                                new ConversationAnswerResponseMapper()))
+                .addFilters(new RequestDiagnosticsFilter(event -> { }))
+                .build();
+
+        mvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+                                  "requestToken": "63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                                  "question": "推荐作品集",
+                                  "messages": [],
+                                  "context": { "audienceRole": "INTERVIEWER", "source": "AGENT_PAGE" }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.portfolioRecommendation.recommendationBatchId")
+                        .value("rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+                .andExpect(jsonPath("$.portfolioRecommendation.context.contentVersion")
+                        .value("public-2026-07-31"))
+                .andExpect(jsonPath("$.portfolioRecommendation.items").isArray())
+                .andExpect(jsonPath("$.portfolioRecommendation.items").isEmpty())
+                .andExpect(jsonPath("$.portfolioRecommendation.satisfiedConstraints").isEmpty())
+                .andExpect(jsonPath("$.portfolioRecommendation.unsatisfiedConstraints").isEmpty());
+    }
+
     private ConversationAnswerResult result() {
         return new ConversationAnswerResult(
                 TURN_ID,
@@ -109,5 +147,21 @@ class ConversationAnswerControllerTest {
                         List.of())),
                 List.of(),
                 false);
+    }
+
+    private ConversationAnswerResult recommendationResult() {
+        PortfolioRecommendationContext context = new PortfolioRecommendationContext(
+                "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "public-2026-07-31", "BACKEND", "INTERVIEWER", Set.of("RAG"), 2,
+                List.of());
+        PortfolioRecommendation recommendation = new PortfolioRecommendation(
+                context.getRecommendationBatchId(), context, List.of(), List.of(), List.of());
+        return new ConversationAnswerResult(
+                TURN_ID, "public-2026-07-31", ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO, AnswerResolution.ANSWERED, "推荐", List.of(),
+                List.of(), false, com.portfolio.agent.answer.domain.GenerationMode.DETERMINISTIC,
+                null, null, new com.portfolio.agent.answer.domain.ConversationProgress(
+                        List.of(), com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
+                recommendation);
     }
 }

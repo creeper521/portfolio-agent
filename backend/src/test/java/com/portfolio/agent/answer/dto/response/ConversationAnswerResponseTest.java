@@ -11,9 +11,12 @@ import com.portfolio.agent.answer.domain.ConversationProgress;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.ConversationTopic;
 import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,5 +57,44 @@ class ConversationAnswerResponseTest {
                 ConversationTopic.SOLUTION);
         assertThat(response.getGuidanceStage())
                 .isEqualTo(ConversationGuidanceStage.OPENING);
+    }
+
+    @Test
+    void omitsPortfolioRecommendationWhenTheAnswerHasNone() throws Exception {
+        ConversationAnswerResult result = new ConversationAnswerResult(
+                "turn-1", "2026-07-27.1", ConversationIntent.CONVERSATION,
+                ConversationAnswerScope.CONVERSATION, AnswerResolution.ANSWERED, "title",
+                List.of(), List.of(), false);
+
+        String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .setDefaultPropertyInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                .writeValueAsString(new ConversationAnswerResponse(result));
+
+        assertThat(json).doesNotContain("portfolioRecommendation");
+    }
+
+    @Test
+    void keepsAnEmptyPortfolioRecommendationInTheResponse() throws Exception {
+        PortfolioRecommendationContext context = new PortfolioRecommendationContext(
+                "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "public-2026-07-31", "BACKEND", "INTERVIEWER", Set.of("RAG"), 2,
+                List.of());
+        PortfolioRecommendation recommendation = new PortfolioRecommendation(
+                context.getRecommendationBatchId(), context, List.of(), List.of(), List.of());
+        ConversationAnswerResult result = new ConversationAnswerResult(
+                "turn-1", "2026-07-27.1", ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO, AnswerResolution.ANSWERED, "title",
+                List.of(), List.of(), false, GenerationMode.DETERMINISTIC, null, null,
+                new ConversationProgress(List.of(), ConversationGuidanceStage.OPENING), recommendation);
+
+        String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .setDefaultPropertyInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                .writeValueAsString(new ConversationAnswerResponse(result));
+
+        assertThat(json).contains("\"portfolioRecommendation\"")
+                .contains("\"items\":[]")
+                .contains("\"satisfiedConstraints\":[]")
+                .contains("\"unsatisfiedConstraints\":[]")
+                .contains("\"selectedPortfolioIds\":[]");
     }
 }
