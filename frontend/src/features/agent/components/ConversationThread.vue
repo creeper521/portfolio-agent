@@ -8,6 +8,8 @@ import type {
   ConversationSuggestedQuestion,
   FollowUpAction,
   FollowUpIntent,
+  PortfolioRecommendation,
+  PortfolioRecommendationContextRequest,
 } from '../model/answerTypes'
 import type {
   AnswerFocusTarget,
@@ -58,7 +60,7 @@ const emit = defineEmits<{
   cancel: []
   followUp: [action: FollowUpAction]
   clearCaseContext: []
-  refineRecommendation: [action: { question: string; recommendationBatchId: string }]
+  refineRecommendation: [action: { question: string; recommendationContext: PortfolioRecommendationContextRequest }]
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -286,6 +288,16 @@ function ordinalLabel(index: number): string {
 // 仍然走现有 /api/v2/answers 链路；不在客户端计算替换结果，也不把作品 ID 写进问题。
 type RecommendationRefine = 'REPLACE' | 'EXPLAIN'
 
+function recommendationContextFor(
+  recommendation: PortfolioRecommendation,
+): PortfolioRecommendationContextRequest {
+  return {
+    ...recommendation.context,
+    capabilityCodes: [...recommendation.context.capabilityCodes],
+    selectedPortfolioIds: [...recommendation.context.selectedPortfolioIds],
+  }
+}
+
 function refineRecommendation(
   message: AgentSession['messages'][number],
   index: number,
@@ -297,7 +309,7 @@ function refineRecommendation(
   const question = intent === 'REPLACE' ? `换掉第${ordinal}个` : `为什么推荐第${ordinal}个？`
   emit('refineRecommendation', {
     question,
-    recommendationBatchId: recommendation.recommendationBatchId,
+    recommendationContext: recommendationContextFor(recommendation),
   })
 }
 
@@ -309,7 +321,7 @@ function refineWhole(
   if (!recommendation || props.pending) return
   emit('refineRecommendation', {
     question,
-    recommendationBatchId: recommendation.recommendationBatchId,
+    recommendationContext: recommendationContextFor(recommendation),
   })
 }
 </script>

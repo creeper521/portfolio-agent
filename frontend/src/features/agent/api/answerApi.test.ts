@@ -80,6 +80,31 @@ describe('answer api', () => {
     expect(body.coveredTopics).toBeUndefined()
   })
 
+  it('sends the complete recommendation context only for a refinement request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const recommendationContext = {
+      recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      contentVersion: 'public-2026-07-31',
+      careerTrack: null,
+      audienceRole: 'INTERVIEWER',
+      capabilityCodes: ['POSTGRESQL', 'RAG'],
+      requestedSize: 2,
+      selectedPortfolioIds: ['project-1', 'case-2'],
+    }
+
+    await askQuestion({ ...input('refine recommendation'), recommendationContext })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.context.recommendationContext).toEqual(recommendationContext)
+    expect(body.context.recommendationContext).not.toBe(recommendationContext)
+  })
+
   it('strips extra fields from forwarded messages', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
