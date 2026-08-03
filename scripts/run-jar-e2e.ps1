@@ -110,7 +110,8 @@ $applicationArguments = @(
     "--server.port=$Port",
     '--spring.profiles.active=prod',
     '--spring.main.banner-mode=off',
-    '--portfolio.diagnostics.frontend-ingest-enabled=true'
+    '--portfolio.diagnostics.frontend-ingest-enabled=true',
+    '--portfolio.answer-production.requests-per-minute=1000'
 )
 if (-not $RequireLiveProvider) {
     $applicationArguments += '--portfolio.model-expression.enabled=false'

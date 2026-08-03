@@ -127,6 +127,10 @@ try {
             throw "Expected normal mode to pass '$disabledArgument' exactly once."
         }
     }
+    if ($normalJavaArguments -notmatch
+            '(?<!\S)--portfolio\.answer-production\.requests-per-minute=1000(?!\S)') {
+        throw 'Packaged JAR smoke must use a release-test answer quota.'
+    }
 
     Remove-Item -LiteralPath $javaArgumentCapture -Force
     $previousLiveCaptureErrorActionPreference = $ErrorActionPreference
