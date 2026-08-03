@@ -36,7 +36,7 @@ class SelectionBenchmarkSmokeTest {
 
         assertThat(result.getSelection().getStatus()).isEqualTo(PortfolioSelectionStatus.READY);
         assertThat(result.getSelection().getSubjectIds())
-                .containsExactly("project-a", "case-b");
+                .containsExactly("case-b", "project-a");
         assertThat(result.getSelection().getPolicyVersion()).isEqualTo("exhaustive-v1");
     }
 }
