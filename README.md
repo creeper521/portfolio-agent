@@ -1,6 +1,6 @@
 # 实习作品集 Agent
 
-> **项目状态（2026-07-30）：** 当前随包运行时为 schema `4.0`、内容版本 `2026-07-29.1` 的七文件检索包：5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。独立 Case 目录/详情、旧地址规范重定向、Case → Agent 页面内存交接、结构化诊断、PostgreSQL 公开快照、Markdown 增量导入和资产组合推荐后端均已进入当前代码；数据库、混合检索和模型能力默认关闭。当前仍未生产部署，也没有真实 Provider、PostgreSQL 组合 API 或线上数据的生产验收结论。详见 [`docs/08-当前实现状态.md`](docs/08-当前实现状态.md)。
+> **项目状态（2026-07-31）：** 当前随包运行时为 schema `4.0`、内容版本 `2026-07-29.1` 的七文件检索包：5 个 Project、49 个 Case、3 个 Collection、79 个 Claim、59 个 APPROVED Evidence、79 条 Claim–Evidence 关联、79 个检索 chunk、11 条 TimelineEvent 和 16 个 QuestionPreset。独立 Case 目录/详情、旧地址规范重定向、Case → Agent 页面内存交接、结构化诊断、PostgreSQL 公开快照、Markdown 增量导入和内部确定性作品推荐均已进入当前代码；唯一公开 Agent 入口为 `POST /api/v2/answers`，数据库、混合检索和模型能力默认关闭。当前仍未生产部署，也没有真实 Provider、PostgreSQL 主检索或线上数据的生产验收结论。详见 [`docs/08-当前实现状态.md`](docs/08-当前实现状态.md)。
 
 一个面向技术面试官、实习导师、HR 和普通访客的交互式实习作品集。系统只展示经人工审核的公开事实，提供 Project/Case 浏览、证据追溯、确定性问答，以及在显式审批后才可启用的模型表达、本地检索和 PostgreSQL 组合推荐能力。
 
@@ -20,7 +20,7 @@
 - 可选的本地 BGE-small-zh-v1.5 INT8 ONNX 混合检索；随包使用 `retrieval-policy-v2.1-query-risk`，文档向量在发布期生成，访客查询只在本机向量化
 - 固定六类只读公开工具与页面内存引用式多轮；只传稳定公开 ID 和意图，不传历史问答正文
 - 默认关闭的 PostgreSQL/pgvector 双库：公开运行库只读 active release，私有治理库负责显式 Markdown 扫描与增量导入
-- 确定性资产组合推荐：PostgreSQL 候选召回、2～5 项受约束组合、迁移完整度和 R0～R4 同口径基准
+- Agent 内部确定性资产组合推荐：PostgreSQL 候选召回、2～5 项受约束组合、迁移完整度和 R0～R4 同口径基准
 - 代码质量、架构、隐私、静态 bundle 与发布验证脚本
 
 默认配置不连接大模型。即使显式启用 C1，外部 Provider 也只接收从已批准公开内容构建的白名单 `AnswerPlan`，不接收访客原问题、会话、`turnId`、`requestId` 或私有知识。访客问题、回答和会话只存在于当前页面内存；首页通过随机、短时、一次性消费的 `handoffId` 进入 Agent，问题和回答不进入 URL 或浏览器持久化存储。
@@ -32,7 +32,7 @@
 - Node.js 22+
 - npm 10+
 - Docker（仅容器构建和运行需要）
-- PostgreSQL 16+ 与 pgvector（仅启用数据库公开运行库、治理导入或组合推荐时需要）
+- PostgreSQL 16+ 与 pgvector（仅启用数据库公开运行库、治理导入、主检索或组合 benchmark 时需要）
 
 开始前确认 `java -version` 指向 Java 21。Windows 下命令使用 `mvn.cmd` 和 `npm.cmd`；其他系统可分别替换为 `mvn` 和 `npm`。
 
@@ -201,9 +201,10 @@ Flyway 分别从 `db/public` 和 `db/governance` 初始化 schema。公开发布
 同口径评测和文件/数据库迁移完整度校验使用 `PortfolioSelectionBenchmarkCli`。
 这些都是显式操作者命令，不存在自动文件 watcher；未审核 Markdown 不会自动进入公开发布链路。
 
-只有公开数据库开关启用时，`POST /api/portfolio-selections` 才会注册。接口从 active release
-召回候选，再由确定性约束组合 2～5 个 Project/Case；检索结果不能绕过 APPROVED Evidence、
-跨 release 阻断或人工发布批准。
+公开数据库开关启用时，`POST /api/v2/answers` 内部以 PostgreSQL/pgvector 为作品集主检索，
+基础设施不可用时受控降级到随包 Bundle。独立 Selection HTTP 接口不再注册；候选召回、
+确定性组合策略和 benchmark 仍作为内部能力保留，且不能绕过 APPROVED Evidence、跨 release
+阻断或人工发布批准。
 
 在另一个终端启动前端，Vite 会把 `/api` 请求代理到后端：
 
@@ -305,9 +306,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - `GET /api/v1/cases`：公开案例摘要列表
 - `GET /api/v1/cases/{slug}`：公开案例详情
 - `POST /api/v1/answers`：四维契约问答；默认确定性，C1 合规启用后可返回 `MODEL` 或 `FALLBACK`
-- `POST /api/v2/answers`：对话式回答；支持自然交流、通用知识、作品集检索回答、混合回答、20 轮临时上下文和动态追问
+- `POST /api/v2/answers`：唯一公开 Agent 入口；支持自然交流、通用知识、作品集检索、比较、推荐和动态追问。对话与推荐上下文由当前标签页内存随请求传入，刷新即清空，后端不保存会话状态
 - `POST /api/v1/client-diagnostics`：默认关闭的前端诊断批量入口，只接受封闭且不持久化的事件契约
-- `POST /api/portfolio-selections`：仅在公开 PostgreSQL 数据源启用时注册，返回 2～5 项受约束的 Project/Case 组合
 
 `GET /api/v1/public-content` 提供顶层 `cases`、`collections` 和 `caseSlugsByEvidenceId`，QuestionPreset 与 Timeline 投影包含 `caseSlugs`。`POST /api/v1/answers` 的 `context` 支持 `projectSlug`/`caseSlug` 二选一，`ContextEnvelope` 使用显式 `caseSlugs` 保持主体隔离。`source=CASE` 时，Project 与 Case 必须互斥；未知主体 fail-closed，Case 不会隐式扩展为相关 Project。前端已经实现 `/cases`、`/cases/:slug`、旧项目地址规范重定向和 Case → Agent 交接；剩余缺口是生产部署、线上数据验证和完整生产验收。
 
