@@ -177,7 +177,7 @@ class PublicBundleDatabaseImporterTest {
     }
 
     @Test
-    void importsTheActualFiveFortyNineSeventyNineFiftyNineSeventyNineBundleUnderOneReleaseId()
+    void importsTheActualSixFiftyTwoEightyThreeSixtyThreeEightyThreeBundleUnderOneReleaseId()
             throws Exception {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
@@ -187,29 +187,29 @@ class PublicBundleDatabaseImporterTest {
 
         PublicBundleImportResult result = importer.importBundle(snapshot);
 
-        assertThat(snapshot.getProjects()).hasSize(5);
-        assertThat(snapshot.getCases()).hasSize(49);
-        assertThat(snapshot.getClaims()).hasSize(79);
-        assertThat(snapshot.getApprovedEvidence()).hasSize(59);
-        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(79);
-        assertThat(snapshot.getRetrievalContent().orElseThrow().getDocuments()).hasSize(79);
+        assertThat(snapshot.getProjects()).hasSize(6);
+        assertThat(snapshot.getCases()).hasSize(52);
+        assertThat(snapshot.getClaims()).hasSize(83);
+        assertThat(snapshot.getApprovedEvidence()).hasSize(63);
+        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(83);
+        assertThat(snapshot.getRetrievalContent().orElseThrow().getDocuments()).hasSize(83);
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
         verify(jdbcTemplate, atLeast(1)).update(sql.capture(), parameters.capture());
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO portfolio_subject"))
-                .hasSize(54);
+                .hasSize(58);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO project_profile"))
-                .hasSize(5);
+                .hasSize(6);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO case_study"))
-                .hasSize(49);
+                .hasSize(52);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO claim\n"))
-                .hasSize(79);
+                .hasSize(83);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO evidence\n"))
-                .hasSize(59);
+                .hasSize(63);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO claim_evidence_link"))
-                .hasSize(79);
+                .hasSize(83);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO retrieval_document"))
-                .hasSize(79);
+                .hasSize(83);
         assertThat(parameters.getAllValues())
                 .allSatisfy(values -> assertThat(values[0]).isEqualTo(result.getReleaseId()));
     }

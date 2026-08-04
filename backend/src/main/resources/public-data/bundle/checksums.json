@@ -1,11 +1,11 @@
 ﻿{
     "schemaVersion":  "4.0",
-    "contentVersion":  "2026-08-04.1",
+    "contentVersion":  "2026-08-04.2",
     "files":  {
-                  "portfolio.json":  "sha256:cf14bc30cc4a3753d4c605db63ecb273cae2971394af56a16273df00a0f12ac6",
-                  "presentation.json":  "sha256:41a52507177b5143258f60a43b9872a81823a2feaeb5617854852abbde90bd7d",
-                  "rag-documents.jsonl":  "sha256:1f7c4bbc69676c84bbd61412c60dd748c4425e1558e88ceb8ec886dd794b83b3",
-                  "keyword-index.json":  "sha256:92aa6f13226e3cae1873d0969e4aa4af54ec57313533dc786300b88c9d77b2db",
-                  "vector-index.bin":  "sha256:136e989cadb357313071d3a4ecb0b677a21f8ecdd226a0107244ae22092e3b48"
+                  "portfolio.json":  "sha256:fb24d52735981758a91241fc88a21299390516a9e6cb055eeea63f771f9218ae",
+                  "presentation.json":  "sha256:20a275e33d8c2608edda22ce1b15f20ed8db332a4a5349d561d11e672be55112",
+                  "rag-documents.jsonl":  "sha256:b8e21dfa80002719bc4731824209ee4d4c63cac21ca725f4337a6057135a265e",
+                  "keyword-index.json":  "sha256:f1a6ef1b1d024786d21f89e17c6d2d5a06006a95f5daf0bac3e62e2015648218",
+                  "vector-index.bin":  "sha256:e877edcc7f3790cc8c64365673368af05c69a6a66fa7c307e01fad676d1932f4"
               }
 }

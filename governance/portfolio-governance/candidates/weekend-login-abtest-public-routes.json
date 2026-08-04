@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "3.0",
+  "targetContentVersion": "2026-08-04.2",
+  "publishRoutes": [
+    {
+      "assetId": "AB-01",
+      "finalRoute": "PROJECT",
+      "projectSlugs": [
+        "weekend-login-abtest"
+      ],
+      "caseSlugs": [],
+      "evidenceIds": [
+        "evidence-abtest-delivery-history"
+      ]
+    },
+    {
+      "assetId": "AB-02",
+      "finalRoute": "CASE",
+      "projectSlugs": [
+        "weekend-login-abtest"
+      ],
+      "caseSlugs": [
+        "abtest-experiment-design"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-experiment-design-notes"
+      ]
+    },
+    {
+      "assetId": "AB-03",
+      "finalRoute": "CASE",
+      "projectSlugs": [
+        "weekend-login-abtest"
+      ],
+      "caseSlugs": [
+        "abtest-service-sql"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-service-sql-evolution"
+      ]
+    },
+    {
+      "assetId": "AB-04",
+      "finalRoute": "CASE",
+      "projectSlugs": [
+        "weekend-login-abtest"
+      ],
+      "caseSlugs": [
+        "abtest-validation-risk-control"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-validation-risk-notes"
+      ]
+    }
+  ]
+}

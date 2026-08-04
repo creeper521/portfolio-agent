@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -37,6 +38,7 @@ public class PublicRuntimeRepositoryConfiguration {
     }
 
     @Bean
+    @Primary
     PublicPortfolioRepository postgresPublicPortfolioRepository(
             PublicRuntimeSnapshotStore store,
             @Qualifier("publicPortfolioReadTransactionTemplate") TransactionTemplate readTransactions,

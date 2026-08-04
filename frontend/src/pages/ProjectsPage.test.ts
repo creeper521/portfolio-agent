@@ -111,6 +111,30 @@ describe('ProjectsPage · 项目主线', () => {
     expect(text).toContain('Spring Boot')
   })
 
+  it('把 ABTest 完整闭环作为 PRIMARY 工程主线展示', async () => {
+    const wrapper = mountPage([
+      makeProject({
+        slug: 'weekend-login-abtest',
+        code: 'P-07',
+        title: '周末登录奖励 ABTest 完整闭环',
+        summary: '覆盖实验设计、服务端能力、配置 SQL、验证埋点与回滚预案。',
+        projectNature: 'WORKSTREAM',
+        technologies: ['Java', 'A/B Testing', 'SQL'],
+        caseCount: 3,
+      }),
+    ])
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('周末登录奖励 ABTest 完整闭环')
+    expect(text).toContain('Java 后端')
+    expect(text).toContain('工作主线')
+    expect(text).toContain('核心版本已交付')
+    expect(text).toContain('主导贡献')
+    expect(text).toContain('3 个案例')
+    expect(text).toContain('A/B Testing')
+  })
+
   it('caseCount 大于零时显示案例数量，等于零时不出现「0 个案例」', async () => {
     const wrapper = mountPage([
       makeProject({ slug: 'with-cases', title: '有案例的项目', caseCount: 3 }),

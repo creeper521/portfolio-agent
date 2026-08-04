@@ -1,7 +1,84 @@
 {
   "suiteVersion": "retrieval-benchmark-v2",
-  "contentVersion": "2026-07-29.1",
+  "contentVersion": "2026-08-04.2",
   "cases": [
+    {
+      "caseId": "abtest-overview-exact-01",
+      "split": "CALIBRATION",
+      "category": "EXACT_TERM",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "请介绍周末登录奖励 ABTest 的完整工程闭环。",
+      "expectedClaimIds": ["claim-abtest-project-delivered"],
+      "expectedChunkIds": ["chunk-claim-abtest-project-delivered"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-stratification-bucketing-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "为什么要先按历史登录天数分层，再在每层里分桶？",
+      "expectedClaimIds": ["claim-abtest-experiment-design"],
+      "expectedChunkIds": ["chunk-claim-abtest-experiment-design"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-date-range-exact-01",
+      "split": "CALIBRATION",
+      "category": "EXACT_TERM",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "登录天数分层的统计日期范围如何做到可配置？",
+      "expectedClaimIds": ["claim-abtest-service-sql"],
+      "expectedChunkIds": ["chunk-claim-abtest-service-sql"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-persistence-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "为什么实验标签要持久化，不能每次请求重新随机？",
+      "expectedClaimIds": ["claim-abtest-experiment-design"],
+      "expectedChunkIds": ["chunk-claim-abtest-experiment-design"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-assignment-exposure-paraphrase-01",
+      "split": "HOLDOUT",
+      "category": "SEMANTIC_PARAPHRASE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "已经分配实验组和客户端真正看到奖励为什么不是一回事？",
+      "expectedClaimIds": ["claim-abtest-validation-risk-control"],
+      "expectedChunkIds": ["chunk-claim-abtest-validation-risk-control"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-test-matrix-rollback-exact-01",
+      "split": "CALIBRATION",
+      "category": "EXACT_TERM",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "测试矩阵、停止条件和回滚边界如何设计？",
+      "expectedClaimIds": ["claim-abtest-validation-risk-control"],
+      "expectedChunkIds": ["chunk-claim-abtest-validation-risk-control"],
+      "expectedDecision": "SUFFICIENT"
+    },
+    {
+      "caseId": "abtest-old-activity-boundary-01",
+      "split": "HOLDOUT",
+      "category": "OUT_OF_SCOPE",
+      "subjectType": "PROJECT",
+      "subjectSlug": "weekend-login-abtest",
+      "query": "以前普通活动复开时客户端资源缺失是怎么排查的？",
+      "expectedClaimIds": [],
+      "expectedChunkIds": [],
+      "expectedDecision": "OUT_OF_SCOPE"
+    },
     {
       "caseId": "case-codegraph-workflow-paraphrase-01",
       "split": "HOLDOUT",

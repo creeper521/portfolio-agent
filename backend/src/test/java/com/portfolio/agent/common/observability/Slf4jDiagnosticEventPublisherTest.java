@@ -2,10 +2,12 @@ package com.portfolio.agent.common.observability;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
+import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,5 +49,30 @@ class Slf4jDiagnosticEventPublisherTest {
         new Slf4jDiagnosticEventPublisher(logger, counter).publish(event);
 
         assertThat(counter.count()).isEqualTo(1);
+    }
+
+    @Test
+    void doesNotDuplicateFieldsAlreadyProvidedByMdc() {
+        Logger logger = mock(Logger.class);
+        LoggingEventBuilder builder = mock(LoggingEventBuilder.class);
+        DroppedDiagnosticCounter counter = new DroppedDiagnosticCounter();
+        DiagnosticEvent event = DiagnosticEvent.builder(
+                "http.request.completed", DiagnosticLevel.INFO)
+                .field("trace.id", "trace-1")
+                .field("http.status_code", 200)
+                .build();
+        when(logger.atInfo()).thenReturn(builder);
+
+        MDC.put("trace.id", "trace-1");
+        try {
+            new Slf4jDiagnosticEventPublisher(logger, counter).publish(event);
+        } finally {
+            MDC.clear();
+        }
+
+        verify(builder, never()).addKeyValue("trace.id", "trace-1");
+        verify(builder).addKeyValue("http.status_code", 200);
+        verify(builder).log("http.request.completed");
+        assertThat(counter.count()).isZero();
     }
 }
