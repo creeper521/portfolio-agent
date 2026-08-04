@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "3.0",
+  "targetContentVersion": "2026-08-04.1",
+  "publishRoutes": [
+    {"assetId":"TD-01","finalRoute":"PROJECT","projectSlugs":["tool-docker-transformation"],"caseSlugs":[],"evidenceIds":["evidence-tool-docker-cross-repository-review"]},
+    {"assetId":"TD-02","finalRoute":"CASE","projectSlugs":["tool-docker-transformation"],"caseSlugs":["tool-docker-runtime-routing"],"evidenceIds":["evidence-tool-docker-tool-implementation-tests"]},
+    {"assetId":"TD-03","finalRoute":"CASE","projectSlugs":["tool-docker-transformation"],"caseSlugs":["tool-docker-sequential-restart"],"evidenceIds":["evidence-tool-docker-tool-implementation-tests"]},
+    {"assetId":"TD-04","finalRoute":"CASE","projectSlugs":["tool-docker-transformation"],"caseSlugs":["tool-docker-virtual-time"],"evidenceIds":["evidence-tool-docker-deployment-contract"]}
+  ]
+}
