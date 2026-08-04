@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "suiteId": "portfolio-agent-release",
+  "datasetVersion": "2026-08-04.1",
+  "cases": [
+    {
+      "id": "route.sql.001", "title": "Route SQL audit project", "split": "HOLDOUT", "origin": "HUMAN_AUTHORED", "riskLevel": "HIGH",
+      "reviewStatus": "APPROVED", "reviewerId": "reviewer-001", "sourceCategory": "PUBLIC_BUNDLE", "difficultyReason": "semantic paraphrase", "firstExposedDatasetVersion": "2026-08-04.1", "tags": ["routing", "semantic-paraphrase"],
+      "input": {"messages": [{"role": "user", "content": "你做过数据库风险排查相关的项目吗？"}]},
+      "oracle": {"expectedSubjects": [{"type": "PROJECT", "slug": "sql-audit-project"}]},
+      "expectations": {"resolution": ["ANSWERED"], "answerScope": ["PORTFOLIO"], "requiredClaimIds": [], "allowedEvidenceIds": [], "forbiddenSubjectSlugs": [], "forbiddenBehaviors": ["INVENT_PRIVATE_EXPERIENCE"]},
+      "execution": {"layers": ["FULL_CORPUS_RETRIEVAL", "INTELLIGENCE", "HTTP_E2E"], "providerTrials": 3},
+      "graders": [{"type": "SUBJECT_MATCH", "severity": "BLOCKING"}],
+      "maintenance": {"subjectRefs": [{"type": "PROJECT", "slug": "sql-audit-project"}], "generatedFromBundle": false}
+    },
+    {
+      "id": "answer.sql.001", "title": "Answer SQL audit project", "split": "CALIBRATION", "origin": "BUNDLE_GENERATED", "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED", "reviewerId": "reviewer-002", "sourceCategory": "PUBLIC_BUNDLE", "difficultyReason": "direct subject reference", "firstExposedDatasetVersion": "2026-08-04.1", "tags": ["answer"],
+      "input": {"messages": [{"role": "user", "content": "介绍 SQL 审计项目"}]},
+      "oracle": {"expectedSubjects": [{"type": "PROJECT", "slug": "sql-audit-project"}]},
+      "expectations": {"resolution": ["ANSWERED"], "answerScope": ["PORTFOLIO"], "requiredClaimIds": [], "allowedEvidenceIds": [], "forbiddenSubjectSlugs": [], "forbiddenBehaviors": []},
+      "execution": {"layers": ["INTELLIGENCE"], "providerTrials": 1},
+      "graders": [{"type": "GROUNDING", "severity": "BLOCKING"}],
+      "maintenance": {"subjectRefs": [{"type": "PROJECT", "slug": "sql-audit-project"}], "generatedFromBundle": true}
+    }
+  ]
+}

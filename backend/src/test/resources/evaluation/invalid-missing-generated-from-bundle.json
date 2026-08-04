@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "suiteId": "portfolio-agent-release",
+  "datasetVersion": "2026-08-04.1",
+  "cases": [{
+    "id": "route.sql.missing-generated.001",
+    "title": "Missing generated flag",
+    "split": "HOLDOUT",
+    "origin": "HUMAN_AUTHORED",
+    "riskLevel": "HIGH",
+    "reviewStatus": "APPROVED",
+    "reviewerId": "reviewer-001",
+    "sourceCategory": "PUBLIC_BUNDLE",
+    "difficultyReason": "required field guard",
+    "firstExposedDatasetVersion": "2026-08-04.1",
+    "tags": ["loader"],
+    "input": {"messages": [{"role": "user", "content": "safe synthetic input"}]},
+    "oracle": {"expectedSubjects": []},
+    "expectations": {"resolution": ["ANSWERED"], "answerScope": ["PORTFOLIO"], "requiredClaimIds": [], "allowedEvidenceIds": [], "forbiddenSubjectSlugs": [], "forbiddenBehaviors": []},
+    "execution": {"layers": ["INTELLIGENCE"], "providerTrials": 1},
+    "graders": [{"type": "SUBJECT_MATCH", "severity": "BLOCKING"}],
+    "maintenance": {"subjectRefs": []}
+  }]
+}
