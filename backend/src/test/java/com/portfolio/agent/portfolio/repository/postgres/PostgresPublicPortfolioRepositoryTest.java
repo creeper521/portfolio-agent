@@ -123,7 +123,7 @@ class PostgresPublicPortfolioRepositoryTest {
                 store, immediateTransactions(), codec).getSnapshot();
 
         assertThat(actual).usingRecursiveComparison().isEqualTo(expected);
-        assertThat(actual.getRetrievalContent().orElseThrow().getDocuments()).hasSize(79);
+        assertThat(actual.getRetrievalContent().orElseThrow().getDocuments()).hasSize(83);
         assertThat(actual.getRetrievalContent().orElseThrow().getVectorIndex().getDimension()).isEqualTo(512);
     }
 

@@ -45,7 +45,7 @@ class CaseConversationBundleIntegrationTest {
                         .content(request("turn-known-case", "multilingual-image-preservation")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.turnId").value("turn-known-case"))
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-08-04.2"))
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))

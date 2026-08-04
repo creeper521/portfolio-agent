@@ -67,7 +67,7 @@ class RetrievalBenchmarkTest {
 
         assertThat(suite.getSuiteVersion()).isEqualTo("retrieval-benchmark-v2");
         assertThat(suite.getContentVersion()).isEqualTo(portfolio.getContentVersion());
-        assertThat(suite.getCases()).hasSize(12);
+        assertThat(suite.getCases()).hasSize(19);
     }
 
     @Test

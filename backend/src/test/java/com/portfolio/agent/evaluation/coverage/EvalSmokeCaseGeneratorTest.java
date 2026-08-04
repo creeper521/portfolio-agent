@@ -25,7 +25,7 @@ class EvalSmokeCaseGeneratorTest {
 
         List<EvalCase> generated = new EvalSmokeCaseGenerator().generate(snapshot);
 
-        assertThat(generated).hasSize(54);
+        assertThat(generated).hasSize(58);
         assertThat(generated).extracting(EvalCase::getId)
                 .contains("smoke.project.sql-audit", "smoke.case.test-role-reset")
                 .isSorted();

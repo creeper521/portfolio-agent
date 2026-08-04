@@ -15,6 +15,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioFollowUpAction;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioReferenceContext;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,7 +40,15 @@ class DefaultPortfolioIntelligenceRoutingTest {
     @Test
     void presetIdWinsWithoutCallingClassifier() {
         PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
-        DefaultPortfolioIntelligence intelligence = intelligence(classifier, false);
+        AtomicReference<com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest>
+                request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier,
+                false,
+                retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
 
         PortfolioDecision decision = intelligence.tryResolve(
                 PortfolioTurn.builder("turn-1", "How is async state restored?")
@@ -49,6 +59,8 @@ class DefaultPortfolioIntelligenceRoutingTest {
         assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.ANSWERED);
         assertThat(decision.getMaterial()).get().satisfies(material ->
                 assertThat(material.getIntentSource()).isEqualTo(AnswerIntentSource.PRESET));
+        assertThat(request.get().getStrategy())
+                .isEqualTo(PortfolioRetrievalStrategy.REFERENCE_SCOPED);
         verifyNoInteractions(classifier);
     }
 

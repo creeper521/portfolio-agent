@@ -47,6 +47,24 @@ class RetrievalBundleCompilerCliTest {
     }
 
     @Test
+    void canonicalDocumentCompilerRejectsRuntimeInvalidClaimVerification()
+            throws Exception {
+        Path source = projectRoot().resolve(
+                "backend/src/main/resources/public-data/bundle/portfolio.json");
+        String invalidPortfolio = Files.readString(source).replaceFirst(
+                "\\\"verificationStatus\\\"\\s*:\\s*\\\"VERIFIED\\\"",
+                "\\\"verificationStatus\\\": \\\"PARTIALLY_VERIFIED\\\"");
+        Path portfolio = temporary.resolve("portfolio.json");
+        Files.writeString(portfolio, invalidPortfolio);
+
+        assertThatThrownBy(() -> RagDocumentCompilerCli.compile(
+                portfolio, temporary.resolve("rag-documents.jsonl"),
+                LocalDate.of(2026, 8, 4)))
+                .hasMessageContaining(
+                        "claim verificationStatus does not match DIRECT evidence");
+    }
+
+    @Test
     void compilesRealLocalArtifactsAtomicallyWhenThePinnedModelIsInstalled()
             throws Exception {
         Path root = projectRoot();

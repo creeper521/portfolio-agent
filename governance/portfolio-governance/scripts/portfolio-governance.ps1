@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$Command,
     [string]$Workspace,
     [string]$Candidate,
@@ -492,6 +492,517 @@ function Write-DeterministicJson([string]$PathValue, [object]$Value) {
     $json = $Value | ConvertTo-Json -Depth 50
     [IO.File]::WriteAllText($PathValue, $json + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 }
+function Invoke-PrepareCandidateV3 {
+    $runtimePath = Resolve-CanonicalRepositoryInput $RuntimeBundle `
+        'backend\src\main\resources\public-data\bundle' 'runtimeBundle'
+    $patchPath = Resolve-CanonicalRepositoryInput $PatchManifest `
+        'governance\portfolio-governance\candidates\weekend-login-abtest-public-patch.json' `
+        'patchManifest'
+    $routePath = Resolve-CanonicalRepositoryInput $RouteManifest `
+        'governance\portfolio-governance\candidates\weekend-login-abtest-public-routes.json' `
+        'routeManifest'
+    $baselinePath = Resolve-CanonicalRepositoryInput `
+        (Join-Path $repositoryRoot `
+            'governance\portfolio-governance\baselines\schema-4-publication-decisions.json') `
+        'governance\portfolio-governance\baselines\schema-4-publication-decisions.json' `
+        'publicationBaseline'
+    $inventoryPath = Resolve-SafePath $AssetInventory 'assetInventory'
+    Assert-NoReparsePoint $inventoryPath
+    if (Test-Contained $inventoryPath $repositoryRoot) {
+        Write-Failure 'PREPARE_INVENTORY_INSIDE_REPOSITORY' `
+            'Asset inventory must remain outside the repository.'
+    }
+
+    $runtimeNames = @(Get-ChildItem -LiteralPath $runtimePath -File |
+        ForEach-Object Name | Sort-Object)
+    if (($runtimeNames -join ',') -ne `
+            'checksums.json,keyword-index.json,manifest.json,portfolio.json,presentation.json,rag-documents.jsonl,vector-index.bin') {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+            'Schema 4 incremental preparation requires the closed seven-file retrieval Bundle.'
+    }
+    try {
+        $checksums = Get-Content (Join-Path $runtimePath 'checksums.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = Get-Content (Join-Path $runtimePath 'manifest.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $portfolio = Get-Content (Join-Path $runtimePath 'portfolio.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $presentation = Get-Content (Join-Path $runtimePath 'presentation.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $patch = Get-Content $patchPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $routes = Get-Content $routePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $baseline = Get-Content $baselinePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $inventoryDocument = Get-Content $inventoryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Failure 'PREPARE_INPUT_INVALID' `
+            'The Schema 4 incremental candidate inputs cannot be parsed.'
+    }
+
+    foreach ($name in @(
+        'portfolio.json', 'presentation.json', 'rag-documents.jsonl',
+        'keyword-index.json', 'vector-index.bin'
+    )) {
+        $actualHash = Get-Sha256 ([IO.File]::ReadAllBytes((Join-Path $runtimePath $name)))
+        if ([string]$checksums.files.$name -ne $actualHash) {
+            Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+                'Schema 4 runtime Bundle checksum verification failed.'
+        }
+    }
+    $runtimePortfolioBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'portfolio.json'))
+    $runtimePresentationBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'presentation.json'))
+    $runtimeRagBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'rag-documents.jsonl'))
+    $baseVersion = [string]$portfolio.contentVersion
+    if ($baseVersion -ne '2026-08-04.1' -or
+            [string]$portfolio.schemaVersion -ne '4.0' -or
+            [string]$presentation.schemaVersion -ne '4.0' -or
+            [string]$presentation.contentVersion -ne $baseVersion -or
+            [string]$manifest.schemaVersion -ne '4.0' -or
+            [string]$manifest.contentVersion -ne $baseVersion -or
+            [string]$checksums.schemaVersion -ne '4.0' -or
+            [string]$checksums.contentVersion -ne $baseVersion -or
+            [string]$manifest.candidatePayloadHash -ne
+                (Get-CandidatePayloadHash $runtimePortfolioBytes $runtimePresentationBytes $runtimeRagBytes) -or
+            [int]$manifest.counts.projects -ne @($portfolio.projects).Count -or
+            [int]$manifest.counts.cases -ne @($portfolio.cases).Count -or
+            [int]$manifest.counts.claims -ne @($portfolio.claims).Count -or
+            [int]$manifest.counts.evidence -ne @($portfolio.evidence).Count -or
+            [int]$manifest.counts.claimEvidenceLinks -ne @($portfolio.claimEvidenceLinks).Count -or
+            [int]$manifest.counts.timelineEvents -ne @($portfolio.timelineEvents).Count -or
+            [int]$manifest.counts.questionPresets -ne @($portfolio.questionPresets).Count) {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+            'ABTest incremental preparation requires the reviewed 2026-08-04.1 schema 4.0 Bundle.'
+    }
+    Assert-SchemaFourCollections $portfolio
+
+    Assert-ExactProperties $patch @(
+        'schemaVersion','baseContentVersion','targetContentVersion','projects','cases',
+        'timelineEvents','claims','evidence','links','presets','projectUpdates','caseUpdates'
+    ) 'PREPARE_PATCH_SCHEMA_INVALID'
+    Assert-ExactProperties $routes @(
+        'schemaVersion','targetContentVersion','publishRoutes'
+    ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+    Assert-ExactProperties $baseline @(
+        'schemaVersion','contentVersion','assets'
+    ) 'PREPARE_BASELINE_SCHEMA_INVALID'
+    if ([string]$patch.schemaVersion -ne '3.0' -or
+            [string]$routes.schemaVersion -ne '3.0' -or
+            [string]$baseline.schemaVersion -ne '1.0' -or
+            [string]$baseline.contentVersion -ne $baseVersion -or
+            [string]$patch.baseContentVersion -ne $baseVersion -or
+            [string]$patch.targetContentVersion -ne $TargetVersion -or
+            [string]$routes.targetContentVersion -ne $TargetVersion) {
+        Write-Failure 'PREPARE_MANIFEST_VERSION_INVALID' `
+            'ABTest patch, routes, baseline and runtime versions are inconsistent.'
+    }
+    if (@($patch.projects).Count -ne 1 -or @($patch.cases).Count -ne 3 -or
+            @($patch.timelineEvents).Count -ne 1 -or @($patch.claims).Count -ne 4 -or
+            @($patch.evidence).Count -ne 4 -or @($patch.links).Count -ne 4 -or
+            @($patch.presets).Count -ne 3 -or @($patch.projectUpdates).Count -ne 0 -or
+            @($patch.caseUpdates).Count -ne 0) {
+        Write-Failure 'PREPARE_PATCH_COVERAGE_INVALID' `
+            'ABTest patch must add exactly 1 Project, 3 Cases, 1 Timeline event, 4 Claims, 4 Evidence summaries, 4 links and 3 presets.'
+    }
+
+    $collectionMap = @{
+        projects='projects'; cases='cases'; timelineEvents='timelineEvents'
+        claims='claims'; evidence='evidence'; links='claimEvidenceLinks'
+        presets='questionPresets'
+    }
+    foreach ($name in $collectionMap.Keys) {
+        Assert-UniqueIds @($patch.$name) $name
+        $baseIds = @($portfolio.($collectionMap[$name]) | ForEach-Object { [string]$_.id })
+        if (@($patch.$name | Where-Object { $baseIds -contains [string]$_.id }).Count -gt 0) {
+            Write-Failure 'PREPARE_ID_COLLISION' `
+                'ABTest patch collides with an existing public ID.'
+        }
+    }
+    foreach ($property in @('code', 'slug')) {
+        $newValues = @($patch.projects | ForEach-Object { [string]$_.$property })
+        $baseValues = @($portfolio.projects | ForEach-Object { [string]$_.$property })
+        if (@($newValues | Select-Object -Unique).Count -ne $newValues.Count -or
+                @($newValues | Where-Object { $baseValues -contains $_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_PROJECT_COLLISION' `
+                'ABTest Project code or slug collides with public content.'
+        }
+        $newCaseValues = @($patch.cases | ForEach-Object { [string]$_.$property })
+        $baseCaseValues = @($portfolio.cases | ForEach-Object { [string]$_.$property })
+        if (@($newCaseValues | Select-Object -Unique).Count -ne $newCaseValues.Count -or
+                @($newCaseValues | Where-Object { $baseCaseValues -contains $_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_CASE_COLLISION' `
+                'ABTest Case code or slug collides with public content.'
+        }
+    }
+
+    $projectFields = @(
+        'id','code','slug','title','summary','background','responsibilities','solution',
+        'keyDecisions','technologies','verification','outcome','handoff','status',
+        'contributionType','claimIds','evidenceIds','timelineEventIds','careerTrack',
+        'projectNature','displayTier','featuredCaseIds'
+    )
+    $caseFields = @(
+        'id','code','slug','type','title','summary','problem','actions','decisions',
+        'verification','outcome','limitations','achievementStatus','contributionType',
+        'projectId','claimIds','evidenceIds','timelineEventIds','questionPresetIds',
+        'collectionIds'
+    )
+    $claimFields = @(
+        'id','subjectType','subjectId','category','statement','detail','achievementStatus',
+        'contributionType','verificationBasis','verificationStatus','materiality','topics',
+        'audiencePriorities'
+    )
+    foreach ($project in @($patch.projects)) {
+        Assert-ExactProperties $project $projectFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$project.status -ne 'DELIVERED' -or
+                [string]$project.contributionType -ne 'PRIMARY' -or
+                [string]$project.careerTrack -ne 'JAVA_BACKEND' -or
+                [string]$project.projectNature -ne 'WORKSTREAM' -or
+                [string]$project.displayTier -ne 'PRIMARY') {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'ABTest Project classification must remain delivered PRIMARY Java backend work.'
+        }
+    }
+    foreach ($caseStudy in @($patch.cases)) {
+        Assert-ExactProperties $caseStudy $caseFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$caseStudy.type -ne 'FEATURE' -or
+                [string]$caseStudy.achievementStatus -ne 'DELIVERED' -or
+                [string]$caseStudy.contributionType -ne 'PRIMARY' -or
+                @($caseStudy.collectionIds).Count -ne 0) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'ABTest Cases must remain delivered PRIMARY features outside learning Collections.'
+        }
+    }
+    foreach ($claim in @($patch.claims)) {
+        Assert-ExactProperties $claim $claimFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$claim.subjectType -notin @('PROJECT','CASE') -or
+                [string]$claim.contributionType -ne 'PRIMARY' -or
+                [string]$claim.verificationBasis -ne 'EVIDENCE_SUPPORTED' -or
+                [string]$claim.verificationStatus -ne 'VERIFIED') {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'ABTest Claims must remain Evidence-supported PRIMARY claims.'
+        }
+    }
+    foreach ($item in @($patch.evidence)) {
+        Assert-ExactProperties $item @(
+            'id','code','title','type','periodStart','periodEnd','sourceCount','summary',
+            'publicStatus','rawContentPublic'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$item.publicStatus -ne 'APPROVED' -or $item.rawContentPublic -ne $false) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'ABTest Evidence must be approved metadata with private raw content.'
+        }
+    }
+
+    $newProjectIds = @($patch.projects.id)
+    $newProjectSlugs = @($patch.projects.slug)
+    $newCaseIds = @($patch.cases.id)
+    $newCaseSlugs = @($patch.cases.slug)
+    $newTimelineIds = @($patch.timelineEvents.id)
+    $newClaimIds = @($patch.claims.id)
+    $newEvidenceIds = @($patch.evidence.id)
+    $newPresetIds = @($patch.presets.id)
+    foreach ($project in @($patch.projects)) {
+        if (@($project.claimIds).Count -ne 1 -or
+                @($project.claimIds | Where-Object { $newClaimIds -notcontains $_ }).Count -gt 0 -or
+                @($project.evidenceIds).Count -ne 4 -or
+                (Compare-Object @($project.evidenceIds) $newEvidenceIds).Count -ne 0 -or
+                @($project.timelineEventIds).Count -ne 1 -or
+                @($project.timelineEventIds | Where-Object { $newTimelineIds -notcontains $_ }).Count -gt 0 -or
+                (Compare-Object @($project.featuredCaseIds) $newCaseIds).Count -ne 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'ABTest Project references must cover its Project Claim, four Evidence summaries, Timeline and three featured Cases.'
+        }
+    }
+    foreach ($caseStudy in @($patch.cases)) {
+        if ($newProjectIds -notcontains [string]$caseStudy.projectId -or
+                @($caseStudy.claimIds).Count -ne 1 -or
+                @($caseStudy.claimIds | Where-Object { $newClaimIds -notcontains $_ }).Count -gt 0 -or
+                @($caseStudy.evidenceIds).Count -ne 1 -or
+                @($caseStudy.evidenceIds | Where-Object { $newEvidenceIds -notcontains $_ }).Count -gt 0 -or
+                @($caseStudy.timelineEventIds).Count -ne 1 -or
+                @($caseStudy.timelineEventIds | Where-Object { $newTimelineIds -notcontains $_ }).Count -gt 0 -or
+                @($caseStudy.questionPresetIds).Count -ne 1 -or
+                @($caseStudy.questionPresetIds | Where-Object { $newPresetIds -notcontains $_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'Every ABTest Case must map to the new Project, one Claim, one Evidence summary, one Timeline and one preset.'
+        }
+    }
+    foreach ($link in @($patch.links)) {
+        Assert-ExactProperties $link @(
+            'id','claimId','evidenceId','supportType','scope','reviewStatus'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ($newClaimIds -notcontains [string]$link.claimId -or
+                $newEvidenceIds -notcontains [string]$link.evidenceId -or
+                [string]$link.supportType -ne 'DIRECT' -or
+                [string]$link.reviewStatus -ne 'APPROVED') {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'ABTest links must be direct, approved and non-dangling.'
+        }
+    }
+    foreach ($claim in @($patch.claims)) {
+        $subjectIds = if ([string]$claim.subjectType -eq 'PROJECT') {
+            $newProjectIds
+        } else {
+            $newCaseIds
+        }
+        if ($subjectIds -notcontains [string]$claim.subjectId -or
+                @($patch.links | Where-Object claimId -eq ([string]$claim.id)).Count -ne 1) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'Every ABTest Claim must map to one new subject and one Evidence link.'
+        }
+    }
+    foreach ($event in @($patch.timelineEvents)) {
+        Assert-ExactProperties $event @(
+            'id','dateLabel','title','problem','action','impact','projectIds',
+            'claimIds','evidenceIds','caseIds'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ((Compare-Object @($event.projectIds) $newProjectIds).Count -ne 0 -or
+                (Compare-Object @($event.caseIds) $newCaseIds).Count -ne 0 -or
+                (Compare-Object @($event.claimIds) $newClaimIds).Count -ne 0 -or
+                (Compare-Object @($event.evidenceIds) $newEvidenceIds).Count -ne 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'ABTest Timeline must cover the complete new Project group.'
+        }
+    }
+    foreach ($preset in @($patch.presets)) {
+        Assert-ExactProperties $preset @(
+            'id','text','aliases','audiences','projectIds','topics',
+            'preferredClaimCategories','placements','deterministicEntry',
+            'displayOrder','caseIds'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ($preset.deterministicEntry -ne $true -or
+                @($preset.projectIds | Where-Object { $newProjectIds -notcontains $_ }).Count -gt 0 -or
+                @($preset.caseIds | Where-Object { $newCaseIds -notcontains $_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+                'ABTest presets must remain deterministic and scoped to new public subjects.'
+        }
+    }
+
+    Assert-ExactProperties $baseline @('schemaVersion','contentVersion','assets') `
+        'PREPARE_BASELINE_SCHEMA_INVALID'
+    $baselineIds = @($baseline.assets | ForEach-Object { [string]$_.assetId })
+    $expectedBaseIds = @(Get-ExpectedAssetIds 68)
+    if (@($baseline.assets).Count -ne 68 -or
+            @($baselineIds | Select-Object -Unique).Count -ne 68 -or
+            (Compare-Object $baselineIds $expectedBaseIds).Count -ne 0) {
+        Write-Failure 'PREPARE_BASELINE_COVERAGE_INVALID' `
+            'Schema 4 publication baseline must cover exactly the original 68 assets.'
+    }
+    foreach ($asset in @($baseline.assets)) {
+        Assert-ExactProperties $asset @(
+            'assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds','routeDecision'
+        ) 'PREPARE_BASELINE_SCHEMA_INVALID'
+        if ([string]$asset.routeDecision -eq 'PUBLISH_CANDIDATE') {
+            if ([string]$asset.finalRoute -notin @(
+                    'PROJECT','CASE','ENRICH_EXISTING_PROJECT','EVIDENCE_ONLY','TIMELINE_ONLY'
+                ) -or @($asset.evidenceIds).Count -eq 0) {
+                Write-Failure 'PREPARE_BASELINE_ROUTE_INVALID' `
+                    'A published Schema 4 baseline route is incomplete.'
+            }
+        }
+        elseif ([string]$asset.routeDecision -ne 'EXCLUDED' -or
+                [string]$asset.finalRoute -ne 'EXCLUDE' -or
+                @($asset.projectSlugs).Count + @($asset.caseSlugs).Count +
+                    @($asset.evidenceIds).Count -ne 0) {
+            Write-Failure 'PREPARE_BASELINE_ROUTE_INVALID' `
+                'An excluded Schema 4 baseline route must remain reference-free.'
+        }
+    }
+    $baselineProjectSlugs = @($baseline.assets.projectSlugs | Select-Object -Unique)
+    $baselineCaseSlugs = @($baseline.assets.caseSlugs | Select-Object -Unique)
+    $baselineEvidenceIds = @($baseline.assets.evidenceIds | Select-Object -Unique)
+    if ((Compare-Object $baselineProjectSlugs @($portfolio.projects.slug)).Count -ne 0 -or
+            (Compare-Object $baselineCaseSlugs @($portfolio.cases.slug)).Count -ne 0 -or
+            (Compare-Object $baselineEvidenceIds @($portfolio.evidence.id)).Count -ne 0) {
+        Write-Failure 'PREPARE_BASELINE_REFERENCE_INVALID' `
+            'Schema 4 baseline must reverse-map all current Projects, Cases and Evidence.'
+    }
+
+    Assert-ExactProperties $inventoryDocument @(
+        'inventoryVersion','reviewState','counts','assets'
+    ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+    $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
+    $expectedInventoryIds = @(Get-ExpectedAssetIds 72)
+    if (@($inventoryDocument.assets).Count -ne 72 -or
+            @($inventoryIds | Select-Object -Unique).Count -ne 72 -or
+            (Compare-Object $inventoryIds $expectedInventoryIds).Count -ne 0) {
+        Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' `
+            'ABTest asset inventory must cover exactly the supported 72 assets.'
+    }
+    foreach ($sourceAsset in @($inventoryDocument.assets)) {
+        Assert-ExactProperties $sourceAsset @(
+            'id','contentType','title','achievementStatus','contributionType',
+            'publicPriority','evidenceStatus','reviewState','summary'
+        ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+    }
+
+    $routeIds = @($routes.publishRoutes | ForEach-Object { [string]$_.assetId })
+    if (@($routes.publishRoutes).Count -ne 4 -or
+            @($routeIds | Select-Object -Unique).Count -ne 4 -or
+            (Compare-Object $routeIds @('AB-01','AB-02','AB-03','AB-04')).Count -ne 0) {
+        Write-Failure 'PREPARE_ROUTE_PUBLISH_SET_INVALID' `
+            'ABTest routes must publish exactly AB-01 through AB-04.'
+    }
+    $routeById = @{}
+    foreach ($route in @($routes.publishRoutes)) {
+        Assert-ExactProperties $route @(
+            'assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds'
+        ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+        if ([string]$route.finalRoute -notin @('PROJECT','CASE') -or
+                @($route.projectSlugs | Where-Object { $newProjectSlugs -notcontains $_ }).Count -gt 0 -or
+                @($route.caseSlugs | Where-Object { $newCaseSlugs -notcontains $_ }).Count -gt 0 -or
+                @($route.evidenceIds).Count -ne 1 -or
+                @($route.evidenceIds | Where-Object { $newEvidenceIds -notcontains $_ }).Count -gt 0) {
+            Write-Failure 'PREPARE_ROUTE_CONTRACT_INVALID' `
+                'An ABTest publication route does not match the reviewed patch.'
+        }
+        $routeById[[string]$route.assetId] = $route
+    }
+    if ((Compare-Object @($routes.publishRoutes.projectSlugs | Select-Object -Unique) `
+                $newProjectSlugs).Count -ne 0 -or
+            (Compare-Object @($routes.publishRoutes.caseSlugs | Select-Object -Unique) `
+                $newCaseSlugs).Count -ne 0 -or
+            (Compare-Object @($routes.publishRoutes.evidenceIds | Select-Object -Unique) `
+                $newEvidenceIds).Count -ne 0) {
+        Write-Failure 'PREPARE_ROUTE_CONTRACT_INVALID' `
+            'ABTest routes must reverse-map every new Project, Case and Evidence summary.'
+    }
+
+    $portfolio.contentVersion = $TargetVersion
+    $presentation.contentVersion = $TargetVersion
+    $portfolio.projects = @($portfolio.projects) + @($patch.projects)
+    $portfolio.cases = @($portfolio.cases) + @($patch.cases)
+    $portfolio.timelineEvents = @($portfolio.timelineEvents) + @($patch.timelineEvents)
+    $portfolio.claims = @($portfolio.claims) + @($patch.claims)
+    $portfolio.evidence = @($portfolio.evidence) + @($patch.evidence)
+    $portfolio.claimEvidenceLinks = @($portfolio.claimEvidenceLinks) + @($patch.links)
+    $portfolio.questionPresets = @($portfolio.questionPresets) + @($patch.presets)
+    Assert-SchemaFourCollections $portfolio
+    Assert-PublicTextPrivacy $portfolio
+    if (@($portfolio.projects).Count -ne 6 -or @($portfolio.cases).Count -ne 52 -or
+            @($portfolio.collections).Count -ne 3 -or @($portfolio.claims).Count -ne 83 -or
+            @($portfolio.evidence).Count -ne 63 -or
+            @($portfolio.claimEvidenceLinks).Count -ne 83 -or
+            @($portfolio.timelineEvents).Count -ne 12 -or
+            @($portfolio.questionPresets).Count -ne 19) {
+        Write-Failure 'PREPARE_CANDIDATE_COVERAGE_INVALID' `
+            'ABTest merged candidate counts differ from the reviewed target.'
+    }
+
+    $baselineById = @{}
+    foreach ($asset in @($baseline.assets)) {
+        $baselineById[[string]$asset.assetId] = $asset
+    }
+    $ledgerAssets = @()
+    foreach ($sourceAsset in @($inventoryDocument.assets)) {
+        $id = [string]$sourceAsset.id
+        $publicRoute = if ($routeById.ContainsKey($id)) {
+            $routeById[$id]
+        } elseif ($baselineById.ContainsKey($id)) {
+            $baselineById[$id]
+        } else {
+            $null
+        }
+        if ($null -ne $publicRoute -and
+                [string]$publicRoute.routeDecision -ne 'EXCLUDED' -and
+                [string]$publicRoute.finalRoute -ne 'EXCLUDE') {
+            if ([string]$sourceAsset.reviewState -eq 'EXCLUDE' -or
+                    [string]$sourceAsset.publicPriority -eq 'EXCLUDE') {
+                Write-Failure 'PREPARE_ROUTE_SOURCE_STATE_INVALID' `
+                    'An excluded source asset cannot be published.'
+            }
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute=[string]$publicRoute.finalRoute
+                decisionReason=if ($id -like 'AB-*') {
+                    'ABTest reviewed public summary candidate.'
+                } else {
+                    'Schema 4 reviewed publication baseline carried forward.'
+                }
+                projectSlugs=@($publicRoute.projectSlugs)
+                caseSlugs=@($publicRoute.caseSlugs)
+                evidenceIds=@($publicRoute.evidenceIds)
+                privacyReview='PUBLIC_SUMMARY_ONLY_RAW_PRIVATE'
+                routeDecision='PUBLISH_CANDIDATE'
+                targetContentVersion=$TargetVersion; targetWave=4
+            }
+        }
+        else {
+            if ($null -eq $publicRoute -or
+                    [string]$publicRoute.routeDecision -ne 'EXCLUDED') {
+                Write-Failure 'PREPARE_BASELINE_COVERAGE_INVALID' `
+                    'Every non-ABTest source asset requires a reviewed baseline decision.'
+            }
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute='EXCLUDE'; decisionReason='Excluded by reviewed Schema 4 baseline.'
+                projectSlugs=@(); caseSlugs=@(); evidenceIds=@()
+                privacyReview='PRIVATE_SOURCE_REMAINS_WITHHELD'
+                routeDecision='EXCLUDED'; targetContentVersion=$null; targetWave=$null
+            }
+        }
+    }
+
+    $packageRoot = Join-Path $resolvedWorkspace 'prepared-candidates'
+    if (Test-Path -LiteralPath $packageRoot) { Assert-NoReparsePoint $packageRoot }
+    $targetPackage = Join-Path $packageRoot $TargetVersion
+    if (Test-Path -LiteralPath $targetPackage) {
+        Write-Failure 'PREPARE_TARGET_EXISTS' `
+            'Candidate package already exists and will not be overwritten.'
+    }
+    New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+    $stage = Join-Path $packageRoot ('.prepare-' + [guid]::NewGuid().ToString('N'))
+    $completed = $false
+    try {
+        $candidateDirectory = Join-Path $stage 'candidate'
+        New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null
+        if ($PrepareFailureStage -ne 'NONE') {
+            throw 'Injected ABTest incremental preparation failure.'
+        }
+        Write-DeterministicJson (Join-Path $candidateDirectory 'portfolio.json') $portfolio
+        Write-DeterministicJson (Join-Path $candidateDirectory 'presentation.json') $presentation
+        Write-DeterministicJson (Join-Path $stage 'asset-publication-decisions.json') `
+            ([ordered]@{ schemaVersion='1.0'; assets=$ledgerAssets })
+        $ledgerState = Read-DecisionLedger (Join-Path $stage 'asset-publication-decisions.json')
+        Assert-DecisionLedgerCandidate $ledgerState.Assets $portfolio
+        $privacyChecker = Join-Path $repositoryRoot 'scripts\privacy-check.ps1'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $privacyChecker `
+            -Path $stage | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'ABTest candidate privacy check failed.'
+        }
+        Move-Item -LiteralPath $stage -Destination $targetPackage
+        $completed = $true
+    }
+    catch {
+        if (-not $completed -and (Test-Path -LiteralPath $stage)) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+        }
+        Write-Failure 'PREPARE_STAGE_WRITE_FAILED' `
+            'ABTest incremental candidate preparation failed atomically.'
+    }
+    [ordered]@{
+        runId=[guid]::NewGuid().ToString('N'); command=$Command; status='PASS'
+        artifacts=@(
+            ('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
+        )
+        blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+    } | ConvertTo-Json -Depth 8 -Compress | Write-Output
+    exit 0
+}
+
 function Invoke-PrepareCandidateV2 {
     $runtimePath = Resolve-CanonicalRepositoryInput $RuntimeBundle `
         'backend\src\main\resources\public-data\bundle' 'runtimeBundle'
@@ -840,8 +1351,9 @@ function Invoke-PrepareCandidateToolDocker {
         }
     }
     if ([string]$portfolio.schemaVersion -ne '4.0' -or [string]$presentation.schemaVersion -ne '4.0' -or
-        [string]$portfolio.contentVersion -ne '2026-07-29.1' -or [string]$presentation.contentVersion -ne '2026-07-29.1') {
-        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Tool Docker requires the reviewed 2026-07-29.1 schema 4.0 Bundle.'
+        [string]$portfolio.contentVersion -notin @('2026-08-04.1', '2026-08-04.2') -or
+        [string]$presentation.contentVersion -ne [string]$portfolio.contentVersion) {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Tool Docker requires a reviewed schema 4.0 Bundle from this integration chain.'
     }
     Assert-ExactProperties $patch @('schemaVersion','baseContentVersion','targetContentVersion','projects','cases','timelineEvents','claims','evidence','links','presets','projectUpdates','caseUpdates') 'PREPARE_PATCH_SCHEMA_INVALID'
     Assert-ExactProperties $routes @('schemaVersion','targetContentVersion','publishRoutes') 'PREPARE_ROUTE_SCHEMA_INVALID'
@@ -907,6 +1419,9 @@ function Invoke-PrepareCandidateToolDocker {
 function Invoke-PrepareCandidate {
     if ($TargetVersion -eq '2026-08-04.1') {
         Invoke-PrepareCandidateToolDocker
+    }
+    if ($TargetVersion -eq '2026-08-04.2') {
+        Invoke-PrepareCandidateV3
     }
     if ($TargetVersion -eq '2026-07-27.1') {
         Invoke-PrepareCandidateV2
@@ -1390,6 +1905,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '3.0|2026-07-27.1' { 'wave-2-benchmarks.v1.json'; break }
         '4.0|2026-07-29.1' { 'wave-2-benchmarks.v1.json'; break }
         '4.0|2026-08-04.1' { 'tool-docker-benchmarks.v1.json'; break }
+        '4.0|2026-08-04.2' { 'weekend-login-abtest-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path

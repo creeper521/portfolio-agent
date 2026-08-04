@@ -3,6 +3,7 @@ package com.portfolio.agent.common.observability;
 import java.util.Objects;
 
 import org.slf4j.Logger;
+import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 
 public final class Slf4jDiagnosticEventPublisher implements DiagnosticEventPublisher {
@@ -28,7 +29,11 @@ public final class Slf4jDiagnosticEventPublisher implements DiagnosticEventPubli
             };
             builder.addKeyValue("event.schema_version", event.getSchemaVersion());
             builder.addKeyValue("event.name", event.getName());
-            event.forEachApprovedField(builder::addKeyValue);
+            event.forEachApprovedField((key, value) -> {
+                if (MDC.get(key) == null) {
+                    builder.addKeyValue(key, value);
+                }
+            });
             builder.log(event.getName());
         } catch (RuntimeException exception) {
             droppedDiagnosticCounter.increment();

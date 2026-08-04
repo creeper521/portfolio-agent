@@ -40,14 +40,14 @@ const BOUNDARY_MESSAGE =
 function answerResponse(
   question: string,
   questionPresetId?: string,
-  contextEnvelope?: Record<string, unknown>,
+  referenceContext?: Record<string, unknown>,
 ) {
   const project = previewPublicContent.projects[0]
   const evidence = previewPublicContent.evidence[0]
   const rejected = /(?:内部|私有|private).*(?:密码|token|密钥|credential)/i.test(question)
   const matched = questionPresetId === 'sql-audit-overview' || QUESTION_ALIASES.has(question.trim())
   const retrieved = !questionPresetId && question.trim() === RETRIEVAL_QUESTION
-  const followUp = Boolean(contextEnvelope)
+  const followUp = Boolean(referenceContext)
   const answered = matched || retrieved || followUp
   const evidenceIds = answered ? [evidence.id] : []
   const resolution = rejected ? 'REJECTED' : answered ? 'ANSWERED' : 'BOUNDARY'
@@ -88,7 +88,7 @@ function answerResponse(
           }],
     evidenceIds,
     suggestedQuestionPresetIds: ['sql-audit-overview'],
-    contextEnvelope: answered ? {
+    referenceContext: answered ? {
       previousContentVersion: previewPublicContent.contentVersion,
       projectSlugs: ['sql-audit'],
       questionPresetId: 'sql-audit-overview',
@@ -114,7 +114,9 @@ async function fulfillAnswer(route: Route) {
   const requestBody = route.request().postDataJSON() as {
     question?: unknown
     questionPresetId?: unknown
-    contextEnvelope?: Record<string, unknown>
+    context?: {
+      referenceContext?: Record<string, unknown>
+    }
   }
   const question = typeof requestBody.question === 'string' ? requestBody.question : ''
   const questionPresetId = typeof requestBody.questionPresetId === 'string'
@@ -123,7 +125,7 @@ async function fulfillAnswer(route: Route) {
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
-    json: answerResponse(question, questionPresetId, requestBody.contextEnvelope),
+    json: answerResponse(question, questionPresetId, requestBody.context?.referenceContext),
   })
 }
 
@@ -223,7 +225,8 @@ export async function installGuidedAnswerMock(
     const base = answerResponse(
       typeof body.question === 'string' ? body.question : '',
       typeof body.questionPresetId === 'string' ? body.questionPresetId : undefined,
-      body.contextEnvelope as Record<string, unknown> | undefined,
+      (body.context as { referenceContext?: Record<string, unknown> } | undefined)
+        ?.referenceContext,
     )
     await route.fulfill({
       status: 200,

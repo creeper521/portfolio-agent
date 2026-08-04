@@ -120,6 +120,27 @@ public final class PortfolioRetrievalRequest {
                 preferredClaimCategories);
     }
 
+    public static PortfolioRetrievalRequest presetScope(
+            String query,
+            PortfolioTaskMode mode,
+            PortfolioConditions conditions,
+            String subjectId,
+            List<AnswerClaimCategory> preferredClaimCategories) {
+        if (subjectId == null || subjectId.isBlank()) {
+            throw new IllegalArgumentException("subjectId is required");
+        }
+        return new PortfolioRetrievalRequest(
+                query,
+                mode,
+                conditions,
+                DEFAULT_LIMIT,
+                List.of(subjectId.trim()),
+                List.of(),
+                true,
+                PortfolioRetrievalStrategy.REFERENCE_SCOPED,
+                preferredClaimCategories);
+    }
+
     public static PortfolioRetrievalRequest referenceScope(
             String query,
             PortfolioTaskMode mode,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
+import com.portfolio.agent.portfolio.repository.file.BundledPublicPortfolioRepositoryConfiguration;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
 import com.portfolio.agent.portfolio.controller.PortfolioController;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
@@ -89,9 +90,11 @@ class PublicPortfolioDatabaseConfigurationTest {
                 .withPropertyValues("portfolio.database.public.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(PublicPortfolioRepository.class);
+                    assertThat(context.getBeansOfType(PublicPortfolioRepository.class)).hasSize(2);
                     assertThat(context.getBean(PublicPortfolioRepository.class))
                             .isInstanceOf(PostgresPublicPortfolioRepository.class);
+                    assertThat(context.getBean("bundledPublicPortfolioRepository"))
+                            .isInstanceOf(JsonPublicPortfolioRepository.class);
                     assertThat(context).hasSingleBean(PortfolioService.class);
                     assertThat(context).hasSingleBean(PortfolioController.class);
                     TransactionTemplate readTransactions =
@@ -113,6 +116,7 @@ class PublicPortfolioDatabaseConfigurationTest {
                 .withUserConfiguration(
                         RuntimeRepositoryTestDependencies.class,
                         JsonPublicPortfolioRepository.class,
+                        BundledPublicPortfolioRepositoryConfiguration.class,
                         PublicRuntimeRepositoryConfiguration.class,
                         PortfolioService.class,
                         PortfolioController.class);

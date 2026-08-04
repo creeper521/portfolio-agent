@@ -195,7 +195,9 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             AnswerIntentSource source,
             boolean contextVersionUpdated
     ) {
-        PortfolioIntelligenceResult result = resolve(task)
+        PortfolioIntelligenceResult result = (source == AnswerIntentSource.PRESET
+                ? resolvePreset(task)
+                : resolve(task))
                 .withDecisionMetadata(source, contextVersionUpdated);
         return decisionFor(result);
     }
@@ -223,6 +225,28 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                 .withDecisionMetadata(AnswerIntentSource.PRESET, false)
                 .withContractIdentity(presetId, contractVersion);
         return new PortfolioDecision(PortfolioDisposition.CAPABILITY_UNAVAILABLE, result);
+    }
+
+    private PortfolioIntelligenceResult resolvePreset(PortfolioTask task) {
+        Objects.requireNonNull(task, "task");
+        PortfolioTaskValidation validation = taskValidator.validate(task);
+        if (!validation.isValid()) {
+            return PortfolioIntelligenceResult.clarification(validation.getClarification());
+        }
+        if (task.getMode() != PortfolioTaskMode.FACT_LOOKUP
+                || task.getSubjectId() == null) {
+            return PortfolioIntelligenceResult.clarification(
+                    new PortfolioClarification(
+                            "Please clarify the portfolio information to use.",
+                            "questionPresetId"));
+        }
+        PortfolioRetrievalRequest request = PortfolioRetrievalRequest.presetScope(
+                task.getQuestion(),
+                task.getMode(),
+                task.getConditions(),
+                task.getSubjectId(),
+                task.getPreferredClaimCategories());
+        return material(task.getMode(), retriever.retrieve(request));
     }
 
     private PortfolioDecision decisionFor(PortfolioIntelligenceResult result) {

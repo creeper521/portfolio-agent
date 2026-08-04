@@ -1,0 +1,543 @@
+{
+  "schemaVersion": "3.0",
+  "baseContentVersion": "2026-08-04.1",
+  "targetContentVersion": "2026-08-04.2",
+  "projects": [
+    {
+      "id": "weekend-login-abtest-project",
+      "code": "P-07",
+      "slug": "weekend-login-abtest",
+      "title": "周末登录奖励 ABTest 完整闭环",
+      "summary": "深度参与重要运营活动从实验需求拆解到发布验证的完整闭环，围绕历史活跃度分层与层内稳定分桶，完成服务端实验能力扩展、配置 SQL、测试验证、埋点核对及回滚方案设计。",
+      "background": "重要运营活动需要验证单一奖励变量对后续活跃的影响。实现不仅要让两组方案正确生效，还要保证样本可比、归组稳定、事件口径一致，并具备异常停止与回滚边界。",
+      "responsibilities": [
+        "将业务需求转化为可执行实验模型，明确实验假设、A/B 唯一变量、实验单位和三个时间窗口。",
+        "设计历史登录天数分层与层内等比例分桶方案，并通过持久化标签保持归组稳定。",
+        "扩展服务端实验条件能力，打通配置、缓存、条件判断与活动激活链路。",
+        "编写和迭代多地区活动 SQL，处理活动实例、实验身份、分层区间和配置版本。",
+        "设计测试矩阵，核对埋点和分析口径，并准备停止实验与回滚预案。"
+      ],
+      "solution": "在实验开始前冻结历史登录基线，先按登录天数划分连续且不重叠的活跃度层，再在每层内部进行稳定分桶；实验标签写入持久化存储，服务端按统一配置链路完成规则加载、标签生成和活动激活，并以分配、激活、曝光和转化的分阶段事件支持验证。",
+      "keyDecisions": [
+        "先按历史登录天数分层，再在每层内部稳定分桶，降低历史活跃度差异的干扰。",
+        "每期实验使用独立实验身份，避免旧标签污染新样本。",
+        "将已经分配和真实曝光分开统计。",
+        "在实验开始前冻结基线窗口，避免活动行为反向改变分层。",
+        "回滚覆盖配置、缓存、活动状态、持久化标签和实验数据，不以 SQL 执行成功作为完成标准。"
+      ],
+      "technologies": [
+        "Java",
+        "Spring Boot",
+        "MySQL",
+        "缓存",
+        "配置管理",
+        "A/B Testing",
+        "数据埋点"
+      ],
+      "verification": [
+        "验证分层区间连续、无重叠并覆盖历史登录天数边界。",
+        "验证同一实验对象重复进入、跨请求和跨实例时保持同一组别。",
+        "核对活动实例、实验身份、配置版本、地区策略和缓存加载结果。",
+        "区分并核对分配、激活、曝光、领取和结果事件。",
+        "按正常结束、紧急停止和回滚场景检查新旧对象及实验数据的处置边界。"
+      ],
+      "outcome": "形成可复用的按日期范围统计登录天数、分层并稳定分桶的服务端能力，完成两期周末登录活动的代码与配置演进，使活动分流从一次性配置提升为具备稳定归组、可验证、可观测和可回滚能力的实验闭环。",
+      "handoff": "已形成两期活动代码与配置演进记录；公开层只保留脱敏工程摘要，不公开内部实现与业务指标。",
+      "status": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "claimIds": [
+        "claim-abtest-project-delivered"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-delivery-history",
+        "evidence-abtest-experiment-design-notes",
+        "evidence-abtest-service-sql-evolution",
+        "evidence-abtest-validation-risk-notes"
+      ],
+      "timelineEventIds": [
+        "timeline-weekend-login-abtest-delivery"
+      ],
+      "careerTrack": "JAVA_BACKEND",
+      "projectNature": "WORKSTREAM",
+      "displayTier": "PRIMARY",
+      "featuredCaseIds": [
+        "case-abtest-experiment-design",
+        "case-abtest-service-sql",
+        "case-abtest-validation-risk-control"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-abtest-experiment-design",
+      "code": "CASE-53",
+      "slug": "abtest-experiment-design",
+      "type": "FEATURE",
+      "title": "实验设计与稳定分流",
+      "summary": "将业务需求转化为先分层、再分桶并持久化标签的稳定实验模型。",
+      "problem": "直接随机分组可能造成两组历史活跃度分布不均，临时计算分组还可能使同一实验对象在不同请求或实例间发生组别漂移。",
+      "actions": [
+        "明确实验假设、A/B 唯一变量和实验单位。",
+        "使用实验前历史登录天数划分连续且不重叠的活跃度层。",
+        "在每层内部执行等比例稳定分桶。",
+        "持久化实验标签，保证跨请求与跨实例归组一致。",
+        "区分分配、激活、曝光和转化阶段。"
+      ],
+      "decisions": [
+        "基线窗口在实验开始前冻结，活动期间的行为不反向改变分层。",
+        "分层用于控制历史活跃度差异，分桶用于在层内分配实验方案。",
+        "稳定标签属于实验身份的一部分，不能只保存在单实例缓存中。"
+      ],
+      "verification": [
+        "检查分层区间连续、无交叉并覆盖边界值。",
+        "检查每层内两组规则只存在唯一实验变量差异。",
+        "检查同一对象重复判定和跨实例判定结果一致。"
+      ],
+      "outcome": "形成先分层、再分桶、标签持久化的实验模型，为配置执行、事件核对和结果分析提供一致口径。",
+      "limitations": [
+        "公开材料不展示实验标识、分层键、对象标识或实际样本数据。",
+        "不公开或推断实验带来的具体业务指标变化。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "weekend-login-abtest-project",
+      "claimIds": [
+        "claim-abtest-experiment-design"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-experiment-design-notes"
+      ],
+      "timelineEventIds": [
+        "timeline-weekend-login-abtest-delivery"
+      ],
+      "questionPresetIds": [
+        "question-abtest-stratification-bucketing"
+      ],
+      "collectionIds": []
+    },
+    {
+      "id": "case-abtest-service-sql",
+      "code": "CASE-54",
+      "slug": "abtest-service-sql",
+      "type": "FEATURE",
+      "title": "服务端能力与配置 SQL",
+      "summary": "扩展可配置日期范围的登录天数分层能力，并完成两期活动的多地区配置演进。",
+      "problem": "原有条件能力无法直接支持按指定日期范围统计登录天数并分层，不同活动期次、地区和奖励方案还需要避免复用历史实验身份。",
+      "actions": [
+        "新增可配置日期范围的登录天数分层条件。",
+        "打通规则解析、配置加载、缓存初始化、条件判断、数据查询、标签生成和活动激活链路。",
+        "编写活动激活规则、分层规则和版本更新 SQL。",
+        "为不同期次使用独立实验身份，隔离历史持久化标签。",
+        "按地区策略区分实验方案与单一奖励方案，并完成字段修正和无用代码清理。"
+      ],
+      "decisions": [
+        "日期范围进入配置模型，不为单次活动写死统计窗口。",
+        "新代码可以先安全部署，但配置启用必须在数据结构和版本准备完成后执行。",
+        "修改仓库中的 SQL 文件不等于修正已经执行过的数据库脚本。"
+      ],
+      "verification": [
+        "检查两组活动使用同一实验身份并只存在一个奖励变量差异。",
+        "检查分层规则数量、区间边界、地区目录和配置版本。",
+        "检查服务实例已经加载目标配置版本。"
+      ],
+      "outcome": "形成可复用的服务端实验条件能力并支撑两期活动配置演进，避免将日期范围和分层规则写死在单次活动逻辑中。",
+      "limitations": [
+        "公开材料不展示类名、表名、字段、SQL 原文或地区目录。",
+        "代码与配置演进证据不等同于公开业务效果数据。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "weekend-login-abtest-project",
+      "claimIds": [
+        "claim-abtest-service-sql"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-service-sql-evolution"
+      ],
+      "timelineEventIds": [
+        "timeline-weekend-login-abtest-delivery"
+      ],
+      "questionPresetIds": [
+        "question-abtest-stable-assignment-and-rollback"
+      ],
+      "collectionIds": []
+    },
+    {
+      "id": "case-abtest-validation-risk-control",
+      "code": "CASE-55",
+      "slug": "abtest-validation-risk-control",
+      "type": "FEATURE",
+      "title": "验证、观测与风险控制",
+      "summary": "从配置可执行扩展到分层、稳定性、事件口径和回滚边界的一致性验证。",
+      "problem": "代码和 SQL 可执行不代表实验可信；分层缺口、组别漂移、配置未刷新、曝光事件缺失和不完整回滚都会污染实验结果。",
+      "actions": [
+        "设计分层边界、区间覆盖、层内比例、重复调用、持久化、地区隔离和版本刷新测试。",
+        "核对活动实例、规则数量、实验身份、缓存加载和服务实例收敛。",
+        "区分服务端分配事件与客户端真实曝光，并建立分配、激活、曝光、领取和结果指标的分析口径。",
+        "设计正常结束、紧急停止和回滚流程。",
+        "将已分配对象、已曝光对象、奖励状态和异常数据纳入处置范围。"
+      ],
+      "decisions": [
+        "页面展示成功不作为实验闭环的唯一验收标准。",
+        "实验异常是否需要停止同时考虑玩家影响和实验可信度。",
+        "回滚先明确只阻止新对象进入，还是同时处理已经入组的对象。"
+      ],
+      "verification": [
+        "执行 SQL 前后分别核对活动实例、规则数量和配置版本。",
+        "核对分配时间、激活时间、曝光时间和转化时间的先后关系。",
+        "按新对象、已分配未曝光、已曝光未领取和已领取四类状态检查处置边界。"
+      ],
+      "outcome": "把实验验收从页面可展示和 SQL 可执行扩展为配置、服务端、缓存、埋点、分析及回滚边界的一致性验证。",
+      "limitations": [
+        "公开内容支持测试设计、事件口径核对和回滚预案，不声明发生过线上事故或执行过线上回滚。",
+        "缺少可公开实验结果数字，因此不评价奖励方案的业务胜负。"
+      ],
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "projectId": "weekend-login-abtest-project",
+      "claimIds": [
+        "claim-abtest-validation-risk-control"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-validation-risk-notes"
+      ],
+      "timelineEventIds": [
+        "timeline-weekend-login-abtest-delivery"
+      ],
+      "questionPresetIds": [
+        "question-abtest-stable-assignment-and-rollback"
+      ],
+      "collectionIds": []
+    }
+  ],
+  "timelineEvents": [
+    {
+      "id": "timeline-weekend-login-abtest-delivery",
+      "dateLabel": "2026.07–08",
+      "title": "从活动需求到可验证实验闭环",
+      "problem": "重要活动既要正确分配两组方案，也要控制历史活跃度差异、保持稳定归组并建立可信事件口径。",
+      "action": "完成实验建模、服务端条件扩展、两期配置演进、验证矩阵、埋点核对和回滚方案设计。",
+      "impact": "形成可复用的分层分桶能力和具备验证、观测与回滚边界的活动实验闭环。",
+      "projectIds": [
+        "weekend-login-abtest-project"
+      ],
+      "claimIds": [
+        "claim-abtest-project-delivered",
+        "claim-abtest-experiment-design",
+        "claim-abtest-service-sql",
+        "claim-abtest-validation-risk-control"
+      ],
+      "evidenceIds": [
+        "evidence-abtest-delivery-history",
+        "evidence-abtest-experiment-design-notes",
+        "evidence-abtest-service-sql-evolution",
+        "evidence-abtest-validation-risk-notes"
+      ],
+      "caseIds": [
+        "case-abtest-experiment-design",
+        "case-abtest-service-sql",
+        "case-abtest-validation-risk-control"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-abtest-project-delivered",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "OUTCOME",
+      "statement": "完成周末登录奖励 ABTest 从实验建模、服务端能力、配置演进到验证与风险控制的工程闭环。",
+      "detail": "代码与配置历史支持两期能力演进；公开内容不包含内部实现或业务指标。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "AB_TESTING",
+        "DELIVERY",
+        "PROJECT_OVERVIEW"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 85,
+        "GUEST": 70
+      }
+    },
+    {
+      "id": "claim-abtest-experiment-design",
+      "subjectType": "CASE",
+      "subjectId": "case-abtest-experiment-design",
+      "category": "TECHNICAL_DECISION",
+      "statement": "通过实验前历史登录天数分层、层内稳定分桶和标签持久化建立可比且稳定的实验分流。",
+      "detail": "支持实验模型和稳定归组设计，不公开实际对象、样本量或分层数据。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "STRATIFICATION",
+        "BUCKETING",
+        "PERSISTENCE"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 95,
+        "HR": 70,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-abtest-service-sql",
+      "subjectType": "CASE",
+      "subjectId": "case-abtest-service-sql",
+      "category": "OUTCOME",
+      "statement": "形成可配置日期范围的登录天数分层能力，并完成两期活动的服务端与配置演进。",
+      "detail": "代码与配置历史支持能力演进，不公开类名、表名、SQL、实验标识或地区目录。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": [
+        "JAVA_BACKEND",
+        "CONFIGURATION",
+        "SQL"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 100,
+        "HR": 75,
+        "GUEST": 60
+      }
+    },
+    {
+      "id": "claim-abtest-validation-risk-control",
+      "subjectType": "CASE",
+      "subjectId": "case-abtest-validation-risk-control",
+      "category": "VERIFICATION",
+      "statement": "建立覆盖配置、稳定归组、事件口径、实验停止和回滚边界的验证方案。",
+      "detail": "支持测试、核对和预案设计，不声明发生过线上事故或执行过线上回滚。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "SUPPORTING",
+      "topics": [
+        "VERIFICATION",
+        "OBSERVABILITY",
+        "ROLLBACK"
+      ],
+      "audiencePriorities": {
+        "INTERVIEWER": 100,
+        "MENTOR": 95,
+        "HR": 70,
+        "GUEST": 60
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence-abtest-delivery-history",
+      "code": "E-AB-01",
+      "title": "ABTest 完整闭环代码演进证据集",
+      "type": "CODE",
+      "periodStart": "2026-07-16",
+      "periodEnd": "2026-07-28",
+      "sourceCount": 8,
+      "summary": "由连续代码与配置变更脱敏汇总，覆盖条件能力、日期范围配置、两期活动配置演进和代码清理。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-abtest-experiment-design-notes",
+      "code": "E-AB-02",
+      "title": "实验设计与稳定分流说明",
+      "type": "DOCUMENT",
+      "periodStart": "2026-07-16",
+      "periodEnd": "2026-08-03",
+      "sourceCount": 3,
+      "summary": "由需求建模、配置模型和数据分析口径材料脱敏汇总，覆盖唯一变量、实验单位、分层、分桶、持久化及曝光定义。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-abtest-service-sql-evolution",
+      "code": "E-AB-03",
+      "title": "服务端能力与配置演进证据集",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-16",
+      "periodEnd": "2026-07-28",
+      "sourceCount": 8,
+      "summary": "由服务端执行链、配置演进和两期活动材料脱敏汇总，覆盖规则加载、缓存、条件判断、稳定标签与多地区配置边界。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    },
+    {
+      "id": "evidence-abtest-validation-risk-notes",
+      "code": "E-AB-04",
+      "title": "验证、观测与风险控制材料",
+      "type": "COLLECTION",
+      "periodStart": "2026-07-16",
+      "periodEnd": "2026-08-03",
+      "sourceCount": 4,
+      "summary": "由测试矩阵、发布核验、事件分析和回滚预案材料脱敏汇总；仅支持设计与核对范围，不证明发生过线上事故。",
+      "publicStatus": "APPROVED",
+      "rawContentPublic": false
+    }
+  ],
+  "links": [
+    {
+      "id": "link-abtest-project-delivered",
+      "claimId": "claim-abtest-project-delivered",
+      "evidenceId": "evidence-abtest-delivery-history",
+      "supportType": "DIRECT",
+      "scope": "支持两期代码与配置演进形成的工程闭环，不支持业务指标推断。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-experiment-design",
+      "claimId": "claim-abtest-experiment-design",
+      "evidenceId": "evidence-abtest-experiment-design-notes",
+      "supportType": "DIRECT",
+      "scope": "支持分层、分桶、持久化和事件阶段设计，不支持实际样本分布推断。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-service-sql",
+      "claimId": "claim-abtest-service-sql",
+      "evidenceId": "evidence-abtest-service-sql-evolution",
+      "supportType": "DIRECT",
+      "scope": "支持服务端条件能力与两期配置演进，不公开内部实现。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-validation-risk-control",
+      "claimId": "claim-abtest-validation-risk-control",
+      "evidenceId": "evidence-abtest-validation-risk-notes",
+      "supportType": "DIRECT",
+      "scope": "支持测试、事件口径和回滚预案设计，不证明执行过线上回滚。",
+      "reviewStatus": "APPROVED"
+    }
+  ],
+  "presets": [
+    {
+      "id": "question-abtest-overview",
+      "text": "请介绍周末登录奖励 ABTest 项目的背景、职责、技术方案、验证过程和最终产出。",
+      "aliases": [
+        "详细介绍一下周末登录奖励 ABTest 完整闭环。",
+        "你在这次 ABTest 活动中完成了什么？",
+        "介绍一下你的 A/B Testing 项目。"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "weekend-login-abtest-project"
+      ],
+      "topics": [
+        "AB_TESTING",
+        "PROJECT_OVERVIEW",
+        "DELIVERY"
+      ],
+      "preferredClaimCategories": [
+        "OUTCOME",
+        "TECHNICAL_DECISION",
+        "VERIFICATION"
+      ],
+      "placements": [
+        "HOME",
+        "AGENT",
+        "PROJECT"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 25,
+      "caseIds": [
+        "case-abtest-experiment-design",
+        "case-abtest-service-sql",
+        "case-abtest-validation-risk-control"
+      ]
+    },
+    {
+      "id": "question-abtest-stratification-bucketing",
+      "text": "这次 ABTest 为什么先按历史登录天数分层，再在层内分桶？",
+      "aliases": [
+        "ABTest 分层和分桶有什么区别？",
+        "为什么不能直接随机分组？",
+        "历史活跃度为什么会影响实验？"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "weekend-login-abtest-project"
+      ],
+      "topics": [
+        "STRATIFICATION",
+        "BUCKETING",
+        "EXPERIMENT_DESIGN"
+      ],
+      "preferredClaimCategories": [
+        "TECHNICAL_DECISION"
+      ],
+      "placements": [
+        "AGENT",
+        "PROJECT",
+        "CASE"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 26,
+      "caseIds": [
+        "case-abtest-experiment-design"
+      ]
+    },
+    {
+      "id": "question-abtest-stable-assignment-and-rollback",
+      "text": "服务端如何保证 ABTest 稳定归组，并验证埋点和回滚边界？",
+      "aliases": [
+        "为什么实验标签必须持久化？",
+        "已经分配和已经曝光有什么区别？",
+        "ABTest 出现异常时怎样停止和回滚？"
+      ],
+      "audiences": [
+        "INTERVIEWER",
+        "MENTOR",
+        "HR",
+        "GUEST"
+      ],
+      "projectIds": [
+        "weekend-login-abtest-project"
+      ],
+      "topics": [
+        "PERSISTENCE",
+        "OBSERVABILITY",
+        "ROLLBACK"
+      ],
+      "preferredClaimCategories": [
+        "OUTCOME",
+        "VERIFICATION"
+      ],
+      "placements": [
+        "AGENT",
+        "PROJECT",
+        "CASE"
+      ],
+      "deterministicEntry": true,
+      "displayOrder": 27,
+      "caseIds": [
+        "case-abtest-service-sql",
+        "case-abtest-validation-risk-control"
+      ]
+    }
+  ],
+  "projectUpdates": [],
+  "caseUpdates": []
+}

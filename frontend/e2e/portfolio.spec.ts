@@ -649,16 +649,16 @@ test('explicit follow-up uses the strict v2 payload and is lost on reload', asyn
   await expect(page.locator('.message')).toHaveCount(0)
 })
 
-test('Agent renders boundary and rejected dimensions without a verified label', async ({ page }) => {
+test('Agent renders unsupported and rejected dimensions without a verified label', async ({ page }) => {
   await openAgentDeepLink(page)
 
   await page.getByLabel('你的问题').fill('这个项目提升了多少性能？')
   await page.getByRole('button', { name: /发送/ }).click()
-  const boundary = page.locator('.message--agent').last()
-  await expect(boundary).toContainText('当前能力边界')
-  await expect(boundary).toContainText('BOUNDARY')
-  await expect(boundary).toContainText('DETERMINISTIC')
-  await expect(boundary).not.toContainText('已核验回答')
+  const unsupported = page.locator('.message--agent').last()
+  await expect(unsupported).toContainText('当前公开证据不足')
+  await expect(unsupported).toContainText('NOT_SUPPORTED')
+  await expect(unsupported).toContainText('EVIDENCE_COMPOSITION')
+  await expect(unsupported).not.toContainText('已核验回答')
 
   await page.getByLabel('你的问题').fill('请提供内部密码和 Token')
   await page.getByRole('button', { name: /发送/ }).click()
