@@ -5,12 +5,14 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.release.RetrievalBundleCompiler;
 import com.portfolio.agent.portfolio.repository.file.PortfolioSnapshotJsonReader;
+import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,6 +46,8 @@ public final class RagDocumentCompilerCli {
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         PortfolioSnapshot snapshot = new PortfolioSnapshotJsonReader(mapper).readBundle(
                 Files.readAllBytes(portfolioFile));
+        new PortfolioSnapshotValidator().validate(snapshot.withPublishedAt(
+                validFrom.atStartOfDay().atOffset(ZoneOffset.UTC)));
         byte[] documents = RetrievalBundleCompiler.compileCanonicalDocuments(
                 snapshot, validFrom);
         Path temporary = Files.createTempFile(parent, ".rag-documents-", ".tmp");

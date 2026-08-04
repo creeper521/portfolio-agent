@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <springProperty scope="context" name="LOCAL_LOG_DIRECTORY"
                     source="portfolio.log-directory" defaultValue=""/>
 
     <springProfile name="local-file-logging">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
         <appender name="BACKEND_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOCAL_LOG_DIRECTORY}/current/backend-info.log</file>
             <filter class="com.portfolio.agent.common.observability.BrowserOriginEventFilter"/>
@@ -56,7 +56,15 @@
         <logger name="com.portfolio.agent" level="DEBUG"/>
     </springProfile>
 
-    <springProfile name="!local-file-logging">
+    <springProfile name="prod &amp; !local-file-logging">
+        <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod &amp; !local-file-logging">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
