@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { defineComponent } from 'vue'
 
 import { publicContentStateKey } from '../features/public-content/composables/usePublicContent'
+import { previewPublicContent } from '../features/public-content/data/previewPublicContent'
 import { readyPublicContentState } from '../test/publicContentStateFixture'
 import CasePage from './CasePage.vue'
 
@@ -240,5 +241,70 @@ describe('CasePage', () => {
     await flushPromises()
 
     expect(wrapper.find('.case-cover__meta').text()).not.toContain('所属集合')
+  })
+
+  it('三个 ABTest Case 均展示结果、边界、Project 反向链接与 Agent 交接', async () => {
+    const state = readyPublicContentState()
+    const baseCase = state.portfolio.value!.cases[0]
+    const project = {
+      ...previewPublicContent.projects[0],
+      slug: 'weekend-login-abtest',
+      code: 'P-07',
+      title: '周末登录奖励 ABTest 完整闭环',
+    }
+    const cases = [
+      {
+        slug: 'abtest-experiment-design',
+        code: 'CASE-53',
+        title: '实验设计与稳定分流',
+        outcome: '形成分层、层内分桶和稳定归组的实验设计。',
+        limitation: '不公开实际样本量和分层分布。',
+      },
+      {
+        slug: 'abtest-service-sql',
+        code: 'CASE-54',
+        title: '服务端能力与配置 SQL',
+        outcome: '形成可配置日期范围的服务端实验条件能力。',
+        limitation: '不公开原始 SQL、表名和内部实现标识。',
+      },
+      {
+        slug: 'abtest-validation-risk-control',
+        code: 'CASE-55',
+        title: '验证、观测与风险控制',
+        outcome: '形成配置、埋点、停止条件和回滚边界的验证方案。',
+        limitation: '不声明发生过线上事故或执行过线上回滚。',
+      },
+    ].map((item) => ({
+      ...baseCase,
+      slug: item.slug,
+      code: item.code,
+      title: item.title,
+      summary: item.outcome,
+      problem: '实验闭环需要可复查的工程边界。',
+      actions: ['完成需求翻译、实现与核对。'],
+      decisions: ['保持唯一变量与稳定归组。'],
+      verification: ['核对配置、事件和处置边界。'],
+      outcome: item.outcome,
+      limitations: [item.limitation],
+      projectSlug: 'weekend-login-abtest',
+      collectionSlugs: [],
+    }))
+    state.portfolio.value = {
+      ...state.portfolio.value!,
+      projects: [...state.portfolio.value!.projects, project],
+      cases,
+    }
+
+    for (const item of cases) {
+      const wrapper = mountCasePage(item.slug, state)
+      await flushPromises()
+      expect(wrapper.text()).toContain(item.title)
+      expect(wrapper.text()).toContain(item.outcome)
+      expect(wrapper.text()).toContain(item.limitations[0])
+      expect(wrapper.get('a[href="/projects/weekend-login-abtest"]').text())
+        .toContain('周末登录奖励 ABTest 完整闭环')
+      expect(wrapper.findAll('a').some((link) =>
+        (link.attributes('href') ?? '').startsWith('/agent'))).toBe(true)
+    }
   })
 })

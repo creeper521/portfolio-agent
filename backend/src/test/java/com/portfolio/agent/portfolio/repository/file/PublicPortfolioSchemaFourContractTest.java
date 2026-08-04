@@ -41,20 +41,21 @@ class PublicPortfolioSchemaFourContractTest {
                 .collect(Collectors.toMap(CaseStudy::getId, Function.identity()));
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("4.0");
-        assertThat(snapshot.getContentVersion()).isEqualTo("2026-07-29.1");
+        assertThat(snapshot.getContentVersion()).isEqualTo("2026-08-04.2");
         assertThat(snapshot.getProjects()).extracting(ProjectProfile::getId)
                 .containsExactly(
                         "sql-audit-project",
                         "activity-engineering-project",
                         "role-reset-tool-project",
                         "personal-agent-platform-project",
-                        "image-audit-project");
+                        "image-audit-project",
+                        "weekend-login-abtest-project");
         assertThat(snapshot.getCollections()).extracting(CaseCollection::getSlug)
                 .containsExactly(
                         "open-source-evaluation",
                         "engineering-operations",
                         "technical-writing");
-        assertThat(snapshot.getCases()).hasSize(49);
+        assertThat(snapshot.getCases()).hasSize(52);
 
         assertProject(projects.get("sql-audit-project"),
                 CareerTrack.JAVA_BACKEND, ProjectNature.TOOL, ProjectDisplayTier.PRIMARY, 0);
@@ -67,6 +68,9 @@ class PublicPortfolioSchemaFourContractTest {
                 ProjectDisplayTier.PRIMARY, 4);
         assertProject(projects.get("image-audit-project"),
                 CareerTrack.JAVA_BACKEND, ProjectNature.TOOL, ProjectDisplayTier.SECONDARY, 2);
+        assertProject(projects.get("weekend-login-abtest-project"),
+                CareerTrack.JAVA_BACKEND, ProjectNature.WORKSTREAM,
+                ProjectDisplayTier.PRIMARY, 3);
 
         assertThat(projects.get("activity-engineering-project").getFeaturedCaseIds())
                 .containsExactly(
@@ -86,6 +90,16 @@ class PublicPortfolioSchemaFourContractTest {
                         "case-public-t-11");
         assertThat(projects.get("image-audit-project").getFeaturedCaseIds())
                 .containsExactly("case-multilingual-upload", "case-public-t-07");
+        assertThat(projects.get("weekend-login-abtest-project").getFeaturedCaseIds())
+                .containsExactly(
+                        "case-abtest-experiment-design",
+                        "case-abtest-service-sql",
+                        "case-abtest-validation-risk-control");
+
+        assertThat(snapshot.getCases()).filteredOn(item ->
+                        "weekend-login-abtest-project".equals(item.getProjectId()))
+                .extracting(CaseStudy::getCode)
+                .containsExactly("CASE-53", "CASE-54", "CASE-55");
 
         List<CaseStudy> independentCases = snapshot.getCases().stream()
                 .filter(item -> item.getProjectId() == null)
@@ -130,7 +144,7 @@ class PublicPortfolioSchemaFourContractTest {
                         .doesNotContainAnyElementsOf(REMOVED_PROJECT_IDS));
 
         PortfolioSnapshot published = snapshot.withPublishedAt(
-                OffsetDateTime.parse("2026-07-29T12:00:00+08:00"));
+                OffsetDateTime.parse("2026-08-04T12:00:00+08:00"));
         assertThatCode(() -> new PortfolioSnapshotValidator().validate(published))
                 .doesNotThrowAnyException();
     }

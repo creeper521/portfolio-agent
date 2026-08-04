@@ -39,9 +39,9 @@ class PublicBundleDatabaseImportCliTest {
         assertThat(result.exitCode).isZero();
         assertThat(result.err).isEmpty();
         assertThat(result.out).isEqualTo(
-                "{\"action\":\"VERIFY\",\"releaseVersion\":\"2026-07-29.1\","
-                        + "\"status\":\"VERIFIED\",\"projects\":5,\"cases\":49,"
-                        + "\"claims\":79,\"evidence\":59}");
+                "{\"action\":\"VERIFY\",\"releaseVersion\":\"2026-08-04.2\","
+                        + "\"status\":\"VERIFIED\",\"projects\":6,\"cases\":52,"
+                        + "\"claims\":83,\"evidence\":63}");
         verify(importer, never()).importBundle(Mockito.any());
         verify(activation, never()).activate(Mockito.anyString());
     }
@@ -52,7 +52,7 @@ class PublicBundleDatabaseImportCliTest {
         PublicBundleDatabaseImporter importer = Mockito.mock(PublicBundleDatabaseImporter.class);
         PublicReleaseActivationService activation = Mockito.mock(PublicReleaseActivationService.class);
         when(importer.importBundle(snapshot)).thenReturn(
-                new PublicBundleImportResult(RELEASE_ID, "2026-07-29.1", "VERIFIED"));
+                new PublicBundleImportResult(RELEASE_ID, "2026-08-04.2", "VERIFIED"));
 
         RunResult result = run(snapshot, importer, activation,
                 "import", "--bundle", fixtureDirectory().toString());
@@ -62,10 +62,10 @@ class PublicBundleDatabaseImportCliTest {
                 "\"action\":\"IMPORT\"",
                 "\"releaseId\":\"" + RELEASE_ID + "\"",
                 "\"status\":\"VERIFIED\"",
-                "\"projects\":5",
-                "\"cases\":49",
-                "\"claims\":79",
-                "\"evidence\":59");
+                "\"projects\":6",
+                "\"cases\":52",
+                "\"claims\":83",
+                "\"evidence\":63");
         verify(importer).importBundle(snapshot);
         verify(activation, never()).activate(Mockito.anyString());
     }
@@ -161,7 +161,7 @@ class PublicBundleDatabaseImportCliTest {
             System.out.println("JDBC driver C:\\private\\bundle");
             System.err.println("database password=hunter2");
             return new PublicBundleImportResult(
-                    RELEASE_ID, "2026-07-29.1", "VERIFIED");
+                    RELEASE_ID, "2026-08-04.2", "VERIFIED");
         });
         Mockito.doAnswer(invocation -> {
             System.out.println("Flyway jdbc:postgresql://secret-host/private");

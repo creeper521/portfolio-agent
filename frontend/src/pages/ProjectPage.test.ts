@@ -229,4 +229,55 @@ describe('ProjectPage · 相关案例', () => {
     expect(entry.text()).toContain('审计查询归档策略复用')
     expect(entry.text()).toContain('复用既有查询归档能力承载审计结果')
   })
+
+  it('完整呈现 ABTest 主叙事、三个 Case、证据与 Agent 入口', async () => {
+    const featuredCases = [
+      makeSummary({
+        slug: 'abtest-experiment-design',
+        code: 'CASE-53',
+        title: '实验设计与稳定分流',
+        projectSlug: 'weekend-login-abtest',
+      }),
+      makeSummary({
+        slug: 'abtest-service-sql',
+        code: 'CASE-54',
+        title: '服务端能力与配置 SQL',
+        projectSlug: 'weekend-login-abtest',
+      }),
+      makeSummary({
+        slug: 'abtest-validation-risk-control',
+        code: 'CASE-55',
+        title: '验证、观测与风险控制',
+        projectSlug: 'weekend-login-abtest',
+      }),
+    ]
+    const wrapper = mountWithProject(makeProject({
+      slug: 'weekend-login-abtest',
+      code: 'P-07',
+      title: '周末登录奖励 ABTest 完整闭环',
+      background: '重要活动需要同时保证样本可比、归组稳定与事件口径一致。',
+      responsibilities: ['完成实验建模与服务端实验能力扩展。'],
+      solution: '按历史登录天数分层，在层内稳定分桶并持久化实验标签。',
+      keyDecisions: ['把分层窗口配置化，并为不同活动期次隔离实验身份。'],
+      verification: ['核对配置、缓存、埋点、停止条件与回滚边界。'],
+      outcome: '形成从需求、实现、配置到验证和风险控制的完整工程闭环。',
+      technologies: ['Java', 'A/B Testing', 'SQL'],
+      projectNature: 'WORKSTREAM',
+      caseCount: 3,
+      featuredCases,
+    }))
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('周末登录奖励 ABTest 完整闭环')
+    expect(text).toContain('为什么做')
+    expect(text).toContain('按历史登录天数分层')
+    expect(text).toContain('核对配置、缓存、埋点、停止条件与回滚边界')
+    expect(text).toContain('实验设计与稳定分流')
+    expect(text).toContain('服务端能力与配置 SQL')
+    expect(text).toContain('验证、观测与风险控制')
+    expect(wrapper.get('a[href="/cases/abtest-experiment-design"]')).toBeDefined()
+    expect(wrapper.findAll('a').some((link) =>
+      (link.attributes('href') ?? '').startsWith('/agent'))).toBe(true)
+  })
 })
