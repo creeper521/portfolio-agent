@@ -66,15 +66,18 @@ function Protect-LocalLogText {
     foreach ($path in @($RepositoryRoot, $HomeDirectory)) {
         if (-not [string]::IsNullOrWhiteSpace($path)) {
             $replacement = if ($path -eq $RepositoryRoot) { '<REPOSITORY>' } else { '<HOME>' }
-            $replaced = [regex]::Replace(
-                $text,
-                [regex]::Escape($path.TrimEnd('\', '/')),
-                $replacement,
-                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
-            )
-            if ($replaced -ne $text) {
-                $text = $replaced
-                $redacted = $true
+            $normalized = $path.TrimEnd('\', '/')
+            foreach ($candidate in @($normalized, $normalized.Replace('\', '/'))) {
+                $replaced = [regex]::Replace(
+                    $text,
+                    [regex]::Escape($candidate),
+                    $replacement,
+                    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+                )
+                if ($replaced -ne $text) {
+                    $text = $replaced
+                    $redacted = $true
+                }
             }
         }
     }

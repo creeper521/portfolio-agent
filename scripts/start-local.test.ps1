@@ -301,6 +301,20 @@ try {
         )
     }
 
+    $launcherText = Get-Content -LiteralPath $launcher -Raw
+    Assert-True ($launcherText -match '\[int\]\$FrontendPort = 5173') `
+        'Unified launcher must default the frontend port to 5173.'
+    Assert-True ($launcherText -match "'--strictPort'") `
+        'Unified launcher must pass --strictPort to the frontend.'
+    Assert-True ($launcherText -match 'PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED') `
+        'Unified launcher must bind the diagnostics switch to portfolio.diagnostics.frontend-ingest-enabled.'
+    Assert-True ($launcherText -notmatch 'PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED') `
+        'Unified launcher must not use the unmapped legacy diagnostics switch.'
+    Assert-True ($launcherText -match "PORTFOLIO_FRONTEND_LOG_OWNER.*=.*'UNIFIED'") `
+        'Unified launcher must delegate frontend log ownership to its own router.'
+    Assert-True ($launcherText -match '\$frontendEnvironment') `
+        'Unified launcher must pass a frontend child environment.'
+
     Write-Output 'start-local tests passed'
 }
 finally {

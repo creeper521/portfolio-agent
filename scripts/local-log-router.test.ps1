@@ -104,6 +104,23 @@ Assert-True (-not $sanitized.Text.Contains('fragment')) 'URL fragment must be re
 Assert-True (-not $sanitized.Text.Contains([char]0)) 'Control characters must be removed'
 Assert-True $sanitized.Redacted 'Sanitized record must be marked redacted'
 
+$urlFormLine = ("file:///{0}/frontend/node_modules/vite/dist/node/chunks/config.js:1:2 " -f `
+    $repositoryRoot.Replace('\', '/')) + `
+    "home=file:///$($homeDirectory.Replace('\', '/'))/app.js"
+$urlFormRecord = ConvertTo-LocalLogRecord `
+    -Stream 'VITE_STDOUT' `
+    -Line $urlFormLine `
+    -RepositoryRoot $repositoryRoot `
+    -HomeDirectory $homeDirectory `
+    -Now $fixedNow
+Assert-True (-not $urlFormRecord.Text.Contains('D:/code')) `
+    'URL-form repository path must be replaced'
+Assert-True (-not $urlFormRecord.Text.Contains('local-log-user')) `
+    'URL-form home path must be replaced'
+Assert-True $urlFormRecord.Text.Contains('file:///<REPOSITORY>/frontend') `
+    'URL-form repository replacement must keep the URL readable'
+Assert-True $urlFormRecord.Redacted 'URL-form replacement must be marked redacted'
+
 $credentialLines = @(
     'Authorization: Bearer top-secret-token',
     'api_key=top-secret-token',

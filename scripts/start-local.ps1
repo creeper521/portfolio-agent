@@ -5,7 +5,7 @@ param(
     [ValidateRange(1, 65535)]
     [int]$BackendPort = 8080,
     [ValidateRange(1, 65535)]
-    [int]$FrontendPort = 5174,
+    [int]$FrontendPort = 5173,
     [string]$MavenExecutable = '',
     [string]$NpmExecutable = 'npm.cmd',
     [switch]$ExitAfterProbe,
@@ -243,32 +243,42 @@ function Start-OwnedProcess(
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     $environmentSnapshot = Set-TemporaryProcessEnvironment $EnvironmentValues
-    $diagnosticsName = 'PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED'
-    $diagnosticsSnapshot = [Environment]::GetEnvironmentVariable(
-        $diagnosticsName,
-        [EnvironmentVariableTarget]::Process
+    $auxiliaryNames = @(
+        'PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED',
+        'PORTFOLIO_FRONTEND_LOG_OWNER'
     )
-    try {
-        $diagnosticsValue = if ($EnvironmentValues.ContainsKey($diagnosticsName)) {
-            [string]$EnvironmentValues[$diagnosticsName]
-        } else {
-            $null
-        }
-        [Environment]::SetEnvironmentVariable(
-            $diagnosticsName,
-            $diagnosticsValue,
+    $auxiliarySnapshots = @{}
+    foreach ($auxiliaryName in $auxiliaryNames) {
+        $auxiliarySnapshots[$auxiliaryName] = [Environment]::GetEnvironmentVariable(
+            $auxiliaryName,
             [EnvironmentVariableTarget]::Process
         )
+    }
+    try {
+        foreach ($auxiliaryName in $auxiliaryNames) {
+            $auxiliaryValue = if ($EnvironmentValues.ContainsKey($auxiliaryName)) {
+                [string]$EnvironmentValues[$auxiliaryName]
+            } else {
+                $null
+            }
+            [Environment]::SetEnvironmentVariable(
+                $auxiliaryName,
+                $auxiliaryValue,
+                [EnvironmentVariableTarget]::Process
+            )
+        }
         if (-not $process.Start()) {
             Stop-WithCode 'LOCAL_CHILD_START_FAILED'
         }
     } finally {
         Restore-ProcessEnvironment $environmentSnapshot
-        [Environment]::SetEnvironmentVariable(
-            $diagnosticsName,
-            $diagnosticsSnapshot,
-            [EnvironmentVariableTarget]::Process
-        )
+        foreach ($auxiliaryName in $auxiliaryNames) {
+            [Environment]::SetEnvironmentVariable(
+                $auxiliaryName,
+                $auxiliarySnapshots[$auxiliaryName],
+                [EnvironmentVariableTarget]::Process
+            )
+        }
     }
 
     $readerScript = {
@@ -548,7 +558,7 @@ try {
         foreach ($entry in $settings.GetEnumerator()) {
             $backendEnvironment[$entry.Key] = $entry.Value
         }
-        $backendEnvironment.PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED = 'true'
+        $backendEnvironment.PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED = 'true'
         $backendEnvironment.PORTFOLIO_LOG_DIRECTORY = $LogDirectory
         $backend = Start-OwnedProcess $backendExecutable `
             $backendArguments `
@@ -592,12 +602,16 @@ try {
                 '--prefix', (Join-Path $script:repositoryRoot 'frontend'),
                 'run', 'dev', '--',
                 '--host', '127.0.0.1',
-                '--port', "$FrontendPort"
+                '--port', "$FrontendPort",
+                '--strictPort'
             )
+        }
+        $frontendEnvironment = @{
+            PORTFOLIO_FRONTEND_LOG_OWNER = 'UNIFIED'
         }
         $frontend = Start-OwnedProcess $frontendExecutable `
             $frontendArguments `
-            @{} `
+            $frontendEnvironment `
             $logRouter `
             'VITE_STDOUT' `
             'VITE_STDERR'

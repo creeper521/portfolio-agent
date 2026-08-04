@@ -9,6 +9,7 @@
     <springProfile name="local-file-logging">
         <appender name="BACKEND_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOCAL_LOG_DIRECTORY}/current/backend-info.log</file>
+            <filter class="com.portfolio.agent.common.observability.BrowserOriginEventFilter"/>
             <filter class="ch.qos.logback.classic.filter.LevelFilter">
                 <level>ERROR</level>
                 <onMatch>DENY</onMatch>
@@ -31,6 +32,7 @@
 
         <appender name="BACKEND_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOCAL_LOG_DIRECTORY}/current/backend-error.log</file>
+            <filter class="com.portfolio.agent.common.observability.BrowserOriginEventFilter"/>
             <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
                 <level>ERROR</level>
             </filter>

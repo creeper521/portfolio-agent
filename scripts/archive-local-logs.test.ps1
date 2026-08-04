@@ -29,7 +29,7 @@ try {
         -MaxFileBytes 1024 `
         -MaxSegments 3 `
         -QueueCapacity 128
-    Submit-LocalLogLine -Router $router -Stream BACKEND_STDOUT -Line 'INFO daily-archive-sentinel'
+    Submit-LocalLogLine -Router $router -Stream VITE_STDOUT -Line 'INFO daily-archive-sentinel'
     Invoke-LocalLogDateRollover -Router $router -NewDate '2026-08-01'
 
     $dailyZip = Join-Path $logRoot 'archive\portfolio-agent-2026-07-31.zip'
@@ -41,7 +41,8 @@ try {
     try {
         $names = @($zip.Entries | ForEach-Object FullName)
         Assert-True ($names -contains 'manifest.json') 'ZIP must contain manifest'
-        Assert-True ($names -contains 'backend-info-2026-07-31.log') 'ZIP must contain dated backend log'
+        Assert-True ($names -contains 'frontend-info-2026-07-31.log') `
+            'ZIP must contain dated frontend log'
     } finally {
         $zip.Dispose()
     }
