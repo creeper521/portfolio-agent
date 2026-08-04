@@ -1,0 +1,11 @@
+{
+  "policyId": "release-policy",
+  "mode": "PROVIDER",
+  "blockingProvider": "active-provider",
+  "thresholds": {
+    "blocking": {"providerP95LatencyMaximumMs": -1},
+    "scored": {"answerQualityPassRateMinimum": 0.0}
+  },
+  "trialPolicy": {"defaultTrials": 3, "standardMinimumPasses": 2, "highMinimumPasses": 3, "invariantMinimumPasses": 3},
+  "pricing": {"currency": "USD", "budget": 0}
+}

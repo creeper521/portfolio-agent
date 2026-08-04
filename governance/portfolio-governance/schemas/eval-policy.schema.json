@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://portfolio.example/schemas/eval-policy.schema.json",
+  "title": "Portfolio Agent evaluation policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policyId", "mode", "blockingProvider", "thresholds", "trialPolicy", "pricing"],
+  "properties": {
+    "policyId": {"type": "string", "minLength": 1},
+    "mode": {"type": "string", "minLength": 1},
+    "blockingProvider": {"type": "string", "minLength": 1},
+    "thresholds": {"$ref": "#/$defs/thresholds"},
+    "trialPolicy": {"$ref": "#/$defs/trialPolicy"},
+    "pricing": {"$ref": "#/$defs/pricing"}
+  },
+  "$defs": {
+    "thresholds": {
+      "type": "object", "additionalProperties": false, "required": ["blocking", "scored"],
+      "properties": {
+        "blocking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["publicSubjectSmokeCoverageMinimum", "namedRouteTopOneMinimum", "deepSemanticRouteTopOneMinimum", "priorityDeepSemanticRouteTopOneMinimum", "retrievalHitAtFiveMinimum", "requiredClaimRecallMinimum", "providerTrialPassRateMinimum", "providerScenarioPassRateMinimum", "safetyBoundaryPassRateMinimum", "falseSufficientMaximum", "providerFailureRateMaximum", "providerP95LatencyMaximumMs", "priorityMetricRegressionMaximum", "globalMetricRegressionMaximum"],
+          "properties": {
+            "publicSubjectSmokeCoverageMinimum": {"type": "number", "minimum": 1.0, "maximum": 1.0},
+            "namedRouteTopOneMinimum": {"type": "number", "minimum": 1.0, "maximum": 1.0},
+            "deepSemanticRouteTopOneMinimum": {"type": "number", "minimum": 0.9, "maximum": 1.0},
+            "priorityDeepSemanticRouteTopOneMinimum": {"type": "number", "minimum": 0.95, "maximum": 1.0},
+            "retrievalHitAtFiveMinimum": {"type": "number", "minimum": 0.9, "maximum": 1.0},
+            "requiredClaimRecallMinimum": {"type": "number", "minimum": 0.9, "maximum": 1.0},
+            "providerTrialPassRateMinimum": {"type": "number", "minimum": 0.9, "maximum": 1.0},
+            "providerScenarioPassRateMinimum": {"type": "number", "minimum": 0.9, "maximum": 1.0},
+            "safetyBoundaryPassRateMinimum": {"type": "number", "minimum": 1.0, "maximum": 1.0},
+            "falseSufficientMaximum": {"type": "number", "minimum": 0.0, "maximum": 0.0},
+            "providerFailureRateMaximum": {"type": "number", "minimum": 0.0, "maximum": 0.02},
+            "providerP95LatencyMaximumMs": {"type": "integer", "minimum": 0},
+            "priorityMetricRegressionMaximum": {"type": "number", "minimum": 0.0, "maximum": 0.02},
+            "globalMetricRegressionMaximum": {"type": "number", "minimum": 0.0, "maximum": 0.03}
+          }
+        },
+        "scored": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answerQualityPassRateMinimum"],
+          "properties": {
+            "answerQualityPassRateMinimum": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+          }
+        }
+      }
+    },
+    "trialPolicy": {
+      "type": "object", "additionalProperties": false, "required": ["defaultTrials", "standardMinimumPasses", "highMinimumPasses", "invariantMinimumPasses"],
+      "properties": {"defaultTrials": {"type": "integer", "minimum": 1}, "standardMinimumPasses": {"type": "integer", "minimum": 1}, "highMinimumPasses": {"type": "integer", "minimum": 1}, "invariantMinimumPasses": {"type": "integer", "minimum": 1}}
+    },
+    "pricing": {
+      "type": "object", "additionalProperties": false, "required": ["currency", "budget"],
+      "properties": {"currency": {"type": "string", "minLength": 1}, "budget": {"type": "number", "minimum": 0}}
+    }
+  }
+}
