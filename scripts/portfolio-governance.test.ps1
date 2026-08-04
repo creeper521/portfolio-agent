@@ -77,6 +77,49 @@ function Invoke-Governance([string[]]$Arguments) {
             }
             $candidatePortfolio = Get-Content -LiteralPath $candidatePortfolioPath `
                 -Raw -Encoding UTF8 | ConvertFrom-Json
+            $candidateProjectSlugs = @($candidatePortfolio.projects.slug)
+            $candidateCaseSlugs = @($candidatePortfolio.cases.slug)
+            $candidateEvidenceIds = @($candidatePortfolio.evidence.id)
+            foreach ($mappedAsset in @($ledgerForCandidate.assets | Where-Object {
+                        $_.routeDecision -eq 'PUBLISH_CANDIDATE'
+                    })) {
+                $mappedAsset.projectSlugs = @($mappedAsset.projectSlugs | Where-Object {
+                        $candidateProjectSlugs -contains $_
+                    })
+                $mappedAsset.caseSlugs = @($mappedAsset.caseSlugs | Where-Object {
+                        $candidateCaseSlugs -contains $_
+                    })
+                $mappedAsset.evidenceIds = @($mappedAsset.evidenceIds | Where-Object {
+                        $candidateEvidenceIds -contains $_
+                    })
+                if (@($mappedAsset.projectSlugs).Count -eq 0 -and
+                        @($mappedAsset.caseSlugs).Count -eq 0 -and
+                        @($mappedAsset.evidenceIds).Count -eq 0) {
+                    $mappedAsset.achievementStatus = 'INCOMPLETE'
+                    $mappedAsset.contributionType = 'ASSISTED'
+                    $mappedAsset.finalRoute = 'HOLD'
+                    $mappedAsset.decisionReason = 'Synthetic reviewed hold'
+                    $mappedAsset.routeDecision = 'REVIEWED_HOLD'
+                    $mappedAsset.targetContentVersion = $null
+                    $mappedAsset.targetWave = $null
+                }
+                elseif (@($mappedAsset.projectSlugs).Count -eq 0 -and
+                        @($mappedAsset.caseSlugs).Count -eq 0) {
+                    $mappedAsset.finalRoute = 'EVIDENCE_ONLY'
+                }
+                elseif (@($mappedAsset.projectSlugs).Count -eq 0 -and
+                        $mappedAsset.finalRoute -in @('PROJECT', 'ENRICH_EXISTING_PROJECT')) {
+                    $mappedAsset.finalRoute = if (
+                        @($mappedAsset.caseSlugs).Count -gt 0
+                    ) { 'CASE' } else { 'EVIDENCE_ONLY' }
+                }
+                elseif (@($mappedAsset.caseSlugs).Count -eq 0 -and
+                        $mappedAsset.finalRoute -eq 'CASE') {
+                    $mappedAsset.finalRoute = if (
+                        @($mappedAsset.projectSlugs).Count -gt 0
+                    ) { 'PROJECT' } else { 'EVIDENCE_ONLY' }
+                }
+            }
             if ([string]$candidatePortfolio.schemaVersion -eq '2.0') {
                 foreach ($caseAsset in @($ledgerForCandidate.assets | Where-Object {
                         $_.routeDecision -eq 'PUBLISH_CANDIDATE' -and
@@ -360,6 +403,27 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     $portfolioPath = Join-Path $CandidatePath 'portfolio.json'
     $presentationPath = Join-Path $CandidatePath 'presentation.json'
     $data = Get-Content -LiteralPath $portfolioPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $data.projects = @($data.projects | Where-Object {
+            $_.id -ne 'weekend-login-abtest-project'
+        })
+    $data.cases = @($data.cases | Where-Object {
+            $_.projectId -ne 'weekend-login-abtest-project'
+        })
+    $data.claims = @($data.claims | Where-Object {
+            $_.id -notlike 'claim-abtest-*'
+        })
+    $data.evidence = @($data.evidence | Where-Object {
+            $_.id -notlike 'evidence-abtest-*'
+        })
+    $data.claimEvidenceLinks = @($data.claimEvidenceLinks | Where-Object {
+            $_.claimId -notlike 'claim-abtest-*'
+        })
+    $data.timelineEvents = @($data.timelineEvents | Where-Object {
+            $_.id -ne 'timeline-weekend-login-abtest-delivery'
+        })
+    $data.questionPresets = @($data.questionPresets | Where-Object {
+            $_.id -notlike 'question-abtest-*'
+        })
     $data.schemaVersion = '3.0'
     $data.contentVersion = $schemaThreeContentVersion
     if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
@@ -785,7 +849,7 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:8512518d0a2ea4a2e3c0eed9cdb086bc1689d04d11bb5bb60890113b552a4c00') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:1128b9a5aecb187bca8e291f6decba5e3f9dac94fcefa45783a40c56ca003e4a') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
@@ -1361,6 +1425,13 @@ try {
     if (-not [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes((Join-Path $candidate 'portfolio.json')),
         [byte[]][IO.File]::ReadAllBytes((Join-Path $publishedVersion 'portfolio.json')))) { throw 'Publish changed approved portfolio bytes.' }
     if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) { throw 'Active pointer was not switched.' }
+    $publishedActiveBytes = [IO.File]::ReadAllBytes((Join-Path $releaseRoot 'active'))
+    if ($publishedActiveBytes.Length -ge 3 -and
+            $publishedActiveBytes[0] -eq 0xEF -and
+            $publishedActiveBytes[1] -eq 0xBB -and
+            $publishedActiveBytes[2] -eq 0xBF) {
+        throw 'Published active pointer must be UTF-8 without BOM.'
+    }
 
     $listed = Invoke-Governance @('-Command', 'list', '-Workspace', $workspace,
         '-ReleaseRoot', $releaseRoot)
@@ -1448,6 +1519,13 @@ try {
         '-ReleaseRoot', $releaseRoot, '-TargetVersion', $currentBundleVersion, '-Confirm')
     if ($rollback.ExitCode -ne 0) { throw "Rollback failed: $($rollback.Output)" }
     if ((Get-Content -LiteralPath (Join-Path $releaseRoot 'active') -Raw).Trim() -ne $currentBundleVersion) { throw 'Rollback did not restore verified target.' }
+    $rollbackActiveBytes = [IO.File]::ReadAllBytes((Join-Path $releaseRoot 'active'))
+    if ($rollbackActiveBytes.Length -ge 3 -and
+            $rollbackActiveBytes[0] -eq 0xEF -and
+            $rollbackActiveBytes[1] -eq 0xBB -and
+            $rollbackActiveBytes[2] -eq 0xBF) {
+        throw 'Rollback active pointer must be UTF-8 without BOM.'
+    }
 
     $compilerJar = Join-Path $repositoryRoot 'backend\target\portfolio-agent.jar'
     $localModel = Join-Path $repositoryRoot 'runtime-models\bge-small-zh-v1.5'

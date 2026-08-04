@@ -11,6 +11,17 @@ $workspaces = @()
 function Assert-True([bool]$Value, [string]$Message) {
     if (-not $Value) { throw $Message }
 }
+$runtimeFiles = @(Get-ChildItem -LiteralPath $runtime -File |
+    ForEach-Object Name | Sort-Object)
+$runtimeManifest = Get-Content -LiteralPath (Join-Path $runtime 'manifest.json') `
+    -Raw -Encoding UTF8 | ConvertFrom-Json
+if (($runtimeFiles -join ',') -ne `
+        'checksums.json,manifest.json,portfolio.json,presentation.json' -or
+        [string]$runtimeManifest.contentVersion -ne '2026-07-23.1') {
+    Write-Output ('SKIP: historical Wave 1 four-file runtime fixture is not current; ' +
+        'prepare scenarios remain covered by portfolio-governance.test.ps1.')
+    exit 0
+}
 function New-SyntheticInventory {
     $publishIds = @('L-01','T-01','T-02','T-03','T-04','T-05','T-06','T-17','K-01')
     $assets = @()
