@@ -605,10 +605,14 @@ Attach `OutputDataReceived` and `ErrorDataReceived` handlers that only submit li
 Inject this non-secret local child setting separately from the Secret whitelist:
 
 ```text
-PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED=true
+PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED=true
 ```
 
 Do not add it to the external Secret file requirements.
+
+> **补充说明（2026-08-04）：** 该计划已执行；启动器注入的变量此后改为直接绑定
+> `portfolio.diagnostics.frontend-ingest-enabled` 的 `PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED`，
+> 直接 `npm run dev` 的日志落盘由 [Direct Vite Local Logging Design](../specs/2026-08-04-direct-vite-local-logging-design.md) 接替。
 
 - [ ] **Step 4: Wire startup, rollover, watch, and cleanup**
 

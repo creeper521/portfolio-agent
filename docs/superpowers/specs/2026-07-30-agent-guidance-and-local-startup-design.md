@@ -113,7 +113,9 @@ Secret 文件采用受限 `KEY=VALUE` 格式：
 - `PORTFOLIO_MODEL_PROVIDER` 是 Registry 中允许的 Provider
 - 所选 Provider 对应的 API Key 非空
 
-脚本还检查 Java 21、Maven、Node、前端依赖和端口 8080/5174。检查失败时不创建子进程，并按字段列出缺失或非法项。
+脚本还检查 Java 21、Maven、Node、前端依赖和端口 8080/5173。检查失败时不创建子进程，并按字段列出缺失或非法项。
+
+> **补充说明（2026-08-04）：** 前端默认端口已由 5174 统一为 5173，直接 `npm run dev` 与启动器都强制 `--strictPort`；直接前端启动的日志落盘入口见 [Direct Vite Local Logging Design](2026-08-04-direct-vite-local-logging-design.md)。
 
 ### 5.3 进程生命周期
 

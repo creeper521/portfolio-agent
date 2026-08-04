@@ -63,6 +63,22 @@ $env:SPRING_PROFILES_ACTIVE='prod'
 java -jar backend/target/portfolio-agent.jar
 ```
 
+前端开发服务器有两种等价的启动方式，统一使用端口 `5173` 并强制 `--strictPort`（端口被占用时
+明确失败而不是静默换端口）：
+
+```powershell
+npm.cmd --prefix frontend run dev
+# 等价于 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-frontend.ps1
+# 需要改端口时：npm.cmd --prefix frontend run dev -- --port 5175
+```
+
+直接启动前端会创建并维护 `logs/current/frontend-info.log`、`frontend-error.log`（Vite 输出
+脱敏后镜像到终端并落盘，退出码原样传播）；`scripts/start-local.ps1` 托管时由启动器统一落盘，
+不会双写。浏览器诊断事件只经后端 `/api/v1/client-diagnostics` 唯一入口，`local` Profile 下
+console 行保留 `event.origin=browser` 供本地路由器归类，且不会进入 `backend-*.log`；
+`start-local.ps1` 通过 `PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED=true` 显式开启该端点，
+直接 `npm run dev` 不自动开启。
+
 ### C1 模型表达（默认关闭）
 
 每个进程只选择一个 Provider，不自动切换、不重试，也不把供应商 conversation/thread ID 保存到应用。未同时满足启用开关、所选 Provider 密钥和独立数据策略批准时，请求继续走 `DETERMINISTIC`。

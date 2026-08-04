@@ -184,10 +184,17 @@ LOG_ROUTER_DEGRADED:DISK_LIMIT_REACHED
 一键启动器只在本地后端子进程中内部设置：
 
 ```text
-PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED=true
+PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED=true
 ```
 
 该值不属于 Secret，不要求用户配置，不改变生产默认关闭策略。
+
+> **补充说明（2026-08-04）：** 启动器使用的环境变量已改为
+> `PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED`，直接绑定
+> `portfolio.diagnostics.frontend-ingest-enabled`；旧名 `PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED`
+> 只保留在 `application-prod.yml` 的生产别名中。浏览器事件不进入 `backend-*.log`，只经
+> `local` console 的 `event.origin=browser` 键值行路由到前端日志文件；直接 `npm run dev` 不
+> 自动开启该端点。完整更新见 [Direct Vite Local Logging Design](2026-08-04-direct-vite-local-logging-design.md)。
 
 新增安全 INFO 事件：
 

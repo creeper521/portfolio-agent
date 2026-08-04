@@ -233,10 +233,13 @@ param(
     [string]$SecretsFile,
     [switch]$CheckOnly,
     [ValidateRange(1, 65535)][int]$BackendPort = 8080,
-    [ValidateRange(1, 65535)][int]$FrontendPort = 5174,
+    [ValidateRange(1, 65535)][int]$FrontendPort = 5173,
     [string]$MavenExecutable = 'mvn.cmd',
     [string]$NpmExecutable = 'npm.cmd'
 )
+
+> **补充说明（2026-08-04）：** 该计划已执行；前端默认端口此后由 5174 统一为 5173 并强制
+> `--strictPort`，直接前端启动日志落盘由 [Direct Vite Local Logging Design](../specs/2026-08-04-direct-vite-local-logging-design.md) 接替。
 
 $ErrorActionPreference = 'Stop'
 $script:repositoryRoot = Split-Path -Parent $PSScriptRoot
