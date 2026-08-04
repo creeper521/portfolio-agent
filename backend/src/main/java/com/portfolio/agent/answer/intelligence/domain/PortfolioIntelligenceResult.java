@@ -15,6 +15,8 @@ public final class PortfolioIntelligenceResult {
     private final String noticeCode;
     private final AnswerIntentSource intentSource;
     private final boolean contextVersionUpdated;
+    private final String questionPresetId;
+    private final String contractVersion;
 
     public PortfolioIntelligenceResult(
             PortfolioTaskMode resolvedIntent,
@@ -25,7 +27,7 @@ public final class PortfolioIntelligenceResult {
             boolean degraded,
             String noticeCode) {
         this(resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
-                null, degraded, noticeCode, null, false);
+                null, degraded, noticeCode, null, false, null, null);
     }
 
     public PortfolioIntelligenceResult(
@@ -38,7 +40,7 @@ public final class PortfolioIntelligenceResult {
             boolean degraded,
             String noticeCode) {
         this(resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
-                contentVersion, degraded, noticeCode, null, false);
+                contentVersion, degraded, noticeCode, null, false, null, null);
     }
 
     public PortfolioIntelligenceResult(
@@ -52,6 +54,23 @@ public final class PortfolioIntelligenceResult {
             String noticeCode,
             AnswerIntentSource intentSource,
             boolean contextVersionUpdated) {
+        this(resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
+                contentVersion, degraded, noticeCode, intentSource, contextVersionUpdated, null, null);
+    }
+
+    private PortfolioIntelligenceResult(
+            PortfolioTaskMode resolvedIntent,
+            List<PortfolioRetrievedSubject> subjects,
+            List<PortfolioRetrievedPassage> evidence,
+            PortfolioRecommendation portfolioRecommendation,
+            PortfolioClarification clarification,
+            String contentVersion,
+            boolean degraded,
+            String noticeCode,
+            AnswerIntentSource intentSource,
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion) {
         this.resolvedIntent = Objects.requireNonNull(resolvedIntent, "resolvedIntent");
         this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
         this.evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
@@ -64,6 +83,8 @@ public final class PortfolioIntelligenceResult {
         this.noticeCode = noticeCode == null || noticeCode.isBlank() ? null : noticeCode.trim();
         this.intentSource = intentSource;
         this.contextVersionUpdated = contextVersionUpdated;
+        this.questionPresetId = normalizeNullable(questionPresetId);
+        this.contractVersion = normalizeNullable(contractVersion);
         if (resolvedIntent == PortfolioTaskMode.CLARIFICATION_REQUIRED && clarification == null) {
             throw new IllegalArgumentException("clarification is required for CLARIFICATION_REQUIRED");
         }
@@ -88,6 +109,8 @@ public final class PortfolioIntelligenceResult {
     public String getNoticeCode() { return noticeCode; }
     public AnswerIntentSource getIntentSource() { return intentSource; }
     public boolean isContextVersionUpdated() { return contextVersionUpdated; }
+    public String getQuestionPresetId() { return questionPresetId; }
+    public String getContractVersion() { return contractVersion; }
 
     public PortfolioIntelligenceResult withDecisionMetadata(
             AnswerIntentSource source,
@@ -103,6 +126,20 @@ public final class PortfolioIntelligenceResult {
                 degraded,
                 noticeCode,
                 Objects.requireNonNull(source, "source"),
-                versionUpdated);
+                versionUpdated, questionPresetId, contractVersion);
+    }
+
+    public PortfolioIntelligenceResult withContractIdentity(
+            String presetId,
+            String version
+    ) {
+        return new PortfolioIntelligenceResult(
+                resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
+                contentVersion, degraded, noticeCode, intentSource, contextVersionUpdated,
+                presetId, version);
+    }
+
+    private static String normalizeNullable(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

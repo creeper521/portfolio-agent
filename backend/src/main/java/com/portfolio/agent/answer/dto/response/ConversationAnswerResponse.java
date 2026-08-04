@@ -32,6 +32,8 @@ public final class ConversationAnswerResponse {
     private final ConversationGuidanceStage guidanceStage;
     private final PortfolioRecommendationResponse portfolioRecommendation;
     private final boolean contextVersionUpdated;
+    private final String questionPresetId;
+    private final String contractVersion;
 
     public ConversationAnswerResponse(ConversationAnswerResult result) {
         this.turnId = result.getTurnId();
@@ -57,6 +59,8 @@ public final class ConversationAnswerResponse {
                 ? null
                 : PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
         this.contextVersionUpdated = result.isContextVersionUpdated();
+        this.questionPresetId = result.getQuestionPresetId();
+        this.contractVersion = result.getContractVersion();
     }
 
     public String getTurnId() { return turnId; }
@@ -77,6 +81,10 @@ public final class ConversationAnswerResponse {
     public List<ConversationTopic> getCoveredTopics() { return coveredTopics; }
     public ConversationGuidanceStage getGuidanceStage() { return guidanceStage; }
     public boolean isContextVersionUpdated() { return contextVersionUpdated; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getQuestionPresetId() { return questionPresetId; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getContractVersion() { return contractVersion; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public PortfolioRecommendationResponse getPortfolioRecommendation() {
         return portfolioRecommendation;

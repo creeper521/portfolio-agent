@@ -64,7 +64,7 @@ class PortfolioControllerTest {
     void returnsCompleteReviewedPublicContent() throws Exception {
         mockMvc.perform(get("/api/v1/public-content"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contentVersion").value("2026-07-29.1"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-08-04.1"))
                 .andExpect(jsonPath("$.runtimeBundleHash").value(org.hamcrest.Matchers.startsWith("sha256:")))
                 .andExpect(jsonPath("$.questionPresets.length()").value(16))
                 .andExpect(jsonPath("$.questionPresets[0].id").value("sql-audit-overview"))

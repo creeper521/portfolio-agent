@@ -247,6 +247,7 @@ public final class ConversationalAgentRuntime {
     ) {
         return PortfolioTurn.builder(request.getTurnId(), request.getQuestion())
                 .questionPresetId(request.getQuestionPresetId())
+                .contractVersion(request.getContractVersion())
                 .window(window)
                 .projectSlug(request.getContext().getProjectSlug())
                 .caseSlug(request.getContext().getCaseSlug())

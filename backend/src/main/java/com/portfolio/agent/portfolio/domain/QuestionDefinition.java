@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -19,6 +20,10 @@ public final class QuestionDefinition {
     private final List<String> placements;
     private final boolean deterministicEntry;
     private final int displayOrder;
+    private final List<String> requiredClaimIds;
+    private final List<String> supportingClaimIds;
+    private final QuestionEvidenceRequirement evidenceRequirement;
+    private final PresetContractStatus contractStatus;
 
     @JsonCreator
     public QuestionDefinition(
@@ -32,7 +37,11 @@ public final class QuestionDefinition {
             @JsonProperty("preferredClaimCategories") List<ClaimCategory> preferredClaimCategories,
             @JsonProperty("placements") List<String> placements,
             @JsonProperty("deterministicEntry") boolean deterministicEntry,
-            @JsonProperty("displayOrder") int displayOrder
+            @JsonProperty("displayOrder") int displayOrder,
+            @JsonProperty("requiredClaimIds") List<String> requiredClaimIds,
+            @JsonProperty("supportingClaimIds") List<String> supportingClaimIds,
+            @JsonProperty("evidenceRequirement") QuestionEvidenceRequirement evidenceRequirement,
+            @JsonProperty("contractStatus") PresetContractStatus contractStatus
     ) {
         this.id = id;
         this.text = text;
@@ -45,6 +54,30 @@ public final class QuestionDefinition {
         this.placements = List.copyOf(placements);
         this.deterministicEntry = deterministicEntry;
         this.displayOrder = displayOrder;
+        this.requiredClaimIds = immutableOrEmpty(requiredClaimIds);
+        this.supportingClaimIds = immutableOrEmpty(supportingClaimIds);
+        this.evidenceRequirement = evidenceRequirement == null
+                ? new QuestionEvidenceRequirement(1, true)
+                : evidenceRequirement;
+        this.contractStatus = contractStatus == null ? PresetContractStatus.DRAFT : contractStatus;
+    }
+
+    public QuestionDefinition(
+            String id,
+            String text,
+            List<String> aliases,
+            List<String> audiences,
+            List<String> projectIds,
+            List<String> caseIds,
+            List<String> topics,
+            List<ClaimCategory> preferredClaimCategories,
+            List<String> placements,
+            boolean deterministicEntry,
+            int displayOrder
+    ) {
+        this(id, text, aliases, audiences, projectIds, caseIds, topics, preferredClaimCategories,
+                placements, deterministicEntry, displayOrder, List.of(), List.of(),
+                new QuestionEvidenceRequirement(1, true), PresetContractStatus.DRAFT);
     }
 
     public String getId() {
@@ -79,6 +112,26 @@ public final class QuestionDefinition {
 
     public int getDisplayOrder() { return displayOrder; }
 
+    public List<String> getRequiredClaimIds() { return requiredClaimIds; }
+
+    public List<String> getSupportingClaimIds() { return supportingClaimIds; }
+
+    public QuestionEvidenceRequirement getEvidenceRequirement() { return evidenceRequirement; }
+
+    public PresetContractStatus getContractStatus() { return contractStatus; }
+
+    @JsonIgnore
+    public boolean isActiveContract() { return contractStatus == PresetContractStatus.ACTIVE; }
+
+    @JsonIgnore
+    public String getContractVersion() {
+        if (contractStatus != PresetContractStatus.ACTIVE) {
+            return null;
+        }
+        return PresetContractVersion.calculate(id, text, aliases, projectIds, caseIds,
+                requiredClaimIds, supportingClaimIds, evidenceRequirement);
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -97,13 +150,18 @@ public final class QuestionDefinition {
                 && Objects.equals(preferredClaimCategories, that.preferredClaimCategories)
                 && Objects.equals(placements, that.placements)
                 && deterministicEntry == that.deterministicEntry
-                && displayOrder == that.displayOrder;
+                && displayOrder == that.displayOrder
+                && Objects.equals(requiredClaimIds, that.requiredClaimIds)
+                && Objects.equals(supportingClaimIds, that.supportingClaimIds)
+                && Objects.equals(evidenceRequirement, that.evidenceRequirement)
+                && contractStatus == that.contractStatus;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, text, aliases, audiences, projectIds, caseIds, topics,
-                preferredClaimCategories, placements, deterministicEntry, displayOrder);
+                preferredClaimCategories, placements, deterministicEntry, displayOrder,
+                requiredClaimIds, supportingClaimIds, evidenceRequirement, contractStatus);
     }
 
     @Override
@@ -115,5 +173,9 @@ public final class QuestionDefinition {
                 ", projectIds=" + projectIds +
                 ", caseIds=" + caseIds +
                 '}';
+    }
+
+    private static <T> List<T> immutableOrEmpty(List<T> value) {
+        return value == null ? List.of() : List.copyOf(value);
     }
 }

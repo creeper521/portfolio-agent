@@ -25,6 +25,9 @@ public final class ConversationAnswerRequest {
     @Pattern(regexp = "[a-z0-9-]{1,100}", message = "questionPresetId format is invalid")
     private final String questionPresetId;
 
+    @Pattern(regexp = "pcv1-[a-f0-9]{16}", message = "contractVersion format is invalid")
+    private final String contractVersion;
+
     @NotBlank(message = "question is required")
     @Size(max = 2000, message = "question must not exceed 2000 characters")
     private final String question;
@@ -43,6 +46,7 @@ public final class ConversationAnswerRequest {
             @JsonProperty("turnId") String turnId,
             @JsonProperty("requestToken") UUID requestToken,
             @JsonProperty("questionPresetId") String questionPresetId,
+            @JsonProperty("contractVersion") String contractVersion,
             @JsonProperty("question") String question,
             @JsonProperty("messages") List<ConversationMessageRequest> messages,
             @JsonProperty("context") ConversationAnswerContextRequest context
@@ -50,6 +54,7 @@ public final class ConversationAnswerRequest {
         this.turnId = turnId;
         this.requestToken = requestToken;
         this.questionPresetId = questionPresetId;
+        this.contractVersion = contractVersion;
         this.question = question;
         this.messages = messages == null ? List.of() : List.copyOf(messages);
         this.context = context;
@@ -62,7 +67,7 @@ public final class ConversationAnswerRequest {
             List<ConversationMessageRequest> messages,
             ConversationAnswerContextRequest context
     ) {
-        this(turnId, requestToken, null, question, messages, context);
+        this(turnId, requestToken, null, null, question, messages, context);
     }
 
     public ConversationAnswerRequest(
@@ -73,12 +78,13 @@ public final class ConversationAnswerRequest {
     ) {
         this(turnId, UUID.nameUUIDFromBytes(
                 String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                null, question, messages, context);
+                null, null, question, messages, context);
     }
 
     public String getTurnId() { return turnId; }
     public UUID getRequestToken() { return requestToken; }
     public String getQuestionPresetId() { return questionPresetId; }
+    public String getContractVersion() { return contractVersion; }
     public String getQuestion() { return question; }
     public List<ConversationMessageRequest> getMessages() { return messages; }
     public ConversationAnswerContextRequest getContext() { return context; }

@@ -1,11 +1,11 @@
-{
-  "schemaVersion": "4.0",
-  "contentVersion": "2026-07-29.1",
-  "files": {
-    "portfolio.json": "sha256:99a351d3fb57b09168d77ab840750609247b4ad1b070942ecb29d7bee5a5a4b7",
-    "presentation.json": "sha256:0a3259afcae559eb551847aa5ac58538f42e664188b328ca412c16da8d06a99f",
-    "rag-documents.jsonl": "sha256:ad5f7f7823c1bf28b840b8a571ea3325c1a7baf55f29515e6e55de5350bd8d21",
-    "keyword-index.json": "sha256:92aa6f13226e3cae1873d0969e4aa4af54ec57313533dc786300b88c9d77b2db",
-    "vector-index.bin": "sha256:136e989cadb357313071d3a4ecb0b677a21f8ecdd226a0107244ae22092e3b48"
-  }
+﻿{
+    "schemaVersion":  "4.0",
+    "contentVersion":  "2026-08-04.1",
+    "files":  {
+                  "portfolio.json":  "sha256:cf14bc30cc4a3753d4c605db63ecb273cae2971394af56a16273df00a0f12ac6",
+                  "presentation.json":  "sha256:41a52507177b5143258f60a43b9872a81823a2feaeb5617854852abbde90bd7d",
+                  "rag-documents.jsonl":  "sha256:1f7c4bbc69676c84bbd61412c60dd748c4425e1558e88ceb8ec886dd794b83b3",
+                  "keyword-index.json":  "sha256:92aa6f13226e3cae1873d0969e4aa4af54ec57313533dc786300b88c9d77b2db",
+                  "vector-index.bin":  "sha256:136e989cadb357313071d3a4ecb0b677a21f8ecdd226a0107244ae22092e3b48"
+              }
 }

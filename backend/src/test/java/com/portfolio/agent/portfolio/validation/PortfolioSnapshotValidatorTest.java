@@ -263,6 +263,37 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsActivePresetWithoutRequiredClaims() {
+        assertInvalid(validJson().replace(questionJson(), activeQuestionJson().replace(
+                "\"requiredClaimIds\": [\"claim-sql-audit-delivered\"]",
+                "\"requiredClaimIds\": []")),
+                "active question requiredClaimIds");
+    }
+
+    @Test
+    void rejectsActivePresetWithRequiredClaimFromAnotherSubject() {
+        String activeCaseQuestion = caseQuestionJson().replace(
+                "\"deterministicEntry\": true,",
+                """
+                "requiredClaimIds": ["claim-sql-audit-delivered"],
+                  "supportingClaimIds": [],
+                  "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
+                  "contractStatus": "ACTIVE",
+                  "deterministicEntry": true,
+                """);
+        assertInvalid(validSchemaThreeJson().replace(caseQuestionJson(), activeCaseQuestion),
+                "required claim subject");
+    }
+
+    @Test
+    void rejectsActivePresetWithoutEnoughApprovedDirectEvidence() {
+        assertInvalid(validJson().replace(questionJson(), activeQuestionJson().replace(
+                "\"minimumApprovedEvidencePerRequiredClaim\": 1",
+                "\"minimumApprovedEvidencePerRequiredClaim\": 2")),
+                "required claim approved evidence");
+    }
+
+    @Test
     void rejectsTimelineWithMissingProject() {
         String invalidTimeline = timelineJson().replace(
                 "\"projectIds\": [\"sql-audit-project\"]",
@@ -794,6 +825,18 @@ class PortfolioSnapshotValidatorTest {
                   "displayOrder": 10
                 }
                 """;
+    }
+
+    private String activeQuestionJson() {
+        return questionJson().replace(
+                "\"deterministicEntry\": true,",
+                """
+                "requiredClaimIds": ["claim-sql-audit-delivered"],
+                  "supportingClaimIds": [],
+                  "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
+                  "contractStatus": "ACTIVE",
+                  "deterministicEntry": true,
+                """);
     }
 
     private String caseQuestionJson() {

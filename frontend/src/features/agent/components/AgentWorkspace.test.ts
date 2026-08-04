@@ -197,6 +197,96 @@ describe('AgentWorkspace', () => {
     expect(answerSection.attributes('data-answer-focus')).toBe('true')
   })
 
+  it('retries a stale preset once with the server contract version', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce({
+        resolution: 'CAPABILITY_UNAVAILABLE',
+        noticeCode: 'PRESET_CONTRACT_STALE',
+        questionPresetId: 'sql-audit-overview',
+        contractVersion: 'pcv1-1111111111111111',
+      })
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        contractVersion: 'pcv1-1111111111111111',
+      })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      questionPresetId: 'sql-audit-overview',
+      contractVersion: 'pcv1-0123456789abcdef',
+    }))
+    expect(askQuestionMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      questionPresetId: 'sql-audit-overview',
+      contractVersion: 'pcv1-1111111111111111',
+    }))
+  })
+
+  it('uses the in-memory server contract version for a later preset request', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce({
+        resolution: 'CAPABILITY_UNAVAILABLE',
+        noticeCode: 'PRESET_CONTRACT_STALE',
+        questionPresetId: 'sql-audit-overview',
+        contractVersion: 'pcv1-1111111111111111',
+      })
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        contractVersion: 'pcv1-1111111111111111',
+      })
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        contractVersion: 'pcv1-1111111111111111',
+      })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+    await wrapper.get('textarea').setValue(previewPublicContent.projects[0].suggestedQuestions[0])
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      questionPresetId: 'sql-audit-overview',
+      contractVersion: 'pcv1-1111111111111111',
+    }))
+  })
+
+  it('shows a contract-specific message after a second stale response', async () => {
+    askQuestionMock.mockResolvedValue({
+      resolution: 'CAPABILITY_UNAVAILABLE',
+      noticeCode: 'PRESET_CONTRACT_STALE',
+      questionPresetId: 'sql-audit-overview',
+      contractVersion: 'pcv1-1111111111111111',
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('.answer-state--error').text()).toContain('正在更新')
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
+  })
+
+  it('shows a contract-specific unavailable message without retrying', async () => {
+    askQuestionMock.mockResolvedValue({
+      resolution: 'CAPABILITY_UNAVAILABLE',
+      noticeCode: 'PRESET_CONTRACT_UNAVAILABLE',
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledOnce()
+    expect(wrapper.get('.answer-state--error').text()).toContain('暂时无法回答')
+    expect(wrapper.find('[data-answer-retry]').exists()).toBe(false)
+  })
+
   it('uses the newest successful answer after inspecting an older answer', async () => {
     const portfolio = portfolioWithSecondaryEvidence()
     askQuestionMock
@@ -1050,6 +1140,8 @@ describe('AgentWorkspace', () => {
           text: '补足预设一',
           audiences: ['HR' as const],
           placements: ['AGENT' as const],
+          contractVersion: 'pcv1-0000000000000001',
+          availability: 'ACTIVE' as const,
         },
         {
           id: 'agent-preset-2',
@@ -1057,6 +1149,8 @@ describe('AgentWorkspace', () => {
           text: '补足预设二',
           audiences: ['HR' as const],
           placements: ['AGENT' as const],
+          contractVersion: 'pcv1-0000000000000002',
+          availability: 'ACTIVE' as const,
         },
       ],
     }

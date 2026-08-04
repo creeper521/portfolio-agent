@@ -1277,6 +1277,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '3.0|2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
         '3.0|2026-07-27.1' { 'wave-2-benchmarks.v1.json'; break }
         '4.0|2026-07-29.1' { 'wave-2-benchmarks.v1.json'; break }
+        '4.0|2026-08-04.1' { 'wave-2-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path

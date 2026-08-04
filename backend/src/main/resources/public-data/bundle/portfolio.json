@@ -1,6 +1,6 @@
 {
   "schemaVersion": "4.0",
-  "contentVersion": "2026-07-29.1",
+  "contentVersion": "2026-08-04.1",
   "owner": {
     "name": "",
     "role": "Java 后端开发实习生",
@@ -2811,6 +2811,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 10,
+      "requiredClaimIds": ["claim-sql-audit-background", "claim-sql-audit-responsibility", "claim-sql-audit-technical-decision", "claim-sql-audit-verification", "claim-sql-audit-delivered"],
+      "supportingClaimIds": ["claim-sql-audit-documented-handoff"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": []
     },
     {
@@ -2840,7 +2844,11 @@
         "PROJECT"
       ],
       "deterministicEntry": true,
-      "displayOrder": 20
+      "displayOrder": 20,
+      "requiredClaimIds": ["claim-sql-audit-fixed-string-search"],
+      "supportingClaimIds": ["claim-sql-audit-verification"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE"
     },
     {
       "id": "question-sql-audit-partial-success",
@@ -2870,7 +2878,11 @@
         "PROJECT"
       ],
       "deterministicEntry": true,
-      "displayOrder": 30
+      "displayOrder": 30,
+      "requiredClaimIds": ["claim-sql-audit-source-selection", "claim-sql-audit-partial-success"],
+      "supportingClaimIds": ["claim-sql-audit-selected-target-check"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE"
     },
     {
       "id": "question-case-multilingual-overview",
@@ -2900,7 +2912,11 @@
         "CASE"
       ],
       "deterministicEntry": true,
-      "displayOrder": 100
+      "displayOrder": 100,
+      "requiredClaimIds": ["claim-case-multilingual-replacement-problem", "claim-case-multilingual-preserve-existing", "claim-case-multilingual-sequential-verification"],
+      "supportingClaimIds": ["claim-case-multilingual-no-backfill"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE"
     },
     {
       "id": "question-case-role-reset-overview",
@@ -2930,7 +2946,11 @@
         "CASE"
       ],
       "deterministicEntry": true,
-      "displayOrder": 110
+      "displayOrder": 110,
+      "requiredClaimIds": ["claim-case-role-reset-cache-interference-problem", "claim-case-role-reset-controlled-flow", "claim-case-role-reset-confirmation-safety", "claim-case-role-reset-acceptance", "claim-case-role-reset-documented-delivery"],
+      "supportingClaimIds": [],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE"
     },
     {
       "id": "question-case-codegraph-overview",
@@ -2961,7 +2981,11 @@
         "CASE"
       ],
       "deterministicEntry": true,
-      "displayOrder": 120
+      "displayOrder": 120,
+      "requiredClaimIds": ["claim-case-codegraph-narrowing", "claim-case-codegraph-combined-workflow", "claim-case-codegraph-evaluation-method"],
+      "supportingClaimIds": ["claim-case-codegraph-failure-boundary", "claim-case-codegraph-manual-quality-review", "claim-case-codegraph-qualitative-publication"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE"
     },
     {
       "id": "question-sql-audit-async-and-recovery",
@@ -2991,6 +3015,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 40,
+      "requiredClaimIds": ["claim-sql-audit-async-task-lifecycle", "claim-sql-audit-progress-fallback"],
+      "supportingClaimIds": [],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": []
     },
     {
@@ -3022,6 +3050,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 50,
+      "requiredClaimIds": ["claim-sql-audit-progress-fallback"],
+      "supportingClaimIds": ["claim-sql-audit-async-task-lifecycle"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": []
     },
     {
@@ -3054,6 +3086,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 60,
+      "requiredClaimIds": ["claim-sql-audit-result-lifecycle", "claim-sql-audit-truncation-disclosure"],
+      "supportingClaimIds": [],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": []
     },
     {
@@ -3083,6 +3119,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 130,
+      "requiredClaimIds": ["claim-case-multilingual-preserve-existing", "claim-case-multilingual-sequential-verification"],
+      "supportingClaimIds": [],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-multilingual-upload"
       ]
@@ -3114,6 +3154,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 140,
+      "requiredClaimIds": ["claim-case-multilingual-no-backfill"],
+      "supportingClaimIds": ["claim-case-multilingual-preserve-existing"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-multilingual-upload"
       ]
@@ -3146,6 +3190,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 150,
+      "requiredClaimIds": ["claim-case-role-reset-controlled-flow", "claim-case-role-reset-acceptance"],
+      "supportingClaimIds": ["claim-case-role-reset-documented-delivery"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-role-reset"
       ]
@@ -3177,6 +3225,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 160,
+      "requiredClaimIds": ["claim-case-role-reset-confirmation-safety"],
+      "supportingClaimIds": ["claim-case-role-reset-controlled-flow"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-role-reset"
       ]
@@ -3208,6 +3260,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 170,
+      "requiredClaimIds": ["claim-case-codegraph-evaluation-method"],
+      "supportingClaimIds": ["claim-case-codegraph-narrowing", "claim-case-codegraph-combined-workflow"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-codegraph-evaluation"
       ]
@@ -3239,6 +3295,10 @@
       ],
       "deterministicEntry": true,
       "displayOrder": 180,
+      "requiredClaimIds": ["claim-case-codegraph-manual-quality-review", "claim-case-codegraph-qualitative-publication"],
+      "supportingClaimIds": ["claim-case-codegraph-failure-boundary"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "ACTIVE",
       "caseIds": [
         "case-codegraph-evaluation"
       ]

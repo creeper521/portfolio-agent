@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioClarification;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioContractTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioFollowUpAction;
@@ -47,6 +48,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     private final PortfolioTaskResolver taskResolver;
     private final ConversationProviderAccess providerAccess;
     private final PortfolioRetrievalPlanner retrievalPlanner;
+    private final ContractEvidenceSelector contractEvidenceSelector;
 
     public DefaultPortfolioIntelligence(
             PortfolioTaskValidator taskValidator,
@@ -63,6 +65,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         this.taskResolver = null;
         this.providerAccess = null;
         this.retrievalPlanner = new PortfolioRetrievalPlanner();
+        this.contractEvidenceSelector = new ContractEvidenceSelector(retriever);
     }
 
     public DefaultPortfolioIntelligence(
@@ -86,6 +89,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         this.taskResolver = Objects.requireNonNull(taskResolver, "taskResolver");
         this.providerAccess = Objects.requireNonNull(providerAccess, "providerAccess");
         this.retrievalPlanner = new PortfolioRetrievalPlanner();
+        this.contractEvidenceSelector = new ContractEvidenceSelector(retriever);
     }
 
     @Override
@@ -108,9 +112,21 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         }
         PortfolioPresetResolution preset = presetResolver.resolve(turn, content);
         if (preset.getType() == PortfolioPresetResolutionType.INVALID) {
-            return clarification(AnswerIntentSource.PRESET, "questionPresetId");
+            return contractUnavailable("PRESET_CONTRACT_UNAVAILABLE", null, null, content);
+        }
+        if (preset.getType() == PortfolioPresetResolutionType.STALE) {
+            return contractUnavailable(
+                    "PRESET_CONTRACT_STALE", preset.getQuestionPresetId(),
+                    preset.getLatestContractVersion(), content);
+        }
+        if (preset.getType() == PortfolioPresetResolutionType.UNAVAILABLE) {
+            return contractUnavailable(
+                    "PRESET_CONTRACT_UNAVAILABLE", preset.getQuestionPresetId(), null, content);
         }
         if (preset.getType() == PortfolioPresetResolutionType.MATCHED) {
+            if (preset.getContractTask() != null) {
+                return executeContract(preset.getContractTask());
+            }
             return execute(preset.getTask(), AnswerIntentSource.PRESET, false);
         }
         if (taskResolver.matchesDeterministicRule(turn.getQuestion())) {
@@ -184,9 +200,37 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         return decisionFor(result);
     }
 
+    private PortfolioDecision executeContract(PortfolioContractTask task) {
+        PortfolioRetrievalResult retrieval = contractEvidenceSelector.select(task);
+        PortfolioIntelligenceResult result = material(PortfolioTaskMode.FACT_LOOKUP, retrieval)
+                .withDecisionMetadata(AnswerIntentSource.PRESET, false)
+                .withContractIdentity(task.getPresetId(), task.getContractVersion());
+        if (ContractEvidenceSelector.UNAVAILABLE_NOTICE.equals(result.getNoticeCode())) {
+            return new PortfolioDecision(PortfolioDisposition.CAPABILITY_UNAVAILABLE, result);
+        }
+        return new PortfolioDecision(PortfolioDisposition.ANSWERED, result);
+    }
+
+    private PortfolioDecision contractUnavailable(
+            String noticeCode,
+            String presetId,
+            String contractVersion,
+            RuntimeAnswerContent content
+    ) {
+        PortfolioIntelligenceResult result = new PortfolioIntelligenceResult(
+                PortfolioTaskMode.FACT_LOOKUP, List.of(), List.of(), null, null,
+                content.getContentVersion(), false, noticeCode)
+                .withDecisionMetadata(AnswerIntentSource.PRESET, false)
+                .withContractIdentity(presetId, contractVersion);
+        return new PortfolioDecision(PortfolioDisposition.CAPABILITY_UNAVAILABLE, result);
+    }
+
     private PortfolioDecision decisionFor(PortfolioIntelligenceResult result) {
         if (result.getResolvedIntent() == PortfolioTaskMode.CLARIFICATION_REQUIRED) {
             return new PortfolioDecision(PortfolioDisposition.NEEDS_CLARIFICATION, result);
+        }
+        if (ContractEvidenceSelector.UNAVAILABLE_NOTICE.equals(result.getNoticeCode())) {
+            return new PortfolioDecision(PortfolioDisposition.CAPABILITY_UNAVAILABLE, result);
         }
         if (result.getEvidence().isEmpty()) {
             return new PortfolioDecision(PortfolioDisposition.NOT_SUPPORTED, result);

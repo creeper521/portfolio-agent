@@ -14,6 +14,8 @@ import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.PresetContractStatus;
+import com.portfolio.agent.common.text.StableQuestionNormalizer;
 import com.portfolio.agent.portfolio.domain.ReviewStatus;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.domain.SupportType;
@@ -165,6 +167,14 @@ public class PortfolioSnapshotValidator {
             requiredNonBlankList(question.getPlacements(), "question placements");
             require(question.isDeterministicEntry(),
                     "published question must be a deterministic entry");
+            validateUniqueNonBlankValues(question.getRequiredClaimIds(),
+                    "question requiredClaimIds");
+            validateUniqueNonBlankValues(question.getSupportingClaimIds(),
+                    "question supportingClaimIds");
+            require(question.getRequiredClaimIds().stream()
+                            .noneMatch(question.getSupportingClaimIds()::contains),
+                    "question requiredClaimIds and supportingClaimIds must be disjoint: "
+                            + question.getId());
         }
 
         for (EvidenceRecord item : evidence) {
@@ -185,6 +195,8 @@ public class PortfolioSnapshotValidator {
                     "evidence sourceCount must be positive: " + item.getId());
             require(hasText(item.getSummary()), "evidence summary is required: " + item.getId());
         }
+
+        validateActiveQuestionContracts(questions, claimsById, linksByClaimId, evidenceById);
 
         for (ProjectProfile project : projects) {
             require(hasText(project.getCode()), "project code is required: " + project.getId());
@@ -371,6 +383,86 @@ public class PortfolioSnapshotValidator {
         }
     }
 
+    private static void validateActiveQuestionContracts(
+            List<QuestionDefinition> questions,
+            Map<String, Claim> claimsById,
+            Map<String, List<ClaimEvidenceLink>> linksByClaimId,
+            Map<String, EvidenceRecord> evidenceById
+    ) {
+        Set<String> identities = new HashSet<>();
+        for (QuestionDefinition question : questions) {
+            if (question.getContractStatus() != PresetContractStatus.ACTIVE) {
+                continue;
+            }
+            require(question.isDeterministicEntry(),
+                    "active question must be a deterministic entry: " + question.getId());
+            require(question.getProjectIds().size() + question.getCaseIds().size() == 1,
+                    "active question must reference exactly one subject: " + question.getId());
+            require(!question.getRequiredClaimIds().isEmpty(),
+                    "active question requiredClaimIds must not be empty: " + question.getId());
+            require(question.getEvidenceRequirement().isPublicOnly(),
+                    "active question evidenceRequirement must be publicOnly: " + question.getId());
+
+            String subjectId = question.getProjectIds().isEmpty()
+                    ? question.getCaseIds().get(0) : question.getProjectIds().get(0);
+            for (String claimId : question.getRequiredClaimIds()) {
+                validateActiveQuestionClaim(question, subjectId, claimId, claimsById,
+                        linksByClaimId, evidenceById, true);
+            }
+            for (String claimId : question.getSupportingClaimIds()) {
+                validateActiveQuestionClaim(question, subjectId, claimId, claimsById,
+                        linksByClaimId, evidenceById, false);
+            }
+            requireUniqueQuestionIdentity(identities, question.getText(), question.getId());
+            for (String alias : question.getAliases()) {
+                requireUniqueQuestionIdentity(identities, alias, question.getId());
+            }
+        }
+    }
+
+    private static void validateActiveQuestionClaim(
+            QuestionDefinition question,
+            String subjectId,
+            String claimId,
+            Map<String, Claim> claimsById,
+            Map<String, List<ClaimEvidenceLink>> linksByClaimId,
+            Map<String, EvidenceRecord> evidenceById,
+            boolean required
+    ) {
+        Claim claim = claimsById.get(claimId);
+        String prefix = required ? "required" : "supporting";
+        require(claim != null, prefix + " claim does not exist: " + claimId);
+        require(claim.getVerificationStatus() == ClaimVerificationStatus.VERIFIED,
+                prefix + " claim must be VERIFIED: " + claimId);
+        require(subjectId.equals(claim.getSubjectId()),
+                prefix + " claim subject must match active question: " + claimId);
+        if (!required) {
+            return;
+        }
+        long approvedDirectEvidence = linksByClaimId.getOrDefault(claimId, List.of()).stream()
+                .filter(link -> link.getSupportType() == SupportType.DIRECT)
+                .filter(link -> link.getReviewStatus() == ReviewStatus.APPROVED)
+                .map(link -> evidenceById.get(link.getEvidenceId()))
+                .filter(java.util.Objects::nonNull)
+                .filter(item -> item.getPublicStatus() == EvidenceStatus.APPROVED)
+                .filter(item -> !item.getRawContentPublic())
+                .count();
+        require(approvedDirectEvidence >= question.getEvidenceRequirement()
+                        .getMinimumApprovedEvidencePerRequiredClaim(),
+                "required claim approved evidence is insufficient: " + claimId);
+    }
+
+    private static void requireUniqueQuestionIdentity(
+            Set<String> identities,
+            String text,
+            String questionId
+    ) {
+        String normalized = StableQuestionNormalizer.normalize(text);
+        require(hasText(normalized), "active question text identity is required: " + questionId);
+        require(identities.add(normalized),
+                "active question text identity must be unique: " + normalized);
+    }
+
     private static boolean isAchievement(AchievementStatus status) {
         return status == AchievementStatus.DELIVERED
                 || status == AchievementStatus.IMPLEMENTED_TESTED
@@ -405,6 +497,14 @@ public class PortfolioSnapshotValidator {
     private static void validateNonBlankValues(List<String> values, String field) {
         for (String item : values) {
             require(hasText(item), field + " must not contain blank values");
+        }
+    }
+
+    private static void validateUniqueNonBlankValues(List<String> values, String field) {
+        validateNonBlankValues(values, field);
+        Set<String> uniqueValues = new HashSet<>();
+        for (String value : values) {
+            require(uniqueValues.add(value), field + " must not contain duplicate values: " + value);
         }
     }
 

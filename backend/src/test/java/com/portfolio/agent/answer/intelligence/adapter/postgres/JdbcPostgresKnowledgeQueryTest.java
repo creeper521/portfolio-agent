@@ -124,6 +124,26 @@ class JdbcPostgresKnowledgeQueryTest {
     }
 
     @Test
+    void presetContractUsesExactPassagesAndNeverCallsRelevantPassageRetrieval() {
+        RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
+        RecordingPassageQuery passageQuery = new RecordingPassageQuery();
+        JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
+                selectionQuery,
+                text -> { throw new AssertionError("contract retrieval must not embed the query"); },
+                passageQuery);
+
+        PostgresKnowledgeQueryResult result = query.retrieve(
+                PortfolioRetrievalRequest.contractScope(
+                        "unrelated text must not affect the contract", "project-1", List.of("claim-1")));
+
+        assertThat(selectionQuery.exactSubjectIds).containsExactly(List.of("project-1"));
+        assertThat(passageQuery.exactRequests).containsExactly(List.of("release-id", List.of("project-1")));
+        assertThat(passageQuery.relevantCallCount).isZero();
+        assertThat(result.getPassages()).extracting(PostgresKnowledgePassageRow::getClaimId)
+                .containsExactly("claim-1");
+    }
+
+    @Test
     void validatesAnEmptyRecommendationWithoutIssuingAnArrayQuery() {
         RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
         JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
@@ -186,6 +206,37 @@ class JdbcPostgresKnowledgeQueryTest {
                     "project-1", PortfolioSubjectKind.PROJECT, "PostgreSQL audit", "Public summary",
                     "/projects/project-1", "BACKEND", Set.of("POSTGRESQL"),
                     List.of(new EvidenceReference("claim-1", "evidence-1", "Approved evidence")), 1.0);
+        }
+    }
+
+    private static final class RecordingPassageQuery implements PostgresFactPassageQuery {
+
+        private final List<List<Object>> exactRequests = new java.util.ArrayList<>();
+        private int relevantCallCount;
+
+        @Override
+        public List<PostgresKnowledgePassageRow> findPassages(String releaseId, List<String> subjectIds) {
+            exactRequests.add(List.of(releaseId, List.copyOf(subjectIds)));
+            return List.of(
+                    new PostgresKnowledgePassageRow(
+                            "project-1", "claim-1", "Contract claim",
+                            List.of(new EvidenceReference(
+                                    "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
+                    new PostgresKnowledgePassageRow(
+                            "project-1", "claim-2", "Unrequested claim",
+                            List.of(new EvidenceReference(
+                                    "claim-2", "evidence-2", "Approved evidence", "APPROVED"))));
+        }
+
+        @Override
+        public List<PostgresKnowledgePassageRow> findRelevantPassages(
+                String releaseId,
+                List<String> subjectIds,
+                String query,
+                List<AnswerClaimCategory> preferredClaimCategories,
+                int limit) {
+            relevantCallCount++;
+            throw new AssertionError("preset contract must not call relevant passage retrieval");
         }
     }
 }

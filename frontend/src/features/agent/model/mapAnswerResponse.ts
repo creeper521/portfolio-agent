@@ -31,6 +31,7 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
   return {
     turnId: response.turnId,
     contentVersion: response.contentVersion,
+    contractVersion: response.contractVersion,
     title: response.title || '',
     summary: response.summary || '',
     intent: response.intent,

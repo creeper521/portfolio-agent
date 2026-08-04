@@ -129,7 +129,8 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             return null;
         }
         if (request.getStrategy() == PortfolioRetrievalStrategy.CONTEXT_VALIDATION
-                || request.getStrategy() == PortfolioRetrievalStrategy.REFERENCE_SCOPED) {
+                || request.getStrategy() == PortfolioRetrievalStrategy.REFERENCE_SCOPED
+                || request.getStrategy() == PortfolioRetrievalStrategy.PRESET_CONTRACT) {
             List<PortfolioRetrievedPassage> exactPassages = exactPassages(
                     knowledge, corpus, verifiedClaims);
             return exactPassages.isEmpty()

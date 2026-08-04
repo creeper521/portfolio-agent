@@ -332,6 +332,8 @@ export const previewPublicContent: PublicPortfolio = {
       text: sqlAuditProject.suggestedQuestions[0],
       audiences: ['INTERVIEWER', 'MENTOR', 'HR', 'GUEST'],
       placements: ['HOME', 'AGENT', 'PROJECT'],
+      contractVersion: 'pcv1-0123456789abcdef',
+      availability: 'ACTIVE',
     },
   ],
 }

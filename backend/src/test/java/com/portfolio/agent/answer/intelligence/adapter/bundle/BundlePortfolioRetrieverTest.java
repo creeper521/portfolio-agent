@@ -180,6 +180,28 @@ class BundlePortfolioRetrieverTest {
                 .containsExactly("chunk-relevant#claim-1");
     }
 
+    @Test
+    void presetContractReturnsExactClaimsWithoutCallingTheRelevanceCoordinator() {
+        AnswerKnowledge subject = knowledge(
+                "project-1", "sql-audit", "JAVA_BACKEND", Set.of("POSTGRESQL"),
+                verifiedClaim("claim-1", "evidence-1"), approved("evidence-1"));
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "public-2026-07-31", "hash", List.of(subject), corpus());
+        LocalRetrievalCoordinator forbiddenCoordinator = new LocalRetrievalCoordinator(
+                null, null, null, null, null, null);
+        BundlePortfolioRetriever retriever = new BundlePortfolioRetriever(
+                () -> content, forbiddenCoordinator, RetrievalPolicy.currentRelease());
+
+        PortfolioRetrievalResult result = retriever.retrieve(
+                PortfolioRetrievalRequest.contractScope(
+                        "unrelated text must not affect the contract", "project-1", List.of("claim-1")));
+
+        assertThat(result.getSubjects()).extracting(item -> item.getPortfolioId())
+                .containsExactly("project-1");
+        assertThat(result.getPassages()).extracting(PortfolioRetrievedPassage::getClaimId)
+                .containsOnly("claim-1");
+    }
+
     private LocalRetrievalCoordinator coordinator() {
         return new LocalRetrievalCoordinator(
                 new RetrievalQueryNormalizer(),

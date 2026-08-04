@@ -154,6 +154,7 @@ export interface AnswerResponse {
   turnId: string
   contentVersion: string
   questionPresetId?: string
+  contractVersion?: string
   intent?: AnswerIntent
   answerScope?: AnswerScope
   resolution: AnswerResolution
@@ -182,6 +183,7 @@ export interface AnswerResponse {
 export interface MappedAnswer {
   turnId: string
   contentVersion: string
+  contractVersion?: string
   title: string
   summary: string
   sections: AnswerSection[]

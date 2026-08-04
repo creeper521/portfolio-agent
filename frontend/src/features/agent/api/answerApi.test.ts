@@ -157,6 +157,7 @@ describe('answer api', () => {
       ...input('查看当前状态'),
       messages: [{ role: 'ASSISTANT', content: 'previous answer' }],
       questionPresetId: 'sql-audit-overview',
+      contractVersion: 'pcv1-0123456789abcdef',
       referenceContext: {
         previousContentVersion: '2026-07-21.1',
         projectSlugs: ['sql-audit'],
@@ -172,6 +173,7 @@ describe('answer api', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     )
     expect(body.questionPresetId).toBe('sql-audit-overview')
+    expect(body.contractVersion).toBe('pcv1-0123456789abcdef')
     expect(body.context.referenceContext).toEqual({
       previousContentVersion: '2026-07-21.1',
       projectSlugs: ['sql-audit'],

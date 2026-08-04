@@ -18,6 +18,7 @@ export interface AnswerApiRequest {
   source: 'HOME' | 'AGENT_PAGE' | 'PROJECT' | 'CASE' | 'EVIDENCE'
   focusEvidenceIds?: string[]
   questionPresetId?: string
+  contractVersion?: string
   question?: string
   messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
   coveredTopics?: readonly ConversationTopic[]
@@ -42,6 +43,9 @@ export function askQuestion(
       ...(input.questionPresetId === undefined
         ? {}
         : { questionPresetId: input.questionPresetId }),
+      ...(input.contractVersion === undefined
+        ? {}
+        : { contractVersion: input.contractVersion }),
       question: input.question,
       messages: input.messages?.map((message) => ({
         role: message.role,

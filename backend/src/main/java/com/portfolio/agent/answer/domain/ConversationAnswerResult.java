@@ -25,6 +25,8 @@ public final class ConversationAnswerResult {
     private final AnswerIntentSource intentSource;
     private final AnswerEvidenceState evidenceState;
     private final boolean contextVersionUpdated;
+    private final String questionPresetId;
+    private final String contractVersion;
 
     public ConversationAnswerResult(
             String turnId,
@@ -146,7 +148,7 @@ public final class ConversationAnswerResult {
         this(turnId, contentVersion, intent, answerScope, resolution, title, blocks,
                 suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
                 progress, portfolioRecommendation, constructionMode, intentSource,
-                evidenceState, false);
+                evidenceState, false, null, null);
     }
 
     private ConversationAnswerResult(
@@ -167,7 +169,9 @@ public final class ConversationAnswerResult {
             AnswerConstructionMode constructionMode,
             AnswerIntentSource intentSource,
             AnswerEvidenceState evidenceState,
-            boolean contextVersionUpdated
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion
     ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
@@ -188,6 +192,8 @@ public final class ConversationAnswerResult {
         this.intentSource = Objects.requireNonNull(intentSource, "intentSource");
         this.evidenceState = Objects.requireNonNull(evidenceState, "evidenceState");
         this.contextVersionUpdated = contextVersionUpdated;
+        this.questionPresetId = normalizeNullable(questionPresetId);
+        this.contractVersion = normalizeNullable(contractVersion);
     }
 
     public String getTurnId() { return turnId; }
@@ -210,6 +216,8 @@ public final class ConversationAnswerResult {
     public AnswerIntentSource getIntentSource() { return intentSource; }
     public AnswerEvidenceState getEvidenceState() { return evidenceState; }
     public boolean isContextVersionUpdated() { return contextVersionUpdated; }
+    public String getQuestionPresetId() { return questionPresetId; }
+    public String getContractVersion() { return contractVersion; }
 
     public ConversationAnswerResult withGuidance(
             List<ConversationSuggestedQuestion> questions,
@@ -233,7 +241,9 @@ public final class ConversationAnswerResult {
                 constructionMode,
                 intentSource,
                 evidenceState,
-                contextVersionUpdated);
+                contextVersionUpdated,
+                questionPresetId,
+                contractVersion);
     }
 
     public ConversationAnswerResult withContextVersionUpdated(boolean updated) {
@@ -241,7 +251,19 @@ public final class ConversationAnswerResult {
                 turnId, contentVersion, intent, answerScope, resolution, title, blocks,
                 suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
                 progress, portfolioRecommendation, constructionMode, intentSource,
-                evidenceState, updated);
+                evidenceState, updated, questionPresetId, contractVersion);
+    }
+
+    public ConversationAnswerResult withContractIdentity(String presetId, String version) {
+        return new ConversationAnswerResult(
+                turnId, contentVersion, intent, answerScope, resolution, title, blocks,
+                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
+                progress, portfolioRecommendation, constructionMode, intentSource,
+                evidenceState, contextVersionUpdated, presetId, version);
+    }
+
+    private static String normalizeNullable(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static AnswerConstructionMode deriveConstructionMode(

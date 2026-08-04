@@ -13,6 +13,8 @@ public final class QuestionPresetResponse {
     private final List<String> caseSlugs;
     private final List<String> audiences;
     private final List<String> placements;
+    private final String contractVersion;
+    private final String availability;
 
     public QuestionPresetResponse(
             String id,
@@ -20,7 +22,9 @@ public final class QuestionPresetResponse {
             String projectSlug,
             List<String> caseSlugs,
             List<String> audiences,
-            List<String> placements
+            List<String> placements,
+            String contractVersion,
+            String availability
     ) {
         this.id = id;
         this.text = text;
@@ -28,6 +32,8 @@ public final class QuestionPresetResponse {
         this.caseSlugs = List.copyOf(caseSlugs);
         this.audiences = List.copyOf(audiences);
         this.placements = List.copyOf(placements);
+        this.contractVersion = contractVersion;
+        this.availability = availability;
     }
 
     public static QuestionPresetResponse from(QuestionDefinition definition, String projectSlug) {
@@ -45,7 +51,9 @@ public final class QuestionPresetResponse {
                 projectSlug,
                 caseSlugs,
                 definition.getAudiences(),
-                definition.getPlacements()
+                definition.getPlacements(),
+                definition.isActiveContract() ? definition.getContractVersion() : null,
+                definition.getContractStatus().name()
         );
     }
 
@@ -73,4 +81,8 @@ public final class QuestionPresetResponse {
     public List<String> getPlacements() {
         return placements;
     }
+
+    public String getContractVersion() { return contractVersion; }
+
+    public String getAvailability() { return availability; }
 }

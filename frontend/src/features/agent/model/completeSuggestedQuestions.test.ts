@@ -28,6 +28,8 @@ function portfolioWithPresets(): PublicPortfolio {
         text: '预设问题 A',
         audiences: ['INTERVIEWER'],
         placements: ['AGENT'],
+        contractVersion: 'pcv1-0000000000000001',
+        availability: 'ACTIVE',
       },
       {
         id: 'preset-b',
@@ -35,6 +37,8 @@ function portfolioWithPresets(): PublicPortfolio {
         text: '预设问题 B',
         audiences: ['INTERVIEWER'],
         placements: ['HOME', 'AGENT'],
+        contractVersion: 'pcv1-0000000000000002',
+        availability: 'ACTIVE',
       },
       {
         id: 'preset-c',
@@ -42,6 +46,8 @@ function portfolioWithPresets(): PublicPortfolio {
         text: '预设问题 C',
         audiences: ['INTERVIEWER'],
         placements: ['AGENT', 'PROJECT'],
+        contractVersion: 'pcv1-0000000000000003',
+        availability: 'ACTIVE',
       },
       {
         id: 'preset-home-only',
@@ -49,6 +55,8 @@ function portfolioWithPresets(): PublicPortfolio {
         text: '只在首页出现的预设',
         audiences: ['INTERVIEWER'],
         placements: ['HOME'],
+        contractVersion: 'pcv1-0000000000000004',
+        availability: 'ACTIVE',
       },
     ],
   }
@@ -163,6 +171,8 @@ describe('completeSuggestedQuestions', () => {
             text: '只在首页出现的预设',
             audiences: ['INTERVIEWER'],
             placements: ['HOME'],
+            contractVersion: 'pcv1-0000000000000005',
+            availability: 'ACTIVE',
           },
         ],
       },

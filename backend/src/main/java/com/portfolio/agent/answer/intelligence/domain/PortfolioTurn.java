@@ -10,6 +10,7 @@ public final class PortfolioTurn {
     private final String turnId;
     private final String question;
     private final String questionPresetId;
+    private final String contractVersion;
     private final ConversationWindow window;
     private final String projectSlug;
     private final String caseSlug;
@@ -22,6 +23,7 @@ public final class PortfolioTurn {
         this.turnId = requireText(builder.turnId, "turnId");
         this.question = requireText(builder.question, "question");
         this.questionPresetId = normalizeText(builder.questionPresetId);
+        this.contractVersion = normalizeText(builder.contractVersion);
         this.window = builder.window == null
                 ? new ConversationWindow(null, List.<ConversationMessage>of(), 0)
                 : builder.window;
@@ -43,6 +45,7 @@ public final class PortfolioTurn {
     public String getTurnId() { return turnId; }
     public String getQuestion() { return question; }
     public String getQuestionPresetId() { return questionPresetId; }
+    public String getContractVersion() { return contractVersion; }
     public ConversationWindow getWindow() { return window; }
     public String getProjectSlug() { return projectSlug; }
     public String getCaseSlug() { return caseSlug; }
@@ -69,6 +72,7 @@ public final class PortfolioTurn {
         private final String turnId;
         private final String question;
         private String questionPresetId;
+        private String contractVersion;
         private ConversationWindow window;
         private String projectSlug;
         private String caseSlug;
@@ -84,6 +88,11 @@ public final class PortfolioTurn {
 
         public Builder questionPresetId(String value) {
             this.questionPresetId = value;
+            return this;
+        }
+
+        public Builder contractVersion(String value) {
+            this.contractVersion = value;
             return this;
         }
 

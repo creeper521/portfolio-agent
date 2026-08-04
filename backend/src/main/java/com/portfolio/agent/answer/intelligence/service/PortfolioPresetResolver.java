@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioContractTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
@@ -39,13 +40,22 @@ public final class PortfolioPresetResolver {
                 return PortfolioPresetResolution.invalid();
             }
             SubjectQuestion match = globalMatches.getFirst();
+            if (!match.question.isActiveContract()) {
+                return PortfolioPresetResolution.unavailable(match.question.getId());
+            }
             if (!matchesText(match.question, turn.getQuestion())) {
                 return PortfolioPresetResolution.invalid();
+            }
+            if (turn.getContractVersion() != null
+                    && !turn.getContractVersion().equals(match.question.getContractVersion())) {
+                return PortfolioPresetResolution.stale(
+                        match.question.getId(), match.question.getContractVersion());
             }
             return matched(turn, match);
         }
         String normalizedQuestion = normalizer.normalize(turn.getQuestion());
         List<SubjectQuestion> matches = available.stream()
+                .filter(candidate -> candidate.question.isActiveContract())
                 .filter(candidate -> matchesNormalized(candidate.question, normalizedQuestion))
                 .toList();
         if (matches.isEmpty()) {
@@ -61,6 +71,16 @@ public final class PortfolioPresetResolver {
             PortfolioTurn turn,
             SubjectQuestion match
     ) {
+        if (!match.question.getRequiredClaimIds().isEmpty()) {
+            return PortfolioPresetResolution.matchedContract(new PortfolioContractTask(
+                    match.question.getId(),
+                    match.question.getContractVersion(),
+                    match.question.getCanonicalQuestion(),
+                    match.subject.getStableId(),
+                    match.question.getRequiredClaimIds(),
+                    match.question.getSupportingClaimIds(),
+                    match.question.getMinimumApprovedEvidencePerRequiredClaim()));
+        }
         PortfolioTask task = new PortfolioTask(
                 turn.getTurnId(),
                 match.question.getCanonicalQuestion(),

@@ -26,6 +26,7 @@ import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.PresetContractStatus;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Primary;
@@ -316,7 +317,15 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 question.getPreferredClaimCategories().stream()
                         .map(category -> AnswerClaimCategory.valueOf(
                                 category.name()))
-                        .toList()
+                        .toList(),
+                question.getContractStatus() == PresetContractStatus.ACTIVE
+                        ? question.getContractVersion()
+                        : null,
+                question.getRequiredClaimIds(),
+                question.getSupportingClaimIds(),
+                question.getEvidenceRequirement()
+                        .getMinimumApprovedEvidencePerRequiredClaim(),
+                question.getContractStatus() == PresetContractStatus.ACTIVE
         );
     }
 

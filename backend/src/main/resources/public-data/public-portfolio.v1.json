@@ -109,7 +109,11 @@
       "preferredClaimCategories": ["BACKGROUND", "RESPONSIBILITY", "TECHNICAL_DECISION", "VERIFICATION", "OUTCOME"],
       "placements": ["HOME", "AGENT", "PROJECT"],
       "deterministicEntry": true,
-      "displayOrder": 10
+      "displayOrder": 10,
+      "requiredClaimIds": ["claim-sql-audit-background", "claim-sql-audit-responsibility", "claim-sql-audit-technical-decision", "claim-sql-audit-verification", "claim-sql-audit-delivered"],
+      "supportingClaimIds": ["claim-sql-audit-documented-handoff"],
+      "evidenceRequirement": { "minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true },
+      "contractStatus": "DRAFT"
     }
   ],
   "evidence": [

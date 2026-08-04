@@ -30,6 +30,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.service.ContractEvidenceSelector;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -52,6 +53,7 @@ public final class PortfolioIntelligenceAnswerAssembler {
             case ANSWERED -> AnswerResolution.ANSWERED;
             case NEEDS_CLARIFICATION -> AnswerResolution.NEEDS_CLARIFICATION;
             case NOT_SUPPORTED -> AnswerResolution.NOT_SUPPORTED;
+            case CAPABILITY_UNAVAILABLE -> AnswerResolution.CAPABILITY_UNAVAILABLE;
             case NOT_PORTFOLIO -> throw new IllegalStateException(
                     "not-portfolio decision cannot be assembled as an answer");
         };
@@ -81,7 +83,8 @@ public final class PortfolioIntelligenceAnswerAssembler {
                 decision.getDisposition() == PortfolioDisposition.ANSWERED
                         ? AnswerEvidenceState.VERIFIED
                         : AnswerEvidenceState.INSUFFICIENT)
-                .withContextVersionUpdated(result.isContextVersionUpdated());
+                .withContextVersionUpdated(result.isContextVersionUpdated())
+                .withContractIdentity(result.getQuestionPresetId(), result.getContractVersion());
     }
 
     public ConversationAnswerResult assemble(
@@ -200,6 +203,12 @@ public final class PortfolioIntelligenceAnswerAssembler {
             return intelligenceResult.getEvidence().stream()
                     .map(this::passageBlock)
                     .toList();
+        }
+        if ("PRESET_CONTRACT_STALE".equals(intelligenceResult.getNoticeCode())) {
+            return List.of(block("这个推荐问题正在更新，请刷新后重试。", List.of(), List.of()));
+        }
+        if (ContractEvidenceSelector.UNAVAILABLE_NOTICE.equals(intelligenceResult.getNoticeCode())) {
+            return List.of(block("这个推荐问题暂时无法回答，内容正在更新。", List.of(), List.of()));
         }
         PortfolioRecommendation recommendation = intelligenceResult.getPortfolioRecommendation();
         if (recommendation != null) {

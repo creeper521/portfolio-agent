@@ -12,6 +12,11 @@ import {
 } from '../../../shared/diagnostics/frontendDiagnosticTypes'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { askQuestion } from '../api/answerApi'
+import {
+  askWithPresetContractRetry,
+  isPresetContractStale,
+  isPresetContractUnavailable,
+} from '../api/presetContractRetry'
 import { createRequestToken } from '../api/createRequestToken'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
@@ -49,6 +54,7 @@ interface AnswerRequestContext {
   caseSlug?: string | null
   question: string
   questionPresetId?: string
+  contractVersion?: string
   coveredTopics?: readonly ConversationTopic[]
   referenceContext?: PortfolioReferenceContext
   requestToken?: string
@@ -100,6 +106,7 @@ const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerFailure = ref<AnswerFailureView | null>(null)
 const failedRequest = ref<AnswerRequestContext | null>(null)
+const resolvedContractVersions = new Map<string, string>()
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
     ? props.initialCase
@@ -258,7 +265,7 @@ function toAnswerFailure(error: unknown): AnswerFailureView {
 }
 
 const failureSuggestions = computed<ConversationSuggestedQuestion[]>(() => {
-  if (!answerFailure.value) return []
+  if (!answerFailure.value || answerFailure.value.action === 'NONE') return []
   const project = activeProject.value
   if (!project) return []
   const local = project.suggestedQuestions.map((text) => ({
@@ -337,8 +344,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         }
       })
 
-    const mapped = mapAnswerResponse(
-      await askQuestion({
+    const response = await askWithPresetContractRetry({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
         requestToken: preparedContext.requestToken,
         signal: controller.signal,
@@ -348,14 +354,32 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         source: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
         focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
         questionPresetId: preparedContext.questionPresetId,
+        contractVersion: preparedContext.contractVersion,
         question: preparedContext.question,
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
         referenceContext: preparedContext.referenceContext,
         recommendationContext: preparedContext.recommendationContext,
-      }),
-    )
+      }, askQuestion)
     if (disposed || request !== requestVersion) return
+    if (response.questionPresetId && response.contractVersion) {
+      resolvedContractVersions.set(response.questionPresetId, response.contractVersion)
+    }
+    if (isPresetContractStale(response)) {
+      answerFailure.value = {
+        message: '这个推荐问题正在更新，请刷新后重试。',
+        action: 'NONE',
+      }
+      return
+    }
+    if (isPresetContractUnavailable(response)) {
+      answerFailure.value = {
+        message: '这个推荐问题暂时无法回答，内容正在更新。',
+        action: 'NONE',
+      }
+      return
+    }
+    const mapped = mapAnswerResponse(response)
     if (!mapped.referenceContext
       && mapped.resolution === 'ANSWERED'
       && (mapped.answerScope === 'PORTFOLIO' || mapped.answerScope === 'MIXED')
@@ -471,7 +495,10 @@ function submit(question: string) {
       projectSlug: project.slug,
       caseSlug: activeCaseSlug.value || null,
       question,
-      questionPresetId: preset?.id,
+      questionPresetId: preset?.availability === 'ACTIVE' ? preset.id : undefined,
+      contractVersion: preset?.availability === 'ACTIVE'
+        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion ?? undefined
+        : undefined,
     },
     true,
   )

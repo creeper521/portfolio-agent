@@ -10,6 +10,40 @@ public final class AnswerQuestion {
     private final List<String> aliases;
     private final String suggestion;
     private final List<AnswerClaimCategory> preferredClaimCategories;
+    private final String contractVersion;
+    private final List<String> requiredClaimIds;
+    private final List<String> supportingClaimIds;
+    private final int minimumApprovedEvidencePerRequiredClaim;
+    private final boolean activeContract;
+
+    public AnswerQuestion(
+            String id,
+            String canonicalQuestion,
+            List<String> aliases,
+            String suggestion,
+            List<AnswerClaimCategory> preferredClaimCategories,
+            String contractVersion,
+            List<String> requiredClaimIds,
+            List<String> supportingClaimIds,
+            int minimumApprovedEvidencePerRequiredClaim,
+            boolean activeContract
+    ) {
+        this.id = id;
+        this.canonicalQuestion = canonicalQuestion;
+        this.aliases = List.copyOf(aliases);
+        this.suggestion = suggestion;
+        this.preferredClaimCategories =
+                List.copyOf(preferredClaimCategories);
+        this.contractVersion = contractVersion;
+        this.requiredClaimIds = List.copyOf(requiredClaimIds);
+        this.supportingClaimIds = List.copyOf(supportingClaimIds);
+        if (minimumApprovedEvidencePerRequiredClaim < 1) {
+            throw new IllegalArgumentException(
+                    "minimumApprovedEvidencePerRequiredClaim must be at least 1");
+        }
+        this.minimumApprovedEvidencePerRequiredClaim = minimumApprovedEvidencePerRequiredClaim;
+        this.activeContract = activeContract;
+    }
 
     public AnswerQuestion(
             String id,
@@ -18,12 +52,8 @@ public final class AnswerQuestion {
             String suggestion,
             List<AnswerClaimCategory> preferredClaimCategories
     ) {
-        this.id = id;
-        this.canonicalQuestion = canonicalQuestion;
-        this.aliases = List.copyOf(aliases);
-        this.suggestion = suggestion;
-        this.preferredClaimCategories =
-                List.copyOf(preferredClaimCategories);
+        this(id, canonicalQuestion, aliases, suggestion, preferredClaimCategories,
+                "legacy-contract", List.of(), List.of(), 1, true);
     }
 
     public AnswerQuestion(
@@ -59,6 +89,14 @@ public final class AnswerQuestion {
         return preferredClaimCategories;
     }
 
+    public String getContractVersion() { return contractVersion; }
+    public List<String> getRequiredClaimIds() { return requiredClaimIds; }
+    public List<String> getSupportingClaimIds() { return supportingClaimIds; }
+    public int getMinimumApprovedEvidencePerRequiredClaim() {
+        return minimumApprovedEvidencePerRequiredClaim;
+    }
+    public boolean isActiveContract() { return activeContract; }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -73,7 +111,13 @@ public final class AnswerQuestion {
                 && Objects.equals(suggestion, that.suggestion)
                 && Objects.equals(
                         preferredClaimCategories,
-                        that.preferredClaimCategories);
+                        that.preferredClaimCategories)
+                && Objects.equals(contractVersion, that.contractVersion)
+                && Objects.equals(requiredClaimIds, that.requiredClaimIds)
+                && Objects.equals(supportingClaimIds, that.supportingClaimIds)
+                && minimumApprovedEvidencePerRequiredClaim
+                        == that.minimumApprovedEvidencePerRequiredClaim
+                && activeContract == that.activeContract;
     }
 
     @Override
@@ -83,7 +127,12 @@ public final class AnswerQuestion {
                 canonicalQuestion,
                 aliases,
                 suggestion,
-                preferredClaimCategories);
+                preferredClaimCategories,
+                contractVersion,
+                requiredClaimIds,
+                supportingClaimIds,
+                minimumApprovedEvidencePerRequiredClaim,
+                activeContract);
     }
 
     @Override

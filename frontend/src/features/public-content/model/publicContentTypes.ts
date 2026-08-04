@@ -144,6 +144,8 @@ export interface QuestionPreset {
   text: string
   audiences: AudienceRole[]
   placements: Array<'HOME' | 'AGENT' | 'PROJECT'>
+  contractVersion: string | null
+  availability: 'ACTIVE' | 'DRAFT'
 }
 
 export interface PublicPortfolio {

@@ -46,7 +46,8 @@ public final class PortfolioRetrievalRequest {
             PortfolioRetrievalStrategy strategy,
             List<AnswerClaimCategory> preferredClaimCategories) {
         if (query == null || query.isBlank()) { throw new IllegalArgumentException("query is required"); }
-        if (limit < 1 || limit > MAX_LIMIT) {
+        if (limit < 1 || (strategy != PortfolioRetrievalStrategy.PRESET_CONTRACT
+                && limit > MAX_LIMIT)) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_LIMIT);
         }
         this.query = query.trim();
@@ -141,6 +142,29 @@ public final class PortfolioRetrievalRequest {
                 true,
                 PortfolioRetrievalStrategy.REFERENCE_SCOPED,
                 preferredClaimCategories);
+    }
+
+    public static PortfolioRetrievalRequest contractScope(
+            String query,
+            String subjectId,
+            List<String> claimIds) {
+        if (subjectId == null || subjectId.isBlank()) {
+            throw new IllegalArgumentException("subjectId is required");
+        }
+        validateUniqueNonBlank(claimIds, "claimIds");
+        if (claimIds.isEmpty()) {
+            throw new IllegalArgumentException("claimIds are required");
+        }
+        return new PortfolioRetrievalRequest(
+                query,
+                PortfolioTaskMode.FACT_LOOKUP,
+                PortfolioConditions.empty(),
+                claimIds.size(),
+                List.of(subjectId.trim()),
+                claimIds,
+                true,
+                PortfolioRetrievalStrategy.PRESET_CONTRACT,
+                List.of());
     }
 
     private static void validateUniqueNonBlank(List<String> values, String name) {

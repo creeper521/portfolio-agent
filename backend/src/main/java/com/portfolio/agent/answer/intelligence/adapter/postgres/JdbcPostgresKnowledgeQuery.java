@@ -102,6 +102,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 == PortfolioRetrievalStrategy.CONTEXT_VALIDATION
                 ? passageQuery.findPassages(release.getReleaseId(), subjectIds)
                 : request.getStrategy() == PortfolioRetrievalStrategy.REFERENCE_SCOPED
+                        || request.getStrategy() == PortfolioRetrievalStrategy.PRESET_CONTRACT
                 ? passageQuery.findPassages(release.getReleaseId(), subjectIds).stream()
                         .filter(row -> request.getRequiredClaimIds().isEmpty()
                                 || request.getRequiredClaimIds().contains(row.getClaimId()))
