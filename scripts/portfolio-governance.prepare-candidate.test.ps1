@@ -69,6 +69,32 @@ function New-SyntheticInventory {
     $script:workspaces += $path
     return $path
 }
+function New-WaveOneRuntimeFixture {
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-runtime-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    foreach ($name in @('checksums.json', 'manifest.json', 'portfolio.json', 'presentation.json')) {
+        $processInfo = New-Object Diagnostics.ProcessStartInfo
+        $processInfo.FileName = 'git'
+        $processInfo.Arguments = "-C `"$root`" show c0a8823:backend/src/main/resources/public-data/bundle/$name"
+        $processInfo.UseShellExecute = $false
+        $processInfo.RedirectStandardOutput = $true
+        $processInfo.RedirectStandardError = $true
+        $process = [Diagnostics.Process]::Start($processInfo)
+        $stream = [IO.File]::Open((Join-Path $fixture $name), [IO.FileMode]::CreateNew)
+        try {
+            $process.StandardOutput.BaseStream.CopyTo($stream)
+        }
+        finally {
+            $stream.Dispose()
+        }
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "Unable to materialize the archived Wave 1 runtime fixture: $($process.StandardError.ReadToEnd())"
+        }
+    }
+    $script:workspaces += $fixture
+    return $fixture
+}
 function Invoke-Prepare([string]$WorkspaceValue, [string]$RuntimeValue = $runtime,
         [string]$PatchValue = $patch, [string]$RoutesValue = $routes,
         [string]$InventoryValue = $inventorySource,
@@ -86,6 +112,8 @@ function New-FakeRepository {
     foreach ($relative in @(
         'backend\src\main\resources\public-data\bundle',
         'governance\portfolio-governance\scripts',
+        'governance\portfolio-governance\benchmark',
+        'governance\portfolio-governance\policies',
         'governance\portfolio-governance\schemas',
         'governance\portfolio-governance\candidates',
         'scripts'
@@ -96,6 +124,10 @@ function New-FakeRepository {
         -Destination (Join-Path $fakeRoot 'governance\portfolio-governance\scripts\portfolio-governance.ps1')
     Copy-Item -LiteralPath (Join-Path $root 'governance\portfolio-governance\schemas\asset-publication-decision-ledger.schema.json') `
         -Destination (Join-Path $fakeRoot 'governance\portfolio-governance\schemas\asset-publication-decision-ledger.schema.json')
+    Get-ChildItem -LiteralPath (Join-Path $root 'governance\portfolio-governance\benchmark') -File | Copy-Item `
+        -Destination (Join-Path $fakeRoot 'governance\portfolio-governance\benchmark')
+    Get-ChildItem -LiteralPath (Join-Path $root 'governance\portfolio-governance\policies') -File | Copy-Item `
+        -Destination (Join-Path $fakeRoot 'governance\portfolio-governance\policies')
     Copy-Item -LiteralPath (Join-Path $root 'scripts\privacy-check.ps1') `
         -Destination (Join-Path $fakeRoot 'scripts\privacy-check.ps1')
     Get-ChildItem -LiteralPath $runtime -File | Copy-Item `
@@ -128,6 +160,21 @@ function Invoke-FakePrepare([string]$FakeRoot, [string]$InventoryValue, [string]
 
 try {
     $inventorySource = New-SyntheticInventory
+    $currentRuntime = $runtime
+    $currentRuntimeWorkspace = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $currentRuntimeWorkspace | Out-Null
+    $workspaces += $currentRuntimeWorkspace
+    $currentRuntimeResult = Invoke-Prepare $currentRuntimeWorkspace -RuntimeValue $currentRuntime `
+        -PatchValue $patch -RoutesValue $routes -InventoryValue $inventorySource
+    Assert-True ($currentRuntimeResult.ExitCode -ne 0 -and
+        $currentRuntimeResult.Json.blockingFindings[0].code -eq 'PREPARE_RUNTIME_BUNDLE_INVALID') `
+        'Wave 1 must reject the current schema 4.0 retrieval Bundle.'
+    $runtime = New-WaveOneRuntimeFixture
+    $waveOneRepository = New-FakeRepository
+    $governance = Join-Path $waveOneRepository 'governance\portfolio-governance\scripts\portfolio-governance.ps1'
+    $runtime = Join-Path $waveOneRepository 'backend\src\main\resources\public-data\bundle'
+    $patch = Join-Path $waveOneRepository 'governance\portfolio-governance\candidates\wave-1-public-patch.json'
+    $routes = Join-Path $waveOneRepository 'governance\portfolio-governance\candidates\wave-1-public-routes.json'
     $workspace = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $workspace | Out-Null
     $workspaces += $workspace

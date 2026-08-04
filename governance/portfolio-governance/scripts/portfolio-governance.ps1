@@ -115,6 +115,9 @@ function Get-ExpectedAssetIds() {
     }
     return $ids
 }
+function Get-IncrementalExpectedAssetIds() {
+    return @((Get-ExpectedAssetIds) + @('TD-01','TD-02','TD-03','TD-04'))
+}
 function Read-DecisionLedger([string]$LedgerPath) {
     $resolvedLedger = Resolve-SafePath $LedgerPath 'decisionLedger'
     Assert-NoReparsePoint $resolvedLedger
@@ -174,7 +177,7 @@ function Read-DecisionLedger([string]$LedgerPath) {
                 $asset.routeDecision -notin $routeDecisions -or
                 [string]::IsNullOrWhiteSpace([string]$asset.decisionReason) -or
                 [string]::IsNullOrWhiteSpace([string]$asset.privacyReview)) {
-            Write-Failure 'DECISION_LEDGER_SCHEMA_INVALID' 'Decision ledger asset values are invalid.'
+            Write-Failure 'DECISION_LEDGER_SCHEMA_INVALID' "Decision ledger asset values are invalid for $($asset.assetId)."
         }
         foreach ($referenceField in @('projectSlugs', 'caseSlugs', 'evidenceIds')) {
             if ($null -eq $asset.$referenceField -or
@@ -189,13 +192,17 @@ function Read-DecisionLedger([string]$LedgerPath) {
             }
         }
     }
-    $expectedIds = @(Get-ExpectedAssetIds)
+    $expectedIds = if (@($ledger.assets | ForEach-Object { [string]$_.assetId }) -contains 'TD-01') {
+        @(Get-IncrementalExpectedAssetIds)
+    } else {
+        @(Get-ExpectedAssetIds)
+    }
     $actualIds = @($ledger.assets | ForEach-Object { [string]$_.assetId })
-    if ($actualIds.Count -ne 68 -or
-            @($actualIds | Select-Object -Unique).Count -ne 68 -or
+    if ($actualIds.Count -ne $expectedIds.Count -or
+            @($actualIds | Select-Object -Unique).Count -ne $expectedIds.Count -or
             @($expectedIds | Where-Object { $actualIds -notcontains $_ }).Count -gt 0 -or
             @($actualIds | Where-Object { $expectedIds -notcontains $_ }).Count -gt 0) {
-        Write-Failure 'DECISION_LEDGER_ID_COVERAGE_INVALID' 'Decision ledger must cover exactly the 68 known asset IDs.'
+        Write-Failure 'DECISION_LEDGER_ID_COVERAGE_INVALID' 'Decision ledger must cover exactly the expected asset IDs for its candidate branch.'
     }
     foreach ($asset in @($ledger.assets)) {
         $publicReferenceCount = @($asset.projectSlugs).Count +
@@ -276,6 +283,10 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
             Write-Failure 'DECISION_LEDGER_ROUTE_INVALID' 'Publish candidate target version differs from candidate content.'
         }
         foreach ($slug in @($asset.projectSlugs)) {
+            if ($asset.routeDecision -eq 'PUBLISH_CANDIDATE' -and
+                    [string]$asset.finalRoute -notin @('PROJECT','ENRICH_EXISTING_PROJECT')) {
+                continue
+            }
             if (-not $projectsBySlug.ContainsKey([string]$slug)) {
                 Write-Failure 'DECISION_LEDGER_FORWARD_REFERENCE_INVALID' 'Decision ledger Project reference is missing.'
             }
@@ -332,11 +343,19 @@ function Assert-DecisionLedgerCandidate([object[]]$Assets, [object]$Portfolio) {
     $ledgerProjectSlugs = @($Assets | ForEach-Object { @($_.projectSlugs) })
     $ledgerCaseSlugs = @($Assets | ForEach-Object { @($_.caseSlugs) })
     $ledgerEvidenceIds = @($Assets | ForEach-Object { @($_.evidenceIds) })
-    $missingProjectSlugs = @($projectsBySlug.Keys |
+    $ledgerIsIncrementalToolDocker = $ledgerProjectSlugs -contains 'tool-docker-transformation'
+    $candidateProjectSlugs = if ($ledgerIsIncrementalToolDocker) { @('tool-docker-transformation') } else { @($projectsBySlug.Keys) }
+    $candidateCaseSlugs = if ($ledgerIsIncrementalToolDocker) {
+        @('tool-docker-runtime-routing','tool-docker-sequential-restart','tool-docker-virtual-time')
+    } else { @($casesBySlug.Keys) }
+    $candidateEvidenceIds = if ($ledgerIsIncrementalToolDocker) {
+        @('evidence-tool-docker-tool-implementation-tests','evidence-tool-docker-deployment-contract','evidence-tool-docker-cross-repository-review')
+    } else { @($evidenceById.Keys) }
+    $missingProjectSlugs = @($candidateProjectSlugs |
         Where-Object { $ledgerProjectSlugs -notcontains $_ })
-    $missingCaseSlugs = @($casesBySlug.Keys |
+    $missingCaseSlugs = @($candidateCaseSlugs |
         Where-Object { $ledgerCaseSlugs -notcontains $_ })
-    $missingEvidenceIds = @($evidenceById.Keys |
+    $missingEvidenceIds = @($candidateEvidenceIds |
         Where-Object { $ledgerEvidenceIds -notcontains $_ })
     if ($missingProjectSlugs.Count -gt 0 -or
             $missingCaseSlugs.Count -gt 0 -or
@@ -795,7 +814,100 @@ function Invoke-PrepareCandidateV2 {
     } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
 }
+function Invoke-PrepareCandidateToolDocker {
+    $runtimePath = Resolve-CanonicalRepositoryInput $RuntimeBundle 'backend\src\main\resources\public-data\bundle' 'runtimeBundle'
+    $patchPath = Resolve-CanonicalRepositoryInput $PatchManifest 'governance\portfolio-governance\candidates\tool-docker-public-patch.json' 'patchManifest'
+    $routePath = Resolve-CanonicalRepositoryInput $RouteManifest 'governance\portfolio-governance\candidates\tool-docker-public-routes.json' 'routeManifest'
+    $inventoryPath = Resolve-SafePath $AssetInventory 'assetInventory'
+    Assert-NoReparsePoint $inventoryPath
+    if (Test-Contained $inventoryPath $repositoryRoot) { Write-Failure 'PREPARE_INVENTORY_INSIDE_REPOSITORY' 'Asset inventory must remain outside the repository.' }
+    $runtimeNames = @(Get-ChildItem -LiteralPath $runtimePath -File | ForEach-Object Name | Sort-Object)
+    if (($runtimeNames -join ',') -ne 'checksums.json,keyword-index.json,manifest.json,portfolio.json,presentation.json,rag-documents.jsonl,vector-index.bin') {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Tool Docker requires the closed schema 4.0 retrieval Bundle.'
+    }
+    try {
+        $checksums = Get-Content (Join-Path $runtimePath 'checksums.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = Get-Content (Join-Path $runtimePath 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $portfolio = Get-Content (Join-Path $runtimePath 'portfolio.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $presentation = Get-Content (Join-Path $runtimePath 'presentation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $patch = Get-Content $patchPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $routes = Get-Content $routePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $inventoryDocument = Get-Content $inventoryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch { Write-Failure 'PREPARE_INPUT_INVALID' 'A Tool Docker candidate preparation input cannot be parsed.' }
+    foreach ($name in @('portfolio.json','presentation.json')) {
+        if ([string]$checksums.files.$name -ne (Get-Sha256 ([IO.File]::ReadAllBytes((Join-Path $runtimePath $name))))) {
+            Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Runtime Bundle checksum verification failed.'
+        }
+    }
+    if ([string]$portfolio.schemaVersion -ne '4.0' -or [string]$presentation.schemaVersion -ne '4.0' -or
+        [string]$portfolio.contentVersion -ne '2026-07-29.1' -or [string]$presentation.contentVersion -ne '2026-07-29.1') {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Tool Docker requires the reviewed 2026-07-29.1 schema 4.0 Bundle.'
+    }
+    Assert-ExactProperties $patch @('schemaVersion','baseContentVersion','targetContentVersion','projects','cases','timelineEvents','claims','evidence','links','presets','projectUpdates','caseUpdates') 'PREPARE_PATCH_SCHEMA_INVALID'
+    Assert-ExactProperties $routes @('schemaVersion','targetContentVersion','publishRoutes') 'PREPARE_ROUTE_SCHEMA_INVALID'
+    if ([string]$patch.schemaVersion -ne '3.0' -or [string]$routes.schemaVersion -ne '3.0' -or
+        [string]$patch.baseContentVersion -ne '2026-07-29.1' -or [string]$patch.targetContentVersion -ne $TargetVersion -or [string]$routes.targetContentVersion -ne $TargetVersion) {
+        Write-Failure 'PREPARE_MANIFEST_VERSION_INVALID' 'Tool Docker manifest versions are inconsistent.'
+    }
+    if (@($patch.projects).Count -ne 1 -or @($patch.cases).Count -ne 3 -or @($patch.timelineEvents).Count -ne 1 -or
+        @($patch.claims).Count -ne 9 -or @($patch.evidence).Count -ne 3 -or @($patch.links).Count -ne 9 -or @($patch.presets).Count -ne 3 -or
+        @($patch.projectUpdates).Count -ne 0 -or @($patch.caseUpdates).Count -ne 0) { Write-Failure 'PREPARE_PATCH_COVERAGE_INVALID' 'Tool Docker patch coverage is invalid.' }
+    $collectionMap = @{ projects='projects'; cases='cases'; timelineEvents='timelineEvents'; claims='claims'; evidence='evidence'; links='claimEvidenceLinks'; presets='questionPresets' }
+    $expectedBaseCounts = @{ projects=5; cases=49; claims=79; evidence=59; links=79; timelineEvents=11; presets=16; collections=3 }
+    foreach ($name in $expectedBaseCounts.Keys) {
+        $property = if ($name -eq 'links') { 'claimEvidenceLinks' } elseif ($name -eq 'presets') { 'questionPresets' } else { $name }
+        if (@($portfolio.$property).Count -ne $expectedBaseCounts[$name]) { Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' 'Tool Docker base Bundle counts have drifted.' }
+    }
+    foreach ($name in $collectionMap.Keys) {
+        Assert-UniqueIds @($patch.$name) $name
+        $baseIds = @($portfolio.($collectionMap[$name]) | ForEach-Object { [string]$_.id })
+        if (@($patch.$name | Where-Object { $baseIds -contains [string]$_.id }).Count -gt 0) { Write-Failure 'PREPARE_ID_COLLISION' 'Tool Docker patch collides with an existing public ID.' }
+    }
+    $baseProjectSlugs = @($portfolio.projects | ForEach-Object { [string]$_.slug })
+    $baseCaseSlugs = @($portfolio.cases | ForEach-Object { [string]$_.slug })
+    $newProjectSlugs = @($patch.projects | ForEach-Object { [string]$_.slug })
+    $newCaseSlugs = @($patch.cases | ForEach-Object { [string]$_.slug })
+    if (@($newProjectSlugs | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+        @($newProjectSlugs | Select-Object -Unique).Count -ne $newProjectSlugs.Count -or
+        @($newProjectSlugs | Where-Object { $baseProjectSlugs -contains $_ }).Count -gt 0 -or
+        @($newCaseSlugs | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+        @($newCaseSlugs | Select-Object -Unique).Count -ne $newCaseSlugs.Count -or
+        @($newCaseSlugs | Where-Object { $baseCaseSlugs -contains $_ }).Count -gt 0) {
+        Write-Failure 'PREPARE_SLUG_COLLISION' 'Tool Docker Project and Case slugs must be non-empty and unique against the schema-4 base.'
+    }
+    $projectFields = @('id','code','slug','title','summary','background','responsibilities','solution','keyDecisions','technologies','verification','outcome','handoff','status','contributionType','claimIds','evidenceIds','timelineEventIds','careerTrack','projectNature','displayTier','featuredCaseIds')
+    $caseFields = @('id','code','slug','type','title','summary','problem','actions','decisions','verification','outcome','limitations','achievementStatus','contributionType','projectId','claimIds','evidenceIds','timelineEventIds','questionPresetIds','collectionIds')
+    $claimFields = @('id','subjectType','subjectId','category','statement','detail','achievementStatus','contributionType','verificationBasis','verificationStatus','materiality','topics','audiencePriorities')
+    foreach ($project in @($patch.projects)) { Assert-ExactProperties $project $projectFields 'PREPARE_PATCH_SCHEMA_INVALID' }
+    foreach ($caseStudy in @($patch.cases)) { Assert-ExactProperties $caseStudy $caseFields 'PREPARE_PATCH_SCHEMA_INVALID' }
+    foreach ($claim in @($patch.claims)) { Assert-ExactProperties $claim $claimFields 'PREPARE_PATCH_SCHEMA_INVALID' }
+    foreach ($item in @($patch.evidence)) { Assert-ExactProperties $item @('id','code','title','type','periodStart','periodEnd','sourceCount','summary','publicStatus','rawContentPublic') 'PREPARE_PATCH_SCHEMA_INVALID'; if ([string]$item.publicStatus -ne 'APPROVED' -or $item.rawContentPublic -ne $false) { Write-Failure 'PREPARE_PATCH_ENUM_INVALID' 'Evidence must be approved summaries with private raw content.' } }
+    $newProjectIds = @($patch.projects | ForEach-Object { [string]$_.id }); $newCaseIds = @($patch.cases | ForEach-Object { [string]$_.id }); $newTimelineIds = @($patch.timelineEvents | ForEach-Object { [string]$_.id }); $newClaimIds = @($patch.claims | ForEach-Object { [string]$_.id }); $newEvidenceIds = @($patch.evidence | ForEach-Object { [string]$_.id }); $newPresetIds = @($patch.presets | ForEach-Object { [string]$_.id })
+    $project = $patch.projects[0]
+    if (@($project.featuredCaseIds).Count -ne 3 -or (Compare-Object @($project.featuredCaseIds) $newCaseIds).Count -ne 0 -or @($project.claimIds | Where-Object { $newClaimIds -notcontains $_ }).Count -gt 0 -or @($project.evidenceIds | Where-Object { $newEvidenceIds -notcontains $_ }).Count -gt 0 -or @($project.timelineEventIds | Where-Object { $newTimelineIds -notcontains $_ }).Count -gt 0) { Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Project references are invalid.' }
+    foreach ($caseStudy in @($patch.cases)) { if ($newProjectIds -notcontains [string]$caseStudy.projectId -or @($caseStudy.claimIds | Where-Object { $newClaimIds -notcontains $_ }).Count -gt 0 -or @($caseStudy.evidenceIds | Where-Object { $newEvidenceIds -notcontains $_ }).Count -gt 0 -or @($caseStudy.timelineEventIds | Where-Object { $newTimelineIds -notcontains $_ }).Count -gt 0 -or @($caseStudy.questionPresetIds | Where-Object { $newPresetIds -notcontains $_ }).Count -gt 0 -or @($caseStudy.collectionIds).Count -ne 0) { Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Case references are invalid.' } }
+    foreach ($link in @($patch.links)) { Assert-ExactProperties $link @('id','claimId','evidenceId','supportType','scope','reviewStatus') 'PREPARE_PATCH_SCHEMA_INVALID'; if ($newClaimIds -notcontains [string]$link.claimId -or $newEvidenceIds -notcontains [string]$link.evidenceId -or [string]$link.supportType -ne 'DIRECT' -or [string]$link.reviewStatus -ne 'APPROVED') { Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Links must be direct, reviewed and non-dangling.' } }
+    foreach ($claim in @($patch.claims)) { $subjects = if ($claim.subjectType -eq 'PROJECT') { $newProjectIds } else { $newCaseIds }; $links = @($patch.links | Where-Object claimId -eq $claim.id); if ($subjects -notcontains [string]$claim.subjectId -or $links.Count -ne 1 -or (($claim.category -in @('OUTCOME','IMPLEMENTATION')) -and ($claim.verificationBasis -ne 'EVIDENCE_SUPPORTED' -or $claim.verificationStatus -ne 'VERIFIED')) -or (($claim.category -eq 'LIMITATION') -and $claim.verificationStatus -eq 'VERIFIED')) { Write-Failure 'PREPARE_KEY_CLAIM_EVIDENCE_INVALID' 'Claim evidence or verification contract is invalid.' } }
+    foreach ($event in @($patch.timelineEvents)) { Assert-ExactProperties $event @('id','dateLabel','title','problem','action','impact','projectIds','caseIds','claimIds','evidenceIds') 'PREPARE_PATCH_SCHEMA_INVALID'; if ((Compare-Object @($event.projectIds) $newProjectIds).Count -ne 0 -or (Compare-Object @($event.caseIds) $newCaseIds).Count -ne 0 -or @($event.claimIds | Where-Object { $newClaimIds -notcontains $_ }).Count -gt 0 -or @($event.evidenceIds | Where-Object { $newEvidenceIds -notcontains $_ }).Count -gt 0) { Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Timeline references are invalid.' } }
+    foreach ($preset in @($patch.presets)) { Assert-ExactProperties $preset @('id','text','aliases','audiences','projectIds','topics','preferredClaimCategories','placements','deterministicEntry','displayOrder','caseIds') 'PREPARE_PATCH_SCHEMA_INVALID'; if (@($preset.projectIds | Where-Object { $newProjectIds -notcontains $_ }).Count -gt 0 -or @($preset.caseIds | Where-Object { $newCaseIds -notcontains $_ }).Count -gt 0) { Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'Preset references are invalid.' } }
+    $portfolio.contentVersion = $TargetVersion; $presentation.contentVersion = $TargetVersion
+    $portfolio.projects = @($portfolio.projects) + @($patch.projects); $portfolio.cases = @($portfolio.cases) + @($patch.cases); $portfolio.timelineEvents = @($portfolio.timelineEvents) + @($patch.timelineEvents); $portfolio.claims = @($portfolio.claims) + @($patch.claims); $portfolio.evidence = @($portfolio.evidence) + @($patch.evidence); $portfolio.claimEvidenceLinks = @($portfolio.claimEvidenceLinks) + @($patch.links); $portfolio.questionPresets = @($portfolio.questionPresets) + @($patch.presets)
+    if (@($portfolio.projects).Count -ne 6 -or @($portfolio.cases).Count -ne 52 -or @($portfolio.claims).Count -ne 88 -or @($portfolio.evidence).Count -ne 62 -or @($portfolio.claimEvidenceLinks).Count -ne 88 -or @($portfolio.timelineEvents).Count -ne 12 -or @($portfolio.questionPresets).Count -ne 19 -or @($portfolio.collections).Count -ne 3) { Write-Failure 'PREPARE_FINAL_COUNTS_INVALID' 'Tool Docker candidate final counts are invalid.' }
+    Assert-PublicTextPrivacy $portfolio
+    Assert-ExactProperties $inventoryDocument @('inventoryVersion','reviewState','counts','assets') 'PREPARE_INVENTORY_SCHEMA_INVALID'
+    $expectedIds = @(Get-IncrementalExpectedAssetIds); $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
+    if (@($inventoryIds).Count -ne 72 -or @($inventoryIds | Select-Object -Unique).Count -ne 72 -or (Compare-Object $inventoryIds $expectedIds).Count -ne 0) { Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' 'Tool Docker inventory must contain exactly the 72 expected assets.' }
+    $routeById = @{}; foreach ($route in @($routes.publishRoutes)) { Assert-ExactProperties $route @('assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds') 'PREPARE_ROUTE_SCHEMA_INVALID'; $routeById[[string]$route.assetId] = $route }
+    if (@($routes.publishRoutes).Count -ne 4 -or @($routes.publishRoutes | ForEach-Object { [string]$_.assetId } | Select-Object -Unique).Count -ne 4 -or $routeById.Count -ne 4 -or (Compare-Object @($routeById.Keys) @('TD-01','TD-02','TD-03','TD-04')).Count -ne 0) { Write-Failure 'PREPARE_ROUTE_PUBLISH_SET_INVALID' 'Tool Docker requires exactly four unique approved asset routes.' }
+    $ledgerAssets = @(); foreach ($sourceAsset in @($inventoryDocument.assets)) { Assert-ExactProperties $sourceAsset @('id','contentType','title','achievementStatus','contributionType','publicPriority','evidenceStatus','reviewState','summary') 'PREPARE_INVENTORY_SCHEMA_INVALID'; $id=[string]$sourceAsset.id; $route=$routeById[$id]; $published=$null -ne $route; if($published){$finalRoute=[string]$route.finalRoute;$reason='Tool Docker reviewed public summary candidate.';$projectSlugs=@($route.projectSlugs);$caseSlugs=@($route.caseSlugs);$evidenceIds=@($route.evidenceIds);$privacyReview='PUBLIC_SUMMARY_ONLY_RAW_PRIVATE';$routeDecision='PUBLISH_CANDIDATE';$targetContentVersion=$TargetVersion;$targetWave=[long]3}else{$finalRoute='HOLD';$reason='Outside the Tool Docker incremental candidate scope.';$projectSlugs=@();$caseSlugs=@();$evidenceIds=@();$privacyReview='PRIVATE_SOURCE_REMAINS_WITHHELD';$routeDecision='REVIEWED_HOLD';$targetContentVersion=$null;$targetWave=$null}; $ledgerAssets += [ordered]@{ assetId=$id; contentType=[string]$sourceAsset.contentType; achievementStatus=[string]$sourceAsset.achievementStatus; contributionType=[string]$sourceAsset.contributionType; publicPriority=[string]$sourceAsset.publicPriority; evidenceStatus=[string]$sourceAsset.evidenceStatus; originalReviewState=[string]$sourceAsset.reviewState; finalRoute=$finalRoute; decisionReason=$reason; projectSlugs=$projectSlugs; caseSlugs=$caseSlugs; evidenceIds=$evidenceIds; privacyReview=$privacyReview; routeDecision=$routeDecision; targetContentVersion=$targetContentVersion; targetWave=$targetWave } }
+    $packageRoot=Join-Path $resolvedWorkspace 'prepared-candidates'; $targetPackage=Join-Path $packageRoot $TargetVersion; if(Test-Path -LiteralPath $targetPackage){Write-Failure 'PREPARE_TARGET_EXISTS' 'Candidate package already exists and will not be overwritten.'}; New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null; $stage=Join-Path $packageRoot ('.prepare-'+[guid]::NewGuid().ToString('N'))
+    try { $candidateDirectory=Join-Path $stage 'candidate'; New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null; Write-DeterministicJson (Join-Path $candidateDirectory 'portfolio.json') $portfolio; Write-DeterministicJson (Join-Path $candidateDirectory 'presentation.json') $presentation; Write-DeterministicJson (Join-Path $stage 'asset-publication-decisions.json') ([ordered]@{schemaVersion='1.0';assets=$ledgerAssets}); $ledgerState=Read-DecisionLedger (Join-Path $stage 'asset-publication-decisions.json'); Assert-DecisionLedgerCandidate $ledgerState.Assets $portfolio; Move-Item -LiteralPath $stage -Destination $targetPackage } catch { if(Test-Path -LiteralPath $stage){Remove-Item -LiteralPath $stage -Recurse -Force}; Write-Failure 'PREPARE_STAGE_WRITE_FAILED' 'Tool Docker candidate preparation failed atomically.' }
+    [ordered]@{runId=[guid]::NewGuid().ToString('N');command=$Command;status='PASS';artifacts=@(('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion));blockingFindings=@();warnings=@();dryRun=$false;idempotent=$false}|ConvertTo-Json -Depth 8 -Compress|Write-Output; exit 0
+}
 function Invoke-PrepareCandidate {
+    if ($TargetVersion -eq '2026-08-04.1') {
+        Invoke-PrepareCandidateToolDocker
+    }
     if ($TargetVersion -eq '2026-07-27.1') {
         Invoke-PrepareCandidateV2
     }
@@ -1277,6 +1389,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '3.0|2026-07-24.1' { 'wave-1-benchmarks.v1.json'; break }
         '3.0|2026-07-27.1' { 'wave-2-benchmarks.v1.json'; break }
         '4.0|2026-07-29.1' { 'wave-2-benchmarks.v1.json'; break }
+        '4.0|2026-08-04.1' { 'tool-docker-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
