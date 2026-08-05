@@ -14,10 +14,10 @@
 1. **设计实现文档（权威规格，逐行照做）**：
    `docs/superpowers/specs/2026-07-23-agent-warm-cream-palette-and-red-cta-design.md`
 2. **原始 demo 设计稿（B 档 + 牛血红 CTA 的视觉基准）**：
-   `design-exploration/warm-cream-compare.html`
+   `design/exploration/warm-cream-compare.html`
    —— 在浏览器打开，顶部切到 `B · 暖调 1档` + `CTA · 牛血红按钮` 即为定稿效果。这是**视觉验收对照基准**。
 3. **定稿参考截图**：
-   `design-exploration/final-B-red.png`
+   `design/exploration/final-B-red.png`
    —— B 档 + 牛血红 CTA 的渲染结果，对照此图验收。
 
 > ⚠️ 设计文档 §1「现状精确映射」基于 commit `c571316`。**所有行号以此为准**。若你读到的代码行号有偏差（因为后续有人改过），以**「改前原文」字符串**为锚点定位，不要只认行号。
@@ -61,7 +61,7 @@ npm.cmd --prefix frontend run build
 必须通过，无类型错误、无构建失败。
 
 ### Step 4 · 视觉验收
-启动 dev server（`npm.cmd --prefix frontend run dev`），访问 `/agent`，按设计文档 §4.2 逐条对照 `design-exploration/final-B-red.png`：
+启动 dev server（`npm.cmd --prefix frontend run dev`），访问 `/agent`，按设计文档 §4.2 逐条对照 `design/exploration/final-B-red.png`：
 - 中栏 `#f3e8d6` 暖燕麦（比左右栏 `#f4eee4` 更暖）
 - 发送按钮牛血红 `#7a2e2a` 实底，hover 变 `#662522`
 - 新建会话按钮**仍是深墨** `#201c17`

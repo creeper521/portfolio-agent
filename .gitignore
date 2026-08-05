@@ -9,7 +9,15 @@ output/playwright/
 output/
 frontend/output/
 frontend/.playwright-cli/
-/design-exploration/
+/design/exploration/*
+!/design/exploration/CODEX-PROMPT.md
+!/design/exploration/dossier-index-tagged.html
+!/design/exploration/empty-state-layouts.html
+!/design/exploration/final-B-red.png
+!/design/exploration/shoot.mjs
+!/design/exploration/verify-after-typography.png
+!/design/exploration/verify-after.png
+!/design/exploration/warm-cream-compare.html
 /交付文件/
 
 # Local environment and secrets
