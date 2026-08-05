@@ -21,6 +21,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolution;
 import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolutionType;
@@ -33,7 +34,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -48,7 +48,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     private final PortfolioPresetResolver presetResolver;
     private final PortfolioReferenceContextValidator referenceContextValidator;
     private final PortfolioTaskResolver taskResolver;
-    private final StructuredSubjectTaskResolver structuredSubjectResolver;
+    private final StructuredSubjectResolver structuredSubjectResolver;
     private final ConversationProviderAccess providerAccess;
     private final PortfolioRetrievalPlanner retrievalPlanner;
     private final ContractEvidenceSelector contractEvidenceSelector;
@@ -81,7 +81,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioPresetResolver presetResolver,
             PortfolioReferenceContextValidator referenceContextValidator,
             PortfolioTaskResolver taskResolver,
-            StructuredSubjectTaskResolver structuredSubjectResolver,
+            StructuredSubjectResolver structuredSubjectResolver,
             ConversationProviderAccess providerAccess) {
         this.taskValidator = Objects.requireNonNull(taskValidator, "taskValidator");
         this.retriever = Objects.requireNonNull(retriever, "retriever");
@@ -136,22 +136,34 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             }
             return execute(preset.getTask(), AnswerIntentSource.PRESET, false);
         }
-        if (taskResolver.matchesDeterministicRule(turn.getQuestion())) {
-            PortfolioTask task = taskResolver.resolve(
-                    turn.getTurnId(), turn.getQuestion(), turn.getRecommendationContext());
-            return execute(withSubjectConstraint(task, turn, content),
-                    AnswerIntentSource.RULE, false);
-        }
         StructuredSubjectResolution structured = structuredSubjectResolver.resolve(
                 turn, content);
         if (structured.getType() == StructuredSubjectResolutionType.INVALID) {
             return invalidInput(content, "STRUCTURED_SUBJECT_INVALID");
         }
-        if (structured.getType() == StructuredSubjectResolutionType.MATCHED) {
-            return execute(structured.getTask(), AnswerIntentSource.RULE, false);
+        String subjectId = structured.getType() == StructuredSubjectResolutionType.MATCHED
+                ? structured.getSubjectId()
+                : null;
+
+        if (taskResolver.matchesDeterministicRule(turn.getQuestion())) {
+            PortfolioTask task = taskResolver.resolve(
+                    turn.getTurnId(), turn.getQuestion(), turn.getRecommendationContext());
+            return execute(withSubjectConstraint(task, subjectId),
+                    AnswerIntentSource.RULE, false);
         }
-        if (turn.getProjectSlug() == null && turn.getCaseSlug() == null
-                && referencesExplicitSubject(turn)) {
+
+        if (providerAccess.isAllowed()) {
+            PortfolioTaskRoutingDecision routed = taskResolver.route(
+                    turn.getTurnId(), turn.getQuestion(),
+                    turn.getRecommendationContext(), true);
+            if (routed.isNotPortfolio() || routed.getBoundaryIntent() != null) {
+                return new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null);
+            }
+            return execute(withSubjectConstraint(routed.getTask(), subjectId),
+                    AnswerIntentSource.MODEL, false);
+        }
+
+        if (subjectId != null) {
             return execute(
                     new PortfolioTask(
                             turn.getTurnId(),
@@ -161,21 +173,10 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                             PortfolioConditions.empty(),
                             turn.getRecommendationContext(),
                             null,
-                            null),
+                            subjectId),
                     AnswerIntentSource.RULE, false);
         }
-        if (!providerAccess.isAllowed()) {
-            return new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null);
-        }
-        com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision routed =
-                taskResolver.route(
-                        turn.getTurnId(), turn.getQuestion(),
-                        turn.getRecommendationContext(), true);
-        if (routed.isNotPortfolio() || routed.getBoundaryIntent() != null) {
-            return new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null);
-        }
-        return execute(withSubjectConstraint(routed.getTask(), turn, content),
-                AnswerIntentSource.MODEL, false);
+        return new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null);
     }
 
     private PortfolioDecision resolveReference(
@@ -290,31 +291,15 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
 
     private PortfolioTask withSubjectConstraint(
             PortfolioTask task,
-            PortfolioTurn turn,
-            RuntimeAnswerContent content
-    ) {
-        if (task.getMode() != PortfolioTaskMode.FACT_LOOKUP || task.getSubjectId() != null) {
-            return task;
-        }
-        AnswerKnowledge subject = null;
-        if (turn.getProjectSlug() != null) {
-            subject = content.getProjects().stream()
-                    .filter(candidate -> turn.getProjectSlug().equals(candidate.getSlug()))
-                    .findFirst()
-                    .orElse(null);
-        } else if (turn.getCaseSlug() != null) {
-            subject = content.getCases().stream()
-                    .filter(candidate -> turn.getCaseSlug().equals(candidate.getSlug()))
-                    .findFirst()
-                    .orElse(null);
-        }
-        if (subject == null) {
+            String subjectId) {
+        if (subjectId == null) {
             return task;
         }
         return new PortfolioTask(
-                task.getTurnId(), task.getQuestion(), task.getMode(), task.getConfidence(),
-                task.getConditions(), task.getRecommendationContext(), task.getRefinement(),
-                subject.getStableId(), task.getPreferredClaimCategories());
+                task.getTurnId(), task.getQuestion(), task.getMode(),
+                task.getConfidence(), task.getConditions(),
+                task.getRecommendationContext(), task.getRefinement(),
+                subjectId, task.getPreferredClaimCategories());
     }
 
     private PortfolioDecision invalidInput(
@@ -326,38 +311,6 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                 content.getContentVersion(), false, noticeCode)
                 .withDecisionMetadata(AnswerIntentSource.RULE, false);
         return new PortfolioDecision(PortfolioDisposition.INVALID_INPUT, result);
-    }
-
-    private boolean referencesExplicitSubject(PortfolioTurn turn) {
-        String question = turn.getQuestion().toLowerCase(Locale.ROOT);
-        if (turn.getProjectSlug() != null) {
-            return containsAny(
-                    question,
-                    "\u8fd9\u4e2a\u9879\u76ee",
-                    "\u8be5\u9879\u76ee",
-                    "\u672c\u9879\u76ee",
-                    "this project",
-                    "the project");
-        }
-        if (turn.getCaseSlug() != null) {
-            return containsAny(
-                    question,
-                    "\u8fd9\u4e2a\u6848\u4f8b",
-                    "\u8be5\u6848\u4f8b",
-                    "\u672c\u6848\u4f8b",
-                    "this case",
-                    "the case");
-        }
-        return false;
-    }
-
-    private boolean containsAny(String value, String... candidates) {
-        for (String candidate : candidates) {
-            if (value.contains(candidate)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     PortfolioIntelligenceResult resolve(PortfolioTask task) {

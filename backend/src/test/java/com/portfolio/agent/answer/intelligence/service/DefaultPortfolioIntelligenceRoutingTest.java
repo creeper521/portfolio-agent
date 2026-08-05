@@ -3,19 +3,25 @@ package com.portfolio.agent.answer.intelligence.service;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
+import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.exception.PortfolioRetrievalFailedException;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioFollowUpAction;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioReferenceContext;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
+import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedEvidenceReference;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievedPassage;
@@ -32,8 +38,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class DefaultPortfolioIntelligenceRoutingTest {
 
@@ -178,6 +189,163 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 .hasMessage("作品集检索暂不可用，请稍后重试");
     }
 
+    @Test
+    void knownProjectSlugScopesModelClassifiedQuestion() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        when(classifier.classifyPortfolioTask(
+                eq("turn-1"), anyString(), isNull()))
+                .thenReturn(ConversationModelResult.success(
+                        new PortfolioTaskClassification(
+                                PortfolioTaskMode.FACT_LOOKUP,
+                                PortfolioConditions.empty(),
+                                null,
+                                0.95d)));
+        AtomicReference<PortfolioRetrievalRequest> request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, true, retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "Please explain it in detail")
+                        .projectSlug("project-a")
+                        .build());
+
+        assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.ANSWERED);
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getIntentSource())
+                        .isEqualTo(AnswerIntentSource.MODEL));
+        assertThat(request.get().getStrategy())
+                .isEqualTo(PortfolioRetrievalStrategy.SUBJECT_SCOPED_RELEVANCE);
+        assertThat(request.get().getRequiredPortfolioIds())
+                .containsExactly("project-a");
+        verify(classifier).classifyPortfolioTask(
+                eq("turn-1"), anyString(), isNull());
+    }
+
+    @Test
+    void knownCaseSlugScopesModelClassifiedQuestion() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        when(classifier.classifyPortfolioTask(
+                eq("turn-1"), anyString(), isNull()))
+                .thenReturn(ConversationModelResult.success(
+                        new PortfolioTaskClassification(
+                                PortfolioTaskMode.FACT_LOOKUP,
+                                PortfolioConditions.empty(),
+                                null,
+                                0.95d)));
+        AtomicReference<PortfolioRetrievalRequest> request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, true, retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "Please explain it in detail")
+                        .caseSlug("case-a")
+                        .build());
+
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getIntentSource())
+                        .isEqualTo(AnswerIntentSource.MODEL));
+        assertThat(request.get().getRequiredPortfolioIds())
+                .containsExactly("case-a");
+        verify(classifier).classifyPortfolioTask(
+                eq("turn-1"), anyString(), isNull());
+    }
+
+    @Test
+    void knownSubjectFallsBackToScopedFactLookupWhenProviderIsDisabled() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        AtomicReference<PortfolioRetrievalRequest> request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, false, retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-2", "Please explain it in detail")
+                        .projectSlug("project-a")
+                        .build());
+
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getIntentSource())
+                        .isEqualTo(AnswerIntentSource.RULE));
+        assertThat(request.get().getStrategy())
+                .isEqualTo(PortfolioRetrievalStrategy.SUBJECT_SCOPED_RELEVANCE);
+        assertThat(request.get().getRequiredPortfolioIds())
+                .containsExactly("project-a");
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void knownSlugWithDeterministicRuleDoesNotCallClassifier() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        AtomicReference<PortfolioRetrievalRequest> request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, true, retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "怎么实现这个项目？")
+                        .projectSlug("project-a")
+                        .build());
+
+        assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.ANSWERED);
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getIntentSource())
+                        .isEqualTo(AnswerIntentSource.RULE));
+        assertThat(request.get().getRequiredPortfolioIds())
+                .containsExactly("project-a");
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void unknownSubjectFailsBeforeDeterministicRuleClassifierAndRetriever() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        PortfolioRetriever retriever = mock(PortfolioRetriever.class);
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, true, retriever);
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-3", "怎么实现这个项目？")
+                        .projectSlug("missing-project")
+                        .build());
+
+        assertThat(decision.getDisposition())
+                .isEqualTo(PortfolioDisposition.INVALID_INPUT);
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getNoticeCode())
+                        .isEqualTo("STRUCTURED_SUBJECT_INVALID"));
+        verifyNoInteractions(classifier, retriever);
+    }
+
+    @Test
+    void knownSlugModelJudgesNonPortfolioDoesNotRetrieve() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        when(classifier.classifyPortfolioTask(
+                eq("turn-1"), anyString(), isNull()))
+                .thenReturn(ConversationModelResult.success(
+                        PortfolioTaskClassification.notPortfolio(0.95d)));
+        PortfolioRetriever retriever = mock(PortfolioRetriever.class);
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, true, retriever);
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "What is dependency injection?")
+                        .projectSlug("project-a")
+                        .build());
+
+        assertThat(decision.getDisposition())
+                .isEqualTo(PortfolioDisposition.NOT_PORTFOLIO);
+        verifyNoInteractions(retriever);
+    }
+
     private DefaultPortfolioIntelligence intelligence(
             PortfolioTaskClassifierPort classifier,
             boolean providerAllowed
@@ -202,7 +370,7 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 new PortfolioPresetResolver(new QuestionNormalizer()),
                 new PortfolioReferenceContextValidator(),
                 taskResolver,
-                new StructuredSubjectTaskResolver(),
+                new StructuredSubjectResolver(),
                 new ConversationProviderAccess(providerAllowed));
     }
 
@@ -217,8 +385,29 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 List.of("Responsibility"), "Solution", List.of("Decision"),
                 List.of("Verification"), "Outcome", "Handoff", "ACTIVE",
                 List.of(preset), List.of(), List.of());
+        AnswerKnowledge caseSubject = new AnswerKnowledge(
+                AnswerSubjectType.CASE,
+                "case-a",
+                "Case A",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Verification"),
+                "Outcome",
+                "Handoff",
+                "ACTIVE",
+                List.of(),
+                List.of(),
+                List.of());
         return new RuntimeAnswerContent(
-                "public-1", "sha256:runtime", List.of(project));
+                "public-1",
+                "sha256:runtime",
+                List.of(project),
+                List.of(caseSubject),
+                null,
+                List.of());
     }
 
     private PortfolioRetrievalResult retrieval() {
