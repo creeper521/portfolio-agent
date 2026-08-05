@@ -11,8 +11,6 @@ $fakeNpm = Join-Path $fixtureRoot 'fake npm\npm with spaces.cmd'
 $successfulFakeNpm = Join-Path $fixtureRoot 'fake npm\npm success.cmd'
 $fakeJava = Join-Path $fixtureRoot 'fake java\java with spaces.cmd'
 $javaArgumentCapture = Join-Path $fixtureRoot 'java-arguments.txt'
-$cleanupProbe = Join-Path $fixtureRoot 'cleanup-probe.json'
-$cleanupRunner = Join-Path $fixtureRoot 'run-jar-e2e-cleanup-failure.ps1'
 $stdoutValidationRunner = Join-Path $fixtureRoot 'run-jar-e2e-stdout-fixture.ps1'
 $latePlaintextRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-plaintext.ps1'
 $lateLeakRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-leak.ps1'
@@ -81,6 +79,14 @@ try {
     $releaseSource = Get-Content -LiteralPath $releaseVerifier -Raw
     if ($releaseSource -notmatch 'assert-live-provider-response\.test\.ps1') {
         throw 'Release verifier does not run the live Provider assertion tests.'
+    }
+    $runnerSource = Get-Content -LiteralPath $runner -Raw
+    if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
+        throw 'Packaged runner must call the shared Live Provider probe.'
+    }
+    if ($runnerSource -match
+            '\$caseAgentResponse\s*\|\s*ConvertTo-Json[\s\S]+assert-live-provider-response') {
+        throw 'Case smoke response must not be reused as Live Provider evidence.'
     }
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $spacedJar) -Force | Out-Null
@@ -216,73 +222,6 @@ try {
         throw "Runner left port $port occupied."
     }
 
-    [System.IO.File]::WriteAllText(
-        $cleanupProbe,
-        '{}',
-        [System.Text.UTF8Encoding]::new($false)
-    )
-    $cleanupRunnerSource = Get-Content -LiteralPath $runner -Raw
-    $cleanupPathInitialization = '$liveProviderResponsePath = $null'
-    $cleanupCommand = 'Remove-Item -LiteralPath $liveProviderResponsePath -Force'
-    if (([regex]::Matches(
-        $cleanupRunnerSource,
-        [regex]::Escape($cleanupPathInitialization)
-    )).Count -ne 1) {
-        throw 'Cleanup test copy requires exactly one response-path initialization.'
-    }
-    if (([regex]::Matches(
-        $cleanupRunnerSource,
-        [regex]::Escape($cleanupCommand)
-    )).Count -ne 1) {
-        throw 'Cleanup test copy requires exactly one hard-coded cleanup command.'
-    }
-    $escapedCleanupProbe = $cleanupProbe.Replace("'", "''")
-    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
-        $cleanupPathInitialization,
-        "`$liveProviderResponsePath = '$escapedCleanupProbe'"
-    )
-    $cleanupRunnerSource = $cleanupRunnerSource.Replace(
-        $cleanupCommand,
-        "throw 'simulated live response cleanup failure'"
-    )
-    [System.IO.File]::WriteAllText(
-        $cleanupRunner,
-        $cleanupRunnerSource,
-        [System.Text.UTF8Encoding]::new($false)
-    )
-
-    $previousCleanupErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $cleanupOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File $cleanupRunner -JarPath $spacedJar -NpmExecutable $fakeNpm `
-            -Port ($port + 2) 2>&1 | Out-String)
-        $cleanupExitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $previousCleanupErrorActionPreference
-    }
-    if ($cleanupExitCode -eq 0) {
-        throw "Expected injected cleanup failure to remain nonzero. Output: $cleanupOutput"
-    }
-    if ($cleanupOutput -notmatch 'simulated live response cleanup failure') {
-        throw "Expected the injected cleanup failure to execute. Output: $cleanupOutput"
-    }
-    if ($cleanupOutput -notmatch 'Playwright environment restored\.') {
-        throw "Cleanup failure skipped Playwright environment restoration. Output: $cleanupOutput"
-    }
-    if ($cleanupOutput -notmatch 'Packaged application process (?<pid>\d+) is stopped\.') {
-        throw "Cleanup failure skipped packaged process termination. Output: $cleanupOutput"
-    }
-    $cleanupProcessId = [int]$Matches.pid
-    if (Get-Process -Id $cleanupProcessId -ErrorAction SilentlyContinue) {
-        throw "Cleanup failure left Java process $cleanupProcessId alive."
-    }
-    $cleanupListeners = @(Get-NetTCPConnection -LocalPort ($port + 2) -State Listen `
-        -ErrorAction SilentlyContinue)
-    if ($cleanupListeners.Count -ne 0) {
-        throw "Cleanup failure left port $($port + 2) occupied."
-    }
     if ($output -notmatch 'Provider calls disabled for deterministic smoke\.') {
         throw "Expected normal mode to override inherited Provider enablement. Output: $output"
     }

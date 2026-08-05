@@ -7,7 +7,9 @@ param(
     [string]$ModelDirectory = '',
     [switch]$RequireLiveProvider,
     [ValidateRange(1, 65535)]
-    [int]$Port = 4173
+    [int]$Port = 4173,
+    [ValidateRange(1, 300)]
+    [int]$ReadinessTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,7 +146,6 @@ if (-not $RequireLiveProvider) {
 }
 
 $playwrightExitCode = 0
-$liveProviderResponsePath = $null
 try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -333,21 +334,16 @@ try {
     Write-Output 'Packaged Case Agent smoke passed.'
 
     if ($RequireLiveProvider) {
-        $liveProviderResponsePath = Join-Path `
-            ([System.IO.Path]::GetTempPath()) `
-            ('portfolio-live-provider-response-' + [guid]::NewGuid() + '.json')
-        [System.IO.File]::WriteAllText(
-            $liveProviderResponsePath,
-            ($caseAgentResponse | ConvertTo-Json -Depth 12 -Compress),
-            [System.Text.UTF8Encoding]::new($false)
-        )
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File (Join-Path $root 'scripts\assert-live-provider-response.ps1') `
-            -ResponsePath $liveProviderResponsePath `
-            -ExpectedContentVersion ([string]$publicContent.contentVersion)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Live Provider response verification failed with exit code $LASTEXITCODE."
+        $probeOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.ps1') `
+            -BackendBaseUrl $baseUrl `
+            -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+            -TimeoutSeconds $ReadinessTimeoutSeconds `
+            -FailOnDegraded 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $probeOutput -ne 'LIVE_PROVIDER_CONNECTED') {
+            throw "Live Provider verification failed: $probeOutput"
         }
+        Write-Output 'Packaged Live Provider verification passed.'
     }
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
@@ -362,25 +358,17 @@ try {
 }
 finally {
     try {
-        try {
-            if ($null -ne $liveProviderResponsePath -and
-                    (Test-Path -LiteralPath $liveProviderResponsePath -PathType Leaf)) {
-                Remove-Item -LiteralPath $liveProviderResponsePath -Force
-            }
-        }
-        finally {
-            Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
-            Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-            Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
-            Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
-                $environment.PLAYWRIGHT_REAL_RETRIEVAL
-            Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
-            Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-            Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
-            Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
-                $environment.PLAYWRIGHT_REAL_RETRIEVAL
-            Write-Output 'Playwright environment restored.'
-        }
+        Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
+            $environment.PLAYWRIGHT_REAL_RETRIEVAL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
+        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
+            $environment.PLAYWRIGHT_REAL_RETRIEVAL
+        Write-Output 'Playwright environment restored.'
     }
     finally {
         $process.Refresh()
