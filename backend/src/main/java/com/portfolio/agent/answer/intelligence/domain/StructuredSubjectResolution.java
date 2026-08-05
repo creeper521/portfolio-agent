@@ -5,14 +5,14 @@ import java.util.Objects;
 public final class StructuredSubjectResolution {
 
     private final StructuredSubjectResolutionType type;
-    private final PortfolioTask task;
+    private final String subjectId;
 
     private StructuredSubjectResolution(
             StructuredSubjectResolutionType type,
-            PortfolioTask task
-    ) {
+            String subjectId) {
         this.type = Objects.requireNonNull(type, "type");
-        this.task = task;
+        this.subjectId = subjectId == null || subjectId.isBlank()
+                ? null : subjectId.trim();
     }
 
     public static StructuredSubjectResolution none() {
@@ -20,10 +20,12 @@ public final class StructuredSubjectResolution {
                 StructuredSubjectResolutionType.NONE, null);
     }
 
-    public static StructuredSubjectResolution matched(PortfolioTask task) {
+    public static StructuredSubjectResolution matched(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) {
+            throw new IllegalArgumentException("subjectId is required");
+        }
         return new StructuredSubjectResolution(
-                StructuredSubjectResolutionType.MATCHED,
-                Objects.requireNonNull(task, "task"));
+                StructuredSubjectResolutionType.MATCHED, subjectId);
     }
 
     public static StructuredSubjectResolution invalid() {
@@ -35,7 +37,7 @@ public final class StructuredSubjectResolution {
         return type;
     }
 
-    public PortfolioTask getTask() {
-        return task;
+    public String getSubjectId() {
+        return subjectId;
     }
 }

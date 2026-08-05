@@ -3,72 +3,71 @@ package com.portfolio.agent.answer.intelligence.service;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolution;
 import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolutionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class StructuredSubjectTaskResolverTest {
+class StructuredSubjectResolverTest {
 
-    private final StructuredSubjectTaskResolver resolver =
-            new StructuredSubjectTaskResolver();
+    private final StructuredSubjectResolver resolver = new StructuredSubjectResolver();
 
     @Test
-    void returnsNoneWithoutAnyStructuredSlug() {
+    void knownProjectReturnsStableSubjectIdWithoutCreatingTask() {
         StructuredSubjectResolution resolution = resolver.resolve(
-                PortfolioTurn.builder("turn-1", "任意问题").build(),
+                PortfolioTurn.builder("turn-1", "question")
+                        .projectSlug("project-a")
+                        .build(),
+                content());
+
+        assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.MATCHED);
+        assertThat(resolution.getSubjectId()).isEqualTo("project-a-id");
+    }
+
+    @Test
+    void knownCaseReturnsStableSubjectIdWithoutCreatingTask() {
+        StructuredSubjectResolution resolution = resolver.resolve(
+                PortfolioTurn.builder("turn-1", "question")
+                        .caseSlug("case-a")
+                        .build(),
+                content());
+
+        assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.MATCHED);
+        assertThat(resolution.getSubjectId()).isEqualTo("case-a-id");
+    }
+
+    @Test
+    void noSlugReturnsNone() {
+        StructuredSubjectResolution resolution = resolver.resolve(
+                PortfolioTurn.builder("turn-none", "question").build(),
                 content());
 
         assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.NONE);
+        assertThat(resolution.getSubjectId()).isNull();
     }
 
     @Test
-    void matchesKnownProjectSlug() {
+    void unknownSlugReturnsInvalid() {
         StructuredSubjectResolution resolution = resolver.resolve(
-                PortfolioTurn.builder("turn-1", "测试角色重置工具的背景和目标是什么？")
-                        .projectSlug("role-reset-tool")
-                        .build(),
-                content());
-
-        assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.MATCHED);
-        assertThat(resolution.getTask().getMode()).isEqualTo(PortfolioTaskMode.FACT_LOOKUP);
-        assertThat(resolution.getTask().getSubjectId()).isEqualTo("role-reset-tool");
-    }
-
-    @Test
-    void matchesKnownCaseSlug() {
-        StructuredSubjectResolution resolution = resolver.resolve(
-                PortfolioTurn.builder("turn-1", "这个案例如何验证？")
-                        .caseSlug("multilingual-image-preservation")
-                        .build(),
-                content());
-
-        assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.MATCHED);
-        assertThat(resolution.getTask().getSubjectId())
-                .isEqualTo("multilingual-image-preservation");
-    }
-
-    @Test
-    void rejectsUnknownSlug() {
-        StructuredSubjectResolution resolution = resolver.resolve(
-                PortfolioTurn.builder("turn-1", "这个项目如何实现？")
-                        .projectSlug("missing-project")
+                PortfolioTurn.builder("turn-missing", "question")
+                        .projectSlug("missing")
                         .build(),
                 content());
 
         assertThat(resolution.getType()).isEqualTo(StructuredSubjectResolutionType.INVALID);
+        assertThat(resolution.getSubjectId()).isNull();
     }
 
     @Test
-    void rejectsDuplicateSlugs() {
+    void duplicateCaseSlugsReturnInvalid() {
         StructuredSubjectResolution resolution = resolver.resolve(
-                PortfolioTurn.builder("turn-1", "这个项目如何实现？")
-                        .projectSlug("duplicate-slug")
+                PortfolioTurn.builder("turn-duplicate", "question")
+                        .caseSlug("duplicate-slug")
                         .build(),
                 content());
 
@@ -79,9 +78,9 @@ class StructuredSubjectTaskResolverTest {
         return new RuntimeAnswerContent(
                 "public-1",
                 "sha256:runtime",
-                List.of(projectKnowledge("role-reset-tool")),
+                List.of(projectKnowledge("project-a")),
                 List.of(
-                        caseKnowledge("multilingual-image-preservation"),
+                        caseKnowledge("case-a"),
                         caseKnowledge("duplicate-slug"),
                         caseKnowledge("duplicate-slug")),
                 null,
@@ -91,8 +90,9 @@ class StructuredSubjectTaskResolverTest {
     private AnswerKnowledge projectKnowledge(String slug) {
         return new AnswerKnowledge(
                 AnswerSubjectType.PROJECT,
+                slug + "-id",
                 slug,
-                slug,
+                "Title",
                 "Summary",
                 "Background",
                 List.of("Responsibility"),
@@ -102,6 +102,8 @@ class StructuredSubjectTaskResolverTest {
                 "Outcome",
                 "Handoff",
                 "ACTIVE",
+                null,
+                Set.of(),
                 List.of(),
                 List.of(),
                 List.of());
@@ -110,8 +112,9 @@ class StructuredSubjectTaskResolverTest {
     private AnswerKnowledge caseKnowledge(String slug) {
         return new AnswerKnowledge(
                 AnswerSubjectType.CASE,
+                slug + "-id",
                 slug,
-                slug,
+                "Title",
                 "Summary",
                 "Background",
                 List.of("Responsibility"),
@@ -121,6 +124,8 @@ class StructuredSubjectTaskResolverTest {
                 "Outcome",
                 "Handoff",
                 "ACTIVE",
+                null,
+                Set.of(),
                 List.of(),
                 List.of(),
                 List.of());
