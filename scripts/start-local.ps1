@@ -383,90 +383,30 @@ function Wait-ForHttp(
     Stop-WithCode 'LOCAL_READINESS_TIMEOUT'
 }
 
-function Get-DegradedCategory([object]$Response) {
-    $noticeCode = [string]$Response.noticeCode
-    $category = switch ($noticeCode) {
-        'PROVIDER_AUTH_FAILED' { 'PROVIDER_AUTH_FAILED' }
-        'PROVIDER_TIMEOUT' { 'PROVIDER_TIMEOUT' }
-        'PROVIDER_CONNECTION_FAILED' { 'PROVIDER_UNAVAILABLE' }
-        'PROVIDER_EMPTY_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
-        'PROVIDER_INVALID_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
-        'PROVIDER_DRAFT_REJECTED' { 'PROVIDER_DRAFT_REJECTED' }
-        'PROVIDER_DISABLED' { 'PROVIDER_POLICY_INCOMPATIBLE' }
-        default { 'PROVIDER_RESPONSE_INVALID' }
-    }
-    return $category
-}
-
 function Invoke-ProviderProbe(
     [string]$BackendBaseUrl,
     [string]$ContentVersion,
     [hashtable]$Settings
 ) {
-    $probePath = Join-Path ([System.IO.Path]::GetTempPath()) `
-        ('portfolio-provider-probe-' + [guid]::NewGuid().ToString('N') + '.json')
-    $probeBody = @{
-        turnId = [guid]::NewGuid()
-        requestToken = [guid]::NewGuid()
-        question = 'Please introduce the SQL audit and troubleshooting project in detail.'
-        messages = @()
-        context = @{
-            projectSlug = 'sql-audit'
-            caseSlug = $null
-            audienceRole = 'INTERVIEWER'
-            source = 'AGENT_PAGE'
-        }
-    } | ConvertTo-Json -Depth 6 -Compress
-
+    $environmentSnapshot = Set-TemporaryProcessEnvironment $Settings
     try {
-        try {
-            $response = Invoke-WebRequest -UseBasicParsing `
-                -Uri "$BackendBaseUrl/api/v2/answers" `
-                -Method Post `
-                -ContentType 'application/json; charset=utf-8' `
-                -Body ([System.Text.Encoding]::UTF8.GetBytes($probeBody)) `
-                -TimeoutSec $ReadinessTimeoutSeconds
-            $responseObject = $response.Content | ConvertFrom-Json
-        }
-        catch {
-            return 'PROVIDER_UNAVAILABLE'
-        }
-        [System.IO.File]::WriteAllText(
-            $probePath,
-            [string]$response.Content,
-            [System.Text.UTF8Encoding]::new($false)
-        )
-
-        $environmentSnapshot = Set-TemporaryProcessEnvironment $Settings
-        try {
-            $previousErrorActionPreference = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            try {
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-                    -File (Join-Path $PSScriptRoot `
-                        'assert-live-provider-response.ps1') `
-                    -ResponsePath $probePath `
-                    -ExpectedContentVersion $ContentVersion 2>&1 |
-                    Out-Null
-                $assertionExitCode = $LASTEXITCODE
-            }
-            finally {
-                $ErrorActionPreference = $previousErrorActionPreference
-            }
-        }
-        finally {
-            Restore-ProcessEnvironment $environmentSnapshot
-        }
-        if ($assertionExitCode -eq 0) {
-            return 'CONNECTED'
-        }
-        return Get-DegradedCategory $responseObject
+        $probeOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $PSScriptRoot `
+                'provider-probe\invoke-live-provider-probe.ps1') `
+            -BackendBaseUrl $BackendBaseUrl `
+            -ExpectedContentVersion $ContentVersion `
+            -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 | Out-String).Trim()
     }
     finally {
-        if (Test-Path -LiteralPath $probePath) {
-            Remove-Item -LiteralPath $probePath -Force
-        }
+        Restore-ProcessEnvironment $environmentSnapshot
     }
+    if ($probeOutput -eq 'LIVE_PROVIDER_CONNECTED') {
+        return 'CONNECTED'
+    }
+    if ($probeOutput -match '^LIVE_PROVIDER_DEGRADED:(?<category>[A-Z0-9_]+)$') {
+        return $Matches.category
+    }
+    return 'PROVIDER_RESPONSE_INVALID'
 }
 
 try {

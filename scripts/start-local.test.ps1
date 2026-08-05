@@ -231,6 +231,8 @@ try {
             "MODEL fixture must pass. Output: $($modelResult.Output)"
         Assert-True ($modelResult.Output -match 'AI_CONNECTED provider=DEEPSEEK_V4_FLASH') `
             'MODEL fixture did not report AI_CONNECTED.'
+        Assert-True ($modelResult.Output -notmatch 'PROBE_ROUTE_BYPASSED') `
+            'start-local sent a product-scoped request instead of the Provider canary.'
         Assert-True ($modelResult.Output -notmatch [regex]::Escape($keySentinel)) `
             'MODEL fixture leaked the key.'
         Assert-True ($modelResult.Output -match 'LOG_DIRECTORY') `
