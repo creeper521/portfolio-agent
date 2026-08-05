@@ -7,6 +7,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$script:allowedFailureCodes = @(
+    'LIVE_PROVIDER_CONFIG_INVALID',
+    'LIVE_PROVIDER_RESPONSE_UNREADABLE',
+    'LIVE_PROVIDER_CONTENT_VERSION_MISMATCH',
+    'LIVE_PROVIDER_REPORTED_DEGRADED',
+    'LIVE_PROVIDER_ROUTE_BYPASSED',
+    'LIVE_PROVIDER_CONSTRUCTION_INVALID',
+    'LIVE_PROVIDER_EVIDENCE_UNVERIFIED',
+    'LIVE_PROVIDER_RESOLUTION_INVALID',
+    'LIVE_PROVIDER_BLOCKS_MISSING'
+)
+
+function Stop-Assertion([string]$Code) {
+    if ($Code -notin $script:allowedFailureCodes) {
+        throw 'LIVE_PROVIDER_RESPONSE_UNREADABLE'
+    }
+    throw $Code
+}
+
 function Test-ApprovedFlag([string]$Value) {
     return [string]::Equals($Value, 'true', [System.StringComparison]::OrdinalIgnoreCase)
 }
@@ -30,7 +49,7 @@ try {
         'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
     )) {
         if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $approvalName))) {
-            throw 'approval'
+            Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID'
         }
     }
 
@@ -42,14 +61,14 @@ try {
         $selectedKey = Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_GLM_API_KEY'
     }
     else {
-        throw 'provider'
+        Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID'
     }
     if ([string]::IsNullOrWhiteSpace($selectedKey)) {
-        throw 'credential'
+        Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID'
     }
 
     if (-not (Test-Path -LiteralPath $ResponsePath -PathType Leaf)) {
-        throw 'response path'
+        Stop-Assertion 'LIVE_PROVIDER_RESPONSE_UNREADABLE'
     }
     try {
         $response = [System.IO.File]::ReadAllText(
@@ -58,34 +77,38 @@ try {
         ) | ConvertFrom-Json
     }
     catch {
-        throw 'response JSON'
+        Stop-Assertion 'LIVE_PROVIDER_RESPONSE_UNREADABLE'
     }
 
     if ($response.contentVersion -cne $ExpectedContentVersion) {
-        throw 'content version'
+        Stop-Assertion 'LIVE_PROVIDER_CONTENT_VERSION_MISMATCH'
     }
     if ($response.degraded -isnot [bool] -or $response.degraded -ne $false) {
-        throw 'degraded'
+        Stop-Assertion 'LIVE_PROVIDER_REPORTED_DEGRADED'
     }
     if ($response.intentSource -cne 'MODEL') {
-        throw 'intent source'
+        Stop-Assertion 'LIVE_PROVIDER_ROUTE_BYPASSED'
     }
     if ($response.constructionMode -cne 'EVIDENCE_COMPOSITION') {
-        throw 'construction mode'
+        Stop-Assertion 'LIVE_PROVIDER_CONSTRUCTION_INVALID'
     }
     if ($response.evidenceState -cne 'VERIFIED') {
-        throw 'evidence state'
+        Stop-Assertion 'LIVE_PROVIDER_EVIDENCE_UNVERIFIED'
     }
     if ($response.resolution -cne 'ANSWERED') {
-        throw 'resolution'
+        Stop-Assertion 'LIVE_PROVIDER_RESOLUTION_INVALID'
     }
     if ($response.blocks -isnot [System.Array] -or $response.blocks.Count -lt 1) {
-        throw 'blocks'
+        Stop-Assertion 'LIVE_PROVIDER_BLOCKS_MISSING'
     }
 
     Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; intentSource=MODEL; constructionMode=EVIDENCE_COMPOSITION; evidenceState=VERIFIED; resolution=ANSWERED; blocks=$($response.blocks.Count)."
 }
 catch {
-    Write-Error 'Live Provider response assertion failed.'
+    $code = [string]$_.Exception.Message
+    if ($code -notin $script:allowedFailureCodes) {
+        $code = 'LIVE_PROVIDER_RESPONSE_UNREADABLE'
+    }
+    [Console]::Error.WriteLine($code)
     exit 1
 }

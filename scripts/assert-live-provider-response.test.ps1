@@ -190,6 +190,7 @@ try {
             Write-ResponseFixture
             $result = Invoke-Checker
             Assert-True ($result.ExitCode -ne 0) "$approvalName=$invalidValue must fail."
+            Assert-True ($result.Output -match 'LIVE_PROVIDER_CONFIG_INVALID') "$approvalName=$invalidValue must report LIVE_PROVIDER_CONFIG_INVALID. Output: $($result.Output)"
             Assert-NoSensitiveOutput $result "$approvalName=$invalidValue"
         }
     }
@@ -205,6 +206,8 @@ try {
             $result = Invoke-Checker
             Assert-True ($result.ExitCode -ne 0) `
                 "Missing selected Provider key for $($providerKey.Provider) must fail."
+            Assert-True ($result.Output -match 'LIVE_PROVIDER_CONFIG_INVALID') `
+                "Missing selected Provider key for $($providerKey.Provider) must report LIVE_PROVIDER_CONFIG_INVALID. Output: $($result.Output)"
             Assert-NoSensitiveOutput $result "missing key for $($providerKey.Provider)"
         }
     }
@@ -213,18 +216,21 @@ try {
     Write-ResponseFixture
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'Unsupported Provider must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_CONFIG_INVALID') "Unsupported Provider must report LIVE_PROVIDER_CONFIG_INVALID. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'unsupported Provider'
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
     Write-ResponseFixture -ContentVersion 'wrong-version'
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'Wrong content version must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_CONTENT_VERSION_MISMATCH') "Wrong content version must report LIVE_PROVIDER_CONTENT_VERSION_MISMATCH. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'wrong content version'
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
     Write-ResponseFixture -Degraded $true
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'degraded=true must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_REPORTED_DEGRADED') "degraded=true must report LIVE_PROVIDER_REPORTED_DEGRADED. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'degraded response'
 
     foreach ($mode in @($null, '', 'TEMPLATE', 'GENERAL_MODEL')) {
@@ -232,6 +238,7 @@ try {
         Write-ResponseFixture -ConstructionMode $mode
         $result = Invoke-Checker
         Assert-True ($result.ExitCode -ne 0) "constructionMode=$mode must fail."
+        Assert-True ($result.Output -match 'LIVE_PROVIDER_CONSTRUCTION_INVALID') "constructionMode=$mode must report LIVE_PROVIDER_CONSTRUCTION_INVALID. Output: $($result.Output)"
         Assert-NoSensitiveOutput $result "constructionMode=$mode"
     }
 
@@ -240,6 +247,7 @@ try {
         Write-ResponseFixture -IntentSource $source
         $result = Invoke-Checker
         Assert-True ($result.ExitCode -ne 0) "intentSource=$source must fail."
+        Assert-True ($result.Output -match 'LIVE_PROVIDER_ROUTE_BYPASSED') "intentSource=$source must report LIVE_PROVIDER_ROUTE_BYPASSED. Output: $($result.Output)"
         Assert-NoSensitiveOutput $result "intentSource=$source"
     }
 
@@ -248,6 +256,7 @@ try {
         Write-ResponseFixture -EvidenceState $state
         $result = Invoke-Checker
         Assert-True ($result.ExitCode -ne 0) "evidenceState=$state must fail."
+        Assert-True ($result.Output -match 'LIVE_PROVIDER_EVIDENCE_UNVERIFIED') "evidenceState=$state must report LIVE_PROVIDER_EVIDENCE_UNVERIFIED. Output: $($result.Output)"
         Assert-NoSensitiveOutput $result "evidenceState=$state"
     }
 
@@ -255,13 +264,33 @@ try {
     Write-ResponseFixture -Resolution 'NEEDS_CLARIFICATION'
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'Non-ANSWERED resolution must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_RESOLUTION_INVALID') "Non-ANSWERED resolution must report LIVE_PROVIDER_RESOLUTION_INVALID. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'non-ANSWERED response'
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
     Write-ResponseFixture -Blocks @()
     $result = Invoke-Checker
     Assert-True ($result.ExitCode -ne 0) 'Empty blocks must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_BLOCKS_MISSING') "Empty blocks must report LIVE_PROVIDER_BLOCKS_MISSING. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'empty blocks response'
+
+    Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+    Remove-Item -LiteralPath $responsePath -Force
+    $result = Invoke-Checker
+    Assert-True ($result.ExitCode -ne 0) 'Missing response file must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_RESPONSE_UNREADABLE') "Missing response file must report LIVE_PROVIDER_RESPONSE_UNREADABLE. Output: $($result.Output)"
+    Assert-NoSensitiveOutput $result 'missing response file'
+
+    Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+    [System.IO.File]::WriteAllText(
+        $responsePath,
+        '{not valid json',
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $result = Invoke-Checker
+    Assert-True ($result.ExitCode -ne 0) 'Invalid response JSON must fail.'
+    Assert-True ($result.Output -match 'LIVE_PROVIDER_RESPONSE_UNREADABLE') "Invalid response JSON must report LIVE_PROVIDER_RESPONSE_UNREADABLE. Output: $($result.Output)"
+    Assert-NoSensitiveOutput $result 'invalid response JSON'
 
     Write-Output 'assert-live-provider-response tests passed'
 }
