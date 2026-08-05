@@ -15,6 +15,7 @@ public final class AnswerQuestion {
     private final List<String> supportingClaimIds;
     private final int minimumApprovedEvidencePerRequiredClaim;
     private final boolean activeContract;
+    private final String contractSubjectId;
 
     public AnswerQuestion(
             String id,
@@ -26,7 +27,8 @@ public final class AnswerQuestion {
             List<String> requiredClaimIds,
             List<String> supportingClaimIds,
             int minimumApprovedEvidencePerRequiredClaim,
-            boolean activeContract
+            boolean activeContract,
+            String contractSubjectId
     ) {
         this.id = id;
         this.canonicalQuestion = canonicalQuestion;
@@ -43,6 +45,24 @@ public final class AnswerQuestion {
         }
         this.minimumApprovedEvidencePerRequiredClaim = minimumApprovedEvidencePerRequiredClaim;
         this.activeContract = activeContract;
+        this.contractSubjectId = contractSubjectId;
+    }
+
+    public AnswerQuestion(
+            String id,
+            String canonicalQuestion,
+            List<String> aliases,
+            String suggestion,
+            List<AnswerClaimCategory> preferredClaimCategories,
+            String contractVersion,
+            List<String> requiredClaimIds,
+            List<String> supportingClaimIds,
+            int minimumApprovedEvidencePerRequiredClaim,
+            boolean activeContract
+    ) {
+        this(id, canonicalQuestion, aliases, suggestion, preferredClaimCategories,
+                contractVersion, requiredClaimIds, supportingClaimIds,
+                minimumApprovedEvidencePerRequiredClaim, activeContract, null);
     }
 
     public AnswerQuestion(
@@ -53,7 +73,7 @@ public final class AnswerQuestion {
             List<AnswerClaimCategory> preferredClaimCategories
     ) {
         this(id, canonicalQuestion, aliases, suggestion, preferredClaimCategories,
-                "legacy-contract", List.of(), List.of(), 1, true);
+                "legacy-contract", List.of(), List.of(), 1, true, null);
     }
 
     public AnswerQuestion(
@@ -96,6 +116,7 @@ public final class AnswerQuestion {
         return minimumApprovedEvidencePerRequiredClaim;
     }
     public boolean isActiveContract() { return activeContract; }
+    public String getContractSubjectId() { return contractSubjectId; }
 
     @Override
     public boolean equals(Object other) {
@@ -117,7 +138,8 @@ public final class AnswerQuestion {
                 && Objects.equals(supportingClaimIds, that.supportingClaimIds)
                 && minimumApprovedEvidencePerRequiredClaim
                         == that.minimumApprovedEvidencePerRequiredClaim
-                && activeContract == that.activeContract;
+                && activeContract == that.activeContract
+                && Objects.equals(contractSubjectId, that.contractSubjectId);
     }
 
     @Override
@@ -132,7 +154,8 @@ public final class AnswerQuestion {
                 requiredClaimIds,
                 supportingClaimIds,
                 minimumApprovedEvidencePerRequiredClaim,
-                activeContract);
+                activeContract,
+                contractSubjectId);
     }
 
     @Override

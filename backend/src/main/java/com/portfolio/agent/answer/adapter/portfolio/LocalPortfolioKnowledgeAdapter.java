@@ -74,8 +74,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
     ) {
         Set<String> evidenceIds = Set.copyOf(value.getEvidenceIds());
         List<AnswerQuestion> questions = snapshot.getQuestions().stream()
-                .filter(candidate -> candidate.getCaseIds().contains(value.getId()))
-                .filter(candidate -> candidate.getProjectIds().isEmpty())
+                .filter(candidate -> belongsToExecutionSubject(candidate, value.getId()))
                 .map(this::toQuestion)
                 .toList();
         List<AnswerEvidence> evidence = snapshot.getEvidence().stream()
@@ -224,8 +223,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         Set<String> evidenceIds = Set.copyOf(value.getEvidenceIds());
 
         List<AnswerQuestion> questions = snapshot.getQuestions().stream()
-                .filter(candidate -> candidate.getProjectIds().contains(value.getId()))
-                .filter(candidate -> candidate.getCaseIds().isEmpty())
+                .filter(candidate -> belongsToExecutionSubject(candidate, value.getId()))
                 .map(this::toQuestion)
                 .toList();
 
@@ -308,6 +306,14 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private boolean belongsToExecutionSubject(
+            QuestionDefinition question,
+            String subjectId
+    ) {
+        return question.isActiveContract()
+                && subjectId.equals(question.getContractSubjectId());
+    }
+
     private AnswerQuestion toQuestion(QuestionDefinition question) {
         return new AnswerQuestion(
                 question.getId(),
@@ -325,7 +331,8 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 question.getSupportingClaimIds(),
                 question.getEvidenceRequirement()
                         .getMinimumApprovedEvidencePerRequiredClaim(),
-                question.getContractStatus() == PresetContractStatus.ACTIVE
+                question.getContractStatus() == PresetContractStatus.ACTIVE,
+                question.getContractSubjectId()
         );
     }
 

@@ -22,6 +22,7 @@ export function answerStatusLabel(answer: AnswerLabelInput | null | undefined): 
   }
   if (answer.resolution === 'NOT_SUPPORTED') return '当前公开证据不足'
   if (answer.resolution === 'CAPABILITY_UNAVAILABLE') return '服务暂不可用'
+  if (answer.resolution === 'INVALID_INPUT') return '请求的作品范围无效'
   if (answer.intent) return '回答'
   if (answer.evidenceState === 'VERIFIED') return '已验证回答'
   if (answer.evidenceState === 'INSUFFICIENT') return '当前公开证据不足'

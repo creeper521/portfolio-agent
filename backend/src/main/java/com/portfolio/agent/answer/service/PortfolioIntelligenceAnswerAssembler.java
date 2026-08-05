@@ -54,13 +54,16 @@ public final class PortfolioIntelligenceAnswerAssembler {
             case NEEDS_CLARIFICATION -> AnswerResolution.NEEDS_CLARIFICATION;
             case NOT_SUPPORTED -> AnswerResolution.NOT_SUPPORTED;
             case CAPABILITY_UNAVAILABLE -> AnswerResolution.CAPABILITY_UNAVAILABLE;
+            case INVALID_INPUT -> AnswerResolution.INVALID_INPUT;
             case NOT_PORTFOLIO -> throw new IllegalStateException(
                     "not-portfolio decision cannot be assembled as an answer");
         };
-        List<ConversationAnswerBlock> blocks = decision.getDisposition()
-                == PortfolioDisposition.NEEDS_CLARIFICATION
-                ? clarificationBlocks(result)
-                : materialBlocks(result);
+        List<ConversationAnswerBlock> blocks = switch (decision.getDisposition()) {
+            case NEEDS_CLARIFICATION -> clarificationBlocks(result);
+            case INVALID_INPUT -> List.of(block(
+                    "请求的作品范围无效。", List.of(), List.of()));
+            default -> materialBlocks(result);
+        };
         return new ConversationAnswerResult(
                 request.getTurnId(),
                 contentVersion(content, result),

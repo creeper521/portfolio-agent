@@ -37,12 +37,16 @@ class JsonPublicPortfolioRepositoryTest {
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("2.0");
         assertThat(snapshot.getCases()).isEmpty();
-        assertThat(snapshot.getClaims()).singleElement()
-                .satisfies(claim -> assertThat(claim.getId())
-                        .isEqualTo("claim-sql-audit-delivered"));
-        assertThat(snapshot.getClaimEvidenceLinks()).singleElement()
-                .satisfies(link -> assertThat(link.getClaimId())
-                        .isEqualTo("claim-sql-audit-delivered"));
+        assertThat(snapshot.getClaims())
+                .extracting(claim -> claim.getId())
+                .containsExactly(
+                        "claim-sql-audit-background",
+                        "claim-sql-audit-responsibility",
+                        "claim-sql-audit-technical-decision",
+                        "claim-sql-audit-verification",
+                        "claim-sql-audit-delivered",
+                        "claim-sql-audit-documented-handoff");
+        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(6);
         assertThat(snapshot.getRuntimeBundleHash()).startsWith("sha256:");
         assertThat(snapshot.getLoadedAt()).isNotNull();
         assertThat(repository.getSnapshot()).isSameAs(snapshot);
@@ -50,7 +54,10 @@ class JsonPublicPortfolioRepositoryTest {
         assertThat(project.getSlug()).isEqualTo("sql-audit");
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.DELIVERED);
         assertThat(project.getContributionType()).isEqualTo(ContributionType.PRIMARY);
-        assertThat(snapshot.getEvidence().getFirst().getCode()).isEqualTo("E-01");
+        assertThat(snapshot.getEvidence()).hasSize(2);
+        assertThat(snapshot.getEvidence())
+                .extracting(com.portfolio.agent.portfolio.domain.EvidenceRecord::getCode)
+                .contains("E-01");
         assertThat(snapshot.getTimeline()).singleElement()
                 .extracting(TimelineEvent::getId)
                 .isEqualTo("timeline-sql-audit-delivery");
@@ -60,6 +67,10 @@ class JsonPublicPortfolioRepositoryTest {
                     assertThat(preset.isDeterministicEntry()).isTrue();
                     assertThat(preset.getAudiences())
                             .containsExactly("INTERVIEWER", "MENTOR", "HR", "GUEST");
+                    assertThat(preset.getContractStatus())
+                            .isEqualTo(com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE);
+                    assertThat(preset.getContractSubjectId()).isEqualTo("sql-audit-project");
+                    assertThat(preset.getContractVersion()).matches("pcv1-[a-f0-9]{16}");
                 });
         assertThat(events).singleElement().satisfies(event -> {
             assertThat(event.getName()).isEqualTo("content.bundle.loaded");
@@ -95,9 +106,9 @@ class JsonPublicPortfolioRepositoryTest {
             assertThat(event.getName()).isEqualTo("content.bundle.loaded");
             assertThat(event.getFields())
                     .containsEntry("schema.version", "4.0")
-                    .containsEntry("content.version", "2026-08-04.2")
+                    .containsEntry("content.version", "2026-08-05.1")
                     .containsEntry("retrieval.enabled", true)
-                    .containsEntry("document.count", 83)
+                    .containsEntry("document.count", 88)
                     .containsEntry("vector.dimension", 512)
                     .containsKey("duration.bucket");
         });

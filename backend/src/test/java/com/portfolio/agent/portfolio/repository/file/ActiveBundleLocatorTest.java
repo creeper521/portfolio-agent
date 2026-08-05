@@ -31,7 +31,7 @@ class ActiveBundleLocatorTest {
                 new PortfolioSnapshotValidator(), Clock.systemUTC());
 
         assertThat(new ActiveBundleLocator().load(releaseRoot, loader).getContentVersion())
-                .isEqualTo("2026-08-04.2");
+                .isEqualTo("2026-08-05.1");
     }
 
     @Test

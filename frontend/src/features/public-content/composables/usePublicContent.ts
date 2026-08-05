@@ -44,7 +44,23 @@ export function createPublicContentState(repository: PublicContentRepository) {
 
     const request = portfolioRequest
       .then((loadedPortfolio) => {
-        portfolio.value = loadedPortfolio
+        const invalidPresetCount = loadedPortfolio.questionPresets.filter(
+          (preset) => !/^pcv1-[a-f0-9]{16}$/.test(preset.contractVersion),
+        ).length
+        if (invalidPresetCount > 0) {
+          frontendDiagnostics.report(createFrontendDiagnosticEvent({
+            eventName: 'frontend.response.invalid',
+            errorCode: 'PRESET_CONTRACT_VERSION_INVALID',
+            errorKind: 'INVALID_RESPONSE',
+            contentVersion: loadedPortfolio.contentVersion,
+          }))
+        }
+        portfolio.value = {
+          ...loadedPortfolio,
+          questionPresets: loadedPortfolio.questionPresets.filter(
+            (preset) => /^pcv1-[a-f0-9]{16}$/.test(preset.contractVersion),
+          ),
+        }
         status.value = 'ready'
         frontendDiagnostics.report(createFrontendDiagnosticEvent({
           eventName: 'frontend.content.load.completed',

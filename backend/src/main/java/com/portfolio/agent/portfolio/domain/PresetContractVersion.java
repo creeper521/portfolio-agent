@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -19,27 +18,22 @@ public final class PresetContractVersion {
             String id,
             String text,
             List<String> aliases,
-            List<String> projectIds,
-            List<String> caseIds,
+            String contractSubjectId,
             List<String> requiredClaimIds,
             List<String> supportingClaimIds,
-            QuestionEvidenceRequirement evidenceRequirement
+            QuestionEvidenceRequirement evidenceRequirement,
+            PresetContractStatus contractStatus
     ) {
-        List<String> subjects = new ArrayList<>();
-        subjects.addAll(projectIds);
-        subjects.addAll(caseIds);
-        if (subjects.size() != 1) {
-            throw new IllegalArgumentException("preset contract must reference exactly one subject");
-        }
         String canonical = "id=" + normalize(id) + "\n"
                 + "text=" + normalize(text) + "\n"
-                + "aliases=" + String.join(",", sortedNormalized(aliases)) + "\n"
-                + "subject=" + normalize(subjects.get(0)) + "\n"
+                + "aliases=" + String.join(",", normalized(aliases)) + "\n"
+                + "subject=" + normalize(contractSubjectId) + "\n"
                 + "requiredClaimIds=" + String.join(",", normalized(requiredClaimIds)) + "\n"
                 + "supportingClaimIds=" + String.join(",", normalized(supportingClaimIds)) + "\n"
                 + "minimumApprovedEvidencePerRequiredClaim="
                 + evidenceRequirement.getMinimumApprovedEvidencePerRequiredClaim() + "\n"
-                + "publicOnly=" + evidenceRequirement.isPublicOnly() + "\n";
+                + "publicOnly=" + evidenceRequirement.isPublicOnly() + "\n"
+                + "status=" + contractStatus.name().toLowerCase(Locale.ROOT) + "\n";
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
@@ -47,12 +41,6 @@ public final class PresetContractVersion {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
-    }
-
-    private static List<String> sortedNormalized(List<String> values) {
-        List<String> result = normalized(values);
-        result.sort(Comparator.naturalOrder());
-        return result;
     }
 
     private static List<String> normalized(List<String> values) {

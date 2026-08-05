@@ -329,6 +329,7 @@ export const previewPublicContent: PublicPortfolio = {
     {
       id: 'sql-audit-overview',
       projectSlug: 'sql-audit',
+      caseSlugs: [],
       text: sqlAuditProject.suggestedQuestions[0],
       audiences: ['INTERVIEWER', 'MENTOR', 'HR', 'GUEST'],
       placements: ['HOME', 'AGENT', 'PROJECT'],

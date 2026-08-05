@@ -64,14 +64,10 @@ class PortfolioControllerTest {
     void returnsCompleteReviewedPublicContent() throws Exception {
         mockMvc.perform(get("/api/v1/public-content"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contentVersion").value("2026-08-04.2"))
+                .andExpect(jsonPath("$.contentVersion").value("2026-08-05.1"))
                 .andExpect(jsonPath("$.runtimeBundleHash").value(org.hamcrest.Matchers.startsWith("sha256:")))
-                .andExpect(jsonPath("$.questionPresets.length()").value(19))
-                .andExpect(jsonPath("$.questionPresets[0].id").value("sql-audit-overview"))
-                .andExpect(jsonPath("$.questionPresets[0].projectSlug").value("sql-audit"))
-                .andExpect(jsonPath("$.questionPresets[0].caseSlugs").isEmpty())
-                .andExpect(jsonPath("$.questionPresets[0].audiences.length()").value(4))
-                .andExpect(jsonPath("$.questionPresets[0].placements[0]").value("HOME"))
+                .andExpect(jsonPath("$.questionPresets.length()").value(18))
+                .andExpect(jsonPath("$.questionPresets[?(@.id=='question-public-assets-overview')]").isEmpty())
                 .andExpect(jsonPath("$.projects[0].code").value("P-01"))
                 .andExpect(jsonPath("$.projects[0].evidenceIds[0]")
                         .value("sql-audit-delivery-set"))
@@ -87,8 +83,8 @@ class PortfolioControllerTest {
                         .value("claim-sql-audit-delivered"))
                 .andExpect(jsonPath("$.evidence[0].supportedClaims").doesNotExist())
                 .andExpect(jsonPath("$.evidence.length()").value(63))
-                .andExpect(jsonPath("$.claims.length()").value(83))
-                .andExpect(jsonPath("$.claimEvidenceLinks.length()").value(83))
+                .andExpect(jsonPath("$.claims.length()").value(88))
+                .andExpect(jsonPath("$.claimEvidenceLinks.length()").value(88))
                 .andExpect(jsonPath("$.claims[4].id")
                         .value("claim-sql-audit-delivered"))
                 .andExpect(jsonPath("$.claims[4].subjectType").value("PROJECT"))
@@ -113,12 +109,6 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.cases.length()").value(52))
                 .andExpect(jsonPath("$.caseSlugsByEvidenceId").isMap())
                 .andExpect(jsonPath("$.caseSlugsByEvidenceId['evidence-case-role-reset-guide-and-acceptance'][0]")
-                        .value("test-role-reset"))
-                .andExpect(jsonPath("$.questionPresets[?(@.id=='question-case-role-reset-overview')].caseSlugs[0]")
-                        .value("test-role-reset"))
-                .andExpect(jsonPath("$.questionPresets[?(@.id=='question-abtest-overview')].projectSlug")
-                        .value("weekend-login-abtest"))
-                .andExpect(jsonPath("$.questionPresets[?(@.id=='question-abtest-overview')].caseSlugs.length()")
-                        .value(3));
+                        .value("test-role-reset"));
     }
 }

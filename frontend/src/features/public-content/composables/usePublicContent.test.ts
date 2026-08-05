@@ -37,6 +37,40 @@ describe('createPublicContentState', () => {
     expect(JSON.stringify(report.mock.calls)).not.toContain('SQL 审计')
   })
 
+  it('filters presets with missing or malformed contract versions and reports a safe diagnostic', async () => {
+    const report = vi.spyOn(frontendDiagnostics, 'report')
+    const repository = new ApiPublicContentRepository(vi.fn().mockResolvedValue({
+      ...previewPublicContent,
+      questionPresets: [
+        ...previewPublicContent.questionPresets,
+        {
+          id: 'question-public-assets-overview',
+          projectSlug: null,
+          caseSlugs: [],
+          text: '公开资产概览',
+          audiences: ['INTERVIEWER' as const],
+          placements: ['HOME' as const],
+          contractVersion: '',
+          availability: 'ACTIVE' as const,
+        },
+      ],
+    }))
+    const state = createPublicContentState(repository)
+
+    await state.load()
+
+    expect(state.portfolio.value?.questionPresets)
+      .toHaveLength(previewPublicContent.questionPresets.length)
+    expect(state.portfolio.value?.questionPresets
+      .some((preset) => preset.id === 'question-public-assets-overview')).toBe(false)
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.response.invalid',
+      errorCode: 'PRESET_CONTRACT_VERSION_INVALID',
+      errorKind: 'INVALID_RESPONSE',
+    }))
+    expect(JSON.stringify(report.mock.calls)).not.toContain('公开资产概览')
+  })
+
   it('clears a failed cache before retrying', async () => {
     const loader = vi.fn()
       .mockRejectedValueOnce(new Error('offline'))

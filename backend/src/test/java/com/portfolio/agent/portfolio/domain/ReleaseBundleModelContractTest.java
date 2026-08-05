@@ -28,6 +28,8 @@ class ReleaseBundleModelContractTest {
         assertThat(manifest.getCounts().getCases()).isZero();
         assertThat(manifest.getFactsFile()).isEqualTo("portfolio.json");
         assertThat(manifest.getRetrieval()).isNull();
+        assertThat(manifest.getLedgerHash()).isNull();
+        assertThat(manifest.getPresetContractSetHash()).isNull();
     }
 
     @Test

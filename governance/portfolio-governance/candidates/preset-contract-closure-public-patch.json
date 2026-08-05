@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "3.0",
+  "baseContentVersion": "2026-08-04.2",
+  "targetContentVersion": "2026-08-05.1",
+  "projects": [],
+  "cases": [],
+  "timelineEvents": [],
+  "claims": [
+    {
+      "id": "claim-abtest-project-background",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "BACKGROUND",
+      "statement": "项目目标是把周末登录奖励从一次性配置扩展为可比较、稳定归组、可验证且可停止的 A/B 实验闭环。",
+      "detail": "公开内容只陈述实验建模目标与闭环范围，不推断任何业务指标或线上效果。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["AB_TESTING", "PROJECT_OVERVIEW", "BACKGROUND"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 85, "GUEST": 70}
+    },
+    {
+      "id": "claim-abtest-project-responsibility",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "RESPONSIBILITY",
+      "statement": "本人负责实验建模、分层分桶、服务端与配置演进、测试验收、埋点核对以及停止和回滚边界设计。",
+      "detail": "公开内容只陈述职责范围与贡献边界，不夸大对业务结果的影响。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["AB_TESTING", "PROJECT_OVERVIEW", "PRIMARY"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 85, "GUEST": 70}
+    },
+    {
+      "id": "claim-abtest-project-stratification-bucketing",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "TECHNICAL_DECISION",
+      "statement": "先按实验前历史登录天数分层，再在层内稳定分桶，以降低历史活跃度差异并保持组间可比。",
+      "detail": "公开内容只陈述分层与分桶的技术决策，不展示分层键、对象标识或样本数量。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["AB_TESTING", "STRATIFICATION", "BUCKETING"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 85, "GUEST": 70}
+    },
+    {
+      "id": "claim-abtest-project-stable-assignment",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "IMPLEMENTATION",
+      "statement": "实验标签通过服务端统一规则和持久化结果保持跨请求、跨实例的稳定归组，并随配置版本演进。",
+      "detail": "公开内容只陈述归组机制与服务端配置演进事实，不包含类名、表名、字段或 SQL 原文。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["AB_TESTING", "PERSISTENCE", "CONFIGURATION"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 85, "GUEST": 70}
+    },
+    {
+      "id": "claim-abtest-project-validation-rollback",
+      "subjectType": "PROJECT",
+      "subjectId": "weekend-login-abtest-project",
+      "category": "VERIFICATION",
+      "statement": "验收覆盖配置、归组、激活、曝光与结果事件，并明确异常停止和回滚边界；不声称发生过线上事故。",
+      "detail": "公开内容只陈述验收范围与回滚预案，不推断线上事故或业务胜负。",
+      "achievementStatus": "DELIVERED",
+      "contributionType": "PRIMARY",
+      "verificationBasis": "EVIDENCE_SUPPORTED",
+      "verificationStatus": "VERIFIED",
+      "materiality": "KEY",
+      "topics": ["AB_TESTING", "VERIFICATION", "ROLLBACK"],
+      "audiencePriorities": {"INTERVIEWER": 100, "MENTOR": 100, "HR": 85, "GUEST": 70}
+    }
+  ],
+  "evidence": [],
+  "links": [
+    {
+      "id": "link-abtest-project-background",
+      "claimId": "claim-abtest-project-background",
+      "evidenceId": "evidence-abtest-delivery-history",
+      "supportType": "DIRECT",
+      "scope": "项目目标与实验闭环范围由交付历史证据集支撑。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-project-responsibility",
+      "claimId": "claim-abtest-project-responsibility",
+      "evidenceId": "evidence-abtest-delivery-history",
+      "supportType": "DIRECT",
+      "scope": "职责与贡献边界由交付历史证据集支撑。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-project-stratification-bucketing",
+      "claimId": "claim-abtest-project-stratification-bucketing",
+      "evidenceId": "evidence-abtest-experiment-design-notes",
+      "supportType": "DIRECT",
+      "scope": "分层与稳定分桶决策由实验设计说明支撑。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-project-stable-assignment",
+      "claimId": "claim-abtest-project-stable-assignment",
+      "evidenceId": "evidence-abtest-service-sql-evolution",
+      "supportType": "DIRECT",
+      "scope": "服务端稳定归组与配置演进由服务端能力证据集支撑。",
+      "reviewStatus": "APPROVED"
+    },
+    {
+      "id": "link-abtest-project-validation-rollback",
+      "claimId": "claim-abtest-project-validation-rollback",
+      "evidenceId": "evidence-abtest-validation-risk-notes",
+      "supportType": "DIRECT",
+      "scope": "验收范围与回滚边界由验证与风险控制说明支撑。",
+      "reviewStatus": "APPROVED"
+    }
+  ],
+  "presets": [],
+  "projectUpdates": [
+    {
+      "id": "weekend-login-abtest-project",
+      "addClaimIds": [
+        "claim-abtest-project-background",
+        "claim-abtest-project-responsibility",
+        "claim-abtest-project-stratification-bucketing",
+        "claim-abtest-project-stable-assignment",
+        "claim-abtest-project-validation-rollback"
+      ]
+    }
+  ],
+  "caseUpdates": []
+}

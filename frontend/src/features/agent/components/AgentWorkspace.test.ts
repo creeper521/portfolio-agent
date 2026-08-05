@@ -658,6 +658,27 @@ describe('AgentWorkspace', () => {
     )
   })
 
+  it('submits a suggestion without contract identity but with a subject slug', async () => {
+    const wrapper = mountWorkspace()
+    await wrapper.get('textarea').setValue('公开检索问题')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const suggestion = wrapper.findAll('[data-suggested-follow-up]')
+      .find((button) => button.text() === '开源评测案例怎么做的？')
+    if (!suggestion) throw new Error('suggestion button missing')
+    await suggestion.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      question: '开源评测案例怎么做的？',
+      projectSlug: null,
+      caseSlug: 'open-source-evaluation',
+      questionPresetId: undefined,
+      contractVersion: undefined,
+    }))
+  })
+
   it('shows rule provenance without turning a clarification into an applicable source', async () => {
     askQuestionMock
       .mockResolvedValueOnce({
@@ -1137,6 +1158,7 @@ describe('AgentWorkspace', () => {
         {
           id: 'agent-preset-1',
           projectSlug: 'sql-audit',
+caseSlugs: [],
           text: '补足预设一',
           audiences: ['HR' as const],
           placements: ['AGENT' as const],
@@ -1146,6 +1168,7 @@ describe('AgentWorkspace', () => {
         {
           id: 'agent-preset-2',
           projectSlug: 'sql-audit',
+caseSlugs: [],
           text: '补足预设二',
           audiences: ['HR' as const],
           placements: ['AGENT' as const],

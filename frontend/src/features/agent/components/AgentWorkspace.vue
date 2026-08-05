@@ -495,9 +495,9 @@ function submit(question: string) {
       projectSlug: project.slug,
       caseSlug: activeCaseSlug.value || null,
       question,
-      questionPresetId: preset?.availability === 'ACTIVE' ? preset.id : undefined,
-      contractVersion: preset?.availability === 'ACTIVE'
-        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion ?? undefined
+      questionPresetId: preset?.id,
+      contractVersion: preset
+        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion
         : undefined,
     },
     true,

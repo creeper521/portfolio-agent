@@ -140,12 +140,13 @@ export interface TimelineEvent {
 
 export interface QuestionPreset {
   id: string
-  projectSlug: string
+  projectSlug: string | null
+  caseSlugs: string[]
   text: string
   audiences: AudienceRole[]
   placements: Array<'HOME' | 'AGENT' | 'PROJECT'>
-  contractVersion: string | null
-  availability: 'ACTIVE' | 'DRAFT'
+  contractVersion: string
+  availability: 'ACTIVE'
 }
 
 export interface PublicPortfolio {

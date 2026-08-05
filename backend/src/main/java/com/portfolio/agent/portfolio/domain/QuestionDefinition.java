@@ -20,6 +20,7 @@ public final class QuestionDefinition {
     private final List<String> placements;
     private final boolean deterministicEntry;
     private final int displayOrder;
+    private final String contractSubjectId;
     private final List<String> requiredClaimIds;
     private final List<String> supportingClaimIds;
     private final QuestionEvidenceRequirement evidenceRequirement;
@@ -38,6 +39,7 @@ public final class QuestionDefinition {
             @JsonProperty("placements") List<String> placements,
             @JsonProperty("deterministicEntry") boolean deterministicEntry,
             @JsonProperty("displayOrder") int displayOrder,
+            @JsonProperty("contractSubjectId") String contractSubjectId,
             @JsonProperty("requiredClaimIds") List<String> requiredClaimIds,
             @JsonProperty("supportingClaimIds") List<String> supportingClaimIds,
             @JsonProperty("evidenceRequirement") QuestionEvidenceRequirement evidenceRequirement,
@@ -54,6 +56,7 @@ public final class QuestionDefinition {
         this.placements = List.copyOf(placements);
         this.deterministicEntry = deterministicEntry;
         this.displayOrder = displayOrder;
+        this.contractSubjectId = contractSubjectId == null ? null : contractSubjectId.trim();
         this.requiredClaimIds = immutableOrEmpty(requiredClaimIds);
         this.supportingClaimIds = immutableOrEmpty(supportingClaimIds);
         this.evidenceRequirement = evidenceRequirement == null
@@ -76,7 +79,7 @@ public final class QuestionDefinition {
             int displayOrder
     ) {
         this(id, text, aliases, audiences, projectIds, caseIds, topics, preferredClaimCategories,
-                placements, deterministicEntry, displayOrder, List.of(), List.of(),
+                placements, deterministicEntry, displayOrder, null, List.of(), List.of(),
                 new QuestionEvidenceRequirement(1, true), PresetContractStatus.DRAFT);
     }
 
@@ -112,6 +115,8 @@ public final class QuestionDefinition {
 
     public int getDisplayOrder() { return displayOrder; }
 
+    public String getContractSubjectId() { return contractSubjectId; }
+
     public List<String> getRequiredClaimIds() { return requiredClaimIds; }
 
     public List<String> getSupportingClaimIds() { return supportingClaimIds; }
@@ -128,8 +133,8 @@ public final class QuestionDefinition {
         if (contractStatus != PresetContractStatus.ACTIVE) {
             return null;
         }
-        return PresetContractVersion.calculate(id, text, aliases, projectIds, caseIds,
-                requiredClaimIds, supportingClaimIds, evidenceRequirement);
+        return PresetContractVersion.calculate(id, text, aliases, contractSubjectId,
+                requiredClaimIds, supportingClaimIds, evidenceRequirement, contractStatus);
     }
 
     @Override
@@ -151,6 +156,7 @@ public final class QuestionDefinition {
                 && Objects.equals(placements, that.placements)
                 && deterministicEntry == that.deterministicEntry
                 && displayOrder == that.displayOrder
+                && Objects.equals(contractSubjectId, that.contractSubjectId)
                 && Objects.equals(requiredClaimIds, that.requiredClaimIds)
                 && Objects.equals(supportingClaimIds, that.supportingClaimIds)
                 && Objects.equals(evidenceRequirement, that.evidenceRequirement)
@@ -161,7 +167,8 @@ public final class QuestionDefinition {
     public int hashCode() {
         return Objects.hash(id, text, aliases, audiences, projectIds, caseIds, topics,
                 preferredClaimCategories, placements, deterministicEntry, displayOrder,
-                requiredClaimIds, supportingClaimIds, evidenceRequirement, contractStatus);
+                contractSubjectId, requiredClaimIds, supportingClaimIds, evidenceRequirement,
+                contractStatus);
     }
 
     @Override

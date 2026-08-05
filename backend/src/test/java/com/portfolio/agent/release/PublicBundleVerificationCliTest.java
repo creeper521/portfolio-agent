@@ -42,9 +42,11 @@ class PublicBundleVerificationCliTest {
         assertThat(result.exitCode).isZero();
         assertThat(result.err).isEmpty();
         assertThat(result.out).contains(
-                "\"contentVersion\":\"2026-08-04.2\"",
+                "\"contentVersion\":\"2026-08-05.1\"",
                 "\"candidatePayloadHash\":\"sha256:",
                 "\"ledgerHash\":\"sha256:",
+                "\"presetContractSetHash\":\"sha256:",
+                "\"activeContracts\":18",
                 "\"runtimeBundleHash\":\"sha256:",
                 "\"chunkCount\":1",
                 "\"projects\":6");
@@ -133,6 +135,20 @@ class PublicBundleVerificationCliTest {
         assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
     }
 
+    @Test
+    void rejectsMissingOrMismatchedPresetContractSetHash() throws Exception {
+        ObjectNode missing = object(bundle.resolve("manifest.json"));
+        missing.remove("presetContractSetHash");
+        write(bundle.resolve("manifest.json"), missing);
+        assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
+
+        recreateBundle();
+        ObjectNode mismatched = object(bundle.resolve("manifest.json"));
+        mismatched.put("presetContractSetHash", "sha256:" + "9".repeat(64));
+        write(bundle.resolve("manifest.json"), mismatched);
+        assertThat(run(bundle.toString()).exitCode).isEqualTo(1);
+    }
+
     private void recreateBundle() throws Exception {
         try (java.util.stream.Stream<Path> entries = Files.list(bundle)) {
             for (Path entry : entries.toList()) {
@@ -201,7 +217,7 @@ class PublicBundleVerificationCliTest {
         files.put("presentation.json",
                 Files.readAllBytes(source.resolve("presentation.json")));
         byte[] rag = ("{\"chunkId\":\"chunk-sql-audit-delivery\","
-                + "\"contentVersion\":\"2026-08-04.2\","
+                + "\"contentVersion\":\"2026-08-05.1\","
                 + "\"projectSlugs\":[\"sql-audit\"],\"caseSlugs\":[],"
                 + "\"claimIds\":[\"claim-sql-audit-delivered\"],"
                 + "\"text\":\"SQL audit delivered\","

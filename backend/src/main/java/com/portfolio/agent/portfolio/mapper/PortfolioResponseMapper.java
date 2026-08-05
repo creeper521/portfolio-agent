@@ -104,6 +104,8 @@ public class PortfolioResponseMapper {
                         .toList(),
                 content.getCaseSlugsByEvidenceId(),
                 content.getQuestionPresets().stream()
+                        .filter(question -> question.getContractStatus()
+                                == com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE)
                         .map(question -> QuestionPresetResponse.from(
                                 question,
                                 firstProjectSlug(

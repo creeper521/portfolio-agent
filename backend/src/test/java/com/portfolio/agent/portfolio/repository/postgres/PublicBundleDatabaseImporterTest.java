@@ -25,10 +25,12 @@ import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
 import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
 import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RetrievalManifest;
+import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -189,10 +191,10 @@ class PublicBundleDatabaseImporterTest {
 
         assertThat(snapshot.getProjects()).hasSize(6);
         assertThat(snapshot.getCases()).hasSize(52);
-        assertThat(snapshot.getClaims()).hasSize(83);
+        assertThat(snapshot.getClaims()).hasSize(88);
         assertThat(snapshot.getApprovedEvidence()).hasSize(63);
-        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(83);
-        assertThat(snapshot.getRetrievalContent().orElseThrow().getDocuments()).hasSize(83);
+        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(88);
+        assertThat(snapshot.getRetrievalContent().orElseThrow().getDocuments()).hasSize(88);
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
         verify(jdbcTemplate, atLeast(1)).update(sql.capture(), parameters.capture());
@@ -203,13 +205,13 @@ class PublicBundleDatabaseImporterTest {
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO case_study"))
                 .hasSize(52);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO claim\n"))
-                .hasSize(83);
+                .hasSize(88);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO evidence\n"))
                 .hasSize(63);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO claim_evidence_link"))
-                .hasSize(83);
+                .hasSize(88);
         assertThat(sql.getAllValues()).filteredOn(value -> value.contains("INSERT INTO retrieval_document"))
-                .hasSize(83);
+                .hasSize(88);
         assertThat(parameters.getAllValues())
                 .allSatisfy(values -> assertThat(values[0]).isEqualTo(result.getReleaseId()));
     }
@@ -292,6 +294,34 @@ class PublicBundleDatabaseImporterTest {
                 .isInstanceOf(DataAccessResourceFailureException.class);
 
         verify(transactionManager).rollback(transactionStatus);
+    }
+
+    @Test
+    void rejectsContractTamperedBundleBeforeReachingTheImporter() throws Exception {
+        Map<String, byte[]> files = new java.util.LinkedHashMap<>();
+        for (String name : List.of("manifest.json", "portfolio.json", "presentation.json", "rag-documents.jsonl",
+                "keyword-index.json", "vector-index.bin", "checksums.json")) {
+            files.put(name, readResource("public-data/bundle/" + name));
+        }
+        String declaredSetHash = new ObjectMapper().findAndRegisterModules()
+                .readTree(files.get("manifest.json")).path("presetContractSetHash").asText();
+        files.put("manifest.json", new String(files.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace(declaredSetHash, "sha256:" + "7".repeat(64))
+                .getBytes(StandardCharsets.UTF_8));
+        PublicBundleLoader loader = new PublicBundleLoader(
+                new ObjectMapper().findAndRegisterModules(),
+                new PortfolioSnapshotValidator(),
+                Clock.fixed(Instant.parse("2026-07-30T00:00:00Z"), ZoneOffset.UTC));
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        TransactionOperations transactions = mock(TransactionOperations.class);
+        PublicBundleDatabaseImporter importer = new PublicBundleDatabaseImporter(
+                jdbcTemplate, transactions);
+
+        assertThatThrownBy(() -> importer.importBundle(loader.load(files)))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("presetContractSetHash mismatch");
+
+        verifyNoInteractions(jdbcTemplate, transactions);
     }
 
     private RuntimeContentSnapshot snapshot(String evidenceStatus) throws Exception {

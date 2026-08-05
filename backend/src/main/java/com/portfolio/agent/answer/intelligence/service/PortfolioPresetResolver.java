@@ -72,11 +72,15 @@ public final class PortfolioPresetResolver {
             SubjectQuestion match
     ) {
         if (!match.question.getRequiredClaimIds().isEmpty()) {
+            if (!match.subject.getStableId()
+                    .equals(match.question.getContractSubjectId())) {
+                return PortfolioPresetResolution.invalid();
+            }
             return PortfolioPresetResolution.matchedContract(new PortfolioContractTask(
                     match.question.getId(),
                     match.question.getContractVersion(),
                     match.question.getCanonicalQuestion(),
-                    match.subject.getStableId(),
+                    match.question.getContractSubjectId(),
                     match.question.getRequiredClaimIds(),
                     match.question.getSupportingClaimIds(),
                     match.question.getMinimumApprovedEvidencePerRequiredClaim()));

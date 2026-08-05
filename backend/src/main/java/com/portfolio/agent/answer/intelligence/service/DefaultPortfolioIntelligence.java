@@ -22,6 +22,8 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
+import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolution;
+import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolutionType;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetrievalException;
 import com.portfolio.agent.selection.domain.EvidenceReference;
@@ -46,6 +48,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     private final PortfolioPresetResolver presetResolver;
     private final PortfolioReferenceContextValidator referenceContextValidator;
     private final PortfolioTaskResolver taskResolver;
+    private final StructuredSubjectTaskResolver structuredSubjectResolver;
     private final ConversationProviderAccess providerAccess;
     private final PortfolioRetrievalPlanner retrievalPlanner;
     private final ContractEvidenceSelector contractEvidenceSelector;
@@ -63,6 +66,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         this.presetResolver = null;
         this.referenceContextValidator = null;
         this.taskResolver = null;
+        this.structuredSubjectResolver = null;
         this.providerAccess = null;
         this.retrievalPlanner = new PortfolioRetrievalPlanner();
         this.contractEvidenceSelector = new ContractEvidenceSelector(retriever);
@@ -77,6 +81,7 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioPresetResolver presetResolver,
             PortfolioReferenceContextValidator referenceContextValidator,
             PortfolioTaskResolver taskResolver,
+            StructuredSubjectTaskResolver structuredSubjectResolver,
             ConversationProviderAccess providerAccess) {
         this.taskValidator = Objects.requireNonNull(taskValidator, "taskValidator");
         this.retriever = Objects.requireNonNull(retriever, "retriever");
@@ -87,6 +92,8 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         this.referenceContextValidator = Objects.requireNonNull(
                 referenceContextValidator, "referenceContextValidator");
         this.taskResolver = Objects.requireNonNull(taskResolver, "taskResolver");
+        this.structuredSubjectResolver = Objects.requireNonNull(
+                structuredSubjectResolver, "structuredSubjectResolver");
         this.providerAccess = Objects.requireNonNull(providerAccess, "providerAccess");
         this.retrievalPlanner = new PortfolioRetrievalPlanner();
         this.contractEvidenceSelector = new ContractEvidenceSelector(retriever);
@@ -135,8 +142,27 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             return execute(withSubjectConstraint(task, turn, content),
                     AnswerIntentSource.RULE, false);
         }
-        if (referencesExplicitSubject(turn)) {
-            return execute(explicitSubjectTask(turn, content), AnswerIntentSource.RULE, false);
+        StructuredSubjectResolution structured = structuredSubjectResolver.resolve(
+                turn, content);
+        if (structured.getType() == StructuredSubjectResolutionType.INVALID) {
+            return invalidInput(content, "STRUCTURED_SUBJECT_INVALID");
+        }
+        if (structured.getType() == StructuredSubjectResolutionType.MATCHED) {
+            return execute(structured.getTask(), AnswerIntentSource.RULE, false);
+        }
+        if (turn.getProjectSlug() == null && turn.getCaseSlug() == null
+                && referencesExplicitSubject(turn)) {
+            return execute(
+                    new PortfolioTask(
+                            turn.getTurnId(),
+                            turn.getQuestion(),
+                            PortfolioTaskMode.FACT_LOOKUP,
+                            1.0d,
+                            PortfolioConditions.empty(),
+                            turn.getRecommendationContext(),
+                            null,
+                            null),
+                    AnswerIntentSource.RULE, false);
         }
         if (!providerAccess.isAllowed()) {
             return new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null);
@@ -291,34 +317,15 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                 subject.getStableId(), task.getPreferredClaimCategories());
     }
 
-    private PortfolioTask explicitSubjectTask(
-            PortfolioTurn turn,
-            RuntimeAnswerContent content
+    private PortfolioDecision invalidInput(
+            RuntimeAnswerContent content,
+            String noticeCode
     ) {
-        AnswerKnowledge subject = null;
-        if (turn.getProjectSlug() != null) {
-            subject = content.getProjects().stream()
-                    .filter(candidate -> turn.getProjectSlug().equals(candidate.getSlug()))
-                    .findFirst()
-                    .orElse(null);
-        } else if (turn.getCaseSlug() != null) {
-            subject = content.getCases().stream()
-                    .filter(candidate -> turn.getCaseSlug().equals(candidate.getSlug()))
-                    .findFirst()
-                    .orElse(null);
-        }
-        String subjectId = subject == null
-                ? "__missing_explicit_subject__"
-                : subject.getStableId();
-        return new PortfolioTask(
-                turn.getTurnId(),
-                turn.getQuestion(),
-                PortfolioTaskMode.FACT_LOOKUP,
-                1.0d,
-                PortfolioConditions.empty(),
-                turn.getRecommendationContext(),
-                null,
-                subjectId);
+        PortfolioIntelligenceResult result = new PortfolioIntelligenceResult(
+                PortfolioTaskMode.FACT_LOOKUP, List.of(), List.of(), null, null,
+                content.getContentVersion(), false, noticeCode)
+                .withDecisionMetadata(AnswerIntentSource.RULE, false);
+        return new PortfolioDecision(PortfolioDisposition.INVALID_INPUT, result);
     }
 
     private boolean referencesExplicitSubject(PortfolioTurn turn) {

@@ -30,6 +30,7 @@ public final class PublicBundleVerificationCli {
             "schemaVersion", "contentVersion", "publishedAt", "builtAt",
             "minimumApplicationVersion", "factsFile", "presentationFile",
             "approvalId", "approvalDigest", "candidatePayloadHash", "ledgerHash",
+            "presetContractSetHash",
             "checksumsFile", "counts", "retrieval"
     );
 
@@ -73,6 +74,11 @@ public final class PublicBundleVerificationCli {
             summary.put("contentVersion", snapshot.getContentVersion());
             summary.put("candidatePayloadHash", manifest.getCandidatePayloadHash());
             summary.put("ledgerHash", ledgerHash);
+            summary.put("presetContractSetHash", manifest.getPresetContractSetHash());
+            summary.put("activeContracts", snapshot.getQuestions().stream()
+                    .filter(question -> question.getContractStatus()
+                            == com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE)
+                    .count());
             summary.put("runtimeBundleHash", BundleHashCalculator.runtimeBundleHash(
                     originalManifest, files.get("checksums.json")));
             summary.put("retrievalPolicyVersion", retrieval.getRetrievalPolicyVersion());

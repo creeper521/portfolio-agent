@@ -8,6 +8,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.portfolio.agent.portfolio.domain.ReleaseManifest;
 import com.portfolio.agent.portfolio.domain.PresentationSnapshot;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.PresetContractSetHash;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.domain.RagDocument;
 import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
@@ -62,6 +64,8 @@ public final class PublicBundleLoader {
                     "bundle file set does not match retrieval manifest");
             require(!hasRetrieval || isSha256(manifest.getLedgerHash()),
                     "retrieval manifest ledgerHash is invalid");
+            require(!hasRetrieval || isSha256(manifest.getPresetContractSetHash()),
+                    "presetContractSetHash is invalid");
             require(SUPPORTED_SCHEMA_VERSIONS.contains(manifest.getSchemaVersion()),
                     "unsupported manifest schemaVersion");
             require("portfolio.json".equals(manifest.getFactsFile()), "invalid factsFile");
@@ -106,6 +110,14 @@ public final class PublicBundleLoader {
 
             PortfolioSnapshot published = content.withPublishedAt(manifest.getPublishedAt());
             validator.validate(published);
+            if (hasRetrieval) {
+                String actualContractSetHash = PresetContractSetHash.calculate(
+                        published.getQuestions().stream()
+                                .filter(QuestionDefinition::isActiveContract)
+                                .toList());
+                require(actualContractSetHash.equals(manifest.getPresetContractSetHash()),
+                        "presetContractSetHash mismatch");
+            }
             RuntimeRetrievalContent retrievalContent = hasRetrieval
                     ? readRetrievalContent(files, manifest)
                     : null;

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.CaseStudy;
 import com.portfolio.agent.portfolio.domain.ReleaseManifest;
+import com.portfolio.agent.portfolio.domain.PresetContractSetHash;
 import com.portfolio.agent.portfolio.exception.InvalidPortfolioSnapshotException;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
@@ -14,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -439,6 +441,45 @@ class PublicBundleLoaderTest {
                 .hasMessageContaining("ledgerHash");
     }
 
+    @Test
+    void rejectsRetrievalManifestWithMissingOrMalformedPresetContractSetHash() {
+        Map<String, byte[]> missing = validRetrievalBundle();
+        missing.put("manifest.json", new String(
+                missing.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace("\"presetContractSetHash\":\""
+                        + PresetContractSetHash.calculate(List.of()) + "\",", "")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(missing))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("presetContractSetHash is invalid");
+
+        Map<String, byte[]> malformed = validRetrievalBundle();
+        malformed.put("manifest.json", new String(
+                malformed.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace(PresetContractSetHash.calculate(List.of()),
+                        "sha256:not-a-contract-set-hash")
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(malformed))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("presetContractSetHash is invalid");
+    }
+
+    @Test
+    void rejectsRetrievalManifestWithMismatchedPresetContractSetHash() {
+        Map<String, byte[]> bundle = validRetrievalBundle();
+        bundle.put("manifest.json", new String(
+                bundle.get("manifest.json"), StandardCharsets.UTF_8)
+                .replace(PresetContractSetHash.calculate(List.of()),
+                        "sha256:" + "2".repeat(64))
+                .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> loader.load(bundle))
+                .isInstanceOf(InvalidPortfolioSnapshotException.class)
+                .hasMessageContaining("presetContractSetHash mismatch");
+    }
+
     private byte[] keywordIndexBytes() {
         try {
             KeywordIndexFile index = new KeywordIndexFile(
@@ -491,6 +532,8 @@ class PublicBundleLoaderTest {
                 + "\"candidatePayloadHash\":\"" + candidateHash + "\","
                 + (bundle.containsKey("rag-documents.jsonl")
                         ? "\"ledgerHash\":\"sha256:" + "1".repeat(64) + "\","
+                                + "\"presetContractSetHash\":\""
+                                + PresetContractSetHash.calculate(List.of()) + "\","
                         : "")
                 + "\"checksumsFile\":\"checksums.json\",\"counts\":{"
                 + "\"projects\":1," + caseCount

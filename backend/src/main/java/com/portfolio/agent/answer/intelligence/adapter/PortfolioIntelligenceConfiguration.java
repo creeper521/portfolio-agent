@@ -20,6 +20,7 @@ import com.portfolio.agent.answer.intelligence.service.PortfolioTaskResolver;
 import com.portfolio.agent.answer.intelligence.service.PortfolioTaskValidator;
 import com.portfolio.agent.answer.intelligence.service.RecommendationBatchFingerprint;
 import com.portfolio.agent.answer.intelligence.service.RecommendationContextValidator;
+import com.portfolio.agent.answer.intelligence.service.StructuredSubjectTaskResolver;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -55,6 +56,11 @@ public class PortfolioIntelligenceConfiguration {
     }
 
     @Bean
+    StructuredSubjectTaskResolver structuredSubjectTaskResolver() {
+        return new StructuredSubjectTaskResolver();
+    }
+
+    @Bean
     PortfolioRecommendationPolicy portfolioRecommendationPolicy() {
         return new PortfolioRecommendationPolicy();
     }
@@ -80,11 +86,12 @@ public class PortfolioIntelligenceConfiguration {
             PortfolioPresetResolver presetResolver,
             PortfolioReferenceContextValidator referenceContextValidator,
             PortfolioTaskResolver taskResolver,
+            StructuredSubjectTaskResolver structuredSubjectResolver,
             ConversationProviderAccess providerAccess) {
         return new DefaultPortfolioIntelligence(
                 taskValidator, retriever, recommendationPolicy, contextValidator,
                 knowledgeGateway, presetResolver, referenceContextValidator,
-                taskResolver, providerAccess);
+                taskResolver, structuredSubjectResolver, providerAccess);
     }
 
     @Bean

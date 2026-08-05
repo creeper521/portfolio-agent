@@ -5,6 +5,7 @@ export type AnswerResolution =
   | 'CAPABILITY_UNAVAILABLE'
   | 'REJECTED'
   | 'BOUNDARY'
+  | 'INVALID_INPUT'
 export type AnswerSource = 'PRESET' | 'RETRIEVAL' | 'TOOL'
 export type GenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
 export type AnswerConstructionMode =

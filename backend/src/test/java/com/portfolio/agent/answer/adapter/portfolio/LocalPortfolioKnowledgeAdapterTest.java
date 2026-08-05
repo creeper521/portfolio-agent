@@ -232,7 +232,12 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(ClaimCategory.OUTCOME),
                 List.of("HOME"),
                 true,
-                10
+                10,
+                "project-1",
+                List.of("claim-sql-audit-delivered"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
         );
         PortfolioSnapshot snapshot = snapshot(
                 List.of(project("project-1", "sql-audit",
@@ -279,7 +284,12 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(ClaimCategory.OUTCOME),
                 List.of("CASE"),
                 true,
-                10
+                10,
+                "case-role-reset",
+                List.of("claim-case-role-reset"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
         );
         PortfolioSnapshot snapshot =
                 validCaseBoundarySnapshot(projectQuestion, caseQuestion);
@@ -388,7 +398,12 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
                 List.of("HOME"),
                 true,
-                10
+                10,
+                "project-1",
+                List.of("claim-sql-audit-delivered"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
         );
         QuestionDefinition caseQuestionDefinition = new QuestionDefinition(
                 "question-case-role-reset",
@@ -401,7 +416,12 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
                 List.of("HOME"),
                 true,
-                10
+                10,
+                "case-role-reset",
+                List.of("claim-case-role-reset"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
         );
         PortfolioSnapshot snapshot = validCaseBoundarySnapshot(
                 projectQuestionDefinition,
@@ -417,6 +437,83 @@ class LocalPortfolioKnowledgeAdapterTest {
 
         assertThat(suggestedQuestions).contains(projectQuestion);
         assertThat(suggestedQuestions).doesNotContain(caseQuestion);
+    }
+
+    @Test
+    void mountsActivePresetOnlyToItsContractExecutionSubject() {
+        QuestionDefinition abtestQuestion = new QuestionDefinition(
+                "question-abtest-overview",
+                "AB 实验项目整体背景是什么？",
+                List.of("AB 实验项目概况"),
+                List.of("INTERVIEWER"),
+                List.of("weekend-login-abtest-project"),
+                List.of(
+                        "case-abtest-experiment-design",
+                        "case-abtest-service-sql",
+                        "case-abtest-validation-risk-control"),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.BACKGROUND),
+                List.of("HOME", "PROJECT"),
+                true,
+                10,
+                "weekend-login-abtest-project",
+                List.of("claim-abtest-overview"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        ProjectProfile project = project(
+                "weekend-login-abtest-project",
+                "weekend-login-abtest",
+                List.of());
+        CaseStudy designCase = abtestCase("case-abtest-experiment-design");
+        CaseStudy serviceCase = abtestCase("case-abtest-service-sql");
+        CaseStudy validationCase = abtestCase("case-abtest-validation-risk-control");
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project),
+                List.of(abtestQuestion),
+                List.of(),
+                List.of(designCase, serviceCase, validationCase)
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        assertThat(adapter.getContent().getProjects())
+                .singleElement()
+                .satisfies(knowledge -> assertThat(knowledge.getQuestions())
+                        .extracting(AnswerQuestion::getId)
+                        .containsExactly("question-abtest-overview"));
+        assertThat(adapter.getContent().getCases())
+                .hasSize(3)
+                .allSatisfy(knowledge -> assertThat(knowledge.getQuestions())
+                        .isEmpty());
+        assertThat(adapter.getContent().getProjects().getFirst().getQuestions()
+                .getFirst().getContractSubjectId())
+                .isEqualTo("weekend-login-abtest-project");
+    }
+
+    private static CaseStudy abtestCase(String id) {
+        return new CaseStudy(
+                id,
+                "C-AB",
+                id.replace("case-", ""),
+                CaseType.FEATURE,
+                "ABTest " + id,
+                "Summary",
+                "Problem",
+                List.of("Action"),
+                List.of(),
+                List.of("Verified"),
+                "Outcome",
+                List.of(),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                "weekend-login-abtest-project",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
     }
 
     private static PortfolioSnapshot validCaseBoundarySnapshot(
@@ -881,7 +978,12 @@ class LocalPortfolioKnowledgeAdapterTest {
                 List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
                 List.of("HOME"),
                 true,
-                10
+                10,
+                projectId,
+                List.of(id + "-required-claim"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
         );
     }
 

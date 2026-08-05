@@ -6,5 +6,6 @@ public enum AnswerResolution {
     NOT_SUPPORTED,
     CAPABILITY_UNAVAILABLE,
     BOUNDARY,
-    REJECTED
+    REJECTED,
+    INVALID_INPUT
 }

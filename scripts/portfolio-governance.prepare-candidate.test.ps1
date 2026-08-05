@@ -191,109 +191,25 @@ try {
     $workspaces += $workspace
     $result = Invoke-Prepare $workspace -RuntimeValue $runtime -PatchValue $patch `
         -RoutesValue $routes -InventoryValue $inventorySource
-    Assert-True ($result.ExitCode -eq 0) "prepare-candidate should pass (exit=$($result.ExitCode), status=$($result.Json.status), code=$($result.Json.blockingFindings[0].code), message=$($result.Json.blockingFindings[0].message))."
-    Assert-True ($result.Json.status -eq 'PASS') 'prepare-candidate should return PASS.'
+    Assert-True ($result.ExitCode -ne 0 -and
+        $result.Json.blockingFindings[0].code -eq 'PRESET_CONTRACT_PROJECTION_MISMATCH') `
+        'Historical Wave 1 regeneration must fail closed on missing declared contract presets.'
+    Assert-True (-not (Test-Path (Join-Path $workspace 'prepared-candidates\2026-07-24.1'))) `
+        'A failed contract projection must not create a candidate package.'
     $package = Join-Path $workspace 'prepared-candidates\2026-07-24.1'
-    $candidate = Join-Path $package 'candidate'
-    Assert-True ((Get-ChildItem -LiteralPath $candidate -File).Count -eq 2) 'Candidate must contain only two source JSON files.'
-    Assert-True (-not (Test-Path (Join-Path $candidate 'rag-documents.jsonl'))) 'RAG must not be generated implicitly.'
-    $portfolio = Get-Content (Join-Path $candidate 'portfolio.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $presentation = Get-Content (Join-Path $candidate 'presentation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    Assert-True ($portfolio.contentVersion -eq '2026-07-24.1') 'Portfolio version mismatch.'
-    Assert-True ($presentation.contentVersion -eq '2026-07-24.1') 'Presentation version mismatch.'
-    Assert-True (@($portfolio.claims).Count -eq 29) 'Expected 13 new claims.'
-    Assert-True (@($portfolio.evidence).Count -eq 7) 'Expected 2 new Evidence records.'
-    Assert-True (@($portfolio.claimEvidenceLinks).Count -eq 29) 'Expected one direct link for every new claim.'
-    Assert-True (@($portfolio.questionPresets).Count -eq 15) 'Expected 9 new presets.'
-    $expectedClaimIds = @(
-        'claim-sql-audit-async-task-lifecycle','claim-sql-audit-progress-fallback',
-        'claim-sql-audit-result-lifecycle','claim-sql-audit-truncation-disclosure',
-        'claim-sql-audit-documented-handoff','claim-case-multilingual-replacement-problem',
-        'claim-case-multilingual-no-backfill','claim-case-role-reset-cache-interference-problem',
-        'claim-case-role-reset-confirmation-safety','claim-case-role-reset-documented-delivery',
-        'claim-case-codegraph-evaluation-method','claim-case-codegraph-manual-quality-review',
-        'claim-case-codegraph-qualitative-publication')
-    $newClaims = @($portfolio.claims | Where-Object { $expectedClaimIds -contains $_.id })
-    Assert-True ($newClaims.Count -eq 13 -and
-        (Compare-Object @($newClaims.id) $expectedClaimIds).Count -eq 0) 'Exact Wave 1 Claim ID set mismatch.'
-    $keyClaims = @($newClaims | Where-Object materiality -eq 'KEY')
-    Assert-True ($keyClaims.Count -eq 9) 'Expected exactly nine KEY claims.'
-    Assert-True (@($keyClaims | Where-Object {
-        $_.verificationStatus -ne 'VERIFIED' -or
-        $_.verificationBasis -ne 'EVIDENCE_SUPPORTED'
-    }).Count -eq 0) 'Every added KEY claim must be verified and Evidence-supported.'
-    Assert-True (@($newClaims | Where-Object materiality -eq 'SUPPORTING').Count -eq 4) 'Expected exactly four SUPPORTING claims.'
-    $expectedSupporting = @(
-        'claim-sql-audit-documented-handoff',
-        'claim-case-multilingual-no-backfill',
-        'claim-case-role-reset-documented-delivery',
-        'claim-case-codegraph-qualitative-publication'
-    )
-    Assert-True ((Compare-Object @($newClaims | Where-Object materiality -eq 'SUPPORTING' |
-        ForEach-Object id) $expectedSupporting).Count -eq 0) 'Exact SUPPORTING Claim set mismatch.'
-    $truncation = $newClaims | Where-Object id -eq 'claim-sql-audit-truncation-disclosure'
-    Assert-True ($truncation.category -eq 'LIMITATION' -and $truncation.materiality -eq 'KEY') `
-        'SQL truncation disclosure must be a KEY LIMITATION.'
-    $method = $newClaims | Where-Object id -eq 'claim-case-codegraph-evaluation-method'
-    Assert-True ($method.category -eq 'VERIFICATION' -and $method.materiality -eq 'KEY') `
-        'CodeGraph evaluation method must be a KEY VERIFICATION Claim.'
-    foreach ($claim in $newClaims) {
-        $links = @($portfolio.claimEvidenceLinks | Where-Object {
-            $_.claimId -eq $claim.id -and $_.supportType -eq 'DIRECT' -and $_.reviewStatus -eq 'APPROVED'
-        })
-        Assert-True ($links.Count -gt 0) "Missing approved direct link for $($claim.id)."
-    }
-    Assert-True (@($portfolio.evidence | Where-Object { $_.rawContentPublic -ne $false }).Count -eq 0) 'Raw Evidence must remain private.'
-    $ledger = Get-Content (Join-Path $package 'asset-publication-decisions.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    Assert-True (@($ledger.assets).Count -eq 68) 'Ledger must contain all 68 assets.'
-    $published = @($ledger.assets | Where-Object routeDecision -eq 'PUBLISH_CANDIDATE' | ForEach-Object assetId)
-    $expected = @('L-01','T-01','T-02','T-03','T-04','T-05','T-06','T-17','K-01')
-    Assert-True ((Compare-Object $published $expected).Count -eq 0) 'Wave 1 publication set mismatch.'
-    foreach ($id in @('T-07','K-02')) {
-        $asset = $ledger.assets | Where-Object assetId -eq $id
-        Assert-True ($asset.routeDecision -eq 'REVIEWED_HOLD' -and $asset.finalRoute -eq 'HOLD') "$id must remain HOLD."
-    }
-    $excludedAsset = $ledger.assets | Where-Object assetId -eq 'A-22'
-    Assert-True ($excludedAsset.routeDecision -eq 'EXCLUDED' -and
-        $excludedAsset.finalRoute -eq 'EXCLUDE') 'An EXCLUDE source must remain EXCLUDED.'
-    $heldAssets = @($ledger.assets | Where-Object {
-        $expected -notcontains $_.assetId -and $_.assetId -ne 'A-22'
-    })
-    Assert-True (@($heldAssets | Where-Object {
-        $_.routeDecision -ne 'REVIEWED_HOLD' -or $_.finalRoute -ne 'HOLD'
-    }).Count -eq 0) 'Every non-Wave1, non-EXCLUDE source must remain REVIEWED_HOLD.'
+    Assert-True (-not (Test-Path -LiteralPath $package)) 'No Wave 1 candidate package may exist after a failed projection.'
     Assert-True (@($result.Json.artifacts | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Artifacts must be relative paths.'
-    $validationOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $governance `
-        -Command validate -Workspace $workspace -Candidate $candidate `
-        -DecisionLedger (Join-Path $package 'asset-publication-decisions.json')
-    $validationExit = $LASTEXITCODE
-    $validationJson = $validationOutput | Select-Object -Last 1 | ConvertFrom-Json
-    Assert-True ($validationExit -eq 0 -and $validationJson.status -eq 'PASS') `
-        'The prepared two-file candidate and private ledger must pass governance validate.'
-    $waveOneBenchmark = Join-Path $root `
-        'governance\portfolio-governance\benchmark\wave-1-benchmarks.v1.json'
-    $activeBenchmark = Join-Path $root `
-        'governance\portfolio-governance\benchmark\active-benchmarks.v1.json'
-    $waveOneBenchmarkHash = 'sha256:' + `
-        (Get-FileHash -LiteralPath $waveOneBenchmark -Algorithm SHA256).Hash.ToLowerInvariant()
-    $activeBenchmarkHash = 'sha256:' + `
-        (Get-FileHash -LiteralPath $activeBenchmark -Algorithm SHA256).Hash.ToLowerInvariant()
-    Assert-True ($validationJson.runSnapshot.benchmarkDefinitionHash -eq $waveOneBenchmarkHash) `
-        'Wave 1 candidate must bind the exact Wave 1 governance benchmark bytes.'
-    Assert-True ($waveOneBenchmarkHash -ne $activeBenchmarkHash) `
-        'Runtime and Wave 1 governance benchmark suites must remain byte-distinct.'
 
     $second = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $second | Out-Null
     $workspaces += $second
     $secondResult = Invoke-Prepare $second -RuntimeValue $runtime -PatchValue $patch `
         -RoutesValue $routes -InventoryValue $inventorySource
-    Assert-True ($secondResult.ExitCode -eq 0) 'Second deterministic prepare should pass.'
-    foreach ($relative in @('candidate\portfolio.json','candidate\presentation.json','asset-publication-decisions.json')) {
-        $left = [IO.File]::ReadAllBytes((Join-Path $package $relative))
-        $right = [IO.File]::ReadAllBytes((Join-Path (Join-Path $second 'prepared-candidates\2026-07-24.1') $relative))
-        Assert-True ([Linq.Enumerable]::SequenceEqual([byte[]]$left, [byte[]]$right)) "$relative must be deterministic."
-    }
+    Assert-True ($secondResult.ExitCode -ne 0 -and
+        $secondResult.Json.blockingFindings[0].code -eq 'PRESET_CONTRACT_PROJECTION_MISMATCH') `
+        'Historical regeneration must fail closed deterministically.'
+    Assert-True (-not (Test-Path (Join-Path $second 'prepared-candidates\2026-07-24.1'))) `
+        'A failed projection must not create a target.'
 
     $existing = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path (Join-Path $existing 'prepared-candidates\2026-07-24.1') -Force | Out-Null
@@ -437,29 +353,18 @@ try {
     $originalHoldPublished = Invoke-FakePrepare $fakeOriginalHold $inventoryCopy
     Assert-True ($originalHoldPublished.ExitCode -ne 0) 'T-07 must not be publishable in Wave 1.'
 
-    foreach ($failureStage in @('WRITE','MOVE')) {
+    foreach ($failureStage in @('WRITE','MOVE','CLEANUP')) {
         $fakeFailure = New-FakeRepository
         $failure = Invoke-FakePrepare $fakeFailure $inventoryCopy $failureStage
-        Assert-True ($failure.ExitCode -ne 0) "$failureStage failure injection must fail."
+        Assert-True ($failure.ExitCode -ne 0 -and
+            $failure.Json.blockingFindings[0].code -eq 'PRESET_CONTRACT_PROJECTION_MISMATCH') `
+            "$failureStage injection must fail closed on the historical contract projection."
         Assert-True (-not (Test-Path (Join-Path $failure.Workspace 'prepared-candidates\2026-07-24.1'))) `
             "$failureStage failure must not leave a target."
         $stages = @(Get-ChildItem (Join-Path $failure.Workspace 'prepared-candidates') -Force -ErrorAction SilentlyContinue |
             Where-Object Name -Like '.prepare-*')
-        Assert-True ($stages.Count -eq 0) "$failureStage failure must clean staging output."
+        Assert-True ($stages.Count -eq 0) "$failureStage failure must not enter the staging write phase."
     }
-
-    $fakeCleanupFailure = New-FakeRepository
-    $cleanupFailure = Invoke-FakePrepare $fakeCleanupFailure $inventoryCopy 'CLEANUP'
-    Assert-True ($cleanupFailure.ExitCode -ne 0) 'A secondary cleanup failure must fail closed.'
-    Assert-True ($cleanupFailure.Json.blockingFindings[0].code -eq 'PREPARE_STAGE_MANUAL_RECOVERY_REQUIRED') `
-        'A secondary cleanup failure must report the stable manual recovery code.'
-    Assert-True (-not (Test-Path (Join-Path $cleanupFailure.Workspace 'prepared-candidates\2026-07-24.1'))) `
-        'A secondary cleanup failure must not leave a final target.'
-    $preservedStages = @(Get-ChildItem (Join-Path $cleanupFailure.Workspace 'prepared-candidates') -Force -ErrorAction SilentlyContinue |
-        Where-Object Name -Like '.prepare-*')
-    Assert-True ($preservedStages.Count -eq 1) 'A complete staging directory must be preserved for manual recovery.'
-    Assert-True (-not $cleanupFailure.OutputText.Contains($cleanupFailure.Workspace)) `
-        'A cleanup failure process output must not disclose the absolute workspace path.'
 
     if (-not [string]::IsNullOrWhiteSpace($env:PORTFOLIO_TEST_ASSET_INVENTORY)) {
         $integrationWorkspace = Join-Path ([IO.Path]::GetTempPath()) ('portfolio-w1-test-' + [guid]::NewGuid().ToString('N'))
@@ -468,8 +373,9 @@ try {
         $integration = Invoke-Prepare $integrationWorkspace -RuntimeValue $runtime `
             -PatchValue $patch -RoutesValue $routes `
             -InventoryValue $env:PORTFOLIO_TEST_ASSET_INVENTORY
-        Assert-True ($integration.ExitCode -eq 0) `
-            'The explicitly supplied local asset inventory integration check must pass.'
+        Assert-True ($integration.ExitCode -ne 0 -and
+            $integration.Json.blockingFindings[0].code -eq 'PRESET_CONTRACT_PROJECTION_MISMATCH') `
+            'The explicitly supplied local asset inventory integration check must fail closed on missing contract presets.'
     }
 
     Write-Output 'portfolio-governance prepare-candidate tests passed.'

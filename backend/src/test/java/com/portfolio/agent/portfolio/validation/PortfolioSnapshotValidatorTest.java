@@ -271,6 +271,85 @@ class PortfolioSnapshotValidatorTest {
     }
 
     @Test
+    void rejectsActivePresetWithoutContractSubject() {
+        assertInvalid(validJson().replace(questionJson(), activeQuestionJson().replace(
+                "\"contractSubjectId\": \"sql-audit-project\",",
+                "")),
+                "contractSubjectId is required");
+    }
+
+    @Test
+    void rejectsActivePresetWithUnknownContractSubject() {
+        assertInvalid(validJson().replace(questionJson(), activeQuestionJson().replace(
+                "\"contractSubjectId\": \"sql-audit-project\"",
+                "\"contractSubjectId\": \"missing-subject\"")),
+                "contractSubjectId is unknown");
+    }
+
+    @Test
+    void rejectsActivePresetWithContractSubjectOutsideDisplayAssociations() {
+        String activeProjectQuestion = caseQuestionJson()
+                .replace("\"projectIds\": [],", "\"projectIds\": [\"sql-audit-project\"],")
+                .replace("\"caseIds\": [\"case-one\"]", "\"caseIds\": []")
+                .replace("\"deterministicEntry\": true,",
+                        """
+                        "contractSubjectId": "case-one",
+                          "requiredClaimIds": ["claim-case-delivered"],
+                          "supportingClaimIds": [],
+                          "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
+                          "contractStatus": "ACTIVE",
+                          "deterministicEntry": true,
+                        """);
+
+        assertInvalid(validSchemaFourJson().replace(caseQuestionJson(), activeProjectQuestion),
+                "contractSubjectId must be a display association");
+    }
+
+    @Test
+    void rejectsActivePresetWithOverlappingRequiredAndSupportingClaims() {
+        assertInvalid(validJson().replace(questionJson(), activeQuestionJson().replace(
+                "\"supportingClaimIds\": []",
+                "\"supportingClaimIds\": [\"claim-sql-audit-delivered\"]")),
+                "must be disjoint");
+    }
+
+    @Test
+    void rejectsActivePresetWhoseRequiredClaimLosesDirectApprovedEvidence() {
+        assertInvalid(validJson()
+                .replace(questionJson(), activeQuestionJson())
+                .replace("\"supportType\": \"DIRECT\"", "\"supportType\": \"CONTEXTUAL\""),
+                "DIRECT");
+    }
+
+    @Test
+    void acceptsActivePresetWithMultipleDisplayAssociationsAndSingleSubject() {
+        String abtestQuestion = """
+                {
+                  "id": "question-abtest-overview",
+                  "text": "Describe the AB test project",
+                  "aliases": ["Introduce the AB test project"],
+                  "audiences": ["INTERVIEWER"],
+                  "projectIds": ["sql-audit-project"],
+                  "caseIds": ["case-one"],
+                  "topics": ["OVERVIEW"],
+                  "preferredClaimCategories": ["OUTCOME"],
+                  "placements": ["HOME"],
+                  "deterministicEntry": true,
+                  "displayOrder": 30,
+                  "contractSubjectId": "sql-audit-project",
+                  "requiredClaimIds": ["claim-sql-audit-delivered"],
+                  "supportingClaimIds": [],
+                  "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
+                  "contractStatus": "ACTIVE"
+                }
+                """;
+        String schemaFour = validSchemaFourJson()
+                .replace(questionJson(), abtestQuestion);
+
+        assertThatCode(() -> validate(schemaFour)).doesNotThrowAnyException();
+    }
+
+    @Test
     void rejectsActivePresetWithRequiredClaimFromAnotherSubject() {
         String activeCaseQuestion = caseQuestionJson().replace(
                 "\"deterministicEntry\": true,",
@@ -278,6 +357,7 @@ class PortfolioSnapshotValidatorTest {
                 "requiredClaimIds": ["claim-sql-audit-delivered"],
                   "supportingClaimIds": [],
                   "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
+                  "contractSubjectId": "case-one",
                   "contractStatus": "ACTIVE",
                   "deterministicEntry": true,
                 """);
@@ -831,7 +911,8 @@ class PortfolioSnapshotValidatorTest {
         return questionJson().replace(
                 "\"deterministicEntry\": true,",
                 """
-                "requiredClaimIds": ["claim-sql-audit-delivered"],
+                "contractSubjectId": "sql-audit-project",
+                  "requiredClaimIds": ["claim-sql-audit-delivered"],
                   "supportingClaimIds": [],
                   "evidenceRequirement": {"minimumApprovedEvidencePerRequiredClaim": 1, "publicOnly": true},
                   "contractStatus": "ACTIVE",

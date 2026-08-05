@@ -1,6 +1,6 @@
 {
     "schemaVersion":  "4.0",
-    "contentVersion":  "2026-08-04.2",
+    "contentVersion":  "2026-08-05.1",
     "owner":  {
                   "name":  "",
                   "role":  "Java 后端开发实习生",
@@ -321,7 +321,12 @@
                          "status":  "DELIVERED",
                          "contributionType":  "PRIMARY",
                          "claimIds":  [
-                                          "claim-abtest-project-delivered"
+                                          "claim-abtest-project-delivered",
+                                          "claim-abtest-project-background",
+                                          "claim-abtest-project-responsibility",
+                                          "claim-abtest-project-stratification-bucketing",
+                                          "claim-abtest-project-stable-assignment",
+                                          "claim-abtest-project-validation-rollback"
                                       ],
                          "evidenceIds":  [
                                              "evidence-abtest-delivery-history",
@@ -2299,6 +2304,126 @@
                                                   "HR":  70,
                                                   "GUEST":  60
                                               }
+                   },
+                   {
+                       "id":  "claim-abtest-project-background",
+                       "subjectType":  "PROJECT",
+                       "subjectId":  "weekend-login-abtest-project",
+                       "category":  "BACKGROUND",
+                       "statement":  "项目目标是把周末登录奖励从一次性配置扩展为可比较、稳定归组、可验证且可停止的 A/B 实验闭环。",
+                       "detail":  "公开内容只陈述实验建模目标与闭环范围，不推断任何业务指标或线上效果。",
+                       "achievementStatus":  "DELIVERED",
+                       "contributionType":  "PRIMARY",
+                       "verificationBasis":  "EVIDENCE_SUPPORTED",
+                       "verificationStatus":  "VERIFIED",
+                       "materiality":  "KEY",
+                       "topics":  [
+                                      "AB_TESTING",
+                                      "PROJECT_OVERVIEW",
+                                      "BACKGROUND"
+                                  ],
+                       "audiencePriorities":  {
+                                                  "INTERVIEWER":  100,
+                                                  "MENTOR":  100,
+                                                  "HR":  85,
+                                                  "GUEST":  70
+                                              }
+                   },
+                   {
+                       "id":  "claim-abtest-project-responsibility",
+                       "subjectType":  "PROJECT",
+                       "subjectId":  "weekend-login-abtest-project",
+                       "category":  "RESPONSIBILITY",
+                       "statement":  "本人负责实验建模、分层分桶、服务端与配置演进、测试验收、埋点核对以及停止和回滚边界设计。",
+                       "detail":  "公开内容只陈述职责范围与贡献边界，不夸大对业务结果的影响。",
+                       "achievementStatus":  "DELIVERED",
+                       "contributionType":  "PRIMARY",
+                       "verificationBasis":  "EVIDENCE_SUPPORTED",
+                       "verificationStatus":  "VERIFIED",
+                       "materiality":  "KEY",
+                       "topics":  [
+                                      "AB_TESTING",
+                                      "PROJECT_OVERVIEW",
+                                      "PRIMARY"
+                                  ],
+                       "audiencePriorities":  {
+                                                  "INTERVIEWER":  100,
+                                                  "MENTOR":  100,
+                                                  "HR":  85,
+                                                  "GUEST":  70
+                                              }
+                   },
+                   {
+                       "id":  "claim-abtest-project-stratification-bucketing",
+                       "subjectType":  "PROJECT",
+                       "subjectId":  "weekend-login-abtest-project",
+                       "category":  "TECHNICAL_DECISION",
+                       "statement":  "先按实验前历史登录天数分层，再在层内稳定分桶，以降低历史活跃度差异并保持组间可比。",
+                       "detail":  "公开内容只陈述分层与分桶的技术决策，不展示分层键、对象标识或样本数量。",
+                       "achievementStatus":  "DELIVERED",
+                       "contributionType":  "PRIMARY",
+                       "verificationBasis":  "EVIDENCE_SUPPORTED",
+                       "verificationStatus":  "VERIFIED",
+                       "materiality":  "KEY",
+                       "topics":  [
+                                      "AB_TESTING",
+                                      "STRATIFICATION",
+                                      "BUCKETING"
+                                  ],
+                       "audiencePriorities":  {
+                                                  "INTERVIEWER":  100,
+                                                  "MENTOR":  100,
+                                                  "HR":  85,
+                                                  "GUEST":  70
+                                              }
+                   },
+                   {
+                       "id":  "claim-abtest-project-stable-assignment",
+                       "subjectType":  "PROJECT",
+                       "subjectId":  "weekend-login-abtest-project",
+                       "category":  "IMPLEMENTATION",
+                       "statement":  "实验标签通过服务端统一规则和持久化结果保持跨请求、跨实例的稳定归组，并随配置版本演进。",
+                       "detail":  "公开内容只陈述归组机制与服务端配置演进事实，不包含类名、表名、字段或 SQL 原文。",
+                       "achievementStatus":  "DELIVERED",
+                       "contributionType":  "PRIMARY",
+                       "verificationBasis":  "EVIDENCE_SUPPORTED",
+                       "verificationStatus":  "VERIFIED",
+                       "materiality":  "KEY",
+                       "topics":  [
+                                      "AB_TESTING",
+                                      "PERSISTENCE",
+                                      "CONFIGURATION"
+                                  ],
+                       "audiencePriorities":  {
+                                                  "INTERVIEWER":  100,
+                                                  "MENTOR":  100,
+                                                  "HR":  85,
+                                                  "GUEST":  70
+                                              }
+                   },
+                   {
+                       "id":  "claim-abtest-project-validation-rollback",
+                       "subjectType":  "PROJECT",
+                       "subjectId":  "weekend-login-abtest-project",
+                       "category":  "VERIFICATION",
+                       "statement":  "验收覆盖配置、归组、激活、曝光与结果事件，并明确异常停止和回滚边界；不声称发生过线上事故。",
+                       "detail":  "公开内容只陈述验收范围与回滚预案，不推断线上事故或业务胜负。",
+                       "achievementStatus":  "DELIVERED",
+                       "contributionType":  "PRIMARY",
+                       "verificationBasis":  "EVIDENCE_SUPPORTED",
+                       "verificationStatus":  "VERIFIED",
+                       "materiality":  "KEY",
+                       "topics":  [
+                                      "AB_TESTING",
+                                      "VERIFICATION",
+                                      "ROLLBACK"
+                                  ],
+                       "audiencePriorities":  {
+                                                  "INTERVIEWER":  100,
+                                                  "MENTOR":  100,
+                                                  "HR":  85,
+                                                  "GUEST":  70
+                                              }
                    }
                ],
     "claimEvidenceLinks":  [
@@ -2965,6 +3090,46 @@
                                    "supportType":  "DIRECT",
                                    "scope":  "支持测试、事件口径和回滚预案设计，不证明执行过线上回滚。",
                                    "reviewStatus":  "APPROVED"
+                               },
+                               {
+                                   "id":  "link-abtest-project-background",
+                                   "claimId":  "claim-abtest-project-background",
+                                   "evidenceId":  "evidence-abtest-delivery-history",
+                                   "supportType":  "DIRECT",
+                                   "scope":  "项目目标与实验闭环范围由交付历史证据集支撑。",
+                                   "reviewStatus":  "APPROVED"
+                               },
+                               {
+                                   "id":  "link-abtest-project-responsibility",
+                                   "claimId":  "claim-abtest-project-responsibility",
+                                   "evidenceId":  "evidence-abtest-delivery-history",
+                                   "supportType":  "DIRECT",
+                                   "scope":  "职责与贡献边界由交付历史证据集支撑。",
+                                   "reviewStatus":  "APPROVED"
+                               },
+                               {
+                                   "id":  "link-abtest-project-stratification-bucketing",
+                                   "claimId":  "claim-abtest-project-stratification-bucketing",
+                                   "evidenceId":  "evidence-abtest-experiment-design-notes",
+                                   "supportType":  "DIRECT",
+                                   "scope":  "分层与稳定分桶决策由实验设计说明支撑。",
+                                   "reviewStatus":  "APPROVED"
+                               },
+                               {
+                                   "id":  "link-abtest-project-stable-assignment",
+                                   "claimId":  "claim-abtest-project-stable-assignment",
+                                   "evidenceId":  "evidence-abtest-service-sql-evolution",
+                                   "supportType":  "DIRECT",
+                                   "scope":  "服务端稳定归组与配置演进由服务端能力证据集支撑。",
+                                   "reviewStatus":  "APPROVED"
+                               },
+                               {
+                                   "id":  "link-abtest-project-validation-rollback",
+                                   "claimId":  "claim-abtest-project-validation-rollback",
+                                   "evidenceId":  "evidence-abtest-validation-risk-notes",
+                                   "supportType":  "DIRECT",
+                                   "scope":  "验收范围与回滚边界由验证与风险控制说明支撑。",
+                                   "reviewStatus":  "APPROVED"
                                }
                            ],
     "questionPresets":  [
@@ -3006,7 +3171,23 @@
                                 "displayOrder":  10,
                                 "caseIds":  [
 
-                                            ]
+                                            ],
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-background",
+                                                         "claim-sql-audit-responsibility",
+                                                         "claim-sql-audit-technical-decision",
+                                                         "claim-sql-audit-verification",
+                                                         "claim-sql-audit-delivered"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-sql-audit-documented-handoff"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-sql-audit-negative-input",
@@ -3037,7 +3218,19 @@
                                                    "PROJECT"
                                                ],
                                 "deterministicEntry":  true,
-                                "displayOrder":  20
+                                "displayOrder":  20,
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-fixed-string-search"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-sql-audit-verification"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-sql-audit-partial-success",
@@ -3069,7 +3262,20 @@
                                                    "PROJECT"
                                                ],
                                 "deterministicEntry":  true,
-                                "displayOrder":  30
+                                "displayOrder":  30,
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-source-selection",
+                                                         "claim-sql-audit-partial-success"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-sql-audit-selected-target-check"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-multilingual-overview",
@@ -3101,7 +3307,21 @@
                                                    "CASE"
                                                ],
                                 "deterministicEntry":  true,
-                                "displayOrder":  100
+                                "displayOrder":  100,
+                                "contractSubjectId":  "case-multilingual-upload",
+                                "requiredClaimIds":  [
+                                                         "claim-case-multilingual-replacement-problem",
+                                                         "claim-case-multilingual-preserve-existing",
+                                                         "claim-case-multilingual-sequential-verification"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-multilingual-no-backfill"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-role-reset-overview",
@@ -3133,7 +3353,23 @@
                                                    "CASE"
                                                ],
                                 "deterministicEntry":  true,
-                                "displayOrder":  110
+                                "displayOrder":  110,
+                                "contractSubjectId":  "case-role-reset",
+                                "requiredClaimIds":  [
+                                                         "claim-case-role-reset-cache-interference-problem",
+                                                         "claim-case-role-reset-controlled-flow",
+                                                         "claim-case-role-reset-confirmation-safety",
+                                                         "claim-case-role-reset-acceptance",
+                                                         "claim-case-role-reset-documented-delivery"
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-codegraph-overview",
@@ -3166,7 +3402,23 @@
                                                    "CASE"
                                                ],
                                 "deterministicEntry":  true,
-                                "displayOrder":  120
+                                "displayOrder":  120,
+                                "contractSubjectId":  "case-codegraph-evaluation",
+                                "requiredClaimIds":  [
+                                                         "claim-case-codegraph-narrowing",
+                                                         "claim-case-codegraph-combined-workflow",
+                                                         "claim-case-codegraph-evaluation-method"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-codegraph-failure-boundary",
+                                                           "claim-case-codegraph-manual-quality-review",
+                                                           "claim-case-codegraph-qualitative-publication"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-sql-audit-async-and-recovery",
@@ -3198,7 +3450,20 @@
                                 "displayOrder":  40,
                                 "caseIds":  [
 
-                                            ]
+                                            ],
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-async-task-lifecycle",
+                                                         "claim-sql-audit-progress-fallback"
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-sql-audit-progress-fallback",
@@ -3231,7 +3496,19 @@
                                 "displayOrder":  50,
                                 "caseIds":  [
 
-                                            ]
+                                            ],
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-progress-fallback"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-sql-audit-async-task-lifecycle"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-sql-audit-archive-and-truncation",
@@ -3265,7 +3542,20 @@
                                 "displayOrder":  60,
                                 "caseIds":  [
 
-                                            ]
+                                            ],
+                                "contractSubjectId":  "sql-audit-project",
+                                "requiredClaimIds":  [
+                                                         "claim-sql-audit-result-lifecycle",
+                                                         "claim-sql-audit-truncation-disclosure"
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-multilingual-verification-sequence",
@@ -3298,7 +3588,20 @@
                                 "displayOrder":  130,
                                 "caseIds":  [
                                                 "case-multilingual-upload"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-multilingual-upload",
+                                "requiredClaimIds":  [
+                                                         "claim-case-multilingual-preserve-existing",
+                                                         "claim-case-multilingual-sequential-verification"
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-multilingual-recovery-boundary",
@@ -3331,7 +3634,19 @@
                                 "displayOrder":  140,
                                 "caseIds":  [
                                                 "case-multilingual-upload"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-multilingual-upload",
+                                "requiredClaimIds":  [
+                                                         "claim-case-multilingual-no-backfill"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-multilingual-preserve-existing"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-role-reset-acceptance-result",
@@ -3365,7 +3680,20 @@
                                 "displayOrder":  150,
                                 "caseIds":  [
                                                 "case-role-reset"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-role-reset",
+                                "requiredClaimIds":  [
+                                                         "claim-case-role-reset-controlled-flow",
+                                                         "claim-case-role-reset-acceptance"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-role-reset-documented-delivery"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-role-reset-safety-boundary",
@@ -3398,7 +3726,19 @@
                                 "displayOrder":  160,
                                 "caseIds":  [
                                                 "case-role-reset"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-role-reset",
+                                "requiredClaimIds":  [
+                                                         "claim-case-role-reset-confirmation-safety"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-role-reset-controlled-flow"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-codegraph-method",
@@ -3431,7 +3771,20 @@
                                 "displayOrder":  170,
                                 "caseIds":  [
                                                 "case-codegraph-evaluation"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-codegraph-evaluation",
+                                "requiredClaimIds":  [
+                                                         "claim-case-codegraph-evaluation-method"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-codegraph-narrowing",
+                                                           "claim-case-codegraph-combined-workflow"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-case-codegraph-quality-boundary",
@@ -3464,7 +3817,20 @@
                                 "displayOrder":  180,
                                 "caseIds":  [
                                                 "case-codegraph-evaluation"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "case-codegraph-evaluation",
+                                "requiredClaimIds":  [
+                                                         "claim-case-codegraph-manual-quality-review",
+                                                         "claim-case-codegraph-qualitative-publication"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-case-codegraph-failure-boundary"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-public-assets-overview",
@@ -3544,7 +3910,19 @@
                                                 "case-public-k-15",
                                                 "case-public-k-16",
                                                 "case-public-k-17"
-                                            ]
+                                            ],
+                                "contractSubjectId":  null,
+                                "requiredClaimIds":  [
+
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "DRAFT"
                             },
                             {
                                 "id":  "question-abtest-overview",
@@ -3584,7 +3962,24 @@
                                                 "case-abtest-experiment-design",
                                                 "case-abtest-service-sql",
                                                 "case-abtest-validation-risk-control"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "weekend-login-abtest-project",
+                                "requiredClaimIds":  [
+                                                         "claim-abtest-project-background",
+                                                         "claim-abtest-project-responsibility",
+                                                         "claim-abtest-project-stratification-bucketing",
+                                                         "claim-abtest-project-stable-assignment",
+                                                         "claim-abtest-project-validation-rollback",
+                                                         "claim-abtest-project-delivered"
+                                                     ],
+                                "supportingClaimIds":  [
+
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-abtest-stratification-bucketing",
@@ -3620,7 +4015,19 @@
                                 "displayOrder":  26,
                                 "caseIds":  [
                                                 "case-abtest-experiment-design"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "weekend-login-abtest-project",
+                                "requiredClaimIds":  [
+                                                         "claim-abtest-project-stratification-bucketing"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-abtest-project-background"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             },
                             {
                                 "id":  "question-abtest-stable-assignment-and-rollback",
@@ -3658,7 +4065,20 @@
                                 "caseIds":  [
                                                 "case-abtest-service-sql",
                                                 "case-abtest-validation-risk-control"
-                                            ]
+                                            ],
+                                "contractSubjectId":  "weekend-login-abtest-project",
+                                "requiredClaimIds":  [
+                                                         "claim-abtest-project-stable-assignment",
+                                                         "claim-abtest-project-validation-rollback"
+                                                     ],
+                                "supportingClaimIds":  [
+                                                           "claim-abtest-project-delivered"
+                                                       ],
+                                "evidenceRequirement":  {
+                                                            "minimumApprovedEvidencePerRequiredClaim":  1,
+                                                            "publicOnly":  true
+                                                        },
+                                "contractStatus":  "ACTIVE"
                             }
                         ],
     "evidence":  [

@@ -92,6 +92,7 @@ function Get-ApprovalDigest([object]$Approval) {
     $projection = [ordered]@{
         candidatePayloadHash = [string]$Approval.candidatePayloadHash
         ledgerHash = [string]$Approval.ledgerHash
+        presetContractSetHash = [string]$Approval.presetContractSetHash
         inputFingerprint = [string]$Approval.inputFingerprint
         compilerJarHash = if ($null -eq $Approval.compilerJarHash) {
             $null
@@ -117,6 +118,9 @@ function Get-ExpectedAssetIds() {
 }
 function Get-IncrementalExpectedAssetIds() {
     return @((Get-ExpectedAssetIds) + @('TD-01','TD-02','TD-03','TD-04'))
+}
+function Get-AbTestExpectedAssetIds() {
+    return @((Get-ExpectedAssetIds) + @('AB-01','AB-02','AB-03','AB-04'))
 }
 function Read-DecisionLedger([string]$LedgerPath) {
     $resolvedLedger = Resolve-SafePath $LedgerPath 'decisionLedger'
@@ -192,8 +196,11 @@ function Read-DecisionLedger([string]$LedgerPath) {
             }
         }
     }
-    $expectedIds = if (@($ledger.assets | ForEach-Object { [string]$_.assetId }) -contains 'TD-01') {
+    $ledgerAssetIds = @($ledger.assets | ForEach-Object { [string]$_.assetId })
+    $expectedIds = if ($ledgerAssetIds -contains 'TD-01') {
         @(Get-IncrementalExpectedAssetIds)
+    } elseif ($ledgerAssetIds -contains 'AB-01') {
+        @(Get-AbTestExpectedAssetIds)
     } else {
         @(Get-ExpectedAssetIds)
     }
@@ -486,6 +493,234 @@ function Assert-UniqueIds([object[]]$Items, [string]$Label) {
     if (@($ids | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
             @($ids | Select-Object -Unique).Count -ne $ids.Count) {
         Write-Failure 'PREPARE_DUPLICATE_OR_EMPTY_ID' "$Label contains an empty or duplicate ID."
+    }
+}
+function Normalize-PresetText([string]$Value) {
+    if ([string]::IsNullOrEmpty($Value)) { return '' }
+    return [regex]::Replace(
+        $Value.Normalize([Text.NormalizationForm]::FormKC).ToLowerInvariant().Trim(),
+        '\s+', ' ')
+}
+function Get-PresetContractVersion([object]$Question) {
+    $canonical = 'id=' + (Normalize-PresetText ([string]$Question.id)) + "`n" +
+        'text=' + (Normalize-PresetText ([string]$Question.text)) + "`n" +
+        'aliases=' + ((@($Question.aliases) |
+            ForEach-Object { Normalize-PresetText ([string]$_) }) -join ',') + "`n" +
+        'subject=' + (Normalize-PresetText ([string]$Question.contractSubjectId)) + "`n" +
+        'requiredClaimIds=' + ((@($Question.requiredClaimIds) |
+            ForEach-Object { Normalize-PresetText ([string]$_) }) -join ',') + "`n" +
+        'supportingClaimIds=' + ((@($Question.supportingClaimIds) |
+            ForEach-Object { Normalize-PresetText ([string]$_) }) -join ',') + "`n" +
+        'minimumApprovedEvidencePerRequiredClaim=' +
+            ([int]$Question.evidenceRequirement.minimumApprovedEvidencePerRequiredClaim) + "`n" +
+        'publicOnly=' + ([string]$Question.evidenceRequirement.publicOnly).ToLowerInvariant() + "`n" +
+        'status=' + ([string]$Question.contractStatus).ToLowerInvariant() + "`n"
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash(
+        [Text.Encoding]::UTF8.GetBytes($canonical))
+    return 'pcv1-' + (([BitConverter]::ToString($hash, 0, 8)) -replace '-', '').ToLowerInvariant()
+}
+function Get-PresetContractSetHash([object[]]$ActiveQuestions) {
+    $sorted = @($ActiveQuestions | Sort-Object { [string]$_.id })
+    $ids = @($sorted | ForEach-Object { [string]$_.id })
+    if (@($ids | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+            @($ids | Select-Object -Unique).Count -ne $ids.Count) {
+        Write-Failure 'PRESET_CONTRACT_SET_HASH_MISMATCH' 'Active preset ids must be unique and non-empty.'
+    }
+    $entries = @()
+    foreach ($question in $sorted) {
+        if ([string]$question.contractStatus -ne 'ACTIVE') {
+            Write-Failure 'PRESET_CONTRACT_SET_HASH_MISMATCH' 'Set hash input contains a non-active preset.'
+        }
+        $version = Get-PresetContractVersion $question
+        if ([string]::IsNullOrWhiteSpace($version)) {
+            Write-Failure 'PRESET_CONTRACT_SET_HASH_MISMATCH' 'Active preset contract version is empty.'
+        }
+        $entries += ('{"presetId":"' + [string]$question.id + '","contractVersion":"' + $version + '"}')
+    }
+    $canonical = '[' + ($entries -join ',') + ']'
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash(
+        [Text.Encoding]::UTF8.GetBytes($canonical))
+    return 'sha256:' + (([BitConverter]::ToString($hash)) -replace '-', '').ToLowerInvariant()
+}
+function Read-PresetContractPolicy([string]$PathValue) {
+    $resolved = Resolve-SafePath $PathValue 'presetContractPolicy'
+    Assert-NoReparsePoint $resolved
+    try {
+        $policy = Get-Content -LiteralPath $resolved -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'Preset contract policy is required and must be parseable.'
+    }
+    $properties = @($policy.PSObject.Properties.Name | Sort-Object)
+    if (($properties -join ',') -ne 'activeContracts,nonPublicDraftPresetIds,schemaVersion' -or
+            [string]$policy.schemaVersion -ne '1.0') {
+        Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'Preset contract policy schema or field set is invalid.'
+    }
+    $activeIds = @($policy.activeContracts | ForEach-Object { [string]$_.presetId })
+    $draftIds = @($policy.nonPublicDraftPresetIds)
+    if (@($activeIds | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+            @($activeIds | Select-Object -Unique).Count -ne $activeIds.Count) {
+        Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'Preset contract policy contains empty or duplicate active preset ids.'
+    }
+    if (@($draftIds | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+            @($draftIds | Select-Object -Unique).Count -ne $draftIds.Count -or
+            @($activeIds | Where-Object { $draftIds -contains $_ }).Count -gt 0) {
+        Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'Active and Draft preset ids must be unique and disjoint.'
+    }
+    foreach ($contract in @($policy.activeContracts)) {
+        Assert-ExactProperties $contract @(
+            'presetId','contractSubjectId','requiredClaimIds','supportingClaimIds',
+            'evidenceRequirement','status') 'PRESET_CONTRACT_POLICY_INVALID'
+        Assert-ExactProperties $contract.evidenceRequirement @(
+            'minimumApprovedEvidencePerRequiredClaim','publicOnly') 'PRESET_CONTRACT_POLICY_INVALID'
+        if ([string]$contract.status -ne 'ACTIVE' -or
+                [string]::IsNullOrWhiteSpace([string]$contract.contractSubjectId) -or
+                @($contract.requiredClaimIds).Count -eq 0 -or
+                [int]$contract.evidenceRequirement.minimumApprovedEvidencePerRequiredClaim -lt 1 -or
+                $contract.evidenceRequirement.publicOnly -ne $true) {
+            Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'An active contract declaration is invalid.'
+        }
+        if (@($contract.requiredClaimIds | Select-Object -Unique).Count -ne
+                @($contract.requiredClaimIds).Count -or
+                @($contract.supportingClaimIds | Select-Object -Unique).Count -ne
+                @($contract.supportingClaimIds).Count -or
+                @($contract.supportingClaimIds | Where-Object {
+                    @($contract.requiredClaimIds) -contains $_
+                }).Count -gt 0) {
+            Write-Failure 'PRESET_CONTRACT_POLICY_INVALID' 'An active contract Claim lists must be unique and disjoint.'
+        }
+    }
+    return $policy
+}
+function Invoke-PresetContractProjection([object]$Portfolio, [object]$Policy) {
+    $questionById = @{}
+    foreach ($question in @($Portfolio.questionPresets)) {
+        $questionById[[string]$question.id] = $question
+    }
+    $projectsById = @{}
+    foreach ($project in @($Portfolio.projects)) { $projectsById[[string]$project.id] = $project }
+    $casesById = @{}
+    foreach ($caseStudy in @($Portfolio.cases)) { $casesById[[string]$caseStudy.id] = $caseStudy }
+    $claimsById = @{}
+    foreach ($claim in @($Portfolio.claims)) { $claimsById[[string]$claim.id] = $claim }
+    $evidenceById = @{}
+    foreach ($item in @($Portfolio.evidence)) { $evidenceById[[string]$item.id] = $item }
+    $activeIds = @($Policy.activeContracts | ForEach-Object { [string]$_.presetId })
+    $draftIds = @($Policy.nonPublicDraftPresetIds)
+    foreach ($presetId in $activeIds) {
+        if (-not $questionById.ContainsKey($presetId)) {
+            Write-Failure 'PRESET_CONTRACT_PROJECTION_MISMATCH' "Active preset is missing from candidate: $presetId"
+        }
+    }
+    foreach ($draftId in $draftIds) {
+        if (-not $questionById.ContainsKey($draftId)) {
+            Write-Failure 'PRESET_CONTRACT_PROJECTION_MISMATCH' "Draft preset is missing from candidate: $draftId"
+        }
+    }
+    foreach ($contract in @($Policy.activeContracts)) {
+        $presetId = [string]$contract.presetId
+        $question = $questionById[$presetId]
+        foreach ($field in @('contractSubjectId','requiredClaimIds','supportingClaimIds','evidenceRequirement','contractStatus')) {
+            if ($question.PSObject.Properties.Name -notcontains $field) {
+                $question | Add-Member -NotePropertyName $field -NotePropertyValue $null
+            }
+        }
+        $question.contractSubjectId = [string]$contract.contractSubjectId
+        $question.requiredClaimIds = @($contract.requiredClaimIds)
+        $question.supportingClaimIds = @($contract.supportingClaimIds)
+        $question.evidenceRequirement = [ordered]@{
+            minimumApprovedEvidencePerRequiredClaim =
+                [int]$contract.evidenceRequirement.minimumApprovedEvidencePerRequiredClaim
+            publicOnly = $true
+        }
+        $question.contractStatus = 'ACTIVE'
+    }
+    foreach ($draftId in $draftIds) {
+        $question = $questionById[$draftId]
+        foreach ($field in @('contractSubjectId','requiredClaimIds','supportingClaimIds','evidenceRequirement','contractStatus')) {
+            if ($question.PSObject.Properties.Name -notcontains $field) {
+                $question | Add-Member -NotePropertyName $field -NotePropertyValue $null
+            }
+        }
+        $question.contractSubjectId = $null
+        $question.requiredClaimIds = @()
+        $question.supportingClaimIds = @()
+        $question.evidenceRequirement = [ordered]@{
+            minimumApprovedEvidencePerRequiredClaim = 1
+            publicOnly = $true
+        }
+        $question.contractStatus = 'DRAFT'
+    }
+    $projectedActiveIds = @($Portfolio.questionPresets |
+        Where-Object { [string]$_.contractStatus -eq 'ACTIVE' } |
+        ForEach-Object { [string]$_.id } | Sort-Object)
+    $policyActiveIds = @($activeIds | Sort-Object)
+    if ((Compare-Object $projectedActiveIds $policyActiveIds).Count -ne 0) {
+        Write-Failure 'PRESET_CONTRACT_ACTIVE_SET_DRIFT' 'Candidate active preset set differs from the policy allowlist.'
+    }
+    foreach ($contract in @($Policy.activeContracts)) {
+        $question = $questionById[[string]$contract.presetId]
+        $subjectId = [string]$contract.contractSubjectId
+        if (-not ($projectsById.ContainsKey($subjectId) -or
+                $casesById.ContainsKey($subjectId))) {
+            Write-Failure 'PRESET_CONTRACT_SUBJECT_INVALID' "contractSubjectId is unknown: $subjectId"
+        }
+        $displayIds = @($question.projectIds) + @($question.caseIds)
+        if ($displayIds -notcontains $subjectId) {
+            Write-Failure 'PRESET_CONTRACT_SUBJECT_INVALID' (
+                "contractSubjectId must be a display association: $($question.id)")
+        }
+        foreach ($claimId in @($contract.requiredClaimIds)) {
+            Assert-ProjectedClaim $claimsById $Portfolio $evidenceById `
+                ([string]$claimId) $subjectId $true $contract
+        }
+        foreach ($claimId in @($contract.supportingClaimIds)) {
+            Assert-ProjectedClaim $claimsById $Portfolio $evidenceById `
+                ([string]$claimId) $subjectId $false $contract
+        }
+    }
+    $activeQuestions = @($Portfolio.questionPresets |
+        Where-Object { [string]$_.contractStatus -eq 'ACTIVE' })
+    return Get-PresetContractSetHash $activeQuestions
+}
+function Assert-ProjectedClaim(
+    [object]$ClaimsById,
+    [object]$Portfolio,
+    [object]$EvidenceById,
+    [string]$ClaimId,
+    [string]$SubjectId,
+    [bool]$Required,
+    [object]$Contract
+) {
+    $prefix = if ($Required) { 'required' } else { 'supporting' }
+    if (-not $ClaimsById.ContainsKey($ClaimId)) {
+        Write-Failure 'PRESET_CONTRACT_CLAIM_INVALID' "$prefix claim does not exist: $ClaimId"
+    }
+    $claim = $ClaimsById[$ClaimId]
+    if ([string]$claim.verificationStatus -ne 'VERIFIED') {
+        Write-Failure 'PRESET_CONTRACT_CLAIM_INVALID' "$prefix claim must be VERIFIED: $ClaimId"
+    }
+    if ([string]$claim.subjectId -ne $SubjectId) {
+        Write-Failure 'PRESET_CONTRACT_CLAIM_INVALID' "$prefix claim subject must match the contract subject: $ClaimId"
+    }
+    if (-not $Required) { return }
+    $approvedDirect = @($Portfolio.claimEvidenceLinks |
+        Where-Object {
+            $_.claimId -eq $ClaimId -and $_.supportType -eq 'DIRECT' -and
+            $_.reviewStatus -eq 'APPROVED' -and $EvidenceById.ContainsKey([string]$_.evidenceId) -and
+            [string]$EvidenceById[[string]$_.evidenceId].publicStatus -eq 'APPROVED' -and
+            $EvidenceById[[string]$_.evidenceId].rawContentPublic -eq $false
+        })
+    if ($approvedDirect.Count -lt
+            [int]$Contract.evidenceRequirement.minimumApprovedEvidencePerRequiredClaim) {
+        Write-Failure 'PRESET_CONTRACT_EVIDENCE_INSUFFICIENT' (
+            "$prefix claim approved evidence is insufficient: $ClaimId")
+    }
+}
+function Assert-PresetContractProjection([object]$Portfolio, [object]$Policy, [string]$ExpectedSetHash) {
+    $actual = Invoke-PresetContractProjection $Portfolio $Policy
+    if ($actual -ne $ExpectedSetHash) {
+        Write-Failure 'PRESET_CONTRACT_SET_HASH_MISMATCH' 'Preset contract set hash differs from the recorded projection.'
     }
 }
 function Write-DeterministicJson([string]$PathValue, [object]$Value) {
@@ -888,6 +1123,9 @@ function Invoke-PrepareCandidateV3 {
         Write-Failure 'PREPARE_CANDIDATE_COVERAGE_INVALID' `
             'ABTest merged candidate counts differ from the reviewed target.'
     }
+    $presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+        'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
 
     $baselineById = @{}
     foreach ($asset in @($baseline.assets)) {
@@ -999,6 +1237,7 @@ function Invoke-PrepareCandidateV3 {
             ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
         )
         blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+        presetContractSetHash=$presetContractSetHash
     } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
 }
@@ -1220,6 +1459,9 @@ function Invoke-PrepareCandidateV2 {
             (Compare-Object $inventoryIds (Get-ExpectedAssetIds)).Count -ne 0) {
         Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' 'Asset inventory must contain exactly the 68 known assets.'
     }
+    $presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+        'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
     $publishIds = @($routes.publishRoutes | ForEach-Object { [string]$_.assetId })
     $excludedIds = @($inventoryDocument.assets |
         Where-Object reviewState -eq 'EXCLUDE' | ForEach-Object { [string]$_.id })
@@ -1322,6 +1564,7 @@ function Invoke-PrepareCandidateV2 {
             ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
         )
         blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+        presetContractSetHash=$presetContractSetHash
     } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
 }
@@ -1406,6 +1649,8 @@ function Invoke-PrepareCandidateToolDocker {
     $portfolio.projects = @($portfolio.projects) + @($patch.projects); $portfolio.cases = @($portfolio.cases) + @($patch.cases); $portfolio.timelineEvents = @($portfolio.timelineEvents) + @($patch.timelineEvents); $portfolio.claims = @($portfolio.claims) + @($patch.claims); $portfolio.evidence = @($portfolio.evidence) + @($patch.evidence); $portfolio.claimEvidenceLinks = @($portfolio.claimEvidenceLinks) + @($patch.links); $portfolio.questionPresets = @($portfolio.questionPresets) + @($patch.presets)
     if (@($portfolio.projects).Count -ne 6 -or @($portfolio.cases).Count -ne 52 -or @($portfolio.claims).Count -ne 88 -or @($portfolio.evidence).Count -ne 62 -or @($portfolio.claimEvidenceLinks).Count -ne 88 -or @($portfolio.timelineEvents).Count -ne 12 -or @($portfolio.questionPresets).Count -ne 19 -or @($portfolio.collections).Count -ne 3) { Write-Failure 'PREPARE_FINAL_COUNTS_INVALID' 'Tool Docker candidate final counts are invalid.' }
     Assert-PublicTextPrivacy $portfolio
+    $presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot 'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
     Assert-ExactProperties $inventoryDocument @('inventoryVersion','reviewState','counts','assets') 'PREPARE_INVENTORY_SCHEMA_INVALID'
     $expectedIds = @(Get-IncrementalExpectedAssetIds); $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
     if (@($inventoryIds).Count -ne 72 -or @($inventoryIds | Select-Object -Unique).Count -ne 72 -or (Compare-Object $inventoryIds $expectedIds).Count -ne 0) { Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' 'Tool Docker inventory must contain exactly the 72 expected assets.' }
@@ -1414,9 +1659,376 @@ function Invoke-PrepareCandidateToolDocker {
     $ledgerAssets = @(); foreach ($sourceAsset in @($inventoryDocument.assets)) { Assert-ExactProperties $sourceAsset @('id','contentType','title','achievementStatus','contributionType','publicPriority','evidenceStatus','reviewState','summary') 'PREPARE_INVENTORY_SCHEMA_INVALID'; $id=[string]$sourceAsset.id; $route=$routeById[$id]; $published=$null -ne $route; if($published){$finalRoute=[string]$route.finalRoute;$reason='Tool Docker reviewed public summary candidate.';$projectSlugs=@($route.projectSlugs);$caseSlugs=@($route.caseSlugs);$evidenceIds=@($route.evidenceIds);$privacyReview='PUBLIC_SUMMARY_ONLY_RAW_PRIVATE';$routeDecision='PUBLISH_CANDIDATE';$targetContentVersion=$TargetVersion;$targetWave=[long]3}else{$finalRoute='HOLD';$reason='Outside the Tool Docker incremental candidate scope.';$projectSlugs=@();$caseSlugs=@();$evidenceIds=@();$privacyReview='PRIVATE_SOURCE_REMAINS_WITHHELD';$routeDecision='REVIEWED_HOLD';$targetContentVersion=$null;$targetWave=$null}; $ledgerAssets += [ordered]@{ assetId=$id; contentType=[string]$sourceAsset.contentType; achievementStatus=[string]$sourceAsset.achievementStatus; contributionType=[string]$sourceAsset.contributionType; publicPriority=[string]$sourceAsset.publicPriority; evidenceStatus=[string]$sourceAsset.evidenceStatus; originalReviewState=[string]$sourceAsset.reviewState; finalRoute=$finalRoute; decisionReason=$reason; projectSlugs=$projectSlugs; caseSlugs=$caseSlugs; evidenceIds=$evidenceIds; privacyReview=$privacyReview; routeDecision=$routeDecision; targetContentVersion=$targetContentVersion; targetWave=$targetWave } }
     $packageRoot=Join-Path $resolvedWorkspace 'prepared-candidates'; $targetPackage=Join-Path $packageRoot $TargetVersion; if(Test-Path -LiteralPath $targetPackage){Write-Failure 'PREPARE_TARGET_EXISTS' 'Candidate package already exists and will not be overwritten.'}; New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null; $stage=Join-Path $packageRoot ('.prepare-'+[guid]::NewGuid().ToString('N'))
     try { $candidateDirectory=Join-Path $stage 'candidate'; New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null; Write-DeterministicJson (Join-Path $candidateDirectory 'portfolio.json') $portfolio; Write-DeterministicJson (Join-Path $candidateDirectory 'presentation.json') $presentation; Write-DeterministicJson (Join-Path $stage 'asset-publication-decisions.json') ([ordered]@{schemaVersion='1.0';assets=$ledgerAssets}); $ledgerState=Read-DecisionLedger (Join-Path $stage 'asset-publication-decisions.json'); Assert-DecisionLedgerCandidate $ledgerState.Assets $portfolio; Move-Item -LiteralPath $stage -Destination $targetPackage } catch { if(Test-Path -LiteralPath $stage){Remove-Item -LiteralPath $stage -Recurse -Force}; Write-Failure 'PREPARE_STAGE_WRITE_FAILED' 'Tool Docker candidate preparation failed atomically.' }
-    [ordered]@{runId=[guid]::NewGuid().ToString('N');command=$Command;status='PASS';artifacts=@(('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion));blockingFindings=@();warnings=@();dryRun=$false;idempotent=$false}|ConvertTo-Json -Depth 8 -Compress|Write-Output; exit 0
+    [ordered]@{runId=[guid]::NewGuid().ToString('N');command=$Command;status='PASS';artifacts=@(('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion));blockingFindings=@();warnings=@();dryRun=$false;idempotent=$false;presetContractSetHash=$presetContractSetHash}|ConvertTo-Json -Depth 8 -Compress|Write-Output; exit 0
+}
+
+function Invoke-PreparePresetContractClosureCandidate {
+    $runtimePath = Resolve-CanonicalRepositoryInput $RuntimeBundle `
+        'backend\src\main\resources\public-data\bundle' 'runtimeBundle'
+    $patchPath = Resolve-CanonicalRepositoryInput $PatchManifest `
+        'governance\portfolio-governance\candidates\preset-contract-closure-public-patch.json' `
+        'patchManifest'
+    $baselinePath = Resolve-CanonicalRepositoryInput `
+        (Join-Path $repositoryRoot `
+            'governance\portfolio-governance\baselines\schema-4-publication-decisions.json') `
+        'governance\portfolio-governance\baselines\schema-4-publication-decisions.json' `
+        'publicationBaseline'
+    $routePath = Resolve-CanonicalRepositoryInput $RouteManifest `
+        'governance\portfolio-governance\candidates\preset-contract-closure-public-routes.json' `
+        'routeManifest'
+    $inventoryPath = Resolve-SafePath $AssetInventory 'assetInventory'
+    Assert-NoReparsePoint $inventoryPath
+    if (Test-Contained $inventoryPath $repositoryRoot) {
+        Write-Failure 'PREPARE_INVENTORY_INSIDE_REPOSITORY' `
+            'Asset inventory must remain outside the repository.'
+    }
+    if ($TargetVersion -ne '2026-08-05.1') {
+        Write-Failure 'PREPARE_TARGET_VERSION_INVALID' `
+            'Preset contract closure requires TargetVersion 2026-08-05.1.'
+    }
+    $runtimeNames = @(Get-ChildItem -LiteralPath $runtimePath -File |
+        ForEach-Object Name | Sort-Object)
+    if (($runtimeNames -join ',') -ne `
+            'checksums.json,keyword-index.json,manifest.json,portfolio.json,presentation.json,rag-documents.jsonl,vector-index.bin') {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+            'Preset contract closure requires the closed seven-file retrieval Bundle.'
+    }
+    try {
+        $checksums = Get-Content (Join-Path $runtimePath 'checksums.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = Get-Content (Join-Path $runtimePath 'manifest.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $portfolio = Get-Content (Join-Path $runtimePath 'portfolio.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $presentation = Get-Content (Join-Path $runtimePath 'presentation.json') `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $patch = Get-Content $patchPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $routes = Get-Content $routePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $baseline = Get-Content $baselinePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $inventoryDocument = Get-Content $inventoryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Write-Failure 'PREPARE_INPUT_INVALID' `
+            'Preset contract closure candidate inputs cannot be parsed.'
+    }
+    foreach ($name in @(
+        'portfolio.json', 'presentation.json', 'rag-documents.jsonl',
+        'keyword-index.json', 'vector-index.bin'
+    )) {
+        $actualHash = Get-Sha256 ([IO.File]::ReadAllBytes((Join-Path $runtimePath $name)))
+        if ([string]$checksums.files.$name -ne $actualHash) {
+            Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+                'Preset contract closure runtime Bundle checksum verification failed.'
+        }
+    }
+    $runtimePortfolioBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'portfolio.json'))
+    $runtimePresentationBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'presentation.json'))
+    $runtimeRagBytes = [IO.File]::ReadAllBytes((Join-Path $runtimePath 'rag-documents.jsonl'))
+    $baseVersion = [string]$portfolio.contentVersion
+    if ($baseVersion -ne '2026-08-04.2' -or
+            [string]$portfolio.schemaVersion -ne '4.0' -or
+            [string]$presentation.schemaVersion -ne '4.0' -or
+            [string]$presentation.contentVersion -ne $baseVersion -or
+            [string]$manifest.schemaVersion -ne '4.0' -or
+            [string]$manifest.contentVersion -ne $baseVersion -or
+            [string]$checksums.schemaVersion -ne '4.0' -or
+            [string]$checksums.contentVersion -ne $baseVersion -or
+            [string]$manifest.candidatePayloadHash -ne
+                (Get-CandidatePayloadHash $runtimePortfolioBytes $runtimePresentationBytes $runtimeRagBytes) -or
+            [int]$manifest.counts.projects -ne @($portfolio.projects).Count -or
+            [int]$manifest.counts.cases -ne @($portfolio.cases).Count -or
+            [int]$manifest.counts.claims -ne @($portfolio.claims).Count -or
+            [int]$manifest.counts.evidence -ne @($portfolio.evidence).Count -or
+            [int]$manifest.counts.claimEvidenceLinks -ne @($portfolio.claimEvidenceLinks).Count -or
+            [int]$manifest.counts.timelineEvents -ne @($portfolio.timelineEvents).Count -or
+            [int]$manifest.counts.questionPresets -ne @($portfolio.questionPresets).Count) {
+        Write-Failure 'PREPARE_RUNTIME_BUNDLE_INVALID' `
+            'Preset contract closure requires the reviewed 2026-08-04.2 schema 4.0 Bundle.'
+    }
+    Assert-SchemaFourCollections $portfolio
+    Assert-ExactProperties $patch @(
+        'schemaVersion','baseContentVersion','targetContentVersion','projects','cases',
+        'timelineEvents','claims','evidence','links','presets','projectUpdates','caseUpdates'
+    ) 'PREPARE_PATCH_SCHEMA_INVALID'
+    Assert-ExactProperties $routes @(
+        'schemaVersion','targetContentVersion','publishRoutes'
+    ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+    if ([string]$patch.schemaVersion -ne '3.0' -or
+            [string]$patch.baseContentVersion -ne $baseVersion -or
+            [string]$patch.targetContentVersion -ne $TargetVersion -or
+            [string]$routes.schemaVersion -ne '3.0' -or
+            [string]$routes.targetContentVersion -ne $TargetVersion) {
+        Write-Failure 'PREPARE_MANIFEST_VERSION_INVALID' `
+            'Preset contract closure patch and route versions are inconsistent.'
+    }
+    if (@($patch.projects).Count -ne 0 -or @($patch.cases).Count -ne 0 -or
+            @($patch.timelineEvents).Count -ne 0 -or @($patch.claims).Count -ne 5 -or
+            @($patch.evidence).Count -ne 0 -or @($patch.links).Count -ne 5 -or
+            @($patch.presets).Count -ne 0 -or @($patch.projectUpdates).Count -ne 1 -or
+            @($patch.caseUpdates).Count -ne 0) {
+        Write-Failure 'PREPARE_PATCH_COVERAGE_INVALID' `
+            'Preset contract closure patch must add exactly 5 Claims and 5 links with one Project update.'
+    }
+    $expectedClaimIds = @(
+        'claim-abtest-project-background','claim-abtest-project-responsibility',
+        'claim-abtest-project-stratification-bucketing','claim-abtest-project-stable-assignment',
+        'claim-abtest-project-validation-rollback'
+    )
+    $expectedCategories = @{
+        'claim-abtest-project-background'='BACKGROUND'
+        'claim-abtest-project-responsibility'='RESPONSIBILITY'
+        'claim-abtest-project-stratification-bucketing'='TECHNICAL_DECISION'
+        'claim-abtest-project-stable-assignment'='IMPLEMENTATION'
+        'claim-abtest-project-validation-rollback'='VERIFICATION'
+    }
+    $expectedEvidence = @{
+        'claim-abtest-project-background'='evidence-abtest-delivery-history'
+        'claim-abtest-project-responsibility'='evidence-abtest-delivery-history'
+        'claim-abtest-project-stratification-bucketing'='evidence-abtest-experiment-design-notes'
+        'claim-abtest-project-stable-assignment'='evidence-abtest-service-sql-evolution'
+        'claim-abtest-project-validation-rollback'='evidence-abtest-validation-risk-notes'
+    }
+    $claimFields = @(
+        'id','subjectType','subjectId','category','statement','detail','achievementStatus',
+        'contributionType','verificationBasis','verificationStatus','materiality','topics',
+        'audiencePriorities'
+    )
+    foreach ($claim in @($patch.claims)) {
+        Assert-ExactProperties $claim $claimFields 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$claim.subjectType -ne 'PROJECT' -or
+                [string]$claim.subjectId -ne 'weekend-login-abtest-project' -or
+                [string]$claim.achievementStatus -ne 'DELIVERED' -or
+                [string]$claim.contributionType -ne 'PRIMARY' -or
+                [string]$claim.verificationBasis -ne 'EVIDENCE_SUPPORTED' -or
+                [string]$claim.verificationStatus -ne 'VERIFIED' -or
+                [string]$claim.materiality -ne 'KEY' -or
+                @($claim.topics).Count -eq 0 -or
+                [string]::IsNullOrWhiteSpace([string]$claim.statement)) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'A closure Claim must be a verified KEY delivery of the ABTest Project.'
+        }
+    }
+    foreach ($link in @($patch.links)) {
+        Assert-ExactProperties $link @(
+            'id','claimId','evidenceId','supportType','scope','reviewStatus'
+        ) 'PREPARE_PATCH_SCHEMA_INVALID'
+        if ([string]$link.supportType -ne 'DIRECT' -or
+                [string]$link.reviewStatus -ne 'APPROVED' -or
+                [string]::IsNullOrWhiteSpace([string]$link.scope)) {
+            Write-Failure 'PREPARE_PATCH_ENUM_INVALID' `
+                'Every closure link must be DIRECT and APPROVED.'
+        }
+    }
+    $newClaimIds = @($patch.claims | ForEach-Object { [string]$_.id })
+    $baseClaimIds = @($portfolio.claims | ForEach-Object { [string]$_.id })
+    $baseEvidenceIds = @($portfolio.evidence | ForEach-Object { [string]$_.id })
+    if (@($newClaimIds | Select-Object -Unique).Count -ne 5 -or
+            @($newClaimIds | Where-Object { $baseClaimIds -contains $_ }).Count -gt 0 -or
+            (Compare-Object $newClaimIds $expectedClaimIds).Count -ne 0) {
+        Write-Failure 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID' 'Closure Claim IDs are not the exact reviewed five.'
+    }
+    $claimById = @{}
+    foreach ($claim in @($patch.claims)) { $claimById[[string]$claim.id] = $claim }
+    foreach ($claimId in $expectedClaimIds) {
+        $claim = $claimById[$claimId]
+        if ($null -eq $claim -or [string]$claim.category -ne $expectedCategories[$claimId]) {
+            Write-Failure 'PREPARE_PATCH_CLAIM_CONTRACT_INVALID' 'A closure Claim category is invalid.'
+        }
+    }
+    foreach ($link in @($patch.links)) {
+        $claimId = [string]$link.claimId
+        if (-not $claimById.ContainsKey($claimId) -or
+                $baseEvidenceIds -notcontains [string]$link.evidenceId -or
+                [string]$link.evidenceId -ne $expectedEvidence[$claimId]) {
+            Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' 'A closure link mapping differs from the reviewed Evidence.'
+        }
+    }
+    Assert-ExactProperties $patch.projectUpdates[0] @('id','addClaimIds') `
+        'PREPARE_PATCH_SCHEMA_INVALID'
+    if ([string]$patch.projectUpdates[0].id -ne 'weekend-login-abtest-project' -or
+            @($patch.projectUpdates[0].addClaimIds).Count -ne 5 -or
+            (Compare-Object @($patch.projectUpdates[0].addClaimIds) $newClaimIds).Count -ne 0) {
+        Write-Failure 'PREPARE_PATCH_REFERENCE_INVALID' `
+            'The closure Project update must add exactly the five new Claims.'
+    }
+    Assert-ExactProperties $baseline @('schemaVersion','contentVersion','assets') `
+        'PREPARE_BASELINE_SCHEMA_INVALID'
+    Assert-ExactProperties $inventoryDocument @(
+        'inventoryVersion','reviewState','counts','assets'
+    ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+    $expectedInventoryIds = @(Get-AbTestExpectedAssetIds)
+    $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
+    if (@($inventoryDocument.assets).Count -ne 72 -or
+            @($inventoryIds | Select-Object -Unique).Count -ne 72 -or
+            (Compare-Object $inventoryIds $expectedInventoryIds).Count -ne 0) {
+        Write-Failure 'PREPARE_INVENTORY_COVERAGE_INVALID' `
+            'Preset contract closure asset inventory must cover exactly the 72 expected assets.'
+    }
+    $routeIds = @($routes.publishRoutes | ForEach-Object { [string]$_.assetId })
+    if (@($routes.publishRoutes).Count -ne 4 -or
+            @($routeIds | Select-Object -Unique).Count -ne 4 -or
+            (Compare-Object $routeIds @('AB-01','AB-02','AB-03','AB-04')).Count -ne 0) {
+        Write-Failure 'PREPARE_ROUTE_PUBLISH_SET_INVALID' `
+            'Preset contract closure routes must carry the reviewed AB-01 through AB-04 decisions.'
+    }
+    $routeById = @{}
+    foreach ($route in @($routes.publishRoutes)) {
+        Assert-ExactProperties $route @(
+            'assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds'
+        ) 'PREPARE_ROUTE_SCHEMA_INVALID'
+        $routeById[[string]$route.assetId] = $route
+    }
+    $baselineById = @{}
+    foreach ($asset in @($baseline.assets)) {
+        Assert-ExactProperties $asset @(
+            'assetId','finalRoute','projectSlugs','caseSlugs','evidenceIds','routeDecision'
+        ) 'PREPARE_BASELINE_SCHEMA_INVALID'
+        $baselineById[[string]$asset.assetId] = $asset
+    }
+    $portfolio.contentVersion = $TargetVersion
+    $presentation.contentVersion = $TargetVersion
+    $portfolio.claims = @($portfolio.claims) + @($patch.claims)
+    $portfolio.claimEvidenceLinks = @($portfolio.claimEvidenceLinks) + @($patch.links)
+    $abtestProject = @($portfolio.projects | Where-Object id -eq 'weekend-login-abtest-project')
+    if ($abtestProject.Count -ne 1) {
+        Write-Failure 'PREPARE_SUBJECT_REFERENCE_INVALID' 'The ABTest Project is missing from the candidate.'
+    }
+    $abtestProject[0].claimIds = @($abtestProject[0].claimIds) + @($patch.projectUpdates[0].addClaimIds)
+    Assert-PublicTextPrivacy $portfolio
+    if (@($portfolio.projects).Count -ne 6 -or @($portfolio.cases).Count -ne 52 -or
+            @($portfolio.collections).Count -ne 3 -or @($portfolio.claims).Count -ne 88 -or
+            @($portfolio.evidence).Count -ne 63 -or
+            @($portfolio.claimEvidenceLinks).Count -ne 88 -or
+            @($portfolio.timelineEvents).Count -ne 12 -or
+            @($portfolio.questionPresets).Count -ne 19) {
+        Write-Failure 'PREPARE_CANDIDATE_COVERAGE_INVALID' `
+            'Preset contract closure merged candidate counts differ from the reviewed target.'
+    }
+    $presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+        'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
+    $ledgerAssets = @()
+    foreach ($sourceAsset in @($inventoryDocument.assets)) {
+        Assert-ExactProperties $sourceAsset @(
+            'id','contentType','title','achievementStatus','contributionType',
+            'publicPriority','evidenceStatus','reviewState','summary'
+        ) 'PREPARE_INVENTORY_SCHEMA_INVALID'
+        $id = [string]$sourceAsset.id
+        $publicRoute = if ($routeById.ContainsKey($id)) {
+            $routeById[$id]
+        } elseif ($baselineById.ContainsKey($id)) {
+            $baselineById[$id]
+        } else {
+            $null
+        }
+        if ($null -ne $publicRoute -and
+                [string]$publicRoute.routeDecision -ne 'EXCLUDED' -and
+                [string]$publicRoute.finalRoute -ne 'EXCLUDE') {
+            if ([string]$sourceAsset.reviewState -eq 'EXCLUDE' -or
+                    [string]$sourceAsset.publicPriority -eq 'EXCLUDE') {
+                Write-Failure 'PREPARE_ROUTE_SOURCE_STATE_INVALID' `
+                    'An excluded source asset cannot be published.'
+            }
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute=[string]$publicRoute.finalRoute
+                decisionReason=if ($id -like 'AB-*') {
+                    'ABTest reviewed public summary candidate carried forward.'
+                } else {
+                    'Schema 4 reviewed publication baseline carried forward.'
+                }
+                projectSlugs=@($publicRoute.projectSlugs)
+                caseSlugs=@($publicRoute.caseSlugs)
+                evidenceIds=@($publicRoute.evidenceIds)
+                privacyReview='PUBLIC_SUMMARY_ONLY_RAW_PRIVATE'
+                routeDecision='PUBLISH_CANDIDATE'
+                targetContentVersion=$TargetVersion; targetWave=4
+            }
+        }
+        else {
+            $ledgerAssets += [ordered]@{
+                assetId=$id; contentType=[string]$sourceAsset.contentType
+                achievementStatus=[string]$sourceAsset.achievementStatus
+                contributionType=[string]$sourceAsset.contributionType
+                publicPriority=[string]$sourceAsset.publicPriority
+                evidenceStatus=[string]$sourceAsset.evidenceStatus
+                originalReviewState=[string]$sourceAsset.reviewState
+                finalRoute='EXCLUDE'; decisionReason='Excluded by reviewed Schema 4 baseline.'
+                projectSlugs=@(); caseSlugs=@(); evidenceIds=@()
+                privacyReview='PRIVATE_SOURCE_REMAINS_WITHHELD'
+                routeDecision='EXCLUDED'; targetContentVersion=$null; targetWave=$null
+            }
+        }
+    }
+    $packageRoot = Join-Path $resolvedWorkspace 'prepared-candidates'
+    if (Test-Path -LiteralPath $packageRoot) { Assert-NoReparsePoint $packageRoot }
+    $targetPackage = Join-Path $packageRoot $TargetVersion
+    if (Test-Path -LiteralPath $targetPackage) {
+        Write-Failure 'PREPARE_TARGET_EXISTS' `
+            'Candidate package already exists and will not be overwritten.'
+    }
+    New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+    $stage = Join-Path $packageRoot ('.prepare-' + [guid]::NewGuid().ToString('N'))
+    $completed = $false
+    try {
+        $candidateDirectory = Join-Path $stage 'candidate'
+        New-Item -ItemType Directory -Path $candidateDirectory -Force | Out-Null
+        Write-DeterministicJson (Join-Path $candidateDirectory 'portfolio.json') $portfolio
+        Write-DeterministicJson (Join-Path $candidateDirectory 'presentation.json') $presentation
+        $validFrom = ([string]$portfolio.contentVersion).Substring(0, 10)
+        $canonicalRag = Join-Path $stage ('.canonical-rag-' + [guid]::NewGuid().ToString('N') + '.jsonl')
+        $compileResult = Invoke-Compiler 'com.portfolio.agent.release.RagDocumentCompilerCli' @(
+            '--portfolio', (Join-Path $candidateDirectory 'portfolio.json'),
+            '--output', $canonicalRag,
+            '--valid-from', $validFrom)
+        if (-not $compileResult.Success -or -not (Test-Path -LiteralPath $canonicalRag -PathType Leaf)) {
+            Write-Failure 'RAG_CANONICAL_BUILD_FAILED' `
+                'Preset contract closure canonical RAG validation failed.'
+        }
+        Copy-Item -LiteralPath $canonicalRag -Destination (Join-Path $candidateDirectory 'rag-documents.jsonl')
+        Remove-Item -LiteralPath $canonicalRag -Force
+        Write-DeterministicJson (Join-Path $stage 'asset-publication-decisions.json') `
+            ([ordered]@{ schemaVersion='1.0'; assets=$ledgerAssets })
+        $ledgerState = Read-DecisionLedger (Join-Path $stage 'asset-publication-decisions.json')
+        Assert-DecisionLedgerCandidate $ledgerState.Assets $portfolio
+        $privacyChecker = Join-Path $repositoryRoot 'scripts\privacy-check.ps1'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $privacyChecker `
+            -Path $stage | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Preset contract closure candidate privacy check failed.'
+        }
+        Move-Item -LiteralPath $stage -Destination $targetPackage
+        $completed = $true
+    }
+    catch {
+        if (-not $completed -and (Test-Path -LiteralPath $stage)) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+        }
+        Write-Failure 'PREPARE_STAGE_WRITE_FAILED' `
+            'Preset contract closure candidate preparation failed atomically.'
+    }
+    [ordered]@{
+        runId=[guid]::NewGuid().ToString('N'); command=$Command; status='PASS'
+        artifacts=@(
+            ('prepared-candidates/{0}/candidate/portfolio.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/candidate/presentation.json' -f $TargetVersion),
+            ('prepared-candidates/{0}/candidate/rag-documents.jsonl' -f $TargetVersion),
+            ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
+        )
+        blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+        presetContractSetHash=$presetContractSetHash
+    } | ConvertTo-Json -Depth 8 -Compress | Write-Output
+    exit 0
 }
 function Invoke-PrepareCandidate {
+    if ($TargetVersion -eq '2026-08-05.1') {
+        Invoke-PreparePresetContractClosureCandidate
+    }
     if ($TargetVersion -eq '2026-08-04.1') {
         Invoke-PrepareCandidateToolDocker
     }
@@ -1721,6 +2333,9 @@ function Invoke-PrepareCandidate {
         }
     }
     Assert-PublicTextPrivacy $portfolio
+    $presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+        'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
     Assert-ExactProperties $inventoryDocument @(
         'inventoryVersion','reviewState','counts','assets') 'PREPARE_INVENTORY_SCHEMA_INVALID'
     $inventoryIds = @($inventoryDocument.assets | ForEach-Object { [string]$_.id })
@@ -1881,6 +2496,7 @@ function Invoke-PrepareCandidate {
             ('prepared-candidates/{0}/asset-publication-decisions.json' -f $TargetVersion)
         )
         blockingFindings=@(); warnings=@(); dryRun=$false; idempotent=$false
+        presetContractSetHash=$presetContractSetHash
     } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
 }
@@ -1906,6 +2522,7 @@ function Resolve-BenchmarkDefinition([string]$SchemaVersionValue, [string]$Conte
         '4.0|2026-07-29.1' { 'wave-2-benchmarks.v1.json'; break }
         '4.0|2026-08-04.1' { 'tool-docker-benchmarks.v1.json'; break }
         '4.0|2026-08-04.2' { 'weekend-login-abtest-benchmarks.v1.json'; break }
+        '4.0|2026-08-05.1' { 'weekend-login-abtest-benchmarks.v1.json'; break }
         default { Write-Failure 'BENCHMARK_VERSION_UNSUPPORTED' 'No frozen benchmark suite matches the candidate schema and content version.' }
     }
     $benchmarkDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\benchmark')).Path
@@ -2151,6 +2768,26 @@ if ($Command -in @('list', 'status', 'verify')) {
     if ([string]$verifyManifest.ledgerHash -ne [string]$decisionLedgerState.Hash) {
         Write-Failure 'VERIFY_LEDGER_STALE' 'Verify decision ledger differs from the approved release ledger.'
     }
+    $verifyPresetContractFieldsPresent = @($verifyPortfolioData.questionPresets | Where-Object {
+        $_.PSObject.Properties.Name -contains 'contractStatus' -or
+        $_.PSObject.Properties.Name -contains 'contractSubjectId' -or
+        $_.PSObject.Properties.Name -contains 'requiredClaimIds'
+    }).Count -gt 0
+    if ($verifyPresetContractFieldsPresent) {
+        $verifyPresetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+            'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+        $verifyContractSetHash = Invoke-PresetContractProjection $verifyPortfolioData $verifyPresetPolicy
+    } else {
+        $verifyContractSetHash = Get-PresetContractSetHash @($verifyPortfolioData.questionPresets |
+            Where-Object { $_.contractStatus -eq 'ACTIVE' })
+    }
+    if ($verifyContractSetHash -ne [string]$verifyManifest.presetContractSetHash) {
+        Write-Failure 'PRESET_CONTRACT_SET_HASH_MISMATCH' 'Verify preset contract set hash differs from the release manifest.'
+    }
+    if ([string]$verifyApproval.presetContractSetHash -ne
+            [string]$verifyManifest.presetContractSetHash) {
+        Write-Failure 'VERIFY_APPROVAL_INVALID' 'Verify target differs from its approved projection.'
+    }
     $verifyRunId = [guid]::NewGuid().ToString('N')
     $verifyAuditRelativePath = Join-Path 'audit' 'verify.jsonl'
     $verifyAudit = Join-Path $resolvedWorkspace $verifyAuditRelativePath
@@ -2163,11 +2800,12 @@ if ($Command -in @('list', 'status', 'verify')) {
             contentVersion = $TargetVersion
             candidatePayloadHash = [string]$verifyManifest.candidatePayloadHash
             ledgerHash = [string]$decisionLedgerState.Hash
+            presetContractSetHash = $verifyContractSetHash
             verifiedAt = [DateTimeOffset]::UtcNow.ToString('o')
         } | ConvertTo-Json -Compress) | Add-Content -LiteralPath $verifyAudit -Encoding UTF8
     }
     catch { Write-Failure 'VERIFY_AUDIT_WRITE_FAILED' 'Verify audit receipt could not be appended.' }
-    [ordered]@{ runId = $verifyRunId; command = $Command; status = 'PASS'; verifiedVersion = $TargetVersion; candidatePayloadHash = $verifyManifest.candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; artifacts = @($verifyAuditRelativePath); blockingFindings = @(); warnings = @() } | ConvertTo-Json -Depth 8 -Compress | Write-Output
+    [ordered]@{ runId = $verifyRunId; command = $Command; status = 'PASS'; verifiedVersion = $TargetVersion; candidatePayloadHash = $verifyManifest.candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; presetContractSetHash = $verifyContractSetHash; artifacts = @($verifyAuditRelativePath); blockingFindings = @(); warnings = @() } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
 }
 
@@ -2227,7 +2865,7 @@ if ($Command -eq 'rollback') {
     }
     catch { Write-Failure 'ROLLBACK_AUDIT_WRITE_FAILED' 'Rollback audit write failed before active pointer mutation.' }
     $activeTemporary = Join-Path $resolvedReleaseRoot ('active.tmp.' + [guid]::NewGuid().ToString('N'))
-    Set-Content -LiteralPath $activeTemporary -Value $TargetVersion -Encoding UTF8
+    [IO.File]::WriteAllText($activeTemporary, $TargetVersion, (New-Object Text.UTF8Encoding($false)))
     Move-Item -LiteralPath $activeTemporary -Destination (Join-Path $resolvedReleaseRoot 'active') -Force
     [ordered]@{ runId = [guid]::NewGuid().ToString('N'); command = $Command; status = 'PASS'; dryRun = $false; targetVersion = $TargetVersion; artifacts = @('audit\rollback.jsonl'); blockingFindings = @(); warnings = @() } | ConvertTo-Json -Depth 8 -Compress | Write-Output
     exit 0
@@ -2366,13 +3004,27 @@ foreach ($claim in @($portfolio.claims)) {
     }
 }
 Assert-DecisionLedgerCandidate $decisionLedgerState.Assets $portfolio
+$presetPolicy = Read-PresetContractPolicy (Join-Path $repositoryRoot `
+    'governance\portfolio-governance\policies\preset-contract-policy.v1.json')
+$presetContractFieldsPresent = @($portfolio.questionPresets | Where-Object {
+    $_.PSObject.Properties.Name -contains 'contractStatus' -or
+    $_.PSObject.Properties.Name -contains 'contractSubjectId' -or
+    $_.PSObject.Properties.Name -contains 'requiredClaimIds'
+}).Count -gt 0
+if ($presetContractFieldsPresent) {
+    $presetContractSetHash = Invoke-PresetContractProjection $portfolio $presetPolicy
+} else {
+    $presetContractSetHash = Get-PresetContractSetHash @($portfolio.questionPresets |
+        Where-Object { $_.contractStatus -eq 'ACTIVE' })
+}
 $benchmarkDefinitionFile = Resolve-BenchmarkDefinition `
     ([string]$portfolio.schemaVersion) ([string]$portfolio.contentVersion)
 $executedGates = @($gates)
 if ($Command -in @('benchmark', 'build-review-pack', 'approve', 'publish')) {
     $benchmark = Get-Content -LiteralPath $benchmarkDefinitionFile -Raw -Encoding UTF8 | ConvertFrom-Json
     $requiredCaseTypes = @('SUPPORTED_QUESTION', 'ALIAS', 'BOUNDARY', 'CLAIM_EVIDENCE', 'SAFETY')
-    foreach ($preset in @($portfolio.questionPresets)) {
+    foreach ($preset in @($portfolio.questionPresets |
+            Where-Object { $_.id -in @($presetPolicy.activeContracts | ForEach-Object presetId) })) {
         $coveredTypes = @($benchmark.cases | Where-Object { $_.questionPresetId -eq $preset.id } | ForEach-Object { $_.caseType } | Select-Object -Unique)
         foreach ($requiredType in $requiredCaseTypes) {
             if ($coveredTypes -notcontains $requiredType) { Write-Failure 'BENCHMARK_COVERAGE_MISSING' 'An active QuestionPreset lacks critical benchmark coverage.' }
@@ -2391,8 +3043,9 @@ if ($Command -in @('benchmark', 'build-review-pack', 'approve', 'publish')) {
 }
 $candidatePayloadHash = Get-CandidatePayloadHash $portfolioBytes $presentationBytes $ragDocumentBytes
 $policyFile = Join-Path $PSScriptRoot '..\policies\governance-policy.v1.json'
+$presetContractPolicyFile = Join-Path $PSScriptRoot '..\policies\preset-contract-policy.v1.json'
 $schemaDirectory = Join-Path $PSScriptRoot '..\schemas'
-$policyBundleEntries = @($policyFile) + @(Get-ChildItem -LiteralPath $schemaDirectory -File -Filter '*.json' |
+$policyBundleEntries = @($policyFile, $presetContractPolicyFile) + @(Get-ChildItem -LiteralPath $schemaDirectory -File -Filter '*.json' |
     Sort-Object Name | ForEach-Object { $_.FullName })
 $policyBundleProjection = $policyBundleEntries | ForEach-Object {
     ([IO.Path]::GetFileName($_)) + ':' + (Get-Sha256 ([IO.File]::ReadAllBytes($_)))
@@ -2422,6 +3075,7 @@ $runSnapshot = [ordered]@{
     toolVersion = $toolVersion
     candidatePayloadHash = $candidatePayloadHash
     ledgerHash = $decisionLedgerState.Hash
+    presetContractSetHash = $presetContractSetHash
     compilerJarHash = $compilerJarHash
 }
 $artifacts = @()
@@ -2445,7 +3099,8 @@ if ($Command -eq 'approve') {
         $reviewSnapshot.policyBundleHash -ne $policyBundleHash -or
         $reviewSnapshot.benchmarkDefinitionHash -ne $benchmarkDefinitionHash -or
         $reviewSnapshot.toolVersion -ne $toolVersion -or
-        $reviewSnapshot.compilerJarHash -ne $compilerJarHash) {
+        $reviewSnapshot.compilerJarHash -ne $compilerJarHash -or
+        $reviewSnapshot.presetContractSetHash -ne $presetContractSetHash) {
         Write-Failure 'APPROVAL_RUN_STALE' 'The reviewed governance run is stale.'
     }
     $approvalId = 'APR-' + [guid]::NewGuid().ToString('N')
@@ -2453,6 +3108,7 @@ if ($Command -eq 'approve') {
     $approvalForDigest = [ordered]@{
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        presetContractSetHash = $presetContractSetHash
         inputFingerprint = $inputFingerprint
         compilerJarHash = $compilerJarHash
         approvedBy = $ApprovedBy
@@ -2466,6 +3122,7 @@ if ($Command -eq 'approve') {
         approvalId = $approvalId
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        presetContractSetHash = $presetContractSetHash
         inputFingerprint = $inputFingerprint
         compilerJarHash = $compilerJarHash
         approvedBy = $ApprovedBy
@@ -2509,6 +3166,7 @@ if ($Command -eq 'build-review-pack') {
         contentVersion = $portfolio.contentVersion
         candidatePayloadHash = $candidatePayloadHash
         ledgerHash = $decisionLedgerState.Hash
+        presetContractSetHash = $presetContractSetHash
         inputFingerprint = $inputFingerprint
         compilerJarHash = $compilerJarHash
         counts = [ordered]@{
@@ -2537,7 +3195,7 @@ if ($Command -eq 'build-review-pack') {
         $reviewChecksums['rag-documents.jsonl'] = Get-Sha256 $ragDocumentBytes
     }
     $reviewChecksums | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'checksums.json') -Encoding UTF8
-    [ordered]@{ runId = $runId; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; inputFingerprint = $inputFingerprint; compilerJarHash = $compilerJarHash; status = 'PENDING_HUMAN_APPROVAL' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'approval-request.json') -Encoding UTF8
+    [ordered]@{ runId = $runId; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; presetContractSetHash = $presetContractSetHash; inputFingerprint = $inputFingerprint; compilerJarHash = $compilerJarHash; status = 'PENDING_HUMAN_APPROVAL' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reviewDirectory 'approval-request.json') -Encoding UTF8
     $artifacts += $reviewRelativePath
 }
 
@@ -2548,7 +3206,8 @@ if ($Command -eq 'publish') {
     if ($approval.candidatePayloadHash -ne $candidatePayloadHash -or
             $approval.ledgerHash -ne $decisionLedgerState.Hash -or
             $approval.inputFingerprint -ne $inputFingerprint -or
-            $approval.compilerJarHash -ne $compilerJarHash) {
+            $approval.compilerJarHash -ne $compilerJarHash -or
+            $approval.presetContractSetHash -ne $presetContractSetHash) {
         Write-Failure 'PUBLISH_APPROVAL_STALE' 'Approval does not match the current candidate, ledger, governance input, or compiler identity.'
     }
     if ([string]$approval.approvalDigest -ne (Get-ApprovalDigest $approval)) {
@@ -2603,8 +3262,11 @@ if ($Command -eq 'publish') {
         $dryRun = $true
     }
     else {
+        $probeUris = @($PostSwitchProbeUri | Where-Object {
+                $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_)
+            })
         $previousActiveVersion = $null
-        if (@($PostSwitchProbeUri).Count -gt 0) {
+        if ($probeUris.Count -gt 0) {
             $currentActivePath = Join-Path $resolvedReleaseRoot 'active'
             if (-not (Test-Path -LiteralPath $currentActivePath -PathType Leaf)) {
                 Write-Failure 'PUBLISH_ROLLBACK_POINT_REQUIRED' 'Post-switch probes require an existing active rollback point.'
@@ -2624,7 +3286,7 @@ if ($Command -eq 'publish') {
         $publishAudit = Join-Path $resolvedWorkspace 'audit\publish.jsonl'
         try {
             New-Item -ItemType Directory -Force -Path (Split-Path $publishAudit -Parent) | Out-Null
-            ([ordered]@{ runId = $runId; action = 'PUBLISH_AUTHORIZED'; approvalId = $ApprovalId; contentVersion = [string]$portfolio.contentVersion; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; authorizedAt = [DateTimeOffset]::UtcNow.ToString('o') } | ConvertTo-Json -Compress) | Add-Content -LiteralPath $publishAudit -Encoding UTF8
+            ([ordered]@{ runId = $runId; action = 'PUBLISH_AUTHORIZED'; approvalId = $ApprovalId; contentVersion = [string]$portfolio.contentVersion; candidatePayloadHash = $candidatePayloadHash; ledgerHash = $decisionLedgerState.Hash; presetContractSetHash = $presetContractSetHash; authorizedAt = [DateTimeOffset]::UtcNow.ToString('o') } | ConvertTo-Json -Compress) | Add-Content -LiteralPath $publishAudit -Encoding UTF8
         }
         catch { Write-Failure 'PUBLISH_AUDIT_WRITE_FAILED' 'Publish audit write failed before public state mutation.' }
         $versionsRoot = Join-Path $resolvedReleaseRoot 'versions'
@@ -2689,6 +3351,7 @@ if ($Command -eq 'publish') {
                 approvalDigest = [string]$approval.approvalDigest
                 candidatePayloadHash = $candidatePayloadHash
                 ledgerHash = $decisionLedgerState.Hash
+                presetContractSetHash = $presetContractSetHash
                 checksumsFile = 'checksums.json'
                 counts = [ordered]@{
                     projects = @($portfolio.projects).Count
@@ -2707,11 +3370,11 @@ if ($Command -eq 'publish') {
             Move-Item -LiteralPath $temporaryDirectory -Destination $versionDirectory
         }
         $activeTemporary = Join-Path $resolvedReleaseRoot ('active.tmp.' + [guid]::NewGuid().ToString('N'))
-        Set-Content -LiteralPath $activeTemporary -Value ([string]$portfolio.contentVersion) -Encoding UTF8
+        [IO.File]::WriteAllText($activeTemporary, [string]$portfolio.contentVersion, (New-Object Text.UTF8Encoding($false)))
         Move-Item -LiteralPath $activeTemporary -Destination (Join-Path $resolvedReleaseRoot 'active') -Force
-        if (@($PostSwitchProbeUri).Count -gt 0) {
+        if ($probeUris.Count -gt 0) {
             try {
-                foreach ($probeUri in @($PostSwitchProbeUri)) {
+                foreach ($probeUri in $probeUris) {
                     if ($probeUri -notmatch '^https?://') { throw 'Probe URI scheme is invalid.' }
                     $probeResponse = Invoke-WebRequest -Uri $probeUri -UseBasicParsing -TimeoutSec 5
                     if ($probeResponse.StatusCode -lt 200 -or $probeResponse.StatusCode -ge 300) {

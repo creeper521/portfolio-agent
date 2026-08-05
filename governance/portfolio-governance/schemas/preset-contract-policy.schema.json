@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Preset Contract Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "activeContracts", "nonPublicDraftPresetIds"],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "activeContracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "presetId",
+          "contractSubjectId",
+          "requiredClaimIds",
+          "supportingClaimIds",
+          "evidenceRequirement",
+          "status"
+        ],
+        "properties": {
+          "presetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contractSubjectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredClaimIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "supportingClaimIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "evidenceRequirement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "minimumApprovedEvidencePerRequiredClaim",
+              "publicOnly"
+            ],
+            "properties": {
+              "minimumApprovedEvidencePerRequiredClaim": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "publicOnly": {
+                "const": true
+              }
+            }
+          },
+          "status": {
+            "const": "ACTIVE"
+          }
+        }
+      }
+    },
+    "nonPublicDraftPresetIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

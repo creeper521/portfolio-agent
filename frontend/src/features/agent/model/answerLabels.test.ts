@@ -32,6 +32,8 @@ describe('answerLabels', () => {
       .toBe('当前公开证据不足')
     expect(answerStatusLabel({ ...base, resolution: 'CAPABILITY_UNAVAILABLE' }))
       .toBe('服务暂不可用')
+    expect(answerStatusLabel({ ...base, resolution: 'INVALID_INPUT' }))
+      .toBe('请求的作品范围无效')
     expect(answerStatusLabel({ ...base, resolution: 'REJECTED' })).toBe('无法处理该请求')
     expect(answerStatusLabel({ ...base, intent: 'PORTFOLIO_GROUNDED' })).toBe('回答')
   })

@@ -25,6 +25,7 @@ function portfolioWithPresets(): PublicPortfolio {
       {
         id: 'preset-a',
         projectSlug: 'sql-audit',
+caseSlugs: [],
         text: '预设问题 A',
         audiences: ['INTERVIEWER'],
         placements: ['AGENT'],
@@ -34,6 +35,7 @@ function portfolioWithPresets(): PublicPortfolio {
       {
         id: 'preset-b',
         projectSlug: 'sql-audit',
+caseSlugs: [],
         text: '预设问题 B',
         audiences: ['INTERVIEWER'],
         placements: ['HOME', 'AGENT'],
@@ -43,6 +45,7 @@ function portfolioWithPresets(): PublicPortfolio {
       {
         id: 'preset-c',
         projectSlug: 'codegraph-evaluation',
+caseSlugs: [],
         text: '预设问题 C',
         audiences: ['INTERVIEWER'],
         placements: ['AGENT', 'PROJECT'],
@@ -52,6 +55,7 @@ function portfolioWithPresets(): PublicPortfolio {
       {
         id: 'preset-home-only',
         projectSlug: 'sql-audit',
+caseSlugs: [],
         text: '只在首页出现的预设',
         audiences: ['INTERVIEWER'],
         placements: ['HOME'],
@@ -168,6 +172,7 @@ describe('completeSuggestedQuestions', () => {
           {
             id: 'preset-home-only',
             projectSlug: 'sql-audit',
+caseSlugs: [],
             text: '只在首页出现的预设',
             audiences: ['INTERVIEWER'],
             placements: ['HOME'],

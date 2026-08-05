@@ -424,6 +424,14 @@ function ConvertTo-SchemaThree([string]$CandidatePath) {
     $data.questionPresets = @($data.questionPresets | Where-Object {
             $_.id -notlike 'question-abtest-*'
         })
+    $data.questionPresets | ForEach-Object {
+        foreach ($field in @(
+                'contractSubjectId', 'requiredClaimIds', 'supportingClaimIds',
+                'evidenceRequirement', 'contractStatus', 'contractVersion'
+        )) {
+            $_.PSObject.Properties.Remove($field)
+        }
+    }
     $data.schemaVersion = '3.0'
     $data.contentVersion = $schemaThreeContentVersion
     if (-not ($data.PSObject.Properties.Name -contains 'cases')) {
@@ -463,6 +471,14 @@ function ConvertTo-SchemaTwo([string]$CandidatePath) {
     $data.timelineEvents = @($data.timelineEvents |
         Where-Object { @($_.projectIds).Count -gt 0 })
     $data.questionPresets | ForEach-Object { $_.PSObject.Properties.Remove('caseIds') }
+    $data.questionPresets | ForEach-Object {
+        foreach ($field in @(
+                'contractSubjectId', 'requiredClaimIds', 'supportingClaimIds',
+                'evidenceRequirement', 'contractStatus', 'contractVersion'
+        )) {
+            $_.PSObject.Properties.Remove($field)
+        }
+    }
     $data.timelineEvents | ForEach-Object { $_.PSObject.Properties.Remove('caseIds') }
     Save-Json $data $portfolioPath
     $presentation = Get-Content -LiteralPath $presentationPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -849,7 +865,7 @@ try {
     $result = $valid.Output | ConvertFrom-Json
     if ($result.status -ne 'PASS') { throw 'Expected PASS machine status.' }
     if ($valid.Output.Contains($workspace)) { throw 'Machine output leaked private absolute path.' }
-    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:1128b9a5aecb187bca8e291f6decba5e3f9dac94fcefa45783a40c56ca003e4a') {
+    if ($result.runSnapshot.candidatePayloadHash -ne 'sha256:0f00e1b80cbf24bd95a133580d620887abccdc75c0dc962f9a7db946e108a2ae') {
         throw 'PowerShell candidatePayloadHash does not match the approved public Bundle test vector.'
     }
     if (-not $result.runSnapshot.ledgerHash.StartsWith('sha256:')) {
@@ -1271,14 +1287,23 @@ try {
     }
     Remove-Item -LiteralPath (Join-Path $workspace 'audit\publish.jsonl') -Force
 
-    $uncoveredCandidate = New-Candidate 'uncovered-preset'
-    $uncoveredData = Get-Content -LiteralPath (Join-Path $uncoveredCandidate 'portfolio.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $extraPreset = $uncoveredData.questionPresets[0].PSObject.Copy()
-    $extraPreset.id = 'uncovered-preset'
-    $extraPreset.text = 'A newly supported question without regression coverage'
-    $uncoveredData.questionPresets = @($uncoveredData.questionPresets) + @($extraPreset)
-    $uncoveredData | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $uncoveredCandidate 'portfolio.json') -Encoding UTF8
-    $uncovered = Invoke-Governance @('-Command', 'benchmark', '-Workspace', $workspace, '-Candidate', $uncoveredCandidate)
+    $uncoveredBenchmarkPath = Join-Path $repositoryRoot `
+        'governance\portfolio-governance\benchmark\weekend-login-abtest-benchmarks.v1.json'
+    $originalUncoveredBenchmarkBytes = [IO.File]::ReadAllBytes($uncoveredBenchmarkPath)
+    try {
+        $uncoveredBenchmark = Get-Content -LiteralPath $uncoveredBenchmarkPath `
+            -Raw -Encoding UTF8 | ConvertFrom-Json
+        $uncoveredBenchmark.cases = @($uncoveredBenchmark.cases |
+            Where-Object {
+                -not ($_.questionPresetId -eq 'sql-audit-overview' -and
+                    $_.caseType -eq 'SUPPORTED_QUESTION')
+            })
+        Save-Json $uncoveredBenchmark $uncoveredBenchmarkPath
+        $uncovered = Invoke-Governance @('-Command', 'benchmark', '-Workspace', $workspace, '-Candidate', $candidate)
+    }
+    finally {
+        [IO.File]::WriteAllBytes($uncoveredBenchmarkPath, $originalUncoveredBenchmarkBytes)
+    }
     if ($uncovered.ExitCode -eq 0 -or -not $uncovered.Output.Contains('BENCHMARK_COVERAGE_MISSING')) { throw 'Every active preset must have complete benchmark coverage.' }
 
     $review = Invoke-Governance @('-Command', 'build-review-pack', '-Workspace', $workspace, '-Candidate', $candidate)

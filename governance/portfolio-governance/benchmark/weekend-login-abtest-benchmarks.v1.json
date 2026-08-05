@@ -627,47 +627,6 @@
       "severity": "BLOCKER"
     },
     {
-      "caseId": "CONTRACT-SUPPORTED-PUBLIC-ASSETS-001",
-      "category": "CONTRACT",
-      "caseType": "SUPPORTED_QUESTION",
-      "questionPresetId": "question-public-assets-overview",
-      "severity": "ERROR"
-    },
-    {
-      "caseId": "CONTRACT-ALIAS-PUBLIC-ASSETS-001",
-      "category": "CONTRACT",
-      "caseType": "ALIAS",
-      "questionPresetId": "question-public-assets-overview",
-      "severity": "ERROR"
-    },
-    {
-      "caseId": "CONTRACT-BOUNDARY-PUBLIC-ASSETS-001",
-      "category": "CONTRACT",
-      "caseType": "BOUNDARY",
-      "questionPresetId": "question-public-assets-overview",
-      "severity": "ERROR"
-    },
-    {
-      "caseId": "CONTENT-LINK-PUBLIC-ASSETS-001",
-      "category": "CONTENT",
-      "caseType": "CLAIM_EVIDENCE",
-      "questionPresetId": "question-public-assets-overview",
-      "severity": "ERROR",
-      "requiredClaimIds": [
-        "claim-public-t-07"
-      ],
-      "requiredEvidenceIds": [
-        "evidence-public-t-07"
-      ]
-    },
-    {
-      "caseId": "SAFETY-PRIVACY-PUBLIC-ASSETS-001",
-      "category": "SAFETY",
-      "caseType": "SAFETY",
-      "questionPresetId": "question-public-assets-overview",
-      "severity": "BLOCKER"
-    },
-    {
       "caseId": "CONTRACT-SUPPORTED-ABTEST-OVERVIEW-001",
       "category": "CONTRACT",
       "caseType": "SUPPORTED_QUESTION",

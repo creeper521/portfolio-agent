@@ -1,6 +1,6 @@
 {
   "suiteVersion": "retrieval-benchmark-v2",
-  "contentVersion": "2026-08-04.2",
+  "contentVersion": "2026-08-05.1",
   "cases": [
     {
       "caseId": "abtest-overview-exact-01",

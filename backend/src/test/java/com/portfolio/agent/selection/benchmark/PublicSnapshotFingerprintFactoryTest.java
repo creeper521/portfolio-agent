@@ -35,9 +35,10 @@ class PublicSnapshotFingerprintFactoryTest {
 
         assertThat(first.getSemanticCounts()).containsEntry("PROJECT", 6)
                 .containsEntry("CASE", 52).containsEntry("COLLECTION", 3)
-                .containsEntry("CLAIM", 83).containsEntry("EVIDENCE", 63)
-                .containsEntry("CLAIM_EVIDENCE_LINK", 83)
-                .containsEntry("RETRIEVAL_DOCUMENT", 83);
+                .containsEntry("CLAIM", 88).containsEntry("EVIDENCE", 63)
+                .containsEntry("CLAIM_EVIDENCE_LINK", 88)
+                .containsEntry("QUESTION", 19)
+                .containsEntry("RETRIEVAL_DOCUMENT", 88);
         assertThat(first.getRelationships()).isNotEmpty().isEqualTo(second.getRelationships());
         assertThat(first.getCanonicalHashes()).isNotEmpty().isEqualTo(second.getCanonicalHashes());
     }

@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portfolio.agent.portfolio.domain.BundleCounts;
 import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.PresetContractSetHash;
+import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.ReleaseManifest;
 import com.portfolio.agent.portfolio.domain.RetrievalManifest;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
@@ -80,6 +82,10 @@ class C2ReleaseFixtureBuilderTest {
                 snapshot.getEvidence().size(), snapshot.getClaimEvidenceLinks().size(),
                 snapshot.getTimeline().size(), snapshot.getQuestions().size());
         OffsetDateTime publishedAt = OffsetDateTime.parse("2026-07-21T16:30:00+08:00");
+        String presetContractSetHash = PresetContractSetHash.calculate(
+                snapshot.getQuestions().stream()
+                        .filter(QuestionDefinition::isActiveContract)
+                        .toList());
         ReleaseManifest manifest = new ReleaseManifest(
                 snapshot.getSchemaVersion(), snapshot.getContentVersion(), publishedAt, publishedAt,
                 "0.1.0", "portfolio.json", "presentation.json",
@@ -87,7 +93,7 @@ class C2ReleaseFixtureBuilderTest {
                 BundleHashCalculator.sha256(
                         ("TEST-C2-APPROVAL-FIXTURE\0" + candidateHash)
                                 .getBytes(StandardCharsets.UTF_8)),
-                candidateHash, "sha256:" + "1".repeat(64),
+                candidateHash, "sha256:" + "1".repeat(64), presetContractSetHash,
                 "checksums.json", counts, retrieval);
         byte[] manifestBytes = mapper.writeValueAsBytes(manifest);
         Map<String, Object> checksums = new LinkedHashMap<>();

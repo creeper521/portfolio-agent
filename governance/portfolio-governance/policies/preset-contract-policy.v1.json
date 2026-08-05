@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "1.0",
+  "activeContracts": [
+    {
+      "presetId": "sql-audit-overview",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-background",
+        "claim-sql-audit-responsibility",
+        "claim-sql-audit-technical-decision",
+        "claim-sql-audit-verification",
+        "claim-sql-audit-delivered"
+      ],
+      "supportingClaimIds": [
+        "claim-sql-audit-documented-handoff"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-sql-audit-negative-input",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-fixed-string-search"
+      ],
+      "supportingClaimIds": [
+        "claim-sql-audit-verification"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-sql-audit-partial-success",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-source-selection",
+        "claim-sql-audit-partial-success"
+      ],
+      "supportingClaimIds": [
+        "claim-sql-audit-selected-target-check"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-multilingual-overview",
+      "contractSubjectId": "case-multilingual-upload",
+      "requiredClaimIds": [
+        "claim-case-multilingual-replacement-problem",
+        "claim-case-multilingual-preserve-existing",
+        "claim-case-multilingual-sequential-verification"
+      ],
+      "supportingClaimIds": [
+        "claim-case-multilingual-no-backfill"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-role-reset-overview",
+      "contractSubjectId": "case-role-reset",
+      "requiredClaimIds": [
+        "claim-case-role-reset-cache-interference-problem",
+        "claim-case-role-reset-controlled-flow",
+        "claim-case-role-reset-confirmation-safety",
+        "claim-case-role-reset-acceptance",
+        "claim-case-role-reset-documented-delivery"
+      ],
+      "supportingClaimIds": [],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-codegraph-overview",
+      "contractSubjectId": "case-codegraph-evaluation",
+      "requiredClaimIds": [
+        "claim-case-codegraph-narrowing",
+        "claim-case-codegraph-combined-workflow",
+        "claim-case-codegraph-evaluation-method"
+      ],
+      "supportingClaimIds": [
+        "claim-case-codegraph-failure-boundary",
+        "claim-case-codegraph-manual-quality-review",
+        "claim-case-codegraph-qualitative-publication"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-sql-audit-async-and-recovery",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-async-task-lifecycle",
+        "claim-sql-audit-progress-fallback"
+      ],
+      "supportingClaimIds": [],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-sql-audit-progress-fallback",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-progress-fallback"
+      ],
+      "supportingClaimIds": [
+        "claim-sql-audit-async-task-lifecycle"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-sql-audit-archive-and-truncation",
+      "contractSubjectId": "sql-audit-project",
+      "requiredClaimIds": [
+        "claim-sql-audit-result-lifecycle",
+        "claim-sql-audit-truncation-disclosure"
+      ],
+      "supportingClaimIds": [],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-multilingual-verification-sequence",
+      "contractSubjectId": "case-multilingual-upload",
+      "requiredClaimIds": [
+        "claim-case-multilingual-preserve-existing",
+        "claim-case-multilingual-sequential-verification"
+      ],
+      "supportingClaimIds": [],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-multilingual-recovery-boundary",
+      "contractSubjectId": "case-multilingual-upload",
+      "requiredClaimIds": [
+        "claim-case-multilingual-no-backfill"
+      ],
+      "supportingClaimIds": [
+        "claim-case-multilingual-preserve-existing"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-role-reset-acceptance-result",
+      "contractSubjectId": "case-role-reset",
+      "requiredClaimIds": [
+        "claim-case-role-reset-controlled-flow",
+        "claim-case-role-reset-acceptance"
+      ],
+      "supportingClaimIds": [
+        "claim-case-role-reset-documented-delivery"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-role-reset-safety-boundary",
+      "contractSubjectId": "case-role-reset",
+      "requiredClaimIds": [
+        "claim-case-role-reset-confirmation-safety"
+      ],
+      "supportingClaimIds": [
+        "claim-case-role-reset-controlled-flow"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-codegraph-method",
+      "contractSubjectId": "case-codegraph-evaluation",
+      "requiredClaimIds": [
+        "claim-case-codegraph-evaluation-method"
+      ],
+      "supportingClaimIds": [
+        "claim-case-codegraph-narrowing",
+        "claim-case-codegraph-combined-workflow"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-case-codegraph-quality-boundary",
+      "contractSubjectId": "case-codegraph-evaluation",
+      "requiredClaimIds": [
+        "claim-case-codegraph-manual-quality-review",
+        "claim-case-codegraph-qualitative-publication"
+      ],
+      "supportingClaimIds": [
+        "claim-case-codegraph-failure-boundary"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-abtest-overview",
+      "contractSubjectId": "weekend-login-abtest-project",
+      "requiredClaimIds": [
+        "claim-abtest-project-background",
+        "claim-abtest-project-responsibility",
+        "claim-abtest-project-stratification-bucketing",
+        "claim-abtest-project-stable-assignment",
+        "claim-abtest-project-validation-rollback",
+        "claim-abtest-project-delivered"
+      ],
+      "supportingClaimIds": [],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-abtest-stratification-bucketing",
+      "contractSubjectId": "weekend-login-abtest-project",
+      "requiredClaimIds": [
+        "claim-abtest-project-stratification-bucketing"
+      ],
+      "supportingClaimIds": [
+        "claim-abtest-project-background"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "presetId": "question-abtest-stable-assignment-and-rollback",
+      "contractSubjectId": "weekend-login-abtest-project",
+      "requiredClaimIds": [
+        "claim-abtest-project-stable-assignment",
+        "claim-abtest-project-validation-rollback"
+      ],
+      "supportingClaimIds": [
+        "claim-abtest-project-delivered"
+      ],
+      "evidenceRequirement": {
+        "minimumApprovedEvidencePerRequiredClaim": 1,
+        "publicOnly": true
+      },
+      "status": "ACTIVE"
+    }
+  ],
+  "nonPublicDraftPresetIds": [
+    "question-public-assets-overview"
+  ]
+}

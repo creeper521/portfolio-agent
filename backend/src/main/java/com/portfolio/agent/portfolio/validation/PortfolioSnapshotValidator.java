@@ -196,7 +196,8 @@ public class PortfolioSnapshotValidator {
             require(hasText(item.getSummary()), "evidence summary is required: " + item.getId());
         }
 
-        validateActiveQuestionContracts(questions, claimsById, linksByClaimId, evidenceById);
+        validateActiveQuestionContracts(questions, claimsById, linksByClaimId, evidenceById,
+                projectsById, casesById);
 
         for (ProjectProfile project : projects) {
             require(hasText(project.getCode()), "project code is required: " + project.getId());
@@ -387,24 +388,38 @@ public class PortfolioSnapshotValidator {
             List<QuestionDefinition> questions,
             Map<String, Claim> claimsById,
             Map<String, List<ClaimEvidenceLink>> linksByClaimId,
-            Map<String, EvidenceRecord> evidenceById
+            Map<String, EvidenceRecord> evidenceById,
+            Map<String, ProjectProfile> projectsById,
+            Map<String, CaseStudy> casesById
     ) {
         Set<String> identities = new HashSet<>();
         for (QuestionDefinition question : questions) {
             if (question.getContractStatus() != PresetContractStatus.ACTIVE) {
+                require(question.getRequiredClaimIds().isEmpty(),
+                        "non-active question must not declare requiredClaimIds: "
+                                + question.getId());
+                require(question.getSupportingClaimIds().isEmpty(),
+                        "non-active question must not declare supportingClaimIds: "
+                                + question.getId());
                 continue;
             }
             require(question.isDeterministicEntry(),
                     "active question must be a deterministic entry: " + question.getId());
-            require(question.getProjectIds().size() + question.getCaseIds().size() == 1,
-                    "active question must reference exactly one subject: " + question.getId());
+            require(hasText(question.getContractSubjectId()),
+                    "active question contractSubjectId is required: " + question.getId());
+            require(projectsById.containsKey(question.getContractSubjectId())
+                            || casesById.containsKey(question.getContractSubjectId()),
+                    "active question contractSubjectId is unknown: " + question.getId());
+            require(question.getProjectIds().contains(question.getContractSubjectId())
+                            || question.getCaseIds().contains(question.getContractSubjectId()),
+                    "active question contractSubjectId must be a display association: "
+                            + question.getId());
             require(!question.getRequiredClaimIds().isEmpty(),
                     "active question requiredClaimIds must not be empty: " + question.getId());
             require(question.getEvidenceRequirement().isPublicOnly(),
                     "active question evidenceRequirement must be publicOnly: " + question.getId());
 
-            String subjectId = question.getProjectIds().isEmpty()
-                    ? question.getCaseIds().get(0) : question.getProjectIds().get(0);
+            String subjectId = question.getContractSubjectId();
             for (String claimId : question.getRequiredClaimIds()) {
                 validateActiveQuestionClaim(question, subjectId, claimId, claimsById,
                         linksByClaimId, evidenceById, true);

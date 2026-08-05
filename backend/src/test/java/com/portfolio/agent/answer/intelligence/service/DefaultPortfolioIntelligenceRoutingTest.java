@@ -79,14 +79,56 @@ class DefaultPortfolioIntelligenceRoutingTest {
     }
 
     @Test
-    void projectHintDoesNotTurnGeneralQuestionIntoPortfolioTask() {
+    void knownProjectSlugScopesGeneralQuestionWithoutCallingClassifier() {
         PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
-        DefaultPortfolioIntelligence intelligence = intelligence(classifier, false);
+        AtomicReference<com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest>
+                request = new AtomicReference<>();
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier,
+                false,
+                retrievalRequest -> {
+                    request.set(retrievalRequest);
+                    return retrieval();
+                });
 
         PortfolioDecision decision = intelligence.tryResolve(
                 PortfolioTurn.builder("turn-1", "What is dependency injection?")
                         .projectSlug("project-a")
                         .build());
+
+        assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.ANSWERED);
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getIntentSource()).isEqualTo(AnswerIntentSource.RULE));
+        assertThat(request.get().getStrategy())
+                .isEqualTo(PortfolioRetrievalStrategy.SUBJECT_SCOPED_RELEVANCE);
+        assertThat(request.get().getRequiredPortfolioIds()).containsExactly("project-a");
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void unknownStructuredSlugBecomesInvalidInputWithoutCallingClassifier() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        DefaultPortfolioIntelligence intelligence = intelligence(classifier, false);
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "这个项目如何实现？")
+                        .projectSlug("missing-project")
+                        .build());
+
+        assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.INVALID_INPUT);
+        assertThat(decision.getMaterial()).get().satisfies(material ->
+                assertThat(material.getNoticeCode())
+                        .isEqualTo("STRUCTURED_SUBJECT_INVALID"));
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void generalQuestionWithoutSubjectHintFallsToProviderGate() {
+        PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
+        DefaultPortfolioIntelligence intelligence = intelligence(classifier, false);
+
+        PortfolioDecision decision = intelligence.tryResolve(
+                PortfolioTurn.builder("turn-1", "What is dependency injection?").build());
 
         assertThat(decision.getDisposition()).isEqualTo(PortfolioDisposition.NOT_PORTFOLIO);
         verifyNoInteractions(classifier);
@@ -160,6 +202,7 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 new PortfolioPresetResolver(new QuestionNormalizer()),
                 new PortfolioReferenceContextValidator(),
                 taskResolver,
+                new StructuredSubjectTaskResolver(),
                 new ConversationProviderAccess(providerAllowed));
     }
 

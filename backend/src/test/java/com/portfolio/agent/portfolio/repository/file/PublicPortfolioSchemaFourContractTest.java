@@ -41,7 +41,7 @@ class PublicPortfolioSchemaFourContractTest {
                 .collect(Collectors.toMap(CaseStudy::getId, Function.identity()));
 
         assertThat(snapshot.getSchemaVersion()).isEqualTo("4.0");
-        assertThat(snapshot.getContentVersion()).isEqualTo("2026-08-04.2");
+        assertThat(snapshot.getContentVersion()).isEqualTo("2026-08-05.1");
         assertThat(snapshot.getProjects()).extracting(ProjectProfile::getId)
                 .containsExactly(
                         "sql-audit-project",

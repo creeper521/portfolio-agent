@@ -175,6 +175,32 @@ class PortfolioResponseMapperTest {
                 .hasMessageContaining("missing-project");
     }
 
+    @Test
+    void filtersDraftPresetsAndExposesOnlyActiveContracts() {
+        PublicContent content = publicContentWithThreeCases();
+        PublicContent withDraft = withQuestions(
+                content,
+                List.of(
+                        question("question-project-overview", List.of("project-1"), List.of()),
+                        draftQuestion(
+                                "question-public-assets-overview",
+                                List.of("project-1", "project-2"),
+                                List.of("case-multilingual"))
+                )
+        );
+
+        PublicContentResponse response = mapper.toPublicContentResponse(withDraft);
+
+        assertThat(response.getQuestionPresets())
+                .extracting(QuestionPresetResponse::getId)
+                .containsExactly("question-project-overview")
+                .doesNotContain("question-public-assets-overview");
+        assertThat(response.getQuestionPresets()).allSatisfy(item -> {
+            assertThat(item.getAvailability()).isEqualTo("ACTIVE");
+            assertThat(item.getContractVersion()).matches("pcv1-[a-f0-9]{16}");
+        });
+    }
+
     private static PublicContent publicContentWithThreeCases() {
         ProjectProfile project = project();
         EvidenceRecord projectEvidence = evidence(
@@ -447,6 +473,32 @@ class PortfolioResponseMapperTest {
     }
 
     private static QuestionDefinition question(
+            String id,
+            List<String> projectIds,
+            List<String> caseIds
+    ) {
+        String subject = projectIds.isEmpty() ? caseIds.getFirst() : projectIds.getFirst();
+        return new QuestionDefinition(
+                id,
+                "Question " + id,
+                List.of(),
+                List.of("INTERVIEWER"),
+                projectIds,
+                caseIds,
+                List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10,
+                subject,
+                List.of(id + "-required-claim"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+    }
+
+    private static QuestionDefinition draftQuestion(
             String id,
             List<String> projectIds,
             List<String> caseIds

@@ -39,9 +39,9 @@ class PublicBundleDatabaseImportCliTest {
         assertThat(result.exitCode).isZero();
         assertThat(result.err).isEmpty();
         assertThat(result.out).isEqualTo(
-                "{\"action\":\"VERIFY\",\"releaseVersion\":\"2026-08-04.2\","
+                "{\"action\":\"VERIFY\",\"releaseVersion\":\"2026-08-05.1\","
                         + "\"status\":\"VERIFIED\",\"projects\":6,\"cases\":52,"
-                        + "\"claims\":83,\"evidence\":63}");
+                        + "\"claims\":88,\"evidence\":63}");
         verify(importer, never()).importBundle(Mockito.any());
         verify(activation, never()).activate(Mockito.anyString());
     }
@@ -64,7 +64,7 @@ class PublicBundleDatabaseImportCliTest {
                 "\"status\":\"VERIFIED\"",
                 "\"projects\":6",
                 "\"cases\":52",
-                "\"claims\":83",
+                "\"claims\":88",
                 "\"evidence\":63");
         verify(importer).importBundle(snapshot);
         verify(activation, never()).activate(Mockito.anyString());

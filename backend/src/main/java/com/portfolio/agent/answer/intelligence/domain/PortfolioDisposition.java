@@ -5,5 +5,6 @@ public enum PortfolioDisposition {
     NEEDS_CLARIFICATION,
     NOT_SUPPORTED,
     CAPABILITY_UNAVAILABLE,
-    NOT_PORTFOLIO
+    NOT_PORTFOLIO,
+    INVALID_INPUT
 }

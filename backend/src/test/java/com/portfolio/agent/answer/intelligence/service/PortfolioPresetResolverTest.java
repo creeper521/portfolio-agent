@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.intelligence.service;
 
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
+import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
@@ -74,6 +75,71 @@ class PortfolioPresetResolverTest {
         assertThat(resolution.getType()).isEqualTo(PortfolioPresetResolutionType.INVALID);
     }
 
+    @Test
+    void contractTaskUsesTheContractExecutionSubjectNotTheDisplayContainer() {
+        AnswerQuestion contractPreset = new AnswerQuestion(
+                "preset-abtest",
+                "ABTest overview",
+                List.of("AB experiment overview"),
+                "ABTest overview",
+                List.of(),
+                "pcv1-0123456789abcdef",
+                List.of("claim-abtest-background"),
+                List.of(),
+                1,
+                true,
+                "weekend-login-abtest-project");
+        AnswerKnowledge projectKnowledge = knowledge("weekend-login-abtest-project",
+                List.of(contractPreset));
+        AnswerKnowledge caseKnowledge = knowledge("case-abtest-experiment-design", List.of());
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "public-1",
+                "sha256:runtime",
+                List.of(projectKnowledge, caseKnowledge));
+
+        PortfolioPresetResolution resolution = resolver.resolve(
+                PortfolioTurn.builder("turn-1", "ABTest overview")
+                        .questionPresetId("preset-abtest")
+                        .projectSlug("weekend-login-abtest-project")
+                        .build(),
+                content);
+
+        assertThat(resolution.getType()).isEqualTo(PortfolioPresetResolutionType.MATCHED);
+        assertThat(resolution.getContractTask().getSubjectId())
+                .isEqualTo("weekend-login-abtest-project");
+    }
+
+    @Test
+    void contractTaskRejectsPresetMountedUnderAForeignSubjectContainer() {
+        AnswerQuestion contractPreset = new AnswerQuestion(
+                "preset-abtest",
+                "ABTest overview",
+                List.of("AB experiment overview"),
+                "ABTest overview",
+                List.of(),
+                "pcv1-0123456789abcdef",
+                List.of("claim-abtest-background"),
+                List.of(),
+                1,
+                true,
+                "weekend-login-abtest-project");
+        AnswerKnowledge caseKnowledge = caseKnowledge("case-abtest-experiment-design",
+                List.of(contractPreset));
+        RuntimeAnswerContent content = new RuntimeAnswerContent(
+                "public-1",
+                "sha256:runtime",
+                List.of(caseKnowledge));
+
+        PortfolioPresetResolution resolution = resolver.resolve(
+                PortfolioTurn.builder("turn-1", "ABTest overview")
+                        .questionPresetId("preset-abtest")
+                        .caseSlug("case-abtest-experiment-design")
+                        .build(),
+                content);
+
+        assertThat(resolution.getType()).isEqualTo(PortfolioPresetResolutionType.INVALID);
+    }
+
     private RuntimeAnswerContent content() {
         AnswerQuestion preset = new AnswerQuestion(
                 "preset-async",
@@ -89,6 +155,25 @@ class PortfolioPresetResolverTest {
 
     private AnswerKnowledge knowledge(String slug, List<AnswerQuestion> questions) {
         return new AnswerKnowledge(
+                slug,
+                slug,
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Verification"),
+                "Outcome",
+                "Handoff",
+                "ACTIVE",
+                questions,
+                List.of(),
+                List.of());
+    }
+
+    private AnswerKnowledge caseKnowledge(String slug, List<AnswerQuestion> questions) {
+        return new AnswerKnowledge(
+                AnswerSubjectType.CASE,
                 slug,
                 slug,
                 "Summary",
