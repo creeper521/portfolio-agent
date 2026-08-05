@@ -42,7 +42,8 @@ class CaseConversationBundleIntegrationTest {
 
         mockMvc.perform(post("/api/v2/answers")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request("turn-known-case", "multilingual-image-preservation")))
+                        .content(request("turn-known-case", "multilingual-image-preservation",
+                                "这个案例如何验证？")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.turnId").value("turn-known-case"))
                 .andExpect(jsonPath("$.contentVersion").value("2026-08-05.1"))
@@ -58,7 +59,8 @@ class CaseConversationBundleIntegrationTest {
 
         mockMvc.perform(post("/api/v2/answers")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request("turn-unknown-case", "unknown-case")))
+                        .content(request("turn-unknown-case", "unknown-case",
+                                "这个案例如何验证？")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
@@ -70,16 +72,29 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(jsonPath("$.blocks[0].sourceScope").value("PORTFOLIO"))
                 .andExpect(jsonPath("$.blocks[0].claimIds.length()").value(0))
                 .andExpect(jsonPath("$.blocks[0].evidenceIds.length()").value(0));
+
+        mockMvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request("turn-unknown-rule", "unknown-case",
+                                "这个案例怎么实现？")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
+                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
+                .andExpect(jsonPath("$.resolution").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.noticeCode").value("STRUCTURED_SUBJECT_INVALID"))
+                .andExpect(jsonPath("$.intentSource").value("RULE"))
+                .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
+                .andExpect(jsonPath("$.degraded").value(false));
     }
 
-    private String request(String turnId, String caseSlug) {
+    private String request(String turnId, String caseSlug, String question) {
         String requestToken = java.util.UUID.nameUUIDFromBytes(
                 turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         return """
                 {
                   "turnId": "%s",
                   "requestToken": "%s",
-                  "question": "这个案例如何验证？",
+                  "question": "%s",
                   "messages": [],
                   "context": {
                     "caseSlug": "%s",
@@ -87,6 +102,6 @@ class CaseConversationBundleIntegrationTest {
                     "source": "CASE"
                   }
                 }
-                """.formatted(turnId, requestToken, caseSlug);
+                """.formatted(turnId, requestToken, question, caseSlug);
     }
 }
