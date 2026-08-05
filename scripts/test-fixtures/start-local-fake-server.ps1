@@ -26,14 +26,23 @@ $listener.Start()
 function Read-Request([System.Net.Sockets.NetworkStream]$Stream) {
     $reader = [System.IO.StreamReader]::new(
         $Stream,
-        [System.Text.Encoding]::ASCII,
+        [System.Text.Encoding]::UTF8,
         $false,
         1024,
         $true
     )
-    $requestLine = $reader.ReadLine()
+    $requestLine = ''
+    try {
+        $requestLine = $reader.ReadLine()
+        if ($null -eq $requestLine) {
+            $requestLine = ''
+        }
+    }
+    catch {
+        $requestLine = ''
+    }
     $contentLength = 0
-    while ($true) {
+    while (-not [string]::IsNullOrEmpty($requestLine)) {
         $line = $reader.ReadLine()
         if ([string]::IsNullOrEmpty($line)) {
             break
@@ -47,11 +56,18 @@ function Read-Request([System.Net.Sockets.NetworkStream]$Stream) {
             ).Trim()
         }
     }
+    $body = ''
     if ($contentLength -gt 0) {
         $buffer = [char[]]::new($contentLength)
-        [void]$reader.ReadBlock($buffer, 0, $contentLength)
+        $read = $reader.ReadBlock($buffer, 0, $contentLength)
+        if ($read -gt 0) {
+            $body = -join $buffer[0..($read - 1)]
+        }
     }
-    return $requestLine
+    return [pscustomobject]@{
+        RequestLine = $requestLine
+        Body = $body
+    }
 }
 
 function Write-Response(
@@ -72,12 +88,42 @@ function Write-Response(
     $Stream.Flush()
 }
 
+function Test-SubjectScopedRequest([string]$RequestBody) {
+    if ([string]::IsNullOrWhiteSpace($RequestBody)) {
+        return $false
+    }
+    try {
+        $parsed = $RequestBody | ConvertFrom-Json
+        if ($null -ne $parsed.questionPresetId -or
+                $null -ne $parsed.contractVersion -or
+                $null -ne $parsed.referenceContext -or
+                $null -ne $parsed.recommendationContext) {
+            return $true
+        }
+        $context = $parsed.context
+        if ($null -ne $context -and (
+                -not [string]::IsNullOrWhiteSpace([string]$context.projectSlug) -or
+                -not [string]::IsNullOrWhiteSpace([string]$context.caseSlug))) {
+            return $true
+        }
+    }
+    catch {
+        return $false
+    }
+    return $false
+}
+
 try {
     while ($true) {
         $client = $listener.AcceptTcpClient()
         try {
             $stream = $client.GetStream()
-            $requestLine = Read-Request $stream
+            $request = Read-Request $stream
+            $requestLine = $request.RequestLine
+            $requestBody = $request.Body
+            if ([string]::IsNullOrWhiteSpace($requestLine)) {
+                continue
+            }
             $path = ($requestLine -split ' ')[1]
             if ($Mode -eq 'FRONTEND') {
                 Write-Response $stream 200 'text/html; charset=utf-8' `
@@ -89,10 +135,18 @@ try {
             }
             elseif ($path -eq '/api/v2/answers') {
                 if ($Mode -eq 'BACKEND_MODEL') {
-                    $body = '{"contentVersion":"test-v1","intentSource":"MODEL",' +
-                        '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"VERIFIED",' +
-                        '"degraded":false,"resolution":"ANSWERED",' +
-                        '"blocks":[{"content":"fixture"}]}'
+                    $body = if (Test-SubjectScopedRequest $requestBody) {
+                        '{"contentVersion":"test-v1","intentSource":"RULE",' +
+                            '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"INSUFFICIENT",' +
+                            '"degraded":false,"resolution":"NOT_SUPPORTED",' +
+                            '"blocks":[{"content":"fixture"}]}'
+                    }
+                    else {
+                        '{"contentVersion":"test-v1","intentSource":"MODEL",' +
+                            '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"VERIFIED",' +
+                            '"degraded":false,"resolution":"ANSWERED",' +
+                            '"blocks":[{"content":"fixture"}]}'
+                    }
                 }
                 else {
                     $body = '{"contentVersion":"test-v1","intentSource":"GLOBAL",' +

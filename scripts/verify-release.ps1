@@ -62,6 +62,9 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\assert-live-provider-response.test.ps1')
     Assert-ExitCode 'Live Provider response checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.test.ps1')
+    Assert-ExitCode 'Live Provider probe contract tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
         -Path (Join-Path $root 'backend\src\main')
     Assert-ExitCode 'Pre-package production source and configuration privacy scan'
