@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Visual baseline is `design-exploration/warm-cream-compare.html`, default `v-warm l1` plus red CTA.
+- Visual baseline is `design/exploration/warm-cream-compare.html`, default `v-warm l1` plus red CTA.
 - Desktop `>=1440px`: stage gap `clamp(24px, 2vw, 32px)`, shell max `1600px`, radius `16px`, shadow `0 30px 80px rgba(0, 0, 0, 0.5)`.
 - Mid-size `981–1439px`: stage gap `16px`, radius `12px`.
 - Mobile `<=980px`: gap `0`, radius `0`, shadow `none`, full viewport.

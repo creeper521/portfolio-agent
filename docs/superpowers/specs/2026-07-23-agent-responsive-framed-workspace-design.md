@@ -3,7 +3,7 @@
 > **状态：** 待用户书面评审  
 > **日期：** 2026-07-23  
 > **适用项目：** `D:\code\agent`  
-> **范围：** 先调整 `design-exploration/warm-cream-compare.html`，视觉确认后再迁移到正式 Vue `/agent` 页面  
+> **范围：** 先调整 `design/exploration/warm-cream-compare.html`，视觉确认后再迁移到正式 Vue `/agent` 页面
 > **选定方向：** C「混合式响应布局」＋完整圆角作品窗口
 
 ## 1. 背景与设计判断
@@ -150,7 +150,7 @@ Agent 路由的 Header 改为浅暖纸色，并纳入作品窗口：
 第一阶段只修改：
 
 ```text
-design-exploration/warm-cream-compare.html
+design/exploration/warm-cream-compare.html
 ```
 
 Demo 需要增加：

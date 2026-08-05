@@ -27,7 +27,7 @@
 
 ## File Structure
 
-- Modify `design-exploration/warm-cream-compare.html`: define the responsive shell, stage, columns, density, and narrow-view pane visibility.
+- Modify `design/exploration/warm-cream-compare.html`: define the responsive shell, stage, columns, density, and narrow-view pane visibility.
 - Create temporary `C:\tmp\verify-agent-framed-workspace.mjs`: verify responsive geometry, active defaults, switch behavior, horizontal overflow, console errors, and save five reference screenshots under `C:\tmp\agent-framed-workspace\`.
 
 No new production files or dependencies are required.
@@ -36,7 +36,7 @@ No new production files or dependencies are required.
 
 **Files:**
 - Create temporary test: `C:\tmp\verify-agent-framed-workspace.mjs`
-- Test target: `design-exploration/warm-cream-compare.html`
+- Test target: `design/exploration/warm-cream-compare.html`
 
 **Interfaces:**
 - Consumes: `#frame`, `.stage`, `.workspace`, `.app-header`, `.rail`, `.desk`, `#seg-variant`, and `#seg-cta` from the Demo HTML.
@@ -55,7 +55,7 @@ import { pathToFileURL } from 'node:url'
 import { chromium } from 'file:///D:/code/agent/frontend/node_modules/playwright/index.mjs'
 
 const demoUrl = pathToFileURL(
-  'D:\\code\\agent\\design-exploration\\warm-cream-compare.html',
+  'D:\\code\\agent\\design\\exploration\\warm-cream-compare.html',
 ).href
 const outputDir = 'C:\\tmp\\agent-framed-workspace'
 await mkdir(outputDir, { recursive: true })
@@ -223,7 +223,7 @@ Expected: the temporary verifier does not appear in repository status. Only pre-
 ### Task 2: Implement the Rounded Responsive Shell
 
 **Files:**
-- Modify: `design-exploration/warm-cream-compare.html`
+- Modify: `design/exploration/warm-cream-compare.html`
 - Test: `C:\tmp\verify-agent-framed-workspace.mjs`
 
 **Interfaces:**
@@ -390,7 +390,7 @@ PASS: responsive framed Demo verified; screenshots: C:\tmp\agent-framed-workspac
 Run:
 
 ```powershell
-git diff -- design-exploration/warm-cream-compare.html
+git diff -- design/exploration/warm-cream-compare.html
 git status --short
 ```
 
@@ -399,7 +399,7 @@ Expected: only the planned Demo and verifier edits plus pre-existing user change
 ### Task 3: Visual QA and Handoff
 
 **Files:**
-- Verify: `design-exploration/warm-cream-compare.html`
+- Verify: `design/exploration/warm-cream-compare.html`
 - Verify: `C:\tmp\agent-framed-workspace\*.png`
 
 **Interfaces:**
@@ -445,7 +445,7 @@ Run:
 ```powershell
 git status --short
 git diff --check
-git diff --stat -- design-exploration/warm-cream-compare.html
+git diff --stat -- design/exploration/warm-cream-compare.html
 ```
 
 Expected:

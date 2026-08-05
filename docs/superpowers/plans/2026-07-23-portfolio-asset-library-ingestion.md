@@ -452,7 +452,7 @@ docs/00-文档状态索引.md
 docs/08-当前实现状态.md
 ```
 
-Existing frontend and design-exploration changes remain unstaged and unmodified by this plan.
+Existing frontend and design/exploration changes remain unstaged and unmodified by this plan.
 
 ## Self-Review Results
 

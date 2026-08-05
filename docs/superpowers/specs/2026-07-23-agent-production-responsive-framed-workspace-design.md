@@ -4,7 +4,7 @@
 > **日期：** 2026-07-23  
 > **适用项目：** `D:\code\agent`  
 > **目标路由：** `/agent`  
-> **视觉基准：** `design-exploration/warm-cream-compare.html` 的 B 暖调 1 档＋牛血红 CTA  
+> **视觉基准：** `design/exploration/warm-cream-compare.html` 的 B 暖调 1 档＋牛血红 CTA
 > **前置确认：** 用户已确认 C「混合式响应布局」、完整圆角外壳、明显深色舞台留边，并通过 Demo 视觉验收
 
 ## 1. 迁移结论

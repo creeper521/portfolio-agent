@@ -18,8 +18,8 @@
 3. **新建会话按钮维持原深墨**（`--ink`）。
 4. 激活态 / 选中标记继续用牛血红细线，不动。
 
-> 定稿参考截图：`design-exploration/final-B-red.png`（B 档 + 牛血红 CTA）。
-> 可交互对比稿：`design-exploration/warm-cream-compare.html`（顶部切换 A/B/C/D + CTA 模式）。
+> 定稿参考截图：`design/exploration/final-B-red.png`（B 档 + 牛血红 CTA）。
+> 可交互对比稿：`design/exploration/warm-cream-compare.html`（顶部切换 A/B/C/D + CTA 模式）。
 
 ---
 
@@ -427,7 +427,7 @@ npm.cmd --prefix frontend run build
 7. **header 仍为 ink 深底米字**（未改，按 §2.6）。
 8. 文字、边线、resizer、composer 容器无残破/错位/不可读。
 
-对照基准：`design-exploration/final-B-red.png`（应高度一致，唯一差异是真实页面有完整动态内容）。
+对照基准：`design/exploration/final-B-red.png`（应高度一致，唯一差异是真实页面有完整动态内容）。
 
 ### 4.3 无副作用检查
 
@@ -465,7 +465,7 @@ Codex 执行顺序（TDD）：
 3. 跑 `npm test -- --run` 确认全绿。
 4. 跑 `npm run build` 确认构建通过。
 5. **REFACTOR**：本改动已最小化，无额外重构空间。
-6. 启动 dev server，按 §4.2 逐项人工验收，截图与 `design-exploration/final-B-red.png` 对照。
+6. 启动 dev server，按 §4.2 逐项人工验收，截图与 `design/exploration/final-B-red.png` 对照。
 
 **约束提醒**：
 - 不提交、不推送（用户未授权 git 操作）。
@@ -500,6 +500,6 @@ Codex 执行顺序（TDD）：
 ## 附录 B · 参考文件位置
 
 - 本设计文档：`docs/superpowers/specs/2026-07-23-agent-warm-cream-palette-and-red-cta-design.md`
-- 定稿截图：`design-exploration/final-B-red.png`
-- 可交互对比稿：`design-exploration/warm-cream-compare.html`
+- 定稿截图：`design/exploration/final-B-red.png`
+- 可交互对比稿：`design/exploration/warm-cream-compare.html`
 - 前序设计：`docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md`
