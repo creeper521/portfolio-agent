@@ -4,24 +4,18 @@ import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioContractTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
+import com.portfolio.agent.common.text.StableQuestionNormalizer;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public final class PortfolioPresetResolver {
-
-    private final QuestionNormalizer normalizer;
-
-    public PortfolioPresetResolver(QuestionNormalizer normalizer) {
-        this.normalizer = Objects.requireNonNull(normalizer, "normalizer");
-    }
 
     public PortfolioPresetResolution resolve(
             PortfolioTurn turn,
@@ -53,7 +47,7 @@ public final class PortfolioPresetResolver {
             }
             return matched(turn, match);
         }
-        String normalizedQuestion = normalizer.normalize(turn.getQuestion());
+        String normalizedQuestion = normalize(turn.getQuestion());
         List<SubjectQuestion> matches = available.stream()
                 .filter(candidate -> candidate.question.isActiveContract())
                 .filter(candidate -> matchesNormalized(candidate.question, normalizedQuestion))
@@ -99,19 +93,23 @@ public final class PortfolioPresetResolver {
     }
 
     private boolean matchesText(AnswerQuestion question, String text) {
-        return matchesNormalized(question, normalizer.normalize(text));
+        return matchesNormalized(question, normalize(text));
     }
 
     private boolean matchesNormalized(AnswerQuestion question, String normalized) {
         if (normalized.isBlank()) {
             return false;
         }
-        if (normalizer.normalize(question.getCanonicalQuestion()).equals(normalized)) {
+        if (normalize(question.getCanonicalQuestion()).equals(normalized)) {
             return true;
         }
         return question.getAliases().stream()
-                .map(normalizer::normalize)
+                .map(PortfolioPresetResolver::normalize)
                 .anyMatch(normalized::equals);
+    }
+
+    private static String normalize(String question) {
+        return StableQuestionNormalizer.normalize(question);
     }
 
     private List<SubjectQuestion> questions(

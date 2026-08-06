@@ -54,6 +54,22 @@ public final class AnswerService {}
         }
     },
     @{
+        Name = 'answer-engine-to-common'
+        File = 'com\portfolio\agent\answer\engine\BadCommonEngine.java'
+        Source = @'
+package com.portfolio.agent.answer.engine;
+import com.portfolio.agent.common.text.StableQuestionNormalizer;
+public final class BadCommonEngine {}
+'@
+        Rule = 'answer-engine-boundary'
+        Stubs = @{
+            'com\portfolio\agent\common\text\StableQuestionNormalizer.java' = @'
+package com.portfolio.agent.common.text;
+public final class StableQuestionNormalizer {}
+'@
+        }
+    },
+    @{
         Name = 'answer-engine-to-mapper'
         File = 'com\portfolio\agent\answer\engine\BadMapperEngine.java'
         Source = @'

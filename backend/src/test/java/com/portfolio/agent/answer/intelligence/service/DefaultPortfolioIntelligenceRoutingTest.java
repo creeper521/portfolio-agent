@@ -7,7 +7,6 @@ import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.exception.PortfolioRetrievalFailedException;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
@@ -367,7 +366,7 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 new PortfolioRecommendationPolicy(),
                 new RecommendationContextValidator(new RecommendationBatchFingerprint()),
                 knowledgeGateway,
-                new PortfolioPresetResolver(new QuestionNormalizer()),
+                new PortfolioPresetResolver(),
                 new PortfolioReferenceContextValidator(),
                 taskResolver,
                 new StructuredSubjectResolver(),

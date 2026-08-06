@@ -8,7 +8,6 @@ import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.EmbeddingVector;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.adapter.bundle.BundlePortfolioRetriever;
@@ -165,11 +164,6 @@ class PortfolioIntelligenceConfigurationTest {
         @Bean
         ConversationalAgentProperties conversationalAgentProperties() {
             return new ConversationalAgentProperties();
-        }
-
-        @Bean
-        QuestionNormalizer questionNormalizer() {
-            return new QuestionNormalizer();
         }
 
         @Bean

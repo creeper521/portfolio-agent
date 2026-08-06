@@ -4,7 +4,6 @@ import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.AnswerQuestion;
 import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import org.junit.jupiter.api.Test;
@@ -15,8 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PortfolioPresetResolverTest {
 
-    private final PortfolioPresetResolver resolver =
-            new PortfolioPresetResolver(new QuestionNormalizer());
+    private final PortfolioPresetResolver resolver = new PortfolioPresetResolver();
 
     @Test
     void explicitPresetIdSelectsTheStablePresetAndSubject() {

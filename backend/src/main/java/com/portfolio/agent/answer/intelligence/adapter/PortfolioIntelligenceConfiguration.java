@@ -3,7 +3,6 @@ package com.portfolio.agent.answer.intelligence.adapter;
 import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
-import com.portfolio.agent.answer.engine.QuestionNormalizer;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.adapter.bundle.BundlePortfolioRetriever;
@@ -46,8 +45,8 @@ public class PortfolioIntelligenceConfiguration {
     }
 
     @Bean
-    PortfolioPresetResolver portfolioPresetResolver(QuestionNormalizer normalizer) {
-        return new PortfolioPresetResolver(normalizer);
+    PortfolioPresetResolver portfolioPresetResolver() {
+        return new PortfolioPresetResolver();
     }
 
     @Bean
