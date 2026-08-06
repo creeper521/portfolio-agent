@@ -1,13 +1,16 @@
 # Build output
 backend/target/
 frontend/dist/
+node_modules/
 frontend/node_modules/
 playwright-report/
 test-results/
+frontend/test-results-review/
 output/playwright/
 .worktrees/
 output/
 frontend/output/
+.playwright-cli/
 frontend/.playwright-cli/
 /design/exploration/*
 !/design/exploration/CODEX-PROMPT.md
@@ -36,7 +39,10 @@ secrets/
 .claude/
 .codex/
 .superpowers/
+.reasonix/
+.zcode/
 skills-lock.json
+reasonix.toml
 
 # Private content pipeline artifacts
 private-kb/
