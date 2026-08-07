@@ -19,7 +19,8 @@ $allowedExtensions = @(
 $excludedDirectoryNames = @(
     '.git', '.idea', '.worktrees', '.claude', '.playwright-cli', '.superpowers', 'node_modules',
     'runtime-models', 'docs', 'test', 'test-classes', 'test-results',
-    'playwright-report', 'surefire-reports', 'antrun', 'maven-status'
+    'playwright-report', 'surefire-reports', 'antrun', 'maven-status',
+'logs', 'output', 'target', 'dist'
 )
 $sourceLogSinkRegex = '(?i:\b(?:console\s*\.\s*(?:trace|debug|info|warn|error|log)|System\s*\.\s*(?:out|err)\s*\.\s*(?:print|println|printf))\s*\()'
 $sensitiveLogIdentifierRegex = '(?:\b(?:question|visitorQuestion|history|conversationHistory|messages|answer|fullAnswer|answerText|generatedAnswer|modelAnswer|prompt|systemPrompt|userPrompt|modelPrompt|credential|credentials|requestCredentials|authorization|password|passwd|secret|token|apiKey|api_key|accessToken|authToken|bearerToken|providerToken|rawIp|raw_ip|clientIp|client_ip|remoteIp|remote_ip|ipAddress|ip_address|remoteAddress|header|headers|requestHeader|requestHeaders|responseHeader|responseHeaders|httpHeaders|body|requestBody|responseBody|payload|providerRequest|providerResponse|modelResponse|exception|exceptionMessage|normalizedQuery|queryVector|similarity|retrievalCandidate|rankedHit|contextEnvelope|toolPlan|toolResult)\b|request\s*\.\s*getQuestion\s*\(|session\s*\.\s*messages\b)'

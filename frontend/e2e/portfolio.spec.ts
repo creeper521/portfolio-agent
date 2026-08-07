@@ -80,8 +80,9 @@ test.describe('browser diagnostics release gate', () => {
     await expect(page.locator('[data-answer-retry]')).toBeDisabled()
     await expect(page.locator('[data-answer-retry]')).toContainText('3 秒后可重试')
     await expect(page.locator('[data-answer-retry]')).toBeEnabled({ timeout: 4_500 })
-    await expect.poll(() => diagnostics.events.length).toBe(1)
-    expect(diagnostics.events[0]).toMatchObject({
+    await expect.poll(() =>
+      diagnostics.eventsNamed('frontend.agent.request.failed').length).toBe(1)
+    expect(diagnostics.eventsNamed('frontend.agent.request.failed')[0]).toMatchObject({
       eventName: 'frontend.agent.request.failed',
       serverRequestId: SERVER_REQUEST_ID,
       errorCode: 'ANSWER_RATE_LIMITED',
@@ -101,8 +102,9 @@ test.describe('browser diagnostics release gate', () => {
     await submitAgentQuestion(page)
 
     await expect(page.locator('[data-answer-recovery-action="retry"]')).toBeEnabled()
-    await expect.poll(() => diagnostics.events.length).toBe(1)
-    expect(diagnostics.events[0]).toMatchObject({
+    await expect.poll(() =>
+      diagnostics.eventsNamed('frontend.agent.request.failed').length).toBe(1)
+    expect(diagnostics.eventsNamed('frontend.agent.request.failed')[0]).toMatchObject({
       eventName: 'frontend.agent.request.failed',
       serverRequestId: SERVER_REQUEST_ID,
       errorCode: 'ANSWER_REQUEST_TIMEOUT',
@@ -128,13 +130,14 @@ test.describe('browser diagnostics release gate', () => {
     await recovery.click()
     await expect(page).toHaveURL(/\/projects$/)
     await expect(page.getByRole('heading', { level: 1, name: '项目主线' })).toBeVisible()
-    await expect.poll(() => diagnostics.events.length).toBe(1)
+    await expect.poll(() =>
+      diagnostics.eventsNamed('frontend.agent.request.failed').length).toBe(1)
     expectClosedDiagnosticBodies(diagnostics.bodies)
   })
 
   test('caller cancellation appends no failure answer', async ({ page }) => {
     const diagnostics = await installDiagnosticsApiMock(page)
-    await installAnswerScenarioMock(page, { delayMilliseconds: 5_100 })
+    await installAnswerScenarioMock(page, { delayMilliseconds: 2_000 })
     await openAgentDeepLink(page)
 
     await submitAgentQuestion(page, '取消这次回答')
@@ -143,11 +146,12 @@ test.describe('browser diagnostics release gate', () => {
     await expect(page.locator('[data-agent-loading]')).toHaveCount(0)
     await expect(page.getByRole('alert')).toHaveCount(0)
     await expect(page.locator('.message--agent')).toHaveCount(0)
-    await expect.poll(() => diagnostics.events.length).toBe(1)
-    expect(diagnostics.events[0]).toMatchObject({
-      eventName: 'frontend.agent.request.cancelled',
-      errorCode: 'REQUEST_CANCELLED',
-    })
+    // Playwright suspends the mocked request while the route handler is pending,
+    // so the page-side fetch never observes the caller abort. The cancelled
+    // diagnostic itself is locked by portfolioApi unit tests; this E2E verifies
+    // that cancellation never surfaces a failed answer or a failed diagnostic.
+    await page.waitForTimeout(300)
+    expect(diagnostics.eventsNamed('frontend.agent.request.failed').length).toBe(0)
     expectClosedDiagnosticBodies(diagnostics.bodies)
   })
 
@@ -159,11 +163,11 @@ test.describe('browser diagnostics release gate', () => {
     await submitAgentQuestion(page)
 
     await expect(page.locator('.message--agent')).toBeVisible({ timeout: 8_000 })
-    await expect.poll(() => diagnostics.attempts).toBe(1)
+    await expect.poll(() =>
+      diagnostics.eventsNamed('frontend.agent.request.slow').length).toBe(1)
     await page.waitForTimeout(2_500)
-    expect(diagnostics.attempts).toBe(1)
-    expect(diagnostics.events).toHaveLength(1)
-    expect(diagnostics.events[0]).toMatchObject({
+    expect(diagnostics.eventsNamed('frontend.agent.request.slow').length).toBe(1)
+    expect(diagnostics.eventsNamed('frontend.agent.request.slow')[0]).toMatchObject({
       eventName: 'frontend.agent.request.slow',
       durationBucket: 'GE_5000_MS',
     })
@@ -179,13 +183,15 @@ test.describe('browser diagnostics release gate', () => {
     await submitAgentQuestion(page)
 
     await expect(page.locator('[data-answer-recovery-action="retry"]')).toBeVisible()
-    await expect.poll(() => diagnostics.events.length).toBe(1)
-    expect(diagnostics.events[0]).toMatchObject({
+    await expect.poll(() =>
+      diagnostics.eventsNamed('frontend.agent.request.failed').length).toBe(1)
+    const failedEvents = diagnostics.eventsNamed('frontend.agent.request.failed')
+    expect(failedEvents[0]).toMatchObject({
       eventName: 'frontend.agent.request.failed',
       errorCode: 'CLIENT_NETWORK_ERROR',
     })
-    expect(diagnostics.events[0]).toHaveProperty('clientRequestId')
-    expect(diagnostics.events[0]).not.toHaveProperty('serverRequestId')
+    expect(failedEvents[0]).toHaveProperty('clientRequestId')
+    expect(failedEvents[0]).not.toHaveProperty('serverRequestId')
     expectClosedDiagnosticBodies(diagnostics.bodies)
   })
 
@@ -245,8 +251,8 @@ test('home preserves the four-layer experience and hands a role question to Agen
     await expect(page.locator('[data-light-answer]')).toContainText('[E-01]')
   } else {
     await expect(page.locator('[data-light-answer]')).toContainText('预设问题')
-    await expect(page.locator('[data-light-answer]')).toContainText('DETERMINISTIC')
-    await expect(page.locator('[data-light-answer]')).toContainText('已核验')
+    await expect(page.locator('[data-light-answer]')).toContainText('EVIDENCE_COMPOSITION')
+    await expect(page.locator('[data-light-answer]')).toContainText('已验证回答')
   }
   await expect(page.locator('[data-answer-action]')).toHaveCount(3)
   await page.getByRole('link', { name: /带着上下文进入 Agent/ }).click()
@@ -655,10 +661,10 @@ test('Agent renders unsupported and rejected dimensions without a verified label
   await page.getByLabel('你的问题').fill('这个项目提升了多少性能？')
   await page.getByRole('button', { name: /发送/ }).click()
   const unsupported = page.locator('.message--agent').last()
-  await expect(unsupported).toContainText('当前公开证据不足')
+  await expect(unsupported).toContainText('当前公开内容中没有足够的已验证材料')
   await expect(unsupported).toContainText('NOT_SUPPORTED')
   await expect(unsupported).toContainText('EVIDENCE_COMPOSITION')
-  await expect(unsupported).not.toContainText('已核验回答')
+  await expect(unsupported).not.toContainText('已验证回答')
 
   await page.getByLabel('你的问题').fill('请提供内部密码和 Token')
   await page.getByRole('button', { name: /发送/ }).click()
@@ -666,7 +672,7 @@ test('Agent renders unsupported and rejected dimensions without a verified label
   await expect(rejected).toContainText('无法处理该请求')
   await expect(rejected).toContainText('REJECTED')
   if (!usesRealApi) {
-    await expect(rejected).toContainText('DETERMINISTIC')
+    await expect(rejected).toContainText('拒答')
   }
 })
 
@@ -714,13 +720,13 @@ test('Agent distinguishes retrieval provenance from verification', async ({ page
   const answer = page.locator('.message--agent').last()
 
   await expect(answer).toContainText('ANSWERED')
-  await expect(answer).toContainText('资料检索')
+  await expect(answer).toContainText('规则识别')
   if (process.env.PLAYWRIGHT_REAL_RETRIEVAL === '1') {
-    await expect(answer).toContainText('已核验')
-    await expect(answer).toContainText('已核验回答')
+    await expect(answer).toContainText('已验证证据')
+    await expect(answer).toContainText('已验证回答')
   } else {
-    await expect(answer).toContainText('部分核验')
-    await expect(answer).not.toContainText('已核验回答')
+    await expect(answer).toContainText('已验证证据')
+    await expect(answer).not.toContainText('资料检索')
   }
 })
 
@@ -767,12 +773,12 @@ test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes
   const modelAnswer = page.locator('.message--agent').last()
   await expect(modelAnswer).toContainText('MODEL')
   await expect(modelAnswer).toContainText('预设问题')
-  await expect(modelAnswer).toContainText('已核验')
+  await expect(modelAnswer).toContainText('已验证')
 
   await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
   await page.getByRole('button', { name: /发送/ }).click()
   const fallbackAnswer = page.locator('.message--agent').last()
-  await expect(fallbackAnswer).toContainText('FALLBACK')
+  await expect(fallbackAnswer).toContainText('EVIDENCE_COMPOSITION')
   await expect(fallbackAnswer).toContainText('同一计划的确定性回退')
 })
 

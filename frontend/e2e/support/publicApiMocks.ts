@@ -21,6 +21,7 @@ interface DiagnosticsCapture {
   attempts: number
   bodies: unknown[]
   events: Record<string, unknown>[]
+  eventsNamed(eventName: string): Record<string, unknown>[]
 }
 
 const CANONICAL_QUESTION =
@@ -146,7 +147,17 @@ export async function installAnswerScenarioMock(page: Page, scenario: AnswerScen
     }
     scenario.onRequest?.(await route.request().allHeaders())
     if (scenario.delayMilliseconds) {
-      await new Promise((resolve) => setTimeout(resolve, scenario.delayMilliseconds))
+      const aborted = await waitForAbortOrTimeout(
+        page,
+        route.request(),
+        scenario.delayMilliseconds,
+      )
+      if (aborted) {
+        // The caller cancelled the fetch; Playwright never rejects the page-side
+        // promise on its own while the route handler is suspended, so let the
+        // browser abort semantics complete the request lifecycle.
+        return
+      }
     }
     if (scenario.networkFailure) {
       await route.abort('failed')
@@ -169,6 +180,35 @@ export async function installAnswerScenarioMock(page: Page, scenario: AnswerScen
   })
 }
 
+async function waitForAbortOrTimeout(
+  page: Page,
+  request: import('@playwright/test').Request,
+  delayMilliseconds: number,
+): Promise<boolean> {
+  let aborted = false
+  let listener: ((failedRequest: import('@playwright/test').Request) => void) | undefined
+  const abortPromise = new Promise<boolean>((resolve) => {
+    listener = (failedRequest: import('@playwright/test').Request) => {
+      if (failedRequest === request) {
+        page.off('requestaborted', listener)
+        aborted = true
+        resolve(true)
+      }
+    }
+    page.on('requestaborted', listener)
+  })
+  const timeoutPromise = new Promise<boolean>((resolve) => {
+    setTimeout(() => resolve(false), delayMilliseconds)
+  })
+  try {
+    return await Promise.race([abortPromise, timeoutPromise])
+  } finally {
+    if (!aborted && listener) {
+      page.off('requestaborted', listener)
+    }
+  }
+}
+
 export async function installDiagnosticsApiMock(
   page: Page,
   options: DiagnosticsMockOptions = {},
@@ -177,6 +217,9 @@ export async function installDiagnosticsApiMock(
     attempts: 0,
     bodies: [],
     events: [],
+    eventsNamed(eventName: string): Record<string, unknown>[] {
+      return this.events.filter((event) => event.eventName === eventName)
+    },
   }
   await page.route('**/api/v1/client-diagnostics', async (route) => {
     capture.attempts += 1

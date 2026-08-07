@@ -51,10 +51,14 @@ export function answerSourceTag(answer: AnswerLabelInput | null | undefined): st
   return ''
 }
 
-export function answerVerificationTag(answer: AnswerLabelInput | null | undefined): string {
+export function answerVerificationTag(
+  answer: AnswerLabelInput | null | undefined,
+): string | null {
   if (!answer) return ''
   if (answer.evidenceState === 'VERIFIED') return '已验证证据'
-  if (answer.evidenceState === 'INSUFFICIENT') return '证据不足'
+  // Insufficient evidence is expressed by the status label only; the
+  // verification tag must never suggest any verification state.
+  if (answer.evidenceState === 'INSUFFICIENT') return null
   return ''
 }
 

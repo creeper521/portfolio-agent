@@ -310,4 +310,77 @@ describe('portfolio api', () => {
       action: 'RETRY',
     })
   })
+
+  describe('single request failure publishes exactly one closed diagnostic', () => {
+    it.each([
+      {
+        name: 'HTTP 429',
+        fetchResult: new Response(JSON.stringify({ code: 'ANSWER_RATE_LIMITED' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        expectedEvent: 'frontend.agent.request.failed',
+        expectedErrorCode: 'ANSWER_RATE_LIMITED',
+      },
+      {
+        name: 'HTTP 503',
+        fetchResult: new Response(JSON.stringify({ code: 'ANSWER_REQUEST_TIMEOUT' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        expectedEvent: 'frontend.agent.request.failed',
+        expectedErrorCode: 'ANSWER_REQUEST_TIMEOUT',
+      },
+      {
+        name: 'business 404',
+        fetchResult: new Response(JSON.stringify({ code: 'PROJECT_NOT_FOUND' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        expectedEvent: 'frontend.agent.request.failed',
+        expectedErrorCode: 'PROJECT_NOT_FOUND',
+      },
+      {
+        name: 'caller cancellation',
+        fetchResult: new DOMException('Aborted', 'AbortError'),
+        expectedEvent: 'frontend.agent.request.cancelled',
+        expectedErrorCode: 'REQUEST_CANCELLED',
+      },
+      {
+        name: 'pre-response network failure',
+        fetchResult: new TypeError('network unavailable'),
+        expectedEvent: 'frontend.agent.request.failed',
+        expectedErrorCode: 'CLIENT_NETWORK_ERROR',
+      },
+    ])('$name publishes exactly one report without sensitive payload', async ({
+      fetchResult,
+      expectedEvent,
+      expectedErrorCode,
+    }) => {
+      const controller = new AbortController()
+      if (fetchResult instanceof DOMException) {
+        controller.abort()
+      }
+      const isHttpResponse = typeof Response !== 'undefined' && fetchResult instanceof Response
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => (
+        isHttpResponse ? Promise.resolve(fetchResult) : Promise.reject(fetchResult)
+      )))
+      const report = vi.spyOn(frontendDiagnostics, 'report')
+
+      await request('/api/v2/answers', { method: 'POST' }, {
+        operation: RequestOperation.ANSWER,
+        signal: controller.signal,
+      }).catch(() => undefined)
+
+      expect(report).toHaveBeenCalledTimes(1)
+      expect(report.mock.calls[0]?.[0]).toMatchObject({
+        eventName: expectedEvent,
+        errorCode: expectedErrorCode,
+      })
+      const serialized = JSON.stringify(report.mock.calls)
+      expect(serialized).not.toContain('/api/v2/answers')
+      expect(serialized).not.toContain('VISITOR_SECRET_TOKEN')
+      expect(serialized).not.toContain('visitor question')
+    })
+  })
 })

@@ -62,8 +62,22 @@ describe('answerLabels', () => {
     expect(answerSourceTag({ ...base, intentSource: 'RULE' })).toBe('规则识别')
     expect(answerVerificationTag(base)).toBe('已验证证据')
     expect(answerVerificationTag({ ...base, evidenceState: 'INSUFFICIENT' }))
-      .toBe('证据不足')
+      .toBeNull()
     expect(answerVerificationTag({ ...base, evidenceState: 'NOT_REQUIRED' })).toBe('')
+  })
+
+  it('keeps the four authoritative answer semantics stable', () => {
+    expect(answerSourceTag({ ...base, intentSource: 'RULE' })).toBe('规则识别')
+    expect(answerGenerationTag({ ...base, constructionMode: 'MODEL_GROUNDED' }))
+      .toBe('基于证据表达')
+    expect(answerVerificationTag({ ...base, evidenceState: 'INSUFFICIENT' }))
+      .toBeNull()
+    const fallbackAnswer = {
+      ...base,
+      constructionMode: 'EVIDENCE_COMPOSITION' as const,
+      generationMode: 'FALLBACK' as const,
+    }
+    expect(answerGenerationTag(fallbackAnswer)).not.toBe('模型回答')
   })
 
   it('keeps the technical tail and degraded notice honest', () => {
