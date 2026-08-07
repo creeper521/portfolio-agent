@@ -1,159 +1,152 @@
 # Agent 回答结构化编排设计
 
 > **日期：** 2026-08-06
-> **状态：** 待用户审阅
+> **讨论确认：** 2026-08-07
+> **状态：** 讨论确认，待书面复核
 > **对应路线图：** `docs/13-Agent对话体验与智能编排改造路线图.md` 阶段 1
-> **目标入口：** `POST /api/v2/answers` 的作品集回答
+> **目标入口：** `POST /api/v2/answers` 的单主体作品集事实回答
 
 ## 1. 结论
 
-本阶段在 `PortfolioIntelligenceResult` 与最终 HTTP 回答之间加入确定性的语义编排模块。检索 Passage 不再一对一成为前端 Block，而是先形成 `PortfolioAnswerPlan`，再按背景、职责、方案、验证、状态和边界组织为少量完整章节。
+阶段 1 首个交付面只处理 `ANSWERED + FACT_LOOKUP + 单主体`。检索器负责选择公开、已验证的 Claim 及其顺序，确定性 Composer 负责把 Claim 组织成背景、职责、方案、验证、状态和边界章节。检索 Passage 不再一对一成为最终 UI Block。
 
-前端继续消费 `/api/v2/answers`，但以增强后的 v2 Block 作为唯一生产传输契约：每个 Block 增加章节类型和标题，正文只展示一次来源语义，引用按章节聚合。现有 legacy `sections` 仅在迁移期间由兼容映射读取，不恢复为第二套后端主契约。
+主链路为：
 
-本阶段不调用大模型，不改变意图路由，不接入新的工具循环。其产物同时成为后续 `MODEL_GROUNDED` 的确定性 fallback。
+```text
+PortfolioTask
+→ AnswerFocus
+→ PortfolioRetriever
+→ PortfolioIntelligenceResult
+→ DeterministicPortfolioAnswerComposer
+→ PortfolioAnswerPlan
+→ PortfolioIntelligenceAnswerAssembler
+→ v2 typed blocks
+→ mapAnswerResponse
+→ AnswerSectionView[]
+```
 
-## 2. 问题定义
+本阶段不调用大模型，不改变意图路由，不接入工具循环。Comparison、Recommendation、澄清和失败响应继续使用现有路径。确定性 Plan seam 为后续模型表达提供 fallback，但本阶段不提前建设双 Adapter 注册表。
 
-当前 `PortfolioIntelligenceAnswerAssembler.materialBlocks()` 对 `PortfolioIntelligenceResult.getEvidence()` 执行逐 Passage 映射：
+## 2. 已确认范围
+
+### 2.1 包含
+
+1. `PortfolioRetrievedPassage` 携带完整、已验证的 `AnswerClaimProjection`；
+2. Bundle 与 PostgreSQL Retriever 产生语义一致的 Claim Projection；
+3. `PortfolioIntelligenceResult` 携带不含用户原文的 `AnswerFocus`；
+4. 定义不可变 `PortfolioAnswerPlan` 与 `PortfolioAnswerSection`；
+5. 实现确定性分组、排序、精确去重、预算、摘要和缺口表达；
+6. Assembler 只对单主体 `FACT_LOOKUP` 调用 Composer；
+7. v2 Block 增加可选 `sectionType` 与 `title`，新事实章节必须填写；
+8. `ConversationAnswerResult/Response` 增加可选 `summary`；
+9. 前端把 v2 Blocks 和 legacy Sections 映射为唯一的 `AnswerSectionView[]`；
+10. 回答级只展示一次作品集范围，引用按章节聚合；
+11. 修正 Eval 对“语义章节”的定义并增加纯结构指标；
+12. 补齐后端、前端、E2E、架构、隐私和评测门禁。
+
+### 2.2 不包含
+
+- 不改变 `PortfolioTaskResolver` 的关键词或模型路由；
+- 不为 `COMPARISON` 设计扁平章节之外的多主体结构；
+- 不改变 Recommendation/Refine Recommendation 卡片与回答结构；
+- 不接入 `ConversationToolService`；
+- 不实现 `MODEL_GROUNDED`、`HYBRID` 或 `MIXED`；
+- 不默认启用 Provider、ONNX 或 PostgreSQL；
+- 不扩大 Bundle、Claim、Evidence 或公开资产范围；
+- 不删除前端 legacy Section 读取兼容；
+- 不做与回答呈现无关的前端重构。
+
+## 3. 问题定义
+
+当前 `PortfolioIntelligenceAnswerAssembler.materialBlocks()` 对 `PortfolioIntelligenceResult.getEvidence()` 逐 Passage 映射：
 
 ```text
 PortfolioRetrievedPassage
 → ConversationAnswerBlock
-→ 前端逐 Block 展示“作品集资料”与 Evidence 按钮
+→ 前端逐 Block 展示“作品集资料”与引用
 ```
 
-该实现保留了 Claim/Evidence 身份，却没有回答以下表达问题：
+这保留了 Claim/Evidence 身份，却把检索颗粒度直接暴露成回答颗粒度，导致来源标签重复、短句割裂、章节缺失和引用分散。根因是检索结果与 HTTP 回答之间没有稳定的语义编排模块。
 
-- 哪些材料共同回答“背景”；
-- 哪些材料属于“我的职责”；
-- 多条实现事实应按什么顺序组织；
-- 验证事实和当前状态如何与实现区分；
-- 重复项、相同引用和重复项目前缀如何合并；
-- 用户首先应该看到结论还是材料列表。
+另一个已核实的问题是：Claim Category 已存在于 Bundle Claim 与 PostgreSQL Row，但进入 `PortfolioRetrievedPassage` 时丢失；现有 `grounding()` 还把 Claim 临时硬编码为 `IMPLEMENTATION / UNKNOWN / PRIMARY`。P1 必须以真实 Claim Projection 取代该临时投影，不能靠正文关键词猜分类。
 
-因此截图中的长串短句不是单纯的前端样式缺陷，而是后端缺少回答计划。
+## 4. 设计原则
 
-## 3. 已比较方案
+1. **检索选择事实，Composer 组织事实。** Retriever 决定选中哪些 Claim；Composer 不重新检索或打分。
+2. **Claim 是正文权威语义源。** 正文来自 `statement + detail`，不从带主体前缀的检索文本反推事实。
+3. **请求焦点结构化传递。** Composer 不读取用户原文，只读取 `AnswerFocus`。
+4. **确定性是完整能力。** 模型关闭时仍返回连贯、可引用的回答。
+5. **章节是用户语义。** 一个章节可包含多个 Claim 与 Evidence。
+6. **失败关闭。** 身份或不变量损坏时丢弃整个 Plan，不输出半可信结果。
+7. **合法缺口允许部分回答。** 有证据的章节照常回答，缺失章节明确说明。
+8. **唯一生产契约。** 后端只发布增强后的 v2 Blocks；legacy Sections 仅由前端映射层读取。
 
-### 3.1 只在前端合并相邻 Block
-
-前端可以按相同 `sourceScope` 合并段落，改动较小。但前端不知道 Claim 分类、任务模式、证据优先级和项目状态，只能做字符串拼接。语义规则会分散到展示层，后续模型表达也无法复用。
-
-**结论：不采用。** 前端只负责呈现，不拥有事实编排决策。
-
-### 3.2 把所有检索材料直接交给模型总结
-
-模型能够改善自然语言，但会引入默认外部依赖、延迟、成本、引用漂移和降级问题。全量材料还会增加重复与越界表达风险。
-
-**结论：不作为第一阶段。** 后续模型只能消费经过筛选的 `EvidenceBundle`，并且必须通过 Grounding Validator。
-
-### 3.3 后端确定性 `AnswerPlan` + 结构化前端
-
-后端利用任务模式、主体信息和 Claim 语义组织章节；Composer 只使用受控模板、连接词和原始公开事实；前端按章节呈现并聚合引用。
-
-**结论：采用。** 它在不增加模型依赖的前提下直接改善用户体验，并为未来模型表达建立稳定 seam。
-
-## 4. 范围
-
-### 4.1 本阶段包含
-
-1. 为检索 Passage 补齐编排所需的稳定语义元数据；
-2. 定义不可变 `PortfolioAnswerPlan` 和章节值对象；
-3. 实现确定性回答 Composer；
-4. 让 `PortfolioIntelligenceAnswerAssembler` 消费 Plan，而不是直接遍历 Passage；
-5. 为 v2 Block 增加章节类型和章节标题；
-6. 前端统一将 v2 Block 映射为章节视图；
-7. 按章节聚合 Claim 和 Evidence；
-8. 补齐单元、契约、组件、E2E 和评测用例；
-9. 保留澄清、错误、推荐和证据不足的现有失败关闭语义。
-
-### 4.2 本阶段不包含
-
-- 不修改 `PortfolioTaskResolver` 的关键词路由；
-- 不引入 `TurnRouter` 模型分类；
-- 不把 `ConversationToolService` 接入主链路；
-- 不实现 `MODEL_GROUNDED` 或 `HYBRID/MIXED`；
-- 不默认启用 Provider、ONNX 或 PostgreSQL；
-- 不扩大 Bundle、Claim、Evidence 或公开资产范围；
-- 不改变访客会话的页面内存和不落盘边界；
-- 不做与回答呈现无关的前端大规模拆分。
-
-## 5. 设计原则
-
-1. **事实与表达分离。** Retriever 决定有哪些公开事实，Composer 决定如何组织，前端决定如何展示。
-2. **确定性是完整能力。** 模型关闭时不能退化为检索段落清单。
-3. **章节是用户语义，不是存储颗粒度。** 一个章节可引用多个 Claim 和 Evidence。
-4. **不通过改写制造事实。** Composer 允许裁剪重复前缀、规范标点和增加固定连接词，不新增事实判断。
-5. **引用跟随语义章节。** 用户能阅读完整段落，也能定位其 Claim/Evidence。
-6. **小接口隐藏复杂度。** 调用方只提交已验证的 Intelligence Result 并接收 Plan；分组、去重、排序和模板是模块内部实现。
-7. **失败关闭。** 任何已回答的作品集章节都不能引用不存在或未批准的 Evidence。
-
-## 6. 总体数据流
+## 5. 总体数据流与适用条件
 
 ```mermaid
 flowchart LR
-    A["PortfolioDecision"] --> B["PortfolioIntelligenceResult"]
-    B --> C["DeterministicPortfolioAnswerComposer"]
-    C --> D["PortfolioAnswerPlan"]
-    D --> E["PortfolioIntelligenceAnswerAssembler"]
-    E --> F["ConversationAnswerResult / v2 blocks"]
-    F --> G["mapAnswerResponse"]
-    G --> H["语义章节视图"]
-    H --> I["ConversationThread"]
-    H --> J["Evidence Desk"]
+    A["PortfolioTask"] --> B["AnswerFocus"]
+    B --> C["PortfolioRetriever"]
+    C --> D["PortfolioIntelligenceResult"]
+    D --> E{"ANSWERED + FACT_LOOKUP + 单主体?"}
+    E -->|"是"| F["DeterministicPortfolioAnswerComposer"]
+    F --> G["PortfolioAnswerPlan"]
+    G --> H["PortfolioIntelligenceAnswerAssembler"]
+    E -->|"否"| I["现有回答路径"]
+    H --> J["v2 typed blocks"]
+    J --> K["AnswerSectionView[]"]
 ```
 
-`PortfolioIntelligence` 仍拥有作品集决策权，Composer 不重新路由、不重新检索，也不判断主体。Assembler 仍拥有 HTTP 结果的状态、来源、模式和版本等外壳元数据。
+Composer 必须再次校验适用条件。多主体、非 `FACT_LOOKUP`、主体/Passage 不一致或空事实集合都不能静默编排。
 
-## 7. 深模块与 seam
+## 6. 输入语义
 
-### 7.1 检索结果的语义投影
+### 6.1 `AnswerFocus`
 
-当前 `PortfolioRetrievedPassage` 只有 Passage、Subject、Claim、Content 和 Evidence 身份，缺少稳定的 Claim 分类。第一阶段为该值对象增加必填的 `AnswerClaimCategory`，由 Bundle 和 PostgreSQL Retriever 从同一公开 Claim 投影填充，再由 Composer 映射到 `AnswerSectionType`。
-
-不得由 Composer 对中文正文执行关键词猜测来决定章节。这会把当前意图规则的问题复制到回答编排中。
-
-检索顺序继续表示相关性顺序；Composer 不重新计算检索分数。
-
-### 7.2 `DeterministicPortfolioAnswerComposer`
-
-该模块的外部 interface 保持为一个操作：
+`AnswerFocus` 是不可变值对象：
 
 ```text
-compose(PortfolioIntelligenceResult) -> PortfolioAnswerPlan
+AnswerFocus
+├── mode: OVERVIEW | FOCUSED
+└── requestedClaimCategories[]
 ```
 
-调用方只需要知道：
+不变量：
 
-- 输入必须来自已经通过主体、公开状态和 Evidence 校验的 Intelligence Result；
-- 输出只包含来自输入的 Claim/Evidence 身份；
-- 相同输入产生相同输出；
-- 不调用网络、数据库、Provider 或其他工具；
-- 不产生日志中的用户原文。
+- `OVERVIEW` 的请求类别为空；
+- `FOCUSED` 至少有一个请求类别；
+- 类别去重并保留第一次出现顺序；
+- 不保存问题正文、关键词、Prompt 或用户标识。
 
-其 implementation 内部负责：
+普通详细介绍与 Contract Claim 集合使用 `OVERVIEW`。显式章节追问、Preset facet 和 Reference follow-up 使用 `FOCUSED`。上游继续使用 Claim Category 表达请求，Composer 通过唯一映射表转换成用户章节，避免上下游各维护一张 Section 映射表。
 
-1. 投影并按 Claim ID 去重；
-2. 按章节类型分组；
-3. 保留检索相关性顺序；
-4. 合并相同正文与重复项目名前缀；
-5. 为每个章节选择有限数量的有效事实；
-6. 使用固定中文连接词组成段落；
-7. 合并并稳定去重 Claim/Evidence ID；
-8. 生成标题和可选摘要；
-9. 验证 Plan 不变量。
+### 6.2 `PortfolioRetrievedPassage`
 
-第一阶段只有确定性 implementation，因此不提前增加仅有一个 Adapter 的抽象注册表。未来模型 Composer 出现时，再在 Plan seam 上引入真实双 Adapter interface。
+Passage 保留检索身份和顺序，同时携带：
 
-### 7.3 `PortfolioAnswerPlan`
+- `passageId`；
+- `subjectId`；
+- 检索文本，仅用于兼容和检索诊断，不进入最终正文；
+- 完整 `AnswerClaimProjection`；
+- 已批准的 Evidence References。
 
-建议采用不可变值对象：
+构造时必须校验：
+
+1. Claim ID 非空，且 Passage 对外 Claim 身份只来自该 Projection；
+2. Claim 为 `VERIFIED`；
+3. Claim 的直接 Evidence ID 与 Reference ID 完全一致；
+4. Evidence 状态全部为 `APPROVED`；
+5. Claim 的 Category、statement、detail、achievement status、contribution type、verification basis 和 materiality 非空；
+6. 对外兼容的 `getClaimId()` 委托给 Claim Projection。
+
+Bundle 已持有完整 Projection。PostgreSQL 公共投影必须补齐数据库字段、Importer 和查询列，不能用默认 `IMPLEMENTATION` 或主体级默认值伪造 Claim 语义。
+
+## 7. `PortfolioAnswerPlan`
 
 ```text
 PortfolioAnswerPlan
 ├── title
-├── summary
+├── summary?
 └── sections[]
     ├── sectionType
     ├── title
@@ -162,100 +155,112 @@ PortfolioAnswerPlan
     └── evidenceIds[]
 ```
 
+Plan 是内部值对象，不直接成为 HTTP DTO。
+
 不变量：
 
-1. `title` 非空；
-2. `ANSWERED` 结果至少有一个非空章节；
+1. 标题非空；
+2. 至少有一个非空章节；
 3. 每个章节的类型、标题和正文非空；
-4. Claim/Evidence ID 去重并保持第一次出现顺序；
-5. 所有 ID 必须来自输入 Intelligence Result；
-6. 普通 `ANSWERED + PORTFOLIO` 章节至少有一个 Evidence；
-7. 摘要只能来自公开主体摘要或已选事实，不能凭空概括生产效果；
-8. Plan 不携带原始私有对象、检索分数或内部路径。
+4. 一个 Section Type 最多出现一次；
+5. Claim/Evidence ID 去重并保持第一次出现顺序；
+6. 所有 ID 必须来自输入 Result；
+7. 除纯缺口 `BOUNDARY` 外，事实章节至少有一个 Evidence；
+8. Summary 只能来自主体公开摘要或首条已选 Claim；
+9. Plan 不携带检索分数、内部路径、用户原文或私有对象。
 
-Plan 是内部编排结果，不直接作为新的公共 HTTP DTO。
+## 8. 确定性 Composer
 
-### 7.4 Assembler
+P1 只有一个 implementation，不提前增加 interface：
 
-`PortfolioIntelligenceAnswerAssembler` 的职责收窄为：
+```text
+DeterministicPortfolioAnswerComposer.compose(PortfolioIntelligenceResult)
+    -> PortfolioAnswerPlan
+```
 
-- 把 `PortfolioDisposition` 映射为 `AnswerResolution`；
-- 保留 contentVersion、Contract、Intent、Source、EvidenceState 和 degraded 状态；
-- 对需要材料回答的 Disposition 调用 Composer；
-- 把 Plan 映射为 v2 Block；
-- 对澄清、输入无效、Contract 过期和能力不可用保留专用短响应。
+内部步骤固定为：
 
-它不再拥有 Passage 遍历、分组、去重或段落组织规则。
+1. 校验单主体 `FACT_LOOKUP` 与所有输入身份；
+2. 按 Claim ID 去重；
+3. 将 Category 映射为 Section Type；
+4. 按固定章节顺序分组；
+5. 保留 Retriever 的相关性顺序；
+6. 按规范化后的 `statement + detail` 精确去重；
+7. 合并同正文的 Claim/Evidence ID；
+8. 应用集中预算；
+9. 使用受控标点与连接词形成段落；
+10. 生成 Summary 与缺口 Boundary；
+11. 构造并验证 Plan。
 
-## 8. 章节映射
+### 8.1 章节映射
 
-第一阶段复用现有 `AnswerSectionType`，不新增一套平行枚举：
-
-| Claim 语义 | 回答章节 | 默认标题 |
+| Claim Category | Section Type | 默认标题 |
 |---|---|---|
 | `BACKGROUND` | `BACKGROUND` | 项目背景 |
 | `RESPONSIBILITY` | `RESPONSIBILITY` | 我的职责 |
 | `TECHNICAL_DECISION`、`IMPLEMENTATION` | `SOLUTION` | 技术方案与实现 |
 | `VERIFICATION` | `VERIFICATION` | 验证过程 |
 | `OUTCOME` | `STATUS` | 结果与当前状态 |
-| `LIMITATION` | `BOUNDARY` | 边界与限制 |
-| `LEARNING`、`REFLECTION` | `BOUNDARY` | 边界与复盘 |
+| `LIMITATION`、`LEARNING`、`REFLECTION` | `BOUNDARY` | 边界与复盘 |
 
-同一个章节包含多个语义类别时，标题使用上表中更具体且覆盖全部内容的固定标题。例如 `LIMITATION + LEARNING` 使用“边界与复盘”。
-
-章节顺序固定为：
+固定顺序为：
 
 ```text
-BACKGROUND
-→ RESPONSIBILITY
-→ SOLUTION
-→ VERIFICATION
-→ STATUS
-→ BOUNDARY
+BACKGROUND → RESPONSIBILITY → SOLUTION → VERIFICATION → STATUS → BOUNDARY
 ```
 
-只输出存在有效材料的章节，不为缺失类别生成空标题或“暂无”占位。用户明确询问但公开证据缺少某一部分时，在 `BOUNDARY` 中用受控文案指出缺失，不根据常识补全。
+### 8.2 正文规则
 
-## 9. 确定性表达规则
+- 正文只使用 Claim 的 `statement + detail`；
+- 允许统一中文标点、删除完全重复的主体标题前缀和加入有限连接词；
+- 不删除“计划”“原型”“观察”“部分”“尚未”等限定词；
+- 不把协作贡献改写成个人独立完成；
+- 不做模糊相似度去重；
+- 不从主体 Summary 推导生产效果或完成状态。
 
-### 9.1 直接回答
+### 8.3 预算
 
-标题使用主体标题或任务标题。摘要优先使用已验证的公开主体摘要；若主体摘要不可用，则使用最相关且允许进入摘要的首条事实。摘要不超过一个自然段。
+- `OVERVIEW` 每章默认选择 1–3 条事实；
+- `FOCUSED` 允许目标章节使用更高预算；
+- 详细介绍最多输出六种 Section Type；
+- 预算常量只存在于 Composer；
+- 预算不截断 Claim/Evidence ID；
+- 具体字符阈值由实施阶段根据当前公开样本与移动视口测试确定。
 
-### 9.2 去重
+### 8.4 直接回答
 
-按以下顺序去重：
+- `OVERVIEW` 必须生成 lead Summary；
+- 优先使用主体公开 Summary；
+- 主体 Summary 不可用时使用首条已选 Claim；
+- `FOCUSED` 不生成 Summary，直接进入目标章节；
+- Summary 不复制章节引用，引用仍跟随具体章节。
 
-1. Claim ID 完全相同；
-2. 规范化后正文完全相同；
-3. 同一正文的 Evidence 列表不同则合并 Evidence，不重复正文；
-4. 仅删除重复的主体标题前缀，不删除事实限定词；
-5. 不使用模型或模糊相似度自动合并两个不同 Claim。
+### 8.5 合法缺口
 
-### 9.3 组织
+Composer 将 `AnswerFocus` 请求类别映射为目标 Section Type，并与实际章节比较：
 
-每个章节保留检索顺序，以固定连接模板组织：
+- 部分目标章节存在：输出已有事实章节，并把缺失项汇总到唯一 `BOUNDARY`；
+- 已有边界事实与缺口文案共用同一个 Boundary Section；
+- 缺口句使用受控文案，例如“当前公开材料未覆盖最终状态。”；
+- 缺口句不伪造 Evidence；
+- 全部目标章节无证据时，不进入普通 Composer，由现有 `NOT_SUPPORTED + INSUFFICIENT` 语义处理。
 
-- 第一条事实直接陈述；
-- 后续事实根据章节使用“实现上”“同时”“验证方面”“当前”等有限连接词；
-- 统一中文标点，避免每条事实单独占一个视觉 Block；
-- 不把“计划”“原型”“观察”改写成“已交付”“已上线”或“长期有效”。
+## 9. Assembler 职责
 
-### 9.4 长度预算
+`PortfolioIntelligenceAnswerAssembler` 负责：
 
-预算以章节和已选事实数量控制，不截断 Claim/Evidence ID：
+- 映射 `PortfolioDisposition`、Resolution、Scope 和运行元数据；
+- 仅对 `ANSWERED + FACT_LOOKUP + 单主体` 调用 Composer；
+- 将 Plan 映射为 v2 Blocks；
+- 将 Plan Summary 写入 Result；
+- 保留 contentVersion、Contract、Intent、Source、EvidenceState 和 contextVersionUpdated；
+- 保持 Comparison、Recommendation、澄清、无效输入和 Contract 失败的现有响应。
 
-- 每个章节默认选择 1–3 条最相关事实；
-- 详细介绍类问题最多输出 6 个章节；
-- 单章节超出预算时保留高相关事实，其余材料仍可从证据面板查看；
-- 用户通过显式引用追问某章节时，允许该章节使用更高预算；
-- 预算常量必须集中在 Composer 内，不散落到 Assembler 和前端。
+它不再拥有 P1 路径的 Passage 遍历、章节分组、去重、预算或段落组织规则。
 
-具体字符阈值在实施计划中通过现有内容样本和组件视口测试确定，不在本设计中凭经验冻结。
+## 10. v2 HTTP 契约
 
-## 10. v2 HTTP 契约演进
-
-保留现有 `blocks` 字段，并为每个 Block 增加两个字段：
+后端继续只发布 `blocks`：
 
 ```json
 {
@@ -263,165 +268,182 @@ BACKGROUND
   "sectionType": "SOLUTION",
   "title": "技术方案与实现",
   "content": "……",
-  "claimIds": ["claim-a", "claim-b"],
-  "evidenceIds": ["evidence-a", "evidence-b"]
+  "claimIds": ["claim-a"],
+  "evidenceIds": ["evidence-a"]
 }
 ```
 
 约束：
 
+- `sectionType` 与 `title` 对新单主体事实章节必填；
+- 其他尚未迁移的 v2 Block 允许字段为空；
+- 顶层 `summary` 可选；
 - `sourceScope`、`content`、`claimIds`、`evidenceIds` 保持现有语义；
-- `sectionType` 和 `title` 对新作品集 `ANSWERED` 回答必填；
-- 澄清和错误短响应允许使用 `BOUNDARY` 或不带语义章节的兼容 Block，具体由 DTO 契约测试锁定；
-- 顶层可增加可选 `summary`，其来源必须满足 Plan 不变量；
-- 不同时向新客户端发送两套内容不同的 `sections` 和 `blocks`。
+- 不向新客户端同时发送内容不同的 `sections` 与 `blocks`；
+- DTO 对可选字段使用加法式演进，不恢复 v1 HTTP 入口。
 
-迁移期读取旧 `sections` 只是前端兼容行为。生产后端以增强后的 v2 `blocks` 为唯一回答正文来源。
+## 11. 前端统一视图
 
-## 11. 前端呈现
+`mapAnswerResponse` 是唯一协议兼容边界。它输出：
 
-### 11.1 映射层
+```text
+AnswerSectionView
+├── type
+├── title
+├── sourceScope
+├── content
+├── claimIds[]
+└── evidenceIds[]
+```
 
-`mapAnswerResponse` 将增强后的 v2 Block 映射成前端统一章节视图。视图模型包含：
+映射优先级：
 
-- 章节类型；
-- 标题；
-- 正文；
-- Claim ID；
-- Evidence ID；
-- 来源范围。
+1. 响应存在 v2 Blocks 时映射 Blocks；
+2. Blocks 不存在时才读取 legacy Sections；
+3. 无类型旧 Block 使用兼容类型与空标题，不丢失正文或引用；
+4. 业务组件不再读取原始 Blocks。
 
-如果响应来自迁移期旧 fixture，映射层可以读取 legacy `sections`；业务组件不同时判断两套协议。
+`ConversationThread` 与 Evidence Desk 只消费 `AnswerSectionView[]`。单一 Portfolio 回答在回答级显示一次范围标签，不在每章重复“作品集资料”。未来 `MIXED` 真正实现时，再在 `sourceScope` 变化处显示来源分区。
 
-### 11.2 `ConversationThread`
+同一章节内 Evidence ID 稳定去重。Claim ID 不作为访客主视觉标签，但继续服务引用上下文、追问和诊断。
 
-每个回答按下面的视觉顺序呈现：
+## 12. 错误、降级与缺口语义
 
-1. 回答状态和范围元信息；
-2. 回答标题；
-3. 可选摘要；
-4. 语义章节；
-5. 章节引用；
-6. 版本变化、推荐卡或后续问题。
+### 12.1 合法证据缺口
 
-不再为每个章节重复显示“作品集资料”。作品集范围已经在回答级元信息中表达。若未来 `HYBRID` 同时出现 `GENERAL` 与 `PORTFOLIO`，才在范围变化处显示来源分区。
+| 场景 | Resolution | EvidenceState | degraded |
+|---|---|---|---|
+| 部分目标章节有证据 | `ANSWERED` | `VERIFIED` | `false` |
+| 全部目标章节无证据 | `NOT_SUPPORTED` | `INSUFFICIENT` | `false` |
 
-### 11.3 引用
+部分回答中的事实章节正常带引用，缺失项只用 Boundary 受控文案表达。
 
-- 同一章节内 Evidence ID 稳定去重；
-- 同一 Evidence 可被多个章节引用，但 Evidence Desk 只保留一个实体；
-- 点击章节引用继续打开现有 Evidence Desk；
-- Claim ID 不直接作为访客主视觉标签，但用于引用上下文和诊断；
-- 无 Evidence 的作品集事实不能渲染为“已验证”。
+### 12.2 数据或 Plan 不变量损坏
 
-## 12. 错误和降级
+Claim/Evidence 身份不一致、未知 Category、非单主体输入、Plan 越界引用或其他不变量失败时：
 
-| 场景 | 行为 |
-|---|---|
-| Intelligence 要求澄清 | 保留单一、直接的澄清问题，不进入普通 Composer |
-| 结构化主体无效 | 保留 `INVALID_INPUT` 与当前失败关闭文案 |
-| Preset Contract 过期 | 保留刷新提示，不用旧 Evidence 继续编排 |
-| Contract Evidence 不可用 | 返回能力不可用或证据不足，不生成空章节 |
-| 单个 Passage 缺少 `AnswerClaimCategory` | Retriever 拒绝构造该 Passage 并进入现有证据不足语义；Composer 不猜分类 |
-| Passage 引用不存在 Evidence | 该事实不得进入 Plan；全部事实失效时返回证据不足 |
-| Composer 不变量失败 | 返回确定性安全短响应并标记 degraded，不泄露异常细节 |
-| 前端收到旧 v2 Block | 兼容映射为无标题章节；不导致整条回答不可见 |
+- 丢弃整个 Plan；
+- 返回 `CAPABILITY_UNAVAILABLE + INSUFFICIENT`；
+- 使用短 `TEMPLATE`：“当前公开材料暂时无法形成可靠回答。”；
+- `degraded=true`；
+- notice 为固定枚举 `ANSWER_COMPOSITION_INVALID`；
+- 不泄露异常、正文、Claim ID 或内部路径。
 
-日志只记录 noticeCode、章节数量、Claim/Evidence 数量和失败枚举，不记录访客问题或完整回答正文。
+### 12.3 既有专用响应
 
-## 13. 测试设计
+- 澄清继续返回单一直接问题；
+- Preset Contract 过期继续提示刷新；
+- Contract Evidence 不可用继续返回能力不可用；
+- Comparison/Recommendation 不进入 Composer；
+- 相同输入必须得到相同章节、正文、引用顺序和 notice。
 
-### 13.1 Composer 单元测试
+日志只记录模式、章节数、Claim/Evidence 数量和失败枚举。
+
+## 13. Eval 调整
+
+P0 已提供 `EvalAnswerShape`，但当前 `semanticSectionCount` 只是非空 Block 数。P1 后必须改为真实 typed section 计数，并增加：
+
+- `typedSectionCount`；
+- `untypedBlockCount`；
+- `sectionOrderValid`；
+- `summaryPresent`。
+
+这些指标只保存计数和布尔值，不保存正文、问题、ID 或 hash。
+
+`repeatedSourceScopeCount` 继续作为结构观察值，但不能证明 UI 是否重复显示来源标签。来源标签只显示一次由前端组件测试和桌面/移动 E2E 验证。
+
+`ANSWER_QUALITY` 至少检查：直接回答存在、正文非空、无完全重复正文、typed section 顺序合法。评测不锁定完整中文措辞。
+
+## 14. 测试设计
+
+### 14.1 Retriever 与领域测试
+
+- Passage 拒绝不完整、未验证或 Evidence 不一致的 Claim Projection；
+- Bundle 与 PostgreSQL 保留同一 Category、statement、detail、状态、贡献和 Evidence；
+- PostgreSQL schema、Importer、查询和 Row 映射不使用默认 Category；
+- `AnswerFocus` 模式与类别不变量；
+- `PortfolioIntelligenceResult` 的复制方法不丢失 Focus。
+
+### 14.2 Composer 测试
+
+- 单 Claim 生成正确章节；
+- 多 Claim 按权威顺序分组；
+- 同 Claim、同正文与 Evidence 精确去重；
+- `OVERVIEW` 生成 Summary；
+- `FOCUSED` 不生成 Summary，并提高目标预算；
+- 部分缺口生成 Boundary；
+- 状态、贡献和限制词保持不变；
+- 多主体、越界 ID 和非法 Evidence 整轮失败；
+- 相同输入重复执行得到相同对象值。
+
+### 14.3 Assembler 与契约测试
+
+- 单主体 Fact Lookup 返回 typed Blocks；
+- Comparison/Recommendation 保持旧路径；
+- constructionMode 仍为 `EVIDENCE_COMPOSITION`；
+- contentVersion、Contract、intentSource、notice 和 context 更新不丢失；
+- Composer 异常映射为安全响应；
+- JSON 暴露可选 Summary、sectionType 与 title。
+
+### 14.4 前端测试
+
+- v2 Blocks 优先于 legacy Sections；
+- 无 Blocks 时 legacy 仍可展示；
+- ConversationThread 只消费统一 Sections；
+- 作品集范围只显示一次；
+- 章节标题、正文和引用按权威顺序展示；
+- Evidence Desk 可定位全部章节引用；
+- 空正文、非法 typed Block 产生脱敏诊断。
+
+### 14.5 E2E
 
 至少覆盖：
 
-- 单 Passage 生成一个正确章节；
-- 多 Passage 按语义合并；
-- 同 Claim、同正文和同 Evidence 去重；
-- 章节顺序稳定；
-- Claim/Evidence 顺序稳定；
-- 详细介绍问题形成背景、职责、方案、验证、状态和边界；
-- 计划、原型、协作贡献和限制词不被改写；
-- 证据缺失时失败关闭；
-- 同一输入重复执行得到相同结果；
-- 输入集合不能从输出对象被修改。
+1. 单主体详细介绍；
+2. 单章节 Focused 追问；
+3. 多目标中的部分证据缺口；
+4. Comparison/Recommendation 回归。
 
-### 13.2 Assembler 契约测试
+桌面与移动端都必须验证无重复范围标签、引用可打开、内容不溢出。
 
-- `ANSWERED` 返回增强后的 v2 Block；
-- constructionMode 仍为 `EVIDENCE_COMPOSITION`；
-- generationMode 仍为 `DETERMINISTIC`；
-- contentVersion、Contract、noticeCode 和 reference context 不丢失；
-- 澄清、无效输入、不可用和推荐回答保持原有 Resolution；
-- 所有输出 Evidence 均属于输入结果。
+## 15. 迁移顺序
 
-### 13.3 前端测试
+1. 补齐 PostgreSQL Claim 语义列和 Importer；
+2. 为 Passage 增加完整 Projection，锁定 Bundle/PostgreSQL 一致性；
+3. 引入 `AnswerFocus` 并贯穿 Intelligence Result；
+4. 以 TDD 实现 Plan 和 Composer；
+5. 接入 Assembler、Summary 和 typed v2 Blocks；
+6. 前端建立统一 Section View 并切换 ConversationThread/Evidence Desk；
+7. 更新 Eval Shape、Grader、报告与目标数据集；
+8. 运行后端、前端、类型、Lint、构建、架构、隐私和桌面/移动 E2E；
+9. 同步 `docs/08-当前实现状态.md`、`docs/11-项目演进日志.md`、路线图和状态索引；
+10. legacy 读取分支在确认无调用后单独删除。
 
-- 同一回答只显示一次作品集范围；
-- 章节标题和正文按权威顺序展示；
-- 引用在章节内去重；
-- Evidence Desk 仍能定位全部证据；
-- 键盘和触屏可以打开证据；
-- 旧 fixture 经过兼容映射仍可展示；
-- 空标题、空正文或非法 Block 被映射层拒绝并产生脱敏诊断。
+## 16. 验收标准
 
-### 13.4 E2E 与评测
+1. 单主体 Fact Lookup Passage 不再一对一成为最终 UI Block；
+2. `OVERVIEW` 按稳定语义章节组织并含直接 Summary；
+3. `FOCUSED` 直接回答目标章节且不重复 Summary；
+4. 前端只显示一次作品集范围；
+5. 引用按章节聚合且全部来自输入 Result；
+6. Bundle/PostgreSQL 的 Claim Projection 语义一致；
+7. Composer 不读取问题、不调用模型、网络、数据库或工具；
+8. 项目状态、贡献类型、限制和验证边界保持不变；
+9. 部分缺口可回答，全缺口失败关闭；
+10. 不变量损坏时不输出部分 Plan；
+11. Comparison、Recommendation、澄清和 Contract 专用响应无行为回归；
+12. Eval 能测量真实 typed section、顺序、摘要、重复和引用完整性；
+13. 后端、前端、构建、架构、隐私和目标 E2E 全部通过；
+14. 权威状态文档与真实代码同步。
 
-新增截图问题对应的端到端场景：
+## 17. 后续关系
 
-> 请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？
+本设计建立“结构化已验证 Claim → AnswerPlan → 确定性章节”的 seam。后续独立设计：
 
-验收不锁定完整措辞，而锁定：
+- Comparison Plan：表达多主体配对与缺失项，不复用本阶段扁平单主体 Plan；
+- TurnRouter：改善任务、主体、范围和置信度决策；
+- PortfolioExecutionPlanner：按问题获得最小必要 EvidenceBundle；
+- Model-grounded Composer：消费同一受控 Plan 输入并通过 GroundingValidator；
+- HYBRID/MIXED：扩展多来源章节，但继续复用 v2 typed Block 与前端 Section View。
 
-- 必要章节存在且顺序正确；
-- 不出现连续重复的“作品集资料”；
-- 正文 Block 数显著少于原始 Passage 数；
-- 每个事实章节都有合法 Evidence；
-- 不扩大长期生产效果或个人贡献；
-- 证据不足类别明确表达边界；
-- 桌面和移动视口均无引用挤压或内容溢出。
-
-该场景同时进入既有 Eval Harness 的回答层。确定性 Grader 检查事实、章节和引用；语义 Grader只评价直接性、连贯性、冗余和清晰度。
-
-## 14. 迁移顺序
-
-1. 为检索结果增加稳定 Claim 语义并锁定 Bundle/PostgreSQL 一致性；
-2. 以测试驱动实现 `PortfolioAnswerPlan` 与确定性 Composer；
-3. 让 Assembler 输出增强后的 v2 Block；
-4. 前端映射层支持新 Block，同时保留旧 fixture 兼容；
-5. `ConversationThread` 切换到统一章节视图；
-6. 更新 Evidence Desk 和引用上下文测试；
-7. 运行后端、前端、架构、E2E、隐私和评测门禁；
-8. 确认不再有生产调用依赖 legacy `sections` 后，单独删除兼容分支；
-9. 更新 `docs/08-当前实现状态.md`、`docs/11-项目演进日志.md` 和本路线图任务状态。
-
-迁移采用同一 `/api/v2/answers` 的加法式字段演进，不恢复已删除的 v1 HTTP 入口。
-
-## 15. 验收标准
-
-本阶段完成必须同时满足：
-
-1. 作品集 Passage 不再一对一成为最终 UI Block；
-2. 普通详细介绍回答按稳定语义章节组织；
-3. 前端不再重复显示相同来源标签；
-4. 引用按章节聚合且全部可打开；
-5. Composer 不调用模型、网络或新工具；
-6. 相同输入得到相同结构和顺序；
-7. 项目状态、贡献类型、限制和验证边界保持不变；
-8. 证据无效时失败关闭，不能为了流畅而补写事实；
-9. 旧响应兼容只存在于映射层，不形成第二套业务渲染；
-10. 后端测试、前端测试、构建、架构检查和目标 E2E 全部通过；
-11. Eval Harness 能比较改造前后的结构、重复度、引用完整性和语义质量；
-12. 当前实现状态和演进日志与真实代码状态同步。
-
-## 16. 后续关系
-
-本阶段只建立“已验证材料 → AnswerPlan → 确定性回答”的深模块。后续阶段分别在它的上下游扩展：
-
-- `TurnRouter` 改善进入哪种回答任务；
-- `PortfolioExecutionPlanner` 改善如何获得最小必要材料；
-- `MODEL_GROUNDED` 在同一 Plan seam 上提供可选表达 Adapter；
-- `GroundingValidator` 校验模型 Plan 后再允许进入最终 Assembler；
-- `HYBRID/MIXED` 扩展多来源章节，但仍复用章节和引用契约。
-
-这些后续能力不得绕过本阶段建立的 Evidence 身份、不变量和确定性 fallback。
+任何后续能力都不得绕过本阶段的 Claim/Evidence 身份、不变量和确定性 fallback。
