@@ -1,7 +1,7 @@
 # Portfolio Agent 统一评测集与发布门禁设计
 
 > 日期：2026-08-04  
-> 状态：已完成逐节讨论，待最终审阅  
+> 状态：已确认；阶段 0 已部分实施，待按第 18 节收口
 > 目标项目：`D:\code\agent`  
 > 首要用途：代码、Prompt、内容、检索策略或模型变更的发布与回归门禁  
 > 次要用途：从同一批真实结果生成可向面试官展示的工程指标
@@ -510,3 +510,121 @@ D:\code\agent
 - Release Verdict 可由 JSON 报告完整复算；
 - 同一结果可用于 CI 发布判断和面试展示；
 - 生产接口、隐私边界和 Provider 选择不因评测被改变。
+
+## 18. 2026-08-06 阶段 0 收口决议
+
+### 18.1 当前实现判断
+
+阶段 0 不是从零开始，也尚未完成。当前代码已经具备统一 Case Schema、严格 Loader、Coverage Linter、Smoke 生成、Run Planner、Oracle 隔离、Legacy Benchmark Adapter 和无 Oracle 的 `FullCorpusRetrievalExecutor`。仍缺少统一确定性 Grader、指标聚合、Baseline 比较、Verdict Policy、JSON/Markdown 报告、CLI、Intelligence/HTTP Executor 和 Provider Executor。
+
+2026-08-06 的新鲜工程基线为：后端 852 项测试通过、17 项因 Docker 或可选环境跳过；前端 455 项测试通过；生产构建和架构检查通过；Mock E2E 62 项中 42 项通过、20 项失败。该结果只说明普通单元与构建基线基本稳定，`BASE-01` 和阶段 0 仍不能标记为完成。E2E 失败必须先区分实现回归、断言漂移和测试隔离问题，不得通过删除用例或放宽无关断言收口。
+
+### 18.2 完成口径
+
+阶段 0 采用工程闭环口径：
+
+1. 离线 Eval 达到 `PASS`；
+2. 后端、前端、构建、架构、隐私和桌面/移动 Mock E2E 全绿；
+3. Provider 执行链实现并通过 Mock 验证；
+4. 真实 Provider 继续要求显式授权；未运行时最终状态为 `INCOMPLETE`；
+5. 满足以上前三项且阶段对比基线已冻结后，允许启动阶段 1；
+6. `INCOMPLETE` 不得被表述为正式发布 `PASS`。
+
+当 0A–0D 的代码、Mock 验证和离线门禁完成，但真实 Provider 尚未运行时，阶段 0 的项目状态为“已实现”，不是“已验证”。该状态允许启动阶段 1；只有真实 Provider 和对应发布门禁通过后，阶段 0 才能标记为“已验证”。
+
+### 18.3 收口工作包
+
+阶段 0 按依赖顺序拆为四个工作包：
+
+#### 0A：基线修复
+
+- 定性并修复当前 Mock E2E 失败；
+- 运行并保存可复现的后端、前端、构建、架构、代码质量和隐私结果；
+- 显式记录 Docker/Testcontainers 等未授权环境测试的跳过数量和原因；
+- 不在 Eval Harness 中增加绕过当前失败的兼容分支。
+
+#### 0B：离线 Eval 闭环
+
+- 实现统一确定性 Grader、指标聚合、Baseline 比较和 Verdict Policy；
+- 实现 JSON 报告、由 JSON 派生的 Markdown 报告和 CLI 退出码；
+- 让 `eval validate` 和 `eval offline` 形成真实可达的完整控制流；
+- 固化相同输入的稳定指标、reason code 和运行身份；
+- 运行身份不可比时拒绝输出误导性的相对回归结论。
+
+#### 0C：回答质量阶段基线
+
+- 接入 Intelligence 和 HTTP 回答执行器；
+- 增加 SQL 审计详细介绍、单 Passage、多 Passage、重复 Claim/Evidence/正文、证据不足、Contract 过期以及状态、贡献和限制词保护场景；
+- 将事实冲突、伪造引用、错误状态、错误贡献和隐私泄露作为零容忍硬门禁；
+- 将 Block 数、章节覆盖、重复来源标签、直接性、连贯性和冗余作为阶段 1 改造前的观察性指标；
+- 阶段 0 不因当前结构质量较差而失败，阶段 1 验证后再把稳定结构指标提升为阻断门禁。
+
+#### 0D：Provider 执行链 Mock 验证
+
+- 实现 Provider Executor 和每场景三次 Trial 编排；
+- 记录延迟、Token、失败、超时、降级和 Provider Usage 可用性；
+- 使用与生产相同的 Provider seam 注入测试 Adapter；
+- 覆盖 3/3、2/3、全部失败、超时、解析失败、空响应、非法引用和 Provider 未配置；
+- 离线结果不是 `PASS` 时拒绝启动 Provider 运行；
+- 未授权真实 Provider 时返回 `INCOMPLETE`，Provider 硬错误始终返回 `FAIL`。
+
+### 18.4 模块与数据流
+
+阶段 0 只建立一个高层入口：
+
+```text
+run(EvalSuite, EvalRunConfig) -> EvalRunReport
+```
+
+内部数据流固定为：
+
+```text
+Dataset Loader
+-> Coverage / Schema Validator
+-> EvalRunPlanner
+-> 分层 Executor
+-> EvalObservation
+-> Deterministic Grader
+-> Metric Aggregator
+-> Baseline Comparator
+-> Verdict Policy
+-> JSON Report
+-> Markdown Renderer / CLI Exit Code
+```
+
+`application` 包拥有 `EvalHarness` 编排；`execution` 包拥有分层执行器；`grading` 包拥有确定性评分；`reporting` 包拥有聚合、比较、Verdict 和报告；`cli` 包只负责参数、输入输出和退出码。Executor 异常转换为脱敏 `EvalObservation`；只有数据集、配置或运行身份无法建立可信结果时才终止整次运行。
+
+### 18.5 失败与退出码
+
+| 条件 | Verdict | 退出码 |
+|---|---|---:|
+| 数据集、配置或输入非法 | 不生成可信 Verdict | `2` |
+| 硬错误、绝对阈值失败或相对回归超限 | `FAIL` | `1` |
+| 离线通过但要求的真实 Provider 未授权或未运行 | `INCOMPLETE` | `3` |
+| 本次要求的全部门禁通过 | `PASS` | `0` |
+
+报告只保存稳定身份、枚举、计数、指标、reason code 和脱敏失败定位，不复制真实访客问题、Provider 完整回答、私有路径、凭据或完整异常。
+
+### 18.6 阶段基线与发布 Baseline
+
+阶段 0 为阶段 1 生成独立的阶段对比基线，例如：
+
+```text
+evaluation/baselines/phase-0-answer-composition.json
+```
+
+它用于比较回答结构化改造前后的 Block 数、章节覆盖、重复度、引用完整性和硬错误，不得写入 `release-baselines`，也不表示正式发布通过。只有真实 Provider 门禁完成且全部必要门禁为 `PASS` 时，才允许按第 11 节生成不可变发布 Baseline。
+
+### 18.7 阶段 1 启动门槛
+
+满足以下全部条件后允许启动阶段 1：
+
+1. 0A 的普通工程门禁全绿；
+2. `eval validate` 和 `eval offline` 为 `PASS`；
+3. Provider 执行链通过 Mock 验证；
+4. 真实 Provider 未运行时明确报告 `INCOMPLETE`；
+5. 阶段对比基线已经冻结并记录完整运行身份；
+6. 文档状态与代码一致；
+7. 没有扩大公开数据、隐私边界或运行时默认开关。
+
+阶段 0 不实现 `PortfolioAnswerPlan`、确定性回答 Composer、v2 Block 章节字段、前端章节渲染、`TurnRouter`、工具规划、`MODEL_GROUNDED` 表达改造或 PostgreSQL/ONNX 生产容量验收。
