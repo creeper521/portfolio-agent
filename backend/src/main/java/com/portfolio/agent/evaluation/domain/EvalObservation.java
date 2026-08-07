@@ -31,6 +31,9 @@ public final class EvalObservation {
     private final List<String> reasonCodes;
     private final long durationMilliseconds;
     private final EvalProviderUsage providerUsage;
+    private final EvalAnswerShape answerShape;
+    private final boolean degraded;
+    private final boolean providerInvoked;
 
     public EvalObservation(
             String caseId,
@@ -48,7 +51,10 @@ public final class EvalObservation {
             AnswerSource answerSource,
             List<String> reasonCodes,
             long durationMilliseconds,
-            EvalProviderUsage providerUsage
+            EvalProviderUsage providerUsage,
+            EvalAnswerShape answerShape,
+            boolean degraded,
+            boolean providerInvoked
     ) {
         this.caseId = Objects.requireNonNull(caseId, "caseId");
         this.layer = Objects.requireNonNull(layer, "layer");
@@ -69,10 +75,139 @@ public final class EvalObservation {
         this.reasonCodes = immutable(reasonCodes);
         this.durationMilliseconds = nonNegative(durationMilliseconds, "durationMilliseconds");
         this.providerUsage = Objects.requireNonNull(providerUsage, "providerUsage");
+        this.answerShape = Objects.requireNonNull(answerShape, "answerShape");
+        this.degraded = degraded;
+        this.providerInvoked = providerInvoked;
     }
 
     private static List<String> immutable(List<String> values) {
         return values == null ? List.of() : List.copyOf(values);
+    }
+
+    /**
+     * Builder for the many-field observation; required fields are caseId,
+     * layer, trialIndex and status, everything else defaults to the neutral
+     * value (empty lists, null slugs, unavailable usage, empty shape).
+     */
+    public static Builder builder(String caseId, EvalLayer layer,
+                                  int trialIndex, EvalObservationStatus status) {
+        return new Builder(caseId, layer, trialIndex, status);
+    }
+
+    public static final class Builder {
+        private final String caseId;
+        private final EvalLayer layer;
+        private final int trialIndex;
+        private final EvalObservationStatus status;
+        private String selectedProjectSlug;
+        private String selectedCaseSlug;
+        private List<String> selectedClaimIds = List.of();
+        private List<String> selectedEvidenceIds = List.of();
+        private List<String> selectedChunkIds = List.of();
+        private AnswerResolution resolution;
+        private ConversationAnswerScope answerScope;
+        private GenerationMode generationMode;
+        private AnswerSource answerSource;
+        private List<String> reasonCodes = List.of();
+        private long durationMilliseconds;
+        private EvalProviderUsage providerUsage = EvalProviderUsage.unavailable();
+        private EvalAnswerShape answerShape = EvalAnswerShape.empty();
+        private boolean degraded;
+        private boolean providerInvoked;
+
+        private Builder(String caseId, EvalLayer layer,
+                        int trialIndex, EvalObservationStatus status) {
+            this.caseId = caseId;
+            this.layer = layer;
+            this.trialIndex = trialIndex;
+            this.status = status;
+        }
+
+        public Builder selectedProjectSlug(String value) {
+            this.selectedProjectSlug = value;
+            return this;
+        }
+
+        public Builder selectedCaseSlug(String value) {
+            this.selectedCaseSlug = value;
+            return this;
+        }
+
+        public Builder selectedClaimIds(List<String> value) {
+            this.selectedClaimIds = value == null ? List.of() : value;
+            return this;
+        }
+
+        public Builder selectedEvidenceIds(List<String> value) {
+            this.selectedEvidenceIds = value == null ? List.of() : value;
+            return this;
+        }
+
+        public Builder selectedChunkIds(List<String> value) {
+            this.selectedChunkIds = value == null ? List.of() : value;
+            return this;
+        }
+
+        public Builder resolution(AnswerResolution value) {
+            this.resolution = value;
+            return this;
+        }
+
+        public Builder answerScope(ConversationAnswerScope value) {
+            this.answerScope = value;
+            return this;
+        }
+
+        public Builder generationMode(GenerationMode value) {
+            this.generationMode = value;
+            return this;
+        }
+
+        public Builder answerSource(AnswerSource value) {
+            this.answerSource = value;
+            return this;
+        }
+
+        public Builder reasonCodes(List<String> value) {
+            this.reasonCodes = value == null ? List.of() : value;
+            return this;
+        }
+
+        public Builder durationMilliseconds(long value) {
+            this.durationMilliseconds = value;
+            return this;
+        }
+
+        public Builder providerUsage(EvalProviderUsage value) {
+            this.providerUsage = value == null
+                    ? EvalProviderUsage.unavailable() : value;
+            return this;
+        }
+
+        public Builder answerShape(EvalAnswerShape value) {
+            this.answerShape = value == null ? EvalAnswerShape.empty() : value;
+            return this;
+        }
+
+        public Builder degraded(boolean value) {
+            this.degraded = value;
+            return this;
+        }
+
+        public Builder providerInvoked(boolean value) {
+            this.providerInvoked = value;
+            return this;
+        }
+
+        public EvalObservation build() {
+            return new EvalObservation(
+                    caseId, layer, trialIndex, status,
+                    selectedProjectSlug, selectedCaseSlug,
+                    selectedClaimIds, selectedEvidenceIds, selectedChunkIds,
+                    resolution, answerScope, generationMode, answerSource,
+                    reasonCodes, durationMilliseconds,
+                    providerUsage, answerShape, degraded, providerInvoked);
+        }
     }
 
     private static long nonNegative(long value, String fieldName) {
@@ -98,4 +233,7 @@ public final class EvalObservation {
     public List<String> getReasonCodes() { return reasonCodes; }
     public long getDurationMilliseconds() { return durationMilliseconds; }
     public EvalProviderUsage getProviderUsage() { return providerUsage; }
+    public EvalAnswerShape getAnswerShape() { return answerShape; }
+    public boolean isDegraded() { return degraded; }
+    public boolean isProviderInvoked() { return providerInvoked; }
 }

@@ -1,0 +1,241 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "id": "legacy.case-codegraph-workflow-paraphrase-01",
+      "title": "评测后采用了怎样的图谱导航、文本搜索与源码阅读组合工作流？",
+      "split": "REGRESSION",
+      "origin": "MIGRATED_LEGACY",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-0",
+      "sourceCategory": "LEGACY_BENCHMARK",
+      "difficultyReason": "旧基准迁移",
+      "firstExposedDatasetVersion": "2026-08-06.1",
+      "tags": [
+        "legacy"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "评测后采用了怎样的图谱导航、文本搜索与源码阅读组合工作流？"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "CASE",
+            "slug": "codegraph-evaluation"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-case-codegraph-combined-workflow"
+        ],
+        "allowedEvidenceIds": [],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "SUBJECT_INTERNAL_RETRIEVAL"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "REFERENCE_INTEGRITY",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "CASE",
+            "slug": "codegraph-evaluation"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    },
+    {
+      "id": "legacy.case-multilingual-preservation-paraphrase-01",
+      "title": "分两次上传不同语言图片时，怎样避免第二次把第一次的结果覆盖掉？",
+      "split": "REGRESSION",
+      "origin": "MIGRATED_LEGACY",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-0",
+      "sourceCategory": "LEGACY_BENCHMARK",
+      "difficultyReason": "旧基准迁移",
+      "firstExposedDatasetVersion": "2026-08-06.1",
+      "tags": [
+        "legacy"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "分两次上传不同语言图片时，怎样避免第二次把第一次的结果覆盖掉？"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "CASE",
+            "slug": "multilingual-image-preservation"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-case-multilingual-preserve-existing"
+        ],
+        "allowedEvidenceIds": [],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "SUBJECT_INTERNAL_RETRIEVAL"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "REFERENCE_INTEGRITY",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "CASE",
+            "slug": "multilingual-image-preservation"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    },
+    {
+      "id": "legacy.case-role-reset-flow-paraphrase-01",
+      "title": "为了避免误删，测试角色重置要经过哪些受控步骤？",
+      "split": "REGRESSION",
+      "origin": "MIGRATED_LEGACY",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-0",
+      "sourceCategory": "LEGACY_BENCHMARK",
+      "difficultyReason": "旧基准迁移",
+      "firstExposedDatasetVersion": "2026-08-06.1",
+      "tags": [
+        "legacy"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "为了避免误删，测试角色重置要经过哪些受控步骤？"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "CASE",
+            "slug": "test-role-reset"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-case-role-reset-controlled-flow"
+        ],
+        "allowedEvidenceIds": [],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "SUBJECT_INTERNAL_RETRIEVAL"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "REFERENCE_INTEGRITY",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "CASE",
+            "slug": "test-role-reset"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    }
+  ],
+  "suiteId": "phase-0-legacy",
+  "datasetVersion": "2026-08-06.1"
+}

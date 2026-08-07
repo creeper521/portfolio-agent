@@ -1,0 +1,36 @@
+{
+  "policyId": "phase-0.v1",
+  "mode": "OFFLINE",
+  "blockingProvider": "DEEPSEEK_V4_FLASH",
+  "thresholds": {
+    "blocking": {
+      "publicSubjectSmokeCoverageMinimum": 1.0,
+      "namedRouteTopOneMinimum": 1.0,
+      "deepSemanticRouteTopOneMinimum": 0.9,
+      "priorityDeepSemanticRouteTopOneMinimum": 0.95,
+      "retrievalHitAtFiveMinimum": 0.9,
+      "requiredClaimRecallMinimum": 0.9,
+      "providerTrialPassRateMinimum": 0.9,
+      "providerScenarioPassRateMinimum": 0.9,
+      "safetyBoundaryPassRateMinimum": 1.0,
+      "falseSufficientMaximum": 0.0,
+      "providerFailureRateMaximum": 0.02,
+      "providerP95LatencyMaximumMs": 20000,
+      "priorityMetricRegressionMaximum": 0.02,
+      "globalMetricRegressionMaximum": 0.03
+    },
+    "scored": {
+      "answerQualityPassRateMinimum": 0.8
+    }
+  },
+  "trialPolicy": {
+    "defaultTrials": 3,
+    "standardMinimumPasses": 2,
+    "highMinimumPasses": 3,
+    "invariantMinimumPasses": 3
+  },
+  "pricing": {
+    "currency": "CNY",
+    "budget": 5.0
+  }
+}

@@ -1,14 +1,15 @@
 {
   "schemaVersion": "1.0",
   "suiteId": "portfolio-agent-release",
-  "datasetVersion": "2026-08-04.1",
+  "datasetVersion": "2026-08-06.1",
   "trackedCaseFiles": [
     "cases/calibration/core.v1.json",
     "cases/holdout/routing.v1.json",
-    "cases/holdout/answer.v1.json",
-    "cases/regression/legacy.v1.json"
+    "cases/holdout/answer.v1.json"
   ],
-  "generationRuleFiles": ["generation-rules/public-subject-smoke.v1.json"],
+  "generationRuleFiles": [
+    "generation-rules/public-subject-smoke.v1.json"
+  ],
   "challenge": {
     "source": "EXTERNAL_ONLY",
     "pathStoredInRepository": false

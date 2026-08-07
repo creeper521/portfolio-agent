@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
 import com.portfolio.agent.answer.domain.RetrievalPolicy;
+import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
 import com.portfolio.agent.evaluation.domain.EvalObservationStatus;
@@ -60,7 +61,8 @@ public final class LegacyRetrievalBenchmarkAdapter {
                 evaluation.getSelectedClaimIds(), List.of(), evaluation.getSelectedChunkIds(),
                 resolution(evaluation.getActualDecision()), ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
-                reasonCodes(evaluation), 0L, EvalProviderUsage.unavailable());
+                reasonCodes(evaluation), 0L, EvalProviderUsage.unavailable(),
+                EvalAnswerShape.empty(), false, false);
     }
 
     private AnswerResolution resolution(RetrievalDecisionType decision) {

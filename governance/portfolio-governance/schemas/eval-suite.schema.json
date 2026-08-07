@@ -67,7 +67,7 @@
     },
     "execution": {
       "type": "object", "additionalProperties": false, "required": ["layers", "providerTrials"],
-      "properties": {"layers": {"type": "array", "minItems": 1, "items": {"enum": ["BUNDLE_CONTRACT", "SUBJECT_INTERNAL_RETRIEVAL", "FULL_CORPUS_RETRIEVAL", "INTELLIGENCE", "HTTP_E2E"]}}, "providerTrials": {"type": "integer", "minimum": 1}}
+      "properties": {"layers": {"type": "array", "minItems": 1, "items": {"enum": ["BUNDLE_CONTRACT", "SUBJECT_INTERNAL_RETRIEVAL", "FULL_CORPUS_RETRIEVAL", "INTELLIGENCE", "HTTP_E2E", "PROVIDER"]}}, "providerTrials": {"type": "integer", "minimum": 1}}
     },
     "grader": {
       "type": "object", "additionalProperties": false, "required": ["type", "severity"],

@@ -9,6 +9,7 @@ import com.portfolio.agent.answer.domain.RetrievalCandidate;
 import com.portfolio.agent.answer.domain.RetrievalDecision;
 import com.portfolio.agent.answer.domain.RetrievalDecisionType;
 import com.portfolio.agent.answer.service.RankedRetrievalHit;
+import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
 import com.portfolio.agent.evaluation.domain.EvalObservationStatus;
@@ -37,7 +38,8 @@ public final class RetrievalObservationFactory {
                 selectedChunkIds, resolution(decision.getType()), ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
                 reasonCodes(input.getLayer(), decision, keywordHits, vectorHits, fusedCandidates),
-                durationMilliseconds, EvalProviderUsage.unavailable());
+                durationMilliseconds, EvalProviderUsage.unavailable(),
+                EvalAnswerShape.empty(), false, false);
     }
 
     private String firstProjectSlug(List<String> selectedChunkIds,

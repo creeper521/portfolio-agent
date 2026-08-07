@@ -13,6 +13,7 @@ import com.portfolio.agent.answer.domain.RetrievalPolicy;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.service.KeywordRetriever;
+import com.portfolio.agent.answer.service.LocalEmbeddingFailureException;
 import com.portfolio.agent.answer.service.NormalizedRetrievalQuery;
 import com.portfolio.agent.answer.service.RankedRetrievalHit;
 import com.portfolio.agent.answer.service.ReciprocalRankFusion;
@@ -97,15 +98,24 @@ public final class FullCorpusRetrievalExecutor implements EvalExecutor {
         NormalizedRetrievalQuery query = normalizer.normalize(lastUserMessage(input.getMessages()));
         List<RankedRetrievalHit> keywordHits = keywordRetriever.retrieve(
                 corpus.getKeywordIndex(), query.getTerms(), allowedChunkIds, policy.getKeywordTopK());
-        EmbeddingVector queryVector = embeddingPort.embedQuery(query.getLocalText());
-        List<RankedRetrievalHit> vectorHits = vectorRetriever.retrieve(
-                queryVector, corpus.copyVectors(), allowedChunkIds, policy.getVectorTopK(),
-                policy.getVectorCandidateThreshold());
+        List<RankedRetrievalHit> vectorHits = List.of();
+        RetrievalMode retrievalMode = RetrievalMode.KEYWORD_ONLY;
+        try {
+            EmbeddingVector queryVector = embeddingPort.embedQuery(query.getLocalText());
+            vectorHits = vectorRetriever.retrieve(
+                    queryVector, corpus.copyVectors(), allowedChunkIds, policy.getVectorTopK(),
+                    policy.getVectorCandidateThreshold());
+            retrievalMode = RetrievalMode.HYBRID_ENABLED;
+        } catch (LocalEmbeddingFailureException unavailable) {
+            // Offline eval is intentionally runnable without a model. Keyword
+            // retrieval remains a real full-corpus execution path.
+            retrievalMode = RetrievalMode.KEYWORD_ONLY;
+        }
         List<RetrievalCandidate> fusedCandidates = fusion.fuse(
                 keywordHits, vectorHits, policy.getRrfK());
         RetrievalDecision decision = contextValidator.validate(
                 query, allClaims(content), allEvidence(content), corpus.getChunks(), fusedCandidates,
-                RetrievalMode.HYBRID_ENABLED, policy);
+                retrievalMode, policy);
         long durationMilliseconds = (System.nanoTime() - startedAt) / 1_000_000L;
         return observationFactory.fullCorpus(input, decision, corpus.getChunks(), keywordHits,
                 vectorHits, fusedCandidates, durationMilliseconds);

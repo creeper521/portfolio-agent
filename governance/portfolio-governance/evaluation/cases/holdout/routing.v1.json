@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "id": "routing.sql-audit.named.001",
+      "title": "命名路由",
+      "split": "HOLDOUT",
+      "origin": "HUMAN_AUTHORED",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-0",
+      "sourceCategory": "PUBLIC_BUNDLE",
+      "difficultyReason": "真实公开材料约束",
+      "firstExposedDatasetVersion": "2026-08-06.1",
+      "tags": [
+        "phase-0"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "SQL 审计与故障排查工具的介绍"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-sql-audit-background"
+        ],
+        "allowedEvidenceIds": [
+          "sql-audit-delivery-set"
+        ],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "INTELLIGENCE"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    },
+    {
+      "id": "routing.sql-audit.named.002",
+      "title": "命名路由追问",
+      "split": "HOLDOUT",
+      "origin": "HUMAN_AUTHORED",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-0",
+      "sourceCategory": "PUBLIC_BUNDLE",
+      "difficultyReason": "真实公开材料约束",
+      "firstExposedDatasetVersion": "2026-08-06.1",
+      "tags": [
+        "phase-0"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "SQL 审计工具解决了什么问题"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-sql-audit-background",
+          "claim-sql-audit-responsibility"
+        ],
+        "allowedEvidenceIds": [
+          "sql-audit-delivery-set",
+          "sql-audit-july-iteration-set"
+        ],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "INTELLIGENCE"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "REQUIRED_CLAIMS",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    }
+  ],
+  "suiteId": "phase-0-routing",
+  "datasetVersion": "2026-08-06.1"
+}

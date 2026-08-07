@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "suiteId": "portfolio-agent-release-legacy",
+  "datasetVersion": "2026-08-06.1",
+  "trackedCaseFiles": [
+    "cases/regression/legacy.v1.json"
+  ],
+  "challenge": {
+    "source": "EXTERNAL_ONLY",
+    "pathStoredInRepository": false
+  }
+}

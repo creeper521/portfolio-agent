@@ -5,5 +5,6 @@ public enum EvalLayer {
     SUBJECT_INTERNAL_RETRIEVAL,
     FULL_CORPUS_RETRIEVAL,
     INTELLIGENCE,
-    HTTP_E2E
+    HTTP_E2E,
+    PROVIDER
 }
