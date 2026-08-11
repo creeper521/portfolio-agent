@@ -34,7 +34,10 @@ import type {
   ConversationTopic,
   FollowUpAction,
   PortfolioRecommendationContextRequest,
+  SemanticContextRequest,
+  InvalidatedPlanReference,
 } from '../model/answerTypes'
+import type { OpaquePlanConfirmation } from '../model/semanticTurnView'
 import { completeSuggestedQuestions } from '../model/completeSuggestedQuestions'
 import {
   buildEvidenceDeskContext,
@@ -52,7 +55,11 @@ interface AnswerRequestContext {
   sessionId: string
   projectSlug: string | null
   caseSlug?: string | null
-  question: string
+  question?: string
+  action?: 'ASK' | 'CONFIRM_PLAN' | 'REGENERATE_PLAN'
+  planConfirmation?: OpaquePlanConfirmation
+  semanticContext?: SemanticContextRequest
+  invalidatedPlanReference?: InvalidatedPlanReference
   questionPresetId?: string
   contractVersion?: string
   coveredTopics?: readonly ConversationTopic[]
@@ -107,6 +114,7 @@ const pending = ref(false)
 const answerFailure = ref<AnswerFailureView | null>(null)
 const failedRequest = ref<AnswerRequestContext | null>(null)
 const resolvedContractVersions = new Map<string, string>()
+const semanticContinuations = new Map<string, SemanticContinuation>()
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
     ? props.initialCase
@@ -291,11 +299,36 @@ function invalidatePendingRequest() {
   pending.value = false
 }
 
+function buildSemanticContext(
+  session: NonNullable<typeof sessions.activeSession.value>,
+  context: AnswerRequestContext,
+): SemanticContextRequest {
+  const activeSubjects = context.caseSlug
+    ? [{ subjectType: 'CASE', subjectId: context.caseSlug }]
+    : context.projectSlug
+      ? [{ subjectType: 'PROJECT', subjectId: context.projectSlug }]
+      : []
+  return {
+    activeSubjects,
+    resultReferences: [],
+    audienceRole: session.role,
+    requestSource: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
+    coveredTopics: [...session.coveredTopics],
+  }
+}
+
 async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
   const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
   if (!session || pending.value || disposed) {
     if (!session) clearAnswerFailure()
     return
+  }
+
+  if (context.question && context.action === undefined) {
+    semanticContinuations.set(session.id, {
+      question: context.question,
+      semanticContext: context.semanticContext ?? buildSemanticContext(session, context),
+    })
   }
 
   const preparedContext = context.requestToken
@@ -308,6 +341,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
   const controller = new AbortController()
   clearFocusedAnswer()
   if (appendUser) {
+    if (!context.question) return
     sessions.appendMessage(session.id, {
       role: 'USER',
       content: context.question,
@@ -334,8 +368,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         if (m.role === 'AGENT' && m.answer) {
           if (m.answer.summary) {
             content = m.answer.summary
-          } else if (m.answer.blocks?.length) {
-            content = m.answer.blocks.map((b) => b.content).join('\n\n')
+          } else if (m.answer.sections?.length) {
+            content = m.answer.sections.map((s) => s.content).join('\n\n')
           }
         }
         return {
@@ -347,6 +381,11 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     const response = await askWithPresetContractRetry({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
         requestToken: preparedContext.requestToken,
+        action: preparedContext.action,
+        agentTurnContract: preparedContext.action === undefined ? undefined : 'stp-v1',
+        planConfirmation: preparedContext.planConfirmation,
+        semanticContext: preparedContext.semanticContext,
+        invalidatedPlanReference: preparedContext.invalidatedPlanReference,
         signal: controller.signal,
         projectSlug: preparedContext.caseSlug ? null : preparedContext.projectSlug,
         caseSlug: preparedContext.caseSlug ?? null,
@@ -379,15 +418,15 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       }
       return
     }
+    sessions.acceptSemanticTurnResponse(session.id, response)
     const mapped = mapAnswerResponse(response)
     if (!mapped.referenceContext
       && mapped.resolution === 'ANSWERED'
       && (mapped.answerScope === 'PORTFOLIO' || mapped.answerScope === 'MIXED')
       && (preparedContext.projectSlug || preparedContext.caseSlug)) {
-      const referencedClaimIds = [...new Set([
-        ...(mapped.blocks ?? []).flatMap((block) => block.claimIds),
-        ...mapped.sections.flatMap((section) => section.claimIds ?? []),
-      ])]
+      const referencedClaimIds = [...new Set(
+        mapped.sections.flatMap((section) => section.claimIds ?? []),
+      )]
       mapped.referenceContext = {
         previousContentVersion: mapped.contentVersion,
         projectSlugs: preparedContext.projectSlug ? [preparedContext.projectSlug] : [],
@@ -502,6 +541,77 @@ function submit(question: string) {
     },
     true,
   )
+}
+
+interface SemanticContinuation {
+  question: string
+  semanticContext: SemanticContextRequest
+}
+
+function confirmSemanticPlan(confirmation: OpaquePlanConfirmation) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  if (!session || !project || pending.value) return
+  if (session.pendingConfirmation?.confirmationId !== confirmation.confirmationId) return
+  void requestAnswer({
+    sessionId: session.id,
+    projectSlug: project.slug,
+    caseSlug: activeCaseSlug.value || null,
+    action: 'CONFIRM_PLAN',
+    planConfirmation: confirmation,
+  }, false)
+}
+
+function adjustSemanticPlan() {
+  document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()
+}
+
+function cancelSemanticPlan() {
+  const session = sessions.activeSession.value
+  if (!session) return
+  sessions.clearPendingConfirmation(session.id)
+}
+
+function selectClarification(selection: { fieldKey: string; value: string }) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  const continuation = session ? semanticContinuations.get(session.id) : undefined
+  if (!session || !project || !continuation || pending.value) return
+  const subjectType = selection.fieldKey === 'comparisonSubject' ? 'PROJECT' : 'CONTROLLED_OPTION'
+  const semanticContext: SemanticContextRequest = {
+    ...continuation.semanticContext,
+    activeSubjects: [
+      ...(continuation.semanticContext.activeSubjects ?? []),
+      { subjectType, subjectId: selection.value },
+    ],
+    coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
+  }
+  void requestAnswer({
+    sessionId: session.id,
+    projectSlug: project.slug,
+    caseSlug: activeCaseSlug.value || null,
+    action: 'ASK',
+    question: continuation.question,
+    semanticContext,
+  }, false)
+}
+
+function regenerateSemanticPlan() {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  const continuation = session ? semanticContinuations.get(session.id) : undefined
+  const latestSemanticTurn = session?.messages.at(-1)?.answer?.semanticTurn
+  const invalidatedPlanReference = latestSemanticTurn?.planChange?.invalidatedPlanReference
+  if (!session || !project || !continuation || !invalidatedPlanReference || pending.value) return
+  void requestAnswer({
+    sessionId: session.id,
+    projectSlug: project.slug,
+    caseSlug: activeCaseSlug.value || null,
+    action: 'REGENERATE_PLAN',
+    question: continuation.question,
+    semanticContext: continuation.semanticContext,
+    invalidatedPlanReference,
+  }, false)
 }
 
 function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
@@ -828,6 +938,11 @@ onBeforeUnmount(() => {
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"
       @clear-case-context="clearCaseContext"
+      @confirm-plan="confirmSemanticPlan"
+      @adjust-plan="adjustSemanticPlan"
+      @cancel-plan="cancelSemanticPlan"
+      @clarification-select="selectClarification"
+      @regenerate-plan="regenerateSemanticPlan"
     />
 
     <PaneResizer

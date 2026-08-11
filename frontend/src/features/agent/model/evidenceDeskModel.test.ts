@@ -24,9 +24,12 @@ const messages: AgentMessage[] = [{
     suggestedQuestionPresetIds: [],
     suggestedQuestions: [],
     sections: [{
+      key: 'VERIFICATION:0',
       type: 'VERIFICATION',
       title: '验证',
+      sourceScope: 'PORTFOLIO',
       content: '通过公开交付物核验。',
+      claimIds: [],
       evidenceIds: ['evidence-a'],
     }],
   },

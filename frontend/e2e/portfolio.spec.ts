@@ -5,6 +5,7 @@ import {
   installAnswerScenarioMock,
   installDiagnosticsApiMock,
   installPublicApiMocks,
+  mockSemanticTurnStates,
 } from './support/publicApiMocks'
 
 const usesRealApi = process.env.PLAYWRIGHT_REAL_API === '1'
@@ -52,6 +53,95 @@ async function submitAgentQuestion(page: Page, question = '这个项目交付了
   await page.getByLabel('你的问题').fill(question)
   await page.getByRole('button', { name: /发送/ }).click()
 }
+
+test('semantic turn states A through H remain safe and usable', async ({ page }) => {
+  test.skip(usesRealApi, 'semantic state machine uses deterministic browser mocks')
+  const requests: Record<string, unknown>[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname !== '/api/v2/answers') return
+    const body = request.postDataJSON() as Record<string, unknown>
+    requests.push(body)
+  })
+  await mockSemanticTurnStates(page)
+  await openAgentDeepLink(page)
+
+  await submitAgentQuestion(page, '状态 A')
+  await expect(page.locator('[data-testid="plan-confirmation"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="task-summary"]')).toHaveCount(0)
+
+  await submitAgentQuestion(page, '状态 B')
+  const compactSummary = page.locator('[data-testid="task-summary"]').last()
+  await expect(compactSummary).toHaveAttribute('data-expanded', 'false')
+  await compactSummary.getByRole('button').click()
+  await expect(compactSummary).toHaveAttribute('data-expanded', 'true')
+
+  await submitAgentQuestion(page, '状态 C')
+  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toBeVisible()
+  await page.locator('[data-action="confirm-plan"]').last().press('Enter')
+  await expect(page.getByText('F only completed body')).toBeVisible()
+  await expect(page.locator('[data-testid="task-summary"]').last()).toHaveAttribute('data-expanded', 'true')
+  await expect(page.getByText('F blocked body')).toHaveCount(0)
+
+  await submitAgentQuestion(page, '状态 D')
+  await expect(page.locator('[data-testid="turn-clarification"][data-scope="LOCAL"]').last()).toBeVisible()
+  await expect(page.getByText('已继续 1 个可安全完成的任务')).toBeVisible()
+  await page.locator('[data-clarification-option="project-b"]').last().click()
+  await expect(page.getByText('D only completed body')).toBeVisible()
+  const localContinuationRequest = requests.find((request) => {
+    const semanticContext = request.semanticContext as { activeSubjects?: unknown[] } | undefined
+    return (semanticContext?.activeSubjects?.length ?? 0) > 1
+  })
+  expect(localContinuationRequest).toMatchObject({
+    action: 'ASK',
+    agentTurnContract: 'stp-v1',
+    question: '状态 D',
+    semanticContext: { activeSubjects: [
+      { subjectType: 'PROJECT', subjectId: 'sql-audit' },
+      { subjectType: 'PROJECT', subjectId: 'project-b' },
+    ] },
+  })
+  expect(localContinuationRequest?.planConfirmation).toBeUndefined()
+
+  await submitAgentQuestion(page, '状态 E')
+  await expect(page.locator('[data-testid="turn-clarification"][data-scope="CRITICAL"]').last()).toBeVisible()
+  await expect(page.getByText('在收到选择前不会执行这项计划')).toBeVisible()
+  await page.locator('[data-clarification-option="project-b"]').last().click()
+  await expect(page.getByText('F only completed body').last()).toBeVisible()
+  const criticalContinuationRequest = requests.find((request) => (
+    request.question === '状态 E'
+    && request.action === 'ASK'
+  ))
+  expect(criticalContinuationRequest).toMatchObject({
+    action: 'ASK',
+    agentTurnContract: 'stp-v1',
+    question: '状态 E',
+    semanticContext: { activeSubjects: [
+      { subjectType: 'PROJECT', subjectId: 'sql-audit' },
+      { subjectType: 'PROJECT', subjectId: 'project-b' },
+    ] },
+  })
+  expect(criticalContinuationRequest?.planConfirmation).toBeUndefined()
+
+  await submitAgentQuestion(page, '状态 G')
+  await expect(page.locator('[data-testid="plan-invalidated-notice"]').last()).toBeVisible()
+  await page.locator('[data-action="regenerate-plan"]').last().click()
+  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toBeVisible()
+  const regenerateRequest = requests.find((request) => request.action === 'REGENERATE_PLAN')
+  expect(regenerateRequest).toMatchObject({
+    action: 'REGENERATE_PLAN',
+    question: '状态 G',
+    semanticContext: { activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }] },
+    invalidatedPlanReference: { planId: 'plan-opaque', planFingerprint: 'sha256:opaque' },
+  })
+  expect(regenerateRequest?.planConfirmation).toBeUndefined()
+
+  await submitAgentQuestion(page, '状态 H')
+  await expect(page.getByText('这项请求不能在当前公开范围内继续。')).toBeVisible()
+  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => window.innerWidth),
+  )
+})
 
 function expectClosedDiagnosticBodies(bodies: unknown[]) {
   for (const body of bodies) {
@@ -706,6 +796,85 @@ test('legacy project-shaped Case URL redirects to its canonical Case route', asy
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     '多语言图片上传结果保留修复',
   )
+})
+
+test('Agent keeps a comparison answer on the legacy path without boundary mislabeling', async ({
+  page,
+}) => {
+  await openAgentDeepLink(page)
+  await page.getByLabel('你的问题').fill('比较一下 SQL 审计项目和图片上传项目')
+  await page.getByRole('button', { name: /发送/ }).click()
+
+  const answer = page.locator('.message--agent').last()
+  // 未迁移的比较回答仍可读，且不被误标为边界章节
+  await expect(answer).toContainText('SQL 审计项目侧重数据库链路')
+  await expect(answer.locator('[data-section-type="BOUNDARY"]')).toHaveCount(0)
+  await expect(answer.locator('[data-section-citation]')).toHaveCount(1)
+  await expect(answer.locator('[data-answer-summary]')).toBeVisible()
+})
+
+test('Agent keeps a recommendation answer on the legacy recommendation path', async ({ page }) => {
+  await openAgentDeepLink(page)
+  await page.getByLabel('你的问题').fill('推荐两个适合后端面试展示的作品')
+  await page.getByRole('button', { name: /发送/ }).click()
+
+  const answer = page.locator('.message--agent').last()
+  await expect(answer.locator('[data-portfolio-recommendation]')).toHaveAttribute(
+    'aria-label',
+    '作品推荐 · 2 项',
+  )
+  await expect(answer).toContainText('SQL 审计与故障排查工具')
+  await expect(answer).toContainText('图片上传与处理平台')
+  await expect(answer.locator('[data-section-type="BACKGROUND"]')).toHaveCount(0)
+  await expect(answer.locator('[data-section-type="SOLUTION"]')).toHaveCount(0)
+})
+
+test('Agent renders a composed overview with one portfolio scope and typed sections', async ({
+  page,
+}) => {
+  await openAgentDeepLink(page)
+  await page.getByLabel('你的问题').fill('请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？')
+  await page.getByRole('button', { name: /发送/ }).click()
+
+  const answer = page.locator('.message--agent').last()
+  await expect(answer.locator('[data-section-type="BACKGROUND"]')).toBeVisible()
+  await expect(answer.locator('[data-section-type="SOLUTION"]')).toBeVisible()
+  await expect(answer.locator('[data-section-type="VERIFICATION"]')).toBeVisible()
+  await expect(answer.locator('[data-scope="PORTFOLIO"]')).toHaveCount(1)
+  await expect(answer.locator('[data-block-scope]')).toHaveCount(0)
+  await expect(answer.locator('[data-answer-summary]')).toBeVisible()
+  // 章节引用可点击打开 Evidence Desk，且引用的正文可读
+  await expect(answer.locator('[data-section-citation]').first()).toBeVisible()
+  await answer.locator('[data-section-citation]').first().click()
+  await expect(page.locator('#agent-evidence-desk')).toBeVisible()
+})
+
+test('Agent renders a focused verification answer without summary', async ({ page }) => {
+  await openAgentDeepLink(page)
+  await page.getByLabel('你的问题').fill('这个项目的验证过程是怎样的？')
+  await page.getByRole('button', { name: /发送/ }).click()
+
+  const answer = page.locator('.message--agent').last()
+  await expect(answer.locator('[data-section-type="VERIFICATION"]')).toBeVisible()
+  await expect(answer.locator('[data-section-type="SOLUTION"]')).toHaveCount(0)
+  await expect(answer.locator('[data-answer-summary]')).toHaveCount(0)
+})
+
+test('Agent renders a partial-gap answer with a boundary that has no fabricated evidence', async ({
+  page,
+}) => {
+  await openAgentDeepLink(page)
+  await page.getByLabel('你的问题').fill('请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？')
+  await page.getByRole('button', { name: /发送/ }).click()
+  const firstAnswer = page.locator('.message--agent').last()
+  await expect(firstAnswer.locator('[data-section-type="SOLUTION"]')).toBeVisible()
+  await firstAnswer.locator('[data-section-type="SOLUTION"]').getByRole('button', { name: /展开本节/ }).click()
+
+  const answer = page.locator('.message--agent').last()
+  await expect(answer.locator('[data-section-type="SOLUTION"]')).toBeVisible()
+  await expect(answer.locator('[data-section-type="BOUNDARY"]')).toBeVisible()
+  await expect(answer.locator('[data-section-type="BOUNDARY"]')).toContainText('当前公开材料未覆盖最终状态')
+  await expect(answer.locator('[data-section-type="BOUNDARY"] [data-section-citation]')).toHaveCount(0)
 })
 
 test('Agent distinguishes retrieval provenance from verification', async ({ page }) => {

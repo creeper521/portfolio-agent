@@ -5,6 +5,13 @@ import { previewPublicContent } from '../../public-content/data/previewPublicCon
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { WORKSPACE_SPLIT_KEY } from '../composables/useWorkspaceSplit'
+import {
+  confirmationRequiredResponse,
+  criticalClarificationResponse,
+  invalidatedPlanResponse,
+  localPartialReadyResponse,
+  partialSuccessResponse,
+} from '../model/semanticTurnFixtures'
 import AgentWorkspace from './AgentWorkspace.vue'
 
 const SESSION_KEY = 'forbidden-session-key'
@@ -158,6 +165,105 @@ describe('AgentWorkspace', () => {
         removeEventListener: vi.fn(),
       })),
     )
+  })
+
+  it('stores the received opaque confirmation in tab memory before sending confirm-plan', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+      .mockResolvedValueOnce(partialSuccessResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="confirm-plan"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'CONFIRM_PLAN',
+      agentTurnContract: 'stp-v1',
+      planConfirmation: {
+        confirmationId: 'confirmation-01',
+        confirmationPlan: 'opaque-envelope',
+        planFingerprint: 'sha256:opaque-fingerprint',
+        integrityToken: 'opaque-integrity-token',
+      },
+    })
+    expect(askQuestionMock.mock.calls[1]?.[0].question).toBeUndefined()
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('continues a local clarification with the original question and controlled semantic subject', async () => {
+    askQuestionMock.mockResolvedValueOnce(localPartialReadyResponse()).mockResolvedValueOnce(partialSuccessResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-clarification-option="project-b"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'ASK',
+      agentTurnContract: 'stp-v1',
+      question: '先审阅再比较',
+      semanticContext: {
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'sql-audit' },
+          { subjectType: 'PROJECT', subjectId: 'project-b' },
+        ],
+      },
+    })
+    expect(askQuestionMock.mock.calls[1]?.[0].planConfirmation).toBeUndefined()
+  })
+
+  it('keeps critical clarification execution-free until a controlled choice is submitted', async () => {
+    askQuestionMock.mockResolvedValueOnce(criticalClarificationResponse()).mockResolvedValueOnce(partialSuccessResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('比较两个项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="turn-clarification"]').attributes('data-scope')).toBe('CRITICAL')
+    expect(wrapper.find('[data-section-type]').exists()).toBe(false)
+    await wrapper.get('[data-clarification-option="project-b"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'ASK',
+      agentTurnContract: 'stp-v1',
+      question: '比较两个项目',
+    })
+    expect(askQuestionMock.mock.calls[1]?.[0].planConfirmation).toBeUndefined()
+    expect(askQuestionMock.mock.calls[1]?.[0].semanticContext.activeSubjects).toContainEqual({
+      subjectType: 'PROJECT', subjectId: 'project-b',
+    })
+  })
+
+  it('regenerates an invalidated plan with original context and no confirmation envelope', async () => {
+    askQuestionMock.mockResolvedValueOnce(invalidatedPlanResponse()).mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('重新比较项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="regenerate-plan"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'REGENERATE_PLAN',
+      agentTurnContract: 'stp-v1',
+      question: '重新比较项目',
+      semanticContext: {
+        activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+      },
+      invalidatedPlanReference: {
+        planId: 'plan-opaque',
+        planFingerprint: 'sha256:opaque',
+      },
+    })
+    expect(askQuestionMock.mock.calls[1]?.[0].planConfirmation).toBeUndefined()
   })
 
   it('focuses cited evidence after an answer and opens citations from a section', async () => {

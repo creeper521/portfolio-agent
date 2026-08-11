@@ -5,7 +5,8 @@
   "trackedCaseFiles": [
     "cases/calibration/core.v1.json",
     "cases/holdout/routing.v1.json",
-    "cases/holdout/answer.v1.json"
+    "cases/holdout/answer.v1.json",
+    "cases/holdout/semantic-turn-routing.v1.json"
   ],
   "generationRuleFiles": [
     "generation-rules/public-subject-smoke.v1.json"

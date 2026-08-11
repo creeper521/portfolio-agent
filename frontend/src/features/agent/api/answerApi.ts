@@ -1,7 +1,11 @@
 import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
 import type {
   AnswerResponse,
+  InvalidatedPlanReference,
+  PlanConfirmationSubmission,
   PortfolioReferenceContext,
+  SemanticContextRequest,
+  TurnAction,
   ConversationTopic,
   PortfolioRecommendationContextRequest,
 } from '../model/answerTypes'
@@ -10,6 +14,11 @@ import { createRequestToken } from './createRequestToken'
 
 export interface AnswerApiRequest {
   turnId: string
+  action?: TurnAction
+  agentTurnContract?: 'stp-v1'
+  planConfirmation?: PlanConfirmationSubmission
+  semanticContext?: SemanticContextRequest
+  invalidatedPlanReference?: InvalidatedPlanReference
   requestToken?: string
   signal?: AbortSignal
   projectSlug?: string | null
@@ -40,13 +49,27 @@ export function askQuestion(
     body: JSON.stringify({
       turnId: input.turnId,
       requestToken: input.requestToken ?? createRequestToken(),
+      ...(input.action === undefined ? {} : { action: input.action }),
+      ...(input.agentTurnContract === undefined
+        ? {}
+        : { agentTurnContract: input.agentTurnContract }),
+      ...(input.action !== 'CONFIRM_PLAN' || input.planConfirmation === undefined
+        ? {}
+        : {
+            planConfirmation: {
+              confirmationId: input.planConfirmation.confirmationId,
+              confirmationPlan: input.planConfirmation.confirmationPlan,
+              planFingerprint: input.planConfirmation.planFingerprint,
+              integrityToken: input.planConfirmation.integrityToken,
+            },
+          }),
       ...(input.questionPresetId === undefined
         ? {}
         : { questionPresetId: input.questionPresetId }),
       ...(input.contractVersion === undefined
         ? {}
         : { contractVersion: input.contractVersion }),
-      question: input.question,
+      ...(input.question === undefined ? {} : { question: input.question }),
       messages: input.messages?.map((message) => ({
         role: message.role,
         content: message.content,
@@ -80,6 +103,25 @@ export function askQuestion(
               },
             }),
       },
+      ...(input.semanticContext === undefined
+        ? {}
+        : {
+            semanticContext: {
+              ...input.semanticContext,
+              activeSubjects: input.semanticContext.activeSubjects === undefined
+                ? undefined
+                : input.semanticContext.activeSubjects.map((subject) => ({ ...subject })),
+              resultReferences: input.semanticContext.resultReferences === undefined
+                ? undefined
+                : input.semanticContext.resultReferences.map((reference) => ({ ...reference })),
+              coveredTopics: input.semanticContext.coveredTopics === undefined
+                ? undefined
+                : [...input.semanticContext.coveredTopics],
+            },
+          }),
+      ...(input.invalidatedPlanReference === undefined
+        ? {}
+        : { invalidatedPlanReference: { ...input.invalidatedPlanReference } }),
     }),
   }, {
     operation: RequestOperation.ANSWER,

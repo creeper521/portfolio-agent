@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Turn Routing · 阶段二交互原型 · 非生产</title>
+<!--
+
+  原型：阶段二「真正多任务 Agent」交互验证 · 非生产代码
+
+  目的：在现有 Agent 工作台中验证计划确认、结构化澄清、部分成功、任务状态摘要的交互体验。
+  结论用于修订 SemanticTurnPlan / 确认协议 / 澄清协议，之后才形成阶段二正式 Spec。
+  不接真实后端，不修改生产前端或后端代码。
+
+  设计方向（已与用户确认）：方向一 · 编号线性清单 + 折叠密度
+    - 任务用序号 01-05 + serif 标题 + mono 约束条 + 一行 mono 依赖标注呈现
+    - 状态 A 单任务：不出现计划 UI
+    - 状态 B ≤3 任务：折叠成一条紧凑摘要
+    - 状态 C 5 步复杂计划：完整展开 + 三选一确认
+    - 状态 D/E 澄清：红菱形 callout + 候选选项
+    - 状态 F 部分成功：状态矩阵 + 安全正文（不为失败任务造伪正文）
+    - 状态 G 计划失效：红边框 callout + 重新生成
+    - 状态 H 安全边界：整轮终止
+
+  视觉基线：严格复刻 tokens.css / AgentWorkspace.vue / ConversationThread.vue
+    - 暖黑舞台 #1e1b17 + 米色 shell #f3eadb + thread #f5e8d1
+    - 单一牛血红 accent #7a2e2a（契约禁 green/teal/cyan/purple）
+    - serif(正文) + sans(用户消息/控件) + mono(元数据/标签/状态/序号)
+    - 状态用「形态+文字」区分，不靠红绿黄
+    - 底部 demo-rail 切换 8 状态，纯前端 mock，不写 URL / 不持久化
+
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* —— 与 tokens.css / AgentWorkspace.vue 完全一致 —— */
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a; --ink-line: #4a433b;
+    --ink-text: #a99f91; --ink-text-hi: #e8ddce; --ink-text-faint: #94897c;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53; --red-on-ink: #d27d74;
+    --agent-stage: #1e1b17;
+    --agent-shell-paper: #f3eadb;
+    --agent-rail-paper: #f0e9de;
+    --agent-thread-paper: #f5e8d1;
+    --agent-evidence-paper: #f8f3ea;
+    --agent-hairline: rgba(104, 84, 60, 0.22);
+    --agent-radius-sm: 8px;
+    --agent-radius-md: 12px;
+    --agent-radius-shell: 20px;
+    --agent-motion-fast: 160ms;
+    --agent-motion-state: 220ms;
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+    /* —— workspace 局部 token（AgentWorkspace.vue 的 --workspace-* 映射）—— */
+    --workspace-thread-bg: var(--agent-thread-paper);
+    --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
+    --workspace-text: var(--ink);
+    --workspace-text-secondary: var(--muted);
+    --workspace-text-faint: var(--faint);
+    --workspace-rule: var(--agent-hairline);
+    --workspace-accent: var(--red);
+    --workspace-accent-soft: color-mix(in srgb, var(--red) 68%, white);
+    --workspace-primary-bg: var(--ink);
+    --workspace-primary-text: var(--paper-hi);
+    --workspace-action-bg: var(--red);
+    --workspace-action-bg-hover: color-mix(in srgb, var(--red) 82%, black);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--agent-stage);
+    color: var(--workspace-text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--red); color: var(--paper-hi); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; border-radius: 2px; }
+  button { font: inherit; color: inherit; }
+
+  /* ===== 暖黑舞台上的 shell 外框（模拟 base.css .site-frame--workspace）===== */
+  .stage-wrap {
+    min-height: 100dvh;
+    padding: clamp(0px, 2vw, 32px);
+    display: flex;
+    justify-content: center;
+    padding-bottom: 64px; /* 给 demo-rail 让位 */
+  }
+  .shell {
+    width: min(1680px, 100%);
+    background: var(--agent-shell-paper);
+    border-radius: var(--agent-radius-shell);
+    box-shadow: 0 28px 72px rgba(0,0,0,0.42);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ===== shell 顶部条（模拟会话标题区，极简）===== */
+  .shell-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--agent-hairline);
+    background: var(--agent-rail-paper);
+    flex-wrap: wrap;
+  }
+  .shell-head__eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent-soft);
+    text-transform: uppercase;
+  }
+  .shell-head__title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--workspace-text);
+  }
+  .shell-head__tools {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .shell-head__tool {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    padding: 4px 9px;
+    border: 1px solid var(--agent-hairline);
+    border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.3);
+  }
+
+  /* ===== thread 主区（中栏对话，居中限宽）===== */
+  .thread {
+    background: var(--workspace-thread-bg);
+    flex: 1;
+    padding: 28px 24px 100px;
+    overflow-y: auto;
+  }
+  .thread__inner {
+    width: min(820px, calc(100% - 48px));
+    margin: 20px auto 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  /* ===== 用户消息：右对齐、左 2px accent 线文本流 ===== */
+  .message--user {
+    width: fit-content;
+    max-width: 64%;
+    margin-left: auto;
+  }
+  .message--user .message__meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--workspace-accent-soft);
+    letter-spacing: 0.13em;
+  }
+  .message--user .message__body {
+    padding: 4px 0 4px 14px;
+    border-left: 2px solid var(--workspace-accent);
+    font: 16px/1.7 var(--sans);
+    color: var(--workspace-text);
+  }
+
+  /* ===== Agent 消息：meta + structured-answer ===== */
+  .message--agent { max-width: 760px; }
+  .message__meta {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .message__meta-prefix { color: var(--workspace-accent-soft); letter-spacing: 0.13em; }
+  .message__meta-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .message__meta-tag {
+    padding: 2px 7px;
+    color: var(--workspace-accent);
+    border: 1px solid var(--workspace-rule);
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .message__meta-tag[data-verification='VERIFIED'] {
+    color: var(--workspace-primary-text);
+    border-color: var(--workspace-accent);
+    background: var(--workspace-accent);
+  }
+  .message__meta-tag[data-verification='CLARIFY'] {
+    color: var(--workspace-accent);
+    border-color: var(--workspace-accent);
+  }
+  .message__meta-tail { color: var(--faint); font-size: 10px; letter-spacing: 0.06em; }
+
+  /* ===== structured-answer 复用 ===== */
+  .structured-answer h3 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--workspace-text);
+    margin-bottom: 10px;
+  }
+  .answer-summary {
+    font-family: var(--serif);
+    font-size: 15.5px;
+    line-height: 1.75;
+    color: var(--workspace-text-secondary);
+    margin-bottom: 14px;
+  }
+  .answer-block { margin-top: 14px; }
+  .answer-block__scope {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-accent-soft);
+    margin-bottom: 4px;
+  }
+  .answer-block__title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--workspace-text);
+    margin-bottom: 6px;
+  }
+  .answer-block__content {
+    font-family: var(--serif);
+    font-size: 15.5px;
+    line-height: 1.85;
+    color: var(--workspace-text);
+  }
+  .answer-block__content b { font-weight: 600; color: var(--ink-2); }
+  .answer-block__citations { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .answer-block__citations button,
+  .evi-inline {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--workspace-accent);
+    background: rgba(255,255,255,0.35);
+    border: 1px solid var(--workspace-rule);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast), color var(--agent-motion-fast);
+  }
+  .answer-block__citations button:hover,
+  .evi-inline:hover { border-color: var(--workspace-accent); }
+
+  /* 来源区分标签（作品集事实 vs 通用知识）—— 复用 blockScopeTag seam */
+  .source-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    vertical-align: 2px;
+  }
+  .source-tag[data-source='PORTFOLIO'] {
+    color: var(--workspace-accent);
+    border: 1px solid var(--workspace-rule);
+    background: rgba(255,255,255,0.35);
+  }
+  .source-tag[data-source='GENERAL'] {
+    color: var(--muted);
+    border: 1px solid var(--workspace-rule);
+    background: transparent;
+  }
+
+  /* ============================================================
+     ★ 统一视觉语法组件 · 方向一：编号线性清单
+     ============================================================ */
+
+  /* —— 约束条（复用 .reco__satisfied 底盘）—— */
+  .constraints {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--workspace-text-secondary);
+  }
+  .constraints__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+  }
+  .constraints__item {
+    font-family: var(--sans);
+    color: var(--ink-2);
+  }
+  .constraints__sep { color: var(--faint); }
+
+  /* —— 计划卡外壳 —— */
+  .plan {
+    border: 1px solid var(--workspace-rule);
+    background: var(--paper-hi);
+    margin-top: 14px;
+  }
+  .plan__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--workspace-rule);
+  }
+  .plan__head-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+  }
+  .plan__head-title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--workspace-text);
+    flex: 1;
+  }
+  .plan__head-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+  }
+
+  /* —— 任务清单（编号线性）—— */
+  .plan__tasks { padding: 6px 18px 10px; }
+  .plan-task {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px dashed var(--workspace-rule);
+  }
+  .plan-task:last-child { border-bottom: 0; }
+  .plan-task__no {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--workspace-accent);
+    flex-shrink: 0;
+    min-width: 30px;
+  }
+  .plan-task__body { flex: 1; min-width: 0; }
+  .plan-task__label {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 15.5px;
+    line-height: 1.45;
+    color: var(--workspace-text);
+  }
+  .plan-task__dep {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--faint);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+  /* 状态行（紧凑摘要里用）*/
+  .plan-task__status {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+    align-self: center;
+    padding: 2px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .plan-task__status[data-status='SUCCEEDED'] {
+    color: var(--muted);
+    background: transparent;
+  }
+  .plan-task__status[data-status='BLOCKED'],
+  .plan-task__status[data-status='INSUFFICIENT'] {
+    color: var(--workspace-accent);
+    border: 1px solid var(--workspace-accent);
+    background: rgba(122,46,42,0.05);
+  }
+  .plan-task__status[data-status='PENDING'] {
+    color: var(--faint);
+  }
+
+  /* —— 计划底部操作区（三选一）—— */
+  .plan__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+  }
+  .plan-btn {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    padding: 9px 16px;
+    border-radius: var(--agent-radius-sm);
+    cursor: pointer;
+    transition: all var(--agent-motion-fast);
+    white-space: nowrap;
+  }
+  .plan-btn--primary {
+    background: var(--workspace-action-bg);
+    color: var(--workspace-primary-text);
+    border: 1px solid var(--workspace-action-bg);
+  }
+  .plan-btn--primary:hover { background: var(--workspace-action-bg-hover); border-color: var(--workspace-action-bg-hover); }
+  .plan-btn--ghost {
+    background: rgba(255,255,255,0.4);
+    color: var(--workspace-text-secondary);
+    border: 1px solid var(--workspace-rule);
+  }
+  .plan-btn--ghost:hover { border-color: var(--workspace-accent); color: var(--workspace-accent); }
+
+  /* —— 折叠摘要条（状态 B 默认态）—— */
+  .plan--compact {
+    margin-top: 14px;
+  }
+  .plan-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast);
+    width: 100%;
+    text-align: left;
+  }
+  .plan-summary:hover { border-color: var(--workspace-accent-soft); }
+  .plan-summary__label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .plan-summary__flow {
+    font-family: var(--serif);
+    font-size: 13.5px;
+    color: var(--muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .plan-summary__flow .arrow { color: var(--faint); margin: 0 4px; }
+  .plan-summary__status {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--faint);
+    flex-shrink: 0;
+  }
+  .plan-summary__chev {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--workspace-text-secondary);
+    flex-shrink: 0;
+    transition: transform var(--agent-motion-fast);
+  }
+  .plan--compact[data-open='true'] .plan-summary__chev { transform: rotate(180deg); }
+  .plan--compact .plan__tasks,
+  .plan--compact .plan__status-grid {
+    display: none;
+  }
+  .plan--compact[data-open='true'] .plan__tasks,
+  .plan--compact[data-open='true'] .plan__status-grid {
+    display: block;
+    padding: 6px 16px 12px;
+    border: 1px solid var(--workspace-rule);
+    border-top: 0;
+    background: var(--paper-hi);
+  }
+
+  /* ============================================================
+     ★ Clarification · 红菱形 callout + 候选选项
+     ============================================================ */
+  .clarify {
+    margin-top: 14px;
+    border: 1px solid var(--workspace-accent);
+    background: var(--paper-hi);
+    padding: 0;
+  }
+  .clarify__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 14px 18px 6px;
+  }
+  .clarify__head-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+  }
+  .clarify__head-title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--workspace-text);
+  }
+  .clarify__question {
+    font-family: var(--serif);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink-2);
+    padding: 0 18px 12px;
+  }
+  .clarify__question::before {
+    content: "";
+    display: inline-block;
+    width: 7px; height: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+    margin-right: 9px;
+    vertical-align: 3px;
+    flex-shrink: 0;
+  }
+  /* 候选选项（复用 .clarify-chip 语法）*/
+  .clarify__options {
+    padding: 0 18px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .clarify-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--workspace-rule);
+    border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: border-color var(--agent-motion-fast), background var(--agent-motion-fast);
+    font-family: var(--sans);
+  }
+  .clarify-chip:hover { border-color: var(--workspace-accent); background: var(--paper-hi); }
+  .clarify-chip__no {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--workspace-accent);
+    flex-shrink: 0;
+  }
+  .clarify-chip__label {
+    font-size: 14.5px;
+    color: var(--workspace-text);
+    flex: 1;
+  }
+  .clarify-chip__hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    flex-shrink: 0;
+  }
+  /* 可继续提示（局部澄清时，标明哪些任务不受影响）*/
+  .clarify__continue {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 18px;
+    border-top: 1px dashed var(--workspace-rule);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  .clarify__continue-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+  }
+  /* 阻塞下游提示（关键澄清时）*/
+  .clarify__blocked-downstream {
+    padding: 10px 18px 14px;
+    border-top: 1px dashed var(--workspace-rule);
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .clarify__blocked-downstream-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .clarify__blocked-downstream ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .clarify__blocked-downstream li::before {
+    content: "↳";
+    color: var(--workspace-accent);
+    font-family: var(--mono);
+    margin-right: 8px;
+  }
+
+  /* ============================================================
+     ★ Task Status Summary · 部分成功状态矩阵（状态 F）
+     ============================================================ */
+  .status-summary {
+    margin-top: 14px;
+    border: 1px solid var(--workspace-rule);
+    background: var(--paper-hi);
+  }
+  .status-summary__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 13px 18px 10px;
+    border-bottom: 1px solid var(--workspace-rule);
+  }
+  .status-summary__label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+  }
+  .status-summary__outcome {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--workspace-text);
+  }
+  .status-summary__hint {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .status-grid { padding: 4px 18px 10px; }
+  .status-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--workspace-rule);
+  }
+  .status-row:last-child { border-bottom: 0; }
+  .status-row__no {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--workspace-accent);
+    flex-shrink: 0;
+    min-width: 24px;
+  }
+  .status-row__label {
+    font-family: var(--serif);
+    font-size: 14px;
+    color: var(--workspace-text);
+    min-width: 0;
+  }
+  .status-row__label .reason {
+    display: block;
+    font-family: var(--sans);
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.5;
+  }
+
+  /* ============================================================
+     ★ Plan Invalidated Notice · 红边框 callout（状态 G）
+     ============================================================ */
+  .invalidated {
+    margin-top: 14px;
+    border: 1px solid var(--workspace-accent);
+    background: var(--paper-hi);
+    padding: 16px 20px;
+  }
+  .invalidated__label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .invalidated__title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 15.5px;
+    color: var(--workspace-text);
+    margin-bottom: 6px;
+  }
+  .invalidated__body {
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--ink-2);
+    margin-bottom: 14px;
+  }
+  .invalidated__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  /* ============================================================
+     ★ 安全边界（状态 H）—— 复用克制表达
+     ============================================================ */
+  .boundary {
+    margin-top: 14px;
+    padding: 14px 18px;
+    border-left: 3px solid var(--workspace-accent);
+    background: var(--workspace-surface-subtle);
+  }
+  .boundary__label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    color: var(--workspace-accent);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .boundary__body {
+    font-family: var(--serif);
+    font-size: 14.5px;
+    line-height: 1.8;
+    color: var(--ink-2);
+  }
+
+  /* ============================================================
+     ★ 证据入口 / 建议问题 / 隐私说明（复用）
+     ============================================================ */
+  .evidence-entries { margin-top: 16px; }
+  .evidence-entries__label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--workspace-text-faint);
+    margin-bottom: 8px;
+  }
+  .dynamic-suggestions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .dynamic-suggestions button {
+    text-align: left;
+    padding: 11px 14px;
+    border: 1px solid var(--workspace-rule);
+    border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.35);
+    font: 13px/1.5 var(--sans);
+    color: var(--workspace-text-secondary);
+    cursor: pointer;
+    transition: border-color var(--agent-motion-fast), color var(--agent-motion-fast);
+  }
+  .dynamic-suggestions button::before {
+    content: "↳";
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--workspace-accent);
+    font-family: var(--mono);
+  }
+  .dynamic-suggestions button:hover { border-color: var(--workspace-accent); color: var(--workspace-accent); }
+
+  .privacy-note {
+    margin-top: 34px;
+    padding-top: 14px;
+    border-top: 1px solid var(--workspace-rule);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    color: var(--faint);
+  }
+
+  /* ============================================================
+     ★ demo-rail · 非产品评审控制条
+     ============================================================ */
+  .demo-rail {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+    background: var(--ink); color: var(--ink-text);
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px clamp(16px, 3vw, 32px);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .demo-rail::-webkit-scrollbar { height: 4px; }
+  .demo-rail::-webkit-scrollbar-thumb { background: var(--ink-line); border-radius: 2px; }
+  .demo-rail__tag { color: var(--red-on-ink); margin-right: 8px; flex-shrink: 0; text-transform: uppercase; }
+  .demo-rail__demo { color: var(--ink-text-faint); margin-right: auto; flex-shrink: 0; }
+  .demo-rail button {
+    color: var(--ink-text); padding: 6px 10px; border: 1px solid transparent;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+    transition: color var(--agent-motion-fast), border-color var(--agent-motion-fast);
+    cursor: pointer; background: none; white-space: nowrap; flex-shrink: 0;
+  }
+  .demo-rail button:hover { color: var(--ink-text-hi); }
+  .demo-rail button.is-on { color: var(--ink-text-hi); border-color: var(--red-on-ink); }
+
+  /* ============================================================
+     ★ 响应式
+     ============================================================ */
+  @media (max-width: 1279.98px) {
+    .stage-wrap { padding: 16px; padding-bottom: 64px; }
+    .shell { border-radius: 12px; }
+  }
+  @media (max-width: 959.98px) {
+    .stage-wrap { padding: 0; padding-bottom: 60px; }
+    .shell { border-radius: 0; }
+  }
+  @media (max-width: 620px) {
+    .thread { padding: 22px 14px 90px; }
+    .thread__inner { width: calc(100% - 28px); gap: 26px; }
+    .message--user { max-width: 85%; width: 100%; }
+    .message--user .message__body { font-size: 15px; }
+    .shell-head { padding: 14px 18px; }
+    .shell-head__title { font-size: 16px; }
+    .answer-block__content { font-size: 14.5px; line-height: 1.8; }
+    .plan__head { padding: 12px 14px 8px; }
+    .plan__tasks { padding: 6px 14px 8px; }
+    .plan-task { gap: 10px; padding: 10px 0; }
+    .plan-task__no { font-size: 16px; min-width: 26px; }
+    .plan-task__label { font-size: 14.5px; }
+    .plan__actions { padding: 12px 14px; gap: 8px; }
+    .plan-btn { padding: 8px 12px; font-size: 11px; flex: 1; min-width: 0; text-align: center; }
+    .plan-btn--ghost { flex: 1; }
+    .clarify__head { padding: 12px 14px 6px; }
+    .clarify__question { padding: 0 14px 10px; font-size: 14px; }
+    .clarify__options { padding: 0 14px 8px; }
+    .clarify-chip { padding: 10px 12px; }
+    .clarify-chip__label { font-size: 14px; }
+    .clarify__continue { padding: 9px 14px; font-size: 12px; }
+    .clarify__blocked-downstream { padding: 9px 14px 12px; }
+    .status-summary__head { padding: 11px 14px 8px; }
+    .status-grid { padding: 4px 14px 8px; }
+    .status-row { gap: 8px; grid-template-columns: auto 1fr; }
+    .status-row__status { grid-column: 2; justify-self: start; margin-top: 2px; }
+    .invalidated { padding: 14px 16px; }
+    .boundary { padding: 12px 14px; }
+    .plan-summary { padding: 11px 14px; gap: 8px; }
+    .plan-summary__flow { font-size: 12.5px; }
+    .demo-rail { padding: 7px 12px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* —— JS 控制的状态容器 —— */
+  .state-pane { display: none; }
+  .state-pane.is-active { display: flex; flex-direction: column; gap: 34px; }
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <div class="shell">
+
+    <!-- shell 顶部条（极简，模拟会话标题区）-->
+    <header class="shell-head">
+      <span class="shell-head__eyebrow">AGENT CONVERSATION</span>
+      <span class="shell-head__title">作品集对话 · 实习作品展示</span>
+      <div class="shell-head__tools">
+        <span class="shell-head__tool">证据桌面</span>
+        <span class="shell-head__tool">会话</span>
+      </div>
+    </header>
+
+    <!-- thread 主区 -->
+    <main class="thread">
+      <div class="thread__inner">
+
+        <!-- ============================================================
+             状态 A · 简单单任务直接回答
+             问题：介绍 SQL 审计项目的实现方案
+             要求：不展示多余计划卡或步骤列表
+             ============================================================ -->
+        <section class="state-pane" data-state="A">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">介绍 SQL 审计项目的实现方案。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 已核验回答</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+                <span class="message__meta-tag" data-verification="VERIFIED">已核验</span>
+                <span class="message__meta-tag">确定性回答</span>
+              </span>
+              <span class="message__meta-tail">ANSWERED · DETERMINISTIC</span>
+            </p>
+            <div class="structured-answer">
+              <h3>SQL 审计项目的实现方案</h3>
+              <p class="answer-summary">这是一个面向数据库访问层的 SQL 审计平台，核心是用规则引擎对应用层生成的 SQL 做静态校验和风险拦截。</p>
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集</p>
+                <p class="answer-block__content">项目分三层：规则引擎负责解析 SQL 文本并匹配预置规则（如全表更新、无 WHERE 条件的删除）；拦截层在数据访问层之前介入，命中规则的 SQL 会被记录并按配置放行或阻断；审计层把每次校验结果写入审计表，支持按时间、规则、来源应用检索。规则以 YAML 描述，便于运维在不发版的情况下增补。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations">
+                  <button type="button">[E001]</button>
+                  <button type="button">[E003]</button>
+                </div>
+              </section>
+              <div class="evidence-entries">
+                <p class="evidence-entries__label">本轮证据 · 点击在证据桌面打开</p>
+                <button class="evi-inline" type="button">[E001] 审计规则实现</button>
+                <button class="evi-inline" type="button">[E003] 拦截层集成测试</button>
+              </div>
+              <div class="dynamic-suggestions">
+                <button type="button">这个项目用了哪些测试策略？</button>
+                <button type="button">规则引擎的性能瓶颈在哪？</button>
+              </div>
+            </div>
+            <p class="privacy-note">对话仅存于当前标签页内存，刷新或关闭后消失。</p>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 B · 多任务自动执行（≤3 任务）
+             问题：介绍 SQL 审计和 ABTest 项目，再比较它们
+             要求：直接执行、紧凑可折叠摘要、顺序不随并行完成变化
+             ============================================================ -->
+        <section class="state-pane" data-state="B">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">介绍 SQL 审计和 ABTest 项目，再比较它们。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 已核验回答</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+                <span class="message__meta-tag" data-verification="VERIFIED">已核验</span>
+                <span class="message__meta-tag">多任务</span>
+              </span>
+              <span class="message__meta-tail">ANSWERED · 3 TASKS</span>
+            </p>
+            <div class="structured-answer">
+              <h3>SQL 审计 与 ABTest 项目介绍及比较</h3>
+
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集</p>
+                <p class="answer-block__title">SQL 审计平台</p>
+                <p class="answer-block__content">面向数据库访问层的静态校验工具，用规则引擎拦截高风险 SQL，支持 YAML 规则配置和审计日志检索。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations"><button type="button">[E001]</button></div>
+              </section>
+
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集</p>
+                <p class="answer-block__title">ABTest 实验</p>
+                <p class="answer-block__content">A/B 实验分流与指标统计服务，支持按流量比例分组、实验配置热更新和显著性计算，覆盖分流均匀性的单元测试。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations"><button type="button">[E002]</button></div>
+              </section>
+
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集 · 比较</p>
+                <p class="answer-block__title">两个项目的定位差异</p>
+                <p class="answer-block__content">SQL 审计偏「质量保障」——在写入路径上拦截风险；ABTest 偏「数据驱动」——在读取路径上支撑决策。前者强调规则引擎与拦截 correctness，后者强调分流均匀性与统计正确性。技术栈有重叠（都涉及数据访问层），但核心问题域不同。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations"><button type="button">[E001]</button><button type="button">[E002]</button></div>
+              </section>
+
+              <!-- ★ 紧凑可折叠任务摘要（默认折叠）★ -->
+              <div class="plan plan--compact" data-open="false">
+                <button class="plan-summary" type="button" aria-expanded="false">
+                  <span class="plan-summary__label">任务摘要</span>
+                  <span class="plan-summary__flow">介绍 SQL 审计<span class="arrow">→</span>介绍 ABTest<span class="arrow">→</span>比较两个项目</span>
+                  <span class="plan-summary__status">3 步 · 已完成</span>
+                  <span class="plan-summary__chev">▾</span>
+                </button>
+                <div class="plan__tasks">
+                  <div class="plan-task">
+                    <span class="plan-task__no">01</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">介绍 SQL 审计项目</p>
+                    </div>
+                    <span class="plan-task__status" data-status="SUCCEEDED">已完成</span>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">02</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">介绍 ABTest 项目</p>
+                    </div>
+                    <span class="plan-task__status" data-status="SUCCEEDED">已完成</span>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">03</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">比较两个项目</p>
+                      <p class="plan-task__dep">↳ 使用 01、02 的结果</p>
+                    </div>
+                    <span class="plan-task__status" data-status="SUCCEEDED">已完成</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="evidence-entries">
+                <p class="evidence-entries__label">本轮证据 · 点击在证据桌面打开</p>
+                <button class="evi-inline" type="button">[E001] SQL 审计规则</button>
+                <button class="evi-inline" type="button">[E002] ABTest 分流实现</button>
+              </div>
+              <div class="dynamic-suggestions">
+                <button type="button">哪个项目更适合面试展示？</button>
+                <button type="button">SQL 审计的规则引擎怎么设计的？</button>
+              </div>
+            </div>
+            <p class="privacy-note">对话仅存于当前标签页内存，刷新或关闭后消失。</p>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 C · 复杂计划等待确认（5 步）
+             问题：分别介绍、比较、推荐、总结策略
+             要求：显示目标和依赖、约束、三选一；不显示检索步骤
+             ============================================================ -->
+        <section class="state-pane" data-state="C">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">分别介绍 SQL 审计和 ABTest，比较它们，再根据比较推荐一个适合后端面试展示的，并总结展示策略。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 复杂计划 · 待确认</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-verification="CLARIFY">待确认</span>
+                <span class="message__meta-tag">5 步计划</span>
+              </span>
+              <span class="message__meta-tail">AWAITING_CONFIRMATION</span>
+            </p>
+            <div class="structured-answer">
+              <h3>这个请求需要分 5 步完成</h3>
+              <p class="answer-summary">我理解你想了解两个项目、做比较，并得到一个面向后端面试的推荐和展示策略。下面是计划，确认后我会按顺序执行。</p>
+
+              <!-- 约束条 -->
+              <div class="constraints">
+                <span class="constraints__label">约束</span>
+                <span class="constraints__item">后端</span>
+                <span class="constraints__sep">·</span>
+                <span class="constraints__item">面试展示</span>
+                <span class="constraints__sep">·</span>
+                <span class="constraints__item">推荐 1 个</span>
+              </div>
+
+              <!-- ★ 编号线性清单（完整展开）★ -->
+              <div class="plan">
+                <div class="plan__head">
+                  <span class="plan__head-label">计划</span>
+                  <span class="plan__head-title">5 步 · 从了解到推荐</span>
+                  <span class="plan__head-status">待你确认</span>
+                </div>
+                <div class="plan__tasks">
+                  <div class="plan-task">
+                    <span class="plan-task__no">01</span>
+                    <div class="plan-task__body"><p class="plan-task__label">介绍 SQL 审计项目</p></div>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">02</span>
+                    <div class="plan-task__body"><p class="plan-task__label">介绍 ABTest 项目</p></div>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">03</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">比较两个项目</p>
+                      <p class="plan-task__dep">↳ 需要 01、02 先完成</p>
+                    </div>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">04</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">推荐一个适合后端面试展示的项目</p>
+                      <p class="plan-task__dep">↳ 需要 03 先完成</p>
+                    </div>
+                  </div>
+                  <div class="plan-task">
+                    <span class="plan-task__no">05</span>
+                    <div class="plan-task__body">
+                      <p class="plan-task__label">总结面试展示策略</p>
+                      <p class="plan-task__dep">↳ 使用 04 的结果</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="plan__actions">
+                  <button class="plan-btn plan-btn--primary" type="button" data-action="confirm">按此计划继续</button>
+                  <button class="plan-btn plan-btn--ghost" type="button" data-action="adjust">调整计划</button>
+                  <button class="plan-btn plan-btn--ghost" type="button" data-action="cancel">取消</button>
+                </div>
+              </div>
+              <p class="privacy-note">计划仅在当前标签页内存中有效，确认后开始执行。</p>
+            </div>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 D · 局部澄清
+             问题：介绍 SQL 审计，再把它和另一个项目比较
+             要求：介绍可继续；比较等选择；一次只问第二个主体
+             ============================================================ -->
+        <section class="state-pane" data-state="D">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">介绍 SQL 审计，再把它和另一个项目比较。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 部分回答 · 需补充信息</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+                <span class="message__meta-tag" data-verification="VERIFIED">已核验</span>
+                <span class="message__meta-tag" data-verification="CLARIFY">待澄清</span>
+              </span>
+              <span class="message__meta-tail">PARTIAL · CLARIFY</span>
+            </p>
+            <div class="structured-answer">
+              <h3>SQL 审计项目介绍</h3>
+              <p class="answer-summary">我已经完成了 SQL 审计的介绍。比较任务需要你指定另一个项目才能继续。</p>
+
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集</p>
+                <p class="answer-block__content">SQL 审计平台用规则引擎对数据访问层生成的 SQL 做静态校验，命中规则的语句会被记录并按配置放行或阻断，规则以 YAML 描述支持热更新。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations"><button type="button">[E001]</button></div>
+              </section>
+
+              <!-- ★ 局部澄清 callout ★ -->
+              <div class="clarify">
+                <div class="clarify__head">
+                  <span class="clarify__head-label">需补充信息</span>
+                  <span class="clarify__head-title">比较任务需要第二个项目</span>
+                </div>
+                <p class="clarify__question">你想把 SQL 审计和哪个项目比较？请从下面的公开项目里选一个。</p>
+                <div class="clarify__options">
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">01</span>
+                    <span class="clarify-chip__label">ABTest 实验分流服务</span>
+                    <span class="clarify-chip__hint">选择 →</span>
+                  </button>
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">02</span>
+                    <span class="clarify-chip__label">数据校验服务</span>
+                    <span class="clarify-chip__hint">选择 →</span>
+                  </button>
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">03</span>
+                    <span class="clarify-chip__label">配置中心</span>
+                    <span class="clarify-chip__hint">选择 →</span>
+                  </button>
+                </div>
+                <!-- 明确可继续的部分 -->
+                <div class="clarify__continue">
+                  <span class="clarify__continue-label">已继续</span>
+                  <span>介绍 SQL 审计项目已完成，不受影响。</span>
+                </div>
+              </div>
+
+              <div class="dynamic-suggestions">
+                <button type="button">和 ABTest 比较</button>
+                <button type="button">和数据校验服务比较</button>
+              </div>
+            </div>
+            <p class="privacy-note">对话仅存于当前标签页内存，刷新或关闭后消失。</p>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 E · 关键依赖澄清
+             问题：比较这两个项目，再推荐一个（无合法引用）
+             要求：不执行比较/推荐；先问主体；推荐显示被阻塞
+             ============================================================ -->
+        <section class="state-pane" data-state="E">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">比较这两个项目，再推荐一个。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 需补充信息</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-verification="CLARIFY">待澄清</span>
+                <span class="message__meta-tag">上游阻塞</span>
+              </span>
+              <span class="message__meta-tail">CLARIFY · BLOCKED</span>
+            </p>
+            <div class="structured-answer">
+              <h3>我无法确认「这两个项目」指什么</h3>
+              <p class="answer-summary">当前对话里还没有明确的项目主体可以用于比较和推荐，我需要你先指定。</p>
+
+              <!-- ★ 关键澄清：先问主体 ★ -->
+              <div class="clarify">
+                <div class="clarify__head">
+                  <span class="clarify__head-label">需补充信息</span>
+                  <span class="clarify__head-title">请指定要比较的两个项目</span>
+                </div>
+                <p class="clarify__question">你想比较哪两个项目？我从对话里找不到明确的「这两个」所指的公开主体。可以从下面选两个，或直接告诉我项目名。</p>
+                <div class="clarify__options">
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">A</span>
+                    <span class="clarify-chip__label">SQL 审计平台</span>
+                    <span class="clarify-chip__hint">第一个</span>
+                  </button>
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">B</span>
+                    <span class="clarify-chip__label">ABTest 实验分流服务</span>
+                    <span class="clarify-chip__hint">第一个</span>
+                  </button>
+                  <button class="clarify-chip" type="button">
+                    <span class="clarify-chip__no">C</span>
+                    <span class="clarify-chip__label">数据校验服务</span>
+                    <span class="clarify-chip__hint">第一个</span>
+                  </button>
+                </div>
+                <!-- 被阻塞的下游任务 -->
+                <div class="clarify__blocked-downstream">
+                  <span class="clarify__blocked-downstream-label">被阻塞的下游任务</span>
+                  <ul>
+                    <li>比较两个项目 — 等待主体确认</li>
+                    <li>推荐一个项目 — 依赖比较结果</li>
+                  </ul>
+                </div>
+              </div>
+
+              <p class="privacy-note">我不会从历史回答正文猜测主体，请你明确指定。</p>
+            </div>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 F · 部分成功
+             要求：正文只保留安全完成的；状态矩阵区分成功/证据不足/阻塞
+             ============================================================ -->
+        <section class="state-pane" data-state="F">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">介绍 SQL 审计和 ABTest，比较它们，推荐一个适合后端面试的，再讲讲通用面试技巧。</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 部分完成</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+                <span class="message__meta-tag" data-verification="VERIFIED">已核验</span>
+                <span class="message__meta-tag">部分成功</span>
+              </span>
+              <span class="message__meta-tail">PARTIAL · 2 of 5</span>
+            </p>
+            <div class="structured-answer">
+              <h3>我完成了部分任务，有几项需要说明</h3>
+              <p class="answer-summary">SQL 审计的介绍和通用面试技巧已经完成。ABTest 的公开证据不足以支撑完整介绍，因此比较和推荐两个依赖任务被阻塞。下面是已完成的部分。</p>
+
+              <!-- 安全正文：只渲染成功的任务 -->
+              <section class="answer-block">
+                <p class="answer-block__scope">作品集</p>
+                <p class="answer-block__title">SQL 审计项目介绍</p>
+                <p class="answer-block__content">SQL 审计平台用规则引擎对数据访问层生成的 SQL 做静态校验，命中规则的语句会被记录并按配置放行或阻断，规则以 YAML 描述支持热更新。<span class="source-tag" data-source="PORTFOLIO">作品集事实</span></p>
+                <div class="answer-block__citations"><button type="button">[E001]</button></div>
+              </section>
+
+              <section class="answer-block">
+                <p class="answer-block__scope">通用知识</p>
+                <p class="answer-block__title">后端面试的通用展示技巧</p>
+                <p class="answer-block__content">后端面试展示项目时，建议先讲清问题域和你的角色，再用一条主线串联技术决策（为什么选这个方案、权衡了什么），最后用可验证的证据收尾（测试覆盖、性能数据）。避免堆砌技术名词，重点呈现你做判断的过程。<span class="source-tag" data-source="GENERAL">通用知识</span></p>
+              </section>
+
+              <!-- ★ 任务状态摘要（部分成功矩阵）★ -->
+              <div class="status-summary">
+                <div class="status-summary__head">
+                  <span class="status-summary__label">任务状态</span>
+                  <span class="status-summary__outcome">部分完成 · 2 项成功</span>
+                  <span class="status-summary__hint">展开看详情</span>
+                </div>
+                <div class="status-grid">
+                  <div class="status-row">
+                    <span class="status-row__no">01</span>
+                    <span class="status-row__label">介绍 SQL 审计项目</span>
+                    <span class="plan-task__status" data-status="SUCCEEDED">已完成</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-row__no">02</span>
+                    <span class="status-row__label">介绍 ABTest 项目
+                      <span class="reason">公开证据不足，无法生成可信介绍</span>
+                    </span>
+                    <span class="plan-task__status" data-status="INSUFFICIENT">证据不足</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-row__no">03</span>
+                    <span class="status-row__label">比较两个项目
+                      <span class="reason">依赖 02 的介绍结果，02 未完成所以阻塞</span>
+                    </span>
+                    <span class="plan-task__status" data-status="BLOCKED">被阻塞</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-row__no">04</span>
+                    <span class="status-row__label">推荐一个项目
+                      <span class="reason">依赖 03 的比较结果，03 被阻塞所以阻塞</span>
+                    </span>
+                    <span class="plan-task__status" data-status="BLOCKED">被阻塞</span>
+                  </div>
+                  <div class="status-row">
+                    <span class="status-row__no">05</span>
+                    <span class="status-row__label">后端面试通用技巧</span>
+                    <span class="plan-task__status" data-status="SUCCEEDED">已完成</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="evidence-entries">
+                <p class="evidence-entries__label">本轮证据 · 点击在证据桌面打开</p>
+                <button class="evi-inline" type="button">[E001] SQL 审计规则</button>
+              </div>
+              <div class="dynamic-suggestions">
+                <button type="button">ABTest 暂无公开证据，换成别的项目比较？</button>
+                <button type="button">只基于 SQL 审计推荐面试展示策略？</button>
+              </div>
+            </div>
+            <p class="privacy-note">对话仅存于当前标签页内存，刷新或关闭后消失。</p>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 G · 计划失效
+             要求：明确重新生成；不静默执行；不展示技术异常
+             ============================================================ -->
+        <section class="state-pane" data-state="G">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">（此前你确认了一个 5 步计划，执行期间计划版本已过期）</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 计划需更新</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-verification="CLARIFY">需重新生成</span>
+              </span>
+              <span class="message__meta-tail">PLAN_INVALIDATED</span>
+            </p>
+            <div class="structured-answer">
+              <h3>之前的计划已经失效</h3>
+              <p class="answer-summary">你确认的那份计划已经不能继续执行了，需要重新生成一份新的。</p>
+
+              <!-- ★ 计划失效 callout ★ -->
+              <div class="invalidated">
+                <p class="invalidated__label">计划已失效</p>
+                <p class="invalidated__title">原计划需要重新生成</p>
+                <p class="invalidated__body">你之前确认的「介绍 SQL 审计 → 介绍 ABTest → 比较 → 推荐 → 总结策略」计划已经过期，我不会沿用旧的计划继续，也不会自动替换成新计划。请确认是否重新生成一份。</p>
+                <div class="invalidated__actions">
+                  <button class="plan-btn plan-btn--primary" type="button">重新生成计划</button>
+                  <button class="plan-btn plan-btn--ghost" type="button">取消</button>
+                </div>
+              </div>
+              <p class="privacy-note">重新生成会基于你最新的输入创建一份新计划，需要你再次确认。</p>
+            </div>
+          </article>
+        </section>
+
+        <!-- ============================================================
+             状态 H · 全局安全边界
+             要求：整轮终止；不展示部分计划；不展示内部规则
+             ============================================================ -->
+        <section class="state-pane" data-state="H">
+          <div class="message--user">
+            <p class="message__meta"><span>YOU</span></p>
+            <div class="message__body">（一条触发安全边界的请求）</div>
+          </div>
+          <article class="message--agent">
+            <p class="message__meta">
+              <span class="message__meta-prefix">AGENT · 无法继续</span>
+              <span class="message__meta-tags">
+                <span class="message__meta-tag" data-verification="CLARIFY">已终止</span>
+              </span>
+              <span class="message__meta-tail">TURN_TERMINATED</span>
+            </p>
+            <div class="structured-answer">
+              <h3>这一轮我无法继续</h3>
+              <p class="answer-summary">这个请求超出了我能处理的范围，整轮已终止，不会执行任何部分计划。</p>
+
+              <!-- ★ 安全边界克制表达 ★ -->
+              <div class="boundary">
+                <p class="boundary__label">无法继续</p>
+                <p class="boundary__body">这个请求我无法回答。如果你是在问作品集相关的项目介绍、比较或推荐，可以换个方式问，我会重新处理。</p>
+              </div>
+
+              <div class="dynamic-suggestions">
+                <button type="button">介绍 SQL 审计项目</button>
+                <button type="button">推荐一个适合后端面试的作品</button>
+              </div>
+            </div>
+            <p class="privacy-note">对话仅存于当前标签页内存，刷新或关闭后消失。</p>
+          </article>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<!-- 非产品评审控制条 -->
+<div class="demo-rail" role="tablist" aria-label="原型状态切换">
+  <span class="demo-rail__tag">DESIGN DEMO · 非生产</span>
+  <span class="demo-rail__demo">阶段二交互验证</span>
+  <button type="button" data-state-btn="A" class="is-on" role="tab" aria-selected="true">A · 单任务</button>
+  <button type="button" data-state-btn="B" role="tab" aria-selected="false">B · 多任务自动</button>
+  <button type="button" data-state-btn="C" role="tab" aria-selected="false">C · 复杂计划确认</button>
+  <button type="button" data-state-btn="D" role="tab" aria-selected="false">D · 局部澄清</button>
+  <button type="button" data-state-btn="E" role="tab" aria-selected="false">E · 关键澄清</button>
+  <button type="button" data-state-btn="F" role="tab" aria-selected="false">F · 部分成功</button>
+  <button type="button" data-state-btn="G" role="tab" aria-selected="false">G · 计划失效</button>
+  <button type="button" data-state-btn="H" role="tab" aria-selected="false">H · 安全边界</button>
+</div>
+
+<script>
+  // ===== 状态切换（纯前端 mock，不写 URL / 不持久化）=====
+  var stateButtons = document.querySelectorAll('[data-state-btn]');
+  var statePanes = document.querySelectorAll('.state-pane');
+
+  function showState(state) {
+    stateButtons.forEach(function (btn) {
+      var on = btn.getAttribute('data-state-btn') === state;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-selected', String(on));
+    });
+    statePanes.forEach(function (pane) {
+      pane.classList.toggle('is-active', pane.getAttribute('data-state') === state);
+    });
+    // 切换后滚回顶部
+    var thread = document.querySelector('.thread');
+    if (thread) thread.scrollTop = 0;
+  }
+
+  stateButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      showState(btn.getAttribute('data-state-btn'));
+    });
+  });
+
+  // 默认显示状态 A
+  showState('A');
+
+  // ===== 折叠摘要条（状态 B）=====
+  document.querySelectorAll('.plan--compact .plan-summary').forEach(function (summary) {
+    summary.addEventListener('click', function () {
+      var plan = summary.closest('.plan--compact');
+      var isOpen = plan.getAttribute('data-open') === 'true';
+      plan.setAttribute('data-open', String(!isOpen));
+      summary.setAttribute('aria-expanded', String(!isOpen));
+    });
+  });
+
+  // ===== 计划确认按钮（状态 C）：点「按此计划继续」→ 切到状态 F 模拟执行结果 =====
+  document.querySelectorAll('[data-action="confirm"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      showState('F');
+    });
+  });
+
+  // ===== 阻止演示链接跳转 =====
+  document.querySelectorAll('a').forEach(function (el) {
+    el.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+
+  // ===== 证据按钮：演示用，不接后端 =====
+  document.querySelectorAll('.evi-inline, .answer-block__citations button').forEach(function (el) {
+    el.addEventListener('click', function (ev) { ev.preventDefault(); });
+  });
+</script>
+</body>
+</html>

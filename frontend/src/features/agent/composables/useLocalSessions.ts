@@ -1,12 +1,14 @@
 import { computed, ref } from 'vue'
 
 import type { MappedAnswer } from '../model/answerTypes'
+import type { AnswerResponse } from '../model/answerTypes'
 import type {
   AgentMessage,
   AgentRouteSeed,
   AgentSession,
   SessionSeed,
 } from '../model/sessionTypes'
+import { extractOpaquePlanConfirmation } from '../model/semanticTurnView'
 
 function makeId(prefix: string) {
   const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
@@ -40,6 +42,7 @@ export function useLocalSessions() {
       updatedAt: createdAt,
       messages: [],
       coveredTopics: [],
+      pendingConfirmation: undefined,
     }
     const retainedSessions = sessions.value.filter(
       (item) => item.messages.some((message) => message.role === 'USER'),
@@ -146,6 +149,23 @@ export function useLocalSessions() {
     sessions.value = [...sessions.value]
   }
 
+  function acceptSemanticTurnResponse(sessionId: string, response: AnswerResponse) {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    const pendingConfirmation = extractOpaquePlanConfirmation(response.agentTurn)
+    session.pendingConfirmation = pendingConfirmation === undefined
+      ? undefined
+      : { ...pendingConfirmation }
+    sessions.value = [...sessions.value]
+  }
+
+  function clearPendingConfirmation(sessionId: string) {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session || session.pendingConfirmation === undefined) return
+    session.pendingConfirmation = undefined
+    sessions.value = [...sessions.value]
+  }
+
   return {
     sessions,
     activeSessionId,
@@ -157,6 +177,8 @@ export function useLocalSessions() {
     appendMessage,
     seedSession,
     applyAnswerProgress,
+    acceptSemanticTurnResponse,
+    clearPendingConfirmation,
     removeSession,
     clearSessions,
   }

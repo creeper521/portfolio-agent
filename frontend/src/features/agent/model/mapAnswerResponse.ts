@@ -1,4 +1,15 @@
-import type { AnswerResponse, MappedAnswer } from './answerTypes'
+import type {
+  AnswerResponse,
+  AnswerSectionView,
+  MappedAnswer,
+  AnswerBlock,
+  LegacyAnswerSection,
+} from './answerTypes'
+import {
+  mapSemanticTurnResponse,
+  type CompletedTaskBlockView,
+  type SemanticTurnView,
+} from './semanticTurnView'
 import type {
   PortfolioRecommendation,
   PortfolioRecommendationContext,
@@ -7,10 +18,17 @@ import type {
 import { createFrontendDiagnosticEvent } from '../../../shared/diagnostics/frontendDiagnosticTypes'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
+const INVALID_TYPED_BLOCK_ERROR = 'Answer response contains an invalid typed block'
+
 export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
+  const semanticTurn = response.agentTurn === undefined
+    ? undefined
+    : mapSemanticTurnResponse(response.agentTurn)
+  const hasV2Blocks = response.blocks !== undefined
+  const authoritativeContent = hasV2Blocks ? response.blocks : response.sections
   const isBlank = !response.title?.trim() && !response.summary?.trim() &&
-    (!response.sections || response.sections.every(s => !s.content?.trim())) &&
-    (!response.blocks || response.blocks.every(b => !b.content?.trim()))
+    (!authoritativeContent || authoritativeContent.every(item => !item.content?.trim())) &&
+    semanticTurn === undefined
 
   if (isBlank) {
     throw new Error('Answer response has no content')
@@ -18,15 +36,16 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
 
   // 结构化作品推荐是可选字段。非法结构不致命：保留可信文本回答，
   // 忽略非法推荐，并通过现有安全诊断入口上报（不含问题/批次 ID/作品内容）。
-  const portfolioRecommendation = mapPortfolioRecommendation(response)
+  const portfolioRecommendation = semanticTurn === undefined
+    ? mapPortfolioRecommendation(response)
+    : undefined
 
-  const blocks = response.blocks?.map(block => ({
-    ...block,
-    evidenceIds: [...block.evidenceIds],
-    claimIds: [...block.claimIds],
-  }))
-  const evidenceIds = response.evidenceIds ??
-    [...new Set((blocks ?? []).flatMap((block) => block.evidenceIds))]
+  const sections = semanticTurn === undefined
+    ? mapSections(response)
+    : mapSemanticSections(semanticTurn)
+
+  // 统一视图权威：顶层 Evidence 集合始终从统一 Sections 推导，不信任原始字段。
+  const evidenceIds = [...new Set(sections.flatMap((section) => section.evidenceIds))]
 
   return {
     turnId: response.turnId,
@@ -36,18 +55,13 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     summary: response.summary || '',
     intent: response.intent,
     answerScope: response.answerScope,
-    sections: response.sections?.map((section) => ({
-      ...section,
-      evidenceIds: [...section.evidenceIds],
-      claimIds: [...(section.claimIds ?? [])],
-    })) || [],
-    blocks,
+    sections,
     resolution: response.resolution,
     answerSource: response.answerSource ?? null,
     generationMode: response.generationMode,
     constructionMode: response.constructionMode ?? legacyConstructionMode(response),
     intentSource: response.intentSource ?? legacyIntentSource(response),
-    evidenceState: response.evidenceState ?? legacyEvidenceState(response),
+    evidenceState: response.evidenceState ?? legacyEvidenceState(response, sections),
     verification: response.verification,
     evidenceIds: [...evidenceIds],
     suggestedQuestionPresetIds: [...(response.suggestedQuestionPresetIds || [])],
@@ -74,7 +88,91 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
       : undefined,
     contextVersionUpdated: response.contextVersionUpdated === true,
     portfolioRecommendation,
+    semanticTurn,
   }
+}
+
+// 唯一协议兼容边界：v2 Blocks 优先，legacy Sections 兜底。
+function mapSemanticSections(semanticTurn: SemanticTurnView): AnswerSectionView[] {
+  return semanticTurn.completedTasks.flatMap((task) => {
+    if (task.resultPayload.kind === 'RECOMMENDATION_RESULT') return []
+    return task.resultPayload.blocks.map((block, index) =>
+      mapSemanticBlock(block, task.displayIndex, index))
+  })
+}
+
+function mapSemanticBlock(
+  block: CompletedTaskBlockView,
+  displayIndex: string,
+  index: number,
+): AnswerSectionView {
+  return {
+    key: `semantic:${displayIndex}:${index}`,
+    type: block.sectionType ?? 'GENERAL',
+    title: block.title ?? '',
+    sourceScope: block.sourceScope,
+    content: block.content,
+    claimIds: stableDistinct(block.claimIds),
+    evidenceIds: stableDistinct(block.evidenceIds),
+  }
+}
+
+function mapSections(response: AnswerResponse): AnswerSectionView[] {
+  if (response.blocks !== undefined) {
+    return response.blocks.map((block, index) => mapBlock(block, index, response))
+  }
+  return (response.sections ?? []).map((section, index) => ({
+    key: `${section.type}:${index}`,
+    type: section.type,
+    title: section.title || '',
+    sourceScope: 'PORTFOLIO' as const,
+    content: section.content,
+    claimIds: [...(section.claimIds ?? [])],
+    evidenceIds: stableDistinct(section.evidenceIds),
+  }))
+}
+
+function mapBlock(block: AnswerBlock, index: number, response: AnswerResponse): AnswerSectionView {
+  const sectionType = block.sectionType
+  const title = block.title
+  const isTyped = sectionType !== undefined || title !== undefined
+  if (isTyped && (!sectionType || !title?.trim())) {
+    reportInvalidTypedBlock(response.turnId)
+    throw new Error(INVALID_TYPED_BLOCK_ERROR)
+  }
+  return {
+    key: `${(sectionType ?? legacyType(block, response))}:${index}`,
+    type: sectionType ?? legacyType(block, response),
+    title: title ?? '',
+    sourceScope: block.sourceScope,
+    content: block.content,
+    claimIds: stableDistinct(block.claimIds),
+    evidenceIds: stableDistinct(block.evidenceIds),
+  }
+}
+
+// 兼容类型只对未类型化旧 Block 生效：
+// - GENERAL 来源保持 GENERAL；
+// - 非 ANSWERED 的 Portfolio Block（失败/边界响应）映射为 BOUNDARY；
+// - ANSWERED 的 Portfolio Block（Comparison/Recommendation 等未迁移回答）
+//   保留其正文与引用，用 GENERAL 兼容类型，避免误标为边界。
+function legacyType(block: AnswerBlock, response: AnswerResponse): 'GENERAL' | 'BOUNDARY' {
+  if (block.sourceScope === 'GENERAL') return 'GENERAL'
+  return response.resolution === 'ANSWERED' ? 'GENERAL' : 'BOUNDARY'
+}
+
+function stableDistinct(values: string[]): string[] {
+  return [...new Set(values)]
+}
+
+function reportInvalidTypedBlock(turnId: string): void {
+  // 只上报脱敏分类，不携带正文、Claim ID、Evidence ID 或标题。
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'ANSWER_BLOCK_INVALID',
+    errorKind: 'INVALID_RESPONSE',
+    turnId: turnId,
+  }))
 }
 
 function legacyConstructionMode(response: AnswerResponse) {
@@ -90,9 +188,12 @@ function legacyIntentSource(response: AnswerResponse) {
   return 'GLOBAL' as const
 }
 
-function legacyEvidenceState(response: AnswerResponse) {
+function legacyEvidenceState(
+  response: AnswerResponse,
+  sections: AnswerSectionView[],
+) {
   if (response.resolution === 'NOT_SUPPORTED') return 'INSUFFICIENT' as const
-  const evidenceIds = response.evidenceIds ?? response.blocks?.flatMap((block) => block.evidenceIds) ?? []
+  const evidenceIds = sections.flatMap((section) => section.evidenceIds)
   if (evidenceIds.length > 0) return 'VERIFIED' as const
   if (response.answerScope === 'PORTFOLIO'
     || response.answerScope === 'MIXED'
