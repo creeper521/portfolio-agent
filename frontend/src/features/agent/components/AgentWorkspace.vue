@@ -36,8 +36,17 @@ import type {
   PortfolioRecommendationContextRequest,
   SemanticContextRequest,
   InvalidatedPlanReference,
+  PendingPlanReference,
+  PlanAdjustmentRequest,
+  ClarificationResolutionRequest,
 } from '../model/answerTypes'
-import type { OpaquePlanConfirmation } from '../model/semanticTurnView'
+import type {
+  ClarificationSubmission,
+  ClarificationView,
+  OpaquePlanConfirmation,
+  PlanAdjustmentBarState,
+} from '../model/semanticTurnView'
+import { resolveActiveSemanticAction } from '../model/activeSemanticAction'
 import { completeSuggestedQuestions } from '../model/completeSuggestedQuestions'
 import {
   buildEvidenceDeskContext,
@@ -60,6 +69,8 @@ interface AnswerRequestContext {
   planConfirmation?: OpaquePlanConfirmation
   semanticContext?: SemanticContextRequest
   invalidatedPlanReference?: InvalidatedPlanReference
+  planAdjustment?: PlanAdjustmentRequest
+  clarificationResolution?: ClarificationResolutionRequest
   questionPresetId?: string
   contractVersion?: string
   coveredTopics?: readonly ConversationTopic[]
@@ -115,6 +126,13 @@ const answerFailure = ref<AnswerFailureView | null>(null)
 const failedRequest = ref<AnswerRequestContext | null>(null)
 const resolvedContractVersions = new Map<string, string>()
 const semanticContinuations = new Map<string, SemanticContinuation>()
+// 调整模式（决策 1 · 方案 B）：页面级单例状态，记录正在调整的会话与计划引用。
+// planReference 缺失时不得进入调整态（后端合同尚未暴露待确认计划标识）。
+const activeAdjustment = ref<{
+  sessionId: string
+  planReference: PendingPlanReference
+  planTitle: string
+} | null>(null)
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
     ? props.initialCase
@@ -169,6 +187,13 @@ const effectiveMaximums = computed(() => {
 const activeCase = computed(
   () => props.portfolio.cases.find((item) => item.slug === activeCaseSlug.value),
 )
+
+// 调整条展示状态：只对持有该计划的当前会话展示。
+const adjustmentBarState = computed<PlanAdjustmentBarState | null>(() => {
+  const adjustment = activeAdjustment.value
+  if (!adjustment || adjustment.sessionId !== sessions.activeSessionId.value) return null
+  return { planTitle: adjustment.planTitle }
+})
 
 const activeProject = computed(() => {
   const projectSlug =
@@ -331,6 +356,27 @@ function completedConversationHistory(
   return completed.slice(-40)
 }
 
+interface SemanticContinuation {
+  question: string
+  semanticContext: SemanticContextRequest
+}
+
+// FE-F08：continuation 生命周期统一收口。
+// 仅当一轮到达「已回答且无待确认/待澄清/失效」终态时才清除；
+// 待确认、澄清中、计划失效都仍需原问题与结构化上下文。
+function settleSemanticContinuation(sessionId: string, answer: ReturnType<typeof mapAnswerResponse>) {
+  const semanticTurn = answer.semanticTurn
+  const hasPendingState = semanticTurn !== undefined
+    && (semanticTurn.disposition === 'CONFIRMATION_REQUIRED'
+      || semanticTurn.clarification !== undefined
+      || semanticTurn.planChange !== undefined)
+  if (!hasPendingState) semanticContinuations.delete(sessionId)
+}
+
+function clearSemanticContinuation(sessionId: string) {
+  semanticContinuations.delete(sessionId)
+}
+
 async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
   const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
   if (!session || pending.value || disposed) {
@@ -398,6 +444,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         planConfirmation: preparedContext.planConfirmation,
         semanticContext: preparedContext.semanticContext,
         invalidatedPlanReference: preparedContext.invalidatedPlanReference,
+        planAdjustment: preparedContext.planAdjustment,
+        clarificationResolution: preparedContext.clarificationResolution,
         signal: controller.signal,
         projectSlug: preparedContext.caseSlug ? null : preparedContext.projectSlug,
         caseSlug: preparedContext.caseSlug ?? null,
@@ -432,6 +480,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     }
     sessions.acceptSemanticTurnResponse(session.id, response)
     const mapped = mapAnswerResponse(response)
+    settleSemanticContinuation(session.id, mapped)
+    if (activeAdjustment.value?.sessionId === session.id) activeAdjustment.value = null
     if (!mapped.referenceContext
       && mapped.resolution === 'ANSWERED'
       && (mapped.answerScope === 'PORTFOLIO' || mapped.answerScope === 'MIXED')
@@ -537,6 +587,7 @@ function submit(question: string) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   if (!session || !project) return
+  activeAdjustment.value = null
   const preset = props.portfolio.questionPresets.find(
     (item) => item.projectSlug === project.slug && item.text === question,
   )
@@ -555,15 +606,13 @@ function submit(question: string) {
   )
 }
 
-interface SemanticContinuation {
-  question: string
-  semanticContext: SemanticContextRequest
-}
-
 function confirmSemanticPlan(confirmation: OpaquePlanConfirmation) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   if (!session || !project || pending.value) return
+  // stale-click guard + 唯一未决动作校验：仅防止旧卡/过期卡触发，不是安全边界。
+  const action = activeSemanticActionFor(session.id)
+  if (action?.kind !== 'CONFIRMATION' || action.confirmationId !== confirmation.confirmationId) return
   if (session.pendingConfirmation?.confirmationId !== confirmation.confirmationId) return
   void requestAnswer({
     sessionId: session.id,
@@ -574,47 +623,168 @@ function confirmSemanticPlan(confirmation: OpaquePlanConfirmation) {
   }, false)
 }
 
+function latestDisplayPlan(sessionId: string) {
+  const session = sessions.sessions.value.find((item) => item.id === sessionId)
+  if (!session) return undefined
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const plan = session.messages[index]?.answer?.semanticTurn?.displayPlan
+    if (plan) return plan
+  }
+  return undefined
+}
+
+// 唯一未决动作（P1 收口）：事件身份校验的唯一依据。
+// 旧卡片即使因时序或注入触发事件，也不得消费或清除属于最新轮次的 continuation。
+function activeSemanticActionFor(sessionId: string) {
+  const session = sessions.sessions.value.find((item) => item.id === sessionId)
+  if (!session) return null
+  return resolveActiveSemanticAction(session, (turnId) => sessions.isPlanChangeDismissed(turnId))
+}
+
+// 调整模式（决策 1）：进入需要当前未决动作为待确认计划，且引用齐备。
 function adjustSemanticPlan() {
-  document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()
-}
-
-function cancelSemanticPlan() {
   const session = sessions.activeSession.value
-  if (!session) return
-  sessions.clearPendingConfirmation(session.id)
+  if (!session || pending.value || !session.pendingConfirmation) return
+  if (activeSemanticActionFor(session.id)?.kind !== 'CONFIRMATION') return
+  const plan = latestDisplayPlan(session.id)
+  if (!plan?.pendingPlanReference) return
+  activeAdjustment.value = {
+    sessionId: session.id,
+    planReference: plan.pendingPlanReference,
+    planTitle: plan.summaryLabel
+      ? `${plan.taskCount} 步 · ${plan.summaryLabel}`
+      : `${plan.taskCount} 项任务`,
+  }
 }
 
-function selectClarification(selection: { fieldKey: string; value: string }) {
+function exitPlanAdjustment() {
+  activeAdjustment.value = null
+}
+
+function submitPlanAdjustment(instruction: string) {
+  const adjustment = activeAdjustment.value
   const session = sessions.activeSession.value
   const project = activeProject.value
   const continuation = session ? semanticContinuations.get(session.id) : undefined
-  if (!session || !project || !continuation || pending.value) return
-  const subjectType = selection.fieldKey === 'comparisonSubject' ? 'PROJECT' : 'CONTROLLED_OPTION'
-  const semanticContext: SemanticContextRequest = {
-    ...continuation.semanticContext,
-    activeSubjects: [
-      ...(continuation.semanticContext.activeSubjects ?? []),
-      { subjectType, subjectId: selection.value },
-    ],
-    coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
-  }
+  const trimmed = instruction.trim()
+  if (!adjustment || !session || !project || !continuation || !trimmed || pending.value) return
+  if (adjustment.sessionId !== session.id) return
   void requestAnswer({
     sessionId: session.id,
     projectSlug: project.slug,
     caseSlug: activeCaseSlug.value || null,
     action: 'ASK',
     question: continuation.question,
-    semanticContext,
+    semanticContext: {
+      ...continuation.semanticContext,
+      pendingPlanReference: { ...adjustment.planReference },
+      coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
+    },
+    planAdjustment: {
+      instruction: trimmed,
+      pendingPlanReference: { ...adjustment.planReference },
+    },
   }, false)
 }
 
-function regenerateSemanticPlan() {
+function cancelSemanticPlan() {
+  const session = sessions.activeSession.value
+  if (!session) return
+  sessions.clearPendingConfirmation(session.id)
+  activeAdjustment.value = null
+  clearSemanticContinuation(session.id)
+}
+
+// 澄清提交（§11.1 目标合同）：受控 clarificationResolution，不按 fieldKey 猜类型（FE-F03）。
+// turnId 必须对应当前唯一未决澄清动作，旧澄清卡的事件一律拒绝（FE-F11）。
+function submitClarification(payload: {
+  turnId: string
+  clarification: ClarificationView
+  submission: ClarificationSubmission
+}) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   const continuation = session ? semanticContinuations.get(session.id) : undefined
-  const latestSemanticTurn = session?.messages.at(-1)?.answer?.semanticTurn
-  const invalidatedPlanReference = latestSemanticTurn?.planChange?.invalidatedPlanReference
-  if (!session || !project || !continuation || !invalidatedPlanReference || pending.value) return
+  if (!session || !project || !continuation || pending.value) return
+
+  const action = activeSemanticActionFor(session.id)
+  if (action?.kind !== 'CLARIFICATION' || action.turnId !== payload.turnId) return
+
+  const { clarification, submission } = payload
+  if (submission.kind === 'MULTI_CHOICE') {
+    // 合同暂未提供多值 resolution 通道：受控主体引用合并进 activeSubjects（全部受控才可到此）。
+    const references = submission.options
+      .map((option) => option.subjectReference)
+      .filter((reference): reference is NonNullable<typeof reference> => reference !== null)
+    if (references.length !== submission.options.length || references.length === 0) return
+    const existing = continuation.semanticContext.activeSubjects ?? []
+    const merged = [...existing]
+    for (const reference of references) {
+      if (!merged.some((item) => item.subjectType === reference.subjectType
+        && item.subjectId === reference.subjectId)) {
+        merged.push({ ...reference })
+      }
+    }
+    void requestAnswer({
+      sessionId: session.id,
+      projectSlug: project.slug,
+      caseSlug: activeCaseSlug.value || null,
+      action: 'ASK',
+      question: continuation.question,
+      semanticContext: {
+        ...continuation.semanticContext,
+        activeSubjects: merged,
+        coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
+      },
+    }, false)
+    return
+  }
+
+  if (!clarification.clarificationId || !clarification.promptCode) return
+  const resolution: ClarificationResolutionRequest = submission.kind === 'TEXT'
+    ? {
+        clarificationId: clarification.clarificationId,
+        promptCode: clarification.promptCode,
+        fieldKey: submission.fieldKey,
+        textValue: submission.text,
+      }
+    : {
+        clarificationId: clarification.clarificationId,
+        promptCode: clarification.promptCode,
+        fieldKey: submission.fieldKey,
+        selectedOption: {
+          value: submission.option.value,
+          ...(submission.option.subjectReference === null
+            ? {}
+            : { subjectReference: { ...submission.option.subjectReference } }),
+        },
+      }
+  void requestAnswer({
+    sessionId: session.id,
+    projectSlug: project.slug,
+    caseSlug: activeCaseSlug.value || null,
+    action: 'ASK',
+    question: continuation.question,
+    semanticContext: {
+      ...continuation.semanticContext,
+      coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
+    },
+    clarificationResolution: resolution,
+  }, false)
+}
+
+function regenerateSemanticPlan(turnId: string) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  const continuation = session ? semanticContinuations.get(session.id) : undefined
+  if (!session || !project || !continuation || pending.value) return
+  // 只有当前唯一未决失效动作可以触发重生成；旧失效卡的注入事件一律拒绝。
+  const action = activeSemanticActionFor(session.id)
+  if (action?.kind !== 'PLAN_INVALIDATION' || action.turnId !== turnId) return
+  const invalidatedPlanReference = session.messages
+    .find((message) => message.answer?.turnId === turnId)
+    ?.answer?.semanticTurn?.planChange?.invalidatedPlanReference
+  if (!invalidatedPlanReference) return
   void requestAnswer({
     sessionId: session.id,
     projectSlug: project.slug,
@@ -626,9 +796,21 @@ function regenerateSemanticPlan() {
   }, false)
 }
 
+// 失效卡「暂不处理」（决策 3）：纯本地 dismiss + continuation 清理，不发请求。
+// 旧失效卡绝不清除新确认计划的 continuation——只有当前未决失效动作可 dismiss。
+function dismissSemanticPlanChange(turnId: string) {
+  const session = sessions.activeSession.value
+  if (!session) return
+  const action = activeSemanticActionFor(session.id)
+  if (action?.kind !== 'PLAN_INVALIDATION' || action.turnId !== turnId) return
+  sessions.dismissPlanChange(turnId)
+  clearSemanticContinuation(session.id)
+}
+
 function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
   const session = sessions.activeSession.value
   if (!session) return
+  activeAdjustment.value = null
   void requestAnswer(
     {
       sessionId: session.id,
@@ -807,7 +989,10 @@ function clearAllSessions() {
   invalidatePendingRequest()
   clearAnswerFailure()
   resetEvidenceFocus()
+  semanticContinuations.clear()
+  activeAdjustment.value = null
   sessions.clearSessions()
+  sessions.pruneDismissedPlanChanges()
   createSession()
 }
 
@@ -819,7 +1004,12 @@ function removeSession(sessionId: string) {
   if (failedRequest.value?.sessionId === sessionId) {
     clearAnswerFailure()
   }
+  if (activeAdjustment.value?.sessionId === sessionId) {
+    activeAdjustment.value = null
+  }
+  clearSemanticContinuation(sessionId)
   sessions.removeSession(sessionId)
+  sessions.pruneDismissedPlanChanges()
   if (sessions.activeSessionId.value !== previousSessionId) {
     resetEvidenceFocus()
     if (sessions.activeSession.value) {
@@ -834,6 +1024,7 @@ function selectSession(sessionId: string) {
   const previousSessionId = sessions.activeSessionId.value
   sessions.selectSession(sessionId)
   if (sessions.activeSessionId.value !== previousSessionId) {
+    activeAdjustment.value = null
     resetEvidenceFocus()
     syncActiveEvidence()
   }
@@ -881,6 +1072,8 @@ onBeforeUnmount(() => {
   disposed = true
   if (retryDelayTimer) clearInterval(retryDelayTimer)
   invalidatePendingRequest()
+  semanticContinuations.clear()
+  activeAdjustment.value = null
   workspaceResizeObserver?.disconnect()
   window.removeEventListener('keydown', onWindowKeydown)
   window.removeEventListener('resize', updateWorkspaceWidth)
@@ -939,6 +1132,8 @@ onBeforeUnmount(() => {
       :failure="answerFailure"
       :failure-suggestions="failureSuggestions"
       :focus-target="answerFocusTarget"
+      :adjustment="adjustmentBarState"
+      :dismissed-plan-changes="sessions.dismissedPlanChangeTurnIds.value"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
@@ -952,9 +1147,12 @@ onBeforeUnmount(() => {
       @clear-case-context="clearCaseContext"
       @confirm-plan="confirmSemanticPlan"
       @adjust-plan="adjustSemanticPlan"
+      @adjust-submit="submitPlanAdjustment"
+      @adjust-exit="exitPlanAdjustment"
       @cancel-plan="cancelSemanticPlan"
-      @clarification-select="selectClarification"
+      @clarification-submit="submitClarification"
       @regenerate-plan="regenerateSemanticPlan"
+      @dismiss-plan-change="dismissSemanticPlanChange"
     />
 
     <PaneResizer

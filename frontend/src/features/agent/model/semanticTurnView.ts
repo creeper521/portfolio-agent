@@ -11,10 +11,12 @@ import type {
   AgentTurnResultPayloadResponse,
   AgentTurnTaskSummaryResponse,
   InvalidatedPlanReference,
+  PendingPlanReference,
   AnswerBlock,
   PlanConfirmationSubmission,
   PortfolioRecommendationItem,
   SemanticSourceDomain,
+  SemanticSubjectReference,
   TaskSummaryDisplayMode,
   TaskSummaryStatus,
   TurnDisposition,
@@ -34,29 +36,58 @@ export interface DisplayPlanTaskView {
 export interface DisplayPlanView {
   taskCount: number
   executableTaskCount: number | null
+  summaryLabel: string | null
+  pendingPlanReference: PendingPlanReference | null
   tasks: DisplayPlanTaskView[]
   constraints: string[]
 }
 
+export type ClarificationInputModeView =
+  | 'SINGLE_CHOICE'
+  | 'MULTI_CHOICE'
+  | 'SHORT_TEXT'
+  | 'UNSUPPORTED'
+
 export interface ClarificationOptionView {
   value: string
   label: string
+  subjectReference: SemanticSubjectReference | null
 }
 
 export interface ClarificationFieldView {
   fieldKey: string
-  inputMode: 'SINGLE_CHOICE'
+  inputMode: ClarificationInputModeView
   options: ClarificationOptionView[]
   required: boolean
   affectedGoalLabels: string[]
 }
 
+export interface ClarificationBlockedGoalView {
+  goalLabel: string
+  reasonCode: string
+}
+
+/** 澄清提交负载：组件层产出，由 Workspace 转换为 clarificationResolution 请求。 */
+export type ClarificationSubmission =
+  | { kind: 'CHOICE'; fieldKey: string; option: ClarificationOptionView }
+  | { kind: 'MULTI_CHOICE'; fieldKey: string; options: ClarificationOptionView[] }
+  | { kind: 'TEXT'; fieldKey: string; text: string }
+
+/** 调整模式状态（由 Workspace 持有）：仅含展示所需信息，不含任何协议字段。 */
+export interface PlanAdjustmentBarState {
+  planTitle: string
+}
+
 export interface ClarificationView {
+  clarificationId: string | null
   scope: 'LOCAL' | 'CRITICAL'
+  promptCode: string | null
   prompt: string
   fields: ClarificationFieldView[]
   blockedTaskCount: number
   continuingTaskCount: number
+  continuingGoalLabels: string[]
+  blockedGoals: ClarificationBlockedGoalView[]
 }
 
 export interface PlanChangeView {
@@ -70,6 +101,8 @@ export interface TaskSummaryItemView {
   goalLabel: string
   status: TaskSummaryStatus
   sourceDomain: SemanticSourceDomain
+  reasonCodes: string[]
+  blockedByDisplayIndexes: string[]
 }
 
 export interface TaskSummaryView {
@@ -140,10 +173,17 @@ export function mapSemanticTurnResponse(response: AgentTurnPayload): SemanticTur
 
   const readyResponse = isReadyResponse(response) ? response : undefined
   const clarificationResponse = hasClarification(response) ? response.clarification : undefined
+  // 待确认计划引用由 planConfirmation 承载（b816bfa 起为必选字段）；
+  // 缺失时视图模型为 null，调整提交按此门控。
+  const confirmationReference = isConfirmationResponse(response)
+    ? mapPendingPlanReference(response.planConfirmation.pendingPlanReference)
+    : null
   return {
     contractVersion: response.contractVersion,
     disposition: response.disposition,
-    ...(response.plan === undefined ? {} : { displayPlan: mapDisplayPlan(response.plan) }),
+    ...(response.plan === undefined
+      ? {}
+      : { displayPlan: mapDisplayPlan(response.plan, confirmationReference) }),
     ...(clarificationResponse === undefined
       ? {}
       : { clarification: mapClarification(clarificationResponse) }),
@@ -239,10 +279,15 @@ function mapUnknownBoundary(response: AgentTurnPayload): SemanticTurnView {
   }
 }
 
-function mapDisplayPlan(plan: AgentTurnDisplayPlanResponse): DisplayPlanView {
+function mapDisplayPlan(
+  plan: AgentTurnDisplayPlanResponse,
+  confirmationReference?: PendingPlanReference | null,
+): DisplayPlanView {
   return {
     taskCount: plan.taskCount,
     executableTaskCount: plan.executableTaskCount ?? null,
+    summaryLabel: mapSummaryLabel(plan.summaryLabel),
+    pendingPlanReference: confirmationReference ?? null,
     tasks: plan.tasks.map((task) => ({
       displayIndex: task.displayIndex,
       goalLabel: task.goalLabel,
@@ -253,23 +298,88 @@ function mapDisplayPlan(plan: AgentTurnDisplayPlanResponse): DisplayPlanView {
   }
 }
 
+// displayPlan.summaryLabel 是后端确定性概括。前端不信任无限长文本，
+// 超长按缺失处理，避免标题被撑爆（FE-U05 fallback）。
+const SUMMARY_LABEL_MAX_LENGTH = 40
+
+function mapSummaryLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if (!normalized || normalized.length > SUMMARY_LABEL_MAX_LENGTH) return null
+  return normalized
+}
+
+function mapPendingPlanReference(value: unknown): PendingPlanReference | null {
+  if (typeof value !== 'object' || value === null) return null
+  const reference = value as PendingPlanReference
+  if (typeof reference.planId !== 'string' || !reference.planId.trim()) return null
+  if (typeof reference.planFingerprint !== 'string' || !reference.planFingerprint.trim()) return null
+  return {
+    planId: reference.planId.trim(),
+    planFingerprint: reference.planFingerprint.trim(),
+  }
+}
+
+const PUBLIC_CODE_PATTERN = /^[A-Z]+_[A-Z0-9_]+$/
+const CLARIFICATION_ID_PATTERN = /^clarify-[a-f0-9]{32}$/
+const CONTROLLED_SUBJECT_TYPES = new Set(['PROJECT', 'CASE', 'RESULT'])
+
+function mapPublicCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return PUBLIC_CODE_PATTERN.test(normalized) ? normalized : null
+}
+
 function mapClarification(clarification: AgentTurnClarificationResponse): ClarificationView {
   return {
+    clarificationId: typeof clarification.clarificationId === 'string'
+      && CLARIFICATION_ID_PATTERN.test(clarification.clarificationId)
+      ? clarification.clarificationId
+      : null,
     scope: clarification.scope,
+    promptCode: mapPublicCode(clarification.promptCode),
     prompt: clarification.prompt,
     fields: clarification.fields.map((field) => ({
       fieldKey: field.fieldKey,
-      inputMode: field.inputMode,
+      inputMode: mapInputMode(field.inputMode),
       options: field.options.map((option) => ({
         value: option.value,
         label: option.label,
+        subjectReference: mapOptionSubjectReference(option.resolution),
       })),
       required: field.required,
       affectedGoalLabels: [...field.affectedGoalLabels],
     })),
     blockedTaskCount: clarification.blockedTaskCount,
     continuingTaskCount: clarification.continuingTaskCount,
+    continuingGoalLabels: (clarification.continuingGoalLabels ?? [])
+      .filter((label): label is string => typeof label === 'string' && label.trim().length > 0),
+    blockedGoals: (clarification.blockedGoals ?? [])
+      .map((goal) => ({
+        goalLabel: typeof goal?.goalLabel === 'string' ? goal.goalLabel : '',
+        reasonCode: mapPublicCode(goal?.reasonCode) ?? '',
+      }))
+      .filter((goal) => goal.goalLabel.trim().length > 0),
   }
+}
+
+function mapInputMode(value: unknown): ClarificationInputModeView {
+  return value === 'SINGLE_CHOICE' || value === 'MULTI_CHOICE' || value === 'SHORT_TEXT'
+    ? value
+    : 'UNSUPPORTED'
+}
+
+// 只接受后端受控 SUBJECT_REFERENCE 且主体类型属于公开闭集；
+// 其余一律视为无引用，前端不根据 fieldKey 或文案猜测类型（FE-F03）。
+function mapOptionSubjectReference(value: unknown): SemanticSubjectReference | null {
+  if (typeof value !== 'object' || value === null) return null
+  const resolution = value as { kind?: unknown; subjectType?: unknown; subjectId?: unknown }
+  if (resolution.kind !== 'SUBJECT_REFERENCE') return null
+  if (typeof resolution.subjectType !== 'string' || typeof resolution.subjectId !== 'string') return null
+  const subjectType = resolution.subjectType.trim()
+  const subjectId = resolution.subjectId.trim()
+  if (!CONTROLLED_SUBJECT_TYPES.has(subjectType) || !subjectId) return null
+  return { subjectType, subjectId }
 }
 
 function mapPlanChange(planChange: AgentTurnPlanChangeResponse): PlanChangeView {
@@ -307,6 +417,11 @@ function mapTaskSummary(summary: AgentTurnTaskSummaryResponse): TaskSummaryView 
       goalLabel: item.goalLabel,
       status: item.status,
       sourceDomain: item.sourceDomain,
+      reasonCodes: (item.reasonCodes ?? [])
+        .map(mapPublicCode)
+        .filter((code): code is string => code !== null),
+      blockedByDisplayIndexes: (item.blockedByDisplayIndexes ?? [])
+        .filter((index): index is string => typeof index === 'string' && index.trim().length > 0),
     })),
   }
 }

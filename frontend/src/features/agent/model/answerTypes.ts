@@ -209,6 +209,24 @@ export interface InvalidatedPlanReference {
   planFingerprint: string
 }
 
+/** 调整计划请求（stp-v1 §11.2）：自然语言调整绑定待确认计划引用，不编辑内部图。 */
+export interface PlanAdjustmentRequest {
+  instruction: string
+  pendingPlanReference: PendingPlanReference
+}
+
+/** 澄清回答请求（stp-v1 §11.1）：受控 resolution，selectedOption 与 textValue 互斥。 */
+export interface ClarificationResolutionRequest {
+  clarificationId: string
+  promptCode: string
+  fieldKey: string
+  selectedOption?: {
+    value: string
+    subjectReference?: SemanticSubjectReference
+  }
+  textValue?: string
+}
+
 export interface AgentTurnDisplayTaskResponse {
   displayIndex: string
   goalLabel: string
@@ -217,35 +235,64 @@ export interface AgentTurnDisplayTaskResponse {
   [field: string]: unknown
 }
 
+export interface PendingPlanReference {
+  planId: string
+  planFingerprint: string
+}
+
 export interface AgentTurnDisplayPlanResponse {
   taskCount: number
   executableTaskCount?: number
+  summaryLabel?: string | null
   tasks: AgentTurnDisplayTaskResponse[]
   constraints?: string[]
+  [field: string]: unknown
+}
+
+export interface AgentTurnClarificationOptionResolution {
+  kind: string
+  subjectType: string
+  subjectId: string
   [field: string]: unknown
 }
 
 export interface AgentTurnClarificationOptionResponse {
   value: string
   label: string
+  resolution?: AgentTurnClarificationOptionResolution | null
   [field: string]: unknown
 }
 
+export type AgentTurnClarificationInputMode =
+  | 'SINGLE_CHOICE'
+  | 'MULTI_CHOICE'
+  | 'SHORT_TEXT'
+
 export interface AgentTurnClarificationFieldResponse {
   fieldKey: string
-  inputMode: 'SINGLE_CHOICE'
+  inputMode: AgentTurnClarificationInputMode
   options: AgentTurnClarificationOptionResponse[]
   required: boolean
   affectedGoalLabels: string[]
   [field: string]: unknown
 }
 
+export interface AgentTurnClarificationBlockedGoalResponse {
+  goalLabel: string
+  reasonCode: string
+  [field: string]: unknown
+}
+
 export interface AgentTurnClarificationResponse {
+  clarificationId?: string
   scope: 'LOCAL' | 'CRITICAL'
+  promptCode?: string
   prompt: string
   fields: AgentTurnClarificationFieldResponse[]
   blockedTaskCount: number
   continuingTaskCount: number
+  continuingGoalLabels?: string[]
+  blockedGoals?: AgentTurnClarificationBlockedGoalResponse[]
   [field: string]: unknown
 }
 
@@ -261,6 +308,8 @@ export interface AgentTurnTaskSummaryItemResponse {
   goalLabel: string
   status: TaskSummaryStatus
   sourceDomain: SemanticSourceDomain
+  reasonCodes?: string[]
+  blockedByDisplayIndexes?: string[]
   [field: string]: unknown
 }
 
@@ -319,6 +368,7 @@ export interface AgentTurnCompletedTaskResponse {
 export interface AgentTurnPlanConfirmationResponse extends PlanConfirmationSubmission {
   expiresAt: string
   triggerCodes: string[]
+  pendingPlanReference?: PendingPlanReference
   [field: string]: unknown
 }
 

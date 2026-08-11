@@ -26,7 +26,13 @@ import {
   degradedNotice,
 } from '../model/answerLabels'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
-import type { OpaquePlanConfirmation } from '../model/semanticTurnView'
+import { resolveActiveSemanticAction } from '../model/activeSemanticAction'
+import type {
+  ClarificationSubmission,
+  ClarificationView,
+  OpaquePlanConfirmation,
+  PlanAdjustmentBarState,
+} from '../model/semanticTurnView'
 import CompactTaskSummary from './CompactTaskSummary.vue'
 import PlanConfirmation from './PlanConfirmation.vue'
 import PlanInvalidatedNotice from './PlanInvalidatedNotice.vue'
@@ -52,6 +58,8 @@ const props = defineProps<{
   failure?: AnswerFailureView | null
   failureSuggestions?: ReadonlyArray<ConversationSuggestedQuestion>
   focusTarget?: AnswerFocusTarget | null
+  adjustment?: PlanAdjustmentBarState | null
+  dismissedPlanChanges?: ReadonlySet<string>
 }>()
 
 const emit = defineEmits<{
@@ -68,9 +76,16 @@ const emit = defineEmits<{
   refineRecommendation: [action: { question: string; recommendationContext: PortfolioRecommendationContextRequest }]
   confirmPlan: [confirmation: OpaquePlanConfirmation]
   adjustPlan: []
+  adjustSubmit: [instruction: string]
+  adjustExit: []
   cancelPlan: []
-  clarificationSelect: [selection: { fieldKey: string; value: string }]
-  regeneratePlan: []
+  clarificationSubmit: [payload: {
+    turnId: string
+    clarification: ClarificationView
+    submission: ClarificationSubmission
+  }]
+  regeneratePlan: [turnId: string]
+  dismissPlanChange: [turnId: string]
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -84,6 +99,73 @@ const state = computed(() => {
   if (props.pending) return 'generating'
   return props.session.messages.length ? 'conversation' : 'empty'
 })
+
+// 唯一未决动作（P1 收口）：同一会话任何时刻最多一张卡可交互。
+// 后续 READY、新确认、新澄清、新失效或用户取消都会让旧动作立即失效；
+// 历史卡仍展示，但一律降级为只读（FE-F10 / FE-F11）。
+const activeSemanticAction = computed(() =>
+  resolveActiveSemanticAction(props.session, (turnId) => isPlanChangeTurnDismissed(turnId)),
+)
+
+function isPlanChangeTurnDismissed(turnId: string): boolean {
+  return props.dismissedPlanChanges?.has(turnId) ?? false
+}
+
+function isActiveConfirmationMessage(message: AgentSession['messages'][number]): boolean {
+  const action = activeSemanticAction.value
+  return action?.kind === 'CONFIRMATION' && action.turnId === message.answer?.turnId
+}
+
+function isActiveClarificationMessage(message: AgentSession['messages'][number]): boolean {
+  const action = activeSemanticAction.value
+  return action?.kind === 'CLARIFICATION' && action.turnId === message.answer?.turnId
+}
+
+function isActiveInvalidationMessage(message: AgentSession['messages'][number]): boolean {
+  const action = activeSemanticAction.value
+  return action?.kind === 'PLAN_INVALIDATION' && action.turnId === message.answer?.turnId
+}
+
+// 确认完成或取消后，历史计划卡降级为只读记录而不是消失。
+function confirmationReadonlyNote(message: AgentSession['messages'][number]): string {
+  const action = activeSemanticAction.value
+  return action?.kind === 'CONFIRMATION'
+    ? '此计划已被后续轮次取代，仅作记录。'
+    : '该计划已关闭，仅作记录。'
+}
+
+// 澄清卡的只读文案：流程正常走完说「已完成」，被更新的动作顶掉说「已被取代」。
+function clarificationReadonlyNote(message: AgentSession['messages'][number]): string {
+  const index = props.session.messages.findIndex((item) => item.id === message.id)
+  const superseded = props.session.messages.slice(index + 1).some((item) => {
+    const semanticTurn = item.answer?.semanticTurn
+    return semanticTurn?.clarification !== undefined
+      || semanticTurn?.planChange !== undefined
+      || semanticTurn?.disposition === 'CONFIRMATION_REQUIRED'
+  })
+  return superseded
+    ? '此澄清已被后续轮次取代，仅作记录。'
+    : '此澄清已完成，仅作记录。'
+}
+
+function isPlanChangeDismissed(message: AgentSession['messages'][number]): boolean {
+  const turnId = message.answer?.turnId
+  return turnId !== undefined && isPlanChangeTurnDismissed(turnId)
+}
+
+const adjustmentDraft = ref('')
+
+function submitAdjustmentDraft() {
+  const instruction = adjustmentDraft.value.trim()
+  if (!instruction || props.pending || !props.adjustment) return
+  emit('adjustSubmit', instruction)
+  adjustmentDraft.value = ''
+}
+
+function exitAdjustment() {
+  adjustmentDraft.value = ''
+  emit('adjustExit')
+}
 const starterQuestions = computed(
   () => props.suggestedQuestions?.length
     ? props.suggestedQuestions
@@ -439,10 +521,14 @@ function refineWhole(
           >{{ degradedNotice(message.answer) }}</p>
           <div v-if="message.answer" class="structured-answer">
             <PlanConfirmation
-              v-if="message.answer.semanticTurn?.disposition === 'CONFIRMATION_REQUIRED' && message.answer.semanticTurn.displayPlan && session.pendingConfirmation"
+              v-if="message.answer.semanticTurn?.disposition === 'CONFIRMATION_REQUIRED' && message.answer.semanticTurn.displayPlan"
               :plan="message.answer.semanticTurn.displayPlan"
-              :confirmation="session.pendingConfirmation"
+              :confirmation="isActiveConfirmationMessage(message) ? session.pendingConfirmation : undefined"
               :pending="pending"
+              :adjusting="adjustment != null && isActiveConfirmationMessage(message)"
+              :readonly="!isActiveConfirmationMessage(message)"
+              :readonly-note="confirmationReadonlyNote(message)"
+              :adjust-disabled="message.answer.semanticTurn.displayPlan.pendingPlanReference == null"
               @confirm="$emit('confirmPlan', $event)"
               @adjust="$emit('adjustPlan')"
               @cancel="$emit('cancelPlan')"
@@ -450,15 +536,22 @@ function refineWhole(
             <TurnClarification
               v-if="message.answer.semanticTurn?.clarification"
               :clarification="message.answer.semanticTurn.clarification"
-              :pending="pending"
-              @select="$emit('clarificationSelect', $event)"
+              :pending="pending && isActiveClarificationMessage(message)"
+              :readonly="!isActiveClarificationMessage(message)"
+              :readonly-note="clarificationReadonlyNote(message)"
+              @submit="$emit('clarificationSubmit', { turnId: message.answer.turnId, ...$event })"
             />
-            <PlanInvalidatedNotice
-              v-if="message.answer.semanticTurn?.planChange"
-              :plan-change="message.answer.semanticTurn.planChange"
-              :pending="pending"
-              @regenerate="$emit('regeneratePlan')"
-            />
+            <template v-if="message.answer.semanticTurn?.planChange">
+              <p v-if="isPlanChangeDismissed(message)" class="plan-change-dismissed">已暂不处理 · 该计划不会执行，可直接继续提问。</p>
+              <PlanInvalidatedNotice
+                v-else
+                :plan-change="message.answer.semanticTurn.planChange"
+                :pending="pending"
+                :readonly="!isActiveInvalidationMessage(message)"
+                @regenerate="$emit('regeneratePlan', message.answer.turnId)"
+                @dismiss="$emit('dismissPlanChange', message.answer.turnId)"
+              />
+            </template>
             <CompactTaskSummary
               v-if="message.answer.semanticTurn?.taskSummary && message.answer.semanticTurn.taskSummary.totalCount > 1 && message.answer.semanticTurn.taskSummary.displayMode !== 'HIDDEN'"
               :summary="message.answer.semanticTurn.taskSummary"
@@ -719,6 +812,31 @@ function refineWhole(
         type="button"
         @click="jumpToLatest"
       >回到最新回答</button>
+    </div>
+
+    <div v-if="adjustment" class="adjust-bar" data-testid="plan-adjustment-bar">
+      <p class="adjust-bar__label">正在调整当前计划</p>
+      <p class="adjust-bar__title">{{ adjustment.planTitle }}</p>
+      <p class="adjust-bar__examples">例如：<span>「去掉总结那一步」</span><span>「把推荐数量改成 2 个」</span></p>
+      <div class="adjust-bar__row">
+        <input
+          v-model="adjustmentDraft"
+          type="text"
+          data-adjustment-input
+          placeholder="用一句话描述怎么调整，提交后会带着原计划重新规划"
+          aria-label="调整说明"
+          :disabled="pending"
+          @keydown.enter.prevent="submitAdjustmentDraft"
+        >
+        <button
+          class="adjust-bar__submit"
+          data-action="submit-adjustment"
+          type="button"
+          :disabled="pending || adjustmentDraft.trim().length === 0"
+          @click="submitAdjustmentDraft"
+        >提交调整</button>
+        <button class="adjust-bar__exit" data-action="exit-adjustment" type="button" @click="exitAdjustment">退出调整</button>
+      </div>
     </div>
 
     <form class="composer" @submit.prevent="submit">
@@ -1052,8 +1170,14 @@ function refineWhole(
   padding: 2px 6px;
   color: var(--workspace-text-secondary, var(--muted));
   border: 1px solid var(--workspace-rule, var(--rule));
+  background: transparent;
   font: 10px var(--mono);
   letter-spacing: .05em;
+}
+/* 来源可区分（spec §5 原则3 + 原型 §3.3.6）：作品集事实=红边，通用知识=灰边，综合=中性描边 */
+.semantic-source-label[data-source-label='PORTFOLIO'] {
+  color: var(--workspace-accent, var(--red));
+  border-color: var(--workspace-accent, var(--red));
 }
 
 .message footer {
@@ -1447,7 +1571,43 @@ textarea:disabled,
     max-width: 85%;
   }
 
-  .composer {
+.plan-change-dismissed {
+  margin: 18px 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--workspace-rule, var(--rule));
+  color: var(--workspace-text-faint, var(--faint));
+  font: 10.5px var(--mono);
+  letter-spacing: .04em;
+}
+
+/* 调整模式上下文条（决策 1 · 方案 B）：composer 上方的显式调整态 */
+.adjust-bar {
+  margin: 0 28px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--workspace-accent, var(--red));
+  background: var(--paper-hi);
+}
+.adjust-bar__label { margin: 0; font: 10px var(--mono); letter-spacing: .1em; color: var(--workspace-accent, var(--red)); }
+.adjust-bar__title { margin: 3px 0 0; font: 600 14px var(--serif); color: var(--workspace-text, var(--ink)); }
+.adjust-bar__examples { margin: 6px 0 0; font: 11.5px/1.7 var(--sans); color: var(--workspace-text-secondary, var(--muted)); }
+.adjust-bar__examples span { display: inline-block; margin-right: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--workspace-text-faint, var(--faint)); }
+.adjust-bar__row { display: flex; gap: 8px; margin-top: 10px; }
+.adjust-bar__row input {
+  flex: 1; min-width: 0; padding: 8px 10px;
+  border: 1px solid var(--workspace-rule, var(--rule)); border-radius: var(--agent-radius-sm, 8px);
+  background: rgba(255,255,255,0.5); font: 13px var(--sans); color: var(--workspace-text, var(--ink));
+}
+.adjust-bar__row input:focus { outline: 2px solid var(--workspace-accent, var(--red)); outline-offset: 1px; }
+.adjust-bar__row button { font: 11px var(--mono); padding: 8px 14px; border-radius: var(--agent-radius-sm, 8px); cursor: pointer; }
+.adjust-bar__submit { border: 1px solid var(--workspace-accent, var(--red)); background: var(--workspace-accent, var(--red)); color: var(--paper-hi); }
+.adjust-bar__submit:disabled { opacity: .45; cursor: not-allowed; }
+.adjust-bar__exit { border: 1px solid var(--workspace-rule, var(--rule)); background: transparent; color: var(--workspace-text-secondary, var(--muted)); }
+.adjust-bar__exit:hover { border-color: var(--workspace-accent, var(--red)); color: var(--workspace-accent, var(--red)); }
+@media (max-width: 620px) {
+  .adjust-bar__row { flex-direction: column; }
+}
+
+.composer {
     margin-inline: 18px;
   }
 }

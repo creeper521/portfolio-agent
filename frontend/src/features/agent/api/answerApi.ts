@@ -1,7 +1,9 @@
 import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
 import type {
   AnswerResponse,
+  ClarificationResolutionRequest,
   InvalidatedPlanReference,
+  PlanAdjustmentRequest,
   PlanConfirmationSubmission,
   PortfolioReferenceContext,
   SemanticContextRequest,
@@ -19,6 +21,8 @@ export interface AnswerApiRequest {
   planConfirmation?: PlanConfirmationSubmission
   semanticContext?: SemanticContextRequest
   invalidatedPlanReference?: InvalidatedPlanReference
+  planAdjustment?: PlanAdjustmentRequest
+  clarificationResolution?: ClarificationResolutionRequest
   requestToken?: string
   signal?: AbortSignal
   projectSlug?: string | null
@@ -122,6 +126,40 @@ export function askQuestion(
       ...(input.invalidatedPlanReference === undefined
         ? {}
         : { invalidatedPlanReference: { ...input.invalidatedPlanReference } }),
+      ...(input.planAdjustment === undefined
+        ? {}
+        : {
+            planAdjustment: {
+              instruction: input.planAdjustment.instruction,
+              pendingPlanReference: { ...input.planAdjustment.pendingPlanReference },
+            },
+          }),
+      ...(input.clarificationResolution === undefined
+        ? {}
+        : {
+            clarificationResolution: {
+              clarificationId: input.clarificationResolution.clarificationId,
+              promptCode: input.clarificationResolution.promptCode,
+              fieldKey: input.clarificationResolution.fieldKey,
+              ...(input.clarificationResolution.selectedOption === undefined
+                ? {}
+                : {
+                    selectedOption: {
+                      value: input.clarificationResolution.selectedOption.value,
+                      ...(input.clarificationResolution.selectedOption.subjectReference === undefined
+                        ? {}
+                        : {
+                            subjectReference: {
+                              ...input.clarificationResolution.selectedOption.subjectReference,
+                            },
+                          }),
+                    },
+                  }),
+              ...(input.clarificationResolution.textValue === undefined
+                ? {}
+                : { textValue: input.clarificationResolution.textValue }),
+            },
+          }),
     }),
   }, {
     operation: RequestOperation.ANSWER,

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { PlanChangeView } from '../model/semanticTurnView'
 
-defineProps<{ planChange: PlanChangeView; pending?: boolean }>()
-const emit = defineEmits<{ regenerate: [] }>()
+defineProps<{ planChange: PlanChangeView; pending?: boolean; readonly?: boolean }>()
+const emit = defineEmits<{ regenerate: []; dismiss: [] }>()
 </script>
 
 <template>
@@ -12,7 +12,10 @@ const emit = defineEmits<{ regenerate: [] }>()
     <ul v-if="planChange.changeLabels.length">
       <li v-for="label in planChange.changeLabels" :key="label">{{ label }}</li>
     </ul>
-    <button data-action="regenerate-plan" type="button" :disabled="pending" @click="emit('regenerate')">重新生成计划</button>
+    <div v-if="!readonly" class="plan-invalidated-notice__actions">
+      <button data-action="regenerate-plan" type="button" :disabled="pending" @click="emit('regenerate')">重新生成计划</button>
+      <button data-action="dismiss-plan-change" type="button" :disabled="pending" @click="emit('dismiss')">暂不处理</button>
+    </div>
   </section>
 </template>
 
@@ -21,6 +24,8 @@ const emit = defineEmits<{ regenerate: [] }>()
 .plan-invalidated-notice__title { margin: 0; color: var(--workspace-accent, var(--red)); font: 11px var(--mono); letter-spacing: .1em; }
 .plan-invalidated-notice > p:not(:first-child) { margin: 8px 0 0; }
 .plan-invalidated-notice ul { margin: 8px 0; padding-left: 18px; color: var(--workspace-text-secondary, var(--muted)); font: 11px/1.5 var(--mono); }
+.plan-invalidated-notice__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .plan-invalidated-notice button { min-height: 34px; padding: 7px 10px; border: 1px solid var(--workspace-accent, var(--red)); background: var(--workspace-accent, var(--red)); color: var(--paper-hi); font: 11px var(--mono); cursor: pointer; }
+.plan-invalidated-notice button[data-action='dismiss-plan-change'] { background: transparent; color: var(--workspace-accent, var(--red)); }
 .plan-invalidated-notice button:disabled { opacity: .55; cursor: wait; }
 </style>

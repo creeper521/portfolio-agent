@@ -166,6 +166,30 @@ export function useLocalSessions() {
     sessions.value = [...sessions.value]
   }
 
+  // 计划失效卡的「暂不处理」记录（按 turnId 记，tab 内存语义，随会话删除/清空回收）。
+  const dismissedPlanChangeTurnIds = ref<ReadonlySet<string>>(new Set())
+
+  function dismissPlanChange(turnId: string) {
+    if (dismissedPlanChangeTurnIds.value.has(turnId)) return
+    dismissedPlanChangeTurnIds.value = new Set([...dismissedPlanChangeTurnIds.value, turnId])
+  }
+
+  function isPlanChangeDismissed(turnId: string): boolean {
+    return dismissedPlanChangeTurnIds.value.has(turnId)
+  }
+
+  function pruneDismissedPlanChanges() {
+    const aliveTurnIds = new Set(
+      sessions.value.flatMap((session) =>
+        session.messages
+          .map((message) => message.answer?.turnId)
+          .filter((turnId): turnId is string => typeof turnId === 'string')),
+    )
+    dismissedPlanChangeTurnIds.value = new Set(
+      [...dismissedPlanChangeTurnIds.value].filter((turnId) => aliveTurnIds.has(turnId)),
+    )
+  }
+
   return {
     sessions,
     activeSessionId,
@@ -179,6 +203,10 @@ export function useLocalSessions() {
     applyAnswerProgress,
     acceptSemanticTurnResponse,
     clearPendingConfirmation,
+    dismissPlanChange,
+    isPlanChangeDismissed,
+    dismissedPlanChangeTurnIds,
+    pruneDismissedPlanChanges,
     removeSession,
     clearSessions,
   }
