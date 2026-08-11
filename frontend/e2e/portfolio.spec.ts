@@ -72,53 +72,96 @@ test('semantic turn states A through H remain safe and usable', async ({ page })
   await submitAgentQuestion(page, '状态 B')
   const compactSummary = page.locator('[data-testid="task-summary"]').last()
   await expect(compactSummary).toHaveAttribute('data-expanded', 'false')
+  await expect(compactSummary).toContainText('状态 B 审阅 → 状态 B 比较 · 2 步已完成')
   await compactSummary.getByRole('button').click()
   await expect(compactSummary).toHaveAttribute('data-expanded', 'true')
 
   await submitAgentQuestion(page, '状态 C')
-  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toBeVisible()
+  const planCard = page.locator('[data-testid="plan-confirmation"]').last()
+  await expect(planCard).toBeVisible()
+  await expect(planCard).toContainText('5 步 · 从了解到推荐')
+  // 调整模式：进入调整态 → 提交增量调整 → 新计划卡
+  await planCard.locator('[data-action="adjust-plan"]').click()
+  const adjustBar = page.locator('[data-testid="plan-adjustment-bar"]')
+  await expect(adjustBar).toBeVisible()
+  await expect(adjustBar).toContainText('正在调整当前计划')
+  await adjustBar.locator('[data-adjustment-input]').fill('去掉总结那一步')
+  await adjustBar.locator('[data-action="submit-adjustment"]').click()
+  const adjustmentRequest = requests.find((request) => request.planAdjustment !== undefined)
+  expect(adjustmentRequest).toMatchObject({
+    action: 'ASK',
+    agentTurnContract: 'stp-v1',
+    question: '状态 C',
+    planAdjustment: {
+      instruction: '去掉总结那一步',
+      pendingPlanReference: {
+        planId: 'plan-pending-e2e',
+        planFingerprint: 'sha256:semantic-fingerprint',
+      },
+    },
+    semanticContext: {
+      pendingPlanReference: {
+        planId: 'plan-pending-e2e',
+        planFingerprint: 'sha256:semantic-fingerprint',
+      },
+    },
+  })
+  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toContainText('4 步 · 从了解到推荐')
   await page.locator('[data-action="confirm-plan"]').last().press('Enter')
   await expect(page.getByText('F only completed body')).toBeVisible()
-  await expect(page.locator('[data-testid="task-summary"]').last()).toHaveAttribute('data-expanded', 'true')
+  const partialSummary = page.locator('[data-testid="task-summary"]').last()
+  await expect(partialSummary).toHaveAttribute('data-expanded', 'true')
+  await expect(partialSummary).toContainText('公开证据不足，无法生成可信结论')
+  await expect(partialSummary).toContainText('依赖任务 03 未完成，因此暂不执行')
   await expect(page.getByText('F blocked body')).toHaveCount(0)
 
   await submitAgentQuestion(page, '状态 D')
   await expect(page.locator('[data-testid="turn-clarification"][data-scope="LOCAL"]').last()).toBeVisible()
-  await expect(page.getByText('已继续 1 个可安全完成的任务')).toBeVisible()
+  await expect(page.getByText('已继续：D 已完成任务，不受影响')).toBeVisible()
   await page.locator('[data-clarification-option="project-b"]').last().click()
   await expect(page.getByText('D only completed body')).toBeVisible()
-  const localContinuationRequest = requests.find((request) => {
-    const semanticContext = request.semanticContext as { activeSubjects?: unknown[] } | undefined
-    return (semanticContext?.activeSubjects?.length ?? 0) > 1
-  })
+  const localContinuationRequest = requests.find((request) => (
+    request.question === '状态 D' && request.clarificationResolution !== undefined
+  ))
   expect(localContinuationRequest).toMatchObject({
     action: 'ASK',
     agentTurnContract: 'stp-v1',
     question: '状态 D',
-    semanticContext: { activeSubjects: [
-      { subjectType: 'PROJECT', subjectId: 'sql-audit' },
-      { subjectType: 'PROJECT', subjectId: 'project-b' },
-    ] },
+    clarificationResolution: {
+      clarificationId: 'clarify-0000000000000000000000000000000d',
+      promptCode: 'ROUTING_COMPARISON_SUBJECT_MISSING',
+      fieldKey: 'comparisonSubject',
+      selectedOption: {
+        value: 'project-b',
+        subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+      },
+    },
   })
   expect(localContinuationRequest?.planConfirmation).toBeUndefined()
+  expect(JSON.stringify(localContinuationRequest)).not.toContain('CONTROLLED_OPTION')
 
   await submitAgentQuestion(page, '状态 E')
   await expect(page.locator('[data-testid="turn-clarification"][data-scope="CRITICAL"]').last()).toBeVisible()
   await expect(page.getByText('在收到选择前不会执行这项计划')).toBeVisible()
+  await expect(page.getByText('等待你确认比较对象')).toBeVisible()
   await page.locator('[data-clarification-option="project-b"]').last().click()
   await expect(page.getByText('F only completed body').last()).toBeVisible()
   const criticalContinuationRequest = requests.find((request) => (
-    request.question === '状态 E'
-    && request.action === 'ASK'
+    request.question === '状态 E' && request.clarificationResolution !== undefined
   ))
   expect(criticalContinuationRequest).toMatchObject({
     action: 'ASK',
     agentTurnContract: 'stp-v1',
     question: '状态 E',
-    semanticContext: { activeSubjects: [
-      { subjectType: 'PROJECT', subjectId: 'sql-audit' },
-      { subjectType: 'PROJECT', subjectId: 'project-b' },
-    ] },
+    clarificationResolution: {
+      clarificationId: 'clarify-0000000000000000000000000000000e',
+      promptCode: 'ROUTING_SUBJECT_CLARIFICATION_REQUIRED',
+      fieldKey: 'comparisonSubject',
+      selectedOption: {
+        value: 'project-b',
+        subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+      },
+    },
   })
   expect(criticalContinuationRequest?.planConfirmation).toBeUndefined()
 
@@ -134,10 +177,43 @@ test('semantic turn states A through H remain safe and usable', async ({ page })
     invalidatedPlanReference: { planId: 'plan-opaque', planFingerprint: 'sha256:opaque' },
   })
   expect(regenerateRequest?.planConfirmation).toBeUndefined()
+  // 新确认卡出现后，旧失效卡仍展示但已只读：没有任何操作按钮
+  const staleNotice = page.locator('[data-testid="plan-invalidated-notice"]').last()
+  await expect(staleNotice).toBeVisible()
+  await expect(staleNotice.locator('[data-action="regenerate-plan"]')).toHaveCount(0)
+  await expect(staleNotice.locator('[data-action="dismiss-plan-change"]')).toHaveCount(0)
+  // 新确认计划仍能正常提交调整
+  await page.locator('[data-action="adjust-plan"]').last().click()
+  const adjustBarAfterRegen = page.locator('[data-testid="plan-adjustment-bar"]')
+  await expect(adjustBarAfterRegen).toBeVisible()
+  await adjustBarAfterRegen.locator('[data-adjustment-input]').fill('把推荐数量改成 2 个')
+  await adjustBarAfterRegen.locator('[data-action="submit-adjustment"]').click()
+  const adjustmentRequests = requests.filter((request) => request.planAdjustment !== undefined)
+  expect(adjustmentRequests).toHaveLength(2)
+  expect(adjustmentRequests[1]).toMatchObject({
+    action: 'ASK',
+    question: '状态 G',
+    planAdjustment: {
+      instruction: '把推荐数量改成 2 个',
+      pendingPlanReference: {
+        planId: 'plan-pending-e2e',
+        planFingerprint: 'sha256:semantic-fingerprint',
+      },
+    },
+  })
+  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toContainText('4 步 · 从了解到推荐')
 
   await submitAgentQuestion(page, '状态 H')
   await expect(page.getByText('这项请求不能在当前公开范围内继续。')).toBeVisible()
-  await expect(page.locator('[data-testid="plan-confirmation"]').last()).toHaveCount(0)
+  // 状态 H 后历史确认卡可以保留，但必须全部只读、无操作按钮
+  const historicalPlanCards = page.locator('[data-testid="plan-confirmation"]')
+  expect(await historicalPlanCards.count()).toBeGreaterThan(0)
+  for (const card of await historicalPlanCards.all()) {
+    await expect(card).toHaveAttribute('data-readonly', 'true')
+  }
+  await expect(page.locator('[data-testid="plan-confirmation"] [data-action="confirm-plan"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="plan-confirmation"] [data-action="adjust-plan"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="plan-confirmation"] [data-action="cancel-plan"]')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => window.innerWidth),
   )

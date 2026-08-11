@@ -296,13 +296,15 @@ export async function mockSemanticTurnStates(page: Page) {
     }
     const body = route.request().postDataJSON() as {
       action?: string
-      semanticContext?: { activeSubjects?: unknown[] }
+      planAdjustment?: unknown
+      clarificationResolution?: unknown
     }
     const response = semanticTurnResponse(
       turn,
       body.action === 'CONFIRM_PLAN',
       body.action === 'REGENERATE_PLAN',
-      (body.semanticContext?.activeSubjects?.length ?? 0) > 1,
+      body.planAdjustment !== undefined,
+      body.clarificationResolution !== undefined,
     )
     turn += 1
     await route.fulfill({ status: 200, contentType: 'application/json', json: response })
@@ -313,6 +315,7 @@ function semanticTurnResponse(
   index: number,
   isConfirmation: boolean,
   isRegenerate: boolean,
+  isAdjustment: boolean,
   isClarificationContinuation: boolean,
 ) {
   const response = {
@@ -341,21 +344,16 @@ function semanticTurnResponse(
   if (index === 2) return {
     ...response,
     resolution: 'AWAITING_CONFIRMATION',
-    agentTurn: {
-      contractVersion: 'stp-v1',
-      disposition: 'CONFIRMATION_REQUIRED',
-      plan: displayPlan(5),
-      planConfirmation: {
-        confirmationId: 'semantic-confirmation',
-        confirmationPlan: 'opaque-confirmation-envelope',
-        planFingerprint: 'sha256:semantic-fingerprint',
-        integrityToken: 'opaque-integrity-token',
-        expiresAt: '2026-08-10T12:10:00Z',
-        triggerCodes: ['TASK_COUNT_REQUIRES_CONFIRMATION'],
-      },
-    },
+    agentTurn: confirmationSemanticTurn(5, 'semantic-confirmation'),
   }
-  if (index === 3 && isConfirmation) return {
+  // 动作分支优先于序号分支：任何调整/确认/重生成/澄清提交都按动作语义响应，
+  // 不依赖它们在测试脚本里的绝对顺序。
+  if (isAdjustment) return {
+    ...response,
+    resolution: 'AWAITING_CONFIRMATION',
+    agentTurn: confirmationSemanticTurn(4, `adjusted-confirmation-${index}`),
+  }
+  if (isConfirmation) return {
     ...response,
     agentTurn: readySemanticTurn(3, 'EXPANDED', [completedTask('01', '状态 F 已完成', 'F only completed body')], {
       answeredCount: 1,
@@ -363,18 +361,23 @@ function semanticTurnResponse(
       notSupportedCount: 1,
       items: [
         taskStatus('01', '状态 F 已完成', 'COMPLETED'),
-        taskStatus('02', '状态 F 被阻塞', 'BLOCKED'),
-        taskStatus('03', '状态 F 证据不足', 'NOT_SUPPORTED'),
+        taskStatus('02', '状态 F 被阻塞', 'BLOCKED', ['EXECUTION_DEPENDENCY_BLOCKED'], ['03']),
+        taskStatus('03', '状态 F 证据不足', 'NOT_SUPPORTED', ['PORTFOLIO_EVIDENCE_INSUFFICIENT']),
       ],
     }),
   }
-  if (index === 4) return localClarificationSemanticResponse(response)
+  if (isRegenerate) return {
+    ...response,
+    resolution: 'AWAITING_CONFIRMATION',
+    agentTurn: confirmationSemanticTurn(4, `regenerated-confirmation-${index}`),
+  }
   if (isClarificationContinuation) return {
     ...response,
     agentTurn: readySemanticTurn(2, 'EXPANDED', [completedTask('01', '继续完成的任务', 'F only completed body')]),
   }
-  if (index === 6) return clarificationSemanticResponse(response, 'CRITICAL', 0)
-  if (index === 8) return {
+  if (index === 5) return localClarificationSemanticResponse(response)
+  if (index === 7) return clarificationSemanticResponse(response, 'CRITICAL', 0)
+  if (index === 9) return {
     ...response,
     resolution: 'REJECTED',
     agentTurn: {
@@ -390,28 +393,31 @@ function semanticTurnResponse(
       },
     },
   }
-  if (index === 9 && isRegenerate) return {
-    ...response,
-    resolution: 'AWAITING_CONFIRMATION',
-    agentTurn: {
-      contractVersion: 'stp-v1',
-      disposition: 'CONFIRMATION_REQUIRED',
-      plan: displayPlan(4),
-      planConfirmation: {
-        confirmationId: 'regenerated-confirmation',
-        confirmationPlan: 'opaque-regenerated-envelope',
-        planFingerprint: 'sha256:regenerated',
-        integrityToken: 'opaque-regenerated-token',
-        expiresAt: '2026-08-10T12:10:00Z',
-        triggerCodes: ['CONTENT_VERSION_CHANGED'],
-      },
-    },
-  }
   return {
     ...response,
     resolution: 'BOUNDARY',
     summary: '这项请求不能在当前公开范围内继续。',
     agentTurn: { contractVersion: 'stp-v1', disposition: 'BOUNDARY' },
+  }
+}
+
+function confirmationSemanticTurn(taskCount: number, confirmationId: string) {
+  return {
+    contractVersion: 'stp-v1',
+    disposition: 'CONFIRMATION_REQUIRED',
+    plan: displayPlan(taskCount),
+    planConfirmation: {
+      confirmationId,
+      confirmationPlan: 'opaque-confirmation-envelope',
+      planFingerprint: 'sha256:semantic-fingerprint',
+      integrityToken: 'opaque-integrity-token',
+      expiresAt: '2026-08-10T12:10:00Z',
+      triggerCodes: ['TASK_COUNT_REQUIRES_CONFIRMATION'],
+      pendingPlanReference: {
+        planId: 'plan-pending-e2e',
+        planFingerprint: 'sha256:semantic-fingerprint',
+      },
+    },
   }
 }
 
@@ -433,13 +439,23 @@ function localClarificationSemanticResponse(response: Record<string, unknown>) {
       },
       completedTasks: [completedTask('01', 'D 已完成任务', 'D only completed body')],
       clarification: {
-        scope: 'LOCAL', prompt: '请选择第二个比较对象',
+        clarificationId: 'clarify-0000000000000000000000000000000d',
+        scope: 'LOCAL',
+        promptCode: 'ROUTING_COMPARISON_SUBJECT_MISSING',
+        prompt: '请选择第二个比较对象',
         fields: [{
           fieldKey: 'comparisonSubject', inputMode: 'SINGLE_CHOICE', required: true,
           affectedGoalLabels: ['比较候选作品'],
-          options: [{ value: 'project-b', label: '项目 B' }],
+          options: [{
+            value: 'project-b',
+            label: '项目 B',
+            resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: 'project-b' },
+          }],
         }],
-        blockedTaskCount: 1, continuingTaskCount: 1,
+        blockedTaskCount: 1,
+        continuingTaskCount: 1,
+        continuingGoalLabels: ['D 已完成任务'],
+        blockedGoals: [{ goalLabel: '比较候选作品', reasonCode: 'WAITING_FOR_COMPARISON_SUBJECT' }],
       },
     },
   }
@@ -449,6 +465,7 @@ function displayPlan(taskCount: number) {
   return {
     taskCount,
     executableTaskCount: taskCount,
+    summaryLabel: '从了解到推荐',
     constraints: ['只基于已审核公开资料'],
     tasks: Array.from({ length: taskCount }, (_, index) => ({
       displayIndex: String(index + 1).padStart(2, '0'),
@@ -471,8 +488,14 @@ function completedTask(displayIndex: string, goalLabel: string, content: string)
   }
 }
 
-function taskStatus(displayIndex: string, goalLabel: string, status: string) {
-  return { displayIndex, goalLabel, status, sourceDomain: 'PORTFOLIO' }
+function taskStatus(
+  displayIndex: string,
+  goalLabel: string,
+  status: string,
+  reasonCodes: string[] = [],
+  blockedByDisplayIndexes: string[] = [],
+) {
+  return { displayIndex, goalLabel, status, sourceDomain: 'PORTFOLIO', reasonCodes, blockedByDisplayIndexes }
 }
 
 function readySemanticTurn(
@@ -518,17 +541,25 @@ function clarificationSemanticResponse(
       disposition: 'CLARIFICATION_REQUIRED',
       plan: displayPlan(2),
       clarification: {
+        clarificationId: 'clarify-0000000000000000000000000000000e',
         scope,
+        promptCode: 'ROUTING_SUBJECT_CLARIFICATION_REQUIRED',
         prompt: '请选择第二个比较对象',
         fields: [{
           fieldKey: 'comparisonSubject',
           inputMode: 'SINGLE_CHOICE',
           required: true,
           affectedGoalLabels: ['比较候选作品'],
-          options: [{ value: 'sql-audit', label: 'SQL 审计工具' }],
+          options: [{
+            value: 'project-b',
+            label: '项目 B',
+            resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: 'project-b' },
+          }],
         }],
         blockedTaskCount: 2 - continuingTaskCount,
         continuingTaskCount,
+        continuingGoalLabels: continuingTaskCount > 0 ? ['已完成的独立任务'] : [],
+        blockedGoals: [{ goalLabel: '比较候选作品', reasonCode: 'WAITING_FOR_COMPARISON_SUBJECT' }],
       },
     },
   }

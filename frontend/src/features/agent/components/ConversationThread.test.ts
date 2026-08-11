@@ -125,11 +125,102 @@ describe('ConversationThread', () => {
     expect(wrapper.find('[data-testid="turn-clarification"][data-scope="LOCAL"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Only completed-task content appears here.')
     expect(wrapper.text()).toContain('作品集资料')
+    expect(wrapper.text()).toContain('已继续：Review the SQL project，不受影响')
     await wrapper.get('[data-clarification-option="project-b"]').trigger('click')
-    expect(wrapper.emitted('clarificationSelect')).toEqual([[{ fieldKey: 'comparisonSubject', value: 'project-b' }]])
+    expect(wrapper.emitted('clarificationSubmit')?.[0]?.[0]).toMatchObject({
+      clarification: { clarificationId: 'clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9' },
+      submission: {
+        kind: 'CHOICE',
+        fieldKey: 'comparisonSubject',
+        option: {
+          value: 'project-b',
+          subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+        },
+      },
+    })
   })
 
-  it('renders confirmation only when the tab-memory opaque state is present', async () => {
+  it('degrades a clarification card to read-only once a later READY answer completes the flow', async () => {
+    const clarificationAnswer = { ...mapAnswerResponse(localPartialReadyResponse()), turnId: 'turn-clarify-done' }
+    const readyAnswer = { ...mapAnswerResponse(partialSuccessResponse()), turnId: 'turn-ready-after' }
+    const wrapper = mountThread([
+      semanticMessage('semantic-clarify', clarificationAnswer),
+      semanticMessage('semantic-ready', readyAnswer),
+    ])
+
+    const card = wrapper.get('[data-testid="turn-clarification"]')
+    expect(card.attributes('data-readonly')).toBe('true')
+    expect(card.text()).toContain('此澄清已完成，仅作记录。')
+    await card.get('[data-clarification-option="project-b"]').trigger('click')
+    expect(wrapper.emitted('clarificationSubmit')).toBeUndefined()
+  })
+
+  it('keeps at most one card actionable per session at any moment', () => {
+    const confirmationAnswer = { ...mapAnswerResponse(confirmationRequiredResponse()), turnId: 'turn-mix-confirm' }
+    const invalidatedAnswer = mapAnswerResponse(partialSuccessResponse())
+    invalidatedAnswer.turnId = 'turn-mix-invalidated'
+    invalidatedAnswer.semanticTurn = {
+      ...invalidatedAnswer.semanticTurn!,
+      disposition: 'REJECTED',
+      displayPlan: undefined,
+      taskSummary: undefined,
+      completedTasks: [],
+      planChange: {
+        summary: '内容版本已变化',
+        changeLabels: [],
+        invalidatedPlanReference: { planId: 'plan-opaque', planFingerprint: 'sha256:opaque' },
+      },
+    }
+    const clarificationAnswer = { ...mapAnswerResponse(localPartialReadyResponse()), turnId: 'turn-mix-clarify' }
+    const current = session([
+      semanticMessage('mix-confirm', confirmationAnswer),
+      semanticMessage('mix-invalidated', invalidatedAnswer),
+      semanticMessage('mix-clarify', clarificationAnswer),
+    ])
+    current.pendingConfirmation = {
+      confirmationId: 'confirmation-01',
+      confirmationPlan: 'opaque-envelope',
+      planFingerprint: 'sha256:opaque-fingerprint',
+      integrityToken: 'opaque-integrity-token',
+      expiresAt: '2026-08-10T12:10:00Z',
+    }
+    const wrapper = mount(ConversationThread, {
+      props: { session: current, role: 'INTERVIEWER', project: previewPublicContent.projects[0], pending: false },
+    })
+
+    const cards = [
+      ...wrapper.findAll('[data-testid="plan-confirmation"]'),
+      ...wrapper.findAll('[data-testid="turn-clarification"]'),
+      ...wrapper.findAll('[data-testid="plan-invalidated-notice"]'),
+    ]
+    expect(cards.length).toBe(3)
+    const actionable = cards.filter((card) =>
+      card.findAll('button').some((button) => button.attributes('disabled') === undefined))
+    expect(actionable).toHaveLength(1)
+    expect(actionable[0]?.attributes('data-testid')).toBe('turn-clarification')
+    expect(wrapper.get('[data-testid="plan-confirmation"]').attributes('data-readonly')).toBe('true')
+    expect(wrapper.get('[data-testid="plan-confirmation"]').find('[data-action="confirm-plan"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="plan-invalidated-notice"]').find('[data-action="regenerate-plan"]').exists()).toBe(false)
+  })
+
+  it('keeps only the newest clarification card interactive and degrades older ones to read-only', async () => {
+    const first = { ...mapAnswerResponse(localPartialReadyResponse()), turnId: 'turn-local-old' }
+    const second = { ...mapAnswerResponse(localPartialReadyResponse()), turnId: 'turn-local-new' }
+    const wrapper = mountThread([
+      semanticMessage('semantic-local-old', first),
+      semanticMessage('semantic-local-new', second),
+    ])
+
+    const cards = wrapper.findAll('[data-testid="turn-clarification"]')
+    expect(cards).toHaveLength(2)
+    expect(cards[0]?.attributes('data-readonly')).toBe('true')
+    expect(cards[0]?.text()).toContain('此澄清已被后续轮次取代，仅作记录。')
+    expect(cards[1]?.attributes('data-readonly')).toBeUndefined()
+    await cards[0]?.get('[data-clarification-option="project-b"]').trigger('click')
+    expect(wrapper.emitted('clarificationSubmit')).toBeUndefined()
+  })
+
+  it('keeps the confirmation card actionable only while the tab-memory opaque state is present', async () => {
     const answer = mapAnswerResponse(confirmationRequiredResponse())
     const current = session([semanticMessage('semantic-confirmation', answer)])
     current.pendingConfirmation = {
@@ -148,6 +239,19 @@ describe('ConversationThread', () => {
     expect(wrapper.emitted('confirmPlan')?.[0]?.[0]).toMatchObject({ confirmationPlan: 'opaque-envelope' })
   })
 
+  it('keeps a confirmation card as a read-only record once its envelope state is gone', () => {
+    const answer = mapAnswerResponse(confirmationRequiredResponse())
+    const current = session([semanticMessage('semantic-confirmation', answer)])
+    const wrapper = mount(ConversationThread, {
+      props: { session: current, role: 'INTERVIEWER', project: previewPublicContent.projects[0], pending: false },
+    })
+
+    const card = wrapper.get('[data-testid="plan-confirmation"]')
+    expect(card.attributes('data-readonly')).toBe('true')
+    expect(card.text()).toContain('该计划已关闭，仅作记录')
+    expect(card.find('[data-action="confirm-plan"]').exists()).toBe(false)
+  })
+
   it('shows an invalidated-plan notice without silently rendering a replacement plan', () => {
     const answer = mapAnswerResponse(partialSuccessResponse())
     answer.semanticTurn = {
@@ -162,6 +266,81 @@ describe('ConversationThread', () => {
 
     expect(wrapper.get('[data-testid="plan-invalidated-notice"]').text()).toContain('重新生成计划')
     expect(wrapper.find('[data-testid="plan-confirmation"]').exists()).toBe(false)
+  })
+
+  it('keeps only the newest confirmation card actionable so an old card cannot submit a mismatched envelope', async () => {
+    const first = { ...mapAnswerResponse(confirmationRequiredResponse()), turnId: 'turn-confirm-old' }
+    const second = { ...mapAnswerResponse(confirmationRequiredResponse()), turnId: 'turn-confirm-new' }
+    const current = session([
+      semanticMessage('semantic-confirmation-old', first),
+      semanticMessage('semantic-confirmation-new', second),
+    ])
+    current.pendingConfirmation = {
+      confirmationId: 'confirmation-02',
+      confirmationPlan: 'opaque-envelope-2',
+      planFingerprint: 'sha256:opaque-fingerprint-2',
+      integrityToken: 'opaque-integrity-token-2',
+      expiresAt: '2026-08-10T12:20:00Z',
+    }
+    const wrapper = mount(ConversationThread, {
+      props: { session: current, role: 'INTERVIEWER', project: previewPublicContent.projects[0], pending: false },
+    })
+
+    const cards = wrapper.findAll('[data-testid="plan-confirmation"]')
+    expect(cards).toHaveLength(2)
+    // 旧卡只读：不渲染操作按钮，避免「旧文案 + 新信封」错配提交（FE-F10）
+    expect(cards[0]?.attributes('data-readonly')).toBe('true')
+    expect(cards[0]?.find('[data-action="confirm-plan"]').exists()).toBe(false)
+    expect(cards[0]?.text()).toContain('仅作记录')
+    await cards[1]?.get('[data-action="confirm-plan"]').trigger('click')
+    expect(wrapper.emitted('confirmPlan')?.[0]?.[0]).toMatchObject({ confirmationId: 'confirmation-02' })
+  })
+
+  it('renders the adjustment bar and submits a trimmed instruction', async () => {
+    const wrapper = mount(ConversationThread, {
+      props: {
+        session: session([semanticMessage('m1')]),
+        role: 'INTERVIEWER',
+        project: previewPublicContent.projects[0],
+        pending: false,
+        adjustment: { planTitle: '5 步 · 从了解到推荐' },
+      },
+    })
+
+    const bar = wrapper.get('[data-testid="plan-adjustment-bar"]')
+    expect(bar.text()).toContain('正在调整当前计划')
+    expect(bar.text()).toContain('5 步 · 从了解到推荐')
+    expect(bar.get('[data-action="submit-adjustment"]').attributes('disabled')).toBeDefined()
+    await bar.get('[data-adjustment-input]').setValue('  去掉总结那一步  ')
+    await bar.get('[data-action="submit-adjustment"]').trigger('click')
+    expect(wrapper.emitted('adjustSubmit')).toEqual([['去掉总结那一步']])
+    await bar.get('[data-action="exit-adjustment"]').trigger('click')
+    expect(wrapper.emitted('adjustExit')).toEqual([[]])
+  })
+
+  it('shows a restrained placeholder line for a dismissed plan change', () => {
+    const answer = mapAnswerResponse(partialSuccessResponse())
+    answer.semanticTurn = {
+      ...answer.semanticTurn!,
+      disposition: 'REJECTED',
+      displayPlan: undefined,
+      taskSummary: undefined,
+      completedTasks: [],
+      planChange: { summary: '内容版本已变化', changeLabels: [] },
+    }
+    const message = semanticMessage('semantic-dismissed', answer)
+    const wrapper = mount(ConversationThread, {
+      props: {
+        session: session([message]),
+        role: 'INTERVIEWER',
+        project: previewPublicContent.projects[0],
+        pending: false,
+        dismissedPlanChanges: new Set([answer.turnId]),
+      },
+    })
+
+    expect(wrapper.find('[data-testid="plan-invalidated-notice"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已暂不处理')
   })
 
   it('renders a disabled retry-after countdown as its only recovery action', () => {

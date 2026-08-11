@@ -11,8 +11,10 @@ import {
   invalidatedPlanResponse,
   localPartialReadyResponse,
   partialSuccessResponse,
+  shortTextClarificationResponse,
 } from '../model/semanticTurnFixtures'
 import AgentWorkspace from './AgentWorkspace.vue'
+import ConversationThread from './ConversationThread.vue'
 
 const SESSION_KEY = 'forbidden-session-key'
 
@@ -193,7 +195,7 @@ describe('AgentWorkspace', () => {
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
-  it('continues a local clarification with the original question and controlled semantic subject', async () => {
+  it('continues a local clarification with a controlled resolution and no fieldKey guessing', async () => {
     askQuestionMock.mockResolvedValueOnce(localPartialReadyResponse()).mockResolvedValueOnce(partialSuccessResponse())
     const wrapper = mountWorkspace()
 
@@ -203,18 +205,25 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-clarification-option="project-b"]').trigger('click')
     await flushPromises()
 
-    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+    const continuation = askQuestionMock.mock.calls[1]?.[0]
+    expect(continuation).toMatchObject({
       action: 'ASK',
       agentTurnContract: 'stp-v1',
       question: '先审阅再比较',
-      semanticContext: {
-        activeSubjects: [
-          { subjectType: 'PROJECT', subjectId: 'sql-audit' },
-          { subjectType: 'PROJECT', subjectId: 'project-b' },
-        ],
+      clarificationResolution: {
+        clarificationId: 'clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9',
+        promptCode: 'ROUTING_COMPARISON_SUBJECT_MISSING',
+        fieldKey: 'comparisonSubject',
+        selectedOption: {
+          value: 'project-b',
+          subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+        },
       },
     })
-    expect(askQuestionMock.mock.calls[1]?.[0].planConfirmation).toBeUndefined()
+    expect(continuation.semanticContext).toBeDefined()
+    expect(continuation.planConfirmation).toBeUndefined()
+    // FE-F03：前端不再构造非法主体类型，也不按 fieldKey 猜领域类型
+    expect(JSON.stringify(continuation)).not.toContain('CONTROLLED_OPTION')
   })
 
   it('keeps critical clarification execution-free until a controlled choice is submitted', async () => {
@@ -230,15 +239,256 @@ describe('AgentWorkspace', () => {
     await flushPromises()
 
     expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+    const continuation = askQuestionMock.mock.calls[1]?.[0]
+    expect(continuation).toMatchObject({
       action: 'ASK',
       agentTurnContract: 'stp-v1',
       question: '比较两个项目',
+      clarificationResolution: {
+        clarificationId: 'clarify-f9e8d7c6b5a4938271605f4e3d2c1b0a',
+        promptCode: 'ROUTING_SUBJECT_CLARIFICATION_REQUIRED',
+        fieldKey: 'subject',
+        selectedOption: {
+          value: 'project-b',
+          subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+        },
+      },
     })
-    expect(askQuestionMock.mock.calls[1]?.[0].planConfirmation).toBeUndefined()
-    expect(askQuestionMock.mock.calls[1]?.[0].semanticContext.activeSubjects).toContainEqual({
-      subjectType: 'PROJECT', subjectId: 'project-b',
+    expect(continuation.planConfirmation).toBeUndefined()
+  })
+
+  it('submits a short-text clarification as a controlled text resolution', async () => {
+    askQuestionMock.mockResolvedValueOnce(shortTextClarificationResponse()).mockResolvedValueOnce(partialSuccessResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('一口气问八个目标')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-clarification-text]').setValue('先只介绍 SQL 审计和 ABTest')
+    await wrapper.get('[data-clarification-submit]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'ASK',
+      question: '一口气问八个目标',
+      clarificationResolution: {
+        clarificationId: 'clarify-11223344556677889900aabbccddeeff',
+        promptCode: 'ROUTING_TASK_SPLIT_REQUIRED',
+        fieldKey: 'taskSplit',
+        textValue: '先只介绍 SQL 审计和 ABTest',
+      },
     })
+  })
+
+  it('enters an explicit adjustment mode and submits instruction with the pending plan reference', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('[data-action="adjust-plan"]').trigger('click')
+    const bar = wrapper.get('[data-testid="plan-adjustment-bar"]')
+    expect(bar.text()).toContain('正在调整当前计划')
+    expect(bar.text()).toContain('4 步 · 从了解到推荐')
+    // 调整中确认卡保持可操作（反悔路径）
+    expect(wrapper.get('[data-action="confirm-plan"]').attributes('disabled')).toBeUndefined()
+
+    await bar.get('[data-adjustment-input]').setValue('去掉总结那一步')
+    await bar.get('[data-action="submit-adjustment"]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
+      action: 'ASK',
+      question: '先审阅再比较',
+      planAdjustment: {
+        instruction: '去掉总结那一步',
+        pendingPlanReference: {
+          planId: 'plan-pending-01',
+          planFingerprint: 'sha256:opaque-fingerprint',
+        },
+      },
+      semanticContext: {
+        pendingPlanReference: {
+          planId: 'plan-pending-01',
+          planFingerprint: 'sha256:opaque-fingerprint',
+        },
+      },
+    })
+    // 新计划到达后调整态自动退出
+    expect(wrapper.find('[data-testid="plan-adjustment-bar"]').exists()).toBe(false)
+  })
+
+  it('exits the adjustment mode without sending any request', async () => {
+    askQuestionMock.mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="adjust-plan"]').trigger('click')
+    await wrapper.get('[data-action="exit-adjustment"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="plan-adjustment-bar"]').exists()).toBe(false)
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('degrades the confirmed plan card to read-only after it executes', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+      .mockResolvedValueOnce(partialSuccessResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="confirm-plan"]').trigger('click')
+    await flushPromises()
+
+    const card = wrapper.get('[data-testid="plan-confirmation"]')
+    expect(card.attributes('data-readonly')).toBe('true')
+    expect(card.text()).toContain('该计划已关闭，仅作记录')
+    expect(card.find('[data-action="confirm-plan"]').exists()).toBe(false)
+  })
+
+  it('degrades the plan card to read-only after cancellation instead of removing it from history', async () => {
+    askQuestionMock.mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="cancel-plan"]').trigger('click')
+
+    const card = wrapper.get('[data-testid="plan-confirmation"]')
+    expect(card.attributes('data-readonly')).toBe('true')
+    expect(card.text()).toContain('该计划已关闭，仅作记录')
+    expect(card.find('[data-action="confirm-plan"]').exists()).toBe(false)
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an injected stale clarification submission once a newer confirmation owns the pending action', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(localPartialReadyResponse())
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先审阅再比较')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('textarea').setValue('按上面的思路给我一个计划')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="plan-confirmation"]').exists()).toBe(true)
+    // 旧澄清卡已只读，不能再通过界面提交
+    const oldCard = wrapper.get('[data-testid="turn-clarification"]')
+    expect(oldCard.attributes('data-readonly')).toBe('true')
+
+    // 注入旧澄清事件：turnId 对应当前未决动作之外，Workspace 必须拒绝
+    wrapper.findComponent(ConversationThread).vm.$emit('clarificationSubmit', {
+      turnId: 'turn-semantic-local-clarification',
+      clarification: {
+        clarificationId: 'clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9',
+        scope: 'LOCAL',
+        promptCode: 'ROUTING_COMPARISON_SUBJECT_MISSING',
+        prompt: '请选择',
+        fields: [],
+        blockedTaskCount: 1,
+        continuingTaskCount: 1,
+        continuingGoalLabels: [],
+        blockedGoals: [],
+      },
+      submission: {
+        kind: 'CHOICE',
+        fieldKey: 'comparisonSubject',
+        option: {
+          value: 'project-b',
+          label: '项目 B',
+          subjectReference: { subjectType: 'PROJECT', subjectId: 'project-b' },
+        },
+      },
+    })
+    await flushPromises()
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('degrades the invalidation card to read-only once regeneration yields a new confirmation', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(invalidatedPlanResponse())
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('重新比较项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="regenerate-plan"]').trigger('click')
+    await flushPromises()
+
+    const notice = wrapper.get('[data-testid="plan-invalidated-notice"]')
+    expect(notice.find('[data-action="regenerate-plan"]').exists()).toBe(false)
+    expect(notice.find('[data-action="dismiss-plan-change"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="plan-confirmation"]').exists()).toBe(true)
+  })
+
+  it('rejects injected stale invalidation events and keeps the new plan adjustable', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(invalidatedPlanResponse())
+      .mockResolvedValueOnce(confirmationRequiredResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('重新比较项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-action="regenerate-plan"]').trigger('click')
+    await flushPromises()
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+
+    // 注入旧失效卡的 dismiss：不得清除新确认计划的 continuation
+    wrapper.findComponent(ConversationThread).vm.$emit('dismissPlanChange', 'turn-semantic-invalidated')
+    await flushPromises()
+    // 注入旧失效卡的 regenerate：不得发送任何请求
+    wrapper.findComponent(ConversationThread).vm.$emit('regeneratePlan', 'turn-semantic-invalidated')
+    await flushPromises()
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+
+    // 新确认计划仍能正常进入调整模式并提交调整（证明 continuation 未被旧卡清除）
+    await wrapper.get('[data-action="adjust-plan"]').trigger('click')
+    const bar = wrapper.get('[data-testid="plan-adjustment-bar"]')
+    askQuestionMock.mockResolvedValueOnce(confirmationRequiredResponse())
+    await bar.get('[data-adjustment-input]').setValue('把推荐数量改成 2 个')
+    await bar.get('[data-action="submit-adjustment"]').trigger('click')
+    await flushPromises()
+    expect(askQuestionMock).toHaveBeenCalledTimes(3)
+    expect(askQuestionMock.mock.calls[2]?.[0]).toMatchObject({
+      action: 'ASK',
+      planAdjustment: {
+        instruction: '把推荐数量改成 2 个',
+        pendingPlanReference: {
+          planId: 'plan-pending-01',
+          planFingerprint: 'sha256:opaque-fingerprint',
+        },
+      },
+    })
+  })
+
+  it('dismisses an invalidated plan locally and drops the continuation without any request', async () => {
+    askQuestionMock.mockResolvedValueOnce(invalidatedPlanResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('重新比较项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="plan-invalidated-notice"]').exists()).toBe(true)
+
+    await wrapper.get('[data-action="dismiss-plan-change"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="plan-invalidated-notice"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已暂不处理')
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
   })
 
   it('regenerates an invalidated plan with original context and no confirmation envelope', async () => {

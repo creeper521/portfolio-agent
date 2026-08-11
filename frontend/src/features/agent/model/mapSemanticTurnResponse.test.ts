@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 
 import { mapAnswerResponse } from './mapAnswerResponse'
 import { mapSemanticTurnResponse } from './semanticTurnView'
@@ -12,25 +12,30 @@ import {
 describe('semantic turn response mapping', () => {
   it('maps agentTurn before legacy answer fields', () => {
     const mapped = mapAnswerResponse(partialSuccessResponse())
-
-    expect(mapped.semanticTurn?.displayPlan?.tasks[0]?.goalLabel)
+    expect(mapped.semanticTurn?.completedTasks[0]?.goalLabel)
       .toBe('Review the SQL project')
     expect(mapped.semanticTurn?.taskSummary?.displayMode).toBe('EXPANDED')
   })
 
   it('derives rendered sections from completed semantic tasks instead of legacy blocks', () => {
     const mapped = mapAnswerResponse(partialSuccessResponse())
-
-    expect(mapped.sections).toEqual([expect.objectContaining({
+    expect(mapped.sections).toHaveLength(1)
+    expect(mapped.sections[0]).toMatchObject({
       title: 'SQL project review',
       content: 'Only completed-task content appears here.',
-    })])
-    expect(mapped.sections.map((section) => section.content))
+    })
+    expect(JSON.stringify(mapped.sections))
       .not.toContain('Legacy fallback must not define the semantic rendering.')
   })
 
   it('renders a safe top-level compatibility projection when a ready turn has no completed payload', () => {
     const response = partialSuccessResponse()
+    response.agentTurn = {
+      contractVersion: 'stp-v1',
+      disposition: 'READY',
+      outcome: { planOutcome: 'SUCCEEDED' },
+      completedTasks: [],
+    }
     response.blocks = [{
       sourceScope: 'PORTFOLIO',
       content: 'Reviewed deterministic portfolio fallback.',
@@ -43,17 +48,15 @@ describe('semantic turn response mapping', () => {
     }
 
     const mapped = mapAnswerResponse(response)
-
-    expect(mapped.sections).toEqual([expect.objectContaining({
+    expect(mapped.sections).toHaveLength(1)
+    expect(mapped.sections[0]).toMatchObject({
       content: 'Reviewed deterministic portfolio fallback.',
       sourceScope: 'PORTFOLIO',
-    })])
+    })
   })
 
   it('maps completed tasks without exposing internal graph fields', () => {
     const view = mapSemanticTurnResponse(partialSuccessResponse().agentTurn!)
-
-    expect(view.completedTasks).toHaveLength(1)
     expect(view.taskSummary?.displayMode).toBe('EXPANDED')
     expect(JSON.stringify(view)).not.toContain('REQUIRES_SUCCESS')
     expect(JSON.stringify(view)).not.toContain('task-01')
@@ -62,21 +65,18 @@ describe('semantic turn response mapping', () => {
 
   it('keeps the legacy answer mapping when agentTurn is absent', () => {
     const mapped = mapAnswerResponse(legacyOnlyResponse())
-
     expect(mapped.semanticTurn).toBeUndefined()
     expect(mapped.sections[0]?.content).toBe('Legacy content')
   })
 
   it('keeps confirmation transport data out of the display view', () => {
     const view = mapSemanticTurnResponse(confirmationRequiredResponse().agentTurn!)
-
     expect(JSON.stringify(view)).not.toContain('opaque-envelope')
     expect(JSON.stringify(view)).not.toContain('opaque-integrity-token')
   })
 
   it('maps a PARTIAL_READY response with LOCAL clarification and safe completed work', () => {
     const view = mapSemanticTurnResponse(localPartialReadyResponse().agentTurn!)
-
     expect(view.disposition).toBe('PARTIAL_READY')
     expect(view.clarification?.scope).toBe('LOCAL')
     expect(view.completedTasks).toHaveLength(1)
@@ -94,7 +94,7 @@ describe('semantic turn response mapping', () => {
       },
     }
 
-    const view = mapSemanticTurnResponse(response.agentTurn)
+    const view = mapSemanticTurnResponse(response.agentTurn!)
     expect(view.planChange?.invalidatedPlanReference).toEqual({
       planId: 'plan-opaque',
       planFingerprint: 'sha256:opaque',
@@ -119,6 +119,89 @@ describe('semantic turn response mapping', () => {
     } as never
 
     expect(mapAnswerResponse(response).semanticTurn?.disposition).toBe('REJECTED')
+  })
+
+  it('maps clarification contract fields with fail-safe validation', () => {
+    const view = mapSemanticTurnResponse(localPartialReadyResponse().agentTurn!)
+
+    const clarification = view.clarification
+    expect(clarification?.clarificationId).toBe('clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9')
+    expect(clarification?.promptCode).toBe('ROUTING_COMPARISON_SUBJECT_MISSING')
+    expect(clarification?.continuingGoalLabels).toEqual(['Review the SQL project'])
+    expect(clarification?.blockedGoals).toEqual([
+      { goalLabel: '比较两个项目', reasonCode: 'WAITING_FOR_COMPARISON_SUBJECT' },
+    ])
+    expect(clarification?.fields[0]?.options[0]?.subjectReference).toEqual({
+      subjectType: 'PROJECT',
+      subjectId: 'project-b',
+    })
+  })
+
+  it('drops uncontrolled option resolutions instead of guessing domain types', () => {
+    const response = localPartialReadyResponse()
+    const turn = response.agentTurn as { clarification?: { fields: Array<{ options: Array<Record<string, unknown>> }> } }
+    turn.clarification!.fields[0]!.options[0] = {
+      value: 'project-b',
+      label: '项目 B',
+      resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'CONTROLLED_OPTION', subjectId: 'project-b' },
+    }
+    turn.clarification!.fields[0]!.options[1] = {
+      value: 'project-c',
+      label: '项目 C',
+      resolution: { kind: 'FREE_TEXT', subjectType: 'PROJECT', subjectId: 'project-c' },
+    }
+
+    const view = mapSemanticTurnResponse(response.agentTurn!)
+    expect(view.clarification?.fields[0]?.options[0]?.subjectReference).toBeNull()
+    expect(view.clarification?.fields[0]?.options[1]?.subjectReference).toBeNull()
+  })
+
+  it('marks unknown input modes as unsupported and filters malformed reason codes', () => {
+    const response = partialSuccessResponse()
+    const turn = response.agentTurn as {
+      outcome?: { taskSummary?: { items: Array<Record<string, unknown>> } }
+      clarification?: Record<string, unknown>
+    }
+    turn.outcome!.taskSummary!.items[1] = {
+      displayIndex: '02',
+      goalLabel: 'Review the ABTest project',
+      status: 'NOT_SUPPORTED',
+      sourceDomain: 'PORTFOLIO',
+      reasonCodes: ['PORTFOLIO_EVIDENCE_INSUFFICIENT', 'lowercase-bad', ''],
+    }
+    turn.clarification = {
+      scope: 'LOCAL',
+      prompt: 'test',
+      fields: [{
+        fieldKey: 'future',
+        inputMode: 'DATE_PICKER',
+        options: [],
+        required: true,
+        affectedGoalLabels: [],
+      }],
+      blockedTaskCount: 1,
+      continuingTaskCount: 1,
+    }
+
+    const view = mapSemanticTurnResponse(response.agentTurn!)
+    expect(view.taskSummary?.items[1]?.reasonCodes).toEqual(['PORTFOLIO_EVIDENCE_INSUFFICIENT'])
+    expect(view.clarification?.fields[0]?.inputMode).toBe('UNSUPPORTED')
+    expect(view.clarification?.clarificationId).toBeNull()
+  })
+
+  it('caps overlong summary labels and tolerates a missing plan reference', () => {
+    const response = confirmationRequiredResponse()
+    const withLongLabel = response.agentTurn as { plan?: { summaryLabel?: string } }
+    withLongLabel.plan!.summaryLabel = '长'.repeat(80)
+    expect(mapSemanticTurnResponse(response.agentTurn!).displayPlan?.summaryLabel).toBeNull()
+
+    const short = confirmationRequiredResponse()
+    const view = mapSemanticTurnResponse(short.agentTurn!)
+    expect(view.displayPlan?.summaryLabel).toBe('从了解到推荐')
+    expect(view.displayPlan?.pendingPlanReference).toEqual({
+      planId: 'plan-pending-01',
+      planFingerprint: 'sha256:opaque-fingerprint',
+    })
   })
 })
 

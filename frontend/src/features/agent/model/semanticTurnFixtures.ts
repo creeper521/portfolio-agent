@@ -48,6 +48,19 @@ export function partialSuccessResponse(): AnswerResponse {
             status: 'COMPLETED',
             sourceDomain: 'PORTFOLIO',
             taskId: 'task-01',
+          }, {
+            displayIndex: '02',
+            goalLabel: 'Review the ABTest project',
+            status: 'NOT_SUPPORTED',
+            sourceDomain: 'PORTFOLIO',
+            reasonCodes: ['PORTFOLIO_EVIDENCE_INSUFFICIENT'],
+          }, {
+            displayIndex: '03',
+            goalLabel: 'Compare the two projects',
+            status: 'BLOCKED',
+            sourceDomain: 'PORTFOLIO',
+            reasonCodes: ['EXECUTION_DEPENDENCY_BLOCKED'],
+            blockedByDisplayIndexes: ['02'],
           }],
         },
       },
@@ -85,11 +98,13 @@ export function confirmationRequiredResponse(): AnswerResponse {
       disposition: 'CONFIRMATION_REQUIRED',
       plan: {
         taskCount: 4,
+        summaryLabel: '从了解到推荐',
         tasks: [{
           displayIndex: '01',
           goalLabel: 'Review the SQL project',
           sourceDomain: 'PORTFOLIO',
         }],
+        constraints: ['只使用公开作品集资料'],
       },
       planConfirmation: {
         confirmationId: 'confirmation-01',
@@ -98,6 +113,10 @@ export function confirmationRequiredResponse(): AnswerResponse {
         integrityToken: 'opaque-integrity-token',
         expiresAt: '2026-08-10T12:10:00Z',
         triggerCodes: ['TASK_COUNT_REQUIRES_CONFIRMATION'],
+        pendingPlanReference: {
+          planId: 'plan-pending-01',
+          planFingerprint: 'sha256:opaque-fingerprint',
+        },
       },
     },
   }
@@ -112,20 +131,32 @@ export function localPartialReadyResponse(): AnswerResponse {
       ...base.agentTurn!,
       disposition: 'PARTIAL_READY',
       clarification: {
+        clarificationId: 'clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9',
         scope: 'LOCAL',
+        promptCode: 'ROUTING_COMPARISON_SUBJECT_MISSING',
         prompt: '你希望项目 A 与哪个项目比较？',
         fields: [{
           fieldKey: 'comparisonSubject',
           inputMode: 'SINGLE_CHOICE',
           options: [
-            { value: 'project-b', label: '项目 B' },
-            { value: 'project-c', label: '项目 C' },
+            {
+              value: 'project-b',
+              label: '项目 B',
+              resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: 'project-b' },
+            },
+            {
+              value: 'project-c',
+              label: '项目 C',
+              resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: 'project-c' },
+            },
           ],
           required: true,
           affectedGoalLabels: ['比较两个项目'],
         }],
         blockedTaskCount: 1,
         continuingTaskCount: 1,
+        continuingGoalLabels: ['Review the SQL project'],
+        blockedGoals: [{ goalLabel: '比较两个项目', reasonCode: 'WAITING_FOR_COMPARISON_SUBJECT' }],
       },
     } as typeof base.agentTurn,
   }
@@ -142,17 +173,59 @@ export function criticalClarificationResponse(): AnswerResponse {
       disposition: 'CLARIFICATION_REQUIRED',
       plan: local.agentTurn && 'plan' in local.agentTurn ? local.agentTurn.plan : undefined,
       clarification: {
+        clarificationId: 'clarify-f9e8d7c6b5a4938271605f4e3d2c1b0a',
         scope: 'CRITICAL',
+        promptCode: 'ROUTING_SUBJECT_CLARIFICATION_REQUIRED',
         prompt: '请选择关键比较主体',
         fields: [{
-          fieldKey: 'comparisonSubject',
+          fieldKey: 'subject',
           inputMode: 'SINGLE_CHOICE',
-          options: [{ value: 'project-b', label: '项目 B' }],
+          options: [{
+            value: 'project-b',
+            label: '项目 B',
+            resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: 'project-b' },
+          }],
           required: true,
           affectedGoalLabels: ['比较两个项目', '形成综合建议'],
         }],
         blockedTaskCount: 2,
         continuingTaskCount: 0,
+        continuingGoalLabels: [],
+        blockedGoals: [
+          { goalLabel: '比较两个项目', reasonCode: 'WAITING_FOR_SUBJECT' },
+          { goalLabel: '形成综合建议', reasonCode: 'WAITING_FOR_SUBJECT' },
+        ],
+      },
+    },
+  }
+}
+
+export function shortTextClarificationResponse(): AnswerResponse {
+  const base = partialSuccessResponse()
+  return {
+    ...base,
+    turnId: 'turn-semantic-short-text',
+    resolution: 'NEEDS_CLARIFICATION',
+    blocks: [],
+    agentTurn: {
+      contractVersion: 'stp-v1',
+      disposition: 'CLARIFICATION_REQUIRED',
+      clarification: {
+        clarificationId: 'clarify-11223344556677889900aabbccddeeff',
+        scope: 'CRITICAL',
+        promptCode: 'ROUTING_TASK_SPLIT_REQUIRED',
+        prompt: '请将目标拆分为不超过六项的独立请求。',
+        fields: [{
+          fieldKey: 'taskSplit',
+          inputMode: 'SHORT_TEXT',
+          options: [],
+          required: true,
+          affectedGoalLabels: ['拆分当前请求'],
+        }],
+        blockedTaskCount: 7,
+        continuingTaskCount: 0,
+        continuingGoalLabels: [],
+        blockedGoals: [{ goalLabel: '拆分当前请求', reasonCode: 'ROUTING_TASK_SPLIT_REQUIRED' }],
       },
     },
   }
