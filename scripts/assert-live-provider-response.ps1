@@ -86,13 +86,13 @@ try {
     if ($response.degraded -isnot [bool] -or $response.degraded -ne $false) {
         Stop-Assertion 'LIVE_PROVIDER_REPORTED_DEGRADED'
     }
-    if ($response.intentSource -cne 'MODEL') {
+    if ($response.answerScope -cne 'GENERAL' -or $response.intentSource -cne 'RULE') {
         Stop-Assertion 'LIVE_PROVIDER_ROUTE_BYPASSED'
     }
-    if ($response.constructionMode -cne 'EVIDENCE_COMPOSITION') {
+    if ($response.constructionMode -cne 'GENERAL_MODEL') {
         Stop-Assertion 'LIVE_PROVIDER_CONSTRUCTION_INVALID'
     }
-    if ($response.evidenceState -cne 'VERIFIED') {
+    if ($response.evidenceState -cne 'NOT_REQUIRED') {
         Stop-Assertion 'LIVE_PROVIDER_EVIDENCE_UNVERIFIED'
     }
     if ($response.resolution -cne 'ANSWERED') {
@@ -102,7 +102,7 @@ try {
         Stop-Assertion 'LIVE_PROVIDER_BLOCKS_MISSING'
     }
 
-    Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; intentSource=MODEL; constructionMode=EVIDENCE_COMPOSITION; evidenceState=VERIFIED; resolution=ANSWERED; blocks=$($response.blocks.Count)."
+    Write-Output "Live Provider verification passed: provider=$provider; contentVersion=$ExpectedContentVersion; answerScope=GENERAL; intentSource=RULE; constructionMode=GENERAL_MODEL; evidenceState=NOT_REQUIRED; resolution=ANSWERED; blocks=$($response.blocks.Count)."
 }
 catch {
     $code = [string]$_.Exception.Message

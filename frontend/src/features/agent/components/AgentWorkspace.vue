@@ -27,7 +27,7 @@ import {
   useWorkspaceSplit,
   type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
-import type { AgentRouteSeed } from '../model/sessionTypes'
+import type { AgentRouteSeed, AgentSession } from '../model/sessionTypes'
 import type {
   PortfolioReferenceContext,
   ConversationSuggestedQuestion,
@@ -317,6 +317,20 @@ function buildSemanticContext(
   }
 }
 
+function completedConversationHistory(
+  messages: AgentSession['messages'],
+): AgentSession['messages'] {
+  const completed: AgentSession['messages'] = []
+  for (let index = 0; index + 1 < messages.length; index += 1) {
+    const user = messages[index]
+    const assistant = messages[index + 1]
+    if (user?.role !== 'USER' || assistant?.role !== 'AGENT') continue
+    completed.push(user, assistant)
+    index += 1
+  }
+  return completed.slice(-40)
+}
+
 async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
   const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
   if (!session || pending.value || disposed) {
@@ -360,9 +374,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     const completedMessages = session.messages.at(-1)?.role === 'USER'
       ? session.messages.slice(0, -1)
       : session.messages
-    const history = completedMessages
-      .filter((m) => m.role === 'USER' || m.role === 'AGENT')
-      .slice(-40)
+    const history = completedConversationHistory(completedMessages)
       .map((m) => {
         let content = m.content
         if (m.role === 'AGENT' && m.answer) {

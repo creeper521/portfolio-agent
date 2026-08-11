@@ -142,13 +142,13 @@ public final class ConversationalAgentRuntime {
                 blocks,
                 List.of(),
                 isDegraded(agentTurn),
-                GenerationMode.DETERMINISTIC,
+                projectedGenerationMode(agentTurn),
                 null,
                 projectedNoticeCode(agentTurn),
                 new ConversationProgress(List.of(), ConversationGuidanceStage.OPENING),
                 null,
                 projectedConstructionMode(request, content, agentTurn),
-                request.getQuestionPresetId() == null ? AnswerIntentSource.RULE : AnswerIntentSource.PRESET,
+                projectedIntentSource(request, agentTurn),
                 projectedEvidenceState(request, content, answerScope, agentTurn)).withAgentTurn(agentTurn);
     }
 
@@ -283,8 +283,28 @@ public final class ConversationalAgentRuntime {
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
             AgentTurnResult agentTurn) {
+        if (hasRenderableGeneralPayload(agentTurn)) {
+            return AnswerConstructionMode.GENERAL_MODEL;
+        }
         return hasRenderablePayload(agentTurn) || hasProjectedFallback(request, content, agentTurn)
                 ? AnswerConstructionMode.EVIDENCE_COMPOSITION : AnswerConstructionMode.TEMPLATE;
+    }
+
+    private GenerationMode projectedGenerationMode(AgentTurnResult agentTurn) {
+        return hasRenderableGeneralPayload(agentTurn)
+                ? GenerationMode.MODEL : GenerationMode.DETERMINISTIC;
+    }
+
+    private AnswerIntentSource projectedIntentSource(
+            ConversationAnswerRequest request, AgentTurnResult agentTurn) {
+        if (request.getQuestionPresetId() != null) {
+            return AnswerIntentSource.PRESET;
+        }
+        return agentTurn.getPlan()
+                .filter(plan -> plan.getSource()
+                        == com.portfolio.agent.answer.routing.domain.SemanticTurnPlan.PlanSource.MODEL_ASSISTED)
+                .map(ignored -> AnswerIntentSource.MODEL)
+                .orElse(AnswerIntentSource.RULE);
     }
 
     private AnswerEvidenceState projectedEvidenceState(
@@ -292,6 +312,10 @@ public final class ConversationalAgentRuntime {
             RuntimeAnswerContent content,
             ConversationAnswerScope answerScope,
             AgentTurnResult agentTurn) {
+        if (hasRenderableGeneralPayload(agentTurn)
+                && answerScope == ConversationAnswerScope.GENERAL) {
+            return AnswerEvidenceState.NOT_REQUIRED;
+        }
         if (hasRenderablePayload(agentTurn) || hasProjectedFallback(request, content, agentTurn)) {
             return AnswerEvidenceState.VERIFIED;
         }
@@ -402,6 +426,12 @@ public final class ConversationalAgentRuntime {
     private boolean hasRenderablePayload(AgentTurnResult agentTurn) {
         return agentTurn.getOutcome().map(value -> value.getTaskOutcomes().stream()
                 .anyMatch(TaskOutcome::hasRenderablePayload)).orElse(false);
+    }
+
+    private boolean hasRenderableGeneralPayload(AgentTurnResult agentTurn) {
+        return agentTurn.getOutcome().map(value -> value.getTaskOutcomes().stream()
+                .anyMatch(outcome -> outcome.getSourceDomain() == TaskSourceDomain.GENERAL
+                        && outcome.hasRenderablePayload())).orElse(false);
     }
 
     private boolean hasReason(AgentTurnResult agentTurn, String reason) {

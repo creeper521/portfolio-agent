@@ -45,7 +45,8 @@ public final class SemanticPlanCompiler {
             if (goal.getIntent() == SemanticSignals.Intent.SYNTHESIS) {
                 continue;
             }
-            tasks.add(createTask(goal.getIntent(), nextTaskId(tasks), goal.getSubjects()));
+            tasks.add(createTask(
+                    goal.getIntent(), nextTaskId(tasks), goal.getSubjects(), signals.getQuestion()));
         }
         if (signals.getGoals().stream().anyMatch(goal -> goal.getIntent() == SemanticSignals.Intent.SYNTHESIS)
                 && tasks.size() >= 2) {
@@ -65,12 +66,15 @@ public final class SemanticPlanCompiler {
     }
 
     private SemanticTask createTask(
-            SemanticSignals.Intent intent, String taskId, List<SubjectReference> subjects) {
+            SemanticSignals.Intent intent,
+            String taskId,
+            List<SubjectReference> subjects,
+            String question) {
         return switch (intent) {
             case PORTFOLIO_FACT -> factTask(taskId, requireSubject(subjects));
             case PORTFOLIO_COMPARE -> comparisonTask(taskId, subjects);
             case PORTFOLIO_RECOMMEND -> recommendationTask(taskId, subjects);
-            case GENERAL_EXPLANATION -> generalTask(taskId);
+            case GENERAL_EXPLANATION -> generalTask(taskId, question);
             case SYNTHESIS -> throw new IllegalArgumentException("synthesis must be compiled after upstream tasks");
         };
     }
@@ -104,9 +108,9 @@ public final class SemanticPlanCompiler {
                 parameters, Set.of(RequestedOutput.RECOMMENDATION), TaskConfidence.highRule(), subjects);
     }
 
-    private SemanticTask generalTask(String taskId) {
+    private SemanticTask generalTask(String taskId, String question) {
         SemanticTaskParameters.GeneralExplanation parameters = new SemanticTaskParameters.GeneralExplanation(
-                "通用主题", "STANDARD", "GUEST");
+                question, "STANDARD", "GUEST");
         return SemanticTask.create(
                 taskId, SemanticTaskType.GENERAL_EXPLANATION, TaskSourceDomain.GENERAL, "解释通用概念",
                 parameters, Set.of(RequestedOutput.SUMMARY), TaskConfidence.highRule(), List.of());

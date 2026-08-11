@@ -40,9 +40,14 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     ? mapPortfolioRecommendation(response)
     : undefined
 
+  const semanticSections = semanticTurn === undefined ? [] : mapSemanticSections(semanticTurn)
   const sections = semanticTurn === undefined
     ? mapSections(response)
-    : mapSemanticSections(semanticTurn)
+    : semanticSections.length > 0
+      ? semanticSections
+      : isSafeSemanticCompatibilityProjection(semanticTurn)
+        ? mapSections(response)
+        : []
 
   // 统一视图权威：顶层 Evidence 集合始终从统一 Sections 推导，不信任原始字段。
   const evidenceIds = [...new Set(sections.flatMap((section) => section.evidenceIds))]
@@ -93,6 +98,10 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
 }
 
 // 唯一协议兼容边界：v2 Blocks 优先，legacy Sections 兜底。
+function isSafeSemanticCompatibilityProjection(semanticTurn: SemanticTurnView): boolean {
+  return semanticTurn.disposition === 'READY' || semanticTurn.disposition === 'PARTIAL_READY'
+}
+
 function mapSemanticSections(semanticTurn: SemanticTurnView): AnswerSectionView[] {
   return semanticTurn.completedTasks.flatMap((task) => {
     if (task.resultPayload.kind === 'RECOMMENDATION_RESULT') return []

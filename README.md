@@ -102,10 +102,12 @@ Secret 文件必须位于仓库外，内容为受限 `KEY=VALUE` 格式，并同
 `PORTFOLIO_MODEL_PROVIDER` 和所选 Provider 对应的密钥。脚本在创建子进程前检查
 Java 21、Maven、Node、前端依赖与端口，只把白名单变量注入本次后端进程。Live Provider
 探针使用固定无主体 canary 问题（刻意不携带 Project/Case/Preset/Reference/Recommendation
-上下文），只有当 canary 返回 `intentSource=MODEL`、`constructionMode=EVIDENCE_COMPOSITION`、
-`evidenceState=VERIFIED`、`degraded=false`、`resolution=ANSWERED` 且包含回答块时才输出
+上下文），阶段二运行时使用纯通用知识问题验证生成链；只有当 canary 返回
+`answerScope=GENERAL`、`intentSource=RULE`、`constructionMode=GENERAL_MODEL`、
+`evidenceState=NOT_REQUIRED`、`degraded=false`、
+`resolution=ANSWERED` 且包含回答块时才输出
 `AI_CONNECTED`；否则服务保持运行并输出 `AI_DEGRADED:<安全类别>`。其中
-`PROBE_ROUTE_BYPASSED` 表示 canary 被非模型产品路由截获（探针契约漂移），不代表 Provider
+`PROBE_ROUTE_BYPASSED` 表示 canary 未进入阶段二的通用模型生成任务（探针契约漂移），不代表 Provider
 返回非法内容。仅检查配置可增加 `-CheckOnly`。
 
 DeepSeek V4 Flash：

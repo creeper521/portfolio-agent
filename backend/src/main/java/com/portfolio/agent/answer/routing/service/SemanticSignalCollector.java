@@ -23,7 +23,8 @@ public final class SemanticSignalCollector {
     public SemanticSignals collect(SemanticTurnInput input, ResolvedRoutingContext context) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(context, "context");
-        String question = normalize(input.getQuestion());
+        String sourceQuestion = input.getQuestion() == null ? "" : input.getQuestion().trim();
+        String question = normalize(sourceQuestion);
         List<SemanticSignals.GoalCandidate> goals = new ArrayList<>();
 
         boolean comparison = containsAny(question, "\u6bd4\u8f83", "\u5bf9\u6bd4", "compare");
@@ -98,6 +99,7 @@ public final class SemanticSignalCollector {
 
         int requestedTaskCount = Math.max(explicitTaskCount(question), goals.size());
         return new SemanticSignals(
+                sourceQuestion,
                 goals,
                 exclusions,
                 requestedTaskCount,
@@ -169,6 +171,8 @@ public final class SemanticSignalCollector {
 
 final class SemanticSignals {
 
+    private final String question;
+
     enum Intent {
         PORTFOLIO_FACT,
         PORTFOLIO_COMPARE,
@@ -192,6 +196,7 @@ final class SemanticSignals {
     private final boolean nodeCapabilityBoundary;
 
     SemanticSignals(
+            String question,
             List<GoalCandidate> goals,
             List<com.portfolio.agent.answer.routing.domain.PlanExclusion> exclusions,
             int requestedTaskCount,
@@ -199,6 +204,7 @@ final class SemanticSignals {
             boolean userDeclaredOrder,
             boolean orderAdjusted,
             boolean nodeCapabilityBoundary) {
+        this.question = Objects.requireNonNull(question, "question");
         this.goals = List.copyOf(Objects.requireNonNull(goals, "goals"));
         this.exclusions = List.copyOf(Objects.requireNonNull(exclusions, "exclusions"));
         this.requestedTaskCount = requestedTaskCount;
@@ -209,6 +215,7 @@ final class SemanticSignals {
     }
 
     List<GoalCandidate> getGoals() { return goals; }
+    String getQuestion() { return question; }
 
     /** Compatibility projection for diagnostics; compilation consumes ordered goals instead. */
     List<Intent> getIntents() {

@@ -29,6 +29,27 @@ describe('semantic turn response mapping', () => {
       .not.toContain('Legacy fallback must not define the semantic rendering.')
   })
 
+  it('renders a safe top-level compatibility projection when a ready turn has no completed payload', () => {
+    const response = partialSuccessResponse()
+    response.blocks = [{
+      sourceScope: 'PORTFOLIO',
+      content: 'Reviewed deterministic portfolio fallback.',
+      claimIds: ['claim-safe'],
+      evidenceIds: ['evidence-safe'],
+    }]
+    if (response.agentTurn?.disposition === 'READY'
+      || response.agentTurn?.disposition === 'PARTIAL_READY') {
+      response.agentTurn.completedTasks = []
+    }
+
+    const mapped = mapAnswerResponse(response)
+
+    expect(mapped.sections).toEqual([expect.objectContaining({
+      content: 'Reviewed deterministic portfolio fallback.',
+      sourceScope: 'PORTFOLIO',
+    })])
+  })
+
   it('maps completed tasks without exposing internal graph fields', () => {
     const view = mapSemanticTurnResponse(partialSuccessResponse().agentTurn!)
 

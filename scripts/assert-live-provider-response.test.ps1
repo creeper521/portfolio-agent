@@ -69,15 +69,17 @@ function Write-ResponseFixture(
     [string]$ContentVersion = $expectedContentVersion,
     [bool]$Degraded = $false,
     [string]$Resolution = 'ANSWERED',
-    [AllowNull()][string]$ConstructionMode = 'EVIDENCE_COMPOSITION',
-    [AllowNull()][string]$IntentSource = 'MODEL',
-    [AllowNull()][string]$EvidenceState = 'VERIFIED',
+    [AllowNull()][string]$AnswerScope = 'GENERAL',
+    [AllowNull()][string]$ConstructionMode = 'GENERAL_MODEL',
+    [AllowNull()][string]$IntentSource = 'RULE',
+    [AllowNull()][string]$EvidenceState = 'NOT_REQUIRED',
     [object[]]$Blocks = @([pscustomobject]@{ content = $contentSentinel })
 ) {
     $response = [pscustomobject]@{
         contentVersion = $ContentVersion
         degraded = $Degraded
         resolution = $Resolution
+        answerScope = $AnswerScope
         constructionMode = $ConstructionMode
         intentSource = $IntentSource
         evidenceState = $EvidenceState
@@ -170,15 +172,16 @@ try {
             'Approved output must name the content version.'
         Assert-True ($result.Output -match 'resolution=ANSWERED') `
             'Approved output must name the resolution.'
-        Assert-True ($result.Output -match 'intentSource=MODEL') `
-            'Approved output must prove model classification.'
+        Assert-True ($result.Output -match 'constructionMode=GENERAL_MODEL') `
+            'Approved output must prove general model construction.'
         Assert-True ($result.Output -match 'blocks=1') `
             'Approved output must name the block count.'
         Assert-True ($result.Output -match (
                 '^Live Provider verification passed: provider=' + [regex]::Escape($provider) +
                 '; contentVersion=' + [regex]::Escape($expectedContentVersion) +
-                '; intentSource=MODEL; constructionMode=EVIDENCE_COMPOSITION' +
-                '; evidenceState=VERIFIED; resolution=ANSWERED; blocks=1\.\s*$'
+                '; answerScope=GENERAL; intentSource=RULE' +
+                '; constructionMode=GENERAL_MODEL; evidenceState=NOT_REQUIRED' +
+                '; resolution=ANSWERED; blocks=1\.\s*$'
             )) 'Approved output must contain only the permitted assertion summary.'
         Assert-NoSensitiveOutput $result "approved $provider"
     }
@@ -233,7 +236,7 @@ try {
     Assert-True ($result.Output -match 'LIVE_PROVIDER_REPORTED_DEGRADED') "degraded=true must report LIVE_PROVIDER_REPORTED_DEGRADED. Output: $($result.Output)"
     Assert-NoSensitiveOutput $result 'degraded response'
 
-    foreach ($mode in @($null, '', 'TEMPLATE', 'GENERAL_MODEL')) {
+    foreach ($mode in @($null, '', 'TEMPLATE', 'EVIDENCE_COMPOSITION')) {
         Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
         Write-ResponseFixture -ConstructionMode $mode
         $result = Invoke-Checker
@@ -242,7 +245,7 @@ try {
         Assert-NoSensitiveOutput $result "constructionMode=$mode"
     }
 
-    foreach ($source in @($null, '', 'RULE', 'PRESET', 'REFERENCE', 'GLOBAL')) {
+    foreach ($source in @($null, '', 'MODEL', 'PRESET', 'REFERENCE', 'GLOBAL')) {
         Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
         Write-ResponseFixture -IntentSource $source
         $result = Invoke-Checker
@@ -251,13 +254,22 @@ try {
         Assert-NoSensitiveOutput $result "intentSource=$source"
     }
 
-    foreach ($state in @($null, '', 'NOT_REQUIRED', 'INSUFFICIENT')) {
+    foreach ($state in @($null, '', 'VERIFIED', 'INSUFFICIENT')) {
         Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
         Write-ResponseFixture -EvidenceState $state
         $result = Invoke-Checker
         Assert-True ($result.ExitCode -ne 0) "evidenceState=$state must fail."
         Assert-True ($result.Output -match 'LIVE_PROVIDER_EVIDENCE_UNVERIFIED') "evidenceState=$state must report LIVE_PROVIDER_EVIDENCE_UNVERIFIED. Output: $($result.Output)"
         Assert-NoSensitiveOutput $result "evidenceState=$state"
+    }
+
+    foreach ($scope in @($null, '', 'PORTFOLIO', 'MIXED')) {
+        Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'
+        Write-ResponseFixture -AnswerScope $scope
+        $result = Invoke-Checker
+        Assert-True ($result.ExitCode -ne 0) "answerScope=$scope must fail."
+        Assert-True ($result.Output -match 'LIVE_PROVIDER_ROUTE_BYPASSED') "answerScope=$scope must report LIVE_PROVIDER_ROUTE_BYPASSED. Output: $($result.Output)"
+        Assert-NoSensitiveOutput $result "answerScope=$scope"
     }
 
     Set-ApprovedEnvironment 'DEEPSEEK_V4_FLASH'

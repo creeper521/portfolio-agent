@@ -142,8 +142,8 @@ try {
                             '"blocks":[{"content":"fixture"}]}'
                     }
                     else {
-                        '{"contentVersion":"test-v1","intentSource":"MODEL",' +
-                            '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"VERIFIED",' +
+                        '{"contentVersion":"test-v1","answerScope":"GENERAL","intentSource":"RULE",' +
+                            '"constructionMode":"GENERAL_MODEL","evidenceState":"NOT_REQUIRED",' +
                             '"degraded":false,"resolution":"ANSWERED",' +
                             '"blocks":[{"content":"fixture"}]}'
                     }

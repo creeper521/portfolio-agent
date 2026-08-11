@@ -91,6 +91,22 @@ class DefaultTurnRouterDeterministicTest {
     }
 
     @Test
+    void preservesTheCurrentQuestionAsTheGeneralModelTopic() {
+        String question = "Explain optimistic locking and give one concise example.";
+
+        SemanticTurnDecision decision = router().route(SemanticTurnInput.ask(question));
+
+        assertThat(decision.getValidatedPlan()).hasValueSatisfying(plan -> {
+            assertThat(plan.getTasks()).hasSize(1);
+            assertThat(plan.getTasks().get(0).getParameters())
+                    .isInstanceOfSatisfying(
+                            com.portfolio.agent.answer.routing.domain.SemanticTaskParameters
+                                    .GeneralExplanation.class,
+                            parameters -> assertThat(parameters.getTopic()).isEqualTo(question));
+        });
+    }
+
+    @Test
     void invalidStructuredSubjectIsRejectedWithoutGeneralFallback() {
         LegacySemanticContextAdapter.LegacyContext legacyContext =
                 LegacySemanticContextAdapter.LegacyContext.ofWithTypedReferences(

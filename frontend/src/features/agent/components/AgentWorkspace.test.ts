@@ -1132,6 +1132,29 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock.mock.calls[0]?.[0].messages).toEqual([])
   })
 
+  it('excludes failed user turns from the next request history', async () => {
+    const wrapper = mountWorkspace()
+    askQuestionMock
+      .mockResolvedValueOnce(v2AnswerResponse('GENERAL_KNOWLEDGE', 'GENERAL'))
+      .mockRejectedValueOnce(new Error('request failed'))
+      .mockResolvedValueOnce(v2AnswerResponse('GENERAL_KNOWLEDGE', 'GENERAL'))
+
+    await wrapper.get('textarea').setValue('first completed question')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('textarea').setValue('failed question')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('textarea').setValue('next valid question')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[2]?.[0].messages).toEqual([
+      { role: 'USER', content: 'first completed question' },
+      { role: 'ASSISTANT', content: '通用回答' },
+    ])
+  })
+
   it('caps conversation history at 20 rounds (40 messages)', async () => {
     const wrapper = mountWorkspace()
 

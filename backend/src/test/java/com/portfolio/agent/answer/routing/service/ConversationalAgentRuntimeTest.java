@@ -3,7 +3,10 @@ package com.portfolio.agent.answer.routing.service;
 import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
 import com.portfolio.agent.answer.domain.AgentTurnResult;
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerConstructionMode;
+import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.dto.request.PlanConfirmationRequest;
@@ -15,6 +18,10 @@ import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
+import com.portfolio.agent.answer.routing.domain.TaskOutcome;
+import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
+import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
+import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
@@ -102,6 +109,54 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getResolution()).isEqualTo(AnswerResolution.NOT_SUPPORTED);
     }
 
+    @Test
+    void projectsACompletedGeneralTaskAsModelGenerationWithoutPortfolioEvidence() {
+        SemanticTask task = SemanticTask.create(
+                "task-general", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
+                SemanticRoutingTypes.TaskSourceDomain.GENERAL, "explain optimistic locking",
+                new SemanticTaskParameters.GeneralExplanation(
+                        "Explain optimistic locking", "STANDARD", "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                TaskConfidence.highRule(), List.of());
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-general", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(task), List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ValidatedSemanticTurnPlan validated = new SemanticPlanValidator(new PlanFingerprintService())
+                .validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
+        CountingRouter router = new CountingRouter(SemanticTurnDecision.ready(
+                validated, ExecutionSelection.allExecutable(Set.of(task.getTaskId()))));
+        SemanticTaskExecutor executor = new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.GENERAL;
+            }
+
+            @Override
+            public TaskOutcome execute(
+                    SemanticTask ignored, List<TaskOutcome> availableDependencyOutcomes) {
+                return TaskOutcome.answered(
+                        task.getTaskId(), SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        new TaskResultPayload.SectionResultPayload(
+                                List.of("Optimistic locking checks a version before update."), null),
+                        TaskResultProvenance.direct(
+                                SemanticRoutingTypes.TaskSourceDomain.GENERAL, List.of(), List.of()),
+                        false);
+            }
+        };
+
+        ConversationAnswerResult result = fixture(
+                router, new SemanticTurnCoordinator(List.of(executor))).runtime.answer(
+                        ask("Explain optimistic locking"));
+
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.ANSWERED);
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.MODEL);
+        assertThat(result.getConstructionMode()).isEqualTo(AnswerConstructionMode.GENERAL_MODEL);
+        assertThat(result.getIntentSource()).isEqualTo(AnswerIntentSource.RULE);
+        assertThat(result.getEvidenceState()).isEqualTo(AnswerEvidenceState.NOT_REQUIRED);
+    }
+
     private static SemanticTask portfolioFact() {
         SubjectReference subject = SubjectReference.project("project-a", "public-v1");
         return SemanticTask.create(
@@ -114,6 +169,10 @@ class ConversationalAgentRuntimeTest {
     }
 
     private Fixture fixture(TurnRouter router) {
+        return fixture(router, new SemanticTurnCoordinator(List.of()));
+    }
+
+    private Fixture fixture(TurnRouter router, SemanticTurnCoordinator coordinator) {
         List<DiagnosticEvent> events = new ArrayList<>();
         DiagnosticEventPublisher diagnostics = events::add;
         SemanticPlanValidator validator = new SemanticPlanValidator(new PlanFingerprintService());
@@ -124,7 +183,7 @@ class ConversationalAgentRuntimeTest {
                 new SemanticTurnRequestMapper(),
                 router,
                 confirmations,
-                new SemanticTurnCoordinator(List.of()),
+                coordinator,
                 decision -> { },
                 diagnostics);
         return new Fixture(runtime, events);
