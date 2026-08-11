@@ -167,6 +167,13 @@ public final class DiagnosticEvent {
                             "context.present",
                             "validation.result",
                             "duration.bucket")),
+                    Map.entry("semantic.turn.completed", fields(
+                            "plan.task.count",
+                            "plan.task.succeeded.count",
+                            "plan.task.blocked.count",
+                            "plan.task.failed.count",
+                            "plan.outcome",
+                            "plan.disposition")),
                     Map.entry("agent.request.completed", fields(
                             "content.version",
                             "question.kind",

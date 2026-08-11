@@ -14,6 +14,7 @@ import com.portfolio.agent.evaluation.domain.EvalObservationStatus;
 import com.portfolio.agent.evaluation.domain.EvalOrigin;
 import com.portfolio.agent.evaluation.domain.EvalProviderUsage;
 import com.portfolio.agent.evaluation.domain.EvalRiskLevel;
+import com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape;
 import com.portfolio.agent.evaluation.domain.EvalSeverity;
 import com.portfolio.agent.evaluation.domain.EvalSplit;
 import com.portfolio.agent.evaluation.domain.EvalSubjectRef;
@@ -240,6 +241,38 @@ class DeterministicEvalGraderTest {
                         List.of(), List.of(), AnswerResolution.INVALID_INPUT));
 
         assertThat(grades).isEmpty();
+    }
+
+    @Test
+    void semanticTurnStructureIsABlockingGradeOnlyWhenAnAgentTurnWasObserved()
+            throws Exception {
+        EvalSemanticTurnShape shape = EvalSemanticTurnShape.from(
+                new com.fasterxml.jackson.databind.ObjectMapper().readTree("""
+                        {"disposition":"READY","plan":{"taskCount":1,"tasks":[
+                          {"sourceDomain":"PORTFOLIO"}
+                        ]},"outcome":{"planOutcome":"SUCCEEDED","taskSummary":{
+                          "totalCount":1,"answeredCount":1,"blockedCount":0,
+                          "failedCount":0,"degradedCount":0,
+                          "items":[{"sourceDomain":"PORTFOLIO"}]
+                        }}}
+                        """));
+        EvalObservation base = observation(EvalObservationStatus.PASS, "case-a", null,
+                List.of("claim-1"), List.of("E-01"), AnswerResolution.ANSWERED);
+        EvalObservation observation = new EvalObservation(
+                base.getCaseId(), base.getLayer(), base.getTrialIndex(), base.getStatus(),
+                base.getSelectedProjectSlug(), base.getSelectedCaseSlug(),
+                base.getSelectedClaimIds(), base.getSelectedEvidenceIds(), base.getSelectedChunkIds(),
+                base.getResolution(), base.getAnswerScope(), base.getGenerationMode(),
+                base.getAnswerSource(), base.getReasonCodes(), base.getDurationMilliseconds(),
+                base.getProviderUsage(), base.getAnswerShape(), shape,
+                base.isDegraded(), base.isProviderInvoked());
+
+        EvalGrade grade = only(grade(caseWith(List.of(
+                rule("RESOLUTION", EvalSeverity.BLOCKING))), observation),
+                "SEMANTIC_TURN_STRUCTURE");
+
+        assertThat(grade.isPassed()).isTrue();
+        assertThat(grade.getSeverity()).isEqualTo(EvalSeverity.BLOCKING);
     }
 
     private EvalCase caseWith(List<EvalGraderRule> graders) {

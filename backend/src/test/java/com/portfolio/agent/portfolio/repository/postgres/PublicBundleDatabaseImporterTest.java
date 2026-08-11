@@ -133,6 +133,36 @@ class PublicBundleDatabaseImporterTest {
     }
 
     @Test
+    void storesClaimAnswerProjectionSemanticsWithoutFabricatingDefaults() throws Exception {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        PublicBundleDatabaseImporter importer = new PublicBundleDatabaseImporter(
+                jdbcTemplate, immediateTransactions());
+
+        importer.importBundle(snapshot("APPROVED"));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate, atLeastOnce()).update(sql.capture(), parameters.capture());
+        int claimWrite = java.util.stream.IntStream.range(0, sql.getAllValues().size())
+                .filter(index -> sql.getAllValues().get(index).contains("INSERT INTO claim\n"))
+                .findFirst()
+                .orElseThrow();
+        Object[] values = parameters.getAllValues().get(claimWrite);
+        assertThat(values[1]).isEqualTo("claim-1");
+        assertThat(values[4]).isEqualTo("OUTCOME");
+        assertThat(values[5]).isEqualTo("Delivered");
+        assertThat(values[6]).isEqualTo("Reviewed");
+        assertThat(values[7]).isEqualTo("DELIVERED");
+        assertThat(values[8]).isEqualTo("PRIMARY");
+        assertThat(values[9]).isEqualTo("EVIDENCE_SUPPORTED");
+        assertThat(values[10]).isEqualTo("VERIFIED");
+        assertThat(values[11]).isEqualTo("KEY");
+        assertThat(values[12].toString()).contains("delivery");
+        assertThat(values[13]).isEqualTo(1);
+    }
+
+    @Test
     void storesTheCompatibilityPayloadAndItsChecksumInsideTheImportTransaction() throws Exception {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);

@@ -174,8 +174,8 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                             passages.add(new PortfolioRetrievedPassage(
                                     chunk.getChunkId() + "#" + claimId,
                                     knowledge.getStableId(),
-                                    claimId,
                                     chunk.getText(),
+                                    claim,
                                     claim.getDirectEvidenceIds().stream()
                                             .map(evidenceId -> evidenceReference(knowledge, evidenceId))
                                             .toList()));
@@ -229,8 +229,8 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                     passages.add(new PortfolioRetrievedPassage(
                             chunkId + "#" + claimId,
                             knowledge.getStableId(),
-                            claimId,
                             chunk.getText(),
+                            claim,
                             claim.getDirectEvidenceIds().stream()
                                     .map(evidenceId -> evidenceReference(knowledge, evidenceId))
                                     .toList()));

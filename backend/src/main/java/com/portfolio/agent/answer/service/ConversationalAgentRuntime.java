@@ -1,98 +1,73 @@
 package com.portfolio.agent.answer.service;
 
+import com.portfolio.agent.answer.domain.AgentTurnResult;
 import com.portfolio.agent.answer.domain.AnswerConstructionMode;
 import com.portfolio.agent.answer.domain.AnswerEvidenceState;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerQuestion;
+import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDecision;
-import com.portfolio.agent.answer.domain.ConversationDraft;
-import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
 import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
 import com.portfolio.agent.answer.domain.ConversationIntent;
-import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
-import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationProgress;
-import com.portfolio.agent.answer.domain.ConversationProviderAccess;
-import com.portfolio.agent.answer.domain.ConversationRoute;
-import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
-import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
-import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
-import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequest;
-import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioReferenceContext;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
-import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
+import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
+import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
+import com.portfolio.agent.answer.routing.domain.TaskOutcome;
+import com.portfolio.agent.answer.routing.service.PlanConfirmationService;
+import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
+import com.portfolio.agent.answer.routing.service.SemanticTurnDecision;
+import com.portfolio.agent.answer.routing.service.TurnRouter;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
+/**
+ * Single runtime authority for an Agent turn. Legacy single-task capabilities
+ * may execute only after a trusted semantic plan selects them.
+ */
 public final class ConversationalAgentRuntime {
 
+    private static final String SEMANTIC_SCHEMA_VERSION = "stp-v1";
+    private static final String SEMANTIC_CAPABILITY_SET_VERSION = "semantic-routing-v1";
+
     private final PortfolioKnowledgeGateway knowledgeGateway;
-    private final ConversationWindowManager windowManager;
-    private final ConversationIntentRouter intentRouter;
-    private final PortfolioGroundingAssembler groundingAssembler;
-    private final ConversationToolService toolService;
-    private final ConversationalModelPort modelPort;
-    private final ConversationDraftValidator draftValidator;
-    private final DynamicQuestionService questionService;
-    private final DeterministicConversationFallback fallback;
-    private final ConversationProviderAccess providerAccess;
-    private final PortfolioIntelligence portfolioIntelligence;
-    private final PortfolioIntelligenceAnswerAssembler portfolioAnswerAssembler;
-    private final ConversationProgressClassifier progressClassifier;
+    private final SemanticTurnRequestMapper requestMapper;
+    private final TurnRouter turnRouter;
+    private final PlanConfirmationService confirmationService;
+    private final SemanticTurnCoordinator coordinator;
     private final ConversationDecisionPublisher decisionPublisher;
     private final DiagnosticEventPublisher diagnosticEventPublisher;
 
     public ConversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
-            ConversationWindowManager windowManager,
-            ConversationIntentRouter intentRouter,
-            PortfolioGroundingAssembler groundingAssembler,
-            ConversationToolService toolService,
-            ConversationalModelPort modelPort,
-            ConversationDraftValidator draftValidator,
-            DynamicQuestionService questionService,
-            DeterministicConversationFallback fallback,
-            ConversationProviderAccess providerAccess,
-            PortfolioIntelligence portfolioIntelligence,
-            PortfolioIntelligenceAnswerAssembler portfolioAnswerAssembler,
-            ConversationProgressClassifier progressClassifier,
+            SemanticTurnRequestMapper requestMapper,
+            TurnRouter turnRouter,
+            PlanConfirmationService confirmationService,
+            SemanticTurnCoordinator coordinator,
             ConversationDecisionPublisher decisionPublisher,
-            DiagnosticEventPublisher diagnosticEventPublisher
-    ) {
+            DiagnosticEventPublisher diagnosticEventPublisher) {
         this.knowledgeGateway = Objects.requireNonNull(knowledgeGateway, "knowledgeGateway");
-        this.windowManager = Objects.requireNonNull(windowManager, "windowManager");
-        this.intentRouter = Objects.requireNonNull(intentRouter, "intentRouter");
-        this.groundingAssembler = Objects.requireNonNull(groundingAssembler, "groundingAssembler");
-        this.toolService = Objects.requireNonNull(toolService, "toolService");
-        this.modelPort = Objects.requireNonNull(modelPort, "modelPort");
-        this.draftValidator = Objects.requireNonNull(draftValidator, "draftValidator");
-        this.questionService = Objects.requireNonNull(questionService, "questionService");
-        this.fallback = Objects.requireNonNull(fallback, "fallback");
-        this.providerAccess = Objects.requireNonNull(providerAccess, "providerAccess");
-        this.portfolioIntelligence = Objects.requireNonNull(
-                portfolioIntelligence, "portfolioIntelligence");
-        this.portfolioAnswerAssembler = Objects.requireNonNull(
-                portfolioAnswerAssembler, "portfolioAnswerAssembler");
-        this.progressClassifier = Objects.requireNonNull(
-                progressClassifier, "progressClassifier");
+        this.requestMapper = Objects.requireNonNull(requestMapper, "requestMapper");
+        this.turnRouter = Objects.requireNonNull(turnRouter, "turnRouter");
+        this.confirmationService = Objects.requireNonNull(confirmationService, "confirmationService");
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
         this.decisionPublisher = Objects.requireNonNull(decisionPublisher, "decisionPublisher");
         this.diagnosticEventPublisher = Objects.requireNonNull(
                 diagnosticEventPublisher, "diagnosticEventPublisher");
@@ -101,265 +76,418 @@ public final class ConversationalAgentRuntime {
     public ConversationAnswerResult answer(ConversationAnswerRequest request) {
         Objects.requireNonNull(request, "request");
         long startedAt = System.nanoTime();
-        ConversationAnswerResult result = answerInternal(request);
+        RuntimeAnswerContent content = knowledgeGateway.getContent();
+        SemanticTurnInput input = requestMapper.toInput(request, content.getContentVersion());
+        AgentTurnResult presetFailure = input.getAction() == SemanticTurnInput.Action.CONFIRM_PLAN
+                ? null : validatePreset(request, content);
+        AgentTurnResult agentTurn = presetFailure != null ? presetFailure
+                : input.getAction() == SemanticTurnInput.Action.CONFIRM_PLAN
+                ? confirmationService.executeVerified(
+                        input.getConfirmationSubmission(), versionBinding(content), coordinator)
+                : routeAndHandle(input, content);
+        ConversationAnswerResult result = result(request, content, agentTurn)
+                .withContractIdentity(request.getQuestionPresetId(), request.getContractVersion());
+        publishSemanticDiagnostics(agentTurn);
         publishBestEffort(result, startedAt);
         return result;
     }
 
-    private ConversationAnswerResult answerInternal(ConversationAnswerRequest request) {
-        RuntimeAnswerContent content = knowledgeGateway.getContent();
-        ConversationWindow window = windowManager.prepare(
-                request.getMessages(), request.getQuestion());
-        ConversationRoute globalRoute = intentRouter.routeBoundary(request.getQuestion());
-        if (globalRoute != null) {
-            return finalizeTurn(
-                    fallback.answer(request, content, globalRoute),
-                    content,
-                    globalRoute,
-                    window,
-                    request,
-                    false);
+    private AgentTurnResult routeAndHandle(SemanticTurnInput input, RuntimeAnswerContent content) {
+        SemanticTurnDecision decision = turnRouter.route(input);
+        if (decision.getDisposition() == SemanticTurnDecision.Disposition.CONFIRMATION_REQUIRED) {
+            try {
+                return AgentTurnResult.fromDecision(
+                        decision,
+                        confirmationService.issue(
+                                decision.getValidatedPlan().orElseThrow(), versionBinding(content)),
+                        null,
+                        input.getAgentTurnContract() != null);
+            } catch (RuntimeException exception) {
+                return AgentTurnResult.rejected(Set.of("PLAN_CONFIRMATION_UNAVAILABLE"));
+            }
         }
-
-        long portfolioStartedAt = System.nanoTime();
-        PortfolioDecision decision = portfolioIntelligence.tryResolve(
-                portfolioTurn(request, window));
-        if (decision.getDisposition() != PortfolioDisposition.NOT_PORTFOLIO) {
-            PortfolioIntelligenceResult material = decision.getMaterial().orElseThrow();
-            publishPortfolioIntelligence(
-                    material,
-                    request.getContext().getRecommendationContext() != null,
-                    portfolioStartedAt);
-            ConversationAnswerResult result = portfolioAnswerAssembler.assemble(
-                    request, content, decision);
-            return finalizeTurn(
-                    result,
-                    content,
-                    portfolioGuidanceRoute(request, !material.getSubjects().isEmpty()),
-                    window,
-                    request,
-                    false);
+        if (decision.getDisposition() == SemanticTurnDecision.Disposition.READY
+                || decision.getDisposition() == SemanticTurnDecision.Disposition.PARTIAL_READY) {
+            SemanticTurnOutcome outcome = coordinator.execute(
+                    decision.getValidatedPlan().orElseThrow(),
+                    decision.getExecutionSelection().orElseThrow());
+            return AgentTurnResult.fromDecision(
+                    decision, null, outcome, input.getAgentTurnContract() != null);
         }
-        return answerGeneral(request, content, window);
+        return AgentTurnResult.fromDecision(
+                decision, null, null, input.getAgentTurnContract() != null);
     }
 
-    private ConversationAnswerResult answerGeneral(
+    private PlanConfirmation.VersionBinding versionBinding(RuntimeAnswerContent content) {
+        return new PlanConfirmation.VersionBinding(
+                SEMANTIC_SCHEMA_VERSION,
+                content.getContentVersion(),
+                content.getRuntimeBundleHash(),
+                SEMANTIC_CAPABILITY_SET_VERSION);
+    }
+
+    private ConversationAnswerResult result(
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
-            ConversationWindow window
-    ) {
-        ConversationRoute route = new ConversationRoute(
-                ConversationIntent.GENERAL_KNOWLEDGE,
-                ConversationAnswerScope.GENERAL,
-                1.0d,
-                null,
-                null,
-                PortfolioKnowledgeFacet.OVERVIEW,
-                false);
-        if (!providerAccess.isAllowed()) {
-            return finalizeTurn(
-                    fallback.capabilityUnavailable(request, content),
-                    content,
-                    route,
-                    window,
-                    request,
-                    false);
-        }
-        PortfolioGroundingContext grounding = groundingAssembler.assemble(
-                content, route, request.getQuestion());
-        grounding = toolService.enrich(
-                content, request.getQuestion(), window, route, grounding);
-        ConversationModelResult<ConversationDraft> generated = modelPort.generate(
-                request.getQuestion(), window, route, grounding);
-        if (generated == null || !generated.isSuccessful()) {
-            ConversationModelFailureCode failureCode = generated == null
-                    ? ConversationModelFailureCode.INVALID_RESPONSE
-                    : generated.getFailureCode();
-            publishFallback(
-                    FallbackTrigger.PROVIDER_FAILURE,
-                    ProviderFailureCodeMapper.map(failureCode));
-            return finalizeTurn(
-                    fallback.capabilityUnavailable(request, content),
-                    content,
-                    route,
-                    window,
-                    request,
-                    false);
-        }
-        ConversationDraftValidationResult validated = validateDraft(
-                generated.getValue(), grounding);
-        if (validated == null || !validated.isValid()) {
-            return finalizeTurn(
-                    fallback.capabilityUnavailable(request, content),
-                    content,
-                    route,
-                    window,
-                    request,
-                    false);
-        }
-        ConversationAnswerResult base = new ConversationAnswerResult(
+            AgentTurnResult agentTurn) {
+        ConversationAnswerScope answerScope = projectedScope(request, agentTurn);
+        return new ConversationAnswerResult(
                 request.getTurnId(),
                 content.getContentVersion(),
-                ConversationIntent.GENERAL_KNOWLEDGE,
-                ConversationAnswerScope.GENERAL,
-                validated.getResolution(),
-                validated.getTitle(),
-                validated.getAcceptedBlocks(),
+                projectedIntent(request, agentTurn, answerScope),
+                answerScope,
+                projectedResolution(agentTurn),
+                title(agentTurn),
+                projectedBlocks(request, content, agentTurn),
                 List.of(),
-                false,
-                GenerationMode.MODEL,
+                isDegraded(agentTurn),
+                GenerationMode.DETERMINISTIC,
                 null,
-                null,
+                projectedNoticeCode(agentTurn),
                 new ConversationProgress(List.of(), ConversationGuidanceStage.OPENING),
                 null,
-                AnswerConstructionMode.GENERAL_MODEL,
-                AnswerIntentSource.GLOBAL,
-                AnswerEvidenceState.NOT_REQUIRED);
-        return finalizeTurn(base, content, route, window, request, false);
+                projectedConstructionMode(request, content, agentTurn),
+                request.getQuestionPresetId() == null ? AnswerIntentSource.RULE : AnswerIntentSource.PRESET,
+                projectedEvidenceState(request, content, answerScope, agentTurn)).withAgentTurn(agentTurn);
     }
 
-    private ConversationDraftValidationResult validateDraft(
-            ConversationDraft draft,
-            PortfolioGroundingContext grounding
-    ) {
-        long startedAt = System.nanoTime();
-        try {
-            ConversationDraftValidationResult validated = draftValidator.validate(
-                    draft, ConversationAnswerScope.GENERAL, grounding);
-            publishValidation(validated, startedAt);
-            if (!validated.isValid()) {
-                publishFallback(
-                        FallbackTrigger.VALIDATION_REJECTED,
-                        ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
+    private AgentTurnResult validatePreset(
+            ConversationAnswerRequest request, RuntimeAnswerContent content) {
+        String presetId = request.getQuestionPresetId();
+        if (presetId == null || presetId.isBlank()) {
+            return null;
+        }
+        AnswerQuestion matched = null;
+        for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : content.getProjects()) {
+            matched = findQuestion(subject, presetId);
+            if (matched != null) {
+                break;
             }
-            return validated;
-        } catch (RuntimeException exception) {
-            publishFallback(
-                    FallbackTrigger.VALIDATION_EXCEPTION,
-                    ProviderFailureCode.PROVIDER_DRAFT_REJECTED);
-            return null;
         }
+        if (matched == null) {
+            for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : content.getCases()) {
+                matched = findQuestion(subject, presetId);
+                if (matched != null) {
+                    break;
+                }
+            }
+        }
+        if (matched == null || !matched.isActiveContract()) {
+            return AgentTurnResult.rejected(Set.of("PRESET_CONTRACT_UNAVAILABLE"));
+        }
+        if (request.getContractVersion() == null
+                || !request.getContractVersion().equals(matched.getContractVersion())) {
+            return AgentTurnResult.rejected(Set.of("PRESET_CONTRACT_STALE"));
+        }
+        return null;
     }
 
-    private PortfolioTurn portfolioTurn(
+    private AnswerQuestion findQuestion(
+            com.portfolio.agent.answer.domain.AnswerKnowledge subject, String presetId) {
+        for (AnswerQuestion question : subject.getQuestions()) {
+            if (presetId.equals(question.getId())) {
+                return question;
+            }
+        }
+        return null;
+    }
+
+    private ConversationAnswerScope projectedScope(
+            ConversationAnswerRequest request, AgentTurnResult agentTurn) {
+        if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
+            return ConversationAnswerScope.PORTFOLIO;
+        }
+        if ((hasReason(agentTurn, "PRESET_CONTRACT_UNAVAILABLE")
+                || hasReason(agentTurn, "PRESET_CONTRACT_STALE"))
+                && hasStructuredSubject(request)) {
+            return ConversationAnswerScope.PORTFOLIO;
+        }
+        return scope(agentTurn);
+    }
+
+    private ConversationIntent projectedIntent(
             ConversationAnswerRequest request,
-            ConversationWindow window
-    ) {
-        return PortfolioTurn.builder(request.getTurnId(), request.getQuestion())
-                .questionPresetId(request.getQuestionPresetId())
-                .contractVersion(request.getContractVersion())
-                .window(window)
-                .projectSlug(request.getContext().getProjectSlug())
-                .caseSlug(request.getContext().getCaseSlug())
-                .recommendationContext(recommendationContext(request))
-                .referenceContext(referenceContext(request))
-                .audienceRole(request.getContext().getAudienceRole().name())
-                .source(request.getContext().getSource().name())
-                .build();
-    }
-
-    private PortfolioReferenceContext referenceContext(ConversationAnswerRequest request) {
-        com.portfolio.agent.answer.dto.request.PortfolioReferenceContextRequest reference =
-                request.getContext().getReferenceContext();
-        if (reference == null) {
-            return null;
+            AgentTurnResult agentTurn,
+            ConversationAnswerScope answerScope) {
+        if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
+            return ConversationIntent.PORTFOLIO_GROUNDED;
         }
-        return new PortfolioReferenceContext(
-                reference.getPreviousContentVersion(),
-                reference.getProjectSlugs(),
-                reference.getCaseSlugs(),
-                reference.getQuestionPresetId(),
-                reference.getReferencedClaimIds(),
-                reference.getSelectedSectionType(),
-                reference.getFollowUpAction());
-    }
-
-    private PortfolioRecommendationContext recommendationContext(
-            ConversationAnswerRequest request
-    ) {
-        PortfolioRecommendationContextRequest context =
-                request.getContext().getRecommendationContext();
-        if (context == null) {
-            return null;
+        if (hasReason(agentTurn, "PRESET_CONTRACT_UNAVAILABLE")
+                || hasReason(agentTurn, "PRESET_CONTRACT_STALE")) {
+            return hasStructuredSubject(request)
+                    ? ConversationIntent.PORTFOLIO_GROUNDED : ConversationIntent.GENERAL_KNOWLEDGE;
         }
-        return new PortfolioRecommendationContext(
-                context.getRecommendationBatchId(),
-                context.getContentVersion(),
-                context.getCareerTrack(),
-                context.getAudienceRole(),
-                context.getCapabilityCodes(),
-                context.getRequestedSize(),
-                context.getSelectedPortfolioIds());
+        if (agentTurn.getDisposition() == AgentTurnResult.Disposition.BOUNDARY) {
+            return ConversationIntent.UNSUPPORTED_OR_UNSAFE;
+        }
+        return switch (answerScope) {
+            case PORTFOLIO -> ConversationIntent.PORTFOLIO_GROUNDED;
+            case MIXED, HYBRID -> ConversationIntent.HYBRID;
+            case GENERAL, CONVERSATION, GLOBAL -> ConversationIntent.GENERAL_KNOWLEDGE;
+        };
     }
 
-    private ConversationAnswerResult finalizeTurn(
-            ConversationAnswerResult base,
+    private AnswerResolution projectedResolution(AgentTurnResult agentTurn) {
+        if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
+            return AnswerResolution.INVALID_INPUT;
+        }
+        if (hasReason(agentTurn, "PRESET_CONTRACT_UNAVAILABLE")
+                || hasReason(agentTurn, "PRESET_CONTRACT_STALE")) {
+            return AnswerResolution.CAPABILITY_UNAVAILABLE;
+        }
+        return resolution(agentTurn);
+    }
+
+    private List<ConversationAnswerBlock> projectedBlocks(
+            ConversationAnswerRequest request,
             RuntimeAnswerContent content,
-            ConversationRoute route,
-            ConversationWindow window,
-            ConversationAnswerRequest request,
-            boolean forceExploreOthers
-    ) {
-        ConversationProgress progress = progressClassifier.classify(
-                request.getContext().getCoveredTopics(),
-                request.getQuestion(),
-                route.getFacet());
-        if (forceExploreOthers
-                || (route.getProjectSlug() == null && route.getCaseSlug() == null)) {
-            progress = new ConversationProgress(
-                    progress.getCoveredTopics(),
-                    ConversationGuidanceStage.EXPLORE_OTHERS);
+            AgentTurnResult agentTurn) {
+        if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
+            return List.of(new ConversationAnswerBlock(
+                    com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
+                    "无法验证公开主体", List.of(), List.of()));
         }
-        List<ConversationSuggestedQuestion> suggestions = questionService.generate(
-                content,
-                route,
-                window,
-                base.getBlocks(),
-                progress,
-                request.getQuestion(),
-                base.getConstructionMode() == AnswerConstructionMode.GENERAL_MODEL
-                        || base.getConstructionMode() == AnswerConstructionMode.MODEL_GROUNDED);
-        return base.withGuidance(suggestions, progress);
+        if (hasValidPreset(request, content) && !hasRenderablePayload(agentTurn)) {
+            List<ConversationAnswerBlock> blocks = presetBlocks(request, content);
+            if (!blocks.isEmpty()) {
+                return blocks;
+            }
+        }
+        if (!hasRenderablePayload(agentTurn) && isReadyPortfolioTurn(agentTurn)) {
+            return structuredSubjectBlocks(request, content);
+        }
+        return List.of();
     }
 
-    private ConversationRoute portfolioGuidanceRoute(
+    private String projectedNoticeCode(AgentTurnResult agentTurn) {
+        if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
+            return "STRUCTURED_SUBJECT_INVALID";
+        }
+        if (hasReason(agentTurn, "PRESET_CONTRACT_UNAVAILABLE")) {
+            return "PRESET_CONTRACT_UNAVAILABLE";
+        }
+        if (hasReason(agentTurn, "PRESET_CONTRACT_STALE")) {
+            return "PRESET_CONTRACT_STALE";
+        }
+        return null;
+    }
+
+    private AnswerConstructionMode projectedConstructionMode(
             ConversationAnswerRequest request,
-            boolean hasResolvedSubject
-    ) {
-        return new ConversationRoute(
-                ConversationIntent.PORTFOLIO_GROUNDED,
-                ConversationAnswerScope.PORTFOLIO,
-                1.0d,
-                hasResolvedSubject ? request.getContext().getProjectSlug() : null,
-                hasResolvedSubject ? request.getContext().getCaseSlug() : null,
-                progressClassifier.inferFacet(request.getQuestion()),
-                false);
+            RuntimeAnswerContent content,
+            AgentTurnResult agentTurn) {
+        return hasRenderablePayload(agentTurn) || hasProjectedFallback(request, content, agentTurn)
+                ? AnswerConstructionMode.EVIDENCE_COMPOSITION : AnswerConstructionMode.TEMPLATE;
     }
 
-    private void publishPortfolioIntelligence(
-            PortfolioIntelligenceResult result,
-            boolean contextPresent,
-            long startedAt
-    ) {
-        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-        int recommendationCount = result.getPortfolioRecommendation() == null
-                ? 0
-                : result.getPortfolioRecommendation().getItems().size();
+    private AnswerEvidenceState projectedEvidenceState(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            ConversationAnswerScope answerScope,
+            AgentTurnResult agentTurn) {
+        if (hasRenderablePayload(agentTurn) || hasProjectedFallback(request, content, agentTurn)) {
+            return AnswerEvidenceState.VERIFIED;
+        }
+        if (answerScope == ConversationAnswerScope.PORTFOLIO) {
+            return AnswerEvidenceState.INSUFFICIENT;
+        }
+        return AnswerEvidenceState.NOT_REQUIRED;
+    }
+
+    private boolean hasValidPreset(ConversationAnswerRequest request, RuntimeAnswerContent content) {
+        return request.getQuestionPresetId() != null
+                && validatePreset(request, content) == null;
+    }
+
+    private List<ConversationAnswerBlock> presetBlocks(
+            ConversationAnswerRequest request, RuntimeAnswerContent content) {
+        String presetId = request.getQuestionPresetId();
+        if (presetId == null || validatePreset(request, content) != null) {
+            return List.of();
+        }
+        for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : allSubjects(content)) {
+            for (AnswerQuestion question : subject.getQuestions()) {
+                if (!presetId.equals(question.getId())) {
+                    continue;
+                }
+                java.util.Set<String> claimIds = new java.util.LinkedHashSet<>();
+                claimIds.addAll(question.getRequiredClaimIds());
+                claimIds.addAll(question.getSupportingClaimIds());
+                List<ConversationAnswerBlock> blocks = new java.util.ArrayList<>();
+                for (com.portfolio.agent.answer.domain.AnswerClaimProjection claim : subject.getClaims()) {
+                    if (!claimIds.isEmpty() && !claimIds.contains(claim.getId())) {
+                        continue;
+                    }
+                    if (claimIds.isEmpty()
+                            && !question.getPreferredClaimCategories().isEmpty()
+                            && !question.getPreferredClaimCategories().contains(claim.getCategory())) {
+                        continue;
+                    }
+                    blocks.add(new ConversationAnswerBlock(
+                            com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
+                            claim.getStatement(),
+                            List.of(claim.getId()), claim.getDirectEvidenceIds()));
+                }
+                if (!blocks.isEmpty()) {
+                    return List.copyOf(blocks);
+                }
+            }
+        }
+        return List.of();
+    }
+
+    private List<ConversationAnswerBlock> structuredSubjectBlocks(
+            ConversationAnswerRequest request, RuntimeAnswerContent content) {
+        if (request.getContext() == null) {
+            return List.of();
+        }
+        String subjectHint = request.getContext().getProjectSlug() != null
+                ? request.getContext().getProjectSlug() : request.getContext().getCaseSlug();
+        if (subjectHint == null || subjectHint.isBlank()) {
+            return List.of();
+        }
+        for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : allSubjects(content)) {
+            if (!subjectHint.equals(subject.getStableId()) && !subjectHint.equals(subject.getSlug())) {
+                continue;
+            }
+            List<ConversationAnswerBlock> blocks = new java.util.ArrayList<>();
+            for (com.portfolio.agent.answer.domain.AnswerClaimProjection claim : subject.getClaims()) {
+                if (claim.getStatement() == null || claim.getStatement().isBlank()) {
+                    continue;
+                }
+                blocks.add(new ConversationAnswerBlock(
+                        com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
+                        claim.getStatement(), List.of(claim.getId()), claim.getDirectEvidenceIds()));
+            }
+            return List.copyOf(blocks);
+        }
+        return List.of();
+    }
+
+    private boolean hasProjectedFallback(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            AgentTurnResult agentTurn) {
+        if (!isReadyPortfolioTurn(agentTurn) || hasRenderablePayload(agentTurn)) {
+            return false;
+        }
+        if (hasValidPreset(request, content) && !presetBlocks(request, content).isEmpty()) {
+            return true;
+        }
+        return !structuredSubjectBlocks(request, content).isEmpty();
+    }
+
+    private boolean isReadyPortfolioTurn(AgentTurnResult agentTurn) {
+        if (agentTurn.getDisposition() != AgentTurnResult.Disposition.READY
+                && agentTurn.getDisposition() != AgentTurnResult.Disposition.PARTIAL_READY) {
+            return false;
+        }
+        return scope(agentTurn) == ConversationAnswerScope.PORTFOLIO;
+    }
+
+    private List<com.portfolio.agent.answer.domain.AnswerKnowledge> allSubjects(RuntimeAnswerContent content) {
+        List<com.portfolio.agent.answer.domain.AnswerKnowledge> subjects = new java.util.ArrayList<>();
+        subjects.addAll(content.getProjects());
+        subjects.addAll(content.getCases());
+        return List.copyOf(subjects);
+    }
+
+    private boolean hasRenderablePayload(AgentTurnResult agentTurn) {
+        return agentTurn.getOutcome().map(value -> value.getTaskOutcomes().stream()
+                .anyMatch(TaskOutcome::hasRenderablePayload)).orElse(false);
+    }
+
+    private boolean hasReason(AgentTurnResult agentTurn, String reason) {
+        return agentTurn.getReasonCodes().contains(reason);
+    }
+
+    private boolean hasStructuredSubject(ConversationAnswerRequest request) {
+        return request.getContext() != null
+                && (request.getContext().getProjectSlug() != null
+                || request.getContext().getCaseSlug() != null);
+    }
+
+    private ConversationIntent intent(AgentTurnResult agentTurn) {
+        if (agentTurn.getDisposition() == AgentTurnResult.Disposition.BOUNDARY) {
+            return ConversationIntent.UNSUPPORTED_OR_UNSAFE;
+        }
+        return switch (scope(agentTurn)) {
+            case PORTFOLIO -> ConversationIntent.PORTFOLIO_GROUNDED;
+            case MIXED, HYBRID -> ConversationIntent.HYBRID;
+            case GENERAL, CONVERSATION, GLOBAL -> ConversationIntent.GENERAL_KNOWLEDGE;
+        };
+    }
+
+    private ConversationAnswerScope scope(AgentTurnResult agentTurn) {
+        Set<TaskSourceDomain> domains = new LinkedHashSet<>();
+        agentTurn.getPlan().ifPresent(plan -> plan.getTasks().forEach(task -> domains.add(task.getSourceDomain())));
+        if (domains.isEmpty()) {
+            return ConversationAnswerScope.GLOBAL;
+        }
+        if (domains.size() == 1 && domains.contains(TaskSourceDomain.PORTFOLIO)) {
+            return ConversationAnswerScope.PORTFOLIO;
+        }
+        if (domains.size() == 1 && domains.contains(TaskSourceDomain.GENERAL)) {
+            return ConversationAnswerScope.GENERAL;
+        }
+        return ConversationAnswerScope.MIXED;
+    }
+
+    private AnswerResolution resolution(AgentTurnResult agentTurn) {
+        return switch (agentTurn.getDisposition()) {
+            case READY, PARTIAL_READY -> AnswerResolution.ANSWERED;
+            case CONFIRMATION_REQUIRED -> AnswerResolution.AWAITING_CONFIRMATION;
+            case CLARIFICATION_REQUIRED -> AnswerResolution.NEEDS_CLARIFICATION;
+            case BOUNDARY, REJECTED -> AnswerResolution.REJECTED;
+            case PLAN_INVALIDATED -> AnswerResolution.NEEDS_CLARIFICATION;
+        };
+    }
+
+    private String title(AgentTurnResult agentTurn) {
+        return switch (agentTurn.getDisposition()) {
+            case READY, PARTIAL_READY -> "处理结果";
+            case CONFIRMATION_REQUIRED -> "请确认执行计划";
+            case CLARIFICATION_REQUIRED -> "需要补充信息";
+            case PLAN_INVALIDATED -> "计划需要重新生成";
+            case BOUNDARY, REJECTED -> "无法处理此请求";
+        };
+    }
+
+    private boolean isDegraded(AgentTurnResult agentTurn) {
+        return agentTurn.getOutcome().map(outcome -> outcome.getDegradedCount() > 0).orElse(false);
+    }
+
+    private void publishSemanticDiagnostics(AgentTurnResult agentTurn) {
+        int taskCount = agentTurn.getPlan().map(plan -> plan.getTasks().size()).orElse(0);
+        int succeeded = 0;
+        int blocked = 0;
+        int failed = 0;
+        String outcome = "NONE";
+        if (agentTurn.getOutcome().isPresent()) {
+            SemanticTurnOutcome turnOutcome = agentTurn.getOutcome().orElseThrow();
+            outcome = turnOutcome.getPlanOutcome().name();
+            for (TaskOutcome taskOutcome : turnOutcome.getTaskOutcomes()) {
+                if (taskOutcome.getExecutionStatus() == TaskOutcome.TaskExecutionStatus.SUCCEEDED) {
+                    succeeded++;
+                } else if (taskOutcome.getExecutionStatus() == TaskOutcome.TaskExecutionStatus.BLOCKED) {
+                    blocked++;
+                } else if (taskOutcome.getExecutionStatus() == TaskOutcome.TaskExecutionStatus.FAILED) {
+                    failed++;
+                }
+            }
+        }
         try {
             diagnosticEventPublisher.publish(DiagnosticEvent.builder(
-                            "portfolio.intelligence.completed",
-                            result.isDegraded() ? DiagnosticLevel.WARN : DiagnosticLevel.INFO)
-                    .field("intent.source", result.getIntentSource())
-                    .field("task.mode", result.getResolvedIntent())
-                    .field("subject.count", result.getSubjects().size())
-                    .field("evidence.count", result.getEvidence().size())
-                    .field("recommendation.count", recommendationCount)
-                    .field("context.present", contextPresent)
-                    .field("degraded", result.isDegraded())
-                    .field("duration.bucket", DurationBuckets.fromElapsedMillis(elapsedMillis))
+                            "semantic.turn.completed", DiagnosticLevel.INFO)
+                    .field("plan.task.count", taskCount)
+                    .field("plan.task.succeeded.count", succeeded)
+                    .field("plan.task.blocked.count", blocked)
+                    .field("plan.task.failed.count", failed)
+                    .field("plan.outcome", outcome)
+                    .field("plan.disposition", agentTurn.getDisposition())
                     .build());
         } catch (RuntimeException ignored) {
-            // Diagnostics must never change answer selection.
+            // Diagnostics must never affect a visitor response.
         }
     }
 
@@ -379,45 +507,5 @@ public final class ConversationalAgentRuntime {
         } catch (RuntimeException ignored) {
             // Observability is passive and must never change the visitor response.
         }
-    }
-
-    private void publishValidation(
-            ConversationDraftValidationResult validation,
-            long startedAt
-    ) {
-        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-        String failureCode = validation.isValid() ? "NONE" : validation.getFailureCode();
-        try {
-            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
-                            "answer.validation.completed",
-                            validation.isValid() ? DiagnosticLevel.DEBUG : DiagnosticLevel.WARN)
-                    .field("validation.accepted", validation.isValid())
-                    .field("failure.code", failureCode)
-                    .field("duration.bucket", DurationBuckets.fromElapsedMillis(elapsedMillis))
-                    .build());
-        } catch (RuntimeException ignored) {
-            // Diagnostics must never change answer selection.
-        }
-    }
-
-    private void publishFallback(
-            FallbackTrigger fallbackTrigger,
-            ProviderFailureCode failureCode
-    ) {
-        try {
-            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
-                            "answer.fallback.selected", DiagnosticLevel.WARN)
-                    .field("fallback.trigger", fallbackTrigger)
-                    .field("failure.code", failureCode)
-                    .build());
-        } catch (RuntimeException ignored) {
-            // Diagnostics must never change answer selection.
-        }
-    }
-
-    private enum FallbackTrigger {
-        PROVIDER_FAILURE,
-        VALIDATION_REJECTED,
-        VALIDATION_EXCEPTION
     }
 }

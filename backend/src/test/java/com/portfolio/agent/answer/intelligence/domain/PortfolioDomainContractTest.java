@@ -1,5 +1,16 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -11,6 +22,114 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class PortfolioDomainContractTest {
+
+    @Test
+    void answerFocusKeepsOverviewAndFocusedInvariants() {
+        assertThat(AnswerFocus.overview().getMode()).isEqualTo(AnswerFocusMode.OVERVIEW);
+        assertThat(AnswerFocus.overview().getRequestedClaimCategories()).isEmpty();
+
+        AnswerFocus focused = AnswerFocus.focused(List.of(
+                AnswerClaimCategory.VERIFICATION,
+                AnswerClaimCategory.VERIFICATION));
+        assertThat(focused.getMode()).isEqualTo(AnswerFocusMode.FOCUSED);
+        assertThat(focused.getRequestedClaimCategories())
+                .containsExactly(AnswerClaimCategory.VERIFICATION);
+
+        assertThatThrownBy(() -> AnswerFocus.focused(List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("focused answer requires claim categories");
+    }
+
+    @Test
+    void answerFocusDefensivelyCopiesCategoriesAndHasValueSemantics() {
+        List<AnswerClaimCategory> categories = new ArrayList<>(
+                List.of(AnswerClaimCategory.VERIFICATION));
+        AnswerFocus focus = AnswerFocus.focused(categories);
+        categories.add(AnswerClaimCategory.OUTCOME);
+
+        assertThat(focus.getRequestedClaimCategories())
+                .containsExactly(AnswerClaimCategory.VERIFICATION);
+        assertThatThrownBy(() -> focus.getRequestedClaimCategories()
+                .add(AnswerClaimCategory.OUTCOME))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(focus).isEqualTo(AnswerFocus.focused(
+                List.of(AnswerClaimCategory.VERIFICATION)));
+        assertThat(focus.hashCode()).isEqualTo(AnswerFocus.focused(
+                List.of(AnswerClaimCategory.VERIFICATION)).hashCode());
+    }
+
+    @Test
+    void intelligenceResultCopyMethodsRetainFocusAndRuntimeMetadata() {
+        AnswerFocus focus = AnswerFocus.focused(List.of(AnswerClaimCategory.VERIFICATION));
+        PortfolioIntelligenceResult original = new PortfolioIntelligenceResult(
+                PortfolioTaskMode.FACT_LOOKUP,
+                List.of(new PortfolioRetrievedSubject(
+                        "project-1", "PROJECT", "Project one", "Summary", "/projects/project-1",
+                        Set.of("POSTGRESQL"))),
+                List.of(passage(projection(AnswerClaimVerificationStatus.VERIFIED))),
+                null, null, "public-1", true, "POSTGRES_FALLBACK")
+                .withDecisionMetadata(AnswerIntentSource.RULE, false)
+                .withAnswerFocus(focus);
+
+        PortfolioIntelligenceResult copied = original
+                .withDecisionMetadata(AnswerIntentSource.MODEL, true)
+                .withContractIdentity("preset-1", "contract-1")
+                .withAnswerFocus(focus);
+
+        assertThat(copied.getAnswerFocus()).isEqualTo(focus);
+        assertThat(copied.isDegraded()).isTrue();
+        assertThat(copied.getNoticeCode()).isEqualTo("POSTGRES_FALLBACK");
+        assertThat(copied.getIntentSource()).isEqualTo(AnswerIntentSource.MODEL);
+        assertThat(copied.isContextVersionUpdated()).isTrue();
+        assertThat(copied.getQuestionPresetId()).isEqualTo("preset-1");
+        assertThat(copied.getContractVersion()).isEqualTo("contract-1");
+    }
+
+    @Test
+    void passageRejectsUnverifiedClaimProjection() {
+        assertThatIllegalArgumentException().isThrownBy(() -> passage(
+                projection(AnswerClaimVerificationStatus.PARTIALLY_VERIFIED)));
+    }
+
+    @Test
+    void passageRejectsEvidenceReferenceThatIsNotApproved() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortfolioRetrievedPassage(
+                "project-1#claim-1", "project-1", "Public verified fact",
+                projection(AnswerClaimVerificationStatus.VERIFIED),
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-1", "Approved evidence", "PENDING"))));
+    }
+
+    @Test
+    void passageRejectsMismatchedDirectEvidenceCollection() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortfolioRetrievedPassage(
+                "project-1#claim-1", "project-1", "Public verified fact",
+                projection(AnswerClaimVerificationStatus.VERIFIED),
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-other", "Other evidence", "APPROVED"))));
+    }
+
+    @Test
+    void passageRejectsBlankClaimId() {
+        AnswerClaimProjection blankId = new AnswerClaimProjection(
+                "  ",
+                AnswerClaimCategory.IMPLEMENTATION,
+                "Public verified fact",
+                "验证范围以公开证据为限。",
+                AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                AnswerContributionType.PRIMARY,
+                AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                AnswerClaimVerificationStatus.VERIFIED,
+                AnswerMateriality.KEY,
+                List.of("POSTGRESQL"),
+                List.of("evidence-1"));
+        assertThatThrownBy(() -> new PortfolioRetrievedPassage(
+                "project-1#claim-1", "project-1", "Public verified fact", blankId,
+                List.of(new PortfolioRetrievedEvidenceReference(
+                        "evidence-1", "Approved evidence", "APPROVED"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("claim id");
+    }
 
     @Test
     void mergesConditionsWithoutMutatingEitherInput() {
@@ -132,10 +251,8 @@ class PortfolioDomainContractTest {
         PortfolioRetrievedSubject subject = new PortfolioRetrievedSubject(
                 "project-1", "PROJECT", "Project one", "Public summary", "/projects/project-1",
                 Set.of("POSTGRESQL"));
-        PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
-                "project-1#claim-1", "project-1", "claim-1", "Public verified fact",
-                List.of(new PortfolioRetrievedEvidenceReference(
-                        "evidence-1", "Approved evidence", "APPROVED")));
+        PortfolioRetrievedPassage passage = passage(
+                projection(AnswerClaimVerificationStatus.VERIFIED));
         PortfolioRetrievalResult result = new PortfolioRetrievalResult(
                 "public-2026-07-31", List.of(subject), List.of(passage),
                 new PortfolioRetrievalSource("BUNDLE"), false, null);
@@ -143,6 +260,30 @@ class PortfolioDomainContractTest {
         assertThat(result.getSubjects()).containsExactly(subject);
         assertThat(result.getPassages()).containsExactly(passage);
         assertThat(result.getSource().getAdapterId()).isEqualTo("BUNDLE");
+    }
+
+    private PortfolioRetrievedPassage passage(AnswerClaimProjection claim) {
+        return new PortfolioRetrievedPassage(
+                "project-1#claim-1", "project-1", "Public verified fact", claim,
+                claim.getDirectEvidenceIds().stream()
+                        .map(evidenceId -> new PortfolioRetrievedEvidenceReference(
+                                evidenceId, "Approved evidence", "APPROVED"))
+                        .toList());
+    }
+
+    private AnswerClaimProjection projection(AnswerClaimVerificationStatus status) {
+        return new AnswerClaimProjection(
+                "claim-1",
+                AnswerClaimCategory.IMPLEMENTATION,
+                "Public verified fact",
+                "验证范围以公开证据为限。",
+                AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                AnswerContributionType.PRIMARY,
+                AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                status,
+                AnswerMateriality.KEY,
+                List.of("POSTGRESQL"),
+                List.of("evidence-1"));
     }
 
     private PortfolioRecommendationContext context() {

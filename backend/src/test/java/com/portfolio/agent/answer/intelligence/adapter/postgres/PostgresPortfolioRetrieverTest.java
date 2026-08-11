@@ -3,6 +3,13 @@ package com.portfolio.agent.answer.intelligence.adapter.postgres;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
@@ -27,7 +34,7 @@ class PostgresPortfolioRetrieverTest {
                         new CandidateRetrievalResult("public-2026-07-31", RetrievalMode.HYBRID, List.of(
                                 candidate("project-1", "claim-1", "evidence-1"))),
                         List.of(new PostgresKnowledgePassageRow(
-                                "project-1", "claim-1", "Actual verified PostgreSQL claim",
+                                "project-1", "Actual verified PostgreSQL claim", rowClaim("claim-1"),
                                 List.of(new EvidenceReference(
                                         "claim-1", "evidence-1", "Approved evidence", "APPROVED"))))));
 
@@ -77,6 +84,21 @@ class PostgresPortfolioRetrieverTest {
     private PortfolioRetrievalRequest request() {
         return new PortfolioRetrievalRequest(
                 "PostgreSQL", PortfolioTaskMode.FACT_LOOKUP, PortfolioConditions.empty());
+    }
+
+    private AnswerClaimProjection rowClaim(String claimId) {
+        return new AnswerClaimProjection(
+                claimId,
+                AnswerClaimCategory.IMPLEMENTATION,
+                "Actual verified PostgreSQL claim",
+                "验证范围以公开证据为限。",
+                AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                AnswerContributionType.PRIMARY,
+                AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                AnswerClaimVerificationStatus.VERIFIED,
+                AnswerMateriality.KEY,
+                List.of("POSTGRESQL"),
+                List.of("evidence-1"));
     }
 
     private SelectionCandidate candidate(String subjectId, String claimId, String evidenceId) {

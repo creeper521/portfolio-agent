@@ -172,9 +172,40 @@ public final class EvalReportJsonWriter {
                 observation.getAnswerShape().getRepeatedSourceScopeCount());
         shape.put("semanticSectionCount",
                 observation.getAnswerShape().getSemanticSectionCount());
+        shape.put("typedSectionCount",
+                observation.getAnswerShape().getTypedSectionCount());
+        shape.put("untypedBlockCount",
+                observation.getAnswerShape().getUntypedBlockCount());
+        shape.put("sectionOrderValid",
+                observation.getAnswerShape().isSectionOrderValid());
+        shape.put("summaryPresent",
+                observation.getAnswerShape().isSummaryPresent());
         shape.put("directAnswerPresent",
                 observation.getAnswerShape().isDirectAnswerPresent());
         entry.put("answerShape", shape);
+        entry.put("semanticTurnShape", semanticTurnShape(observation));
+        return entry;
+    }
+
+    private Map<String, Object> semanticTurnShape(EvalObservation observation) {
+        com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape shape =
+                observation.getSemanticTurnShape();
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("disposition", shape.getDisposition().name());
+        entry.put("planOutcome", shape.getPlanOutcome().name());
+        entry.put("taskCount", shape.getTaskCount());
+        entry.put("dependencyCount", shape.getDependencyCount());
+        entry.put("modelCallCount", shape.getModelCallCount());
+        entry.put("answeredCount", shape.getAnsweredCount());
+        entry.put("blockedCount", shape.getBlockedCount());
+        entry.put("failedCount", shape.getFailedCount());
+        entry.put("degradedCount", shape.getDegradedCount());
+        entry.put("portfolioSourceTaskCount", shape.getPortfolioSourceTaskCount());
+        entry.put("generalSourceTaskCount", shape.getGeneralSourceTaskCount());
+        entry.put("synthesisSourceTaskCount", shape.getSynthesisSourceTaskCount());
+        entry.put("planInvariantValid", shape.isPlanInvariantValid());
+        entry.put("provenanceValid", shape.isProvenanceValid());
+        entry.put("privacySafe", shape.isPrivacySafe());
         return entry;
     }
 }

@@ -3,7 +3,13 @@ package com.portfolio.agent.answer.intelligence.adapter.postgres;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.agent.answer.domain.EmbeddingVector;
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
@@ -25,10 +31,9 @@ class JdbcPostgresKnowledgeQueryTest {
         JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
                 selectionQuery,
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
-                (releaseId, subjectIds) -> List.of(new PostgresKnowledgePassageRow(
-                        "project-1", "claim-1", "Actual verified PostgreSQL claim",
-                        List.of(new EvidenceReference(
-                                "claim-1", "evidence-1", "Approved evidence", "APPROVED")))));
+                (releaseId, subjectIds) -> List.of(row(
+                        "claim-1", "Actual verified PostgreSQL claim",
+                        AnswerClaimCategory.IMPLEMENTATION, "evidence-1")));
 
         PortfolioRetrievalRequest request = new PortfolioRetrievalRequest(
                 "PostgreSQL audit", PortfolioTaskMode.FACT_LOOKUP,
@@ -59,16 +64,10 @@ class JdbcPostgresKnowledgeQueryTest {
                 selectionQuery,
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
                 (releaseId, subjectIds) -> List.of(
-                        new PostgresKnowledgePassageRow(
-                                "project-1", "claim-1", "PostgreSQL verification details",
-                                AnswerClaimCategory.VERIFICATION,
-                                List.of(new EvidenceReference(
-                                        "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
-                        new PostgresKnowledgePassageRow(
-                                "project-1", "claim-2", "PostgreSQL verification outcome",
-                                AnswerClaimCategory.OUTCOME,
-                                List.of(new EvidenceReference(
-                                        "claim-2", "evidence-2", "Approved evidence", "APPROVED")))));
+                        row("claim-1", "PostgreSQL verification details",
+                                AnswerClaimCategory.VERIFICATION, "evidence-1"),
+                        row("claim-2", "PostgreSQL verification outcome",
+                                AnswerClaimCategory.OUTCOME, "evidence-2")));
 
         PostgresKnowledgeQueryResult result = query.retrieve(
                 PortfolioRetrievalRequest.contextValidation(
@@ -94,16 +93,10 @@ class JdbcPostgresKnowledgeQueryTest {
                 selectionQuery,
                 text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
                 (releaseId, subjectIds) -> List.of(
-                        new PostgresKnowledgePassageRow(
-                                "project-1", "claim-1", "PostgreSQL verification details",
-                                AnswerClaimCategory.VERIFICATION,
-                                List.of(new EvidenceReference(
-                                        "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
-                        new PostgresKnowledgePassageRow(
-                                "project-1", "claim-2", "PostgreSQL verification outcome",
-                                AnswerClaimCategory.OUTCOME,
-                                List.of(new EvidenceReference(
-                                        "claim-2", "evidence-2", "Approved evidence", "APPROVED")))));
+                        row("claim-1", "PostgreSQL verification details",
+                                AnswerClaimCategory.VERIFICATION, "evidence-1"),
+                        row("claim-2", "PostgreSQL verification outcome",
+                                AnswerClaimCategory.OUTCOME, "evidence-2")));
 
         PostgresKnowledgeQueryResult result = query.retrieve(
                 PortfolioRetrievalRequest.subjectScope(
@@ -210,7 +203,6 @@ class JdbcPostgresKnowledgeQueryTest {
     }
 
     private static final class RecordingPassageQuery implements PostgresFactPassageQuery {
-
         private final List<List<Object>> exactRequests = new java.util.ArrayList<>();
         private int relevantCallCount;
 
@@ -218,14 +210,8 @@ class JdbcPostgresKnowledgeQueryTest {
         public List<PostgresKnowledgePassageRow> findPassages(String releaseId, List<String> subjectIds) {
             exactRequests.add(List.of(releaseId, List.copyOf(subjectIds)));
             return List.of(
-                    new PostgresKnowledgePassageRow(
-                            "project-1", "claim-1", "Contract claim",
-                            List.of(new EvidenceReference(
-                                    "claim-1", "evidence-1", "Approved evidence", "APPROVED"))),
-                    new PostgresKnowledgePassageRow(
-                            "project-1", "claim-2", "Unrequested claim",
-                            List.of(new EvidenceReference(
-                                    "claim-2", "evidence-2", "Approved evidence", "APPROVED"))));
+                    row("claim-1", "Contract claim", AnswerClaimCategory.IMPLEMENTATION, "evidence-1"),
+                    row("claim-2", "Unrequested claim", AnswerClaimCategory.IMPLEMENTATION, "evidence-2"));
         }
 
         @Override
@@ -238,5 +224,29 @@ class JdbcPostgresKnowledgeQueryTest {
             relevantCallCount++;
             throw new AssertionError("preset contract must not call relevant passage retrieval");
         }
+    }
+
+    private static PostgresKnowledgePassageRow row(
+            String claimId,
+            String content,
+            AnswerClaimCategory category,
+            String evidenceId) {
+        return new PostgresKnowledgePassageRow(
+                "project-1",
+                content,
+                new AnswerClaimProjection(
+                        claimId,
+                        category,
+                        content,
+                        "验证范围以公开证据为限。",
+                        AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                        AnswerContributionType.PRIMARY,
+                        AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                        AnswerClaimVerificationStatus.VERIFIED,
+                        AnswerMateriality.KEY,
+                        List.of("POSTGRESQL"),
+                        List.of(evidenceId)),
+                List.of(new EvidenceReference(
+                        claimId, evidenceId, "Approved evidence", "APPROVED")));
     }
 }

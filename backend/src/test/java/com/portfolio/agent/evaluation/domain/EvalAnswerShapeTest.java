@@ -1,5 +1,6 @@
 package com.portfolio.agent.evaluation.domain;
 
+import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,9 @@ class EvalAnswerShapeTest {
         assertThat(shape.getRepeatedEvidenceReferenceCount()).isEqualTo(1);
         assertThat(shape.getRepeatedContentCount()).isEqualTo(1);
         assertThat(shape.getRepeatedSourceScopeCount()).isEqualTo(1);
-        assertThat(shape.getSemanticSectionCount()).isEqualTo(2);
+        assertThat(shape.getSemanticSectionCount()).isZero();
+        assertThat(shape.getTypedSectionCount()).isZero();
+        assertThat(shape.getUntypedBlockCount()).isEqualTo(2);
         assertThat(shape.isDirectAnswerPresent()).isTrue();
     }
 
@@ -71,14 +74,18 @@ class EvalAnswerShapeTest {
     }
 
     @Test
-    void countsOnlyNonEmptySemanticSections() {
+    void countsOnlyNonEmptyTypedSemanticSections() {
         ConversationAnswerBlock empty = new ConversationAnswerBlock(
                 ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.BACKGROUND,
+                "项目背景",
                 "   ",
                 List.of(),
                 List.of());
         ConversationAnswerBlock real = new ConversationAnswerBlock(
                 ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.SOLUTION,
+                "技术方案与实现",
                 "有效回答",
                 List.of("claim-a"),
                 List.of());
@@ -86,6 +93,78 @@ class EvalAnswerShapeTest {
         EvalAnswerShape shape = EvalAnswerShape.from(List.of(empty, real));
 
         assertThat(shape.getSemanticSectionCount()).isEqualTo(1);
+        assertThat(shape.getTypedSectionCount()).isEqualTo(2);
+        assertThat(shape.getUntypedBlockCount()).isZero();
         assertThat(shape.getBlockCount()).isEqualTo(2);
+    }
+
+    @Test
+    void countsTypedSectionsAndSummaryWithoutStoringContent() {
+        ConversationAnswerBlock background = new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.BACKGROUND,
+                "项目背景",
+                "背景正文",
+                List.of("claim-bg"),
+                List.of("evidence-bg"));
+        ConversationAnswerBlock solution = new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.SOLUTION,
+                "技术方案与实现",
+                "方案正文",
+                List.of("claim-sol"),
+                List.of("evidence-sol"));
+
+        EvalAnswerShape shape = EvalAnswerShape.from(
+                List.of(background, solution), "直接摘要");
+
+        assertThat(shape.getSemanticSectionCount()).isEqualTo(2);
+        assertThat(shape.getTypedSectionCount()).isEqualTo(2);
+        assertThat(shape.getUntypedBlockCount()).isZero();
+        assertThat(shape.isSectionOrderValid()).isTrue();
+        assertThat(shape.isSummaryPresent()).isTrue();
+        assertThat(shape.isDirectAnswerPresent()).isTrue();
+    }
+
+    @Test
+    void rejectsOutOfOrderTypedSectionsAndCountsUntypedBlocksSeparately() {
+        ConversationAnswerBlock solution = new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.SOLUTION,
+                "技术方案与实现",
+                "方案正文",
+                List.of("claim-sol"),
+                List.of("evidence-sol"));
+        ConversationAnswerBlock background = new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                AnswerSectionType.BACKGROUND,
+                "项目背景",
+                "背景正文",
+                List.of("claim-bg"),
+                List.of("evidence-bg"));
+        ConversationAnswerBlock untyped = new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                "无类型兼容块",
+                List.of("claim-legacy"),
+                List.of());
+
+        EvalAnswerShape shape = EvalAnswerShape.from(
+                List.of(solution, background, untyped), null);
+
+        assertThat(shape.getSemanticSectionCount()).isEqualTo(2);
+        assertThat(shape.getTypedSectionCount()).isEqualTo(2);
+        assertThat(shape.getUntypedBlockCount()).isEqualTo(1);
+        assertThat(shape.isSectionOrderValid()).isFalse();
+        assertThat(shape.isSummaryPresent()).isFalse();
+        assertThat(shape.isDirectAnswerPresent()).isTrue();
+    }
+
+    @Test
+    void summaryAloneMakesTheAnswerDirectlyPresent() {
+        EvalAnswerShape shape = EvalAnswerShape.from(List.of(), "直接摘要");
+
+        assertThat(shape.getBlockCount()).isZero();
+        assertThat(shape.isSummaryPresent()).isTrue();
+        assertThat(shape.isDirectAnswerPresent()).isTrue();
     }
 }

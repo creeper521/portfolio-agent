@@ -1,5 +1,12 @@
 package com.portfolio.agent.answer.intelligence.adapter.postgres;
 
+import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
+import com.portfolio.agent.answer.domain.AnswerContributionType;
+import com.portfolio.agent.answer.domain.AnswerMateriality;
+import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -16,6 +23,14 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                    c.stable_id AS claim_id,
                    c.category AS claim_category,
                    c.statement AS content,
+                   c.statement AS claim_statement,
+                   c.detail AS claim_detail,
+                   c.achievement_status AS claim_achievement_status,
+                   c.contribution_type AS claim_contribution_type,
+                   c.verification_basis AS claim_verification_basis,
+                   c.verification_status AS claim_verification_status,
+                   c.materiality AS claim_materiality,
+                   ARRAY(SELECT jsonb_array_elements_text(c.topics)) AS claim_topics,
                    array_agg(e.stable_id ORDER BY e.stable_id) AS evidence_ids,
                    array_agg(e.label ORDER BY e.stable_id) AS evidence_labels,
                    array_agg(e.public_status ORDER BY e.stable_id) AS evidence_statuses
@@ -35,7 +50,15 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
             WHERE ps.release_id = CAST(? AS uuid)
               AND ps.stable_id = ANY(CAST(? AS text[]))
               AND NULLIF(BTRIM(c.statement), '') IS NOT NULL
-            GROUP BY ps.stable_id, c.stable_id, c.category, c.statement
+              AND c.detail IS NOT NULL
+              AND c.achievement_status IS NOT NULL
+              AND c.contribution_type IS NOT NULL
+              AND c.verification_basis IS NOT NULL
+              AND c.materiality IS NOT NULL
+              AND c.topics IS NOT NULL
+            GROUP BY ps.stable_id, c.stable_id, c.category, c.statement, c.detail,
+                     c.achievement_status, c.contribution_type, c.verification_basis,
+                     c.verification_status, c.materiality, c.topics
             ORDER BY array_position(CAST(? AS text[]), ps.stable_id), c.stable_id
             """;
 
@@ -69,19 +92,39 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
             List<String> evidenceIds = readStrings(resultSet.getArray("evidence_ids"));
             List<String> evidenceLabels = readStrings(resultSet.getArray("evidence_labels"));
             List<String> evidenceStatuses = readStrings(resultSet.getArray("evidence_statuses"));
+            AnswerClaimProjection claim = claimProjection(resultSet, evidenceIds);
             rows.add(new PostgresKnowledgePassageRow(
                     resultSet.getString("subject_id"),
-                    resultSet.getString("claim_id"),
                     resultSet.getString("content"),
-                    com.portfolio.agent.answer.domain.AnswerClaimCategory.valueOf(
-                            resultSet.getString("claim_category")),
+                    claim,
                     evidenceReferences(
-                            resultSet.getString("claim_id"),
+                            claim.getId(),
                             evidenceIds,
                             evidenceLabels,
                             evidenceStatuses)));
         }
         return List.copyOf(rows);
+    }
+
+    private AnswerClaimProjection claimProjection(
+            ResultSet resultSet,
+            List<String> evidenceIds) throws SQLException {
+        return new AnswerClaimProjection(
+                resultSet.getString("claim_id"),
+                AnswerClaimCategory.valueOf(resultSet.getString("claim_category")),
+                resultSet.getString("claim_statement"),
+                resultSet.getString("claim_detail"),
+                AnswerAchievementStatus.valueOf(
+                        resultSet.getString("claim_achievement_status")),
+                AnswerContributionType.valueOf(
+                        resultSet.getString("claim_contribution_type")),
+                AnswerVerificationBasis.valueOf(
+                        resultSet.getString("claim_verification_basis")),
+                AnswerClaimVerificationStatus.valueOf(
+                        resultSet.getString("claim_verification_status")),
+                AnswerMateriality.valueOf(resultSet.getString("claim_materiality")),
+                readStrings(resultSet.getArray("claim_topics")),
+                evidenceIds);
     }
 
     private List<com.portfolio.agent.selection.domain.EvidenceReference> evidenceReferences(

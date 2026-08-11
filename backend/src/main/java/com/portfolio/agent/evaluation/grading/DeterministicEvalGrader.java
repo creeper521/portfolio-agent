@@ -6,6 +6,8 @@ import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
 import com.portfolio.agent.evaluation.domain.EvalObservationStatus;
+import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
+import com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape;
 import com.portfolio.agent.evaluation.domain.EvalSeverity;
 import com.portfolio.agent.evaluation.domain.EvalSubjectRef;
 import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
@@ -37,12 +39,32 @@ public final class DeterministicEvalGrader implements EvalGrader {
         for (EvalGraderRule rule : evalCase.getGraders()) {
             grades.add(dispatch(evalCase, observation, rule));
         }
+        EvalSemanticTurnShape semanticTurnShape = observation.getSemanticTurnShape();
+        if (semanticTurnShape.getDisposition() != EvalSemanticTurnShape.Disposition.UNKNOWN) {
+            grades.add(semanticTurnStructure(evalCase, observation, semanticTurnShape));
+        }
         if (isFalseSufficient(evalCase, observation)) {
             grades.add(grade(evalCase, observation,
                     "RESOLUTION", EvalSeverity.BLOCKING, false,
                     EvalReasonCode.FALSE_SUFFICIENT, 0L, 1L));
         }
         return List.copyOf(grades);
+    }
+
+    private EvalGrade semanticTurnStructure(
+            EvalCase evalCase,
+            EvalObservation observation,
+            EvalSemanticTurnShape shape) {
+        if (!shape.isPrivacySafe()) {
+            return grade(evalCase, observation, "SEMANTIC_TURN_STRUCTURE",
+                    EvalSeverity.BLOCKING, false, EvalReasonCode.PRIVACY_LEAK, 0L, 1L);
+        }
+        if (!shape.isPlanInvariantValid() || !shape.isProvenanceValid()) {
+            return grade(evalCase, observation, "SEMANTIC_TURN_STRUCTURE",
+                    EvalSeverity.BLOCKING, false, EvalReasonCode.API_CONTRACT_BROKEN, 0L, 1L);
+        }
+        return grade(evalCase, observation, "SEMANTIC_TURN_STRUCTURE",
+                EvalSeverity.BLOCKING, true, EvalReasonCode.PASS, 1L, 1L);
     }
 
     private EvalGrade dispatch(
@@ -208,10 +230,17 @@ public final class DeterministicEvalGrader implements EvalGrader {
             EvalCase evalCase,
             EvalObservation observation,
             EvalGraderRule rule) {
-        boolean passed = observation.getAnswerShape().isDirectAnswerPresent()
-                && observation.getAnswerShape().getCharacterCount() > 0
-                && observation.getAnswerShape().getRepeatedContentCount() == 0;
-        return passed
+        EvalAnswerShape shape = observation.getAnswerShape();
+        boolean hasDirectContent = shape.isDirectAnswerPresent()
+                && shape.getCharacterCount() > 0
+                && shape.getRepeatedContentCount() == 0;
+        if (!hasDirectContent) {
+            return grade(evalCase, observation, rule.getType(), rule.getSeverity(),
+                    false, EvalReasonCode.ANSWER_QUALITY_MISSING, 0L, 1L);
+        }
+        boolean hasTypedSections = shape.getTypedSectionCount() > 0;
+        boolean orderValid = !hasTypedSections || shape.isSectionOrderValid();
+        return orderValid
                 ? pass(evalCase, observation, rule, EvalReasonCode.PASS)
                 : grade(evalCase, observation, rule.getType(), rule.getSeverity(),
                         false, EvalReasonCode.ANSWER_QUALITY_MISSING, 0L, 1L);

@@ -45,6 +45,9 @@ public final class EvalExecutionEngine {
             List<EvalLayer> layers = evalCase.getLayers() == null
                     ? List.of() : evalCase.getLayers();
             for (EvalLayer layer : layers) {
+                if (layer == EvalLayer.HTTP_E2E && plan.getMode() == EvalRunMode.OFFLINE) {
+                    continue;
+                }
                 if (layer == EvalLayer.PROVIDER && plan.getMode() != EvalRunMode.PROVIDER) {
                     continue;
                 }

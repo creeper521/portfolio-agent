@@ -21,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.List;
 import java.util.Set;
@@ -148,6 +149,39 @@ class ConversationAnswerControllerTest {
                 .andExpect(jsonPath("$.portfolioRecommendation.items").isEmpty())
                 .andExpect(jsonPath("$.portfolioRecommendation.satisfiedConstraints").isEmpty())
                 .andExpect(jsonPath("$.portfolioRecommendation.unsatisfiedConstraints").isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidRegenerateActionAtHttpBoundary() throws Exception {
+        ProductionConversationService service = mock(ProductionConversationService.class);
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new ConversationAnswerController(
+                                service,
+                                new ClientAddressResolver(false, java.util.Set.of()),
+                                new ConversationAnswerResponseMapper()))
+                .setValidator(validator)
+                .build();
+
+        mvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "turnId": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+                                  "requestToken": "63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                                  "action": "REGENERATE_PLAN",
+                                  "question": "regenerate",
+                                  "messages": [],
+                                  "invalidatedPlanReference": {
+                                    "planId": "plan-1",
+                                    "planFingerprint": "sha256:value"
+                                  }
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
     }
 
     private ConversationAnswerResult result() {

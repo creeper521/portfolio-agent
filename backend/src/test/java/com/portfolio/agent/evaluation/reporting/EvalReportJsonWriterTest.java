@@ -61,6 +61,8 @@ class EvalReportJsonWriterTest {
         assertThat(json).contains("\"metricName\"");
         assertThat(json).contains("\"reasonCode\"");
         assertThat(json).contains("\"directAnswerPresent\"");
+        assertThat(json).contains("\"semanticTurnShape\"");
+        assertThat(json).contains("\"taskCount\":0");
         assertThat(json.indexOf("\"hardError.count\""))
                 .isLessThan(json.indexOf("\"routing.top1\""));
     }

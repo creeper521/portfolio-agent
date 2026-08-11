@@ -52,6 +52,25 @@ import com.portfolio.agent.answer.service.ReciprocalRankFusion;
 import com.portfolio.agent.answer.service.RetrievalContextValidator;
 import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
 import com.portfolio.agent.answer.service.VectorRetriever;
+import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
+import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
+import com.portfolio.agent.answer.routing.adapter.execution.DeterministicSynthesisTaskExecutor;
+import com.portfolio.agent.answer.routing.adapter.execution.GeneralSemanticTaskExecutor;
+import com.portfolio.agent.answer.routing.adapter.execution.PortfolioSemanticTaskExecutor;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
+import com.portfolio.agent.answer.routing.service.DefaultTurnRouter;
+import com.portfolio.agent.answer.routing.service.GlobalBoundaryGate;
+import com.portfolio.agent.answer.routing.service.LegacySemanticContextAdapter;
+import com.portfolio.agent.answer.routing.service.PlanConfirmationService;
+import com.portfolio.agent.answer.routing.service.PlanFingerprintService;
+import com.portfolio.agent.answer.routing.service.RoutingContextResolver;
+import com.portfolio.agent.answer.routing.service.SemanticPlanCompiler;
+import com.portfolio.agent.answer.routing.service.SemanticPlanValidator;
+import com.portfolio.agent.answer.routing.service.SemanticRoutingPolicy;
+import com.portfolio.agent.answer.routing.service.SemanticSignalCollector;
+import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
+import com.portfolio.agent.answer.routing.service.TurnDecisionPolicy;
+import com.portfolio.agent.answer.routing.service.TurnRouter;
 import com.portfolio.agent.common.observability.AnonymousSourceHasher;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
@@ -203,8 +222,7 @@ class RuntimeCompositePrivacyTest {
             assertThat(events).extracting(DiagnosticEvent::getName)
                     .contains(
                             "http.request.started",
-                            "provider.call.failed",
-                            "answer.fallback.selected",
+                            "semantic.turn.completed",
                             "agent.request.completed",
                             "http.request.completed");
         } finally {
@@ -220,13 +238,6 @@ class RuntimeCompositePrivacyTest {
     private RuntimeSeams runtimeSeams(DiagnosticEventPublisher publisher) {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
-                .andExpect(header("Authorization", "Bearer " + API_KEY_SENTINEL))
-                .andExpect(content().string(containsString(QUESTION_SENTINEL)))
-                .andExpect(content().string(containsString(HISTORY_SENTINEL)))
-                .andRespond(request -> {
-                    throw new ResourceAccessException(EXCEPTION_MESSAGE_SENTINEL);
-                });
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         OpenAiCompatibleConversationalModelAdapter adapter =
                 new OpenAiCompatibleConversationalModelAdapter(
@@ -282,20 +293,32 @@ class RuntimeCompositePrivacyTest {
                 1,
                 1,
                 publisher);
+        SemanticPlanValidator validator = new SemanticPlanValidator(new PlanFingerprintService());
+        TurnRouter router = DefaultTurnRouter.fromPublicSubjects(
+                List.of(new DefaultTurnRouter.PublicSubjectSpec(
+                        SubjectType.PROJECT, project.getStableId(), content.getContentVersion(),
+                        Set.of(project.getStableId()))),
+                new GlobalBoundaryGate(),
+                new RoutingContextResolver(new LegacySemanticContextAdapter()),
+                new SemanticSignalCollector(),
+                new SemanticPlanCompiler(new SemanticRoutingPolicy()),
+                validator,
+                new TurnDecisionPolicy());
         ConversationalAgentRuntime runtime = new ConversationalAgentRuntime(
                 () -> content,
-                new ConversationWindowManager(adapter, 12000, 6),
-                new ConversationIntentRouter(adapter, 0.65, publisher),
-                groundingAssembler,
-                toolService,
-                adapter,
-                new ConversationDraftValidator(adapter),
-                new DynamicQuestionService(adapter, groundingAssembler, 3),
-                new DeterministicConversationFallback(),
-                new ConversationProviderAccess(true),
-                turn -> new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null),
-                new PortfolioIntelligenceAnswerAssembler(),
-                new ConversationProgressClassifier(),
+                new SemanticTurnRequestMapper(),
+                router,
+                new PlanConfirmationService(
+                        new JdkPlanCryptographyAdapter(new byte[32], new byte[32]),
+                        validator,
+                        Clock.systemUTC()),
+                new SemanticTurnCoordinator(List.of(
+                        new PortfolioSemanticTaskExecutor(
+                                turn -> new PortfolioDecision(PortfolioDisposition.NOT_PORTFOLIO, null)),
+                        new GeneralSemanticTaskExecutor(
+                                new ConversationProviderAccess(false), adapter,
+                                new ConversationDraftValidator(adapter)),
+                        new DeterministicSynthesisTaskExecutor())),
                 new LoggingConversationDecisionPublisher(publisher),
                 publisher);
         return new RuntimeSeams(runtime, server);

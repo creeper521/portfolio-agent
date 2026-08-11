@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.intelligence.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
@@ -151,23 +152,14 @@ class DefaultPortfolioIntelligenceTest {
     }
 
     @Test
-    void doesNotPromotePendingRetrievedEvidenceToApproved() {
-        PortfolioRetrievedSubject subject = subject("project-a", "Project A");
-        PortfolioRetrievedPassage pendingPassage = new PortfolioRetrievedPassage(
-                "project-a#claim-a", "project-a", "claim-a", "Pending claim",
+    void doesNotAllowPendingRetrievedEvidenceIntoThePassageModel() {
+        assertThatThrownBy(() -> new PortfolioRetrievedPassage(
+                "project-a#claim-a", "project-a", "Pending claim",
+                claimProjection("claim-a", "evidence-a"),
                 List.of(new PortfolioRetrievedEvidenceReference(
-                        "evidence-a", "Pending evidence", "PENDING")));
-        RecordingRetriever retriever = new RecordingRetriever(new PortfolioRetrievalResult(
-                "public-1", List.of(subject), List.of(pendingPassage),
-                new PortfolioRetrievalSource("TEST"), false, null));
-
-        PortfolioIntelligenceResult result = intelligence(retriever).resolve(task(
-                PortfolioTaskMode.RECOMMENDATION,
-                new PortfolioConditions("BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2),
-                null,
-                null));
-
-        assertThat(result.getPortfolioRecommendation().getItems()).isEmpty();
+                        "evidence-a", "Pending evidence", "PENDING"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("APPROVED");
     }
 
     @Test
@@ -335,9 +327,26 @@ class DefaultPortfolioIntelligenceTest {
 
     private PortfolioRetrievedPassage passage(String subjectId, String claimId, String evidenceId) {
         return new PortfolioRetrievedPassage(
-                subjectId + "#" + claimId, subjectId, claimId, "Verified " + claimId,
+                subjectId + "#" + claimId, subjectId, "Verified " + claimId,
+                claimProjection(claimId, evidenceId),
                 List.of(new PortfolioRetrievedEvidenceReference(
                         evidenceId, "Approved " + evidenceId, "APPROVED")));
+    }
+
+    private com.portfolio.agent.answer.domain.AnswerClaimProjection claimProjection(
+            String claimId, String evidenceId) {
+        return new com.portfolio.agent.answer.domain.AnswerClaimProjection(
+                claimId,
+                com.portfolio.agent.answer.domain.AnswerClaimCategory.IMPLEMENTATION,
+                "Verified " + claimId,
+                "验证范围以公开证据为限。",
+                com.portfolio.agent.answer.domain.AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                com.portfolio.agent.answer.domain.AnswerContributionType.PRIMARY,
+                com.portfolio.agent.answer.domain.AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus.VERIFIED,
+                com.portfolio.agent.answer.domain.AnswerMateriality.KEY,
+                List.of("JAVA"),
+                List.of(evidenceId));
     }
 
     private static final class RecordingRetriever implements PortfolioRetriever {

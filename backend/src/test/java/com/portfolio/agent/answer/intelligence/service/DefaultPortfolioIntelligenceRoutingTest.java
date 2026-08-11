@@ -147,7 +147,9 @@ class DefaultPortfolioIntelligenceRoutingTest {
     @Test
     void explicitReferenceWinsWithoutCallingClassifier() {
         PortfolioTaskClassifierPort classifier = mock(PortfolioTaskClassifierPort.class);
-        DefaultPortfolioIntelligence intelligence = intelligence(classifier, false);
+        DefaultPortfolioIntelligence intelligence = intelligence(
+                classifier, false, request -> retrieval(
+                        com.portfolio.agent.answer.domain.AnswerClaimCategory.VERIFICATION));
         PortfolioReferenceContext reference = new PortfolioReferenceContext(
                 "public-1",
                 List.of("project-a"),
@@ -410,11 +412,17 @@ class DefaultPortfolioIntelligenceRoutingTest {
     }
 
     private PortfolioRetrievalResult retrieval() {
+        return retrieval(com.portfolio.agent.answer.domain.AnswerClaimCategory.IMPLEMENTATION);
+    }
+
+    private PortfolioRetrievalResult retrieval(
+            com.portfolio.agent.answer.domain.AnswerClaimCategory category) {
         PortfolioRetrievedSubject subject = new PortfolioRetrievedSubject(
                 "project-a", "PROJECT", "Project A", "Summary", "/projects/project-a",
                 "BACKEND", Set.of("JAVA"), 0.9d, 0.9d, 0.0d);
         PortfolioRetrievedPassage passage = new PortfolioRetrievedPassage(
-                "project-a#claim-a", "project-a", "claim-a", "Verified material",
+                "project-a#claim-a", "project-a", "Verified material",
+                claimProjection("claim-a", "evidence-a", category),
                 List.of(new PortfolioRetrievedEvidenceReference(
                         "evidence-a", "Evidence A", "APPROVED")));
         return new PortfolioRetrievalResult(
@@ -424,5 +432,30 @@ class DefaultPortfolioIntelligenceRoutingTest {
                 new PortfolioRetrievalSource("TEST"),
                 false,
                 null);
+    }
+
+    private com.portfolio.agent.answer.domain.AnswerClaimProjection claimProjection(
+            String claimId, String evidenceId) {
+        return claimProjection(
+                claimId, evidenceId,
+                com.portfolio.agent.answer.domain.AnswerClaimCategory.IMPLEMENTATION);
+    }
+
+    private com.portfolio.agent.answer.domain.AnswerClaimProjection claimProjection(
+            String claimId,
+            String evidenceId,
+            com.portfolio.agent.answer.domain.AnswerClaimCategory category) {
+        return new com.portfolio.agent.answer.domain.AnswerClaimProjection(
+                claimId,
+                category,
+                "Verified material",
+                "验证范围以公开证据为限。",
+                com.portfolio.agent.answer.domain.AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                com.portfolio.agent.answer.domain.AnswerContributionType.PRIMARY,
+                com.portfolio.agent.answer.domain.AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus.VERIFIED,
+                com.portfolio.agent.answer.domain.AnswerMateriality.KEY,
+                List.of("JAVA"),
+                List.of(evidenceId));
     }
 }

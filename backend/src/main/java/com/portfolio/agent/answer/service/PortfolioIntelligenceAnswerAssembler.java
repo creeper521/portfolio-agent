@@ -3,16 +3,10 @@ package com.portfolio.agent.answer.service;
 import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.AnswerConstructionMode;
 import com.portfolio.agent.answer.domain.AnswerEvidenceState;
-import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerClaimProjection;
-import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
-import com.portfolio.agent.answer.domain.AnswerContributionType;
 import com.portfolio.agent.answer.domain.AnswerEvidence;
-import com.portfolio.agent.answer.domain.AnswerMateriality;
 import com.portfolio.agent.answer.domain.AnswerRetrievalChunk;
 import com.portfolio.agent.answer.domain.AnswerSubjectType;
-import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
@@ -20,10 +14,13 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.answer.domain.PortfolioAnswerPlan;
+import com.portfolio.agent.answer.domain.PortfolioAnswerSection;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
 import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
+import com.portfolio.agent.answer.exception.PortfolioAnswerCompositionException;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioIntelligenceResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
@@ -38,6 +35,19 @@ import java.util.Objects;
 
 public final class PortfolioIntelligenceAnswerAssembler {
 
+    private static final String COMPOSITION_INVALID_NOTICE = "ANSWER_COMPOSITION_INVALID";
+    private static final String COMPOSITION_FAILED_TEMPLATE = "当前公开材料暂时无法形成可靠回答。";
+
+    private final DeterministicPortfolioAnswerComposer composer;
+
+    public PortfolioIntelligenceAnswerAssembler() {
+        this(new DeterministicPortfolioAnswerComposer());
+    }
+
+    public PortfolioIntelligenceAnswerAssembler(DeterministicPortfolioAnswerComposer composer) {
+        this.composer = Objects.requireNonNull(composer, "composer");
+    }
+
     public ConversationAnswerResult assemble(
             ConversationAnswerRequest request,
             RuntimeAnswerContent content,
@@ -49,6 +59,18 @@ public final class PortfolioIntelligenceAnswerAssembler {
                     "not-portfolio decision cannot be assembled as an answer");
         }
         PortfolioIntelligenceResult result = decision.getMaterial().orElseThrow();
+        if (decision.getDisposition() == PortfolioDisposition.ANSWERED
+                && result.getResolvedIntent() == PortfolioTaskMode.FACT_LOOKUP) {
+            if (!composeEligible(result)) {
+                return compositionFailure(request, content, result);
+            }
+            try {
+                PortfolioAnswerPlan plan = composer.compose(result);
+                return answeredResult(request, content, result, plan);
+            } catch (RuntimeException failure) {
+                return compositionFailure(request, content, result);
+            }
+        }
         AnswerResolution resolution = switch (decision.getDisposition()) {
             case ANSWERED -> AnswerResolution.ANSWERED;
             case NEEDS_CLARIFICATION -> AnswerResolution.NEEDS_CLARIFICATION;
@@ -62,6 +84,8 @@ public final class PortfolioIntelligenceAnswerAssembler {
             case NEEDS_CLARIFICATION -> clarificationBlocks(result);
             case INVALID_INPUT -> List.of(block(
                     "请求的作品范围无效。", List.of(), List.of()));
+            case NOT_SUPPORTED -> List.of(block(
+                    "当前公开内容中没有足够的已验证材料。", List.of(), List.of()));
             default -> materialBlocks(result);
         };
         return new ConversationAnswerResult(
@@ -86,6 +110,67 @@ public final class PortfolioIntelligenceAnswerAssembler {
                 decision.getDisposition() == PortfolioDisposition.ANSWERED
                         ? AnswerEvidenceState.VERIFIED
                         : AnswerEvidenceState.INSUFFICIENT)
+                .withContextVersionUpdated(result.isContextVersionUpdated())
+                .withContractIdentity(result.getQuestionPresetId(), result.getContractVersion());
+    }
+
+    private ConversationAnswerResult answeredResult(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            PortfolioIntelligenceResult result,
+            PortfolioAnswerPlan plan) {
+        List<ConversationAnswerBlock> blocks = plan.getSections().stream()
+                .map(this::planBlock)
+                .toList();
+        return new ConversationAnswerResult(
+                request.getTurnId(),
+                contentVersion(content, result),
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                AnswerResolution.ANSWERED,
+                title(result.getResolvedIntent()),
+                blocks,
+                List.of(),
+                result.isDegraded(),
+                GenerationMode.DETERMINISTIC,
+                AnswerSource.RETRIEVAL,
+                result.getNoticeCode(),
+                new com.portfolio.agent.answer.domain.ConversationProgress(
+                        List.of(),
+                        com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
+                result.getPortfolioRecommendation(),
+                AnswerConstructionMode.EVIDENCE_COMPOSITION,
+                Objects.requireNonNull(result.getIntentSource(), "intentSource"),
+                AnswerEvidenceState.VERIFIED)
+                .withContextVersionUpdated(result.isContextVersionUpdated())
+                .withContractIdentity(result.getQuestionPresetId(), result.getContractVersion())
+                .withSummary(plan.getSummary());
+    }
+
+    private ConversationAnswerResult compositionFailure(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            PortfolioIntelligenceResult result) {
+        return new ConversationAnswerResult(
+                request.getTurnId(),
+                contentVersion(content, result),
+                ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO,
+                AnswerResolution.CAPABILITY_UNAVAILABLE,
+                title(result.getResolvedIntent()),
+                List.of(block(COMPOSITION_FAILED_TEMPLATE, List.of(), List.of())),
+                List.of(),
+                true,
+                GenerationMode.DETERMINISTIC,
+                AnswerSource.RETRIEVAL,
+                COMPOSITION_INVALID_NOTICE,
+                new com.portfolio.agent.answer.domain.ConversationProgress(
+                        List.of(),
+                        com.portfolio.agent.answer.domain.ConversationGuidanceStage.OPENING),
+                result.getPortfolioRecommendation(),
+                AnswerConstructionMode.TEMPLATE,
+                Objects.requireNonNull(result.getIntentSource(), "intentSource"),
+                AnswerEvidenceState.INSUFFICIENT)
                 .withContextVersionUpdated(result.isContextVersionUpdated())
                 .withContractIdentity(result.getQuestionPresetId(), result.getContractVersion());
     }
@@ -143,17 +228,7 @@ public final class PortfolioIntelligenceAnswerAssembler {
         Map<String, AnswerClaimProjection> claimsById = new LinkedHashMap<>();
         result.getEvidence().forEach(passage -> claimsById.putIfAbsent(
                 passage.getClaimId(),
-                new AnswerClaimProjection(
-                        passage.getClaimId(),
-                        AnswerClaimCategory.IMPLEMENTATION,
-                        passage.getContent(),
-                        passage.getContent(),
-                        AnswerAchievementStatus.UNKNOWN,
-                        AnswerContributionType.PRIMARY,
-                        AnswerVerificationBasis.EVIDENCE_SUPPORTED,
-                        AnswerClaimVerificationStatus.VERIFIED,
-                        AnswerMateriality.KEY,
-                        passage.getEvidenceIds())));
+                passage.getClaim()));
         Map<String, AnswerEvidence> evidenceById = new LinkedHashMap<>();
         result.getEvidence().forEach(passage -> passage.getEvidenceReferences().forEach(reference ->
                 evidenceById.putIfAbsent(reference.getEvidenceId(), new AnswerEvidence(
@@ -181,6 +256,22 @@ public final class PortfolioIntelligenceAnswerAssembler {
                 List.copyOf(claimsById.values()),
                 List.copyOf(evidenceById.values()),
                 chunks);
+    }
+
+    private ConversationAnswerBlock planBlock(PortfolioAnswerSection section) {
+        return new ConversationAnswerBlock(
+                ConversationSourceScope.PORTFOLIO,
+                section.getSectionType(),
+                section.getTitle(),
+                section.getContent(),
+                section.getClaimIds(),
+                section.getEvidenceIds());
+    }
+
+    private boolean composeEligible(PortfolioIntelligenceResult result) {
+        return result.getResolvedIntent() == PortfolioTaskMode.FACT_LOOKUP
+                && result.getSubjects().size() == 1
+                && !result.getEvidence().isEmpty();
     }
 
     private ConversationSubjectOption subject(

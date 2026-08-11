@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.intelligence.service;
 
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.domain.AnswerSectionMapping;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioReferenceContext;
@@ -35,20 +36,10 @@ public final class PortfolioRetrievalPlanner {
     }
 
     private List<AnswerClaimCategory> preferredCategories(AnswerSectionType sectionType) {
-        if (sectionType == null) {
-            return List.of();
-        }
-        return switch (sectionType) {
-            case BACKGROUND -> List.of(AnswerClaimCategory.BACKGROUND);
-            case RESPONSIBILITY -> List.of(AnswerClaimCategory.RESPONSIBILITY);
-            case SOLUTION -> List.of(
-                    AnswerClaimCategory.TECHNICAL_DECISION,
-                    AnswerClaimCategory.IMPLEMENTATION);
-            case VERIFICATION -> List.of(AnswerClaimCategory.VERIFICATION);
-            case STATUS -> List.of(
-                    AnswerClaimCategory.OUTCOME,
-                    AnswerClaimCategory.LIMITATION);
-            case BOUNDARY, REJECTED -> List.of();
-        };
+        return AnswerSectionMapping.preferredCategoriesFor(sectionType);
+    }
+
+    public List<AnswerClaimCategory> preferredCategoriesForSection(AnswerSectionType sectionType) {
+        return preferredCategories(sectionType);
     }
 }

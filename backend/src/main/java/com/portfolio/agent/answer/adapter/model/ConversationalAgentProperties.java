@@ -18,6 +18,8 @@ public final class ConversationalAgentProperties {
     private int maxSuggestedQuestions = 3;
     private double minimumIntentConfidence = 0.65;
     private double minimumPortfolioTaskConfidence = 0.80;
+    private String planConfirmationEncryptionKey = "";
+    private String planConfirmationIntegrityKey = "";
 
     public boolean allowsProviderCalls(
             ModelPolicy modelPolicy,
@@ -69,5 +71,15 @@ public final class ConversationalAgentProperties {
     public double getMinimumPortfolioTaskConfidence() { return minimumPortfolioTaskConfidence; }
     public void setMinimumPortfolioTaskConfidence(double minimumPortfolioTaskConfidence) {
         this.minimumPortfolioTaskConfidence = minimumPortfolioTaskConfidence;
+    }
+    public String getPlanConfirmationEncryptionKey() { return planConfirmationEncryptionKey; }
+    public void setPlanConfirmationEncryptionKey(String planConfirmationEncryptionKey) {
+        this.planConfirmationEncryptionKey = planConfirmationEncryptionKey == null
+                ? "" : planConfirmationEncryptionKey.strip();
+    }
+    public String getPlanConfirmationIntegrityKey() { return planConfirmationIntegrityKey; }
+    public void setPlanConfirmationIntegrityKey(String planConfirmationIntegrityKey) {
+        this.planConfirmationIntegrityKey = planConfirmationIntegrityKey == null
+                ? "" : planConfirmationIntegrityKey.strip();
     }
 }

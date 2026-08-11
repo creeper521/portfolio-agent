@@ -10,6 +10,7 @@ import com.portfolio.agent.evaluation.domain.EvalMessage;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
 import com.portfolio.agent.evaluation.domain.EvalObservationStatus;
 import com.portfolio.agent.evaluation.domain.EvalProviderUsage;
+import com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape;
 import com.portfolio.agent.portfolio.domain.Claim;
 import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
@@ -55,9 +56,11 @@ public final class HttpEvalExecutor implements EvalExecutor {
         }
         EvalHttpResult result = client.answer(new EvalHttpRequest(
                 baseUrl, input.getCaseId(), input.getCaseId(), question));
+        boolean semanticTurnObserved = result.getSemanticTurnShape().getDisposition()
+                != EvalSemanticTurnShape.Disposition.UNKNOWN;
         if (result.getFailureCode() == EvalHttpResult.FailureCode.NONE
                 && result.getStatusCode() == 200
-                && result.getResolution() == AnswerResolution.ANSWERED) {
+                && (result.getResolution() == AnswerResolution.ANSWERED || semanticTurnObserved)) {
             return new EvalObservation(
                     input.getCaseId(), input.getLayer(), input.getTrialIndex(),
                     EvalObservationStatus.PASS,
@@ -65,8 +68,10 @@ public final class HttpEvalExecutor implements EvalExecutor {
                     result.getClaimIds(), result.getEvidenceIds(), List.of(),
                     result.getResolution(), result.getAnswerScope(),
                     result.getGenerationMode(), result.getAnswerSource(),
-                    List.of("HTTP_ANSWERED"), result.getDurationMilliseconds(),
+                    List.of(semanticTurnObserved ? "HTTP_SEMANTIC_TURN" : "HTTP_ANSWERED"),
+                    result.getDurationMilliseconds(),
                     EvalProviderUsage.unavailable(), result.getAnswerShape(),
+                    result.getSemanticTurnShape(),
                     result.isDegraded(), false);
         }
         EvalObservationStatus status = result.getFailureCode()

@@ -67,6 +67,18 @@ class EvalMetricAggregatorTest {
                 .isEqualByComparingTo("1");
     }
 
+    @Test
+    void reportsSemanticTurnStructurePassRate() {
+        EvalGrade semantic = grade("case-1", EvalLayer.HTTP_E2E,
+                "SEMANTIC_TURN_STRUCTURE", EvalSeverity.BLOCKING,
+                true, EvalReasonCode.PASS, 1, 1);
+
+        EvalMetrics metrics = aggregator.aggregate(List.of(semantic), List.of(), 1, 1);
+
+        assertThat(metrics.getValue("semantic.turnStructurePassRate").getValue())
+                .isEqualByComparingTo("1.0");
+    }
+
     private EvalGrade grade(
             String caseId,
             EvalLayer layer,

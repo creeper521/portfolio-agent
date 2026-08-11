@@ -29,7 +29,7 @@ class PhaseZeroDatasetAcceptanceTest {
                 GOVERNANCE.resolve("manifest.v1.json"));
 
         assertThat(manifest.getDatasetVersion()).isEqualTo("2026-08-06.1");
-        assertThat(manifest.getTrackedCaseFiles()).hasSize(3);
+        assertThat(manifest.getTrackedCaseFiles()).hasSize(4);
         assertThat(manifest.getGenerationRuleFiles()).hasSize(1);
 
         EvalSuiteLoader suiteLoader = new EvalSuiteLoader(
@@ -52,10 +52,16 @@ class PhaseZeroDatasetAcceptanceTest {
 
         assertThat(cases.stream()
                 .filter(caseItem -> caseItem.getId().startsWith("answer.sql-audit.")))
-                .hasSize(11);
+                .hasSize(12);
         assertThat(cases.stream()
                 .filter(caseItem -> caseItem.getId().startsWith("safety.")))
                 .hasSize(1);
+        assertThat(cases.stream()
+                .filter(caseItem -> caseItem.getId().startsWith("semantic-turn.")))
+                .singleElement()
+                .satisfies(caseItem -> assertThat(caseItem.getTags())
+                        .contains("phase-2-semantic-turn", "multi-task", "dependency",
+                                "mixed-source", "exclusion"));
 
         for (EvalCase evalCase : cases) {
             if (evalCase.getId().startsWith("answer.sql-audit.")) {

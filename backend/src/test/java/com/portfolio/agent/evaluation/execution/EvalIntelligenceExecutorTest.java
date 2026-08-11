@@ -120,7 +120,19 @@ class EvalIntelligenceExecutorTest {
                         "SQL 审计与故障排查工具", "PORTFOLIO",
                         java.util.Set.of())),
                 List.of(new PortfolioRetrievedPassage(
-                        "p-1", "sql-audit", "claim-sql-audit", "正文",
+                        "p-1", "sql-audit", "正文",
+                        new com.portfolio.agent.answer.domain.AnswerClaimProjection(
+                                "claim-sql-audit",
+                                com.portfolio.agent.answer.domain.AnswerClaimCategory.IMPLEMENTATION,
+                                "正文",
+                                "验证范围以公开证据为限。",
+                                com.portfolio.agent.answer.domain.AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                                com.portfolio.agent.answer.domain.AnswerContributionType.PRIMARY,
+                                com.portfolio.agent.answer.domain.AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                                com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus.VERIFIED,
+                                com.portfolio.agent.answer.domain.AnswerMateriality.KEY,
+                                List.of(),
+                                List.of("E-01")),
                         List.of(new PortfolioRetrievedEvidenceReference(
                                 "E-01", "E-01", "APPROVED")))),
                 null, null, "2026-08-06.1", false, null,
