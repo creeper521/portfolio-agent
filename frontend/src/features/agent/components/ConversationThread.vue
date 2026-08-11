@@ -10,6 +10,7 @@ import type {
   PortfolioFollowUpAction,
   PortfolioRecommendation,
   PortfolioRecommendationContextRequest,
+  SemanticSourceDomain,
 } from '../model/answerTypes'
 import type {
   AnswerFocusTarget,
@@ -22,10 +23,14 @@ import {
   answerStatusLabel,
   answerTechTail,
   answerVerificationTag,
-  blockScopeTag,
   degradedNotice,
 } from '../model/answerLabels'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
+import type { OpaquePlanConfirmation } from '../model/semanticTurnView'
+import CompactTaskSummary from './CompactTaskSummary.vue'
+import PlanConfirmation from './PlanConfirmation.vue'
+import PlanInvalidatedNotice from './PlanInvalidatedNotice.vue'
+import TurnClarification from './TurnClarification.vue'
 
 interface AnswerFailureView {
   message: string
@@ -61,6 +66,11 @@ const emit = defineEmits<{
   followUp: [action: FollowUpAction]
   clearCaseContext: []
   refineRecommendation: [action: { question: string; recommendationContext: PortfolioRecommendationContextRequest }]
+  confirmPlan: [confirmation: OpaquePlanConfirmation]
+  adjustPlan: []
+  cancelPlan: []
+  clarificationSelect: [selection: { fieldKey: string; value: string }]
+  regeneratePlan: []
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -220,19 +230,30 @@ onBeforeUnmount(() => {
   if (highlightTimer) clearTimeout(highlightTimer)
 })
 
-function v2Blocks(message: AgentSession['messages'][number]) {
-  const answer = message.answer
-  if (!answer || !answer.blocks || answer.blocks.length === 0) return []
-  return answer.blocks
-}
-
 function isV2Answer(message: AgentSession['messages'][number]) {
   const answer = message.answer
-  return Boolean(answer && (answer.blocks?.length || answer.intent))
+  return Boolean(answer && (answer.sections?.length || answer.intent))
 }
 
 function dynamicSuggestions(message: AgentSession['messages'][number]) {
   return message.answer?.suggestedQuestions ?? []
+}
+
+function sourceLabel(sourceDomain: SemanticSourceDomain | 'GENERAL' | 'PORTFOLIO'): string {
+  if (sourceDomain === 'PORTFOLIO') return '作品集资料'
+  if (sourceDomain === 'GENERAL') return '通用知识'
+  return '综合结论'
+}
+
+function sourceLabelForSection(
+  message: AgentSession['messages'][number],
+  section: NonNullable<AgentSession['messages'][number]['answer']>['sections'][number],
+): string {
+  const semanticTurn = message.answer?.semanticTurn
+  if (!semanticTurn || !section.key.startsWith('semantic:')) return sourceLabel(section.sourceScope)
+  const displayIndex = section.key.split(':')[1]
+  const task = semanticTurn.completedTasks.find((item) => item.displayIndex === displayIndex)
+  return sourceLabel(task?.sourceDomain ?? section.sourceScope)
 }
 
 function followUp(
@@ -417,40 +438,113 @@ function refineWhole(
             role="status"
           >{{ degradedNotice(message.answer) }}</p>
           <div v-if="message.answer" class="structured-answer">
-            <template v-if="isV2Answer(message)">
-              <h3 v-if="message.answer.title">{{ message.answer.title }}</h3>
-              <p v-if="message.answer.summary">{{ message.answer.summary }}</p>
-              <section
-                v-for="(block, blockIndex) in v2Blocks(message)"
-                :key="blockIndex"
-                :data-block-scope="block.sourceScope"
-                class="answer-block"
+            <PlanConfirmation
+              v-if="message.answer.semanticTurn?.disposition === 'CONFIRMATION_REQUIRED' && message.answer.semanticTurn.displayPlan && session.pendingConfirmation"
+              :plan="message.answer.semanticTurn.displayPlan"
+              :confirmation="session.pendingConfirmation"
+              :pending="pending"
+              @confirm="$emit('confirmPlan', $event)"
+              @adjust="$emit('adjustPlan')"
+              @cancel="$emit('cancelPlan')"
+            />
+            <TurnClarification
+              v-if="message.answer.semanticTurn?.clarification"
+              :clarification="message.answer.semanticTurn.clarification"
+              :pending="pending"
+              @select="$emit('clarificationSelect', $event)"
+            />
+            <PlanInvalidatedNotice
+              v-if="message.answer.semanticTurn?.planChange"
+              :plan-change="message.answer.semanticTurn.planChange"
+              :pending="pending"
+              @regenerate="$emit('regeneratePlan')"
+            />
+            <CompactTaskSummary
+              v-if="message.answer.semanticTurn?.taskSummary && message.answer.semanticTurn.taskSummary.totalCount > 1 && message.answer.semanticTurn.taskSummary.displayMode !== 'HIDDEN'"
+              :summary="message.answer.semanticTurn.taskSummary"
+            />
+            <p
+              v-if="(message.answer.semanticTurn?.disposition === 'BOUNDARY' || message.answer.semanticTurn?.disposition === 'REJECTED') && !message.answer.semanticTurn.planChange && message.answer.summary"
+              data-semantic-boundary-message
+            >{{ message.answer.summary }}</p>
+            <h3 v-if="!message.answer.semanticTurn && message.answer.title">{{ message.answer.title }}</h3>
+            <p v-if="!message.answer.semanticTurn && message.answer.summary" data-answer-summary>{{ message.answer.summary }}</p>
+            <p
+              v-if="message.answer.contextVersionUpdated"
+              data-context-version-updated
+              class="context-version-updated"
+              role="status"
+            >公开内容已更新，本轮已按当前版本重新核对。</p>
+            <section
+              v-for="section in message.answer.sections"
+              :key="section.key"
+              :data-section-type="section.type"
+              :data-answer-focus="
+                highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
+              "
+              tabindex="-1"
               >
-                <p class="answer-block__scope" :data-scope="block.sourceScope">{{ blockScopeTag(block.sourceScope) }}</p>
-                <p class="answer-block__content">{{ block.content }}</p>
-                <div v-if="block.evidenceIds.length" class="answer-block__citations">
-                  <button
-                    v-for="eid in block.evidenceIds"
-                    :key="eid"
-                    :data-block-evidence="eid"
-                    type="button"
-                    @click="inspectMessageEvidence(message, eid)"
-                  >[{{ eid }}]</button>
-                </div>
-              </section>
-              <p
-                v-if="message.answer.contextVersionUpdated"
-                data-context-version-updated
-                class="context-version-updated"
-                role="status"
-              >公开内容已更新，本轮已按当前版本重新核对。</p>
-              <!-- 结构化作品推荐卡组（可选；items 顺序是后端权威顺序，前端不重排）-->
-              <section
-                v-if="message.answer.portfolioRecommendation"
-                class="portfolio-recommendation"
-                data-portfolio-recommendation
-                :aria-label="`作品推荐 · ${message.answer.portfolioRecommendation.items.length} 项`"
-              >
+              <h4 v-if="section.title">{{ section.title }}</h4>
+              <span
+                v-if="message.answer.semanticTurn"
+                class="semantic-source-label"
+                data-source-label
+              >{{ sourceLabelForSection(message, section) }}</span>
+              <p>{{ section.content }}</p>
+              <div v-if="section.evidenceIds.length" class="answer-block__citations">
+                <button
+                  v-for="eid in section.evidenceIds"
+                  :key="eid"
+                  :data-section-citation="eid"
+                  type="button"
+                  @click="inspectMessageEvidence(message, eid)"
+                >[{{ eid }}]</button>
+              </div>
+              <div v-if="message.answer.referenceContext" class="follow-up-actions">
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, `展开${section.title || section.type}`, 'EXPAND_SECTION', section.type, section.claimIds)"
+                >展开本节</button>
+                <button
+                  data-section-evidence
+                  type="button"
+                  :disabled="pending || !section.evidenceIds.length"
+                  @click="inspectSection(message, section)"
+                >查看本节证据</button>
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="followUp(message, `说明${section.title || section.type}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
+                >说明判断</button>
+              </div>
+            </section>
+            <div v-if="message.answer.referenceContext" class="follow-up-actions follow-up-actions--answer">
+              <button
+                data-follow-up="current-status"
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
+              >查看当前状态</button>
+              <button
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
+              >查看相关问题</button>
+              <button
+                v-if="(message.answer.referenceContext.projectSlugs?.length ?? 0) > 1"
+                type="button"
+                :disabled="pending"
+                @click="followUp(message, '对比这些项目', 'COMPARE_SUBJECTS')"
+              >对比项目</button>
+            </div>
+            <!-- 结构化作品推荐卡组（可选；items 顺序是后端权威顺序，前端不重排）-->
+            <section
+              v-if="message.answer.portfolioRecommendation"
+              class="portfolio-recommendation"
+              data-portfolio-recommendation
+              :aria-label="`作品推荐 · ${message.answer.portfolioRecommendation.items.length} 项`"
+            >
                 <p
                   v-if="message.answer.portfolioRecommendation.satisfiedConstraints.length"
                   class="reco-satisfied"
@@ -540,66 +634,6 @@ function refineWhole(
                   >把数量改成 2 个</button>
                 </div>
               </section>
-            </template>
-            <template v-else>
-              <h3>{{ message.answer.title }}</h3>
-              <p>{{ message.answer.summary }}</p>
-              <p
-                v-if="message.answer.contextVersionUpdated"
-                data-context-version-updated
-                class="context-version-updated"
-                role="status"
-              >公开内容已更新，本轮已按当前版本重新核对。</p>
-              <section
-                v-for="section in message.answer.sections"
-                :key="section.type"
-                :data-section-type="section.type"
-                :data-answer-focus="
-                  highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
-                "
-                tabindex="-1"
-              >
-                <h4>{{ section.title }}</h4>
-                <p>{{ section.content }}</p>
-                <div v-if="message.answer.referenceContext" class="follow-up-actions">
-                  <button
-                    type="button"
-                    :disabled="pending"
-                    @click="followUp(message, `展开${section.title}`, 'EXPAND_SECTION', section.type, section.claimIds)"
-                  >展开本节</button>
-                  <button
-                    data-section-evidence
-                    type="button"
-                    :disabled="pending || !section.evidenceIds.length"
-                    @click="inspectSection(message, section)"
-                  >查看本节证据</button>
-                  <button
-                    type="button"
-                    :disabled="pending"
-                    @click="followUp(message, `说明${section.title}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
-                  >说明判断</button>
-                </div>
-              </section>
-              <div v-if="message.answer.referenceContext" class="follow-up-actions follow-up-actions--answer">
-                <button
-                  data-follow-up="current-status"
-                  type="button"
-                  :disabled="pending"
-                  @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
-                >查看当前状态</button>
-                <button
-                  type="button"
-                  :disabled="pending"
-                  @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
-                >查看相关问题</button>
-                <button
-                  v-if="(message.answer.referenceContext.projectSlugs?.length ?? 0) > 1"
-                  type="button"
-                  :disabled="pending"
-                  @click="followUp(message, '对比这些项目', 'COMPARE_SUBJECTS')"
-                >对比项目</button>
-              </div>
-            </template>
             <div v-if="dynamicSuggestions(message).length" class="dynamic-suggestions">
               <button
                 v-for="(q, qi) in dynamicSuggestions(message)"
@@ -613,7 +647,7 @@ function refineWhole(
             </div>
           </div>
           <div v-else class="message__body">{{ message.content }}</div>
-          <footer v-if="message.evidenceIds.length && !isV2Answer(message)">
+          <footer v-if="message.evidenceIds.length && (!message.answer || !message.answer.sections.some(s => s.evidenceIds.length))">
             <button
               v-for="id in message.evidenceIds"
               :key="id"
@@ -1010,6 +1044,16 @@ function refineWhole(
   margin: 16px 0 4px;
   color: var(--workspace-text, var(--ink-2));
   font: 600 13px/1.4 var(--sans);
+}
+
+.semantic-source-label {
+  display: inline-block;
+  margin: 3px 0 4px;
+  padding: 2px 6px;
+  color: var(--workspace-text-secondary, var(--muted));
+  border: 1px solid var(--workspace-rule, var(--rule));
+  font: 10px var(--mono);
+  letter-spacing: .05em;
 }
 
 .message footer {

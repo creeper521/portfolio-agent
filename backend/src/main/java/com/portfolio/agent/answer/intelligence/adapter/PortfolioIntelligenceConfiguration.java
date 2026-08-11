@@ -22,6 +22,7 @@ import com.portfolio.agent.answer.intelligence.service.RecommendationContextVali
 import com.portfolio.agent.answer.intelligence.service.StructuredSubjectResolver;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import com.portfolio.agent.answer.service.PortfolioIntelligenceAnswerAssembler;
+import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -94,8 +95,14 @@ public class PortfolioIntelligenceConfiguration {
     }
 
     @Bean
-    PortfolioIntelligenceAnswerAssembler portfolioIntelligenceAnswerAssembler() {
-        return new PortfolioIntelligenceAnswerAssembler();
+    PortfolioIntelligenceAnswerAssembler portfolioIntelligenceAnswerAssembler(
+            DeterministicPortfolioAnswerComposer composer) {
+        return new PortfolioIntelligenceAnswerAssembler(composer);
+    }
+
+    @Bean
+    DeterministicPortfolioAnswerComposer deterministicPortfolioAnswerComposer() {
+        return new DeterministicPortfolioAnswerComposer();
     }
 
     @Bean

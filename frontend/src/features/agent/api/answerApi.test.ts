@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ConversationTopic } from '../model/answerTypes'
+import type { PendingPlanConfirmation } from '../model/sessionTypes'
 import { askQuestion } from './answerApi'
 
 function input(question: string) {
@@ -185,6 +186,112 @@ describe('answer api', () => {
     })
     expect(body.context.focusEvidenceIds).toBeUndefined()
     expect(body.messages).toEqual([{ role: 'ASSISTANT', content: 'previous answer' }])
+  })
+
+  it('submits an opaque confirmation unchanged for confirmation and regeneration actions', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+    const confirmation: PendingPlanConfirmation = {
+      confirmationId: 'confirmation-01',
+      confirmationPlan: 'opaque-envelope',
+      planFingerprint: 'sha256:opaque-fingerprint',
+      integrityToken: 'opaque-integrity-token',
+      expiresAt: '2026-08-10T12:10:00Z',
+    }
+
+    await askQuestion({
+      ...input(''),
+      question: undefined,
+      action: 'CONFIRM_PLAN',
+      agentTurnContract: 'stp-v1',
+      planConfirmation: confirmation,
+    })
+    await askQuestion({
+      ...input('Regenerate this plan'),
+      action: 'REGENERATE_PLAN',
+      agentTurnContract: 'stp-v1',
+      semanticContext: {
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'project-a' },
+          { subjectType: 'PROJECT', subjectId: 'project-b' },
+        ],
+      },
+      invalidatedPlanReference: {
+        planId: 'plan-01',
+        planFingerprint: 'sha256:opaque-fingerprint',
+      },
+    })
+
+    const confirmBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const regenerateBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))
+    expect(confirmBody).toMatchObject({
+      action: 'CONFIRM_PLAN',
+      agentTurnContract: 'stp-v1',
+      planConfirmation: {
+        confirmationId: confirmation.confirmationId,
+        confirmationPlan: confirmation.confirmationPlan,
+        planFingerprint: confirmation.planFingerprint,
+        integrityToken: confirmation.integrityToken,
+      },
+    })
+    expect(confirmBody.question).toBeUndefined()
+    expect(regenerateBody).toMatchObject({
+      action: 'REGENERATE_PLAN',
+      agentTurnContract: 'stp-v1',
+      question: 'Regenerate this plan',
+      semanticContext: {
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'project-a' },
+          { subjectType: 'PROJECT', subjectId: 'project-b' },
+        ],
+      },
+      invalidatedPlanReference: {
+        planId: 'plan-01',
+        planFingerprint: 'sha256:opaque-fingerprint',
+      },
+    })
+    expect(regenerateBody.planConfirmation).toBeUndefined()
+  })
+
+  it('serializes semantic clarification continuation as explicit ASK stp-v1', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('比较两个项目'),
+      action: 'ASK',
+      agentTurnContract: 'stp-v1',
+      semanticContext: {
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'project-a' },
+          { subjectType: 'PROJECT', subjectId: 'project-b' },
+        ],
+      },
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body).toMatchObject({
+      action: 'ASK',
+      agentTurnContract: 'stp-v1',
+      question: '比较两个项目',
+      semanticContext: {
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'project-a' },
+          { subjectType: 'PROJECT', subjectId: 'project-b' },
+        ],
+      },
+    })
+    expect(body.planConfirmation).toBeUndefined()
   })
 
   it('aborts a stalled request and returns a stable timeout message', async () => {

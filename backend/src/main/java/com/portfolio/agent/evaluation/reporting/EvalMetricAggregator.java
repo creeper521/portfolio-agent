@@ -61,6 +61,8 @@ public final class EvalMetricAggregator {
                 null, "API_CONTRACT");
         rate(metrics, grades, "structure.answerQualityPassRate",
                 null, "ANSWER_QUALITY");
+        rate(metrics, grades, "semantic.turnStructurePassRate",
+                null, "SEMANTIC_TURN_STRUCTURE");
 
         long hardErrors = grades.stream()
                 .filter(grade -> !grade.isPassed()

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { ConversationTopic } from '../model/answerTypes'
 import type { AgentRouteSeed } from '../model/sessionTypes'
+import { confirmationRequiredResponse } from '../model/semanticTurnFixtures'
 import { useLocalSessions } from './useLocalSessions'
 
 const mappedAnswer = {
@@ -9,7 +10,7 @@ const mappedAnswer = {
   contentVersion: '2026-07-21',
   title: '项目说明',
   summary: '公开摘要',
-  sections: [{ type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] }],
+  sections: [{ key: 'BACKGROUND:0', type: 'BACKGROUND' as const, title: '背景', sourceScope: 'PORTFOLIO' as const, content: '背景内容', claimIds: [], evidenceIds: ['sql-audit-delivery-set'] }],
   resolution: 'ANSWERED' as const,
   answerSource: 'PRESET' as const,
   generationMode: 'DETERMINISTIC' as const,
@@ -57,6 +58,18 @@ describe('useLocalSessions', () => {
   it('never persists a visitor session', () => {
     const store = useLocalSessions()
     store.createSession({ role: 'MENTOR', title: '项目复盘' })
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('keeps confirmation state in memory and never browser storage', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+
+    store.acceptSemanticTurnResponse(session.id, confirmationRequiredResponse())
+
+    expect(store.activeSession.value?.pendingConfirmation?.confirmationPlan)
+      .toBe('opaque-envelope')
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
   })

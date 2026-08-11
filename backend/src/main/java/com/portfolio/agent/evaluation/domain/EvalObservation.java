@@ -32,6 +32,7 @@ public final class EvalObservation {
     private final long durationMilliseconds;
     private final EvalProviderUsage providerUsage;
     private final EvalAnswerShape answerShape;
+    private final EvalSemanticTurnShape semanticTurnShape;
     private final boolean degraded;
     private final boolean providerInvoked;
 
@@ -56,6 +57,35 @@ public final class EvalObservation {
             boolean degraded,
             boolean providerInvoked
     ) {
+        this(caseId, layer, trialIndex, status, selectedProjectSlug, selectedCaseSlug,
+                selectedClaimIds, selectedEvidenceIds, selectedChunkIds, resolution,
+                answerScope, generationMode, answerSource, reasonCodes, durationMilliseconds,
+                providerUsage, answerShape, EvalSemanticTurnShape.empty(), degraded,
+                providerInvoked);
+    }
+
+    public EvalObservation(
+            String caseId,
+            EvalLayer layer,
+            int trialIndex,
+            EvalObservationStatus status,
+            String selectedProjectSlug,
+            String selectedCaseSlug,
+            List<String> selectedClaimIds,
+            List<String> selectedEvidenceIds,
+            List<String> selectedChunkIds,
+            AnswerResolution resolution,
+            ConversationAnswerScope answerScope,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            List<String> reasonCodes,
+            long durationMilliseconds,
+            EvalProviderUsage providerUsage,
+            EvalAnswerShape answerShape,
+            EvalSemanticTurnShape semanticTurnShape,
+            boolean degraded,
+            boolean providerInvoked
+    ) {
         this.caseId = Objects.requireNonNull(caseId, "caseId");
         this.layer = Objects.requireNonNull(layer, "layer");
         if (trialIndex < 1) {
@@ -76,6 +106,7 @@ public final class EvalObservation {
         this.durationMilliseconds = nonNegative(durationMilliseconds, "durationMilliseconds");
         this.providerUsage = Objects.requireNonNull(providerUsage, "providerUsage");
         this.answerShape = Objects.requireNonNull(answerShape, "answerShape");
+        this.semanticTurnShape = Objects.requireNonNull(semanticTurnShape, "semanticTurnShape");
         this.degraded = degraded;
         this.providerInvoked = providerInvoked;
     }
@@ -112,6 +143,7 @@ public final class EvalObservation {
         private long durationMilliseconds;
         private EvalProviderUsage providerUsage = EvalProviderUsage.unavailable();
         private EvalAnswerShape answerShape = EvalAnswerShape.empty();
+        private EvalSemanticTurnShape semanticTurnShape = EvalSemanticTurnShape.empty();
         private boolean degraded;
         private boolean providerInvoked;
 
@@ -189,6 +221,11 @@ public final class EvalObservation {
             return this;
         }
 
+        public Builder semanticTurnShape(EvalSemanticTurnShape value) {
+            this.semanticTurnShape = value == null ? EvalSemanticTurnShape.empty() : value;
+            return this;
+        }
+
         public Builder degraded(boolean value) {
             this.degraded = value;
             return this;
@@ -206,7 +243,7 @@ public final class EvalObservation {
                     selectedClaimIds, selectedEvidenceIds, selectedChunkIds,
                     resolution, answerScope, generationMode, answerSource,
                     reasonCodes, durationMilliseconds,
-                    providerUsage, answerShape, degraded, providerInvoked);
+                    providerUsage, answerShape, semanticTurnShape, degraded, providerInvoked);
         }
     }
 
@@ -234,6 +271,7 @@ public final class EvalObservation {
     public long getDurationMilliseconds() { return durationMilliseconds; }
     public EvalProviderUsage getProviderUsage() { return providerUsage; }
     public EvalAnswerShape getAnswerShape() { return answerShape; }
+    public EvalSemanticTurnShape getSemanticTurnShape() { return semanticTurnShape; }
     public boolean isDegraded() { return degraded; }
     public boolean isProviderInvoked() { return providerInvoked; }
 }

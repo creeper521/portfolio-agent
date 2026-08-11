@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ConversationTopic, PortfolioRecommendation } from './answerTypes'
+import type { AnswerResolution, ConversationTopic, PortfolioRecommendation } from './answerTypes'
 import { mapAnswerResponse } from './mapAnswerResponse'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
 describe('mapAnswerResponse', () => {
-  function response(resolution: 'ANSWERED' | 'NEEDS_CLARIFICATION' = 'ANSWERED') {
+  function response(resolution: AnswerResolution = 'ANSWERED') {
     return {
       requestId: 'request-1',
       turnId: 'turn-1',
@@ -41,7 +41,15 @@ describe('mapAnswerResponse', () => {
     const source = response()
     const mapped = mapAnswerResponse(source)
 
-    expect(mapped.sections).toEqual(source.sections)
+    expect(mapped.sections).toEqual([{
+      key: 'BACKGROUND:0',
+      type: 'BACKGROUND',
+      title: '背景',
+      sourceScope: 'PORTFOLIO',
+      content: '结构化内容',
+      claimIds: ['claim-1'],
+      evidenceIds: ['evidence-1'],
+    }])
     expect(mapped).toMatchObject({
       contentVersion: '2026-07-21',
       resolution: 'ANSWERED',
@@ -58,6 +66,7 @@ describe('mapAnswerResponse', () => {
     expect(mapped.referenceContext?.referencedClaimIds)
       .not.toBe(source.referenceContext?.referencedClaimIds)
     expect(mapped.contextVersionUpdated).toBe(true)
+    expect(mapped).not.toHaveProperty('blocks')
   })
 
   it('rejects an answer whose title, summary and sections are all blank', () => {
@@ -112,6 +121,193 @@ describe('mapAnswerResponse', () => {
     }])
     expect(mapped.evidenceIds).toEqual(['evidence-1'])
     expect(mapped.degraded).toBe(true)
+    // ANSWERED 无类型旧 Block 使用兼容 GENERAL 类型与空标题，不丢失正文或引用，
+    // 不误标为边界（BOUNDARY 只用于非 ANSWERED 的失败/边界响应）
+    expect(mapped.sections).toEqual([{
+      key: 'GENERAL:0',
+      type: 'GENERAL',
+      title: '',
+      sourceScope: 'PORTFOLIO',
+      content: 'Implementation details',
+      claimIds: ['claim-1'],
+      evidenceIds: ['evidence-1'],
+    }])
+    expect(mapped).not.toHaveProperty('blocks')
+  })
+
+  it('maps untyped portfolio blocks of non-answered responses to BOUNDARY', () => {
+    const mapped = mapAnswerResponse({
+      ...response('NOT_SUPPORTED'),
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        content: '当前公开内容中没有足够的已验证材料。',
+        claimIds: [],
+        evidenceIds: [],
+      }],
+    })
+
+    expect(mapped.sections).toEqual([{
+      key: 'BOUNDARY:0',
+      type: 'BOUNDARY',
+      title: '',
+      sourceScope: 'PORTFOLIO',
+      content: '当前公开内容中没有足够的已验证材料。',
+      claimIds: [],
+      evidenceIds: [],
+    }])
+  })
+
+  it('derives top-level evidence from unified sections and deduplicates within a section', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      evidenceIds: ['evidence-ghost'],
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'SOLUTION',
+        title: '技术方案',
+        content: '正文',
+        claimIds: ['claim-1', 'claim-1'],
+        evidenceIds: ['evidence-1', 'evidence-1', 'evidence-2'],
+      }],
+    })
+
+    expect(mapped.evidenceIds).toEqual(['evidence-1', 'evidence-2'])
+    expect(mapped.sections[0].claimIds).toEqual(['claim-1'])
+    expect(mapped.sections[0].evidenceIds).toEqual(['evidence-1', 'evidence-2'])
+  })
+
+  it('maps typed v2 blocks with priority over legacy sections', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      summary: '公开项目摘要',
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'SOLUTION',
+        title: '技术方案与实现',
+        content: '使用受控路由。',
+        claimIds: ['claim-1'],
+        evidenceIds: ['evidence-1'],
+      }],
+      sections: [{
+        type: 'BACKGROUND',
+        title: '旧章节',
+        content: '不得采用',
+        claimIds: [],
+        evidenceIds: [],
+      }],
+    })
+
+    expect(mapped.sections).toEqual([{
+      key: 'SOLUTION:0',
+      type: 'SOLUTION',
+      title: '技术方案与实现',
+      sourceScope: 'PORTFOLIO',
+      content: '使用受控路由。',
+      claimIds: ['claim-1'],
+      evidenceIds: ['evidence-1'],
+    }])
+    expect(mapped).not.toHaveProperty('blocks')
+  })
+
+  it('treats an explicitly empty blocks array as authoritative', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      title: '作品集信息',
+      blocks: [],
+      sections: [{
+        type: 'BACKGROUND',
+        title: '旧章节',
+        content: '不得回退展示',
+        claimIds: ['legacy-claim'],
+        evidenceIds: ['legacy-evidence'],
+      }],
+    })
+
+    expect(mapped.sections).toEqual([])
+    expect(mapped.evidenceIds).toEqual([])
+  })
+
+  it('rejects blank content when empty blocks make legacy sections non-authoritative', () => {
+    expect(() => mapAnswerResponse({
+      ...response(),
+      title: '',
+      summary: '',
+      blocks: [],
+      sections: [{
+        type: 'BACKGROUND',
+        title: '旧章节',
+        content: '不得回退展示',
+        claimIds: [],
+        evidenceIds: [],
+      }],
+    })).toThrow('Answer response has no content')
+  })
+
+  it('maps general untyped blocks and keeps legacy sections as fallback', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      sections: [{
+        type: 'BACKGROUND',
+        title: '背景',
+        content: 'legacy 内容',
+        evidenceIds: ['evidence-1'],
+        claimIds: ['claim-1'],
+      }],
+    })
+
+    expect(mapped.sections).toEqual([{
+      key: 'BACKGROUND:0',
+      type: 'BACKGROUND',
+      title: '背景',
+      sourceScope: 'PORTFOLIO',
+      content: 'legacy 内容',
+      claimIds: ['claim-1'],
+      evidenceIds: ['evidence-1'],
+    }])
+    expect(mapped).not.toHaveProperty('blocks')
+
+    const general = mapAnswerResponse({
+      ...response(),
+      blocks: [{
+        sourceScope: 'GENERAL',
+        content: '一般内容',
+        claimIds: [],
+        evidenceIds: [],
+      }],
+    })
+    expect(general.sections).toEqual([{
+      key: 'GENERAL:0',
+      type: 'GENERAL',
+      title: '',
+      sourceScope: 'GENERAL',
+      content: '一般内容',
+      claimIds: [],
+      evidenceIds: [],
+    }])
+  })
+
+  it('rejects a typed block missing title with a sanitized diagnostic', () => {
+    const reportSpy = vi.spyOn(frontendDiagnostics, 'report')
+
+    expect(() => mapAnswerResponse({
+      ...response(),
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'SOLUTION',
+        content: '只有 sectionType 没有 title',
+        claimIds: ['claim-1'],
+        evidenceIds: ['evidence-1'],
+      }],
+    })).toThrowError('Answer response contains an invalid typed block')
+
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      eventName: 'frontend.response.invalid',
+      errorCode: 'ANSWER_BLOCK_INVALID',
+      errorKind: 'INVALID_RESPONSE',
+    }))
+    const payload = JSON.stringify(reportSpy.mock.calls[0]?.[0])
+    expect(payload).not.toContain('只有 sectionType 没有 title')
+    expect(payload).not.toContain('claim-1')
   })
 
   it('carries conversation progress fields with a defensive copy', () => {

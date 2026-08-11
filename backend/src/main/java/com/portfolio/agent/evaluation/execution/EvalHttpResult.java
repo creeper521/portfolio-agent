@@ -5,6 +5,7 @@ import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.answer.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
+import com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape;
 
 import java.util.List;
 import java.util.Objects;
@@ -39,6 +40,7 @@ public final class EvalHttpResult {
     private final long durationMilliseconds;
     private final FailureCode failureCode;
     private final EvalAnswerShape answerShape;
+    private final EvalSemanticTurnShape semanticTurnShape;
 
     public EvalHttpResult(
             int statusCode,
@@ -55,6 +57,28 @@ public final class EvalHttpResult {
             long durationMilliseconds,
             FailureCode failureCode,
             EvalAnswerShape answerShape) {
+        this(statusCode, resolution, answerScope, generationMode, answerSource,
+                intentSource, evidenceState, claimIds, evidenceIds, degraded,
+                noticeCode, durationMilliseconds, failureCode, answerShape,
+                EvalSemanticTurnShape.empty());
+    }
+
+    public EvalHttpResult(
+            int statusCode,
+            AnswerResolution resolution,
+            ConversationAnswerScope answerScope,
+            GenerationMode generationMode,
+            AnswerSource answerSource,
+            String intentSource,
+            String evidenceState,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            boolean degraded,
+            String noticeCode,
+            long durationMilliseconds,
+            FailureCode failureCode,
+            EvalAnswerShape answerShape,
+            EvalSemanticTurnShape semanticTurnShape) {
         this.statusCode = statusCode;
         this.resolution = resolution;
         this.answerScope = answerScope;
@@ -69,6 +93,7 @@ public final class EvalHttpResult {
         this.durationMilliseconds = durationMilliseconds;
         this.failureCode = Objects.requireNonNull(failureCode, "failureCode");
         this.answerShape = Objects.requireNonNull(answerShape, "answerShape");
+        this.semanticTurnShape = Objects.requireNonNull(semanticTurnShape, "semanticTurnShape");
     }
 
     public int getStatusCode() { return statusCode; }
@@ -85,4 +110,5 @@ public final class EvalHttpResult {
     public long getDurationMilliseconds() { return durationMilliseconds; }
     public FailureCode getFailureCode() { return failureCode; }
     public EvalAnswerShape getAnswerShape() { return answerShape; }
+    public EvalSemanticTurnShape getSemanticTurnShape() { return semanticTurnShape; }
 }

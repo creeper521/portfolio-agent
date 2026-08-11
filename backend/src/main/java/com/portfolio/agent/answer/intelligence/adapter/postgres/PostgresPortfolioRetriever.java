@@ -80,7 +80,9 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
     private PortfolioRetrievedPassage toPassage(PostgresKnowledgePassageRow row) {
         return new PortfolioRetrievedPassage(
                 row.getSubjectId() + "#" + row.getClaimId(),
-                row.getSubjectId(), row.getClaimId(), row.getContent(),
+                row.getSubjectId(),
+                row.getContent(),
+                row.getClaim(),
                 row.getEvidenceReferences().stream()
                         .map(reference -> new PortfolioRetrievedEvidenceReference(
                                 reference.getEvidenceId(), reference.getLabel(),

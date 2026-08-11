@@ -17,6 +17,7 @@ public final class PortfolioIntelligenceResult {
     private final boolean contextVersionUpdated;
     private final String questionPresetId;
     private final String contractVersion;
+    private final AnswerFocus answerFocus;
 
     public PortfolioIntelligenceResult(
             PortfolioTaskMode resolvedIntent,
@@ -71,6 +72,25 @@ public final class PortfolioIntelligenceResult {
             boolean contextVersionUpdated,
             String questionPresetId,
             String contractVersion) {
+        this(resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
+                contentVersion, degraded, noticeCode, intentSource, contextVersionUpdated,
+                questionPresetId, contractVersion, AnswerFocus.overview());
+    }
+
+    private PortfolioIntelligenceResult(
+            PortfolioTaskMode resolvedIntent,
+            List<PortfolioRetrievedSubject> subjects,
+            List<PortfolioRetrievedPassage> evidence,
+            PortfolioRecommendation portfolioRecommendation,
+            PortfolioClarification clarification,
+            String contentVersion,
+            boolean degraded,
+            String noticeCode,
+            AnswerIntentSource intentSource,
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion,
+            AnswerFocus answerFocus) {
         this.resolvedIntent = Objects.requireNonNull(resolvedIntent, "resolvedIntent");
         this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
         this.evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
@@ -85,6 +105,7 @@ public final class PortfolioIntelligenceResult {
         this.contextVersionUpdated = contextVersionUpdated;
         this.questionPresetId = normalizeNullable(questionPresetId);
         this.contractVersion = normalizeNullable(contractVersion);
+        this.answerFocus = Objects.requireNonNull(answerFocus, "answerFocus");
         if (resolvedIntent == PortfolioTaskMode.CLARIFICATION_REQUIRED && clarification == null) {
             throw new IllegalArgumentException("clarification is required for CLARIFICATION_REQUIRED");
         }
@@ -111,6 +132,7 @@ public final class PortfolioIntelligenceResult {
     public boolean isContextVersionUpdated() { return contextVersionUpdated; }
     public String getQuestionPresetId() { return questionPresetId; }
     public String getContractVersion() { return contractVersion; }
+    public AnswerFocus getAnswerFocus() { return answerFocus; }
 
     public PortfolioIntelligenceResult withDecisionMetadata(
             AnswerIntentSource source,
@@ -126,7 +148,7 @@ public final class PortfolioIntelligenceResult {
                 degraded,
                 noticeCode,
                 Objects.requireNonNull(source, "source"),
-                versionUpdated, questionPresetId, contractVersion);
+                versionUpdated, questionPresetId, contractVersion, answerFocus);
     }
 
     public PortfolioIntelligenceResult withContractIdentity(
@@ -136,7 +158,15 @@ public final class PortfolioIntelligenceResult {
         return new PortfolioIntelligenceResult(
                 resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
                 contentVersion, degraded, noticeCode, intentSource, contextVersionUpdated,
-                presetId, version);
+                presetId, version, answerFocus);
+    }
+
+    public PortfolioIntelligenceResult withAnswerFocus(AnswerFocus focus) {
+        Objects.requireNonNull(focus, "focus");
+        return new PortfolioIntelligenceResult(
+                resolvedIntent, subjects, evidence, portfolioRecommendation, clarification,
+                contentVersion, degraded, noticeCode, intentSource, contextVersionUpdated,
+                questionPresetId, contractVersion, focus);
     }
 
     private static String normalizeNullable(String value) {

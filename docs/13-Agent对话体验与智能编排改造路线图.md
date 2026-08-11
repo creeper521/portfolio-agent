@@ -168,16 +168,18 @@ flowchart LR
 
 ### 5.2 阶段 1：回答结构化与前端呈现
 
-| 编号 | 任务 | 目标 |
-|---|---|---|
-| `ANSWER-01` | 定义统一 `AnswerPlan` | 检索材料先转换为语义回答计划，不直接成为 UI 段落 |
-| `ANSWER-02` | 实现确定性回答编排 | 按任务类型组织背景、职责、方案、验证、状态和边界 |
-| `ANSWER-03` | 去重与压缩证据材料 | 同 Claim、同 Evidence、同语义内容只保留必要表达 |
-| `ANSWER-04` | 聚合引用 | 引用附着到语义章节，不重复散落在每个短句后 |
-| `ANSWER-05` | 定义失败和证据不足表达 | 澄清、不可用、过期 Contract 与证据不足保持清晰且短 |
-| `FRONTEND-01` | 按语义章节渲染回答 | 不再重复展示每个 Block 的相同来源标签 |
-| `FRONTEND-02` | 集中展示和展开证据 | 正文保持连贯，证据仍可核验、可定位 |
-| `FRONTEND-03` | 收口 v2 Block 与 legacy Section | 明确唯一生产契约，避免两套渲染长期并存 |
+| 编号 | 任务 | 当前状态 | 目标 |
+|---|---|---|---|
+| `ANSWER-01` | 定义统一 `AnswerPlan` | 2026-08-07 完成：`PortfolioAnswerPlan`/`PortfolioAnswerSection` 不可变，`DeterministicPortfolioAnswerComposer` 唯一 P1 Composer | 检索材料先转换为语义回答计划，不直接成为 UI 段落 |
+| `ANSWER-02` | 实现确定性回答编排 | 2026-08-07 完成：单主体 `FACT_LOOKUP` 按背景、职责、方案、验证、状态、边界组织；Comparison/Recommendation/澄清保持原路径 | 按任务类型组织背景、职责、方案、验证、状态和边界 |
+| `ANSWER-03` | 去重与压缩证据材料 | 2026-08-07 完成：按 Claim ID 去重、同正文合并 Claim/Evidence ID、固定预算 | 同 Claim、同 Evidence、同语义内容只保留必要表达 |
+| `ANSWER-04` | 聚合引用 | 2026-08-07 完成：引用按章节聚合，回答级只展示一次范围标签 | 引用附着到语义章节，不重复散落在每个短句后 |
+| `ANSWER-05` | 定义失败和证据不足表达 | 2026-08-07 完成：缺口汇总到唯一 Boundary 受控文案；不变量损坏 `CAPABILITY_UNAVAILABLE + ANSWER_COMPOSITION_INVALID` | 澄清、不可用、过期 Contract 与证据不足保持清晰且短 |
+| `FRONTEND-01` | 按语义章节渲染回答 | 2026-08-07 完成：`AnswerSectionView[]` 唯一渲染 | 不再重复展示每个 Block 的相同来源标签 |
+| `FRONTEND-02` | 集中展示和展开证据 | 2026-08-07 完成：Evidence Desk 只消费统一 Sections | 正文保持连贯，证据仍可核验、可定位 |
+| `FRONTEND-03` | 收口 v2 Block 与 legacy Section | 2026-08-07 完成：映射层唯一读取，组件只消费 Section View | 明确唯一生产契约，避免两套渲染长期并存 |
+
+阶段 1 状态：**首个交付面（单主体 Fact Lookup）完成**；模型表达、Provider/PostgreSQL 启用与阶段对比基线冻结仍待后续。真实 Provider 保持显式授权。
 
 ### 5.3 阶段 2：统一语义路由
 

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 澄清交互对比 · 当前 vs 升级方向</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --paper: #f4eee4;
+  --paper-hi: #fbf7ef;
+  --paper-low: #e9dfd0;
+  --ink: #201c17;
+  --ink-2: #34302a;
+  --muted: #746b5e;
+  --faint: #9c9182;
+  --rule: #cdbfa9;
+  --red: #7a2e2a;
+  --red-hi: #b65d53;
+  --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+  --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.6;
+  padding: 40px 24px 80px;
+}
+
+.page-head {
+  max-width: 920px;
+  margin: 0 auto 48px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.page-head p {
+  font: 11px var(--mono);
+  letter-spacing: 0.13em;
+  color: var(--red-hi);
+  margin-bottom: 12px;
+}
+.page-head h1 {
+  font: 500 26px/1.35 var(--serif);
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.page-head .lede {
+  font: 14px/1.7 var(--serif);
+  color: var(--muted);
+  max-width: 680px;
+}
+
+/* —— 对比卡片：每个变体一张 —— */
+.variant {
+  max-width: 920px;
+  margin: 0 auto 56px;
+}
+.variant__label {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.variant__no {
+  font: 500 20px var(--mono);
+  color: var(--red);
+}
+.variant__title {
+  font: 600 17px var(--serif);
+  color: var(--ink);
+}
+.variant__tag {
+  padding: 2px 8px;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--muted);
+}
+.variant__tag--current {
+  color: var(--red);
+  border-color: var(--red-hi);
+}
+.variant__note {
+  font: 13px/1.65 var(--serif);
+  color: var(--muted);
+  margin-bottom: 20px;
+  padding-left: 14px;
+  border-left: 2px solid var(--rule);
+}
+
+/* —— 对话窗口外壳：复刻 ConversationThread 中栏 —— */
+.thread-frame {
+  background: var(--paper-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.thread-frame__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.thread-frame__head p {
+  font: 11px var(--mono);
+  letter-spacing: 0.13em;
+  color: var(--red-hi);
+}
+.thread-frame__head h2 {
+  font: 500 18px var(--serif);
+}
+.thread-frame__tools {
+  display: flex;
+  gap: 8px;
+}
+.thread-frame__tools span {
+  padding: 6px 10px;
+  font: 11px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+.thread-frame__body {
+  padding: 24px 28px;
+}
+
+/* —— 用户消息气泡 —— */
+.msg-user {
+  max-width: 64%;
+  margin-left: auto;
+  margin-bottom: 28px;
+}
+.msg-user .meta {
+  font: 11px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--red-hi);
+  text-align: right;
+  margin-bottom: 6px;
+}
+.msg-user .body {
+  padding: 4px 0 4px 14px;
+  border-left: 2px solid var(--red);
+  font: 15px/1.7 var(--sans);
+  color: var(--ink);
+}
+
+/* —— Agent 消息 —— */
+.msg-agent { margin-bottom: 28px; }
+.msg-agent .meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: 12px;
+}
+.msg-agent .meta-prefix {
+  font: 11px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--red-hi);
+}
+.meta-tag {
+  padding: 2px 7px;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--red);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+}
+.meta-tag[data-verification='VERIFIED'] {
+  color: var(--paper-hi);
+  background: var(--red);
+  border-color: var(--red);
+}
+.meta-tag[data-scope] { color: var(--red); }
+
+.structured-answer h3 {
+  font: 600 16px/1.45 var(--serif);
+  margin-bottom: 10px;
+}
+.structured-answer h4 {
+  font: 600 13px/1.4 var(--sans);
+  color: var(--ink-2);
+  margin: 14px 0 4px;
+}
+.structured-answer p {
+  font: 15px/1.85 var(--serif);
+  color: var(--ink);
+}
+
+/* 章节引用按钮 */
+.answer-block__citations {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+}
+.answer-block__citations button {
+  padding: 4px 8px;
+  font: 11px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.35);
+  cursor: pointer;
+}
+
+.follow-up-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.follow-up-actions button {
+  padding: 6px 10px;
+  font: 11px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.35);
+  cursor: pointer;
+}
+.follow-up-actions button:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* —— 底部 composer —— */
+.composer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  margin: 0 28px 24px;
+  min-height: 50px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--paper-hi) 86%, white);
+}
+.composer span { color: var(--red-hi); font: 18px var(--serif); }
+.composer input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font: 13px var(--sans);
+  color: var(--ink);
+  outline: none;
+}
+.composer input::placeholder { color: var(--faint); }
+.composer button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--red);
+  color: var(--paper-hi);
+  font: 12px var(--mono);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+/* ============================================================
+   变体 A：当前弱呈现（复刻真实代码）
+   ============================================================ */
+/* 澄清回答就是一段无标题裸文本，状态标签是"需要补充信息" */
+
+/* ============================================================
+   变体 B：结构化澄清选项卡
+   ============================================================ */
+.clarify-options {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--red);
+  border-radius: var(--radius-sm);
+  background: var(--paper-low);
+}
+.clarify-options__lead {
+  font: 13px/1.7 var(--serif);
+  color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.clarify-options__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.clarify-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-hi);
+  cursor: pointer;
+  font: 14px/1.5 var(--sans);
+  color: var(--ink);
+  transition: border-color 160ms var(--ease), color 160ms var(--ease);
+}
+.clarify-chip:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+.clarify-chip__label {
+  font: 11px var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  flex: none;
+  min-width: 36px;
+}
+.clarify-chip__text { flex: 1; }
+.clarify-chip__hint {
+  font: 11px var(--mono);
+  color: var(--red-hi);
+}
+.clarify-chip[data-selected="true"] {
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 6%, var(--paper-hi));
+}
+
+/* ============================================================
+   变体 C：多意图分区呈现
+   ============================================================ */
+.intent-split {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.intent-split__section {
+  padding: 16px 18px;
+  background: var(--paper-hi);
+}
+.intent-split__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--rule);
+}
+.intent-split__tag {
+  padding: 2px 8px;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+}
+.intent-split__tag--portfolio {
+  color: var(--red);
+  border-color: var(--red-hi);
+  background: color-mix(in srgb, var(--red) 5%, var(--paper-hi));
+}
+.intent-split__tag--general {
+  color: var(--muted);
+}
+.intent-split__title {
+  font: 600 14px var(--sans);
+  color: var(--ink);
+}
+.intent-split__body {
+  font: 14px/1.8 var(--serif);
+  color: var(--ink-2);
+}
+
+/* —— 问题标注 —— */
+.problem-callout {
+  max-width: 920px;
+  margin: 0 auto 8px;
+  padding: 18px 22px;
+  background: color-mix(in srgb, var(--red) 4%, var(--paper-hi));
+  border: 1px solid var(--red-hi);
+  border-radius: var(--radius-sm);
+  margin-top: 24px;
+}
+.problem-callout__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 13px var(--sans);
+  color: var(--red);
+  margin-bottom: 8px;
+}
+.problem-callout__title::before {
+  content: "";
+  width: 7px; height: 7px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+.problem-callout p {
+  font: 13px/1.7 var(--serif);
+  color: var(--ink-2);
+}
+.problem-callout ul {
+  margin: 8px 0 0 18px;
+  padding: 0;
+}
+.problem-callout li {
+  font: 13px/1.8 var(--serif);
+  color: var(--ink-2);
+}
+
+.divider-section {
+  max-width: 920px;
+  margin: 64px auto 48px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+.section-anchor {
+  max-width: 920px;
+  margin: 0 auto 8px;
+}
+.section-anchor p {
+  font: 11px var(--mono);
+  letter-spacing: 0.13em;
+  color: var(--red-hi);
+}
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <p>AGENT CLARIFICATION · 澄清交互对比</p>
+  <h1>阶段 1 澄清呈现是否满足需求？三种方案横向对比</h1>
+  <p class="lede">
+    场景：访客问「这个项目怎么实现的？」——但作品集里有 3 个项目，路由无法确定指向哪一个。
+    当前澄清回答只返回一段无标题裸文本，访客唯一出路是自由打字重新描述。下面把当前呈现和两个升级方向并排展示，用于判断是否需要在阶段 2 升级澄清交互。
+  </p>
+</header>
+
+<!-- ========== 变体 A：当前弱呈现（复刻真实代码） ========== -->
+<div class="variant">
+  <div class="variant__label">
+    <span class="variant__no">A</span>
+    <span class="variant__title">当前实现 · 复刻真实代码</span>
+    <span class="variant__tag variant__tag--current">现状</span>
+  </div>
+  <p class="variant__note">
+    后端 <code>clarificationBlocks()</code> 返回单个无 sectionType、无 title 的裸 Block。
+    前端 <code>answerStatusLabel</code> 把 NEEDS_CLARIFICATION 映射成「需要补充信息」——与 BOUNDARY（证据不足）共用同一句文案。
+    没有标题，没有 summary，没有选项。访客唯一出路是底部输入框自由打字。
+  </p>
+
+  <div class="thread-frame">
+    <div class="thread-frame__head">
+      <div>
+        <p>AGENT CONVERSATION</p>
+        <h2>这个项目怎么实现的？</h2>
+      </div>
+      <div class="thread-frame__tools">
+        <span>HIRING MANAGER MODE</span>
+      </div>
+    </div>
+    <div class="thread-frame__body">
+      <!-- 用户消息 -->
+      <div class="msg-user">
+        <p class="meta">YOU</p>
+        <p class="body">这个项目怎么实现的？</p>
+      </div>
+
+      <!-- Agent 澄清回答：当前真实呈现 -->
+      <div class="msg-agent">
+        <div class="meta">
+          <span class="meta-prefix">AGENT · 需要补充信息</span>
+          <span class="meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+        </div>
+        <div class="structured-answer">
+          <!-- 没有 h3 标题，没有 summary，只有一段裸文本 -->
+          <section>
+            <p>你想了解的是哪一个项目？请补充项目的名称或关键信息，我才能基于公开证据回答它的实现方式。</p>
+          </section>
+          <!-- 章节级 follow-up（当前有，但澄清回答通常没有 referenceContext，所以这块也不出现） -->
+        </div>
+        <!-- dynamic-suggestions：如果后端恰好给了建议追问 -->
+        <div class="follow-up-actions">
+          <button>↳ 介绍订单中台项目</button>
+          <button>↳ 介绍 SQL 审计项目</button>
+          <button>↳ 介绍作品集 Agent</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="composer" onsubmit="return false">
+      <span>›</span>
+      <input type="text" placeholder="继续追问方案取舍、验证过程或证据" />
+      <button>发送 ↵</button>
+    </form>
+  </div>
+
+  <div class="problem-callout">
+    <div class="problem-callout__title">当前呈现的三个问题</div>
+    <ul>
+      <li><strong>状态标签无法区分语义</strong>：「需要补充信息」同时用于澄清和证据不足——访客分不清是「我没问清楚」还是「没有这个证据」。</li>
+      <li><strong>澄清句是孤立的裸文本</strong>：没有标题、没有视觉层级，和普通事实回答的章节化呈现反差大，显得「敷衍」。</li>
+      <li><strong>选项依赖后端偶然给建议追问</strong>：<code>dynamicSuggestions</code> 不是澄清的专属契约，后端不给就只剩自由输入——而自由输入很容易再次歧义。</li>
+    </ul>
+  </div>
+</div>
+
+<hr class="divider-section">
+
+<div class="section-anchor">
+  <p>UPGRADE OPTIONS · 升级方向</p>
+</div>
+
+<!-- ========== 变体 B：结构化澄清选项卡 ========== -->
+<div class="variant">
+  <div class="variant__label">
+    <span class="variant__no">B</span>
+    <span class="variant__title">结构化澄清选项卡 · 主体歧义消解</span>
+    <span class="variant__tag">轻量升级</span>
+  </div>
+  <p class="variant__note">
+    当路由低置信度判定为「主体歧义」时，后端返回结构化的候选主体列表（来自公开作品集），前端渲染成可点击的选项卡。
+    访客点一下就能消歧，不必重新打字。仍保留自由输入兜底。这是路线图 ROUTER-04「低置信度不猜测主体」的自然配套。
+  </p>
+
+  <div class="thread-frame">
+    <div class="thread-frame__head">
+      <div>
+        <p>AGENT CONVERSATION</p>
+        <h2>这个项目怎么实现的？</h2>
+      </div>
+      <div class="thread-frame__tools">
+        <span>HIRING MANAGER MODE</span>
+      </div>
+    </div>
+    <div class="thread-frame__body">
+      <div class="msg-user">
+        <p class="meta">YOU</p>
+        <p class="body">这个项目怎么实现的？</p>
+      </div>
+
+      <div class="msg-agent">
+        <div class="meta">
+          <span class="meta-prefix">AGENT · 需要补充信息</span>
+          <span class="meta-tag" data-scope="PORTFOLIO">作品集资料</span>
+          <span class="meta-tag" data-verification="CLARIFY">待澄清</span>
+        </div>
+        <div class="structured-answer">
+          <h3>需要补充信息</h3>
+          <p>你提到「这个项目」，但作品集里有多个公开项目。请选择你想了解的具体项目：</p>
+
+          <!-- 结构化选项卡：候选主体来自公开作品集 -->
+          <div class="clarify-options">
+            <div class="clarify-options__list">
+              <button class="clarify-chip" type="button">
+                <span class="clarify-chip__label">01</span>
+                <span class="clarify-chip__text">订单履约中台 · 后端架构与分布式事务</span>
+                <span class="clarify-chip__hint">选择 →</span>
+              </button>
+              <button class="clarify-chip" type="button">
+                <span class="clarify-chip__label">02</span>
+                <span class="clarify-chip__text">SQL 慢查询审计系统 · 规则引擎与可观测性</span>
+                <span class="clarify-chip__hint">选择 →</span>
+              </button>
+              <button class="clarify-chip" type="button">
+                <span class="clarify-chip__label">03</span>
+                <span class="clarify-chip__text">作品集 Agent · 证据编排与回答结构化</span>
+                <span class="clarify-chip__hint">选择 →</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="follow-up-actions">
+          <button>↳ 以上都不是，我重新描述</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="composer" onsubmit="return false">
+      <span>›</span>
+      <input type="text" placeholder="或直接输入你想问的项目" />
+      <button>发送 ↵</button>
+    </form>
+  </div>
+
+  <div class="problem-callout">
+    <div class="problem-callout__title">这个方向解决了什么</div>
+    <ul>
+      <li><strong>消歧从「重新打字」变成「点一下」</strong>：候选主体是后端从公开作品集里检索出来的，不是前端硬编码。</li>
+      <li><strong>澄清状态有专属视觉</strong>：「待澄清」标签与「证据不足」区分开，访客知道这是「需要我选一下」而非「没有数据」。</li>
+      <li><strong>契约加法式演进</strong>：v2 Block 可新增 <code>clarificationOptions</code> 可选字段，不破坏现有回答渲染。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ========== 变体 C：多意图分区呈现 ========== -->
+<div class="variant">
+  <div class="variant__label">
+    <span class="variant__no">C</span>
+    <span class="variant__title">多意图分区 · 事实 + 通用解释同框</span>
+    <span class="variant__tag">阶段 5 预览</span>
+  </div>
+  <p class="variant__note">
+    当一个问题同时包含「作品集事实」和「通用解释」（如「这个项目用了事件驱动架构，它和传统 MVC 有什么区别？」），
+    MIXED 回答需要在一个回答内按段落切换来源标签。这是路线图 CONTEXT-01 的前端呈现预览——当前 <code>blockScopeTag</code> 就是为此预留的 seam。
+  </p>
+
+  <div class="thread-frame">
+    <div class="thread-frame__head">
+      <div>
+        <p>AGENT CONVERSATION</p>
+        <h2>订单中台用了事件驱动，它和传统 MVC 有什么区别？</h2>
+      </div>
+      <div class="thread-frame__tools">
+        <span>HIRING MANAGER MODE</span>
+      </div>
+    </div>
+    <div class="thread-frame__body">
+      <div class="msg-user">
+        <p class="meta">YOU</p>
+        <p class="body">订单中台用了事件驱动，它和传统 MVC 有什么区别？</p>
+      </div>
+
+      <div class="msg-agent">
+        <div class="meta">
+          <span class="meta-prefix">AGENT · 回答</span>
+          <span class="meta-tag" data-scope="MIXED">混合回答</span>
+          <span class="meta-tag" data-verification="VERIFIED">已验证证据</span>
+        </div>
+        <div class="structured-answer">
+          <h3>订单履约中台 · 事件驱动架构</h3>
+          <p style="font: 13px/1.7 var(--mono); color: var(--muted); margin-bottom: 14px;">该项目的订单状态变更通过领域事件异步通知下游，保证最终一致性。</p>
+
+          <!-- 多意图分区：同一回答内按来源切换标签 -->
+          <div class="intent-split">
+            <div class="intent-split__section">
+              <div class="intent-split__head">
+                <span class="intent-split__tag intent-split__tag--portfolio">作品集资料</span>
+                <span class="intent-split__title">该项目的事件驱动实现</span>
+              </div>
+              <p class="intent-split__body">
+                订单状态机在状态流转时发布 <code>OrderEvent</code> 到 Kafka，库存、物流、通知服务各自消费。
+                关键设计是事件 schema 的向后兼容与死信队列兜底。
+              </p>
+              <div class="answer-block__citations">
+                <button>[evi-order-001]</button>
+                <button>[evi-order-007]</button>
+              </div>
+            </div>
+            <div class="intent-split__section">
+              <div class="intent-split__head">
+                <span class="intent-split__tag intent-split__tag--general">通用知识</span>
+                <span class="intent-split__title">事件驱动与传统 MVC 的区别</span>
+              </div>
+              <p class="intent-split__body">
+                传统 MVC 是同步请求-响应模型，控制器直接调用服务并阻塞等待；事件驱动是异步、解耦的，
+                生产者只负责「发布事实」，不关心谁消费、何时消费。代价是调试链路变长，需要完善的可观测性。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="follow-up-actions">
+          <button>展开事件 schema 设计</button>
+          <button>查看死信队列证据</button>
+          <button>说明判断</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="composer" onsubmit="return false">
+      <span>›</span>
+      <input type="text" placeholder="继续追问方案取舍、验证过程或证据" />
+      <button>发送 ↵</button>
+    </form>
+  </div>
+
+  <div class="problem-callout">
+    <div class="problem-callout__title">为什么这个方向要等到阶段 5</div>
+    <ul>
+      <li><strong>依赖真实 HYBRID 后端能力</strong>：当前没有真实可达的混合回答链路，前端做出来也没有数据驱动。</li>
+      <li><strong>blockScopeTag seam 已预留</strong>：<code>answerLabels.ts:41</code> 的 <code>blockScopeTag</code> 就是为这个场景准备的，届时接线即可，不需要现在改。</li>
+      <li><strong>来源分区是渲染逻辑改变</strong>：从回答级单标签 → 章节级分区标签，需要 Evidence Desk 同步适配分区定位。</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

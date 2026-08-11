@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "1.0",
+  "suiteId": "phase-2-semantic-turn-routing",
+  "datasetVersion": "2026-08-10.1",
+  "cases": [
+    {
+      "id": "semantic-turn.sql-audit.multi-objective.001",
+      "title": "多目标语义轮次：作品集事实、通用比较与受限推荐",
+      "split": "HOLDOUT",
+      "origin": "HUMAN_AUTHORED",
+      "riskLevel": "HIGH",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-2",
+      "sourceCategory": "PUBLIC_BUNDLE",
+      "difficultyReason": "验证一轮多目标、显式依赖、混合来源和排除条件不会退化为单任务回答",
+      "firstExposedDatasetVersion": "2026-08-10.1",
+      "tags": [
+        "phase-2-semantic-turn",
+        "multi-task",
+        "dependency",
+        "mixed-source",
+        "exclusion"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "先介绍 SQL 审计项目，再和通用数据校验做比较，最后按后端岗位给出建议；不要包含纯前端项目。"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "AWAITING_CONFIRMATION",
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO",
+          "HYBRID",
+          "MIXED"
+        ],
+        "requiredClaimIds": [],
+        "allowedEvidenceIds": [],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "HTTP_E2E"
+        ],
+        "providerTrials": 1
+      },
+      "graders": [
+        {
+          "type": "API_CONTRACT",
+          "severity": "BLOCKING"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ],
+        "generatedFromBundle": true
+      }
+    }
+  ]
+}

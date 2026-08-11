@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.GenerationMode;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
+import com.portfolio.agent.evaluation.domain.EvalSemanticTurnShape;
 
 import java.io.IOException;
 import java.net.URI;
@@ -132,6 +133,8 @@ public final class JdkEvalAnswerClient implements EvalAnswerClient {
                 evidenceIds.addAll(blockEvidence);
                 blocks.add(new ConversationAnswerBlock(
                         parseSourceScope(text(block, "sourceScope")),
+                        parseSectionType(text(block, "sectionType")),
+                        text(block, "title"),
                         contentText, blockClaims, blockEvidence));
             }
         }
@@ -142,7 +145,8 @@ public final class JdkEvalAnswerClient implements EvalAnswerClient {
                 text(root, "evidenceState"), List.copyOf(claimIds),
                 List.copyOf(evidenceIds), degraded, text(root, "noticeCode"),
                 durationMilliseconds, EvalHttpResult.FailureCode.NONE,
-                EvalAnswerShape.from(blocks));
+                EvalAnswerShape.from(blocks, text(root, "summary")),
+                EvalSemanticTurnShape.from(root.get("agentTurn")));
     }
 
     private EvalHttpResult failure(long startedAt, EvalHttpResult.FailureCode code) {
@@ -206,6 +210,18 @@ public final class JdkEvalAnswerClient implements EvalAnswerClient {
             return com.portfolio.agent.answer.domain.ConversationSourceScope.valueOf(value);
         } catch (IllegalArgumentException failure) {
             return com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO;
+        }
+    }
+
+    private com.portfolio.agent.answer.domain.AnswerSectionType parseSectionType(
+            String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return com.portfolio.agent.answer.domain.AnswerSectionType.valueOf(value);
+        } catch (IllegalArgumentException failure) {
+            return null;
         }
     }
 

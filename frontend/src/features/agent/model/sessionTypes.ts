@@ -1,5 +1,8 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import type { ConversationTopic, MappedAnswer } from './answerTypes'
+import type { OpaquePlanConfirmation } from './semanticTurnView'
+
+export interface PendingPlanConfirmation extends OpaquePlanConfirmation {}
 
 export interface AgentMessage {
   id: string
@@ -21,6 +24,7 @@ export interface AgentSession {
   updatedAt: number
   messages: AgentMessage[]
   coveredTopics: ConversationTopic[]
+  pendingConfirmation?: PendingPlanConfirmation
 }
 
 export interface SessionSeed {

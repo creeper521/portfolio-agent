@@ -71,7 +71,7 @@ public final class EvalIntelligenceExecutor implements EvalExecutor {
         if (decision.getMaterial().isEmpty()) {
             return new EvalObservation(
                     input.getCaseId(), input.getLayer(), input.getTrialIndex(),
-                    EvalObservationStatus.PASS, null, null, List.of(), List.of(), List.of(),
+                    status(decision.getDisposition()), null, null, List.of(), List.of(), List.of(),
                     resolution(decision.getDisposition()), ConversationAnswerScope.PORTFOLIO,
                     GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
                     List.of(decision.getDisposition().name()), 0L,
@@ -96,7 +96,7 @@ public final class EvalIntelligenceExecutor implements EvalExecutor {
             }
         }
         AnswerResolution resolution = resolution(decision.getDisposition());
-        EvalObservationStatus status = EvalObservationStatus.PASS;
+        EvalObservationStatus status = status(decision.getDisposition());
         boolean providerInvoked =
                 material.getIntentSource() == AnswerIntentSource.MODEL;
         return new EvalObservation(
@@ -124,6 +124,12 @@ public final class EvalIntelligenceExecutor implements EvalExecutor {
             case INVALID_INPUT -> AnswerResolution.INVALID_INPUT;
             default -> AnswerResolution.NOT_SUPPORTED;
         };
+    }
+
+    private EvalObservationStatus status(PortfolioDisposition disposition) {
+        return disposition == PortfolioDisposition.ANSWERED
+                ? EvalObservationStatus.PASS
+                : EvalObservationStatus.FAIL;
     }
 
     private String projectSlug(String subjectId) {

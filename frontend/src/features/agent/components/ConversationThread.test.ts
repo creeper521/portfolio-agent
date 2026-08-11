@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
 import type { AnswerFocusTarget } from '../model/evidenceDeskModel'
 import type { AgentMessage, AgentSession } from '../model/sessionTypes'
+import { confirmationRequiredResponse, localPartialReadyResponse, partialSuccessResponse } from '../model/semanticTurnFixtures'
+import { mapAnswerResponse } from '../model/mapAnswerResponse'
 import ConversationThread from './ConversationThread.vue'
 
 const answerMessageFixture: AgentSession['messages'][number] = {
@@ -34,8 +36,10 @@ const answerMessageFixture: AgentSession['messages'][number] = {
       followUpAction: 'RELATED_QUESTION',
     },
     sections: [{
+      key: 'VERIFICATION:0',
       type: 'VERIFICATION',
       title: 'Verification',
+      sourceScope: 'PORTFOLIO',
       content: 'Verified against delivery artifacts and test results.',
       evidenceIds: ['sql-audit-delivery-set'],
       claimIds: ['claim-sql-audit-delivered'],
@@ -55,6 +59,17 @@ function session(messages: AgentSession['messages'] = []): AgentSession {
     createdAt: 1,
     updatedAt: 1,
     messages,
+  }
+}
+
+function semanticMessage(id: string, answer = mapAnswerResponse(partialSuccessResponse())): AgentMessage {
+  return {
+    id,
+    role: 'AGENT',
+    content: answer.summary,
+    answer,
+    evidenceIds: answer.evidenceIds,
+    createdAt: 2,
   }
 }
 
@@ -82,6 +97,73 @@ function mountThread(
 }
 
 describe('ConversationThread', () => {
+  it('does not render plan UI for a single successful semantic task', () => {
+    const answer = mapAnswerResponse(partialSuccessResponse())
+    answer.semanticTurn = {
+      ...answer.semanticTurn!,
+      taskSummary: undefined,
+      completedTasks: [answer.semanticTurn!.completedTasks[0]!],
+    }
+    const wrapper = mountThread([semanticMessage('semantic-single', answer)])
+
+    expect(wrapper.find('[data-testid="plan-confirmation"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="task-summary"]').exists()).toBe(false)
+  })
+
+  it('renders partial task status and no body for blocked work', () => {
+    const wrapper = mountThread([semanticMessage('semantic-partial')])
+
+    expect(wrapper.get('[data-testid="task-summary"]').attributes('data-expanded')).toBe('true')
+    expect(wrapper.text()).toContain('Only completed-task content appears here.')
+    expect(wrapper.find('[data-testid="blocked-task-body"]').exists()).toBe(false)
+  })
+
+  it('renders a real PARTIAL_READY local clarification alongside its safe completed body', async () => {
+    const answer = mapAnswerResponse(localPartialReadyResponse())
+    const wrapper = mountThread([semanticMessage('semantic-local', answer)])
+
+    expect(wrapper.find('[data-testid="turn-clarification"][data-scope="LOCAL"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Only completed-task content appears here.')
+    expect(wrapper.text()).toContain('作品集资料')
+    await wrapper.get('[data-clarification-option="project-b"]').trigger('click')
+    expect(wrapper.emitted('clarificationSelect')).toEqual([[{ fieldKey: 'comparisonSubject', value: 'project-b' }]])
+  })
+
+  it('renders confirmation only when the tab-memory opaque state is present', async () => {
+    const answer = mapAnswerResponse(confirmationRequiredResponse())
+    const current = session([semanticMessage('semantic-confirmation', answer)])
+    current.pendingConfirmation = {
+      confirmationId: 'confirmation-01',
+      confirmationPlan: 'opaque-envelope',
+      planFingerprint: 'sha256:opaque-fingerprint',
+      integrityToken: 'opaque-integrity-token',
+      expiresAt: '2026-08-10T12:10:00Z',
+    }
+    const wrapper = mount(ConversationThread, {
+      props: { session: current, role: 'INTERVIEWER', project: previewPublicContent.projects[0], pending: false },
+    })
+
+    expect(wrapper.get('[data-testid="plan-confirmation"]').text()).toContain('计划确认')
+    await wrapper.get('[data-action="confirm-plan"]').trigger('click')
+    expect(wrapper.emitted('confirmPlan')?.[0]?.[0]).toMatchObject({ confirmationPlan: 'opaque-envelope' })
+  })
+
+  it('shows an invalidated-plan notice without silently rendering a replacement plan', () => {
+    const answer = mapAnswerResponse(partialSuccessResponse())
+    answer.semanticTurn = {
+      ...answer.semanticTurn!,
+      disposition: 'REJECTED',
+      displayPlan: undefined,
+      taskSummary: undefined,
+      completedTasks: [],
+      planChange: { summary: '内容版本已变化，请重新生成计划', changeLabels: ['内容版本变化'] },
+    }
+    const wrapper = mountThread([semanticMessage('semantic-invalidated', answer)])
+
+    expect(wrapper.get('[data-testid="plan-invalidated-notice"]').text()).toContain('重新生成计划')
+    expect(wrapper.find('[data-testid="plan-confirmation"]').exists()).toBe(false)
+  })
+
   it('renders a disabled retry-after countdown as its only recovery action', () => {
     const wrapper = mountThread([], false, null, {
       message: '请稍后再试',
@@ -177,15 +259,15 @@ describe('ConversationThread', () => {
           verification: 'NOT_APPLICABLE',
           intent: 'GENERAL_KNOWLEDGE',
           answerScope: 'GENERAL',
-          sections: [],
-          blocks: [
-            {
-              sourceScope: 'GENERAL' as const,
-              content: 'HTTP 是无状态的应用层协议。',
-              claimIds: [],
-              evidenceIds: [],
-            },
-          ],
+          sections: [{
+            key: 'GENERAL:0',
+            type: 'GENERAL',
+            title: '',
+            sourceScope: 'GENERAL',
+            content: 'HTTP 是无状态的应用层协议。',
+            claimIds: [],
+            evidenceIds: [],
+          }],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -219,15 +301,15 @@ describe('ConversationThread', () => {
           verification: 'VERIFIED',
           intent: 'PORTFOLIO_GROUNDED',
           answerScope: 'PORTFOLIO',
-          sections: [],
-          blocks: [
-            {
-              sourceScope: 'PORTFOLIO' as const,
-              content: 'SQL 审计项目交付了完整流水线。',
-              claimIds: ['claim-sql-audit-delivered'],
-              evidenceIds: ['sql-audit-delivery-set'],
-            },
-          ],
+          sections: [{
+            key: 'BOUNDARY:0',
+            type: 'BOUNDARY',
+            title: '',
+            sourceScope: 'PORTFOLIO',
+            content: 'SQL 审计项目交付了完整流水线。',
+            claimIds: ['claim-sql-audit-delivered'],
+            evidenceIds: ['sql-audit-delivery-set'],
+          }],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -241,8 +323,8 @@ describe('ConversationThread', () => {
 
     expect(wrapper.text()).toContain('作品集资料')
     expect(wrapper.text()).toContain('SQL 审计项目交付了完整流水线。')
-    // PORTFOLIO blocks should render claim/evidence reference hooks
-    expect(wrapper.find('[data-block-evidence="sql-audit-delivery-set"]').exists()).toBe(true)
+    // PORTFOLIO sections should render claim/evidence reference hooks
+    expect(wrapper.find('[data-section-citation="sql-audit-delivery-set"]').exists()).toBe(true)
     expect(wrapper.find('[data-message-evidence="sql-audit-delivery-set"]').exists()).toBe(false)
   })
 
@@ -263,16 +345,21 @@ describe('ConversationThread', () => {
           verification: 'VERIFIED',
           intent: 'HYBRID',
           answerScope: 'HYBRID',
-          sections: [],
-          blocks: [
+          sections: [
             {
-              sourceScope: 'GENERAL' as const,
+              key: 'GENERAL:0',
+              type: 'GENERAL',
+              title: '',
+              sourceScope: 'GENERAL',
               content: 'RBAC 是常见的访问控制模型。',
               claimIds: [],
               evidenceIds: [],
             },
             {
-              sourceScope: 'PORTFOLIO' as const,
+              key: 'BOUNDARY:1',
+              type: 'BOUNDARY',
+              title: '',
+              sourceScope: 'PORTFOLIO',
               content: '作者在 SQL 审计项目里使用 RBAC 隔离了审计师角色。',
               claimIds: ['claim-sql-audit-delivered'],
               evidenceIds: ['sql-audit-delivery-set'],
@@ -290,15 +377,13 @@ describe('ConversationThread', () => {
     ])
 
     expect(wrapper.text()).toContain('混合回答')
-    // Each block should carry its own scope marker
-    const general = wrapper.find('[data-block-scope="GENERAL"]')
-    const portfolio = wrapper.find('[data-block-scope="PORTFOLIO"]')
-    expect(general.exists()).toBe(true)
-    expect(portfolio.exists()).toBe(true)
-    expect(general.text()).toContain('RBAC 是常见的访问控制模型')
-    expect(portfolio.text()).toContain('作者在 SQL 审计项目里使用 RBAC')
-    // 通用知识块不应附作品集引用
-    expect(general.find('[data-block-evidence]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('RBAC 是常见的访问控制模型')
+    expect(wrapper.text()).toContain('作者在 SQL 审计项目里使用 RBAC')
+    // 通用知识章节不应附作品集引用；PORTFOLIO 章节保留引用钩子
+    const generalSection = wrapper.get('[data-section-type="GENERAL"]')
+    expect(generalSection.find('[data-section-citation]').exists()).toBe(false)
+    expect(wrapper.find('[data-section-citation="sql-audit-delivery-set"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-block-scope]')).toHaveLength(0)
   })
 
   it('renders dynamic suggestedQuestions as clickable follow-ups and supports empty array', async () => {
@@ -318,10 +403,15 @@ describe('ConversationThread', () => {
           verification: 'NOT_APPLICABLE',
           intent: 'GENERAL_KNOWLEDGE',
           answerScope: 'GENERAL',
-          sections: [],
-          blocks: [
-            { sourceScope: 'GENERAL' as const, content: '一些通用内容', claimIds: [], evidenceIds: [] },
-          ],
+          sections: [{
+            key: 'GENERAL:0',
+            type: 'GENERAL',
+            title: '',
+            sourceScope: 'GENERAL',
+            content: '一些通用内容',
+            claimIds: [],
+            evidenceIds: [],
+          }],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -407,7 +497,6 @@ describe('ConversationThread', () => {
           intent: 'PORTFOLIO_GROUNDED',
           answerScope: 'PORTFOLIO',
           sections: [],
-          blocks: [],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -441,10 +530,15 @@ describe('ConversationThread', () => {
           verification: 'NOT_APPLICABLE',
           intent: 'TIME_SENSITIVE',
           answerScope: 'GENERAL',
-          sections: [],
-          blocks: [
-            { sourceScope: 'GENERAL' as const, content: '我目前无法访问实时网络信息。', claimIds: [], evidenceIds: [] },
-          ],
+          sections: [{
+            key: 'GENERAL:0',
+            type: 'GENERAL',
+            title: '',
+            sourceScope: 'GENERAL',
+            content: '我目前无法访问实时网络信息。',
+            claimIds: [],
+            evidenceIds: [],
+          }],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -477,10 +571,15 @@ describe('ConversationThread', () => {
           verification: 'NOT_APPLICABLE',
           intent: 'UNSUPPORTED_OR_UNSAFE',
           answerScope: 'CONVERSATION',
-          sections: [],
-          blocks: [
-            { sourceScope: 'GENERAL' as const, content: '这个请求涉及私密信息，无法处理。', claimIds: [], evidenceIds: [] },
-          ],
+          sections: [{
+            key: 'GENERAL:0',
+            type: 'GENERAL',
+            title: '',
+            sourceScope: 'GENERAL',
+            content: '这个请求涉及私密信息，无法处理。',
+            claimIds: [],
+            evidenceIds: [],
+          }],
           turnId: 'turn-inline',
           contentVersion: '2026-07-21',
           coveredTopics: [],
@@ -513,10 +612,15 @@ describe('ConversationThread', () => {
         verification: 'VERIFIED',
         intent: 'PORTFOLIO_GROUNDED',
         answerScope: 'PORTFOLIO',
-        sections: [],
-        blocks: [
-          { sourceScope: 'PORTFOLIO' as const, content: '我按公开证据选出了 2 个作品。', claimIds: [], evidenceIds: ['evidence-1'] },
-        ],
+        sections: [{
+          key: 'BOUNDARY:0',
+          type: 'BOUNDARY',
+          title: '',
+          sourceScope: 'PORTFOLIO',
+          content: '我按公开证据选出了 2 个作品。',
+          claimIds: [],
+          evidenceIds: ['evidence-1'],
+        }],
         turnId: 'turn-reco',
         contentVersion: '2026-07-21',
         coveredTopics: [],

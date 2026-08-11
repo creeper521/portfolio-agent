@@ -1,5 +1,7 @@
 package com.portfolio.agent.evaluation.domain;
 
+import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.answer.domain.AnswerSectionMapping;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 
 import java.util.ArrayList;
@@ -25,6 +27,10 @@ public final class EvalAnswerShape {
     private final int repeatedContentCount;
     private final int repeatedSourceScopeCount;
     private final int semanticSectionCount;
+    private final int typedSectionCount;
+    private final int untypedBlockCount;
+    private final boolean sectionOrderValid;
+    private final boolean summaryPresent;
     private final boolean directAnswerPresent;
 
     private EvalAnswerShape(
@@ -37,6 +43,10 @@ public final class EvalAnswerShape {
             int repeatedContentCount,
             int repeatedSourceScopeCount,
             int semanticSectionCount,
+            int typedSectionCount,
+            int untypedBlockCount,
+            boolean sectionOrderValid,
+            boolean summaryPresent,
             boolean directAnswerPresent) {
         this.blockCount = blockCount;
         this.characterCount = characterCount;
@@ -47,34 +57,56 @@ public final class EvalAnswerShape {
         this.repeatedContentCount = repeatedContentCount;
         this.repeatedSourceScopeCount = repeatedSourceScopeCount;
         this.semanticSectionCount = semanticSectionCount;
+        this.typedSectionCount = typedSectionCount;
+        this.untypedBlockCount = untypedBlockCount;
+        this.sectionOrderValid = sectionOrderValid;
+        this.summaryPresent = summaryPresent;
         this.directAnswerPresent = directAnswerPresent;
     }
 
     public static EvalAnswerShape empty() {
-        return new EvalAnswerShape(0, 0, 0, 0, 0, 0, 0, 0, 0, false);
+        return new EvalAnswerShape(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                true, false, false);
     }
 
     public static EvalAnswerShape from(List<ConversationAnswerBlock> blocks) {
+        return from(blocks, null);
+    }
+
+    public static EvalAnswerShape from(
+            List<ConversationAnswerBlock> blocks,
+            String summary) {
         Objects.requireNonNull(blocks, "blocks");
         if (blocks.isEmpty()) {
-            return empty();
+            boolean summaryPresent = hasText(summary);
+            return new EvalAnswerShape(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    true, summaryPresent, summaryPresent);
         }
         int characterCount = 0;
         int semanticSectionCount = 0;
+        int typedSectionCount = 0;
+        int untypedBlockCount = 0;
+        int repeatedContent = 0;
+        int repeatedSourceScope = 0;
         List<String> allClaims = new ArrayList<>();
         List<String> allEvidence = new ArrayList<>();
         Set<String> normalizedContents = new HashSet<>();
         Set<String> sourceScopes = new HashSet<>();
-        int repeatedContent = 0;
-        int repeatedSourceScope = 0;
+        List<AnswerSectionType> typedSections = new ArrayList<>();
         boolean directAnswerPresent = false;
         for (int index = 0; index < blocks.size(); index++) {
             ConversationAnswerBlock block = blocks.get(index);
             String normalized = block.getContent() == null
                     ? "" : block.getContent().trim();
             characterCount += normalized.length();
-            if (!normalized.isEmpty()) {
-                semanticSectionCount++;
+            if (block.getSectionType() != null) {
+                typedSectionCount++;
+                typedSections.add(block.getSectionType());
+                if (!normalized.isEmpty()) {
+                    semanticSectionCount++;
+                }
+            } else {
+                untypedBlockCount++;
             }
             if (index == 0 && !normalized.isEmpty()) {
                 directAnswerPresent = true;
@@ -91,6 +123,10 @@ public final class EvalAnswerShape {
         }
         int distinctClaims = (int) new HashSet<>(allClaims).size();
         int distinctEvidence = (int) new HashSet<>(allEvidence).size();
+        boolean summaryPresent = hasText(summary);
+        if (!directAnswerPresent && summaryPresent) {
+            directAnswerPresent = true;
+        }
         return new EvalAnswerShape(
                 blocks.size(),
                 characterCount,
@@ -101,7 +137,30 @@ public final class EvalAnswerShape {
                 repeatedContent,
                 repeatedSourceScope,
                 semanticSectionCount,
+                typedSectionCount,
+                untypedBlockCount,
+                sectionOrderValid(typedSections),
+                summaryPresent,
                 directAnswerPresent);
+    }
+
+    private static boolean sectionOrderValid(List<AnswerSectionType> typedSections) {
+        int previousRank = -1;
+        for (AnswerSectionType type : typedSections) {
+            int rank = AnswerSectionMapping.authoritativeOrder().indexOf(type);
+            if (rank < 0) {
+                return false;
+            }
+            if (rank < previousRank) {
+                return false;
+            }
+            previousRank = rank;
+        }
+        return true;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     public int getBlockCount() { return blockCount; }
@@ -113,6 +172,10 @@ public final class EvalAnswerShape {
     public int getRepeatedContentCount() { return repeatedContentCount; }
     public int getRepeatedSourceScopeCount() { return repeatedSourceScopeCount; }
     public int getSemanticSectionCount() { return semanticSectionCount; }
+    public int getTypedSectionCount() { return typedSectionCount; }
+    public int getUntypedBlockCount() { return untypedBlockCount; }
+    public boolean isSectionOrderValid() { return sectionOrderValid; }
+    public boolean isSummaryPresent() { return summaryPresent; }
     public boolean isDirectAnswerPresent() { return directAnswerPresent; }
 
     @Override
@@ -126,6 +189,10 @@ public final class EvalAnswerShape {
                 + ", repeatedContentCount=" + repeatedContentCount
                 + ", repeatedSourceScopeCount=" + repeatedSourceScopeCount
                 + ", semanticSectionCount=" + semanticSectionCount
+                + ", typedSectionCount=" + typedSectionCount
+                + ", untypedBlockCount=" + untypedBlockCount
+                + ", sectionOrderValid=" + sectionOrderValid
+                + ", summaryPresent=" + summaryPresent
                 + ", directAnswerPresent=" + directAnswerPresent + '}';
     }
 }

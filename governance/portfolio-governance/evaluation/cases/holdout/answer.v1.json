@@ -957,6 +957,97 @@
         ],
         "generatedFromBundle": true
       }
+    },
+    {
+      "id": "answer.sql-audit.status-limitations.phase1.001",
+      "title": "阶段一状态与限制聚合回答",
+      "split": "HOLDOUT",
+      "origin": "HUMAN_AUTHORED",
+      "riskLevel": "STANDARD",
+      "reviewStatus": "APPROVED",
+      "reviewerId": "phase-1",
+      "sourceCategory": "PUBLIC_BUNDLE",
+      "difficultyReason": "阶段一 Focused STATUS 与 BOUNDARY 语义",
+      "firstExposedDatasetVersion": "2026-08-10.1",
+      "tags": [
+        "phase-1-answer-composition"
+      ],
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "SQL 审计项目的最终状态和已知局限分别是什么？"
+          }
+        ]
+      },
+      "oracle": {
+        "expectedSubjects": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ]
+      },
+      "expectations": {
+        "resolution": [
+          "ANSWERED"
+        ],
+        "answerScope": [
+          "PORTFOLIO"
+        ],
+        "requiredClaimIds": [
+          "claim-sql-audit-delivered",
+          "claim-sql-audit-fixed-string-search",
+          "claim-sql-audit-partial-success",
+          "claim-sql-audit-truncation-disclosure"
+        ],
+        "allowedEvidenceIds": [
+          "sql-audit-delivery-set",
+          "sql-audit-july-iteration-set",
+          "evidence-sql-audit-async-progress-validation",
+          "evidence-sql-audit-result-lifecycle-docs"
+        ],
+        "forbiddenSubjectSlugs": [],
+        "forbiddenBehaviors": []
+      },
+      "execution": {
+        "layers": [
+          "INTELLIGENCE",
+          "HTTP_E2E"
+        ],
+        "providerTrials": 3
+      },
+      "graders": [
+        {
+          "type": "SUBJECT_MATCH",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "REQUIRED_CLAIMS",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "REFERENCE_INTEGRITY",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "RESOLUTION",
+          "severity": "BLOCKING"
+        },
+        {
+          "type": "ANSWER_QUALITY",
+          "severity": "SCORED"
+        }
+      ],
+      "maintenance": {
+        "subjectRefs": [
+          {
+            "type": "PROJECT",
+            "slug": "sql-audit"
+          }
+        ],
+        "generatedFromBundle": true
+      }
     }
   ],
   "suiteId": "phase-0-answer",

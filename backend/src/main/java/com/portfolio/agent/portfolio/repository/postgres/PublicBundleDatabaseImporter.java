@@ -51,9 +51,10 @@ public final class PublicBundleDatabaseImporter {
             """;
     private static final String INSERT_CLAIM_SQL = """
             INSERT INTO claim
-                (release_id, stable_id, subject_stable_id, subject_kind, category, statement,
-                 verification_status, display_order)
-            VALUES (CAST(? AS uuid), ?, ?, ?, ?, ?, ?, ?)
+                (release_id, stable_id, subject_stable_id, subject_kind, category,
+                 statement, detail, achievement_status, contribution_type,
+                 verification_basis, verification_status, materiality, topics, display_order)
+            VALUES (CAST(? AS uuid), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?)
             """;
     private static final String INSERT_EVIDENCE_SQL = """
             INSERT INTO evidence
@@ -187,7 +188,10 @@ public final class PublicBundleDatabaseImporter {
             displayOrder++;
             jdbcTemplate.update(INSERT_CLAIM_SQL, releaseId, claim.getId(), claim.getSubjectId(),
                     claim.getSubjectType().name(), claim.getCategory().name(), claim.getStatement(),
-                    claim.getVerificationStatus().name(), displayOrder);
+                    claim.getDetail(), claim.getAchievementStatus().name(),
+                    claim.getContributionType().name(), claim.getVerificationBasis().name(),
+                    claim.getVerificationStatus().name(), claim.getMateriality().name(),
+                    jsonArray(claim.getTopics()), displayOrder);
         }
     }
 

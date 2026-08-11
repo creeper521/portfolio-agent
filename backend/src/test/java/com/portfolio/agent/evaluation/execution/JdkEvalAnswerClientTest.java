@@ -105,6 +105,41 @@ class JdkEvalAnswerClientTest {
     }
 
     @Test
+    void extractsOnlySemanticTurnCountersFromStpV1Responses() throws Exception {
+        server = startServer(exchange -> respond(exchange, 200, """
+                {
+                  "resolution":"ANSWERED",
+                  "answerScope":"PORTFOLIO",
+                  "agentTurn": {
+                    "disposition":"PARTIAL_READY",
+                    "plan":{"taskCount":2,"tasks":[
+                      {"goalLabel":"project-a","sourceDomain":"PORTFOLIO"},
+                      {"goalLabel":"compare","sourceDomain":"GENERAL",
+                       "dependencySummary":"requires 01"}
+                    ]},
+                    "outcome":{"planOutcome":"PARTIAL","taskSummary":{
+                      "totalCount":2,"answeredCount":1,"blockedCount":1,
+                      "failedCount":0,"degradedCount":0,
+                      "items":[
+                        {"goalLabel":"project-a","sourceDomain":"PORTFOLIO"},
+                        {"goalLabel":"compare","sourceDomain":"GENERAL"}
+                      ]
+                    }}
+                  }
+                }
+                """));
+
+        EvalHttpResult result = new JdkEvalAnswerClient(new ObjectMapper()).answer(
+                new EvalHttpRequest(baseUrl(), "case-7", "case-7", "question"));
+
+        assertThat(result.getSemanticTurnShape().getTaskCount()).isEqualTo(2);
+        assertThat(result.getSemanticTurnShape().getDependencyCount()).isEqualTo(1);
+        assertThat(result.getSemanticTurnShape().getAnsweredCount()).isEqualTo(1);
+        assertThat(result.getSemanticTurnShape().getBlockedCount()).isEqualTo(1);
+        assertThat(result.getSemanticTurnShape().toString()).doesNotContain("project-a");
+    }
+
+    @Test
     void localAbsolutePathsAndPrivateKeywordsTriggerPolicyLeak() throws Exception {
         server = startServer(exchange -> respond(exchange, 200, """
                 {"resolution":"ANSWERED","blocks":[{"content":"路径 C:\\Users\\me\\secret.txt"}]}

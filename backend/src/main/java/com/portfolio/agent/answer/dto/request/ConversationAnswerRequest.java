@@ -28,9 +28,22 @@ public final class ConversationAnswerRequest {
     @Pattern(regexp = "pcv1-[a-f0-9]{16}", message = "contractVersion format is invalid")
     private final String contractVersion;
 
-    @NotBlank(message = "question is required")
     @Size(max = 2000, message = "question must not exceed 2000 characters")
     private final String question;
+
+    @Pattern(regexp = "stp-v1", message = "agentTurnContract must be stp-v1 when present")
+    private final String agentTurnContract;
+
+    private final TurnAction action;
+
+    @Valid
+    private final SemanticContextRequest semanticContext;
+
+    @Valid
+    private final PlanConfirmationRequest planConfirmation;
+
+    @Valid
+    private final InvalidatedPlanReferenceRequest invalidatedPlanReference;
 
     @Valid
     @NotNull(message = "messages are required")
@@ -38,7 +51,6 @@ public final class ConversationAnswerRequest {
     private final List<ConversationMessageRequest> messages;
 
     @Valid
-    @NotNull(message = "context is required")
     private final ConversationAnswerContextRequest context;
 
     @JsonCreator
@@ -47,17 +59,27 @@ public final class ConversationAnswerRequest {
             @JsonProperty("requestToken") UUID requestToken,
             @JsonProperty("questionPresetId") String questionPresetId,
             @JsonProperty("contractVersion") String contractVersion,
+            @JsonProperty("action") TurnAction action,
             @JsonProperty("question") String question,
             @JsonProperty("messages") List<ConversationMessageRequest> messages,
-            @JsonProperty("context") ConversationAnswerContextRequest context
+            @JsonProperty("context") ConversationAnswerContextRequest context,
+            @JsonProperty("semanticContext") SemanticContextRequest semanticContext,
+            @JsonProperty("planConfirmation") PlanConfirmationRequest planConfirmation,
+            @JsonProperty("invalidatedPlanReference") InvalidatedPlanReferenceRequest invalidatedPlanReference,
+            @JsonProperty("agentTurnContract") String agentTurnContract
     ) {
         this.turnId = turnId;
         this.requestToken = requestToken;
         this.questionPresetId = questionPresetId;
         this.contractVersion = contractVersion;
+        this.action = action == null ? TurnAction.ASK : action;
         this.question = question;
         this.messages = messages == null ? List.of() : List.copyOf(messages);
         this.context = context;
+        this.semanticContext = semanticContext;
+        this.planConfirmation = planConfirmation;
+        this.invalidatedPlanReference = invalidatedPlanReference;
+        this.agentTurnContract = agentTurnContract;
     }
 
     public ConversationAnswerRequest(
@@ -67,7 +89,8 @@ public final class ConversationAnswerRequest {
             List<ConversationMessageRequest> messages,
             ConversationAnswerContextRequest context
     ) {
-        this(turnId, requestToken, null, null, question, messages, context);
+        this(turnId, requestToken, null, null, TurnAction.ASK, question, messages, context,
+                null, null, null, null);
     }
 
     public ConversationAnswerRequest(
@@ -78,16 +101,35 @@ public final class ConversationAnswerRequest {
     ) {
         this(turnId, UUID.nameUUIDFromBytes(
                 String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                null, null, question, messages, context);
+                null, null, TurnAction.ASK, question, messages, context,
+                null, null, null, null);
     }
 
     public String getTurnId() { return turnId; }
     public UUID getRequestToken() { return requestToken; }
     public String getQuestionPresetId() { return questionPresetId; }
     public String getContractVersion() { return contractVersion; }
+    public TurnAction getAction() { return action; }
     public String getQuestion() { return question; }
     public List<ConversationMessageRequest> getMessages() { return messages; }
     public ConversationAnswerContextRequest getContext() { return context; }
+    public SemanticContextRequest getSemanticContext() { return semanticContext; }
+    public PlanConfirmationRequest getPlanConfirmation() { return planConfirmation; }
+    public InvalidatedPlanReferenceRequest getInvalidatedPlanReference() {
+        return invalidatedPlanReference;
+    }
+    public String getAgentTurnContract() { return agentTurnContract; }
+
+    @AssertTrue(message = "question or plan confirmation is invalid for action")
+    public boolean isActionPayloadValid() {
+        return switch (action) {
+            case ASK -> hasText(question) && planConfirmation == null && invalidatedPlanReference == null;
+            case REGENERATE_PLAN -> hasText(question) && planConfirmation == null
+                    && semanticContext != null && invalidatedPlanReference != null;
+            case CONFIRM_PLAN -> !hasText(question) && planConfirmation != null
+                    && invalidatedPlanReference == null;
+        };
+    }
 
     @AssertTrue(message = "messages must alternate USER and ASSISTANT")
     public boolean isMessageOrderValid() {
@@ -100,6 +142,16 @@ public final class ConversationAnswerRequest {
             }
         }
         return true;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    public enum TurnAction {
+        ASK,
+        CONFIRM_PLAN,
+        REGENERATE_PLAN
     }
 
     @Override

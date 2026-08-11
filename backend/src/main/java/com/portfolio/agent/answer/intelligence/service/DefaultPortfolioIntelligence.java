@@ -1,10 +1,13 @@
 package com.portfolio.agent.answer.intelligence.service;
 
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerKnowledge;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.exception.PortfolioRetrievalFailedException;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.answer.intelligence.domain.AnswerFocus;
+import com.portfolio.agent.answer.intelligence.domain.AnswerFocusMode;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioClarification;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
@@ -21,6 +24,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTask;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskRoutingDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTurn;
 import com.portfolio.agent.answer.intelligence.domain.StructuredSubjectResolution;
@@ -103,6 +107,15 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
     public PortfolioDecision tryResolve(PortfolioTurn turn) {
         try {
             return resolveTurn(turn);
+        } catch (PortfolioRetrievalException exception) {
+            throw new PortfolioRetrievalFailedException(exception);
+        }
+    }
+
+    @Override
+    public PortfolioDecision resolveTypedTask(PortfolioTask task) {
+        try {
+            return execute(Objects.requireNonNull(task, "task"), AnswerIntentSource.RULE, false);
         } catch (PortfolioRetrievalException exception) {
             throw new PortfolioRetrievalFailedException(exception);
         }
@@ -201,7 +214,11 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         PortfolioIntelligenceResult result = material(mode, retriever.retrieve(request))
                 .withDecisionMetadata(
                         AnswerIntentSource.REFERENCE,
-                        resolution.isContextVersionUpdated());
+                        resolution.isContextVersionUpdated())
+                .withAnswerFocus(focusFor(
+                        mode,
+                        retrievalPlanner.preferredCategoriesForSection(
+                                turn.getReferenceContext().getSelectedSectionType())));
         return decisionFor(result);
     }
 
@@ -273,7 +290,9 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
                 task.getConditions(),
                 task.getSubjectId(),
                 task.getPreferredClaimCategories());
-        return material(task.getMode(), retriever.retrieve(request));
+        return material(task.getMode(), retriever.retrieve(request))
+                .withAnswerFocus(focusFor(
+                        task.getMode(), task.getPreferredClaimCategories()));
     }
 
     private PortfolioDecision decisionFor(PortfolioIntelligenceResult result) {
@@ -283,10 +302,22 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
         if (ContractEvidenceSelector.UNAVAILABLE_NOTICE.equals(result.getNoticeCode())) {
             return new PortfolioDecision(PortfolioDisposition.CAPABILITY_UNAVAILABLE, result);
         }
-        if (result.getEvidence().isEmpty()) {
+        if (result.getEvidence().isEmpty() || !hasFocusedTargetEvidence(result)) {
             return new PortfolioDecision(PortfolioDisposition.NOT_SUPPORTED, result);
         }
         return new PortfolioDecision(PortfolioDisposition.ANSWERED, result);
+    }
+
+    private boolean hasFocusedTargetEvidence(PortfolioIntelligenceResult result) {
+        AnswerFocus focus = result.getAnswerFocus();
+        if (focus.getMode() == AnswerFocusMode.OVERVIEW) {
+            return !result.getEvidence().isEmpty();
+        }
+        java.util.Set<AnswerClaimCategory> requested = java.util.Set.copyOf(
+                focus.getRequestedClaimCategories());
+        return result.getEvidence().stream()
+                .map(passage -> passage.getClaim().getCategory())
+                .anyMatch(requested::contains);
     }
 
     private PortfolioTask withSubjectConstraint(
@@ -331,7 +362,18 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
 
     private PortfolioIntelligenceResult retrieveMaterial(PortfolioTask task) {
         PortfolioRetrievalResult retrieval = retrieve(task, task.getMode(), task.getConditions());
-        return material(task.getMode(), retrieval);
+        return material(task.getMode(), retrieval)
+                .withAnswerFocus(focusFor(
+                        task.getMode(), task.getPreferredClaimCategories()));
+    }
+
+    private AnswerFocus focusFor(
+            PortfolioTaskMode mode,
+            List<AnswerClaimCategory> categories) {
+        if (mode != PortfolioTaskMode.FACT_LOOKUP || categories.isEmpty()) {
+            return AnswerFocus.overview();
+        }
+        return AnswerFocus.focused(categories);
     }
 
     private PortfolioIntelligenceResult recommend(PortfolioTask task) {
@@ -385,13 +427,19 @@ public final class DefaultPortfolioIntelligence implements PortfolioIntelligence
             PortfolioTask task,
             PortfolioTaskMode mode,
             PortfolioConditions conditions) {
-        boolean singleSubjectFactLookup = mode == PortfolioTaskMode.FACT_LOOKUP
-                && task.getSubjectId() != null;
-        PortfolioRetrievalRequest request = !singleSubjectFactLookup
-                ? new PortfolioRetrievalRequest(task.getQuestion(), mode, conditions)
-                : PortfolioRetrievalRequest.subjectScope(
-                        task.getQuestion(), mode, conditions, task.getSubjectId(),
-                        task.getPreferredClaimCategories());
+        List<String> subjectIds = task.getSubjectIds();
+        PortfolioRetrievalRequest request;
+        if (mode == PortfolioTaskMode.FACT_LOOKUP && subjectIds.size() == 1) {
+            request = PortfolioRetrievalRequest.subjectScope(
+                    task.getQuestion(), mode, conditions, subjectIds.getFirst(),
+                    task.getPreferredClaimCategories());
+        } else if (subjectIds.size() > 1) {
+            request = PortfolioRetrievalRequest.referenceScope(
+                    task.getQuestion(), mode, conditions, subjectIds, List.of(),
+                    task.getPreferredClaimCategories());
+        } else {
+            request = new PortfolioRetrievalRequest(task.getQuestion(), mode, conditions);
+        }
         return retriever.retrieve(request);
     }
 
