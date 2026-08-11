@@ -12,6 +12,7 @@ public final class PlanConfirmationResponse {
     private final String planFingerprint;
     private final String integrityToken;
     private final List<String> triggerCodes;
+    private final PendingPlanReferenceResponse pendingPlanReference;
 
     public PlanConfirmationResponse(
             String confirmationId,
@@ -19,13 +20,16 @@ public final class PlanConfirmationResponse {
             String confirmationPlan,
             String planFingerprint,
             String integrityToken,
-            List<String> triggerCodes) {
+            List<String> triggerCodes,
+            PendingPlanReferenceResponse pendingPlanReference) {
         this.confirmationId = requireText(confirmationId, "confirmationId");
         this.expiresAt = requireText(expiresAt, "expiresAt");
         this.confirmationPlan = requireText(confirmationPlan, "confirmationPlan");
         this.planFingerprint = requireText(planFingerprint, "planFingerprint");
         this.integrityToken = requireText(integrityToken, "integrityToken");
         this.triggerCodes = List.copyOf(Objects.requireNonNull(triggerCodes, "triggerCodes"));
+        this.pendingPlanReference = Objects.requireNonNull(
+                pendingPlanReference, "pendingPlanReference");
     }
 
     public String getConfirmationId() { return confirmationId; }
@@ -34,6 +38,7 @@ public final class PlanConfirmationResponse {
     public String getPlanFingerprint() { return planFingerprint; }
     public String getIntegrityToken() { return integrityToken; }
     public List<String> getTriggerCodes() { return triggerCodes; }
+    public PendingPlanReferenceResponse getPendingPlanReference() { return pendingPlanReference; }
 
     @Override
     public String toString() {

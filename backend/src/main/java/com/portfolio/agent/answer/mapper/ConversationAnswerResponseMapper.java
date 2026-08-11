@@ -17,6 +17,7 @@ import com.portfolio.agent.answer.dto.response.DisplayPlanResponse;
 import com.portfolio.agent.answer.dto.response.PlanConfirmationResponse;
 import com.portfolio.agent.answer.dto.response.PlanChangeResponse;
 import com.portfolio.agent.answer.dto.response.InvalidatedPlanReferenceResponse;
+import com.portfolio.agent.answer.dto.response.PendingPlanReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationContextResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse;
@@ -298,10 +299,13 @@ public final class ConversationAnswerResponseMapper {
 
     private PlanConfirmationResponse toPlanConfirmation(
             PlanConfirmation.Challenge challenge, SemanticTurnPlan plan) {
+        SemanticTurnPlan pendingPlan = Objects.requireNonNull(plan, "confirmation plan");
         return new PlanConfirmationResponse(challenge.getConfirmationId(), challenge.getExpiresAt().toString(),
                 challenge.getConfirmationPlan(), challenge.getPlanFingerprint(), challenge.getIntegrityToken(),
-                plan == null ? List.of() : plan.getConfirmationPolicy().getTriggerCodes().stream()
-                        .map(Enum::name).sorted().toList());
+                pendingPlan.getConfirmationPolicy().getTriggerCodes().stream()
+                        .map(Enum::name).sorted().toList(),
+                new PendingPlanReferenceResponse(
+                        pendingPlan.getPlanId(), challenge.getPlanFingerprint()));
     }
 
     private ClarificationResponse toClarification(ClarificationRequest clarification) {

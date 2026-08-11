@@ -64,7 +64,19 @@ Rules:
 - uncertain adjustments may use the optional classifier once, then still pass the compiler and validator;
 - invalid or unsupported adjustments clarify or reject; they never silently execute the old plan.
 
-### 3.3 Clarification resolution
+### 3.3 Pending plan identity response
+
+Every `CONFIRMATION_REQUIRED` response includes the public-safe identity needed by a later adjustment request:
+
+```text
+planConfirmation.pendingPlanReference
+├── planId
+└── planFingerprint
+```
+
+The reference is protocol state, not display content. `planId` comes from the validated pending plan and `planFingerprint` is the same fingerprint bound into the confirmation challenge. The display plan remains free of internal task ids, dependency enums and fingerprints.
+
+### 3.4 Clarification resolution
 
 ```text
 clarificationResolution

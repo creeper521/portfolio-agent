@@ -43,14 +43,20 @@ class ConversationAnswerResponseMapperTest {
 
         ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(result);
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(response);
-        com.fasterxml.jackson.databind.JsonNode displayPlan = new com.fasterxml.jackson.databind.ObjectMapper()
-                .readTree(json).path("agentTurn").path("plan");
+        com.fasterxml.jackson.databind.JsonNode agentTurnJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json).path("agentTurn");
+        com.fasterxml.jackson.databind.JsonNode displayPlan = agentTurnJson.path("plan");
+        com.fasterxml.jackson.databind.JsonNode pendingPlanReference = agentTurnJson
+                .path("planConfirmation").path("pendingPlanReference");
 
         assertThat(response.getResolution()).isEqualTo(AnswerResolution.AWAITING_CONFIRMATION);
         assertThat(json).contains("\"contractVersion\":\"pcv1-0123456789abcdef\"")
                 .contains("\"contractVersion\":\"stp-v1\"")
                 .contains("\"confirmationPlan\":\"opaque-envelope\"");
         assertThat(displayPlan.toString()).doesNotContain("task-01", "REQUIRES_SUCCESS", "sha256:");
+        assertThat(pendingPlanReference.path("planId").asText()).isEqualTo("plan-1");
+        assertThat(pendingPlanReference.path("planFingerprint").asText())
+                .isEqualTo("sha256:plan");
     }
 
     @Test
@@ -166,6 +172,8 @@ class ConversationAnswerResponseMapperTest {
         assertThat(json.path("plan").path("taskCount").asInt()).isEqualTo(1);
         assertThat(json.path("plan").path("tasks").isArray()).isTrue();
         assertThat(json.path("planConfirmation").path("triggerCodes").isArray()).isTrue();
+        assertThat(json.path("planConfirmation").path("pendingPlanReference").path("planId").asText())
+                .isEqualTo("plan-1");
         assertThat(json.has("outcome")).isFalse();
     }
 
