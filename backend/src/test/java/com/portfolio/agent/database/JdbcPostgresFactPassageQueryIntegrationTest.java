@@ -1,8 +1,10 @@
-package com.portfolio.agent.answer.intelligence.adapter.postgres;
+package com.portfolio.agent.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.agent.answer.intelligence.adapter.postgres.JdbcPostgresFactPassageQuery;
+import com.portfolio.agent.answer.intelligence.adapter.postgres.PostgresKnowledgePassageRow;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.repository.postgres.PublicBundleDatabaseImporter;
 import com.portfolio.agent.portfolio.repository.postgres.PublicBundleImportResult;

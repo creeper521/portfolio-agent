@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.routing.domain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** Explicit renderable-result variants; generic maps are intentionally forbidden. */
 public sealed interface TaskResultPayload
@@ -56,17 +57,32 @@ public sealed interface TaskResultPayload
         private final String recommendation;
         private final List<RecommendationItem> items;
         private final List<String> supportingBlocks;
+        private final RecommendationProjection projection;
 
         public RecommendationResultPayload(String recommendation, List<String> supportingBlocks) {
             this.recommendation = requireText(recommendation, "recommendation");
             this.items = List.of();
             this.supportingBlocks = copyBlocks(supportingBlocks, "supportingBlocks");
+            this.projection = null;
         }
 
         public RecommendationResultPayload(
                 List<RecommendationItem> items,
                 List<String> supportingBlocks) {
             this.items = copyItems(items);
+            this.recommendation = this.items.stream()
+                    .map(RecommendationItem::getTitle)
+                    .reduce((left, right) -> left + "; " + right)
+                    .orElseThrow(() -> new IllegalArgumentException("items must not be empty"));
+            this.supportingBlocks = copyBlocks(supportingBlocks, "supportingBlocks");
+            this.projection = null;
+        }
+
+        public RecommendationResultPayload(
+                RecommendationProjection projection,
+                List<String> supportingBlocks) {
+            this.projection = Objects.requireNonNull(projection, "projection");
+            this.items = projection.getItems();
             this.recommendation = this.items.stream()
                     .map(RecommendationItem::getTitle)
                     .reduce((left, right) -> left + "; " + right)
@@ -86,6 +102,10 @@ public sealed interface TaskResultPayload
             return supportingBlocks;
         }
 
+        public RecommendationProjection getProjection() {
+            return projection;
+        }
+
         @Override
         public boolean equals(Object other) {
             if (this == other) {
@@ -96,18 +116,110 @@ public sealed interface TaskResultPayload
             }
             return Objects.equals(recommendation, that.recommendation)
                     && Objects.equals(items, that.items)
-                    && Objects.equals(supportingBlocks, that.supportingBlocks);
+                    && Objects.equals(supportingBlocks, that.supportingBlocks)
+                    && Objects.equals(projection, that.projection);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(recommendation, items, supportingBlocks);
+            return Objects.hash(recommendation, items, supportingBlocks, projection);
         }
 
         @Override
         public String toString() {
             return "RecommendationResultPayload{itemCount=" + items.size()
                     + ", supportingBlockCount=" + supportingBlocks.size() + '}';
+        }
+    }
+
+    /** Complete public recommendation data retained for the single-result legacy projection. */
+    final class RecommendationProjection {
+
+        private final String recommendationBatchId;
+        private final String contentVersion;
+        private final String careerTrack;
+        private final String audienceRole;
+        private final Set<String> capabilityCodes;
+        private final int requestedSize;
+        private final List<String> selectedPortfolioIds;
+        private final List<RecommendationItem> items;
+        private final List<String> satisfiedConstraints;
+        private final List<String> unsatisfiedConstraints;
+
+        public RecommendationProjection(
+                String recommendationBatchId,
+                String contentVersion,
+                String careerTrack,
+                String audienceRole,
+                Set<String> capabilityCodes,
+                int requestedSize,
+                List<String> selectedPortfolioIds,
+                List<RecommendationItem> items,
+                List<String> satisfiedConstraints,
+                List<String> unsatisfiedConstraints) {
+            this.recommendationBatchId = requireText(
+                    recommendationBatchId, "recommendationBatchId");
+            this.contentVersion = requireText(contentVersion, "contentVersion");
+            this.careerTrack = optionalText(careerTrack);
+            this.audienceRole = requireText(audienceRole, "audienceRole");
+            this.capabilityCodes = Set.copyOf(
+                    Objects.requireNonNull(capabilityCodes, "capabilityCodes"));
+            if (requestedSize < 2 || requestedSize > 5) {
+                throw new IllegalArgumentException("requestedSize must be between 2 and 5");
+            }
+            this.requestedSize = requestedSize;
+            this.selectedPortfolioIds = copyTextList(
+                    selectedPortfolioIds, "selectedPortfolioIds");
+            this.items = copyItems(items);
+            this.satisfiedConstraints = copyTextList(
+                    satisfiedConstraints, "satisfiedConstraints");
+            this.unsatisfiedConstraints = copyTextList(
+                    unsatisfiedConstraints, "unsatisfiedConstraints");
+        }
+
+        public String getRecommendationBatchId() { return recommendationBatchId; }
+        public String getContentVersion() { return contentVersion; }
+        public String getCareerTrack() { return careerTrack; }
+        public String getAudienceRole() { return audienceRole; }
+        public Set<String> getCapabilityCodes() { return capabilityCodes; }
+        public int getRequestedSize() { return requestedSize; }
+        public List<String> getSelectedPortfolioIds() { return selectedPortfolioIds; }
+        public List<RecommendationItem> getItems() { return items; }
+        public List<String> getSatisfiedConstraints() { return satisfiedConstraints; }
+        public List<String> getUnsatisfiedConstraints() { return unsatisfiedConstraints; }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof RecommendationProjection that)) {
+                return false;
+            }
+            return requestedSize == that.requestedSize
+                    && Objects.equals(recommendationBatchId, that.recommendationBatchId)
+                    && Objects.equals(contentVersion, that.contentVersion)
+                    && Objects.equals(careerTrack, that.careerTrack)
+                    && Objects.equals(audienceRole, that.audienceRole)
+                    && Objects.equals(capabilityCodes, that.capabilityCodes)
+                    && Objects.equals(selectedPortfolioIds, that.selectedPortfolioIds)
+                    && Objects.equals(items, that.items)
+                    && Objects.equals(satisfiedConstraints, that.satisfiedConstraints)
+                    && Objects.equals(unsatisfiedConstraints, that.unsatisfiedConstraints);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(recommendationBatchId, contentVersion, careerTrack,
+                    audienceRole, capabilityCodes, requestedSize, selectedPortfolioIds,
+                    items, satisfiedConstraints, unsatisfiedConstraints);
+        }
+
+        @Override
+        public String toString() {
+            return "RecommendationProjection{itemCount=" + items.size()
+                    + ", capabilityCount=" + capabilityCodes.size()
+                    + ", requestedSize=" + requestedSize + '}';
         }
     }
 

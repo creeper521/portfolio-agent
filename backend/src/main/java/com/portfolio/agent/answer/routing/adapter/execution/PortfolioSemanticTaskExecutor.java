@@ -253,7 +253,20 @@ public final class PortfolioSemanticTaskExecutor implements SemanticTaskExecutor
                     item.getMatchReasons(),
                     item.getEvidenceIds()));
         }
-        return new TaskResultPayload.RecommendationResultPayload(entries, supportingBlocks);
+        PortfolioRecommendationContext context = recommendation.getContext();
+        TaskResultPayload.RecommendationProjection projection =
+                new TaskResultPayload.RecommendationProjection(
+                        recommendation.getRecommendationBatchId(),
+                        context.getContentVersion(),
+                        context.getCareerTrack(),
+                        context.getAudienceRole(),
+                        context.getCapabilityCodes(),
+                        context.getRequestedSize(),
+                        context.getSelectedPortfolioIds(),
+                        entries,
+                        recommendation.getSatisfiedConstraints(),
+                        recommendation.getUnsatisfiedConstraints());
+        return new TaskResultPayload.RecommendationResultPayload(projection, supportingBlocks);
     }
 
     private boolean isSupported(SemanticTaskType taskType) {

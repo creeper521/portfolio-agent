@@ -18,6 +18,8 @@ import com.portfolio.agent.answer.dto.response.PlanConfirmationResponse;
 import com.portfolio.agent.answer.dto.response.PlanChangeResponse;
 import com.portfolio.agent.answer.dto.response.InvalidatedPlanReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationResponse;
+import com.portfolio.agent.answer.dto.response.PortfolioRecommendationContextResponse;
+import com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse;
 import com.portfolio.agent.answer.dto.response.TaskSummaryResponse;
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
@@ -126,14 +128,55 @@ public final class ConversationAnswerResponseMapper {
 
     private PortfolioRecommendationResponse publicRecommendation(
             ConversationAnswerResult result, AgentTurnResult agentTurn) {
-        if (result.getPortfolioRecommendation() == null) {
-            return null;
-        }
         if (agentTurn != null) {
-            return countRenderableRecommendations(agentTurn) == 1
-                    ? PortfolioRecommendationResponse.from(result.getPortfolioRecommendation()) : null;
+            if (countRenderableRecommendations(agentTurn) != 1) {
+                return null;
+            }
+            if (result.getPortfolioRecommendation() != null) {
+                return PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+            }
+            return singleRecommendationProjection(agentTurn)
+                    .map(this::toRecommendationResponse)
+                    .orElse(null);
         }
-        return PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+        return result.getPortfolioRecommendation() == null ? null
+                : PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+    }
+
+    private Optional<TaskResultPayload.RecommendationProjection> singleRecommendationProjection(
+            AgentTurnResult agentTurn) {
+        if (agentTurn.getOutcome().isEmpty()) {
+            return Optional.empty();
+        }
+        for (TaskOutcome outcome : agentTurn.getOutcome().orElseThrow().getTaskOutcomes()) {
+            if (outcome.hasRenderablePayload()
+                    && outcome.getResultPayload().orElseThrow()
+                    instanceof TaskResultPayload.RecommendationResultPayload recommendation
+                    && recommendation.getProjection() != null) {
+                return Optional.of(recommendation.getProjection());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private PortfolioRecommendationResponse toRecommendationResponse(
+            TaskResultPayload.RecommendationProjection projection) {
+        PortfolioRecommendationContextResponse context = new PortfolioRecommendationContextResponse(
+                projection.getRecommendationBatchId(),
+                projection.getContentVersion(),
+                projection.getCareerTrack(),
+                projection.getAudienceRole(),
+                projection.getCapabilityCodes(),
+                projection.getRequestedSize(),
+                projection.getSelectedPortfolioIds());
+        List<PortfolioRecommendationItemResponse> items = projection.getItems().stream()
+                .map(item -> new PortfolioRecommendationItemResponse(
+                        item.getPortfolioId(), item.getTitle(), item.getRoute(),
+                        item.getMatchReasons(), item.getEvidenceIds()))
+                .toList();
+        return new PortfolioRecommendationResponse(
+                projection.getRecommendationBatchId(), context, items,
+                projection.getSatisfiedConstraints(), projection.getUnsatisfiedConstraints());
     }
 
     private int countRenderableRecommendations(AgentTurnResult agentTurn) {
@@ -309,6 +352,7 @@ public final class ConversationAnswerResponseMapper {
                     null, null);
         }
         if (payload instanceof TaskResultPayload.RecommendationResultPayload recommendation) {
+            TaskResultProvenance provenance = provenanceFor(task, payload, result);
             List<com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse> recommendations =
                     recommendation.getItems().stream().map(item ->
                             new com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse(
@@ -318,7 +362,9 @@ public final class ConversationAnswerResponseMapper {
                                     item.getMatchReasons(),
                                     item.getEvidenceIds()))
                             .toList();
-            return new CompletedTaskResponse.ResultPayload("RECOMMENDATION_RESULT", null,
+            return new CompletedTaskResponse.ResultPayload("RECOMMENDATION_RESULT",
+                    toBlocks(recommendation.getSupportingBlocks(), sourceScope(task),
+                            provenance.getClaimIds(), provenance.getEvidenceIds()),
                     recommendations, null);
         }
         TaskResultPayload.SynthesisResultPayload synthesis = (TaskResultPayload.SynthesisResultPayload) payload;

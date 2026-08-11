@@ -1200,7 +1200,7 @@ npm.cmd --prefix frontend test -- --run
 npm.cmd --prefix frontend run build
 npm.cmd --prefix frontend run test:e2e -- e2e/portfolio.spec.ts
 mvn.cmd -f backend/pom.xml package
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/privacy-check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/privacy-check.ps1 -Path .
 ```
 
 Expected: every command exits 0. If a command fails, stop the completion claim, diagnose with `systematic-debugging`, fix through a new RED/GREEN cycle, then rerun the full gate list.

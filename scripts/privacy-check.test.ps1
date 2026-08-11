@@ -473,6 +473,27 @@ psql \
 $composeFile = 'compose.postgres.local.yml'
 $environmentFile = '.env.postgres.local'
 '@
+    },
+    @{
+        File = 'SafeLocalScope.java'
+        Source = @'
+final class SafeLocalScope {
+    private final Scope scope = Scope.LOCAL;
+    enum Scope { LOCAL, GLOBAL }
+}
+'@
+    },
+    @{
+        File = 'safe-fetch-credentials.ts'
+        Source = @'
+fetch('/api/v2/answers', { credentials: 'same-origin' })
+'@
+    },
+    @{
+        File = 'safe-confirmation-projection.ts'
+        Source = @'
+const request = { integrityToken: response.planConfirmation.integrityToken }
+'@
     }
 )
 

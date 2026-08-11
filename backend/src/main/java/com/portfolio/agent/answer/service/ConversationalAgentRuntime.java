@@ -131,14 +131,15 @@ public final class ConversationalAgentRuntime {
             RuntimeAnswerContent content,
             AgentTurnResult agentTurn) {
         ConversationAnswerScope answerScope = projectedScope(request, agentTurn);
+        List<ConversationAnswerBlock> blocks = projectedBlocks(request, content, agentTurn);
         return new ConversationAnswerResult(
                 request.getTurnId(),
                 content.getContentVersion(),
                 projectedIntent(request, agentTurn, answerScope),
                 answerScope,
-                projectedResolution(agentTurn),
+                projectedResolution(agentTurn, !blocks.isEmpty()),
                 title(agentTurn),
-                projectedBlocks(request, content, agentTurn),
+                blocks,
                 List.of(),
                 isDegraded(agentTurn),
                 GenerationMode.DETERMINISTIC,
@@ -227,13 +228,19 @@ public final class ConversationalAgentRuntime {
         };
     }
 
-    private AnswerResolution projectedResolution(AgentTurnResult agentTurn) {
+    private AnswerResolution projectedResolution(
+            AgentTurnResult agentTurn, boolean hasVerifiedCompatibilityBlocks) {
         if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
             return AnswerResolution.INVALID_INPUT;
         }
         if (hasReason(agentTurn, "PRESET_CONTRACT_UNAVAILABLE")
                 || hasReason(agentTurn, "PRESET_CONTRACT_STALE")) {
             return AnswerResolution.CAPABILITY_UNAVAILABLE;
+        }
+        if (hasVerifiedCompatibilityBlocks
+                && (agentTurn.getDisposition() == AgentTurnResult.Disposition.READY
+                || agentTurn.getDisposition() == AgentTurnResult.Disposition.PARTIAL_READY)) {
+            return AnswerResolution.ANSWERED;
         }
         return resolution(agentTurn);
     }
@@ -435,7 +442,10 @@ public final class ConversationalAgentRuntime {
 
     private AnswerResolution resolution(AgentTurnResult agentTurn) {
         return switch (agentTurn.getDisposition()) {
-            case READY, PARTIAL_READY -> AnswerResolution.ANSWERED;
+            case READY, PARTIAL_READY -> agentTurn.getOutcome()
+                    .filter(outcome -> outcome.getAnsweredCount() > 0)
+                    .map(outcome -> AnswerResolution.ANSWERED)
+                    .orElse(AnswerResolution.NOT_SUPPORTED);
             case CONFIRMATION_REQUIRED -> AnswerResolution.AWAITING_CONFIRMATION;
             case CLARIFICATION_REQUIRED -> AnswerResolution.NEEDS_CLARIFICATION;
             case BOUNDARY, REJECTED -> AnswerResolution.REJECTED;

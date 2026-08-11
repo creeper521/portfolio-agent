@@ -2,11 +2,19 @@ package com.portfolio.agent.answer.routing.service;
 
 import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
 import com.portfolio.agent.answer.domain.AgentTurnResult;
+import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.dto.request.PlanConfirmationRequest;
 import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
+import com.portfolio.agent.answer.routing.domain.ExecutionSelection;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
+import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
+import com.portfolio.agent.answer.routing.domain.SubjectReference;
+import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
@@ -72,6 +80,37 @@ class ConversationalAgentRuntimeTest {
                 .flatMap(values -> values.keySet().stream()))
                 .doesNotContain("question", "planId", "planFingerprint", "confirmationPlan",
                         "integrityToken", "taskId");
+    }
+
+    @Test
+    void mapsAReadyPlanWithoutAnyAnsweredTaskToNotSupported() {
+        SemanticTask task = portfolioFact();
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-no-result", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(task), List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ValidatedSemanticTurnPlan validated = new SemanticPlanValidator(new PlanFingerprintService())
+                .validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
+        CountingRouter router = new CountingRouter(SemanticTurnDecision.ready(
+                validated, ExecutionSelection.allExecutable(Set.of(task.getTaskId()))));
+
+        ConversationAnswerResult result = fixture(router).runtime.answer(ask("review project"));
+
+        assertThat(result.getAgentTurn().getOutcome().orElseThrow().getPlanOutcome())
+                .isEqualTo(com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome.PlanOutcome.NO_RESULT);
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.NOT_SUPPORTED);
+    }
+
+    private static SemanticTask portfolioFact() {
+        SubjectReference subject = SubjectReference.project("project-a", "public-v1");
+        return SemanticTask.create(
+                "task-01", SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, "review project",
+                new SemanticTaskParameters.PortfolioFact(
+                        subject, Set.of("OVERVIEW"), "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                TaskConfidence.highRule(), List.of(subject));
     }
 
     private Fixture fixture(TurnRouter router) {

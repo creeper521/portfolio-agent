@@ -271,6 +271,50 @@ class ConversationAnswerResponseMapperTest {
                 .getRecommendations().get(0).getPortfolioId()).isEqualTo("project-b");
     }
 
+    @Test
+    void projectsSingleTypedRecommendationAndPreservesItsSupportingBlocks() {
+        TaskResultPayload.RecommendationItem item = new TaskResultPayload.RecommendationItem(
+                "project-a", "Project A", "/portfolio/project-a",
+                List.of("covers RAG"), List.of("evidence-1"));
+        TaskResultPayload.RecommendationProjection projection =
+                new TaskResultPayload.RecommendationProjection(
+                        "rec-public-1", "public-1", "BACKEND", "INTERVIEWER",
+                        Set.of("RAG"), 2, List.of("project-a"), List.of(item),
+                        List.of("RAG"), List.of("KUBERNETES"));
+        TaskOutcome recommendation = TaskOutcome.answered(
+                "task-01", SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                new TaskResultPayload.RecommendationResultPayload(
+                        projection, List.of("有证据支持的推荐说明")),
+                TaskResultProvenance.direct(
+                        SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                        List.of("claim-1"), List.of("evidence-1")), false);
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-single-typed-recommendation", "public-1",
+                SemanticTurnPlan.PlanSource.RULE, List.of(portfolioFact()),
+                List.of(), List.of(), Set.of(),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.ready(
+                        plan, new SemanticTurnOutcome(List.of(recommendation)))));
+
+        assertThat(response.getPortfolioRecommendation()).isNotNull();
+        assertThat(response.getPortfolioRecommendation().getRecommendationBatchId())
+                .isEqualTo("rec-public-1");
+        assertThat(response.getPortfolioRecommendation().getItems()).singleElement()
+                .satisfies(value -> assertThat(value.getPortfolioId()).isEqualTo("project-a"));
+        assertThat(response.getAgentTurn().getCompletedTasks()).singleElement()
+                .satisfies(completed -> {
+                    assertThat(completed.getResultPayload().getBlocks()).singleElement()
+                            .satisfies(block -> {
+                                assertThat(block.getContent()).isEqualTo("有证据支持的推荐说明");
+                                assertThat(block.getClaimIds()).containsExactly("claim-1");
+                                assertThat(block.getEvidenceIds()).containsExactly("evidence-1");
+                            });
+                    assertThat(completed.getResultPayload().getRecommendations()).hasSize(1);
+                });
+    }
+
     private String recommendationAnswer(AgentTurnResult agentTurn) throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
                 new ConversationAnswerResponseMapper().toResponse(
