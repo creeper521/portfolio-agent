@@ -10,6 +10,7 @@ public final class ConversationalAgentProperties {
 
     private boolean enabled;
     private boolean visitorDataPolicyApproved;
+    private boolean semanticClassifierEnabled;
     private int maxHistoryRounds = 20;
     private int recentRawRounds = 6;
     private int maxInputTokens = 12000;
@@ -39,6 +40,10 @@ public final class ConversationalAgentProperties {
     public boolean isVisitorDataPolicyApproved() { return visitorDataPolicyApproved; }
     public void setVisitorDataPolicyApproved(boolean visitorDataPolicyApproved) {
         this.visitorDataPolicyApproved = visitorDataPolicyApproved;
+    }
+    public boolean isSemanticClassifierEnabled() { return semanticClassifierEnabled; }
+    public void setSemanticClassifierEnabled(boolean semanticClassifierEnabled) {
+        this.semanticClassifierEnabled = semanticClassifierEnabled;
     }
     public int getMaxHistoryRounds() { return maxHistoryRounds; }
     public void setMaxHistoryRounds(int maxHistoryRounds) {

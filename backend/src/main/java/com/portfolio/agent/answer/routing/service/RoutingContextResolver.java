@@ -140,6 +140,13 @@ public final class RoutingContextResolver {
         }
         List<SubjectReference> validated = new ArrayList<>();
         for (SubjectReference reference : references) {
+            if (reference.getSubjectType() == SubjectType.RESULT
+                    && resolutionSource == SubjectResolutionSource.STRUCTURED_RESULT) {
+                validated.add(new SubjectReference(
+                        SubjectType.RESULT, reference.getSubjectId(), resolutionSource,
+                        reference.getContentVersion()));
+                continue;
+            }
             Optional<SubjectReference> catalogReference = catalog.validate(reference, resolutionSource);
             if (catalogReference.isEmpty()) {
                 return ResolvedRoutingContext.unresolved("ROUTING_SUBJECT_INVALID_REFERENCE", context);
@@ -305,17 +312,39 @@ final class PublicSubjectCatalog {
                 resolutionSource, subject.getContentVersion());
     }
 
+    List<Subject> list(SubjectType requiredType) {
+        return subjects.values().stream()
+                .filter(subject -> requiredType == null || subject.getSubjectType() == requiredType)
+                .sorted(Comparator.comparing(Subject::getDisplayLabel)
+                        .thenComparing(Subject::getSubjectId))
+                .toList();
+    }
+
+    List<SubjectReference> references() {
+        return list(null).stream()
+                .map(subject -> toReference(subject, SubjectResolutionSource.EXPLICIT_REFERENCE))
+                .toList();
+    }
+
     static final class Subject {
 
         private final SubjectType subjectType;
         private final String subjectId;
         private final String contentVersion;
+        private final String displayLabel;
         private final Set<String> aliases;
 
         Subject(SubjectType subjectType, String subjectId, String contentVersion, Set<String> aliases) {
+            this(subjectType, subjectId, contentVersion, subjectId, aliases);
+        }
+
+        Subject(
+                SubjectType subjectType, String subjectId, String contentVersion,
+                String displayLabel, Set<String> aliases) {
             this.subjectType = Objects.requireNonNull(subjectType, "subjectType");
             this.subjectId = requireText(subjectId, "subjectId");
             this.contentVersion = requireText(contentVersion, "contentVersion");
+            this.displayLabel = requireText(displayLabel, "displayLabel");
             Objects.requireNonNull(aliases, "aliases");
             Set<String> normalizedAliases = new LinkedHashSet<>();
             normalizedAliases.add(normalize(this.subjectId));
@@ -340,6 +369,8 @@ final class PublicSubjectCatalog {
         String getContentVersion() {
             return contentVersion;
         }
+
+        String getDisplayLabel() { return displayLabel; }
 
         boolean matches(String normalizedQuestion) {
             for (String alias : aliases) {

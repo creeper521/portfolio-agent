@@ -51,18 +51,31 @@ public final class TaskSummaryResponse {
         private final String goalLabel;
         private final String status;
         private final TaskSourceDomain sourceDomain;
+        private final List<String> reasonCodes;
+        private final List<String> blockedByDisplayIndexes;
 
         public Item(String displayIndex, String goalLabel, String status, TaskSourceDomain sourceDomain) {
+            this(displayIndex, goalLabel, status, sourceDomain, List.of(), List.of());
+        }
+
+        public Item(
+                String displayIndex, String goalLabel, String status, TaskSourceDomain sourceDomain,
+                List<String> reasonCodes, List<String> blockedByDisplayIndexes) {
             this.displayIndex = requireText(displayIndex, "displayIndex");
             this.goalLabel = requireText(goalLabel, "goalLabel");
             this.status = requireText(status, "status");
             this.sourceDomain = java.util.Objects.requireNonNull(sourceDomain, "sourceDomain");
+            this.reasonCodes = List.copyOf(Objects.requireNonNull(reasonCodes, "reasonCodes"));
+            this.blockedByDisplayIndexes = List.copyOf(
+                    Objects.requireNonNull(blockedByDisplayIndexes, "blockedByDisplayIndexes"));
         }
 
         public String getDisplayIndex() { return displayIndex; }
         public String getGoalLabel() { return goalLabel; }
         public String getStatus() { return status; }
         public TaskSourceDomain getSourceDomain() { return sourceDomain; }
+        public List<String> getReasonCodes() { return reasonCodes; }
+        public List<String> getBlockedByDisplayIndexes() { return blockedByDisplayIndexes; }
     }
 
     private static String requireText(String value, String name) {

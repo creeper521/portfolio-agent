@@ -30,6 +30,10 @@ public final class ConversationalPromptFactory {
         return prompt("portfolio_task", taskInput, null);
     }
 
+    public String semanticRoutingPrompt(Object routingInput) {
+        return prompt("semantic_route", routingInput, null);
+    }
+
     public String summaryPrompt(Object conversation) {
         return prompt("summary", conversation, null);
     }
@@ -91,6 +95,21 @@ public final class ConversationalPromptFactory {
                     """;
         }
         return switch (operation) {
+            case "semantic_route" -> """
+                    Return exactly one JSON object with these fields only:
+                    taskCandidates, dependencyCandidates, exclusionCandidates.
+                    All three fields must be arrays. Do not add undeclared fields.
+                    Each task candidate must contain exactly taskType, questionSpan, subjects,
+                    dimensions and requestedOutputs. questionSpan must be copied verbatim from the current question.
+                    taskType must be one of PORTFOLIO_FACT, PORTFOLIO_COMPARE, PORTFOLIO_RECOMMEND,
+                    PORTFOLIO_REFINE_RECOMMENDATION, GENERAL_EXPLANATION, GENERAL_COMPARISON or SYNTHESIS.
+                    subjects may contain only subjectType and subjectId values present in publicSubjects.
+                    dimensions and requestedOutputs must use declared enum names.
+                    Each dependency candidate must contain exactly fromTaskIndex, toTaskIndex and dependencyType.
+                    Each exclusion candidate must contain exactly scope, exclusionType, taskIndex and exactly one
+                    controlled value matching its exclusionType.
+                    Never invent identifiers, free-text goals, hidden state, tools or execution instructions.
+                    """;
             case "intent" -> """
                     只输出一个 JSON 对象，字段必须且只能是：
                     intent: CONVERSATION|GENERAL_KNOWLEDGE|PORTFOLIO_GROUNDED|HYBRID|TIME_SENSITIVE|UNSUPPORTED_OR_UNSAFE

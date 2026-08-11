@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationDraft;
@@ -25,6 +26,8 @@ import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
+import com.portfolio.agent.answer.routing.adapter.model.SemanticClassificationCodec;
+import com.portfolio.agent.answer.routing.gateway.SemanticClassifierPort;
 import com.portfolio.agent.answer.service.DurationBuckets;
 import com.portfolio.agent.answer.service.ProviderFailureCodeMapper;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
@@ -44,7 +47,8 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 public final class OpenAiCompatibleConversationalModelAdapter
-        implements ConversationalModelPort, ConversationSummaryPort, PortfolioTaskClassifierPort {
+        implements ConversationalModelPort, ConversationSummaryPort, PortfolioTaskClassifierPort,
+        SemanticClassifierPort {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -53,6 +57,7 @@ public final class OpenAiCompatibleConversationalModelAdapter
     private final String apiKey;
     private final int maxTokens;
     private final DiagnosticEventPublisher diagnosticEventPublisher;
+    private final SemanticClassificationCodec semanticClassificationCodec;
 
     OpenAiCompatibleConversationalModelAdapter(
             RestClient.Builder builder,
@@ -73,6 +78,7 @@ public final class OpenAiCompatibleConversationalModelAdapter
         this.diagnosticEventPublisher = Objects.requireNonNull(
                 diagnosticEventPublisher,
                 "diagnosticEventPublisher");
+        this.semanticClassificationCodec = new SemanticClassificationCodec(objectMapper);
     }
 
     @Override
@@ -88,6 +94,20 @@ public final class OpenAiCompatibleConversationalModelAdapter
                         publicSubjects),
                 objectMapper.constructType(ConversationRoute.class),
                 0.0);
+    }
+
+    @Override
+    public SemanticClassificationResult classify(SemanticClassificationInput input) {
+        Objects.requireNonNull(input, "input");
+        ConversationModelResult<JsonNode> result = post(
+                ProviderOperation.SEMANTIC_ROUTE,
+                () -> promptFactory.semanticRoutingPrompt(input),
+                objectMapper.constructType(JsonNode.class),
+                0.0);
+        if (!result.isSuccessful()) {
+            return SemanticClassificationResult.failure(result.getFailureCode());
+        }
+        return semanticClassificationCodec.decode(result.getValue().toString(), input);
     }
 
     @Override

@@ -165,8 +165,12 @@ class PlanConfirmationServiceTest {
         assertEquals(1, executions.get());
         assertEquals(PlanConfirmation.PlanInvalidationReason.PLAN_INTEGRITY_INVALID,
                 tamper.getInvalidationReason().orElseThrow());
-        assertEquals(PlanConfirmation.PlanInvalidationReason.PLAN_CONFIRMATION_EXPIRED,
-                expired.getInvalidationReason().orElseThrow());
+        assertEquals(AgentTurnResult.Disposition.CONFIRMATION_REQUIRED, expired.getDisposition());
+        assertTrue(expired.getInvalidationReason().isEmpty());
+        assertEquals(challenge.getPlanFingerprint(),
+                expired.getPlanConfirmation().orElseThrow().getPlanFingerprint());
+        assertFalse(challenge.getConfirmationId().equals(
+                expired.getPlanConfirmation().orElseThrow().getConfirmationId()));
         assertEquals(PlanConfirmation.PlanInvalidationReason.CONTENT_VERSION_CHANGED,
                 versionChanged.getInvalidationReason().orElseThrow());
         assertEquals(1, executions.get());

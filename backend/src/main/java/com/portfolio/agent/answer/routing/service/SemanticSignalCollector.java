@@ -19,17 +19,25 @@ public final class SemanticSignalCollector {
 
     private static final Pattern EXPLICIT_TASK_COUNT = Pattern.compile(
             "(?:^|\\D)([1-9][0-9]*)\\s*(?:\u4e2a|\u9879)?\\s*(?:\u72ec\u7acb)?\u4efb\u52a1");
+    private static final Pattern CHINESE_GENERAL_COMPARISON = Pattern.compile(
+            "(?:比较|对比)\\s*([^，。,.?？]{1,80}?)\\s*(?:和|与|跟|vs\\.?)\\s*([^，。,.?？]{1,80})",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern ENGLISH_GENERAL_COMPARISON = Pattern.compile(
+            "compare\\s+(.{1,80}?)\\s+(?:and|with|vs\\.?)\\s+(.{1,80}?)(?:[,.?]|$)",
+            Pattern.CASE_INSENSITIVE);
 
     public SemanticSignals collect(SemanticTurnInput input, ResolvedRoutingContext context) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(context, "context");
-        String sourceQuestion = input.getQuestion() == null ? "" : input.getQuestion().trim();
+        String sourceQuestion = input.getRoutingQuestion() == null ? "" : input.getRoutingQuestion().trim();
         String question = normalize(sourceQuestion);
         List<SemanticSignals.GoalCandidate> goals = new ArrayList<>();
 
         boolean comparison = containsAny(question, "\u6bd4\u8f83", "\u5bf9\u6bd4", "compare");
         boolean introduction = containsAny(question, "\u4ecb\u7ecd", "\u6982\u8ff0", "\u5ba1\u8ba1", "\u804c\u8d23", "\u8bf4\u660e\u9879\u76ee");
         boolean recommendation = containsAny(question, "\u63a8\u8350", "recommend");
+        boolean refinement = containsAny(question, "调整推荐", "换一个", "换一批", "重新推荐",
+                "去掉这个", "不要这个", "refine", "another recommendation");
         boolean synthesis = containsAny(question, "\u7efc\u5408", "\u603b\u7ed3", "\u7ed3\u8bba");
         boolean generalExplanation = containsAny(question, "\u89e3\u91ca", "\u539f\u7406", "\u662f\u4ec0\u4e48") && !introduction;
 
@@ -39,14 +47,28 @@ public final class SemanticSignalCollector {
         boolean comparisonMissingSubjects = false;
         if (comparison) {
             if (context.getSubjects().size() < 2) {
-                comparisonMissingSubjects = true;
+                List<String> generalSubjects = generalComparisonSubjects(sourceQuestion);
+                if (context.getSubjects().isEmpty() && generalSubjects.size() >= 2) {
+                    goals.add(new SemanticSignals.GoalCandidate(
+                            SemanticSignals.Intent.GENERAL_COMPARISON, List.of(), generalSubjects));
+                } else {
+                    comparisonMissingSubjects = true;
+                }
             } else {
                 goals.add(new SemanticSignals.GoalCandidate(
                         SemanticSignals.Intent.PORTFOLIO_COMPARE,
                         List.copyOf(context.getSubjects().subList(0, Math.min(3, context.getSubjects().size())))));
             }
         }
-        if (recommendation) {
+        if (refinement && context.getSubjects().stream()
+                .anyMatch(subject -> subject.getSubjectType()
+                        == com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.RESULT)) {
+            goals.add(new SemanticSignals.GoalCandidate(
+                    SemanticSignals.Intent.PORTFOLIO_REFINE_RECOMMENDATION,
+                    context.getSubjects().stream().filter(subject -> subject.getSubjectType()
+                            == com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.RESULT)
+                            .limit(1).toList()));
+        } else if (recommendation) {
             goals.add(new SemanticSignals.GoalCandidate(
                     SemanticSignals.Intent.PORTFOLIO_RECOMMEND, context.getSubjects()));
         }
@@ -155,6 +177,26 @@ public final class SemanticSignalCollector {
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
+    private static List<String> generalComparisonSubjects(String question) {
+        Matcher matcher = CHINESE_GENERAL_COMPARISON.matcher(question == null ? "" : question);
+        if (!matcher.find()) {
+            matcher = ENGLISH_GENERAL_COMPARISON.matcher(question == null ? "" : question);
+            if (!matcher.find()) {
+                return List.of();
+            }
+        }
+        String left = cleanTopic(matcher.group(1));
+        String right = cleanTopic(matcher.group(2));
+        return left == null || right == null || left.equalsIgnoreCase(right)
+                ? List.of() : List.of(left, right);
+    }
+
+    private static String cleanTopic(String value) {
+        if (value == null) return null;
+        String cleaned = value.trim().replaceFirst("^(请|帮我|一下|the)\\s*", "").trim();
+        return cleaned.isEmpty() ? null : cleaned;
+    }
+
     private static boolean containsAny(String question, String... markers) {
         for (String marker : markers) {
             if (question.contains(marker)) {
@@ -177,7 +219,9 @@ final class SemanticSignals {
         PORTFOLIO_FACT,
         PORTFOLIO_COMPARE,
         PORTFOLIO_RECOMMEND,
+        PORTFOLIO_REFINE_RECOMMENDATION,
         GENERAL_EXPLANATION,
+        GENERAL_COMPARISON,
         SYNTHESIS
     }
 
@@ -252,13 +296,20 @@ final class SemanticSignals {
     static final class GoalCandidate {
         private final Intent intent;
         private final List<SubjectReference> subjects;
+        private final List<String> topics;
 
         GoalCandidate(Intent intent, List<SubjectReference> subjects) {
+            this(intent, subjects, List.of());
+        }
+
+        GoalCandidate(Intent intent, List<SubjectReference> subjects, List<String> topics) {
             this.intent = Objects.requireNonNull(intent, "intent");
             this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
+            this.topics = List.copyOf(Objects.requireNonNull(topics, "topics"));
         }
 
         Intent getIntent() { return intent; }
         List<SubjectReference> getSubjects() { return subjects; }
+        List<String> getTopics() { return topics; }
     }
 }

@@ -46,6 +46,12 @@ public final class ConversationAnswerRequest {
     private final InvalidatedPlanReferenceRequest invalidatedPlanReference;
 
     @Valid
+    private final PlanAdjustmentRequest planAdjustment;
+
+    @Valid
+    private final ClarificationResolutionRequest clarificationResolution;
+
+    @Valid
     @NotNull(message = "messages are required")
     @Size(max = 40, message = "messages must contain at most 20 rounds")
     private final List<ConversationMessageRequest> messages;
@@ -66,6 +72,9 @@ public final class ConversationAnswerRequest {
             @JsonProperty("semanticContext") SemanticContextRequest semanticContext,
             @JsonProperty("planConfirmation") PlanConfirmationRequest planConfirmation,
             @JsonProperty("invalidatedPlanReference") InvalidatedPlanReferenceRequest invalidatedPlanReference,
+            @JsonProperty("planAdjustment") PlanAdjustmentRequest planAdjustment,
+            @JsonProperty("clarificationResolution")
+            ClarificationResolutionRequest clarificationResolution,
             @JsonProperty("agentTurnContract") String agentTurnContract
     ) {
         this.turnId = turnId;
@@ -79,7 +88,27 @@ public final class ConversationAnswerRequest {
         this.semanticContext = semanticContext;
         this.planConfirmation = planConfirmation;
         this.invalidatedPlanReference = invalidatedPlanReference;
+        this.planAdjustment = planAdjustment;
+        this.clarificationResolution = clarificationResolution;
         this.agentTurnContract = agentTurnContract;
+    }
+
+    public ConversationAnswerRequest(
+            String turnId,
+            UUID requestToken,
+            String questionPresetId,
+            String contractVersion,
+            TurnAction action,
+            String question,
+            List<ConversationMessageRequest> messages,
+            ConversationAnswerContextRequest context,
+            SemanticContextRequest semanticContext,
+            PlanConfirmationRequest planConfirmation,
+            InvalidatedPlanReferenceRequest invalidatedPlanReference,
+            String agentTurnContract) {
+        this(turnId, requestToken, questionPresetId, contractVersion, action, question, messages,
+                context, semanticContext, planConfirmation, invalidatedPlanReference,
+                null, null, agentTurnContract);
     }
 
     public ConversationAnswerRequest(
@@ -90,7 +119,7 @@ public final class ConversationAnswerRequest {
             ConversationAnswerContextRequest context
     ) {
         this(turnId, requestToken, null, null, TurnAction.ASK, question, messages, context,
-                null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     public ConversationAnswerRequest(
@@ -102,7 +131,7 @@ public final class ConversationAnswerRequest {
         this(turnId, UUID.nameUUIDFromBytes(
                 String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 null, null, TurnAction.ASK, question, messages, context,
-                null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     public String getTurnId() { return turnId; }
@@ -118,16 +147,25 @@ public final class ConversationAnswerRequest {
     public InvalidatedPlanReferenceRequest getInvalidatedPlanReference() {
         return invalidatedPlanReference;
     }
+    public PlanAdjustmentRequest getPlanAdjustment() { return planAdjustment; }
+    public ClarificationResolutionRequest getClarificationResolution() {
+        return clarificationResolution;
+    }
     public String getAgentTurnContract() { return agentTurnContract; }
 
     @AssertTrue(message = "question or plan confirmation is invalid for action")
     public boolean isActionPayloadValid() {
         return switch (action) {
-            case ASK -> hasText(question) && planConfirmation == null && invalidatedPlanReference == null;
+            case ASK -> hasText(question) && planConfirmation == null && invalidatedPlanReference == null
+                    && !(planAdjustment != null && clarificationResolution != null)
+                    && ((planAdjustment == null && clarificationResolution == null)
+                    || semanticContext != null);
             case REGENERATE_PLAN -> hasText(question) && planConfirmation == null
-                    && semanticContext != null && invalidatedPlanReference != null;
+                    && semanticContext != null && invalidatedPlanReference != null
+                    && planAdjustment == null && clarificationResolution == null;
             case CONFIRM_PLAN -> !hasText(question) && planConfirmation != null
-                    && invalidatedPlanReference == null;
+                    && invalidatedPlanReference == null
+                    && planAdjustment == null && clarificationResolution == null;
         };
     }
 
@@ -160,6 +198,8 @@ public final class ConversationAnswerRequest {
                 "turnId='" + turnId + '\'' +
                 ", question='<redacted>'" +
                 ", messageCount=" + messages.size() +
+                ", hasPlanAdjustment=" + (planAdjustment != null) +
+                ", hasClarificationResolution=" + (clarificationResolution != null) +
                 '}';
     }
 }

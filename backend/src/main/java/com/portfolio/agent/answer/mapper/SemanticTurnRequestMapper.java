@@ -2,7 +2,9 @@ package com.portfolio.agent.answer.mapper;
 
 import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
+import com.portfolio.agent.answer.dto.request.ClarificationResolutionRequest;
 import com.portfolio.agent.answer.dto.request.InvalidatedPlanReferenceRequest;
+import com.portfolio.agent.answer.dto.request.PlanAdjustmentRequest;
 import com.portfolio.agent.answer.dto.request.PlanConfirmationRequest;
 import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequest;
 import com.portfolio.agent.answer.dto.request.PortfolioReferenceContextRequest;
@@ -33,13 +35,23 @@ public final class SemanticTurnRequestMapper {
                 request.getSemanticContext(), effectiveContentVersion);
         LegacySemanticContextAdapter.LegacyContext legacyContext = toLegacyContext(
                 request.getContext(), effectiveContentVersion);
+        SemanticTurnInput.ClarificationResolution clarificationResolution =
+                toClarificationResolution(request.getClarificationResolution(), effectiveContentVersion);
+        List<SubjectReference> explicitSubjects = new ArrayList<>(
+                semanticContext == null ? List.of() : semanticContext.getActiveSubjects());
+        if (clarificationResolution != null && clarificationResolution.getSelectedSubject() != null
+                && !explicitSubjects.contains(clarificationResolution.getSelectedSubject())) {
+            explicitSubjects.add(clarificationResolution.getSelectedSubject());
+        }
         return new SemanticTurnInput(
                 request.getTurnId(), toAction(request.getAction()), request.getQuestion(), semanticContext,
                 legacyContext,
                 semanticContext == null ? List.of() : semanticContext.getResultReferences(),
-                semanticContext == null ? List.of() : semanticContext.getActiveSubjects(), List.of(),
+                List.copyOf(explicitSubjects), List.of(),
                 toSubmission(request.getPlanConfirmation()),
                 toInvalidatedReference(request.getInvalidatedPlanReference()),
+                toPlanAdjustment(request.getPlanAdjustment()),
+                clarificationResolution,
                 request.getRequestToken() == null ? null : request.getRequestToken().toString(),
                 request.getAgentTurnContract(), request.getQuestionPresetId(), request.getContractVersion());
     }
@@ -51,10 +63,11 @@ public final class SemanticTurnRequestMapper {
         }
         return SemanticContext.of(
                 mapSubjects(request.getActiveSubjects(), contentVersion),
-                mapResultReferences(request.getResultReferences()),
+                mapResultReferences(request.getResultReferences(), contentVersion),
                 request.getPendingPlanReference() == null ? null
                         : new SemanticContext.PendingPlanReference(
-                                request.getPendingPlanReference().getPlanId(), List.of()),
+                                request.getPendingPlanReference().getPlanId(),
+                                request.getPendingPlanReference().getPlanFingerprint(), List.of()),
                 request.getAudienceRole(), request.getRequestSource(),
                 new LinkedHashSet<>(request.getCoveredTopics()));
     }
@@ -96,12 +109,13 @@ public final class SemanticTurnRequestMapper {
     }
 
     private List<SubjectReference> mapResultReferences(
-            List<SemanticContextRequest.ResultReferenceRequest> references) {
+            List<SemanticContextRequest.ResultReferenceRequest> references,
+            String contentVersion) {
         List<SubjectReference> mapped = new ArrayList<>();
         for (SemanticContextRequest.ResultReferenceRequest reference : references) {
             mapped.add(new SubjectReference(
                     SubjectType.RESULT, reference.getReferenceId(),
-                    SubjectResolutionSource.STRUCTURED_RESULT, null));
+                    SubjectResolutionSource.STRUCTURED_RESULT, contentVersion));
         }
         return List.copyOf(mapped);
     }
@@ -129,6 +143,41 @@ public final class SemanticTurnRequestMapper {
         }
         return new SemanticTurnInput.InvalidatedPlanReference(
                 request.getPlanId(), request.getPlanFingerprint());
+    }
+
+    private static SemanticTurnInput.PlanAdjustment toPlanAdjustment(PlanAdjustmentRequest request) {
+        if (request == null) {
+            return null;
+        }
+        SemanticContextRequest.PendingPlanReferenceRequest reference = request.getPendingPlanReference();
+        return new SemanticTurnInput.PlanAdjustment(
+                request.getInstruction(),
+                new SemanticTurnInput.PendingPlanIdentity(
+                        reference.getPlanId(), reference.getPlanFingerprint()));
+    }
+
+    private SemanticTurnInput.ClarificationResolution toClarificationResolution(
+            ClarificationResolutionRequest request,
+            String contentVersion) {
+        if (request == null) {
+            return null;
+        }
+        SubjectReference selectedSubject = null;
+        String selectedValue = null;
+        if (request.getSelectedOption() != null) {
+            selectedValue = request.getSelectedOption().getValue();
+            SemanticContextRequest.SubjectReferenceRequest subject =
+                    request.getSelectedOption().getSubjectReference();
+            if (subject != null) {
+                SubjectType type = SubjectType.valueOf(subject.getSubjectType());
+                selectedSubject = new SubjectReference(
+                        type, subject.getSubjectId(), SubjectResolutionSource.EXPLICIT_REFERENCE,
+                        type == SubjectType.RESULT ? null : contentVersion);
+            }
+        }
+        return new SemanticTurnInput.ClarificationResolution(
+                request.getClarificationId(), request.getPromptCode(), request.getFieldKey(),
+                selectedValue, selectedSubject, request.getTextValue());
     }
 
     private static List<String> nullToEmpty(List<String> values) {

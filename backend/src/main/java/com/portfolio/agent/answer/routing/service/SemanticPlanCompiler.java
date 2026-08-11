@@ -46,7 +46,8 @@ public final class SemanticPlanCompiler {
                 continue;
             }
             tasks.add(createTask(
-                    goal.getIntent(), nextTaskId(tasks), goal.getSubjects(), signals.getQuestion()));
+                    goal.getIntent(), nextTaskId(tasks), goal.getSubjects(), goal.getTopics(),
+                    signals.getQuestion()));
         }
         if (signals.getGoals().stream().anyMatch(goal -> goal.getIntent() == SemanticSignals.Intent.SYNTHESIS)
                 && tasks.size() >= 2) {
@@ -69,12 +70,15 @@ public final class SemanticPlanCompiler {
             SemanticSignals.Intent intent,
             String taskId,
             List<SubjectReference> subjects,
+            List<String> topics,
             String question) {
         return switch (intent) {
             case PORTFOLIO_FACT -> factTask(taskId, requireSubject(subjects));
             case PORTFOLIO_COMPARE -> comparisonTask(taskId, subjects);
             case PORTFOLIO_RECOMMEND -> recommendationTask(taskId, subjects);
+            case PORTFOLIO_REFINE_RECOMMENDATION -> refinementTask(taskId, requireResult(subjects));
             case GENERAL_EXPLANATION -> generalTask(taskId, question);
+            case GENERAL_COMPARISON -> generalComparisonTask(taskId, topics);
             case SYNTHESIS -> throw new IllegalArgumentException("synthesis must be compiled after upstream tasks");
         };
     }
@@ -108,12 +112,31 @@ public final class SemanticPlanCompiler {
                 parameters, Set.of(RequestedOutput.RECOMMENDATION), TaskConfidence.highRule(), subjects);
     }
 
+    private SemanticTask refinementTask(String taskId, SubjectReference resultReference) {
+        SemanticTaskParameters.PortfolioRefinement parameters =
+                new SemanticTaskParameters.PortfolioRefinement(resultReference, Set.of(), Set.of());
+        return SemanticTask.create(
+                taskId, SemanticTaskType.PORTFOLIO_REFINE_RECOMMENDATION,
+                TaskSourceDomain.PORTFOLIO, "调整岗位推荐",
+                parameters, Set.of(RequestedOutput.RECOMMENDATION),
+                TaskConfidence.highRule(), List.of(resultReference));
+    }
+
     private SemanticTask generalTask(String taskId, String question) {
         SemanticTaskParameters.GeneralExplanation parameters = new SemanticTaskParameters.GeneralExplanation(
                 question, "STANDARD", "GUEST");
         return SemanticTask.create(
                 taskId, SemanticTaskType.GENERAL_EXPLANATION, TaskSourceDomain.GENERAL, "解释通用概念",
                 parameters, Set.of(RequestedOutput.SUMMARY), TaskConfidence.highRule(), List.of());
+    }
+
+    private SemanticTask generalComparisonTask(String taskId, List<String> topics) {
+        SemanticTaskParameters.GeneralComparison parameters = new SemanticTaskParameters.GeneralComparison(
+                topics, Set.of(ComparisonDimension.ARCHITECTURE.name()), "STANDARD", "GUEST");
+        return SemanticTask.create(
+                taskId, SemanticTaskType.GENERAL_COMPARISON, TaskSourceDomain.GENERAL, "比较通用主题",
+                parameters, Set.of(RequestedOutput.SUMMARY, RequestedOutput.COMPARISON),
+                TaskConfidence.highRule(), List.of());
     }
 
     private SemanticTask synthesisTask(String taskId, List<SemanticTask> upstream) {
@@ -186,8 +209,21 @@ public final class SemanticPlanCompiler {
         return subjects.get(0);
     }
 
+    private SubjectReference requireResult(List<SubjectReference> subjects) {
+        if (subjects.size() != 1 || subjects.getFirst().getSubjectType()
+                != com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.RESULT) {
+            throw new IllegalArgumentException("portfolio refinement requires one result reference");
+        }
+        return subjects.getFirst();
+    }
+
     private String contentVersion(List<SubjectReference> subjects) {
-        return subjects.isEmpty() ? "public-v1" : subjects.get(0).getContentVersion();
+        for (SubjectReference subject : subjects) {
+            if (subject.getContentVersion() != null && !subject.getContentVersion().isBlank()) {
+                return subject.getContentVersion();
+            }
+        }
+        return "public-v1";
     }
 
     private String freshPlanId() {

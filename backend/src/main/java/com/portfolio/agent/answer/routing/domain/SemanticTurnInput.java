@@ -26,6 +26,8 @@ public final class SemanticTurnInput {
     private final List<SubjectReference> pageSubjects;
     private final PlanConfirmation.Submission confirmationSubmission;
     private final InvalidatedPlanReference invalidatedPlanReference;
+    private final PlanAdjustment planAdjustment;
+    private final ClarificationResolution clarificationResolution;
     private final String requestToken;
     private final String agentTurnContract;
     private final String questionPresetId;
@@ -56,6 +58,8 @@ public final class SemanticTurnInput {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -74,6 +78,29 @@ public final class SemanticTurnInput {
             String agentTurnContract,
             String questionPresetId,
             String presetContractVersion) {
+        this(turnId, action, question, semanticContext, legacyContext,
+                explicitResultReferences, explicitSubjectReferences, pageSubjects,
+                confirmationSubmission, invalidatedPlanReference, null, null,
+                requestToken, agentTurnContract, questionPresetId, presetContractVersion);
+    }
+
+    public SemanticTurnInput(
+            String turnId,
+            Action action,
+            String question,
+            SemanticContext semanticContext,
+            LegacySemanticContextAdapter.LegacyContext legacyContext,
+            List<SubjectReference> explicitResultReferences,
+            List<SubjectReference> explicitSubjectReferences,
+            List<SubjectReference> pageSubjects,
+            PlanConfirmation.Submission confirmationSubmission,
+            InvalidatedPlanReference invalidatedPlanReference,
+            PlanAdjustment planAdjustment,
+            ClarificationResolution clarificationResolution,
+            String requestToken,
+            String agentTurnContract,
+            String questionPresetId,
+            String presetContractVersion) {
         this.turnId = requireText(turnId, "turnId");
         this.action = Objects.requireNonNull(action, "action");
         this.question = normalizeQuestion(question, action);
@@ -86,6 +113,8 @@ public final class SemanticTurnInput {
         this.pageSubjects = copyReferences(pageSubjects, "pageSubjects");
         this.confirmationSubmission = confirmationSubmission;
         this.invalidatedPlanReference = invalidatedPlanReference;
+        this.planAdjustment = planAdjustment;
+        this.clarificationResolution = clarificationResolution;
         this.requestToken = normalizeText(requestToken);
         this.agentTurnContract = normalizeContract(agentTurnContract);
         this.questionPresetId = normalizeText(questionPresetId);
@@ -164,6 +193,24 @@ public final class SemanticTurnInput {
         return invalidatedPlanReference;
     }
 
+    public PlanAdjustment getPlanAdjustment() {
+        return planAdjustment;
+    }
+
+    public ClarificationResolution getClarificationResolution() {
+        return clarificationResolution;
+    }
+
+    public String getRoutingQuestion() {
+        if (clarificationResolution != null && clarificationResolution.isTextResolution()) {
+            return clarificationResolution.getTextValue();
+        }
+        if (planAdjustment != null) {
+            return question + "\n调整要求：" + planAdjustment.getInstruction();
+        }
+        return question;
+    }
+
     public String getRequestToken() {
         return requestToken;
     }
@@ -198,6 +245,8 @@ public final class SemanticTurnInput {
                 && Objects.equals(pageSubjects, that.pageSubjects)
                 && submissionEquals(confirmationSubmission, that.confirmationSubmission)
                 && Objects.equals(invalidatedPlanReference, that.invalidatedPlanReference)
+                && Objects.equals(planAdjustment, that.planAdjustment)
+                && Objects.equals(clarificationResolution, that.clarificationResolution)
                 && Objects.equals(requestToken, that.requestToken)
                 && Objects.equals(agentTurnContract, that.agentTurnContract)
                 && Objects.equals(questionPresetId, that.questionPresetId)
@@ -210,6 +259,7 @@ public final class SemanticTurnInput {
                 turnId, action, question, semanticContext, legacyContext,
                 explicitResultReferences, explicitSubjectReferences, pageSubjects,
                 submissionHash(confirmationSubmission), invalidatedPlanReference,
+                planAdjustment, clarificationResolution,
                 requestToken, agentTurnContract, questionPresetId, presetContractVersion);
     }
 
@@ -221,7 +271,9 @@ public final class SemanticTurnInput {
                 + ", explicitSubjectReferenceCount=" + explicitSubjectReferences.size()
                 + ", pageSubjectCount=" + pageSubjects.size()
                 + ", hasConfirmationSubmission=" + (confirmationSubmission != null)
-                + ", hasInvalidatedPlanReference=" + (invalidatedPlanReference != null) + '}';
+                + ", hasInvalidatedPlanReference=" + (invalidatedPlanReference != null)
+                + ", hasPlanAdjustment=" + (planAdjustment != null)
+                + ", hasClarificationResolution=" + (clarificationResolution != null) + '}';
     }
 
     public enum Action {
@@ -271,6 +323,175 @@ public final class SemanticTurnInput {
         }
     }
 
+    public static final class PendingPlanIdentity {
+
+        private final String planId;
+        private final String planFingerprint;
+
+        public PendingPlanIdentity(String planId, String planFingerprint) {
+            this.planId = requireText(planId, "planId");
+            this.planFingerprint = requireText(planFingerprint, "planFingerprint");
+        }
+
+        public String getPlanId() { return planId; }
+        public String getPlanFingerprint() { return planFingerprint; }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof PendingPlanIdentity that)) return false;
+            return Objects.equals(planId, that.planId)
+                    && Objects.equals(planFingerprint, that.planFingerprint);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(planId, planFingerprint);
+        }
+
+        @Override
+        public String toString() {
+            return "PendingPlanIdentity{hasPlanId=true, hasFingerprint=true}";
+        }
+    }
+
+    public static final class PlanAdjustment {
+
+        private final String instruction;
+        private final PendingPlanIdentity pendingPlanReference;
+
+        public PlanAdjustment(String instruction, PendingPlanIdentity pendingPlanReference) {
+            this.instruction = requireText(instruction, "instruction");
+            if (this.instruction.length() > 500) {
+                throw new IllegalArgumentException("instruction must not exceed 500 characters");
+            }
+            this.pendingPlanReference = Objects.requireNonNull(
+                    pendingPlanReference, "pendingPlanReference");
+        }
+
+        public String getInstruction() { return instruction; }
+        public PendingPlanIdentity getPendingPlanReference() { return pendingPlanReference; }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof PlanAdjustment that)) return false;
+            return Objects.equals(instruction, that.instruction)
+                    && Objects.equals(pendingPlanReference, that.pendingPlanReference);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(instruction, pendingPlanReference);
+        }
+
+        @Override
+        public String toString() {
+            return "PlanAdjustment{instruction=<redacted>, hasPendingPlanReference=true}";
+        }
+    }
+
+    public static final class ClarificationResolution {
+
+        private final String clarificationId;
+        private final String promptCode;
+        private final String fieldKey;
+        private final String selectedValue;
+        private final SubjectReference selectedSubject;
+        private final String textValue;
+
+        public ClarificationResolution(
+                String clarificationId,
+                String promptCode,
+                String fieldKey,
+                String selectedValue,
+                SubjectReference selectedSubject,
+                String textValue) {
+            this.clarificationId = requireText(clarificationId, "clarificationId");
+            this.promptCode = requireText(promptCode, "promptCode");
+            this.fieldKey = requireText(fieldKey, "fieldKey");
+            this.selectedValue = normalizeText(selectedValue);
+            this.selectedSubject = selectedSubject;
+            this.textValue = normalizeText(textValue);
+            validate();
+        }
+
+        public String getClarificationId() { return clarificationId; }
+        public String getPromptCode() { return promptCode; }
+        public String getFieldKey() { return fieldKey; }
+        public String getSelectedValue() { return selectedValue; }
+        public SubjectReference getSelectedSubject() { return selectedSubject; }
+        public String getTextValue() { return textValue; }
+        public boolean isTextResolution() { return textValue != null; }
+
+        private void validate() {
+            if (!clarificationId.matches("clarify-[a-f0-9]{32}")) {
+                throw new IllegalArgumentException("clarificationId format is invalid");
+            }
+            if (!promptCode.matches("[A-Z]+_[A-Z0-9_]+")) {
+                throw new IllegalArgumentException("promptCode format is invalid");
+            }
+            boolean selected = selectedValue != null || selectedSubject != null;
+            if (selected == (textValue != null)) {
+                throw new IllegalArgumentException("exactly one clarification value is required");
+            }
+            if ("taskSplit".equals(fieldKey)) {
+                if (textValue == null || !"ROUTING_TASK_SPLIT_REQUIRED".equals(promptCode)) {
+                    throw new IllegalArgumentException("taskSplit requires a matching text resolution");
+                }
+                if (textValue.length() > 2000) {
+                    throw new IllegalArgumentException("textValue must not exceed 2000 characters");
+                }
+                return;
+            }
+            if (selectedValue == null || selectedSubject == null
+                    || !selectedValue.equals(selectedSubject.getSubjectId())) {
+                throw new IllegalArgumentException("selected option requires a matching subject reference");
+            }
+            if ("comparisonSubject".equals(fieldKey)) {
+                if (!"ROUTING_COMPARISON_SUBJECT_MISSING".equals(promptCode)
+                        || selectedSubject.getSubjectType()
+                        != com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.PROJECT) {
+                    throw new IllegalArgumentException("comparisonSubject resolution is invalid");
+                }
+                return;
+            }
+            if ("subject".equals(fieldKey)) {
+                if (!"ROUTING_SUBJECT_CLARIFICATION_REQUIRED".equals(promptCode)
+                        || selectedSubject.getSubjectType()
+                        == com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.RESULT) {
+                    throw new IllegalArgumentException("subject resolution is invalid");
+                }
+                return;
+            }
+            throw new IllegalArgumentException("clarification field is invalid");
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof ClarificationResolution that)) return false;
+            return Objects.equals(clarificationId, that.clarificationId)
+                    && Objects.equals(promptCode, that.promptCode)
+                    && Objects.equals(fieldKey, that.fieldKey)
+                    && Objects.equals(selectedValue, that.selectedValue)
+                    && Objects.equals(selectedSubject, that.selectedSubject)
+                    && Objects.equals(textValue, that.textValue);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(clarificationId, promptCode, fieldKey,
+                    selectedValue, selectedSubject, textValue);
+        }
+
+        @Override
+        public String toString() {
+            return "ClarificationResolution{promptCode=" + promptCode
+                    + ", fieldKey=" + fieldKey + ", value=<redacted>}";
+        }
+    }
+
     private void validateActionPayload() {
         if (action == Action.CONFIRM_PLAN) {
             if (question != null || confirmationSubmission == null) {
@@ -280,6 +501,9 @@ public final class SemanticTurnInput {
             if (invalidatedPlanReference != null) {
                 throw new IllegalArgumentException("CONFIRM_PLAN cannot carry an invalidated plan reference");
             }
+            if (planAdjustment != null || clarificationResolution != null) {
+                throw new IllegalArgumentException("CONFIRM_PLAN cannot carry ASK continuation values");
+            }
             return;
         }
         if (confirmationSubmission != null) {
@@ -288,6 +512,27 @@ public final class SemanticTurnInput {
         if (action == Action.REGENERATE_PLAN && semanticContext == null) {
             throw new IllegalArgumentException(
                     "REGENERATE_PLAN requires current semanticContext");
+        }
+        if (action != Action.ASK && (planAdjustment != null || clarificationResolution != null)) {
+            throw new IllegalArgumentException(action + " cannot carry ASK continuation values");
+        }
+        if (planAdjustment != null && clarificationResolution != null) {
+            throw new IllegalArgumentException(
+                    "plan adjustment and clarification resolution are mutually exclusive");
+        }
+        if ((planAdjustment != null || clarificationResolution != null) && semanticContext == null) {
+            throw new IllegalArgumentException("ASK continuation requires semanticContext");
+        }
+        if (planAdjustment != null) {
+            SemanticContext.PendingPlanReference contextReference = semanticContext
+                    .getPendingPlanReference().orElseThrow(() -> new IllegalArgumentException(
+                            "plan adjustment requires semanticContext.pendingPlanReference"));
+            PendingPlanIdentity adjustmentReference = planAdjustment.getPendingPlanReference();
+            if (!contextReference.getReferenceId().equals(adjustmentReference.getPlanId())
+                    || !Objects.equals(contextReference.getPlanFingerprint(),
+                            adjustmentReference.getPlanFingerprint())) {
+                throw new IllegalArgumentException("pending plan references must match");
+            }
         }
     }
 

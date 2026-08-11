@@ -125,6 +125,11 @@ public final class PlanConfirmationService {
         Objects.requireNonNull(currentVersions, "currentVersions");
         Objects.requireNonNull(coordinator, "coordinator");
         ConfirmationVerification verification = verify(submission, currentVersions);
+        if (verification.requiresSamePlanResign()) {
+            ValidatedSemanticTurnPlan expiredPlan = verification.getValidatedPlan().orElseThrow();
+            return AgentTurnResult.confirmationRequired(
+                    expiredPlan.getPlan(), reissue(verification, currentVersions), true);
+        }
         if (!verification.isExecutable()) {
             return AgentTurnResult.planInvalidated(verification.getReason());
         }

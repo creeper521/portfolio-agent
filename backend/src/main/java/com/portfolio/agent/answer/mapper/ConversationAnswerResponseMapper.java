@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 @Component
 public final class ConversationAnswerResponseMapper {
@@ -98,8 +99,7 @@ public final class ConversationAnswerResponseMapper {
             TaskResultProvenance provenance = outcome.getProvenance().orElseGet(() ->
                     TaskResultProvenance.direct(task.getSourceDomain(), List.of(), List.of()));
             if (payload instanceof TaskResultPayload.SectionResultPayload section) {
-                appendTopLevelBlocks(mapped, sourceScope(task), section.getBlocks(),
-                        provenance.getClaimIds(), provenance.getEvidenceIds());
+                mapped.addAll(toSectionBlocks(section, sourceScope(task), provenance));
             } else if (payload instanceof TaskResultPayload.SynthesisResultPayload synthesis) {
                 appendTopLevelBlocks(mapped, sourceScope(task), synthesis.getBlocks(),
                         synthesis.getProvenance().getClaimIds(), synthesis.getProvenance().getEvidenceIds());
@@ -237,7 +237,20 @@ public final class ConversationAnswerResponseMapper {
                         && value.getExecutionStatus() != TaskOutcome.TaskExecutionStatus.CANCELLED
                         && value.getExecutionStatus() != TaskOutcome.TaskExecutionStatus.FAILED)
                 .count();
-        return new DisplayPlanResponse(plan.getTasks().size(), executable, tasks, constraints(plan));
+        return new DisplayPlanResponse(
+                plan.getTasks().size(), executable, summaryLabel(plan), tasks, constraints(plan));
+    }
+
+    private static String summaryLabel(SemanticTurnPlan plan) {
+        if (plan.getTasks().isEmpty()) {
+            return null;
+        }
+        String first = plan.getTasks().get(0).getGoalLabel();
+        if (plan.getTasks().size() == 1) {
+            return first;
+        }
+        String last = plan.getTasks().get(plan.getTasks().size() - 1).getGoalLabel();
+        return "从" + first + "到" + last;
     }
 
     private static List<String> constraints(SemanticTurnPlan plan) {
@@ -295,11 +308,17 @@ public final class ConversationAnswerResponseMapper {
         List<ClarificationResponse.Field> fields = clarification.getFields().stream().map(field ->
                 new ClarificationResponse.Field(field.getFieldKey(), field.getInputMode().name(),
                         field.getOptions().stream().map(option -> new ClarificationResponse.Option(
-                                option.getValue(), option.getLabel())).toList(),
+                                option.getValue(), option.getLabel(),
+                                option.getSubjectType(), option.getSubjectId())).toList(),
                         field.isRequired(), field.getAffectedGoalLabels())).toList();
-        return new ClarificationResponse(clarification.getScope().name(), clarification.getPromptCode(),
+        List<ClarificationResponse.BlockedGoal> blockedGoals = clarification.getBlockedGoals().stream()
+                .map(goal -> new ClarificationResponse.BlockedGoal(
+                        goal.getGoalLabel(), goal.getReasonCode()))
+                .toList();
+        return new ClarificationResponse(
+                clarification.getClarificationId(), clarification.getScope().name(), clarification.getPromptCode(),
                 clarification.getPrompt(), fields, clarification.getBlockedTaskCount(),
-                clarification.getContinuingTaskCount());
+                clarification.getContinuingTaskCount(), clarification.getContinuingGoalLabels(), blockedGoals);
     }
 
     private TaskSummaryResponse toTaskSummary(SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
@@ -310,7 +329,9 @@ public final class ConversationAnswerResponseMapper {
             SemanticTask task = tasksById.get(taskOutcome.getTaskId());
             if (task != null) {
                 items.add(new TaskSummaryResponse.Item(indexes.get(task.getTaskId()), task.getGoalLabel(),
-                        publicTaskStatus(taskOutcome), task.getSourceDomain()));
+                        publicTaskStatus(taskOutcome), task.getSourceDomain(),
+                        taskOutcome.getReasonCodes().stream().sorted().toList(),
+                        blockedByDisplayIndexes(plan, taskOutcome, indexes)));
             }
         }
         String mode = outcome.getPlanOutcome() == SemanticTurnOutcome.PlanOutcome.SUCCEEDED
@@ -320,6 +341,21 @@ public final class ConversationAnswerResponseMapper {
         return new TaskSummaryResponse(mode, outcome.getTaskOutcomes().size(), outcome.getAnsweredCount(),
                 outcome.getNotSupportedCount(), outcome.getEmptyCount(), outcome.getBlockedCount(),
                 outcome.getFailedCount(), outcome.getCancelledCount(), outcome.getDegradedCount(), items);
+    }
+
+    private static List<String> blockedByDisplayIndexes(
+            SemanticTurnPlan plan, TaskOutcome outcome, Map<String, String> indexes) {
+        if (plan == null || outcome.getExecutionStatus() != TaskOutcome.TaskExecutionStatus.BLOCKED) {
+            return List.of();
+        }
+        return plan.getDependencies().stream()
+                .filter(dependency -> outcome.getTaskId().equals(dependency.getToTaskId()))
+                .map(TaskDependency::getFromTaskId)
+                .map(indexes::get)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private List<CompletedTaskResponse> toCompletedTasks(
@@ -348,7 +384,7 @@ public final class ConversationAnswerResponseMapper {
         if (payload instanceof TaskResultPayload.SectionResultPayload section) {
             TaskResultProvenance provenance = provenanceFor(task, payload, result);
             return new CompletedTaskResponse.ResultPayload("SECTION_RESULT",
-                    toBlocks(section.getBlocks(), sourceScope(task), provenance.getClaimIds(), provenance.getEvidenceIds()),
+                    toSectionBlocks(section, sourceScope(task), provenance),
                     null, null);
         }
         if (payload instanceof TaskResultPayload.RecommendationResultPayload recommendation) {
@@ -379,6 +415,22 @@ public final class ConversationAnswerResponseMapper {
             List<String> claimIds, List<String> evidenceIds) {
         return contents.stream().map(value -> new ConversationAnswerBlockResponse(
                 sourceScope, value, claimIds, evidenceIds)).toList();
+    }
+
+    private List<ConversationAnswerBlockResponse> toSectionBlocks(
+            TaskResultPayload.SectionResultPayload payload,
+            ConversationSourceScope sourceScope,
+            TaskResultProvenance fallbackProvenance) {
+        return payload.getSections().stream().map(section -> {
+            if (section.isTyped()) {
+                return new ConversationAnswerBlockResponse(
+                        sourceScope, section.getSectionType(), section.getTitle(), section.getContent(),
+                        section.getClaimIds(), section.getEvidenceIds());
+            }
+            return new ConversationAnswerBlockResponse(
+                    sourceScope, section.getContent(),
+                    fallbackProvenance.getClaimIds(), fallbackProvenance.getEvidenceIds());
+        }).toList();
     }
 
     private TaskResultProvenance provenanceFor(

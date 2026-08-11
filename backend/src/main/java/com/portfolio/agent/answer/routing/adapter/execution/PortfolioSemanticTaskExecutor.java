@@ -1,5 +1,8 @@
 package com.portfolio.agent.answer.routing.adapter.execution;
 
+import com.portfolio.agent.answer.domain.PortfolioAnswerPlan;
+import com.portfolio.agent.answer.domain.PortfolioAnswerSection;
+import com.portfolio.agent.answer.exception.PortfolioAnswerCompositionException;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioConditions;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
@@ -20,6 +23,7 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
+import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -34,19 +38,31 @@ public final class PortfolioSemanticTaskExecutor implements SemanticTaskExecutor
     private final PortfolioIntelligence portfolioIntelligence;
     private final RecommendationContextResolver recommendationContextResolver;
     private final String currentContentVersion;
+    private final DeterministicPortfolioAnswerComposer answerComposer;
 
     public PortfolioSemanticTaskExecutor(PortfolioIntelligence portfolioIntelligence) {
-        this(portfolioIntelligence, ignored -> Optional.empty(), null);
+        this(portfolioIntelligence, ignored -> Optional.empty(), null,
+                new DeterministicPortfolioAnswerComposer());
     }
 
     public PortfolioSemanticTaskExecutor(
             PortfolioIntelligence portfolioIntelligence,
             RecommendationContextResolver recommendationContextResolver,
             String currentContentVersion) {
+        this(portfolioIntelligence, recommendationContextResolver, currentContentVersion,
+                new DeterministicPortfolioAnswerComposer());
+    }
+
+    public PortfolioSemanticTaskExecutor(
+            PortfolioIntelligence portfolioIntelligence,
+            RecommendationContextResolver recommendationContextResolver,
+            String currentContentVersion,
+            DeterministicPortfolioAnswerComposer answerComposer) {
         this.portfolioIntelligence = Objects.requireNonNull(portfolioIntelligence, "portfolioIntelligence");
         this.recommendationContextResolver = Objects.requireNonNull(
                 recommendationContextResolver, "recommendationContextResolver");
         this.currentContentVersion = normalizeNullable(currentContentVersion);
+        this.answerComposer = Objects.requireNonNull(answerComposer, "answerComposer");
     }
 
     @Override
@@ -233,13 +249,45 @@ public final class PortfolioSemanticTaskExecutor implements SemanticTaskExecutor
             return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
                     material.isDegraded(), "PORTFOLIO_RECOMMENDATION_UNAVAILABLE");
         }
+        TaskResultPayload payload;
+        if (task.getTaskType() == SemanticTaskType.PORTFOLIO_FACT) {
+            try {
+                PortfolioAnswerPlan answerPlan = answerComposer.compose(material);
+                List<TaskResultPayload.SectionBlock> sections = answerPlan.getSections().stream()
+                        .map(this::toSectionBlock)
+                        .toList();
+                claimIds.clear();
+                evidenceIds.clear();
+                for (TaskResultPayload.SectionBlock section : sections) {
+                    section.getClaimIds().forEach(value -> addDistinct(claimIds, value));
+                    section.getEvidenceIds().forEach(value -> addDistinct(evidenceIds, value));
+                }
+                if (claimIds.isEmpty() || evidenceIds.isEmpty()) {
+                    return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                            material.isDegraded(), "PORTFOLIO_EVIDENCE_INSUFFICIENT");
+                }
+                payload = TaskResultPayload.SectionResultPayload.fromSections(
+                        sections, answerPlan.getSummary());
+            } catch (PortfolioAnswerCompositionException exception) {
+                return TaskOutcome.capabilityUnavailable(
+                        task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                        "PORTFOLIO_COMPOSITION_UNAVAILABLE");
+            }
+        } else {
+            payload = recommendationTask
+                    ? recommendationPayload(material.getPortfolioRecommendation(), blocks)
+                    : new TaskResultPayload.SectionResultPayload(blocks, task.getGoalLabel());
+        }
         TaskResultProvenance provenance = TaskResultProvenance.direct(
                 TaskSourceDomain.PORTFOLIO, claimIds, evidenceIds);
-        TaskResultPayload payload = recommendationTask
-                ? recommendationPayload(material.getPortfolioRecommendation(), blocks)
-                : new TaskResultPayload.SectionResultPayload(blocks, task.getGoalLabel());
         return TaskOutcome.answered(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
                 payload, provenance, material.isDegraded());
+    }
+
+    private TaskResultPayload.SectionBlock toSectionBlock(PortfolioAnswerSection section) {
+        return new TaskResultPayload.SectionBlock(
+                section.getSectionType(), section.getTitle(), section.getContent(),
+                section.getClaimIds(), section.getEvidenceIds());
     }
 
     private TaskResultPayload recommendationPayload(

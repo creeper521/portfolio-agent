@@ -10,6 +10,7 @@ public final class DisplayPlanResponse {
 
     private final int taskCount;
     private final Integer executableTaskCount;
+    private final String summaryLabel;
     private final List<Task> tasks;
     private final List<String> constraints;
 
@@ -18,19 +19,34 @@ public final class DisplayPlanResponse {
             Integer executableTaskCount,
             List<Task> tasks,
             List<String> constraints) {
+        this(taskCount, executableTaskCount, null, tasks, constraints);
+    }
+
+    public DisplayPlanResponse(
+            int taskCount,
+            Integer executableTaskCount,
+            String summaryLabel,
+            List<Task> tasks,
+            List<String> constraints) {
         if (taskCount < 0) {
             throw new IllegalArgumentException("taskCount must not be negative");
         }
         this.taskCount = taskCount;
         this.executableTaskCount = executableTaskCount;
+        this.summaryLabel = normalize(summaryLabel);
         this.tasks = List.copyOf(Objects.requireNonNull(tasks, "tasks"));
         this.constraints = constraints == null ? null : List.copyOf(constraints);
     }
 
     public int getTaskCount() { return taskCount; }
     public Integer getExecutableTaskCount() { return executableTaskCount; }
+    public String getSummaryLabel() { return summaryLabel; }
     public List<Task> getTasks() { return tasks; }
     public List<String> getConstraints() { return constraints; }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 
     public static final class Task {
         private final String displayIndex;

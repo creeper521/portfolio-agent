@@ -1,12 +1,15 @@
 package com.portfolio.agent.answer.routing.adapter.execution;
 
 import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationDraft;
 import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.answer.domain.PortfolioAnswerPlan;
+import com.portfolio.agent.answer.domain.PortfolioAnswerSection;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDecision;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioDisposition;
@@ -25,6 +28,7 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
+import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -55,7 +59,14 @@ class SemanticTaskExecutorAdapterTest {
         when(material.isDegraded()).thenReturn(false);
         when(intelligence.resolveTypedTask(any())).thenReturn(new PortfolioDecision(
                 PortfolioDisposition.ANSWERED, material));
-        PortfolioSemanticTaskExecutor executor = new PortfolioSemanticTaskExecutor(intelligence);
+        DeterministicPortfolioAnswerComposer composer = mock(DeterministicPortfolioAnswerComposer.class);
+        when(composer.compose(material)).thenReturn(new PortfolioAnswerPlan(
+                "Project A", "Summary",
+                List.of(new PortfolioAnswerSection(
+                        AnswerSectionType.BACKGROUND, "Background", "Verified public project detail",
+                        List.of("claim-01"), List.of("evidence-01")))));
+        PortfolioSemanticTaskExecutor executor = new PortfolioSemanticTaskExecutor(
+                intelligence, ignored -> java.util.Optional.empty(), null, composer);
 
         TaskOutcome outcome = executor.execute(portfolioFact("task-01"), List.of());
 
@@ -64,7 +75,12 @@ class SemanticTaskExecutorAdapterTest {
         assertEquals(List.of("claim-01"), outcome.getProvenance().orElseThrow().getClaimIds());
         assertEquals(List.of("evidence-01"), outcome.getProvenance().orElseThrow().getEvidenceIds());
         assertFalse(outcome.getResultPayload().isEmpty());
+        TaskResultPayload.SectionResultPayload payload =
+                (TaskResultPayload.SectionResultPayload) outcome.getResultPayload().orElseThrow();
+        assertEquals(AnswerSectionType.BACKGROUND, payload.getSections().getFirst().getSectionType());
+        assertEquals(List.of("claim-01"), payload.getSections().getFirst().getClaimIds());
         verify(intelligence).resolveTypedTask(any());
+        verify(composer).compose(material);
         verify(intelligence, never()).tryResolve(any());
     }
 

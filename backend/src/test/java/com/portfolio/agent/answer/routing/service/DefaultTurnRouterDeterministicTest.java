@@ -1,13 +1,17 @@
 package com.portfolio.agent.answer.routing.service;
 
+import com.portfolio.agent.answer.domain.ConversationModelFailureCode;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectResolutionSource;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
+import com.portfolio.agent.answer.routing.gateway.SemanticClassifierPort;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -148,6 +152,14 @@ class DefaultTurnRouterDeterministicTest {
             assertThat(clarification.getScope()).isEqualTo(ClarificationRequest.Scope.LOCAL);
             assertThat(clarification.getBlockedTaskCount()).isEqualTo(1);
             assertThat(clarification.getContinuingTaskCount()).isEqualTo(1);
+            assertThat(clarification.getContinuingGoalLabels()).hasSize(1);
+            assertThat(clarification.getBlockedGoals()).extracting(ClarificationRequest.BlockedGoal::getReasonCode)
+                    .containsExactly("WAITING_FOR_COMPARISON_SUBJECT");
+            assertThat(clarification.getFields().get(0).getOptions()).isNotEmpty()
+                    .allSatisfy(option -> {
+                        assertThat(option.getSubjectType()).isEqualTo("PROJECT");
+                        assertThat(option.getSubjectId()).isEqualTo(option.getValue());
+                    });
         });
     }
 
@@ -160,6 +172,76 @@ class DefaultTurnRouterDeterministicTest {
         assertThat(decision.getValidatedPlan()).isEmpty();
         assertThat(decision.getClarification()).hasValueSatisfying(clarification ->
                 assertThat(clarification.getScope()).isEqualTo(ClarificationRequest.Scope.CRITICAL));
+    }
+
+    @Test
+    void ordinaryAskCompilesGeneralComparisonWithoutPortfolioSubjects() {
+        SemanticTurnDecision decision = router().route(
+                SemanticTurnInput.ask("比较 PostgreSQL 和 MySQL"));
+
+        assertThat(decision.getValidatedPlan()).hasValueSatisfying(plan -> {
+            assertThat(plan.getTasks()).hasSize(1);
+            assertThat(plan.getTasks().getFirst().getTaskType())
+                    .isEqualTo(com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SemanticTaskType.GENERAL_COMPARISON);
+            assertThat(plan.getTasks().getFirst().getParameters())
+                    .isInstanceOf(com.portfolio.agent.answer.routing.domain.SemanticTaskParameters.GeneralComparison.class);
+        });
+        assertThat(decision.getClarification()).isEmpty();
+    }
+
+    @Test
+    void ordinaryAskCompilesRecommendationRefinementFromStructuredResultReference() {
+        SemanticTurnInput input = new SemanticTurnInput(
+                "换一批推荐", null, null,
+                List.of(new SubjectReference(
+                        SubjectType.RESULT, "rec_" + "a".repeat(64),
+                        SubjectResolutionSource.STRUCTURED_RESULT, "content-v1")),
+                List.of(), List.of());
+
+        SemanticTurnDecision decision = router().route(input);
+
+        assertThat(decision.getValidatedPlan()).hasValueSatisfying(plan ->
+                assertThat(plan.getTasks().getFirst().getTaskType())
+                        .isEqualTo(com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_REFINE_RECOMMENDATION));
+    }
+
+    @Test
+    void optionalClassifierMayResolveOneCatalogSubjectAndIsCalledAtMostOnce() {
+        AtomicInteger calls = new AtomicInteger();
+        SubjectReference project = new SubjectReference(
+                SubjectType.PROJECT, "project-a", SubjectResolutionSource.EXPLICIT_REFERENCE, "content-v1");
+        SemanticClassifierPort classifier = input -> {
+            calls.incrementAndGet();
+            return SemanticClassifierPort.SemanticClassificationResult.success(
+                    List.of(new SemanticClassifierPort.SemanticTaskCandidate(
+                            SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                            "这个项目", List.of(project), Set.of(),
+                            Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY))),
+                    List.of(), List.of());
+        };
+
+        SemanticTurnDecision decision = router(classifier).route(SemanticTurnInput.ask("介绍这个项目"));
+
+        assertThat(calls).hasValue(1);
+        assertThat(decision.getValidatedPlan()).hasValueSatisfying(plan ->
+                assertThat(plan.getTasks().getFirst().getSubjectReferences().getFirst().getResolutionSource())
+                        .isEqualTo(SubjectResolutionSource.VALIDATED_MODEL_CANDIDATE));
+    }
+
+    @Test
+    void classifierFailureFallsBackToDeterministicClarification() {
+        AtomicInteger calls = new AtomicInteger();
+        SemanticClassifierPort classifier = input -> {
+            calls.incrementAndGet();
+            return SemanticClassifierPort.SemanticClassificationResult.failure(
+                    ConversationModelFailureCode.TIMEOUT);
+        };
+
+        SemanticTurnDecision decision = router(classifier).route(SemanticTurnInput.ask("介绍这个项目"));
+
+        assertThat(calls).hasValue(1);
+        assertThat(decision.getDisposition())
+                .isEqualTo(SemanticTurnDecision.Disposition.CLARIFICATION_REQUIRED);
     }
 
     @Test
@@ -206,6 +288,23 @@ class DefaultTurnRouterDeterministicTest {
                 new SemanticPlanCompiler(policy),
                 new SemanticPlanValidator(new PlanFingerprintService()),
                 new TurnDecisionPolicy());
+    }
+
+    private DefaultTurnRouter router(SemanticClassifierPort classifier) {
+        PublicSubjectCatalog catalog = new PublicSubjectCatalog(List.of(
+                new PublicSubjectCatalog.Subject(
+                        SubjectType.PROJECT, "project-a", "content-v1", Set.of("project-a"))));
+        SemanticRoutingPolicy policy = new SemanticRoutingPolicy();
+        return new DefaultTurnRouter(
+                new GlobalBoundaryGate(),
+                new RoutingContextResolver(new LegacySemanticContextAdapter()),
+                catalog,
+                new SemanticSignalCollector(),
+                new SemanticPlanCompiler(policy),
+                new SemanticPlanValidator(new PlanFingerprintService()),
+                new TurnDecisionPolicy(),
+                classifier,
+                true);
     }
 
     private SemanticTurnInput inputWithSubjects(String question) {

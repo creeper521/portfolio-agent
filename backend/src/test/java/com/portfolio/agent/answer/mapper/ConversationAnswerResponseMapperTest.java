@@ -23,6 +23,7 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
+import com.portfolio.agent.answer.routing.service.ClarificationRequest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -65,6 +66,34 @@ class ConversationAnswerResponseMapperTest {
     }
 
     @Test
+    void mapsClarificationCorrelationAndClosedSubjectResolution() {
+        ClarificationRequest clarification = new ClarificationRequest(
+                "clarify-0123456789abcdef0123456789abcdef",
+                ClarificationRequest.Scope.CRITICAL,
+                "ROUTING_SUBJECT_CLARIFICATION_REQUIRED",
+                "请选择公开主体",
+                List.of(new ClarificationRequest.Field(
+                        "subject", ClarificationRequest.InputMode.SINGLE_CHOICE,
+                        List.of(new ClarificationRequest.Option(
+                                "project-a", "Project A", "PROJECT", "project-a")),
+                        true, List.of("继续当前请求"))),
+                1, 0, List.of(),
+                List.of(new ClarificationRequest.BlockedGoal(
+                        "继续当前请求", "WAITING_FOR_SUBJECT")));
+
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.clarificationRequired(clarification)));
+
+        var mapped = response.getAgentTurn().getClarification();
+        assertThat(mapped.getClarificationId())
+                .isEqualTo("clarify-0123456789abcdef0123456789abcdef");
+        assertThat(mapped.getFields().getFirst().getOptions().getFirst().getResolution().getKind())
+                .isEqualTo("SUBJECT_REFERENCE");
+        assertThat(mapped.getFields().getFirst().getOptions().getFirst().getResolution().getSubjectType())
+                .isEqualTo("PROJECT");
+    }
+
+    @Test
     void mapsOnlyCompletedTaskBodiesWhenThePlanHasBlockedTasks() throws Exception {
         TaskOutcome answered = TaskOutcome.answered(
                 "task-01", SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
@@ -86,7 +115,9 @@ class ConversationAnswerResponseMapperTest {
         assertThat(response.getAgentTurn().getOutcome().getTaskSummary().getItems())
                 .extracting(com.portfolio.agent.answer.dto.response.TaskSummaryResponse.Item::getStatus)
                 .containsExactly("COMPLETED", "BLOCKED");
-        assertThat(json).doesNotContain("task-01", "task-02", "EXECUTION_DEPENDENCY_BLOCKED");
+        assertThat(response.getAgentTurn().getOutcome().getTaskSummary().getItems().get(1).getReasonCodes())
+                .containsExactly("EXECUTION_DEPENDENCY_BLOCKED");
+        assertThat(json).doesNotContain("task-01", "task-02");
     }
 
     @Test

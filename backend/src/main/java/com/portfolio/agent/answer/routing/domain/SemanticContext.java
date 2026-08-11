@@ -108,15 +108,28 @@ public final class SemanticContext {
     public static final class PendingPlanReference {
 
         private final String referenceId;
+        private final String planFingerprint;
         private final List<SubjectReference> subjects;
 
         public PendingPlanReference(String referenceId, List<SubjectReference> subjects) {
+            this(referenceId, null, subjects);
+        }
+
+        public PendingPlanReference(
+                String referenceId,
+                String planFingerprint,
+                List<SubjectReference> subjects) {
             this.referenceId = requireText(referenceId, "referenceId");
+            this.planFingerprint = normalizeText(planFingerprint);
             this.subjects = copyReferences(subjects, "subjects");
         }
 
         public String getReferenceId() {
             return referenceId;
+        }
+
+        public String getPlanFingerprint() {
+            return planFingerprint;
         }
 
         public List<SubjectReference> getSubjects() {
@@ -132,17 +145,19 @@ public final class SemanticContext {
                 return false;
             }
             return Objects.equals(referenceId, that.referenceId)
+                    && Objects.equals(planFingerprint, that.planFingerprint)
                     && Objects.equals(subjects, that.subjects);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(referenceId, subjects);
+            return Objects.hash(referenceId, planFingerprint, subjects);
         }
 
         @Override
         public String toString() {
-            return "PendingPlanReference{subjectCount=" + subjects.size() + '}';
+            return "PendingPlanReference{hasFingerprint=" + (planFingerprint != null)
+                    + ", subjectCount=" + subjects.size() + '}';
         }
     }
 

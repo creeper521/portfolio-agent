@@ -16,6 +16,7 @@ import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.DeterministicConversationFallback;
+import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
 import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
@@ -176,7 +177,10 @@ public class ConversationalAgentConfiguration {
     @Bean
     TurnRouter semanticTurnRouter(
             PortfolioKnowledgeGateway knowledgeGateway,
-            SemanticPlanValidator semanticPlanValidator
+            SemanticPlanValidator semanticPlanValidator,
+            OpenAiCompatibleConversationalModelAdapter modelAdapter,
+            ConversationProviderAccess providerAccess,
+            ConversationalAgentProperties properties
     ) {
         return DefaultTurnRouter.fromPublicSubjects(
                 publicSubjects(knowledgeGateway),
@@ -185,7 +189,9 @@ public class ConversationalAgentConfiguration {
                 new SemanticSignalCollector(),
                 new SemanticPlanCompiler(new SemanticRoutingPolicy()),
                 semanticPlanValidator,
-                new TurnDecisionPolicy());
+                new TurnDecisionPolicy(),
+                modelAdapter,
+                properties.isSemanticClassifierEnabled() && providerAccess.isAllowed());
     }
 
     @Bean
@@ -208,12 +214,13 @@ public class ConversationalAgentConfiguration {
             ConversationProviderAccess providerAccess,
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             ConversationDraftValidator draftValidator,
-            PortfolioKnowledgeGateway knowledgeGateway
+            PortfolioKnowledgeGateway knowledgeGateway,
+            DeterministicPortfolioAnswerComposer answerComposer
     ) {
         String contentVersion = knowledgeGateway.getContent().getContentVersion();
         return new SemanticTurnCoordinator(List.of(
                 new PortfolioSemanticTaskExecutor(
-                        portfolioIntelligence, ignored -> Optional.empty(), contentVersion),
+                        portfolioIntelligence, ignored -> Optional.empty(), contentVersion, answerComposer),
                 new GeneralSemanticTaskExecutor(providerAccess, modelAdapter, draftValidator),
                 new DeterministicSynthesisTaskExecutor()));
     }
@@ -262,7 +269,7 @@ public class ConversationalAgentConfiguration {
             addAlias(aliases, item.getSlug());
             addAlias(aliases, item.getTitle());
             target.add(new DefaultTurnRouter.PublicSubjectSpec(
-                    subjectType, item.getStableId(), contentVersion, aliases));
+                    subjectType, item.getStableId(), contentVersion, item.getTitle(), aliases));
         }
     }
 

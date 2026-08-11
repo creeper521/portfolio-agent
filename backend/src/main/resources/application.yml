@@ -53,6 +53,7 @@ portfolio:
   conversational-agent:
     enabled: ${PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED:false}
     visitor-data-policy-approved: ${PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED:false}
+    semantic-classifier-enabled: ${PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED:false}
     max-history-rounds: 20
     recent-raw-rounds: 6
     max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}

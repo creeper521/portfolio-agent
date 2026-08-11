@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.routing.domain;
 
+import com.portfolio.agent.answer.domain.AnswerSectionType;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -14,16 +16,30 @@ public sealed interface TaskResultPayload
     final class SectionResultPayload implements TaskResultPayload {
 
         private final List<String> blocks;
+        private final List<SectionBlock> sections;
         private final String summary;
 
         public SectionResultPayload(List<String> blocks, String summary) {
             this.blocks = copyBlocks(blocks, "blocks");
+            this.sections = this.blocks.stream().map(SectionBlock::untyped).toList();
             this.summary = optionalText(summary);
+        }
+
+        private SectionResultPayload(List<SectionBlock> sections, String summary, boolean typed) {
+            this.sections = copySections(sections);
+            this.blocks = this.sections.stream().map(SectionBlock::getContent).toList();
+            this.summary = optionalText(summary);
+        }
+
+        public static SectionResultPayload fromSections(List<SectionBlock> sections, String summary) {
+            return new SectionResultPayload(sections, summary, true);
         }
 
         public List<String> getBlocks() {
             return blocks;
         }
+
+        public List<SectionBlock> getSections() { return sections; }
 
         public String getSummary() {
             return summary;
@@ -37,18 +53,69 @@ public sealed interface TaskResultPayload
             if (!(other instanceof SectionResultPayload that)) {
                 return false;
             }
-            return Objects.equals(blocks, that.blocks) && Objects.equals(summary, that.summary);
+            return Objects.equals(sections, that.sections) && Objects.equals(summary, that.summary);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(blocks, summary);
+            return Objects.hash(sections, summary);
         }
 
         @Override
         public String toString() {
             return "SectionResultPayload{blockCount=" + blocks.size()
                     + ", hasSummary=" + (summary != null) + '}';
+        }
+    }
+
+    final class SectionBlock {
+        private final AnswerSectionType sectionType;
+        private final String title;
+        private final String content;
+        private final List<String> claimIds;
+        private final List<String> evidenceIds;
+
+        public SectionBlock(
+                AnswerSectionType sectionType, String title, String content,
+                List<String> claimIds, List<String> evidenceIds) {
+            this.sectionType = Objects.requireNonNull(sectionType, "sectionType");
+            this.title = requireText(title, "title");
+            this.content = requireText(content, "content");
+            this.claimIds = copyTextList(claimIds, "claimIds");
+            this.evidenceIds = copyTextList(evidenceIds, "evidenceIds");
+        }
+
+        private SectionBlock(String content) {
+            this.sectionType = null;
+            this.title = null;
+            this.content = requireText(content, "content");
+            this.claimIds = List.of();
+            this.evidenceIds = List.of();
+        }
+
+        static SectionBlock untyped(String content) { return new SectionBlock(content); }
+
+        public AnswerSectionType getSectionType() { return sectionType; }
+        public String getTitle() { return title; }
+        public String getContent() { return content; }
+        public List<String> getClaimIds() { return claimIds; }
+        public List<String> getEvidenceIds() { return evidenceIds; }
+        public boolean isTyped() { return sectionType != null; }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof SectionBlock that)) return false;
+            return sectionType == that.sectionType
+                    && Objects.equals(title, that.title)
+                    && Objects.equals(content, that.content)
+                    && Objects.equals(claimIds, that.claimIds)
+                    && Objects.equals(evidenceIds, that.evidenceIds);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(sectionType, title, content, claimIds, evidenceIds);
         }
     }
 
@@ -331,6 +398,14 @@ public sealed interface TaskResultPayload
             copied.add(requireText(block, name));
         }
         return List.copyOf(copied);
+    }
+
+    private static List<SectionBlock> copySections(List<SectionBlock> sections) {
+        List<SectionBlock> copied = List.copyOf(Objects.requireNonNull(sections, "sections"));
+        if (copied.isEmpty()) {
+            throw new IllegalArgumentException("sections must not be empty");
+        }
+        return copied;
     }
 
     private static List<RecommendationItem> copyItems(
