@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2 语义轮次路由 · 前端决策点审计 Demo · 非生产</title>
+<!--
+
+  本文件：P2 前端设计决策点审计 Demo · 非生产代码
+
+  目的：在动 Vue 实现前，让 manager 逐项审计四个已拍板决策 + 两个新发现修复的交互形态。
+  不覆盖 A–H 全状态（已有原型负责），只演示本次变化的决策点。
+
+  场景 ↔ 决策对照：
+    场景 1  计划确认卡：约束置顶（U04-A）+ summaryLabel 标题（U05-A 目标形态）+ 显式调整模式（决策 1：调整条 + 确认卡保持可操作）
+    场景 2  澄清 Field Renderer：SINGLE_CHOICE / MULTI_CHOICE / SHORT_TEXT（FE-F02/F04）+ chip 序号（U03）+ 已继续点名（FE-F06）+ 下游原因（FE-F07）+ 旧卡只读（FE-F11）
+    场景 3  任务摘要双模式（U01-C：全成功流程箭头 / 部分成功计数+默认展开）+ reason 白名单小字（FE-F05）
+    场景 4  失效卡「暂不处理」（决策 3：本地 dismiss）
+    场景 5  生命周期与消息级绑定说明（FE-F08/F10，纯文字 + 只读态示例）
+
+  视觉基线：复用 semantic-turn-routing-prototype.html 的 token 体系与组件语法，不引入新视觉系统。
+  演示脚本仅驱动本页状态切换，不代表生产实现方式。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --ink: #201c17; --ink-2: #34302a;
+    --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53;
+    --agent-stage: #1e1b17;
+    --agent-thread-paper: #f5e8d1;
+    --agent-radius-sm: 8px;
+    --agent-motion-fast: 160ms;
+    --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --sans: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --workspace-surface-subtle: color-mix(in srgb, var(--paper-low) 46%, transparent);
+    --workspace-text: var(--ink);
+    --workspace-text-secondary: var(--muted);
+    --workspace-text-faint: var(--faint);
+    --workspace-rule: rgba(104, 84, 60, 0.22);
+    --workspace-accent: var(--red);
+    --workspace-accent-soft: color-mix(in srgb, var(--red) 68%, white);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--agent-stage); color: var(--workspace-text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; border-radius: 2px; }
+  button { font: inherit; color: inherit; }
+
+  /* ===== 审计外壳（非产品 UI）===== */
+  .audit-head {
+    padding: 22px clamp(16px, 4vw, 44px) 16px;
+    color: #e8ddce;
+  }
+  .audit-head h1 { font: 600 20px var(--serif); }
+  .audit-head p { margin-top: 6px; color: #a99f91; font: 12px/1.7 var(--mono); max-width: 960px; }
+  .audit-nav {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 0 clamp(16px, 4vw, 44px) 18px;
+  }
+  .audit-nav a {
+    color: #e8ddce; text-decoration: none;
+    font: 11px var(--mono); letter-spacing: .05em;
+    padding: 6px 11px; border: 1px solid #4a433b; border-radius: var(--agent-radius-sm);
+  }
+  .audit-nav a:hover { border-color: var(--red-hi); color: #fff; }
+
+  .scene {
+    margin: 0 clamp(10px, 3vw, 34px) 26px;
+    background: var(--agent-thread-paper);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .scene__head {
+    padding: 14px 20px;
+    border-bottom: 1px dashed var(--rule);
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  .scene__head h2 { font: 600 15px var(--serif); color: var(--ink); }
+  .scene__head .scene__no { font: 11px var(--mono); color: var(--red); letter-spacing: .1em; }
+  .scene__decisions {
+    padding: 10px 20px;
+    border-bottom: 1px dashed var(--rule);
+    background: var(--workspace-surface-subtle);
+    font: 11px/1.8 var(--mono); color: var(--muted);
+  }
+  .scene__decisions b { color: var(--red); font-weight: 500; }
+  .scene__stage { padding: 22px 20px 26px; max-width: 780px; }
+  .scene__note { padding: 0 20px 18px; font: 12px/1.8 var(--sans); color: var(--muted); }
+  .scene__note code { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+
+  /* 模拟用户消息 + agent meta（极简，只为场景感）*/
+  .msg-user {
+    width: fit-content; max-width: 64%; margin-left: auto; margin-bottom: 18px;
+    padding: 4px 0 4px 14px; border-left: 2px solid var(--red);
+    font: 15px/1.7 var(--sans);
+  }
+  .msg-meta { margin-bottom: 12px; font: 11px var(--mono); letter-spacing: .13em; color: var(--workspace-accent-soft); }
+  .msg-meta .tag {
+    padding: 2px 7px; margin-left: 6px; border: 1px solid var(--workspace-rule); border-radius: 4px;
+    font-size: 10px; letter-spacing: .08em; color: var(--red);
+  }
+  .msg-meta .tag--solid { background: var(--red); border-color: var(--red); color: var(--paper-hi); }
+
+  /* ============================================================
+     场景 1 · 计划确认卡（约束置顶 + summaryLabel + 调整模式）
+     ============================================================ */
+  .plan { border: 1px solid var(--workspace-rule); background: var(--paper-hi); }
+  .plan__head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 14px 18px 10px; border-bottom: 1px solid var(--workspace-rule);
+  }
+  .plan__head-label { font: 11px var(--mono); letter-spacing: .13em; color: var(--red); text-transform: uppercase; }
+  .plan__head-title { font: 600 16px var(--serif); flex: 1; }
+  .plan__head-status { font: 10px var(--mono); letter-spacing: .08em; color: var(--faint); }
+  .plan__head-status[data-mode='adjusting'] { color: var(--red); border: 1px solid var(--red); padding: 1px 6px; border-radius: 3px; }
+
+  /* 约束条置顶（决策 U04-A） */
+  .constraints {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin: 12px 18px 0; padding: 9px 12px;
+    border: 1px solid var(--workspace-rule); background: var(--workspace-surface-subtle);
+    font: 12.5px/1.6 var(--sans); color: var(--workspace-text-secondary);
+  }
+  .constraints__label { font: 10px var(--mono); letter-spacing: .1em; color: var(--faint); }
+  .constraints__sep { color: var(--faint); }
+
+  .plan__tasks { padding: 6px 18px 10px; }
+  .plan-task { display: flex; align-items: baseline; gap: 14px; padding: 11px 0; border-bottom: 1px dashed var(--workspace-rule); }
+  .plan-task:last-child { border-bottom: 0; }
+  .plan-task__no { font: 500 18px var(--mono); letter-spacing: .04em; color: var(--red); flex-shrink: 0; min-width: 30px; }
+  .plan-task__body { flex: 1; min-width: 0; }
+  .plan-task__label { font: 500 15.5px/1.45 var(--serif); }
+  .plan-task__dep { font: 10.5px/1.5 var(--mono); color: var(--faint); margin-top: 3px; }
+
+  .plan__actions {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    padding: 14px 18px; border-top: 1px solid var(--workspace-rule);
+    background: var(--workspace-surface-subtle);
+  }
+  .plan-btn { font: 11.5px var(--mono); letter-spacing: .04em; padding: 9px 16px; border-radius: var(--agent-radius-sm); cursor: pointer; transition: all var(--agent-motion-fast) var(--ease); white-space: nowrap; }
+  .plan-btn--primary { background: var(--red); color: var(--paper-hi); border: 1px solid var(--red); }
+  .plan-btn--primary:hover { background: color-mix(in srgb, var(--red) 82%, black); }
+  .plan-btn--ghost { background: rgba(255,255,255,0.4); color: var(--workspace-text-secondary); border: 1px solid var(--workspace-rule); }
+  .plan-btn--ghost:hover { border-color: var(--red); color: var(--red); }
+
+  /* 调整模式：composer 上方上下文条（决策 1） */
+  .adjust-bar {
+    display: none;
+    margin-top: 14px; padding: 12px 14px;
+    border: 1px solid var(--red); background: var(--paper-hi);
+  }
+  .adjust-bar.is-on { display: block; }
+  .adjust-bar__label { font: 10px var(--mono); letter-spacing: .1em; color: var(--red); }
+  .adjust-bar__title { font: 600 14px var(--serif); margin-top: 3px; }
+  .adjust-bar__examples { margin-top: 6px; font: 11.5px/1.7 var(--sans); color: var(--muted); }
+  .adjust-bar__examples span { display: inline-block; margin-right: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .adjust-bar__row { display: flex; gap: 8px; margin-top: 10px; }
+  .adjust-bar__row input {
+    flex: 1; min-width: 0; padding: 8px 10px;
+    border: 1px solid var(--workspace-rule); border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.5); font: 13px var(--sans); color: var(--ink);
+  }
+  .adjust-bar__row input:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+  .adjust-bar__row button { font: 11px var(--mono); padding: 8px 14px; border-radius: var(--agent-radius-sm); cursor: pointer; }
+  .adjust-bar__submit { border: 1px solid var(--red); background: var(--red); color: var(--paper-hi); }
+  .adjust-bar__exit { border: 1px solid var(--workspace-rule); background: transparent; color: var(--muted); }
+  .adjust-bar__exit:hover { border-color: var(--red); color: var(--red); }
+
+  /* ============================================================
+     场景 2 · 澄清卡（三种 Field Renderer）
+     ============================================================ */
+  .clarify { border: 1px solid var(--red); background: var(--paper-hi); }
+  .clarify + .clarify { margin-top: 18px; }
+  .clarify__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 14px 18px 6px; }
+  .clarify__head-label { font: 11px var(--mono); letter-spacing: .13em; color: var(--red); text-transform: uppercase; }
+  .clarify__head-title { font: 600 15px var(--serif); }
+  .clarify__question { font: 15px/1.7 var(--serif); color: var(--ink-2); padding: 0 18px 12px; }
+  .clarify__question::before {
+    content: ""; display: inline-block; width: 7px; height: 7px;
+    background: var(--red); transform: rotate(45deg); margin-right: 9px; vertical-align: 3px;
+  }
+  .clarify__options { padding: 0 18px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .clarify-chip {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 11px 14px; width: 100%; text-align: left;
+    border: 1px solid var(--workspace-rule); border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.4); cursor: pointer;
+    transition: border-color var(--agent-motion-fast), background var(--agent-motion-fast);
+    font-family: var(--sans);
+  }
+  .clarify-chip:hover { border-color: var(--red); background: var(--paper-hi); }
+  .clarify-chip__no { font: 13px var(--mono); color: var(--red); flex-shrink: 0; }
+  .clarify-chip__label { font-size: 14.5px; flex: 1; }
+  .clarify-chip__hint { font: 10px var(--mono); letter-spacing: .08em; color: var(--faint); flex-shrink: 0; }
+  /* MULTI_CHOICE 选中态 */
+  .clarify-chip[aria-pressed='true'] { border-color: var(--red); background: rgba(122,46,42,0.05); }
+  .clarify-chip[aria-pressed='true'] .clarify-chip__hint { color: var(--red); }
+  /* 只读旧卡（FE-F11） */
+  .clarify[data-readonly='true'] { border-color: var(--workspace-rule); }
+  .clarify[data-readonly='true'] .clarify-chip { cursor: default; opacity: .55; }
+  .clarify[data-readonly='true'] .clarify-chip:hover { border-color: var(--workspace-rule); background: rgba(255,255,255,0.4); }
+  .clarify__readonly-note { padding: 0 18px 12px; font: 10.5px var(--mono); color: var(--faint); letter-spacing: .04em; }
+
+  .clarify__continue {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 10px 18px; border-top: 1px dashed var(--workspace-rule);
+    font: 12.5px/1.6 var(--sans); color: var(--muted);
+  }
+  .clarify__continue-label { font: 10px var(--mono); letter-spacing: .1em; color: var(--faint); flex-shrink: 0; }
+
+  .clarify__blocked { padding: 10px 18px 14px; border-top: 1px dashed var(--workspace-rule); font: 12px/1.7 var(--sans); color: var(--muted); }
+  .clarify__blocked-label { display: block; font: 10px var(--mono); letter-spacing: .1em; color: var(--red); margin-bottom: 4px; }
+  .clarify__blocked ul { list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .clarify__blocked li::before { content: "↳"; color: var(--red); font-family: var(--mono); margin-right: 8px; }
+  .clarify__blocked .reason { color: var(--faint); font-size: 11px; }
+
+  /* SHORT_TEXT 输入 */
+  .clarify__text { padding: 0 18px 12px; }
+  .clarify__text textarea {
+    width: 100%; min-height: 64px; padding: 9px 11px; resize: vertical;
+    border: 1px solid var(--workspace-rule); border-radius: var(--agent-radius-sm);
+    background: rgba(255,255,255,0.5); font: 13.5px/1.6 var(--sans); color: var(--ink);
+  }
+  .clarify__text textarea:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+  .clarify__submit-row { display: flex; align-items: baseline; gap: 10px; padding: 0 18px 14px; }
+  .clarify__submit { font: 11px var(--mono); padding: 8px 14px; border-radius: var(--agent-radius-sm); border: 1px solid var(--red); background: var(--red); color: var(--paper-hi); cursor: pointer; }
+  .clarify__submit:disabled { opacity: .45; cursor: not-allowed; }
+  .clarify__submit-hint { font: 10px var(--mono); color: var(--faint); }
+  .clarify__pending { padding: 0 18px 12px; font: 10.5px var(--mono); color: var(--red); display: none; }
+  .clarify[data-pending='true'] .clarify__pending { display: block; }
+  .clarify[data-pending='true'] .clarify-chip,
+  .clarify[data-pending='true'] .clarify__submit { opacity: .5; pointer-events: none; }
+
+  /* ============================================================
+     场景 3 · 任务摘要双模式 + 状态矩阵
+     ============================================================ */
+  .summary { border: 1px solid var(--workspace-rule); background: var(--paper-hi); }
+  .summary + .summary { margin-top: 18px; }
+  .summary__bar {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 12px 16px; border: 0; background: var(--workspace-surface-subtle);
+    cursor: pointer; text-align: left;
+  }
+  .summary__bar:hover { outline: 1px solid var(--workspace-accent-soft); outline-offset: -1px; }
+  .summary__label { font: 10.5px var(--mono); letter-spacing: .1em; color: var(--red); text-transform: uppercase; flex-shrink: 0; }
+  .summary__flow { font: 13.5px var(--serif); color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .summary__flow .arrow { color: var(--faint); margin: 0 4px; }
+  .summary__counts { font: 13.5px var(--serif); color: var(--muted); flex: 1; min-width: 0; }
+  .summary__counts b { color: var(--red); font-weight: 500; }
+  .summary__status { font: 10px var(--mono); letter-spacing: .06em; color: var(--faint); flex-shrink: 0; }
+  .summary__chev { font: 13px var(--mono); color: var(--workspace-text-secondary); flex-shrink: 0; transition: transform var(--agent-motion-fast); }
+  .summary[data-open='true'] .summary__chev { transform: rotate(180deg); }
+  .summary__detail { display: none; padding: 6px 16px 12px; border-top: 1px solid var(--workspace-rule); }
+  .summary[data-open='true'] .summary__detail { display: block; }
+
+  .status-row {
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: baseline; gap: 12px;
+    padding: 10px 0; border-bottom: 1px dashed var(--workspace-rule);
+  }
+  .status-row:last-child { border-bottom: 0; }
+  .status-row__no { font: 13px var(--mono); color: var(--red); min-width: 24px; }
+  .status-row__label { font: 14px var(--serif); min-width: 0; }
+  .status-row__label .reason { display: block; font: 11.5px/1.5 var(--sans); color: var(--muted); margin-top: 2px; }
+  .status-row__label .reason b { font-weight: 500; color: var(--ink-2); }
+  .status-row__state { font: 10px var(--mono); letter-spacing: .06em; white-space: nowrap; padding: 2px 7px; border-radius: 3px; }
+  .status-row__state[data-s='done'] { color: var(--muted); }
+  .status-row__state[data-s='bad'] { color: var(--red); border: 1px solid var(--red); background: rgba(122,46,42,0.05); }
+
+  /* ============================================================
+     场景 4 · 失效卡
+     ============================================================ */
+  .invalidated { border: 1px solid var(--red); background: var(--paper-hi); padding: 16px 20px; }
+  .invalidated__label { font: 11px var(--mono); letter-spacing: .13em; color: var(--red); text-transform: uppercase; margin-bottom: 8px; }
+  .invalidated__title { font: 600 15.5px var(--serif); margin-bottom: 6px; }
+  .invalidated__body { font: 14px/1.75 var(--serif); color: var(--ink-2); margin-bottom: 14px; }
+  .invalidated__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .invalidated__dismissed {
+    display: none; padding: 10px 14px;
+    font: 10.5px var(--mono); letter-spacing: .04em; color: var(--faint);
+    border: 1px dashed var(--workspace-rule);
+  }
+  .invalidated__dismissed.is-on { display: block; }
+
+  /* ============================================================
+     场景 5 · 生命周期说明
+     ============================================================ */
+  .lifecycle { border: 1px solid var(--workspace-rule); background: var(--paper-hi); padding: 16px 20px; }
+  .lifecycle h3 { font: 600 14px var(--serif); margin-bottom: 8px; color: var(--ink); }
+  .lifecycle table { width: 100%; border-collapse: collapse; font: 12px/1.6 var(--sans); color: var(--ink-2); }
+  .lifecycle th, .lifecycle td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px dashed var(--workspace-rule); vertical-align: top; }
+  .lifecycle th { font: 10px var(--mono); letter-spacing: .08em; color: var(--faint); white-space: nowrap; }
+  .lifecycle tr:last-child td { border-bottom: 0; }
+
+  .demo-toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    padding: 9px 16px; background: var(--ink); color: #e8ddce;
+    font: 11px var(--mono); letter-spacing: .04em; border-radius: var(--agent-radius-sm);
+    opacity: 0; pointer-events: none; transition: opacity 200ms;
+  }
+  .demo-toast.is-on { opacity: 1; }
+
+  @media (max-width: 620px) {
+    .msg-user { max-width: 88%; }
+    .plan__actions .plan-btn { flex: 1; text-align: center; }
+    .adjust-bar__row { flex-direction: column; }
+    .status-row { grid-template-columns: auto 1fr; }
+    .status-row__state { grid-column: 2; justify-self: start; margin-top: 2px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="audit-head">
+  <h1>P2 语义轮次路由 · 前端决策点审计 Demo</h1>
+  <p>非生产。只演示本次四个已拍板决策与两个新发现修复的交互形态。每个场景上方标注对应决策编号。视觉沿用既有原型 token，不代表生产像素。</p>
+</header>
+
+<nav class="audit-nav" aria-label="场景导航">
+  <a href="#s1">场景 1 · 确认卡 + 调整模式</a>
+  <a href="#s2">场景 2 · 澄清三种控件</a>
+  <a href="#s3">场景 3 · 摘要双模式</a>
+  <a href="#s4">场景 4 · 失效卡</a>
+  <a href="#s5">场景 5 · 生命周期</a>
+</nav>
+
+<!-- ============================================================
+     场景 1 · 计划确认卡：约束置顶 + summaryLabel + 调整模式
+     ============================================================ -->
+<section class="scene" id="s1">
+  <div class="scene__head">
+    <span class="scene__no">SCENE 01</span>
+    <h2>计划确认卡 · 约束置顶 / 确定性概括 / 显式调整模式</h2>
+  </div>
+  <p class="scene__decisions">
+    审计点：<b>U04-A</b> 约束条置顶（先决策前提后任务） · <b>U05-A</b> 标题带确定性概括（目标形态，后端 summaryLabel 缺失时前端有克制 fallback） · <b>决策 1</b> 点「调整计划」→ composer 上方出现调整条，确认卡加「调整中」角标但三按钮保持可点（可反悔直接确认），「退出调整」恢复。
+  </p>
+  <div class="scene__stage">
+    <div class="msg-user">分别介绍 SQL 审计和 ABTest，比较它们，再推荐一个适合后端面试展示的，并总结展示策略。</div>
+    <p class="msg-meta">AGENT · 复杂计划 · 待确认<span class="tag">待确认</span><span class="tag">5 步计划</span></p>
+
+    <div class="plan" id="demo-plan">
+      <div class="plan__head">
+        <span class="plan__head-label">计划</span>
+        <span class="plan__head-title">5 步 · 从了解到推荐</span>
+        <span class="plan__head-status" id="plan-status" data-mode="idle">待你确认</span>
+      </div>
+      <!-- 约束置顶（U04-A） -->
+      <div class="constraints">
+        <span class="constraints__label">约束</span>
+        <span>后端</span><span class="constraints__sep">·</span>
+        <span>面试展示</span><span class="constraints__sep">·</span>
+        <span>推荐 1 个</span>
+      </div>
+      <div class="plan__tasks">
+        <div class="plan-task"><span class="plan-task__no">01</span><div class="plan-task__body"><p class="plan-task__label">介绍 SQL 审计项目</p></div></div>
+        <div class="plan-task"><span class="plan-task__no">02</span><div class="plan-task__body"><p class="plan-task__label">介绍 ABTest 项目</p></div></div>
+        <div class="plan-task"><span class="plan-task__no">03</span><div class="plan-task__body"><p class="plan-task__label">比较两个项目</p><p class="plan-task__dep">↳ 需要 01、02 先完成</p></div></div>
+        <div class="plan-task"><span class="plan-task__no">04</span><div class="plan-task__body"><p class="plan-task__label">推荐一个适合后端面试展示的项目</p><p class="plan-task__dep">↳ 需要 03 先完成</p></div></div>
+        <div class="plan-task"><span class="plan-task__no">05</span><div class="plan-task__body"><p class="plan-task__label">总结面试展示策略</p><p class="plan-task__dep">↳ 使用 04 的结果</p></div></div>
+      </div>
+      <div class="plan__actions">
+        <button class="plan-btn plan-btn--primary" type="button" id="btn-confirm">按此计划继续</button>
+        <button class="plan-btn plan-btn--ghost" type="button" id="btn-adjust">调整计划</button>
+        <button class="plan-btn plan-btn--ghost" type="button" id="btn-cancel">取消</button>
+      </div>
+    </div>
+
+    <!-- 调整模式上下文条（决策 1） -->
+    <div class="adjust-bar" id="adjust-bar" role="status">
+      <p class="adjust-bar__label">正在调整当前计划</p>
+      <p class="adjust-bar__title">5 步 · 从了解到推荐</p>
+      <p class="adjust-bar__examples">例如：<span>「去掉总结那一步」</span><span>「把推荐数量改成 2 个」</span></p>
+      <div class="adjust-bar__row">
+        <input type="text" id="adjust-input" placeholder="用一句话描述怎么调整，提交后会带着原计划重新规划" aria-label="调整说明">
+        <button class="adjust-bar__submit" type="button" id="btn-adjust-submit">提交调整</button>
+        <button class="adjust-bar__exit" type="button" id="btn-adjust-exit">退出调整</button>
+      </div>
+    </div>
+  </div>
+  <p class="scene__note">试试：点「调整计划」→ 确认卡右上角出现「调整中」角标，按钮仍可点；点「退出调整」恢复。点「按此计划继续」（即使调整中）演示反悔路径。提交调整 = <code>ASK + 原问题 + planAdjustment{instruction, pendingPlanReference}</code>（决策 2 的双轨适配层负责命名差异吸收）。</p>
+</section>
+
+<!-- ============================================================
+     场景 2 · 澄清三种 Field Renderer
+     ============================================================ -->
+<section class="scene" id="s2">
+  <div class="scene__head">
+    <span class="scene__no">SCENE 02</span>
+    <h2>澄清卡 · SINGLE_CHOICE / MULTI_CHOICE / SHORT_TEXT</h2>
+  </div>
+  <p class="scene__decisions">
+    审计点：<b>FE-F04</b> 三种 inputMode 都有可操作控件 · <b>U03</b> chip 带序号（01/02/03） · <b>FE-F06</b> 局部澄清点名已继续任务 · <b>FE-F07</b> 关键澄清下游带安全原因（白名单短句，不自由发挥） · <b>FE-F11</b> 旧澄清卡降级只读 · 必填未满足时提交禁用 · 提交后 pending 防重复。
+  </p>
+  <div class="scene__stage">
+
+    <!-- 2a · 局部澄清 SINGLE_CHOICE -->
+    <div class="msg-user">介绍 SQL 审计，再把它和另一个项目比较。</div>
+    <div class="clarify" id="clarify-single">
+      <div class="clarify__head">
+        <span class="clarify__head-label">局部澄清</span>
+        <span class="clarify__head-title">比较任务需要第二个项目</span>
+      </div>
+      <p class="clarify__question">你想把 SQL 审计和哪个项目比较？</p>
+      <div class="clarify__options">
+        <button class="clarify-chip" type="button" data-demo-select>
+          <span class="clarify-chip__no">01</span>
+          <span class="clarify-chip__label">ABTest 实验分流服务</span>
+          <span class="clarify-chip__hint">选择</span>
+        </button>
+        <button class="clarify-chip" type="button" data-demo-select>
+          <span class="clarify-chip__no">02</span>
+          <span class="clarify-chip__label">数据校验服务</span>
+          <span class="clarify-chip__hint">选择</span>
+        </button>
+        <button class="clarify-chip" type="button" data-demo-select>
+          <span class="clarify-chip__no">03</span>
+          <span class="clarify-chip__label">配置中心</span>
+          <span class="clarify-chip__hint">选择</span>
+        </button>
+      </div>
+      <p class="clarify__pending">已提交，正在按你的选择重新规划…</p>
+      <!-- FE-F06：点名已继续任务（数据来自现有 completedTasks[].goalLabel，无需新后端字段） -->
+      <div class="clarify__continue">
+        <span class="clarify__continue-label">已继续</span>
+        <span>介绍 SQL 审计项目已完成，不受影响。</span>
+      </div>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">2a · 局部澄清：点任一 chip → 整卡进入 pending（防重复提交）。「已继续」点名具体任务而不是只报数量。</p>
+
+    <!-- 2b · 关键澄清 MULTI_CHOICE -->
+    <div class="clarify" id="clarify-multi" style="margin-top:22px">
+      <div class="clarify__head">
+        <span class="clarify__head-label">关键澄清</span>
+        <span class="clarify__head-title">请指定要比较的两个项目</span>
+      </div>
+      <p class="clarify__question">你想比较哪两个项目？可多选，确认后我会重新规划。</p>
+      <div class="clarify__options">
+        <button class="clarify-chip" type="button" aria-pressed="false" data-demo-multi>
+          <span class="clarify-chip__no">01</span>
+          <span class="clarify-chip__label">SQL 审计平台</span>
+          <span class="clarify-chip__hint">未选</span>
+        </button>
+        <button class="clarify-chip" type="button" aria-pressed="false" data-demo-multi>
+          <span class="clarify-chip__no">02</span>
+          <span class="clarify-chip__label">ABTest 实验分流服务</span>
+          <span class="clarify-chip__hint">未选</span>
+        </button>
+        <button class="clarify-chip" type="button" aria-pressed="false" data-demo-multi>
+          <span class="clarify-chip__no">03</span>
+          <span class="clarify-chip__label">数据校验服务</span>
+          <span class="clarify-chip__hint">未选</span>
+        </button>
+      </div>
+      <div class="clarify__submit-row">
+        <button class="clarify__submit" type="button" id="btn-multi-submit" disabled>确认选择</button>
+        <span class="clarify__submit-hint">至少选择 1 项后可提交</span>
+      </div>
+      <p class="clarify__pending">已提交，正在按你的选择重新规划…</p>
+      <!-- FE-F07：下游带白名单原因短句 -->
+      <div class="clarify__blocked">
+        <span class="clarify__blocked-label">被阻塞的下游任务</span>
+        <ul>
+          <li>比较两个项目 <span class="reason">— 等待你确认主体</span></li>
+          <li>推荐一个项目 <span class="reason">— 依赖比较结果</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">2b · 关键澄清 MULTI_CHOICE：chip 可切换选中态，未选时「确认选择」禁用；下游原因只来自白名单映射（promptCode / reasonCode → 短句），前端不自由猜测。</p>
+
+    <!-- 2c · SHORT_TEXT（拆分请求场景） -->
+    <div class="clarify" id="clarify-text" style="margin-top:22px">
+      <div class="clarify__head">
+        <span class="clarify__head-label">需要澄清</span>
+        <span class="clarify__head-title">这个请求包含的目标过多</span>
+      </div>
+      <p class="clarify__question">一轮最多处理六个目标。请描述你想优先完成的部分，剩下的可以之后再问。</p>
+      <div class="clarify__text">
+        <textarea id="short-text-input" placeholder="例如：先只做介绍 SQL 审计和 ABTest 这两步" aria-label="补充说明"></textarea>
+      </div>
+      <div class="clarify__submit-row">
+        <button class="clarify__submit" type="button" id="btn-text-submit" disabled>提交</button>
+        <span class="clarify__submit-hint">内容为空时不可提交</span>
+      </div>
+      <p class="clarify__pending">已提交，正在按你的描述重新规划…</p>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">2c · SHORT_TEXT：空输入禁提交；在 §11.1 合同冻结前，这段文本按决策 2 的双轨策略作为新一轮普通提问提交（适配层兜底），冻结后切到 <code>textValue</code>。</p>
+
+    <!-- 2d · 旧澄清卡只读（FE-F11） -->
+    <div class="clarify" data-readonly="true" style="margin-top:22px">
+      <div class="clarify__head">
+        <span class="clarify__head-label">局部澄清</span>
+        <span class="clarify__head-title">比较任务需要第二个项目</span>
+      </div>
+      <p class="clarify__question">你想把 SQL 审计和哪个项目比较？</p>
+      <div class="clarify__options">
+        <button class="clarify-chip" type="button" tabindex="-1">
+          <span class="clarify-chip__no">01</span>
+          <span class="clarify-chip__label">ABTest 实验分流服务</span>
+          <span class="clarify-chip__hint">已失效</span>
+        </button>
+      </div>
+      <p class="clarify__readonly-note">此澄清已被后续轮次取代，仅作记录，不可再提交。</p>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">2d · FE-F11：历史中过期的澄清卡降级为只读记录，防止点击旧 chip 把选项合并进最新一轮的上下文。</p>
+  </div>
+</section>
+
+<!-- ============================================================
+     场景 3 · 任务摘要双模式 + reason 白名单
+     ============================================================ -->
+<section class="scene" id="s3">
+  <div class="scene__head">
+    <span class="scene__no">SCENE 03</span>
+    <h2>任务摘要 · 全成功流程箭头 / 部分成功计数 + reason</h2>
+  </div>
+  <p class="scene__decisions">
+    审计点：<b>U01-C</b> 全成功折叠态用流程箭头（介绍 → 比较 → 推荐 · 3 步已完成）；非全成功折叠态用计数（2/5 完成 · 1 证据不足 · 2 阻塞）且默认展开 · <b>FE-F05</b> 状态行带 reason 白名单小字与 blockedBy 引用（依赖任务 02 未完成）。
+  </p>
+  <div class="scene__stage">
+
+    <!-- 3a · 全成功：流程箭头，默认折叠 -->
+    <div class="summary" data-open="false" id="summary-ok">
+      <button class="summary__bar" type="button" aria-expanded="false" data-demo-toggle>
+        <span class="summary__label">任务摘要</span>
+        <span class="summary__flow">介绍 SQL 审计<span class="arrow">→</span>介绍 ABTest<span class="arrow">→</span>比较两个项目</span>
+        <span class="summary__status">3 步 · 已完成</span>
+        <span class="summary__chev">▾</span>
+      </button>
+      <div class="summary__detail">
+        <div class="status-row"><span class="status-row__no">01</span><span class="status-row__label">介绍 SQL 审计项目</span><span class="status-row__state" data-s="done">已完成</span></div>
+        <div class="status-row"><span class="status-row__no">02</span><span class="status-row__label">介绍 ABTest 项目</span><span class="status-row__state" data-s="done">已完成</span></div>
+        <div class="status-row"><span class="status-row__no">03</span><span class="status-row__label">比较两个项目</span><span class="status-row__state" data-s="done">已完成</span></div>
+      </div>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">3a · 全成功：折叠态一眼看到执行链路，正文仍是主角。点击可展开。</p>
+
+    <!-- 3b · 部分成功：计数 + 默认展开 + reason -->
+    <div class="summary" data-open="true" id="summary-partial" style="margin-top:22px">
+      <button class="summary__bar" type="button" aria-expanded="true" data-demo-toggle>
+        <span class="summary__label">任务状态</span>
+        <span class="summary__counts"><b>2/5</b> 完成 · <b>1</b> 证据不足 · <b>2</b> 阻塞</span>
+        <span class="summary__chev">▾</span>
+      </button>
+      <div class="summary__detail">
+        <div class="status-row"><span class="status-row__no">01</span><span class="status-row__label">介绍 SQL 审计项目</span><span class="status-row__state" data-s="done">已完成</span></div>
+        <div class="status-row">
+          <span class="status-row__no">02</span>
+          <span class="status-row__label">介绍 ABTest 项目<span class="reason">公开证据不足，无法生成可信介绍</span></span>
+          <span class="status-row__state" data-s="bad">证据不足</span>
+        </div>
+        <div class="status-row">
+          <span class="status-row__no">03</span>
+          <span class="status-row__label">比较两个项目<span class="reason">依赖任务 <b>02</b> 未完成，因此暂不执行</span></span>
+          <span class="status-row__state" data-s="bad">被阻塞</span>
+        </div>
+        <div class="status-row">
+          <span class="status-row__no">04</span>
+          <span class="status-row__label">推荐一个项目<span class="reason">依赖任务 <b>03</b> 未完成，因此暂不执行</span></span>
+          <span class="status-row__state" data-s="bad">被阻塞</span>
+        </div>
+        <div class="status-row"><span class="status-row__no">05</span><span class="status-row__label">后端面试通用技巧</span><span class="status-row__state" data-s="done">已完成</span></div>
+      </div>
+    </div>
+    <p class="scene__note" style="padding:10px 0 0">3b · 部分成功：默认展开；折叠后计数条仍让失败可感知。reason 只来自白名单映射，未知 code → 克制通用句，永不显示后端原字符串。</p>
+  </div>
+</section>
+
+<!-- ============================================================
+     场景 4 · 失效卡「暂不处理」
+     ============================================================ -->
+<section class="scene" id="s4">
+  <div class="scene__head">
+    <span class="scene__no">SCENE 04</span>
+    <h2>计划失效 · 重新生成 / 暂不处理</h2>
+  </div>
+  <p class="scene__decisions">
+    审计点：<b>决策 3</b> 增加「暂不处理」：纯本地 dismiss + 清理 continuation，不发任何请求；措辞避开「取消」（防止被理解为取消服务端任务）。dismiss 后原位留一行克制记录（也可选完全消失，见下方说明）。
+  </p>
+  <div class="scene__stage">
+    <div class="invalidated" id="invalidated-card">
+      <p class="invalidated__label">计划已失效</p>
+      <p class="invalidated__title">原计划需要重新生成</p>
+      <p class="invalidated__body">你之前确认的计划已经过期，我不会沿用旧的继续，也不会自动替换。请确认是否重新生成。</p>
+      <div class="invalidated__actions">
+        <button class="plan-btn plan-btn--primary" type="button" id="btn-regenerate">重新生成计划</button>
+        <button class="plan-btn plan-btn--ghost" type="button" id="btn-dismiss">暂不处理</button>
+      </div>
+    </div>
+    <p class="invalidated__dismissed" id="dismissed-note">已暂不处理 · 该计划不会执行，可直接继续提问。</p>
+  </div>
+  <p class="scene__note">点「暂不处理」→ 卡片消失，留下一行 mono 记录。审计时请一并判断：dismiss 后留这一行记录，还是完全消失更干净？（我倾向留一行，让用户知道"那张卡去哪了"。）</p>
+</section>
+
+<!-- ============================================================
+     场景 5 · 生命周期与消息级绑定（文字说明）
+     ============================================================ -->
+<section class="scene" id="s5">
+  <div class="scene__head">
+    <span class="scene__no">SCENE 05</span>
+    <h2>continuation 生命周期与消息级绑定（说明）</h2>
+  </div>
+  <p class="scene__decisions">
+    审计点：<b>FE-F08</b> 七个时点统一清理 continuation · <b>FE-F10</b> 确认信封绑定到产生它的消息，旧确认卡不会以「旧文案 + 新信封」错配渲染。
+  </p>
+  <div class="scene__stage">
+    <div class="lifecycle">
+      <h3>continuation 七个清理时点（FE-F08）</h3>
+      <table>
+        <tr><th>时点</th><th>动作</th></tr>
+        <tr><td>取消确认</td><td>清除该会话 continuation 与 pendingConfirmation</td></tr>
+        <tr><td>确认成功</td><td>响应落库后清除 continuation</td></tr>
+        <tr><td>澄清提交成功</td><td>响应落库后按新状态重建或清除</td></tr>
+        <tr><td>重生成成功</td><td>响应落库后清除失效引用</td></tr>
+        <tr><td>删除单个会话</td><td>同步删除该会话 continuation</td></tr>
+        <tr><td>清空全部会话</td><td>清空整个 continuation 表</td></tr>
+        <tr><td>Workspace 卸载</td><td>全部丢弃（tab memory 语义）</td></tr>
+      </table>
+    </div>
+    <div class="lifecycle" style="margin-top:16px">
+      <h3>消息级信封绑定（FE-F10）</h3>
+      <table>
+        <tr><th>现状问题</th><th>修复后</th></tr>
+        <tr>
+          <td>确认卡挂在历史消息下，但信封取会话级「最新」值；连续两次待确认时，旧卡会显示旧计划文案却提交新信封——用户以为确认 A，实际执行 B。</td>
+          <td>信封随消息存储，确认卡只渲染「自己这条消息」的信封；会话级指针仅作 stale-click guard。旧确认卡在新确认出现后自动降级为只读记录（同场景 2d 的只读态）。</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <p class="scene__note">这两项是前端内部状态管理修复，不改变任何后端合同；此处不提供可点交互，审计文字语义即可。</p>
+</section>
+
+<div class="demo-toast" id="demo-toast" role="status"></div>
+
+<script>
+  // —— 演示脚本：只驱动本页视觉状态，不代表生产实现 ——
+  const toast = document.getElementById('demo-toast');
+  let toastTimer = null;
+  function showToast(text) {
+    toast.textContent = text;
+    toast.classList.add('is-on');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('is-on'), 2200);
+  }
+
+  // 场景 1 · 调整模式
+  const adjustBar = document.getElementById('adjust-bar');
+  const planStatus = document.getElementById('plan-status');
+  const adjustInput = document.getElementById('adjust-input');
+  function setAdjusting(on) {
+    adjustBar.classList.toggle('is-on', on);
+    planStatus.dataset.mode = on ? 'adjusting' : 'idle';
+    planStatus.textContent = on ? '调整中 · 仍可确认原计划' : '待你确认';
+    if (on) adjustInput.focus();
+  }
+  document.getElementById('btn-adjust').addEventListener('click', () => setAdjusting(true));
+  document.getElementById('btn-adjust-exit').addEventListener('click', () => setAdjusting(false));
+  document.getElementById('btn-adjust-submit').addEventListener('click', () => {
+    const value = adjustInput.value.trim();
+    showToast(value ? `提交调整：「${value}」+ 原计划引用（demo）` : '调整说明为空 · 生产端将禁用提交');
+  });
+  document.getElementById('btn-confirm').addEventListener('click', () => {
+    showToast(planStatus.dataset.mode === 'adjusting'
+      ? '反悔路径：调整中仍确认原计划（demo）'
+      : '确认原计划（demo）');
+  });
+  document.getElementById('btn-cancel').addEventListener('click', () => {
+    setAdjusting(false);
+    showToast('已取消 · 清除本地确认状态（demo）');
+  });
+
+  // 场景 2a · SINGLE_CHOICE pending
+  document.querySelectorAll('[data-demo-select]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.getElementById('clarify-single').dataset.pending = 'true';
+      showToast('已选择并提交（demo）· 卡片进入 pending 防重复');
+    });
+  });
+
+  // 场景 2b · MULTI_CHOICE
+  const multiSubmit = document.getElementById('btn-multi-submit');
+  document.querySelectorAll('[data-demo-multi]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const on = chip.getAttribute('aria-pressed') === 'true';
+      chip.setAttribute('aria-pressed', String(!on));
+      chip.querySelector('.clarify-chip__hint').textContent = on ? '未选' : '已选';
+      const anySelected = [...document.querySelectorAll('[data-demo-multi]')]
+        .some((item) => item.getAttribute('aria-pressed') === 'true');
+      multiSubmit.disabled = !anySelected;
+    });
+  });
+  multiSubmit.addEventListener('click', () => {
+    document.getElementById('clarify-multi').dataset.pending = 'true';
+    showToast('已提交多项选择（demo）');
+  });
+
+  // 场景 2c · SHORT_TEXT
+  const shortText = document.getElementById('short-text-input');
+  const textSubmit = document.getElementById('btn-text-submit');
+  shortText.addEventListener('input', () => {
+    textSubmit.disabled = shortText.value.trim().length === 0;
+  });
+  textSubmit.addEventListener('click', () => {
+    document.getElementById('clarify-text').dataset.pending = 'true';
+    showToast('已提交文本（demo）· 冻结前按普通提问兜底');
+  });
+
+  // 场景 3 · 折叠切换
+  document.querySelectorAll('[data-demo-toggle]').forEach((bar) => {
+    bar.addEventListener('click', () => {
+      const summary = bar.closest('.summary');
+      const open = summary.dataset.open === 'true';
+      summary.dataset.open = String(!open);
+      bar.setAttribute('aria-expanded', String(!open));
+    });
+  });
+
+  // 场景 4 · 暂不处理
+  document.getElementById('btn-dismiss').addEventListener('click', () => {
+    document.getElementById('invalidated-card').style.display = 'none';
+    document.getElementById('dismissed-note').classList.add('is-on');
+    showToast('已暂不处理 · 本地清理，无请求（demo）');
+  });
+  document.getElementById('btn-regenerate').addEventListener('click', () => {
+    showToast('重新生成计划（demo）');
+  });
+</script>
+
+</body>
+</html>

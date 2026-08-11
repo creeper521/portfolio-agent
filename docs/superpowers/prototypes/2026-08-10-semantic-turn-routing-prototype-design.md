@@ -1,21 +1,26 @@
 # Semantic Turn Routing 原型设计文档
 
 > 日期：2026-08-10
-> 状态：交互验证材料 · 非正式 Spec · 不授权生产实现
+> 状态：原型已验收 · 交互基线已被权威 Spec 采纳 · 前端实现已落地
 > 对应原型：`design/prototypes/semantic-turn-routing-prototype.html`
 > 对应验收：`design/prototypes/semantic-turn-routing-prototype-acceptance.md`
+> 权威 Spec：`docs/superpowers/specs/2026-08-10-semantic-turn-routing-design.md`（已确认、已实施）
 > 上游资料：`2026-08-10-semantic-turn-routing-prototype-brief.md`、`...-prompt.md`
 > 对应阶段：Agent 对话体验与智能编排路线图 · 阶段二
 
 ## 0. 文档定位
 
-本文档记录"真正多任务 Agent"前端交互原型的**设计决策与理由**，不是后端 Spec，也不是生产实现授权。它的产出物是一份可点击验证的 HTML 原型，结论将用于：
+本文档记录"真正多任务 Agent"前端交互原型阶段**的设计决策与理由**，并标注每个决策在后续 Spec 与实现中的最终落地情况。它是 Spec 的上游交互基线，不是后端契约，也不是生产实现规范。
+
+> **权威性说明**：本原型是 Spec 的**输入**，不是最终权威。当本文档与 `docs/superpowers/specs/2026-08-10-semantic-turn-routing-design.md` 冲突时，以 Spec 为准。Spec 在若干点上有意识地细化或修订了原型方案，本文档在这些点用「实现演进」标注说明差异与最终决策，避免读者误把原型早期方案当作权威。
+
+原型的产出物是一份可点击验证的 HTML 演示，曾用于：
 
 1. 修订 `SemanticTurnPlan`、确认协议、澄清协议、任务结果摘要等后端语义契约；
 2. 确认任务上限、确认阈值、状态摘要密度等产品参数；
-3. 在契约修订完成后，编写阶段二正式 Spec 与实施 Plan。
+3. 编写阶段二正式 Spec 与实施 Plan。
 
-本文档**不构成**对生产前端或后端代码的修改授权。原型使用本地 Mock 数据，不接真实后端。
+以上三步现已完成，Spec 已确认、前端实现已落地并通过本地门禁。原型 HTML 本身仍用本地 Mock 数据、不接真实后端，仅作交互演示与历史参照。
 
 ## 1. 设计目标
 
@@ -125,10 +130,15 @@
 └──────────────────────────────────────────┘
 ```
 
-- **约束条**（`.constraints`）：复用 `.reco__satisfied` 底盘，置顶，mono 标签 + sans 约束项，`·` 分隔。
-- **任务行**（`.plan-task`）：mono 序号 `01-05`（红色，`min-width` 对齐）+ serif 任务名 + 可选 mono 依赖标注（`↳ 需要 XX 先完成`）。
-- **依赖标注规则**：`REQUIRES_SUCCESS` → `↳ 需要 XX 先完成`；`USES_AVAILABLE_RESULTS` → `↳ 使用 XX 的结果`；`ORDER_AFTER` → 不显示（顺序已隐含）。**不画连接线、不画节点图**。
+- **约束条**：置顶（约束是决策前提，应先于任务清单看到），上下发丝线包裹成独立信息带。
+- **任务行**：mono 序号 `01-05`（红色，`min-width` 对齐）+ serif 任务名 + 来源标签 + 可选 mono 依赖标注（`↳ 需要 XX 先完成`）。
+- **依赖标注规则**：依赖类型枚举不外泄（见 §5 原则5），后端只返回预格式化的 `dependencySummary` 字符串，前端原样展示为 `↳ …` 一行。**不画连接线、不画节点图**。
 - **三选一操作**：主按钮（实底红）`按此计划继续` + 幽灵按钮（描边）`调整计划` / `取消`。主次清晰，移动端等宽堆叠。
+
+> **实现演进**（`PlanConfirmation.vue`）：
+> - **eyebrow 概括句**：实现采用 `N 步 · {summaryLabel}`，其中概括句由后端确定性提供（`plan.summaryLabel`），缺失时回落为「N 项任务」——不前端拼接，避免瞎猜。
+> - **状态机扩展**：原型只考虑「待确认」一态。实现补充了 `adjusting`（用户点过调整计划、仍在编辑，显示「调整中 · 仍可确认原计划」徽章）与 `readonly`（计划被后续轮次取代，仅作记录、不可操作）两态。
+> - **来源标签**：每个任务行带 `[data-source-label]`，`PORTFOLIO` 用红边、其余灰边（见 §3.3.6）。
 
 #### 3.3.2 Compact Task Summary · 折叠摘要条（状态 B 默认）
 
@@ -145,9 +155,15 @@
 └───────────────────────────────┘
 ```
 
-- **默认折叠**：多任务自动执行成功时，正文是主角，摘要收起成一条 mono 流程条（`介绍 → 比较 → 推荐`）。
-- **点击展开**：`data-open` 切换，chevron 旋转 180°，展开后是完整任务清单 + 状态。
-- **设计取舍**：折叠态只显示流程箭头和"N 步·已完成"，不显示部分成功标志。若后续发现用户需要在不展开时就知道"几项失败"，可在折叠态加 `(2/3 完成)` 之类——这是待定项（见 §9）。
+- **默认折叠**：多任务自动执行时，正文是主角，摘要收起成一条 mono 条。
+- **点击展开**：`aria-expanded` 切换，展开后是完整任务清单 + 状态（由 `TaskStatusSummary` 渲染）。
+- **折叠态密度按结果分流**（实现最终方案，Spec §15.3 细化）：
+  - **全成功** → 流程箭头 `介绍 → 比较 → 推荐 · 3 步已完成`（可读性优先）。
+  - **部分成功** → 计数 + 异常摘要 `2/5 完成 · 1 证据不足 · 2 阻塞`（让用户不展开就感知到失败项）。
+  - eyebrow 随状态切换：全成功显示「任务摘要」、部分成功显示「任务状态」。
+- **展开触发**：部分成功时首屏自动展开（让失败项立即可见）；全成功时默认折叠。
+
+> **实现演进**（`CompactTaskSummary.vue`）：原型初稿折叠态统一用流程箭头，并在 §9 列为「是否在折叠态显示失败计数」待定项。Spec §15.3 明确要求「用户折叠后仍显示 2/5 完成 · 1 证据不足 · 2 阻塞」，实现据此定为「全成功用箭头 / 部分成功用计数」的折中。toggle 字符用 `+/−`（mono 字体下清晰），非 chevron 旋转——功能等价。
 
 #### 3.3.3 Clarification · 澄清卡（状态 D、E）
 
@@ -179,9 +195,16 @@
 ```
 
 - **红菱形 bullet**（7px rotate45）前置问题文案，复用现有 `.reco__unsatisfied` / `.problem-callout` 语汇。
-- **候选选项**（`.clarify-chip`）：mono 序号 + sans 选项名 + mono hint，hover 变红边。选项来自当前公开主体目录，不让用户自由输入（避免歧义）。
+- **候选选项**（`.clarify-chip`）：mono 序号 + sans 选项名 + mono hint，hover 变红边。选项来自当前公开主体目录。
 - **`已继续` 条**（D 独有）：明确标出哪些任务不受澄清影响，已经执行。
 - **`被阻塞的下游任务`**（E 独有）：列出被上游歧义阻塞的任务链，让用户理解"为什么不一次问完就开干"。
+
+> **实现演进**（`TurnClarification.vue` + `ClarificationField.vue`）：
+> - **输入模式扩展**：原型只有单选 chip。实现按后端 `field.inputMode` 支持 `SINGLE_CHOICE`（点选即提交）/ `MULTI_CHOICE`（多选 + 「确认选择」，带 `aria-pressed` 选中态）/ `SHORT_TEXT`（文本框 + 提交）三种。多选提交是临时兼容路径，待后端多值通道确认后切换。
+> - **已继续提示点名**：局部澄清优先用后端 `continuingGoalLabels` 点名已继续任务（「已继续：介绍 SQL 审计、不受影响」），缺失才回落数量文案。
+> - **下游原因白名单**：关键澄清的下游目标附原因短句，同样走 `taskReasonLabels` 白名单映射（`等待你确认比较对象` 等），不接收后端自由文本。
+> - **空选项兜底**：无可选项时引导用户去输入框补充说明，不呈现死路。
+> - **状态机扩展**：补充 `pending`（已提交、正在重新规划）与 `readonly`（被后续轮次取代）两态。
 
 #### 3.3.4 Task Status Summary · 部分成功状态矩阵（状态 F）
 
@@ -198,9 +221,11 @@
 └───────────────────────────────────────────────┘
 ```
 
-- **三列网格**：序号 / 任务名（含 reason 小字）/ 状态标签。
-- **reason 小字**：失败或阻塞任务必附一行 sans 小字解释"为什么"，让用户理解阻塞的因果链（02 失败 → 03 阻塞 → 04 阻塞）。
+- **网格**：序号 / 任务名（含 reason 小字）/ 来源标签 / 状态标签，形态标记（实心圆=完成、菱形=阻塞/失败）。
+- **reason 小字**：失败或阻塞任务附一行 sans 小字解释"为什么"，让用户理解阻塞的因果链（02 失败 → 03 阻塞 → 04 阻塞）。**只在非成功状态显示**，成功不加噪音。
 - **正文与摘要严格分离**：矩阵上方只渲染安全完成的任务正文（01、05），失败/阻塞任务**不生成伪正文**——这是可信度的核心。
+
+> **实现演进**（`TaskStatusSummary.vue` + `taskReasonLabels.ts`）：原型初稿的 reason 是后端返回的自由文本。Spec §16 明确「公开 API 只返回白名单原因码，不得把异常消息/堆栈写入响应」。实现据此改为**前端硬编码白名单映射**——后端只返回闭集原因码（`PORTFOLIO_EVIDENCE_INSUFFICIENT` 等），前端 `taskReasonLabels.ts` 把码映射成预定义中文短语，未知码一律回落克制通用句，**永不展示原始码或异常文本**。这是「人话解释」与「不泄露内部细节」的折中。此外，有 `blockedByDisplayIndexes` 时优先点名依赖（「依赖任务 02、03 未完成」），比泛泛「依赖未满足」更精确。
 
 #### 3.3.5 Plan Invalidated Notice · 计划失效提示（状态 G）
 
@@ -210,12 +235,15 @@
 │ 你之前确认的计划已经过期，我不会沿用  │
 │ 旧的继续，也不会自动替换。请确认是否  │
 │ 重新生成。                            │
-│ [重新生成计划]  取消                  │
+│ [重新生成计划]  暂不处理              │
 └───────────────────────────────────────┘
 ```
 
 - 红边框 callout，复用 `.problem-callout`。
 - **明说不静默替换**：文案明确"不会沿用旧的继续，也不会自动替换"——这是与"静默重路由"的关键对立。
+- **两个出口**：`重新生成计划`（发 `REGENERATE_PLAN`）+ `暂不处理`（dismiss，保留现状、不清除上下文）。
+
+> **实现演进**（`PlanInvalidatedNotice.vue`）：原型初稿二号按钮叫「取消」，实现改为「暂不处理」——失效后没有"取消"语义（计划已失效，无所谓取消），只有"现在不处理"。失效原因由后端 `planChange.summary` + `changeLabels` 提供受控文案。同样补充 `readonly` 态（被后续轮次取代时只读）。Spec §11 定义了 6 类失效原因码与对应行为（重签 / 完全重规划 / 拒绝），前端不暴露这些码，只展示受控文案。
 
 #### 3.3.6 辅助语汇
 
@@ -328,7 +356,7 @@
 - `.source-tag`：红边（作品集）/ 灰边（通用）；
 - 证据引用：作品集事实附 `[E001]`，通用知识无证据引用。
 
-**推论**：`SYNTHESIS` 来源域（如"总结展示策略"）的来源标记待定（见 §9）。
+**推论**：`SYNTHESIS` 来源域（如"总结展示策略"）保留独立来源标记（灰边「综合结论」），与作品集事实、通用知识三分；Spec §13.3 还要求综合结论保留完整上游 provenance，不新造证据。详见 §9.3。
 
 ### 原则 4 · 确认与澄清语义区分
 
@@ -352,6 +380,8 @@
 
 ## 6. 交互流程
 
+> 下面的流程已对齐前端实际实现（`AgentWorkspace.vue` 的 `confirmSemanticPlan` / `adjustSemanticPlan` / `selectClarification` / `regenerateSemanticPlan`）。原型初稿措辞与实现有出入处，已在各流程下标注。
+
 ### 6.1 主流程：复杂计划确认 → 执行
 
 ```
@@ -362,10 +392,14 @@ Agent 生成 SemanticTurnPlan（5 步）
  disposition = CONFIRMATION_REQUIRED → 展示计划卡（状态 C）
     ↓
  用户三选一：
- ├─ 按此计划继续 → 执行 → 结果（成功 B / 部分成功 F）
- ├─ 调整计划    → 生成新计划 → 回到确认（新计划卡）
- └─ 取消       → 清除当前标签页内存，不执行
+ ├─ 按此计划继续 → 发 CONFIRM_PLAN + 确认信封 → 执行 → 结果（成功 B / 部分成功 F）
+ ├─ 调整计划    → 聚焦输入框（见下注）→ 用户手输调整 → 发新 ASK → 新计划卡
+ └─ 取消       → 清除 tab memory 中的确认信封，不执行
 ```
+
+> **实现演进 · 调整计划**：原型流程图写「→ 生成新计划 → 回到确认」，暗示自动动作。Spec §10.3 明确「调整计划提交新的 ASK 与自然语言调整，不允许前端直接编辑内部图」。实现据此：点「调整计划」只聚焦 composer 输入框（`adjustSemanticPlan` → `textarea.focus()`），等用户手输调整意图后提交新 ASK，后端重新路由生成新计划。原计划卡在调整期间进入 `adjusting` 态（仍可确认），用户也可放弃调整直接确认原计划。
+>
+> **实现演进 · 确认安全**：`confirmSemanticPlan` 在提交前校验 `pendingConfirmation.confirmationId === confirmation.confirmationId`，前端层防篡改/防过期信封误用。
 
 ### 6.2 澄清流程
 
@@ -375,25 +409,29 @@ Agent 生成 SemanticTurnPlan（5 步）
  Agent 判断歧义类型：
  ├─ 局部歧义（D）：安全任务继续，只澄清受影响任务
  │     ↓ 展示已继续正文 + 局部澄清卡
- │     ↓ 用户选定 → 继续执行受影响任务
+ │     ↓ 用户选定 → 注入 semanticContext.activeSubjects → 发新 ASK → 后端重新路由
  └─ 关键歧义（E）：整链阻塞，先澄清主体
        ↓ 展示关键澄清卡 + 被阻塞下游
-       ↓ 用户选定主体 → 重新生成计划 → 确认/执行
+       ↓ 用户选定主体 → 注入 activeSubjects → 发新 ASK → 重新路由 → 确认/执行
 ```
 
-**铁律**：不从历史回答正文推断主体。状态 E 即便对话历史里出现过项目名，也不自动用作"这两个"的指代——必须用户明确指定。
+> **实现演进 · 澄清提交**：原型写「继续执行受影响任务」，措辞像接着原计划跑。实现里 `selectClarification` 把选中值注入 `semanticContext.activeSubjects`，然后发**全新一轮 ASK**（带原始 question + enriched context），后端重新路由——可能生成新计划，也可能直接执行。澄清本质是"补全信息后重新理解需求"，不是续跑。
+>
+> **铁律（保留）**：不从历史回答正文推断主体。状态 E 即便对话历史里出现过项目名，也不自动用作"这两个"的指代——必须用户明确指定。
 
 ### 6.3 失效流程
 
 ```
 计划执行中 / 确认后
     ↓
- contentVersion / integrityToken / expiresAt 失效
+ 确认时按固定顺序验证：签名 → schema → expiresAt → contentVersion → 主体 → capability
     ↓
- 展示失效 callout（状态 G）—— 不静默重路由
+ 失效 → 展示失效 callout（状态 G）—— 不静默重路由
     ↓
- 用户：重新生成 / 取消
+ 用户：重新生成（REGENERATE_PLAN + invalidatedPlanReference）/ 暂不处理（dismiss）
 ```
+
+> **实现演进**：Spec §11 把失效细分为 6 类原因码（完整性无效 / schema 不支持 / 仅确认过期 / 内容版本变 / 主体失效 / 能力集变），对应「拒绝只能重问」「完全重规划」「同计划重签」三种行为。前端不暴露这些码，只展示后端 `planChange` 受控文案；用户侧只见「原计划已失效 + 重新生成/暂不处理」。
 
 ### 6.4 边界流程
 
@@ -430,33 +468,30 @@ Agent 生成 SemanticTurnPlan（5 步）
 - **reduced motion**：`@media (prefers-reduced-motion: reduce)` 禁用所有 transition / animation。
 - **颜色对比**：正文 `--ink #201c17` on `--agent-thread-paper #f5e8d1`，对比度 > 12:1；mono 小字 `--muted #746b5e` 对比度 > 4.5:1。
 
-## 9. 给后端契约的反馈（待定项）
+## 9. 原型提出的待定项 · 解决情况
 
-原型用 Mock 字段命名（对齐 Brief 第 6 节的 Mock 响应契约），最终契约待修订。以下四点需后端定义，原型已为每点留出演示锚点：
+原型阶段提出的四个待定项，现已在 Spec 与实现中全部解决。下表对照「原型待定 → 最终决策」：
 
-### 9.1 任务上限 / 确认阈值
+### 9.1 任务上限 / 确认阈值 — ✅ 已解决
 
-原型演示用 3（自动）/ 5（确认）。实际阈值需 `SemanticTurnPlan` 定义：
-- 纯任务数？还是成本 + 冲突 + 扩范围综合判定？
-- Brief 第 2 节说"复杂、高成本、存在冲突或明显扩大范围的计划需要确认"——"高成本"和"明显扩大范围"如何量化？
+- **原型待定**：纯任务数，还是成本 + 冲突 + 扩范围综合判定？
+- **Spec 决策**（§2.1 第 8 条、§10.1）：1–3 个简单任务自动执行，4–6 个任务或任一确认触发项要求确认，超过六个任务要求拆分。即**任务数为主、确认触发项为辅**的综合判定。
 
-### 9.2 状态摘要折叠密度
+### 9.2 状态摘要折叠密度 — ✅ 已解决
 
-原型折叠态只显示流程箭头 + "N 步·已完成"。待定：
-- 部分成功时折叠态要不要就显示 `(2/3 完成)` 之类的标志，让用户不展开就知道有失败？
-- 还是保持"必须展开才看详情"，避免折叠态信息过载？
+- **原型待定**：部分成功时折叠态要不要显示失败计数？
+- **Spec 决策**（§15.3）：要。折叠态显示 `2/5 完成 · 1 证据不足 · 2 阻塞`。
+- **实现**（`CompactTaskSummary.vue`）：采用折中——全成功用流程箭头、部分成功用计数 + 异常摘要，部分成功时首屏自动展开。
 
-### 9.3 来源区分粒度
+### 9.3 来源区分粒度 — ✅ 已解决
 
-原型区分 `PORTFOLIO`（作品集事实）/ `GENERAL`（通用知识）。待定：
-- `SYNTHESIS` 来源域（如"总结展示策略"）是否需要单独的 `.source-tag` 标记？
-- 还是 `SYNTHESIS` 归入 `GENERAL`（因为它是综合推理，不是作品集事实）？
+- **原型待定**：`SYNTHESIS` 是否单独标记？
+- **Spec 决策**（§13.3、§15）：`SYNTHESIS` 保留独立来源域，与 `PORTFOLIO` / `GENERAL` 三分。前端来源标签三档：作品集资料（红边/红字）/ 通用知识（灰）/ 综合结论（灰）。Spec §13.3 还要求 `SYNTHESIS` 保留完整上游 provenance（`derivationType` / `originDomains` / `sourceTaskIds` 等），不新造证据。
 
-### 9.4 计划失效触发
+### 9.4 计划失效触发 — ✅ 已解决
 
-原型演示了失效后的 UI。待定：
-- `contentVersion` / `integrityToken` / `expiresAt` 三者哪个是主要失效信号？
-- 失效后"重新生成"是复用原计划结构还是完全重新规划？
+- **原型待定**：哪个字段是主信号？重新生成是复用还是重规划？
+- **Spec 决策**（§11）：按固定顺序验证签名 → schema → expiresAt → contentVersion → 主体 → capability，**逐项对应不同行为**——仅过期则同计划重签，内容/主体/能力变则完全重规划，完整性失败则拒绝只能重问。无单一"主信号"，按失效类型分流。
 
 ## 10. 验收对照
 
@@ -464,31 +499,34 @@ Agent 生成 SemanticTurnPlan（5 步）
 
 技术验证：控制台错误 0；桌面 1440px + 移动 390px 无横向溢出；折叠/展开、确认跳转交互均通过。
 
-## 11. 后续步骤
+## 11. 后续步骤（当前状态）
 
 ```
-本原型（交互验证）✅
+本原型（交互验证）✅ 已完成
     ↓
-后端语义契约修订（基于 §9 四个待定项）
+后端语义契约修订 ✅ 已完成（stp-v1 契约）
     ├─ SemanticTurnPlan 结构定稿
-    ├─ 确认协议（disposition / planConfirmation）
-    ├─ 澄清协议（CLARIFICATION 卡结构）
-    └─ 任务结果摘要（taskSummary / outcome）
+    ├─ 确认协议（disposition / planConfirmation / OpaquePlanConfirmation）
+    ├─ 澄清协议（ClarificationRequest / field.inputMode）
+    └─ 任务结果摘要（taskSummary / outcome / reasonCodes 白名单）
     ↓
-阶段二正式 Spec（docs/superpowers/specs/）
+阶段二正式 Spec ✅ 已确认（2026-08-10-semantic-turn-routing-design.md）
     ↓
-实施 Plan + 生产前端/后端代码
+实施 + 生产前端/后端代码 ✅ 已落地并通过本地门禁
 ```
 
-**本文档到此为止**，不授权生产实现。后续任何代码变更需先完成契约修订与正式 Spec。
+原型使命已完成。后续如需调整交互，应以权威 Spec 为准；本文档作为交互基线的历史参照保留，遇冲突以 Spec 为准。
 
 ## 附：文件索引
 
 | 文件 | 位置 | 说明 |
 |---|---|---|
-| 原型 HTML | `design/prototypes/semantic-turn-routing-prototype.html` | 可交互原型主体 |
+| **权威 Spec** | `docs/superpowers/specs/2026-08-10-semantic-turn-routing-design.md` | **最终权威**，已确认已实施 |
+| 原型 HTML | `design/prototypes/semantic-turn-routing-prototype.html` | 可交互原型主体（Mock 数据） |
 | 截图 | `design/prototypes/shots/` | 桌面 A–H + 移动关键状态 |
 | 验收清单 | `design/prototypes/semantic-turn-routing-prototype-acceptance.md` | Brief 第 9 节逐项打勾 |
-| 本设计文档 | `docs/superpowers/prototypes/2026-08-10-semantic-turn-routing-prototype-design.md` | 本文 |
+| 本设计文档 | `docs/superpowers/prototypes/2026-08-10-semantic-turn-routing-prototype-design.md` | 本文（交互基线） |
 | Brief | `docs/superpowers/prototypes/2026-08-10-semantic-turn-routing-prototype-brief.md` | 需求背景 |
 | Prompt | `docs/superpowers/prototypes/2026-08-10-semantic-turn-routing-prototype-prompt.md` | 原型指令 |
+| 前端实现 | `frontend/src/features/agent/components/`（PlanConfirmation / CompactTaskSummary / TurnClarification / ClarificationField / TaskStatusSummary / PlanInvalidatedNotice）+ `model/semanticTurnView.ts` + `model/taskReasonLabels.ts` | 生产实现 |
+| 文档状态 | `docs/00-文档状态索引.md` | Spec 状态为「已确认，阶段 2 已实施并通过本地门禁」 |
