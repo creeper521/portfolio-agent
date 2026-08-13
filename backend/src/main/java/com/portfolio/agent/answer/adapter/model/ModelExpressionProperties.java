@@ -8,7 +8,7 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 
-@ConfigurationProperties(prefix = "portfolio.model-expression")
+@ConfigurationProperties(prefix = "portfolio.conversational-model")
 public final class ModelExpressionProperties {
 
     private boolean enabled;

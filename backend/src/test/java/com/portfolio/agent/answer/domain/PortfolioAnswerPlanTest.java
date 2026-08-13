@@ -95,6 +95,22 @@ class PortfolioAnswerPlanTest {
     }
 
     @Test
+    void acceptsStrongPublicReferencesWithoutInternalClaimOrEvidenceIds() {
+        PublicSourceReferenceValue source = new PublicSourceReferenceValue(
+                "public-source", "公开来源", "v1", "CODE",
+                "/projects/project-a", "/evidence/evidence-a");
+        PortfolioAnswerSection section = PortfolioAnswerSection.grounded(
+                AnswerSectionType.SOLUTION, "方案", "公开正文", List.of(source));
+
+        PortfolioAnswerPlan plan = new PortfolioAnswerPlan("Project A", null, List.of(section));
+
+        assertThat(section.getClaimIds()).isEmpty();
+        assertThat(section.getEvidenceIds()).isEmpty();
+        assertThat(section.getSourceReferences()).containsExactly(source);
+        assertThat(plan.getSections()).containsExactly(section);
+    }
+
+    @Test
     void rejectsDuplicateSectionType() {
         assertThatThrownBy(() -> new PortfolioAnswerPlan(
                 "title", null,

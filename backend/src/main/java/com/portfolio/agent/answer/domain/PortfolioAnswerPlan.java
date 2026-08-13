@@ -29,7 +29,8 @@ public final class PortfolioAnswerPlan {
                         "answer plan contains duplicate section type");
             }
             if (section.getSectionType() != AnswerSectionType.BOUNDARY
-                    && section.getEvidenceIds().isEmpty()) {
+                    && section.getEvidenceIds().isEmpty()
+                    && section.getSourceReferences().isEmpty()) {
                 throw new PortfolioAnswerCompositionException(
                         "fact section requires at least one evidence");
             }

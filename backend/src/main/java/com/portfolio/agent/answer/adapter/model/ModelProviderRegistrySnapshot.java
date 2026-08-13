@@ -68,7 +68,7 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
         return descriptors.keySet();
     }
 
-    ModelProviderDescriptor getRequiredDescriptor(ModelProviderKind provider) {
+    public ModelProviderDescriptor getRequiredDescriptor(ModelProviderKind provider) {
         ModelProviderDescriptor descriptor = descriptors.get(provider);
         if (descriptor == null) {
             throw new IllegalArgumentException("provider is not configured: " + provider);
@@ -86,8 +86,9 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
                 "c3-openai-compatible-v1",
                 URI.create(endpoint),
                 modelName,
-                Set.of("c1-policy-v1"),
-                Set.of("c1.answer.v1", ConversationalAgentProperties.ANSWER_SCHEMA_VERSION),
+                Set.of("c1-policy-v1", "p4-expression-policy-v1"),
+                Set.of("c1.answer.v1", ConversationalAgentProperties.ANSWER_SCHEMA_VERSION,
+                        "portfolio-expression-input.v1", "portfolio-expression-draft.v1"),
                 capabilities);
     }
 

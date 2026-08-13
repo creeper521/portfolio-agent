@@ -82,7 +82,7 @@ public final class GroundedAnswerContribution {
 
     @Override
     public int hashCode() {
-        return Objects.hash(supportedStatements, publicSourceReferences, caveats, omittedTopicLabels);
+        return Objects.hash(supportedStatements, publicSourceReferences, sourceReferences, caveats, omittedTopicLabels);
     }
 
     @Override

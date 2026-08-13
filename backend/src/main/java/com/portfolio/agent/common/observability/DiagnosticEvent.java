@@ -152,6 +152,21 @@ public final class DiagnosticEvent {
                             "duration.bucket",
                             "response.present",
                             "failure.code")),
+                    Map.entry("expression.eligibility", fields(
+                            "task.kind", "material.kind", "expression.disposition",
+                            "expression.attempted", "input.size.bucket", "breaker.state")),
+                    Map.entry("expression.provider.completed", fields(
+                            "provider.operation", "event.outcome", "duration.bucket",
+                            "response.present", "output.size.bucket")),
+                    Map.entry("expression.provider.failed", fields(
+                            "provider.operation", "event.outcome", "duration.bucket",
+                            "response.present", "failure.code")),
+                    Map.entry("expression.validation.completed", fields(
+                            "material.kind", "validation.accepted", "failure.code",
+                            "section.count.bucket", "sentence.count.bucket")),
+                    Map.entry("expression.fallback.used", fields(
+                            "expression.disposition", "failure.code", "breaker.state",
+                            "expression.fallback")),
                     Map.entry("answer.validation.completed", fields(
                             "validation.accepted",
                             "failure.code",

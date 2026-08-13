@@ -60,6 +60,18 @@ portfolio:
     profile: ${PORTFOLIO_RETRIEVAL_PROFILE:DISABLED}
     model-directory: ${PORTFOLIO_RETRIEVAL_MODEL_DIR:}
   model-expression:
+    enabled: ${PORTFOLIO_MODEL_EXPRESSION_ENABLED:false}
+    provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
+    policy-version: ${PORTFOLIO_MODEL_EXPRESSION_POLICY_VERSION:p4-expression-policy-v1}
+    input-schema-version: ${PORTFOLIO_MODEL_EXPRESSION_INPUT_SCHEMA_VERSION:portfolio-expression-input.v1}
+    draft-schema-version: ${PORTFOLIO_MODEL_EXPRESSION_DRAFT_SCHEMA_VERSION:portfolio-expression-draft.v1}
+    allowed-material-kinds: [FACT]
+    max-output-tokens: ${PORTFOLIO_MODEL_EXPRESSION_MAX_OUTPUT_TOKENS:1600}
+    timeout: ${PORTFOLIO_MODEL_EXPRESSION_TIMEOUT:4s}
+    external-public-data-policy-approved: ${PORTFOLIO_MODEL_EXPRESSION_PUBLIC_DATA_POLICY_APPROVED:false}
+    deepseek-api-key: ${PORTFOLIO_AGENT_DEEPSEEK_API_KEY:}
+    glm-api-key: ${PORTFOLIO_AGENT_GLM_API_KEY:}
+  conversational-model:
     enabled: ${PORTFOLIO_MODEL_ENABLED:false}
     provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
     model-policy-version: ${PORTFOLIO_MODEL_POLICY_VERSION:c1-policy-v1}

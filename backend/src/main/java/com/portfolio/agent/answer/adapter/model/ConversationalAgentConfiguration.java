@@ -14,7 +14,6 @@ import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.DeterministicConversationFallback;
-import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
 import com.portfolio.agent.answer.intelligence.execution.adapter.bundle.BundlePortfolioCandidateRetrievalAdapter;
@@ -212,11 +211,11 @@ public class ConversationalAgentConfiguration {
     P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor(
             PortfolioCapabilityCatalog capabilityCatalog,
             PortfolioEvidenceCapability evidenceCapability,
-            DeterministicPortfolioAnswerComposer answerComposer,
-            DiagnosticEventPublisher diagnosticEventPublisher
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition p4Composition
     ) {
         return new P3PortfolioSemanticTaskExecutor(
-                capabilityCatalog, evidenceCapability, answerComposer, diagnosticEventPublisher);
+                capabilityCatalog, evidenceCapability, diagnosticEventPublisher, p4Composition);
     }
 
     @Bean
