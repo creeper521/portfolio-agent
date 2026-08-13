@@ -84,7 +84,10 @@ function Import-LocalEnvironment {
         'PORTFOLIO_PUBLIC_DATABASE_PASSWORD',
         'PORTFOLIO_GOVERNANCE_DATABASE_NAME',
         'PORTFOLIO_GOVERNANCE_DATABASE_USERNAME',
-        'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD'
+        'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_DATABASE_NAME',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD'
     )
     foreach ($name in $required) {
         if (-not $values.ContainsKey($name) -or
@@ -101,7 +104,9 @@ function Import-LocalEnvironment {
             'PORTFOLIO_PUBLIC_DATABASE_NAME',
             'PORTFOLIO_PUBLIC_DATABASE_USERNAME',
             'PORTFOLIO_GOVERNANCE_DATABASE_NAME',
-            'PORTFOLIO_GOVERNANCE_DATABASE_USERNAME')) {
+            'PORTFOLIO_GOVERNANCE_DATABASE_USERNAME',
+            'PORTFOLIO_CONTEXT_DATABASE_NAME',
+            'PORTFOLIO_CONTEXT_DATABASE_USERNAME')) {
         if ([string]$values[$name] -notmatch '^[a-z_][a-z0-9_]{0,62}$') {
             Stop-WithCode 'POSTGRES_LOCAL_IDENTIFIER_INVALID'
         }
@@ -113,13 +118,24 @@ function Import-LocalEnvironment {
             $values.PORTFOLIO_PUBLIC_DATABASE_USERNAME -eq
             $values.PORTFOLIO_POSTGRES_ADMIN_USERNAME -or
             $values.PORTFOLIO_GOVERNANCE_DATABASE_USERNAME -eq
+            $values.PORTFOLIO_POSTGRES_ADMIN_USERNAME -or
+            $values.PORTFOLIO_CONTEXT_DATABASE_NAME -eq
+            $values.PORTFOLIO_PUBLIC_DATABASE_NAME -or
+            $values.PORTFOLIO_CONTEXT_DATABASE_NAME -eq
+            $values.PORTFOLIO_GOVERNANCE_DATABASE_NAME -or
+            $values.PORTFOLIO_CONTEXT_DATABASE_USERNAME -eq
+            $values.PORTFOLIO_PUBLIC_DATABASE_USERNAME -or
+            $values.PORTFOLIO_CONTEXT_DATABASE_USERNAME -eq
+            $values.PORTFOLIO_GOVERNANCE_DATABASE_USERNAME -or
+            $values.PORTFOLIO_CONTEXT_DATABASE_USERNAME -eq
             $values.PORTFOLIO_POSTGRES_ADMIN_USERNAME) {
         Stop-WithCode 'POSTGRES_LOCAL_IDENTIFIERS_NOT_DISTINCT'
     }
     foreach ($name in @(
             'PORTFOLIO_POSTGRES_ADMIN_PASSWORD',
             'PORTFOLIO_PUBLIC_DATABASE_PASSWORD',
-            'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD')) {
+            'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD',
+            'PORTFOLIO_CONTEXT_DATABASE_PASSWORD')) {
         if ([string]$values[$name] -notmatch
                 '^[A-Za-z0-9_@%+=:,./!?~-]{12,}$') {
             Stop-WithCode 'POSTGRES_LOCAL_PASSWORD_UNSAFE'
@@ -212,6 +228,7 @@ function Set-ApplicationDatabaseEnvironment {
     $port = [string]$script:settings.PORTFOLIO_POSTGRES_PORT
     $publicDatabase = [string]$script:settings.PORTFOLIO_PUBLIC_DATABASE_NAME
     $governanceDatabase = [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_NAME
+    $contextDatabase = [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_NAME
     $env:PORTFOLIO_PUBLIC_DATABASE_URL =
         "jdbc:postgresql://127.0.0.1:$port/$publicDatabase"
     $env:PORTFOLIO_PUBLIC_DATABASE_USERNAME =
@@ -224,6 +241,12 @@ function Set-ApplicationDatabaseEnvironment {
         [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_USERNAME
     $env:PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD =
         [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD
+    $env:PORTFOLIO_CONTEXT_DATABASE_URL =
+        "jdbc:postgresql://127.0.0.1:$port/$contextDatabase"
+    $env:PORTFOLIO_CONTEXT_DATABASE_USERNAME =
+        [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_USERNAME
+    $env:PORTFOLIO_CONTEXT_DATABASE_PASSWORD =
+        [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_PASSWORD
 }
 
 function Find-Maven {
@@ -329,6 +352,7 @@ function Invoke-Verify {
     Wait-PostgresHealthy
     $public = [string]$script:settings.PORTFOLIO_PUBLIC_DATABASE_NAME
     $governance = [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_NAME
+    $context = [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_NAME
     Write-Output 'Public database:'
     Invoke-ContainerPsql $public @'
 SELECT 'vector=' || extversion FROM pg_extension WHERE extname = 'vector';
@@ -352,6 +376,12 @@ SELECT 'selfDistance=' || COALESCE(MIN(embedding <=> embedding), 0)
 FROM retrieval_document rd
 JOIN active_release ar ON ar.release_id = rd.release_id
 WHERE rd.embedding IS NOT NULL;
+    '@
+    Write-Output 'Context database:'
+    Invoke-ContainerPsql $context @'
+SELECT 'vector=' || extversion FROM pg_extension WHERE extname = 'vector';
+SELECT 'flyway=' || COALESCE(MAX(version), 'none') FROM agent_context.flyway_schema_history_context WHERE success;
+SELECT 'conversations=' || count(*) FROM agent_context.conversation_context;
 '@
     Write-Output 'Governance database:'
     Invoke-ContainerPsql $governance @'
@@ -367,6 +397,7 @@ function Invoke-Connections {
     $port = [string]$script:settings.PORTFOLIO_POSTGRES_PORT
     $public = [string]$script:settings.PORTFOLIO_PUBLIC_DATABASE_NAME
     $governance = [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_NAME
+    $context = [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_NAME
     Write-Output 'Public database'
     Write-Output '  Host: 127.0.0.1'
     Write-Output "  Port: $port"
@@ -379,6 +410,12 @@ function Invoke-Connections {
     Write-Output "  Database: $governance"
     Write-Output "  Username: $($script:settings.PORTFOLIO_GOVERNANCE_DATABASE_USERNAME)"
     Write-Output "  JDBC URL: jdbc:postgresql://127.0.0.1:$port/$governance"
+    Write-Output 'Context database'
+    Write-Output '  Host: 127.0.0.1'
+    Write-Output "  Port: $port"
+    Write-Output "  Database: $context"
+    Write-Output "  Username: $($script:settings.PORTFOLIO_CONTEXT_DATABASE_USERNAME)"
+    Write-Output "  JDBC URL: jdbc:postgresql://127.0.0.1:$port/$context"
     Write-Output "Passwords: read from $(Split-Path -Leaf $script:envPath)"
 }
 
@@ -420,7 +457,8 @@ try {
                 'POSTGRES_LOCAL_COMPOSE_STATUS_FAILED'
             foreach ($database in @(
                     [string]$script:settings.PORTFOLIO_PUBLIC_DATABASE_NAME,
-                    [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_NAME)) {
+                    [string]$script:settings.PORTFOLIO_GOVERNANCE_DATABASE_NAME,
+                    [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_NAME)) {
                 $result = Invoke-ContainerPsql $database 'SELECT 1' -Capture
                 if (@($result | Where-Object { $_ -eq '1' }).Count -eq 0) {
                     Stop-WithCode 'POSTGRES_LOCAL_DATABASE_UNAVAILABLE'

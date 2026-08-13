@@ -26,20 +26,12 @@ public final class ConversationalPromptFactory {
         return prompt("intent", conversation, publicSubjects);
     }
 
-    public String portfolioTaskPrompt(Object taskInput) {
-        return prompt("portfolio_task", taskInput, null);
-    }
-
     public String semanticRoutingPrompt(Object routingInput) {
         return prompt("semantic_route", routingInput, null);
     }
 
     public String summaryPrompt(Object conversation) {
         return prompt("summary", conversation, null);
-    }
-
-    public String toolPlanPrompt(Object conversation, Object approvedContext) {
-        return prompt("tool_plan", conversation, approvedContext);
     }
 
     public String generationPrompt(Object conversation, Object approvedContext) {
@@ -79,21 +71,6 @@ public final class ConversationalPromptFactory {
     }
 
     private String outputContract(String operation) {
-        if ("portfolio_task".equals(operation)) {
-            return """
-                    Return exactly one JSON object with these fields only:
-                    portfolioRelevant, boundaryIntent, mode, conditions, refinement, confidence.
-                    portfolioRelevant must be boolean. When false, boundaryIntent, mode and refinement must be null.
-                    When portfolioRelevant is true, exactly one of boundaryIntent or mode must be non-null.
-                    boundaryIntent may only be TIME_SENSITIVE, UNSUPPORTED_OR_UNSAFE or null.
-                    mode may only be FACT_LOOKUP, COMPARISON, RECOMMENDATION,
-                    REFINE_RECOMMENDATION, CLARIFICATION_REQUIRED or null.
-                    conditions must contain only careerTrack, audienceRole, capabilityCodes, goal and requestedSize.
-                    refinement is allowed only for REFINE_RECOMMENDATION; otherwise it must be null.
-                    confidence must be a number from 0 to 1.
-                    Do not output SQL, retrieval strategy, adapter names, portfolio IDs or undeclared fields.
-                    """;
-        }
         return switch (operation) {
             case "semantic_route" -> """
                     Return exactly one JSON object with these fields only:

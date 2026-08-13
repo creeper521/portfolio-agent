@@ -1,0 +1,66 @@
+package com.portfolio.agent.answer.context.adapter.postgres;
+
+import com.portfolio.agent.answer.context.domain.ContextStoreMode;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
+
+@ConfigurationProperties(prefix = "portfolio.conversation-context")
+public class ConversationContextProperties {
+    private ContextStoreMode mode = ContextStoreMode.DISABLED;
+    private Duration idleTtl = Duration.ofHours(24);
+    private Duration absoluteTtl = Duration.ofDays(7);
+    private Duration cleanupInterval = Duration.ofMinutes(15);
+    private int cleanupBatchSize = 500;
+    private final Crypto crypto = new Crypto();
+
+    public ContextStoreMode getMode() { return mode; }
+    public void setMode(ContextStoreMode mode) { this.mode = mode; }
+    public Duration getIdleTtl() { return idleTtl; }
+    public void setIdleTtl(Duration idleTtl) { this.idleTtl = idleTtl; }
+    public Duration getAbsoluteTtl() { return absoluteTtl; }
+    public void setAbsoluteTtl(Duration absoluteTtl) { this.absoluteTtl = absoluteTtl; }
+    public Duration getCleanupInterval() { return cleanupInterval; }
+    public void setCleanupInterval(Duration cleanupInterval) { this.cleanupInterval = cleanupInterval; }
+    public int getCleanupBatchSize() { return cleanupBatchSize; }
+    public void setCleanupBatchSize(int cleanupBatchSize) { this.cleanupBatchSize = cleanupBatchSize; }
+    public Crypto getCrypto() { return crypto; }
+
+    public void validate() {
+        if (idleTtl.isNegative() || idleTtl.isZero()
+                || absoluteTtl.isNegative() || absoluteTtl.isZero()
+                || idleTtl.compareTo(absoluteTtl) > 0
+                || cleanupInterval.isNegative() || cleanupInterval.isZero()
+                || cleanupBatchSize < 1 || cleanupBatchSize > 500) {
+            throw new IllegalStateException("invalid conversation Context retention settings");
+        }
+    }
+
+    public static class Crypto {
+        private String currentTokenKeyId;
+        private String currentTokenKey;
+        private String previousTokenKeyId;
+        private String previousTokenKey;
+        private String currentPayloadKeyId;
+        private String currentPayloadKey;
+        private String previousPayloadKeyId;
+        private String previousPayloadKey;
+
+        public String getCurrentTokenKeyId() { return currentTokenKeyId; }
+        public void setCurrentTokenKeyId(String value) { currentTokenKeyId = value; }
+        public String getCurrentTokenKey() { return currentTokenKey; }
+        public void setCurrentTokenKey(String value) { currentTokenKey = value; }
+        public String getPreviousTokenKeyId() { return previousTokenKeyId; }
+        public void setPreviousTokenKeyId(String value) { previousTokenKeyId = value; }
+        public String getPreviousTokenKey() { return previousTokenKey; }
+        public void setPreviousTokenKey(String value) { previousTokenKey = value; }
+        public String getCurrentPayloadKeyId() { return currentPayloadKeyId; }
+        public void setCurrentPayloadKeyId(String value) { currentPayloadKeyId = value; }
+        public String getCurrentPayloadKey() { return currentPayloadKey; }
+        public void setCurrentPayloadKey(String value) { currentPayloadKey = value; }
+        public String getPreviousPayloadKeyId() { return previousPayloadKeyId; }
+        public void setPreviousPayloadKeyId(String value) { previousPayloadKeyId = value; }
+        public String getPreviousPayloadKey() { return previousPayloadKey; }
+        public void setPreviousPayloadKey(String value) { previousPayloadKey = value; }
+    }
+}

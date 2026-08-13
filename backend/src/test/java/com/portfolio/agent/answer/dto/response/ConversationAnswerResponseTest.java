@@ -141,8 +141,8 @@ class ConversationAnswerResponseTest {
                 .contains("\"summary\":\"公开项目摘要\"")
                 .contains("\"sectionType\":\"SOLUTION\"")
                 .contains("\"title\":\"技术方案与实现\"")
-                .contains("\"claimIds\":[\"claim-1\"]")
-                .contains("\"evidenceIds\":[\"evidence-1\"]");
+                .doesNotContain("\"claimIds\"")
+                .doesNotContain("\"evidenceIds\"");
     }
 
     @Test
@@ -164,7 +164,8 @@ class ConversationAnswerResponseTest {
         assertThat(block.has("sectionType")).isFalse();
         assertThat(block.has("title")).isFalse();
         assertThat(block.get("content").asText()).isEqualTo("正文");
-        assertThat(block.get("claimIds").size()).isZero();
+        assertThat(block.has("claimIds")).isFalse();
+        assertThat(block.has("evidenceIds")).isFalse();
     }
 
     @Test
@@ -203,6 +204,6 @@ class ConversationAnswerResponseTest {
                 .contains("\"items\":[]")
                 .contains("\"satisfiedConstraints\":[]")
                 .contains("\"unsatisfiedConstraints\":[]")
-                .contains("\"selectedPortfolioIds\":[]");
+                .doesNotContain("\"selectedPortfolioIds\"");
     }
 }

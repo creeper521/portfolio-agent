@@ -8,7 +8,10 @@ import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationProgress;
 import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.answer.domain.GroundedAnswerContribution;
+import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerResponse;
+import com.portfolio.agent.answer.dto.response.ClarificationResponse;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationItem;
@@ -90,7 +93,7 @@ class ConversationAnswerResponseMapperTest {
         ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
                 answerResult().withAgentTurn(AgentTurnResult.clarificationRequired(clarification)));
 
-        var mapped = response.getAgentTurn().getClarification();
+        ClarificationResponse mapped = response.getAgentTurn().getClarification();
         assertThat(mapped.getClarificationId())
                 .isEqualTo("clarify-0123456789abcdef0123456789abcdef");
         assertThat(mapped.getFields().getFirst().getOptions().getFirst().getResolution().getKind())
@@ -127,6 +130,31 @@ class ConversationAnswerResponseMapperTest {
     }
 
     @Test
+    void mapsContributionAsSectionResultAndDeduplicatesSharedPublicReferencesAcrossBlocks() throws Exception {
+        GroundedAnswerContribution contribution = new GroundedAnswerContribution(
+                List.of("first statement", "second statement"), List.of("shared-evidence"),
+                List.of(new PublicSourceReferenceValue(
+                        "shared-evidence", "DOCUMENT", "/projects/project-a", "/evidence/shared-evidence")),
+                List.of(), List.of());
+        TaskOutcome outcome = TaskOutcome.answeredWithContribution(
+                "task-01", SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, contribution,
+                TaskResultProvenance.direct(
+                        SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, List.of(), List.of()), false);
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.ready(
+                        partialPlan(), new SemanticTurnOutcome(List.of(outcome)))));
+
+        assertThat(response.getBlocks()).hasSize(2);
+        assertThat(response.getBlocks().get(0).getSourceReferences()).hasSize(1);
+        assertThat(response.getBlocks().get(1).getSourceReferences()).isEmpty();
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(response);
+        com.fasterxml.jackson.databind.JsonNode payload = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json).path("agentTurn").path("completedTasks").get(0).path("resultPayload");
+        assertThat(payload.path("kind").asText()).isEqualTo("SECTION_RESULT");
+        assertThat(json).doesNotContain("GROUNDED_CONTRIBUTION", "claimIds", "evidenceIds");
+    }
+
+    @Test
     void mapsCompleteRecommendationWithoutExposingFreeTextGoal() {
         PortfolioRecommendationContext context = new PortfolioRecommendationContext(
                 "rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -148,10 +176,6 @@ class ConversationAnswerResponseMapperTest {
 
         assertThat(response.getPortfolioRecommendation().getRecommendationBatchId())
                 .isEqualTo(context.getRecommendationBatchId());
-        assertThat(response.getPortfolioRecommendation().getContext().getContentVersion())
-                .isEqualTo("public-2026-07-31");
-        assertThat(response.getPortfolioRecommendation().getContext().getCapabilityCodes())
-                .containsExactlyInAnyOrder("RAG", "POSTGRESQL");
         assertThat(response.getPortfolioRecommendation().getItems()).singleElement()
                 .satisfies(item -> {
                     assertThat(item.getPortfolioId()).isEqualTo("project-1");

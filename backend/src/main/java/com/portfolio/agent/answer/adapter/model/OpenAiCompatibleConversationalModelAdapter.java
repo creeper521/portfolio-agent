@@ -14,18 +14,12 @@ import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
-import com.portfolio.agent.answer.domain.ConversationToolPlan;
 import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.GroundingReview;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
-import com.portfolio.agent.answer.domain.PublicToolResult;
-import com.portfolio.agent.answer.domain.ToolKind;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
-import com.portfolio.agent.answer.intelligence.gateway.PortfolioTaskClassifierPort;
 import com.portfolio.agent.answer.routing.adapter.model.SemanticClassificationCodec;
 import com.portfolio.agent.answer.routing.gateway.SemanticClassifierPort;
 import com.portfolio.agent.answer.service.DurationBuckets;
@@ -47,7 +41,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 public final class OpenAiCompatibleConversationalModelAdapter
-        implements ConversationalModelPort, ConversationSummaryPort, PortfolioTaskClassifierPort,
+        implements ConversationalModelPort, ConversationSummaryPort,
         SemanticClassifierPort {
 
     private final RestClient restClient;
@@ -108,45 +102,6 @@ public final class OpenAiCompatibleConversationalModelAdapter
             return SemanticClassificationResult.failure(result.getFailureCode());
         }
         return semanticClassificationCodec.decode(result.getValue().toString(), input);
-    }
-
-    @Override
-    public ConversationModelResult<PortfolioTaskClassification> classifyPortfolioTask(
-            String turnId,
-            String question,
-            PortfolioRecommendationContext recommendationContext) {
-        Map<String, Object> taskInput = new LinkedHashMap<>();
-        taskInput.put("turnId", turnId);
-        taskInput.put("question", question);
-        taskInput.put("recommendationContext", recommendationContext);
-        return post(
-                ProviderOperation.CLASSIFY_PORTFOLIO_TASK,
-                () -> promptFactory.portfolioTaskPrompt(taskInput),
-                objectMapper.constructType(PortfolioTaskClassification.class),
-                0.0);
-    }
-
-    @Override
-    public ConversationModelResult<ConversationToolPlan> planTools(
-            String question,
-            ConversationWindow window,
-            ConversationRoute route,
-            PortfolioGroundingContext grounding,
-            List<PublicToolResult> priorResults,
-            List<ToolKind> allowedTools
-    ) {
-        Map<String, Object> approved = new LinkedHashMap<>();
-        approved.put("route", route);
-        approved.put("grounding", grounding);
-        approved.put("priorResults", priorResults);
-        approved.put("allowedTools", allowedTools);
-        return post(
-                ProviderOperation.PLAN_TOOLS,
-                () -> promptFactory.toolPlanPrompt(
-                        conversation(question, window),
-                        approved),
-                objectMapper.constructType(ConversationToolPlan.class),
-                0.0);
     }
 
     @Override

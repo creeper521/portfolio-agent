@@ -264,7 +264,8 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                 .orElseThrow(() -> new IllegalStateException(
                         "retrieved claim references missing evidence"));
         return new PortfolioRetrievedEvidenceReference(
-                evidence.getId(), evidence.getTitle(), evidence.getPublicStatus());
+                evidence.getId(), evidence.getCode(), evidence.getTitle(), evidence.getType(),
+                evidence.getPublicStatus());
     }
 
     private double targetFit(AnswerKnowledge knowledge, PortfolioRetrievalRequest request) {

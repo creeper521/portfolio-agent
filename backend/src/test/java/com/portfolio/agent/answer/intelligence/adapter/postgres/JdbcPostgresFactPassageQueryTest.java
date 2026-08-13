@@ -95,6 +95,8 @@ class JdbcPostgresFactPassageQueryTest {
             assertThat(row.getEvidenceIds()).containsExactly("evidence-1");
             assertThat(row.getEvidenceReferences()).singleElement().satisfies(reference -> {
                 assertThat(reference.getEvidenceId()).isEqualTo("evidence-1");
+                assertThat(reference.getEvidenceCode()).isEqualTo("E-01");
+                assertThat(reference.getEvidenceType()).isEqualTo("DOCUMENT");
                 assertThat(reference.getPublicStatus()).isEqualTo("APPROVED");
             });
         });
@@ -105,8 +107,12 @@ class JdbcPostgresFactPassageQueryTest {
         when(topics.getArray()).thenReturn(new String[]{"POSTGRESQL"});
         Array evidenceIds = mock(Array.class);
         when(evidenceIds.getArray()).thenReturn(new String[]{"evidence-1"});
+        Array evidenceCodes = mock(Array.class);
+        when(evidenceCodes.getArray()).thenReturn(new String[]{"E-01"});
         Array evidenceLabels = mock(Array.class);
         when(evidenceLabels.getArray()).thenReturn(new String[]{"验证证据"});
+        Array evidenceTypes = mock(Array.class);
+        when(evidenceTypes.getArray()).thenReturn(new String[]{"DOCUMENT"});
         Array evidenceStatuses = mock(Array.class);
         when(evidenceStatuses.getArray()).thenReturn(new String[]{"APPROVED"});
         ResultSet resultSet = mock(ResultSet.class);
@@ -124,7 +130,9 @@ class JdbcPostgresFactPassageQueryTest {
         when(resultSet.getString("claim_materiality")).thenReturn("KEY");
         when(resultSet.getArray("claim_topics")).thenReturn(topics);
         when(resultSet.getArray("evidence_ids")).thenReturn(evidenceIds);
+        when(resultSet.getArray("evidence_codes")).thenReturn(evidenceCodes);
         when(resultSet.getArray("evidence_labels")).thenReturn(evidenceLabels);
+        when(resultSet.getArray("evidence_types")).thenReturn(evidenceTypes);
         when(resultSet.getArray("evidence_statuses")).thenReturn(evidenceStatuses);
         return resultSet;
     }

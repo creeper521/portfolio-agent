@@ -14,6 +14,7 @@ import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
 import com.portfolio.agent.answer.routing.domain.ExecutionSelection;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
@@ -110,6 +111,43 @@ class ConversationalAgentRuntimeTest {
     }
 
     @Test
+    void doesNotProjectLegacyFallbackWhenAReadyPortfolioPlanHasFailedExecution() {
+        SemanticTask task = portfolioFact();
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-failed", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(task), List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ValidatedSemanticTurnPlan validated = new SemanticPlanValidator(new PlanFingerprintService())
+                .validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
+        CountingRouter router = new CountingRouter(SemanticTurnDecision.ready(
+                validated, ExecutionSelection.allExecutable(Set.of(task.getTaskId()))));
+        SemanticTaskExecutor failedExecutor = new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO;
+            }
+
+            @Override
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
+                return TaskOutcome.failed(task.getTaskId(),
+                        SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                        "EVIDENCE_INTEGRITY_FAILURE");
+            }
+        };
+
+        ConversationAnswerResult result = fixture(
+                router, new SemanticTurnCoordinator(List.of(failedExecutor))).runtime.answer(
+                ask("review project"));
+
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.CAPABILITY_UNAVAILABLE);
+        assertThat(result.getBlocks()).isEmpty();
+        assertThat(result.getEvidenceState()).isEqualTo(AnswerEvidenceState.INSUFFICIENT);
+        assertThat(result.getAgentTurn().getOutcome().orElseThrow().getPlanOutcome())
+                .isEqualTo(com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome.PlanOutcome.FAILED);
+    }
+
+    @Test
     void projectsACompletedGeneralTaskAsModelGenerationWithoutPortfolioEvidence() {
         SemanticTask task = SemanticTask.create(
                 "task-general", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
@@ -134,8 +172,7 @@ class ConversationalAgentRuntimeTest {
             }
 
             @Override
-            public TaskOutcome execute(
-                    SemanticTask ignored, List<TaskOutcome> availableDependencyOutcomes) {
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
                 return TaskOutcome.answered(
                         task.getTaskId(), SemanticRoutingTypes.TaskSourceDomain.GENERAL,
                         new TaskResultPayload.SectionResultPayload(

@@ -70,8 +70,8 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(jsonPath("$.degraded").value(false))
                 .andExpect(jsonPath("$.blocks.length()").value(1))
                 .andExpect(jsonPath("$.blocks[0].sourceScope").value("PORTFOLIO"))
-                .andExpect(jsonPath("$.blocks[0].claimIds.length()").value(0))
-                .andExpect(jsonPath("$.blocks[0].evidenceIds.length()").value(0));
+                 .andExpect(jsonPath("$.blocks[0].claimIds").doesNotExist())
+                 .andExpect(jsonPath("$.blocks[0].evidenceIds").doesNotExist());
 
         mockMvc.perform(post("/api/v2/answers")
                         .contentType(MediaType.APPLICATION_JSON)

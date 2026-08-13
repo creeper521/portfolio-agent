@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.adapter.web;
 
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.context.service.RequestReceiptService;
+import com.portfolio.agent.answer.context.service.ConversationContextCommitter;
 import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
 import com.portfolio.agent.answer.adapter.model.ModelExpressionProperties;
 import com.portfolio.agent.answer.adapter.retrieval.RetrievalProperties;
@@ -19,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Clock;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Optional;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AnswerProductionProperties.class)
@@ -82,7 +85,9 @@ public class AnswerProductionConfiguration {
             AnswerAdmissionGate admissionGate,
             AnswerIdempotencyCoordinator<ConversationAnswerResult> idempotency,
             ExecutorService conversationRequestExecutor,
-            AnswerProductionProperties properties
+            AnswerProductionProperties properties,
+            Optional<RequestReceiptService> requestReceiptService,
+            Optional<ConversationContextCommitter> contextCommitter
     ) {
         return new ProductionConversationService(
                 runtime,
@@ -90,7 +95,9 @@ public class AnswerProductionConfiguration {
                 admissionGate,
                 idempotency,
                 conversationRequestExecutor,
-                properties.getRequestTimeout()
+                properties.getRequestTimeout(),
+                requestReceiptService,
+                contextCommitter
         );
     }
 }

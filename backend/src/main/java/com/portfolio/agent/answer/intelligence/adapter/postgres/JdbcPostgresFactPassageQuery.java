@@ -32,7 +32,9 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                    c.materiality AS claim_materiality,
                    ARRAY(SELECT jsonb_array_elements_text(c.topics)) AS claim_topics,
                    array_agg(e.stable_id ORDER BY e.stable_id) AS evidence_ids,
+                   array_agg(e.public_code ORDER BY e.stable_id) AS evidence_codes,
                    array_agg(e.label ORDER BY e.stable_id) AS evidence_labels,
+                   array_agg(e.evidence_type ORDER BY e.stable_id) AS evidence_types,
                    array_agg(e.public_status ORDER BY e.stable_id) AS evidence_statuses
             FROM portfolio_subject ps
             JOIN claim c
@@ -90,7 +92,9 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
         java.util.ArrayList<PostgresKnowledgePassageRow> rows = new java.util.ArrayList<>();
         while (resultSet.next()) {
             List<String> evidenceIds = readStrings(resultSet.getArray("evidence_ids"));
+            List<String> evidenceCodes = readStrings(resultSet.getArray("evidence_codes"));
             List<String> evidenceLabels = readStrings(resultSet.getArray("evidence_labels"));
+            List<String> evidenceTypes = readStrings(resultSet.getArray("evidence_types"));
             List<String> evidenceStatuses = readStrings(resultSet.getArray("evidence_statuses"));
             AnswerClaimProjection claim = claimProjection(resultSet, evidenceIds);
             rows.add(new PostgresKnowledgePassageRow(
@@ -100,7 +104,9 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                     evidenceReferences(
                             claim.getId(),
                             evidenceIds,
+                            evidenceCodes,
                             evidenceLabels,
+                            evidenceTypes,
                             evidenceStatuses)));
         }
         return List.copyOf(rows);
@@ -130,16 +136,22 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
     private List<com.portfolio.agent.selection.domain.EvidenceReference> evidenceReferences(
             String claimId,
             List<String> evidenceIds,
+            List<String> evidenceCodes,
             List<String> labels,
+            List<String> evidenceTypes,
             List<String> statuses) {
-        if (evidenceIds.size() != labels.size() || evidenceIds.size() != statuses.size()) {
+        if (evidenceIds.size() != evidenceCodes.size()
+                || evidenceIds.size() != labels.size()
+                || evidenceIds.size() != evidenceTypes.size()
+                || evidenceIds.size() != statuses.size()) {
             throw new IllegalStateException("PostgreSQL evidence projection columns are misaligned");
         }
         java.util.ArrayList<com.portfolio.agent.selection.domain.EvidenceReference> references =
                 new java.util.ArrayList<>();
         for (int index = 0; index < evidenceIds.size(); index++) {
             references.add(new com.portfolio.agent.selection.domain.EvidenceReference(
-                    claimId, evidenceIds.get(index), labels.get(index), statuses.get(index)));
+                    claimId, evidenceIds.get(index), evidenceCodes.get(index), labels.get(index),
+                    evidenceTypes.get(index), statuses.get(index)));
         }
         return List.copyOf(references);
     }

@@ -13,19 +13,32 @@ public final class CompletedTaskResponse {
     private final String goalLabel;
     private final TaskSourceDomain sourceDomain;
     private final ResultPayload resultPayload;
+    private final String contextHandle;
 
     public CompletedTaskResponse(
             String displayIndex, String goalLabel, TaskSourceDomain sourceDomain, ResultPayload resultPayload) {
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, null);
+    }
+
+    public CompletedTaskResponse(
+            String displayIndex,
+            String goalLabel,
+            TaskSourceDomain sourceDomain,
+            ResultPayload resultPayload,
+            String contextHandle) {
         this.displayIndex = requireText(displayIndex, "displayIndex");
         this.goalLabel = requireText(goalLabel, "goalLabel");
         this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
         this.resultPayload = Objects.requireNonNull(resultPayload, "resultPayload");
+        this.contextHandle = contextHandle;
     }
 
     public String getDisplayIndex() { return displayIndex; }
     public String getGoalLabel() { return goalLabel; }
     public TaskSourceDomain getSourceDomain() { return sourceDomain; }
     public ResultPayload getResultPayload() { return resultPayload; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getContextHandle() { return contextHandle; }
 
     public static final class ResultPayload {
         private final String kind;

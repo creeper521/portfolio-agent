@@ -14,11 +14,8 @@ public final class ConversationalAgentProperties {
     private int maxHistoryRounds = 20;
     private int recentRawRounds = 6;
     private int maxInputTokens = 12000;
-    private int maxToolCalls = 4;
-    private int maxToolRounds = 2;
     private int maxSuggestedQuestions = 3;
     private double minimumIntentConfidence = 0.65;
-    private double minimumPortfolioTaskConfidence = 0.80;
     private String planConfirmationEncryptionKey = "";
     private String planConfirmationIntegrityKey = "";
 
@@ -57,14 +54,6 @@ public final class ConversationalAgentProperties {
     public void setMaxInputTokens(int maxInputTokens) {
         this.maxInputTokens = maxInputTokens;
     }
-    public int getMaxToolCalls() { return maxToolCalls; }
-    public void setMaxToolCalls(int maxToolCalls) {
-        this.maxToolCalls = maxToolCalls;
-    }
-    public int getMaxToolRounds() { return maxToolRounds; }
-    public void setMaxToolRounds(int maxToolRounds) {
-        this.maxToolRounds = maxToolRounds;
-    }
     public int getMaxSuggestedQuestions() { return maxSuggestedQuestions; }
     public void setMaxSuggestedQuestions(int maxSuggestedQuestions) {
         this.maxSuggestedQuestions = maxSuggestedQuestions;
@@ -72,10 +61,6 @@ public final class ConversationalAgentProperties {
     public double getMinimumIntentConfidence() { return minimumIntentConfidence; }
     public void setMinimumIntentConfidence(double minimumIntentConfidence) {
         this.minimumIntentConfidence = minimumIntentConfidence;
-    }
-    public double getMinimumPortfolioTaskConfidence() { return minimumPortfolioTaskConfidence; }
-    public void setMinimumPortfolioTaskConfidence(double minimumPortfolioTaskConfidence) {
-        this.minimumPortfolioTaskConfidence = minimumPortfolioTaskConfidence;
     }
     public String getPlanConfirmationEncryptionKey() { return planConfirmationEncryptionKey; }
     public void setPlanConfirmationEncryptionKey(String planConfirmationEncryptionKey) {

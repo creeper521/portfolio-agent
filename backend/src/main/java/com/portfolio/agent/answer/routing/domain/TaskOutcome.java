@@ -1,5 +1,6 @@
 package com.portfolio.agent.answer.routing.domain;
 
+import com.portfolio.agent.answer.domain.GroundedAnswerContribution;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
 
 import java.util.LinkedHashSet;
@@ -14,6 +15,7 @@ public final class TaskOutcome {
         NOT_STARTED,
         RUNNING,
         SUCCEEDED,
+        REJECTED,
         FAILED,
         BLOCKED,
         CANCELLED
@@ -21,10 +23,14 @@ public final class TaskOutcome {
 
     public enum TaskResolution {
         ANSWERED,
+        PARTIALLY_ANSWERED,
+        PRESENTATION_BLOCKED,
         NOT_SUPPORTED,
         EMPTY,
         REJECTED,
         CAPABILITY_UNAVAILABLE,
+        DEPENDENCY_UNAVAILABLE,
+        NOT_EXECUTED_BUDGET,
         BOUNDARY,
         NOT_APPLICABLE
     }
@@ -46,6 +52,7 @@ public final class TaskOutcome {
     private final TaskSourceDomain sourceDomain;
     private final TaskResultProvenance provenance;
     private final TaskResultPayload resultPayload;
+    private final GroundedAnswerContribution contribution;
 
     private TaskOutcome(
             String taskId,
@@ -58,6 +65,22 @@ public final class TaskOutcome {
             TaskSourceDomain sourceDomain,
             TaskResultProvenance provenance,
             TaskResultPayload resultPayload) {
+        this(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
+                resultReference, sourceDomain, provenance, resultPayload, null);
+    }
+
+    private TaskOutcome(
+            String taskId,
+            TaskExecutionStatus executionStatus,
+            TaskResolution resolution,
+            TaskEvidenceState evidenceState,
+            boolean degraded,
+            Set<String> reasonCodes,
+            String resultReference,
+            TaskSourceDomain sourceDomain,
+            TaskResultProvenance provenance,
+            TaskResultPayload resultPayload,
+            GroundedAnswerContribution contribution) {
         this.taskId = requireText(taskId, "taskId");
         this.executionStatus = Objects.requireNonNull(executionStatus, "executionStatus");
         this.resolution = Objects.requireNonNull(resolution, "resolution");
@@ -68,6 +91,7 @@ public final class TaskOutcome {
         this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
         this.provenance = provenance;
         this.resultPayload = resultPayload;
+        this.contribution = contribution;
         validate();
     }
 
@@ -104,6 +128,76 @@ public final class TaskOutcome {
                 sourceDomain,
                 provenance,
                 resultPayload);
+    }
+
+    public static TaskOutcome answeredWithContribution(
+            String taskId,
+            TaskSourceDomain sourceDomain,
+            GroundedAnswerContribution contribution,
+            TaskResultProvenance provenance,
+            boolean degraded) {
+        return new TaskOutcome(
+                taskId,
+                TaskExecutionStatus.SUCCEEDED,
+                TaskResolution.ANSWERED,
+                TaskEvidenceState.SUFFICIENT,
+                degraded,
+                Set.of(),
+                null,
+                sourceDomain,
+                provenance,
+                null,
+                Objects.requireNonNull(contribution, "contribution"));
+    }
+
+    public static TaskOutcome partiallyAnswered(
+            String taskId,
+            TaskSourceDomain sourceDomain,
+            GroundedAnswerContribution contribution,
+            TaskEvidenceState evidenceState,
+            TaskResultProvenance provenance,
+            boolean degraded) {
+        if (evidenceState != TaskEvidenceState.PARTIAL
+                && evidenceState != TaskEvidenceState.SUFFICIENT) {
+            throw new IllegalArgumentException("partial answer requires partial or sufficient evidence");
+        }
+        return new TaskOutcome(
+                taskId,
+                TaskExecutionStatus.SUCCEEDED,
+                TaskResolution.PARTIALLY_ANSWERED,
+                evidenceState,
+                degraded,
+                Set.of(),
+                null,
+                sourceDomain,
+                provenance,
+                null,
+                Objects.requireNonNull(contribution, "contribution"));
+    }
+
+    public static TaskOutcome partiallyAnswered(
+            String taskId,
+            TaskSourceDomain sourceDomain,
+            TaskResultPayload resultPayload,
+            TaskEvidenceState evidenceState,
+            TaskResultProvenance provenance,
+            boolean degraded) {
+        if (evidenceState != TaskEvidenceState.PARTIAL
+                && evidenceState != TaskEvidenceState.SUFFICIENT) {
+            throw new IllegalArgumentException(
+                    "partial answer requires partial or sufficient evidence");
+        }
+        return create(
+                taskId,
+                TaskExecutionStatus.SUCCEEDED,
+                TaskResolution.PARTIALLY_ANSWERED,
+                evidenceState,
+                degraded,
+                Set.of(),
+                null,
+                sourceDomain,
+                provenance,
+                Objects.requireNonNull(resultPayload, "resultPayload"));
     }
 
     public static TaskOutcome notSupported(
@@ -167,6 +261,36 @@ public final class TaskOutcome {
                 null);
     }
 
+    public static TaskOutcome dependencyUnavailable(
+            String taskId, TaskSourceDomain sourceDomain, String reasonCode) {
+        return create(
+                taskId,
+                TaskExecutionStatus.BLOCKED,
+                TaskResolution.DEPENDENCY_UNAVAILABLE,
+                TaskEvidenceState.NOT_APPLICABLE,
+                false,
+                Set.of(reasonCode),
+                null,
+                sourceDomain,
+                null,
+                null);
+    }
+
+    public static TaskOutcome notExecutedBudget(
+            String taskId, TaskSourceDomain sourceDomain) {
+        return create(
+                taskId,
+                TaskExecutionStatus.NOT_STARTED,
+                TaskResolution.NOT_EXECUTED_BUDGET,
+                TaskEvidenceState.NOT_APPLICABLE,
+                false,
+                Set.of("NOT_EXECUTED_BUDGET"),
+                null,
+                sourceDomain,
+                null,
+                null);
+    }
+
     public static TaskOutcome cancelled(String taskId, TaskSourceDomain sourceDomain, String reasonCode) {
         return create(
                 taskId,
@@ -221,11 +345,16 @@ public final class TaskOutcome {
         return Optional.ofNullable(resultPayload);
     }
 
+    public Optional<GroundedAnswerContribution> getContribution() {
+        return Optional.ofNullable(contribution);
+    }
+
     public boolean hasRenderablePayload() {
         return executionStatus == TaskExecutionStatus.SUCCEEDED
-                && resolution == TaskResolution.ANSWERED
+                && (resolution == TaskResolution.ANSWERED
+                || resolution == TaskResolution.PARTIALLY_ANSWERED)
                 && evidenceState != TaskEvidenceState.INSUFFICIENT
-                && resultPayload != null;
+                && (resultPayload != null || contribution != null);
     }
 
     @Override
@@ -245,13 +374,14 @@ public final class TaskOutcome {
                 && Objects.equals(resultReference, that.resultReference)
                 && sourceDomain == that.sourceDomain
                 && Objects.equals(provenance, that.provenance)
-                && Objects.equals(resultPayload, that.resultPayload);
+                && Objects.equals(resultPayload, that.resultPayload)
+                && Objects.equals(contribution, that.contribution);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
-                resultReference, sourceDomain, provenance, resultPayload);
+                resultReference, sourceDomain, provenance, resultPayload, contribution);
     }
 
     @Override
@@ -262,16 +392,28 @@ public final class TaskOutcome {
                 + ", degraded=" + degraded
                 + ", reasonCount=" + reasonCodes.size()
                 + ", sourceDomain=" + sourceDomain
-                + ", hasPayload=" + (resultPayload != null) + '}';
+                + ", hasPayload=" + (resultPayload != null)
+                + ", hasContribution=" + (contribution != null) + '}';
     }
 
     private void validate() {
         if (resultPayload != null
-                && (executionStatus != TaskExecutionStatus.SUCCEEDED || resolution != TaskResolution.ANSWERED)) {
+                && (executionStatus != TaskExecutionStatus.SUCCEEDED
+                || (resolution != TaskResolution.ANSWERED
+                && resolution != TaskResolution.PARTIALLY_ANSWERED))) {
             throw new IllegalArgumentException("renderable payload requires succeeded answered outcome");
+        }
+        if (contribution != null
+                && (executionStatus != TaskExecutionStatus.SUCCEEDED
+                || (resolution != TaskResolution.ANSWERED
+                && resolution != TaskResolution.PARTIALLY_ANSWERED))) {
+            throw new IllegalArgumentException("contribution requires a renderable answer outcome");
         }
         if (resultPayload != null && provenance == null) {
             throw new IllegalArgumentException("renderable payload requires provenance");
+        }
+        if (contribution != null && provenance == null) {
+            throw new IllegalArgumentException("contribution requires provenance");
         }
         if (resultPayload != null && evidenceState == TaskEvidenceState.INSUFFICIENT) {
             throw new IllegalArgumentException("evidence-insufficient outcome must not carry renderable payload");
@@ -283,7 +425,9 @@ public final class TaskOutcome {
         if ((executionStatus == TaskExecutionStatus.FAILED
                 || executionStatus == TaskExecutionStatus.BLOCKED
                 || executionStatus == TaskExecutionStatus.CANCELLED)
-                && resolution != TaskResolution.NOT_APPLICABLE) {
+                && resolution != TaskResolution.NOT_APPLICABLE
+                && !(executionStatus == TaskExecutionStatus.BLOCKED
+                && resolution == TaskResolution.DEPENDENCY_UNAVAILABLE)) {
             throw new IllegalArgumentException("terminal non-success outcome requires not applicable resolution");
         }
         if (executionStatus == TaskExecutionStatus.FAILED && resolution == TaskResolution.EMPTY) {

@@ -8,7 +8,7 @@ This repository builds a public internship portfolio Agent. Runtime code may rea
 
 The current public content still contains one SQL audit project and one executable preset. The runtime now also contains the implemented A/B/C1/C2 capabilities and the C3 built-in Model Provider Registry documented in `docs/08-当前实现状态.md`; optional model expression and local retrieval remain disabled by default. These runtime additions do not expand the reviewed public factual scope.
 
-Do not add Spring AI runtime calls, SSE, a database, authentication, dynamic external publication, private search, or further C3 abstractions unless the authoritative design is updated and approved. The existing fixed DeepSeek/GLM expression adapters and local BGE embedding path are admitted only under their documented fail-closed configuration and privacy boundaries.
+Do not add Spring AI runtime calls, SSE, authentication, dynamic external publication, private search, or further C3 abstractions unless the authoritative design is updated and approved. P3's explicitly approved PostgreSQL Context Store exception permits only encrypted, short-lived, typed business Context and minimal request receipts; it must not persist questions, answers, Evidence text, credentials, private data, or long-term memory. The existing fixed DeepSeek/GLM expression adapters and local BGE embedding path are admitted only under their documented fail-closed configuration and privacy boundaries.
 
 ## Source of truth
 
@@ -61,7 +61,7 @@ Do not treat a historical or superseded plan as active work. Dynamic publication
 ## Security
 
 - Public APIs are read-only and must return DTOs, not private source objects.
-- Do not log visitor questions or persist them on the server or in browser storage. Visitor conversations are tab-memory only and disappear on refresh or close; the page must state this clearly without intercepting refresh. Questions and answers must not enter URLs or browser history. Homepage-to-Agent handoff uses a random, memory-only, one-time ID with a short expiry.
+- Do not log visitor questions or persist them on the server or in browser storage. P3 may persist only the approved encrypted typed business Context and minimal request receipt; visitor questions and answers remain non-persistent. Questions and answers must not enter URLs or browser history. Homepage-to-Agent handoff uses a random, memory-only, one-time ID with a short expiry.
 - Do not expose stack traces, local paths, internal hosts, IP addresses, credentials, or raw evidence.
 - Only Evidence with `publicStatus = APPROVED` may be returned.
 - Run `scripts/privacy-check.ps1` before packaging.

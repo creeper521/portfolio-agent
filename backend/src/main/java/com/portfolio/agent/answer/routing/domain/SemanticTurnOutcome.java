@@ -49,7 +49,8 @@ public final class SemanticTurnOutcome {
     }
 
     public int getAnsweredCount() {
-        return countResolution(TaskOutcome.TaskResolution.ANSWERED);
+        return countResolution(TaskOutcome.TaskResolution.ANSWERED)
+                + countResolution(TaskOutcome.TaskResolution.PARTIALLY_ANSWERED);
     }
 
     public int getNotSupportedCount() {
@@ -155,7 +156,8 @@ public final class SemanticTurnOutcome {
         int failedCount = 0;
         int cancelledCount = 0;
         for (TaskOutcome outcome : outcomes) {
-            if (outcome.getResolution() == TaskOutcome.TaskResolution.ANSWERED) {
+            if (outcome.getResolution() == TaskOutcome.TaskResolution.ANSWERED
+                    || outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED) {
                 answeredCount++;
             }
             if (outcome.getExecutionStatus() == TaskOutcome.TaskExecutionStatus.FAILED) {

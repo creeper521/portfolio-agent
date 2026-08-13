@@ -9,6 +9,9 @@ required=(
   PORTFOLIO_GOVERNANCE_DATABASE_NAME
   PORTFOLIO_GOVERNANCE_DATABASE_USERNAME
   PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD
+  PORTFOLIO_CONTEXT_DATABASE_NAME
+  PORTFOLIO_CONTEXT_DATABASE_USERNAME
+  PORTFOLIO_CONTEXT_DATABASE_PASSWORD
 )
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
@@ -22,7 +25,9 @@ for value in \
   "$PORTFOLIO_PUBLIC_DATABASE_NAME" \
   "$PORTFOLIO_PUBLIC_DATABASE_USERNAME" \
   "$PORTFOLIO_GOVERNANCE_DATABASE_NAME" \
-  "$PORTFOLIO_GOVERNANCE_DATABASE_USERNAME"; do
+  "$PORTFOLIO_GOVERNANCE_DATABASE_USERNAME" \
+  "$PORTFOLIO_CONTEXT_DATABASE_NAME" \
+  "$PORTFOLIO_CONTEXT_DATABASE_USERNAME"; do
   if [[ ! "$value" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
     echo "POSTGRES_LOCAL_IDENTIFIER_INVALID" >&2
     exit 1
@@ -37,6 +42,15 @@ if [[ "$PORTFOLIO_PUBLIC_DATABASE_NAME" == "$PORTFOLIO_GOVERNANCE_DATABASE_NAME"
   exit 1
 fi
 
+if [[ "$PORTFOLIO_CONTEXT_DATABASE_NAME" == "$PORTFOLIO_PUBLIC_DATABASE_NAME" ]] ||
+   [[ "$PORTFOLIO_CONTEXT_DATABASE_NAME" == "$PORTFOLIO_GOVERNANCE_DATABASE_NAME" ]] ||
+   [[ "$PORTFOLIO_CONTEXT_DATABASE_USERNAME" == "$PORTFOLIO_PUBLIC_DATABASE_USERNAME" ]] ||
+   [[ "$PORTFOLIO_CONTEXT_DATABASE_USERNAME" == "$PORTFOLIO_GOVERNANCE_DATABASE_USERNAME" ]] ||
+   [[ "$PORTFOLIO_CONTEXT_DATABASE_USERNAME" == "$POSTGRES_USER" ]]; then
+  echo "POSTGRES_LOCAL_IDENTIFIERS_NOT_DISTINCT" >&2
+  exit 1
+fi
+
 for password in \
   "$PORTFOLIO_PUBLIC_DATABASE_PASSWORD" \
   "$PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD"; do
@@ -46,6 +60,11 @@ for password in \
   fi
 done
 
+if [[ ! "$PORTFOLIO_CONTEXT_DATABASE_PASSWORD" =~ ^[A-Za-z0-9_@%+=:,./!?~-]{12,}$ ]]; then
+  echo "POSTGRES_LOCAL_PASSWORD_UNSAFE" >&2
+  exit 1
+fi
+
 psql --username "$POSTGRES_USER" --dbname postgres \
   --set=ON_ERROR_STOP=1 \
   --set=public_db="$PORTFOLIO_PUBLIC_DATABASE_NAME" \
@@ -53,7 +72,10 @@ psql --username "$POSTGRES_USER" --dbname postgres \
   --set=public_password="$PORTFOLIO_PUBLIC_DATABASE_PASSWORD" \
   --set=governance_db="$PORTFOLIO_GOVERNANCE_DATABASE_NAME" \
   --set=governance_user="$PORTFOLIO_GOVERNANCE_DATABASE_USERNAME" \
-  --set=governance_password="$PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD" <<'SQL'
+  --set=governance_password="$PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD" \
+  --set=context_db="$PORTFOLIO_CONTEXT_DATABASE_NAME" \
+  --set=context_user="$PORTFOLIO_CONTEXT_DATABASE_USERNAME" \
+  --set=context_password="$PORTFOLIO_CONTEXT_DATABASE_PASSWORD" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'public_user', :'public_password')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'public_user') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'public_user', :'public_password') \gexec
@@ -67,11 +89,19 @@ SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'governance_user', :'gove
 SELECT format('CREATE DATABASE %I OWNER %I', :'governance_db', :'governance_user')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'governance_db') \gexec
 SELECT format('ALTER DATABASE %I OWNER TO %I', :'governance_db', :'governance_user') \gexec
+
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'context_user', :'context_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'context_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'context_user', :'context_password') \gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'context_db', :'context_user')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'context_db') \gexec
+SELECT format('ALTER DATABASE %I OWNER TO %I', :'context_db', :'context_user') \gexec
 SQL
 
 for database in \
   "$PORTFOLIO_PUBLIC_DATABASE_NAME" \
-  "$PORTFOLIO_GOVERNANCE_DATABASE_NAME"; do
+  "$PORTFOLIO_GOVERNANCE_DATABASE_NAME" \
+  "$PORTFOLIO_CONTEXT_DATABASE_NAME"; do
   psql --username "$POSTGRES_USER" --dbname "$database" \
     --set=ON_ERROR_STOP=1 \
     --command='CREATE EXTENSION IF NOT EXISTS vector' >/dev/null

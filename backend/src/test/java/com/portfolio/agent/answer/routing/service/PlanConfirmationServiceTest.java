@@ -5,6 +5,7 @@ import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdap
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
@@ -137,10 +138,10 @@ class PlanConfirmationServiceTest {
             }
 
             @Override
-            public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
                 executions.incrementAndGet();
                 return TaskOutcome.answered(
-                        task.getTaskId(),
+                        context.getSemanticTask().getTaskId(),
                         SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
                         new TaskResultPayload.SectionResultPayload(List.of("safe"), "safe"),
                         TaskResultProvenance.direct(

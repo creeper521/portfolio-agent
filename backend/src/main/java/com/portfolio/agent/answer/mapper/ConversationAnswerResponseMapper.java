@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.answer.context.domain.ContextHandle;
 import com.portfolio.agent.answer.dto.response.AgentTurnResponse;
 import com.portfolio.agent.answer.dto.response.AgentTurnOutcomeResponse;
 import com.portfolio.agent.answer.dto.response.ClarificationResponse;
@@ -14,12 +15,13 @@ import com.portfolio.agent.answer.dto.response.ConversationAnswerBlockResponse;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerResponse;
 import com.portfolio.agent.answer.dto.response.ConversationSuggestedQuestionResponse;
 import com.portfolio.agent.answer.dto.response.DisplayPlanResponse;
+import com.portfolio.agent.answer.dto.response.ExecutionDisplayPlanResponse;
+import com.portfolio.agent.answer.dto.response.PublicSourceReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PlanConfirmationResponse;
 import com.portfolio.agent.answer.dto.response.PlanChangeResponse;
 import com.portfolio.agent.answer.dto.response.InvalidatedPlanReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PendingPlanReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationResponse;
-import com.portfolio.agent.answer.dto.response.PortfolioRecommendationContextResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse;
 import com.portfolio.agent.answer.dto.response.TaskSummaryResponse;
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
@@ -32,6 +34,7 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.routing.service.ClarificationRequest;
+import com.portfolio.agent.answer.intelligence.execution.service.ExecutionDisplayPlanProjector;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -43,7 +46,21 @@ import java.util.Optional;
 @Component
 public final class ConversationAnswerResponseMapper {
 
+    private final ExecutionDisplayPlanProjector executionProjector = new ExecutionDisplayPlanProjector();
+
     public ConversationAnswerResponse toResponse(ConversationAnswerResult result) {
+        return toResponse(result, null);
+    }
+
+    public ConversationAnswerResponse toResponse(
+            ConversationAnswerResult result, com.portfolio.agent.answer.dto.response.ConversationResponse conversation) {
+        return toResponse(result, conversation, Map.of());
+    }
+
+    public ConversationAnswerResponse toResponse(
+            ConversationAnswerResult result,
+            com.portfolio.agent.answer.dto.response.ConversationResponse conversation,
+            Map<String, ContextHandle> contextHandles) {
         AgentTurnResult agentTurn = result.getAgentTurn();
         return new ConversationAnswerResponse(
                 result.getTurnId(),
@@ -68,7 +85,8 @@ public final class ConversationAnswerResponseMapper {
                 result.getQuestionPresetId(),
                 result.getContractVersion(),
                 result.getSummary(),
-                agentTurn == null ? null : toAgentTurnResponse(agentTurn, result));
+                agentTurn == null ? null : toAgentTurnResponse(agentTurn, result, contextHandles),
+                "ANSWER", conversation);
     }
 
     private ConversationAnswerBlockResponse toBlockResponse(ConversationAnswerBlock block) {
@@ -84,7 +102,8 @@ public final class ConversationAnswerResponseMapper {
     private List<ConversationAnswerBlockResponse> topLevelBlocks(
             ConversationAnswerResult result, AgentTurnResult agentTurn) {
         if (agentTurn == null || agentTurn.getOutcome().isEmpty()) {
-            return result.getBlocks().stream().map(this::toBlockResponse).toList();
+            return deduplicatePublicReferences(
+                    result.getBlocks().stream().map(this::toBlockResponse).toList());
         }
         List<ConversationAnswerBlockResponse> mapped = new ArrayList<>();
         Map<String, SemanticTask> tasksById = indexTasks(agentTurn.getPlan());
@@ -94,6 +113,10 @@ public final class ConversationAnswerResponseMapper {
             }
             SemanticTask task = tasksById.get(outcome.getTaskId());
             if (task == null) {
+                continue;
+            }
+            if (outcome.getResultPayload().isEmpty() && outcome.getContribution().isPresent()) {
+                mapped.addAll(toContributionBlocks(outcome.getContribution().orElseThrow(), sourceScope(task)));
                 continue;
             }
             TaskResultPayload payload = outcome.getResultPayload().orElseThrow();
@@ -111,9 +134,36 @@ public final class ConversationAnswerResponseMapper {
         // projected by the runtime). Preserve that safe top-level projection
         // instead of dropping it merely because an outcome object exists.
         if (mapped.isEmpty() && !result.getBlocks().isEmpty()) {
-            return result.getBlocks().stream().map(this::toBlockResponse).toList();
+            return deduplicatePublicReferences(
+                    result.getBlocks().stream().map(this::toBlockResponse).toList());
         }
-        return List.copyOf(mapped);
+        return deduplicatePublicReferences(mapped);
+    }
+
+    private static List<ConversationAnswerBlockResponse> deduplicatePublicReferences(
+            List<ConversationAnswerBlockResponse> blocks) {
+        java.util.Set<String> seenReferenceKeys = new java.util.LinkedHashSet<>();
+        List<ConversationAnswerBlockResponse> deduplicated = new ArrayList<>();
+        for (ConversationAnswerBlockResponse block : blocks) {
+            List<PublicSourceReferenceResponse> references = block.getSourceReferences().stream()
+                    .filter(reference -> seenReferenceKeys.add(reference.getReferenceKey()))
+                    .toList();
+            deduplicated.add(new ConversationAnswerBlockResponse(
+                    block.getSourceScope(), block.getSectionType(), block.getTitle(), block.getContent(),
+                    block.getClaimIds(), block.getEvidenceIds(), references));
+        }
+        return List.copyOf(deduplicated);
+    }
+
+    private List<ConversationAnswerBlockResponse> toContributionBlocks(
+            com.portfolio.agent.answer.domain.GroundedAnswerContribution contribution,
+            ConversationSourceScope sourceScope) {
+        List<PublicSourceReferenceResponse> references = contribution.getSourceReferences().stream()
+                .map(PublicSourceReferenceResponse::from).toList();
+        return contribution.getSupportedStatements().stream()
+                .map(statement -> new ConversationAnswerBlockResponse(
+                        sourceScope, statement, List.of(), List.of(), references))
+                .toList();
     }
 
     private static void appendTopLevelBlocks(
@@ -150,7 +200,7 @@ public final class ConversationAnswerResponseMapper {
             return Optional.empty();
         }
         for (TaskOutcome outcome : agentTurn.getOutcome().orElseThrow().getTaskOutcomes()) {
-            if (outcome.hasRenderablePayload()
+            if (outcome.hasRenderablePayload() && outcome.getResultPayload().isPresent()
                     && outcome.getResultPayload().orElseThrow()
                     instanceof TaskResultPayload.RecommendationResultPayload recommendation
                     && recommendation.getProjection() != null) {
@@ -162,21 +212,15 @@ public final class ConversationAnswerResponseMapper {
 
     private PortfolioRecommendationResponse toRecommendationResponse(
             TaskResultPayload.RecommendationProjection projection) {
-        PortfolioRecommendationContextResponse context = new PortfolioRecommendationContextResponse(
-                projection.getRecommendationBatchId(),
-                projection.getContentVersion(),
-                projection.getCareerTrack(),
-                projection.getAudienceRole(),
-                projection.getCapabilityCodes(),
-                projection.getRequestedSize(),
-                projection.getSelectedPortfolioIds());
         List<PortfolioRecommendationItemResponse> items = projection.getItems().stream()
                 .map(item -> new PortfolioRecommendationItemResponse(
                         item.getPortfolioId(), item.getTitle(), item.getRoute(),
-                        item.getMatchReasons(), item.getEvidenceIds()))
+                        item.getMatchReasons(), item.getEvidenceIds(),
+                        item.getSourceReferences().stream()
+                                .map(PublicSourceReferenceResponse::from).toList()))
                 .toList();
         return new PortfolioRecommendationResponse(
-                projection.getRecommendationBatchId(), context, items,
+                projection.getRecommendationBatchId(), items,
                 projection.getSatisfiedConstraints(), projection.getUnsatisfiedConstraints());
     }
 
@@ -186,7 +230,7 @@ public final class ConversationAnswerResponseMapper {
         }
         int count = 0;
         for (TaskOutcome outcome : agentTurn.getOutcome().orElseThrow().getTaskOutcomes()) {
-            if (outcome.hasRenderablePayload()
+            if (outcome.hasRenderablePayload() && outcome.getResultPayload().isPresent()
                     && outcome.getResultPayload().orElseThrow()
                     instanceof TaskResultPayload.RecommendationResultPayload) {
                 count++;
@@ -195,7 +239,10 @@ public final class ConversationAnswerResponseMapper {
         return count;
     }
 
-    private AgentTurnResponse toAgentTurnResponse(AgentTurnResult agentTurn, ConversationAnswerResult result) {
+    private AgentTurnResponse toAgentTurnResponse(
+            AgentTurnResult agentTurn,
+            ConversationAnswerResult result,
+            Map<String, ContextHandle> contextHandles) {
         SemanticTurnOutcome outcomeValue = agentTurn.getOutcome().orElse(null);
         DisplayPlanResponse plan = agentTurn.getPlan()
                 .map(value -> toDisplayPlan(value, outcomeValue)).orElse(null);
@@ -210,19 +257,24 @@ public final class ConversationAnswerResponseMapper {
                 : new AgentTurnOutcomeResponse(outcomeValue.getPlanOutcome(), summary);
         List<CompletedTaskResponse> completed = outcomeValue == null ? null
                 : toCompletedTasks(agentTurn.getPlan().orElse(null), outcomeValue, result,
-                        countRenderableRecommendations(agentTurn));
+                        countRenderableRecommendations(agentTurn), contextHandles);
         String reasonCode = agentTurn.getInvalidationReason().map(Enum::name)
                 .orElseGet(() -> agentTurn.getReasonCodes().stream().sorted().findFirst().orElse(null));
         AgentTurnResult.Disposition wireDisposition = agentTurn.getDisposition()
                 == AgentTurnResult.Disposition.PLAN_INVALIDATED
                 ? AgentTurnResult.Disposition.REJECTED : agentTurn.getDisposition();
+        ExecutionDisplayPlanResponse execution = outcomeValue == null || agentTurn.getPlan().isEmpty()
+                ? null
+                : ExecutionDisplayPlanResponse.from(
+                        executionProjector.project(agentTurn.getPlan().orElseThrow(), outcomeValue));
         if (wireDisposition != AgentTurnResult.Disposition.READY
                 && wireDisposition != AgentTurnResult.Disposition.PARTIAL_READY) {
             outcome = null;
             completed = null;
+            execution = null;
         }
         return new AgentTurnResponse(wireDisposition, plan, planChange, confirmation, clarification,
-                outcome, completed);
+                outcome, completed, execution);
     }
 
     private DisplayPlanResponse toDisplayPlan(SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
@@ -364,7 +416,9 @@ public final class ConversationAnswerResponseMapper {
 
     private List<CompletedTaskResponse> toCompletedTasks(
             SemanticTurnPlan plan, SemanticTurnOutcome outcome,
-            ConversationAnswerResult result, int recommendationCount) {
+            ConversationAnswerResult result,
+            int recommendationCount,
+            Map<String, ContextHandle> contextHandles) {
         Map<String, SemanticTask> tasksById = indexTasks(Optional.ofNullable(plan));
         Map<String, String> indexes = plan == null ? Map.of() : displayIndexes(plan);
         List<CompletedTaskResponse> completed = new ArrayList<>();
@@ -374,9 +428,17 @@ public final class ConversationAnswerResponseMapper {
             }
             SemanticTask task = tasksById.get(outcomeItem.getTaskId());
             if (task != null) {
+                CompletedTaskResponse.ResultPayload payload = outcomeItem.getResultPayload().isPresent()
+                        ? toResultPayload(outcomeItem.getResultPayload().orElseThrow(), task, result,
+                                recommendationCount)
+                        : new CompletedTaskResponse.ResultPayload(
+                                "SECTION_RESULT",
+                                toContributionBlocks(outcomeItem.getContribution().orElseThrow(), sourceScope(task)),
+                                null, null);
                 completed.add(new CompletedTaskResponse(indexes.get(task.getTaskId()), task.getGoalLabel(),
-                        task.getSourceDomain(), toResultPayload(
-                                outcomeItem.getResultPayload().orElseThrow(), task, result, recommendationCount)));
+                        task.getSourceDomain(), payload,
+                        Optional.ofNullable(contextHandles.get(task.getTaskId()))
+                                .map(ContextHandle::asBase64Url).orElse(null)));
             }
         }
         return List.copyOf(completed);
@@ -400,7 +462,9 @@ public final class ConversationAnswerResponseMapper {
                                     item.getTitle(),
                                     item.getRoute(),
                                     item.getMatchReasons(),
-                                    item.getEvidenceIds()))
+                                    item.getEvidenceIds(),
+                                    item.getSourceReferences().stream()
+                                            .map(PublicSourceReferenceResponse::from).toList()))
                             .toList();
             return new CompletedTaskResponse.ResultPayload("RECOMMENDATION_RESULT",
                     toBlocks(recommendation.getSupportingBlocks(), sourceScope(task),
@@ -453,16 +517,24 @@ public final class ConversationAnswerResponseMapper {
     }
 
     private static String publicTaskStatus(TaskOutcome outcome) {
+        if (outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED) {
+            return "PARTIAL";
+        }
         if (outcome.hasRenderablePayload()) {
             return "COMPLETED";
         }
         return switch (outcome.getExecutionStatus()) {
+            case REJECTED -> "REJECTED";
             case BLOCKED -> "BLOCKED";
             case FAILED -> "FAILED";
             case CANCELLED -> "CANCELLED";
             case NOT_STARTED, RUNNING, SUCCEEDED -> switch (outcome.getResolution()) {
                 case NOT_SUPPORTED, CAPABILITY_UNAVAILABLE -> "NOT_SUPPORTED";
                 case EMPTY -> "EMPTY";
+                case PRESENTATION_BLOCKED -> "PRESENTATION_BLOCKED";
+                case PARTIALLY_ANSWERED -> "PARTIAL";
+                case DEPENDENCY_UNAVAILABLE -> "DEPENDENCY_UNAVAILABLE";
+                case NOT_EXECUTED_BUDGET -> "NOT_EXECUTED_BUDGET";
                 case REJECTED, BOUNDARY, NOT_APPLICABLE -> "NOT_SUPPORTED";
                 case ANSWERED -> "FAILED";
             };

@@ -8,12 +8,9 @@ import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
-import com.portfolio.agent.answer.domain.ConversationToolPlan;
 import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.GroundingReview;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
-import com.portfolio.agent.answer.domain.PublicToolResult;
-import com.portfolio.agent.answer.domain.ToolKind;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 
 import java.util.List;
@@ -38,18 +35,6 @@ public final class MockConversationalModelPort implements ConversationalModelPor
                 ConversationIntent.PORTFOLIO_GROUNDED,
                 com.portfolio.agent.answer.domain.ConversationAnswerScope.PORTFOLIO,
                 1.0d, null, null, null, false));
-    }
-
-    @Override
-    public ConversationModelResult<ConversationToolPlan> planTools(
-            String question,
-            ConversationWindow window,
-            ConversationRoute route,
-            PortfolioGroundingContext grounding,
-            List<PublicToolResult> priorResults,
-            List<ToolKind> allowedTools) {
-        return ConversationModelResult.success(new ConversationToolPlan(
-                List.of()));
     }
 
     @Override

@@ -6,8 +6,6 @@ import com.portfolio.agent.answer.dto.request.ClarificationResolutionRequest;
 import com.portfolio.agent.answer.dto.request.InvalidatedPlanReferenceRequest;
 import com.portfolio.agent.answer.dto.request.PlanAdjustmentRequest;
 import com.portfolio.agent.answer.dto.request.PlanConfirmationRequest;
-import com.portfolio.agent.answer.dto.request.PortfolioRecommendationContextRequest;
-import com.portfolio.agent.answer.dto.request.PortfolioReferenceContextRequest;
 import com.portfolio.agent.answer.dto.request.SemanticContextRequest;
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
 import com.portfolio.agent.answer.routing.domain.SemanticContext;
@@ -77,17 +75,10 @@ public final class SemanticTurnRequestMapper {
         if (context == null) {
             return null;
         }
-        PortfolioRecommendationContextRequest recommendation = context.getRecommendationContext();
-        PortfolioReferenceContextRequest reference = context.getReferenceContext();
-        List<String> recommendationSubjects = recommendation == null
-                ? List.of() : nullToEmpty(recommendation.getSelectedPortfolioIds());
-        List<String> referenceProjects = reference == null ? List.of() : reference.getProjectSlugs();
-        List<String> referenceCases = reference == null ? List.of() : reference.getCaseSlugs();
         Set<String> coveredTopics = new LinkedHashSet<>();
         context.getCoveredTopics().forEach(topic -> coveredTopics.add(topic.name()));
         return LegacySemanticContextAdapter.LegacyContext.ofWithTypedReferences(
-                context.getProjectSlug(), context.getCaseSlug(), recommendationSubjects,
-                referenceProjects, referenceCases,
+                context.getProjectSlug(), context.getCaseSlug(), List.of(), List.of(), List.of(),
                 context.getAudienceRole() == null ? null : context.getAudienceRole().name(),
                 context.getSource() == null ? null : context.getSource().name(),
                 coveredTopics, contentVersion);
@@ -178,10 +169,6 @@ public final class SemanticTurnRequestMapper {
         return new SemanticTurnInput.ClarificationResolution(
                 request.getClarificationId(), request.getPromptCode(), request.getFieldKey(),
                 selectedValue, selectedSubject, request.getTextValue());
-    }
-
-    private static List<String> nullToEmpty(List<String> values) {
-        return values == null ? List.of() : values;
     }
 
     private static String requireText(String value, String name) {

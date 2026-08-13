@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.routing.domain;
 
+import com.portfolio.agent.answer.domain.GroundedAnswerContribution;
+import com.portfolio.agent.answer.intelligence.execution.domain.SafeReasonCode;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
 import org.junit.jupiter.api.Test;
 
@@ -90,6 +92,23 @@ class TaskOutcomeContractTest {
         assertEquals(TaskOutcome.TaskEvidenceState.INSUFFICIENT, outcome.getEvidenceState());
         assertTrue(outcome.isDegraded());
         assertFalse(outcome.getResultPayload().isPresent());
+    }
+
+    @Test
+    void groundedContributionIsTheOnlyNewRenderableMaterialShape() {
+        GroundedAnswerContribution contribution = new GroundedAnswerContribution(
+                List.of("A verified statement"), List.of("source-a"), List.of(), List.of());
+
+        TaskOutcome outcome = TaskOutcome.answeredWithContribution(
+                "task-01", TaskSourceDomain.PORTFOLIO,
+                contribution,
+                TaskResultProvenance.direct(TaskSourceDomain.PORTFOLIO, List.of(), List.of()),
+                false);
+
+        assertEquals(TaskOutcome.TaskResolution.ANSWERED, outcome.getResolution());
+        assertEquals(contribution, outcome.getContribution().orElseThrow());
+        assertTrue(outcome.hasRenderablePayload());
+        assertEquals(10, SafeReasonCode.values().length);
     }
 
     @Test

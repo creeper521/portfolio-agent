@@ -58,8 +58,9 @@ public final class PublicBundleDatabaseImporter {
             """;
     private static final String INSERT_EVIDENCE_SQL = """
             INSERT INTO evidence
-                (release_id, stable_id, evidence_type, label, description, public_url, public_status)
-            VALUES (CAST(? AS uuid), ?, ?, ?, ?, NULL, 'APPROVED')
+                (release_id, stable_id, public_code, evidence_type, label, description,
+                 public_url, public_status)
+            VALUES (CAST(? AS uuid), ?, ?, ?, ?, ?, NULL, 'APPROVED')
             """;
     private static final String INSERT_LINK_SQL = """
             INSERT INTO claim_evidence_link
@@ -197,8 +198,8 @@ public final class PublicBundleDatabaseImporter {
 
     private void insertEvidence(List<EvidenceRecord> evidence, String releaseId) {
         for (EvidenceRecord item : evidence) {
-            jdbcTemplate.update(INSERT_EVIDENCE_SQL, releaseId, item.getId(), item.getType().name(),
-                    item.getTitle(), item.getSummary());
+            jdbcTemplate.update(INSERT_EVIDENCE_SQL, releaseId, item.getId(), item.getCode(),
+                    item.getType().name(), item.getTitle(), item.getSummary());
         }
     }
 

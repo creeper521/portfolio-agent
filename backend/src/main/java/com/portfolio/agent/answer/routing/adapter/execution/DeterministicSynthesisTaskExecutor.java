@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.routing.adapter.execution;
 
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
@@ -23,6 +24,12 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
     }
 
     @Override
+    public TaskOutcome execute(SemanticTaskExecutionContext context) {
+        Objects.requireNonNull(context, "context");
+        return execute(context.getSemanticTask(), context.getDependencyOutcomes());
+    }
+
+    /** Compatibility adapter retained until the P3-E production cutover. */
     public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
         Objects.requireNonNull(task, "task");
         Objects.requireNonNull(availableDependencyOutcomes, "availableDependencyOutcomes");

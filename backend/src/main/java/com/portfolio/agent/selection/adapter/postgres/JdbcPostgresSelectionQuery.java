@@ -42,7 +42,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                  AND owner.subject_kind = 'PROJECT'
                 WHERE ps.release_id = CAST(? AS uuid)
                   AND (
-                      ? IS NULL
+                      CAST(? AS text) IS NULL
                       OR COALESCE(owner.career_track, ps.career_track) = ?
                       OR (
                           ps.subject_kind = 'CASE'
@@ -156,7 +156,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                  AND owner.subject_kind = 'PROJECT'
                 WHERE ps.release_id = CAST(? AS uuid)
                   AND (
-                      ? IS NULL
+                      CAST(? AS text) IS NULL
                       OR COALESCE(owner.career_track, ps.career_track) = ?
                       OR (
                           ps.subject_kind = 'CASE'
@@ -277,7 +277,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             WHERE ps.release_id = CAST(? AS uuid)
               AND ps.stable_id = ANY(CAST(? AS text[]))
               AND (
-                  ? IS NULL
+                  CAST(? AS text) IS NULL
                   OR ps.career_track = ?
               )
               AND (CAST(? AS text[]) IS NULL OR EXISTS (

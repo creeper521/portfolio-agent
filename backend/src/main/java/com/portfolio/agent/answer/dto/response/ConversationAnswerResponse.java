@@ -35,6 +35,8 @@ public final class ConversationAnswerResponse {
     private final String contractVersion;
     private final String summary;
     private final AgentTurnResponse agentTurn;
+    private final String responseKind;
+    private final ConversationResponse conversation;
 
     public ConversationAnswerResponse(
             String turnId,
@@ -58,6 +60,36 @@ public final class ConversationAnswerResponse {
             String contractVersion,
             String summary,
             AgentTurnResponse agentTurn) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks, suggestedQuestions,
+                degraded, constructionMode, intentSource, evidenceState, noticeCode, coveredTopics,
+                guidanceStage, portfolioRecommendation, contextVersionUpdated, questionPresetId,
+                contractVersion, summary, agentTurn, "ANSWER", null);
+    }
+
+    public ConversationAnswerResponse(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlockResponse> blocks,
+            List<ConversationSuggestedQuestionResponse> suggestedQuestions,
+            boolean degraded,
+            AnswerConstructionMode constructionMode,
+            AnswerIntentSource intentSource,
+            AnswerEvidenceState evidenceState,
+            String noticeCode,
+            List<ConversationTopic> coveredTopics,
+            ConversationGuidanceStage guidanceStage,
+            PortfolioRecommendationResponse portfolioRecommendation,
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion,
+            String summary,
+            AgentTurnResponse agentTurn,
+            String responseKind,
+            ConversationResponse conversation) {
         this.turnId = turnId;
         this.contentVersion = contentVersion;
         this.intent = intent;
@@ -79,6 +111,8 @@ public final class ConversationAnswerResponse {
         this.contractVersion = contractVersion;
         this.summary = summary;
         this.agentTurn = agentTurn;
+        this.responseKind = responseKind;
+        this.conversation = conversation;
     }
 
     public String getTurnId() { return turnId; }
@@ -111,4 +145,7 @@ public final class ConversationAnswerResponse {
     }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public AgentTurnResponse getAgentTurn() { return agentTurn; }
+    public String getResponseKind() { return responseKind; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ConversationResponse getConversation() { return conversation; }
 }

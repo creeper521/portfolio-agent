@@ -1,0 +1,299 @@
+package com.portfolio.agent.answer.routing.adapter.execution;
+
+import com.portfolio.agent.answer.domain.GroundedAnswerContribution;
+import com.portfolio.agent.answer.domain.PortfolioAnswerMaterial;
+import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.answer.intelligence.execution.capability.CapabilityExecutionResult;
+import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvidenceCapability;
+import com.portfolio.agent.answer.intelligence.execution.domain.CapabilityExecutionConstraints;
+import com.portfolio.agent.answer.intelligence.execution.domain.CandidateSubject;
+import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
+import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioExecutionPlanner;
+import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioPlanValidator;
+import com.portfolio.agent.answer.intelligence.execution.planning.TrustedPortfolioExecutionPlan;
+import com.portfolio.agent.answer.intelligence.execution.resultpolicy.ComparisonResultPolicy;
+import com.portfolio.agent.answer.intelligence.execution.resultpolicy.FactResultPolicy;
+import com.portfolio.agent.answer.intelligence.execution.resultpolicy.PortfolioResultPolicy;
+import com.portfolio.agent.answer.intelligence.execution.resultpolicy.RecommendationResultPolicy;
+import com.portfolio.agent.answer.intelligence.execution.resultpolicy.RefineResultPolicy;
+import com.portfolio.agent.answer.intelligence.execution.support.EvidenceSupportAssessment;
+import com.portfolio.agent.answer.intelligence.execution.support.EvidenceSupportAssessor;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SemanticTaskType;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
+import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
+import com.portfolio.agent.answer.routing.domain.TaskOutcome;
+import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
+import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
+import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
+import com.portfolio.agent.answer.service.PortfolioAnswerComposer;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
+
+/** P3-only Portfolio executor: planner, one capability, support, policy and Composer. */
+public final class P3PortfolioSemanticTaskExecutor implements SemanticTaskExecutor {
+    private final PortfolioExecutionPlanner planner;
+    private final PortfolioPlanValidator validator;
+    private final PortfolioEvidenceCapability capability;
+    private final EvidenceSupportAssessor supportAssessor;
+    private final PortfolioAnswerComposer composer;
+    private final PortfolioResultPolicy factPolicy;
+    private final PortfolioResultPolicy comparisonPolicy;
+    private final PortfolioResultPolicy recommendationPolicy;
+    private final PortfolioResultPolicy refinePolicy;
+    private final DiagnosticEventPublisher diagnosticEventPublisher;
+
+    public P3PortfolioSemanticTaskExecutor(
+            PortfolioCapabilityCatalog catalog,
+            PortfolioEvidenceCapability capability,
+            PortfolioAnswerComposer composer) {
+        this(new PortfolioExecutionPlanner(catalog), new PortfolioPlanValidator(catalog), capability,
+                new EvidenceSupportAssessor(), composer, new FactResultPolicy(),
+                new ComparisonResultPolicy(), new RecommendationResultPolicy(), new RefineResultPolicy(),
+                event -> { });
+    }
+
+    public P3PortfolioSemanticTaskExecutor(
+            PortfolioCapabilityCatalog catalog,
+            PortfolioEvidenceCapability capability,
+            PortfolioAnswerComposer composer,
+            DiagnosticEventPublisher diagnosticEventPublisher) {
+        this(new PortfolioExecutionPlanner(catalog), new PortfolioPlanValidator(catalog), capability,
+                new EvidenceSupportAssessor(), composer, new FactResultPolicy(),
+                new ComparisonResultPolicy(), new RecommendationResultPolicy(), new RefineResultPolicy(),
+                diagnosticEventPublisher);
+    }
+
+    public P3PortfolioSemanticTaskExecutor(
+            PortfolioExecutionPlanner planner,
+            PortfolioPlanValidator validator,
+            PortfolioEvidenceCapability capability,
+            EvidenceSupportAssessor supportAssessor,
+            PortfolioAnswerComposer composer,
+            PortfolioResultPolicy factPolicy,
+            PortfolioResultPolicy comparisonPolicy,
+            PortfolioResultPolicy recommendationPolicy,
+            PortfolioResultPolicy refinePolicy) {
+        this(planner, validator, capability, supportAssessor, composer, factPolicy,
+                comparisonPolicy, recommendationPolicy, refinePolicy, event -> { });
+    }
+
+    public P3PortfolioSemanticTaskExecutor(
+            PortfolioExecutionPlanner planner,
+            PortfolioPlanValidator validator,
+            PortfolioEvidenceCapability capability,
+            EvidenceSupportAssessor supportAssessor,
+            PortfolioAnswerComposer composer,
+            PortfolioResultPolicy factPolicy,
+            PortfolioResultPolicy comparisonPolicy,
+            PortfolioResultPolicy recommendationPolicy,
+            PortfolioResultPolicy refinePolicy,
+            DiagnosticEventPublisher diagnosticEventPublisher) {
+        this.planner = Objects.requireNonNull(planner, "planner");
+        this.validator = Objects.requireNonNull(validator, "validator");
+        this.capability = Objects.requireNonNull(capability, "capability");
+        this.supportAssessor = Objects.requireNonNull(supportAssessor, "supportAssessor");
+        this.composer = Objects.requireNonNull(composer, "composer");
+        this.factPolicy = Objects.requireNonNull(factPolicy, "factPolicy");
+        this.comparisonPolicy = Objects.requireNonNull(comparisonPolicy, "comparisonPolicy");
+        this.recommendationPolicy = Objects.requireNonNull(recommendationPolicy, "recommendationPolicy");
+        this.refinePolicy = Objects.requireNonNull(refinePolicy, "refinePolicy");
+        this.diagnosticEventPublisher = Objects.requireNonNull(
+                diagnosticEventPublisher, "diagnosticEventPublisher");
+    }
+
+    @Override
+    public TaskSourceDomain getSourceDomain() {
+        return TaskSourceDomain.PORTFOLIO;
+    }
+
+    @Override
+    public TaskOutcome execute(SemanticTaskExecutionContext context) {
+        Objects.requireNonNull(context, "context");
+        SemanticTask task = context.getSemanticTask();
+        if (task.getSourceDomain() != TaskSourceDomain.PORTFOLIO) {
+            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                    false, "PORTFOLIO_TASK_UNSUPPORTED");
+        }
+        String failureStage = "PLANNING";
+        try {
+            TrustedPortfolioExecutionPlan trusted = validator.validate(planner.plan(context), context);
+            failureStage = "CAPABILITY";
+            CapabilityExecutionResult execution = capability.execute(
+                    trusted.getInvocation().getInvocation(),
+                    new CapabilityExecutionConstraints(context.getTaskExecutionAllowance()));
+            failureStage = "COMPOSITION";
+            return toOutcome(task, execution);
+        } catch (IllegalArgumentException exception) {
+            publishFailure(task, failureStage, "PORTFOLIO_EXECUTION_REJECTED");
+            return TaskOutcome.create(task.getTaskId(), TaskOutcome.TaskExecutionStatus.REJECTED,
+                    TaskOutcome.TaskResolution.REJECTED, TaskOutcome.TaskEvidenceState.NOT_APPLICABLE,
+                    false, java.util.Set.of("PORTFOLIO_EXECUTION_REJECTED"), null,
+                    TaskSourceDomain.PORTFOLIO, null, null);
+        } catch (RuntimeException exception) {
+            publishFailure(task, failureStage, "PORTFOLIO_EXECUTION_FAILED");
+            return TaskOutcome.failed(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                    "PORTFOLIO_EXECUTION_FAILED");
+        }
+    }
+
+    private void publishFailure(SemanticTask task, String failureStage, String failureCode) {
+        try {
+            diagnosticEventPublisher.publish(DiagnosticEvent.builder(
+                            "portfolio.execution.failed", DiagnosticLevel.ERROR)
+                    .field("failure.stage", failureStage)
+                    .field("failure.code", failureCode)
+                    .field("capability.code", PortfolioCapabilityCatalog.CAPABILITY_ID)
+                    .field("task.type", task.getTaskType().name())
+                    .build());
+        } catch (RuntimeException ignored) {
+            // Diagnostics are best effort and must not change the safe execution outcome.
+        }
+    }
+
+    private TaskOutcome toOutcome(SemanticTask task, CapabilityExecutionResult execution) {
+        return switch (execution.getStatus()) {
+            case UNAVAILABLE, TIMED_OUT -> TaskOutcome.capabilityUnavailable(
+                    task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                    execution.getSafeReasonCode().map(Enum::name).orElse("CAPABILITY_UNAVAILABLE"));
+            case INTEGRITY_FAILED -> {
+                publishFailure(task, "CAPABILITY", execution.getSafeReasonCode()
+                        .map(Enum::name).orElse("EVIDENCE_INTEGRITY_FAILURE"));
+                yield TaskOutcome.failed(
+                        task.getTaskId(), TaskSourceDomain.PORTFOLIO, "EVIDENCE_INTEGRITY_FAILURE");
+            }
+            case SUCCESS, EMPTY -> compose(task, execution);
+        };
+    }
+
+    private TaskOutcome compose(SemanticTask task, CapabilityExecutionResult execution) {
+        EvidenceSupportAssessment assessment = supportAssessor.assess(
+                task, execution.getEvidenceBundle().orElseThrow());
+        if (!assessment.isSupported()) {
+            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                    execution.isDegraded(), "PORTFOLIO_EVIDENCE_INSUFFICIENT");
+        }
+        PortfolioResultPolicy policy = policy(task.getTaskType());
+        PortfolioAnswerMaterial material = policy.material(
+                execution.getEvidenceBundle().orElseThrow(), assessment, task.getGoalLabel());
+        composer.compose(material);
+        GroundedAnswerContribution contribution = new GroundedAnswerContribution(
+                material.getStatements().stream().map(value -> value.getStatement()).toList(),
+                material.getStatements().stream()
+                        .flatMap(value -> value.getPublicSourceReferences().stream()).distinct().toList(),
+                material.getStatements().stream()
+                        .flatMap(value -> value.getSourceReferences().stream()).distinct().toList(),
+                material.getCaveats(), material.getOmittedTopicLabels());
+        TaskResultProvenance provenance = TaskResultProvenance.direct(
+                TaskSourceDomain.PORTFOLIO, List.of(), List.of());
+        if (task.getTaskType() == SemanticTaskType.PORTFOLIO_RECOMMEND
+                && task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend parameters) {
+            TaskResultPayload.RecommendationResultPayload payload = recommendationPayload(
+                    task, parameters, execution, assessment, material);
+            if (assessment.getStatus() == EvidenceSupportAssessment.SupportStatus.PARTIAL) {
+                return TaskOutcome.partiallyAnswered(
+                        task.getTaskId(), TaskSourceDomain.PORTFOLIO, payload,
+                        TaskOutcome.TaskEvidenceState.PARTIAL, provenance, execution.isDegraded());
+            }
+            return TaskOutcome.answered(
+                    task.getTaskId(), TaskSourceDomain.PORTFOLIO, payload,
+                    provenance, execution.isDegraded());
+        }
+        if (assessment.getStatus() == EvidenceSupportAssessment.SupportStatus.PARTIAL) {
+            return TaskOutcome.partiallyAnswered(task.getTaskId(), TaskSourceDomain.PORTFOLIO,
+                    contribution, TaskOutcome.TaskEvidenceState.PARTIAL, provenance, execution.isDegraded());
+        }
+        return TaskOutcome.answeredWithContribution(
+                task.getTaskId(), TaskSourceDomain.PORTFOLIO, contribution, provenance, execution.isDegraded());
+    }
+
+    private TaskResultPayload.RecommendationResultPayload recommendationPayload(
+            SemanticTask task,
+            SemanticTaskParameters.PortfolioRecommend parameters,
+            CapabilityExecutionResult execution,
+            EvidenceSupportAssessment assessment,
+            PortfolioAnswerMaterial material) {
+        java.util.Map<String, List<com.portfolio.agent.answer.intelligence.execution.validation.ValidatedEvidenceUnit>>
+                unitsBySubject = assessment.getSelectedUnits().stream().collect(
+                        java.util.stream.Collectors.groupingBy(
+                                com.portfolio.agent.answer.intelligence.execution.validation.ValidatedEvidenceUnit::getSubjectId,
+                                java.util.LinkedHashMap::new,
+                                java.util.stream.Collectors.toList()));
+        List<TaskResultPayload.RecommendationItem> items = execution.getCandidateSet().orElseThrow()
+                .getCandidateSubjects().stream()
+                .filter(subject -> unitsBySubject.containsKey(subject.getSubjectId()))
+                .limit(parameters.getRequestedSize().getValue())
+                .map(subject -> recommendationItem(subject, unitsBySubject.get(subject.getSubjectId())))
+                .toList();
+        if (items.isEmpty()) {
+            throw new IllegalArgumentException("supported recommendation requires public items");
+        }
+        List<String> selectedIds = items.stream()
+                .map(TaskResultPayload.RecommendationItem::getPortfolioId).toList();
+        java.util.Set<String> capabilities = parameters.getCapabilityCodes().stream()
+                .map(Enum::name)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        List<String> satisfied = new java.util.ArrayList<>();
+        satisfied.add(parameters.getCareerTrack().name());
+        satisfied.add(parameters.getAudienceRole().name());
+        satisfied.addAll(capabilities);
+        TaskResultPayload.RecommendationProjection projection =
+                new TaskResultPayload.RecommendationProjection(
+                        batchId(task, execution.getCandidateSet().orElseThrow()
+                                .getReturnedContentVersion(), selectedIds),
+                        execution.getCandidateSet().orElseThrow().getReturnedContentVersion(),
+                        parameters.getCareerTrack().name(), parameters.getAudienceRole().name(),
+                        capabilities, parameters.getRequestedSize().getValue(), selectedIds, items,
+                        List.copyOf(satisfied), assessment.getOmittedLabels());
+        return new TaskResultPayload.RecommendationResultPayload(
+                projection, material.getStatements().stream()
+                        .map(value -> value.getStatement()).toList());
+    }
+
+    private TaskResultPayload.RecommendationItem recommendationItem(
+            CandidateSubject subject,
+            List<com.portfolio.agent.answer.intelligence.execution.validation.ValidatedEvidenceUnit> units) {
+        List<String> reasons = units.stream().map(unit -> unit.getClaim().getStatement())
+                .distinct().toList();
+        List<PublicSourceReferenceValue> sources = units.stream()
+                .map(unit -> unit.getSourceReference())
+                .map(reference -> new PublicSourceReferenceValue(
+                        reference.getReferenceKey(), reference.getLabel(),
+                        reference.getPublishedVersion(), reference.getSourceType().name(),
+                        reference.getSubjectRoute(), reference.getEvidenceRoute()))
+                .distinct().toList();
+        return new TaskResultPayload.RecommendationItem(
+                subject.getSubjectId(), subject.getTitle(), subject.getSubjectRoute(), reasons,
+                sources.stream().map(PublicSourceReferenceValue::getReferenceKey).toList(), sources);
+    }
+
+    private String batchId(SemanticTask task, String contentVersion, List<String> selectedIds) {
+        try {
+            String canonical = task.getTaskId() + "\n" + contentVersion + "\n"
+                    + String.join("\n", selectedIds);
+            return "rec_" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private PortfolioResultPolicy policy(SemanticTaskType taskType) {
+        return switch (taskType) {
+            case PORTFOLIO_FACT -> factPolicy;
+            case PORTFOLIO_COMPARE -> comparisonPolicy;
+            case PORTFOLIO_RECOMMEND -> recommendationPolicy;
+            case PORTFOLIO_REFINE_RECOMMENDATION -> refinePolicy;
+            default -> throw new IllegalArgumentException("unsupported portfolio task type");
+        };
+    }
+}

@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -144,7 +145,7 @@ class ConversationAnswerRequestValidationTest {
                 """, ConversationAnswerRequest.class);
 
         assertThat(messages(validator.validate(request))).isEmpty();
-        var input = new SemanticTurnRequestMapper().toInput(request, "public-1");
+        SemanticTurnInput input = new SemanticTurnRequestMapper().toInput(request, "public-1");
         assertThat(input.getRoutingQuestion()).contains("去掉推荐步骤");
         assertThat(input.getPlanAdjustment().getPendingPlanReference().getPlanFingerprint())
                 .isEqualTo("sha256:one");
@@ -195,7 +196,7 @@ class ConversationAnswerRequestValidationTest {
                 """, ConversationAnswerRequest.class);
 
         assertThat(messages(validator.validate(request))).isEmpty();
-        var input = new SemanticTurnRequestMapper().toInput(request, "public-1");
+        SemanticTurnInput input = new SemanticTurnRequestMapper().toInput(request, "public-1");
         assertThat(input.getExplicitSubjectReferences()).extracting(
                         com.portfolio.agent.answer.routing.domain.SubjectReference::getSubjectId)
                 .containsExactly("project-b");

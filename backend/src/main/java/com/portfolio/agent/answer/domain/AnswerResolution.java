@@ -2,6 +2,8 @@ package com.portfolio.agent.answer.domain;
 
 public enum AnswerResolution {
     ANSWERED,
+    PARTIALLY_ANSWERED,
+    PRESENTATION_BLOCKED,
     AWAITING_CONFIRMATION,
     NEEDS_CLARIFICATION,
     NOT_SUPPORTED,

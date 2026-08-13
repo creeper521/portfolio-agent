@@ -16,13 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OracleIsolationTest {
 
     @Test
-    void executionInputCarriesOnlyMessagesLayerTrialsAndResolvedSubjects() {
+    void executionInputCarriesOnlyNonOracleExecutionData() {
         // The input boundary admits the resolved subject references needed by
         // deterministic subject-internal retrieval, but never oracle fields.
         assertThat(Arrays.stream(EvalExecutionInput.class.getDeclaredFields())
                 .map(Field::getName))
                 .containsExactlyInAnyOrder(
-                        "caseId", "messages", "layer", "trialIndex", "resolvedSubjects");
+                        "caseId", "messages", "layer", "trialIndex", "resolvedSubjects", "semanticTask");
         assertThat(Arrays.stream(EvalExecutionInput.class.getDeclaredFields())
                 .map(Field::getName))
                 .noneMatch(name -> name.contains("oracle")

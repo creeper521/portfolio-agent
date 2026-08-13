@@ -1,11 +1,16 @@
 package com.portfolio.agent.answer.routing.service;
 
 import com.portfolio.agent.answer.routing.domain.ExecutionSelection;
+import com.portfolio.agent.answer.routing.domain.AuthorizedContextReference;
+import com.portfolio.agent.answer.routing.domain.PlanExclusion;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskDependencyType;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnExecutionBudget;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskDependency;
+import com.portfolio.agent.answer.routing.domain.TaskExecutionAllowance;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 
 import java.util.ArrayList;
@@ -18,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.time.Instant;
 
 /** Executes a trusted semantic plan deterministically without creating tasks or planning tools. */
 public final class SemanticTurnCoordinator {
@@ -30,8 +36,41 @@ public final class SemanticTurnCoordinator {
 
     public SemanticTurnOutcome execute(
             ValidatedSemanticTurnPlan plan, ExecutionSelection selection) {
+        return execute(plan, selection, List.of());
+    }
+
+    /** Executes with references that have already crossed the Context authorization boundary. */
+    public SemanticTurnOutcome execute(
+            ValidatedSemanticTurnPlan plan,
+            ExecutionSelection selection,
+            List<AuthorizedContextReference> authorizedContextReferences) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(selection, "selection");
+        Objects.requireNonNull(authorizedContextReferences, "authorizedContextReferences");
+        validateSelection(plan, selection);
+        Instant startedAt = Instant.now();
+        SemanticTurnExecutionBudget budget = SemanticTurnExecutionBudget.allocate(
+                stableTopologicalOrder(plan), selection.getExecutableTaskIds(),
+                startedAt, startedAt.plusSeconds(10));
+        return execute(plan, selection, budget, authorizedContextReferences);
+    }
+
+    public SemanticTurnOutcome execute(
+            ValidatedSemanticTurnPlan plan,
+            ExecutionSelection selection,
+            SemanticTurnExecutionBudget budget) {
+        return execute(plan, selection, budget, List.of());
+    }
+
+    private SemanticTurnOutcome execute(
+            ValidatedSemanticTurnPlan plan,
+            ExecutionSelection selection,
+            SemanticTurnExecutionBudget budget,
+            List<AuthorizedContextReference> authorizedContextReferences) {
+        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(selection, "selection");
+        Objects.requireNonNull(budget, "budget");
+        Objects.requireNonNull(authorizedContextReferences, "authorizedContextReferences");
         validateSelection(plan, selection);
 
         List<SemanticTask> orderedTasks = stableTopologicalOrder(plan);
@@ -47,11 +86,26 @@ public final class SemanticTurnCoordinator {
             DependencyDecision dependency = assessDependencies(
                     task, inboundDependencies.getOrDefault(task.getTaskId(), List.of()), outcomesByTaskId);
             if (dependency.isBlocked()) {
-                outcomesByTaskId.put(task.getTaskId(), TaskOutcome.blocked(
+                outcomesByTaskId.put(task.getTaskId(), TaskOutcome.dependencyUnavailable(
                         task.getTaskId(), task.getSourceDomain(), dependency.getReasonCode()));
                 continue;
             }
-            outcomesByTaskId.put(task.getTaskId(), executeSafely(task, dependency.getAvailableOutcomes()));
+            TaskExecutionAllowance allowance = budget.containsTask(task.getTaskId())
+                    ? budget.getAllowance(task.getTaskId())
+                    : TaskExecutionAllowance.none(budget.getAbsoluteDeadline());
+            if (!allowance.hasMinimumStartWindow(Instant.now())) {
+                outcomesByTaskId.put(task.getTaskId(), TaskOutcome.notExecutedBudget(
+                        task.getTaskId(), task.getSourceDomain()));
+                continue;
+            }
+            SemanticTaskExecutionContext context = new SemanticTaskExecutionContext(
+                    task,
+                    applicableExclusions(plan, task),
+                    dependency.getAvailableOutcomes(),
+                    plan.getContentVersion(),
+                    allowance,
+                    authorizedContextReferences);
+            outcomesByTaskId.put(task.getTaskId(), executeSafely(context));
         }
 
         List<TaskOutcome> orderedOutcomes = new ArrayList<>();
@@ -110,14 +164,15 @@ public final class SemanticTurnCoordinator {
         return DependencyDecision.executable(availableOutcomes);
     }
 
-    private TaskOutcome executeSafely(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
+    private TaskOutcome executeSafely(SemanticTaskExecutionContext context) {
+        SemanticTask task = context.getSemanticTask();
         SemanticTaskExecutor executor = executorsBySourceDomain.get(task.getSourceDomain());
         if (executor == null) {
             return TaskOutcome.capabilityUnavailable(
                     task.getTaskId(), task.getSourceDomain(), "CAPABILITY_EXECUTOR_UNAVAILABLE");
         }
         try {
-            TaskOutcome outcome = executor.execute(task, List.copyOf(availableDependencyOutcomes));
+            TaskOutcome outcome = executor.execute(context);
             if (outcome == null
                     || !task.getTaskId().equals(outcome.getTaskId())
                     || task.getSourceDomain() != outcome.getSourceDomain()) {
@@ -128,6 +183,18 @@ public final class SemanticTurnCoordinator {
         } catch (RuntimeException exception) {
             return TaskOutcome.failed(task.getTaskId(), task.getSourceDomain(), "EXECUTION_UNEXPECTED_FAILURE");
         }
+    }
+
+    private List<PlanExclusion> applicableExclusions(
+            ValidatedSemanticTurnPlan plan, SemanticTask task) {
+        List<PlanExclusion> applicable = new ArrayList<>();
+        for (PlanExclusion exclusion : plan.getExclusions()) {
+            if (exclusion.getScope() == com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.ExclusionScope.PLAN
+                    || task.getTaskId().equals(exclusion.getTaskId())) {
+                applicable.add(exclusion);
+            }
+        }
+        return List.copyOf(applicable);
     }
 
     private List<SemanticTask> stableTopologicalOrder(ValidatedSemanticTurnPlan plan) {

@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.routing.domain;
 
 import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -298,6 +299,7 @@ public sealed interface TaskResultPayload
         private final String route;
         private final List<String> matchReasons;
         private final List<String> evidenceIds;
+        private final List<PublicSourceReferenceValue> sourceReferences;
 
         public RecommendationItem(
                 String portfolioId,
@@ -305,11 +307,23 @@ public sealed interface TaskResultPayload
                 String route,
                 List<String> matchReasons,
                 List<String> evidenceIds) {
+            this(portfolioId, title, route, matchReasons, evidenceIds, List.of());
+        }
+
+        public RecommendationItem(
+                String portfolioId,
+                String title,
+                String route,
+                List<String> matchReasons,
+                List<String> evidenceIds,
+                List<PublicSourceReferenceValue> sourceReferences) {
             this.portfolioId = requireText(portfolioId, "portfolioId");
             this.title = requireText(title, "title");
             this.route = requireText(route, "route");
             this.matchReasons = copyTextList(matchReasons, "matchReasons");
             this.evidenceIds = copyTextList(evidenceIds, "evidenceIds");
+            this.sourceReferences = List.copyOf(
+                    Objects.requireNonNull(sourceReferences, "sourceReferences"));
         }
 
         public String getPortfolioId() { return portfolioId; }
@@ -317,6 +331,7 @@ public sealed interface TaskResultPayload
         public String getRoute() { return route; }
         public List<String> getMatchReasons() { return matchReasons; }
         public List<String> getEvidenceIds() { return evidenceIds; }
+        public List<PublicSourceReferenceValue> getSourceReferences() { return sourceReferences; }
 
         @Override
         public boolean equals(Object other) {
@@ -330,12 +345,13 @@ public sealed interface TaskResultPayload
                     && Objects.equals(title, that.title)
                     && Objects.equals(route, that.route)
                     && Objects.equals(matchReasons, that.matchReasons)
-                    && Objects.equals(evidenceIds, that.evidenceIds);
+                    && Objects.equals(evidenceIds, that.evidenceIds)
+                    && Objects.equals(sourceReferences, that.sourceReferences);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(portfolioId, title, route, matchReasons, evidenceIds);
+            return Objects.hash(portfolioId, title, route, matchReasons, evidenceIds, sourceReferences);
         }
 
         @Override

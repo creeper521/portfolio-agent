@@ -117,11 +117,11 @@ public final class EvalCliBootstrap {
                 new KeywordRetriever(), new VectorRetriever(), new ReciprocalRankFusion(),
                 new RetrievalContextValidator(), offlineEmbedding));
         if (withIntelligence) {
-            com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence
-                    intelligence = createIntelligence();
-            if (intelligence != null) {
+            com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor
+                    p3Executor = createP3Executor();
+            if (p3Executor != null) {
                 executors.add(new com.portfolio.agent.evaluation.execution
-                        .EvalIntelligenceExecutor(intelligence, bundle));
+                        .P3EvalExecutor(p3Executor, bundle));
             }
             if (baseUrl != null && !baseUrl.isBlank()) {
                 executors.add(new com.portfolio.agent.evaluation.execution
@@ -158,8 +158,8 @@ public final class EvalCliBootstrap {
                 bundle);
     }
 
-    private com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence
-            createIntelligence() {
+    private com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor
+            createP3Executor() {
         org.springframework.context.ConfigurableApplicationContext context =
                 springContext();
         if (context == null) {
@@ -167,7 +167,8 @@ public final class EvalCliBootstrap {
         }
         try {
             return context.getBean(
-                    com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence.class);
+                    com.portfolio.agent.answer.routing.adapter.execution
+                            .P3PortfolioSemanticTaskExecutor.class);
         } catch (RuntimeException failure) {
             return null;
         }

@@ -7,11 +7,18 @@ import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.answer.context.adapter.memory.InMemoryConversationBusinessContextStore;
+import com.portfolio.agent.answer.context.domain.CompletionReceipt;
+import com.portfolio.agent.answer.context.domain.ConversationContinuationStatus;
+import com.portfolio.agent.answer.context.domain.ConversationId;
+import com.portfolio.agent.answer.context.domain.RequestFingerprint;
+import com.portfolio.agent.answer.context.domain.ResumeToken;
 import com.portfolio.agent.answer.dto.request.ConversationAnswerRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendationContext;
 import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
 import com.portfolio.agent.answer.service.ProductionConversationService;
+import com.portfolio.agent.answer.service.ProductionConversationExecution;
 import com.portfolio.agent.common.web.ClientAddressResolver;
 import com.portfolio.agent.common.web.RequestContextHolder;
 import com.portfolio.agent.common.web.RequestDiagnosticsFilter;
@@ -25,6 +32,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.List;
 import java.util.Set;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,6 +92,100 @@ class ConversationAnswerControllerTest {
     }
 
     @Test
+    void createsAndReturnsAResumeTokenOnlyForTheFirstRequest() throws Exception {
+        ProductionConversationService service = mock(ProductionConversationService.class);
+        when(service.execute(any(), any(), any()))
+                .thenReturn(ProductionConversationExecution.answer(result()));
+        InMemoryConversationBusinessContextStore contextStore =
+                new InMemoryConversationBusinessContextStore();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new ConversationAnswerController(
+                                service,
+                                new ClientAddressResolver(false, java.util.Set.of()),
+                                new ConversationAnswerResponseMapper(),
+                                Optional.of(contextStore)))
+                .addFilters(new RequestDiagnosticsFilter(event -> { }))
+                .build();
+        String request = """
+                {
+                  "turnId": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+                  "requestToken": "63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "question": "hello",
+                  "messages": []
+                }
+                """;
+
+        String token = mvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversation.continuationStatus").value("AVAILABLE"))
+                .andExpect(jsonPath("$.conversation.resumeToken").isString())
+                .andReturn().getResponse().getContentAsString();
+        String encodedToken = new ObjectMapper().readTree(token)
+                .path("conversation").path("resumeToken").asText();
+
+        mvc.perform(post("/api/v2/answers")
+                        .header("X-Conversation-Resume-Token", encodedToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversation.continuationStatus").value("AVAILABLE"))
+                .andExpect(jsonPath("$.conversation.resumeToken").doesNotExist());
+    }
+
+    @Test
+    void recoversACompletedFirstRequestByRotatingTheResumeToken() throws Exception {
+        ProductionConversationService service = mock(ProductionConversationService.class);
+        InMemoryConversationBusinessContextStore contextStore =
+                new InMemoryConversationBusinessContextStore();
+        ConversationId conversationId = ConversationId.random();
+        ResumeToken oldToken = ResumeToken.issue();
+        contextStore.open(conversationId, oldToken, java.time.Instant.now());
+        com.portfolio.agent.answer.context.domain.ContextHandle handle =
+                com.portfolio.agent.answer.context.domain.ContextHandle.issue();
+        CompletionReceipt receipt = new CompletionReceipt(
+                java.util.UUID.fromString("63f63c75-16e8-49e7-864d-dcd0fe100d50"),
+                conversationId,
+                RequestFingerprint.sha256Canonical("same-request"),
+                handle,
+                ConversationContinuationStatus.AVAILABLE,
+                java.time.Instant.now());
+        when(service.findCompleted(any())).thenReturn(Optional.of(receipt));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                        new ConversationAnswerController(
+                                service,
+                                new ClientAddressResolver(false, java.util.Set.of()),
+                                new ConversationAnswerResponseMapper(),
+                                Optional.of(contextStore)))
+                .addFilters(new RequestDiagnosticsFilter(event -> { }))
+                .build();
+
+        String body = """
+                {
+                  "turnId": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+                  "requestToken": "63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "question": "hello",
+                  "messages": []
+                }
+                """;
+        String response = mvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.responseKind").value("COMPLETION_RECEIPT"))
+                .andExpect(jsonPath("$.completedTasks[0].contextHandle")
+                        .value(handle.asBase64Url()))
+                .andExpect(jsonPath("$.conversation.resumeToken").isString())
+                .andReturn().getResponse().getContentAsString();
+        String replacement = new ObjectMapper().readTree(response)
+                .path("conversation").path("resumeToken").asText();
+        assertThat(contextStore.findConversation(oldToken)).isEmpty();
+        assertThat(contextStore.findConversation(ResumeToken.fromBase64Url(replacement)))
+                .contains(conversationId);
+    }
+
+    @Test
     void legacyAnswerEndpointIsNotRegistered() throws Exception {
         ProductionConversationService service = mock(ProductionConversationService.class);
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
@@ -118,7 +220,7 @@ class ConversationAnswerControllerTest {
     }
 
     @Test
-    void returnsRecommendationContextEvenWhenRecommendationListsAreEmpty() throws Exception {
+    void doesNotExposeRecommendationContextWhenRecommendationListsAreEmpty() throws Exception {
         ProductionConversationService service = mock(ProductionConversationService.class);
         when(service.answer(any(), any())).thenReturn(recommendationResult());
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
@@ -143,8 +245,7 @@ class ConversationAnswerControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.portfolioRecommendation.recommendationBatchId")
                         .value("rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
-                .andExpect(jsonPath("$.portfolioRecommendation.context.contentVersion")
-                        .value("public-2026-07-31"))
+                .andExpect(jsonPath("$.portfolioRecommendation.context").doesNotExist())
                 .andExpect(jsonPath("$.portfolioRecommendation.items").isArray())
                 .andExpect(jsonPath("$.portfolioRecommendation.items").isEmpty())
                 .andExpect(jsonPath("$.portfolioRecommendation.satisfiedConstraints").isEmpty())

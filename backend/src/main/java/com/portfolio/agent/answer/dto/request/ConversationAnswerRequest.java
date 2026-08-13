@@ -59,6 +59,9 @@ public final class ConversationAnswerRequest {
     @Valid
     private final ConversationAnswerContextRequest context;
 
+    @Valid
+    private final ContextReferenceRequest contextReference;
+
     @JsonCreator
     public ConversationAnswerRequest(
             @JsonProperty("turnId") String turnId,
@@ -69,6 +72,7 @@ public final class ConversationAnswerRequest {
             @JsonProperty("question") String question,
             @JsonProperty("messages") List<ConversationMessageRequest> messages,
             @JsonProperty("context") ConversationAnswerContextRequest context,
+            @JsonProperty("contextReference") ContextReferenceRequest contextReference,
             @JsonProperty("semanticContext") SemanticContextRequest semanticContext,
             @JsonProperty("planConfirmation") PlanConfirmationRequest planConfirmation,
             @JsonProperty("invalidatedPlanReference") InvalidatedPlanReferenceRequest invalidatedPlanReference,
@@ -85,6 +89,7 @@ public final class ConversationAnswerRequest {
         this.question = question;
         this.messages = messages == null ? List.of() : List.copyOf(messages);
         this.context = context;
+        this.contextReference = contextReference;
         this.semanticContext = semanticContext;
         this.planConfirmation = planConfirmation;
         this.invalidatedPlanReference = invalidatedPlanReference;
@@ -107,7 +112,7 @@ public final class ConversationAnswerRequest {
             InvalidatedPlanReferenceRequest invalidatedPlanReference,
             String agentTurnContract) {
         this(turnId, requestToken, questionPresetId, contractVersion, action, question, messages,
-                context, semanticContext, planConfirmation, invalidatedPlanReference,
+                context, null, semanticContext, planConfirmation, invalidatedPlanReference,
                 null, null, agentTurnContract);
     }
 
@@ -119,7 +124,7 @@ public final class ConversationAnswerRequest {
             ConversationAnswerContextRequest context
     ) {
         this(turnId, requestToken, null, null, TurnAction.ASK, question, messages, context,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     public ConversationAnswerRequest(
@@ -130,7 +135,7 @@ public final class ConversationAnswerRequest {
     ) {
         this(turnId, UUID.nameUUIDFromBytes(
                 String.valueOf(turnId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                null, null, TurnAction.ASK, question, messages, context,
+                null, null, TurnAction.ASK, question, messages, context, null,
                 null, null, null, null, null, null);
     }
 
@@ -142,6 +147,7 @@ public final class ConversationAnswerRequest {
     public String getQuestion() { return question; }
     public List<ConversationMessageRequest> getMessages() { return messages; }
     public ConversationAnswerContextRequest getContext() { return context; }
+    public ContextReferenceRequest getContextReference() { return contextReference; }
     public SemanticContextRequest getSemanticContext() { return semanticContext; }
     public PlanConfirmationRequest getPlanConfirmation() { return planConfirmation; }
     public InvalidatedPlanReferenceRequest getInvalidatedPlanReference() {

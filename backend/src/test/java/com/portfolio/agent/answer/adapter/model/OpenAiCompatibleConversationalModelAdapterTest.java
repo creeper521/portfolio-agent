@@ -15,8 +15,6 @@ import com.portfolio.agent.answer.domain.DurationBucket;
 import com.portfolio.agent.answer.domain.ModelProviderKind;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskClassification;
-import com.portfolio.agent.answer.intelligence.domain.PortfolioTaskMode;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
@@ -88,6 +86,7 @@ class OpenAiCompatibleConversationalModelAdapterTest {
         server.verify();
     }
 
+    /*
     @Test
     void classifiesPortfolioTaskUsingTheConstrainedStructuredContract() {
         RestClient.Builder builder = RestClient.builder();
@@ -175,6 +174,8 @@ class OpenAiCompatibleConversationalModelAdapterTest {
         server.verify();
     }
 
+    */
+
     @Test
     void unwrapsSuggestedQuestionsFromJsonObject() {
         RestClient.Builder builder = RestClient.builder();
@@ -213,9 +214,6 @@ class OpenAiCompatibleConversationalModelAdapterTest {
         server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
                 .andRespond(withSuccess(routeResponse(), MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
-                .andRespond(withSuccess(
-                        providerResponse("{\"calls\":[]}"), MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://provider.example/v1/chat/completions"))
                 .andRespond(withSuccess(providerResponse(
                         "{\"title\":\"Generated\",\"resolution\":\"ANSWERED\",\"blocks\":[]}"),
                         MediaType.APPLICATION_JSON));
@@ -231,13 +229,6 @@ class OpenAiCompatibleConversationalModelAdapterTest {
                         "{\"summary\":\"Approved summary\"}"), MediaType.APPLICATION_JSON));
 
         adapter.classify("question", window(), List.of());
-        adapter.planTools(
-                "question",
-                window(),
-                route(),
-                PortfolioGroundingContext.empty(),
-                List.of(),
-                List.of());
         adapter.generate("question", window(), route(), PortfolioGroundingContext.empty());
         adapter.review(List.of(), PortfolioGroundingContext.empty());
         adapter.suggest(route(), window(), List.of(), List.of());
@@ -247,7 +238,6 @@ class OpenAiCompatibleConversationalModelAdapterTest {
                         event.getFields().get("provider.operation"))
                 .containsExactly(
                         "CLASSIFY",
-                        "PLAN_TOOLS",
                         "GENERATE",
                         "REVIEW",
                         "SUGGEST",

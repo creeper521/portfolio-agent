@@ -29,6 +29,26 @@ portfolio:
       url: ${PORTFOLIO_GOVERNANCE_DATABASE_URL:}
       username: ${PORTFOLIO_GOVERNANCE_DATABASE_USERNAME:}
       password: ${PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD:}
+    context:
+      url: ${PORTFOLIO_CONTEXT_DATABASE_URL:}
+      username: ${PORTFOLIO_CONTEXT_DATABASE_USERNAME:}
+      password: ${PORTFOLIO_CONTEXT_DATABASE_PASSWORD:}
+      schema: ${PORTFOLIO_CONTEXT_DATABASE_SCHEMA:agent_context}
+  conversation-context:
+    mode: ${PORTFOLIO_CONVERSATION_CONTEXT_MODE:DISABLED}
+    idle-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_IDLE_TTL:24h}
+    absolute-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_ABSOLUTE_TTL:7d}
+    cleanup-interval: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_INTERVAL:15m}
+    cleanup-batch-size: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_BATCH_SIZE:500}
+    crypto:
+      current-token-key-id: ${PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID:}
+      current-token-key: ${PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY:}
+      previous-token-key-id: ${PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY_ID:}
+      previous-token-key: ${PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY:}
+      current-payload-key-id: ${PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID:}
+      current-payload-key: ${PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY:}
+      previous-payload-key-id: ${PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY_ID:}
+      previous-payload-key: ${PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY:}
   diagnostics:
     frontend-ingest-enabled: false
     frontend-max-batch-size: 10
@@ -57,8 +77,6 @@ portfolio:
     max-history-rounds: 20
     recent-raw-rounds: 6
     max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}
-    max-tool-calls: 4
-    max-tool-rounds: 2
     max-suggested-questions: 3
     minimum-intent-confidence: 0.65
   answer-production:

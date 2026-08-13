@@ -223,9 +223,10 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                 """, releaseId, claimId, subjectId, verificationStatus);
         jdbcTemplate.update("""
                 INSERT INTO evidence
-                    (release_id, stable_id, evidence_type, label, description, public_status)
-                VALUES (CAST(? AS uuid), ?, 'DOCUMENT', ?, 'public', 'APPROVED')
-                """, releaseId, evidenceId, "Evidence " + subjectId);
+                    (release_id, stable_id, public_code, evidence_type, label,
+                     description, public_status)
+                VALUES (CAST(? AS uuid), ?, ?, 'DOCUMENT', ?, 'public', 'APPROVED')
+                """, releaseId, evidenceId, "E-" + subjectId, "Evidence " + subjectId);
         jdbcTemplate.update("""
                 INSERT INTO claim_evidence_link
                     (release_id, claim_stable_id, evidence_stable_id, support_type)
@@ -262,9 +263,11 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                 """, releaseId, claimId, subjectId);
         jdbcTemplate.update("""
                 INSERT INTO evidence
-                    (release_id, stable_id, evidence_type, label, description, public_status)
-                VALUES (CAST(? AS uuid), ?, 'DOCUMENT', 'Extra evidence', 'public', 'APPROVED')
-                """, releaseId, evidenceId);
+                    (release_id, stable_id, public_code, evidence_type, label,
+                     description, public_status)
+                VALUES (CAST(? AS uuid), ?, ?, 'DOCUMENT', 'Extra evidence',
+                        'public', 'APPROVED')
+                """, releaseId, evidenceId, "E-EXTRA-" + subjectId);
         jdbcTemplate.update("""
                 INSERT INTO claim_evidence_link
                     (release_id, claim_stable_id, evidence_stable_id, support_type)
@@ -318,9 +321,10 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                 """, releaseId, claimId, subjectId);
         jdbcTemplate.update("""
                 INSERT INTO evidence
-                    (release_id, stable_id, evidence_type, label, description, public_status)
-                VALUES (CAST(? AS uuid), ?, 'DOCUMENT', ?, 'public', 'APPROVED')
-                """, releaseId, evidenceId, "Evidence " + subjectId);
+                    (release_id, stable_id, public_code, evidence_type, label,
+                     description, public_status)
+                VALUES (CAST(? AS uuid), ?, ?, 'DOCUMENT', ?, 'public', 'APPROVED')
+                """, releaseId, evidenceId, "E-" + subjectId, "Evidence " + subjectId);
         jdbcTemplate.update("""
                 INSERT INTO claim_evidence_link
                     (release_id, claim_stable_id, evidence_stable_id, support_type)

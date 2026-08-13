@@ -72,7 +72,7 @@ class PresetContractBundleIntegrationTest {
     }
 
     @Test
-    void roleResetSuggestionWithStructuredSubjectStaysInSubjectScopedRelevance()
+    void roleResetBackgroundSuggestionDoesNotBypassP3EvidenceSupport()
             throws Exception {
         mockMvc.perform(post("/api/v2/answers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -85,11 +85,13 @@ class PresetContractBundleIntegrationTest {
                 .andExpect(jsonPath("$.turnId").value("structured-role-reset"))
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
-                .andExpect(jsonPath("$.resolution").value("ANSWERED"))
-                .andExpect(jsonPath("$.constructionMode").value("EVIDENCE_COMPOSITION"))
+                .andExpect(jsonPath("$.resolution").value("NOT_SUPPORTED"))
+                .andExpect(jsonPath("$.constructionMode").value("TEMPLATE"))
                 .andExpect(jsonPath("$.intentSource").value("RULE"))
-                .andExpect(jsonPath("$.evidenceState").value("VERIFIED"))
-                .andExpect(jsonPath("$.blocks").isNotEmpty())
+                .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
+                .andExpect(jsonPath("$.blocks").isEmpty())
+                .andExpect(jsonPath("$.agentTurn.outcome.taskSummary.items[0].reasonCodes[0]")
+                        .value("PORTFOLIO_EVIDENCE_INSUFFICIENT"))
                 .andExpect(jsonPath("$.degraded").value(false));
     }
 
@@ -138,8 +140,8 @@ class PresetContractBundleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resolution").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.noticeCode").value("STRUCTURED_SUBJECT_INVALID"))
-                .andExpect(jsonPath("$.blocks[0].claimIds.length()").value(0))
-                .andExpect(jsonPath("$.blocks[0].evidenceIds.length()").value(0));
+                 .andExpect(jsonPath("$.blocks[0].claimIds").doesNotExist())
+                 .andExpect(jsonPath("$.blocks[0].evidenceIds").doesNotExist());
     }
 
     private String presetRequest(

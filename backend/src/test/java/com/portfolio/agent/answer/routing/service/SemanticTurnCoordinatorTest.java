@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.routing.service;
 import com.portfolio.agent.answer.routing.domain.ExecutionSelection;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
@@ -228,7 +229,9 @@ class SemanticTurnCoordinatorTest {
         }
 
         @Override
-        public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
+        public TaskOutcome execute(SemanticTaskExecutionContext context) {
+            SemanticTask task = context.getSemanticTask();
+            List<TaskOutcome> availableDependencyOutcomes = context.getDependencyOutcomes();
             executedTaskIds.add(task.getTaskId());
             List<String> availableTaskIds = new ArrayList<>();
             for (TaskOutcome outcome : availableDependencyOutcomes) {

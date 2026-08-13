@@ -85,7 +85,8 @@ public final class PostgresPortfolioRetriever implements PortfolioRetriever {
                 row.getClaim(),
                 row.getEvidenceReferences().stream()
                         .map(reference -> new PortfolioRetrievedEvidenceReference(
-                                reference.getEvidenceId(), reference.getLabel(),
+                                reference.getEvidenceId(), reference.getEvidenceCode(), reference.getLabel(),
+                                reference.getEvidenceType(),
                                 reference.getPublicStatus()))
                         .toList());
     }

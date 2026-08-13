@@ -339,6 +339,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
     private AnswerEvidence toEvidence(EvidenceRecord evidence) {
         return new AnswerEvidence(
                 evidence.getId(),
+                evidence.getCode(),
                 evidence.getTitle(),
                 evidence.getType().name(),
                 evidence.getPeriodStart(),

@@ -11,7 +11,8 @@ public final class GlobalBoundaryGate {
 
     private static final List<String> BOUNDARY_MARKERS = List.of(
             "private knowledge base", "private repository", "credentials", "access token",
-            "bypass access control", "私有知识库", "私有仓库", "访问凭证", "绕过访问控制");
+            "internal password", "internal token", "api key", "bypass access control",
+            "私有知识库", "私有仓库", "访问凭证", "内部密码", "内部 token", "绕过访问控制");
 
     public BoundaryDecision evaluate(SemanticTurnInput input) {
         Objects.requireNonNull(input, "input");

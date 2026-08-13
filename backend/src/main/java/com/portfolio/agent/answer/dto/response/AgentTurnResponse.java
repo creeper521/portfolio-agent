@@ -19,6 +19,7 @@ public final class AgentTurnResponse {
     private final ClarificationResponse clarification;
     private final AgentTurnOutcomeResponse outcome;
     private final List<CompletedTaskResponse> completedTasks;
+    private final ExecutionDisplayPlanResponse execution;
 
     public AgentTurnResponse(
             AgentTurnResult.Disposition disposition,
@@ -28,6 +29,18 @@ public final class AgentTurnResponse {
             ClarificationResponse clarification,
             AgentTurnOutcomeResponse outcome,
             List<CompletedTaskResponse> completedTasks) {
+        this(disposition, plan, planChange, planConfirmation, clarification, outcome, completedTasks, null);
+    }
+
+    public AgentTurnResponse(
+            AgentTurnResult.Disposition disposition,
+            DisplayPlanResponse plan,
+            PlanChangeResponse planChange,
+            PlanConfirmationResponse planConfirmation,
+            ClarificationResponse clarification,
+            AgentTurnOutcomeResponse outcome,
+            List<CompletedTaskResponse> completedTasks,
+            ExecutionDisplayPlanResponse execution) {
         this.contractVersion = CONTRACT_VERSION;
         this.disposition = Objects.requireNonNull(disposition, "disposition");
         this.plan = plan;
@@ -36,6 +49,7 @@ public final class AgentTurnResponse {
         this.clarification = clarification;
         this.outcome = outcome;
         this.completedTasks = completedTasks == null ? null : List.copyOf(completedTasks);
+        this.execution = execution;
     }
 
     public String getContractVersion() { return contractVersion; }
@@ -58,4 +72,7 @@ public final class AgentTurnResponse {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public List<CompletedTaskResponse> getCompletedTasks() { return completedTasks; }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ExecutionDisplayPlanResponse getExecution() { return execution; }
 }

@@ -6,12 +6,9 @@ import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationRoute;
 import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.ConversationSuggestedQuestion;
-import com.portfolio.agent.answer.domain.ConversationToolPlan;
 import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.GroundingReview;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
-import com.portfolio.agent.answer.domain.PublicToolResult;
-import com.portfolio.agent.answer.domain.ToolKind;
 
 import java.util.List;
 
@@ -21,14 +18,6 @@ public interface ConversationalModelPort {
             String question,
             ConversationWindow window,
             List<ConversationSubjectOption> publicSubjects);
-
-    ConversationModelResult<ConversationToolPlan> planTools(
-            String question,
-            ConversationWindow window,
-            ConversationRoute route,
-            PortfolioGroundingContext grounding,
-            List<PublicToolResult> priorResults,
-            List<ToolKind> allowedTools);
 
     ConversationModelResult<ConversationDraft> generate(
             String question,

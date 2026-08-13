@@ -167,6 +167,11 @@ public final class DiagnosticEvent {
                             "context.present",
                             "validation.result",
                             "duration.bucket")),
+                    Map.entry("portfolio.execution.failed", fields(
+                            "failure.stage",
+                            "failure.code",
+                            "capability.code",
+                            "task.type")),
                     Map.entry("semantic.turn.completed", fields(
                             "plan.task.count",
                             "plan.task.succeeded.count",

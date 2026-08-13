@@ -67,6 +67,9 @@ PORTFOLIO_PUBLIC_DATABASE_PASSWORD=public-secret
 PORTFOLIO_GOVERNANCE_DATABASE_NAME=portfolio_governance_dev
 PORTFOLIO_GOVERNANCE_DATABASE_USERNAME=portfolio_governance_owner
 PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD=governance-secret
+PORTFOLIO_CONTEXT_DATABASE_NAME=portfolio_context_dev
+PORTFOLIO_CONTEXT_DATABASE_USERNAME=portfolio_context_owner
+PORTFOLIO_CONTEXT_DATABASE_PASSWORD=context-secret
 '@ | Set-Content -LiteralPath $envFile -Encoding UTF8
 
     $missingEnv = Invoke-Tool @('connections', '-EnvFile',
@@ -83,6 +86,8 @@ PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD=governance-secret
         'connections must include the public database.'
     Assert-True ($connections.Output -match 'portfolio_governance_dev') `
         'connections must include the governance database.'
+    Assert-True ($connections.Output -match 'portfolio_context_dev') `
+        'connections must include the Context database.'
     Assert-True ($connections.Output -notmatch 'admin-secret|public-secret|governance-secret') `
         'connections must not print passwords.'
     Assert-True ($connections.Output -match 'Passwords: read from') `

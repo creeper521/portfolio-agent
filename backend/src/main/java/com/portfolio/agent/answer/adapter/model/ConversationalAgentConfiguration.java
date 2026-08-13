@@ -8,24 +8,26 @@ import com.portfolio.agent.answer.domain.AnswerSubjectType;
 import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
-import com.portfolio.agent.answer.gateway.PublicKnowledgeTools;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationProgressClassifier;
 import com.portfolio.agent.answer.service.ConversationSubjectGuard;
-import com.portfolio.agent.answer.service.ConversationToolService;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.answer.service.DeterministicConversationFallback;
 import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
-import com.portfolio.agent.answer.intelligence.service.PortfolioIntelligence;
+import com.portfolio.agent.answer.intelligence.execution.adapter.bundle.BundlePortfolioCandidateRetrievalAdapter;
+import com.portfolio.agent.answer.intelligence.execution.capability.DefaultPortfolioEvidenceCapability;
+import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvidenceCapability;
+import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
+import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
 import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
 import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
 import com.portfolio.agent.answer.routing.adapter.crypto.PlanCryptographyPort;
 import com.portfolio.agent.answer.routing.adapter.execution.DeterministicSynthesisTaskExecutor;
 import com.portfolio.agent.answer.routing.adapter.execution.GeneralSemanticTaskExecutor;
-import com.portfolio.agent.answer.routing.adapter.execution.PortfolioSemanticTaskExecutor;
+import com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor;
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
 import com.portfolio.agent.answer.routing.service.DefaultTurnRouter;
@@ -41,6 +43,7 @@ import com.portfolio.agent.answer.routing.service.SemanticSignalCollector;
 import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
 import com.portfolio.agent.answer.routing.service.TurnDecisionPolicy;
 import com.portfolio.agent.answer.routing.service.TurnRouter;
+import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceService;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -126,21 +129,6 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
-    ConversationToolService conversationToolService(
-            OpenAiCompatibleConversationalModelAdapter modelAdapter,
-            PublicKnowledgeTools tools,
-            ConversationalAgentProperties properties,
-            DiagnosticEventPublisher diagnosticEventPublisher
-    ) {
-        return new ConversationToolService(
-                modelAdapter,
-                tools,
-                properties.getMaxToolRounds(),
-                properties.getMaxToolCalls(),
-                diagnosticEventPublisher);
-    }
-
-    @Bean
     ConversationDraftValidator conversationDraftValidator(
             OpenAiCompatibleConversationalModelAdapter modelAdapter
     ) {
@@ -209,18 +197,40 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
+    PortfolioCapabilityCatalog portfolioCapabilityCatalog() {
+        return new PortfolioCapabilityCatalog();
+    }
+
+    @Bean
+    PortfolioEvidenceCapability portfolioEvidenceCapability(PortfolioRetriever retriever) {
+        BundlePortfolioCandidateRetrievalAdapter adapter =
+                new BundlePortfolioCandidateRetrievalAdapter(retriever);
+        return new DefaultPortfolioEvidenceCapability(adapter, adapter);
+    }
+
+    @Bean
+    P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor(
+            PortfolioCapabilityCatalog capabilityCatalog,
+            PortfolioEvidenceCapability evidenceCapability,
+            DeterministicPortfolioAnswerComposer answerComposer,
+            DiagnosticEventPublisher diagnosticEventPublisher
+    ) {
+        return new P3PortfolioSemanticTaskExecutor(
+                capabilityCatalog, evidenceCapability, answerComposer, diagnosticEventPublisher);
+    }
+
+    @Bean
     SemanticTurnCoordinator semanticTurnCoordinator(
-            PortfolioIntelligence portfolioIntelligence,
+            PortfolioCapabilityCatalog capabilityCatalog,
+            PortfolioEvidenceCapability evidenceCapability,
             ConversationProviderAccess providerAccess,
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             ConversationDraftValidator draftValidator,
             PortfolioKnowledgeGateway knowledgeGateway,
-            DeterministicPortfolioAnswerComposer answerComposer
+            P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor
     ) {
-        String contentVersion = knowledgeGateway.getContent().getContentVersion();
         return new SemanticTurnCoordinator(List.of(
-                new PortfolioSemanticTaskExecutor(
-                        portfolioIntelligence, ignored -> Optional.empty(), contentVersion, answerComposer),
+                p3PortfolioSemanticTaskExecutor,
                 new GeneralSemanticTaskExecutor(providerAccess, modelAdapter, draftValidator),
                 new DeterministicSynthesisTaskExecutor()));
     }
@@ -233,7 +243,8 @@ public class ConversationalAgentConfiguration {
             PlanConfirmationService planConfirmationService,
             SemanticTurnCoordinator semanticTurnCoordinator,
             ConversationDecisionPublisher decisionPublisher,
-            DiagnosticEventPublisher diagnosticEventPublisher
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            Optional<AuthorizedContextReferenceService> contextReferenceService
     ) {
         return new ConversationalAgentRuntime(
                 knowledgeGateway,
@@ -242,7 +253,7 @@ public class ConversationalAgentConfiguration {
                 planConfirmationService,
                 semanticTurnCoordinator,
                 decisionPublisher,
-                diagnosticEventPublisher);
+                diagnosticEventPublisher, contextReferenceService.orElse(null));
     }
 
     private List<DefaultTurnRouter.PublicSubjectSpec> publicSubjects(

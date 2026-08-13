@@ -3,6 +3,7 @@ package com.portfolio.agent.evaluation.execution;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalMessage;
 import com.portfolio.agent.evaluation.domain.EvalSubjectRef;
+import com.portfolio.agent.answer.routing.domain.SemanticTask;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,6 +20,7 @@ public final class EvalExecutionInput {
     private final EvalLayer layer;
     private final int trialIndex;
     private final List<EvalSubjectRef> resolvedSubjects;
+    private final SemanticTask semanticTask;
 
     public EvalExecutionInput(String caseId, List<EvalMessage> messages, EvalLayer layer,
                               int trialIndex) {
@@ -27,6 +29,21 @@ public final class EvalExecutionInput {
 
     public EvalExecutionInput(String caseId, List<EvalMessage> messages, EvalLayer layer,
                               int trialIndex, List<EvalSubjectRef> resolvedSubjects) {
+        this(caseId, messages, layer, trialIndex, resolvedSubjects, null);
+    }
+
+    /**
+     * Creates an executor input with an already-compiled P2 task. The task is
+     * deliberately supplied separately from oracle/maintenance metadata.
+     */
+    public EvalExecutionInput(String caseId, List<EvalMessage> messages, EvalLayer layer,
+                              int trialIndex, SemanticTask semanticTask) {
+        this(caseId, messages, layer, trialIndex, List.of(), semanticTask);
+    }
+
+    private EvalExecutionInput(String caseId, List<EvalMessage> messages, EvalLayer layer,
+                               int trialIndex, List<EvalSubjectRef> resolvedSubjects,
+                               SemanticTask semanticTask) {
         this.caseId = Objects.requireNonNull(caseId, "caseId");
         this.messages = List.copyOf(Objects.requireNonNull(messages, "messages"));
         this.layer = Objects.requireNonNull(layer, "layer");
@@ -36,6 +53,7 @@ public final class EvalExecutionInput {
         this.trialIndex = trialIndex;
         this.resolvedSubjects = List.copyOf(
                 Objects.requireNonNull(resolvedSubjects, "resolvedSubjects"));
+        this.semanticTask = semanticTask;
     }
 
     public String getCaseId() { return caseId; }
@@ -43,4 +61,8 @@ public final class EvalExecutionInput {
     public EvalLayer getLayer() { return layer; }
     public int getTrialIndex() { return trialIndex; }
     public List<EvalSubjectRef> getResolvedSubjects() { return resolvedSubjects; }
+
+    public java.util.Optional<SemanticTask> getSemanticTask() {
+        return java.util.Optional.ofNullable(semanticTask);
+    }
 }
