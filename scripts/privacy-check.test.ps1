@@ -169,6 +169,7 @@ $unsafeCases = [ordered]@{
     'windows-absolute-path' = 'path=C:\Users\internal\report.md'
     'internal-linux-path' = 'path=/data/server/private/report.md'
     'credential-assignment' = 'password=secret'
+    'hardcoded-resume-token' = 'resumeToken=''hardcoded-secret-value'''
     'internal-hostname' = 'service=https://sql-audit.private.corp/api'
     'private-key-material' = '-----BEGIN PRIVATE KEY-----'
     'standalone-deepseek-key' = 'sk-1234567890abcdefghijklmnop'
@@ -493,6 +494,12 @@ fetch('/api/v2/answers', { credentials: 'same-origin' })
         File = 'safe-confirmation-projection.ts'
         Source = @'
 const request = { integrityToken: response.planConfirmation.integrityToken }
+'@
+    },
+    @{
+        File = 'safe-minified-token-projection.js'
+        Source = @'
+session.resumeToken=nextToken;session.resumeToken=void 0;const api={setSessionResumeToken:a,getSessionResumeToken:b,clearSessionResumeToken:c};const payload={resumeToken:e.resumeToken,integrityToken:e.confirmation.integrityToken};
 '@
     }
 )

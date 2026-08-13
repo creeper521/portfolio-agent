@@ -5,6 +5,14 @@ param(
     [string]$ReleaseRoot = '',
     [string]$RetrievalProfile = '',
     [string]$ModelDirectory = '',
+    [string]$ContextDatabaseUrl = $env:PORTFOLIO_CONTEXT_DATABASE_URL,
+    [string]$ContextDatabaseUsername = $env:PORTFOLIO_CONTEXT_DATABASE_USERNAME,
+    [string]$ContextDatabasePassword = $env:PORTFOLIO_CONTEXT_DATABASE_PASSWORD,
+    [string]$CurrentTokenKeyId = $env:PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID,
+    [string]$CurrentTokenKey = $env:PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY,
+    [string]$CurrentPayloadKeyId = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID,
+    [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
+    [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
     [ValidateRange(1, 65535)]
     [int]$Port = 4173,
@@ -13,6 +21,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$ContextMode = if ([string]::IsNullOrWhiteSpace($ContextMode)) {
+    'POSTGRESQL'
+} else {
+    $ContextMode.Trim().ToUpperInvariant()
+}
 $root = Split-Path -Parent $PSScriptRoot
 $jar = if ([string]::IsNullOrWhiteSpace($JarPath)) {
     Join-Path $root 'backend\target\portfolio-agent.jar'
@@ -69,6 +82,23 @@ function Assert-EnvironmentRestored([string]$Name, [hashtable]$Snapshot) {
     }
 }
 
+function Assert-CurrentContextKey([string]$KeyId, [string]$Key, [string]$Label) {
+    if ([string]::IsNullOrWhiteSpace($KeyId) -or
+            $KeyId -notmatch '^[A-Za-z0-9._-]{1,64}$' -or
+            [string]::IsNullOrWhiteSpace($Key)) {
+        throw "Packaged Context $Label key configuration is incomplete."
+    }
+    try {
+        $decoded = [Convert]::FromBase64String($Key)
+    }
+    catch {
+        throw "Packaged Context $Label key configuration is invalid."
+    }
+    if ($decoded.Length -ne 32) {
+        throw "Packaged Context $Label key configuration is invalid."
+    }
+}
+
 function Assert-PackagedLogBoundary(
     [string]$stdoutPath,
     [string]$stderrPath,
@@ -99,10 +129,56 @@ function Assert-PackagedLogBoundary(
 }
 
 $environment = @{
+    PORTFOLIO_CONVERSATION_CONTEXT_MODE = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONVERSATION_CONTEXT_MODE'
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
+    P3_REAL_API = Get-EnvironmentSnapshot 'P3_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
     PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
+    PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_URL'
+    PORTFOLIO_CONTEXT_DATABASE_USERNAME = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME'
+    PORTFOLIO_CONTEXT_DATABASE_PASSWORD = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD'
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID'
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY'
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID'
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
+}
+
+if ($ContextMode -notin @('POSTGRESQL', 'DISABLED')) {
+    throw 'Packaged Context mode is invalid.'
+}
+if ($ContextMode -eq 'POSTGRESQL') {
+    if ([string]::IsNullOrWhiteSpace($ContextDatabaseUrl) -or
+            $ContextDatabaseUrl -notmatch '^jdbc:postgresql://') {
+        throw 'Packaged Context database URL is missing or invalid.'
+    }
+    if ([string]::IsNullOrWhiteSpace($ContextDatabaseUsername) -or
+            [string]::IsNullOrWhiteSpace($ContextDatabasePassword)) {
+        throw 'Packaged Context database credentials are incomplete.'
+    }
+    Assert-CurrentContextKey $CurrentTokenKeyId $CurrentTokenKey 'token'
+    Assert-CurrentContextKey $CurrentPayloadKeyId $CurrentPayloadKey 'payload'
+}
+
+foreach ($entry in @{
+    PORTFOLIO_CONVERSATION_CONTEXT_MODE = $ContextMode
+    PORTFOLIO_CONTEXT_DATABASE_URL = $ContextDatabaseUrl
+    PORTFOLIO_CONTEXT_DATABASE_USERNAME = $ContextDatabaseUsername
+    PORTFOLIO_CONTEXT_DATABASE_PASSWORD = $ContextDatabasePassword
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID = $CurrentTokenKeyId
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY = $CurrentTokenKey
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID = $CurrentPayloadKeyId
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY = $CurrentPayloadKey
+}.GetEnumerator()) {
+    Set-Item -LiteralPath "Env:$($entry.Key)" -Value ([string]$entry.Value)
 }
 
 $quotedJar = '"' + $jar + '"'
@@ -112,6 +188,7 @@ $applicationArguments = @(
     "--server.port=$Port",
     '--spring.profiles.active=prod',
     '--spring.main.banner-mode=off',
+    "--portfolio.conversation-context.mode=$ContextMode",
     '--portfolio.diagnostics.frontend-ingest-enabled=true',
     '--portfolio.answer-production.requests-per-minute=1000'
 )
@@ -348,23 +425,42 @@ try {
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
     $env:PLAYWRIGHT_REAL_API = '1'
+    $env:P3_REAL_API = '1'
     $env:PLAYWRIGHT_BASE_URL = $baseUrl
     if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
         $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
     }
 
-    & $NpmExecutable --prefix (Join-Path $root 'frontend') run test:e2e
+    & $NpmExecutable --prefix (Join-Path $root 'frontend') run test:e2e -- --workers=1
     $playwrightExitCode = $LASTEXITCODE
 }
 finally {
     try {
+        Restore-EnvironmentVariable 'PORTFOLIO_CONVERSATION_CONTEXT_MODE' `
+            $environment.PORTFOLIO_CONVERSATION_CONTEXT_MODE
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_URL' `
+            $environment.PORTFOLIO_CONTEXT_DATABASE_URL
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_USERNAME' `
+            $environment.PORTFOLIO_CONTEXT_DATABASE_USERNAME
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_PASSWORD' `
+            $environment.PORTFOLIO_CONTEXT_DATABASE_PASSWORD
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID' `
+            $environment.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY' `
+            $environment.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID' `
+            $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID
+        Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY' `
+            $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
         Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Restore-EnvironmentVariable 'P3_REAL_API' $environment.P3_REAL_API
         Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
             $environment.PLAYWRIGHT_REAL_RETRIEVAL
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+        Assert-EnvironmentRestored 'P3_REAL_API' $environment.P3_REAL_API
         Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
             $environment.PLAYWRIGHT_REAL_RETRIEVAL

@@ -37,8 +37,25 @@ function Restore-EnvironmentVariable([string]$Name, [hashtable]$Snapshot) {
 }
 
 $environment = @{
+    PORTFOLIO_CONVERSATION_CONTEXT_MODE = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONVERSATION_CONTEXT_MODE'
+    PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_URL'
+    PORTFOLIO_CONTEXT_DATABASE_USERNAME = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME'
+    PORTFOLIO_CONTEXT_DATABASE_PASSWORD = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD'
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID'
+    PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY'
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID'
+    PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY = Get-EnvironmentSnapshot `
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
+    P3_REAL_API = Get-EnvironmentSnapshot 'P3_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
     PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
     PORTFOLIO_MODEL_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_ENABLED'
@@ -54,6 +71,23 @@ $environment = @{
 }
 
 try {
+    $contextTestKey = [Convert]::ToBase64String([byte[]](0..31))
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_DATABASE_URL',
+        'jdbc:postgresql://127.0.0.1:54329/portfolio_context_dev', 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME', 'context-user', 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD', 'context-password-123', 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID', 'current-token', 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY', $contextTestKey, 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID', 'current-payload', 'Process')
+    [Environment]::SetEnvironmentVariable(
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY', $contextTestKey, 'Process')
+
     if (-not (Test-Path -LiteralPath $sourceJar -PathType Leaf)) {
         throw 'Packaged JAR is required before running run-jar-e2e tests.'
     }
@@ -166,6 +200,7 @@ try {
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'
     $env:PLAYWRIGHT_REAL_API = 'original-real'
+    $env:P3_REAL_API = 'original-p3-real'
     $env:PLAYWRIGHT_BASE_URL = 'original-base'
     $env:PLAYWRIGHT_REAL_RETRIEVAL = 'original-retrieval'
     $env:PORTFOLIO_MODEL_ENABLED = 'true'
@@ -174,6 +209,7 @@ try {
     $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'true'
     $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'provider-key-must-not-leak'
     $env:PORTFOLIO_MODEL_TIMEOUT = '1ms'
+    $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE = 'DISABLED'
 
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
         -JarPath $spacedJar -NpmExecutable $fakeNpm -Port $port 2>&1 | Out-String)
@@ -350,8 +386,25 @@ $capturedStdout = '{"message":"structured fixture"}' `
     Write-Output 'run-jar-e2e tests passed'
 }
 finally {
+    Restore-EnvironmentVariable 'PORTFOLIO_CONVERSATION_CONTEXT_MODE' `
+        $environment.PORTFOLIO_CONVERSATION_CONTEXT_MODE
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_URL' `
+        $environment.PORTFOLIO_CONTEXT_DATABASE_URL
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_USERNAME' `
+        $environment.PORTFOLIO_CONTEXT_DATABASE_USERNAME
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_DATABASE_PASSWORD' `
+        $environment.PORTFOLIO_CONTEXT_DATABASE_PASSWORD
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID' `
+        $environment.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY' `
+        $environment.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID' `
+        $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID
+    Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY' `
+        $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
     Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
+    Restore-EnvironmentVariable 'P3_REAL_API' $environment.P3_REAL_API
     Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
         $environment.PLAYWRIGHT_REAL_RETRIEVAL
