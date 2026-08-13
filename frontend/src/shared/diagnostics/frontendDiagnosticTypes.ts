@@ -14,7 +14,9 @@ export type FrontendDiagnosticEventName =
 export type FrontendDurationBucket = 'LT_1000_MS' | 'FROM_1000_TO_4999_MS' | 'GE_5000_MS'
 
 export type FrontendGuidanceStage = 'OPENING' | 'DEEPENING' | 'WRAP_UP' | 'EXPLORE_OTHERS'
-export type FrontendGenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
+// P4：顶层聚合 MIXED 是合法值（设计 §11.3）。诊断闭集接纳它，
+// 避免 MIXED 回答让 frontend.agent.request.completed 整条事件被序列化器丢弃。
+export type FrontendGenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK' | 'MIXED'
 
 export interface ReportableFrontendEvent {
   schemaVersion: 1
@@ -65,6 +67,7 @@ const GENERATION_MODES = new Set<FrontendGenerationMode>([
   'DETERMINISTIC',
   'MODEL',
   'FALLBACK',
+  'MIXED',
 ])
 const ERROR_KINDS = new Set([
   'HTTP',

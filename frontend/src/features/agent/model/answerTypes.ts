@@ -11,12 +11,23 @@ export type AnswerResolution =
   | 'PARTIALLY_ANSWERED'
   | 'PRESENTATION_BLOCKED'
 export type AnswerSource = 'PRESET' | 'RETRIEVAL' | 'TOOL'
-export type GenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK'
+// P4：顶层聚合新增 MIXED（设计 §11.3 / handoff §2.1）。
+export type GenerationMode = 'DETERMINISTIC' | 'MODEL' | 'FALLBACK' | 'MIXED'
+// P4：顶层构造模式新增 MIXED_COMPOSITION（设计 §11.3 / handoff §2.1）。
 export type AnswerConstructionMode =
   | 'TEMPLATE'
   | 'EVIDENCE_COMPOSITION'
   | 'MODEL_GROUNDED'
   | 'GENERAL_MODEL'
+  | 'MIXED_COMPOSITION'
+// P4：单个 completed task 的表达来源（设计 §11.2 / handoff §2.2）。
+// 与顶层 GenerationMode 不同：这里是任务级闭集，不含 MODEL/MIXED。
+export type TaskCompositionMode = 'DETERMINISTIC' | 'MODEL_GROUNDED' | 'FALLBACK'
+// P4：任务级表达状态。用于协议状态与测试，不要求在访客主界面展示（handoff §2.2/§3）。
+export interface TaskComposition {
+  mode: TaskCompositionMode
+  degraded: boolean
+}
 export type AnswerIntentSource = 'PRESET' | 'RULE' | 'MODEL' | 'REFERENCE' | 'GLOBAL'
 export type AnswerEvidenceState = 'VERIFIED' | 'NOT_REQUIRED' | 'INSUFFICIENT'
 export type Verification =
@@ -375,6 +386,8 @@ export interface AgentTurnCompletedTaskResponse {
   resultPayload: AgentTurnResultPayloadResponse
   // P3：仅产生可续接 Context 的完成任务返回不透明 handle（handoff §6）。
   contextHandle?: string
+  // P4：任务级表达状态（设计 §11.2 / handoff §2.2）。缺省视为未提供（兼容旧响应）。
+  composition?: TaskComposition
   [field: string]: unknown
 }
 

@@ -23,6 +23,7 @@ import type {
   PublicSourceReference,
   SemanticSourceDomain,
   SemanticSubjectReference,
+  TaskCompositionMode,
   TaskSummaryDisplayMode,
   TaskSummaryStatus,
   TurnDisposition,
@@ -159,6 +160,13 @@ export type CompletedTaskResultView =
   | RecommendationResultView
   | SynthesisResultView
 
+// P4：任务级表达状态视图（设计 §11.2 / handoff §2.2）。
+// 仅供协议状态与测试使用，不在访客主界面渲染徽标（handoff §3）。
+export interface TaskCompositionView {
+  mode: TaskCompositionMode
+  degraded: boolean
+}
+
 export interface CompletedTaskView {
   displayIndex: string
   goalLabel: string
@@ -166,6 +174,8 @@ export interface CompletedTaskView {
   resultPayload: CompletedTaskResultView
   // P3：仅产生可续接 Context 的任务返回不透明 handle（handoff §6）。
   contextHandle?: string
+  // P4：任务级表达状态。缺省（undefined）表示后端未提供，按兼容处理；不渲染差异。
+  composition?: TaskCompositionView
 }
 
 // ── P3 执行快照视图（FINAL，handoff §7）────────────────────────────────────
@@ -493,6 +503,9 @@ function mapCompletedTask(task: AgentTurnCompletedTaskResponse): CompletedTaskVi
     ...(task.contextHandle === undefined || typeof task.contextHandle !== 'string'
       ? {}
       : { contextHandle: task.contextHandle }),
+    // P4：严格闭集映射；非法 composition 只丢 metadata 并上报脱敏诊断，
+    // 不丢失已通过既有契约校验的可信正文与 sourceReferences（handoff §3）。
+    ...mapTaskComposition(task.composition),
   }
 }
 
@@ -653,6 +666,42 @@ function reportInvalidExecution(): void {
   frontendDiagnostics.report(createFrontendDiagnosticEvent({
     eventName: 'frontend.response.invalid',
     errorCode: 'EXECUTION_SNAPSHOT_INVALID',
+    errorKind: 'INVALID_RESPONSE',
+  }))
+}
+
+// ── P4：任务级 composition 校验（设计 §11.2 / handoff §2.2/§3）──────────────
+// composition 是可选 metadata：缺省视为未提供（兼容旧响应，不报诊断）；
+// 提供但非法（非对象、mode 不在闭集、degraded 非布尔）时只丢弃该 metadata，
+// 保留已通过既有契约校验的可信正文与 sourceReferences，并上报脱敏诊断——
+// 诊断不含正文、reference key、Token、mode 字面值或任何 composition 原文。
+const TASK_COMPOSITION_MODES = new Set<string>(['DETERMINISTIC', 'MODEL_GROUNDED', 'FALLBACK'])
+
+/** 严格闭集映射 composition；非法返回空对象（不挂 composition 字段）并上报脱敏诊断。 */
+function mapTaskComposition(
+  value: unknown,
+): { composition?: TaskCompositionView } {
+  if (value === undefined) return {}
+  if (typeof value !== 'object' || value === null) {
+    reportInvalidTaskComposition()
+    return {}
+  }
+  const raw = value as Record<string, unknown>
+  const mode = typeof raw.mode === 'string' && TASK_COMPOSITION_MODES.has(raw.mode)
+    ? (raw.mode as TaskCompositionMode)
+    : null
+  if (mode === null || (raw.degraded !== true && raw.degraded !== false)) {
+    reportInvalidTaskComposition()
+    return {}
+  }
+  return { composition: { mode, degraded: raw.degraded } }
+}
+
+function reportInvalidTaskComposition(): void {
+  // 仅上报脱敏 code，不携带正文/reference key/Token/mode 字面值。
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'TASK_COMPOSITION_INVALID',
     errorKind: 'INVALID_RESPONSE',
   }))
 }

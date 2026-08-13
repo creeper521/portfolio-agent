@@ -440,6 +440,180 @@ export async function installAnswerApiMock(page: Page) {
   await page.route('**/api/v2/answers', fulfillAnswer)
 }
 
+// ── P4 任务级 composition Mock（设计 §11 / handoff §2/§6）──────────────────────
+// 后端 P4 公共契约尚未落地，前端按冻结文档契约以 Mock 验收三类表达来源：
+// MODEL_GROUNDED / FALLBACK / MIXED。三种使用同一套章节、引用与 Evidence Desk。
+// 顶层 generation/construction 模式按 §11.3 聚合表赋值。
+export type P4CompositionScenario = 'MODEL_GROUNDED' | 'FALLBACK' | 'MIXED'
+
+function p4SourceReferences(): Array<Record<string, unknown>> {
+  return [{
+    referenceKey: 'SRC_SQL_AUDIT_P4',
+    label: 'SQL 审计 · 交付证据',
+    sourceType: 'DOCUMENT',
+    subjectRoute: '/projects/sql-audit',
+    evidenceRoute: '/evidence?evidence=sql-audit-delivery-set',
+    publishedVersion: previewPublicContent.contentVersion,
+  }]
+}
+
+function p4CompletedTask(
+  displayIndex: string,
+  goalLabel: string,
+  content: string,
+  composition: { mode: string; degraded: boolean },
+): Record<string, unknown> {
+  return {
+    displayIndex,
+    goalLabel,
+    sourceDomain: 'PORTFOLIO',
+    composition,
+    resultPayload: {
+      kind: 'SECTION_RESULT',
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'SOLUTION',
+        title: goalLabel,
+        content,
+        claimIds: [],
+        evidenceIds: [],
+        sourceReferences: p4SourceReferences(),
+      }],
+    },
+  }
+}
+
+function p4Execution(taskCount: number): Record<string, unknown> {
+  // 仍是 P3 四阶段（handoff §4）；P4 的 Provider/Draft/Validator 是 RESULT_COMPOSED 内部实现。
+  return {
+    contractVersion: 'p3-display-v1',
+    snapshotType: 'FINAL',
+    overallStatus: 'COMPLETED',
+    tasks: Array.from({ length: taskCount }, (_, index) => ({
+      displayIndex: String(index + 1).padStart(2, '0'),
+      finalStatus: 'COMPLETED',
+      stages: [
+        { code: 'SCOPE_CONFIRMED', label: '确认查询范围', status: 'COMPLETED' },
+        { code: 'MATERIALS_RETRIEVED', label: '查找已发布材料', status: 'COMPLETED' },
+        { code: 'EVIDENCE_VALIDATED', label: '核验证据', status: 'COMPLETED' },
+        { code: 'RESULT_COMPOSED', label: '形成回答', status: 'COMPLETED' },
+      ],
+    })),
+  }
+}
+
+function p4CompositionResponse(scenario: P4CompositionScenario): Record<string, unknown> {
+  const project = previewPublicContent.projects[0]
+  let generationMode: string
+  let constructionMode: string
+  let degraded: boolean
+  let completedTasks: Array<Record<string, unknown>>
+  if (scenario === 'MODEL_GROUNDED') {
+    generationMode = 'MODEL'
+    constructionMode = 'MODEL_GROUNDED'
+    degraded = false
+    completedTasks = [p4CompletedTask(
+      '01', 'SQL 审计项目说明',
+      `${project.solution} 模型受控表达正文。`,
+      { mode: 'MODEL_GROUNDED', degraded: false },
+    )]
+  } else if (scenario === 'FALLBACK') {
+    generationMode = 'FALLBACK'
+    constructionMode = 'EVIDENCE_COMPOSITION'
+    degraded = true
+    completedTasks = [p4CompletedTask(
+      '01', 'SQL 审计项目说明',
+      `${project.solution} 确定性 fallback 正文。`,
+      { mode: 'FALLBACK', degraded: true },
+    )]
+  } else {
+    generationMode = 'MIXED'
+    constructionMode = 'MIXED_COMPOSITION'
+    degraded = false
+    completedTasks = [
+      p4CompletedTask(
+        '01', 'SQL 审计项目说明',
+        `${project.solution} 确定性正文。`,
+        { mode: 'DETERMINISTIC', degraded: false },
+      ),
+      p4CompletedTask(
+        '02', 'SQL 审计验证过程',
+        `${project.verification.join(' ')} 模型受控表达正文。`,
+        { mode: 'MODEL_GROUNDED', degraded: false },
+      ),
+    ]
+  }
+  return {
+    requestId: 'playwright-p4-mock',
+    turnId: 'playwright-p4-turn',
+    contentVersion: previewPublicContent.contentVersion,
+    responseKind: 'ANSWER',
+    resolution: 'ANSWERED',
+    answerScope: 'PORTFOLIO',
+    generationMode,
+    constructionMode,
+    verification: 'VERIFIED',
+    evidenceState: 'VERIFIED',
+    degraded,
+    title: project.title,
+    summary: '',
+    sections: [],
+    blocks: [],
+    evidenceIds: [],
+    suggestedQuestionPresetIds: [],
+    suggestedQuestions: [],
+    conversation: { resumeToken: MOCK_RESUME_TOKEN, continuationStatus: 'AVAILABLE' },
+    agentTurn: {
+      contractVersion: 'stp-v1',
+      disposition: 'READY',
+      outcome: {
+        planOutcome: 'SUCCEEDED',
+        taskSummary: {
+          displayMode: 'EXPANDED',
+          totalCount: completedTasks.length,
+          answeredCount: completedTasks.length,
+          notSupportedCount: 0,
+          emptyCount: 0,
+          blockedCount: 0,
+          failedCount: 0,
+          cancelledCount: 0,
+          degradedCount: scenario === 'FALLBACK' ? 1 : 0,
+          items: completedTasks.map((task) => ({
+            displayIndex: task.displayIndex,
+            goalLabel: task.goalLabel,
+            status: 'COMPLETED',
+            sourceDomain: 'PORTFOLIO',
+          })),
+        },
+      },
+      completedTasks,
+      execution: p4Execution(completedTasks.length),
+    },
+  }
+}
+
+/**
+ * P4 表达来源 Mock：在公共内容 + 诊断 + 会话上下文基础上，按场景返回
+ * MODEL_GROUNDED / FALLBACK / MIXED 的 ready 语义轮次。用于前端契约验收，
+ * 不代表真实 Provider 已验收或部署已启用（设计 §20 状态阶梯）。
+ */
+export async function installP4CompositionMocks(page: Page, scenario: P4CompositionScenario) {
+  await page.route('**/api/v1/public-content', fulfillPublicContent)
+  await installDiagnosticsApiMock(page)
+  await page.route('**/api/v2/answers', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      json: p4CompositionResponse(scenario),
+    })
+  })
+  await installConversationContextMocks(page, { status: 'AVAILABLE' })
+}
+
 /** Deterministic stp-v1 fixtures for the approved A–H interaction gate. */
 export async function mockSemanticTurnStates(page: Page) {
   let turn = 0

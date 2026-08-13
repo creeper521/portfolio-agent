@@ -486,4 +486,66 @@ describe('mapAnswerResponse', () => {
     expect(payload).not.toContain('rec_')
     expect(payload).not.toContain('项目一')
   })
+
+  // —— P4 顶层聚合 MIXED / MIXED_COMPOSITION ——
+  it('accepts top-level MIXED generation and MIXED_COMPOSITION construction (P4)', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      generationMode: 'MIXED',
+      constructionMode: 'MIXED_COMPOSITION',
+    })
+
+    expect(mapped.generationMode).toBe('MIXED')
+    expect(mapped.constructionMode).toBe('MIXED_COMPOSITION')
+    // 不丢可信正文
+    expect(mapped.sections[0]?.content).toBe('结构化内容')
+  })
+
+  it('does not relax P3 source reference validation for a MODEL_GROUNDED task (P4)', () => {
+    const mapped = mapAnswerResponse({
+      requestId: 'request-p4',
+      turnId: 'turn-p4-model',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      constructionMode: 'MODEL_GROUNDED',
+      evidenceState: 'VERIFIED',
+      title: '模型接地回答',
+      summary: '',
+      agentTurn: {
+        contractVersion: 'stp-v1',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '模型任务',
+          sourceDomain: 'PORTFOLIO',
+          composition: { mode: 'MODEL_GROUNDED', degraded: false },
+          resultPayload: {
+            kind: 'SECTION_RESULT',
+            blocks: [{
+              sourceScope: 'PORTFOLIO',
+              sectionType: 'SOLUTION',
+              title: '方案',
+              content: '模型表达正文',
+              claimIds: [],
+              evidenceIds: [],
+              // 非闭集 sourceType：P3 校验应丢弃，不因模型模式放宽
+              sourceReferences: [{
+                referenceKey: 'SRC_BAD',
+                label: '非法来源',
+                sourceType: 'PRIVATE_BUCKET',
+                subjectRoute: '/projects/sql-audit',
+                publishedVersion: 'public-2026-08-13',
+              }],
+            }],
+          },
+        }],
+      },
+    })
+
+    // 正文保留
+    expect(mapped.sections[0]?.content).toBe('模型表达正文')
+    // MODEL_GROUNDED 不放宽引用校验：非法引用被丢弃
+    expect(mapped.sections[0]?.sourceReferences).toBeUndefined()
+  })
 })

@@ -97,4 +97,12 @@ describe('answerLabels', () => {
     expect(answerGenerationTag({ ...base, degraded: true })).toBe('降级回答')
     expect(answerGenerationTag({ ...base, resolution: 'REJECTED' })).toBe('拒答')
   })
+
+  it('does not badge MIXED_COMPOSITION with any model/AI wording (P4)', () => {
+    // 混合表达不展示徽标：fall-through 到空标签，且技术尾注不出现「模型/AI」字样。
+    expect(answerGenerationTag({ ...base, constructionMode: 'MIXED_COMPOSITION' })).toBe('')
+    const tail = answerTechTail({ ...base, constructionMode: 'MIXED_COMPOSITION' })
+    expect(tail).not.toContain('模型')
+    expect(tail).not.toContain('AI')
+  })
 })
