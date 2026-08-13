@@ -2,7 +2,10 @@ import { RequestOperation, request } from '../../portfolio/api/portfolioApi'
 import type {
   AnswerResponse,
   ClarificationResolutionRequest,
+  ContextReferenceRequest,
+  ConversationContextSummaryResponse,
   InvalidatedPlanReference,
+  P3AnswerSuccess,
   PlanAdjustmentRequest,
   PlanConfirmationSubmission,
   PortfolioReferenceContext,
@@ -35,8 +38,13 @@ export interface AnswerApiRequest {
   question?: string
   messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
   coveredTopics?: readonly ConversationTopic[]
+  // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 最终改用 contextReference。
   referenceContext?: PortfolioReferenceContext
   recommendationContext?: PortfolioRecommendationContextRequest
+  // P3：会话级不透明 ResumeToken（handoff §3.1, §10）。仅通过 Header 携带。
+  resumeToken?: string
+  // P3：从结果继续时发送的强类型 Context 引用（handoff §3.2）。
+  contextReference?: ContextReferenceRequest
 }
 
 export interface AnswerRequestOptions {
@@ -46,10 +54,14 @@ export interface AnswerRequestOptions {
 export function askQuestion(
   input: AnswerApiRequest,
   options: AnswerRequestOptions = {},
-): Promise<AnswerResponse> {
-  return request<AnswerResponse>('/api/v2/answers', {
+): Promise<P3AnswerSuccess> {
+  return request<P3AnswerSuccess>('/api/v2/answers', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // P3：已有会话才发送 ResumeToken；首问不发送（handoff §3.1）。
+      ...(input.resumeToken === undefined ? {} : { 'X-Conversation-Resume-Token': input.resumeToken }),
+    },
     body: JSON.stringify({
       turnId: input.turnId,
       requestToken: input.requestToken ?? createRequestToken(),
@@ -74,6 +86,15 @@ export function askQuestion(
         ? {}
         : { contractVersion: input.contractVersion }),
       ...(input.question === undefined ? {} : { question: input.question }),
+      // P3：contextReference 是顶层强类型字段，不放入 context（handoff §3.2）。
+      ...(input.contextReference === undefined
+        ? {}
+        : {
+            contextReference: {
+              contextHandle: input.contextReference.contextHandle,
+              expectedContextType: input.contextReference.expectedContextType,
+            },
+          }),
       messages: input.messages?.map((message) => ({
         role: message.role,
         content: message.content,
@@ -165,5 +186,44 @@ export function askQuestion(
     operation: RequestOperation.ANSWER,
     signal: options.signal ?? input.signal,
     timeoutMs: 15_000,
+  })
+}
+
+// ── P3：会话业务上下文 API（handoff §11 刷新恢复 / §12 主动清除）──
+//
+// ResumeToken 只通过 X-Conversation-Resume-Token Header 携带，绝不进入 URL/body/Cookie。
+// request() 的诊断管道只写 X-Client-Session-Id/X-Client-Request-Id（诊断用 UUID，与会话 Token
+// 无关），且诊断事件为固定白名单 schema，结构上无法携带 Token。
+
+/** GET /api/v2/conversation-context：用 ResumeToken 取安全 Context Summary（刷新恢复）。 */
+export function fetchConversationContext(
+  resumeToken: string,
+  options: AnswerRequestOptions = {},
+): Promise<ConversationContextSummaryResponse> {
+  return request<ConversationContextSummaryResponse>('/api/v2/conversation-context', {
+    method: 'GET',
+    headers: { 'X-Conversation-Resume-Token': resumeToken },
+    signal: options.signal,
+  }, {
+    operation: RequestOperation.ANSWER,
+    signal: options.signal,
+    timeoutMs: 10_000,
+  })
+}
+
+/** DELETE /api/v2/conversation-context：幂等清除当前 Token 的服务端 Context（204 即成功）。 */
+export function clearConversationContext(
+  resumeToken: string,
+  options: AnswerRequestOptions = {},
+): Promise<void> {
+  return request<void>('/api/v2/conversation-context', {
+    method: 'DELETE',
+    headers: { 'X-Conversation-Resume-Token': resumeToken },
+    signal: options.signal,
+  }, {
+    operation: RequestOperation.ANSWER,
+    signal: options.signal,
+    timeoutMs: 10_000,
+    expectNoContent: true,
   })
 }

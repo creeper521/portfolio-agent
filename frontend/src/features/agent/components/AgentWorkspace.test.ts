@@ -18,12 +18,16 @@ import ConversationThread from './ConversationThread.vue'
 
 const SESSION_KEY = 'forbidden-session-key'
 
-const { askQuestionMock } = vi.hoisted(() => ({
+const { askQuestionMock, fetchContextMock, clearContextMock } = vi.hoisted(() => ({
   askQuestionMock: vi.fn(),
+  fetchContextMock: vi.fn(),
+  clearContextMock: vi.fn(),
 }))
 
 vi.mock('../api/answerApi', () => ({
   askQuestion: askQuestionMock,
+  fetchConversationContext: fetchContextMock,
+  clearConversationContext: clearContextMock,
 }))
 
 function answerResponse(
@@ -157,8 +161,12 @@ describe('AgentWorkspace', () => {
 
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     askQuestionMock.mockReset()
     askQuestionMock.mockResolvedValue(answerResponse())
+    fetchContextMock.mockReset()
+    clearContextMock.mockReset()
+    clearContextMock.mockResolvedValue(undefined)
     vi.stubGlobal(
       'matchMedia',
       vi.fn((query: string) => ({
@@ -1808,5 +1816,235 @@ caseSlugs: [],
     )
     expect(selectionCalls).toHaveLength(0)
     fetchSpy.mockRestore()
+  })
+})
+
+// ── P3：会话业务上下文（ResumeToken / 恢复 / 清除 / 幂等 / 完成回执）──
+describe('AgentWorkspace P3 conversation context', () => {
+  const RESUME_KEY = 'portfolio.agent.resume-token.v1'
+
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    askQuestionMock.mockReset()
+    askQuestionMock.mockResolvedValue(answerResponse())
+    fetchContextMock.mockReset()
+    clearContextMock.mockReset()
+    clearContextMock.mockResolvedValue(undefined)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('1279'),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function answerWithConversation(
+    resumeToken: string,
+    continuationStatus: string = 'AVAILABLE',
+  ) {
+    return {
+      ...answerResponse(),
+      turnId: 'turn-conv',
+      conversation: { resumeToken, continuationStatus },
+    }
+  }
+
+  it('sends no resume token on the first question, then stores and reuses it via header only', async () => {
+    askQuestionMock.mockResolvedValueOnce(answerWithConversation('opaque-token-1'))
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('介绍项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 首问不带 ResumeToken（header 缺省）。
+    expect(askQuestionMock.mock.calls[0]?.[0].resumeToken).toBeUndefined()
+    // 收到 Token 后写入唯一 sessionStorage 槽位。
+    expect(sessionStorage.getItem(RESUME_KEY)).toBe('opaque-token-1')
+
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    await wrapper.get('textarea').setValue('继续追问')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 续问通过输入字段携带 ResumeToken（由 answerApi 转为 Header；body/URL 不含）。
+    expect(askQuestionMock.mock.calls[1]?.[0].resumeToken).toBe('opaque-token-1')
+  })
+
+  it('keeps an established answer intact when continuation is PERSISTENCE_UNAVAILABLE', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      degraded: true,
+      conversation: { continuationStatus: 'PERSISTENCE_UNAVAILABLE' },
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('介绍项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 答案仍然渲染（证据状态未被降级），并显示非阻断续接提示。
+    expect(wrapper.find('.structured-answer').exists()).toBe(true)
+    expect(wrapper.find('[data-continuation-notice]').text()).toContain('连续追问或刷新恢复暂不可用')
+  })
+
+  it('shows a deterministic completion receipt without fabricating an answer', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      responseKind: 'COMPLETION_RECEIPT',
+      turnId: 'turn-receipt',
+      requestToken: '00000000-0000-4000-8000-000000000010',
+      requestStatus: 'REQUEST_ALREADY_COMPLETED',
+      completedTasks: [{ displayIndex: '01', status: 'COMPLETED', contextHandle: 'handle-1' }],
+      conversation: { continuationStatus: 'AVAILABLE', resumeToken: 'opaque-token-resigned' },
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('介绍项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 回执提示出现，但没有伪造的答案气泡。
+    expect(wrapper.find('[data-completion-receipt]').exists()).toBe(true)
+    expect(wrapper.find('.structured-answer').exists()).toBe(false)
+    // 重签 Token 以回执为准。
+    expect(sessionStorage.getItem(RESUME_KEY)).toBe('opaque-token-resigned')
+  })
+
+  it('recovers only the safe context summary on mount and shows the recovery card', async () => {
+    sessionStorage.setItem(RESUME_KEY, 'opaque-recover')
+    fetchContextMock.mockResolvedValue({
+      contractVersion: 'p3-context-summary-v1',
+      continuationStatus: 'AVAILABLE',
+      summary: {
+        recentTaskType: 'RECOMMENDATION',
+        subjectLabels: ['SQL 审计'],
+        facetLabels: ['VERIFICATION'],
+        comparisonDimensionLabels: [],
+        preferenceLabels: ['优先验证'],
+        canRefine: true,
+      },
+    })
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    expect(fetchContextMock).toHaveBeenCalledWith('opaque-recover')
+    expect(wrapper.find('[data-recovery-card]').exists()).toBe(true)
+    expect(wrapper.find('[data-recovery-card]').text()).toContain('SQL 审计')
+    // 槽位仍持有恢复 Token。
+    expect(sessionStorage.getItem(RESUME_KEY)).toBe('opaque-recover')
+    // 不恢复问题/答案气泡。
+    expect(wrapper.findAll('.structured-answer')).toHaveLength(0)
+  })
+
+  it('clears the local token and starts fresh when the resumed context is expired', async () => {
+    sessionStorage.setItem(RESUME_KEY, 'opaque-expired')
+    fetchContextMock.mockResolvedValue({
+      contractVersion: 'p3-context-summary-v1',
+      continuationStatus: 'CONTEXT_EXPIRED',
+    })
+    mountWorkspace()
+    await flushPromises()
+
+    expect(fetchContextMock).toHaveBeenCalledWith('opaque-expired')
+    expect(sessionStorage.getItem(RESUME_KEY)).toBeNull()
+  })
+
+  it('clears the conversation via DELETE and removes the recovery card only after 204', async () => {
+    sessionStorage.setItem(RESUME_KEY, 'opaque-clear')
+    fetchContextMock.mockResolvedValue({
+      contractVersion: 'p3-context-summary-v1',
+      continuationStatus: 'AVAILABLE',
+      summary: {
+        subjectLabels: ['SQL 审计'],
+        facetLabels: [],
+        comparisonDimensionLabels: [],
+        preferenceLabels: [],
+        canRefine: false,
+      },
+    })
+    const wrapper = mountWorkspace()
+    await flushPromises()
+    expect(wrapper.find('[data-recovery-card]').exists()).toBe(true)
+
+    await wrapper.get('[data-clear-conversation]').trigger('click')
+    await flushPromises()
+
+    expect(clearContextMock).toHaveBeenCalledWith('opaque-clear')
+    expect(wrapper.find('[data-recovery-card]').exists()).toBe(false)
+    expect(sessionStorage.getItem(RESUME_KEY)).toBeNull()
+  })
+
+  it('does not claim the conversation was cleared when DELETE fails', async () => {
+    sessionStorage.setItem(RESUME_KEY, 'opaque-clear-fail')
+    fetchContextMock.mockResolvedValue({
+      contractVersion: 'p3-context-summary-v1',
+      continuationStatus: 'AVAILABLE',
+      summary: {
+        subjectLabels: ['SQL 审计'],
+        facetLabels: [],
+        comparisonDimensionLabels: [],
+        preferenceLabels: [],
+        canRefine: false,
+      },
+    })
+    clearContextMock.mockReset()
+    clearContextMock.mockRejectedValue(new Error('network'))
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-clear-conversation]').trigger('click')
+    await flushPromises()
+
+    // 未宣称已清除：Token 仍在，提示「清除尚未确认」。
+    expect(sessionStorage.getItem(RESUME_KEY)).toBe('opaque-clear-fail')
+    expect(wrapper.find('[data-continuation-notice]').text()).toContain('清除尚未在服务端确认')
+  })
+
+  it('retries REQUEST_IN_PROGRESS with the same requestToken instead of creating a second one', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce(answerResponse())
+    // 先正常一问以绑定 Token。
+    const wrapper = mountWorkspace()
+    await wrapper.get('textarea').setValue('介绍项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 第二问：服务端返回 409 仍在执行中。
+    const inProgress = new PortfolioApiError('in progress', {
+      kind: 'HTTP',
+      status: 409,
+      code: 'REQUEST_IN_PROGRESS',
+      retryAfterSeconds: 0,
+      action: 'RETRY_AFTER',
+      clientRequestId: crypto.randomUUID(),
+    })
+    askQuestionMock.mockReset()
+    askQuestionMock.mockRejectedValueOnce(inProgress)
+    await wrapper.get('textarea').setValue('继续追问')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.answer-state--error').exists()).toBe(true)
+    const conflictedRequestToken = askQuestionMock.mock.calls[0]?.[0].requestToken
+
+    // 重试沿用同一 requestToken（不换 token 并发重发）。
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock.mock.calls[1]?.[0].requestToken).toBe(conflictedRequestToken)
+  })
+
+  it('always shows the privacy notice near the composer', () => {
+    const wrapper = mountWorkspace()
+    const notice = wrapper.find('[data-privacy-notice]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('不保存问题原文')
   })
 })

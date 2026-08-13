@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ConversationTopic } from '../model/answerTypes'
 import type { PendingPlanConfirmation } from '../model/sessionTypes'
-import { askQuestion } from './answerApi'
+import { askQuestion, clearConversationContext, fetchConversationContext } from './answerApi'
 
 function input(question: string) {
   return {
@@ -367,5 +367,116 @@ describe('answer api', () => {
     })
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
     expect(body.requestToken).toBe('63f63c75-16e8-49e7-864d-dcd0fe100d50')
+  })
+
+  // ── P3：ResumeToken 只通过 X-Conversation-Resume-Token Header 携带（handoff §3.1, §10.2）──
+
+  it('does not send a resume token header on the first question of a new conversation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion(input('首问'))
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    expect(headers.has('X-Conversation-Resume-Token')).toBe(false)
+  })
+
+  it('sends the resume token only via header and never in body, url, or cookie', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({ ...input('续问'), resumeToken: 'opaque-resume-token-abc' })
+
+    const [url, requestInit] = fetchMock.mock.calls[0] ?? []
+    const headers = new Headers(requestInit?.headers)
+    expect(headers.get('X-Conversation-Resume-Token')).toBe('opaque-resume-token-abc')
+    // Token 不得进入请求体或 URL。
+    const body = String(requestInit?.body ?? '')
+    expect(body).not.toContain('opaque-resume-token-abc')
+    expect(String(url)).not.toContain('opaque-resume-token-abc')
+  })
+
+  it('serializes contextReference as a top-level field with handle and expected type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('从该推荐继续'),
+      resumeToken: 'opaque-resume-token-abc',
+      contextReference: {
+        contextHandle: 'opaque-context-handle',
+        expectedContextType: 'RECOMMENDATION',
+      },
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.contextReference).toEqual({
+      contextHandle: 'opaque-context-handle',
+      expectedContextType: 'RECOMMENDATION',
+    })
+    // contextReference 必须是顶层字段，不落入 context 对象。
+    expect(body.context.contextReference).toBeUndefined()
+  })
+
+  it('does not emit contextReference when omitted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({ ...input('普通追问'), resumeToken: 'opaque-resume-token-abc' })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.contextReference).toBeUndefined()
+  })
+
+  // ── P3：GET /api/v2/conversation-context 刷新恢复（handoff §11）──
+
+  it('fetches the conversation context summary with the resume token header', async () => {
+    const summary = {
+      contractVersion: 'p3-context-summary-v1',
+      continuationStatus: 'AVAILABLE',
+      summary: {
+        recentTaskType: 'RECOMMENDATION',
+        subjectLabels: ['SQL 审计'],
+        facetLabels: ['VERIFICATION'],
+        comparisonDimensionLabels: [],
+        preferenceLabels: ['优先有验证'],
+        canRefine: true,
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(summary), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchConversationContext('opaque-resume-token-abc')).resolves.toEqual(summary)
+
+    const [url, requestInit] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/v2/conversation-context')
+    expect(requestInit?.method).toBe('GET')
+    expect(new Headers(requestInit?.headers).get('X-Conversation-Resume-Token'))
+      .toBe('opaque-resume-token-abc')
+  })
+
+  // ── P3：DELETE /api/v2/conversation-context 幂等清除（handoff §12）──
+
+  it('clears the conversation context via DELETE and resolves on 204', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(clearConversationContext('opaque-resume-token-abc')).resolves.toBeUndefined()
+
+    const [url, requestInit] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/v2/conversation-context')
+    expect(requestInit?.method).toBe('DELETE')
+    expect(new Headers(requestInit?.headers).get('X-Conversation-Resume-Token'))
+      .toBe('opaque-resume-token-abc')
   })
 })

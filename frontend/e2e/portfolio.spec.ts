@@ -414,7 +414,7 @@ test('home preserves the four-layer experience and hands a role question to Agen
   await expect(page.locator('[data-light-answer]')).toBeVisible()
   if (usesRealApi) {
     await expect(page.locator('[data-light-answer]')).toContainText('ANSWERED')
-    await expect(page.locator('[data-light-answer]')).toContainText('[E-01]')
+    await expect(page.locator('[data-light-answer]')).toContainText('原有排查依赖固定服务器与固定目录')
   } else {
     await expect(page.locator('[data-light-answer]')).toContainText('预设问题')
     await expect(page.locator('[data-light-answer]')).toContainText('EVIDENCE_COMPOSITION')
@@ -822,6 +822,7 @@ test('explicit follow-up uses the strict v2 payload and is lost on reload', asyn
 })
 
 test('Agent renders unsupported and rejected dimensions without a verified label', async ({ page }) => {
+  test.skip(usesRealApi, 'deterministic unsupported/rejected copy is covered by browser mocks; P3 rejection has a dedicated real-API gate')
   await openAgentDeepLink(page)
 
   await page.getByLabel('你的问题').fill('这个项目提升了多少性能？')
@@ -874,9 +875,15 @@ test('legacy project-shaped Case URL redirects to its canonical Case route', asy
   )
 })
 
+// 以下用例保留 P2 mock 的兼容展示回归，不参与真实 P3 API 断言。
+// P3 原子结果、公开来源、ContextHandle 与安全拒答由 agent-p3-real-api.spec.ts 验证。
+
+// TODO(P3-E)：旧比较回答文本与 data-section-citation 均属 P2 契约；P3-E 后改用
+// sourceReferences 与确定性比较矩阵。
 test('Agent keeps a comparison answer on the legacy path without boundary mislabeling', async ({
   page,
 }) => {
+  test.skip(usesRealApi, 'legacy comparison presentation is a deterministic mock compatibility test')
   await openAgentDeepLink(page)
   await page.getByLabel('你的问题').fill('比较一下 SQL 审计项目和图片上传项目')
   await page.getByRole('button', { name: /发送/ }).click()
@@ -889,7 +896,10 @@ test('Agent keeps a comparison answer on the legacy path without boundary mislab
   await expect(answer.locator('[data-answer-summary]')).toBeVisible()
 })
 
+// TODO(P3-E)：推荐卡仍走 P2 数据形态；P3 推荐项改为 sourceReferences + matchReasons
+// 绑定公开来源，断言需重写。
 test('Agent keeps a recommendation answer on the legacy recommendation path', async ({ page }) => {
+  test.skip(usesRealApi, 'legacy recommendation presentation is a deterministic mock compatibility test')
   await openAgentDeepLink(page)
   await page.getByLabel('你的问题').fill('推荐两个适合后端面试展示的作品')
   await page.getByRole('button', { name: /发送/ }).click()
@@ -905,9 +915,12 @@ test('Agent keeps a recommendation answer on the legacy recommendation path', as
   await expect(answer.locator('[data-section-type="SOLUTION"]')).toHaveCount(0)
 })
 
+// TODO(P3-E)：固定 typed sections + data-section-citation 是 P2 契约；P3 后由
+// sourceReferences 与 FINAL 执行快照驱动，章节类型/引用选择器需按最终契约重写。
 test('Agent renders a composed overview with one portfolio scope and typed sections', async ({
   page,
 }) => {
+  test.skip(usesRealApi, 'legacy typed-section presentation is a deterministic mock compatibility test')
   await openAgentDeepLink(page)
   await page.getByLabel('你的问题').fill('请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？')
   await page.getByRole('button', { name: /发送/ }).click()
@@ -925,7 +938,10 @@ test('Agent renders a composed overview with one portfolio scope and typed secti
   await expect(page.locator('#agent-evidence-desk')).toBeVisible()
 })
 
+// TODO(P3-E)：固定章节结构（VERIFICATION 显示 / SOLUTION 隐藏）属于 P2 排版契约，
+// P3 切片类型由后端 PLAN/结果策略决定，断言需按最终 P3 契约重新核对。
 test('Agent renders a focused verification answer without summary', async ({ page }) => {
+  test.skip(usesRealApi, 'legacy typed-section presentation is a deterministic mock compatibility test')
   await openAgentDeepLink(page)
   await page.getByLabel('你的问题').fill('这个项目的验证过程是怎样的？')
   await page.getByRole('button', { name: /发送/ }).click()
@@ -936,9 +952,12 @@ test('Agent renders a focused verification answer without summary', async ({ pag
   await expect(answer.locator('[data-answer-summary]')).toHaveCount(0)
 })
 
+// TODO(P3-E)：BOUNDARY 章节与"无引用"断言仍是 P2 形态；P3 用 PARTIALLY_ANSWERED /
+// PRESENTATION_BLOCKED + SafeReasonCode 表达同一语义，断言需对应调整。
 test('Agent renders a partial-gap answer with a boundary that has no fabricated evidence', async ({
   page,
 }) => {
+  test.skip(usesRealApi, 'legacy boundary-section presentation is a deterministic mock compatibility test')
   await openAgentDeepLink(page)
   await page.getByLabel('你的问题').fill('请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？')
   await page.getByRole('button', { name: /发送/ }).click()

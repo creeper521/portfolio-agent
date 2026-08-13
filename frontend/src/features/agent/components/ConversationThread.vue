@@ -5,11 +5,13 @@ import type { AudienceRole, PublicProject } from '../../public-content/model/pub
 import type { AgentSession } from '../model/sessionTypes'
 import type {
   AnswerSectionType,
+  ConversationContextSummary,
   ConversationSuggestedQuestion,
   FollowUpAction,
   PortfolioFollowUpAction,
   PortfolioRecommendation,
   PortfolioRecommendationContextRequest,
+  RecentTaskType,
   SemanticSourceDomain,
 } from '../model/answerTypes'
 import type {
@@ -30,12 +32,16 @@ import { resolveActiveSemanticAction } from '../model/activeSemanticAction'
 import type {
   ClarificationSubmission,
   ClarificationView,
+  CompletedTaskView,
   OpaquePlanConfirmation,
   PlanAdjustmentBarState,
 } from '../model/semanticTurnView'
+import { hasExecutionAnswerConflict } from '../model/semanticTurnView'
 import CompactTaskSummary from './CompactTaskSummary.vue'
+import ExecutionSnapshot from './ExecutionSnapshot.vue'
 import PlanConfirmation from './PlanConfirmation.vue'
 import PlanInvalidatedNotice from './PlanInvalidatedNotice.vue'
+import SourceReferenceList from './SourceReferenceList.vue'
 import TurnClarification from './TurnClarification.vue'
 
 interface AnswerFailureView {
@@ -60,6 +66,19 @@ const props = defineProps<{
   focusTarget?: AnswerFocusTarget | null
   adjustment?: PlanAdjustmentBarState | null
   dismissedPlanChanges?: ReadonlySet<string>
+  // P3：刷新恢复的安全 Context Summary（handoff §11/§17.15）。
+  recoverySummary?: ConversationContextSummary | null
+  // P3：非阻断续接提示（PERSISTENCE_UNAVAILABLE 等，独立维度，handoff §5/§13.1）。
+  continuationNotice?: string | null
+  // P3：幂等完成回执（handoff §4）。
+  completionReceipt?: {
+    turnId: string
+    completedTasks: Array<{ displayIndex: string; status: string; contextHandle?: string }>
+  } | null
+  // P3：sessionStorage 不可用 → 无法刷新恢复（非阻断，handoff §10.1）。
+  resumeUnavailable?: boolean
+  // P3：清除流程中间态（DELETE 未确认，handoff §12）。
+  clearPending?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -86,6 +105,14 @@ const emit = defineEmits<{
   }]
   regeneratePlan: [turnId: string]
   dismissPlanChange: [turnId: string]
+  // P3：主动清除本次对话（handoff §12）。
+  clearConversation: []
+  // P3：从某条结果继续追问（ContextHandle，handoff §3.2/§6）。
+  continueFromContext: [action: {
+    question: string
+    contextHandle: string
+    expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
+  }]
 }>()
 
 const question = ref(props.seedQuestion ?? '')
@@ -95,6 +122,30 @@ const showJumpToLatest = ref(false)
 const followLatest = ref(true)
 const highlightedTarget = ref('')
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+// P3：恢复卡只展示服务端确定性安全字段（handoff §11/§17.15）。不得显示问题/答案/handle/version。
+const RECENT_TASK_TYPE_LABELS: Record<RecentTaskType, string> = {
+  FACT: '事实查询',
+  COMPARE: '比较分析',
+  RECOMMENDATION: '作品推荐',
+  REFINE: '推荐调整',
+}
+function recentTaskTypeLabel(value?: RecentTaskType): string | null {
+  return value ? (RECENT_TASK_TYPE_LABELS[value] ?? null) : null
+}
+
+// P3：从某条已完成结果继续追问（ContextHandle，handoff §3.2/§6）。
+// Fact/Compare/Synthesis → RECENT_SEMANTIC_TASK；Recommendation/Refine → RECOMMENDATION。
+function continueFromCompletedTask(message: { id: string }, task: CompletedTaskView): void {
+  if (!task.contextHandle) return
+  const expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION' =
+    task.resultPayload.kind === 'RECOMMENDATION_RESULT' ? 'RECOMMENDATION' : 'RECENT_SEMANTIC_TASK'
+  emit('continueFromContext', {
+    question: `继续追问：${task.goalLabel}`,
+    contextHandle: task.contextHandle,
+    expectedContextType,
+  })
+}
 const state = computed(() => {
   if (props.pending) return 'generating'
   return props.session.messages.length ? 'conversation' : 'empty'
@@ -401,18 +452,45 @@ function recommendationContextFor(
   }
 }
 
+function semanticRecommendationTask(
+  message: AgentSession['messages'][number],
+): CompletedTaskView | undefined {
+  return message.answer?.semanticTurn?.completedTasks.find(
+    (task) => task.resultPayload.kind === 'RECOMMENDATION_RESULT',
+  )
+}
+
+function recommendationItems(message: AgentSession['messages'][number]) {
+  const legacy = message.answer?.portfolioRecommendation?.items
+  if (legacy) return legacy
+  const task = semanticRecommendationTask(message)
+  return task?.resultPayload.kind === 'RECOMMENDATION_RESULT'
+    ? task.resultPayload.recommendations
+    : []
+}
+
 function refineRecommendation(
   message: AgentSession['messages'][number],
   index: number,
   intent: RecommendationRefine,
 ) {
   const recommendation = message.answer?.portfolioRecommendation
-  if (!recommendation || props.pending) return
+  if (props.pending) return
   const ordinal = ordinalLabel(index)
   const question = intent === 'REPLACE' ? `换掉第${ordinal}个` : `为什么推荐第${ordinal}个？`
-  emit('refineRecommendation', {
+  if (recommendation) {
+    emit('refineRecommendation', {
+      question,
+      recommendationContext: recommendationContextFor(recommendation),
+    })
+    return
+  }
+  const task = semanticRecommendationTask(message)
+  if (!task?.contextHandle) return
+  emit('continueFromContext', {
     question,
-    recommendationContext: recommendationContextFor(recommendation),
+    contextHandle: task.contextHandle,
+    expectedContextType: 'RECOMMENDATION',
   })
 }
 
@@ -421,10 +499,20 @@ function refineWhole(
   question: string,
 ) {
   const recommendation = message.answer?.portfolioRecommendation
-  if (!recommendation || props.pending) return
-  emit('refineRecommendation', {
+  if (props.pending) return
+  if (recommendation) {
+    emit('refineRecommendation', {
+      question,
+      recommendationContext: recommendationContextFor(recommendation),
+    })
+    return
+  }
+  const task = semanticRecommendationTask(message)
+  if (!task?.contextHandle) return
+  emit('continueFromContext', {
     question,
-    recommendationContext: recommendationContextFor(recommendation),
+    contextHandle: task.contextHandle,
+    expectedContextType: 'RECOMMENDATION',
   })
 }
 </script>
@@ -476,6 +564,65 @@ function refineWhole(
     <div class="conversation__body">
       <div ref="scrollArea" class="conversation__scroll" @scroll.passive="onThreadScroll">
       <div class="thread" :data-conversation-state="state">
+        <!-- P3：刷新恢复卡（handoff §11/§17.15）。只显示安全字段 + 清除入口。 -->
+        <section
+          v-if="recoverySummary"
+          class="thread-p3-card thread-recovery"
+          data-recovery-card
+          role="status"
+          aria-live="polite"
+        >
+          <p class="thread-p3-card__title">已恢复本次对话的业务上下文</p>
+          <ul class="thread-recovery__fields">
+            <li v-if="recentTaskTypeLabel(recoverySummary.recentTaskType)">
+              最近任务 · {{ recentTaskTypeLabel(recoverySummary.recentTaskType) }}
+            </li>
+            <li v-if="recoverySummary.subjectLabels.length">
+              主体 · {{ recoverySummary.subjectLabels.join('、') }}
+            </li>
+            <li v-if="recoverySummary.facetLabels.length">
+              维度 · {{ recoverySummary.facetLabels.join('、') }}
+            </li>
+            <li v-if="recoverySummary.comparisonDimensionLabels.length">
+              比较项 · {{ recoverySummary.comparisonDimensionLabels.join('、') }}
+            </li>
+            <li v-if="recoverySummary.preferenceLabels.length">
+              偏好 · {{ recoverySummary.preferenceLabels.join('、') }}
+            </li>
+          </ul>
+          <div class="thread-p3-card__actions">
+            <button
+              data-clear-conversation
+              type="button"
+              :disabled="clearPending"
+              @click="$emit('clearConversation')"
+            >{{ clearPending ? '清除中…' : '清除本次对话' }}</button>
+          </div>
+        </section>
+
+        <!-- P3：幂等完成回执（handoff §4）。不伪造答案；提示可基于 Context 继续。 -->
+        <section
+          v-if="completionReceipt"
+          class="thread-p3-card thread-completion"
+          data-completion-receipt
+          role="status"
+          aria-live="polite"
+        >
+          <p class="thread-p3-card__title">这个请求此前已经完成</p>
+          <p class="thread-p3-card__body">
+            原回答正文不被服务端保存，因此无法重放。你可以基于已保存的业务上下文继续追问，或重新提问。
+          </p>
+        </section>
+
+        <!-- P3：非阻断续接提示（handoff §5/§13.1）。不改本次回答的证据状态。 -->
+        <p
+          v-if="continuationNotice"
+          class="thread-continuation-notice"
+          data-continuation-notice
+          role="status"
+          aria-live="polite"
+        >{{ continuationNotice }}</p>
+
         <section v-if="state === 'empty'" class="thread-empty">
           <p>YOU · FROM DOSSIER</p>
           <p class="thread-empty__lead">从一个可核验的问题开始——这里只回答有公开证据支撑的内容。</p>
@@ -556,6 +703,22 @@ function refineWhole(
               v-if="message.answer.semanticTurn?.taskSummary && message.answer.semanticTurn.taskSummary.totalCount > 1 && message.answer.semanticTurn.taskSummary.displayMode !== 'HIDDEN'"
               :summary="message.answer.semanticTurn.taskSummary"
             />
+            <!-- P3：最终执行快照（FINAL，handoff §7）。只在服务端返回时渲染，无拟真实时进度。 -->
+            <ExecutionSnapshot
+              v-if="message.answer.semanticTurn?.execution"
+              :execution="message.answer.semanticTurn.execution"
+            />
+            <!--
+              P3 防御性展示（handoff §7/§9）：顶层宣称 ANSWERED + VERIFIED，但 FINAL 快照
+              全任务全阶段 FAILED 时是后端矛盾状态。前端不伪造阶段成功，也不把答案静默
+              包装为完整成功，仅以非阻断方式提示本轮执行能力降级。
+            -->
+            <p
+              v-if="hasExecutionAnswerConflict(message.answer)"
+              data-execution-conflict-notice
+              class="thread-execution-conflict"
+              role="status"
+            >回答已返回，但本轮执行能力降级；执行快照按服务端最终状态展示，未掩饰失败阶段。</p>
             <p
               v-if="(message.answer.semanticTurn?.disposition === 'BOUNDARY' || message.answer.semanticTurn?.disposition === 'REJECTED') && !message.answer.semanticTurn.planChange && message.answer.summary"
               data-semantic-boundary-message
@@ -584,7 +747,16 @@ function refineWhole(
                 data-source-label
               >{{ sourceLabelForSection(message, section) }}</span>
               <p>{{ section.content }}</p>
-              <div v-if="section.evidenceIds.length" class="answer-block__citations">
+              <!-- P3：公开来源引用（handoff §8）。存在时优先于旧 evidenceIds 渲染。 -->
+              <SourceReferenceList
+                v-if="section.sourceReferences && section.sourceReferences.length"
+                :references="section.sourceReferences"
+              />
+              <!-- TRANSITIONAL(p3-e): 无 sourceReferences 时回落旧 evidenceId 引用按钮。 -->
+              <div
+                v-if="(!section.sourceReferences || !section.sourceReferences.length) && section.evidenceIds.length"
+                class="answer-block__citations"
+              >
                 <button
                   v-for="eid in section.evidenceIds"
                   :key="eid"
@@ -631,15 +803,30 @@ function refineWhole(
                 @click="followUp(message, '对比这些项目', 'COMPARE_SUBJECTS')"
               >对比项目</button>
             </div>
+            <!-- P3：从产生可续接 Context 的已完成结果继续追问（handoff §3.2/§6）。 -->
+            <div
+              v-if="message.answer.semanticTurn?.completedTasks.some((task) => task.contextHandle)"
+              class="follow-up-actions follow-up-actions--context"
+              data-context-continue
+            >
+              <button
+                v-for="task in message.answer.semanticTurn?.completedTasks.filter((t) => t.contextHandle) ?? []"
+                :key="`continue-${task.displayIndex}`"
+                :data-continue-task="task.displayIndex"
+                type="button"
+                :disabled="pending"
+                @click="continueFromCompletedTask(message, task)"
+              >从「{{ task.goalLabel }}」继续追问</button>
+            </div>
             <!-- 结构化作品推荐卡组（可选；items 顺序是后端权威顺序，前端不重排）-->
             <section
-              v-if="message.answer.portfolioRecommendation"
+              v-if="message.answer.portfolioRecommendation || recommendationItems(message).length"
               class="portfolio-recommendation"
               data-portfolio-recommendation
-              :aria-label="`作品推荐 · ${message.answer.portfolioRecommendation.items.length} 项`"
+              :aria-label="`作品推荐 · ${recommendationItems(message).length} 项`"
             >
                 <p
-                  v-if="message.answer.portfolioRecommendation.satisfiedConstraints.length"
+                  v-if="message.answer.portfolioRecommendation?.satisfiedConstraints.length"
                   class="reco-satisfied"
                 >
                   <span class="reco-satisfied__code">已满足</span>
@@ -648,7 +835,7 @@ function refineWhole(
                   }}</span>
                 </p>
                 <p
-                  v-if="message.answer.portfolioRecommendation.unsatisfiedConstraints.length"
+                  v-if="message.answer.portfolioRecommendation?.unsatisfiedConstraints.length"
                   class="reco-unsatisfied"
                   data-recommendation-unsatisfied
                   role="status"
@@ -659,11 +846,11 @@ function refineWhole(
                   }}</span>
                 </p>
                 <div
-                  v-if="message.answer.portfolioRecommendation.items.length"
+                  v-if="recommendationItems(message).length"
                   class="reco-grid"
                 >
                   <div
-                    v-for="(item, itemIndex) in message.answer.portfolioRecommendation.items"
+                    v-for="(item, itemIndex) in recommendationItems(message)"
                     :key="item.portfolioId"
                     class="reco-card"
                     :data-recommendation-item="item.portfolioId"
@@ -676,6 +863,10 @@ function refineWhole(
                     <p v-if="item.matchReasons.length" class="reco-card__reason">
                       {{ item.matchReasons.join('；') }}
                     </p>
+                    <SourceReferenceList
+                      v-if="item.sourceReferences && item.sourceReferences.length"
+                      :references="item.sourceReferences"
+                    />
                     <div v-if="item.evidenceIds.length" class="reco-card__evidence">
                       <button
                         v-for="eid in item.evidenceIds"
@@ -853,6 +1044,19 @@ function refineWhole(
       ></textarea>
       <button data-agent-submit type="submit" :disabled="pending">发送 ↵</button>
     </form>
+    <!-- P3：访客告知（handoff §15）。持续可见，非阻断，无同意弹窗。 -->
+    <p class="conversation__privacy-notice" data-privacy-notice>
+      系统会短期保存本次对话的任务范围与偏好（默认空闲 24 小时、最长 7 天），用于刷新恢复与连续追问；
+      不保存问题原文、助手答案或证据正文。关闭页签后不会跨页签或跨设备自动恢复。
+      <button
+        v-if="recoverySummary || resumeUnavailable"
+        data-clear-conversation-footer
+        type="button"
+        class="conversation__privacy-clear"
+        :disabled="clearPending"
+        @click="$emit('clearConversation')"
+      >{{ clearPending ? '清除中…' : '清除本次对话' }}</button>
+    </p>
   </section>
 </template>
 
@@ -862,10 +1066,86 @@ function refineWhole(
   position: relative;
   display: grid;
   min-width: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   color: var(--workspace-text, var(--ink));
   background: var(--workspace-thread-bg, var(--paper-hi));
   overflow: hidden;
+}
+
+/* P3：刷新恢复卡 / 完成回执 / 续接提示（handoff §4/§5/§11）。 */
+.thread-p3-card {
+  margin: 0 0 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--workspace-rule, currentColor);
+  border-radius: 8px;
+  background: var(--workspace-surface-subtle, rgba(0, 0, 0, 0.03));
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.thread-p3-card__title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+.thread-p3-card__body {
+  margin: 0;
+  color: var(--workspace-text-secondary, inherit);
+}
+.thread-recovery__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.875rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  color: var(--workspace-text-secondary, inherit);
+}
+.thread-p3-card__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.thread-p3-card__actions button,
+.conversation__privacy-clear {
+  border: 1px solid var(--workspace-rule, currentColor);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workspace-text, inherit);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.thread-p3-card__actions button:not(:disabled):hover,
+.conversation__privacy-clear:not(:disabled):hover {
+  background: var(--workspace-action-bg, rgba(0, 0, 0, 0.06));
+}
+.thread-p3-card__actions button:disabled,
+.conversation__privacy-clear:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.thread-continuation-notice {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--workspace-surface-subtle, rgba(0, 0, 0, 0.03));
+  font-size: 0.8125rem;
+  color: var(--workspace-text-secondary, inherit);
+}
+/* P3 防御性提示：执行快照与顶层回答矛盾时（handoff §7/§9）。 */
+.thread-execution-conflict {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid var(--workspace-warning, #8a6a14);
+  background: var(--workspace-surface-subtle, rgba(0, 0, 0, 0.03));
+  font-size: 0.8125rem;
+  color: var(--workspace-text-secondary, inherit);
+}
+.conversation__privacy-notice[data-privacy-notice] {
+  margin: 0;
+  padding: 0.5rem 1rem 0.625rem;
+  border-top: 1px solid var(--workspace-rule, currentColor);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--workspace-text-faint, var(--muted, inherit));
 }
 
 .conversation__body {

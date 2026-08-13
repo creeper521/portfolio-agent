@@ -5,10 +5,12 @@ import type {
   PublicEvidence,
   PublicProject,
 } from '../../public-content/model/publicContentTypes'
+import type { PublicSourceReference } from '../model/answerTypes'
 import type {
   EvidenceCitation,
   EvidenceDeskTab,
 } from '../model/evidenceDeskModel'
+import SourceReferenceList from './SourceReferenceList.vue'
 
 const props = defineProps<{
   evidence: PublicEvidence[]
@@ -17,6 +19,8 @@ const props = defineProps<{
   focusEvidenceIds: string[]
   citations: EvidenceCitation[]
   tab: EvidenceDeskTab
+  // P3：当前聚焦回答的公开来源引用（handoff §8）。SOURCES 优先渲染它。
+  sources?: PublicSourceReference[]
 }>()
 
 const emit = defineEmits<{
@@ -123,19 +127,27 @@ const orderedEvidence = computed(() => {
     </div>
 
     <div v-else class="source-list">
-      <article
-        v-for="item in orderedEvidence"
-        :key="item.id"
-        class="source-card"
-      >
-        <span>{{ item.type }} · {{ item.code }}</span>
-        <h3>{{ item.title }}</h3>
-        <p>
-          {{ item.sourceCount }} 个公开来源 ·
-          {{ item.periodStart }}—{{ item.periodEnd }}
-        </p>
-        <small>{{ item.publicStatus }}</small>
-      </article>
+      <!-- P3：优先渲染聚焦回答的公开来源引用（handoff §8）。 -->
+      <SourceReferenceList
+        v-if="sources && sources.length"
+        :references="sources"
+      />
+      <!-- TRANSITIONAL(p3-e): 无 P3 来源引用时回落公开证据集合摘要。 -->
+      <template v-if="!sources || !sources.length">
+        <article
+          v-for="item in orderedEvidence"
+          :key="item.id"
+          class="source-card"
+        >
+          <span>{{ item.type }} · {{ item.code }}</span>
+          <h3>{{ item.title }}</h3>
+          <p>
+            {{ item.sourceCount }} 个公开来源 ·
+            {{ item.periodStart }}—{{ item.periodEnd }}
+          </p>
+          <small>{{ item.publicStatus }}</small>
+        </article>
+      </template>
     </div>
   </aside>
 </template>

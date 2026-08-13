@@ -1128,3 +1128,189 @@ describe('ConversationThread', () => {
     expect(wrapper.find('[data-jump-latest]').exists()).toBe(true)
   })
 })
+
+// ── P3：sourceReferences / 执行快照 / ContextHandle 继续入口（handoff §3.2/§6/§7/§8）──
+describe('ConversationThread P3 surfaces', () => {
+  function p3Answer() {
+    return {
+      title: 'P3 answer',
+      summary: 'grounded answer',
+      resolution: 'ANSWERED' as const,
+      turnId: 'turn-p3',
+      contentVersion: 'public-2026-07-31',
+      coveredTopics: [],
+      guidanceStage: null,
+      evidenceIds: [],
+      suggestedQuestionPresetIds: [],
+      suggestedQuestions: [],
+      sections: [{
+        key: 'SOLUTION:0',
+        type: 'SOLUTION' as const,
+        title: '技术方案',
+        sourceScope: 'PORTFOLIO' as const,
+        content: '受控正文',
+        evidenceIds: [],
+        claimIds: [],
+        sourceReferences: [{
+          referenceKey: 'SRC_SQL_AUDIT_DELIVERED',
+          label: 'SQL 审计 · 交付证据',
+          sourceType: 'DOCUMENT' as const,
+          subjectRoute: '/projects/sql-audit',
+          evidenceRoute: '/evidence?evidence=evi-sql-audit',
+          publishedVersion: 'public-2026-07-31',
+        }],
+      }],
+      semanticTurn: {
+        contractVersion: 'stp-v1' as const,
+        disposition: 'READY' as const,
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '介绍项目',
+          sourceDomain: 'PORTFOLIO' as const,
+          contextHandle: 'handle-opaque',
+          resultPayload: { kind: 'SECTION_RESULT' as const, blocks: [] },
+        }],
+        execution: {
+          overallStatus: 'COMPLETED' as const,
+          tasks: [{
+            displayIndex: '01',
+            finalStatus: 'COMPLETED' as const,
+            stages: [
+              { code: 'SCOPE_CONFIRMED' as const, label: '确认查询范围', status: 'COMPLETED' as const },
+              { code: 'RESULT_COMPOSED' as const, label: '形成回答', status: 'COMPLETED' as const },
+            ],
+          }],
+        },
+      },
+    }
+  }
+
+  function mountP3() {
+    const message = semanticMessage('agent-p3', p3Answer() as never)
+    return mount(ConversationThread, {
+      props: {
+        session: session([message]),
+        role: 'INTERVIEWER',
+        project: previewPublicContent.projects[0],
+        pending: false,
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+  }
+
+  it('renders public source references, the FINAL execution snapshot, and a continue-from-result entry', () => {
+    const wrapper = mountP3()
+
+    expect(wrapper.find('[data-source-reference="SRC_SQL_AUDIT_DELIVERED"]').exists()).toBe(true)
+    expect(wrapper.find('[data-execution-snapshot]').exists()).toBe(true)
+    expect(wrapper.find('[data-continue-task="01"]').exists()).toBe(true)
+    // 有 sourceReferences 时不渲染旧 evidenceId 引用按钮（过渡双读：P3 优先）。
+    expect(wrapper.find('[data-section-citation]').exists()).toBe(false)
+  })
+
+  it('emits continueFromContext with the task handle and RECENT_SEMANTIC_TASK for a section result', async () => {
+    const wrapper = mountP3()
+
+    await wrapper.get('[data-continue-task="01"]').trigger('click')
+
+    expect(wrapper.emitted('continueFromContext')).toBeTruthy()
+    const event = wrapper.emitted('continueFromContext')?.[0]?.[0] as {
+      contextHandle: string
+      expectedContextType: string
+      question: string
+    }
+    expect(event.contextHandle).toBe('handle-opaque')
+    expect(event.expectedContextType).toBe('RECENT_SEMANTIC_TASK')
+  })
+
+  it('renders P3 recommendation results and refines them through their context handle', async () => {
+    const answer = p3Answer()
+    answer.semanticTurn.completedTasks = [{
+      displayIndex: '01',
+      goalLabel: '推荐后端项目',
+      sourceDomain: 'PORTFOLIO',
+      contextHandle: 'recommendation-handle',
+      resultPayload: {
+        kind: 'RECOMMENDATION_RESULT',
+        recommendations: [{
+          portfolioId: 'sql-audit',
+          title: 'SQL 审计与故障排查工具',
+          route: '/projects/sql-audit',
+          matchReasons: ['体现后端交付闭环'],
+          evidenceIds: [],
+          sourceReferences: [{
+            referenceKey: 'E-SQL-AUDIT',
+            label: 'SQL 审计交付证据',
+            sourceType: 'DOCUMENT',
+            subjectRoute: '/projects/sql-audit',
+            evidenceRoute: '/evidence?evidence=evi-sql-audit',
+            publishedVersion: 'public-2026-07-31',
+          }],
+        }],
+      },
+    }] as never
+    const wrapper = mountThread([semanticMessage('agent-p3-recommendation', answer as never)])
+
+    expect(wrapper.get('[data-portfolio-recommendation]').text())
+      .toContain('SQL 审计与故障排查工具')
+    expect(wrapper.find('[data-source-reference="E-SQL-AUDIT"]').exists()).toBe(true)
+
+    await wrapper.get('[data-recommendation-refine="replace"]').trigger('click')
+    expect(wrapper.emitted('continueFromContext')?.[0]?.[0]).toEqual({
+      question: '换掉第一个',
+      contextHandle: 'recommendation-handle',
+      expectedContextType: 'RECOMMENDATION',
+    })
+  })
+
+  // P3 防御性展示（handoff §7/§9）：当顶层宣称 ANSWERED + VERIFIED 但 FINAL 执行快照
+  // 全任务全阶段 FAILED 时，前端不能静默包装成完整成功，也不能伪造阶段成功。
+  it('shows a degraded notice when ANSWERED + VERIFIED meets an all-FAILED FINAL snapshot', () => {
+    const conflicted = {
+      ...p3Answer(),
+      evidenceState: 'VERIFIED' as const,
+      semanticTurn: {
+        ...p3Answer().semanticTurn,
+        execution: {
+          overallStatus: 'FAILED' as const,
+          tasks: [{
+            displayIndex: '01',
+            finalStatus: 'FAILED' as const,
+            stages: [
+              { code: 'SCOPE_CONFIRMED' as const, label: '确认查询范围', status: 'FAILED' as const },
+              { code: 'MATERIALS_RETRIEVED' as const, label: '读取作品集材料', status: 'FAILED' as const },
+              { code: 'EVIDENCE_VALIDATED' as const, label: '校验证据', status: 'FAILED' as const },
+              { code: 'RESULT_COMPOSED' as const, label: '形成回答', status: 'FAILED' as const },
+            ],
+          }],
+        },
+      },
+    }
+    const wrapper = mount(ConversationThread, {
+      props: {
+        session: session([semanticMessage('agent-p3-conflict', conflicted as never)]),
+        role: 'INTERVIEWER',
+        project: previewPublicContent.projects[0],
+        pending: false,
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+
+    // 必须出现非阻断降级提示。
+    const notice = wrapper.find('[data-execution-conflict-notice]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('执行能力降级')
+    // 快照仍按服务端 FINAL 状态原样呈现，不得改写为成功。
+    const stages = wrapper.findAll('[data-stage-status]')
+    expect(stages.length).toBeGreaterThan(0)
+    for (const stage of stages) {
+      expect(stage.attributes('data-stage-status')).toBe('FAILED')
+    }
+    expect(wrapper.find('[data-execution-overall]').attributes('data-execution-overall')).toBe('FAILED')
+  })
+
+  it('does not show the conflict notice when execution succeeded', () => {
+    const wrapper = mountP3()
+    expect(wrapper.find('[data-execution-conflict-notice]').exists()).toBe(false)
+  })
+})

@@ -72,6 +72,7 @@ describe('AudienceDialogue', () => {
     expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
       projectSlug: 'sql-audit',
       questionPresetId: 'sql-audit-overview',
+      contractVersion: previewPublicContent.questionPresets[0].contractVersion,
       question: previewPublicContent.questionPresets[0].text,
       source: 'HOME',
     }))

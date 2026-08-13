@@ -25,6 +25,11 @@ export interface AgentSession {
   messages: AgentMessage[]
   coveredTopics: ConversationTopic[]
   pendingConfirmation?: PendingPlanConfirmation
+  // P3：该会话绑定的服务端 conversation ResumeToken（仅内存，handoff §10.1）。
+  // 一会话一 Token；不透明值，前端不生成/解析/修改。sessionStorage 只保存活跃会话的 Token。
+  resumeToken?: string
+  // P3：刷新恢复得到的安全业务上下文摘要（仅活跃会话恢复卡使用）。
+  activeContextSummary?: import('./answerTypes').ConversationContextSummary
 }
 
 export interface SessionSeed {

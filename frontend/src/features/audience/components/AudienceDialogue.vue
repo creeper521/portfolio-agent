@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { askQuestion } from '../../agent/api/answerApi'
 import { mapAnswerResponse } from '../../agent/model/mapAnswerResponse'
+import { resolveAnswerSuccess } from '../../agent/model/answerTypes'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { audienceProfiles } from '../data/audienceProfiles'
 import type { AudienceProfile, HomeAnswerState } from '../model/audienceTypes'
@@ -42,14 +43,24 @@ async function ask(question: string, questionPresetId?: string) {
   answerError.value = ''
   failedQuestion.value = normalized
   try {
-    const mapped = mapAnswerResponse(await askQuestion({
+    const preset = questionPresetId === undefined
+      ? undefined
+      : props.portfolio.questionPresets.find((item) => item.id === questionPresetId)
+    // P3：响应按 responseKind 分流（handoff §4）。首页一次性问答无 ResumeToken，
+    // 不会出现合法 COMPLETION_RECEIPT；若非 ANSWER 一律视为契约错误并走通用错误 UI。
+    const resolved = resolveAnswerSuccess(await askQuestion({
       turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
       projectSlug: project.slug,
       audienceRole: selectedRole.value.id,
       source: 'HOME',
       questionPresetId,
+      contractVersion: preset?.contractVersion,
       question: normalized,
     }))
+    if (resolved.kind !== 'ANSWER') {
+      throw new Error('P3_UNEXPECTED_RESPONSE_KIND')
+    }
+    const mapped = mapAnswerResponse(resolved.response)
     round.value = Math.min(round.value + 1, 3)
     answer.value = {
       round: round.value,

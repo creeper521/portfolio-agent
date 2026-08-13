@@ -311,6 +311,46 @@ describe('portfolio api', () => {
     })
   })
 
+  // P3：DELETE /api/v2/conversation-context 幂等返回 204 No Content。
+  // 不带 expectNoContent 时，空体会被误判为 INVALID_RESPONSE；该选项让 204 直接成功。
+  it('resolves without parsing JSON when expectNoContent receives a 204', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(request('/api/v2/conversation-context', { method: 'DELETE' }, {
+      operation: RequestOperation.ANSWER,
+      expectNoContent: true,
+    })).resolves.toBeUndefined()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v2/conversation-context',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('still surfaces HTTP errors even when expectNoContent is set', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: 'INTERNAL_ERROR' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ))
+
+    const failure = await request('/api/v2/conversation-context', { method: 'DELETE' }, {
+      operation: RequestOperation.ANSWER,
+      expectNoContent: true,
+    }).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({
+      kind: 'HTTP',
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      action: 'RETRY',
+    })
+  })
+
   describe('single request failure publishes exactly one closed diagnostic', () => {
     it.each([
       {

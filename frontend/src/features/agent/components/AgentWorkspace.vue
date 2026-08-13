@@ -13,6 +13,10 @@ import {
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { askQuestion } from '../api/answerApi'
 import {
+  clearConversationContext,
+  fetchConversationContext,
+} from '../api/answerApi'
+import {
   askWithPresetContractRetry,
   isPresetContractStale,
   isPresetContractUnavailable,
@@ -21,6 +25,7 @@ import { createRequestToken } from '../api/createRequestToken'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
 import { useLocalSessions } from '../composables/useLocalSessions'
+import { useConversationResume } from '../composables/useConversationResume'
 import {
   WORKSPACE_LIMITS,
   fitWorkspaceSplit,
@@ -32,6 +37,7 @@ import type {
   PortfolioReferenceContext,
   ConversationSuggestedQuestion,
   ConversationTopic,
+  ContextReferenceRequest,
   FollowUpAction,
   PortfolioRecommendationContextRequest,
   SemanticContextRequest,
@@ -40,6 +46,7 @@ import type {
   PlanAdjustmentRequest,
   ClarificationResolutionRequest,
 } from '../model/answerTypes'
+import { resolveAnswerSuccess } from '../model/answerTypes'
 import type {
   ClarificationSubmission,
   ClarificationView,
@@ -74,9 +81,12 @@ interface AnswerRequestContext {
   questionPresetId?: string
   contractVersion?: string
   coveredTopics?: readonly ConversationTopic[]
+  // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 改用 contextReference。
   referenceContext?: PortfolioReferenceContext
-  requestToken?: string
   recommendationContext?: PortfolioRecommendationContextRequest
+  requestToken?: string
+  // P3：从某条结果继续时发送的强类型 Context 引用（handoff §3.2）。
+  contextReference?: ContextReferenceRequest
 }
 
 interface AnswerFailureView {
@@ -110,6 +120,8 @@ const emit = defineEmits<{
 }>()
 
 const sessions = useLocalSessions()
+// P3：会话级 ResumeToken 的唯一 sessionStorage 槽位（handoff §10）。
+const resume = useConversationResume()
 const split = useWorkspaceSplit()
 const workspaceRoot = ref<HTMLElement | null>(null)
 const workspaceWidth = ref(Number.POSITIVE_INFINITY)
@@ -124,6 +136,15 @@ const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
 const pending = ref(false)
 const answerFailure = ref<AnswerFailureView | null>(null)
 const failedRequest = ref<AnswerRequestContext | null>(null)
+// P3：Context 写入失败等非阻断续接提示（独立维度，不降级 Evidence，handoff §5/§13.1）。
+const continuationNotice = ref<string | null>(null)
+// P3：幂等完成回执（handoff §4）。不伪造答案；提示用户可基于已保存 Context 继续。
+const completionReceipt = ref<{
+  turnId: string
+  completedTasks: Array<{ displayIndex: string; status: string; contextHandle?: string }>
+} | null>(null)
+// P3：清除流程中间态（DELETE 未确认时不宣称已清除，handoff §12）。
+const clearPending = ref(false)
 const resolvedContractVersions = new Map<string, string>()
 const semanticContinuations = new Map<string, SemanticContinuation>()
 // 调整模式（决策 1 · 方案 B）：页面级单例状态，记录正在调整的会话与计划引用。
@@ -211,6 +232,12 @@ const evidenceContext = computed(() =>
   ),
 )
 
+// P3：刷新恢复得到的安全 Context Summary（仅活跃会话恢复卡，handoff §11/§17.15）。
+// 只读活跃会话内存中的服务端确定性投影；不展示问题/答案/handle/version。
+const recoveredSummary = computed(
+  () => sessions.activeSession.value?.activeContextSummary ?? null,
+)
+
 function clearFocusedAnswer() {
   focusedAnswerMessageId.value = ''
   answerFocusTarget.value = null
@@ -257,6 +284,9 @@ function createSession(initialEvidenceId = '') {
     evidenceId: evidenceId || null,
   })
   activeEvidenceId.value = coreEvidenceId(session)
+  // P3：新建会话无 Token，清空唯一槽位与 P3 UI 态（不继承上一会话 Token，handoff §10.1）。
+  syncResumeSlot(session.id)
+  clearActiveConversationUi()
 }
 
 function clearAnswerFailure() {
@@ -377,6 +407,59 @@ function clearSemanticContinuation(sessionId: string) {
   semanticContinuations.delete(sessionId)
 }
 
+// ── P3：ResumeToken / 会话续接 / 恢复 / 清除（handoff §5, §10–§13）──────────────
+
+/** 把指定会话的内存 Token 同步到唯一 sessionStorage 槽位（仅活跃会话）。 */
+function syncResumeSlot(sessionId: string): void {
+  if (sessionId !== sessions.activeSessionId.value) return
+  const token = sessions.getSessionResumeToken(sessionId)
+  if (token) resume.setActiveToken(token)
+  else resume.clearActiveToken()
+}
+
+/**
+ * 处理会话续接状态与 ResumeToken（handoff §5）。
+ * degraded 与 continuationStatus 是不同维度：Context 写失败不让前端把证据充分的答案标成证据不足。
+ */
+function applyConversation(
+  sessionId: string,
+  conversation: ReturnType<typeof mapAnswerResponse>['conversation'],
+): void {
+  if (conversation === undefined) return
+  switch (conversation.continuationStatus) {
+    case 'AVAILABLE':
+      // 首次签发或明确重签时才返回 Token（handoff §17.14）；P3 v1 不逐请求轮换。
+      if (conversation.resumeToken) {
+        const isActive = sessions.setSessionResumeToken(sessionId, conversation.resumeToken)
+        if (isActive) resume.setActiveToken(conversation.resumeToken)
+      }
+      continuationNotice.value = null
+      break
+    case 'PERSISTENCE_UNAVAILABLE':
+      // 非阻断提示：当前答案仍可能完全有效，只是不保证刷新恢复/连续调整（handoff §13.1）。
+      continuationNotice.value = '当前会话的连续追问或刷新恢复暂不可用，但不影响这次回答。'
+      break
+    case 'CONTEXT_EXPIRED':
+      // 依赖 Context 的任务不可用或恢复失败：删除本地 Token 与 handle，按新会话开始。
+      sessions.clearSessionResumeToken(sessionId)
+      syncResumeSlot(sessionId)
+      break
+    case 'CONTEXT_CLEARED':
+      sessions.clearSessionResumeToken(sessionId)
+      syncResumeSlot(sessionId)
+      break
+    case 'NOT_APPLICABLE':
+    default:
+      break
+  }
+}
+
+/** 清除当前页签与活跃会话相关的 P3 UI 状态（回执、续接提示）。 */
+function clearActiveConversationUi(): void {
+  completionReceipt.value = null
+  continuationNotice.value = null
+}
+
 async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
   const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
   if (!session || pending.value || disposed) {
@@ -400,6 +483,8 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       }
   const controller = new AbortController()
   clearFocusedAnswer()
+  // P3：新一轮请求开始时清除上一轮的回执/续接提示（恢复卡由活跃会话摘要驱动，不受影响）。
+  clearActiveConversationUi()
   if (appendUser) {
     if (!context.question) return
     sessions.appendMessage(session.id, {
@@ -440,7 +525,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
         requestToken: preparedContext.requestToken,
         action: preparedContext.action,
-        agentTurnContract: preparedContext.action === undefined ? undefined : 'stp-v1',
+        agentTurnContract: 'stp-v1',
         planConfirmation: preparedContext.planConfirmation,
         semanticContext: preparedContext.semanticContext,
         invalidatedPlanReference: preparedContext.invalidatedPlanReference,
@@ -457,29 +542,58 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         question: preparedContext.question,
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
+        // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 改用 contextReference。
         referenceContext: preparedContext.referenceContext,
         recommendationContext: preparedContext.recommendationContext,
+        // P3：已有会话才发送 ResumeToken；首问不发送（handoff §3.1）。
+        resumeToken: session.resumeToken,
+        // P3：从结果继续时发送顶层 contextReference（handoff §3.2）。
+        contextReference: preparedContext.contextReference,
       }, askQuestion)
     if (disposed || request !== requestVersion) return
-    if (response.questionPresetId && response.contractVersion) {
-      resolvedContractVersions.set(response.questionPresetId, response.contractVersion)
+    // P3：200 响应先按 responseKind 分流（handoff §4）。requestVersion 是单调 attempt 序号，
+    // 更早 attempt 的迟到响应（含旧 Token）在此被丢弃，无法覆盖新回执（handoff §4/§14）。
+    const resolved = resolveAnswerSuccess(response)
+    if (resolved.kind === 'COMPLETION_RECEIPT') {
+      // 幂等完成回执：不伪造答案气泡、不自动换 token 重发。
+      // 可能重签 Token（首轮丢响应恢复）——以回执中的 Token 为准（handoff §4, §17.17）。
+      applyConversation(session.id, resolved.response.conversation)
+      completionReceipt.value = {
+        turnId: resolved.response.turnId,
+        completedTasks: resolved.response.completedTasks.map((task) => ({
+          displayIndex: task.displayIndex,
+          status: task.status,
+          ...(task.contextHandle === undefined ? {} : { contextHandle: task.contextHandle }),
+        })),
+      }
+      return
     }
-    if (isPresetContractStale(response)) {
+    if (resolved.kind === 'CONTRACT_ERROR') {
+      // 未知 responseKind → 契约错误恢复（不向用户显示原始值，handoff §9）。
+      throw new Error('P3_CONTRACT_ERROR')
+    }
+    const answerResponse = resolved.response
+    if (answerResponse.questionPresetId && answerResponse.contractVersion) {
+      resolvedContractVersions.set(answerResponse.questionPresetId, answerResponse.contractVersion)
+    }
+    if (isPresetContractStale(answerResponse)) {
       answerFailure.value = {
         message: '这个推荐问题正在更新，请刷新后重试。',
         action: 'NONE',
       }
       return
     }
-    if (isPresetContractUnavailable(response)) {
+    if (isPresetContractUnavailable(answerResponse)) {
       answerFailure.value = {
         message: '这个推荐问题暂时无法回答，内容正在更新。',
         action: 'NONE',
       }
       return
     }
-    sessions.acceptSemanticTurnResponse(session.id, response)
-    const mapped = mapAnswerResponse(response)
+    sessions.acceptSemanticTurnResponse(session.id, answerResponse)
+    const mapped = mapAnswerResponse(answerResponse)
+    // P3：会话续接状态与 ResumeToken（handoff §5）。独立于 degraded，不改 Evidence 状态。
+    applyConversation(session.id, mapped.conversation)
     settleSemanticContinuation(session.id, mapped)
     if (activeAdjustment.value?.sessionId === session.id) activeAdjustment.value = null
     if (!mapped.referenceContext
@@ -541,13 +655,34 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     }))
   } catch (error) {
     if (disposed || request !== requestVersion) return
-    if (controller.signal.aborted
-      || (error instanceof PortfolioApiError && error.action === 'NONE')) {
+    if (controller.signal.aborted) {
+      clearAnswerFailure()
+      return
+    }
+    // P3：恢复 Token 在 askQuestion 中被判非法（会话已失效）：清除本地 Token 并提示重新提问，
+    // 不静默吞掉（handoff §11/§17.11）。重试会以新会话（无 Token）发送。
+    if (error instanceof PortfolioApiError && error.code === 'INVALID_CONVERSATION_RESUME_TOKEN') {
+      sessions.clearSessionResumeToken(session.id)
+      syncResumeSlot(session.id)
+      failedRequest.value = { ...preparedContext, contextReference: undefined }
+      answerFailure.value = {
+        message: '当前会话已失效，请重新提问以开始新的对话。',
+        action: 'RETRY',
+      }
+      return
+    }
+    if (error instanceof PortfolioApiError && error.action === 'NONE') {
       clearAnswerFailure()
       return
     }
     failedRequest.value = preparedContext
     const failure = toAnswerFailure(error)
+    // P3：为幂等错误码提供准确文案（动作映射已保证行为，这里只精修文案）。
+    if (error instanceof PortfolioApiError && error.code === 'REQUEST_IN_PROGRESS') {
+      failure.message = '上一个相同请求仍在处理中，请稍候再试（不会重复执行）。'
+    } else if (error instanceof PortfolioApiError && error.code === 'IDEMPOTENCY_KEY_CONFLICT') {
+      failure.message = '请求状态冲突，请刷新页面后再试。'
+    }
     answerFailure.value = failure
     if (failure.retryAfterSeconds) {
       startRetryDelay(failure.retryAfterSeconds)
@@ -954,6 +1089,74 @@ function toggleEvidence() {
   if (evidenceDrawerOpen.value && evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
 }
 
+// ── P3：从某条结果继续追问（ContextHandle，handoff §3.2/§6）──
+// 只在用户明确从某条结果继续时发送 contextReference；普通追问不发送。
+// Fact/Compare → RECENT_SEMANTIC_TASK；Recommend/Refine → RECOMMENDATION。
+function continueFromContext(action: {
+  question: string
+  contextHandle: string
+  expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
+}) {
+  const session = sessions.activeSession.value
+  const project = activeProject.value
+  if (!session || !project || !action.contextHandle) return
+  void requestAnswer(
+    {
+      sessionId: session.id,
+      projectSlug: project.slug,
+      question: action.question,
+      contextReference: {
+        contextHandle: action.contextHandle,
+        expectedContextType: action.expectedContextType,
+      },
+    },
+    true,
+  )
+}
+
+// ── P3：主动清除本次对话（handoff §12）──
+// 顺序：对活跃会话 Token 调 DELETE → 收到 204 后清除内存 Token/槽位/恢复卡/UI。
+// 网络失败时不得本地宣称「已清除」；保留仅内存的待重试态（clearPending）。
+async function clearConversation() {
+  const session = sessions.activeSession.value
+  if (!session || clearPending.value) return
+  const token = sessions.getSessionResumeToken(session.id)
+  if (!token) {
+    // 本就无 Token：仅清除本地 P3 UI 态。
+    sessions.clearSessionResumeToken(session.id)
+    resume.clearActiveToken()
+    clearActiveConversationUi()
+    return
+  }
+  clearPending.value = true
+  try {
+    await clearConversationContext(token)
+    if (disposed) return
+    // 204 成功：清除内存 Token、活跃槽位与恢复卡 UI。
+    sessions.clearSessionResumeToken(session.id)
+    resume.clearActiveToken()
+    clearActiveConversationUi()
+    continuationNotice.value = '本次对话的服务端上下文已清除。'
+  } catch {
+    // 不宣称已清除；给出「清除尚未确认」状态（handoff §12）。
+    if (disposed) return
+    continuationNotice.value = '清除尚未在服务端确认，请稍后重试。'
+  } finally {
+    clearPending.value = false
+  }
+}
+
+/** 删除单个本地会话前清除其服务端 Context（幂等 DELETE，handoff §12）。 */
+async function clearSessionContext(sessionId: string): Promise<void> {
+  const token = sessions.getSessionResumeToken(sessionId)
+  if (!token) return
+  try {
+    await clearConversationContext(token)
+  } catch {
+    // 静默：删除会话是本地动作；清除失败不阻断 UI 移除，但也不宣称已清除。
+  }
+}
+
 function focusDrawer(selector: string) {
   requestAnimationFrame(() => {
     const root = document.querySelector<HTMLElement>(selector)
@@ -985,18 +1188,32 @@ function trapDrawerFocus(event: KeyboardEvent) {
   }
 }
 
-function clearAllSessions() {
+// P3：清空全部会话时逐个幂等清除尚存 Token 的服务端 Context（handoff §12）。
+async function clearAllSessions() {
   invalidatePendingRequest()
   clearAnswerFailure()
   resetEvidenceFocus()
   semanticContinuations.clear()
   activeAdjustment.value = null
+  clearPending.value = true
+  // 收集所有不同 Token，并发清除但逐项确认结果。
+  const tokens = new Set<string>()
+  for (const session of sessions.sessions.value) {
+    if (session.resumeToken) tokens.add(session.resumeToken)
+  }
+  await Promise.all(
+    [...tokens].map((token) => clearConversationContext(token).catch(() => undefined)),
+  )
+  if (disposed) return
   sessions.clearSessions()
   sessions.pruneDismissedPlanChanges()
+  clearPending.value = false
+  resume.clearActiveToken()
   createSession()
 }
 
-function removeSession(sessionId: string) {
+// P3：删除单个本地会话前先幂等清除其服务端 Context（handoff §12）。
+async function removeSession(sessionId: string) {
   const previousSessionId = sessions.activeSessionId.value
   if (activeRequest?.sessionId === sessionId) {
     invalidatePendingRequest()
@@ -1008,12 +1225,16 @@ function removeSession(sessionId: string) {
     activeAdjustment.value = null
   }
   clearSemanticContinuation(sessionId)
+  await clearSessionContext(sessionId)
+  if (disposed) return
   sessions.removeSession(sessionId)
   sessions.pruneDismissedPlanChanges()
   if (sessions.activeSessionId.value !== previousSessionId) {
     resetEvidenceFocus()
+    clearActiveConversationUi()
     if (sessions.activeSession.value) {
       syncActiveEvidence()
+      syncResumeSlot(sessions.activeSessionId.value)
     } else {
       createSession()
     }
@@ -1026,7 +1247,10 @@ function selectSession(sessionId: string) {
   if (sessions.activeSessionId.value !== previousSessionId) {
     activeAdjustment.value = null
     resetEvidenceFocus()
+    clearActiveConversationUi()
     syncActiveEvidence()
+    // P3：切换活跃会话时把槽位替换为目标会话 Token（handoff §10.1）。
+    syncResumeSlot(sessions.activeSessionId.value)
   }
 }
 
@@ -1052,11 +1276,40 @@ function onWindowKeydown(event: KeyboardEvent) {
   }
 }
 
+// P3：在初始化会话清空槽位之前捕获刷新前活跃会话的 ResumeToken（handoff §10/§11）。
+// createSession 会让活跃会话变为无 Token，从而清空槽位；恢复时用捕获值重新绑定。
+const initialResumeToken = resume.getActiveToken()
+
 if (props.initialSeed) {
   sessions.seedSession(props.initialSeed)
   syncActiveEvidence()
 } else if (!sessions.activeSession.value) {
   createSession(props.initialEvidence)
+}
+
+// P3：刷新恢复（handoff §11/§17.10）。只恢复安全 Context Summary，不恢复问题/答案/气泡。
+async function recoverConversation() {
+  if (!initialResumeToken) return
+  const sessionId = sessions.activeSessionId.value
+  if (!sessionId) return
+  try {
+    const summary = await fetchConversationContext(initialResumeToken)
+    if (disposed || sessionId !== sessions.activeSessionId.value) return
+    if (summary.continuationStatus === 'AVAILABLE' && summary.summary) {
+      // 绑定 Token 与安全摘要到当前活跃会话；恢复唯一槽位。
+      sessions.setSessionResumeToken(sessionId, initialResumeToken)
+      sessions.setSessionContextSummary(sessionId, summary.summary)
+      resume.setActiveToken(initialResumeToken)
+    } else {
+      // CONTEXT_EXPIRED / 无 summary：清除本地 Token，按新会话开始。
+      sessions.clearSessionResumeToken(sessionId)
+      resume.clearActiveToken()
+    }
+  } catch {
+    // 网络失败 / 400 非法 Token：不阻断页内问答；过期的非法 Token 已被槽位清空。
+    if (disposed) return
+    continuationNotice.value = '无法确认上次对话是否可恢复，已开始新会话。'
+  }
 }
 
 onMounted(() => {
@@ -1067,6 +1320,7 @@ onMounted(() => {
     workspaceResizeObserver = new ResizeObserver(updateWorkspaceWidth)
     workspaceResizeObserver.observe(workspaceRoot.value)
   }
+  void recoverConversation()
 })
 onBeforeUnmount(() => {
   disposed = true
@@ -1134,10 +1388,16 @@ onBeforeUnmount(() => {
       :focus-target="answerFocusTarget"
       :adjustment="adjustmentBarState"
       :dismissed-plan-changes="sessions.dismissedPlanChangeTurnIds.value"
+      :recovery-summary="recoveredSummary"
+      :continuation-notice="continuationNotice"
+      :completion-receipt="completionReceipt"
+      :resume-unavailable="resume.resumeUnavailable.value"
+      :clear-pending="clearPending"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"
       @refine-recommendation="refineRecommendation"
+      @continue-from-context="continueFromContext"
       @retry="retryAnswer"
       @navigate-back="navigateBackFromFailure"
       @cancel="cancelAnswer"
@@ -1145,6 +1405,7 @@ onBeforeUnmount(() => {
       @toggle-sessions="toggleSessions"
       @toggle-evidence="toggleEvidence"
       @clear-case-context="clearCaseContext"
+      @clear-conversation="clearConversation"
       @confirm-plan="confirmSemanticPlan"
       @adjust-plan="adjustSemanticPlan"
       @adjust-submit="submitPlanAdjustment"
@@ -1174,6 +1435,7 @@ onBeforeUnmount(() => {
       :active-evidence-id="activeEvidenceId"
       :focus-evidence-ids="evidenceContext.focusEvidenceIds"
       :citations="evidenceContext.citations"
+      :sources="evidenceContext.sources"
       :tab="evidenceTab"
       :inert="evidenceIsDrawer && !evidenceDrawerOpen ? true : undefined"
       :aria-hidden="evidenceIsDrawer ? String(!evidenceDrawerOpen) : undefined"

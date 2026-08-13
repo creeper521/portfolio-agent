@@ -21,6 +21,9 @@ export type ApiErrorCode =
   | 'CLIENT_NETWORK_ERROR'
   | 'CLIENT_INVALID_RESPONSE'
   | 'REQUEST_CANCELLED'
+  | 'REQUEST_IN_PROGRESS'
+  | 'IDEMPOTENCY_KEY_CONFLICT'
+  | 'INVALID_CONVERSATION_RESUME_TOKEN'
   | 'UNKNOWN'
 
 const API_ERROR_CODES = new Set<ApiErrorCode>([
@@ -39,6 +42,9 @@ const API_ERROR_CODES = new Set<ApiErrorCode>([
   'CLIENT_NETWORK_ERROR',
   'CLIENT_INVALID_RESPONSE',
   'REQUEST_CANCELLED',
+  'REQUEST_IN_PROGRESS',
+  'IDEMPOTENCY_KEY_CONFLICT',
+  'INVALID_CONVERSATION_RESUME_TOKEN',
   'UNKNOWN',
 ])
 
@@ -60,6 +66,15 @@ export function actionForApiError(code: string | undefined): ErrorAction {
     case 'PROJECT_NOT_FOUND':
       return 'NAVIGATE_BACK'
     case 'REQUEST_CANCELLED':
+      return 'NONE'
+    // P3：同一 requestToken 仍在执行——保持可重试态，由 Workspace 保证不换 token 重发。
+    case 'REQUEST_IN_PROGRESS':
+      return 'RETRY_AFTER'
+    // P3：同 key 不同指纹——停止自动重试，进入受控错误状态。
+    case 'IDEMPOTENCY_KEY_CONFLICT':
+      return 'CORRECT_INPUT'
+    // P3：恢复 Token 格式非法——静默处理（清除本地并新建会话），不向用户报错。
+    case 'INVALID_CONVERSATION_RESUME_TOKEN':
       return 'NONE'
     default:
       return 'RETRY'

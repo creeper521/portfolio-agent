@@ -3,10 +3,21 @@ import type {
   AnswerSectionView,
   MappedAnswer,
   AnswerBlock,
+  CompletionReceiptResponse,
+  ConversationContextSummary,
+  ConversationContinuationStatus,
   LegacyAnswerSection,
+  MappedAnswerSuccess,
+  MappedCompletionReceipt,
+  MappedConversation,
+  P3AnswerSuccess,
+  PublicSourceReference,
+  RecentTaskType,
 } from './answerTypes'
+import { resolveAnswerSuccess } from './answerTypes'
 import {
   mapSemanticTurnResponse,
+  mapSourceReferencesField,
   type CompletedTaskBlockView,
   type SemanticTurnView,
 } from './semanticTurnView'
@@ -94,12 +105,121 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     contextVersionUpdated: response.contextVersionUpdated === true,
     portfolioRecommendation,
     semanticTurn,
+    // P3：会话续接状态与 ResumeToken（handoff §5）。
+    ...mapConversationField(response.conversation),
   }
 }
 
 // 唯一协议兼容边界：v2 Blocks 优先，legacy Sections 兜底。
 function isSafeSemanticCompatibilityProjection(semanticTurn: SemanticTurnView): boolean {
   return semanticTurn.disposition === 'READY' || semanticTurn.disposition === 'PARTIAL_READY'
+}
+
+// ── P3：成功联合响应映射（handoff §4）────────────────────────────────────────
+// 200 响应先按 responseKind 分流：ANSWER 正常映射；COMPLETION_RECEIPT 不伪造正文；
+// 未知 responseKind 进入契约错误。ResumeToken 绝不进入诊断。
+export function mapAnswerSuccess(response: P3AnswerSuccess): MappedAnswerSuccess {
+  const resolved = resolveAnswerSuccess(response)
+  if (resolved.kind === 'ANSWER') {
+    return { kind: 'ANSWER', answer: mapAnswerResponse(resolved.response) }
+  }
+  if (resolved.kind === 'COMPLETION_RECEIPT') {
+    return { kind: 'COMPLETION_RECEIPT', receipt: mapCompletionReceipt(resolved.response) }
+  }
+  return { kind: 'CONTRACT_ERROR', responseKind: resolved.responseKind }
+}
+
+function mapCompletionReceipt(response: CompletionReceiptResponse): MappedCompletionReceipt {
+  const validTasks = (Array.isArray(response.completedTasks) ? response.completedTasks : [])
+    .filter((task) => PUBLIC_TASK_STATUSES.has(String(task?.status)))
+    .map((task) => ({
+      displayIndex: typeof task.displayIndex === 'string' ? task.displayIndex : '',
+      status: task.status,
+      ...(typeof task.contextHandle === 'string' && task.contextHandle
+        ? { contextHandle: task.contextHandle } : {}),
+    }))
+  return {
+    turnId: response.turnId,
+    requestToken: response.requestToken,
+    completedTasks: validTasks,
+    conversation: mapConversationField(response.conversation).conversation
+      ?? { continuationStatus: 'NOT_APPLICABLE' as const },
+  }
+}
+
+const CONVERSATION_CONTINUATION_STATUSES: ReadonlySet<ConversationContinuationStatus> = new Set([
+  'AVAILABLE', 'PERSISTENCE_UNAVAILABLE', 'CONTEXT_EXPIRED', 'CONTEXT_CLEARED', 'NOT_APPLICABLE',
+])
+
+const RECENT_TASK_TYPES: ReadonlySet<RecentTaskType> = new Set([
+  'FACT', 'COMPARE', 'RECOMMENDATION', 'REFINE',
+])
+
+const PUBLIC_TASK_STATUSES = new Set<string>([
+  'COMPLETED', 'PARTIAL', 'NOT_SUPPORTED', 'PRESENTATION_BLOCKED', 'REJECTED',
+  'FAILED', 'DEPENDENCY_UNAVAILABLE', 'NOT_EXECUTED_BUDGET', 'CANCELLED',
+])
+
+function isConversationContinuationStatus(value: string): value is ConversationContinuationStatus {
+  return CONVERSATION_CONTINUATION_STATUSES.has(value as ConversationContinuationStatus)
+}
+
+function isRecentTaskType(value: string): value is RecentTaskType {
+  return RECENT_TASK_TYPES.has(value as RecentTaskType)
+}
+
+/** 校验会话续接信息（handoff §5）；非法 continuationStatus 一律丢弃，不更新本地 Token。 */
+export function mapConversationField(value: unknown): { conversation?: MappedConversation } {
+  if (typeof value !== 'object' || value === null) return {}
+  const raw = value as Record<string, unknown>
+  if (typeof raw.continuationStatus !== 'string'
+    || !isConversationContinuationStatus(raw.continuationStatus)) {
+    return {}
+  }
+  const conversation: MappedConversation = { continuationStatus: raw.continuationStatus }
+  if (typeof raw.resumeToken === 'string' && raw.resumeToken.trim()) {
+    conversation.resumeToken = raw.resumeToken.trim()
+  }
+  const summary = mapContextSummary(raw.activeContextSummary)
+  if (summary) conversation.activeContextSummary = summary
+  return { conversation }
+}
+
+/** 校验安全 Context Summary（handoff §11）；用于恢复卡和 activeContextSummary。 */
+export function mapContextSummary(value: unknown): ConversationContextSummary | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  if (raw.canRefine !== true && raw.canRefine !== false) return undefined
+  const summary: ConversationContextSummary = {
+    subjectLabels: stringLabelArray(raw.subjectLabels),
+    facetLabels: stringLabelArray(raw.facetLabels),
+    comparisonDimensionLabels: stringLabelArray(raw.comparisonDimensionLabels),
+    preferenceLabels: stringLabelArray(raw.preferenceLabels),
+    canRefine: raw.canRefine,
+  }
+  if (typeof raw.recentTaskType === 'string' && isRecentTaskType(raw.recentTaskType)) {
+    summary.recentTaskType = raw.recentTaskType
+  }
+  return summary
+}
+
+function stringLabelArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map((entry) => entry.trim())
+}
+
+function copySourceReference(reference: PublicSourceReference): PublicSourceReference {
+  const copy: PublicSourceReference = {
+    referenceKey: reference.referenceKey,
+    label: reference.label,
+    sourceType: reference.sourceType,
+    subjectRoute: reference.subjectRoute,
+    publishedVersion: reference.publishedVersion,
+  }
+  if (reference.evidenceRoute !== undefined) copy.evidenceRoute = reference.evidenceRoute
+  return copy
 }
 
 function mapSemanticSections(semanticTurn: SemanticTurnView): AnswerSectionView[] {
@@ -121,8 +241,10 @@ function mapSemanticBlock(
     title: block.title ?? '',
     sourceScope: block.sourceScope,
     content: block.content,
-    claimIds: stableDistinct(block.claimIds),
-    evidenceIds: stableDistinct(block.evidenceIds),
+    claimIds: stableDistinct(block.claimIds ?? []),
+    evidenceIds: stableDistinct(block.evidenceIds ?? []),
+    // 已在语义映射层校验过，这里仅复制（保持不可变）。
+    ...(block.sourceReferences === undefined ? {} : { sourceReferences: block.sourceReferences.map(copySourceReference) }),
   }
 }
 
@@ -155,8 +277,10 @@ function mapBlock(block: AnswerBlock, index: number, response: AnswerResponse): 
     title: title ?? '',
     sourceScope: block.sourceScope,
     content: block.content,
-    claimIds: stableDistinct(block.claimIds),
-    evidenceIds: stableDistinct(block.evidenceIds),
+    claimIds: stableDistinct(block.claimIds ?? []),
+    evidenceIds: stableDistinct(block.evidenceIds ?? []),
+    // P3：校验原始 sourceReferences（handoff §8）；非法引用被丢弃。
+    ...mapSourceReferencesField(block.sourceReferences),
   }
 }
 

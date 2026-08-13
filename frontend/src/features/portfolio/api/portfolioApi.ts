@@ -39,6 +39,9 @@ export interface RequestOptions {
   operation: RequestOperation
   signal?: AbortSignal
   timeoutMs?: number
+  // P3：用于幂等 DELETE 等「成功无正文」的响应（204 No Content）。
+  // 为真时，2xx 响应不解析 JSON，直接 resolve，避免空体被误判为 INVALID_RESPONSE。
+  expectNoContent?: boolean
 }
 
 export class PortfolioApiError extends Error {
@@ -189,6 +192,8 @@ async function requestInternal<T>(
     }
 
     try {
+      // P3：幂等 DELETE 等成功响应可能无正文（204），跳过 JSON 解析。
+      if (options.expectNoContent === true) return undefined as T
       return (await response.json()) as T
     } catch {
       if (cancelledByCaller) {

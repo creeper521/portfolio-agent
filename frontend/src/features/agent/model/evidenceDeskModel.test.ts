@@ -48,6 +48,8 @@ describe('buildEvidenceDeskContext', () => {
         excerpt: '通过公开交付物核验。',
         evidenceId: 'evidence-a',
       }],
+      // P3：无公开来源引用时 sources 为空数组（handoff §8）。
+      sources: [],
     })
   })
 
@@ -56,7 +58,27 @@ describe('buildEvidenceDeskContext', () => {
       answerMessageId: '',
       focusEvidenceIds: [],
       citations: [],
+      sources: [],
     })
+  })
+
+  it('aggregates P3 public source references from sections in order with dedup', () => {
+    const withSources: AgentMessage = {
+      ...messages[0]!,
+      answer: {
+        ...messages[0]!.answer!,
+        sections: [{
+          ...messages[0]!.answer!.sections[0]!,
+          sourceReferences: [
+            { referenceKey: 'SRC_A', label: 'A', sourceType: 'DOCUMENT', subjectRoute: '/projects/sql-audit', publishedVersion: 'v1' },
+            { referenceKey: 'SRC_B', label: 'B', sourceType: 'CODE', subjectRoute: '/projects/sql-audit', publishedVersion: 'v1' },
+            { referenceKey: 'SRC_A', label: 'A dup', sourceType: 'DOCUMENT', subjectRoute: '/projects/sql-audit', publishedVersion: 'v1' },
+          ],
+        }],
+      },
+    }
+    const context = buildEvidenceDeskContext([withSources])
+    expect(context.sources.map((s) => s.referenceKey)).toEqual(['SRC_A', 'SRC_B'])
   })
 
   it('prefers an explicitly inspected answer and otherwise selects the latest answer', () => {

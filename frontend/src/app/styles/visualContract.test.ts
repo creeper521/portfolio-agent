@@ -195,9 +195,12 @@ describe('prototype visual contract', () => {
   })
 
   it('keeps the composer in the grid flow and the thread focus-visible', () => {
+    // P3：会话区为 header / body / composer / 持续可见的访客告知（handoff §15）四行栅格，
+    // composer 仍在文档流中（非绝对定位），保留可聚焦轮廓。
     expect(conversation).toMatch(
-      /\.conversation\s*\{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto;/s,
+      /\.conversation\s*\{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto auto;/s,
     )
+    expect(conversation).toContain('[data-privacy-notice]')
     expect(conversation).not.toContain('padding-bottom: 104px')
     expect(conversation).toMatch(/\.composer\s*\{[^}]*margin: 0 28px 24px;/s)
     expect(conversation).not.toMatch(/\.composer\s*\{[^}]*position: absolute;/s)

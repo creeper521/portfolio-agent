@@ -42,6 +42,74 @@ const BOUNDARY_MESSAGE =
   '当前版本只稳定支持项目完整介绍问题。你可以使用下方推荐问题了解项目背景、我的职责、技术方案、验证过程和最终状态。'
 const GAP_BOUNDARY_MESSAGE = '当前公开材料未覆盖最终状态。'
 
+// P3 mock helpers（handoff §4–§13）。这些字段与旧 P2 字段并存，便于过渡双读。
+const MOCK_RESUME_TOKEN = 'opaque-mock-resume-token-e2e'
+
+function sampleSourceReferences(evidenceId: string, projectSlug: string) {
+  return [{
+    referenceKey: 'SRC_SQL_AUDIT_DELIVERED',
+    label: 'SQL 审计 · 交付证据',
+    sourceType: 'DOCUMENT',
+    subjectRoute: `/projects/${projectSlug}`,
+    evidenceRoute: `/evidence?evidence=${evidenceId}`,
+    publishedVersion: previewPublicContent.contentVersion,
+  }]
+}
+
+/**
+ * 给 mock 答案叠加 P3 公共契约字段（responseKind / conversation / sourceReferences /
+ * completedTasks.contextHandle / execution）。旧 P2 字段保留，便于过渡双读。
+ */
+function withP3Fields(response: Record<string, unknown>): Record<string, unknown> {
+  const augmented = { ...response }
+  if (augmented.responseKind === undefined) augmented.responseKind = 'ANSWER'
+  if (augmented.conversation === undefined) {
+    augmented.conversation = { resumeToken: MOCK_RESUME_TOKEN, continuationStatus: 'AVAILABLE' }
+  }
+  // 给 blocks 追加 sourceReferences。
+  if (Array.isArray(augmented.blocks)) {
+    augmented.blocks = (augmented.blocks as Array<Record<string, unknown>>).map((block) => {
+      if (Array.isArray(block.sourceReferences) && block.sourceReferences.length) return block
+      const evidenceId = Array.isArray(block.evidenceIds) && block.evidenceIds.length
+        ? String(block.evidenceIds[0])
+        : ''
+      const projectSlug = block.sourceScope === 'GENERAL' ? 'sql-audit' : 'sql-audit'
+      return {
+        ...block,
+        ...(evidenceId ? { sourceReferences: sampleSourceReferences(evidenceId, projectSlug) } : {}),
+      }
+    })
+  }
+  // 给 agentTurn.completedTasks 追加 contextHandle 与 execution 快照。
+  const agentTurn = augmented.agentTurn as Record<string, unknown> | undefined
+  if (agentTurn && Array.isArray(agentTurn.completedTasks)) {
+    agentTurn.completedTasks = (agentTurn.completedTasks as Array<Record<string, unknown>>).map(
+      (task, index) => ({
+        ...task,
+        ...(task.contextHandle === undefined ? { contextHandle: `handle-mock-${index}` } : {}),
+      }),
+    )
+    if (agentTurn.execution === undefined) {
+      agentTurn.execution = {
+        contractVersion: 'p3-display-v1',
+        snapshotType: 'FINAL',
+        overallStatus: 'COMPLETED',
+        tasks: [{
+          displayIndex: '01',
+          finalStatus: 'COMPLETED',
+          stages: [
+            { code: 'SCOPE_CONFIRMED', label: '确认查询范围', status: 'COMPLETED' },
+            { code: 'MATERIALS_RETRIEVED', label: '查找已发布材料', status: 'COMPLETED' },
+            { code: 'EVIDENCE_VALIDATED', label: '核验证据', status: 'COMPLETED' },
+            { code: 'RESULT_COMPOSED', label: '形成回答', status: 'COMPLETED' },
+          ],
+        }],
+      }
+    }
+  }
+  return augmented
+}
+
 function answerResponse(
   question: string,
   questionPresetId?: string,
@@ -280,6 +348,92 @@ async function fulfillAnswer(route: Route) {
 export async function installPublicApiMocks(page: Page) {
   await page.route('**/api/v1/public-content', fulfillPublicContent)
   await installAnswerApiMock(page)
+}
+
+// P3：刷新恢复（GET）与主动清除（DELETE）的 conversation-context mock（handoff §11/§12）。
+export async function installConversationContextMocks(
+  page: Page,
+  options: { status?: 'AVAILABLE' | 'CONTEXT_EXPIRED'; clearFails?: boolean } = {},
+) {
+  const status = options.status ?? 'AVAILABLE'
+  const clearFails = options.clearFails === true
+  await page.route('**/api/v2/conversation-context', async (route) => {
+    const method = route.request().method()
+    if (method === 'GET') {
+      if (status === 'CONTEXT_EXPIRED') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          json: { contractVersion: 'p3-context-summary-v1', continuationStatus: 'CONTEXT_EXPIRED' },
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          contractVersion: 'p3-context-summary-v1',
+          continuationStatus: 'AVAILABLE',
+          summary: {
+            recentTaskType: 'FACT',
+            subjectLabels: ['SQL 审计'],
+            facetLabels: ['VERIFICATION'],
+            comparisonDimensionLabels: [],
+            preferenceLabels: [],
+            canRefine: true,
+          },
+        },
+      })
+      return
+    }
+    if (method === 'DELETE') {
+      if (clearFails) {
+        await route.abort('failed')
+        return
+      }
+      await route.fulfill({ status: 204 })
+      return
+    }
+    await route.fallback()
+  })
+}
+
+/**
+ * P3 专用 mock：在公共内容 + 回答 mock 基础上叠加 P3 契约字段（responseKind /
+ * conversation / sourceReferences / execution / contextHandle）与会话上下文 API。
+ * 同时 mock 客户端诊断接口，避免 dev server 因后端未起而向 console 输出 ECONNREFUSED 噪声。
+ * 旧 portfolio.spec.ts 继续使用 installPublicApiMocks（不带 P3 字段）以保持稳定。
+ */
+export async function installP3Mocks(
+  page: Page,
+  options: { contextStatus?: 'AVAILABLE' | 'CONTEXT_EXPIRED'; clearFails?: boolean } = {},
+) {
+  await page.route('**/api/v1/public-content', fulfillPublicContent)
+  // P3：诊断端点一并不返回 202，避免 dev server proxy 报 ECONNREFUSED 干扰 P3 用例。
+  await installDiagnosticsApiMock(page)
+  await page.route('**/api/v2/answers', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    const requestBody = route.request().postDataJSON() as {
+      question?: unknown
+      questionPresetId?: unknown
+      context?: { referenceContext?: Record<string, unknown> }
+    }
+    const question = typeof requestBody.question === 'string' ? requestBody.question : ''
+    const questionPresetId = typeof requestBody.questionPresetId === 'string'
+      ? requestBody.questionPresetId
+      : undefined
+    const mockResponse = withP3Fields(
+      answerResponse(question, questionPresetId, requestBody.context?.referenceContext) as Record<string, unknown>,
+    )
+    await route.fulfill({ status: 200, contentType: 'application/json', json: mockResponse })
+  })
+  await installConversationContextMocks(page, {
+    status: options.contextStatus ?? 'AVAILABLE',
+    clearFails: options.clearFails,
+  })
 }
 
 export async function installAnswerApiMock(page: Page) {

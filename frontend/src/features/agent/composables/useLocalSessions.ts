@@ -159,6 +159,47 @@ export function useLocalSessions() {
     sessions.value = [...sessions.value]
   }
 
+  // ── P3：会话级 ResumeToken 与恢复摘要（handoff §6, §10, §11）──
+  // Token 只存当前会话内存；sessionStorage 槽位由 useConversationResume + Workspace 协调。
+  // 摘要只来自服务端确定性投影，供恢复卡展示，绝不包含问题/答案/handle/version。
+
+  /** 把服务端签发/重签的 ResumeToken 绑定到指定会话内存。返回该会话是否为当前活跃会话。 */
+  function setSessionResumeToken(sessionId: string, token: string): boolean {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return false
+    const trimmed = token.trim()
+    if (!trimmed) return false
+    session.resumeToken = trimmed
+    sessions.value = [...sessions.value]
+    return sessionId === activeSessionId.value
+  }
+
+  /** 读取指定会话绑定的内存 Token（用于切换槽位、DELETE 清除）。 */
+  function getSessionResumeToken(sessionId: string): string | undefined {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    return session?.resumeToken
+  }
+
+  /** 清除指定会话的内存 Token（DELETE 成功或过期后）。 */
+  function clearSessionResumeToken(sessionId: string): void {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.resumeToken = undefined
+    session.activeContextSummary = undefined
+    sessions.value = [...sessions.value]
+  }
+
+  /** 记录刷新恢复得到的安全 Context Summary（仅活跃会话恢复卡）。 */
+  function setSessionContextSummary(
+    sessionId: string,
+    summary: import('../model/answerTypes').ConversationContextSummary | undefined,
+  ): void {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.activeContextSummary = summary
+    sessions.value = [...sessions.value]
+  }
+
   function clearPendingConfirmation(sessionId: string) {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session || session.pendingConfirmation === undefined) return
@@ -202,6 +243,10 @@ export function useLocalSessions() {
     seedSession,
     applyAnswerProgress,
     acceptSemanticTurnResponse,
+    setSessionResumeToken,
+    getSessionResumeToken,
+    clearSessionResumeToken,
+    setSessionContextSummary,
     clearPendingConfirmation,
     dismissPlanChange,
     isPlanChangeDismissed,

@@ -171,6 +171,60 @@ describe('useLocalSessions', () => {
     expect(typeof indexedDB).toBe('undefined')
   })
 
+  // P3：每个本地会话在内存中绑定自己的 ResumeToken（handoff §6, §10.1）。
+  // 会话存储本身仍只内存化（不写 storage）；sessionStorage 槽位由 useConversationResume 协调。
+  it('binds a per-session resume token in memory and isolates tokens between sessions', () => {
+    const store = useLocalSessions()
+    // Token 只在收到响应后到达，因此每个会话至少有一条 USER 消息（避免被 createSession 回收）。
+    const sessionA = store.createSession()
+    store.appendMessage(sessionA.id, { role: 'USER', content: '问题 A', answer: null, evidenceIds: [] })
+    store.setSessionResumeToken(sessionA.id, 'opaque-token-a')
+    const sessionB = store.createSession()
+    store.appendMessage(sessionB.id, { role: 'USER', content: '问题 B', answer: null, evidenceIds: [] })
+    store.setSessionResumeToken(sessionB.id, 'opaque-token-b')
+
+    expect(store.getSessionResumeToken(sessionA.id)).toBe('opaque-token-a')
+    expect(store.getSessionResumeToken(sessionB.id)).toBe('opaque-token-b')
+    // 切回 A 后，两个会话的 Token 仍然独立存在（槽位由 Workspace 同步，这里只验证内存隔离）。
+    store.selectSession(sessionA.id)
+    expect(store.getSessionResumeToken(sessionA.id)).toBe('opaque-token-a')
+    expect(store.getSessionResumeToken(sessionB.id)).toBe('opaque-token-b')
+    // 会话存储不写 storage（仍为纯内存）。
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('clears a session resume token without affecting other sessions', () => {
+    const store = useLocalSessions()
+    const sessionA = store.createSession()
+    store.appendMessage(sessionA.id, { role: 'USER', content: '问题 A', answer: null, evidenceIds: [] })
+    store.setSessionResumeToken(sessionA.id, 'opaque-token-a')
+    const sessionB = store.createSession()
+    store.appendMessage(sessionB.id, { role: 'USER', content: '问题 B', answer: null, evidenceIds: [] })
+    store.setSessionResumeToken(sessionB.id, 'opaque-token-b')
+
+    store.clearSessionResumeToken(sessionA.id)
+
+    expect(store.getSessionResumeToken(sessionA.id)).toBeUndefined()
+    expect(store.getSessionResumeToken(sessionB.id)).toBe('opaque-token-b')
+  })
+
+  it('records a safe server-provided context summary on the session', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+    store.setSessionContextSummary(session.id, {
+      recentTaskType: 'RECOMMENDATION',
+      subjectLabels: ['SQL 审计'],
+      facetLabels: ['VERIFICATION'],
+      comparisonDimensionLabels: [],
+      preferenceLabels: ['优先验证'],
+      canRefine: true,
+    })
+
+    expect(session.activeContextSummary?.subjectLabels).toEqual(['SQL 审计'])
+    expect(session.activeContextSummary?.canRefine).toBe(true)
+  })
+
   it('keeps the full text of the first question as the session title', () => {
     const store = useLocalSessions()
     const session = store.createSession()
