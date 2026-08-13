@@ -378,6 +378,44 @@ class ConversationAnswerResponseMapperTest {
                 });
     }
 
+    @Test
+    void exposesOnlyPublicCompositionMetadataAndSectionSourceReferences() {
+        com.portfolio.agent.answer.domain.PublicSourceReferenceValue source =
+                new com.portfolio.agent.answer.domain.PublicSourceReferenceValue(
+                "source-public-1", "公开证据", "public-1", "PROJECT",
+                "/projects/a", "/evidence/a");
+        TaskResultPayload.SectionResultPayload payload =
+                TaskResultPayload.SectionResultPayload.fromSections(List.of(
+                        new TaskResultPayload.SectionBlock(
+                                com.portfolio.agent.answer.domain.AnswerSectionType.SOLUTION,
+                                "实现", "模型受控表达", List.of(), List.of("source-public-1"),
+                                List.of(source))), null);
+        TaskOutcome completed = TaskOutcome.answered(
+                "task-01", SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, payload,
+                TaskResultProvenance.direct(SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                        List.of(), List.of("source-public-1")), false)
+                .withComposition(new com.portfolio.agent.answer.routing.domain.TaskComposition(
+                        com.portfolio.agent.answer.composition.domain.CompositionMode.MODEL_GROUNDED,
+                        false));
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-p4", "public-1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(portfolioFact()), List.of(), List.of(), Set.of(),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.ready(
+                        plan, new SemanticTurnOutcome(List.of(completed)))));
+
+        assertThat(response.getAgentTurn().getCompletedTasks()).singleElement().satisfies(task -> {
+            assertThat(task.getComposition().getMode().name()).isEqualTo("MODEL_GROUNDED");
+            assertThat(task.getComposition().isDegraded()).isFalse();
+            assertThat(task.getResultPayload().getBlocks()).singleElement()
+                    .satisfies(block -> assertThat(block.getSourceReferences()).singleElement()
+                            .satisfies(reference -> assertThat(reference.getReferenceKey())
+                                    .isEqualTo("source-public-1")));
+        });
+    }
+
     private String recommendationAnswer(AgentTurnResult agentTurn) throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
                 new ConversationAnswerResponseMapper().toResponse(

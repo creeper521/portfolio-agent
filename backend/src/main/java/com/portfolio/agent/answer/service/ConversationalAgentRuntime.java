@@ -142,7 +142,8 @@ public final class ConversationalAgentRuntime {
                 || decision.getDisposition() == SemanticTurnDecision.Disposition.PARTIAL_READY) {
             SemanticTurnOutcome outcome = coordinator.execute(
                     decision.getValidatedPlan().orElseThrow(),
-                    decision.getExecutionSelection().orElseThrow(), authorizedContextReferences);
+                    decision.getExecutionSelection().orElseThrow(), authorizedContextReferences,
+                    input.getQuestionPresetId() != null);
             return AgentTurnResult.fromDecision(
                     decision, null, outcome, input.getAgentTurnContract() != null);
         }
@@ -337,7 +338,13 @@ public final class ConversationalAgentRuntime {
             RuntimeAnswerContent content,
             AgentTurnResult agentTurn) {
         if (hasRenderableGeneralPayload(agentTurn)) {
-            return AnswerConstructionMode.GENERAL_MODEL;
+            return hasRenderableNonGeneralPayload(agentTurn)
+                    ? AnswerConstructionMode.MIXED_COMPOSITION
+                    : AnswerConstructionMode.GENERAL_MODEL;
+        }
+        AnswerConstructionMode compositionMode = projectedCompositionMode(agentTurn);
+        if (compositionMode != null) {
+            return compositionMode;
         }
         return hasRenderablePayload(agentTurn)
                 || hasProjectedFallback(request, content, agentTurn)
@@ -345,8 +352,56 @@ public final class ConversationalAgentRuntime {
     }
 
     private GenerationMode projectedGenerationMode(AgentTurnResult agentTurn) {
-        return hasRenderableGeneralPayload(agentTurn)
-                ? GenerationMode.MODEL : GenerationMode.DETERMINISTIC;
+        if (hasRenderableGeneralPayload(agentTurn)) {
+            return hasRenderableNonGeneralPayload(agentTurn)
+                    ? GenerationMode.MIXED : GenerationMode.MODEL;
+        }
+        return projectedGenerationModeForComposition(agentTurn);
+    }
+
+    private boolean hasRenderableNonGeneralPayload(AgentTurnResult agentTurn) {
+        return agentTurn.getOutcome().map(outcome -> outcome.getTaskOutcomes().stream()
+                .anyMatch(task -> task.hasRenderablePayload()
+                        && task.getSourceDomain() != TaskSourceDomain.GENERAL)).orElse(false);
+    }
+
+    private GenerationMode projectedGenerationModeForComposition(AgentTurnResult agentTurn) {
+        java.util.Set<com.portfolio.agent.answer.composition.domain.CompositionMode> modes =
+                compositionModes(agentTurn);
+        if (modes.contains(com.portfolio.agent.answer.composition.domain.CompositionMode.MODEL_GROUNDED)) {
+            return modes.size() == 1 ? GenerationMode.MODEL : GenerationMode.MIXED;
+        }
+        if (modes.contains(com.portfolio.agent.answer.composition.domain.CompositionMode.FALLBACK)) {
+            return modes.size() == 1 ? GenerationMode.FALLBACK : GenerationMode.MIXED;
+        }
+        return GenerationMode.DETERMINISTIC;
+    }
+
+    private AnswerConstructionMode projectedCompositionMode(AgentTurnResult agentTurn) {
+        java.util.Set<com.portfolio.agent.answer.composition.domain.CompositionMode> modes =
+                compositionModes(agentTurn);
+        if (modes.contains(com.portfolio.agent.answer.composition.domain.CompositionMode.MODEL_GROUNDED)) {
+            return modes.size() == 1
+                    ? AnswerConstructionMode.MODEL_GROUNDED
+                    : AnswerConstructionMode.MIXED_COMPOSITION;
+        }
+        if (modes.contains(com.portfolio.agent.answer.composition.domain.CompositionMode.FALLBACK)) {
+            return modes.size() == 1 ? AnswerConstructionMode.EVIDENCE_COMPOSITION
+                    : AnswerConstructionMode.MIXED_COMPOSITION;
+        }
+        return null;
+    }
+
+    private java.util.Set<com.portfolio.agent.answer.composition.domain.CompositionMode> compositionModes(
+            AgentTurnResult agentTurn) {
+        java.util.Set<com.portfolio.agent.answer.composition.domain.CompositionMode> modes =
+                new java.util.LinkedHashSet<>();
+        agentTurn.getOutcome().ifPresent(outcome -> outcome.getTaskOutcomes().stream()
+                .filter(com.portfolio.agent.answer.routing.domain.TaskOutcome::hasRenderablePayload)
+                .flatMap(value -> value.getComposition().stream())
+                .map(com.portfolio.agent.answer.routing.domain.TaskComposition::getMode)
+                .forEach(modes::add));
+        return java.util.Set.copyOf(modes);
     }
 
     private AnswerIntentSource projectedIntentSource(

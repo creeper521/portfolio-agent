@@ -165,6 +165,32 @@ class SemanticTurnCoordinatorTest {
         assertEquals(List.of("task-01"), executor.getExecutedTaskIds());
     }
 
+    @Test
+    void grantsExpressionAttemptOnlyToFirstExecutableFactInStableTopology() {
+        RecordingExecutor executor = new RecordingExecutor(Set.of());
+        SemanticTurnCoordinator coordinator = new SemanticTurnCoordinator(List.of(executor));
+        ValidatedSemanticTurnPlan plan = validated(plan(
+                List.of(fact("task-02"), fact("task-01"), fact("task-03")),
+                List.of(requiredDependency("task-01", "task-02"))));
+
+        coordinator.execute(plan, ExecutionSelection.allExecutable(
+                Set.of("task-01", "task-02", "task-03")), List.of(), false);
+
+        assertEquals(List.of("task-01"), executor.getExpressionAllowedTaskIds());
+    }
+
+    @Test
+    void presetTurnNeverGrantsExpressionAttempt() {
+        RecordingExecutor executor = new RecordingExecutor(Set.of());
+        SemanticTurnCoordinator coordinator = new SemanticTurnCoordinator(List.of(executor));
+        ValidatedSemanticTurnPlan plan = validated(plan(List.of(fact("task-01")), List.of()));
+
+        coordinator.execute(plan, ExecutionSelection.allExecutable(Set.of("task-01")),
+                List.of(), true);
+
+        assertEquals(List.of(), executor.getExpressionAllowedTaskIds());
+    }
+
     private static ValidatedSemanticTurnPlan validated(SemanticTurnPlan plan) {
         SemanticPlanValidator validator = new SemanticPlanValidator(new PlanFingerprintService());
         return validator.validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
@@ -218,6 +244,7 @@ class SemanticTurnCoordinatorTest {
         private final Set<String> failedTaskIds;
         private final List<String> executedTaskIds = new ArrayList<>();
         private final java.util.Map<String, List<String>> availableTaskIdsByTask = new java.util.LinkedHashMap<>();
+        private final List<String> expressionAllowedTaskIds = new ArrayList<>();
 
         private RecordingExecutor(Set<String> failedTaskIds) {
             this.failedTaskIds = Set.copyOf(failedTaskIds);
@@ -233,6 +260,9 @@ class SemanticTurnCoordinatorTest {
             SemanticTask task = context.getSemanticTask();
             List<TaskOutcome> availableDependencyOutcomes = context.getDependencyOutcomes();
             executedTaskIds.add(task.getTaskId());
+            if (context.isModelExpressionAttemptAllowed()) {
+                expressionAllowedTaskIds.add(task.getTaskId());
+            }
             List<String> availableTaskIds = new ArrayList<>();
             for (TaskOutcome outcome : availableDependencyOutcomes) {
                 availableTaskIds.add(outcome.getTaskId());
@@ -255,6 +285,10 @@ class SemanticTurnCoordinatorTest {
 
         private List<String> getAvailableTaskIds(String taskId) {
             return availableTaskIdsByTask.getOrDefault(taskId, List.of());
+        }
+
+        private List<String> getExpressionAllowedTaskIds() {
+            return List.copyOf(expressionAllowedTaskIds);
         }
     }
 }

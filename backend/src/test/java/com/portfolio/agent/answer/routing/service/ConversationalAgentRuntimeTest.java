@@ -19,10 +19,12 @@ import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
+import com.portfolio.agent.answer.routing.domain.TaskComposition;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
+import com.portfolio.agent.answer.composition.domain.CompositionMode;
 import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
@@ -194,10 +196,131 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getEvidenceState()).isEqualTo(AnswerEvidenceState.NOT_REQUIRED);
     }
 
-    private static SemanticTask portfolioFact() {
-        SubjectReference subject = SubjectReference.project("project-a", "public-v1");
+    @Test
+    void projectsGeneralAndPortfolioPayloadsAsMixedComposition() {
+        SemanticTask general = generalTask("task-general");
+        SemanticTask portfolio = portfolioFact("task-portfolio", "project-a");
+        ConversationAnswerResult result = answerMultiTaskPlan(
+                List.of(general, portfolio),
+                List.of(generalExecutor(general), portfolioExecutor(CompositionMode.DETERMINISTIC)));
+
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.MIXED);
+        assertThat(result.getConstructionMode()).isEqualTo(
+                AnswerConstructionMode.MIXED_COMPOSITION);
+    }
+
+    @Test
+    void projectsAllFallbackPortfolioPayloadsAsFallbackRatherThanMixed() {
+        SemanticTask first = portfolioFact("task-first", "project-a");
+        SemanticTask second = portfolioFact("task-second", "project-b");
+        ConversationAnswerResult result = answerMultiTaskPlan(
+                List.of(first, second), List.of(portfolioExecutor(CompositionMode.FALLBACK)));
+
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.FALLBACK);
+        assertThat(result.getConstructionMode()).isEqualTo(
+                AnswerConstructionMode.EVIDENCE_COMPOSITION);
+    }
+
+    @Test
+    void projectsDeterministicAndFallbackPortfolioPayloadsAsMixed() {
+        SemanticTask deterministic = portfolioFact("task-deterministic", "project-a");
+        SemanticTask fallback = portfolioFact("task-fallback", "project-b");
+        SemanticTaskExecutor executor = new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO;
+            }
+
+            @Override
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
+                CompositionMode mode = context.getSemanticTask().getTaskId().equals("task-fallback")
+                        ? CompositionMode.FALLBACK : CompositionMode.DETERMINISTIC;
+                return portfolioOutcome(context.getSemanticTask(), mode);
+            }
+        };
+        ConversationAnswerResult result = answerMultiTaskPlan(
+                List.of(deterministic, fallback), List.of(executor));
+
+        assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.MIXED);
+        assertThat(result.getConstructionMode()).isEqualTo(
+                AnswerConstructionMode.MIXED_COMPOSITION);
+    }
+
+    private ConversationAnswerResult answerMultiTaskPlan(
+            List<SemanticTask> tasks, List<SemanticTaskExecutor> executors) {
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-mixed", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                tasks, List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ValidatedSemanticTurnPlan validated = new SemanticPlanValidator(new PlanFingerprintService())
+                .validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
+        CountingRouter router = new CountingRouter(SemanticTurnDecision.ready(
+                validated, ExecutionSelection.allExecutable(tasks.stream()
+                        .map(SemanticTask::getTaskId).collect(java.util.stream.Collectors.toSet()))));
+        return fixture(router, new SemanticTurnCoordinator(executors)).runtime.answer(
+                ask("compare public results"));
+    }
+
+    private SemanticTaskExecutor generalExecutor(SemanticTask task) {
+        return new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.GENERAL;
+            }
+
+            @Override
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
+                return TaskOutcome.answered(task.getTaskId(), getSourceDomain(),
+                        new TaskResultPayload.SectionResultPayload(
+                                List.of("Public general explanation."), null),
+                        TaskResultProvenance.direct(getSourceDomain(), List.of(), List.of()), false);
+            }
+        };
+    }
+
+    private SemanticTaskExecutor portfolioExecutor(CompositionMode mode) {
+        return new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO;
+            }
+
+            @Override
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
+                return portfolioOutcome(context.getSemanticTask(), mode);
+            }
+        };
+    }
+
+    private TaskOutcome portfolioOutcome(SemanticTask task, CompositionMode mode) {
+        return TaskOutcome.answered(task.getTaskId(),
+                SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                new TaskResultPayload.SectionResultPayload(
+                        List.of("Public portfolio result."), null),
+                TaskResultProvenance.direct(SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,
+                        List.of(), List.of()), mode == CompositionMode.FALLBACK)
+                .withComposition(new TaskComposition(mode, mode == CompositionMode.FALLBACK));
+    }
+
+    private static SemanticTask generalTask(String taskId) {
         return SemanticTask.create(
-                "task-01", SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                taskId, SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
+                SemanticRoutingTypes.TaskSourceDomain.GENERAL, "general explanation",
+                new SemanticTaskParameters.GeneralExplanation(
+                        "General explanation", "STANDARD", "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                TaskConfidence.highRule(), List.of());
+    }
+
+    private static SemanticTask portfolioFact() {
+        return portfolioFact("task-01", "project-a");
+    }
+
+    private static SemanticTask portfolioFact(String taskId, String subjectId) {
+        SubjectReference subject = SubjectReference.project(subjectId, "public-v1");
+        return SemanticTask.create(
+                taskId, SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
                 SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, "review project",
                 new SemanticTaskParameters.PortfolioFact(
                         subject, Set.of("OVERVIEW"), "INTERVIEWER"),

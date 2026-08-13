@@ -12,7 +12,6 @@ import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskExecutionAllowance;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
-import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +35,7 @@ class P3PortfolioSemanticTaskExecutorTest {
         when(capability.execute(any(), any())).thenReturn(
                 CapabilityExecutionResult.unavailable(SafeReasonCode.CAPABILITY_TEMPORARILY_UNAVAILABLE));
         P3PortfolioSemanticTaskExecutor executor = new P3PortfolioSemanticTaskExecutor(
-                new PortfolioCapabilityCatalog(), capability, new DeterministicPortfolioAnswerComposer());
+                new PortfolioCapabilityCatalog(), capability);
 
         TaskOutcome outcome = executor.execute(context(task()));
 
@@ -50,7 +49,7 @@ class P3PortfolioSemanticTaskExecutorTest {
     void rejectsNonPortfolioTaskBeforeCapabilityInvocation() {
         PortfolioEvidenceCapability capability = mock(PortfolioEvidenceCapability.class);
         P3PortfolioSemanticTaskExecutor executor = new P3PortfolioSemanticTaskExecutor(
-                new PortfolioCapabilityCatalog(), capability, new DeterministicPortfolioAnswerComposer());
+                new PortfolioCapabilityCatalog(), capability);
         SemanticTask general = SemanticTask.create(
                 "task-general", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
                 SemanticRoutingTypes.TaskSourceDomain.GENERAL, "general",
@@ -72,7 +71,7 @@ class P3PortfolioSemanticTaskExecutorTest {
                 "visitor question and evidence body must never be logged"));
         List<DiagnosticEvent> events = new ArrayList<>();
         P3PortfolioSemanticTaskExecutor executor = new P3PortfolioSemanticTaskExecutor(
-                new PortfolioCapabilityCatalog(), capability, new DeterministicPortfolioAnswerComposer(),
+                new PortfolioCapabilityCatalog(), capability,
                 events::add);
 
         TaskOutcome outcome = executor.execute(context(task()));

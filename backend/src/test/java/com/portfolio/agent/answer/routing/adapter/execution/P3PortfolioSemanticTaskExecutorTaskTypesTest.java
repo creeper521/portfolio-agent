@@ -1,12 +1,23 @@
 package com.portfolio.agent.answer.routing.adapter.execution;
 
+import com.portfolio.agent.answer.composition.domain.CompositionMode;
+import com.portfolio.agent.answer.composition.domain.ModelExpressionResult;
+import com.portfolio.agent.answer.composition.gateway.PortfolioExpressionPort;
+import com.portfolio.agent.answer.composition.service.DeterministicPortfolioAnswerComposer;
+import com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition;
+import com.portfolio.agent.answer.composition.service.PortfolioAnswerPlanValidator;
 import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
+import com.portfolio.agent.answer.domain.AgentTurnResult;
+import com.portfolio.agent.answer.domain.AnswerResolution;
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
 import com.portfolio.agent.answer.domain.AnswerClaimProjection;
 import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
 import com.portfolio.agent.answer.domain.AnswerContributionType;
 import com.portfolio.agent.answer.domain.AnswerMateriality;
 import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.intelligence.execution.capability.CapabilityExecutionResult;
 import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvidenceCapability;
 import com.portfolio.agent.answer.intelligence.execution.domain.AuthorizedSubjectScope;
@@ -17,16 +28,18 @@ import com.portfolio.agent.answer.intelligence.execution.domain.PublicEvidenceDe
 import com.portfolio.agent.answer.intelligence.execution.domain.PortfolioRetrievalCandidateSet;
 import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
 import com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator;
+import com.portfolio.agent.answer.mapper.ConversationAnswerResponseMapper;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
+import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskExecutionAllowance;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
-import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -94,14 +107,84 @@ class P3PortfolioSemanticTaskExecutorTaskTypesTest {
                 .allMatch(item -> !item.getSourceReferences().isEmpty()));
     }
 
+    @Test
+    void modelPlanBecomesPayloadWhileContributionKeepsPreModelFacts() {
+        SubjectReference subject = SubjectReference.project("project-a", VERSION);
+        SemanticTask task = SemanticTask.create(
+                "fact-task", SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, "private goal label",
+                new SemanticTaskParameters.PortfolioFact(subject, Set.of("IMPLEMENTATION"),
+                        "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY), TaskConfidence.highRule(),
+                List.of(subject));
+        PortfolioExpressionPort fakePort = (request, deadline) -> {
+            assertTrue(request.getSerializedInput().contains("Project project-a"));
+            assertTrue(!request.getSerializedInput().contains("private goal label"));
+            return ModelExpressionResult.success("""
+                    {"schemaVersion":"portfolio-expression-draft.v1","materialKind":"FACT",
+                     "summary":null,"sections":[{"sectionType":"SOLUTION","sentences":[
+                     {"text":"Statement project-a。","supports":["S001"]}]}]}
+                    """);
+        };
+        PortfolioAnswerComposition composition = new PortfolioAnswerComposition(
+                new DeterministicPortfolioAnswerComposer(),
+                new PortfolioAnswerPlanValidator(), fakePort);
+
+        TaskOutcome outcome = execute(task, candidateResult(
+                List.of(subject), AnswerClaimCategory.IMPLEMENTATION, "IMPLEMENTATION"),
+                composition);
+
+        TaskResultPayload.SectionResultPayload payload = (TaskResultPayload.SectionResultPayload)
+                outcome.getResultPayload().orElseThrow();
+        assertEquals(CompositionMode.MODEL_GROUNDED,
+                outcome.getComposition().orElseThrow().getMode());
+        assertEquals(List.of("Statement project-a。"), payload.getBlocks());
+        assertEquals("shared-evidence", payload.getSections().get(0)
+                .getSourceReferences().get(0).getReferenceKey());
+        assertEquals("Statement project-a", outcome.getContribution().orElseThrow()
+                .getSupportedStatements().get(0));
+
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-model-fact", VERSION, SemanticTurnPlan.PlanSource.RULE,
+                List.of(task), List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ConversationAnswerResult answer = new ConversationAnswerResult(
+                "turn-1", VERSION, ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO, AnswerResolution.ANSWERED,
+                "Project project-a", List.of(), List.of(), false)
+                .withAgentTurn(AgentTurnResult.ready(
+                        plan, new SemanticTurnOutcome(List.of(outcome))));
+        com.portfolio.agent.answer.dto.response.ConversationAnswerResponse response =
+                new ConversationAnswerResponseMapper().toResponse(answer);
+
+        assertEquals("Statement project-a。",
+                response.getAgentTurn().getCompletedTasks().get(0)
+                .getResultPayload().getBlocks().get(0).getContent());
+        assertEquals("shared-evidence", response.getAgentTurn().getCompletedTasks().get(0)
+                .getResultPayload().getBlocks().get(0).getSourceReferences().get(0)
+                .getReferenceKey());
+        assertEquals("MODEL_GROUNDED", response.getAgentTurn().getCompletedTasks().get(0)
+                .getComposition().getMode().name());
+    }
+
     private static TaskOutcome execute(SemanticTask task, CapabilityExecutionResult result) {
+        return execute(task, result, null);
+    }
+
+    private static TaskOutcome execute(SemanticTask task, CapabilityExecutionResult result,
+            PortfolioAnswerComposition composition) {
         PortfolioEvidenceCapability capability = mock(PortfolioEvidenceCapability.class);
         when(capability.execute(any(), any())).thenReturn(result);
+        SemanticTaskExecutionContext context = composition == null
+                ? new SemanticTaskExecutionContext(task, List.of(), List.of(), VERSION,
+                        TaskExecutionAllowance.portfolio(Instant.now().plusSeconds(30)), List.of())
+                : new SemanticTaskExecutionContext(task, List.of(), List.of(), VERSION,
+                        TaskExecutionAllowance.portfolio(Instant.now().plusSeconds(30)), List.of(),
+                        true, false);
         return new P3PortfolioSemanticTaskExecutor(
-                new PortfolioCapabilityCatalog(), capability, new DeterministicPortfolioAnswerComposer())
-                .execute(new SemanticTaskExecutionContext(
-                        task, List.of(), List.of(), VERSION,
-                        TaskExecutionAllowance.portfolio(Instant.now().plusSeconds(30)), List.of()));
+                new PortfolioCapabilityCatalog(), capability, event -> { }, composition)
+                .execute(context);
     }
 
     private static CapabilityExecutionResult candidateResult(

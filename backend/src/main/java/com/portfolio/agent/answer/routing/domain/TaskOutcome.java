@@ -53,6 +53,7 @@ public final class TaskOutcome {
     private final TaskResultProvenance provenance;
     private final TaskResultPayload resultPayload;
     private final GroundedAnswerContribution contribution;
+    private final TaskComposition composition;
 
     private TaskOutcome(
             String taskId,
@@ -66,7 +67,7 @@ public final class TaskOutcome {
             TaskResultProvenance provenance,
             TaskResultPayload resultPayload) {
         this(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
-                resultReference, sourceDomain, provenance, resultPayload, null);
+                resultReference, sourceDomain, provenance, resultPayload, null, null);
     }
 
     private TaskOutcome(
@@ -80,7 +81,8 @@ public final class TaskOutcome {
             TaskSourceDomain sourceDomain,
             TaskResultProvenance provenance,
             TaskResultPayload resultPayload,
-            GroundedAnswerContribution contribution) {
+            GroundedAnswerContribution contribution,
+            TaskComposition composition) {
         this.taskId = requireText(taskId, "taskId");
         this.executionStatus = Objects.requireNonNull(executionStatus, "executionStatus");
         this.resolution = Objects.requireNonNull(resolution, "resolution");
@@ -92,6 +94,7 @@ public final class TaskOutcome {
         this.provenance = provenance;
         this.resultPayload = resultPayload;
         this.contribution = contribution;
+        this.composition = composition;
         validate();
     }
 
@@ -147,7 +150,29 @@ public final class TaskOutcome {
                 sourceDomain,
                 provenance,
                 null,
-                Objects.requireNonNull(contribution, "contribution"));
+                Objects.requireNonNull(contribution, "contribution"),
+                null);
+    }
+
+    public static TaskOutcome answeredWithPayloadAndContribution(
+            String taskId, TaskSourceDomain sourceDomain, TaskResultPayload resultPayload,
+            GroundedAnswerContribution contribution, TaskResultProvenance provenance,
+            boolean degraded) {
+        return new TaskOutcome(taskId, TaskExecutionStatus.SUCCEEDED, TaskResolution.ANSWERED,
+                TaskEvidenceState.SUFFICIENT, degraded, Set.of(), null, sourceDomain,
+                provenance, Objects.requireNonNull(resultPayload, "resultPayload"),
+                Objects.requireNonNull(contribution, "contribution"), null);
+    }
+
+    public static TaskOutcome partiallyAnsweredWithPayloadAndContribution(
+            String taskId, TaskSourceDomain sourceDomain, TaskResultPayload resultPayload,
+            GroundedAnswerContribution contribution, TaskResultProvenance provenance,
+            boolean degraded) {
+        return new TaskOutcome(taskId, TaskExecutionStatus.SUCCEEDED,
+                TaskResolution.PARTIALLY_ANSWERED, TaskEvidenceState.PARTIAL, degraded,
+                Set.of(), null, sourceDomain, provenance,
+                Objects.requireNonNull(resultPayload, "resultPayload"),
+                Objects.requireNonNull(contribution, "contribution"), null);
     }
 
     public static TaskOutcome partiallyAnswered(
@@ -172,7 +197,8 @@ public final class TaskOutcome {
                 sourceDomain,
                 provenance,
                 null,
-                Objects.requireNonNull(contribution, "contribution"));
+                Objects.requireNonNull(contribution, "contribution"),
+                null);
     }
 
     public static TaskOutcome partiallyAnswered(
@@ -349,6 +375,18 @@ public final class TaskOutcome {
         return Optional.ofNullable(contribution);
     }
 
+    public Optional<TaskComposition> getComposition() {
+        return Optional.ofNullable(composition);
+    }
+
+    public TaskOutcome withComposition(TaskComposition value) {
+        TaskComposition safe = Objects.requireNonNull(value, "composition");
+        return new TaskOutcome(taskId, executionStatus, resolution, evidenceState,
+                degraded || safe.isDegraded(),
+                reasonCodes, resultReference, sourceDomain, provenance, resultPayload,
+                contribution, safe);
+    }
+
     public boolean hasRenderablePayload() {
         return executionStatus == TaskExecutionStatus.SUCCEEDED
                 && (resolution == TaskResolution.ANSWERED
@@ -375,13 +413,14 @@ public final class TaskOutcome {
                 && sourceDomain == that.sourceDomain
                 && Objects.equals(provenance, that.provenance)
                 && Objects.equals(resultPayload, that.resultPayload)
-                && Objects.equals(contribution, that.contribution);
+                && Objects.equals(contribution, that.contribution)
+                && Objects.equals(composition, that.composition);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
-                resultReference, sourceDomain, provenance, resultPayload, contribution);
+                resultReference, sourceDomain, provenance, resultPayload, contribution, composition);
     }
 
     @Override

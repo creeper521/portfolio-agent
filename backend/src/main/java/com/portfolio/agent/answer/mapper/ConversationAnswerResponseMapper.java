@@ -11,6 +11,7 @@ import com.portfolio.agent.answer.dto.response.AgentTurnResponse;
 import com.portfolio.agent.answer.dto.response.AgentTurnOutcomeResponse;
 import com.portfolio.agent.answer.dto.response.ClarificationResponse;
 import com.portfolio.agent.answer.dto.response.CompletedTaskResponse;
+import com.portfolio.agent.answer.dto.response.TaskCompositionResponse;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerBlockResponse;
 import com.portfolio.agent.answer.dto.response.ConversationAnswerResponse;
 import com.portfolio.agent.answer.dto.response.ConversationSuggestedQuestionResponse;
@@ -438,7 +439,9 @@ public final class ConversationAnswerResponseMapper {
                 completed.add(new CompletedTaskResponse(indexes.get(task.getTaskId()), task.getGoalLabel(),
                         task.getSourceDomain(), payload,
                         Optional.ofNullable(contextHandles.get(task.getTaskId()))
-                                .map(ContextHandle::asBase64Url).orElse(null)));
+                                .map(ContextHandle::asBase64Url).orElse(null),
+                        outcomeItem.getComposition().map(value -> new TaskCompositionResponse(
+                                value.getMode(), value.isDegraded())).orElse(null)));
             }
         }
         return List.copyOf(completed);
@@ -493,7 +496,9 @@ public final class ConversationAnswerResponseMapper {
             if (section.isTyped()) {
                 return new ConversationAnswerBlockResponse(
                         sourceScope, section.getSectionType(), section.getTitle(), section.getContent(),
-                        section.getClaimIds(), section.getEvidenceIds());
+                        section.getClaimIds(), section.getEvidenceIds(),
+                        section.getSourceReferences().stream()
+                                .map(PublicSourceReferenceResponse::from).toList());
             }
             return new ConversationAnswerBlockResponse(
                     sourceScope, section.getContent(),

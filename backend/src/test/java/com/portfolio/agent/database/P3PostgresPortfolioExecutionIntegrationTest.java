@@ -17,7 +17,6 @@ import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskExecutionAllowance;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
-import com.portfolio.agent.answer.service.DeterministicPortfolioAnswerComposer;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.repository.postgres.PublicBundleDatabaseImporter;
@@ -107,7 +106,7 @@ class P3PostgresPortfolioExecutionIntegrationTest {
         SubjectReference subject = SubjectReference.project("sql-audit-project", contentVersion);
         PortfolioEvidenceCapability capability = new DefaultPortfolioEvidenceCapability(primary, fallback);
         P3PortfolioSemanticTaskExecutor executor = new P3PortfolioSemanticTaskExecutor(
-                new PortfolioCapabilityCatalog(), capability, new DeterministicPortfolioAnswerComposer());
+                new PortfolioCapabilityCatalog(), capability);
         SemanticTask task = SemanticTask.create(
                 "p3-sql-project", SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
                 SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, "SQL audit project overview",

@@ -14,10 +14,11 @@ public final class CompletedTaskResponse {
     private final TaskSourceDomain sourceDomain;
     private final ResultPayload resultPayload;
     private final String contextHandle;
+    private final TaskCompositionResponse composition;
 
     public CompletedTaskResponse(
             String displayIndex, String goalLabel, TaskSourceDomain sourceDomain, ResultPayload resultPayload) {
-        this(displayIndex, goalLabel, sourceDomain, resultPayload, null);
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, null, null);
     }
 
     public CompletedTaskResponse(
@@ -26,11 +27,22 @@ public final class CompletedTaskResponse {
             TaskSourceDomain sourceDomain,
             ResultPayload resultPayload,
             String contextHandle) {
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, contextHandle, null);
+    }
+
+    public CompletedTaskResponse(
+            String displayIndex,
+            String goalLabel,
+            TaskSourceDomain sourceDomain,
+            ResultPayload resultPayload,
+            String contextHandle,
+            TaskCompositionResponse composition) {
         this.displayIndex = requireText(displayIndex, "displayIndex");
         this.goalLabel = requireText(goalLabel, "goalLabel");
         this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
         this.resultPayload = Objects.requireNonNull(resultPayload, "resultPayload");
         this.contextHandle = contextHandle;
+        this.composition = composition;
     }
 
     public String getDisplayIndex() { return displayIndex; }
@@ -39,6 +51,8 @@ public final class CompletedTaskResponse {
     public ResultPayload getResultPayload() { return resultPayload; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public String getContextHandle() { return contextHandle; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public TaskCompositionResponse getComposition() { return composition; }
 
     public static final class ResultPayload {
         private final String kind;

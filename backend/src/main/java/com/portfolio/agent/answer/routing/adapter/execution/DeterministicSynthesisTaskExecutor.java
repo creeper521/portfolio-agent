@@ -110,6 +110,13 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
     private List<String> blocks(List<TaskOutcome> inputs) {
         List<String> blocks = new ArrayList<>();
         for (TaskOutcome input : inputs) {
+            if (input.getContribution().isPresent()) {
+                // P4 model wording is presentation-only. Synthesis consumes the
+                // immutable pre-expression contribution produced by Material.
+                appendAllDistinct(blocks,
+                        input.getContribution().orElseThrow().getSupportedStatements());
+                continue;
+            }
             TaskResultPayload payload = input.getResultPayload().orElseThrow();
             if (payload instanceof TaskResultPayload.SectionResultPayload section) {
                 appendAllDistinct(blocks, section.getBlocks());

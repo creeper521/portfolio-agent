@@ -75,15 +75,25 @@ public sealed interface TaskResultPayload
         private final String content;
         private final List<String> claimIds;
         private final List<String> evidenceIds;
+        private final List<PublicSourceReferenceValue> sourceReferences;
 
         public SectionBlock(
                 AnswerSectionType sectionType, String title, String content,
                 List<String> claimIds, List<String> evidenceIds) {
+            this(sectionType, title, content, claimIds, evidenceIds, List.of());
+        }
+
+        public SectionBlock(
+                AnswerSectionType sectionType, String title, String content,
+                List<String> claimIds, List<String> evidenceIds,
+                List<PublicSourceReferenceValue> sourceReferences) {
             this.sectionType = Objects.requireNonNull(sectionType, "sectionType");
             this.title = requireText(title, "title");
             this.content = requireText(content, "content");
             this.claimIds = copyTextList(claimIds, "claimIds");
             this.evidenceIds = copyTextList(evidenceIds, "evidenceIds");
+            this.sourceReferences = List.copyOf(
+                    Objects.requireNonNull(sourceReferences, "sourceReferences"));
         }
 
         private SectionBlock(String content) {
@@ -92,6 +102,7 @@ public sealed interface TaskResultPayload
             this.content = requireText(content, "content");
             this.claimIds = List.of();
             this.evidenceIds = List.of();
+            this.sourceReferences = List.of();
         }
 
         static SectionBlock untyped(String content) { return new SectionBlock(content); }
@@ -101,6 +112,7 @@ public sealed interface TaskResultPayload
         public String getContent() { return content; }
         public List<String> getClaimIds() { return claimIds; }
         public List<String> getEvidenceIds() { return evidenceIds; }
+        public List<PublicSourceReferenceValue> getSourceReferences() { return sourceReferences; }
         public boolean isTyped() { return sectionType != null; }
 
         @Override
@@ -111,12 +123,13 @@ public sealed interface TaskResultPayload
                     && Objects.equals(title, that.title)
                     && Objects.equals(content, that.content)
                     && Objects.equals(claimIds, that.claimIds)
-                    && Objects.equals(evidenceIds, that.evidenceIds);
+                    && Objects.equals(evidenceIds, that.evidenceIds)
+                    && Objects.equals(sourceReferences, that.sourceReferences);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(sectionType, title, content, claimIds, evidenceIds);
+            return Objects.hash(sectionType, title, content, claimIds, evidenceIds, sourceReferences);
         }
     }
 

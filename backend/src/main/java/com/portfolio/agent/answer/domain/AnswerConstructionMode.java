@@ -4,5 +4,6 @@ public enum AnswerConstructionMode {
     TEMPLATE,
     EVIDENCE_COMPOSITION,
     MODEL_GROUNDED,
-    GENERAL_MODEL
+    GENERAL_MODEL,
+    MIXED_COMPOSITION
 }

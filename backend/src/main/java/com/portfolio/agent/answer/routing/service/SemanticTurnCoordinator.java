@@ -44,6 +44,15 @@ public final class SemanticTurnCoordinator {
             ValidatedSemanticTurnPlan plan,
             ExecutionSelection selection,
             List<AuthorizedContextReference> authorizedContextReferences) {
+        return execute(plan, selection, authorizedContextReferences, false);
+    }
+
+    /** Executes a turn while preserving request-source constraints for P4 expression. */
+    public SemanticTurnOutcome execute(
+            ValidatedSemanticTurnPlan plan,
+            ExecutionSelection selection,
+            List<AuthorizedContextReference> authorizedContextReferences,
+            boolean presetRequest) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(selection, "selection");
         Objects.requireNonNull(authorizedContextReferences, "authorizedContextReferences");
@@ -52,7 +61,7 @@ public final class SemanticTurnCoordinator {
         SemanticTurnExecutionBudget budget = SemanticTurnExecutionBudget.allocate(
                 stableTopologicalOrder(plan), selection.getExecutableTaskIds(),
                 startedAt, startedAt.plusSeconds(10));
-        return execute(plan, selection, budget, authorizedContextReferences);
+        return execute(plan, selection, budget, authorizedContextReferences, presetRequest);
     }
 
     public SemanticTurnOutcome execute(
@@ -67,6 +76,15 @@ public final class SemanticTurnCoordinator {
             ExecutionSelection selection,
             SemanticTurnExecutionBudget budget,
             List<AuthorizedContextReference> authorizedContextReferences) {
+        return execute(plan, selection, budget, authorizedContextReferences, false);
+    }
+
+    private SemanticTurnOutcome execute(
+            ValidatedSemanticTurnPlan plan,
+            ExecutionSelection selection,
+            SemanticTurnExecutionBudget budget,
+            List<AuthorizedContextReference> authorizedContextReferences,
+            boolean presetRequest) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(selection, "selection");
         Objects.requireNonNull(budget, "budget");
@@ -74,6 +92,8 @@ public final class SemanticTurnCoordinator {
         validateSelection(plan, selection);
 
         List<SemanticTask> orderedTasks = stableTopologicalOrder(plan);
+        String expressionTaskId = presetRequest ? null
+                : firstExpressionTaskId(orderedTasks, selection);
         Map<String, List<TaskDependency>> inboundDependencies = indexInboundDependencies(plan);
         Map<String, TaskOutcome> outcomesByTaskId = new LinkedHashMap<>();
 
@@ -104,7 +124,9 @@ public final class SemanticTurnCoordinator {
                     dependency.getAvailableOutcomes(),
                     plan.getContentVersion(),
                     allowance,
-                    authorizedContextReferences);
+                    authorizedContextReferences,
+                    task.getTaskId().equals(expressionTaskId),
+                    presetRequest);
             outcomesByTaskId.put(task.getTaskId(), executeSafely(context));
         }
 
@@ -113,6 +135,18 @@ public final class SemanticTurnCoordinator {
             orderedOutcomes.add(outcomesByTaskId.get(task.getTaskId()));
         }
         return new SemanticTurnOutcome(orderedOutcomes);
+    }
+
+    private String firstExpressionTaskId(
+            List<SemanticTask> orderedTasks, ExecutionSelection selection) {
+        for (SemanticTask task : orderedTasks) {
+            if (selection.isExecutable(task.getTaskId())
+                    && task.getTaskType()
+                    == com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT) {
+                return task.getTaskId();
+            }
+        }
+        return null;
     }
 
     private TaskOutcome selectionOutcome(SemanticTask task, ExecutionSelection selection) {
