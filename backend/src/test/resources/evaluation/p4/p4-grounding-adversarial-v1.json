@@ -1,0 +1,105 @@
+[
+  {
+    "name": "exact high-risk facts preserved",
+    "source": "2026-08-13 使用 PostgreSQL v16 将耗时降至 42ms",
+    "draft": "2026-08-13 使用 PostgreSQL v16，将耗时降至 42ms",
+    "accepted": true
+  },
+  {
+    "name": "new date rejected",
+    "source": "2026-08-13 完成阶段验证",
+    "draft": "2026-08-14 完成阶段验证",
+    "accepted": false
+  },
+  {
+    "name": "new unit value rejected",
+    "source": "耗时为 42ms",
+    "draft": "耗时为 20ms",
+    "accepted": false
+  },
+  {
+    "name": "new version rejected",
+    "source": "使用 PostgreSQL v16",
+    "draft": "使用 PostgreSQL v17",
+    "accepted": false
+  },
+  {
+    "name": "new technology rejected",
+    "source": "使用 PostgreSQL v16",
+    "draft": "使用 Redis v16",
+    "accepted": false
+  },
+  {
+    "name": "new Chinese technology rejected",
+    "source": "使用关系型数据库完成验证",
+    "draft": "使用向量数据库完成验证",
+    "accepted": false
+  },
+  {
+    "name": "cross subject rejected",
+    "source": "公开项目使用 PostgreSQL",
+    "draft": "另一个项目使用 PostgreSQL",
+    "secondSubject": "另一个项目",
+    "accepted": false
+  },
+  {
+    "name": "negation deletion rejected",
+    "source": "尚未覆盖 Redis",
+    "draft": "覆盖 Redis",
+    "accepted": false
+  },
+  {
+    "name": "new negation synonym rejected",
+    "source": "系统覆盖该场景",
+    "draft": "系统从未覆盖该场景",
+    "accepted": false
+  },
+  {
+    "name": "unsupported comparison rejected",
+    "source": "方案使用 PostgreSQL",
+    "draft": "方案优于 Redis",
+    "accepted": false
+  },
+  {
+    "name": "new causal claim rejected",
+    "source": "延迟下降 42ms",
+    "draft": "因为缓存优化，因此延迟下降 42ms",
+    "accepted": false
+  },
+  {
+    "name": "new causal synonym and content rejected",
+    "source": "延迟下降 42ms",
+    "draft": "缓存优化造成延迟下降 42ms",
+    "accepted": false
+  },
+  {
+    "name": "new achievement and verification claims rejected",
+    "source": "系统完成公开测试",
+    "draft": "系统已交付并证明生产可用",
+    "accepted": false
+  },
+  {
+    "name": "contribution strengthening rejected",
+    "source": "团队协作完成公开测试",
+    "draft": "由我独立完成公开测试",
+    "accepted": false
+  },
+  {
+    "name": "verification wording preserved",
+    "source": "通过公开测试验证 PostgreSQL v16",
+    "draft": "PostgreSQL v16 已通过公开测试验证",
+    "accepted": true
+  },
+  {
+    "name": "qualifier classes may be paraphrased",
+    "source": "计划以原型部分观察，结果不确定，协作参与且可能有效",
+    "draft": "拟通过试验局部观察，结果尚未确定，由团队支持且倾向有效",
+    "accepted": true
+  },
+  {
+    "name": "planned prototype cannot become proven production",
+    "source": "计划以原型部分观察，协作参与且可能有效",
+    "draft": "已上线生产系统，全部完成，由我独立完成并证明有效",
+    "accepted": false
+  }
+]
