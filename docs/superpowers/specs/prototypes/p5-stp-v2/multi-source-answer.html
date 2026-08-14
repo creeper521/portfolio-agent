@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>P5 stp-v2 · 多来源 / 跨域综合回答（原型）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* —— 与仓库 tokens.css 完全一致的取值 —— */
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --agent-stage: #1e1b17; --agent-shell-paper: #f3eadb; --agent-thread-paper: #f5e8d1;
+    --agent-hairline: rgba(104,84,60,.22);
+    --agent-radius-sm: 8px; --agent-radius-md: 12px; --agent-radius-shell: 20px;
+    --agent-shell-shadow: 0 28px 72px rgba(0,0,0,.42);
+    --agent-motion-fast: 160ms; --agent-motion-state: 220ms;
+    --ink: #201c17; --ink-2: #34302a; --muted: #746b5e; --faint: #9c9182;
+    --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53;
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+    --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --ease: cubic-bezier(.22,.8,.22,1);
+
+    /* —— P5 新增：来源域色码（design §4.3）—— */
+    --src-general: #5b6470;            /* 冷灰墨 */
+    --src-portfolio: var(--red);       /* 牛血红 */
+    --src-synthesis: #54507e;          /* 靛蓝紫 */
+    --src-general-bg: color-mix(in srgb, var(--src-general) 7%, var(--paper-hi));
+    --src-portfolio-bg: color-mix(in srgb, var(--src-portfolio) 7%, var(--paper-hi));
+    --src-synthesis-bg: color-mix(in srgb, var(--src-synthesis) 9%, var(--paper-hi));
+    --warn: #8a6a14;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--agent-stage); }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink);
+    background: var(--agent-stage);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  ::selection { color: var(--paper-hi); background: var(--red); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+
+  /* —— 顶部说明条（仅原型用，非产品 UI）—— */
+  .proto-note {
+    max-width: 980px; margin: 0 auto; padding: 18px 20px 6px;
+    color: #cdbfa9; font: 12px/1.7 var(--mono); letter-spacing: .04em;
+  }
+  .proto-note b { color: #e8ddce; font-weight: 500; }
+  .proto-note a { color: var(--red-hi); }
+
+  /* —— 漂浮工作区外壳（复刻 site-frame--workspace）—— */
+  .shell {
+    width: min(1080px, calc(100% - 48px));
+    margin: 14px auto 60px;
+    border-radius: var(--agent-radius-shell);
+    background: var(--paper-hi);
+    box-shadow: var(--agent-shell-shadow);
+    overflow: hidden;
+  }
+  .shell__bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    height: 64px; padding: 0 24px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--agent-shell-paper);
+  }
+  .mark { display: flex; align-items: baseline; gap: 12px; }
+  .mark__name { font: 700 17px/1 var(--serif); color: var(--ink); }
+  .mark__meta { font: 10px/1 var(--mono); letter-spacing: .14em; color: var(--muted); }
+  .shell__pills { display: flex; gap: 8px; }
+  .pill {
+    padding: 4px 9px; border: 1px solid var(--rule); border-radius: 999px;
+    font: 10.5px/1 var(--mono); letter-spacing: .08em; color: var(--muted);
+    background: var(--paper-hi);
+  }
+  .pill--accent { color: var(--red); border-color: var(--red); }
+  .pill--stp { color: var(--ink-2); border-color: var(--ink-2); }
+
+  /* —— 会话主体 —— */
+  .thread { width: min(820px, calc(100% - 96px)); margin: 26px auto 40px; }
+
+  /* 用户消息：右对齐 + 2px 牛血红左线，无气泡 */
+  .msg-user { width: fit-content; max-width: 64%; margin-left: auto; }
+  .msg-user__meta { text-align: right; margin: 0 0 6px; color: var(--red-hi);
+    font: 11px var(--mono); letter-spacing: .13em; }
+  .msg-user__body { padding: 4px 0 4px 14px; border-left: 2px solid var(--red);
+    font: 16px/1.7 var(--sans); }
+
+  /* Agent 消息 */
+  .msg-agent { margin-top: 34px; }
+  .msg-agent__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+    margin: 0 0 14px; }
+  .meta-prefix { color: var(--red-hi); font: 11px var(--mono); letter-spacing: .13em; }
+  .meta-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .tag { padding: 2px 7px; border: 1px solid var(--rule); border-radius: 4px;
+    font: 10px var(--mono); letter-spacing: .08em; color: var(--muted); }
+  .tag--verified { color: var(--paper-hi); border-color: var(--red); background: var(--red); }
+  .tag--synth { color: var(--src-synthesis); border-color: var(--src-synthesis); }
+  .meta-tail { color: var(--faint); font: 10px var(--mono); letter-spacing: .06em; }
+
+  /* 顶部来源组成条 + 回答构成入口 */
+  .answer-head { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    margin: 0 0 18px; }
+  .composition { display: inline-flex; align-items: center; gap: 9px;
+    padding: 6px 11px; border: 1px solid var(--src-synthesis); border-radius: 999px;
+    background: var(--src-synthesis-bg); font: 11px var(--mono); letter-spacing: .06em;
+    color: var(--src-synthesis); }
+  .composition__dots { display: inline-flex; gap: 3px; }
+  .cdot { width: 7px; height: 7px; border-radius: 50%; }
+  .cdot--g { background: var(--src-general); }
+  .cdot--p { background: var(--src-portfolio); }
+  .cdot--s { background: var(--src-synthesis); }
+
+  .comp-toggle {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+    border: 1px solid var(--rule); border-radius: 6px; background: rgba(255,255,255,.4);
+    font: 11px var(--mono); letter-spacing: .06em; color: var(--muted); cursor: pointer;
+    transition: border-color var(--agent-motion-fast) var(--ease), color var(--agent-motion-fast) var(--ease);
+  }
+  .comp-toggle:hover { border-color: var(--red); color: var(--red); }
+  .comp-toggle__chev { transition: transform var(--agent-motion-state) var(--ease); }
+  .comp-toggle[aria-expanded="true"] .comp-toggle__chev { transform: rotate(180deg); }
+
+  /* 回答构成信任层（默认折叠） */
+  .composition-panel {
+    overflow: hidden; max-height: 0; opacity: 0;
+    transition: max-height var(--agent-motion-state) var(--ease),
+                opacity var(--agent-motion-state) var(--ease),
+                margin var(--agent-motion-state) var(--ease);
+  }
+  .composition-panel[data-open="true"] { max-height: 520px; opacity: 1; margin: 0 0 22px; }
+  .comp-card { padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--agent-radius-md);
+    background: var(--paper-low); }
+  .comp-card__title { margin: 0 0 4px; font: 600 12px var(--mono); letter-spacing: .12em;
+    color: var(--ink-2); text-transform: uppercase; }
+  .comp-card__sub { margin: 0 0 14px; color: var(--muted); font: 11px/1.6 var(--mono); }
+  .task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px;
+    background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .task-row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 12px;
+    padding: 11px 13px; background: var(--paper-hi); }
+  .task-row__idx { font: 11px var(--mono); color: var(--faint); }
+  .task-row__main { min-width: 0; }
+  .task-row__label { font: 500 13.5px/1.4 var(--sans); color: var(--ink); }
+  .task-row__role { font: 10px var(--mono); letter-spacing: .08em; margin-left: 8px; }
+  .role--primary { color: var(--red); }
+  .role--supporting { color: var(--muted); }
+  .role--optional { color: var(--faint); }
+  .task-row__support { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 3px; font: 10.5px var(--mono); color: var(--muted); }
+  .sup-kind { padding: 1px 6px; border-radius: 3px; }
+  .sup-kind--verified { color: var(--red); background: color-mix(in srgb, var(--red) 9%, transparent); }
+  .sup-kind--general { color: var(--src-general); background: color-mix(in srgb, var(--src-general) 10%, transparent); }
+  .sup-kind--derived { color: var(--src-synthesis); background: color-mix(in srgb, var(--src-synthesis) 12%, transparent); }
+  .task-row__status { font: 10px var(--mono); color: var(--muted); text-align: right; white-space: nowrap; }
+  .degrade-flag { color: var(--warn); }
+  .caveat-summary { margin: 12px 0 0; padding: 9px 12px; border-left: 2px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 8%, var(--paper-hi));
+    font: 11px/1.6 var(--mono); color: var(--ink-2); }
+
+  /* —— 来源域 Block —— */
+  .block { padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--agent-radius-md);
+    background: var(--paper-hi); margin: 0 0 14px; }
+  .block--general { background: var(--src-general-bg); }
+  .block--portfolio { background: var(--src-portfolio-bg); }
+  .block--synthesis { background: var(--src-synthesis-bg); border-color: color-mix(in srgb, var(--src-synthesis) 40%, var(--rule)); }
+
+  .block__src { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; }
+  .src-mark { display: inline-flex; align-items: center; gap: 7px; padding: 2px 8px 2px 7px;
+    border-radius: 999px; font: 10px var(--mono); letter-spacing: .06em; }
+  .src-mark__dot { width: 8px; height: 8px; border-radius: 50%; }
+  .src-mark--general { color: var(--src-general); background: color-mix(in srgb, var(--src-general) 12%, transparent); }
+  .src-mark--general .src-mark__dot { background: var(--src-general); }
+  .src-mark--portfolio { color: var(--src-portfolio); background: color-mix(in srgb, var(--src-portfolio) 12%, transparent); }
+  .src-mark--portfolio .src-mark__dot { background: var(--src-portfolio); }
+  .src-mark--synthesis { color: var(--src-synthesis); background: color-mix(in srgb, var(--src-synthesis) 14%, transparent); }
+  .src-mark--synthesis .src-mark__dot { background: var(--src-synthesis); }
+
+  .support-badge { padding: 2px 7px; border-radius: 4px; font: 10px var(--mono); letter-spacing: .04em;
+    border: 1px solid transparent; }
+  .support-badge--verified { color: var(--paper-hi); background: var(--red); }
+  .support-badge--general { color: var(--src-general); border-color: color-mix(in srgb, var(--src-general) 40%, var(--rule)); }
+  .support-badge--derived { color: var(--src-synthesis); border-color: color-mix(in srgb, var(--src-synthesis) 45%, var(--rule)); }
+
+  .block h3 { margin: 2px 0 8px; font: 600 16px/1.45 var(--serif); color: var(--ink); }
+  .block__body { font: 16px/1.85 var(--serif); color: var(--ink); }
+  .block__body p { margin: 0 0 10px; }
+  .block__body p:last-child { margin-bottom: 0; }
+
+  /* 关系标签（仅 Synthesis） */
+  .relation { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin: 4px 0 12px; padding: 7px 11px; border-radius: 6px;
+    background: color-mix(in srgb, var(--src-synthesis) 8%, var(--paper-hi));
+    border: 1px dashed color-mix(in srgb, var(--src-synthesis) 45%, var(--rule));
+    font: 11.5px/1.5 var(--mono); color: var(--ink-2); }
+  .relation__type { color: var(--src-synthesis); font-weight: 500; }
+  .relation__note { color: var(--muted); font-size: 10.5px; }
+
+  /* Caveat（结构化限定语） */
+  .caveat { margin-top: 12px; padding: 9px 12px; border-left: 2px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
+    font: 11.5px/1.65 var(--mono); color: var(--ink-2); }
+  .caveat__code { color: var(--warn); font-size: 10px; letter-spacing: .1em; margin-right: 6px; }
+
+  /* 来源引用（按 publicSourceKey 关联顶层目录） */
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px;
+    padding-top: 12px; border-top: 1px solid var(--rule); }
+  .src-ref { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+    border: 1px solid var(--rule); border-radius: 6px; background: rgba(255,255,255,.45);
+    font: 11px var(--mono); color: var(--ink-2); cursor: pointer;
+    transition: border-color var(--agent-motion-fast) var(--ease), color var(--agent-motion-fast) var(--ease); }
+  .src-ref:hover { border-color: var(--red); color: var(--red); }
+  .src-ref__icon { color: var(--red); }
+  .src-ref__key { color: var(--faint); font-size: 10px; }
+  .sources__note { width: 100%; margin: 0; font: 10.5px var(--mono); color: var(--faint); letter-spacing: .04em; }
+
+  /* 续接 / 后续动作 */
+  .actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; }
+  .actions button { min-height: 32px; padding: 6px 11px; border: 1px solid var(--rule);
+    border-radius: 6px; background: rgba(255,255,255,.4); font: 11px var(--mono);
+    color: var(--muted); cursor: pointer; transition: border-color var(--agent-motion-fast) var(--ease), color var(--agent-motion-fast) var(--ease); }
+  .actions button:hover { border-color: var(--red); color: var(--red); }
+
+  /* 公共来源目录条（EvidenceDesk SOURCES 的投影） */
+  .catalog { margin-top: 26px; border: 1px solid var(--rule); border-radius: var(--agent-radius-md); overflow: hidden; }
+  .catalog__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 11px 15px; background: var(--paper-low); border-bottom: 1px solid var(--rule); }
+  .catalog__title { margin: 0; font: 600 11px var(--mono); letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
+  .catalog__count { font: 10.5px var(--mono); color: var(--faint); }
+  .catalog__list { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); }
+  .catalog__item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--paper-hi); }
+  .catalog__icon { width: 22px; height: 22px; flex: none; border-radius: 4px; display: grid; place-items: center;
+    color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 35%, var(--rule));
+    font: 10px var(--mono); }
+  .catalog__main { min-width: 0; }
+  .catalog__label { font: 500 12.5px/1.4 var(--sans); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .catalog__meta { font: 10px var(--mono); color: var(--faint); letter-spacing: .04em; }
+
+  /* 续接成功轻提示（contextResolution） */
+  .resolution-toast { display: flex; align-items: center; gap: 9px; margin: 0 0 18px;
+    padding: 8px 12px; border-radius: 6px; background: color-mix(in srgb, var(--red) 6%, var(--paper-hi));
+    border: 1px solid color-mix(in srgb, var(--red) 22%, var(--rule));
+    font: 11px var(--mono); color: var(--ink-2); }
+  .resolution-toast__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex: none; }
+
+  /* 输入框 */
+  .composer { display: flex; gap: 8px; align-items: flex-end; margin-top: 30px;
+    padding: 14px 0 0; border-top: 1px solid var(--rule); }
+  .composer__input { flex: 1; min-height: 42px; padding: 11px 14px; border: 1px solid var(--rule);
+    border-radius: var(--agent-radius-sm); background: var(--paper-hi); color: var(--ink);
+    font: 14px/1.5 var(--sans); resize: none; }
+  .composer__send { padding: 0 18px; min-height: 42px; border: 0; border-radius: var(--agent-radius-sm);
+    background: var(--red); color: var(--paper-hi); font: 12px var(--mono); letter-spacing: .08em; cursor: pointer; }
+  .composer__send:hover { background: color-mix(in srgb, var(--red) 88%, #000); }
+  .privacy { margin: 10px 0 0; font: 10px var(--mono); color: var(--faint); letter-spacing: .04em; }
+
+  /* 注解开关（仅原型） */
+  .anno-bar { max-width: 1080px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: flex-end; }
+  .anno-switch { padding: 5px 10px; border: 1px solid #5a5247; border-radius: 999px; background: rgba(255,255,255,.04);
+    color: #cdbfa9; font: 10.5px var(--mono); cursor: pointer; }
+  body[data-anno="on"] .anno { display: inline-flex; }
+  .anno { display: none; align-items: center; gap: 5px; margin-left: 8px; padding: 1px 6px;
+    border-radius: 3px; background: rgba(84,80,126,.16); color: var(--src-synthesis);
+    font: 9px var(--mono); letter-spacing: .04em; vertical-align: middle; }
+
+  @media (max-width: 620px) {
+    .thread { width: calc(100% - 40px); }
+    .catalog__list { grid-template-columns: 1fr; }
+    .msg-user { max-width: 86%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-anno="off">
+
+<div class="proto-note">
+  <b>P5 stp-v2 前端原型 ①／2 — 多来源 + 跨域综合回答主秀场。</b>
+  本页为高保真交互原型，沿用仓库 <code>tokes.css</code> 暖米/牛血红 dossier 主题（产品自托管 Noto Serif SC，此处用 CDN 近似）。
+  所有数据均为契约样例。打开右上角「显示字段注解」可查看每个表面对应的公共契约字段与 Spec 章节。
+</div>
+
+<div class="anno-bar">
+  <button class="anno-switch" id="annoSwitch">显示字段注解</button>
+</div>
+
+<div class="shell">
+  <div class="shell__bar">
+    <div class="mark">
+      <span class="mark__name">档案 · Portfolio Agent</span>
+      <span class="mark__meta">SESSION · 内存 · 不持久化</span>
+    </div>
+    <div class="shell__pills">
+      <span class="pill pill--stp">stp-v2</span>
+      <span class="pill pill--accent">跨域综合回答</span>
+    </div>
+  </div>
+
+  <div class="thread">
+
+    <!-- 续接成功轻提示：contextResolution（Spec §13.14） -->
+    <div class="resolution-toast">
+      <span class="resolution-toast__dot"></span>
+      已基于最新内容（v2）重新核对你继续的主体
+      <span class="anno">contextResolution.mode=REVALIDATED_TO_CURRENT · §13.14</span>
+    </div>
+
+    <!-- 用户消息 -->
+    <div class="msg-user">
+      <div class="msg-user__meta">你</div>
+      <div class="msg-user__body">解释一下乐观锁，以及这个项目是怎么用乐观锁的？</div>
+    </div>
+
+    <!-- Agent 回答 -->
+    <div class="msg-agent">
+      <div class="msg-agent__meta">
+        <span class="meta-prefix">回答</span>
+        <span class="meta-tags">
+          <span class="tag tag--synth">多来源</span>
+          <span class="tag">跨域综合</span>
+        </span>
+        <span class="meta-tail">ANSWERED · CROSS_DOMAIN_DERIVED</span>
+        <span class="anno">sourceComposition · resolution · §9.5 / §10.6</span>
+      </div>
+
+      <!-- 来源组成 + 回答构成入口 -->
+      <div class="answer-head">
+        <span class="composition">
+          <span class="composition__dots"><span class="cdot cdot--g"></span><span class="cdot cdot--p"></span><span class="cdot cdot--s"></span></span>
+          由 通用知识 + 作品集资料 + 跨域推导 组成
+          <span class="anno">sourceComposition=CROSS_DOMAIN_DERIVED · §9.5</span>
+        </span>
+        <button class="comp-toggle" id="compToggle" aria-expanded="false" aria-controls="compPanel">
+          回答构成 <span class="comp-toggle__chev">▾</span>
+          <span class="anno">fulfillmentRole / supportSummary · §9.4 / §10.4</span>
+        </button>
+      </div>
+
+      <!-- 回答构成信任层 -->
+      <div class="composition-panel" id="compPanel" data-open="false">
+        <div class="comp-card">
+          <p class="comp-card__title">回答构成</p>
+          <p class="comp-card__sub">履约角色由服务端按用户目标判定，前端只读、不可修改。Block 支持是权威明细，这里是聚合投影。</p>
+          <ul class="task-list">
+            <li class="task-row">
+              <span class="task-row__idx">01</span>
+              <span class="task-row__main">
+                <span class="task-row__label">通用概念解释：乐观锁<span class="task-row__role role--primary">主</span></span>
+                <span class="task-row__support">
+                  <span class="sup-kind sup-kind--general">通用知识</span>
+                  <span>0 公开来源</span>
+                </span>
+              </span>
+              <span class="task-row__status">COMPLETED</span>
+            </li>
+            <li class="task-row">
+              <span class="task-row__idx">02</span>
+              <span class="task-row__main">
+                <span class="task-row__label">项目 A 并发控制事实<span class="task-row__role role--supporting">辅</span></span>
+                <span class="task-row__support">
+                  <span class="sup-kind sup-kind--verified">✓已验证证据</span>
+                  <span>3 公开来源</span>
+                </span>
+              </span>
+              <span class="task-row__status">COMPLETED</span>
+            </li>
+            <li class="task-row">
+              <span class="task-row__idx">03</span>
+              <span class="task-row__main">
+                <span class="task-row__label">跨域综合：机制体现<span class="task-row__role role--primary">主</span></span>
+                <span class="task-row__support">
+                  <span class="sup-kind sup-kind--derived">任务推导</span>
+                  <span>来源任务 2</span>
+                  <span class="degrade-flag">· 检索回退</span>
+                </span>
+              </span>
+              <span class="task-row__status">COMPLETED · degraded</span>
+            </li>
+          </ul>
+          <p class="caveat-summary">
+            CAVEAT · 综合结论只描述「体现」而非「完整实现」；公开来源只追溯其作品集输入，不直接证明整句综合。
+            <span class="anno">degradationSummary.kinds=RETRIEVAL_FALLBACK · caveat · §10.8 / §9.9</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Block ① 通用知识 -->
+      <section class="block block--general">
+        <div class="block__src">
+          <span class="src-mark src-mark--general"><span class="src-mark__dot"></span>通用知识</span>
+          <span class="support-badge support-badge--general">通用知识</span>
+          <span class="anno">sourceDomain=GENERAL · support.kind=GENERAL_KNOWLEDGE · §9.2/§9.3</span>
+        </div>
+        <h3>什么是乐观锁</h3>
+        <div class="block__body">
+          <p>乐观锁是一种并发控制策略：它在读取时不加锁，而是在提交更新时再校验数据自读取后是否被改动，通常依赖版本号或时间戳。它假设冲突较少，适合读多写少的场景。</p>
+        </div>
+        <div class="sources">
+          <span class="sources__note">通用知识 Block 不携带公开来源（publicSourceKeys 为空）· §9.3</span>
+        </div>
+      </section>
+
+      <!-- Block ② 作品集资料 -->
+      <section class="block block--portfolio">
+        <div class="block__src">
+          <span class="src-mark src-mark--portfolio"><span class="src-mark__dot"></span>作品集资料</span>
+          <span class="support-badge support-badge--verified">✓已验证证据</span>
+          <span class="anno">sourceDomain=PORTFOLIO · support.kind=VERIFIED_PUBLIC_EVIDENCE · §9.2/§9.3</span>
+        </div>
+        <h3>项目 A 如何使用乐观锁</h3>
+        <div class="block__body">
+          <p>项目 A 在订单服务的更新接口上采用版本号乐观锁：每条记录携带 version 字段，更新时以 <code>WHERE id = ? AND version = ?</code> 匹配并自增；匹配失败则返回冲突，由上层重试。</p>
+        </div>
+        <div class="sources">
+          <button class="src-ref"><span class="src-ref__icon">📄</span>订单服务并发设计<span class="src-ref__key">order-lock-design</span></button>
+          <button class="src-ref"><span class="src-ref__icon">📄</span>更新接口实现<span class="src-ref__key">order-update-impl</span></button>
+          <button class="src-ref"><span class="src-ref__icon">🧪</span>冲突重试测试<span class="src-ref__key">order-retry-test</span></button>
+          <span class="anno">support.publicSourceKeys → 顶层 publicSourceCatalog · §9.7</span>
+        </div>
+      </section>
+
+      <!-- Block ③ 跨域综合 -->
+      <section class="block block--synthesis">
+        <div class="block__src">
+          <span class="src-mark src-mark--synthesis"><span class="src-mark__dot"></span>跨域综合</span>
+          <span class="support-badge support-badge--derived">由 通用 + 作品集 推导</span>
+          <span class="anno">sourceDomain=SYNTHESIS · support.kind=DERIVED_FROM_TASKS · §9.2/§9.3</span>
+        </div>
+        <div class="relation">
+          <span>项目 A · 订单服务</span>
+          <span class="relation__type">体现了</span>
+          <span>乐观锁的「读时不加锁、提交时版本校验」机制</span>
+          <span class="relation__note">关系：ILLUSTRATES（由服务端 Allowed Relation 决定，模型不可创建）· §8.2</span>
+        </div>
+        <div class="block__body">
+          <p>项目 A 的订单更新接口可以视作上文乐观锁机制的一个具体实例：它没有在读取阶段持有锁，而是用 version 字段在写入时做冲突检测。不过该实现聚焦于单记录更新，并未涉及多记录事务的乐观并发控制。</p>
+        </div>
+        <div class="sources">
+          <button class="src-ref"><span class="src-ref__icon">📄</span>订单服务并发设计<span class="src-ref__key">order-lock-design</span></button>
+          <span class="sources__note">综合 Block 的公开来源只追溯其作品集输入，不表示来源直接证明整句综合 · §9.3</span>
+        </div>
+        <div class="caveat">
+          <span class="caveat__code">CAVEAT · ILLUSTRATES_NOT_FULL_IMPLEMENTATION</span>
+          「体现」不等于「完整实现」；多记录事务级乐观锁是否被覆盖，公开材料不足以确认。
+        </div>
+      </section>
+
+      <!-- 后续动作 / 续接 -->
+      <div class="actions">
+        <button>换一个项目举例</button>
+        <button>它和悲观锁的区别</button>
+        <button>继续了解订单服务实现 ↳</button>
+        <span class="anno">continuationContext · resultItemId 续接 · §11.14 / §12.12</span>
+      </div>
+
+      <!-- 公共来源目录（顶层 publicSourceCatalog 去重） -->
+      <div class="catalog">
+        <div class="catalog__head">
+          <h4 class="catalog__title">公开来源目录</h4>
+          <span class="catalog__count">3 项 · 按 referenceKey 去重 · 供多个 Block 共享引用</span>
+        </div>
+        <div class="catalog__list">
+          <div class="catalog__item">
+            <span class="catalog__icon">DOC</span>
+            <span class="catalog__main">
+              <span class="catalog__label">订单服务并发设计</span>
+              <span class="catalog__meta">order-lock-design · DOCUMENT · v2</span>
+            </span>
+          </div>
+          <div class="catalog__item">
+            <span class="catalog__icon">COD</span>
+            <span class="catalog__main">
+              <span class="catalog__label">更新接口实现</span>
+              <span class="catalog__meta">order-update-impl · CODE · v2</span>
+            </span>
+          </div>
+          <div class="catalog__item">
+            <span class="catalog__icon">TST</span>
+            <span class="catalog__main">
+              <span class="catalog__label">冲突重试测试</span>
+              <span class="catalog__meta">order-retry-test · TEST_RESULT · v2</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入 -->
+      <div class="composer">
+        <textarea class="composer__input" rows="1" placeholder="继续追问（如：第二个推荐的架构是什么？）"></textarea>
+        <button class="composer__send">发送</button>
+      </div>
+      <p class="privacy">隐私：问题与回答仅存于当前标签页内存，不入 URL / Cookie / 服务端日志。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 回答构成展开/折叠
+  var t = document.getElementById('compToggle');
+  var p = document.getElementById('compPanel');
+  t.addEventListener('click', function () {
+    var open = t.getAttribute('aria-expanded') === 'true';
+    t.setAttribute('aria-expanded', String(!open));
+    p.setAttribute('data-open', String(!open));
+  });
+  // 字段注解开关（仅原型评审用）
+  var sw = document.getElementById('annoSwitch');
+  sw.addEventListener('click', function () {
+    var on = document.body.getAttribute('data-anno') === 'on';
+    document.body.setAttribute('data-anno', on ? 'off' : 'on');
+    sw.textContent = on ? '显示字段注解' : '隐藏字段注解';
+  });
+</script>
+</body>
+</html>

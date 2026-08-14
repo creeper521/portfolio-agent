@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>P5 stp-v2 · 边缘态秀场（原型）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --agent-stage: #1e1b17; --agent-shell-paper: #f3eadb;
+    --agent-hairline: rgba(104,84,60,.22);
+    --agent-radius-sm: 8px; --agent-radius-md: 12px; --agent-radius-shell: 20px;
+    --agent-shell-shadow: 0 28px 72px rgba(0,0,0,.42);
+    --agent-motion-fast: 160ms; --agent-motion-state: 220ms;
+    --ink: #201c17; --ink-2: #34302a; --muted: #746b5e; --faint: #9c9182;
+    --rule: #cdbfa9;
+    --red: #7a2e2a; --red-hi: #b65d53;
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+    --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --ease: cubic-bezier(.22,.8,.22,1);
+    --src-general: #5b6470; --src-portfolio: var(--red); --src-synthesis: #54507e;
+    --warn: #8a6a14;       /* 覆盖度/限定语：暖琥珀 */
+    --stale: #6d5d3f;      /* STALE：陈旧褐 */
+    --info: #3a5a6a;       /* 续接/提示：静蓝 */
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--agent-stage); }
+  body { margin: 0; min-height: 100vh; color: var(--ink); background: var(--agent-stage);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  ::selection { color: var(--paper-hi); background: var(--red); }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+  code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--ink) 7%, transparent);
+    padding: 1px 5px; border-radius: 4px; }
+
+  .proto-note { max-width: 980px; margin: 0 auto; padding: 18px 20px 6px; color: #cdbfa9;
+    font: 12px/1.7 var(--mono); letter-spacing: .04em; }
+  .proto-note b { color: #e8ddce; font-weight: 500; }
+
+  .gallery { max-width: 880px; margin: 14px auto 70px; padding: 0 20px; display: flex; flex-direction: column; gap: 30px; }
+  .case { background: var(--paper-hi); border-radius: var(--agent-radius-shell); box-shadow: var(--agent-shell-shadow); overflow: hidden; }
+  .case__label { display: flex; align-items: baseline; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--rule);
+    background: var(--agent-shell-paper); flex-wrap: wrap; }
+  .case__tag { font: 10.5px var(--mono); letter-spacing: .14em; color: var(--red); text-transform: uppercase; }
+  .case__title { margin: 0; font: 600 15px var(--serif); color: var(--ink); }
+  .case__spec { margin-left: auto; font: 10px var(--mono); color: var(--faint); letter-spacing: .04em; }
+  .case__body { padding: 22px; }
+  .case__body > p { margin: 0 0 14px; font: 13px/1.7 var(--sans); color: var(--muted); }
+
+  /* 通用：用户消息 */
+  .q { width: fit-content; max-width: 72%; margin: 0 0 18px auto; }
+  .q__meta { text-align: right; margin: 0 0 6px; color: var(--red-hi); font: 11px var(--mono); letter-spacing: .13em; }
+  .q__body { padding: 4px 0 4px 14px; border-left: 2px solid var(--red); font: 15px/1.7 var(--sans); }
+
+  /* Agent meta */
+  .ameta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 0 0 14px; }
+  .ameta__pre { color: var(--red-hi); font: 11px var(--mono); letter-spacing: .13em; }
+  .tag { padding: 2px 7px; border: 1px solid var(--rule); border-radius: 4px; font: 10px var(--mono); letter-spacing: .08em; color: var(--muted); }
+  .tag--warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--rule)); }
+  .tag--stale { color: var(--stale); border-color: color-mix(in srgb, var(--stale) 50%, var(--rule)); }
+  .ameta__tail { color: var(--faint); font: 10px var(--mono); letter-spacing: .06em; }
+
+  /* Block */
+  .block { padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--agent-radius-md); background: var(--paper-hi); margin: 0 0 12px; }
+  .block--portfolio { background: color-mix(in srgb, var(--red) 6%, var(--paper-hi)); }
+  .block__src { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+  .src-mark { display: inline-flex; align-items: center; gap: 7px; padding: 2px 8px 2px 7px; border-radius: 999px; font: 10px var(--mono); }
+  .src-mark__dot { width: 8px; height: 8px; border-radius: 50%; }
+  .src-mark--portfolio { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+  .src-mark--portfolio .src-mark__dot { background: var(--red); }
+  .badge-v { padding: 2px 7px; border-radius: 4px; font: 10px var(--mono); color: var(--paper-hi); background: var(--red); }
+  .block h3 { margin: 2px 0 7px; font: 600 15.5px/1.45 var(--serif); }
+  .block__body { font: 15px/1.8 var(--serif); }
+
+  /* 横幅：部分完成 */
+  .banner { display: flex; gap: 11px; align-items: flex-start; margin: 0 0 16px; padding: 11px 14px;
+    border-left: 3px solid var(--warn); border-radius: 4px;
+    background: color-mix(in srgb, var(--warn) 8%, var(--paper-hi)); font: 12.5px/1.6 var(--sans); color: var(--ink-2); }
+  .banner__strong { font-weight: 600; color: var(--ink); }
+  .banner__mono { font: 10.5px var(--mono); color: var(--muted); letter-spacing: .04em; }
+
+  /* 降级提示 */
+  .degrade { display: flex; align-items: center; gap: 9px; margin: 0 0 16px; padding: 9px 13px;
+    border: 1px solid color-mix(in srgb, var(--red-hi) 40%, var(--rule)); border-radius: 6px;
+    background: color-mix(in srgb, var(--red-hi) 7%, var(--paper-hi));
+    font: 11.5px var(--mono); color: var(--ink-2); }
+  .degrade__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red-hi); flex: none; }
+  .degrade__kind { padding: 1px 6px; border-radius: 3px; background: color-mix(in srgb, var(--red-hi) 14%, transparent); color: var(--red); }
+
+  /* Caveat */
+  .caveat { margin-top: 12px; padding: 9px 12px; border-left: 2px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 8%, transparent); font: 11.5px/1.65 var(--mono); color: var(--ink-2); }
+  .caveat__code { color: var(--warn); font-size: 10px; letter-spacing: .1em; margin-right: 6px; }
+
+  /* 来源引用 */
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--rule); }
+  .src-ref { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid var(--rule);
+    border-radius: 6px; background: rgba(255,255,255,.45); font: 11px var(--mono); color: var(--ink-2); cursor: pointer; }
+  .src-ref:hover { border-color: var(--red); color: var(--red); }
+  .src-ref__icon { color: var(--red); }
+
+  /* 任务摘要（紧凑） */
+  .tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px;
+    background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .trow { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 11px; padding: 10px 13px; background: var(--paper-hi); }
+  .trow__idx { font: 11px var(--mono); color: var(--faint); }
+  .trow__label { font: 500 13px/1.4 var(--sans); }
+  .trow__sub { font: 10.5px var(--mono); color: var(--muted); margin-top: 2px; }
+  .trow__stale { color: var(--stale); }
+  .trow__status { font: 10px var(--mono); color: var(--muted); white-space: nowrap; }
+  .status--stale { color: var(--stale); }
+  .status--empty { color: var(--faint); }
+
+  /* 恢复卡：CONTEXT_INVALIDATED（沿用 PlanInvalidatedNotice 范式） */
+  .recover { border: 1px solid color-mix(in srgb, var(--red) 45%, var(--rule)); border-radius: var(--agent-radius-md);
+    background: color-mix(in srgb, var(--red) 5%, var(--paper-hi)); padding: 20px 22px; }
+  .recover__eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 8px;
+    font: 11px var(--mono); letter-spacing: .14em; color: var(--red); text-transform: uppercase; }
+  .recover__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .recover__title { margin: 0 0 6px; font: 600 17px/1.4 var(--serif); color: var(--ink); }
+  .recover__body { margin: 0 0 14px; font: 14px/1.75 var(--sans); color: var(--ink-2); }
+  .recover__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 16px;
+    padding: 10px 13px; border-radius: 6px; background: var(--paper-low);
+    font: 11px var(--mono); color: var(--muted); }
+  .recover__meta b { color: var(--ink-2); font-weight: 500; }
+  .recover__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { min-height: 36px; padding: 8px 14px; border: 1px solid var(--rule); border-radius: 6px;
+    background: rgba(255,255,255,.4); font: 12px var(--mono); color: var(--muted); cursor: pointer;
+    transition: border-color var(--agent-motion-fast) var(--ease), color var(--agent-motion-fast) var(--ease); }
+  .btn:hover { border-color: var(--red); color: var(--red); }
+  .btn--primary { background: var(--red); color: var(--paper-hi); border-color: var(--red); }
+  .btn--primary:hover { background: color-mix(in srgb, var(--red) 88%, #000); color: var(--paper-hi); }
+
+  /* 澄清卡 */
+  .clarify { border: 1px solid var(--rule); border-radius: var(--agent-radius-md); background: var(--paper-hi); padding: 18px 20px; }
+  .clarify__pre { margin: 0 0 4px; font: 11px var(--mono); letter-spacing: .13em; color: var(--red-hi); }
+  .clarify__title { margin: 0 0 6px; font: 600 16px/1.4 var(--serif); }
+  .clarify__body { margin: 0 0 14px; font: 14px/1.75 var(--sans); color: var(--ink-2); }
+  .clarify__opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--rule);
+    border-radius: var(--agent-radius-sm); background: rgba(255,255,255,.4); text-align: left; cursor: pointer;
+    font: 13px/1.5 var(--sans); color: var(--ink); transition: border-color var(--agent-motion-fast) var(--ease), color var(--agent-motion-fast) var(--ease); }
+  .opt:hover { border-color: var(--red); color: var(--red); }
+  .opt__pos { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 1px solid var(--rule);
+    display: grid; place-items: center; font: 10px var(--mono); color: var(--muted); }
+  .opt__meta { margin-left: auto; font: 10px var(--mono); color: var(--faint); }
+
+  /* 409 升级卡 */
+  .upgrade { border: 1px solid var(--ink-2); border-radius: var(--agent-radius-md);
+    background: color-mix(in srgb, var(--ink) 5%, var(--paper-hi)); padding: 18px 20px; }
+  .upgrade__pre { margin: 0 0 4px; font: 11px var(--mono); letter-spacing: .13em; color: var(--ink-2); }
+  .upgrade__title { margin: 0 0 6px; font: 600 16px/1.4 var(--serif); }
+  .upgrade__body { margin: 0 0 14px; font: 13.5px/1.7 var(--sans); color: var(--ink-2); }
+  .upgrade__code { display: inline-block; margin-bottom: 12px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="proto-note">
+  <b>P5 stp-v2 前端原型 ②／2 — 边缘态秀场。</b>
+  逐个呈现部分完成、降级、Caveat、Context 失效恢复、局部 STALE、澄清与 409 升级等状态表面，
+  均沿用 dossier 主题。每张卡片右上角标注其公共契约字段与 Spec 章节。
+</div>
+
+<div class="gallery">
+
+  <!-- ① 部分完成 -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 01</span>
+      <h3 class="case__title">部分完成：覆盖度 ≠ 不可信</h3>
+      <span class="case__spec">resolution=PARTIALLY_ANSWERED · coverage=PARTIAL · §9.8 / §10.7</span>
+    </div>
+    <div class="case__body">
+      <div class="q"><div class="q__meta">你</div><div class="q__body">介绍项目 A 的并发控制，并和悲观锁做对比。</div></div>
+      <div class="ameta">
+        <span class="ameta__pre">回答</span>
+        <span class="tag tag--warn">部分回答</span>
+        <span class="ameta__tail">PARTIALLY_ANSWERED · MULTI_SOURCE</span>
+      </div>
+      <div class="banner">
+        <div>
+          <div class="banner__strong">已回答部分内容。</div>
+          <div>已发布的作品集事实仍充分可信；「与悲观锁对比」这一主题当前没有可发布结果。</div>
+          <div class="banner__mono">coverage=PARTIAL · 已发布内容 support.kind=VERIFIED_PUBLIC_EVIDENCE</div>
+        </div>
+      </div>
+      <section class="block block--portfolio">
+        <div class="block__src">
+          <span class="src-mark src-mark--portfolio"><span class="src-mark__dot"></span>作品集资料</span>
+          <span class="badge-v">✓已验证证据</span>
+        </div>
+        <h3>项目 A 的并发控制</h3>
+        <div class="block__body">项目 A 在订单更新接口采用版本号乐观锁，读时不加锁，提交时校验 version 并自增……</div>
+        <div class="sources">
+          <span class="src-ref"><span class="src-ref__icon">📄</span>订单服务并发设计</span>
+          <span class="src-ref"><span class="src-ref__icon">🧪</span>冲突重试测试</span>
+        </div>
+      </section>
+      <ul class="tasks">
+        <li class="trow"><span class="trow__idx">01</span><span><div class="trow__label">项目 A 并发控制事实</div><div class="trow__sub">✓已验证证据 · 2 来源</div></span><span class="trow__status">COMPLETED</span></li>
+        <li class="trow"><span class="trow__idx">02</span><span><div class="trow__label">与悲观锁对比</div><div class="trow__sub status--empty">公开证据不足，未生成 Block</div></span><span class="trow__status status--empty">EMPTY</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ② 降级 -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 02</span>
+      <h3 class="case__title">降级：完整 fallback 仍是 ANSWERED</h3>
+      <span class="case__spec">degradationSummary.kinds=RETRIEVAL_FALLBACK · §10.7 / §10.8</span>
+    </div>
+    <div class="case__body">
+      <div class="degrade">
+        <span class="degrade__dot"></span>
+        已切换到基础回答方式 <span class="degrade__kind">检索回退</span>
+        <span style="margin-left:auto;color:var(--faint);font-size:10.5px;">仅聚合可见内容任务 · 不污染整份回答</span>
+      </div>
+      <p style="margin:0;font:13px/1.7 var(--sans);color:var(--muted);">正文照常呈现（此处省略）。降级只描述执行路径；已发布内容仍可读可信，resolution 仍为 <code>ANSWERED</code>。</p>
+    </div>
+  </section>
+
+  <!-- ③ Caveat -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 03</span>
+      <h3 class="case__title">结构化限定语（Caveat）：不省略、不反转</h3>
+      <span class="case__spec">caveats[].appliesToBlockIds · §9.9</span>
+    </div>
+    <div class="case__body">
+      <section class="block">
+        <div class="block__src"><span class="src-mark src-mark--portfolio"><span class="src-mark__dot"></span>作品集资料</span><span class="badge-v">✓已验证证据</span></div>
+        <h3>项目 A 的接口吞吐</h3>
+        <div class="block__body">在公开记录的压测条件下，订单更新接口达到某吞吐水平……</div>
+        <div class="caveat">
+          <span class="caveat__code">CAVEAT · BENCHMARK_CONDITION_SCOPED</span>
+          该数字仅适用于公开记录的压测条件，不可外推到不同硬件或负载 profile。
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ④ CONTEXT_INVALIDATED 恢复卡（整轮） -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 04</span>
+      <h3 class="case__title">Context 失效恢复（整轮依赖 Strict Context）</h3>
+      <span class="case__spec">disposition=CONTEXT_INVALIDATED · contextInvalidation · §13.9 / §13.14</span>
+    </div>
+    <div class="case__body">
+      <div class="q"><div class="q__meta">你</div><div class="q__body">把刚才推荐的项目换成更偏后端的。</div></div>
+      <div class="ameta">
+        <span class="ameta__pre">回答</span>
+        <span class="tag tag--stale">上下文失效</span>
+        <span class="ameta__tail">ANSWER · NEEDS_CLARIFICATION · disposition=CONTEXT_INVALIDATED</span>
+      </div>
+      <div class="recover">
+        <p class="recover__eyebrow"><span class="recover__dot"></span>上下文已失效</p>
+        <h4 class="recover__title">这份推荐结果已与最新内容不兼容</h4>
+        <p class="recover__body">你引用的推荐基于旧版本内容；内容更新后，其候选范围与排序无法安全重算。请基于最新内容重新开始一次推荐。</p>
+        <div class="recover__meta">
+          <span><b>原因</b> CONTEXT_RESULT_STALE</span>
+          <span><b>类型</b> RECOMMENDATION</span>
+          <span><b>当前版本</b> v2</span>
+          <span><b>恢复动作</b> RESTART_FROM_CURRENT_CONTENT</span>
+        </div>
+        <div class="recover__actions">
+          <button class="btn btn--primary">基于最新内容重新推荐</button>
+          <button class="btn">换个问法</button>
+        </div>
+      </div>
+      <p style="margin:14px 0 0;font:11px/1.6 var(--mono);color:var(--faint);">不自动重启 stale 操作、不静默回退到页面主体或其它 Context（§13.10 / §11.12）。</p>
+    </div>
+  </section>
+
+  <!-- ⑤ 局部 STALE（不全屏覆盖） -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 05</span>
+      <h3 class="case__title">局部 STALE：其他成功结果照常返回</h3>
+      <span class="case__spec">Task public status=STALE · 顶层 PARTIALLY_ANSWERED · §13.9</span>
+    </div>
+    <div class="case__body">
+      <div class="ameta">
+        <span class="ameta__pre">回答</span>
+        <span class="tag tag--warn">部分回答</span>
+        <span class="ameta__tail">PARTIALLY_ANSWERED · 局部 STALE 不覆盖正文</span>
+      </div>
+      <section class="block block--portfolio">
+        <div class="block__src"><span class="src-mark src-mark--portfolio"><span class="src-mark__dot"></span>作品集资料</span><span class="badge-v">✓已验证证据</span></div>
+        <h3>项目 A 的并发控制</h3>
+        <div class="block__body">该任务正常返回，正文照常呈现……</div>
+      </section>
+      <ul class="tasks">
+        <li class="trow"><span class="trow__idx">01</span><span><div class="trow__label">项目 A 并发控制事实</div><div class="trow__sub">✓已验证证据</div></span><span class="trow__status">COMPLETED</span></li>
+        <li class="trow"><span class="trow__idx">02</span><span><div class="trow__label">换一个推荐</div><div class="trow__sub trow__stale">推荐上下文与最新内容不兼容</div></span><span class="trow__status status--stale">STALE</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ⑥ 澄清：序号越界 / 歧义 -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 06</span>
+      <h3 class="case__title">澄清：结果引用歧义（不默认选第一名）</h3>
+      <span class="case__spec">CLARIFICATION_REQUIRED · RESULT_CONTEXT_AMBIGUITY · §12.10 / §12.13</span>
+    </div>
+    <div class="case__body">
+      <div class="q"><div class="q__meta">你</div><div class="q__body">那个的架构是什么？</div></div>
+      <div class="clarify">
+        <p class="clarify__pre">需要补充信息</p>
+        <h4 class="clarify__title">你指的是哪一个推荐？</h4>
+        <p class="clarify__body">当前有多个推荐结果且没有选择信息，「那个」无法唯一确定。请明确所指项目。</p>
+        <div class="clarify__opts">
+          <button class="opt"><span class="opt__pos">1</span>订单优化项目<span class="opt__meta">RECOMMENDATION · rank 1</span></button>
+          <button class="opt"><span class="opt__pos">2</span>权限重构项目<span class="opt__meta">RECOMMENDATION · rank 2</span></button>
+          <button class="opt"><span class="opt__pos">3</span>数据迁移项目<span class="opt__meta">RECOMMENDATION · rank 3</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑦ 409 升级 -->
+  <section class="case">
+    <div class="case__label">
+      <span class="case__tag">EDGE 07</span>
+      <h3 class="case__title">协议不兼容：HTTP 409 升级提示</h3>
+      <span class="case__spec">409 · AGENT_TURN_CONTRACT_UNSUPPORTED · §17.2</span>
+    </div>
+    <div class="case__body">
+      <div class="upgrade">
+        <p class="upgrade__pre">需要刷新</p>
+        <h4 class="upgrade__title">当前页面需要更新以继续</h4>
+        <p class="upgrade__body">本次回答能力需要更新后的界面支持。请刷新页面获取最新能力。</p>
+        <span class="upgrade__code"><code>HTTP 409 · AGENT_TURN_CONTRACT_UNSUPPORTED</code></span>
+        <div class="recover__actions">
+          <button class="btn btn--primary">刷新页面</button>
+          <button class="btn">以基础模式继续（stp-v1）</button>
+        </div>
+        <p style="margin:14px 0 0;font:11px/1.6 var(--mono);color:var(--faint);">不静默降级成错误单域回答；「基础模式」为用户显式选择（是否允许回退待契约第 7 点确认）。</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

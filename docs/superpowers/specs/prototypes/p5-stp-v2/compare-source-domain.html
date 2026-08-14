@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>P5 stp-v2 · 来源域视觉 A/B（克制 vs 鲜明）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+    --agent-stage: #1e1b17; --agent-shell-paper: #f3eadb;
+    --agent-radius-sm: 8px; --agent-radius-md: 12px; --agent-radius-shell: 20px;
+    --agent-shell-shadow: 0 28px 72px rgba(0,0,0,.42);
+    --agent-motion-fast: 160ms; --agent-motion-state: 260ms;
+    --ink: #201c17; --ink-2: #34302a; --muted: #746b5e; --faint: #9c9182;
+    --rule: #cdbfa9; --red: #7a2e2a; --red-hi: #b65d53;
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+    --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --ease: cubic-bezier(.22,.8,.22,1);
+    --src-general: #5b6470; --src-portfolio: var(--red); --src-synthesis: #54507e;
+    --warn: #8a6a14;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--agent-stage); }
+  body { margin: 0; min-height: 100vh; color: var(--ink); background: var(--agent-stage);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased;
+    transition: background-color var(--agent-motion-state) var(--ease); }
+
+  .proto-note { max-width: 880px; margin: 0 auto; padding: 18px 20px 4px; color: #cdbfa9;
+    font: 12px/1.7 var(--mono); letter-spacing: .04em; }
+  .proto-note b { color: #e8ddce; font-weight: 500; }
+
+  /* A/B 切换条 */
+  .switchbar { max-width: 880px; margin: 10px auto 0; padding: 0 20px; display: flex; align-items: center;
+    gap: 14px; flex-wrap: wrap; }
+  .switch { display: inline-flex; border: 1px solid #5a5247; border-radius: 999px; overflow: hidden; }
+  .switch button { padding: 8px 18px; border: 0; background: transparent; color: #cdbfa9;
+    font: 11px var(--mono); letter-spacing: .12em; cursor: pointer; transition: all var(--agent-motion-fast) var(--ease); }
+  .switch button[aria-pressed="true"] { background: var(--red); color: var(--paper-hi); }
+  .switchdesc { color: #9c9182; font: 11px/1.6 var(--mono); }
+
+  .shell { width: min(880px, calc(100% - 48px)); margin: 16px auto 70px; border-radius: var(--agent-radius-shell);
+    background: var(--paper-hi); box-shadow: var(--agent-shell-shadow); overflow: hidden; }
+  .shell__bar { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 16px 24px; border-bottom: 1px solid var(--rule); background: var(--agent-shell-paper); }
+  .shell__bar h1 { margin: 0; font: 600 16px var(--serif); }
+  .shell__bar .variant-name { font: 11px var(--mono); letter-spacing: .14em; color: var(--red); text-transform: uppercase;
+    transition: color var(--agent-motion-state) var(--ease); }
+  .body { padding: 26px 28px 32px; }
+
+  .lead { margin: 0 0 20px; padding: 12px 15px; border-radius: 8px; background: var(--paper-low);
+    font: 12px/1.7 var(--mono); color: var(--ink-2); }
+  .lead b { color: var(--ink); }
+
+  /* —— 共用 Block 结构 —— */
+  .block { position: relative; padding: 18px 20px; border: 1px solid var(--rule); border-radius: var(--agent-radius-md);
+    background: var(--paper-hi); margin: 0 0 14px; overflow: hidden;
+    transition: background-color var(--agent-motion-state) var(--ease), border-color var(--agent-motion-state) var(--ease); }
+  .block[data-domain="general"]   { --dc: var(--src-general); }
+  .block[data-domain="portfolio"] { --dc: var(--src-portfolio); }
+  .block[data-domain="synthesis"] { --dc: var(--src-synthesis); }
+
+  .block__src { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; }
+  .src-mark { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px 3px 8px; border-radius: 999px;
+    font: 10px var(--mono); letter-spacing: .06em; transition: all var(--agent-motion-state) var(--ease); }
+  .src-mark__dot { width: 8px; height: 8px; border-radius: 50%; }
+  .support-badge { padding: 2px 8px; border-radius: 4px; font: 10px var(--mono); letter-spacing: .04em;
+    transition: all var(--agent-motion-state) var(--ease); }
+  .block h3 { margin: 2px 0 8px; font: 600 16px/1.45 var(--serif); }
+  .block__body { font: 16px/1.85 var(--serif); }
+  .block__body p { margin: 0; }
+
+  .relation { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; padding: 8px 12px;
+    border-radius: 6px; font: 11.5px/1.5 var(--mono); color: var(--ink-2);
+    transition: all var(--agent-motion-state) var(--ease); }
+  .relation__type { font-weight: 500; }
+
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .src-ref { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid var(--rule);
+    border-radius: 6px; background: rgba(255,255,255,.45); font: 11px var(--mono); color: var(--ink-2); cursor: pointer; }
+  .src-ref:hover { border-color: var(--red); color: var(--red); }
+  .src-ref__icon { color: var(--red); }
+
+  /* =====================================================================
+     A · 克制版：无底色、3px 内嵌左线、描边徽标；SYNTHESIS 仅留靛蓝描边
+     ===================================================================== */
+  body.variant-restrained .block { background: var(--paper-hi); }
+  body.variant-restrained .block::before {
+    content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 2px 2px 0;
+    background: var(--dc);
+  }
+  body.variant-restrained .src-mark { background: transparent; color: var(--dc); }
+  body.variant-restrained .src-mark__dot { background: var(--dc); }
+  body.variant-restrained .support-badge {
+    background: transparent; border: 1px solid color-mix(in srgb, var(--dc) 45%, var(--rule)); color: var(--dc);
+  }
+  /* SYNTHESIS：去底色，仅靛蓝实线描边 + 左线 */
+  body.variant-restrained .block[data-domain="synthesis"] {
+    background: var(--paper-hi); border-color: color-mix(in srgb, var(--src-synthesis) 45%, var(--rule));
+  }
+  body.variant-restrained .relation {
+    background: transparent; border: 1px dashed color-mix(in srgb, var(--src-synthesis) 50%, var(--rule));
+  }
+  body.variant-restrained .relation__type { color: var(--src-synthesis); }
+
+  /* =====================================================================
+     B · 鲜明版：饱和底色 + 满高左条 + 实底药丸/徽标；SYNTHESIS 最强靛蓝卡
+     ===================================================================== */
+  body.variant-vivid .block {
+    background: color-mix(in srgb, var(--dc) 12%, var(--paper-hi));
+    border-color: color-mix(in srgb, var(--dc) 42%, var(--rule));
+  }
+  body.variant-vivid .block::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--dc);
+  }
+  body.variant-vivid .src-mark { background: var(--dc); color: var(--paper-hi); }
+  body.variant-vivid .src-mark__dot { background: var(--paper-hi); }
+  body.variant-vivid .support-badge { background: var(--dc); color: var(--paper-hi); border: 1px solid var(--dc); }
+  /* SYNTHESIS：最强靛蓝卡 + 头部色带 */
+  body.variant-vivid .block[data-domain="synthesis"] {
+    background: color-mix(in srgb, var(--src-synthesis) 16%, var(--paper-hi));
+    border-color: color-mix(in srgb, var(--src-synthesis) 60%, var(--rule));
+  }
+  body.variant-vivid .block[data-domain="synthesis"] .block__src {
+    margin: -18px -20px 12px; padding: 10px 20px;
+    background: color-mix(in srgb, var(--src-synthesis) 22%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--src-synthesis) 40%, var(--rule));
+  }
+  body.variant-vivid .relation {
+    background: color-mix(in srgb, var(--src-synthesis) 14%, var(--paper-hi));
+    border: 1px solid color-mix(in srgb, var(--src-synthesis) 45%, var(--rule));
+  }
+  body.variant-vivid .relation__type { color: var(--src-synthesis); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body class="variant-restrained">
+
+<div class="proto-note">
+  <b>P5 stp-v2 来源域视觉 A/B。</b> 同一份三 Block 内容（通用知识 / 作品集资料 / 跨域综合），点顶部切换 <b>克制 A</b> 与 <b>鲜明 B</b>，观察三色来源域、支持徽标、SYNTHESIS 卡片三种语汇的差异。
+</div>
+
+<div class="switchbar">
+  <div class="switch" role="group" aria-label="视觉变体">
+    <button id="btnA" aria-pressed="true">克制 A</button>
+    <button id="btnB" aria-pressed="false">鲜明 B</button>
+  </div>
+  <span class="switchdesc" id="desc">A｜无底色 · 3px 内嵌左线 · 描边徽标 · SYNTHESIS 仅靛蓝描边</span>
+</div>
+
+<div class="shell">
+  <div class="shell__bar">
+    <h1>来源域视觉对比</h1>
+    <span class="variant-name" id="vname">克制版 A</span>
+  </div>
+  <div class="body">
+    <p class="lead" id="lead">
+      <b>克制 A。</b> 让正文与牛血红品牌色主导，来源域只用一条 3px 内嵌左线 + 描边小徽标低声提示；SYNTHESIS 去掉底色、仅以靛蓝描边区分。适合「诚实但不喧宾夺主」。
+    </p>
+
+    <section class="block" data-domain="general">
+      <div class="block__src">
+        <span class="src-mark"><span class="src-mark__dot"></span>通用知识</span>
+        <span class="support-badge">通用知识</span>
+      </div>
+      <h3>什么是乐观锁</h3>
+      <div class="block__body"><p>乐观锁在读时不加锁，提交更新时再校验数据自读取后是否被改动，通常依赖版本号或时间戳。它假设冲突较少，适合读多写少的场景。</p></div>
+    </section>
+
+    <section class="block" data-domain="portfolio">
+      <div class="block__src">
+        <span class="src-mark"><span class="src-mark__dot"></span>作品集资料</span>
+        <span class="support-badge">✓已验证证据</span>
+      </div>
+      <h3>项目 A 如何使用乐观锁</h3>
+      <div class="block__body"><p>项目 A 在订单更新接口采用版本号乐观锁：每条记录携带 version，更新时以 <code>WHERE id=? AND version=?</code> 匹配并自增；失败则返回冲突由上层重试。</p></div>
+      <div class="sources">
+        <span class="src-ref"><span class="src-ref__icon">📄</span>订单服务并发设计</span>
+        <span class="src-ref"><span class="src-ref__icon">🧪</span>冲突重试测试</span>
+      </div>
+    </section>
+
+    <section class="block" data-domain="synthesis">
+      <div class="block__src">
+        <span class="src-mark"><span class="src-mark__dot"></span>跨域综合</span>
+        <span class="support-badge">由 通用 + 作品集 推导</span>
+      </div>
+      <div class="relation">
+        <span>项目 A · 订单服务</span><span class="relation__type">体现了</span><span>乐观锁的版本校验机制</span>
+      </div>
+      <div class="block__body"><p>项目 A 的订单更新接口可视作上文乐观锁机制的一个具体实例：读时不加锁，写入时用 version 做冲突检测；不过它聚焦单记录更新，未涉及多记录事务级乐观并发控制。</p></div>
+      <div class="sources">
+        <span class="src-ref"><span class="src-ref__icon">📄</span>订单服务并发设计</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  var btnA = document.getElementById('btnA');
+  var btnB = document.getElementById('btnB');
+  var vname = document.getElementById('vname');
+  var desc = document.getElementById('desc');
+  var lead = document.getElementById('lead');
+  var TEXTS = {
+    a: { name: '克制版 A', vname: '克制版 A',
+         desc: 'A｜无底色 · 3px 内嵌左线 · 描边徽标 · SYNTHESIS 仅靛蓝描边',
+         lead: '<b>克制 A。</b> 让正文与牛血红品牌色主导，来源域只用一条 3px 内嵌左线 + 描边小徽标低声提示；SYNTHESIS 去掉底色、仅以靛蓝描边区分。适合「诚实但不喧宾夺主」。' },
+    b: { name: '鲜明版 B', vname: '鲜明版 B',
+         desc: 'B｜饱和底色 · 满高左条 · 实底药丸/徽标 · SYNTHESIS 最强靛蓝卡',
+         lead: '<b>鲜明 B。</b> 来源域用饱和底色 + 满高左条 + 实底徽标强烈分区；SYNTHESIS 用最强靛蓝卡片 + 头部色带，跨域推导一眼可辨。适合「来源一目了然、信任分层显性」。' }
+  };
+  function set(v) {
+    var isA = v === 'a';
+    document.body.className = isA ? 'variant-restrained' : 'variant-vivid';
+    btnA.setAttribute('aria-pressed', String(isA));
+    btnB.setAttribute('aria-pressed', String(!isA));
+    vname.textContent = TEXTS[v].vname;
+    desc.textContent = TEXTS[v].desc;
+    lead.innerHTML = TEXTS[v].lead;
+  }
+  btnA.addEventListener('click', function () { set('a'); });
+  btnB.addEventListener('click', function () { set('b'); });
+</script>
+</body>
+</html>
