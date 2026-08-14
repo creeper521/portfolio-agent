@@ -1,7 +1,6 @@
 package com.portfolio.agent.answer.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
@@ -102,9 +101,9 @@ public final class ConversationAnswerBlockResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public String getTitle() { return title; }
     public String getContent() { return content; }
-    @JsonIgnore
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<String> getClaimIds() { return claimIds; }
-    @JsonIgnore
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<String> getEvidenceIds() { return evidenceIds; }
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<PublicSourceReferenceResponse> getSourceReferences() { return sourceReferences; }

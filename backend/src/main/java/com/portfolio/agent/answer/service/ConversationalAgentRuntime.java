@@ -621,15 +621,29 @@ public final class ConversationalAgentRuntime {
                 claimIds.addAll(question.getRequiredClaimIds());
                 claimIds.addAll(question.getSupportingClaimIds());
                 List<ConversationAnswerBlock> blocks = new java.util.ArrayList<>();
+                java.util.Map<String, com.portfolio.agent.answer.domain.AnswerClaimProjection> claimsById =
+                        new java.util.LinkedHashMap<>();
                 for (com.portfolio.agent.answer.domain.AnswerClaimProjection claim : subject.getClaims()) {
-                    if (!claimIds.isEmpty() && !claimIds.contains(claim.getId())) {
-                        continue;
+                    claimsById.put(claim.getId(), claim);
+                }
+                List<com.portfolio.agent.answer.domain.AnswerClaimProjection> selectedClaims =
+                        new java.util.ArrayList<>();
+                if (!claimIds.isEmpty()) {
+                    for (String claimId : claimIds) {
+                        com.portfolio.agent.answer.domain.AnswerClaimProjection claim = claimsById.get(claimId);
+                        if (claim != null) {
+                            selectedClaims.add(claim);
+                        }
                     }
-                    if (claimIds.isEmpty()
-                            && !question.getPreferredClaimCategories().isEmpty()
-                            && !question.getPreferredClaimCategories().contains(claim.getCategory())) {
-                        continue;
+                } else {
+                    for (com.portfolio.agent.answer.domain.AnswerClaimProjection claim : subject.getClaims()) {
+                        if (question.getPreferredClaimCategories().isEmpty()
+                                || question.getPreferredClaimCategories().contains(claim.getCategory())) {
+                            selectedClaims.add(claim);
+                        }
                     }
+                }
+                for (com.portfolio.agent.answer.domain.AnswerClaimProjection claim : selectedClaims) {
                     blocks.add(new ConversationAnswerBlock(
                             com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
                             presetSectionType(claim), presetSectionTitle(claim),
@@ -637,11 +651,39 @@ public final class ConversationalAgentRuntime {
                             List.of(claim.getId()), claim.getDirectEvidenceIds()));
                 }
                 if (!blocks.isEmpty()) {
-                    return List.copyOf(blocks);
+                    return mergeAdjacentPresetSections(blocks);
                 }
             }
         }
         return List.of();
+    }
+
+    private static List<ConversationAnswerBlock> mergeAdjacentPresetSections(
+            List<ConversationAnswerBlock> blocks) {
+        List<ConversationAnswerBlock> merged = new java.util.ArrayList<>();
+        for (ConversationAnswerBlock block : blocks) {
+            if (merged.isEmpty()) {
+                merged.add(block);
+                continue;
+            }
+            ConversationAnswerBlock previous = merged.get(merged.size() - 1);
+            if (previous.getSectionType() != block.getSectionType()
+                    || !java.util.Objects.equals(previous.getTitle(), block.getTitle())
+                    || previous.getSourceScope() != block.getSourceScope()) {
+                merged.add(block);
+                continue;
+            }
+            List<String> claimIds = new java.util.ArrayList<>(previous.getClaimIds());
+            claimIds.addAll(block.getClaimIds());
+            List<String> evidenceIds = new java.util.ArrayList<>(previous.getEvidenceIds());
+            evidenceIds.addAll(block.getEvidenceIds());
+            merged.set(merged.size() - 1, new ConversationAnswerBlock(
+                    previous.getSourceScope(), previous.getSectionType(), previous.getTitle(),
+                    previous.getContent() + "\n\n" + block.getContent(),
+                    List.copyOf(new java.util.LinkedHashSet<>(claimIds)),
+                    List.copyOf(new java.util.LinkedHashSet<>(evidenceIds))));
+        }
+        return List.copyOf(merged);
     }
 
     private static String presetClaimContent(

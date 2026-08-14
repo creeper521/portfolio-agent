@@ -115,6 +115,8 @@ class PresetContractBundleIntegrationTest {
                     .andExpect(jsonPath("$.blocks[0].blockId").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].sectionType").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].title").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].claimIds").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].evidenceIds").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].support.kind")
                             .value("VERIFIED_PUBLIC_EVIDENCE"))
                     .andExpect(jsonPath("$.blocks[0].support.statementReferences[0].statementId")
