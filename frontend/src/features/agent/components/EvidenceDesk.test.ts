@@ -94,7 +94,7 @@ describe('EvidenceDesk', () => {
     ]])
   })
 
-  it('reorders focused evidence first without mutating the input collection', () => {
+  it('shows only focused evidence by default without mutating the input collection', () => {
     const secondary = {
       ...evidence[0]!,
       id: 'secondary-evidence',
@@ -116,7 +116,8 @@ describe('EvidenceDesk', () => {
     })
 
     expect(wrapper.findAll('.evidence-card').map((card) => card.attributes('data-evidence-id')))
-      .toEqual([secondary.id, evidence[0]!.id])
+      .toEqual([secondary.id])
+    expect(wrapper.get('.evidence-list__toggle').text()).toContain('查看全部')
     expect(input.map((item) => item.id)).toEqual(originalIds)
   })
 

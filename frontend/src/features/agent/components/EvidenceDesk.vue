@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type {
   PublicEvidence,
@@ -38,9 +38,16 @@ const tabs: Array<{ id: EvidenceDeskTab; label: string }> = [
   { id: 'SOURCES', label: '来源' },
 ]
 
+const showAllEvidence = ref(false)
+const hasFocusedEvidence = computed(() => props.focusEvidenceIds.length > 0)
+const evidenceStatus = computed(() => hasFocusedEvidence.value ? 'ANSWER FOCUSED' : 'PUBLIC INDEX')
+
 const orderedEvidence = computed(() => {
   const focused = new Set(props.focusEvidenceIds)
-  return [...props.evidence].sort(
+  const candidates = hasFocusedEvidence.value && !showAllEvidence.value
+    ? props.evidence.filter((item) => focused.has(item.id))
+    : props.evidence
+  return [...candidates].sort(
     (left, right) =>
       Number(focused.has(right.id)) - Number(focused.has(left.id)),
   )
@@ -56,7 +63,7 @@ const orderedEvidence = computed(() => {
   >
     <header>
       <h2>证据工作台</h2>
-      <span>SYNCED</span>
+      <span>{{ evidenceStatus }}</span>
     </header>
 
     <nav class="evidence-tabs" role="tablist" aria-label="证据上下文">
@@ -74,6 +81,12 @@ const orderedEvidence = computed(() => {
     </nav>
 
     <div v-if="tab === 'EVIDENCE'" class="evidence-list">
+      <button
+        v-if="hasFocusedEvidence"
+        type="button"
+        class="evidence-list__toggle"
+        @click="showAllEvidence = !showAllEvidence"
+      >{{ showAllEvidence ? '只看当前回答证据' : `查看全部 ${evidence.length} 条证据` }}</button>
       <article
         v-for="item in orderedEvidence"
         :key="item.id"

@@ -330,11 +330,26 @@ function jumpToLatest() {
   showJumpToLatest.value = false
 }
 
+function focusNewestAnswer() {
+  const container = scrollArea.value
+  const latest = props.session.messages.at(-1)
+  if (!container || !latest || latest.role !== 'AGENT') return
+  const answer = container.querySelector<HTMLElement>(`[data-message-id="${latest.id}"]`)
+  if (!answer) return
+  container.scrollTo?.({ top: Math.max(0, answer.offsetTop - 16), behavior: 'auto' })
+  followLatest.value = false
+  showJumpToLatest.value = false
+}
+
 watch(
   () => [props.session.messages.length, props.pending],
-  async () => {
-    if (!followLatest.value) return
+  async ([, pending], [, wasPending]) => {
     await nextTick()
+    if (wasPending && !pending) {
+      focusNewestAnswer()
+      return
+    }
+    if (!followLatest.value) return
     jumpToLatest()
   },
 )
@@ -1047,7 +1062,6 @@ function refineWhole(
                       class="reco-card__link"
                       data-recommendation-link
                       :href="item.route"
-                      @click.prevent
                     >查看作品 →</a>
                     <div v-if="canRefineRecommendation(message)" class="reco-card__actions">
                       <button
@@ -2162,6 +2176,17 @@ textarea:disabled,
     max-width: 85%;
   }
 
+  .conversation__head h1 {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+
+  .composer {
+    margin-inline: 18px;
+  }
+}
+
 .plan-change-dismissed {
   margin: 18px 0;
   padding: 10px 14px;
@@ -2196,11 +2221,6 @@ textarea:disabled,
 .adjust-bar__exit:hover { border-color: var(--workspace-accent, var(--red)); color: var(--workspace-accent, var(--red)); }
 @media (max-width: 620px) {
   .adjust-bar__row { flex-direction: column; }
-}
-
-.composer {
-    margin-inline: 18px;
-  }
 }
 
 @media (hover: none) {

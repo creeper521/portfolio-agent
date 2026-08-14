@@ -289,6 +289,9 @@ function mapSemanticBlock(
     content: block.content,
     claimIds: stableDistinct(block.claimIds ?? []),
     evidenceIds: stableDistinct(block.evidenceIds ?? []),
+    blockId: block.blockId,
+    sourceDomain: block.sourceDomain,
+    support: block.support === undefined ? undefined : copyBlockSupport(block.support),
     // 已在语义映射层校验过，这里仅复制（保持不可变）。
     ...(block.sourceReferences === undefined ? {} : { sourceReferences: block.sourceReferences.map(copySourceReference) }),
     // P5 stp-v2（设计 §9.3 / handoff §5）：逐 Block 来源域（权威）、支持明细与 blockId，
@@ -342,6 +345,9 @@ function mapBlock(block: AnswerBlock, index: number, response: AnswerResponse): 
     content: block.content,
     claimIds: stableDistinct(block.claimIds ?? []),
     evidenceIds: stableDistinct(block.evidenceIds ?? []),
+    blockId: block.blockId,
+    sourceDomain: block.sourceDomain,
+    support: block.support === undefined ? undefined : copyBlockSupport(block.support),
     // P3：校验原始 sourceReferences（handoff §8）；非法引用被丢弃。
     ...mapSourceReferencesField(block.sourceReferences),
   }

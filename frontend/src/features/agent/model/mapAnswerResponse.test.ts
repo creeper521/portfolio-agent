@@ -548,4 +548,34 @@ describe('mapAnswerResponse', () => {
     // MODEL_GROUNDED 不放宽引用校验：非法引用被丢弃
     expect(mapped.sections[0]?.sourceReferences).toBeUndefined()
   })
+
+  it('keeps semantic block provenance and public claim/evidence anchors for follow-ups', () => {
+    const mapped = mapAnswerResponse({
+      ...response(),
+      blocks: [{
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'SOLUTION',
+        title: '处理方案',
+        content: '已审核的实现说明。',
+        claimIds: ['claim-safe-input'],
+        evidenceIds: ['evidence-safe-input'],
+        blockId: 'block-safe-input',
+        sourceDomain: 'PORTFOLIO',
+        support: {
+          kind: 'VERIFIED_PUBLIC_EVIDENCE',
+          statementReferences: [{ statementId: 'claim-safe-input', title: null, sourceReferences: [] }],
+          sourceTaskIds: [],
+          publicSourceKeys: [],
+        },
+      }],
+    })
+
+    expect(mapped.sections[0]).toMatchObject({
+      blockId: 'block-safe-input',
+      sourceDomain: 'PORTFOLIO',
+      claimIds: ['claim-safe-input'],
+      evidenceIds: ['evidence-safe-input'],
+      support: { kind: 'VERIFIED_PUBLIC_EVIDENCE' },
+    })
+  })
 })

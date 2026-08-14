@@ -913,6 +913,7 @@ describe('AgentWorkspace', () => {
     await wrapper.get('textarea').setValue('第二个历史会话')
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
+    await wrapper.get('.evidence-list__toggle').trigger('click')
     await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
 
     await wrapper.get('.session-list article.active [data-session-menu]').trigger('click')
@@ -926,6 +927,7 @@ describe('AgentWorkspace', () => {
     const wrapper = mountWorkspace(portfolioWithSecondaryEvidence())
     await wrapper.get('[data-suggested-question]').trigger('click')
     await flushPromises()
+    await wrapper.get('.evidence-list__toggle').trigger('click')
     await wrapper.get('[data-evidence-id="sql-audit-secondary"]').trigger('click')
 
     await wrapper.get('[data-session-clear]').trigger('click')
