@@ -95,12 +95,14 @@ IDE 的受保护环境配置、部署平台 Secret 或仓库外的本机 Secret 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/start-local.ps1 `
-  -SecretsFile C:\secrets\portfolio-agent-model.env
+  -SecretsFile C:\secrets\portfolio-agent-model.env `
+  -EnableGeneralAi
 ```
 
 Secret 文件必须位于仓库外，内容为受限 `KEY=VALUE` 格式，并同时提供四个批准开关、
 `PORTFOLIO_MODEL_PROVIDER` 和所选 Provider 对应的密钥。脚本在创建子进程前检查
-Java 21、Maven、Node、前端依赖与端口，只把白名单变量注入本次后端进程。Live Provider
+Java 21、Maven、Node、前端依赖与端口，只把白名单变量注入本次后端进程。`-EnableGeneralAi`
+显式启用语义路由与通用问答 operation；不启用作品集表达或跨域表达 operation。Live Provider
 探针使用固定无主体 canary 问题（刻意不携带 Project/Case/Preset/Reference/Recommendation
 上下文），阶段二运行时使用纯通用知识问题验证生成链；只有当 canary 返回
 `answerScope=GENERAL`、`intentSource=RULE`、`constructionMode=GENERAL_MODEL`、

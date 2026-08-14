@@ -772,9 +772,14 @@ foreach ($file in $files) {
                 $file.BaseName -match '(?i)(?:diagnostic.*(?:event|request|batch|dto)|(?:event|request|batch|dto).*diagnostic)'
             )
     if (([string]$file.Extension).ToLowerInvariant() -eq '.class') {
-        $lines = @([System.Text.Encoding]::GetEncoding(28591).GetString(
+        $classText = [System.Text.Encoding]::GetEncoding(28591).GetString(
             [System.IO.File]::ReadAllBytes($file.FullName)
-        ) -split "`0")
+        )
+        # Scan printable constant-pool strings only. Treating the complete
+        # binary chunk between NUL bytes as text creates false credential
+        # assignments from adjacent bytecode and constant-pool bytes.
+        $lines = @([regex]::Matches($classText, '[\x20-\x7E]{4,}') |
+            ForEach-Object { $_.Value })
         $sourceText = ''
         $lexicalSourceText = ''
         $lexicalLines = @()

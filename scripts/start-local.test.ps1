@@ -316,6 +316,20 @@ try {
         'Unified launcher must delegate frontend log ownership to its own router.'
     Assert-True ($launcherText -match '\$frontendEnvironment') `
         'Unified launcher must pass a frontend child environment.'
+    Assert-True ($launcherText -match '\[switch\]\$EnableGeneralAi') `
+        'Unified launcher must expose explicit General AI opt-in.'
+    foreach ($generalAiSetting in @(
+        'PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED',
+        'PORTFOLIO_MODEL_OP_ROUTING_MODE',
+        'PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF',
+        'PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION',
+        'PORTFOLIO_MODEL_OP_GENERAL_MODE',
+        'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
+        'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION'
+    )) {
+        Assert-True ($launcherText -match [regex]::Escape($generalAiSetting)) `
+            "General AI opt-in must configure $generalAiSetting."
+    }
 
     Write-Output 'start-local tests passed'
 }

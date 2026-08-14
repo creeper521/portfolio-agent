@@ -8,6 +8,7 @@ param(
     [int]$FrontendPort = 5173,
     [string]$MavenExecutable = '',
     [string]$NpmExecutable = 'npm.cmd',
+    [switch]$EnableGeneralAi,
     [switch]$ExitAfterProbe,
     [ValidateRange(1, 300)]
     [int]$ReadinessTimeoutSeconds = 60,
@@ -31,6 +32,20 @@ $script:allowedNames = @(
     'PORTFOLIO_AGENT_GLM_API_KEY',
     'PORTFOLIO_MODEL_TIMEOUT',
     'PORTFOLIO_MODEL_MAX_TOKENS'
+)
+$script:generalAiEnvironment = @{
+    PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED = 'true'
+    PORTFOLIO_MODEL_OP_ROUTING_MODE = 'ENABLED'
+    PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF = 'conversational-default'
+    PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION = 'semantic-route-v1'
+    PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT = '8s'
+    PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
+    PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
+    PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
+    PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
+}
+$script:managedEnvironmentNames = @(
+    $script:allowedNames + @($script:generalAiEnvironment.Keys)
 )
 
 function Stop-WithCode([string]$Code) {
@@ -191,7 +206,7 @@ function Assert-PortAvailable([int]$Port) {
 
 function Set-TemporaryProcessEnvironment([hashtable]$Values) {
     $snapshot = @{}
-    foreach ($name in $script:allowedNames) {
+    foreach ($name in $script:managedEnvironmentNames) {
         $snapshot[$name] = [Environment]::GetEnvironmentVariable(
             $name,
             [EnvironmentVariableTarget]::Process
@@ -212,7 +227,7 @@ function Set-TemporaryProcessEnvironment([hashtable]$Values) {
 }
 
 function Restore-ProcessEnvironment([hashtable]$Snapshot) {
-    foreach ($name in $script:allowedNames) {
+    foreach ($name in $script:managedEnvironmentNames) {
         [Environment]::SetEnvironmentVariable(
             $name,
             $Snapshot[$name],
@@ -497,6 +512,11 @@ try {
         $backendEnvironment = @{}
         foreach ($entry in $settings.GetEnumerator()) {
             $backendEnvironment[$entry.Key] = $entry.Value
+        }
+        if ($EnableGeneralAi) {
+            foreach ($entry in $script:generalAiEnvironment.GetEnumerator()) {
+                $backendEnvironment[$entry.Key] = $entry.Value
+            }
         }
         $backendEnvironment.PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED = 'true'
         $backendEnvironment.PORTFOLIO_LOG_DIRECTORY = $LogDirectory
