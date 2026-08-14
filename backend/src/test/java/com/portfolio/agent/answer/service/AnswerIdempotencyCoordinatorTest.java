@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AnswerIdempotencyCoordinatorTest {
 
@@ -70,6 +71,20 @@ class AnswerIdempotencyCoordinatorTest {
         assertThat(coordinator.execute(
                 "source", token, () -> "answer-" + executions.incrementAndGet()))
                 .isEqualTo("answer-2");
+    }
+
+    @Test
+    void rejectsAReusedTokenWhenTheRequestFingerprintChanges() {
+        AnswerIdempotencyCoordinator<String> coordinator = new AnswerIdempotencyCoordinator<String>(
+                Clock.systemUTC(), Duration.ofMinutes(2));
+        UUID token = UUID.randomUUID();
+
+        assertThat(coordinator.execute("source", token, "fingerprint-one", () -> "answer"))
+                .isEqualTo("answer");
+
+        assertThatThrownBy(() -> coordinator.execute(
+                "source", token, "fingerprint-two", () -> "different"))
+                .isInstanceOf(RequestReceiptConflictException.class);
     }
 
     @Test

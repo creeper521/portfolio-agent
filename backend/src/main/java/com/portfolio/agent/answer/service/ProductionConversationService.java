@@ -94,7 +94,8 @@ public final class ProductionConversationService {
         Objects.requireNonNull(request, "request must not be null");
         String sourceHash = sourceHasher.hash(
                 Objects.requireNonNull(clientAddress, "clientAddress must not be null"));
-        return idempotency.execute(sourceHash, request.getRequestToken(), () -> {
+        return idempotency.execute(
+                sourceHash, request.getRequestToken(), fingerprint(request).value(), () -> {
             try (AnswerAdmission admission = admissionGate.acquire(sourceHash, request.getRequestToken())) {
                 return executeWithinBudget(request, requestContext);
             }
@@ -176,7 +177,9 @@ public final class ProductionConversationService {
         append(canonical, request.getTurnId());
         append(canonical, request.getQuestionPresetId());
         append(canonical, request.getContractVersion());
-        append(canonical, request.getAction().name());
+        append(canonical, request.getAction() == null
+                ? ConversationAnswerRequest.TurnAction.ASK.name()
+                : request.getAction().name());
         append(canonical, request.getQuestion());
         append(canonical, request.getAgentTurnContract());
         request.getMessages().forEach(message -> {

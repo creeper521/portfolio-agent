@@ -42,10 +42,23 @@ public final class AnswerIdempotencyCoordinator<T> {
     }
 
     public T execute(String sourceHash, UUID requestToken, Supplier<T> operation) {
+        return execute(sourceHash, requestToken, "legacy-request", operation);
+    }
+
+    public T execute(
+            String sourceHash,
+            UUID requestToken,
+            String requestFingerprint,
+            Supplier<T> operation) {
         RequestKey key = new RequestKey(
                 Objects.requireNonNull(sourceHash, "sourceHash must not be null"),
                 Objects.requireNonNull(requestToken, "requestToken must not be null")
         );
+        String fingerprint = Objects.requireNonNull(
+                requestFingerprint, "requestFingerprint must not be null");
+        if (fingerprint.isBlank()) {
+            throw new IllegalArgumentException("requestFingerprint must not be blank");
+        }
         Objects.requireNonNull(operation, "operation must not be null");
 
         while (true) {
@@ -63,10 +76,13 @@ public final class AnswerIdempotencyCoordinator<T> {
                         throw new AnswerAdmissionRejectedException(
                                 AnswerErrorCode.ANSWER_RATE_LIMITED, 60);
                     }
-                    selected = new Entry<>();
+                    selected = new Entry<>(fingerprint);
                     entries.put(key, selected);
                     producer = true;
                 } else {
+                    if (!existing.requestFingerprint.equals(fingerprint)) {
+                        throw new RequestReceiptConflictException();
+                    }
                     selected = existing;
                     producer = false;
                 }
@@ -180,8 +196,12 @@ public final class AnswerIdempotencyCoordinator<T> {
     }
 
     private static final class Entry<T> {
+        private final String requestFingerprint;
         private Instant completedAt;
         private final CompletableFuture<T> result = new CompletableFuture<>();
 
+        private Entry(String requestFingerprint) {
+            this.requestFingerprint = requestFingerprint;
+        }
     }
 }
