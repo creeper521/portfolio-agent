@@ -61,6 +61,15 @@ public final class RoutingContextResolver {
                     context);
         }
         if (questionMatches.size() > 1) {
+            if (requestsMultipleSubjects(input.getRoutingQuestion())) {
+                return ResolvedRoutingContext.resolved(
+                        questionMatches.stream()
+                                .map(subject -> catalog.toReference(
+                                        subject, SubjectResolutionSource.EXPLICIT_TEXT))
+                                .toList(),
+                        SubjectResolutionSource.EXPLICIT_TEXT,
+                        context);
+            }
             if (context.getActiveSubjects().size() == 1) {
                 ResolvedRoutingContext activeSubject = resolveStructured(
                         context.getActiveSubjects(), SubjectResolutionSource.ACTIVE_SUBJECT, catalog, context);
@@ -148,6 +157,20 @@ public final class RoutingContextResolver {
                 List.of(validated.orElseThrow()),
                 SubjectResolutionSource.VALIDATED_MODEL_CANDIDATE,
                 unresolvedContext.getContext());
+    }
+
+    private boolean requestsMultipleSubjects(String question) {
+        if (question == null || question.isBlank()) {
+            return false;
+        }
+        String normalized = Normalizer.normalize(question, Normalizer.Form.NFKC)
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        return normalized.contains("比较")
+                || normalized.contains("对比")
+                || normalized.contains("compare")
+                || normalized.contains("versus")
+                || normalized.contains(" vs ");
     }
 
     private ResolvedRoutingContext resolvePageHintOrDeictic(

@@ -116,6 +116,25 @@ class PresetContractBundleIntegrationTest {
     }
 
     @Test
+    void explicitlyNamedPublishedProjectsReachPortfolioComparison() throws Exception {
+        mockMvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(
+                                "compare-published-projects",
+                                "比较 SQL 审计与故障排查工具和周末登录奖励 ABTest 完整闭环",
+                                "\"context\":{\"audienceRole\":\"INTERVIEWER\","
+                                        + "\"source\":\"AGENT_PAGE\"}")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
+                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
+                .andExpect(jsonPath("$.agentTurn.disposition").value(org.hamcrest.Matchers.anyOf(
+                        org.hamcrest.Matchers.is("READY"),
+                        org.hamcrest.Matchers.is("PARTIAL_READY"))))
+                .andExpect(jsonPath("$.agentTurn.plan.taskCount").value(2))
+                .andExpect(jsonPath("$.blocks").isNotEmpty());
+    }
+
+    @Test
     void roleResetBackgroundSuggestionDoesNotBypassP3EvidenceSupport()
             throws Exception {
         mockMvc.perform(post("/api/v2/answers")

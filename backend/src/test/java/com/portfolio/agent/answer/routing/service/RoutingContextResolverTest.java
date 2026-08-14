@@ -115,8 +115,21 @@ class RoutingContextResolverTest {
     }
 
     @Test
-    void ambiguousQuestionMatchRequiresClarificationInsteadOfGuessing() {
+    void comparisonQuestionResolvesEveryExplicitlyNamedSubject() {
         SemanticTurnInput input = SemanticTurnInput.ask("比较项目A和项目B");
+
+        ResolvedRoutingContext result = resolver.resolve(input, catalog);
+
+        assertEquals(RoutingContextStatus.RESOLVED, result.getStatus());
+        assertEquals(SubjectResolutionSource.EXPLICIT_TEXT, result.getResolutionSource());
+        assertEquals(List.of("project-a", "project-b"), result.getSubjects().stream()
+                .map(SubjectReference::getSubjectId)
+                .toList());
+    }
+
+    @Test
+    void multipleBareQuestionMatchesRemainAmbiguous() {
+        SemanticTurnInput input = SemanticTurnInput.ask("项目A 项目B");
 
         ResolvedRoutingContext result = resolver.resolve(input, catalog);
 
