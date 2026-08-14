@@ -198,7 +198,9 @@ public final class ConversationAnswerController {
         AuthorizedContextReference reference = request.getContextReference() == null ? null
                 : new AuthorizedContextReference(
                         request.getContextReference().getContextHandle(),
-                        request.getContextReference().getExpectedContextType().name());
+                        request.getContextReference().getExpectedContextType().name(),
+                        null,
+                        request.getContextReference().getResultItemId());
         return new ConversationRequestContext(conversationId.orElseThrow(), token, reference, false);
     }
 }

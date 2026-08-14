@@ -135,6 +135,28 @@ public final class InMemoryConversationBusinessContextStore
     }
 
     @Override
+    public synchronized LookupResult lookup(
+            ConversationId conversationId,
+            ResumeToken resumeToken,
+            ContextHandle contextHandle,
+            Instant now) {
+        Session session = authorizedSession(conversationId, resumeToken);
+        if (session == null) {
+            return LookupResult.notFound();
+        }
+        MutableEntry entry = session.entries.get(contextHandle);
+        if (entry == null) {
+            return LookupResult.notFound();
+        }
+        if (entry.isExpired(now)) {
+            purgeExpired(session, now);
+            return LookupResult.expired();
+        }
+        entry.touch(now, capacityPolicy);
+        return LookupResult.found(entry.snapshot());
+    }
+
+    @Override
     public synchronized List<ConversationContextEntry> list(
             ConversationId conversationId, ResumeToken resumeToken, Instant now) {
         Session session = authorizedSession(conversationId, resumeToken);

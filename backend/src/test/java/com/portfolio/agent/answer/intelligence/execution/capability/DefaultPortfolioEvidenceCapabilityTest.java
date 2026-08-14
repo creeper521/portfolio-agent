@@ -20,6 +20,11 @@ import com.portfolio.agent.answer.intelligence.execution.domain.PublicEvidenceDe
 import com.portfolio.agent.answer.intelligence.execution.domain.SafeReasonCode;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskExecutionAllowance;
+import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
+import com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalFallbackPolicy;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalIntent;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -77,6 +82,31 @@ class DefaultPortfolioEvidenceCapabilityTest {
         assertEquals(0, fallback.calls);
     }
 
+    @Test
+    void vectorFailureExecutesKeywordPlanOnTheSameBackend() {
+        CountingPort primary = new CountingPort(CapabilityExecutionResult.vectorUnavailable(),
+                CapabilityExecutionResult.empty(emptyCandidateSet(),
+                        new com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator()
+                                .promote(emptyCandidateSet(), "public-v1")));
+        CountingPort fallback = new CountingPort(CapabilityExecutionResult.unavailable(
+                SafeReasonCode.CAPABILITY_TEMPORARILY_UNAVAILABLE));
+        EffectiveRetrievalPlan plan = new EffectiveRetrievalPlan(
+                RetrievalIntent.EXACT_SUBJECT, CorpusBackend.POSTGRESQL,
+                SearchStrategy.HYBRID, null, null, "public-v1");
+        PortfolioEvidenceInvocation invocation = invocation().withRetrievalPlan(plan);
+
+        CapabilityExecutionResult result = new DefaultPortfolioEvidenceCapability(
+                primary, fallback,
+                new com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator(),
+                new RetrievalFallbackPolicy()).execute(invocation, constraints());
+
+        assertEquals(CapabilityExecutionResult.Status.EMPTY, result.getStatus());
+        assertTrue(result.isDegraded());
+        assertEquals(2, primary.calls);
+        assertEquals(0, fallback.calls);
+        assertEquals(SearchStrategy.KEYWORD, primary.lastInvocation.getRetrievalPlan().getPrimaryStrategy());
+    }
+
     private static CapabilityExecutionConstraints constraints() {
         return new CapabilityExecutionConstraints(TaskExecutionAllowance.portfolio(
                 Instant.now().plusSeconds(10)));
@@ -124,16 +154,23 @@ class DefaultPortfolioEvidenceCapabilityTest {
 
     private static final class CountingPort implements PortfolioCandidateRetrievalPort {
         private final CapabilityExecutionResult result;
+        private final CapabilityExecutionResult secondResult;
         private int calls;
+        private PortfolioEvidenceInvocation lastInvocation;
 
-        private CountingPort(CapabilityExecutionResult result) { this.result = result; }
+        private CountingPort(CapabilityExecutionResult result) { this(result, result); }
+        private CountingPort(CapabilityExecutionResult result, CapabilityExecutionResult secondResult) {
+            this.result = result;
+            this.secondResult = secondResult;
+        }
 
         @Override
         public CapabilityExecutionResult retrieve(
                 PortfolioEvidenceInvocation invocation,
                 CapabilityExecutionConstraints constraints) {
             calls++;
-            return result;
+            lastInvocation = invocation;
+            return calls == 1 ? result : secondResult;
         }
     }
 }

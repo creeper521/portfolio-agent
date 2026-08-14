@@ -19,7 +19,6 @@ import java.util.Optional;
  */
 public final class PlanConfirmationService {
 
-    private static final String SUPPORTED_SCHEMA = "stp-v1";
     private static final Duration CONFIRMATION_TTL = Duration.ofMinutes(10);
     private static final int CONFIRMATION_ID_BYTES = 18;
 
@@ -27,6 +26,7 @@ public final class PlanConfirmationService {
     private final SemanticPlanValidator validator;
     private final Clock clock;
     private final SecureRandom secureRandom;
+    private final SemanticTurnContractPolicy contractPolicy = new SemanticTurnContractPolicy();
 
     public PlanConfirmationService(
             PlanCryptographyPort cryptography,
@@ -51,7 +51,7 @@ public final class PlanConfirmationService {
             PlanConfirmation.VersionBinding currentVersions) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(currentVersions, "currentVersions");
-        if (!SUPPORTED_SCHEMA.equals(currentVersions.getSchemaVersion())
+        if (!contractPolicy.isSupported(currentVersions.getSchemaVersion())
                 || !plan.getContentVersion().equals(currentVersions.getContentVersion())) {
             throw new IllegalArgumentException("plan confirmation cannot be issued for current versions");
         }
@@ -79,7 +79,7 @@ public final class PlanConfirmationService {
         } catch (IllegalArgumentException exception) {
             return ConfirmationVerification.integrityInvalid();
         }
-        if (!SUPPORTED_SCHEMA.equals(opened.getVersionBinding().getSchemaVersion())
+        if (!contractPolicy.isSupported(opened.getVersionBinding().getSchemaVersion())
                 || !opened.getVersionBinding().getSchemaVersion().equals(currentVersions.getSchemaVersion())) {
             return ConfirmationVerification.invalid(PlanConfirmation.PlanInvalidationReason.PLAN_SCHEMA_UNSUPPORTED);
         }
@@ -122,13 +122,21 @@ public final class PlanConfirmationService {
             PlanConfirmation.Submission submission,
             PlanConfirmation.VersionBinding currentVersions,
             SemanticTurnCoordinator coordinator) {
+        return executeVerified(submission, currentVersions, coordinator, true);
+    }
+
+    public AgentTurnResult executeVerified(
+            PlanConfirmation.Submission submission,
+            PlanConfirmation.VersionBinding currentVersions,
+            SemanticTurnCoordinator coordinator,
+            boolean requestUsesStpV1) {
         Objects.requireNonNull(currentVersions, "currentVersions");
         Objects.requireNonNull(coordinator, "coordinator");
         ConfirmationVerification verification = verify(submission, currentVersions);
         if (verification.requiresSamePlanResign()) {
             ValidatedSemanticTurnPlan expiredPlan = verification.getValidatedPlan().orElseThrow();
             return AgentTurnResult.confirmationRequired(
-                    expiredPlan.getPlan(), reissue(verification, currentVersions), true);
+                    expiredPlan.getPlan(), reissue(verification, currentVersions), requestUsesStpV1);
         }
         if (!verification.isExecutable()) {
             return AgentTurnResult.planInvalidated(verification.getReason());
@@ -139,7 +147,7 @@ public final class PlanConfirmationService {
             taskIds.add(task.getTaskId());
         }
         return AgentTurnResult.ready(
-                plan.getPlan(), coordinator.execute(plan, ExecutionSelection.allExecutable(taskIds)));
+                plan.getPlan(), coordinator.execute(plan, ExecutionSelection.allExecutable(taskIds)), requestUsesStpV1);
     }
 
     /**

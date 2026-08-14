@@ -56,6 +56,7 @@ public final class PlanFingerprintService {
             append(builder, "taskType", task.getTaskType().name());
             append(builder, "taskSource", task.getSourceDomain().name());
             append(builder, "goalLabel", task.getGoalLabel());
+            append(builder, "fulfillmentRole", task.getFulfillmentRole().name());
             appendParameters(builder, task.getParameters());
             appendEnumCollection(builder, "taskRequestedOutputs", task.getRequestedOutputs());
             appendConfidence(builder, task.getConfidence());

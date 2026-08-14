@@ -3,7 +3,6 @@ package com.portfolio.agent.answer.routing.adapter.execution;
 import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationDraft;
-import com.portfolio.agent.answer.domain.ConversationDraftValidationResult;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationModelResult;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
@@ -21,7 +20,9 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
-import com.portfolio.agent.answer.service.ConversationDraftValidator;
+import com.portfolio.agent.answer.general.service.GeneralMaterialPipeline;
+import com.portfolio.agent.answer.runtime.ModelOperation;
+import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,15 +33,19 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
 
     private final ConversationProviderAccess providerAccess;
     private final ConversationalModelPort modelPort;
-    private final ConversationDraftValidator draftValidator;
+    private final GeneralMaterialPipeline materialPipeline;
+    private final ModelOperationPolicyRegistry operationPolicies;
 
     public GeneralSemanticTaskExecutor(
             ConversationProviderAccess providerAccess,
             ConversationalModelPort modelPort,
-            ConversationDraftValidator draftValidator) {
+            com.portfolio.agent.answer.service.ConversationDraftValidator draftValidator,
+            ModelOperationPolicyRegistry operationPolicies) {
         this.providerAccess = Objects.requireNonNull(providerAccess, "providerAccess");
         this.modelPort = Objects.requireNonNull(modelPort, "modelPort");
-        this.draftValidator = Objects.requireNonNull(draftValidator, "draftValidator");
+        Objects.requireNonNull(draftValidator, "draftValidator");
+        this.operationPolicies = Objects.requireNonNull(operationPolicies, "operationPolicies");
+        this.materialPipeline = new GeneralMaterialPipeline(providerAccess, modelPort, operationPolicies);
     }
 
     @Override
@@ -51,11 +56,21 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
     @Override
     public TaskOutcome execute(SemanticTaskExecutionContext context) {
         Objects.requireNonNull(context, "context");
-        return execute(context.getSemanticTask(), context.getDependencyOutcomes());
+        return execute(
+                context.getSemanticTask(),
+                context.getDependencyOutcomes(),
+                context.getExpectedContentVersion());
     }
 
     /** Compatibility adapter retained until the P3-E production cutover. */
     public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
+        return execute(task, availableDependencyOutcomes, "compatibility-general-v1");
+    }
+
+    private TaskOutcome execute(
+            SemanticTask task,
+            List<TaskOutcome> availableDependencyOutcomes,
+            String expectedContentVersion) {
         Objects.requireNonNull(task, "task");
         Objects.requireNonNull(availableDependencyOutcomes, "availableDependencyOutcomes");
         if (task.getSourceDomain() != TaskSourceDomain.GENERAL || !isSupported(task.getTaskType())) {
@@ -66,31 +81,29 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
             return TaskOutcome.capabilityUnavailable(
                     task.getTaskId(), TaskSourceDomain.GENERAL, "GENERAL_PROVIDER_UNAVAILABLE");
         }
-        ConversationModelResult<ConversationDraft> generated = modelPort.generate(
-                question(task), new ConversationWindow(null, List.of(), 0), generalRoute(),
-                PortfolioGroundingContext.empty());
-        if (generated == null || !generated.isSuccessful()) {
-            return TaskOutcome.capabilityUnavailable(
-                    task.getTaskId(), TaskSourceDomain.GENERAL, "GENERAL_PROVIDER_UNAVAILABLE");
+        GeneralMaterialPipeline.Result generated = materialPipeline.generate(
+                question(task),
+                new ConversationWindow(null, List.of(), 0),
+                generalRoute(),
+                expectedContentVersion,
+                audienceRole(task));
+        if (!generated.isSuccessful() && "GENERAL_PROVIDER_UNAVAILABLE".equals(generated.getFailureCode())) {
+            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.GENERAL,
+                    "GENERAL_PROVIDER_UNAVAILABLE");
         }
-        ConversationDraftValidationResult validation = draftValidator.validate(
-                generated.getValue(), ConversationAnswerScope.GENERAL, PortfolioGroundingContext.empty());
-        if (validation == null || !validation.isValid() || validation.getAcceptedBlocks().isEmpty()) {
-            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.GENERAL,
-                    false, "GENERAL_DRAFT_REJECTED");
+        if (operationPolicies.get(ModelOperation.GENERAL_ANSWER_MATERIAL).getMode()
+                != com.portfolio.agent.answer.runtime.OperationMode.ENABLED) {
+            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.GENERAL,
+                    "GENERAL_ANSWER_MATERIAL_DISABLED");
         }
-        List<String> blocks = new ArrayList<>();
-        for (ConversationAnswerBlock block : validation.getAcceptedBlocks()) {
-            blocks.add(block.getContent());
-        }
-        if (blocks.isEmpty()) {
+        if (!generated.isSuccessful()) {
             return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.GENERAL,
                     false, "GENERAL_DRAFT_REJECTED");
         }
         return TaskOutcome.answered(
                 task.getTaskId(),
                 TaskSourceDomain.GENERAL,
-                new TaskResultPayload.SectionResultPayload(blocks, validation.getTitle()),
+                generated.getPayload(),
                 TaskResultProvenance.direct(TaskSourceDomain.GENERAL, List.of(), List.of()),
                 false);
     }
@@ -106,6 +119,16 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
                     + "\nDimensions: " + comparison.getDimensions()
                     + "\nDepth: " + comparison.getDepth()
                     + "\nAudience: " + comparison.getAudienceRole();
+        }
+        throw new IllegalArgumentException("unsupported general task parameters");
+    }
+
+    private String audienceRole(SemanticTask task) {
+        if (task.getParameters() instanceof SemanticTaskParameters.GeneralExplanation explanation) {
+            return explanation.getAudienceRole().name();
+        }
+        if (task.getParameters() instanceof SemanticTaskParameters.GeneralComparison comparison) {
+            return comparison.getAudienceRole().name();
         }
         throw new IllegalArgumentException("unsupported general task parameters");
     }

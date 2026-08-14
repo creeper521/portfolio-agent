@@ -34,6 +34,13 @@ import java.util.Objects;
 
 /** Builds the closed, public P4 material directly from validated evidence. */
 public final class FactResultPolicy implements PortfolioResultPolicy {
+    private static final List<AnswerSectionType> CANONICAL_SECTION_ORDER = List.of(
+            AnswerSectionType.BACKGROUND,
+            AnswerSectionType.RESPONSIBILITY,
+            AnswerSectionType.SOLUTION,
+            AnswerSectionType.VERIFICATION,
+            AnswerSectionType.STATUS);
+
     @Override
     public PortfolioAnswerMaterial material(SemanticTask task, ValidatedEvidenceBundle bundle,
             EvidenceSupportAssessment assessment, List<CandidateSubject> publicSubjects) {
@@ -49,9 +56,21 @@ public final class FactResultPolicy implements PortfolioResultPolicy {
         Map<AnswerSectionType, List<ExpressionStatement>> bySection = new LinkedHashMap<>();
         entries.forEach(entry -> bySection.computeIfAbsent(entry.getAllowedSection(), ignored -> new ArrayList<>())
                 .add(entry));
-        List<FactAnswerMaterial.FactSection> sections = bySection.entrySet().stream()
-                .map(entry -> new FactAnswerMaterial.FactSection(entry.getKey(), entry.getValue(),
-                        OrderingPolicy.STABLE)).toList();
+        List<FactAnswerMaterial.FactSection> sections = new ArrayList<>();
+        int canonicalOrder = 0;
+        for (AnswerSectionType section : CANONICAL_SECTION_ORDER) {
+            List<ExpressionStatement> selected = bySection.get(section);
+            if (selected == null) {
+                continue;
+            }
+            List<ExpressionStatement> ordered = new ArrayList<>();
+            for (ExpressionStatement entry : selected) {
+                ordered.add(new ExpressionStatement(
+                        entry.getStatement(), entry.getPresentationRole(), section, canonicalOrder++));
+            }
+            sections.add(new FactAnswerMaterial.FactSection(
+                    section, ordered, OrderingPolicy.STABLE));
+        }
         FocusMode focus = task.getParameters() instanceof
                 com.portfolio.agent.answer.routing.domain.SemanticTaskParameters.PortfolioFact fact
                 && fact.getFacets().size() == 1 ? FocusMode.FOCUSED : FocusMode.OVERVIEW;
@@ -109,7 +128,7 @@ public final class FactResultPolicy implements PortfolioResultPolicy {
             case BACKGROUND -> AnswerSectionType.BACKGROUND;
             case RESPONSIBILITY -> AnswerSectionType.RESPONSIBILITY;
             case VERIFICATION -> AnswerSectionType.VERIFICATION;
-            case LIMITATION -> AnswerSectionType.STATUS;
+            case OUTCOME, LIMITATION -> AnswerSectionType.STATUS;
             default -> AnswerSectionType.SOLUTION;
         };
     }

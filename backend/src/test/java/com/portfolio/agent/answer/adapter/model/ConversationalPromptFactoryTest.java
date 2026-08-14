@@ -53,6 +53,13 @@ class ConversationalPromptFactoryTest {
                 Arguments.of("generation", List.of(
                         "title", "resolution", "blocks", "sourceScope",
                         "content", "claimIds", "evidenceIds")),
+                Arguments.of("semantic_route", List.of(
+                        "taskCandidates", "dependencyCandidates", "exclusionCandidates")),
+                Arguments.of("general_answer_material", List.of(
+                        "general-material-v1", "DEFINITION", "MECHANISM",
+                        "GENERAL_KNOWLEDGE", "contentVersion", "audienceRole")),
+                Arguments.of("cross_domain_expression", List.of(
+                        "cross-domain-expression-v1", "relationAlias", "statementAliases")),
                 Arguments.of("review", List.of(
                         "unsupportedBlockIndexes", "reasonCodes")),
                 Arguments.of("suggestion", List.of(

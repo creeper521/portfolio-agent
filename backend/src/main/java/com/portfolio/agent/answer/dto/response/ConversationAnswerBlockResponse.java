@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.portfolio.agent.answer.domain.AnswerSectionType;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
 
 import java.util.List;
 
@@ -16,6 +17,9 @@ public final class ConversationAnswerBlockResponse {
     private final List<String> claimIds;
     private final List<String> evidenceIds;
     private final List<PublicSourceReferenceResponse> sourceReferences;
+    private final String blockId;
+    private final TaskSourceDomain sourceDomain;
+    private final AnswerBlockSupportResponse support;
 
     public ConversationAnswerBlockResponse(
             ConversationSourceScope sourceScope,
@@ -63,8 +67,35 @@ public final class ConversationAnswerBlockResponse {
         this.claimIds = List.copyOf(claimIds);
         this.evidenceIds = List.copyOf(evidenceIds);
         this.sourceReferences = List.copyOf(sourceReferences);
+        this.blockId = null;
+        this.sourceDomain = null;
+        this.support = null;
     }
 
+    public ConversationAnswerBlockResponse(
+            String blockId,
+            TaskSourceDomain sourceDomain,
+            ConversationSourceScope sourceScope,
+            AnswerSectionType sectionType,
+            String title,
+            String content,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            List<PublicSourceReferenceResponse> sourceReferences,
+            AnswerBlockSupportResponse support) {
+        this.sourceScope = sourceScope;
+        this.sectionType = sectionType;
+        this.title = title;
+        this.content = content;
+        this.claimIds = List.copyOf(claimIds);
+        this.evidenceIds = List.copyOf(evidenceIds);
+        this.sourceReferences = List.copyOf(sourceReferences);
+        this.blockId = requireText(blockId, "blockId");
+        this.sourceDomain = java.util.Objects.requireNonNull(sourceDomain, "sourceDomain");
+        this.support = java.util.Objects.requireNonNull(support, "support");
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public ConversationSourceScope getSourceScope() { return sourceScope; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public AnswerSectionType getSectionType() { return sectionType; }
@@ -77,4 +108,17 @@ public final class ConversationAnswerBlockResponse {
     public List<String> getEvidenceIds() { return evidenceIds; }
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<PublicSourceReferenceResponse> getSourceReferences() { return sourceReferences; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getBlockId() { return blockId; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public TaskSourceDomain getSourceDomain() { return sourceDomain; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public AnswerBlockSupportResponse getSupport() { return support; }
+
+    private static String requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " is required");
+        }
+        return value.trim();
+    }
 }

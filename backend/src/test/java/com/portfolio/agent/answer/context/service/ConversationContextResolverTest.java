@@ -101,7 +101,7 @@ class ConversationContextResolverTest {
     }
 
     @Test
-    void missingExplicitContextIsUnavailableAndDoesNotUseAnotherActiveContext() {
+    void missingExplicitContextIsInvalidAndDoesNotUseAnotherActiveContext() {
         ConversationId conversationId = ConversationId.random();
         ResumeToken token = ResumeToken.issue();
         InMemoryConversationBusinessContextStore store = new InMemoryConversationBusinessContextStore();
@@ -114,8 +114,26 @@ class ConversationContextResolverTest {
                 conversationId, token, ContextHandle.issue(),
                 ConversationContextType.RECENT_SEMANTIC_TASK, START.plusSeconds(1));
 
-        assertEquals(ConversationContextResolution.Status.UNAVAILABLE, result.getStatus());
+        assertEquals(ConversationContextResolution.Status.INVALID_REFERENCE, result.getStatus());
         assertTrue(result.getEntry().isEmpty());
+    }
+
+    @Test
+    void expiredExplicitContextIsDistinctFromMissingReference() {
+        ConversationId conversationId = ConversationId.random();
+        ResumeToken token = ResumeToken.issue();
+        InMemoryConversationBusinessContextStore store = new InMemoryConversationBusinessContextStore();
+        ConversationContextMutation mutation = factory().create(
+                ConversationContextValue.recentSemanticTask(recent(
+                        SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT, "expired")),
+                null, "expired", ContextSlot.ACTIVE_FACT_CONTEXT, 0L);
+        store.save(conversationId, token, mutation, START);
+
+        ConversationContextResolution result = new ConversationContextResolver(store).resolve(
+                conversationId, token, mutation.getContextHandle(),
+                ConversationContextType.RECENT_SEMANTIC_TASK, START.plusSeconds(25 * 60 * 60));
+
+        assertEquals(ConversationContextResolution.Status.EXPIRED, result.getStatus());
     }
 
     private static ConversationContextMutationFactory factory() {

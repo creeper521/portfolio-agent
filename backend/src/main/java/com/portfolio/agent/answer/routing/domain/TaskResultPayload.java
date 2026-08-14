@@ -245,8 +245,8 @@ public sealed interface TaskResultPayload
             this.audienceRole = requireText(audienceRole, "audienceRole");
             this.capabilityCodes = Set.copyOf(
                     Objects.requireNonNull(capabilityCodes, "capabilityCodes"));
-            if (requestedSize < 2 || requestedSize > 5) {
-                throw new IllegalArgumentException("requestedSize must be between 2 and 5");
+            if (requestedSize < 1 || requestedSize > 5) {
+                throw new IllegalArgumentException("requestedSize must be between 1 and 5");
             }
             this.requestedSize = requestedSize;
             this.selectedPortfolioIds = copyTextList(

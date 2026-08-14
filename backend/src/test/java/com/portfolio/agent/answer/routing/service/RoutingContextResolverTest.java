@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectRes
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
+import com.portfolio.agent.answer.routing.domain.SubjectBindingRole;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -72,6 +73,45 @@ class RoutingContextResolverTest {
         assertEquals(SubjectResolutionSource.EXPLICIT_TEXT, result.getResolutionSource());
         assertEquals("project-a", result.getSubjects().get(0).getSubjectId());
         assertEquals(CONTENT_VERSION, result.getSubjects().get(0).getContentVersion());
+    }
+
+    @Test
+    void pageSubjectIsOnlyHintForAnOrdinaryGeneralQuestion() {
+        SemanticTurnInput input = new SemanticTurnInput(
+                "什么是乐观锁？", null, null, List.of(), List.of(),
+                List.of(reference(SubjectType.PROJECT, "project-a", SubjectResolutionSource.PAGE_CONTEXT)));
+
+        ResolvedRoutingContext result = resolver.resolve(input, catalog);
+
+        assertEquals(RoutingContextStatus.UNRESOLVED, result.getStatus());
+        assertEquals(SubjectBindingRole.HINT, result.getBindings().get(0).getRole());
+        assertEquals(List.of(), result.getSubjects());
+    }
+
+    @Test
+    void deicticQuestionPromotesTheUniquePageHintToDeicticBinding() {
+        SemanticTurnInput input = new SemanticTurnInput(
+                "这个项目用了什么并发控制？", null, null, List.of(), List.of(),
+                List.of(reference(SubjectType.PROJECT, "project-a", SubjectResolutionSource.PAGE_CONTEXT)));
+
+        ResolvedRoutingContext result = resolver.resolve(input, catalog);
+
+        assertEquals(RoutingContextStatus.RESOLVED, result.getStatus());
+        assertEquals(SubjectBindingRole.DEICTIC, result.getBindings().get(0).getRole());
+        assertEquals("project-a", result.getSubjects().get(0).getSubjectId());
+    }
+
+    @Test
+    void ordinaryQuestionDoesNotInheritAnActiveContext() {
+        SemanticContext context = SemanticContext.of(
+                List.of(reference(SubjectType.PROJECT, "project-a", SubjectResolutionSource.ACTIVE_SUBJECT)),
+                List.of(), null, null, null, Set.of());
+
+        ResolvedRoutingContext result = resolver.resolve(
+                new SemanticTurnInput("解释乐观锁", context, null, List.of(), List.of(), List.of()), catalog);
+
+        assertEquals(RoutingContextStatus.UNRESOLVED, result.getStatus());
+        assertEquals(List.of(), result.getSubjects());
     }
 
     @Test
@@ -157,7 +197,7 @@ class RoutingContextResolverTest {
                                 SubjectType.PROJECT, "project-a", SubjectResolutionSource.PENDING_PLAN))),
                 null, null, Set.of());
         SemanticTurnInput input = new SemanticTurnInput(
-                "继续", context, null, List.of(), List.of(),
+                "继续基于这个结果", context, null, List.of(), List.of(),
                 List.of(reference(SubjectType.CASE, "case-a", SubjectResolutionSource.PAGE_CONTEXT)));
 
         ResolvedRoutingContext result = resolver.resolve(input, catalog);
@@ -174,7 +214,7 @@ class RoutingContextResolverTest {
                 List.of(reference(SubjectType.PROJECT, "project-b", SubjectResolutionSource.STRUCTURED_RESULT)),
                 null, null, null, Set.of());
         SemanticTurnInput input = new SemanticTurnInput(
-                "继续", context, null, List.of(), List.of(),
+                "继续基于这个结果", context, null, List.of(), List.of(),
                 List.of(reference(SubjectType.CASE, "case-a", SubjectResolutionSource.PAGE_CONTEXT)));
 
         ResolvedRoutingContext result = resolver.resolve(input, catalog);
@@ -184,7 +224,21 @@ class RoutingContextResolverTest {
     }
 
     @Test
-    void resolvesPageSubjectBeforeActiveSubject() {
+    void bareContinuationDoesNotGuessWhichRecentResultToReuse() {
+        SemanticContext context = SemanticContext.of(
+                List.of(),
+                List.of(reference(SubjectType.PROJECT, "project-b", SubjectResolutionSource.STRUCTURED_RESULT)),
+                null, null, null, Set.of());
+
+        ResolvedRoutingContext result = resolver.resolve(
+                new SemanticTurnInput("继续", context, null, List.of(), List.of(), List.of()), catalog);
+
+        assertEquals(RoutingContextStatus.UNRESOLVED, result.getStatus());
+        assertEquals("ROUTING_SUBJECT_UNRESOLVED", result.getReasonCode());
+    }
+
+    @Test
+    void keepsPageSubjectAsHintForAnOrdinaryContinuation() {
         SemanticContext context = SemanticContext.of(
                 List.of(reference(SubjectType.PROJECT, "project-a", SubjectResolutionSource.ACTIVE_SUBJECT)),
                 List.of(), null, null, null, Set.of());
@@ -194,12 +248,13 @@ class RoutingContextResolverTest {
 
         ResolvedRoutingContext result = resolver.resolve(input, catalog);
 
-        assertEquals(SubjectResolutionSource.PAGE_CONTEXT, result.getResolutionSource());
-        assertEquals("case-a", result.getSubjects().get(0).getSubjectId());
+        assertEquals(RoutingContextStatus.UNRESOLVED, result.getStatus());
+        assertEquals(SubjectBindingRole.HINT, result.getBindings().get(0).getRole());
+        assertEquals(List.of(), result.getSubjects());
     }
 
     @Test
-    void resolvesUniqueActiveSubjectAsLastDeterministicSource() {
+    void doesNotBindUniqueActiveSubjectWithoutAContextDemand() {
         SemanticContext context = SemanticContext.of(
                 List.of(reference(SubjectType.PROJECT, "project-a", SubjectResolutionSource.ACTIVE_SUBJECT)),
                 List.of(), null, null, null, Set.of());
@@ -207,8 +262,8 @@ class RoutingContextResolverTest {
         ResolvedRoutingContext result = resolver.resolve(
                 new SemanticTurnInput("继续", context, null, List.of(), List.of(), List.of()), catalog);
 
-        assertEquals(SubjectResolutionSource.ACTIVE_SUBJECT, result.getResolutionSource());
-        assertEquals("project-a", result.getSubjects().get(0).getSubjectId());
+        assertEquals(RoutingContextStatus.UNRESOLVED, result.getStatus());
+        assertEquals(List.of(), result.getSubjects());
     }
 
     @Test

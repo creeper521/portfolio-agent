@@ -118,4 +118,19 @@ class TaskOutcomeContractTest {
         assertThrows(IllegalArgumentException.class, () -> TaskResultProvenance.direct(
                 TaskSourceDomain.SYNTHESIS, List.of(), List.of()));
     }
+
+    @Test
+    void planOutcomeIgnoresOptionalCancellationWhenAllPrimaryTasksAnswered() {
+        TaskOutcome primary = TaskOutcome.answered(
+                "primary", TaskSourceDomain.GENERAL,
+                new TaskResultPayload.SectionResultPayload(List.of("answer"), null),
+                TaskResultProvenance.direct(TaskSourceDomain.GENERAL, List.of(), List.of()), false)
+                .withFulfillmentRole(TaskFulfillmentRole.PRIMARY);
+        TaskOutcome optional = TaskOutcome.cancelled(
+                "optional", TaskSourceDomain.SYNTHESIS, "OPTIONAL_NOT_RUN")
+                .withFulfillmentRole(TaskFulfillmentRole.OPTIONAL);
+
+        assertEquals(SemanticTurnOutcome.PlanOutcome.SUCCEEDED,
+                new SemanticTurnOutcome(List.of(primary, optional)).getPlanOutcome());
+    }
 }

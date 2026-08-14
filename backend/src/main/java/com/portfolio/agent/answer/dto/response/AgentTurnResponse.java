@@ -6,7 +6,7 @@ import com.portfolio.agent.answer.domain.AgentTurnResult;
 import java.util.List;
 import java.util.Objects;
 
-/** Stable stp-v1 wire response. Internal routing dispositions are normalized at the mapper boundary. */
+/** Versioned semantic-turn wire response. Internal routing dispositions are normalized at the mapper boundary. */
 public final class AgentTurnResponse {
 
     private static final String CONTRACT_VERSION = "stp-v1";
@@ -41,7 +41,21 @@ public final class AgentTurnResponse {
             AgentTurnOutcomeResponse outcome,
             List<CompletedTaskResponse> completedTasks,
             ExecutionDisplayPlanResponse execution) {
-        this.contractVersion = CONTRACT_VERSION;
+        this(AgentTurnResponse.CONTRACT_VERSION, disposition, plan, planChange, planConfirmation,
+                clarification, outcome, completedTasks, execution);
+    }
+
+    public AgentTurnResponse(
+            String contractVersion,
+            AgentTurnResult.Disposition disposition,
+            DisplayPlanResponse plan,
+            PlanChangeResponse planChange,
+            PlanConfirmationResponse planConfirmation,
+            ClarificationResponse clarification,
+            AgentTurnOutcomeResponse outcome,
+            List<CompletedTaskResponse> completedTasks,
+            ExecutionDisplayPlanResponse execution) {
+        this.contractVersion = requireContract(contractVersion);
         this.disposition = Objects.requireNonNull(disposition, "disposition");
         this.plan = plan;
         this.planChange = planChange;
@@ -75,4 +89,11 @@ public final class AgentTurnResponse {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public ExecutionDisplayPlanResponse getExecution() { return execution; }
+
+    private static String requireContract(String value) {
+        if (!"stp-v1".equals(value) && !"stp-v2".equals(value)) {
+            throw new IllegalArgumentException("unsupported agent turn contract");
+        }
+        return value;
+    }
 }

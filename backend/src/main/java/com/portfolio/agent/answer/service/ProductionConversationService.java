@@ -186,6 +186,7 @@ public final class ProductionConversationService {
         if (request.getContextReference() != null) {
             append(canonical, request.getContextReference().getContextHandle());
             append(canonical, request.getContextReference().getExpectedContextType().name());
+            append(canonical, request.getContextReference().getResultItemId());
         } else {
             append(canonical, "context:none");
         }

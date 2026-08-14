@@ -18,6 +18,30 @@ server:
     include-stacktrace: never
 
 portfolio:
+  agent:
+    cross-domain-relations:
+      enabled: ${PORTFOLIO_AGENT_CROSS_DOMAIN_RELATIONS_ENABLED:false}
+  model-operations:
+    routing-semantic-assist:
+      mode: ${PORTFOLIO_MODEL_OP_ROUTING_MODE:DISABLED}
+      provider-ref: ${PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF:}
+      schema-version: ${PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION:}
+      timeout: ${PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT:}
+    general-answer-material:
+      mode: ${PORTFOLIO_MODEL_OP_GENERAL_MODE:DISABLED}
+      provider-ref: ${PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF:}
+      schema-version: ${PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION:}
+      timeout: ${PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT:}
+    portfolio-expression:
+      mode: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_MODE:DISABLED}
+      provider-ref: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_PROVIDER_REF:}
+      schema-version: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_SCHEMA_VERSION:}
+      timeout: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_TIMEOUT:}
+    cross-domain-expression:
+      mode: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_MODE:DISABLED}
+      provider-ref: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_PROVIDER_REF:}
+      schema-version: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_SCHEMA_VERSION:}
+      timeout: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_TIMEOUT:}
   database:
     public:
       enabled: ${PORTFOLIO_PUBLIC_DATABASE_ENABLED:false}

@@ -19,7 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         classes = PortfolioAgentApplication.class,
         properties = {
                 "portfolio.model-expression.enabled=false",
-                "portfolio.conversational-agent.enabled=false"
+                "portfolio.conversational-agent.enabled=false",
+                "portfolio.answer-production.requests-per-minute=100"
         }
 )
 @AutoConfigureMockMvc
@@ -72,6 +73,49 @@ class PresetContractBundleIntegrationTest {
     }
 
     @Test
+    void everyPublishedPresetRemainsPortfolioGroundedAndExecutable() throws Exception {
+        String content = mockMvc.perform(get("/api/v1/public-content"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode presets = new ObjectMapper().readTree(content).path("questionPresets");
+
+        int index = 0;
+        for (JsonNode preset : presets) {
+            String projectSlug = preset.path("projectSlug").isTextual()
+                    ? preset.path("projectSlug").asText() : null;
+            String caseSlug = preset.path("caseSlugs").isArray()
+                    && !preset.path("caseSlugs").isEmpty()
+                    ? preset.path("caseSlugs").get(0).asText() : null;
+            String contextSubject = projectSlug != null
+                    ? "\"projectSlug\":\"" + projectSlug + "\""
+                    : "\"caseSlug\":\"" + caseSlug + "\"";
+            String request = request(
+                    "published-preset-" + index,
+                    preset.path("text").asText(),
+                    ("\"questionPresetId\":\"%s\",\"contractVersion\":\"%s\","
+                            + "\"context\":{%s,\"audienceRole\":\"INTERVIEWER\","
+                            + "\"source\":\"AGENT_PAGE\"}")
+                            .formatted(
+                                    preset.path("id").asText(),
+                                    preset.path("contractVersion").asText(),
+                                    contextSubject));
+
+            mockMvc.perform(post("/api/v2/answers")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(request))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
+                    .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
+                    .andExpect(jsonPath("$.resolution").value(org.hamcrest.Matchers.anyOf(
+                            org.hamcrest.Matchers.is("ANSWERED"),
+                            org.hamcrest.Matchers.is("PARTIALLY_ANSWERED"))))
+                    .andExpect(jsonPath("$.evidenceState").value("VERIFIED"))
+                    .andExpect(jsonPath("$.blocks").isNotEmpty());
+            index++;
+        }
+    }
+
+    @Test
     void roleResetBackgroundSuggestionDoesNotBypassP3EvidenceSupport()
             throws Exception {
         mockMvc.perform(post("/api/v2/answers")
@@ -83,15 +127,15 @@ class PresetContractBundleIntegrationTest {
                                 "AGENT_PAGE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.turnId").value("structured-role-reset"))
-                .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
-                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
+                .andExpect(jsonPath("$.intent").value("GENERAL_KNOWLEDGE"))
+                .andExpect(jsonPath("$.answerScope").value("GENERAL"))
                 .andExpect(jsonPath("$.resolution").value("NOT_SUPPORTED"))
                 .andExpect(jsonPath("$.constructionMode").value("TEMPLATE"))
                 .andExpect(jsonPath("$.intentSource").value("RULE"))
-                .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
+                .andExpect(jsonPath("$.evidenceState").value("NOT_REQUIRED"))
                 .andExpect(jsonPath("$.blocks").isEmpty())
                 .andExpect(jsonPath("$.agentTurn.outcome.taskSummary.items[0].reasonCodes[0]")
-                        .value("PORTFOLIO_EVIDENCE_INSUFFICIENT"))
+                        .value("GENERAL_PROVIDER_UNAVAILABLE"))
                 .andExpect(jsonPath("$.degraded").value(false));
     }
 

@@ -152,7 +152,8 @@ public final class DefaultTurnRouter implements TurnRouter {
             return SemanticTurnDecision.clarificationRequired(clarification);
         }
         String contract = input.getAgentTurnContract() == null ? "stp-v1" : input.getAgentTurnContract();
-        PlanValidationResult validation = planValidator.validate(planCompiler.compile(signals), contract);
+        PlanValidationResult validation = planValidator.validate(
+                planCompiler.compile(signals, subjectCatalog.currentContentVersion()), contract);
         ClarificationRequest clarification = signals.getClarificationNeed() == SemanticSignals.ClarificationNeed.LOCAL
                 ? ClarificationRequest.comparisonSubjects(
                         ClarificationRequest.Scope.LOCAL, signals.getGoals().size(),

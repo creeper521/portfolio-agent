@@ -100,14 +100,16 @@ public final class SemanticTurnCoordinator {
         for (SemanticTask task : orderedTasks) {
             TaskOutcome selectedOutcome = selectionOutcome(task, selection);
             if (selectedOutcome != null) {
-                outcomesByTaskId.put(task.getTaskId(), selectedOutcome);
+                outcomesByTaskId.put(task.getTaskId(),
+                        selectedOutcome.withFulfillmentRole(task.getFulfillmentRole()));
                 continue;
             }
             DependencyDecision dependency = assessDependencies(
                     task, inboundDependencies.getOrDefault(task.getTaskId(), List.of()), outcomesByTaskId);
             if (dependency.isBlocked()) {
                 outcomesByTaskId.put(task.getTaskId(), TaskOutcome.dependencyUnavailable(
-                        task.getTaskId(), task.getSourceDomain(), dependency.getReasonCode()));
+                        task.getTaskId(), task.getSourceDomain(), dependency.getReasonCode())
+                        .withFulfillmentRole(task.getFulfillmentRole()));
                 continue;
             }
             TaskExecutionAllowance allowance = budget.containsTask(task.getTaskId())
@@ -115,7 +117,8 @@ public final class SemanticTurnCoordinator {
                     : TaskExecutionAllowance.none(budget.getAbsoluteDeadline());
             if (!allowance.hasMinimumStartWindow(Instant.now())) {
                 outcomesByTaskId.put(task.getTaskId(), TaskOutcome.notExecutedBudget(
-                        task.getTaskId(), task.getSourceDomain()));
+                        task.getTaskId(), task.getSourceDomain())
+                        .withFulfillmentRole(task.getFulfillmentRole()));
                 continue;
             }
             SemanticTaskExecutionContext context = new SemanticTaskExecutionContext(
@@ -127,7 +130,8 @@ public final class SemanticTurnCoordinator {
                     authorizedContextReferences,
                     task.getTaskId().equals(expressionTaskId),
                     presetRequest);
-            outcomesByTaskId.put(task.getTaskId(), executeSafely(context));
+            outcomesByTaskId.put(task.getTaskId(), executeSafely(context)
+                    .withFulfillmentRole(task.getFulfillmentRole()));
         }
 
         List<TaskOutcome> orderedOutcomes = new ArrayList<>();

@@ -10,6 +10,7 @@ import com.portfolio.agent.selection.domain.SelectionCandidate;
 import com.portfolio.agent.selection.domain.SelectionTarget;
 import com.portfolio.agent.selection.gateway.CandidateRetrievalPort;
 import com.portfolio.agent.selection.gateway.CandidateRetrievalException;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -49,6 +50,14 @@ public final class PostgresHybridCandidateRetriever implements CandidateRetrieva
             ActiveRelease release,
             SelectionTarget target,
             int limit) {
+        return retrieve(release, target, limit, SearchStrategy.HYBRID);
+    }
+
+    public CandidateRetrievalResult retrieve(
+            ActiveRelease release,
+            SelectionTarget target,
+            int limit,
+            SearchStrategy requestedStrategy) {
         List<PostgresSelectionRow> ftsRows;
         try {
             ftsRows = query.searchFts(release.getReleaseId(), target, limit);
@@ -60,6 +69,11 @@ public final class PostgresHybridCandidateRetriever implements CandidateRetrieva
         List<PostgresSelectionRow> vectorRows;
         RetrievalMode retrievalMode;
         try {
+            if (requestedStrategy == SearchStrategy.KEYWORD) {
+                return new CandidateRetrievalResult(
+                        release.getReleaseVersion(), RetrievalMode.FTS_ONLY,
+                        ftsRows.stream().map(this::toCandidate).limit(limit).toList());
+            }
             EmbeddingVector embedding = embeddingPort.embedQuery(queryText(target));
             vectorRows = query.searchVector(
                     release.getReleaseId(),
@@ -138,6 +152,13 @@ public final class PostgresHybridCandidateRetriever implements CandidateRetrieva
                 Set.copyOf(allCapabilities),
                 List.copyOf(evidence.values()),
                 Math.max(left.getEvidenceQuality(), right.getEvidenceQuality()));
+    }
+
+    private SelectionCandidate toCandidate(PostgresSelectionRow row) {
+        return new SelectionCandidate(
+                row.getSubjectId(), row.getSubjectKind(), row.getTitle(), row.getSummary(),
+                row.getRoute(), row.getCareerTrack(), row.getCapabilityCodes(),
+                row.getEvidenceReferences(), 1.0d, row.getEvidenceQuality(), 0.0d);
     }
 
     private SelectionCandidate toCandidate(FusedCandidate fused) {

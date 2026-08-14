@@ -20,6 +20,7 @@ import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalResult;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalSource;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
 import com.portfolio.agent.answer.service.LocalRetrievalCoordinator;
 import java.util.ArrayList;
@@ -144,7 +145,7 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
                 corpus,
                 verifiedClaims,
                 approvedEvidence,
-                RetrievalMode.HYBRID_ENABLED,
+                retrievalMode(request),
                 retrievalPolicy);
         if (decision.getType() != RetrievalDecisionType.SUFFICIENT) {
             return null;
@@ -155,6 +156,11 @@ public final class BundlePortfolioRetriever implements PortfolioRetriever {
             return null;
         }
         return new SubjectMaterial(toSubject(knowledge, request), passages);
+    }
+
+    private RetrievalMode retrievalMode(PortfolioRetrievalRequest request) {
+        return request.getSearchStrategy() == SearchStrategy.KEYWORD
+                ? RetrievalMode.KEYWORD_ONLY : RetrievalMode.HYBRID_ENABLED;
     }
 
     private List<PortfolioRetrievedPassage> exactPassages(

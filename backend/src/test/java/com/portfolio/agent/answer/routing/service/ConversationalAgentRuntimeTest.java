@@ -20,6 +20,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskComposition;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
@@ -150,6 +151,51 @@ class ConversationalAgentRuntimeTest {
     }
 
     @Test
+    void optionalFailureDoesNotOverrideAnAnsweredPrimaryGoal() {
+        SemanticTask primary = generalTask("task-primary");
+        SemanticTask optional = SemanticTask.create(
+                "task-optional", SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO, "optional project detail",
+                new SemanticTaskParameters.PortfolioFact(
+                        SubjectReference.project("project-a", "public-v1"), Set.of("OVERVIEW"), "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY), TaskConfidence.highRule(),
+                List.of(SubjectReference.project("project-a", "public-v1")), TaskFulfillmentRole.OPTIONAL);
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-primary-optional", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(primary, optional), List.of(), List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        ValidatedSemanticTurnPlan validated = new SemanticPlanValidator(new PlanFingerprintService())
+                .validate(plan, "stp-v1").getValidatedPlan().orElseThrow();
+        CountingRouter router = new CountingRouter(SemanticTurnDecision.ready(
+                validated, ExecutionSelection.allExecutable(Set.of(primary.getTaskId(), optional.getTaskId()))));
+        SemanticTaskExecutor executor = new SemanticTaskExecutor() {
+            @Override
+            public SemanticRoutingTypes.TaskSourceDomain getSourceDomain() {
+                return SemanticRoutingTypes.TaskSourceDomain.GENERAL;
+            }
+
+            @Override
+            public TaskOutcome execute(SemanticTaskExecutionContext context) {
+                if (context.getSemanticTask().getFulfillmentRole() == TaskFulfillmentRole.OPTIONAL) {
+                    return TaskOutcome.failed(context.getSemanticTask().getTaskId(),
+                            context.getSemanticTask().getSourceDomain(), "OPTIONAL_FAILURE");
+                }
+                return TaskOutcome.answered(context.getSemanticTask().getTaskId(),
+                        SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        new TaskResultPayload.SectionResultPayload(List.of("primary answer"), null),
+                        TaskResultProvenance.direct(SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                                List.of(), List.of()), false);
+            }
+        };
+
+        ConversationAnswerResult result = fixture(
+                router, new SemanticTurnCoordinator(List.of(executor))).runtime.answer(ask("explain topic"));
+
+        assertThat(result.getResolution()).isEqualTo(AnswerResolution.ANSWERED);
+    }
+
+    @Test
     void projectsACompletedGeneralTaskAsModelGenerationWithoutPortfolioEvidence() {
         SemanticTask task = SemanticTask.create(
                 "task-general", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
@@ -207,6 +253,7 @@ class ConversationalAgentRuntimeTest {
         assertThat(result.getGenerationMode()).isEqualTo(GenerationMode.MIXED);
         assertThat(result.getConstructionMode()).isEqualTo(
                 AnswerConstructionMode.MIXED_COMPOSITION);
+        assertThat(result.getEvidenceState()).isEqualTo(AnswerEvidenceState.MIXED);
     }
 
     @Test

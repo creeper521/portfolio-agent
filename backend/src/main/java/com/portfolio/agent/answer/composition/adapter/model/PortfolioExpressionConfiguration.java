@@ -23,6 +23,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.core.env.Environment;
 import com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition;
+import com.portfolio.agent.answer.runtime.ModelOperation;
+import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
+import com.portfolio.agent.answer.runtime.OperationMode;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PortfolioExpressionProperties.class)
@@ -77,7 +80,17 @@ public class PortfolioExpressionConfiguration {
     PortfolioAnswerComposition portfolioAnswerComposition(
             PortfolioExpressionProperties properties,
             ObjectProvider<PortfolioExpressionPort> expressionPortProvider,
-            DiagnosticEventPublisher diagnosticEventPublisher) {
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            ObjectProvider<ModelOperationPolicyRegistry> operationPoliciesProvider) {
+        ModelOperationPolicyRegistry operationPolicies = operationPoliciesProvider.getIfAvailable();
+        boolean operationEnabled = operationPolicies == null ? properties.isEnabled()
+                : operationPolicies.get(ModelOperation.PORTFOLIO_EXPRESSION)
+                .getMode() == OperationMode.ENABLED;
+        if (operationPolicies != null && properties.isEnabled() != operationEnabled
+                && (properties.isEnabled() || operationEnabled)) {
+            throw new IllegalStateException(
+                    "portfolio expression legacy alias conflicts with operation policy");
+        }
         return new PortfolioAnswerComposition(
                 new DeterministicPortfolioAnswerComposer(),
                 new PortfolioAnswerPlanValidator(),
@@ -87,7 +100,7 @@ public class PortfolioExpressionConfiguration {
                 new ExpressionCircuitBreaker(Clock.systemUTC()),
                 new FactDraftValidator(),
                 new ModelExpressionEligibilityPolicy(),
-                Clock.systemUTC(), properties.isEnabled()
+                Clock.systemUTC(), operationEnabled
                         && properties.getAllowedMaterialKinds().contains(
                                 com.portfolio.agent.answer.composition.domain.MaterialKind.FACT),
                 new PortfolioCompositionDiagnostics(diagnosticEventPublisher));

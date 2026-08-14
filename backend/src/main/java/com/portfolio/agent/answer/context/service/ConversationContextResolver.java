@@ -34,11 +34,19 @@ public final class ConversationContextResolver {
             Instant now) {
         Objects.requireNonNull(criteria, "criteria");
         if (explicitHandle != null) {
-            Optional<ConversationContextEntry> explicit = store.resolve(
-                    conversationId, resumeToken, explicitHandle, now);
-            if (explicit.isEmpty()) {
+            ConversationBusinessContextStore.LookupResult lookup;
+            try {
+                lookup = store.lookup(conversationId, resumeToken, explicitHandle, now);
+            } catch (RuntimeException exception) {
                 return ConversationContextResolution.unavailable();
             }
+            if (lookup.getStatus() == ConversationBusinessContextStore.LookupResult.Status.EXPIRED) {
+                return ConversationContextResolution.expired();
+            }
+            if (lookup.getStatus() == ConversationBusinessContextStore.LookupResult.Status.NOT_FOUND) {
+                return ConversationContextResolution.invalidReference();
+            }
+            Optional<ConversationContextEntry> explicit = lookup.getEntry();
             if (!matches(explicit.orElseThrow(), criteria)) {
                 return ConversationContextResolution.incompatible();
             }

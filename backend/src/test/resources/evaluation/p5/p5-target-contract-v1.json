@@ -1,0 +1,62 @@
+{
+  "contractVersion": "stp-v2",
+  "responseKind": "ANSWER",
+  "agentTurn": {
+    "contractVersion": "stp-v2",
+    "plan": {
+      "tasks": [
+        {
+          "taskId": "task-01",
+          "sourceDomain": "PORTFOLIO",
+          "fulfillmentRole": "PRIMARY",
+          "goalLabel": "portfolio-fact"
+        },
+        {
+          "taskId": "task-02",
+          "sourceDomain": "GENERAL",
+          "fulfillmentRole": "PRIMARY",
+          "goalLabel": "general-explanation"
+        }
+      ]
+    }
+  },
+  "blocks": [
+    {
+      "blockId": "block-01",
+      "sourceDomain": "PORTFOLIO",
+      "support": {
+        "kind": "GROUNDED",
+        "statementIds": ["statement-01"],
+        "publicSourceKeys": ["source-01"]
+      }
+    },
+    {
+      "blockId": "block-02",
+      "sourceDomain": "GENERAL",
+      "support": {
+        "kind": "UNSUPPORTED",
+        "statementIds": [],
+        "publicSourceKeys": []
+      }
+    }
+  ],
+  "sourceComposition": "MULTI_SOURCE",
+  "publicSourceCatalog": [
+    {"key": "source-01", "label": "approved-public-source"}
+  ],
+  "unsupportedContract409": {
+    "httpStatus": 409,
+    "errorCode": "AGENT_TURN_CONTRACT_UNSUPPORTED"
+  },
+  "contextInvalidatedAnswer": {
+    "httpStatus": 200,
+    "responseKind": "ANSWER",
+    "answerResolution": "NEEDS_CLARIFICATION",
+    "disposition": "CONTEXT_INVALIDATED",
+    "contextInvalidation": {
+      "reasonCode": "CONTEXT_REFERENCE_EXPIRED",
+      "recoveryAction": "REASK_WITHOUT_CONTEXT"
+    },
+    "blocks": []
+  }
+}

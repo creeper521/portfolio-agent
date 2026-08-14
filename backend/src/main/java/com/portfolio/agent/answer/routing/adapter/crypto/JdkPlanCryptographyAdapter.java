@@ -14,6 +14,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskDependency;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 import com.portfolio.agent.answer.routing.service.ValidatedSemanticTurnPlan;
 
 import javax.crypto.Cipher;
@@ -34,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /** JDK-only AES-GCM envelope and detached HMAC binding implementation. */
@@ -222,6 +224,7 @@ public final class JdkPlanCryptographyAdapter implements PlanCryptographyPort {
         node.put("taskType", task.getTaskType().name());
         node.put("sourceDomain", task.getSourceDomain().name());
         node.put("goalLabel", task.getGoalLabel());
+        node.put("fulfillmentRole", task.getFulfillmentRole().name());
         node.set("parameters", encodeParameters(task.getParameters()));
         node.set("requestedOutputs", encodeEnums(task.getRequestedOutputs()));
         ObjectNode confidence = node.putObject("confidence");
@@ -429,7 +432,9 @@ public final class JdkPlanCryptographyAdapter implements PlanCryptographyPort {
                         enumValue(SemanticRoutingTypes.ConfidenceLevel.class, confidence, "overall"),
                         levels,
                         enumValue(SemanticRoutingTypes.ConfidenceOrigin.class, confidence, "origin")),
-                subjects);
+                subjects,
+                optionalEnumValue(TaskFulfillmentRole.class, node, "fulfillmentRole")
+                        .orElse(TaskFulfillmentRole.PRIMARY));
     }
 
     private SemanticTaskParameters decodeParameters(JsonNode node) {
@@ -535,6 +540,12 @@ public final class JdkPlanCryptographyAdapter implements PlanCryptographyPort {
 
     private static <E extends Enum<E>> E enumValue(Class<E> type, JsonNode node, String field) {
         return Enum.valueOf(type, requiredText(node, field));
+    }
+
+    private static <E extends Enum<E>> Optional<E> optionalEnumValue(
+            Class<E> type, JsonNode node, String field) {
+        String value = optionalText(node, field);
+        return value == null ? Optional.empty() : Optional.of(Enum.valueOf(type, value));
     }
 
     private static ObjectNode requiredObject(JsonNode node, String field) {

@@ -28,6 +28,7 @@ public final class EvalSemanticTurnShape {
         BOUNDARY,
         REJECTED,
         PLAN_INVALIDATED,
+        CONTEXT_INVALIDATED,
         UNKNOWN
     }
 
@@ -154,6 +155,7 @@ public final class EvalSemanticTurnShape {
                     || disposition == Disposition.BOUNDARY
                     || disposition == Disposition.REJECTED
                     || disposition == Disposition.PLAN_INVALIDATED
+                    || disposition == Disposition.CONTEXT_INVALIDATED
                     || disposition == Disposition.UNKNOWN;
         }
         JsonNode tasks = plan.get("tasks");

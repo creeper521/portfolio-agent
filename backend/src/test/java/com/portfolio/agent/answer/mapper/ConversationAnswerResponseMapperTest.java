@@ -22,6 +22,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
@@ -36,6 +37,74 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ConversationAnswerResponseMapperTest {
+
+    @Test
+    void projectsFulfillmentRoleOnlyForStpV2AndKeepsLegacyProjectionUnchanged() throws Exception {
+        SemanticTask task = SemanticTask.create(
+                "task-role", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
+                SemanticRoutingTypes.TaskSourceDomain.GENERAL, "explain role",
+                new SemanticTaskParameters.GeneralExplanation("explain role", "STANDARD", "GUEST"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY), TaskConfidence.highRule(), List.of(),
+                TaskFulfillmentRole.SUPPORTING);
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-role", "public-v1", SemanticTurnPlan.PlanSource.RULE,
+                List.of(task), List.of(), List.of(), Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        TaskOutcome outcome = TaskOutcome.answered(
+                task.getTaskId(), SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                new TaskResultPayload.SectionResultPayload(List.of("role result"), null),
+                TaskResultProvenance.direct(SemanticRoutingTypes.TaskSourceDomain.GENERAL, List.of(), List.of()),
+                false);
+        ConversationAnswerResponseMapper mapper = new ConversationAnswerResponseMapper();
+
+        ConversationAnswerResponse v2 = mapper.toResponse(answerResult().withAgentTurn(
+                AgentTurnResult.ready(plan, new SemanticTurnOutcome(List.of(outcome)), false)));
+        assertThat(v2.getAgentTurn().getContractVersion()).isEqualTo("stp-v2");
+        assertThat(v2.getAgentTurn().getPlan().getTasks().get(0).getFulfillmentRole())
+                .isEqualTo(TaskFulfillmentRole.SUPPORTING);
+        assertThat(v2.getAgentTurn().getCompletedTasks().get(0).getFulfillmentRole())
+                .isEqualTo(TaskFulfillmentRole.SUPPORTING);
+        assertThat(v2.getAgentTurn().getOutcome().getTaskSummary().getItems().get(0).getFulfillmentRole())
+                .isEqualTo(TaskFulfillmentRole.SUPPORTING);
+
+        String v1Json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+                mapper.toResponse(answerResult().withAgentTurn(
+                        AgentTurnResult.ready(plan, new SemanticTurnOutcome(List.of(outcome))))));
+        assertThat(v1Json).contains("\"contractVersion\":\"stp-v1\"")
+                .doesNotContain("fulfillmentRole");
+    }
+
+    @Test
+    void keepsPublicTaskStatusCategoriesDistinct() {
+        List<SemanticTask> tasks = List.of(
+                statusTask("task-status-1"), statusTask("task-status-2"),
+                statusTask("task-status-3"), statusTask("task-status-4"),
+                statusTask("task-status-5"), statusTask("task-status-6"));
+        SemanticTurnPlan plan = new SemanticTurnPlan(
+                "plan-status", "public-1", SemanticTurnPlan.PlanSource.RULE,
+                tasks, List.of(), List.of(), Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
+                SemanticTurnPlan.PlanConfirmationPolicy.noConfirmation());
+        SemanticTurnOutcome outcome = new SemanticTurnOutcome(List.of(
+                TaskOutcome.notSupported("task-status-1", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        false, "NOT_SUPPORTED"),
+                TaskOutcome.capabilityUnavailable("task-status-2", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        "RUNTIME_UNAVAILABLE"),
+                TaskOutcome.failed("task-status-3", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        "EXECUTION_FAILED"),
+                TaskOutcome.notExecutedBudget("task-status-4", SemanticRoutingTypes.TaskSourceDomain.GENERAL),
+                TaskOutcome.notApplicable("task-status-5", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        "NO_SUPPORTED_CROSS_DOMAIN_RELATION"),
+                TaskOutcome.notSupported("task-status-6", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                        false, "STALE_CONTEXT")));
+
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.ready(plan, outcome)));
+
+        assertThat(response.getAgentTurn().getOutcome().getTaskSummary().getItems())
+                .extracting(item -> item.getStatus())
+                .containsExactly("NOT_SUPPORTED", "UNAVAILABLE", "FAILED", "NOT_EXECUTED",
+                        "NOT_APPLICABLE", "STALE");
+    }
 
     @Test
     void mapsConfirmationToAwaitingOnlyForStpV1AndKeepsDisplayPlanFreeOfInternalIds() throws Exception {
@@ -379,7 +448,7 @@ class ConversationAnswerResponseMapperTest {
     }
 
     @Test
-    void exposesOnlyPublicCompositionMetadataAndSectionSourceReferences() {
+    void exposesOnlyPublicCompositionMetadataAndSectionSourceReferences() throws Exception {
         com.portfolio.agent.answer.domain.PublicSourceReferenceValue source =
                 new com.portfolio.agent.answer.domain.PublicSourceReferenceValue(
                 "source-public-1", "公开证据", "public-1", "PROJECT",
@@ -404,7 +473,28 @@ class ConversationAnswerResponseMapperTest {
 
         ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(
                 answerResult().withAgentTurn(AgentTurnResult.ready(
-                        plan, new SemanticTurnOutcome(List.of(completed)))));
+                        plan, new SemanticTurnOutcome(List.of(completed)), false)));
+
+        assertThat(response.getSourceComposition()).isEqualTo(
+                com.portfolio.agent.answer.domain.AnswerSourceComposition.PORTFOLIO_ONLY);
+        assertThat(response.getPublicSourceCatalog()).extracting(value -> value.getReferenceKey())
+                .containsExactly("source-public-1");
+        assertThat(response.getBlocks()).singleElement().satisfies(block -> {
+            assertThat(block.getBlockId()).isNotBlank();
+            assertThat(block.getSourceDomain())
+                    .isEqualTo(SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO);
+            assertThat(block.getSupport().getKind())
+                    .isEqualTo(com.portfolio.agent.answer.domain.AnswerSupportKind.VERIFIED_PUBLIC_EVIDENCE);
+            assertThat(block.getSupport().getPublicSourceKeys()).containsExactly("source-public-1");
+        });
+
+        ConversationAnswerResponse legacy = new ConversationAnswerResponseMapper().toResponse(
+                answerResult().withAgentTurn(AgentTurnResult.ready(
+                        plan, new SemanticTurnOutcome(List.of(completed)), true)));
+        String legacyJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(legacy);
+        assertThat(legacy.getSourceComposition()).isNull();
+        assertThat(legacyJson).doesNotContain("sourceComposition", "publicSourceCatalog", "blockId",
+                "\"support\"");
 
         assertThat(response.getAgentTurn().getCompletedTasks()).singleElement().satisfies(task -> {
             assertThat(task.getComposition().getMode().name()).isEqualTo("MODEL_GROUNDED");
@@ -470,6 +560,14 @@ class ConversationAnswerResponseMapperTest {
                 "task-02", SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
                 SemanticRoutingTypes.TaskSourceDomain.GENERAL, "general",
                 new SemanticTaskParameters.GeneralExplanation("general", "BRIEF", "INTERVIEWER"),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY), TaskConfidence.highRule(), List.of());
+    }
+
+    private static SemanticTask statusTask(String taskId) {
+        return SemanticTask.create(
+                taskId, SemanticRoutingTypes.SemanticTaskType.GENERAL_EXPLANATION,
+                SemanticRoutingTypes.TaskSourceDomain.GENERAL, "status task",
+                new SemanticTaskParameters.GeneralExplanation("status task", "BRIEF", "INTERVIEWER"),
                 Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY), TaskConfidence.highRule(), List.of());
     }
 

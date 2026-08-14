@@ -21,7 +21,8 @@ public final class AgentTurnResult {
         CLARIFICATION_REQUIRED,
         BOUNDARY,
         REJECTED,
-        PLAN_INVALIDATED
+        PLAN_INVALIDATED,
+        CONTEXT_INVALIDATED
     }
 
     private final Disposition disposition;
@@ -33,6 +34,8 @@ public final class AgentTurnResult {
     private final SemanticTurnInput.InvalidatedPlanReference invalidatedPlanReference;
     private final Set<String> reasonCodes;
     private final boolean requestUsesStpV1;
+    private final ContextInvalidation contextInvalidation;
+    private final ContextResolution contextResolution;
 
     private AgentTurnResult(
             Disposition disposition,
@@ -44,6 +47,22 @@ public final class AgentTurnResult {
             SemanticTurnInput.InvalidatedPlanReference invalidatedPlanReference,
             Set<String> reasonCodes,
             boolean requestUsesStpV1) {
+        this(disposition, plan, planConfirmation, clarification, outcome, invalidationReason,
+                invalidatedPlanReference, reasonCodes, requestUsesStpV1, null, null);
+    }
+
+    private AgentTurnResult(
+            Disposition disposition,
+            SemanticTurnPlan plan,
+            PlanConfirmation.Challenge planConfirmation,
+            ClarificationRequest clarification,
+            SemanticTurnOutcome outcome,
+            PlanConfirmation.PlanInvalidationReason invalidationReason,
+            SemanticTurnInput.InvalidatedPlanReference invalidatedPlanReference,
+            Set<String> reasonCodes,
+            boolean requestUsesStpV1,
+            ContextInvalidation contextInvalidation,
+            ContextResolution contextResolution) {
         this.disposition = Objects.requireNonNull(disposition, "disposition");
         this.plan = plan;
         this.planConfirmation = planConfirmation;
@@ -53,6 +72,8 @@ public final class AgentTurnResult {
         this.invalidatedPlanReference = invalidatedPlanReference;
         this.reasonCodes = Set.copyOf(Objects.requireNonNull(reasonCodes, "reasonCodes"));
         this.requestUsesStpV1 = requestUsesStpV1;
+        this.contextInvalidation = contextInvalidation;
+        this.contextResolution = contextResolution;
         validateInvariant();
     }
 
@@ -67,18 +88,31 @@ public final class AgentTurnResult {
     }
 
     public static AgentTurnResult ready(SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
+        return ready(plan, outcome, true);
+    }
+
+    public static AgentTurnResult ready(
+            SemanticTurnPlan plan, SemanticTurnOutcome outcome, boolean requestUsesStpV1) {
         return new AgentTurnResult(Disposition.READY, Objects.requireNonNull(plan, "plan"), null,
-                null, Objects.requireNonNull(outcome, "outcome"), null, null, Set.of(), true);
+                null, Objects.requireNonNull(outcome, "outcome"), null, null, Set.of(), requestUsesStpV1);
     }
 
     public static AgentTurnResult partialReady(
             SemanticTurnPlan plan,
             ClarificationRequest clarification,
             SemanticTurnOutcome outcome) {
+        return partialReady(plan, clarification, outcome, true);
+    }
+
+    public static AgentTurnResult partialReady(
+            SemanticTurnPlan plan,
+            ClarificationRequest clarification,
+            SemanticTurnOutcome outcome,
+            boolean requestUsesStpV1) {
         return new AgentTurnResult(Disposition.PARTIAL_READY,
                 Objects.requireNonNull(plan, "plan"), null,
                 Objects.requireNonNull(clarification, "clarification"),
-                Objects.requireNonNull(outcome, "outcome"), null, null, Set.of(), true);
+                Objects.requireNonNull(outcome, "outcome"), null, null, Set.of(), requestUsesStpV1);
     }
 
     public static AgentTurnResult clarificationRequired(ClarificationRequest clarification) {
@@ -92,8 +126,25 @@ public final class AgentTurnResult {
     }
 
     public static AgentTurnResult rejected(Set<String> reasonCodes) {
+        return rejected(reasonCodes, true);
+    }
+
+    public static AgentTurnResult rejected(Set<String> reasonCodes, boolean requestUsesStpV1) {
         return new AgentTurnResult(Disposition.REJECTED, null, null, null, null, null,
-                null, reasonCodes, true);
+                null, reasonCodes, requestUsesStpV1);
+    }
+
+    public static AgentTurnResult contextInvalidated(
+            ContextInvalidation invalidation, ContextResolution resolution) {
+        return contextInvalidated(invalidation, resolution, false);
+    }
+
+    public static AgentTurnResult contextInvalidated(
+            ContextInvalidation invalidation, ContextResolution resolution, boolean requestUsesStpV1) {
+        ContextInvalidation safeInvalidation = Objects.requireNonNull(invalidation, "invalidation");
+        return new AgentTurnResult(Disposition.CONTEXT_INVALIDATED, null, null, null, null, null,
+                null, Set.of(safeInvalidation.getReasonCode()), requestUsesStpV1,
+                safeInvalidation, resolution);
     }
 
     public static AgentTurnResult planInvalidated(
@@ -120,9 +171,10 @@ public final class AgentTurnResult {
         Objects.requireNonNull(decision, "decision");
         SemanticTurnPlan plan = decision.getValidatedPlan().map(value -> value.getPlan()).orElse(null);
         return switch (decision.getDisposition()) {
-            case READY -> ready(plan, Objects.requireNonNull(outcome, "outcome"));
+            case READY -> ready(plan, Objects.requireNonNull(outcome, "outcome"), requestUsesStpV1);
             case PARTIAL_READY -> partialReady(plan,
-                    decision.getClarification().orElseThrow(), Objects.requireNonNull(outcome, "outcome"));
+                    decision.getClarification().orElseThrow(), Objects.requireNonNull(outcome, "outcome"),
+                    requestUsesStpV1);
             case CONFIRMATION_REQUIRED -> confirmationRequired(plan,
                     Objects.requireNonNull(challenge, "challenge"), requestUsesStpV1);
             case CLARIFICATION_REQUIRED -> clarificationRequired(decision.getClarification().orElseThrow());
@@ -145,8 +197,20 @@ public final class AgentTurnResult {
         return Optional.ofNullable(invalidatedPlanReference);
     }
     public Set<String> getReasonCodes() { return reasonCodes; }
+    public Optional<ContextInvalidation> getContextInvalidation() {
+        return Optional.ofNullable(contextInvalidation);
+    }
+    public Optional<ContextResolution> getContextResolution() {
+        return Optional.ofNullable(contextResolution);
+    }
     public boolean isRequestUsesStpV1() { return requestUsesStpV1; }
     public boolean isConfirmationRequired() { return disposition == Disposition.CONFIRMATION_REQUIRED; }
+
+    public AgentTurnResult withContextResolution(ContextResolution resolution) {
+        return new AgentTurnResult(disposition, plan, planConfirmation, clarification, outcome,
+                invalidationReason, invalidatedPlanReference, reasonCodes, requestUsesStpV1,
+                contextInvalidation, Objects.requireNonNull(resolution, "resolution"));
+    }
 
     private void validateInvariant() {
         switch (disposition) {
@@ -164,6 +228,9 @@ public final class AgentTurnResult {
             case PLAN_INVALIDATED -> require(plan == null && clarification == null && outcome == null
                     && planConfirmation == null && invalidationReason != null,
                     "invalidated result must carry an invalidation reason only");
+            case CONTEXT_INVALIDATED -> require(plan == null && clarification == null && outcome == null
+                    && planConfirmation == null && contextInvalidation != null,
+                    "context invalidated result must carry context invalidation only");
         }
     }
 

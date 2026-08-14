@@ -10,6 +10,7 @@ public final class ConversationContextResolution {
         CLARIFICATION_REQUIRED,
         UNAVAILABLE,
         INVALID_REFERENCE,
+        EXPIRED,
         INCOMPATIBLE
     }
 
@@ -44,6 +45,10 @@ public final class ConversationContextResolution {
 
     public static ConversationContextResolution invalidReference() {
         return new ConversationContextResolution(Status.INVALID_REFERENCE, SelectionReason.NONE, null);
+    }
+
+    public static ConversationContextResolution expired() {
+        return new ConversationContextResolution(Status.EXPIRED, SelectionReason.NONE, null);
     }
 
     public static ConversationContextResolution incompatible() {

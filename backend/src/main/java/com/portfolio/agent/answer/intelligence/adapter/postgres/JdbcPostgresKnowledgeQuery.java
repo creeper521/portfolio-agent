@@ -3,6 +3,7 @@ package com.portfolio.agent.answer.intelligence.adapter.postgres;
 import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalRequest;
 import com.portfolio.agent.answer.intelligence.domain.PortfolioRetrievalStrategy;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetrievalException;
 import com.portfolio.agent.selection.adapter.postgres.JdbcPostgresSelectionQuery;
 import com.portfolio.agent.selection.adapter.postgres.PostgresHybridCandidateRetriever;
@@ -61,7 +62,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 return retrieveExact(release, request, target);
             }
             CandidateRetrievalResult candidates = candidateRetriever.retrieve(
-                    release, target, request.getLimit());
+                    release, target, request.getLimit(), request.getSearchStrategy());
             List<String> subjectIds = candidates.getCandidates().stream()
                     .map(candidate -> candidate.getSubjectId())
                     .toList();

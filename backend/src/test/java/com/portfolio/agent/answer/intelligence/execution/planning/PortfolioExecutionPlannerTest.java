@@ -13,6 +13,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -43,6 +46,10 @@ class PortfolioExecutionPlannerTest {
         assertEquals(1, first.getInvocations().size());
         assertEquals("PORTFOLIO_EVIDENCE_RETRIEVAL_V1",
                 first.getInvocations().getFirst().getCapabilityId());
+        assertEquals(CorpusBackend.BUNDLE,
+                first.getInvocations().getFirst().getInvocation().getRetrievalPlan().getPrimaryBackend());
+        assertEquals(SearchStrategy.EXACT,
+                first.getInvocations().getFirst().getInvocation().getRetrievalPlan().getPrimaryStrategy());
     }
 
     @Test

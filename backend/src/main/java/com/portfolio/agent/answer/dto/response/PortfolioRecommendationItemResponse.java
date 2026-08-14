@@ -15,6 +15,9 @@ public final class PortfolioRecommendationItemResponse {
     private final List<String> matchReasons;
     private final List<String> evidenceIds;
     private final List<PublicSourceReferenceResponse> sourceReferences;
+    private final String resultItemId;
+    private final Integer position;
+    private final SubjectReferenceResponse subject;
 
     public PortfolioRecommendationItemResponse(
             String portfolioId,
@@ -22,7 +25,7 @@ public final class PortfolioRecommendationItemResponse {
             String route,
             List<String> matchReasons,
             List<String> evidenceIds) {
-        this(portfolioId, title, route, matchReasons, evidenceIds, List.of());
+        this(portfolioId, title, route, matchReasons, evidenceIds, List.of(), null, null, null);
     }
 
     public PortfolioRecommendationItemResponse(
@@ -32,12 +35,28 @@ public final class PortfolioRecommendationItemResponse {
             List<String> matchReasons,
             List<String> evidenceIds,
             List<PublicSourceReferenceResponse> sourceReferences) {
+        this(portfolioId, title, route, matchReasons, evidenceIds, sourceReferences, null, null, null);
+    }
+
+    public PortfolioRecommendationItemResponse(
+            String portfolioId,
+            String title,
+            String route,
+            List<String> matchReasons,
+            List<String> evidenceIds,
+            List<PublicSourceReferenceResponse> sourceReferences,
+            String resultItemId,
+            Integer position,
+            SubjectReferenceResponse subject) {
         this.portfolioId = Objects.requireNonNull(portfolioId, "portfolioId");
         this.title = Objects.requireNonNull(title, "title");
         this.route = Objects.requireNonNull(route, "route");
         this.matchReasons = List.copyOf(Objects.requireNonNull(matchReasons, "matchReasons"));
         this.evidenceIds = List.copyOf(Objects.requireNonNull(evidenceIds, "evidenceIds"));
         this.sourceReferences = List.copyOf(Objects.requireNonNull(sourceReferences, "sourceReferences"));
+        this.resultItemId = resultItemId;
+        this.position = position;
+        this.subject = subject;
     }
 
     public static PortfolioRecommendationItemResponse from(PortfolioRecommendationItem item) {
@@ -55,4 +74,10 @@ public final class PortfolioRecommendationItemResponse {
     public List<String> getEvidenceIds() { return evidenceIds; }
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<PublicSourceReferenceResponse> getSourceReferences() { return sourceReferences; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getResultItemId() { return resultItemId; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Integer getPosition() { return position; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public SubjectReferenceResponse getSubject() { return subject; }
 }

@@ -24,8 +24,8 @@ public final class PortfolioConditions {
             @JsonProperty("capabilityCodes") Set<String> capabilityCodes,
             @JsonProperty("goal") String goal,
             @JsonProperty("requestedSize") Integer requestedSize) {
-        if (requestedSize != null && (requestedSize < 2 || requestedSize > 5)) {
-            throw new IllegalArgumentException("requestedSize must be between 2 and 5");
+        if (requestedSize != null && (requestedSize < 1 || requestedSize > 5)) {
+            throw new IllegalArgumentException("requestedSize must be between 1 and 5");
         }
         this.careerTrack = normalizeControlledValue(careerTrack);
         this.audienceRole = normalizeControlledValue(audienceRole);

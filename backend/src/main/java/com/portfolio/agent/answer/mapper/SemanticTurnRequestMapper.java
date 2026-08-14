@@ -14,6 +14,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectTyp
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.service.LegacySemanticContextAdapter;
+import com.portfolio.agent.answer.routing.service.SemanticTurnContractPolicy;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -26,9 +27,14 @@ import java.util.Set;
 @Component
 public final class SemanticTurnRequestMapper {
 
+    private final SemanticTurnContractPolicy contractPolicy = new SemanticTurnContractPolicy();
+
     public SemanticTurnInput toInput(ConversationAnswerRequest request, String contentVersion) {
         Objects.requireNonNull(request, "request");
         String effectiveContentVersion = requireText(contentVersion, "contentVersion");
+        contractPolicy.requireCompatible(
+                request.getAgentTurnContract(), requiresP5Semantics(request));
+        String agentTurnContract = contractPolicy.resolve(request.getAgentTurnContract());
         SemanticContext semanticContext = toSemanticContext(
                 request.getSemanticContext(), effectiveContentVersion);
         LegacySemanticContextAdapter.LegacyContext legacyContext = toLegacyContext(
@@ -51,7 +57,7 @@ public final class SemanticTurnRequestMapper {
                 toPlanAdjustment(request.getPlanAdjustment()),
                 clarificationResolution,
                 request.getRequestToken() == null ? null : request.getRequestToken().toString(),
-                request.getAgentTurnContract(), request.getQuestionPresetId(), request.getContractVersion());
+                agentTurnContract, request.getQuestionPresetId(), request.getContractVersion());
     }
 
     private SemanticContext toSemanticContext(
@@ -176,5 +182,10 @@ public final class SemanticTurnRequestMapper {
             throw new IllegalArgumentException(name + " is required");
         }
         return value.trim();
+    }
+
+    private boolean requiresP5Semantics(ConversationAnswerRequest request) {
+        return request.getContextReference() != null
+                && request.getContextReference().getResultItemId() != null;
     }
 }

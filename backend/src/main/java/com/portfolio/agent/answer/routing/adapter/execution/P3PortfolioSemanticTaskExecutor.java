@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvi
 import com.portfolio.agent.answer.intelligence.execution.domain.CapabilityExecutionConstraints;
 import com.portfolio.agent.answer.intelligence.execution.domain.CandidateSubject;
 import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
+import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
 import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioExecutionPlanner;
 import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioPlanValidator;
 import com.portfolio.agent.answer.intelligence.execution.planning.TrustedPortfolioExecutionPlan;
@@ -95,6 +96,19 @@ public final class P3PortfolioSemanticTaskExecutor implements SemanticTaskExecut
             DiagnosticEventPublisher diagnosticEventPublisher,
             PortfolioAnswerComposition p4Composition) {
         this(new PortfolioExecutionPlanner(catalog), new PortfolioPlanValidator(catalog), capability,
+                new EvidenceSupportAssessor(), new FactResultPolicy(),
+                new ComparisonResultPolicy(), new RecommendationResultPolicy(), new RefineResultPolicy(),
+                diagnosticEventPublisher, p4Composition);
+    }
+
+    public P3PortfolioSemanticTaskExecutor(
+            PortfolioCapabilityCatalog catalog,
+            CorpusBackend primaryBackend,
+            PortfolioEvidenceCapability capability,
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            PortfolioAnswerComposition p4Composition) {
+        this(new PortfolioExecutionPlanner(catalog, primaryBackend),
+                new PortfolioPlanValidator(catalog), capability,
                 new EvidenceSupportAssessor(), new FactResultPolicy(),
                 new ComparisonResultPolicy(), new RecommendationResultPolicy(), new RefineResultPolicy(),
                 diagnosticEventPublisher, p4Composition);

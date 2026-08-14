@@ -5,6 +5,8 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
+import com.portfolio.agent.answer.exception.AnswerErrorCode;
+import com.portfolio.agent.common.exception.ApplicationException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -98,7 +100,41 @@ class ConversationAnswerRequestValidationTest {
 
         assertThat(messages(validator.validate(valid))).isEmpty();
         assertThat(messages(validator.validate(invalidAgentTurnContract)))
-                .contains("agentTurnContract must be stp-v1 when present");
+                .contains("agentTurnContract must be stp-v1 or stp-v2 when present");
+    }
+
+    @Test
+    void acceptsTheCurrentStpV2ContractAlongsideTheV1CompatibilityContract() {
+        ConversationAnswerRequest request = new ConversationAnswerRequest(
+                "turn-ask", UUID.randomUUID(), null, null,
+                ConversationAnswerRequest.TurnAction.ASK, "safe question", List.of(), null,
+                null, null, null, "stp-v2");
+
+        assertThat(messages(validator.validate(request))).isEmpty();
+    }
+
+    @Test
+    void productionRequestMappingRejectsP5ResultSelectionUnderStpV1() throws Exception {
+        ConversationAnswerRequest request = new com.fasterxml.jackson.databind.ObjectMapper().readValue("""
+                {
+                  "turnId":"turn-result-selection",
+                  "requestToken":"6b2d8895-4108-4b4d-aee0-21f6e7c4f333",
+                  "action":"ASK",
+                  "question":"继续查看第二个结果",
+                  "messages":[],
+                  "contextReference":{
+                    "contextHandle":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "expectedContextType":"RECOMMENDATION",
+                    "resultItemId":"item-2"
+                  },
+                  "agentTurnContract":"stp-v1"
+                }
+                """, ConversationAnswerRequest.class);
+
+        assertThatThrownBy(() -> new SemanticTurnRequestMapper().toInput(request, "public-1"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(error -> ((ApplicationException) error).getErrorCode())
+                .isEqualTo(AnswerErrorCode.AGENT_TURN_CONTRACT_UNSUPPORTED);
     }
 
     @Test

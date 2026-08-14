@@ -1,5 +1,10 @@
 package com.portfolio.agent.answer.intelligence.execution.domain;
 
+import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
+import com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalIntent;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -12,6 +17,7 @@ public final class PortfolioEvidenceInvocation {
     private final List<ComparisonDimensionProfile> comparisonDimensionProfiles;
     private final EvidenceSelectionPolicy evidenceSelectionPolicy;
     private final String expectedContentVersion;
+    private final EffectiveRetrievalPlan retrievalPlan;
 
     public PortfolioEvidenceInvocation(
             AuthorizedSubjectScope authorizedSubjectScope,
@@ -19,6 +25,18 @@ public final class PortfolioEvidenceInvocation {
             List<ComparisonDimensionProfile> comparisonDimensionProfiles,
             EvidenceSelectionPolicy evidenceSelectionPolicy,
             String expectedContentVersion) {
+        this(authorizedSubjectScope, facetProfiles, comparisonDimensionProfiles,
+                evidenceSelectionPolicy, expectedContentVersion,
+                defaultPlan(authorizedSubjectScope, expectedContentVersion));
+    }
+
+    public PortfolioEvidenceInvocation(
+            AuthorizedSubjectScope authorizedSubjectScope,
+            List<FacetRetrievalProfile> facetProfiles,
+            List<ComparisonDimensionProfile> comparisonDimensionProfiles,
+            EvidenceSelectionPolicy evidenceSelectionPolicy,
+            String expectedContentVersion,
+            EffectiveRetrievalPlan retrievalPlan) {
         this.authorizedSubjectScope = Objects.requireNonNull(
                 authorizedSubjectScope, "authorizedSubjectScope");
         this.facetProfiles = List.copyOf(Objects.requireNonNull(facetProfiles, "facetProfiles"));
@@ -27,6 +45,10 @@ public final class PortfolioEvidenceInvocation {
         this.evidenceSelectionPolicy = Objects.requireNonNull(
                 evidenceSelectionPolicy, "evidenceSelectionPolicy");
         this.expectedContentVersion = requireText(expectedContentVersion, "expectedContentVersion");
+        this.retrievalPlan = Objects.requireNonNull(retrievalPlan, "retrievalPlan");
+        if (!this.expectedContentVersion.equals(retrievalPlan.getExpectedContentVersion())) {
+            throw new IllegalArgumentException("invocation content version conflicts with retrieval plan");
+        }
         if (!this.expectedContentVersion.equals(authorizedSubjectScope.getContentVersion())) {
             throw new IllegalArgumentException("invocation content version conflicts with subject scope");
         }
@@ -57,6 +79,16 @@ public final class PortfolioEvidenceInvocation {
         return expectedContentVersion;
     }
 
+    public EffectiveRetrievalPlan getRetrievalPlan() {
+        return retrievalPlan;
+    }
+
+    public PortfolioEvidenceInvocation withRetrievalPlan(EffectiveRetrievalPlan plan) {
+        return new PortfolioEvidenceInvocation(authorizedSubjectScope, facetProfiles,
+                comparisonDimensionProfiles, evidenceSelectionPolicy, expectedContentVersion,
+                Objects.requireNonNull(plan, "plan"));
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -69,13 +101,15 @@ public final class PortfolioEvidenceInvocation {
                 && facetProfiles.equals(that.facetProfiles)
                 && comparisonDimensionProfiles.equals(that.comparisonDimensionProfiles)
                 && evidenceSelectionPolicy.equals(that.evidenceSelectionPolicy)
-                && expectedContentVersion.equals(that.expectedContentVersion);
+                && expectedContentVersion.equals(that.expectedContentVersion)
+                && retrievalPlan.equals(that.retrievalPlan);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(authorizedSubjectScope, facetProfiles,
-                comparisonDimensionProfiles, evidenceSelectionPolicy, expectedContentVersion);
+                comparisonDimensionProfiles, evidenceSelectionPolicy, expectedContentVersion,
+                retrievalPlan);
     }
 
     @Override
@@ -107,5 +141,17 @@ public final class PortfolioEvidenceInvocation {
             throw new IllegalArgumentException(name + " is required");
         }
         return value.trim();
+    }
+
+    private static EffectiveRetrievalPlan defaultPlan(
+            AuthorizedSubjectScope scope, String expectedContentVersion) {
+        boolean exact = scope.getMode() == AuthorizedSubjectScope.ScopeMode.EXACT_SUBJECTS;
+        return new EffectiveRetrievalPlan(
+                exact ? RetrievalIntent.EXACT_SUBJECT : RetrievalIntent.RECOMMENDATION_DISCOVERY,
+                CorpusBackend.BUNDLE,
+                exact ? SearchStrategy.EXACT : SearchStrategy.HYBRID,
+                null,
+                null,
+                expectedContentVersion);
     }
 }

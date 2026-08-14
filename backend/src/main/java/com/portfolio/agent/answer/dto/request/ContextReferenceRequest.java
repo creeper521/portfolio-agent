@@ -18,14 +18,24 @@ public final class ContextReferenceRequest {
     @NotNull(message = "expectedContextType is required")
     private final ConversationContextType expectedContextType;
 
+    @Size(max = 100, message = "resultItemId must not exceed 100 characters")
+    private final String resultItemId;
+
     @JsonCreator
     public ContextReferenceRequest(
             @JsonProperty("contextHandle") String contextHandle,
-            @JsonProperty("expectedContextType") ConversationContextType expectedContextType) {
+            @JsonProperty("expectedContextType") ConversationContextType expectedContextType,
+            @JsonProperty("resultItemId") String resultItemId) {
         this.contextHandle = contextHandle;
         this.expectedContextType = expectedContextType;
+        this.resultItemId = resultItemId;
+    }
+
+    public ContextReferenceRequest(String contextHandle, ConversationContextType expectedContextType) {
+        this(contextHandle, expectedContextType, null);
     }
 
     public String getContextHandle() { return contextHandle; }
     public ConversationContextType getExpectedContextType() { return expectedContextType; }
+    public String getResultItemId() { return resultItemId; }
 }

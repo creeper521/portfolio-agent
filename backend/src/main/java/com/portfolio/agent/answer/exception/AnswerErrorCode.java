@@ -6,6 +6,11 @@ public enum AnswerErrorCode implements ErrorCode {
 
     INVALID_ANSWER_CONTEXT("INVALID_ANSWER_CONTEXT", "回答上下文包含无效的公开证据引用", 400),
 
+    AGENT_TURN_CONTRACT_UNSUPPORTED(
+            "AGENT_TURN_CONTRACT_UNSUPPORTED",
+            "请更新页面后重试该请求。",
+            409),
+
     ANSWER_RATE_LIMITED("ANSWER_RATE_LIMITED", "请求过于频繁，请稍后再试。", 429),
     ANSWER_CONCURRENCY_LIMITED("ANSWER_CONCURRENCY_LIMITED", "当前请求较多，请稍后再试。", 429),
     ANSWER_REQUEST_TIMEOUT("ANSWER_REQUEST_TIMEOUT", "回答处理超时，请稍后重试。", 503),

@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 
 import java.util.List;
 import java.util.Objects;
@@ -53,6 +55,7 @@ public final class TaskSummaryResponse {
         private final TaskSourceDomain sourceDomain;
         private final List<String> reasonCodes;
         private final List<String> blockedByDisplayIndexes;
+        private final TaskFulfillmentRole fulfillmentRole;
 
         public Item(String displayIndex, String goalLabel, String status, TaskSourceDomain sourceDomain) {
             this(displayIndex, goalLabel, status, sourceDomain, List.of(), List.of());
@@ -61,6 +64,13 @@ public final class TaskSummaryResponse {
         public Item(
                 String displayIndex, String goalLabel, String status, TaskSourceDomain sourceDomain,
                 List<String> reasonCodes, List<String> blockedByDisplayIndexes) {
+            this(displayIndex, goalLabel, status, sourceDomain, reasonCodes, blockedByDisplayIndexes, null);
+        }
+
+        public Item(
+                String displayIndex, String goalLabel, String status, TaskSourceDomain sourceDomain,
+                List<String> reasonCodes, List<String> blockedByDisplayIndexes,
+                TaskFulfillmentRole fulfillmentRole) {
             this.displayIndex = requireText(displayIndex, "displayIndex");
             this.goalLabel = requireText(goalLabel, "goalLabel");
             this.status = requireText(status, "status");
@@ -68,6 +78,7 @@ public final class TaskSummaryResponse {
             this.reasonCodes = List.copyOf(Objects.requireNonNull(reasonCodes, "reasonCodes"));
             this.blockedByDisplayIndexes = List.copyOf(
                     Objects.requireNonNull(blockedByDisplayIndexes, "blockedByDisplayIndexes"));
+            this.fulfillmentRole = fulfillmentRole;
         }
 
         public String getDisplayIndex() { return displayIndex; }
@@ -76,6 +87,8 @@ public final class TaskSummaryResponse {
         public TaskSourceDomain getSourceDomain() { return sourceDomain; }
         public List<String> getReasonCodes() { return reasonCodes; }
         public List<String> getBlockedByDisplayIndexes() { return blockedByDisplayIndexes; }
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public TaskFulfillmentRole getFulfillmentRole() { return fulfillmentRole; }
     }
 
     private static String requireText(String value, String name) {

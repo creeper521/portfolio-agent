@@ -31,6 +31,16 @@ public interface ConversationBusinessContextStore {
             ContextHandle contextHandle,
             Instant now);
 
+    /** Detailed lookup keeps a missing/expired reference distinct from store unavailability. */
+    default LookupResult lookup(
+            ConversationId conversationId,
+            ResumeToken resumeToken,
+            ContextHandle contextHandle,
+            Instant now) {
+        return resolve(conversationId, resumeToken, contextHandle, now)
+                .map(LookupResult::found).orElseGet(LookupResult::notFound);
+    }
+
     List<ConversationContextEntry> list(
             ConversationId conversationId, ResumeToken resumeToken, Instant now);
 
@@ -80,5 +90,23 @@ public interface ConversationBusinessContextStore {
         public ConversationContextEntry getEntry() { return entry; }
         public boolean isActiveAdvanced() { return activeAdvanced; }
         public long getActiveRevision() { return activeRevision; }
+    }
+
+    final class LookupResult {
+        public enum Status { FOUND, NOT_FOUND, EXPIRED }
+        private final Status status;
+        private final ConversationContextEntry entry;
+
+        private LookupResult(Status status, ConversationContextEntry entry) {
+            this.status = status;
+            this.entry = entry;
+        }
+        public static LookupResult found(ConversationContextEntry entry) {
+            return new LookupResult(Status.FOUND, java.util.Objects.requireNonNull(entry, "entry"));
+        }
+        public static LookupResult notFound() { return new LookupResult(Status.NOT_FOUND, null); }
+        public static LookupResult expired() { return new LookupResult(Status.EXPIRED, null); }
+        public Status getStatus() { return status; }
+        public Optional<ConversationContextEntry> getEntry() { return Optional.ofNullable(entry); }
     }
 }

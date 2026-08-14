@@ -91,7 +91,7 @@ class LegacySemanticContextAdapterTest {
 
         ResolvedRoutingContext result = new RoutingContextResolver(adapter).resolve(
                 new com.portfolio.agent.answer.routing.domain.SemanticTurnInput(
-                        "继续", null, legacy, List.of(), List.of(), List.of()), catalog);
+                        "继续基于这个结果", null, legacy, List.of(), List.of(), List.of()), catalog);
 
         assertEquals(RoutingContextStatus.RESOLVED, result.getStatus());
         assertEquals(SubjectType.CASE, result.getSubjects().get(0).getSubjectType());

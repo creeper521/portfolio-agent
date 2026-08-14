@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.intelligence.execution.validation.ValidatedEvi
 
 import java.util.Objects;
 import java.util.Optional;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalAttemptFailure;
 
 /** Closed result of one atomic capability attempt. */
 public final class CapabilityExecutionResult {
@@ -16,16 +17,18 @@ public final class CapabilityExecutionResult {
     private final ValidatedEvidenceBundle evidenceBundle;
     private final boolean degraded;
     private final SafeReasonCode safeReasonCode;
+    private final RetrievalAttemptFailure attemptFailure;
 
     private CapabilityExecutionResult(
             Status status, PortfolioRetrievalCandidateSet candidateSet,
             ValidatedEvidenceBundle evidenceBundle, boolean degraded,
-            SafeReasonCode safeReasonCode) {
+            SafeReasonCode safeReasonCode, RetrievalAttemptFailure attemptFailure) {
         this.status = Objects.requireNonNull(status, "status");
         this.candidateSet = candidateSet;
         this.evidenceBundle = evidenceBundle;
         this.degraded = degraded;
         this.safeReasonCode = safeReasonCode;
+        this.attemptFailure = attemptFailure;
         if (status == Status.SUCCESS && (candidateSet == null || evidenceBundle == null)) {
             throw new IllegalArgumentException("success requires candidate set and evidence bundle");
         }
@@ -43,31 +46,40 @@ public final class CapabilityExecutionResult {
 
     public static CapabilityExecutionResult success(
             PortfolioRetrievalCandidateSet candidateSet, ValidatedEvidenceBundle evidenceBundle) {
-        return new CapabilityExecutionResult(Status.SUCCESS, candidateSet, evidenceBundle, false, null);
+        return new CapabilityExecutionResult(Status.SUCCESS, candidateSet, evidenceBundle, false, null, null);
     }
 
     public static CapabilityExecutionResult empty(
             PortfolioRetrievalCandidateSet candidateSet, ValidatedEvidenceBundle evidenceBundle) {
-        return new CapabilityExecutionResult(Status.EMPTY, candidateSet, evidenceBundle, false, null);
+        return new CapabilityExecutionResult(Status.EMPTY, candidateSet, evidenceBundle, false, null, null);
     }
 
     public static CapabilityExecutionResult unavailable(SafeReasonCode reasonCode) {
         return new CapabilityExecutionResult(Status.UNAVAILABLE, null, null, false,
-                Objects.requireNonNull(reasonCode, "reasonCode"));
+                Objects.requireNonNull(reasonCode, "reasonCode"),
+                RetrievalAttemptFailure.BACKEND_CONNECTION_UNAVAILABLE);
     }
 
     public static CapabilityExecutionResult timedOut() {
         return new CapabilityExecutionResult(Status.TIMED_OUT, null, null, false,
-                SafeReasonCode.CAPABILITY_TEMPORARILY_UNAVAILABLE);
+                SafeReasonCode.CAPABILITY_TEMPORARILY_UNAVAILABLE,
+                RetrievalAttemptFailure.BACKEND_TIMEOUT);
+    }
+
+    public static CapabilityExecutionResult vectorUnavailable() {
+        return new CapabilityExecutionResult(Status.UNAVAILABLE, null, null, false,
+                SafeReasonCode.CAPABILITY_TEMPORARILY_UNAVAILABLE,
+                RetrievalAttemptFailure.VECTOR_UNAVAILABLE);
     }
 
     public static CapabilityExecutionResult integrityFailed() {
         return new CapabilityExecutionResult(Status.INTEGRITY_FAILED, null, null, false,
-                SafeReasonCode.EVIDENCE_INTEGRITY_FAILURE);
+                SafeReasonCode.EVIDENCE_INTEGRITY_FAILURE, RetrievalAttemptFailure.INTEGRITY_FAILURE);
     }
 
     public CapabilityExecutionResult asDegraded() {
-        return new CapabilityExecutionResult(status, candidateSet, evidenceBundle, true, safeReasonCode);
+        return new CapabilityExecutionResult(status, candidateSet, evidenceBundle, true,
+                safeReasonCode, attemptFailure);
     }
 
     public Status getStatus() { return status; }
@@ -75,4 +87,7 @@ public final class CapabilityExecutionResult {
     public Optional<ValidatedEvidenceBundle> getEvidenceBundle() { return Optional.ofNullable(evidenceBundle); }
     public boolean isDegraded() { return degraded; }
     public Optional<SafeReasonCode> getSafeReasonCode() { return Optional.ofNullable(safeReasonCode); }
+    public Optional<RetrievalAttemptFailure> getAttemptFailure() {
+        return Optional.ofNullable(attemptFailure);
+    }
 }

@@ -54,6 +54,7 @@ public final class TaskOutcome {
     private final TaskResultPayload resultPayload;
     private final GroundedAnswerContribution contribution;
     private final TaskComposition composition;
+    private final TaskFulfillmentRole fulfillmentRole;
 
     private TaskOutcome(
             String taskId,
@@ -67,7 +68,8 @@ public final class TaskOutcome {
             TaskResultProvenance provenance,
             TaskResultPayload resultPayload) {
         this(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
-                resultReference, sourceDomain, provenance, resultPayload, null, null);
+                resultReference, sourceDomain, provenance, resultPayload, null, null,
+                TaskFulfillmentRole.PRIMARY);
     }
 
     private TaskOutcome(
@@ -83,6 +85,25 @@ public final class TaskOutcome {
             TaskResultPayload resultPayload,
             GroundedAnswerContribution contribution,
             TaskComposition composition) {
+        this(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
+                resultReference, sourceDomain, provenance, resultPayload, contribution, composition,
+                TaskFulfillmentRole.PRIMARY);
+    }
+
+    private TaskOutcome(
+            String taskId,
+            TaskExecutionStatus executionStatus,
+            TaskResolution resolution,
+            TaskEvidenceState evidenceState,
+            boolean degraded,
+            Set<String> reasonCodes,
+            String resultReference,
+            TaskSourceDomain sourceDomain,
+            TaskResultProvenance provenance,
+            TaskResultPayload resultPayload,
+            GroundedAnswerContribution contribution,
+            TaskComposition composition,
+            TaskFulfillmentRole fulfillmentRole) {
         this.taskId = requireText(taskId, "taskId");
         this.executionStatus = Objects.requireNonNull(executionStatus, "executionStatus");
         this.resolution = Objects.requireNonNull(resolution, "resolution");
@@ -95,6 +116,7 @@ public final class TaskOutcome {
         this.resultPayload = resultPayload;
         this.contribution = contribution;
         this.composition = composition;
+        this.fulfillmentRole = Objects.requireNonNull(fulfillmentRole, "fulfillmentRole");
         validate();
     }
 
@@ -302,6 +324,21 @@ public final class TaskOutcome {
                 null);
     }
 
+    public static TaskOutcome notApplicable(
+            String taskId, TaskSourceDomain sourceDomain, String reasonCode) {
+        return create(
+                taskId,
+                TaskExecutionStatus.SUCCEEDED,
+                TaskResolution.NOT_APPLICABLE,
+                TaskEvidenceState.NOT_APPLICABLE,
+                false,
+                Set.of(reasonCode),
+                null,
+                sourceDomain,
+                null,
+                null);
+    }
+
     public static TaskOutcome notExecutedBudget(
             String taskId, TaskSourceDomain sourceDomain) {
         return create(
@@ -363,6 +400,10 @@ public final class TaskOutcome {
         return sourceDomain;
     }
 
+    public TaskFulfillmentRole getFulfillmentRole() {
+        return fulfillmentRole;
+    }
+
     public Optional<TaskResultProvenance> getProvenance() {
         return Optional.ofNullable(provenance);
     }
@@ -384,7 +425,13 @@ public final class TaskOutcome {
         return new TaskOutcome(taskId, executionStatus, resolution, evidenceState,
                 degraded || safe.isDegraded(),
                 reasonCodes, resultReference, sourceDomain, provenance, resultPayload,
-                contribution, safe);
+                contribution, safe, fulfillmentRole);
+    }
+
+    public TaskOutcome withFulfillmentRole(TaskFulfillmentRole value) {
+        return new TaskOutcome(taskId, executionStatus, resolution, evidenceState,
+                degraded, reasonCodes, resultReference, sourceDomain, provenance, resultPayload,
+                contribution, composition, Objects.requireNonNull(value, "fulfillmentRole"));
     }
 
     public boolean hasRenderablePayload() {
@@ -414,13 +461,15 @@ public final class TaskOutcome {
                 && Objects.equals(provenance, that.provenance)
                 && Objects.equals(resultPayload, that.resultPayload)
                 && Objects.equals(contribution, that.contribution)
-                && Objects.equals(composition, that.composition);
+                && Objects.equals(composition, that.composition)
+                && fulfillmentRole == that.fulfillmentRole;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(taskId, executionStatus, resolution, evidenceState, degraded, reasonCodes,
-                resultReference, sourceDomain, provenance, resultPayload, contribution, composition);
+                resultReference, sourceDomain, provenance, resultPayload, contribution, composition,
+                fulfillmentRole);
     }
 
     @Override

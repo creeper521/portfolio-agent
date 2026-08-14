@@ -124,6 +124,39 @@ public final class OpenAiCompatibleConversationalModelAdapter
     }
 
     @Override
+    public ConversationModelResult<String> generateGeneralMaterial(
+            String question, ConversationWindow window, ConversationRoute route,
+            String expectedContentVersion, String audienceRole) {
+        Map<String, Object> approved = new LinkedHashMap<>();
+        approved.put("route", route);
+        approved.put("contentVersion", expectedContentVersion);
+        approved.put("audienceRole", audienceRole);
+        ConversationModelResult<JsonNode> result = post(
+                ProviderOperation.GENERAL_ANSWER_MATERIAL,
+                () -> promptFactory.generalMaterialPrompt(conversation(question, window), approved),
+                objectMapper.constructType(JsonNode.class),
+                0.3);
+        if (!result.isSuccessful()) {
+            return ConversationModelResult.failure(result.getFailureCode());
+        }
+        return ConversationModelResult.success(result.getValue().toString());
+    }
+
+    @Override
+    public ConversationModelResult<String> generateCrossDomainExpression(
+            String approvedMaterialJson) {
+        ConversationModelResult<JsonNode> result = post(
+                ProviderOperation.CROSS_DOMAIN_EXPRESSION,
+                () -> promptFactory.crossDomainExpressionPrompt(approvedMaterialJson),
+                objectMapper.constructType(JsonNode.class),
+                0.2);
+        if (!result.isSuccessful()) {
+            return ConversationModelResult.failure(result.getFailureCode());
+        }
+        return ConversationModelResult.success(result.getValue().toString());
+    }
+
+    @Override
     public ConversationModelResult<GroundingReview> review(
             List<ConversationAnswerBlock> blocks,
             PortfolioGroundingContext grounding

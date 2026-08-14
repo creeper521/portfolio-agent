@@ -121,6 +121,16 @@ public final class JdbcConversationBusinessContextStore implements ConversationB
     }
 
     @Override
+    public LookupResult lookup(
+            ConversationId conversationId,
+            ResumeToken resumeToken,
+            ContextHandle contextHandle,
+            Instant now) {
+        return transactions.execute(status -> lookupInTransaction(
+                conversationId, resumeToken, contextHandle, now));
+    }
+
+    @Override
     public List<ConversationContextEntry> list(
             ConversationId conversationId, ResumeToken resumeToken, Instant now) {
         return transactions.execute(status -> listInTransaction(conversationId, resumeToken, now));
@@ -259,6 +269,25 @@ public final class JdbcConversationBusinessContextStore implements ConversationB
         row.lastAccessedAt = now;
         row.expiresAt = idleExpiresAt;
         return Optional.of(decode(row));
+    }
+
+    private LookupResult lookupInTransaction(
+            ConversationId conversationId,
+            ResumeToken resumeToken,
+            ContextHandle contextHandle,
+            Instant now) {
+        if (authorizedSession(conversationId, resumeToken) == null) {
+            return LookupResult.notFound();
+        }
+        ContextRow row = contextRow(conversationId, contextHandle);
+        if (row == null) {
+            return LookupResult.notFound();
+        }
+        if (!now.isBefore(row.expiresAt) || !now.isBefore(row.absoluteExpiresAt)) {
+            return LookupResult.expired();
+        }
+        return resolveInTransaction(conversationId, resumeToken, contextHandle, now)
+                .map(LookupResult::found).orElseGet(LookupResult::notFound);
     }
 
     private List<ConversationContextEntry> listInTransaction(

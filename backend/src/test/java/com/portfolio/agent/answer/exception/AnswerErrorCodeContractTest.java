@@ -39,6 +39,7 @@ class AnswerErrorCodeContractTest {
                 .map(AnswerErrorCode::getCode))
                 .containsExactly(
                         "INVALID_ANSWER_CONTEXT",
+                        "AGENT_TURN_CONTRACT_UNSUPPORTED",
                         "ANSWER_RATE_LIMITED",
                         "ANSWER_CONCURRENCY_LIMITED",
                         "ANSWER_REQUEST_TIMEOUT",

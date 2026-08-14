@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.domain.AnswerConstructionMode;
 import com.portfolio.agent.answer.domain.AnswerEvidenceState;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationGuidanceStage;
+import com.portfolio.agent.answer.domain.AnswerSourceComposition;
 import com.portfolio.agent.answer.domain.ConversationIntent;
 import com.portfolio.agent.answer.domain.ConversationTopic;
 import com.portfolio.agent.answer.intelligence.domain.AnswerIntentSource;
@@ -37,6 +38,10 @@ public final class ConversationAnswerResponse {
     private final AgentTurnResponse agentTurn;
     private final String responseKind;
     private final ConversationResponse conversation;
+    private final AnswerSourceComposition sourceComposition;
+    private final List<PublicSourceCatalogEntryResponse> publicSourceCatalog;
+    private final ContextInvalidationResponse contextInvalidation;
+    private final ContextResolutionResponse contextResolution;
 
     public ConversationAnswerResponse(
             String turnId,
@@ -90,6 +95,73 @@ public final class ConversationAnswerResponse {
             AgentTurnResponse agentTurn,
             String responseKind,
             ConversationResponse conversation) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks, suggestedQuestions,
+                degraded, constructionMode, intentSource, evidenceState, noticeCode, coveredTopics,
+                guidanceStage, portfolioRecommendation, contextVersionUpdated, questionPresetId,
+                contractVersion, summary, agentTurn, responseKind, conversation, null, List.of());
+    }
+
+    public ConversationAnswerResponse(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlockResponse> blocks,
+            List<ConversationSuggestedQuestionResponse> suggestedQuestions,
+            boolean degraded,
+            AnswerConstructionMode constructionMode,
+            AnswerIntentSource intentSource,
+            AnswerEvidenceState evidenceState,
+            String noticeCode,
+            List<ConversationTopic> coveredTopics,
+            ConversationGuidanceStage guidanceStage,
+            PortfolioRecommendationResponse portfolioRecommendation,
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion,
+            String summary,
+            AgentTurnResponse agentTurn,
+            String responseKind,
+            ConversationResponse conversation,
+            AnswerSourceComposition sourceComposition,
+            List<PublicSourceCatalogEntryResponse> publicSourceCatalog) {
+        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks, suggestedQuestions,
+                degraded, constructionMode, intentSource, evidenceState, noticeCode, coveredTopics,
+                guidanceStage, portfolioRecommendation, contextVersionUpdated, questionPresetId,
+                contractVersion, summary, agentTurn, responseKind, conversation, sourceComposition,
+                publicSourceCatalog, null, null);
+    }
+
+    public ConversationAnswerResponse(
+            String turnId,
+            String contentVersion,
+            ConversationIntent intent,
+            ConversationAnswerScope answerScope,
+            AnswerResolution resolution,
+            String title,
+            List<ConversationAnswerBlockResponse> blocks,
+            List<ConversationSuggestedQuestionResponse> suggestedQuestions,
+            boolean degraded,
+            AnswerConstructionMode constructionMode,
+            AnswerIntentSource intentSource,
+            AnswerEvidenceState evidenceState,
+            String noticeCode,
+            List<ConversationTopic> coveredTopics,
+            ConversationGuidanceStage guidanceStage,
+            PortfolioRecommendationResponse portfolioRecommendation,
+            boolean contextVersionUpdated,
+            String questionPresetId,
+            String contractVersion,
+            String summary,
+            AgentTurnResponse agentTurn,
+            String responseKind,
+            ConversationResponse conversation,
+            AnswerSourceComposition sourceComposition,
+            List<PublicSourceCatalogEntryResponse> publicSourceCatalog,
+            ContextInvalidationResponse contextInvalidation,
+            ContextResolutionResponse contextResolution) {
         this.turnId = turnId;
         this.contentVersion = contentVersion;
         this.intent = intent;
@@ -113,6 +185,10 @@ public final class ConversationAnswerResponse {
         this.agentTurn = agentTurn;
         this.responseKind = responseKind;
         this.conversation = conversation;
+        this.sourceComposition = sourceComposition;
+        this.publicSourceCatalog = List.copyOf(publicSourceCatalog);
+        this.contextInvalidation = contextInvalidation;
+        this.contextResolution = contextResolution;
     }
 
     public String getTurnId() { return turnId; }
@@ -148,4 +224,12 @@ public final class ConversationAnswerResponse {
     public String getResponseKind() { return responseKind; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public ConversationResponse getConversation() { return conversation; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public AnswerSourceComposition getSourceComposition() { return sourceComposition; }
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<PublicSourceCatalogEntryResponse> getPublicSourceCatalog() { return publicSourceCatalog; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ContextInvalidationResponse getContextInvalidation() { return contextInvalidation; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ContextResolutionResponse getContextResolution() { return contextResolution; }
 }

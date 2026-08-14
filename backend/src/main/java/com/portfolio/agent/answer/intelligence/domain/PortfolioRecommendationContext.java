@@ -36,8 +36,8 @@ public final class PortfolioRecommendationContext {
         this.careerTrack = normalizeControlledValue(careerTrack);
         this.audienceRole = requireControlledValue(audienceRole, "audienceRole");
         this.capabilityCodes = normalizeCapabilityCodes(capabilityCodes);
-        if (requestedSize < 2 || requestedSize > 5) {
-            throw new IllegalArgumentException("requestedSize must be between 2 and 5");
+        if (requestedSize < 1 || requestedSize > 5) {
+            throw new IllegalArgumentException("requestedSize must be between 1 and 5");
         }
         this.requestedSize = requestedSize;
         this.selectedPortfolioIds = normalizePortfolioIds(selectedPortfolioIds);

@@ -20,7 +20,7 @@ import com.portfolio.agent.answer.intelligence.execution.adapter.bundle.BundlePo
 import com.portfolio.agent.answer.intelligence.execution.capability.DefaultPortfolioEvidenceCapability;
 import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvidenceCapability;
 import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
-import com.portfolio.agent.answer.intelligence.gateway.PortfolioRetriever;
+import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioCandidateRetrievalPort;
 import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
 import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
 import com.portfolio.agent.answer.routing.adapter.crypto.PlanCryptographyPort;
@@ -43,6 +43,12 @@ import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
 import com.portfolio.agent.answer.routing.service.TurnDecisionPolicy;
 import com.portfolio.agent.answer.routing.service.TurnRouter;
 import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceService;
+import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationPolicy;
+import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationProperties;
+import com.portfolio.agent.answer.synthesis.service.DeterministicCrossDomainComposer;
+import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
+import com.portfolio.agent.answer.runtime.ModelOperation;
+import com.portfolio.agent.answer.runtime.OperationMode;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -61,7 +67,11 @@ import java.util.Optional;
 import java.util.Set;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(ConversationalAgentProperties.class)
+@EnableConfigurationProperties({
+        ConversationalAgentProperties.class,
+        CrossDomainRelationProperties.class,
+        ModelOperationProperties.class
+})
 public class ConversationalAgentConfiguration {
 
     @Bean
@@ -167,8 +177,16 @@ public class ConversationalAgentConfiguration {
             SemanticPlanValidator semanticPlanValidator,
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             ConversationProviderAccess providerAccess,
-            ConversationalAgentProperties properties
+            ConversationalAgentProperties properties,
+            ModelOperationPolicyRegistry operationPolicies
     ) {
+        boolean legacyEnabled = properties.isSemanticClassifierEnabled();
+        boolean operationEnabled = operationPolicies.get(ModelOperation.ROUTING_SEMANTIC_ASSIST)
+                .getMode() == OperationMode.ENABLED;
+        if (legacyEnabled != operationEnabled && (legacyEnabled || operationEnabled)) {
+            throw new IllegalStateException(
+                    "routing semantic assist legacy alias conflicts with operation policy");
+        }
         return DefaultTurnRouter.fromPublicSubjects(
                 publicSubjects(knowledgeGateway),
                 new GlobalBoundaryGate(),
@@ -178,7 +196,7 @@ public class ConversationalAgentConfiguration {
                 semanticPlanValidator,
                 new TurnDecisionPolicy(),
                 modelAdapter,
-                properties.isSemanticClassifierEnabled() && providerAccess.isAllowed());
+                operationEnabled && providerAccess.isAllowed());
     }
 
     @Bean
@@ -201,10 +219,20 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
-    PortfolioEvidenceCapability portfolioEvidenceCapability(PortfolioRetriever retriever) {
-        BundlePortfolioCandidateRetrievalAdapter adapter =
-                new BundlePortfolioCandidateRetrievalAdapter(retriever);
-        return new DefaultPortfolioEvidenceCapability(adapter, adapter);
+    ModelOperationPolicyRegistry modelOperationPolicyRegistry(ModelOperationProperties properties) {
+        return properties.toRegistry();
+    }
+
+    @Bean
+    PortfolioEvidenceCapability portfolioEvidenceCapability(
+            @org.springframework.beans.factory.annotation.Qualifier("primaryPortfolioCandidateRetrievalPort")
+            PortfolioCandidateRetrievalPort primary,
+            @org.springframework.beans.factory.annotation.Qualifier("fallbackPortfolioCandidateRetrievalPort")
+            PortfolioCandidateRetrievalPort fallback) {
+        return new DefaultPortfolioEvidenceCapability(
+                primary, fallback,
+                new com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator(),
+                new com.portfolio.agent.answer.intelligence.retrieval.RetrievalFallbackPolicy());
     }
 
     @Bean
@@ -212,10 +240,16 @@ public class ConversationalAgentConfiguration {
             PortfolioCapabilityCatalog capabilityCatalog,
             PortfolioEvidenceCapability evidenceCapability,
             DiagnosticEventPublisher diagnosticEventPublisher,
-            com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition p4Composition
+            com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition p4Composition,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${portfolio.database.public.enabled:false}") boolean databaseEnabled
     ) {
         return new P3PortfolioSemanticTaskExecutor(
-                capabilityCatalog, evidenceCapability, diagnosticEventPublisher, p4Composition);
+                capabilityCatalog,
+                databaseEnabled
+                        ? com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend.POSTGRESQL
+                        : com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend.BUNDLE,
+                evidenceCapability, diagnosticEventPublisher, p4Composition);
     }
 
     @Bean
@@ -226,12 +260,20 @@ public class ConversationalAgentConfiguration {
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             ConversationDraftValidator draftValidator,
             PortfolioKnowledgeGateway knowledgeGateway,
-            P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor
+            P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor,
+            CrossDomainRelationProperties relationProperties,
+            ModelOperationPolicyRegistry operationPolicies
     ) {
         return new SemanticTurnCoordinator(List.of(
                 p3PortfolioSemanticTaskExecutor,
-                new GeneralSemanticTaskExecutor(providerAccess, modelAdapter, draftValidator),
-                new DeterministicSynthesisTaskExecutor()));
+                new GeneralSemanticTaskExecutor(
+                        providerAccess, modelAdapter, draftValidator, operationPolicies),
+                new DeterministicSynthesisTaskExecutor(
+                        relationProperties.isEnabled(),
+                        new CrossDomainRelationPolicy(),
+                        new DeterministicCrossDomainComposer(),
+                        new com.portfolio.agent.answer.synthesis.service.CrossDomainExpressionPipeline(
+                                modelAdapter, operationPolicies))));
     }
 
     @Bean

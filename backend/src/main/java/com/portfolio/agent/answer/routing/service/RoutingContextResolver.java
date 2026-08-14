@@ -4,6 +4,8 @@ import com.portfolio.agent.answer.routing.domain.SemanticContext;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectResolutionSource;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
+import com.portfolio.agent.answer.routing.domain.ResolvedSubjectBinding;
+import com.portfolio.agent.answer.routing.domain.SubjectBindingRole;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 
 import java.text.Normalizer;
@@ -69,30 +71,48 @@ public final class RoutingContextResolver {
             return ResolvedRoutingContext.ambiguous("ROUTING_SUBJECT_AMBIGUOUS", context);
         }
 
-        ResolvedRoutingContext pendingPlan = context.getPendingPlanReference()
-                .map(reference -> resolveStructured(
-                        reference.getSubjects(), SubjectResolutionSource.PENDING_PLAN, catalog, context))
-                .orElse(null);
+        boolean contextDemand = isContextDemand(input.getRoutingQuestion());
+        ResolvedRoutingContext pendingPlan = contextDemand
+                ? context.getPendingPlanReference()
+                        .map(reference -> resolveStructured(
+                                reference.getSubjects(), SubjectResolutionSource.PENDING_PLAN, catalog, context))
+                        .orElse(null)
+                : null;
         if (pendingPlan != null) {
             return pendingPlan;
         }
-        ResolvedRoutingContext recentResult = resolveStructured(
-                context.getResultReferences(), SubjectResolutionSource.STRUCTURED_RESULT, catalog, context);
+        boolean bareContinuation = input.getRoutingQuestion() != null
+                && input.getRoutingQuestion().trim().equals("\u7ee7\u7eed");
+        ResolvedRoutingContext recentResult = contextDemand && !bareContinuation
+                ? resolveStructured(context.getResultReferences(),
+                        SubjectResolutionSource.STRUCTURED_RESULT, catalog, context)
+                : null;
         if (recentResult != null) {
             return recentResult;
         }
-        ResolvedRoutingContext pageSubject = resolveStructured(
-                input.getPageSubjects(), SubjectResolutionSource.PAGE_CONTEXT, catalog, context);
+        ResolvedRoutingContext pageSubject = resolvePageHintOrDeictic(input, catalog, context);
         if (pageSubject != null) {
             return pageSubject;
         }
 
-        if (context.getActiveSubjects().size() == 1) {
-            return resolveStructured(
-                    context.getActiveSubjects(), SubjectResolutionSource.ACTIVE_SUBJECT, catalog, context);
+        if (isDeictic(input.getRoutingQuestion())) {
+            if (context.getActiveSubjects().size() == 1) {
+                return resolveStructured(
+                        context.getActiveSubjects(), SubjectResolutionSource.ACTIVE_SUBJECT,
+                        SubjectBindingRole.DEICTIC, catalog, context);
+            }
+            if (context.getActiveSubjects().size() > 1) {
+                return ResolvedRoutingContext.ambiguous("ROUTING_SUBJECT_AMBIGUOUS", context);
+            }
         }
-        if (context.getActiveSubjects().size() > 1) {
-            return ResolvedRoutingContext.ambiguous("ROUTING_SUBJECT_AMBIGUOUS", context);
+        if (!context.getActiveSubjects().isEmpty()) {
+            ResolvedRoutingContext activeValidation = resolveStructured(
+                    context.getActiveSubjects(), SubjectResolutionSource.ACTIVE_SUBJECT,
+                    SubjectBindingRole.HINT, catalog, context);
+            if (activeValidation != null
+                    && "ROUTING_SUBJECT_INVALID_REFERENCE".equals(activeValidation.getReasonCode())) {
+                return activeValidation;
+            }
         }
         return ResolvedRoutingContext.unresolved("ROUTING_SUBJECT_UNRESOLVED", context);
     }
@@ -130,9 +150,70 @@ public final class RoutingContextResolver {
                 unresolvedContext.getContext());
     }
 
+    private ResolvedRoutingContext resolvePageHintOrDeictic(
+            SemanticTurnInput input,
+            PublicSubjectCatalog catalog,
+            SemanticContext context) {
+        if (input.getPageSubjects().isEmpty()) {
+            return null;
+        }
+        SubjectBindingRole role = isDeictic(input.getRoutingQuestion())
+                ? SubjectBindingRole.DEICTIC : SubjectBindingRole.HINT;
+        if (role == SubjectBindingRole.HINT) {
+            List<ResolvedSubjectBinding> hints = validateBindings(
+                    input.getPageSubjects(), SubjectResolutionSource.PAGE_CONTEXT,
+                    SubjectBindingRole.HINT, catalog);
+            return ResolvedRoutingContext.unresolvedWithBindings(
+                    "ROUTING_SUBJECT_UNRESOLVED", context, hints);
+        }
+        return resolveStructured(input.getPageSubjects(), SubjectResolutionSource.PAGE_CONTEXT,
+                role, catalog, context);
+    }
+
+    private boolean isDeictic(String question) {
+        if (question == null) {
+            return false;
+        }
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return normalized.contains("这个项目") || normalized.contains("该项目")
+                || normalized.contains("这个案例") || normalized.contains("该案例")
+                || normalized.contains("this project") || normalized.contains("that project")
+                || normalized.contains("this case") || normalized.contains("that case")
+                || normalized.matches(".*\\b(it|this|that)\\b.*")
+                || normalized.contains("它");
+    }
+
+    private boolean isContextDemand(String question) {
+        if (question == null || question.isBlank()) {
+            return false;
+        }
+        String normalized = question.toLowerCase(Locale.ROOT).trim();
+        return normalized.contains("\u7ee7\u7eed")
+                || normalized.contains("\u57fa\u4e8e\u4e0a\u9762")
+                || normalized.contains("\u6839\u636e\u4e0a\u9762")
+                || normalized.contains("\u521a\u624d\u7684\u7ed3\u679c")
+                || normalized.contains("\u8fd9\u4e2a\u7ed3\u679c")
+                || normalized.contains("\u8fd9\u4e9b\u7ed3\u679c")
+                || normalized.contains("\u8c03\u6574")
+                || normalized.contains("\u518d\u8bf4")
+                || normalized.contains("\u518d\u8bb2")
+                || normalized.contains("continue")
+                || normalized.contains("based on the result");
+    }
+
     private ResolvedRoutingContext resolveStructured(
             List<SubjectReference> references,
             SubjectResolutionSource resolutionSource,
+            PublicSubjectCatalog catalog,
+            SemanticContext context) {
+        return resolveStructured(references, resolutionSource,
+                roleFor(resolutionSource), catalog, context);
+    }
+
+    private ResolvedRoutingContext resolveStructured(
+            List<SubjectReference> references,
+            SubjectResolutionSource resolutionSource,
+            SubjectBindingRole bindingRole,
             PublicSubjectCatalog catalog,
             SemanticContext context) {
         if (references.isEmpty()) {
@@ -153,7 +234,30 @@ public final class RoutingContextResolver {
             }
             validated.add(catalogReference.orElseThrow());
         }
-        return ResolvedRoutingContext.resolved(validated, resolutionSource, context);
+        return ResolvedRoutingContext.resolved(validated, resolutionSource, bindingRole, context);
+    }
+
+    private List<ResolvedSubjectBinding> validateBindings(
+            List<SubjectReference> references,
+            SubjectResolutionSource resolutionSource,
+            SubjectBindingRole role,
+            PublicSubjectCatalog catalog) {
+        List<ResolvedSubjectBinding> bindings = new ArrayList<>();
+        for (SubjectReference reference : references) {
+            Optional<SubjectReference> validated = catalog.validate(reference, resolutionSource);
+            if (validated.isPresent()) {
+                bindings.add(new ResolvedSubjectBinding(validated.orElseThrow(), role, resolutionSource));
+            }
+        }
+        return List.copyOf(bindings);
+    }
+
+    private SubjectBindingRole roleFor(SubjectResolutionSource source) {
+        return switch (source) {
+            case EXPLICIT_REFERENCE, EXPLICIT_TEXT, VALIDATED_MODEL_CANDIDATE -> SubjectBindingRole.EXPLICIT;
+            case ACTIVE_SUBJECT, PAGE_CONTEXT -> SubjectBindingRole.HINT;
+            case STRUCTURED_RESULT, PENDING_PLAN -> SubjectBindingRole.RESULT_BOUND;
+        };
     }
 }
 
@@ -171,18 +275,21 @@ final class ResolvedRoutingContext {
     private final SubjectResolutionSource resolutionSource;
     private final String reasonCode;
     private final SemanticContext context;
+    private final List<ResolvedSubjectBinding> bindings;
 
     private ResolvedRoutingContext(
             RoutingContextStatus status,
             List<SubjectReference> subjects,
             SubjectResolutionSource resolutionSource,
             String reasonCode,
-            SemanticContext context) {
+            SemanticContext context,
+            List<ResolvedSubjectBinding> bindings) {
         this.status = Objects.requireNonNull(status, "status");
         this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
         this.resolutionSource = resolutionSource;
         this.reasonCode = reasonCode;
         this.context = Objects.requireNonNull(context, "context");
+        this.bindings = List.copyOf(Objects.requireNonNull(bindings, "bindings"));
         boolean resolved = status == RoutingContextStatus.RESOLVED;
         if (resolved != (resolutionSource != null && !subjects.isEmpty())) {
             throw new IllegalArgumentException("resolved context must carry subjects and a source");
@@ -196,22 +303,45 @@ final class ResolvedRoutingContext {
             List<SubjectReference> subjects,
             SubjectResolutionSource source,
             SemanticContext context) {
-        return new ResolvedRoutingContext(RoutingContextStatus.RESOLVED, subjects, source, null, context);
+        SubjectBindingRole role = source == SubjectResolutionSource.PAGE_CONTEXT
+                ? SubjectBindingRole.HINT : source == SubjectResolutionSource.ACTIVE_SUBJECT
+                ? SubjectBindingRole.DEICTIC : source == SubjectResolutionSource.STRUCTURED_RESULT
+                || source == SubjectResolutionSource.PENDING_PLAN
+                ? SubjectBindingRole.RESULT_BOUND : SubjectBindingRole.EXPLICIT;
+        List<ResolvedSubjectBinding> bindings = subjects.stream()
+                .map(subject -> new ResolvedSubjectBinding(subject, role, source)).toList();
+        return resolved(subjects, source, role, context);
+    }
+
+    static ResolvedRoutingContext resolved(
+            List<SubjectReference> subjects,
+            SubjectResolutionSource source,
+            SubjectBindingRole role,
+            SemanticContext context) {
+        List<ResolvedSubjectBinding> bindings = subjects.stream()
+                .map(subject -> new ResolvedSubjectBinding(subject, role, source)).toList();
+        return new ResolvedRoutingContext(RoutingContextStatus.RESOLVED, subjects, source, null, context, bindings);
     }
 
     static ResolvedRoutingContext unresolved(String reasonCode, SemanticContext context) {
         return new ResolvedRoutingContext(
-                RoutingContextStatus.UNRESOLVED, List.of(), null, reasonCode, context);
+                RoutingContextStatus.UNRESOLVED, List.of(), null, reasonCode, context, List.of());
     }
 
     static ResolvedRoutingContext ambiguous(String reasonCode, SemanticContext context) {
         return new ResolvedRoutingContext(
-                RoutingContextStatus.AMBIGUOUS, List.of(), null, reasonCode, context);
+                RoutingContextStatus.AMBIGUOUS, List.of(), null, reasonCode, context, List.of());
     }
 
     static ResolvedRoutingContext invalidInput(String reasonCode) {
         return new ResolvedRoutingContext(
-                RoutingContextStatus.INVALID_INPUT, List.of(), null, reasonCode, SemanticContext.empty());
+                RoutingContextStatus.INVALID_INPUT, List.of(), null, reasonCode, SemanticContext.empty(), List.of());
+    }
+
+    static ResolvedRoutingContext unresolvedWithBindings(
+            String reasonCode, SemanticContext context, List<ResolvedSubjectBinding> bindings) {
+        return new ResolvedRoutingContext(
+                RoutingContextStatus.UNRESOLVED, List.of(), null, reasonCode, context, bindings);
     }
 
     RoutingContextStatus getStatus() {
@@ -221,6 +351,8 @@ final class ResolvedRoutingContext {
     List<SubjectReference> getSubjects() {
         return subjects;
     }
+
+    List<ResolvedSubjectBinding> getBindings() { return bindings; }
 
     SubjectResolutionSource getResolutionSource() {
         return resolutionSource;
@@ -324,6 +456,16 @@ final class PublicSubjectCatalog {
         return list(null).stream()
                 .map(subject -> toReference(subject, SubjectResolutionSource.EXPLICIT_REFERENCE))
                 .toList();
+    }
+
+    String currentContentVersion() {
+        Set<String> versions = subjects.values().stream()
+                .map(Subject::getContentVersion)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (versions.size() != 1) {
+            throw new IllegalStateException("public subject catalog must bind one content version");
+        }
+        return versions.iterator().next();
     }
 
     static final class Subject {

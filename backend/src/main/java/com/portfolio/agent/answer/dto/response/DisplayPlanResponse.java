@@ -1,6 +1,8 @@
 package com.portfolio.agent.answer.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 
 import java.util.List;
 import java.util.Objects;
@@ -53,22 +55,35 @@ public final class DisplayPlanResponse {
         private final String goalLabel;
         private final TaskSourceDomain sourceDomain;
         private final String dependencySummary;
+        private final TaskFulfillmentRole fulfillmentRole;
 
         public Task(
                 String displayIndex,
                 String goalLabel,
                 TaskSourceDomain sourceDomain,
                 String dependencySummary) {
+            this(displayIndex, goalLabel, sourceDomain, dependencySummary, null);
+        }
+
+        public Task(
+                String displayIndex,
+                String goalLabel,
+                TaskSourceDomain sourceDomain,
+                String dependencySummary,
+                TaskFulfillmentRole fulfillmentRole) {
             this.displayIndex = requireText(displayIndex, "displayIndex");
             this.goalLabel = requireText(goalLabel, "goalLabel");
             this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
             this.dependencySummary = normalize(dependencySummary);
+            this.fulfillmentRole = fulfillmentRole;
         }
 
         public String getDisplayIndex() { return displayIndex; }
         public String getGoalLabel() { return goalLabel; }
         public TaskSourceDomain getSourceDomain() { return sourceDomain; }
         public String getDependencySummary() { return dependencySummary; }
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public TaskFulfillmentRole getFulfillmentRole() { return fulfillmentRole; }
 
         private static String requireText(String value, String name) {
             String normalized = normalize(value);

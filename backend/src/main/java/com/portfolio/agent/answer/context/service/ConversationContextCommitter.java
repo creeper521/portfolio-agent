@@ -8,10 +8,14 @@ import com.portfolio.agent.answer.context.domain.RecommendationContext;
 import com.portfolio.agent.answer.context.domain.RecentSemanticTaskContext;
 import com.portfolio.agent.answer.domain.AgentTurnResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
+import com.portfolio.agent.answer.domain.PublicResultItemId;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
+import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
+import com.portfolio.agent.answer.context.domain.OrderedResultSelection;
+import com.portfolio.agent.answer.context.domain.SubjectOrderKind;
 import com.portfolio.agent.answer.routing.domain.AuthorizedContextReference;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.intelligence.execution.domain.AuthorizedSubjectScope;
@@ -59,7 +63,7 @@ public final class ConversationContextCommitter {
                     || task.getSourceDomain() != SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO) {
                 continue;
             }
-            ConversationContextMutation mutation = mutation(task, result, requestContext, now);
+            ConversationContextMutation mutation = mutation(task, outcome, result, requestContext, now);
             if (mutation == null) {
                 continue;
             }
@@ -71,6 +75,7 @@ public final class ConversationContextCommitter {
 
     private ConversationContextMutation mutation(
             SemanticTask task,
+            TaskOutcome outcome,
             ConversationAnswerResult result,
             ConversationRequestContext requestContext,
             Instant now) {
@@ -86,7 +91,7 @@ public final class ConversationContextCommitter {
             case PORTFOLIO_FACT, PORTFOLIO_COMPARE ->
                     ConversationContextValue.recentSemanticTask(recent(task, result));
             case PORTFOLIO_RECOMMEND ->
-                    ConversationContextValue.recommendation(recommendation(task, result, parent));
+                    ConversationContextValue.recommendation(recommendation(task, outcome, result, parent));
             case PORTFOLIO_REFINE_RECOMMENDATION -> {
                 if (parent == null) {
                     yield null;
@@ -119,7 +124,8 @@ public final class ConversationContextCommitter {
     }
 
     private RecommendationContext recommendation(
-            SemanticTask task, ConversationAnswerResult result, ContextHandle parent) {
+            SemanticTask task, TaskOutcome outcome,
+            ConversationAnswerResult result, ContextHandle parent) {
         SemanticTaskParameters.PortfolioRecommend parameters =
                 task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend recommend
                         ? recommend : null;
@@ -134,8 +140,27 @@ public final class ConversationContextCommitter {
                 .map(Enum::name).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Set<String> constraints = Set.of(parameters.getCareerTrack().name());
         Set<String> preferences = Set.of(parameters.getAudienceRole().name());
+        OrderedResultSelection selectedResults = outcome.getResultPayload()
+                .filter(TaskResultPayload.RecommendationResultPayload.class::isInstance)
+                .map(TaskResultPayload.RecommendationResultPayload.class::cast)
+                .filter(payload -> !payload.getItems().isEmpty())
+                .map(payload -> new OrderedResultSelection(
+                        SubjectOrderKind.RECOMMENDATION_RANK,
+                        java.util.stream.IntStream.range(0, payload.getItems().size())
+                                .mapToObj(index -> new OrderedResultSelection.Item(
+                                        index + 1,
+                                        PublicResultItemId.forRecommendation(task.getTaskId(),
+                                                payload.getItems().get(index).getPortfolioId()),
+                                        payload.getItems().get(index).getPortfolioId(),
+                                        payload.getItems().get(index).getRoute() != null
+                                                && payload.getItems().get(index).getRoute().startsWith("/cases/")
+                                                ? SemanticRoutingTypes.SubjectType.CASE
+                                                : SemanticRoutingTypes.SubjectType.PROJECT))
+                                .toList()))
+                .orElse(null);
         return new RecommendationContext(
                 scope, "p3-recommendation-profile-v1", baseline, constraints, preferences,
-                Set.of(), parameters.getRequestedSize().getValue(), parent);
+                Set.of(), parameters.getRequestedSize().getValue(), parent,
+                selectedResults, PublicResultItemId.recommendationBatch(task.getTaskId()));
     }
 }

@@ -3,6 +3,8 @@ package com.portfolio.agent.answer.context.codec;
 import com.portfolio.agent.answer.context.domain.ConversationContextType;
 import com.portfolio.agent.answer.context.domain.RecentSemanticTaskContext;
 import com.portfolio.agent.answer.context.domain.RecommendationContext;
+import com.portfolio.agent.answer.context.domain.OrderedResultSelection;
+import com.portfolio.agent.answer.context.domain.SubjectOrderKind;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ class ConversationContextCodecRegistryTest {
                 ConversationContextType.RECENT_SEMANTIC_TASK, context);
 
         assertArrayEquals(first.getPayload(), second.getPayload());
+        assertEquals("p5-recent-v2", first.getSchemaVersion());
         RecentSemanticTaskContext decoded = (RecentSemanticTaskContext) registry.decode(first);
         assertEquals(context.getContentVersion(), decoded.getContentVersion());
         assertThrows(IllegalArgumentException.class, () -> registry.decode(
@@ -43,12 +46,20 @@ class ConversationContextCodecRegistryTest {
                 com.portfolio.agent.answer.intelligence.execution.domain.AuthorizedSubjectScope
                         .allPublishedCandidates("public-v1"), "recommendation-v1",
                 Set.of("PUBLIC_DELIVERY_EVIDENCE"), Set.of("EXCLUDE_UNVERIFIED"),
-                Set.of("JAVA"), Set.of(), 3, null);
+                Set.of("JAVA"), Set.of(), 3, null,
+                new OrderedResultSelection(SubjectOrderKind.RECOMMENDATION_RANK, List.of(
+                        new OrderedResultSelection.Item(1, "result-item-a", "case-a",
+                                SemanticRoutingTypes.SubjectType.CASE))), "batch-a");
         ConversationContextCodecRegistry.EncodedContext encoded = registry.encode(
                 ConversationContextType.RECOMMENDATION, context);
         String json = new String(encoded.getPayload(), java.nio.charset.StandardCharsets.UTF_8);
         assertEquals(-1, json.indexOf("question"));
         assertEquals(-1, json.indexOf("answer"));
-        assertEquals(3, ((RecommendationContext) registry.decode(encoded)).getResultLimit());
+        assertEquals("p5-recommendation-v2", encoded.getSchemaVersion());
+        RecommendationContext decoded = (RecommendationContext) registry.decode(encoded);
+        assertEquals(3, decoded.getResultLimit());
+        assertEquals(SemanticRoutingTypes.SubjectType.CASE,
+                decoded.getSelectedResults().getItems().getFirst().getSubjectType());
+        assertEquals(context, decoded);
     }
 }

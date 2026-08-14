@@ -7,6 +7,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskDependency;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,16 +20,15 @@ import java.util.Set;
 /** Validates the closed semantic-plan contract before execution is permitted. */
 public final class SemanticPlanValidator {
 
-    private static final String CONTRACT = "stp-v1";
-
     private final PlanFingerprintService fingerprints;
+    private final SemanticTurnContractPolicy contractPolicy = new SemanticTurnContractPolicy();
 
     public SemanticPlanValidator(PlanFingerprintService fingerprints) {
         this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
     }
 
     public PlanValidationResult validate(SemanticTurnPlan candidate, String contract) {
-        if (!CONTRACT.equals(contract)) {
+        if (!contractPolicy.isSupported(contract)) {
             return PlanValidationResult.invalid(List.of("PLAN_CONTRACT_UNSUPPORTED"));
         }
         if (candidate == null) {
@@ -77,11 +77,32 @@ public final class SemanticPlanValidator {
             }
             validateTask(task, plan.getContentVersion(), issues);
         }
+        if (tasks.stream().noneMatch(task -> task.getFulfillmentRole() == TaskFulfillmentRole.PRIMARY)) {
+            issues.add("PLAN_PRIMARY_FULFILLMENT_ROLE_MISSING");
+        }
 
         validateDependencies(plan.getDependencies(), taskIds, issues);
+        validateRoleDependencies(tasks, plan.getDependencies(), issues);
         validateSynthesisDependencies(tasks, plan.getDependencies(), issues);
         validateExclusions(plan, taskIds, issues);
         return List.copyOf(issues);
+    }
+
+    private void validateRoleDependencies(
+            List<SemanticTask> tasks, List<TaskDependency> dependencies, List<String> issues) {
+        Map<String, SemanticTask> tasksById = new HashMap<>();
+        for (SemanticTask task : tasks) {
+            tasksById.put(task.getTaskId(), task);
+        }
+        for (TaskDependency dependency : dependencies) {
+            SemanticTask from = tasksById.get(dependency.getFromTaskId());
+            SemanticTask to = tasksById.get(dependency.getToTaskId());
+            if (from != null && to != null
+                    && to.getFulfillmentRole() == TaskFulfillmentRole.PRIMARY
+                    && from.getFulfillmentRole() == TaskFulfillmentRole.OPTIONAL) {
+                issues.add("PLAN_PRIMARY_DEPENDS_ON_OPTIONAL");
+            }
+        }
     }
 
     private void validateTask(SemanticTask task, String contentVersion, List<String> issues) {

@@ -16,16 +16,25 @@ public final class RecentSemanticTaskContext {
     private final Set<String> dimensions;
     private final String contentVersion;
     private final String sourceTaskId;
+    private final OrderedSubjectSelection orderedSelection;
 
     public RecentSemanticTaskContext(
             SemanticRoutingTypes.SemanticTaskType taskType, List<SubjectReference> publicSubjects,
             Set<String> facets, Set<String> dimensions, String contentVersion, String sourceTaskId) {
+        this(taskType, publicSubjects, facets, dimensions, contentVersion, sourceTaskId, null);
+    }
+
+    public RecentSemanticTaskContext(
+            SemanticRoutingTypes.SemanticTaskType taskType, List<SubjectReference> publicSubjects,
+            Set<String> facets, Set<String> dimensions, String contentVersion, String sourceTaskId,
+            OrderedSubjectSelection orderedSelection) {
         this.taskType = Objects.requireNonNull(taskType, "taskType");
         this.publicSubjects = List.copyOf(Objects.requireNonNull(publicSubjects, "publicSubjects"));
         this.facets = normalizedSet(facets, "facets");
         this.dimensions = normalizedSet(dimensions, "dimensions");
         this.contentVersion = requireText(contentVersion, "contentVersion");
         this.sourceTaskId = requireText(sourceTaskId, "sourceTaskId");
+        this.orderedSelection = orderedSelection;
         if (this.publicSubjects.isEmpty()) throw new IllegalArgumentException("publicSubjects are required");
     }
     public SemanticRoutingTypes.SemanticTaskType getTaskType() { return taskType; }
@@ -34,6 +43,7 @@ public final class RecentSemanticTaskContext {
     public Set<String> getDimensions() { return dimensions; }
     public String getContentVersion() { return contentVersion; }
     public String getSourceTaskId() { return sourceTaskId; }
+    public OrderedSubjectSelection getOrderedSelection() { return orderedSelection; }
     @Override public String toString() { return "RecentSemanticTaskContext{taskType=" + taskType + ", subjectCount=" + publicSubjects.size() + '}'; }
     private static Set<String> normalizedSet(Set<String> values, String name) {
         LinkedHashSet<String> result = new LinkedHashSet<>();

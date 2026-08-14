@@ -6,7 +6,12 @@ import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
 import com.portfolio.agent.answer.domain.ConversationAnswerResult;
 import com.portfolio.agent.answer.domain.ConversationAnswerScope;
 import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.answer.domain.AnswerSourceComposition;
+import com.portfolio.agent.answer.domain.AnswerSupportKind;
+import com.portfolio.agent.answer.domain.PublicResultItemId;
 import com.portfolio.agent.answer.context.domain.ContextHandle;
+import com.portfolio.agent.answer.context.domain.ContextSlot;
+import com.portfolio.agent.answer.context.domain.ConversationContextType;
 import com.portfolio.agent.answer.dto.response.AgentTurnResponse;
 import com.portfolio.agent.answer.dto.response.AgentTurnOutcomeResponse;
 import com.portfolio.agent.answer.dto.response.ClarificationResponse;
@@ -18,6 +23,9 @@ import com.portfolio.agent.answer.dto.response.ConversationSuggestedQuestionResp
 import com.portfolio.agent.answer.dto.response.DisplayPlanResponse;
 import com.portfolio.agent.answer.dto.response.ExecutionDisplayPlanResponse;
 import com.portfolio.agent.answer.dto.response.PublicSourceReferenceResponse;
+import com.portfolio.agent.answer.dto.response.AnswerBlockSupportResponse;
+import com.portfolio.agent.answer.dto.response.StatementSupportReferenceResponse;
+import com.portfolio.agent.answer.dto.response.PublicSourceCatalogEntryResponse;
 import com.portfolio.agent.answer.dto.response.PlanConfirmationResponse;
 import com.portfolio.agent.answer.dto.response.PlanChangeResponse;
 import com.portfolio.agent.answer.dto.response.InvalidatedPlanReferenceResponse;
@@ -25,6 +33,11 @@ import com.portfolio.agent.answer.dto.response.PendingPlanReferenceResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationResponse;
 import com.portfolio.agent.answer.dto.response.PortfolioRecommendationItemResponse;
 import com.portfolio.agent.answer.dto.response.TaskSummaryResponse;
+import com.portfolio.agent.answer.dto.response.TaskSupportSummaryResponse;
+import com.portfolio.agent.answer.dto.response.ContinuationContextResponse;
+import com.portfolio.agent.answer.dto.response.SubjectReferenceResponse;
+import com.portfolio.agent.answer.dto.response.ContextInvalidationResponse;
+import com.portfolio.agent.answer.dto.response.ContextResolutionResponse;
 import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes;
 import com.portfolio.agent.answer.routing.domain.SemanticTask;
@@ -63,6 +76,8 @@ public final class ConversationAnswerResponseMapper {
             com.portfolio.agent.answer.dto.response.ConversationResponse conversation,
             Map<String, ContextHandle> contextHandles) {
         AgentTurnResult agentTurn = result.getAgentTurn();
+        boolean stpV1 = agentTurn == null || agentTurn.isRequestUsesStpV1();
+        List<ConversationAnswerBlockResponse> blocks = topLevelBlocks(result, agentTurn, stpV1);
         return new ConversationAnswerResponse(
                 result.getTurnId(),
                 result.getContentVersion(),
@@ -70,7 +85,7 @@ public final class ConversationAnswerResponseMapper {
                 publicScope(result.getAnswerScope()),
                 publicResolution(result.getResolution(), agentTurn),
                 result.getTitle(),
-                topLevelBlocks(result, agentTurn),
+                blocks,
                 result.getSuggestedQuestions().stream()
                         .map(ConversationSuggestedQuestionResponse::from)
                         .toList(),
@@ -81,13 +96,22 @@ public final class ConversationAnswerResponseMapper {
                 result.getNoticeCode(),
                 result.getProgress().getCoveredTopics(),
                 result.getProgress().getStage(),
-                publicRecommendation(result, agentTurn),
+                publicRecommendation(result, agentTurn, stpV1),
                 result.isContextVersionUpdated(),
                 result.getQuestionPresetId(),
                 result.getContractVersion(),
                 result.getSummary(),
                 agentTurn == null ? null : toAgentTurnResponse(agentTurn, result, contextHandles),
-                "ANSWER", conversation);
+                "ANSWER", conversation,
+                stpV1 ? null : sourceComposition(blocks),
+                stpV1 ? List.of() : publicSourceCatalog(blocks),
+                stpV1 ? null : agentTurn == null ? null : agentTurn.getContextInvalidation()
+                        .map(value -> new ContextInvalidationResponse(value.getReasonCode(),
+                                value.getRecoveryAction(), value.getContextType(),
+                                value.getCurrentContentVersion())).orElse(null),
+                stpV1 ? null : agentTurn == null ? null : agentTurn.getContextResolution()
+                        .map(value -> new ContextResolutionResponse(value.getMode(), value.getContextType(),
+                                value.getCurrentContentVersion())).orElse(null));
     }
 
     private ConversationAnswerBlockResponse toBlockResponse(ConversationAnswerBlock block) {
@@ -100,11 +124,36 @@ public final class ConversationAnswerResponseMapper {
                 block.getEvidenceIds());
     }
 
+    private ConversationAnswerBlockResponse toBlockResponse(
+            ConversationAnswerBlock block, boolean stpV1) {
+        if (stpV1) {
+            return toBlockResponse(block);
+        }
+        SemanticRoutingTypes.TaskSourceDomain domain = block.getSourceScope()
+                == ConversationSourceScope.PORTFOLIO
+                ? SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
+                : SemanticRoutingTypes.TaskSourceDomain.GENERAL;
+        if (domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO) {
+            return null;
+        }
+        AnswerSupportKind kind = domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
+                ? AnswerSupportKind.VERIFIED_PUBLIC_EVIDENCE : AnswerSupportKind.GENERAL_KNOWLEDGE;
+        List<StatementSupportReferenceResponse> statements = block.getClaimIds().stream()
+                .map(id -> new StatementSupportReferenceResponse(id, null, List.of(), null)).toList();
+        AnswerBlockSupportResponse support = new AnswerBlockSupportResponse(
+                kind, statements, List.of(), List.of(), null);
+        return new ConversationAnswerBlockResponse(
+                stableId("block", block.getContent(), block.getClaimIds(), block.getEvidenceIds()),
+                domain, block.getSourceScope(), block.getSectionType(), block.getTitle(), block.getContent(),
+                block.getClaimIds(), block.getEvidenceIds(), List.of(), support);
+    }
+
     private List<ConversationAnswerBlockResponse> topLevelBlocks(
-            ConversationAnswerResult result, AgentTurnResult agentTurn) {
+            ConversationAnswerResult result, AgentTurnResult agentTurn, boolean stpV1) {
         if (agentTurn == null || agentTurn.getOutcome().isEmpty()) {
-            return deduplicatePublicReferences(
-                    result.getBlocks().stream().map(this::toBlockResponse).toList());
+            return deduplicatePublicReferences(result.getBlocks().stream()
+                    .map(block -> toBlockResponse(block, stpV1))
+                    .filter(Objects::nonNull).toList(), stpV1);
         }
         List<ConversationAnswerBlockResponse> mapped = new ArrayList<>();
         Map<String, SemanticTask> tasksById = indexTasks(agentTurn.getPlan());
@@ -117,17 +166,16 @@ public final class ConversationAnswerResponseMapper {
                 continue;
             }
             if (outcome.getResultPayload().isEmpty() && outcome.getContribution().isPresent()) {
-                mapped.addAll(toContributionBlocks(outcome.getContribution().orElseThrow(), sourceScope(task)));
+                mapped.addAll(toContributionBlocks(outcome.getContribution().orElseThrow(), task, stpV1));
                 continue;
             }
             TaskResultPayload payload = outcome.getResultPayload().orElseThrow();
             TaskResultProvenance provenance = outcome.getProvenance().orElseGet(() ->
                     TaskResultProvenance.direct(task.getSourceDomain(), List.of(), List.of()));
             if (payload instanceof TaskResultPayload.SectionResultPayload section) {
-                mapped.addAll(toSectionBlocks(section, sourceScope(task), provenance));
+                mapped.addAll(toSectionBlocks(section, task, provenance, stpV1));
             } else if (payload instanceof TaskResultPayload.SynthesisResultPayload synthesis) {
-                appendTopLevelBlocks(mapped, sourceScope(task), synthesis.getBlocks(),
-                        synthesis.getProvenance().getClaimIds(), synthesis.getProvenance().getEvidenceIds());
+                appendTopLevelBlocks(mapped, task, synthesis.getBlocks(), synthesis.getProvenance(), stpV1);
             }
         }
         // A semantic task may complete without a renderable section payload
@@ -136,13 +184,17 @@ public final class ConversationAnswerResponseMapper {
         // instead of dropping it merely because an outcome object exists.
         if (mapped.isEmpty() && !result.getBlocks().isEmpty()) {
             return deduplicatePublicReferences(
-                    result.getBlocks().stream().map(this::toBlockResponse).toList());
+                    result.getBlocks().stream().map(block -> toBlockResponse(block, stpV1))
+                            .filter(Objects::nonNull).toList(), stpV1);
         }
-        return deduplicatePublicReferences(mapped);
+        return deduplicatePublicReferences(mapped, stpV1);
     }
 
     private static List<ConversationAnswerBlockResponse> deduplicatePublicReferences(
-            List<ConversationAnswerBlockResponse> blocks) {
+            List<ConversationAnswerBlockResponse> blocks, boolean legacyProjection) {
+        if (!legacyProjection) {
+            return List.copyOf(blocks);
+        }
         java.util.Set<String> seenReferenceKeys = new java.util.LinkedHashSet<>();
         List<ConversationAnswerBlockResponse> deduplicated = new ArrayList<>();
         for (ConversationAnswerBlockResponse block : blocks) {
@@ -158,41 +210,66 @@ public final class ConversationAnswerResponseMapper {
 
     private List<ConversationAnswerBlockResponse> toContributionBlocks(
             com.portfolio.agent.answer.domain.GroundedAnswerContribution contribution,
-            ConversationSourceScope sourceScope) {
+            SemanticTask task,
+            boolean stpV1) {
         List<PublicSourceReferenceResponse> references = contribution.getSourceReferences().stream()
                 .map(PublicSourceReferenceResponse::from).toList();
         return contribution.getSupportedStatements().stream()
-                .map(statement -> new ConversationAnswerBlockResponse(
-                        sourceScope, statement, List.of(), List.of(), references))
+                .map(statement -> toSupportedBlock(task, statement, List.of(), List.of(), references,
+                        TaskResultProvenance.direct(task.getSourceDomain(), List.of(), List.of()), stpV1,
+                        null, null))
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    private static void appendTopLevelBlocks(
+    private void appendTopLevelBlocks(
             List<ConversationAnswerBlockResponse> target,
-            ConversationSourceScope sourceScope,
+            SemanticTask task,
             List<String> contents,
-            List<String> claimIds,
-            List<String> evidenceIds) {
+            TaskResultProvenance provenance,
+            boolean stpV1) {
         for (String content : contents) {
-            target.add(new ConversationAnswerBlockResponse(sourceScope, content, claimIds, evidenceIds));
+            ConversationAnswerBlockResponse block = toSupportedBlock(task, content, provenance.getClaimIds(),
+                    provenance.getEvidenceIds(), List.of(), provenance, stpV1, null, null);
+            if (block != null) {
+                target.add(block);
+            }
         }
     }
 
     private PortfolioRecommendationResponse publicRecommendation(
-            ConversationAnswerResult result, AgentTurnResult agentTurn) {
+            ConversationAnswerResult result, AgentTurnResult agentTurn, boolean stpV1) {
         if (agentTurn != null) {
             if (countRenderableRecommendations(agentTurn) != 1) {
                 return null;
             }
             if (result.getPortfolioRecommendation() != null) {
-                return PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+                return stpV1
+                        ? PortfolioRecommendationResponse.from(result.getPortfolioRecommendation())
+                        : toRecommendationResponse(result.getPortfolioRecommendation());
             }
             return singleRecommendationProjection(agentTurn)
-                    .map(this::toRecommendationResponse)
+                    .map(projection -> toRecommendationResponse(projection, stpV1))
                     .orElse(null);
         }
         return result.getPortfolioRecommendation() == null ? null
                 : PortfolioRecommendationResponse.from(result.getPortfolioRecommendation());
+    }
+
+    private PortfolioRecommendationResponse toRecommendationResponse(
+            com.portfolio.agent.answer.intelligence.domain.PortfolioRecommendation recommendation) {
+        return new PortfolioRecommendationResponse(
+                recommendation.getRecommendationBatchId(),
+                recommendation.getItems().stream().map(item ->
+                        new PortfolioRecommendationItemResponse(
+                                item.getPortfolioId(), item.getTitle(), item.getRoute(),
+                                item.getMatchReasons(), item.getEvidenceIds(), List.of(),
+                                stableId("result-item", item.getPortfolioId(),
+                                        item.getMatchReasons(), item.getEvidenceIds()),
+                                recommendation.getItems().indexOf(item) + 1,
+                                subjectReference(item.getRoute(), item.getPortfolioId())))
+                        .toList(),
+                recommendation.getSatisfiedConstraints(), recommendation.getUnsatisfiedConstraints());
     }
 
     private Optional<TaskResultPayload.RecommendationProjection> singleRecommendationProjection(
@@ -212,13 +289,17 @@ public final class ConversationAnswerResponseMapper {
     }
 
     private PortfolioRecommendationResponse toRecommendationResponse(
-            TaskResultPayload.RecommendationProjection projection) {
+            TaskResultPayload.RecommendationProjection projection, boolean stpV1) {
         List<PortfolioRecommendationItemResponse> items = projection.getItems().stream()
                 .map(item -> new PortfolioRecommendationItemResponse(
                         item.getPortfolioId(), item.getTitle(), item.getRoute(),
                         item.getMatchReasons(), item.getEvidenceIds(),
                         item.getSourceReferences().stream()
-                                .map(PublicSourceReferenceResponse::from).toList()))
+                                .map(PublicSourceReferenceResponse::from).toList(),
+                        stpV1 ? null : stableId("result-item", item.getPortfolioId(),
+                                item.getMatchReasons(), item.getEvidenceIds()),
+                        stpV1 ? null : projection.getItems().indexOf(item) + 1,
+                        stpV1 ? null : subjectReference(item.getRoute(), item.getPortfolioId())))
                 .toList();
         return new PortfolioRecommendationResponse(
                 projection.getRecommendationBatchId(), items,
@@ -245,20 +326,21 @@ public final class ConversationAnswerResponseMapper {
             ConversationAnswerResult result,
             Map<String, ContextHandle> contextHandles) {
         SemanticTurnOutcome outcomeValue = agentTurn.getOutcome().orElse(null);
+        boolean stpV1 = agentTurn.isRequestUsesStpV1();
         DisplayPlanResponse plan = agentTurn.getPlan()
-                .map(value -> toDisplayPlan(value, outcomeValue)).orElse(null);
+                .map(value -> toDisplayPlan(value, outcomeValue, stpV1)).orElse(null);
         PlanChangeResponse planChange = toPlanChange(agentTurn);
         PlanConfirmationResponse confirmation = agentTurn.getPlanConfirmation()
                 .map(value -> toPlanConfirmation(value, agentTurn.getPlan().orElse(null))).orElse(null);
         ClarificationResponse clarification = agentTurn.getClarification()
                 .map(this::toClarification).orElse(null);
         TaskSummaryResponse summary = outcomeValue == null ? null
-                : toTaskSummary(agentTurn.getPlan().orElse(null), outcomeValue);
+                : toTaskSummary(agentTurn.getPlan().orElse(null), outcomeValue, stpV1);
         AgentTurnOutcomeResponse outcome = outcomeValue == null ? null
                 : new AgentTurnOutcomeResponse(outcomeValue.getPlanOutcome(), summary);
         List<CompletedTaskResponse> completed = outcomeValue == null ? null
                 : toCompletedTasks(agentTurn.getPlan().orElse(null), outcomeValue, result,
-                        countRenderableRecommendations(agentTurn), contextHandles);
+                        countRenderableRecommendations(agentTurn), contextHandles, stpV1);
         String reasonCode = agentTurn.getInvalidationReason().map(Enum::name)
                 .orElseGet(() -> agentTurn.getReasonCodes().stream().sorted().findFirst().orElse(null));
         AgentTurnResult.Disposition wireDisposition = agentTurn.getDisposition()
@@ -274,17 +356,19 @@ public final class ConversationAnswerResponseMapper {
             completed = null;
             execution = null;
         }
-        return new AgentTurnResponse(wireDisposition, plan, planChange, confirmation, clarification,
-                outcome, completed, execution);
+        return new AgentTurnResponse(stpV1 ? "stp-v1" : "stp-v2", wireDisposition, plan,
+                planChange, confirmation, clarification, outcome, completed, execution);
     }
 
-    private DisplayPlanResponse toDisplayPlan(SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
+    private DisplayPlanResponse toDisplayPlan(
+            SemanticTurnPlan plan, SemanticTurnOutcome outcome, boolean stpV1) {
         Map<String, String> displayIndexes = displayIndexes(plan);
         List<DisplayPlanResponse.Task> tasks = new ArrayList<>();
         for (SemanticTask task : plan.getTasks()) {
             tasks.add(new DisplayPlanResponse.Task(
                     displayIndexes.get(task.getTaskId()), task.getGoalLabel(), task.getSourceDomain(),
-                    dependencySummary(plan, task.getTaskId(), displayIndexes)));
+                    dependencySummary(plan, task.getTaskId(), displayIndexes),
+                    stpV1 ? null : task.getFulfillmentRole()));
         }
         Integer executable = outcome == null ? null : (int) outcome.getTaskOutcomes().stream()
                 .filter(value -> value.getExecutionStatus() != TaskOutcome.TaskExecutionStatus.BLOCKED
@@ -378,7 +462,8 @@ public final class ConversationAnswerResponseMapper {
                 clarification.getContinuingTaskCount(), clarification.getContinuingGoalLabels(), blockedGoals);
     }
 
-    private TaskSummaryResponse toTaskSummary(SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
+    private TaskSummaryResponse toTaskSummary(
+            SemanticTurnPlan plan, SemanticTurnOutcome outcome, boolean stpV1) {
         Map<String, SemanticTask> tasksById = indexTasks(Optional.ofNullable(plan));
         Map<String, String> indexes = plan == null ? Map.of() : displayIndexes(plan);
         List<TaskSummaryResponse.Item> items = new ArrayList<>();
@@ -386,9 +471,10 @@ public final class ConversationAnswerResponseMapper {
             SemanticTask task = tasksById.get(taskOutcome.getTaskId());
             if (task != null) {
                 items.add(new TaskSummaryResponse.Item(indexes.get(task.getTaskId()), task.getGoalLabel(),
-                        publicTaskStatus(taskOutcome), task.getSourceDomain(),
+                        publicTaskStatus(taskOutcome, stpV1), task.getSourceDomain(),
                         taskOutcome.getReasonCodes().stream().sorted().toList(),
-                        blockedByDisplayIndexes(plan, taskOutcome, indexes)));
+                        blockedByDisplayIndexes(plan, taskOutcome, indexes),
+                        stpV1 ? null : task.getFulfillmentRole()));
             }
         }
         String mode = outcome.getPlanOutcome() == SemanticTurnOutcome.PlanOutcome.SUCCEEDED
@@ -419,7 +505,8 @@ public final class ConversationAnswerResponseMapper {
             SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             ConversationAnswerResult result,
             int recommendationCount,
-            Map<String, ContextHandle> contextHandles) {
+            Map<String, ContextHandle> contextHandles,
+            boolean stpV1) {
         Map<String, SemanticTask> tasksById = indexTasks(Optional.ofNullable(plan));
         Map<String, String> indexes = plan == null ? Map.of() : displayIndexes(plan);
         List<CompletedTaskResponse> completed = new ArrayList<>();
@@ -431,17 +518,23 @@ public final class ConversationAnswerResponseMapper {
             if (task != null) {
                 CompletedTaskResponse.ResultPayload payload = outcomeItem.getResultPayload().isPresent()
                         ? toResultPayload(outcomeItem.getResultPayload().orElseThrow(), task, result,
-                                recommendationCount)
+                                recommendationCount, stpV1)
                         : new CompletedTaskResponse.ResultPayload(
                                 "SECTION_RESULT",
-                                toContributionBlocks(outcomeItem.getContribution().orElseThrow(), sourceScope(task)),
+                                toContributionBlocks(outcomeItem.getContribution().orElseThrow(), task, stpV1),
                                 null, null);
+                com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole publicRole =
+                        stpV1 ? null : task.getFulfillmentRole();
+                TaskSupportSummaryResponse publicSupport = stpV1
+                        ? null : supportSummary(task, outcomeItem, result);
                 completed.add(new CompletedTaskResponse(indexes.get(task.getTaskId()), task.getGoalLabel(),
                         task.getSourceDomain(), payload,
                         Optional.ofNullable(contextHandles.get(task.getTaskId()))
                                 .map(ContextHandle::asBase64Url).orElse(null),
                         outcomeItem.getComposition().map(value -> new TaskCompositionResponse(
-                                value.getMode(), value.isDegraded())).orElse(null)));
+                                value.getMode(), value.isDegraded())).orElse(null),
+                        publicRole, publicSupport,
+                        continuationContext(task, contextHandles, stpV1)));
             }
         }
         return List.copyOf(completed);
@@ -449,11 +542,11 @@ public final class ConversationAnswerResponseMapper {
 
     private CompletedTaskResponse.ResultPayload toResultPayload(
             TaskResultPayload payload, SemanticTask task,
-            ConversationAnswerResult result, int recommendationCount) {
+            ConversationAnswerResult result, int recommendationCount, boolean stpV1) {
         if (payload instanceof TaskResultPayload.SectionResultPayload section) {
             TaskResultProvenance provenance = provenanceFor(task, payload, result);
             return new CompletedTaskResponse.ResultPayload("SECTION_RESULT",
-                    toSectionBlocks(section, sourceScope(task), provenance),
+                    toSectionBlocks(section, task, provenance, stpV1),
                     null, null);
         }
         if (payload instanceof TaskResultPayload.RecommendationResultPayload recommendation) {
@@ -467,43 +560,197 @@ public final class ConversationAnswerResponseMapper {
                                     item.getMatchReasons(),
                                     item.getEvidenceIds(),
                                     item.getSourceReferences().stream()
-                                            .map(PublicSourceReferenceResponse::from).toList()))
+                                            .map(PublicSourceReferenceResponse::from).toList(),
+                                    stpV1 ? null : PublicResultItemId.forRecommendation(
+                                            task.getTaskId(), item.getPortfolioId()),
+                                    stpV1 ? null : recommendationsPosition(recommendation, item),
+                                    stpV1 ? null : subjectReference(item.getRoute(), item.getPortfolioId())))
                             .toList();
             return new CompletedTaskResponse.ResultPayload("RECOMMENDATION_RESULT",
-                    toBlocks(recommendation.getSupportingBlocks(), sourceScope(task),
-                            provenance.getClaimIds(), provenance.getEvidenceIds()),
+                    toBlocks(recommendation.getSupportingBlocks(), task, provenance, stpV1),
                     recommendations, null);
         }
         TaskResultPayload.SynthesisResultPayload synthesis = (TaskResultPayload.SynthesisResultPayload) payload;
         return new CompletedTaskResponse.ResultPayload("SYNTHESIS_RESULT",
-                toBlocks(synthesis.getBlocks(), sourceScope(task), synthesis.getProvenance().getClaimIds(),
-                        synthesis.getProvenance().getEvidenceIds()), null,
+                toBlocks(synthesis.getBlocks(), task, synthesis.getProvenance(), stpV1), null,
                 synthesis.getProvenance().getOriginDomains().stream().sorted().toList());
     }
 
     private List<ConversationAnswerBlockResponse> toBlocks(
-            List<String> contents, ConversationSourceScope sourceScope,
-            List<String> claimIds, List<String> evidenceIds) {
-        return contents.stream().map(value -> new ConversationAnswerBlockResponse(
-                sourceScope, value, claimIds, evidenceIds)).toList();
+            List<String> contents, SemanticTask task, TaskResultProvenance provenance, boolean stpV1) {
+        return contents.stream().map(value -> toSupportedBlock(task, value,
+                provenance.getClaimIds(), provenance.getEvidenceIds(), List.of(), provenance,
+                stpV1, null, null)).filter(Objects::nonNull).toList();
     }
 
     private List<ConversationAnswerBlockResponse> toSectionBlocks(
             TaskResultPayload.SectionResultPayload payload,
-            ConversationSourceScope sourceScope,
-            TaskResultProvenance fallbackProvenance) {
+            SemanticTask task,
+            TaskResultProvenance fallbackProvenance,
+            boolean stpV1) {
         return payload.getSections().stream().map(section -> {
             if (section.isTyped()) {
-                return new ConversationAnswerBlockResponse(
-                        sourceScope, section.getSectionType(), section.getTitle(), section.getContent(),
-                        section.getClaimIds(), section.getEvidenceIds(),
-                        section.getSourceReferences().stream()
-                                .map(PublicSourceReferenceResponse::from).toList());
+                return toSupportedBlock(task, section.getContent(), section.getClaimIds(),
+                        section.getEvidenceIds(), section.getSourceReferences().stream()
+                                .map(PublicSourceReferenceResponse::from).toList(),
+                        fallbackProvenance, stpV1, section.getSectionType(), section.getTitle());
             }
-            return new ConversationAnswerBlockResponse(
-                    sourceScope, section.getContent(),
-                    fallbackProvenance.getClaimIds(), fallbackProvenance.getEvidenceIds());
-        }).toList();
+            return toSupportedBlock(task, section.getContent(), fallbackProvenance.getClaimIds(),
+                    fallbackProvenance.getEvidenceIds(), List.of(), fallbackProvenance, stpV1, null, null);
+        }).filter(Objects::nonNull).toList();
+    }
+
+    private ConversationAnswerBlockResponse toSupportedBlock(
+            SemanticTask task,
+            String content,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            List<PublicSourceReferenceResponse> references,
+            TaskResultProvenance provenance,
+            boolean stpV1,
+            com.portfolio.agent.answer.domain.AnswerSectionType sectionType,
+            String title) {
+        ConversationSourceScope scope = sourceScope(task);
+        if (stpV1) {
+            return new ConversationAnswerBlockResponse(scope, sectionType, title, content,
+                    claimIds, evidenceIds, references);
+        }
+        SemanticRoutingTypes.TaskSourceDomain domain = task.getSourceDomain();
+        if (domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO && references.isEmpty()) {
+            return null;
+        }
+        AnswerSupportKind kind = domain == SemanticRoutingTypes.TaskSourceDomain.GENERAL
+                ? AnswerSupportKind.GENERAL_KNOWLEDGE
+                : domain == SemanticRoutingTypes.TaskSourceDomain.SYNTHESIS
+                ? AnswerSupportKind.DERIVED_FROM_TASKS : AnswerSupportKind.VERIFIED_PUBLIC_EVIDENCE;
+        List<String> publicKeys = references.stream()
+                .map(PublicSourceReferenceResponse::getReferenceKey).toList();
+        List<String> sourceTaskIds = provenance.getSourceTaskIds().isEmpty()
+                ? List.of(task.getTaskId()) : provenance.getSourceTaskIds();
+        List<StatementSupportReferenceResponse> statements = claimIds.stream()
+                .map(id -> new StatementSupportReferenceResponse(id, sourceTaskIds.getFirst(),
+                        publicKeys, resultVersion(references)))
+                .toList();
+        AnswerBlockSupportResponse support = new AnswerBlockSupportResponse(
+                kind, statements,
+                sourceTaskIds,
+                publicKeys, resultVersion(references));
+        return new ConversationAnswerBlockResponse(
+                stableId("block", task, content, claimIds, evidenceIds), domain,
+                domain == SemanticRoutingTypes.TaskSourceDomain.SYNTHESIS ? null : scope,
+                sectionType, title,
+                content, claimIds, evidenceIds, references, support);
+    }
+
+    private String resultVersion(List<PublicSourceReferenceResponse> references) {
+        return references.stream().map(PublicSourceReferenceResponse::getPublishedVersion)
+                .filter(Objects::nonNull).findFirst().orElse(null);
+    }
+
+    private String stableId(String prefix, String content, List<String> claimIds, List<String> evidenceIds) {
+        String value = content + "|" + String.join(",", claimIds) + "|" + String.join(",", evidenceIds);
+        return prefix + "-" + java.util.UUID.nameUUIDFromBytes(
+                value.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString().replace("-", "");
+    }
+
+    private String stableId(
+            String prefix, SemanticTask task, String content,
+            List<String> claimIds, List<String> evidenceIds) {
+        return stableId(prefix, task.getTaskId() + "|" + content, claimIds, evidenceIds);
+    }
+
+    private int recommendationsPosition(
+            TaskResultPayload.RecommendationResultPayload payload,
+            TaskResultPayload.RecommendationItem item) {
+        return payload.getItems().indexOf(item) + 1;
+    }
+
+    private SubjectReferenceResponse subjectReference(String route, String subjectId) {
+        String type = route != null && route.startsWith("/cases/") ? "CASE" : "PROJECT";
+        return new SubjectReferenceResponse(type, subjectId);
+    }
+
+    private ContinuationContextResponse continuationContext(
+            SemanticTask task, Map<String, ContextHandle> contextHandles, boolean stpV1) {
+        if (stpV1 || contextHandles == null || !contextHandles.containsKey(task.getTaskId())
+                || task.getSourceDomain() != SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO) {
+            return null;
+        }
+        return new ContinuationContextResponse(
+                contextHandles.get(task.getTaskId()).asBase64Url(),
+                ContextSlot.forTaskType(task.getTaskType()).contextType(), task.getTaskId());
+    }
+
+    private TaskSupportSummaryResponse supportSummary(
+            SemanticTask task, TaskOutcome outcome, ConversationAnswerResult result) {
+        if (task.getSourceDomain() == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
+                && !hasPublicSourceReference(outcome)) {
+            return null;
+        }
+        TaskResultProvenance provenance = outcome.getProvenance().orElseGet(() ->
+                TaskResultProvenance.direct(task.getSourceDomain(), List.of(), List.of()));
+        AnswerSupportKind kind = task.getSourceDomain() == SemanticRoutingTypes.TaskSourceDomain.GENERAL
+                ? AnswerSupportKind.GENERAL_KNOWLEDGE
+                : task.getSourceDomain() == SemanticRoutingTypes.TaskSourceDomain.SYNTHESIS
+                ? AnswerSupportKind.DERIVED_FROM_TASKS : AnswerSupportKind.VERIFIED_PUBLIC_EVIDENCE;
+        return new TaskSupportSummaryResponse(kind.name(),
+                Math.max(provenance.getClaimIds().size(), outcome.hasRenderablePayload() ? 1 : 0),
+                provenance.getEvidenceIds().size(), provenance.getSourceTaskIds().size(),
+                result.getContentVersion());
+    }
+
+    private boolean hasPublicSourceReference(TaskOutcome outcome) {
+        if (outcome.getContribution().isPresent()
+                && !outcome.getContribution().orElseThrow().getSourceReferences().isEmpty()) {
+            return true;
+        }
+        if (outcome.getResultPayload().isEmpty()) {
+            return false;
+        }
+        TaskResultPayload payload = outcome.getResultPayload().orElseThrow();
+        if (payload instanceof TaskResultPayload.SectionResultPayload section) {
+            return section.getSections().stream()
+                    .anyMatch(value -> !value.getSourceReferences().isEmpty());
+        }
+        if (payload instanceof TaskResultPayload.RecommendationResultPayload recommendation) {
+            return recommendation.getItems().stream()
+                    .anyMatch(value -> !value.getSourceReferences().isEmpty());
+        }
+        return false;
+    }
+
+    private AnswerSourceComposition sourceComposition(List<ConversationAnswerBlockResponse> blocks) {
+        if (blocks.isEmpty()) {
+            return null;
+        }
+        java.util.Set<SemanticRoutingTypes.TaskSourceDomain> domains = new java.util.LinkedHashSet<>();
+        for (ConversationAnswerBlockResponse block : blocks) {
+            if (block.getSourceDomain() != null) {
+                domains.add(block.getSourceDomain());
+            }
+        }
+        if (domains.contains(SemanticRoutingTypes.TaskSourceDomain.SYNTHESIS)) {
+            return AnswerSourceComposition.CROSS_DOMAIN_DERIVED;
+        }
+        if (domains.contains(SemanticRoutingTypes.TaskSourceDomain.GENERAL)
+                && domains.contains(SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO)) {
+            return AnswerSourceComposition.MULTI_SOURCE;
+        }
+        return domains.contains(SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO)
+                ? AnswerSourceComposition.PORTFOLIO_ONLY : AnswerSourceComposition.GENERAL_ONLY;
+    }
+
+    private List<PublicSourceCatalogEntryResponse> publicSourceCatalog(
+            List<ConversationAnswerBlockResponse> blocks) {
+        Map<String, PublicSourceCatalogEntryResponse> entries = new LinkedHashMap<>();
+        for (ConversationAnswerBlockResponse block : blocks) {
+            for (PublicSourceReferenceResponse reference : block.getSourceReferences()) {
+                entries.putIfAbsent(reference.getReferenceKey(), new PublicSourceCatalogEntryResponse(
+                        reference.getReferenceKey(), reference.getLabel(), reference.getPublishedVersion(),
+                        reference.getSourceType(), reference.getSubjectRoute(), reference.getEvidenceRoute()));
+            }
+        }
+        return List.copyOf(entries.values());
     }
 
     private TaskResultProvenance provenanceFor(
@@ -521,7 +768,43 @@ public final class ConversationAnswerResponseMapper {
         return TaskResultProvenance.direct(task.getSourceDomain(), List.of(), List.of());
     }
 
-    private static String publicTaskStatus(TaskOutcome outcome) {
+    private static String publicTaskStatus(TaskOutcome outcome, boolean stpV1) {
+        if (stpV1) {
+            return legacyTaskStatus(outcome);
+        }
+        if (outcome.getReasonCodes().stream().anyMatch(reason -> reason.contains("STALE"))) {
+            return "STALE";
+        }
+        if (outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED) {
+            return "PARTIAL";
+        }
+        if (outcome.hasRenderablePayload()) {
+            return "COMPLETED";
+        }
+        return switch (outcome.getExecutionStatus()) {
+            case REJECTED -> "REJECTED";
+            case BLOCKED -> "BLOCKED";
+            case FAILED -> "FAILED";
+            case CANCELLED -> "NOT_EXECUTED";
+            case NOT_STARTED, RUNNING, SUCCEEDED -> switch (outcome.getResolution()) {
+                case NOT_SUPPORTED -> "NOT_SUPPORTED";
+                case CAPABILITY_UNAVAILABLE -> "UNAVAILABLE";
+                case EMPTY -> "EMPTY";
+                case PRESENTATION_BLOCKED -> "BLOCKED";
+                case PARTIALLY_ANSWERED -> "PARTIAL";
+                case DEPENDENCY_UNAVAILABLE -> "BLOCKED";
+                case NOT_EXECUTED_BUDGET -> "NOT_EXECUTED";
+                case REJECTED, BOUNDARY -> "REJECTED";
+                case NOT_APPLICABLE -> "NOT_APPLICABLE";
+                case ANSWERED -> "FAILED";
+            };
+        };
+    }
+
+    private static String legacyTaskStatus(TaskOutcome outcome) {
+        if (outcome.getReasonCodes().stream().anyMatch(reason -> reason.contains("STALE"))) {
+            return "STALE";
+        }
         if (outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED) {
             return "PARTIAL";
         }
@@ -534,13 +817,15 @@ public final class ConversationAnswerResponseMapper {
             case FAILED -> "FAILED";
             case CANCELLED -> "CANCELLED";
             case NOT_STARTED, RUNNING, SUCCEEDED -> switch (outcome.getResolution()) {
-                case NOT_SUPPORTED, CAPABILITY_UNAVAILABLE -> "NOT_SUPPORTED";
+                case NOT_SUPPORTED -> "NOT_SUPPORTED";
+                case CAPABILITY_UNAVAILABLE -> "UNAVAILABLE";
                 case EMPTY -> "EMPTY";
                 case PRESENTATION_BLOCKED -> "PRESENTATION_BLOCKED";
                 case PARTIALLY_ANSWERED -> "PARTIAL";
                 case DEPENDENCY_UNAVAILABLE -> "DEPENDENCY_UNAVAILABLE";
-                case NOT_EXECUTED_BUDGET -> "NOT_EXECUTED_BUDGET";
-                case REJECTED, BOUNDARY, NOT_APPLICABLE -> "NOT_SUPPORTED";
+                case NOT_EXECUTED_BUDGET -> "NOT_EXECUTED";
+                case REJECTED, BOUNDARY -> "NOT_SUPPORTED";
+                case NOT_APPLICABLE -> "NOT_APPLICABLE";
                 case ANSWERED -> "FAILED";
             };
         };

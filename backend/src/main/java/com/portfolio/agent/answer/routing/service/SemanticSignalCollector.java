@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.routing.service;
 
 import com.portfolio.agent.answer.routing.domain.PlanExclusion;
+import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.PortfolioFacet;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.RequestedOutput;
 import com.portfolio.agent.answer.routing.domain.SemanticTurnInput;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
@@ -76,8 +77,10 @@ public final class SemanticSignalCollector {
             goals.add(new SemanticSignals.GoalCandidate(
                     SemanticSignals.Intent.GENERAL_EXPLANATION, List.of()));
         }
-        if (generalExplanation && !context.getSubjects().isEmpty()) {
-            goals.removeIf(goal -> goal.getIntent() == SemanticSignals.Intent.GENERAL_EXPLANATION);
+        if (!context.getSubjects().isEmpty()
+                && goals.stream().noneMatch(goal -> goal.getIntent() == SemanticSignals.Intent.PORTFOLIO_FACT)
+                && containsAny(question, "这个项目", "该项目", "这个案例", "该案例",
+                "this project", "that project", "this case", "that case", "它")) {
             addFactGoals(goals, context.getSubjects(), question);
         }
         if (synthesis && countNonSynthesis(goals) >= 2) {
@@ -135,21 +138,46 @@ public final class SemanticSignalCollector {
             List<SemanticSignals.GoalCandidate> goals,
             List<SubjectReference> subjects,
             String question) {
+        Set<PortfolioFacet> facets = requestedPortfolioFacets(question);
         if (subjects.isEmpty()) {
-            goals.add(new SemanticSignals.GoalCandidate(SemanticSignals.Intent.PORTFOLIO_FACT, List.of()));
+            goals.add(SemanticSignals.GoalCandidate.portfolioFact(List.of(), facets));
             return;
         }
         boolean oneGoalPerSubject = containsAny(question, "\u5206\u522b", "\u6bcf\u4e2a", "\u5404\u4e2a", "\u8fd9\u4e9b")
                 || countOccurrences(question, "\u4ecb\u7ecd") > 1;
         if (oneGoalPerSubject) {
             for (SubjectReference subject : subjects) {
-                goals.add(new SemanticSignals.GoalCandidate(
-                        SemanticSignals.Intent.PORTFOLIO_FACT, List.of(subject)));
+                goals.add(SemanticSignals.GoalCandidate.portfolioFact(List.of(subject), facets));
             }
             return;
         }
-        goals.add(new SemanticSignals.GoalCandidate(
-                SemanticSignals.Intent.PORTFOLIO_FACT, List.of(subjects.get(0))));
+        goals.add(SemanticSignals.GoalCandidate.portfolioFact(List.of(subjects.get(0)), facets));
+    }
+
+    private static Set<PortfolioFacet> requestedPortfolioFacets(String question) {
+        LinkedHashSet<PortfolioFacet> facets = new LinkedHashSet<>();
+        if (containsAny(question, "背景", "缘起", "目标")) {
+            facets.add(PortfolioFacet.OVERVIEW);
+        }
+        if (containsAny(question, "职责", "负责", "贡献", "分工")) {
+            facets.add(PortfolioFacet.RESPONSIBILITY);
+        }
+        if (containsAny(question, "技术方案", "方案", "架构", "选型", "决策", "取舍")) {
+            facets.add(PortfolioFacet.DECISION);
+        }
+        if (containsAny(question, "实现", "落地")) {
+            facets.add(PortfolioFacet.IMPLEMENTATION);
+        }
+        if (containsAny(question, "验证", "测试", "验收")) {
+            facets.add(PortfolioFacet.VERIFICATION);
+        }
+        if (containsAny(question, "最终状态", "结果", "交付", "上线", "现状")) {
+            facets.add(PortfolioFacet.OUTCOME);
+        }
+        if (facets.isEmpty()) {
+            facets.add(PortfolioFacet.OVERVIEW);
+        }
+        return Set.copyOf(facets);
     }
 
     private static int countNonSynthesis(List<SemanticSignals.GoalCandidate> goals) {
@@ -297,19 +325,35 @@ final class SemanticSignals {
         private final Intent intent;
         private final List<SubjectReference> subjects;
         private final List<String> topics;
+        private final Set<PortfolioFacet> portfolioFacets;
 
         GoalCandidate(Intent intent, List<SubjectReference> subjects) {
-            this(intent, subjects, List.of());
+            this(intent, subjects, List.of(), Set.of());
         }
 
         GoalCandidate(Intent intent, List<SubjectReference> subjects, List<String> topics) {
+            this(intent, subjects, topics, Set.of());
+        }
+
+        private GoalCandidate(
+                Intent intent,
+                List<SubjectReference> subjects,
+                List<String> topics,
+                Set<PortfolioFacet> portfolioFacets) {
             this.intent = Objects.requireNonNull(intent, "intent");
             this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
             this.topics = List.copyOf(Objects.requireNonNull(topics, "topics"));
+            this.portfolioFacets = Set.copyOf(Objects.requireNonNull(portfolioFacets, "portfolioFacets"));
+        }
+
+        static GoalCandidate portfolioFact(
+                List<SubjectReference> subjects, Set<PortfolioFacet> portfolioFacets) {
+            return new GoalCandidate(Intent.PORTFOLIO_FACT, subjects, List.of(), portfolioFacets);
         }
 
         Intent getIntent() { return intent; }
         List<SubjectReference> getSubjects() { return subjects; }
         List<String> getTopics() { return topics; }
+        Set<PortfolioFacet> getPortfolioFacets() { return portfolioFacets; }
     }
 }

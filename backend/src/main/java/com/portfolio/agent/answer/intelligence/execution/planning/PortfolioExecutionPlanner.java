@@ -11,6 +11,10 @@ import com.portfolio.agent.answer.routing.domain.SemanticTask;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
 import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
+import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
+import com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalIntent;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,9 +25,16 @@ import java.util.Objects;
 public final class PortfolioExecutionPlanner {
 
     private final PortfolioCapabilityCatalog catalog;
+    private final CorpusBackend primaryBackend;
 
     public PortfolioExecutionPlanner(PortfolioCapabilityCatalog catalog) {
+        this(catalog, CorpusBackend.BUNDLE);
+    }
+
+    public PortfolioExecutionPlanner(
+            PortfolioCapabilityCatalog catalog, CorpusBackend primaryBackend) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
+        this.primaryBackend = Objects.requireNonNull(primaryBackend, "primaryBackend");
     }
 
     public PortfolioExecutionPlan plan(SemanticTaskExecutionContext context) {
@@ -100,7 +111,24 @@ public final class PortfolioExecutionPlanner {
         }
         return new PortfolioEvidenceInvocation(
                 scope, facets, dimensions, EvidenceSelectionPolicy.defaults(),
-                context.getExpectedContentVersion());
+                context.getExpectedContentVersion(), retrievalPlan(task, context));
+    }
+
+    private EffectiveRetrievalPlan retrievalPlan(
+            SemanticTask task, SemanticTaskExecutionContext context) {
+        boolean recommendation = task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend;
+        boolean refinement = task.getParameters() instanceof SemanticTaskParameters.PortfolioRefinement;
+        RetrievalIntent intent = refinement
+                ? RetrievalIntent.CONTEXT_REVALIDATION
+                : recommendation
+                        ? RetrievalIntent.RECOMMENDATION_DISCOVERY
+                        : RetrievalIntent.EXACT_SUBJECT;
+        SearchStrategy strategy = recommendation ? SearchStrategy.HYBRID : SearchStrategy.EXACT;
+        CorpusBackend fallbackBackend = primaryBackend == CorpusBackend.POSTGRESQL
+                ? CorpusBackend.BUNDLE : null;
+        SearchStrategy fallbackStrategy = fallbackBackend == null ? null : strategy;
+        return new EffectiveRetrievalPlan(intent, primaryBackend, strategy,
+                fallbackStrategy, fallbackBackend, context.getExpectedContentVersion());
     }
 
     private void addRecommendationProfiles(List<FacetRetrievalProfile> facets) {

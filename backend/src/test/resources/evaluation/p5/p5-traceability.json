@@ -1,0 +1,17 @@
+{
+  "statusVocabulary": [
+    "EXISTING_CORRECT",
+    "EXISTING_NEEDS_CHANGE",
+    "NEW",
+    "REMOVE_AFTER_MIGRATION",
+    "FRONTEND_CONTRACT_ONLY"
+  ],
+  "capabilities": [
+    {"id": "stp-v2", "status": "EXISTING_NEEDS_CHANGE", "owner": "backend"},
+    {"id": "fulfillment-role", "status": "NEW", "owner": "backend"},
+    {"id": "task-block-support", "status": "NEW", "owner": "backend"},
+    {"id": "context-v2-reader", "status": "NEW", "owner": "backend"},
+    {"id": "consumer-preflight", "status": "FRONTEND_CONTRACT_ONLY", "owner": "frontend"},
+    {"id": "bottom-failover-retriever", "status": "REMOVE_AFTER_MIGRATION", "owner": "backend"}
+  ]
+}

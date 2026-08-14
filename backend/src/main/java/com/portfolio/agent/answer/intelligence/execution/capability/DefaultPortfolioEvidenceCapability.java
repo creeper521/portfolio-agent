@@ -5,6 +5,8 @@ import com.portfolio.agent.answer.intelligence.execution.domain.PortfolioEvidenc
 import com.portfolio.agent.answer.intelligence.execution.domain.SafeReasonCode;
 import com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator;
 import com.portfolio.agent.answer.intelligence.execution.validation.ValidatedEvidenceBundle;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalAttemptFailure;
+import com.portfolio.agent.answer.intelligence.retrieval.RetrievalFallbackPolicy;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -14,6 +16,7 @@ public final class DefaultPortfolioEvidenceCapability implements PortfolioEviden
     private final PortfolioCandidateRetrievalPort primary;
     private final PortfolioCandidateRetrievalPort fallback;
     private final EvidencePromotionValidator promotionValidator;
+    private final RetrievalFallbackPolicy fallbackPolicy;
 
     public DefaultPortfolioEvidenceCapability(
             PortfolioCandidateRetrievalPort primary,
@@ -25,9 +28,18 @@ public final class DefaultPortfolioEvidenceCapability implements PortfolioEviden
             PortfolioCandidateRetrievalPort primary,
             PortfolioCandidateRetrievalPort fallback,
             EvidencePromotionValidator promotionValidator) {
+        this(primary, fallback, promotionValidator, null);
+    }
+
+    public DefaultPortfolioEvidenceCapability(
+            PortfolioCandidateRetrievalPort primary,
+            PortfolioCandidateRetrievalPort fallback,
+            EvidencePromotionValidator promotionValidator,
+            RetrievalFallbackPolicy fallbackPolicy) {
         this.primary = Objects.requireNonNull(primary, "primary");
         this.fallback = Objects.requireNonNull(fallback, "fallback");
         this.promotionValidator = Objects.requireNonNull(promotionValidator, "promotionValidator");
+        this.fallbackPolicy = fallbackPolicy;
     }
 
     @Override
@@ -43,10 +55,23 @@ public final class DefaultPortfolioEvidenceCapability implements PortfolioEviden
                 || primaryResult.getStatus() == CapabilityExecutionResult.Status.INTEGRITY_FAILED) {
             return primaryResult;
         }
+        PortfolioEvidenceInvocation fallbackInvocation = invocation;
+        PortfolioCandidateRetrievalPort fallbackPort = fallback;
+        if (fallbackPolicy != null) {
+            java.util.Optional<com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan>
+                    fallbackPlan = fallbackPlan(invocation, primaryResult);
+            if (fallbackPlan.isEmpty()) return primaryResult;
+            com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan selected =
+                    fallbackPlan.orElseThrow();
+            fallbackInvocation = invocation.withRetrievalPlan(selected);
+            fallbackPort = selected.getPrimaryBackend()
+                    == invocation.getRetrievalPlan().getPrimaryBackend() ? primary : fallback;
+        }
         if (constraints.getAllowance().getBackendAttemptLimit() < 2 || !canStart(constraints)) {
             return primaryResult;
         }
-        CapabilityExecutionResult fallbackResult = executeAttempt(fallback, invocation, constraints, 2);
+        CapabilityExecutionResult fallbackResult = executeAttempt(
+                fallbackPort, fallbackInvocation, constraints, 2);
         if (fallbackResult.getStatus() == CapabilityExecutionResult.Status.SUCCESS
                 || fallbackResult.getStatus() == CapabilityExecutionResult.Status.EMPTY) {
             return fallbackResult.asDegraded();
@@ -78,5 +103,13 @@ public final class DefaultPortfolioEvidenceCapability implements PortfolioEviden
         return constraints.getAllowance().getLogicalRetrievalLimit() >= 1
                 && !constraints.getAllowance().isExpired(Instant.now())
                 && constraints.getAllowance().hasMinimumStartWindow(Instant.now());
+    }
+
+    private java.util.Optional<com.portfolio.agent.answer.intelligence.retrieval.EffectiveRetrievalPlan>
+            fallbackPlan(
+            PortfolioEvidenceInvocation invocation, CapabilityExecutionResult result) {
+        RetrievalAttemptFailure failure = result.getAttemptFailure()
+                .orElse(RetrievalAttemptFailure.BACKEND_CONNECTION_UNAVAILABLE);
+        return fallbackPolicy.fallbackFor(invocation.getRetrievalPlan(), failure);
     }
 }

@@ -1,0 +1,17 @@
+{
+  "contractVersion": "stp-v1",
+  "responseKind": "ANSWER",
+  "agentTurn": {
+    "contractVersion": "stp-v1",
+    "plan": {
+      "tasks": [
+        {"sourceDomain": "PORTFOLIO", "goalLabel": "portfolio-fact"}
+      ]
+    }
+  },
+  "block": {
+    "sourceScope": "PORTFOLIO",
+    "sourceReferences": ["claim-1"],
+    "evidenceState": "SUPPORTED"
+  }
+}

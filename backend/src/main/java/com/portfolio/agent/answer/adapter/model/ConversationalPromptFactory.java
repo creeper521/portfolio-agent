@@ -38,6 +38,14 @@ public final class ConversationalPromptFactory {
         return prompt("generation", conversation, approvedContext);
     }
 
+    public String generalMaterialPrompt(Object conversation, Object approvedContext) {
+        return prompt("general_answer_material", conversation, approvedContext);
+    }
+
+    public String crossDomainExpressionPrompt(Object approvedMaterial) {
+        return prompt("cross_domain_expression", null, approvedMaterial);
+    }
+
     public String reviewPrompt(Object blocks, Object approvedContext) {
         return prompt("review", blocks, approvedContext);
     }
@@ -126,6 +134,21 @@ public final class ConversationalPromptFactory {
                     claimIds、evidenceIds 必须是字符串数组；通用内容必须使用 []；作品集内容只能使用 approved_portfolio_context 中存在的 ID。
                     示例：{"title":"REST API","resolution":"ANSWERED","blocks":[{"sourceScope":"GENERAL","content":"REST API 是一种接口设计风格。","claimIds":[],"evidenceIds":[]}]}
                     不要把推荐问题放入本对象。不要输出未声明字段。
+                    """;
+            case "general_answer_material" -> """
+                    只输出一个 JSON 对象，字段必须且只能是 schemaVersion、topic、statements、caveats、metadata。
+                    schemaVersion 必须是 general-material-v1。statements 至少一项；每项只能包含 statementAlias、text、role、conceptTags、supportKind、publicSourceKeys。
+                    role 必须是 DEFINITION|MECHANISM|ADVANTAGE|LIMITATION|USE_CASE|CONTRAST|PRACTICE|CAUTION 之一。
+                    supportKind 必须是 GENERAL_KNOWLEDGE，publicSourceKeys 必须始终为空数组；不得输出 Portfolio 事实、来源 ID 或自由对话摘要。
+                    caveats 每项只能包含 alias、text；metadata 只能包含 contentVersion、audienceRole、discourseAliases。
+                    metadata.contentVersion 与 metadata.audienceRole 必须原样复制 approved_portfolio_context 中的同名字段，discourseAliases 必须是字符串数组。
+                    不要输出未声明字段。
+                    """;
+            case "cross_domain_expression" -> """
+                    只输出一个 JSON 对象，字段必须且只能是 schemaVersion、sectionKind、text、relationAlias、statementAliases、caveatAliases。
+                    schemaVersion 必须是 cross-domain-expression-v1；relationAlias 必须原样使用已批准关系；
+                    不得新增关系、修改 Portfolio 原子事实、制造来源或删除输入 Caveat。
+                    不要输出未声明字段。
                     """;
             case "review" -> """
                     只输出一个 JSON 对象，字段必须且只能是 unsupportedBlockIndexes、reasonCodes。

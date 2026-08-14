@@ -2,6 +2,7 @@ package com.portfolio.agent.answer.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 
 import java.util.List;
 import java.util.Objects;
@@ -15,6 +16,9 @@ public final class CompletedTaskResponse {
     private final ResultPayload resultPayload;
     private final String contextHandle;
     private final TaskCompositionResponse composition;
+    private final TaskFulfillmentRole fulfillmentRole;
+    private final TaskSupportSummaryResponse supportSummary;
+    private final ContinuationContextResponse continuationContext;
 
     public CompletedTaskResponse(
             String displayIndex, String goalLabel, TaskSourceDomain sourceDomain, ResultPayload resultPayload) {
@@ -37,12 +41,53 @@ public final class CompletedTaskResponse {
             ResultPayload resultPayload,
             String contextHandle,
             TaskCompositionResponse composition) {
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, contextHandle, composition, null);
+    }
+
+    public CompletedTaskResponse(
+            String displayIndex,
+            String goalLabel,
+            TaskSourceDomain sourceDomain,
+            ResultPayload resultPayload,
+            String contextHandle,
+            TaskCompositionResponse composition,
+            TaskFulfillmentRole fulfillmentRole) {
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, contextHandle, composition,
+                fulfillmentRole, null);
+    }
+
+    public CompletedTaskResponse(
+            String displayIndex,
+            String goalLabel,
+            TaskSourceDomain sourceDomain,
+            ResultPayload resultPayload,
+            String contextHandle,
+            TaskCompositionResponse composition,
+            TaskFulfillmentRole fulfillmentRole,
+            TaskSupportSummaryResponse supportSummary) {
+        this(displayIndex, goalLabel, sourceDomain, resultPayload, contextHandle, composition,
+                fulfillmentRole, supportSummary, null);
+    }
+
+    public CompletedTaskResponse(
+            String displayIndex,
+            String goalLabel,
+            TaskSourceDomain sourceDomain,
+            ResultPayload resultPayload,
+            String contextHandle,
+            TaskCompositionResponse composition,
+            TaskFulfillmentRole fulfillmentRole,
+            TaskSupportSummaryResponse supportSummary,
+            ContinuationContextResponse continuationContext) {
         this.displayIndex = requireText(displayIndex, "displayIndex");
         this.goalLabel = requireText(goalLabel, "goalLabel");
         this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
         this.resultPayload = Objects.requireNonNull(resultPayload, "resultPayload");
         this.contextHandle = contextHandle;
         this.composition = composition;
+        this.fulfillmentRole = fulfillmentRole;
+        this.supportSummary = supportSummary;
+        this.continuationContext = continuationContext;
     }
 
     public String getDisplayIndex() { return displayIndex; }
@@ -53,6 +98,12 @@ public final class CompletedTaskResponse {
     public String getContextHandle() { return contextHandle; }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public TaskCompositionResponse getComposition() { return composition; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public TaskFulfillmentRole getFulfillmentRole() { return fulfillmentRole; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public TaskSupportSummaryResponse getSupportSummary() { return supportSummary; }
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ContinuationContextResponse getContinuationContext() { return continuationContext; }
 
     public static final class ResultPayload {
         private final String kind;

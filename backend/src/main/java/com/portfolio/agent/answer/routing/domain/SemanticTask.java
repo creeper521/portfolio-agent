@@ -19,6 +19,7 @@ public final class SemanticTask {
     private final Set<RequestedOutput> requestedOutputs;
     private final TaskConfidence confidence;
     private final List<SubjectReference> subjectReferences;
+    private final TaskFulfillmentRole fulfillmentRole;
 
     private SemanticTask(
             String taskId,
@@ -28,7 +29,8 @@ public final class SemanticTask {
             SemanticTaskParameters parameters,
             Set<RequestedOutput> requestedOutputs,
             TaskConfidence confidence,
-            List<SubjectReference> subjectReferences) {
+            List<SubjectReference> subjectReferences,
+            TaskFulfillmentRole fulfillmentRole) {
         this.taskId = requireText(taskId, "taskId");
         this.taskType = Objects.requireNonNull(taskType, "taskType");
         this.sourceDomain = Objects.requireNonNull(sourceDomain, "sourceDomain");
@@ -37,6 +39,7 @@ public final class SemanticTask {
         this.requestedOutputs = Set.copyOf(Objects.requireNonNull(requestedOutputs, "requestedOutputs"));
         this.confidence = Objects.requireNonNull(confidence, "confidence");
         this.subjectReferences = List.copyOf(Objects.requireNonNull(subjectReferences, "subjectReferences"));
+        this.fulfillmentRole = Objects.requireNonNull(fulfillmentRole, "fulfillmentRole");
         validateMatrix();
         validateSubjectReferences();
     }
@@ -52,7 +55,22 @@ public final class SemanticTask {
             List<SubjectReference> subjectReferences) {
         return new SemanticTask(
                 taskId, taskType, sourceDomain, goalLabel, parameters,
-                requestedOutputs, confidence, subjectReferences);
+                requestedOutputs, confidence, subjectReferences, TaskFulfillmentRole.PRIMARY);
+    }
+
+    public static SemanticTask create(
+            String taskId,
+            SemanticTaskType taskType,
+            TaskSourceDomain sourceDomain,
+            String goalLabel,
+            SemanticTaskParameters parameters,
+            Set<RequestedOutput> requestedOutputs,
+            TaskConfidence confidence,
+            List<SubjectReference> subjectReferences,
+            TaskFulfillmentRole fulfillmentRole) {
+        return new SemanticTask(
+                taskId, taskType, sourceDomain, goalLabel, parameters,
+                requestedOutputs, confidence, subjectReferences, fulfillmentRole);
     }
 
     public static SemanticTask portfolioCompare(
@@ -101,6 +119,10 @@ public final class SemanticTask {
         return subjectReferences;
     }
 
+    public TaskFulfillmentRole getFulfillmentRole() {
+        return fulfillmentRole;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -116,13 +138,14 @@ public final class SemanticTask {
                 && Objects.equals(parameters, that.parameters)
                 && Objects.equals(requestedOutputs, that.requestedOutputs)
                 && Objects.equals(confidence, that.confidence)
-                && Objects.equals(subjectReferences, that.subjectReferences);
+                && Objects.equals(subjectReferences, that.subjectReferences)
+                && fulfillmentRole == that.fulfillmentRole;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(taskId, taskType, sourceDomain, goalLabel, parameters,
-                requestedOutputs, confidence, subjectReferences);
+                requestedOutputs, confidence, subjectReferences, fulfillmentRole);
     }
 
     @Override

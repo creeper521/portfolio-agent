@@ -1,5 +1,7 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
+import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
@@ -31,5 +33,20 @@ class PortfolioRetrievalRequestTest {
         assertThatIllegalArgumentException().isThrownBy(() ->
                 PortfolioRetrievalRequest.contractScope(
                         "question", "project-a", List.of("claim-a", "claim-a")));
+    }
+
+    @Test
+    void createsAnExactProfileDiscoveryRequestWithoutPreauthorizingSubjects() {
+        PortfolioRetrievalRequest request = PortfolioRetrievalRequest.profileDiscovery(
+                "recommendation-profile", PortfolioConditions.empty(), 50,
+                List.of(AnswerClaimCategory.RESPONSIBILITY, AnswerClaimCategory.VERIFICATION));
+
+        assertThat(request.getStrategy()).isEqualTo(PortfolioRetrievalStrategy.REFERENCE_SCOPED);
+        assertThat(request.getSearchStrategy())
+                .isEqualTo(com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy.EXACT);
+        assertThat(request.isExactPortfolioLookup()).isFalse();
+        assertThat(request.getRequiredPortfolioIds()).isEmpty();
+        assertThat(request.getPreferredClaimCategories())
+                .containsExactly(AnswerClaimCategory.RESPONSIBILITY, AnswerClaimCategory.VERIFICATION);
     }
 }

@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.intelligence.domain;
 
 import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
 
 import java.util.HashSet;
 import java.util.List;
@@ -20,10 +21,11 @@ public final class PortfolioRetrievalRequest {
     private final boolean exactPortfolioLookup;
     private final PortfolioRetrievalStrategy strategy;
     private final List<AnswerClaimCategory> preferredClaimCategories;
+    private final SearchStrategy searchStrategy;
 
     public PortfolioRetrievalRequest(String query, PortfolioTaskMode mode, PortfolioConditions conditions) {
         this(query, mode, conditions, DEFAULT_LIMIT, List.of(), List.of(), false,
-                PortfolioRetrievalStrategy.RELEVANCE, List.of());
+                PortfolioRetrievalStrategy.RELEVANCE, List.of(), SearchStrategy.HYBRID);
     }
 
     public PortfolioRetrievalRequest(
@@ -32,7 +34,7 @@ public final class PortfolioRetrievalRequest {
             PortfolioConditions conditions,
             int limit) {
         this(query, mode, conditions, limit, List.of(), List.of(), false,
-                PortfolioRetrievalStrategy.RELEVANCE, List.of());
+                PortfolioRetrievalStrategy.RELEVANCE, List.of(), SearchStrategy.HYBRID);
     }
 
     private PortfolioRetrievalRequest(
@@ -44,7 +46,8 @@ public final class PortfolioRetrievalRequest {
             List<String> requiredClaimIds,
             boolean exactPortfolioLookup,
             PortfolioRetrievalStrategy strategy,
-            List<AnswerClaimCategory> preferredClaimCategories) {
+            List<AnswerClaimCategory> preferredClaimCategories,
+            SearchStrategy searchStrategy) {
         if (query == null || query.isBlank()) { throw new IllegalArgumentException("query is required"); }
         if (limit < 1 || (strategy != PortfolioRetrievalStrategy.PRESET_CONTRACT
                 && limit > MAX_LIMIT)) {
@@ -62,6 +65,7 @@ public final class PortfolioRetrievalRequest {
         this.strategy = Objects.requireNonNull(strategy, "strategy");
         this.preferredClaimCategories = List.copyOf(Objects.requireNonNull(
                 preferredClaimCategories, "preferredClaimCategories"));
+        this.searchStrategy = Objects.requireNonNull(searchStrategy, "searchStrategy");
     }
 
     public static PortfolioRetrievalRequest contextValidation(
@@ -88,7 +92,7 @@ public final class PortfolioRetrievalRequest {
                 List.of(),
                 true,
                 PortfolioRetrievalStrategy.CONTEXT_VALIDATION,
-                List.of());
+                List.of(), SearchStrategy.EXACT);
     }
 
     public static PortfolioRetrievalRequest subjectScope(
@@ -117,7 +121,7 @@ public final class PortfolioRetrievalRequest {
                 List.of(),
                 true,
                 PortfolioRetrievalStrategy.SUBJECT_SCOPED_RELEVANCE,
-                preferredClaimCategories);
+                preferredClaimCategories, SearchStrategy.EXACT);
     }
 
     public static PortfolioRetrievalRequest presetScope(
@@ -138,7 +142,7 @@ public final class PortfolioRetrievalRequest {
                 List.of(),
                 true,
                 PortfolioRetrievalStrategy.REFERENCE_SCOPED,
-                preferredClaimCategories);
+                preferredClaimCategories, SearchStrategy.EXACT);
     }
 
     public static PortfolioRetrievalRequest referenceScope(
@@ -162,7 +166,28 @@ public final class PortfolioRetrievalRequest {
                 claimIds,
                 true,
                 PortfolioRetrievalStrategy.REFERENCE_SCOPED,
-                preferredClaimCategories);
+                preferredClaimCategories, SearchStrategy.EXACT);
+    }
+
+    public static PortfolioRetrievalRequest profileDiscovery(
+            String query,
+            PortfolioConditions conditions,
+            int limit,
+            List<AnswerClaimCategory> preferredClaimCategories) {
+        if (preferredClaimCategories == null || preferredClaimCategories.isEmpty()) {
+            throw new IllegalArgumentException("preferredClaimCategories are required");
+        }
+        return new PortfolioRetrievalRequest(
+                query,
+                PortfolioTaskMode.RECOMMENDATION,
+                Objects.requireNonNull(conditions, "conditions"),
+                limit,
+                List.of(),
+                List.of(),
+                false,
+                PortfolioRetrievalStrategy.REFERENCE_SCOPED,
+                preferredClaimCategories,
+                SearchStrategy.EXACT);
     }
 
     public static PortfolioRetrievalRequest contractScope(
@@ -185,7 +210,7 @@ public final class PortfolioRetrievalRequest {
                 claimIds,
                 true,
                 PortfolioRetrievalStrategy.PRESET_CONTRACT,
-                List.of());
+                List.of(), SearchStrategy.EXACT);
     }
 
     private static void validateUniqueNonBlank(List<String> values, String name) {
@@ -210,6 +235,17 @@ public final class PortfolioRetrievalRequest {
         return preferredClaimCategories;
     }
 
+    public SearchStrategy getSearchStrategy() {
+        return searchStrategy;
+    }
+
+    public PortfolioRetrievalRequest withSearchStrategy(SearchStrategy requestedStrategy) {
+        return new PortfolioRetrievalRequest(
+                query, mode, conditions, limit, requiredPortfolioIds, requiredClaimIds,
+                exactPortfolioLookup, strategy, preferredClaimCategories,
+                Objects.requireNonNull(requestedStrategy, "requestedStrategy"));
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) { return true; }
@@ -220,13 +256,15 @@ public final class PortfolioRetrievalRequest {
                 && Objects.equals(requiredClaimIds, that.requiredClaimIds)
                 && exactPortfolioLookup == that.exactPortfolioLookup
                 && strategy == that.strategy
-                && Objects.equals(preferredClaimCategories, that.preferredClaimCategories);
+                && Objects.equals(preferredClaimCategories, that.preferredClaimCategories)
+                && searchStrategy == that.searchStrategy;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(query, mode, conditions, limit, requiredPortfolioIds,
-                requiredClaimIds, exactPortfolioLookup, strategy, preferredClaimCategories);
+                requiredClaimIds, exactPortfolioLookup, strategy, preferredClaimCategories,
+                searchStrategy);
     }
 
     @Override

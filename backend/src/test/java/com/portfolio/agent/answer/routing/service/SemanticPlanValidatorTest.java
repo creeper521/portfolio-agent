@@ -8,6 +8,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTurnPlan;
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import com.portfolio.agent.answer.routing.domain.TaskConfidence;
 import com.portfolio.agent.answer.routing.domain.TaskDependency;
+import com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -94,6 +95,22 @@ class SemanticPlanValidatorTest {
                 Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY));
 
         assertFalse(validator.validate(plan, "stp-v1").isValid());
+    }
+
+    @Test
+    void rejectsPlansWithoutAPrimaryFulfillmentRole() {
+        SemanticTurnPlan plan = plan(
+                List.of(
+                        factWithRole("task-01", "project-a", TaskFulfillmentRole.SUPPORTING),
+                        factWithRole("task-02", "project-b", TaskFulfillmentRole.OPTIONAL)),
+                List.of(),
+                List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY));
+
+        PlanValidationResult result = validator.validate(plan, "stp-v2");
+
+        assertFalse(result.isValid());
+        assertTrue(result.getIssues().contains("PLAN_PRIMARY_FULFILLMENT_ROLE_MISSING"));
     }
 
     @Test
@@ -232,6 +249,11 @@ class SemanticPlanValidatorTest {
     }
 
     private static SemanticTask fact(String taskId, String projectId) {
+        return factWithRole(taskId, projectId, TaskFulfillmentRole.PRIMARY);
+    }
+
+    private static SemanticTask factWithRole(
+            String taskId, String projectId, TaskFulfillmentRole role) {
         SubjectReference subject = SubjectReference.project(projectId, "public-v1");
         SemanticTaskParameters.PortfolioFact parameters = new SemanticTaskParameters.PortfolioFact(
                 subject, Set.of(), "INTERVIEWER");
@@ -243,7 +265,7 @@ class SemanticPlanValidatorTest {
                 parameters,
                 Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY),
                 TaskConfidence.highRule(),
-                List.of(subject));
+                List.of(subject), role);
     }
 
     private static SemanticTask compareWithOutputs(

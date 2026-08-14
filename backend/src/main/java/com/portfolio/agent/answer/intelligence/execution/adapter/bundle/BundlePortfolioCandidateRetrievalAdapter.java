@@ -79,11 +79,12 @@ public final class BundlePortfolioCandidateRetrievalAdapter implements Portfolio
             return PortfolioRetrievalRequest.referenceScope(
                     FIXED_PROFILE_QUERY, PortfolioTaskMode.FACT_LOOKUP, PortfolioConditions.empty(),
                     scope.getExactSubjects().stream().map(SubjectReference::getSubjectId).toList(),
-                    List.of(), categories);
+                    List.of(), categories)
+                    .withSearchStrategy(invocation.getRetrievalPlan().getPrimaryStrategy());
         }
-        return new PortfolioRetrievalRequest(
-                FIXED_PROFILE_QUERY, PortfolioTaskMode.RECOMMENDATION,
-                PortfolioConditions.empty(), PortfolioRetrievalCandidateSet.MAX_SUBJECTS);
+        return PortfolioRetrievalRequest.profileDiscovery(
+                FIXED_PROFILE_QUERY, PortfolioConditions.empty(),
+                PortfolioRetrievalRequest.MAX_LIMIT, categories);
     }
 
     private PortfolioRetrievalCandidateSet toCandidateSet(
@@ -98,9 +99,14 @@ public final class BundlePortfolioCandidateRetrievalAdapter implements Portfolio
         List<CandidateSubject> subjects = new ArrayList<>();
         for (PortfolioRetrievedSubject subject : result.getSubjects()) {
             List<ClaimEvidenceCandidate> candidates = new ArrayList<>();
+            Set<String> claimEvidencePairs = new LinkedHashSet<>();
             for (PortfolioRetrievedPassage passage : passagesBySubject.getOrDefault(
                     subject.getSubjectId(), List.of())) {
                 for (PortfolioRetrievedEvidenceReference evidence : passage.getEvidenceReferences()) {
+                    String pair = passage.getClaim().getId() + "\u0000" + evidence.getEvidenceId();
+                    if (!claimEvidencePairs.add(pair)) {
+                        continue;
+                    }
                     PublicEvidenceDescriptor descriptor = new PublicEvidenceDescriptor(
                             evidence.getEvidenceId(), evidence.getEvidenceCode(), evidence.getLabel(),
                             result.getContentVersion(), evidence.getPublicStatus(),
@@ -108,7 +114,7 @@ public final class BundlePortfolioCandidateRetrievalAdapter implements Portfolio
                             subject.getRoute(),
                             "/evidence?evidence=" + evidence.getEvidenceId(), LocalDate.of(9999, 12, 31));
                     candidates.add(new ClaimEvidenceCandidate(subject.getSubjectId(), passage.getClaim(),
-                            descriptor, profileTarget(invocation)));
+                            descriptor, profileTarget(invocation, passage.getClaim().getCategory().name())));
                 }
             }
             subjects.add(new CandidateSubject(subject.getSubjectId(), subject.getRoute(), subject.getTitle(),
@@ -154,7 +160,13 @@ public final class BundlePortfolioCandidateRetrievalAdapter implements Portfolio
         return List.copyOf(targets);
     }
 
-    private String profileTarget(PortfolioEvidenceInvocation invocation) {
+    private String profileTarget(PortfolioEvidenceInvocation invocation, String claimCategory) {
+        for (com.portfolio.agent.answer.intelligence.execution.domain.FacetRetrievalProfile profile
+                : invocation.getFacetProfiles()) {
+            if (profile.getClaimCategories().contains(claimCategory)) {
+                return profile.getFacet().name();
+            }
+        }
         if (!invocation.getFacetProfiles().isEmpty()) return invocation.getFacetProfiles().get(0).getFacet().name();
         return invocation.getComparisonDimensionProfiles().get(0).getDimension().name();
     }

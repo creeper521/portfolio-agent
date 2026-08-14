@@ -27,6 +27,7 @@ import com.portfolio.agent.answer.routing.domain.SemanticTurnOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.service.PlanConfirmationService;
 import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
+import com.portfolio.agent.answer.routing.service.SemanticTurnContractPolicy;
 import com.portfolio.agent.answer.routing.service.SemanticTurnDecision;
 import com.portfolio.agent.answer.routing.service.TurnRouter;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
@@ -40,6 +41,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.Optional;
 import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceService;
+import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceResult;
+import com.portfolio.agent.answer.context.domain.ConversationContextResolution;
+import com.portfolio.agent.answer.context.domain.ConversationContextType;
+import com.portfolio.agent.answer.domain.ContextInvalidation;
+import com.portfolio.agent.answer.domain.ContextResolution;
 
 /**
  * Single runtime authority for an Agent turn. Legacy single-task capabilities
@@ -47,7 +53,6 @@ import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceServ
  */
 public final class ConversationalAgentRuntime {
 
-    private static final String SEMANTIC_SCHEMA_VERSION = "stp-v1";
     private static final String SEMANTIC_CAPABILITY_SET_VERSION = "semantic-routing-v1";
 
     private final PortfolioKnowledgeGateway knowledgeGateway;
@@ -58,6 +63,7 @@ public final class ConversationalAgentRuntime {
     private final ConversationDecisionPublisher decisionPublisher;
     private final DiagnosticEventPublisher diagnosticEventPublisher;
     private final AuthorizedContextReferenceService contextReferenceService;
+    private final SemanticTurnContractPolicy contractPolicy = new SemanticTurnContractPolicy();
 
     public ConversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
@@ -101,19 +107,32 @@ public final class ConversationalAgentRuntime {
         long startedAt = System.nanoTime();
         RuntimeAnswerContent content = knowledgeGateway.getContent();
         SemanticTurnInput input = requestMapper.toInput(request, content.getContentVersion());
-        List<AuthorizedContextReference> authorizedContextReferences =
-                authorizedContextReferences(request, requestContext);
-        AgentTurnResult contextFailure = request.getContextReference() != null
-                && authorizedContextReferences.isEmpty()
-                ? AgentTurnResult.rejected(Set.of("CONTEXT_DEPENDENCY_UNAVAILABLE")) : null;
+        ContextAuthorization authorization = authorizeContextReferences(
+                request, requestContext, content.getContentVersion());
+        List<AuthorizedContextReference> authorizedContextReferences = authorization.references();
+        for (AuthorizedContextReference reference : authorizedContextReferences) {
+            if (reference.getSelectedSubject().isPresent()) {
+                input = input.withExplicitSubjectReference(reference.getSelectedSubject().orElseThrow());
+            }
+        }
+        AgentTurnResult contextFailure = authorization.failure();
         AgentTurnResult presetFailure = input.getAction() == SemanticTurnInput.Action.CONFIRM_PLAN
                 ? null : validatePreset(request, content);
+        if (contextFailure == null && presetFailure == null
+                && input.getAction() != SemanticTurnInput.Action.CONFIRM_PLAN) {
+            input = bindPublishedPresetSubject(input, request, content);
+        }
         AgentTurnResult agentTurn = contextFailure != null ? contextFailure
                 : presetFailure != null ? presetFailure
                 : input.getAction() == SemanticTurnInput.Action.CONFIRM_PLAN
                 ? confirmationService.executeVerified(
-                        input.getConfirmationSubmission(), versionBinding(content), coordinator)
+                        input.getConfirmationSubmission(),
+                        versionBinding(content, contractPolicy.resolve(request.getAgentTurnContract())),
+                        coordinator, isStpV1(input))
                 : routeAndHandle(input, content, authorizedContextReferences);
+        if (contextFailure == null && authorization.resolution() != null) {
+            agentTurn = agentTurn.withContextResolution(authorization.resolution());
+        }
         ConversationAnswerResult result = result(request, content, agentTurn)
                 .withContractIdentity(request.getQuestionPresetId(), request.getContractVersion());
         publishSemanticDiagnostics(agentTurn);
@@ -131,9 +150,10 @@ public final class ConversationalAgentRuntime {
                 return AgentTurnResult.fromDecision(
                         decision,
                         confirmationService.issue(
-                                decision.getValidatedPlan().orElseThrow(), versionBinding(content)),
+                                decision.getValidatedPlan().orElseThrow(),
+                                versionBinding(content, contractPolicy.resolve(input.getAgentTurnContract()))),
                         null,
-                        input.getAgentTurnContract() != null);
+                        isStpV1(input));
             } catch (RuntimeException exception) {
                 return AgentTurnResult.rejected(Set.of("PLAN_CONFIRMATION_UNAVAILABLE"));
             }
@@ -145,34 +165,114 @@ public final class ConversationalAgentRuntime {
                     decision.getExecutionSelection().orElseThrow(), authorizedContextReferences,
                     input.getQuestionPresetId() != null);
             return AgentTurnResult.fromDecision(
-                    decision, null, outcome, input.getAgentTurnContract() != null);
+                    decision, null, outcome, isStpV1(input));
         }
         return AgentTurnResult.fromDecision(
-                decision, null, null, input.getAgentTurnContract() != null);
+                decision, null, null, isStpV1(input));
     }
 
-    private List<AuthorizedContextReference> authorizedContextReferences(
+    private boolean isStpV1(SemanticTurnInput input) {
+        return SemanticTurnContractPolicy.COMPATIBILITY_CONTRACT.equals(
+                contractPolicy.resolve(input.getAgentTurnContract()));
+    }
+
+    private ContextAuthorization authorizeContextReferences(
             ConversationAnswerRequest request,
-            ConversationRequestContext requestContext) {
+            ConversationRequestContext requestContext,
+            String currentContentVersion) {
         if (request.getContextReference() == null || requestContext == null
                 || contextReferenceService == null) {
-            return requestContext == null || contextReferenceService == null
+            return new ContextAuthorization(requestContext == null || contextReferenceService == null
                     ? List.of()
                     : contextReferenceService.authorizeActive(
-                            requestContext.getConversationId(), requestContext.getResumeToken(), Instant.now());
+                            requestContext.getConversationId(), requestContext.getResumeToken(), Instant.now()), null);
         }
         AuthorizedContextReference requested = new AuthorizedContextReference(
                 request.getContextReference().getContextHandle(),
-                request.getContextReference().getExpectedContextType().name());
-        Optional<AuthorizedContextReference> authorized = contextReferenceService.authorize(
+                request.getContextReference().getExpectedContextType().name(),
+                null,
+                request.getContextReference().getResultItemId());
+        AuthorizedContextReferenceResult authorization = contextReferenceService.authorizeDetailed(
                 requestContext.getConversationId(), requestContext.getResumeToken(),
-                requested, Instant.now());
-        return authorized.map(List::of).orElseGet(List::of);
+                requested, Instant.now(), currentContentVersion);
+        if (authorization.getReference().isPresent()) {
+            ContextResolution resolution = authorization.getVersionDecision()
+                    .filter(value -> value.getStatus()
+                            == com.portfolio.agent.answer.context.service.ContextVersionStatus.REVALIDATED)
+                    .map(value -> new ContextResolution("REVALIDATED_TO_CURRENT",
+                            request.getContextReference().getExpectedContextType(), currentContentVersion))
+                    .orElse(null);
+            return new ContextAuthorization(
+                    List.of(authorization.getReference().orElseThrow()), null, resolution);
+        }
+        String contract = contractPolicy.resolve(request.getAgentTurnContract());
+        if (SemanticTurnContractPolicy.COMPATIBILITY_CONTRACT.equals(contract)) {
+            return new ContextAuthorization(List.of(),
+                    AgentTurnResult.rejected(Set.of("CONTEXT_DEPENDENCY_UNAVAILABLE")), null);
+        }
+        ConversationContextResolution.Status status = authorization.getResolution().getStatus();
+        if (status == ConversationContextResolution.Status.UNAVAILABLE) {
+            return new ContextAuthorization(List.of(), AgentTurnResult.rejected(
+                    Set.of("CONTEXT_RESOLUTION_UNAVAILABLE"), false), null);
+        }
+        ConversationContextType type = request.getContextReference().getExpectedContextType();
+        String reason = contextReason(status, requested.getResultItemId().isPresent());
+        ContextInvalidation invalidation = new ContextInvalidation(
+                reason, recoveryAction(reason), type, currentContentVersion);
+        return new ContextAuthorization(List.of(), AgentTurnResult.contextInvalidated(
+                invalidation, null, false), null);
     }
 
-    private PlanConfirmation.VersionBinding versionBinding(RuntimeAnswerContent content) {
+    private String contextReason(
+            ConversationContextResolution.Status status, boolean hasResultItemReference) {
+        return switch (status) {
+            case INVALID_REFERENCE -> "CONTEXT_REFERENCE_INVALID";
+            case EXPIRED -> "CONTEXT_REFERENCE_EXPIRED";
+            case INCOMPATIBLE -> hasResultItemReference
+                    ? "REFERENCED_SUBJECT_UNAVAILABLE" : "CONTEXT_RESULT_STALE";
+            case CLARIFICATION_REQUIRED -> "RESULT_CONTEXT_AMBIGUITY";
+            case UNAVAILABLE, RESOLVED -> throw new IllegalStateException(
+                    "non-invalidation Context status cannot be projected");
+        };
+    }
+
+    private String recoveryAction(String reason) {
+        return switch (reason) {
+            case "CONTEXT_REFERENCE_INVALID", "CONTEXT_REFERENCE_EXPIRED" -> "REASK_WITHOUT_CONTEXT";
+            case "REFERENCED_SUBJECT_UNAVAILABLE", "RESULT_CONTEXT_AMBIGUITY" -> "RESELECT_RESULTS";
+            case "CONTEXT_RESULT_STALE", "REFERENCED_PUBLIC_SOURCE_CHANGED" ->
+                    "RESTART_FROM_CURRENT_CONTENT";
+            default -> throw new IllegalArgumentException("unsupported Context invalidation reason");
+        };
+    }
+
+    private static final class ContextAuthorization {
+        private final List<AuthorizedContextReference> references;
+        private final AgentTurnResult failure;
+        private final ContextResolution resolution;
+
+        private ContextAuthorization(List<AuthorizedContextReference> references, AgentTurnResult failure) {
+            this(references, failure, null);
+        }
+
+        private ContextAuthorization(
+                List<AuthorizedContextReference> references,
+                AgentTurnResult failure,
+                ContextResolution resolution) {
+            this.references = List.copyOf(references);
+            this.failure = failure;
+            this.resolution = resolution;
+        }
+
+        private List<AuthorizedContextReference> references() { return references; }
+        private AgentTurnResult failure() { return failure; }
+        private ContextResolution resolution() { return resolution; }
+    }
+
+    private PlanConfirmation.VersionBinding versionBinding(
+            RuntimeAnswerContent content, String semanticSchemaVersion) {
         return new PlanConfirmation.VersionBinding(
-                SEMANTIC_SCHEMA_VERSION,
+                semanticSchemaVersion,
                 content.getContentVersion(),
                 content.getRuntimeBundleHash(),
                 SEMANTIC_CAPABILITY_SET_VERSION);
@@ -189,7 +289,7 @@ public final class ConversationalAgentRuntime {
                 content.getContentVersion(),
                 projectedIntent(request, agentTurn, answerScope),
                 answerScope,
-                projectedResolution(agentTurn),
+                projectedResolution(request, content, agentTurn),
                 title(agentTurn),
                 blocks,
                 List.of(),
@@ -233,6 +333,35 @@ public final class ConversationalAgentRuntime {
             return AgentTurnResult.rejected(Set.of("PRESET_CONTRACT_STALE"));
         }
         return null;
+    }
+
+    private SemanticTurnInput bindPublishedPresetSubject(
+            SemanticTurnInput input,
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content) {
+        String presetId = request.getQuestionPresetId();
+        if (presetId == null || presetId.isBlank()) {
+            return input;
+        }
+        for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : content.getProjects()) {
+            if (findQuestion(subject, presetId) != null) {
+                return input.withExplicitSubjectReference(new com.portfolio.agent.answer.routing.domain.SubjectReference(
+                        com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.PROJECT,
+                        subject.getStableId(),
+                        com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectResolutionSource.EXPLICIT_REFERENCE,
+                        content.getContentVersion()));
+            }
+        }
+        for (com.portfolio.agent.answer.domain.AnswerKnowledge subject : content.getCases()) {
+            if (findQuestion(subject, presetId) != null) {
+                return input.withExplicitSubjectReference(new com.portfolio.agent.answer.routing.domain.SubjectReference(
+                        com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType.CASE,
+                        subject.getStableId(),
+                        com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectResolutionSource.EXPLICIT_REFERENCE,
+                        content.getContentVersion()));
+            }
+        }
+        return input;
     }
 
     private AnswerQuestion findQuestion(
@@ -280,7 +409,10 @@ public final class ConversationalAgentRuntime {
         };
     }
 
-    private AnswerResolution projectedResolution(AgentTurnResult agentTurn) {
+    private AnswerResolution projectedResolution(
+            ConversationAnswerRequest request,
+            RuntimeAnswerContent content,
+            AgentTurnResult agentTurn) {
         if (hasReason(agentTurn, "ROUTING_SUBJECT_INVALID_REFERENCE")) {
             return AnswerResolution.INVALID_INPUT;
         }
@@ -288,17 +420,50 @@ public final class ConversationalAgentRuntime {
                 || hasReason(agentTurn, "PRESET_CONTRACT_STALE")) {
             return AnswerResolution.CAPABILITY_UNAVAILABLE;
         }
+        List<TaskOutcome> primaryOutcomes = primaryOutcomes(agentTurn);
+        if (!primaryOutcomes.isEmpty()) {
+            boolean primaryHasRenderablePayload = primaryOutcomes.stream()
+                    .anyMatch(TaskOutcome::hasRenderablePayload);
+            boolean primaryFailed = primaryOutcomes.stream().anyMatch(outcome ->
+                    outcome.getExecutionStatus() == TaskOutcome.TaskExecutionStatus.FAILED);
+            if (primaryFailed && !primaryHasRenderablePayload) {
+                return AnswerResolution.CAPABILITY_UNAVAILABLE;
+            }
+            if (primaryHasRenderablePayload) {
+                boolean partial = primaryOutcomes.stream().anyMatch(outcome ->
+                        outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED
+                                || !outcome.hasRenderablePayload());
+                return partial ? AnswerResolution.PARTIALLY_ANSWERED : AnswerResolution.ANSWERED;
+            }
+            if (hasProjectedFallback(request, content, agentTurn)) {
+                return AnswerResolution.ANSWERED;
+            }
+            return resolution(agentTurn);
+        }
         if (hasFailedExecution(agentTurn)) {
             return AnswerResolution.CAPABILITY_UNAVAILABLE;
         }
+        if (hasProjectedFallback(request, content, agentTurn)) {
+            return AnswerResolution.ANSWERED;
+        }
         if (hasRenderablePayload(agentTurn)) {
-            boolean partial = agentTurn.getOutcome().orElseThrow().getTaskOutcomes().stream()
-                    .anyMatch(outcome -> outcome.getResolution()
-                            == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED
-                            || !outcome.hasRenderablePayload());
-            return partial ? AnswerResolution.PARTIALLY_ANSWERED : AnswerResolution.ANSWERED;
+            return AnswerResolution.PARTIALLY_ANSWERED;
         }
         return resolution(agentTurn);
+    }
+
+    private List<TaskOutcome> primaryOutcomes(AgentTurnResult agentTurn) {
+        if (agentTurn.getPlan().isEmpty() || agentTurn.getOutcome().isEmpty()) {
+            return List.of();
+        }
+        Set<String> primaryTaskIds = agentTurn.getPlan().orElseThrow().getTasks().stream()
+                .filter(task -> task.getFulfillmentRole()
+                        == com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole.PRIMARY)
+                .map(com.portfolio.agent.answer.routing.domain.SemanticTask::getTaskId)
+                .collect(java.util.stream.Collectors.toSet());
+        return agentTurn.getOutcome().orElseThrow().getTaskOutcomes().stream()
+                .filter(outcome -> primaryTaskIds.contains(outcome.getTaskId()))
+                .toList();
     }
 
     private List<ConversationAnswerBlock> projectedBlocks(
@@ -424,6 +589,9 @@ public final class ConversationalAgentRuntime {
         if (hasRenderableGeneralPayload(agentTurn)
                 && answerScope == ConversationAnswerScope.GENERAL) {
             return AnswerEvidenceState.NOT_REQUIRED;
+        }
+        if (hasRenderableGeneralPayload(agentTurn) && hasRenderableNonGeneralPayload(agentTurn)) {
+            return AnswerEvidenceState.MIXED;
         }
         if (hasRenderablePayload(agentTurn)
                 || hasProjectedFallback(request, content, agentTurn)) {
@@ -597,7 +765,7 @@ public final class ConversationalAgentRuntime {
             case CONFIRMATION_REQUIRED -> AnswerResolution.AWAITING_CONFIRMATION;
             case CLARIFICATION_REQUIRED -> AnswerResolution.NEEDS_CLARIFICATION;
             case BOUNDARY, REJECTED -> AnswerResolution.REJECTED;
-            case PLAN_INVALIDATED -> AnswerResolution.NEEDS_CLARIFICATION;
+            case PLAN_INVALIDATED, CONTEXT_INVALIDATED -> AnswerResolution.NEEDS_CLARIFICATION;
         };
     }
 
@@ -608,6 +776,7 @@ public final class ConversationalAgentRuntime {
             case CLARIFICATION_REQUIRED -> "需要补充信息";
             case PLAN_INVALIDATED -> "计划需要重新生成";
             case BOUNDARY, REJECTED -> "无法处理此请求";
+            default -> "context invalidated";
         };
     }
 

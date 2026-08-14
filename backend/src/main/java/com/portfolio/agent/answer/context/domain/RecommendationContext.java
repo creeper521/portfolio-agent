@@ -16,11 +16,22 @@ public final class RecommendationContext {
     private final Set<String> exclusions;
     private final int resultLimit;
     private final ContextHandle parentContextHandle;
+    private final OrderedResultSelection selectedResults;
+    private final String recommendationBatchId;
 
     public RecommendationContext(
             AuthorizedSubjectScope authorizedScope, String profileVersion, Set<String> baselineCriteria,
             Set<String> constraints, Set<String> preferences, Set<String> exclusions,
             int resultLimit, ContextHandle parentContextHandle) {
+        this(authorizedScope, profileVersion, baselineCriteria, constraints, preferences, exclusions,
+                resultLimit, parentContextHandle, null, null);
+    }
+
+    public RecommendationContext(
+            AuthorizedSubjectScope authorizedScope, String profileVersion, Set<String> baselineCriteria,
+            Set<String> constraints, Set<String> preferences, Set<String> exclusions,
+            int resultLimit, ContextHandle parentContextHandle, OrderedResultSelection selectedResults,
+            String recommendationBatchId) {
         this.authorizedScope = Objects.requireNonNull(authorizedScope, "authorizedScope");
         this.profileVersion = requireText(profileVersion, "profileVersion");
         this.baselineCriteria = normalized(baselineCriteria, "baselineCriteria");
@@ -30,6 +41,9 @@ public final class RecommendationContext {
         if (resultLimit < 1 || resultLimit > 5) throw new IllegalArgumentException("resultLimit must be between 1 and 5");
         this.resultLimit = resultLimit;
         this.parentContextHandle = parentContextHandle;
+        if (selectedResults != null && selectedResults.getItems().size() > resultLimit) throw new IllegalArgumentException("selected results exceed result limit");
+        this.selectedResults = selectedResults;
+        this.recommendationBatchId = recommendationBatchId == null || recommendationBatchId.isBlank() ? null : recommendationBatchId.trim();
     }
     public AuthorizedSubjectScope getAuthorizedScope() { return authorizedScope; }
     public String getProfileVersion() { return profileVersion; }
@@ -39,6 +53,8 @@ public final class RecommendationContext {
     public Set<String> getExclusions() { return exclusions; }
     public int getResultLimit() { return resultLimit; }
     public ContextHandle getParentContextHandle() { return parentContextHandle; }
+    public OrderedResultSelection getSelectedResults() { return selectedResults; }
+    public String getRecommendationBatchId() { return recommendationBatchId; }
     @Override public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof RecommendationContext that)) return false;
@@ -49,11 +65,14 @@ public final class RecommendationContext {
                 && constraints.equals(that.constraints)
                 && preferences.equals(that.preferences)
                 && exclusions.equals(that.exclusions)
-                && Objects.equals(parentContextHandle, that.parentContextHandle);
+                && Objects.equals(parentContextHandle, that.parentContextHandle)
+                && Objects.equals(selectedResults, that.selectedResults)
+                && Objects.equals(recommendationBatchId, that.recommendationBatchId);
     }
     @Override public int hashCode() {
         return Objects.hash(authorizedScope, profileVersion, baselineCriteria, constraints,
-                preferences, exclusions, resultLimit, parentContextHandle);
+                preferences, exclusions, resultLimit, parentContextHandle,
+                selectedResults, recommendationBatchId);
     }
     @Override public String toString() { return "RecommendationContext{profileVersion=" + profileVersion + ", resultLimit=" + resultLimit + ", hasParent=" + (parentContextHandle != null) + '}'; }
     private static Set<String> normalized(Set<String> values, String name) {

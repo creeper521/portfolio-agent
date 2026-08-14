@@ -152,10 +152,14 @@ public final class SemanticTurnOutcome {
     }
 
     private static PlanOutcome derivePlanOutcome(List<TaskOutcome> outcomes) {
+        List<TaskOutcome> primaryOutcomes = outcomes.stream()
+                .filter(outcome -> outcome.getFulfillmentRole() == TaskFulfillmentRole.PRIMARY)
+                .toList();
+        List<TaskOutcome> considered = primaryOutcomes.isEmpty() ? outcomes : primaryOutcomes;
         int answeredCount = 0;
         int failedCount = 0;
         int cancelledCount = 0;
-        for (TaskOutcome outcome : outcomes) {
+        for (TaskOutcome outcome : considered) {
             if (outcome.getResolution() == TaskOutcome.TaskResolution.ANSWERED
                     || outcome.getResolution() == TaskOutcome.TaskResolution.PARTIALLY_ANSWERED) {
                 answeredCount++;
@@ -167,13 +171,13 @@ public final class SemanticTurnOutcome {
                 cancelledCount++;
             }
         }
-        if (answeredCount == outcomes.size()) {
+        if (answeredCount == considered.size()) {
             return PlanOutcome.SUCCEEDED;
         }
         if (answeredCount > 0) {
             return PlanOutcome.PARTIAL;
         }
-        if (cancelledCount == outcomes.size()) {
+        if (cancelledCount == considered.size()) {
             return PlanOutcome.CANCELLED;
         }
         if (failedCount > 0) {

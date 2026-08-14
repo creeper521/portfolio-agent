@@ -14,6 +14,7 @@ import java.util.Objects;
 public final class SemanticTurnInput {
 
     private static final String SUPPORTED_AGENT_TURN_CONTRACT = "stp-v1";
+    private static final String CURRENT_AGENT_TURN_CONTRACT = "stp-v2";
     private static final String DEFAULT_TURN_ID = "turn-local";
 
     private final String turnId;
@@ -225,6 +226,16 @@ public final class SemanticTurnInput {
 
     public String getPresetContractVersion() {
         return presetContractVersion;
+    }
+
+    public SemanticTurnInput withExplicitSubjectReference(SubjectReference reference) {
+        Objects.requireNonNull(reference, "reference");
+        List<SubjectReference> subjects = new java.util.ArrayList<>(explicitSubjectReferences);
+        if (!subjects.contains(reference)) subjects.add(reference);
+        return new SemanticTurnInput(turnId, action, question, semanticContext, legacyContext,
+                explicitResultReferences, subjects, pageSubjects, confirmationSubmission,
+                invalidatedPlanReference, planAdjustment, clarificationResolution, requestToken,
+                agentTurnContract, questionPresetId, presetContractVersion);
     }
 
     @Override
@@ -549,8 +560,10 @@ public final class SemanticTurnInput {
 
     private static String normalizeContract(String value) {
         String normalized = normalizeText(value);
-        if (normalized != null && !SUPPORTED_AGENT_TURN_CONTRACT.equals(normalized)) {
-            throw new IllegalArgumentException("agentTurnContract must be stp-v1");
+        if (normalized != null
+                && !SUPPORTED_AGENT_TURN_CONTRACT.equals(normalized)
+                && !CURRENT_AGENT_TURN_CONTRACT.equals(normalized)) {
+            throw new IllegalArgumentException("agentTurnContract must be stp-v1 or stp-v2");
         }
         return normalized;
     }

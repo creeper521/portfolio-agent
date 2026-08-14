@@ -8,6 +8,10 @@ import com.portfolio.agent.answer.routing.domain.TaskOutcome;
 import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
 import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
 import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
+import com.portfolio.agent.answer.synthesis.domain.AllowedRelation;
+import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationPolicy;
+import com.portfolio.agent.answer.synthesis.service.DeterministicCrossDomainComposer;
+import com.portfolio.agent.answer.synthesis.service.CrossDomainExpressionPipeline;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -18,6 +22,33 @@ import java.util.Set;
 /** Bounded deterministic synthesis that only reuses successful upstream payloads and provenance. */
 public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExecutor {
 
+    private final boolean relationsEnabled;
+    private final CrossDomainRelationPolicy relationPolicy;
+    private final DeterministicCrossDomainComposer composer;
+    private final CrossDomainExpressionPipeline expressionPipeline;
+
+    public DeterministicSynthesisTaskExecutor() {
+        this(false, new CrossDomainRelationPolicy(), new DeterministicCrossDomainComposer(), null);
+    }
+
+    public DeterministicSynthesisTaskExecutor(
+            boolean relationsEnabled,
+            CrossDomainRelationPolicy relationPolicy,
+            DeterministicCrossDomainComposer composer) {
+        this(relationsEnabled, relationPolicy, composer, null);
+    }
+
+    public DeterministicSynthesisTaskExecutor(
+            boolean relationsEnabled,
+            CrossDomainRelationPolicy relationPolicy,
+            DeterministicCrossDomainComposer composer,
+            CrossDomainExpressionPipeline expressionPipeline) {
+        this.relationsEnabled = relationsEnabled;
+        this.relationPolicy = Objects.requireNonNull(relationPolicy, "relationPolicy");
+        this.composer = Objects.requireNonNull(composer, "composer");
+        this.expressionPipeline = expressionPipeline;
+    }
+
     @Override
     public TaskSourceDomain getSourceDomain() {
         return TaskSourceDomain.SYNTHESIS;
@@ -26,11 +57,18 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
     @Override
     public TaskOutcome execute(SemanticTaskExecutionContext context) {
         Objects.requireNonNull(context, "context");
-        return execute(context.getSemanticTask(), context.getDependencyOutcomes());
+        return execute(context.getSemanticTask(), context.getDependencyOutcomes(),
+                context.isModelExpressionAttemptAllowed());
     }
 
     /** Compatibility adapter retained until the P3-E production cutover. */
     public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
+        return execute(task, availableDependencyOutcomes, false);
+    }
+
+    private TaskOutcome execute(
+            SemanticTask task, List<TaskOutcome> availableDependencyOutcomes,
+            boolean modelExpressionAttemptAllowed) {
         Objects.requireNonNull(task, "task");
         Objects.requireNonNull(availableDependencyOutcomes, "availableDependencyOutcomes");
         if (task.getSourceDomain() != TaskSourceDomain.SYNTHESIS
@@ -41,13 +79,49 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
         List<TaskOutcome> inputs = matchingSuccessfulInputs(parameters, availableDependencyOutcomes);
         if (inputs.size() < 2) {
             return TaskOutcome.blocked(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "SYNTHESIS_INPUT_INSUFFICIENT");
+                    "SYNTHESIS_INPUT_INSUFFICIENT").withFulfillmentRole(task.getFulfillmentRole());
         }
         TaskResultProvenance provenance = provenance(inputs);
-        List<String> blocks = blocks(inputs);
+        List<String> generalTexts = textsFor(inputs, TaskSourceDomain.GENERAL);
+        List<String> portfolioTexts = textsFor(inputs, TaskSourceDomain.PORTFOLIO);
+        if (generalTexts.isEmpty() || portfolioTexts.isEmpty()) {
+            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
+                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
+        }
+        if (!relationsEnabled) {
+            if (task.getFulfillmentRole() == com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole.OPTIONAL) {
+                return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
+                        "CROSS_DOMAIN_RELATION_DISABLED").withFulfillmentRole(task.getFulfillmentRole());
+            }
+            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
+                    "CROSS_DOMAIN_RELATION_DISABLED").withFulfillmentRole(task.getFulfillmentRole());
+        }
+        Set<String> sharedConcepts = new LinkedHashSet<>();
+        for (com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.ComparisonDimension dimension
+                : parameters.getDimensions()) {
+            sharedConcepts.add(dimension.name());
+        }
+        String generalMaterial = String.join("\n", generalTexts);
+        String portfolioMaterial = String.join("\n", portfolioTexts);
+        List<AllowedRelation> relations = relationPolicy.allow(
+                inputs.getFirst().getTaskId(), inputs.getLast().getTaskId(),
+                generalMaterial, portfolioMaterial, sharedConcepts);
+        if (relations.isEmpty()) {
+            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
+                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
+        }
+        List<String> blocks = new ArrayList<>(
+                composer.composeAll(generalTexts, portfolioTexts, relations.getFirst()));
         if (blocks.isEmpty()) {
-            return TaskOutcome.blocked(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "SYNTHESIS_INPUT_INSUFFICIENT");
+            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
+                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
+        }
+        if (modelExpressionAttemptAllowed && expressionPipeline != null) {
+            expressionPipeline.express(generalMaterial, portfolioMaterial, relations.getFirst())
+                    .ifPresent(expression -> {
+                        blocks.clear();
+                        blocks.add(expression);
+                    });
         }
         boolean degraded = inputs.stream().anyMatch(TaskOutcome::isDegraded);
         TaskOutcome.TaskEvidenceState evidenceState = inputs.stream().anyMatch(
@@ -66,7 +140,7 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
                 null,
                 TaskSourceDomain.SYNTHESIS,
                 provenance,
-                payload);
+                payload).withFulfillmentRole(task.getFulfillmentRole());
     }
 
     private List<TaskOutcome> matchingSuccessfulInputs(
@@ -107,9 +181,12 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
                 originDomains, sourceTaskIds, claimIds, evidenceIds);
     }
 
-    private List<String> blocks(List<TaskOutcome> inputs) {
+    private List<String> textsFor(List<TaskOutcome> inputs, TaskSourceDomain domain) {
         List<String> blocks = new ArrayList<>();
         for (TaskOutcome input : inputs) {
+            if (!input.getProvenance().orElseThrow().getOriginDomains().contains(domain)) {
+                continue;
+            }
             if (input.getContribution().isPresent()) {
                 // P4 model wording is presentation-only. Synthesis consumes the
                 // immutable pre-expression contribution produced by Material.
