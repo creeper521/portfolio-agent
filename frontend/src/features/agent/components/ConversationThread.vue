@@ -11,6 +11,7 @@ import type {
   PortfolioFollowUpAction,
   PortfolioRecommendation,
   PortfolioRecommendationContextRequest,
+  PublicAnswerCaveat,
   RecentTaskType,
   SemanticSourceDomain,
 } from '../model/answerTypes'
@@ -25,7 +26,9 @@ import {
   answerStatusLabel,
   answerTechTail,
   answerVerificationTag,
-  degradedNotice,
+  degradationKindLabel,
+  sourceDomainLabel,
+  supportKindLabel,
 } from '../model/answerLabels'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
 import { resolveActiveSemanticAction } from '../model/activeSemanticAction'
@@ -35,9 +38,12 @@ import type {
   CompletedTaskView,
   OpaquePlanConfirmation,
   PlanAdjustmentBarState,
+  RecommendationItemView,
 } from '../model/semanticTurnView'
 import { hasExecutionAnswerConflict } from '../model/semanticTurnView'
 import CompactTaskSummary from './CompactTaskSummary.vue'
+import AnswerCompositionPanel from './AnswerCompositionPanel.vue'
+import ContextInvalidatedNotice from './ContextInvalidatedNotice.vue'
 import ExecutionSnapshot from './ExecutionSnapshot.vue'
 import PlanConfirmation from './PlanConfirmation.vue'
 import PlanInvalidatedNotice from './PlanInvalidatedNotice.vue'
@@ -88,6 +94,7 @@ const emit = defineEmits<{
   toggleSessions: []
   toggleEvidence: []
   retry: []
+  continueBasicMode: []
   navigateBack: []
   cancel: []
   followUp: [action: FollowUpAction]
@@ -107,11 +114,15 @@ const emit = defineEmits<{
   dismissPlanChange: [turnId: string]
   // P3：主动清除本次对话（handoff §12）。
   clearConversation: []
+  // P5：Strict Context 失效恢复（设计 §13.10/§4.4）。
+  recoverContext: []
   // P3：从某条结果继续追问（ContextHandle，handoff §3.2/§6）。
+  // P5：resultItemId 用于有序结果项的显式续接（设计 §12.12 / handoff §2）。
   continueFromContext: [action: {
     question: string
     contextHandle: string
     expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
+    resultItemId?: string
   }]
 }>()
 
@@ -175,6 +186,11 @@ function isActiveClarificationMessage(message: AgentSession['messages'][number])
 function isActiveInvalidationMessage(message: AgentSession['messages'][number]): boolean {
   const action = activeSemanticAction.value
   return action?.kind === 'PLAN_INVALIDATION' && action.turnId === message.answer?.turnId
+}
+
+// P5：CONTEXT_INVALIDATED 恢复卡只在最新一条消息可操作，历史卡降级为只读记录（单动作不变量）。
+function isActiveMessage(message: AgentSession['messages'][number]): boolean {
+  return props.session.messages.at(-1)?.id === message.id
 }
 
 // 确认完成或取消后，历史计划卡降级为只读记录而不是消失。
@@ -372,21 +388,67 @@ function dynamicSuggestions(message: AgentSession['messages'][number]) {
   return message.answer?.suggestedQuestions ?? []
 }
 
-function sourceLabel(sourceDomain: SemanticSourceDomain | 'GENERAL' | 'PORTFOLIO'): string {
-  if (sourceDomain === 'PORTFOLIO') return '作品集资料'
-  if (sourceDomain === 'GENERAL') return '通用知识'
-  return '综合结论'
-}
-
-function sourceLabelForSection(
+// P5 stp-v2 来源域解析（设计 §2.7 规则1）：块级 sourceDomain 权威；缺失回落任务级
+// sourceDomain，再回落旧 sourceScope。返回 null 表示无域信息（不渲染域标记，fail-closed）。
+function sectionDomain(
   message: AgentSession['messages'][number],
   section: NonNullable<AgentSession['messages'][number]['answer']>['sections'][number],
-): string {
-  const semanticTurn = message.answer?.semanticTurn
-  if (!semanticTurn || !section.key.startsWith('semantic:')) return sourceLabel(section.sourceScope)
-  const displayIndex = section.key.split(':')[1]
-  const task = semanticTurn.completedTasks.find((item) => item.displayIndex === displayIndex)
-  return sourceLabel(task?.sourceDomain ?? section.sourceScope)
+): SemanticSourceDomain | null {
+  if (section.sourceDomain) return section.sourceDomain
+  if (section.key.startsWith('semantic:')) {
+    const displayIndex = section.key.split(':')[1]
+    const task = message.answer?.semanticTurn?.completedTasks.find((item) => item.displayIndex === displayIndex)
+    if (task?.sourceDomain) return task.sourceDomain
+  }
+  return section.sourceScope === 'GENERAL' || section.sourceScope === 'PORTFOLIO' ? section.sourceScope : null
+}
+
+// P5 降级提示（设计 §4.4）：有 degradationSummary 时细化到 kinds，否则回落布尔 degraded。
+function degradationNoticeText(answer: NonNullable<AgentSession['messages'][number]['answer']>): string {
+  const summary = answer.degradationSummary
+  if (summary?.degraded) {
+    const kinds = summary.kinds
+      .map(degradationKindLabel)
+      .filter((label): label is string => label !== null)
+    return kinds.length ? `已切换到基础回答方式（${kinds.join('、')}）` : '已切换到基础回答'
+  }
+  return answer.degraded ? '已切换到基础回答' : ''
+}
+
+// P5 结构化限定语（设计 §4.4/§9.9）：挂在所涉 Block 下方，绝不省略/反转。
+function caveatsForBlock(
+  answer: NonNullable<AgentSession['messages'][number]['answer']>,
+  blockId: string | undefined,
+): PublicAnswerCaveat[] {
+  if (!blockId || !answer.caveats?.length) return []
+  return answer.caveats.filter((caveat) => caveat.appliesToBlockIds.includes(blockId))
+}
+
+// 未匹配到任何已渲染 Block 的限定语在回答级统一展示（含 appliesToBlockIds 为空者）。
+function generalCaveats(message: AgentSession['messages'][number]): PublicAnswerCaveat[] {
+  const answer = message.answer
+  if (!answer?.caveats?.length) return []
+  const renderedBlockIds = new Set(
+    answer.sections
+      .map((section) => section.blockId)
+      .filter((id): id is string => Boolean(id)),
+  )
+  return answer.caveats.filter((caveat) =>
+    caveat.appliesToBlockIds.length === 0
+    || !caveat.appliesToBlockIds.some((id) => renderedBlockIds.has(id)))
+}
+
+// P5「回答构成」信任层入口（设计 §4.2/§4.4）：有多任务/角色/支持聚合/来源组成/降级/限定语时才出现；
+// 单任务且无信任细节时隐藏，避免噪声（§4.4「单任务可隐藏」）。
+function hasCompositionDetail(message: AgentSession['messages'][number]): boolean {
+  const answer = message.answer
+  const tasks = answer?.semanticTurn?.completedTasks ?? []
+  const hasTaskDetail = tasks.length > 1
+    || tasks.some((task) => task.fulfillmentRole || task.supportSummary)
+  return Boolean(answer?.sourceComposition)
+    || Boolean(answer?.degradationSummary?.kinds.length)
+    || Boolean(answer?.caveats?.length)
+    || hasTaskDetail
 }
 
 function followUp(
@@ -460,13 +522,30 @@ function semanticRecommendationTask(
   )
 }
 
-function recommendationItems(message: AgentSession['messages'][number]) {
+function recommendationItems(message: AgentSession['messages'][number]): RecommendationItemView[] {
   const legacy = message.answer?.portfolioRecommendation?.items
   if (legacy) return legacy
   const task = semanticRecommendationTask(message)
   return task?.resultPayload.kind === 'RECOMMENDATION_RESULT'
     ? task.resultPayload.recommendations
     : []
+}
+
+// P5 有序结果项续接（设计 §12.12 / handoff §2）：携带 contextHandle + resultItemId 显式选择某一项。
+function continueFromResultItem(
+  message: AgentSession['messages'][number],
+  item: RecommendationItemView,
+): void {
+  if (props.pending) return
+  const task = semanticRecommendationTask(message)
+  const handle = task?.contextHandle ?? task?.continuationContext?.contextHandle
+  if (!handle || !item.resultItemId) return
+  emit('continueFromContext', {
+    question: `继续了解：${item.title}`,
+    contextHandle: handle,
+    expectedContextType: 'RECOMMENDATION',
+    resultItemId: item.resultItemId,
+  })
 }
 
 function refineRecommendation(
@@ -661,11 +740,18 @@ function refineWhole(
           </p>
           <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <p
-            v-if="message.answer && degradedNotice(message.answer)"
+            v-if="message.answer && degradationNoticeText(message.answer)"
             data-degraded-notice
             class="degraded-notice"
             role="status"
-          >{{ degradedNotice(message.answer) }}</p>
+          >{{ degradationNoticeText(message.answer) }}</p>
+          <!-- P5 部分完成（设计 §9.8/§4.4）：温和横幅，已发布事实仍充分可信 -->
+          <p
+            v-if="message.answer?.resolution === 'PARTIALLY_ANSWERED'"
+            data-partial-banner
+            class="partial-banner"
+            role="status"
+          >已回答部分内容，部分主题暂无可发布结果；已发布事实仍按其来源标注可信度。</p>
           <div v-if="message.answer" class="structured-answer">
             <PlanConfirmation
               v-if="message.answer.semanticTurn?.disposition === 'CONFIRMATION_REQUIRED' && message.answer.semanticTurn.displayPlan"
@@ -731,21 +817,52 @@ function refineWhole(
               class="context-version-updated"
               role="status"
             >公开内容已更新，本轮已按当前版本重新核对。</p>
+            <!-- P5 Strict Context 失效恢复卡（设计 §13.9/§4.4）：优先于正文，进入独立恢复路径 -->
+            <ContextInvalidatedNotice
+              v-if="message.answer.semanticTurn?.disposition === 'CONTEXT_INVALIDATED' && message.answer.contextInvalidation"
+              :invalidation="message.answer.contextInvalidation"
+              :pending="pending"
+              :readonly="!isActiveMessage(message)"
+              @recover="$emit('recoverContext')"
+            />
+            <!-- P5 重验证成功轻提示（设计 §13.14）：一次性、不阻断 -->
+            <p
+              v-if="message.answer.contextResolution"
+              data-context-resolution
+              class="context-resolution-notice"
+              role="status"
+            >已基于最新内容重新核对你引用的上下文。</p>
             <section
               v-for="section in message.answer.sections"
               :key="section.key"
+              class="answer-block"
               :data-section-type="section.type"
+              :data-domain="sectionDomain(message, section) ?? undefined"
               :data-answer-focus="
                 highlightedTarget === `${message.id}:${section.type}` ? 'true' : undefined
               "
               tabindex="-1"
+            >
+              <header
+                v-if="section.title || sourceDomainLabel(sectionDomain(message, section)) || supportKindLabel(section.support?.kind)"
+                class="answer-block__head"
               >
-              <h4 v-if="section.title">{{ section.title }}</h4>
-              <span
-                v-if="message.answer.semanticTurn"
-                class="semantic-source-label"
-                data-source-label
-              >{{ sourceLabelForSection(message, section) }}</span>
+                <h4 v-if="section.title">{{ section.title }}</h4>
+                <span
+                  v-if="sourceDomainLabel(sectionDomain(message, section))"
+                  class="source-pill"
+                  :data-domain="sectionDomain(message, section)"
+                  data-source-label
+                >
+                  <span class="source-pill__dot" aria-hidden="true"></span>{{ sourceDomainLabel(sectionDomain(message, section)) }}
+                </span>
+                <span
+                  v-if="supportKindLabel(section.support?.kind)"
+                  class="support-badge"
+                  :data-support="section.support?.kind"
+                  data-support-badge
+                >{{ supportKindLabel(section.support?.kind) }}</span>
+              </header>
               <p>{{ section.content }}</p>
               <!-- P3：公开来源引用（handoff §8）。存在时优先于旧 evidenceIds 渲染。 -->
               <SourceReferenceList
@@ -765,6 +882,15 @@ function refineWhole(
                   @click="inspectMessageEvidence(message, eid)"
                 >[{{ eid }}]</button>
               </div>
+              <!-- P5 结构化限定语（设计 §9.9/§4.4）：挂所涉 Block 下方，绝不省略/反转 -->
+              <p
+                v-for="caveat in caveatsForBlock(message.answer, section.blockId)"
+                :key="`caveat-${section.key}-${caveat.code}`"
+                class="answer-caveat"
+                :data-caveat-code="caveat.code"
+                :data-caveat-block="section.blockId"
+                role="note"
+              >{{ caveat.message }}</p>
               <div v-if="message.answer.referenceContext" class="follow-up-actions">
                 <button
                   type="button"
@@ -784,6 +910,24 @@ function refineWhole(
                 >说明判断</button>
               </div>
             </section>
+            <!-- P5 通用限定语：未归属到任何已渲染 Block 的结构化限定语（设计 §9.9） -->
+            <div v-if="generalCaveats(message).length" class="answer-caveats" data-caveats-general>
+              <p
+                v-for="caveat in generalCaveats(message)"
+                :key="`caveat-general-${caveat.code}`"
+                class="answer-caveat"
+                :data-caveat-code="caveat.code"
+                role="note"
+              >{{ caveat.message }}</p>
+            </div>
+            <!-- P5「回答构成」信任层（设计 §4.2/§4.4）：默认折叠，单任务无细节时隐藏 -->
+            <AnswerCompositionPanel
+              v-if="hasCompositionDetail(message)"
+              :source-composition="message.answer.sourceComposition"
+              :completed-tasks="message.answer.semanticTurn?.completedTasks ?? []"
+              :degradation-summary="message.answer.degradationSummary"
+              :caveats="message.answer.caveats"
+            />
             <div v-if="message.answer.referenceContext" class="follow-up-actions follow-up-actions--answer">
               <button
                 data-follow-up="current-status"
@@ -898,6 +1042,16 @@ function refineWhole(
                         :disabled="pending"
                         @click="refineRecommendation(message, itemIndex, 'EXPLAIN')"
                       >为什么推荐这个？</button>
+                      <!-- P5 有序结果项续接（设计 §12.12）：仅当后端暴露 resultItemId 时提供 -->
+                      <button
+                        v-if="item.resultItemId"
+                        class="reco-card__action"
+                        data-recommendation-continue
+                        :data-result-item="item.resultItemId"
+                        type="button"
+                        :disabled="pending"
+                        @click="continueFromResultItem(message, item)"
+                      >继续了解这一项</button>
                     </div>
                   </div>
                 </div>
@@ -980,6 +1134,12 @@ function refineWhole(
               type="button"
               @click="$emit('navigateBack')"
             >返回作品集</button>
+            <button
+              v-else-if="failure.action === 'UPGRADE_REQUIRED'"
+              data-answer-recovery-action="continue-basic-mode"
+              type="button"
+              @click="$emit('continueBasicMode')"
+            >以基础模式继续</button>
           </div>
           <div v-if="failureSuggestions?.length" class="dynamic-suggestions">
             <button
@@ -1444,20 +1604,106 @@ function refineWhole(
   font: 600 13px/1.4 var(--sans);
 }
 
-.semantic-source-label {
-  display: inline-block;
-  margin: 3px 0 4px;
-  padding: 2px 6px;
-  color: var(--workspace-text-secondary, var(--muted));
-  border: 1px solid var(--workspace-rule, var(--rule));
-  background: transparent;
-  font: 10px var(--mono);
-  letter-spacing: .05em;
+/* P5 stp-v2 来源域视觉（鲜明版 B，设计 §4.3/§4.4，原型 compare-source-domain.html）：
+   饱和域色底 + 同色描边 + 满高 5px 域色左条；SYNTHESIS 最强靛蓝卡 + 头部色带。
+   --dc 为当前域色，--dc-bg 为域色着色底，按 data-domain 注入。 */
+.answer-block[data-domain] {
+  position: relative;
+  margin: 0 0 14px;
+  padding: 14px 16px 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--dc) 42%, var(--workspace-rule, var(--rule)));
+  border-radius: var(--agent-radius-sm);
+  background: var(--dc-bg);
+  overflow: hidden;
 }
-/* 来源可区分（spec §5 原则3 + 原型 §3.3.6）：作品集事实=红边，通用知识=灰边，综合=中性描边 */
-.semantic-source-label[data-source-label='PORTFOLIO'] {
-  color: var(--workspace-accent, var(--red));
-  border-color: var(--workspace-accent, var(--red));
+.answer-block[data-domain]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--dc);
+}
+.answer-block[data-domain='GENERAL'] {
+  --dc: var(--agent-source-general);
+  --dc-bg: var(--agent-source-general-bg);
+}
+.answer-block[data-domain='PORTFOLIO'] {
+  --dc: var(--agent-source-portfolio);
+  --dc-bg: var(--agent-source-portfolio-bg);
+}
+.answer-block[data-domain='SYNTHESIS'] {
+  --dc: var(--agent-source-synthesis);
+  --dc-bg: var(--agent-source-synthesis-bg);
+  background: color-mix(in srgb, var(--agent-source-synthesis) 16%, var(--paper-hi));
+  border-color: color-mix(in srgb, var(--agent-source-synthesis) 60%, var(--workspace-rule, var(--rule)));
+}
+/* SYNTHESIS 头部色带：让跨域推导一眼可辨 */
+.answer-block[data-domain='SYNTHESIS'] .answer-block__head {
+  margin: -14px -16px 12px -20px;
+  padding: 10px 16px 10px 20px;
+  background: color-mix(in srgb, var(--agent-source-synthesis) 22%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--agent-source-synthesis) 40%, var(--workspace-rule, var(--rule)));
+}
+.answer-block__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.answer-block__head h4 {
+  flex: 1 1 100%;
+  margin: 0;
+}
+/* 实底来源药丸：域色底 + paper 字 + paper 色点 */
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dc);
+  color: var(--paper-hi);
+  font: 10px var(--mono);
+  letter-spacing: 0.04em;
+}
+.source-pill__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--paper-hi);
+}
+/* SYNTHESIS 来源药丸用淡底描边（头部色带上实底会糊），保持可读 */
+.answer-block[data-domain='SYNTHESIS'] .source-pill {
+  background: color-mix(in srgb, var(--agent-source-synthesis) 14%, var(--paper-hi));
+  color: var(--agent-source-synthesis);
+  border: 1px solid color-mix(in srgb, var(--agent-source-synthesis) 45%, var(--workspace-rule, var(--rule)));
+}
+.answer-block[data-domain='SYNTHESIS'] .source-pill__dot {
+  background: var(--agent-source-synthesis);
+}
+/* 实底支持徽标：域色底 + paper 字 */
+.support-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--dc);
+  border-radius: 4px;
+  background: var(--dc);
+  color: var(--paper-hi);
+  font: 10px var(--mono);
+  letter-spacing: 0.04em;
+}
+.support-badge[data-support='VERIFIED_PUBLIC_EVIDENCE'] {
+  --dc: var(--agent-source-portfolio);
+}
+.support-badge[data-support='GENERAL_KNOWLEDGE'] {
+  --dc: var(--agent-source-general);
+}
+.support-badge[data-support='DERIVED_FROM_TASKS'] {
+  --dc: var(--agent-source-synthesis);
 }
 
 .message footer {
@@ -1498,6 +1744,42 @@ function refineWhole(
   border-left: 2px solid var(--workspace-accent-soft, var(--red-hi));
   background: var(--workspace-surface-subtle, var(--paper-low));
   font: 11px/1.6 var(--mono);
+}
+
+/* P5 重验证成功轻提示（设计 §13.14）：克制、不阻断 */
+.context-resolution-notice {
+  margin: 0 0 0.75rem;
+  padding: 7px 11px;
+  color: var(--workspace-text-secondary, var(--ink-2));
+  border-left: 2px solid var(--workspace-text-faint, var(--faint));
+  background: var(--workspace-surface-subtle, var(--paper-low));
+  font: 11px/1.6 var(--mono);
+}
+
+/* P5 部分完成横幅（设计 §9.8）：温和提示，不阻断，已发布事实仍可信 */
+.partial-banner {
+  margin: 0 0 0.75rem;
+  padding: 8px 11px;
+  border-left: 2px solid var(--workspace-accent-soft, var(--red-hi));
+  background: var(--workspace-surface-subtle, var(--paper-low));
+  color: var(--workspace-text-secondary, var(--ink-2));
+  font: 11px/1.6 var(--mono);
+}
+
+/* P5 结构化限定语（设计 §9.9）：克制提示，挂在所涉 Block 下方或回答级 */
+.answer-caveats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.answer-caveat {
+  margin: 8px 0 0;
+  padding: 7px 10px;
+  border-left: 2px solid var(--workspace-text-faint, var(--faint));
+  background: var(--workspace-surface-subtle, rgba(0, 0, 0, 0.02));
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11.5px/1.6 var(--sans);
 }
 
 .follow-up-actions--answer {

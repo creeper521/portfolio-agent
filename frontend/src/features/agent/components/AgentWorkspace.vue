@@ -45,6 +45,7 @@ import type {
   PendingPlanReference,
   PlanAdjustmentRequest,
   ClarificationResolutionRequest,
+  SemanticTurnContract,
 } from '../model/answerTypes'
 import { resolveAnswerSuccess } from '../model/answerTypes'
 import type {
@@ -73,6 +74,7 @@ interface AnswerRequestContext {
   caseSlug?: string | null
   question?: string
   action?: 'ASK' | 'CONFIRM_PLAN' | 'REGENERATE_PLAN'
+  agentTurnContract?: SemanticTurnContract
   planConfirmation?: OpaquePlanConfirmation
   semanticContext?: SemanticContextRequest
   invalidatedPlanReference?: InvalidatedPlanReference
@@ -380,6 +382,11 @@ function completedConversationHistory(
     const user = messages[index]
     const assistant = messages[index + 1]
     if (user?.role !== 'USER' || assistant?.role !== 'AGENT') continue
+    const answer = assistant.answer
+    const hasTrustedContent = answer?.resolution === 'ANSWERED'
+      && (Boolean(answer.summary?.trim())
+        || answer.sections.some((section) => Boolean(section.content.trim())))
+    if (!hasTrustedContent) continue
     completed.push(user, assistant)
     index += 1
   }
@@ -525,7 +532,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
         requestToken: preparedContext.requestToken,
         action: preparedContext.action,
-        agentTurnContract: 'stp-v1',
+        agentTurnContract: preparedContext.agentTurnContract ?? 'stp-v2',
         planConfirmation: preparedContext.planConfirmation,
         semanticContext: preparedContext.semanticContext,
         invalidatedPlanReference: preparedContext.invalidatedPlanReference,
@@ -668,6 +675,27 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
       answerFailure.value = {
         message: '当前会话已失效，请重新提问以开始新的对话。',
         action: 'RETRY',
+      }
+      return
+    }
+    if (error instanceof PortfolioApiError
+      && error.code === 'AGENT_TURN_CONTRACT_UNSUPPORTED') {
+      const basicContextReference = preparedContext.contextReference === undefined
+        ? undefined
+        : {
+            contextHandle: preparedContext.contextReference.contextHandle,
+            expectedContextType: preparedContext.contextReference.expectedContextType,
+          }
+      failedRequest.value = {
+        ...preparedContext,
+        agentTurnContract: 'stp-v1',
+        contextReference: basicContextReference,
+        requestToken: createRequestToken(),
+      }
+      answerFailure.value = {
+        message: '当前服务不支持增强回答协议。你可以主动以基础模式继续。',
+        action: 'UPGRADE_REQUIRED',
+        requestId: error.requestId,
       }
       return
     }
@@ -976,6 +1004,17 @@ function retryAnswer() {
   void requestAnswer(context, false)
 }
 
+function continueInBasicMode() {
+  if (answerFailure.value?.action !== 'UPGRADE_REQUIRED') return
+  const context = failedRequest.value
+  if (!context || context.agentTurnContract !== 'stp-v1') return
+  if (!sessions.sessions.value.some((item) => item.id === context.sessionId)) {
+    clearAnswerFailure()
+    return
+  }
+  void requestAnswer(context, false)
+}
+
 function navigateBackFromFailure() {
   clearAnswerFailure()
   clearCaseContext()
@@ -1096,6 +1135,7 @@ function continueFromContext(action: {
   question: string
   contextHandle: string
   expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
+  resultItemId?: string
 }) {
   const session = sessions.activeSession.value
   const project = activeProject.value
@@ -1108,6 +1148,7 @@ function continueFromContext(action: {
       contextReference: {
         contextHandle: action.contextHandle,
         expectedContextType: action.expectedContextType,
+        ...(action.resultItemId ? { resultItemId: action.resultItemId } : {}),
       },
     },
     true,
@@ -1399,6 +1440,7 @@ onBeforeUnmount(() => {
       @refine-recommendation="refineRecommendation"
       @continue-from-context="continueFromContext"
       @retry="retryAnswer"
+      @continue-basic-mode="continueInBasicMode"
       @navigate-back="navigateBackFromFailure"
       @cancel="cancelAnswer"
       @inspect-evidence="inspectEvidence"
@@ -1406,6 +1448,7 @@ onBeforeUnmount(() => {
       @toggle-evidence="toggleEvidence"
       @clear-case-context="clearCaseContext"
       @clear-conversation="clearConversation"
+      @recover-context="clearConversation"
       @confirm-plan="confirmSemanticPlan"
       @adjust-plan="adjustSemanticPlan"
       @adjust-submit="submitPlanAdjustment"

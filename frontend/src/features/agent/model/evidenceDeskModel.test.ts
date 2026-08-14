@@ -81,6 +81,32 @@ describe('buildEvidenceDeskContext', () => {
     expect(context.sources.map((s) => s.referenceKey)).toEqual(['SRC_A', 'SRC_B'])
   })
 
+  it('prefers the P5 publicSourceCatalog over scattered inline sourceReferences (FE-6)', () => {
+    // catalog 存在时作为 SOURCES 权威目录；inline sourceReferences 不再混入
+    const withCatalog: AgentMessage = {
+      ...messages[0]!,
+      answer: {
+        ...messages[0]!.answer!,
+        publicSourceCatalog: [
+          { referenceKey: 'CAT_A', label: '目录 A', sourceType: 'DOCUMENT', subjectRoute: '/projects/sql-audit', publishedVersion: 'v2' },
+          { referenceKey: 'CAT_B', label: '目录 B', sourceType: 'SCREENSHOT', subjectRoute: '/cases/case-one', evidenceRoute: '/evidence?evidence=evi-1', publishedVersion: 'v2' },
+        ],
+        sections: [{
+          ...messages[0]!.answer!.sections[0]!,
+          sourceReferences: [
+            { referenceKey: 'INLINE_X', label: '内联', sourceType: 'CODE', subjectRoute: '/projects/sql-audit', publishedVersion: 'v1' },
+          ],
+        }],
+      },
+    }
+    const context = buildEvidenceDeskContext([withCatalog])
+    expect(context.sources.map((s) => s.referenceKey)).toEqual(['CAT_A', 'CAT_B'])
+    // 目录项字段完整透传（含 evidenceRoute）
+    expect(context.sources[1]).toMatchObject({ evidenceRoute: '/evidence?evidence=evi-1' })
+    // inline sourceReferences 被权威目录取代，不再出现
+    expect(context.sources.some((s) => s.referenceKey === 'INLINE_X')).toBe(false)
+  })
+
   it('prefers an explicitly inspected answer and otherwise selects the latest answer', () => {
     const latest: AgentMessage = {
       ...messages[0]!,

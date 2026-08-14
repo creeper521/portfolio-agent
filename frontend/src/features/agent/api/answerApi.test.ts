@@ -436,6 +436,44 @@ describe('answer api', () => {
     expect(body.contextReference).toBeUndefined()
   })
 
+  // ── P5 stp-v2：contextReference.resultItemId 显式结果项（设计 §12.12 / handoff §2）──
+
+  it('serializes contextReference.resultItemId when selecting an explicit result item', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({
+      ...input('第二个推荐的架构'),
+      resumeToken: 'opaque-resume-token-abc',
+      contextReference: {
+        contextHandle: 'opaque-context-handle',
+        expectedContextType: 'RECOMMENDATION',
+        resultItemId: 'item-2-opaque',
+      },
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.contextReference).toEqual({
+      contextHandle: 'opaque-context-handle',
+      expectedContextType: 'RECOMMENDATION',
+      resultItemId: 'item-2-opaque',
+    })
+  })
+
+  it('accepts and forwards an stp-v2 agent turn contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ resolution: 'ANSWERED' }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await askQuestion({ ...input('介绍项目'), agentTurnContract: 'stp-v2' })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.agentTurnContract).toBe('stp-v2')
+  })
+
   // ── P3：GET /api/v2/conversation-context 刷新恢复（handoff §11）──
 
   it('fetches the conversation context summary with the resume token header', async () => {

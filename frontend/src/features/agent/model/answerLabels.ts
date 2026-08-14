@@ -1,4 +1,4 @@
-import type { MappedAnswer } from './answerTypes'
+import type { AnswerSupportKind, FulfillmentRole, MappedAnswer, PublicDegradationKind, SemanticSourceDomain, SourceComposition } from './answerTypes'
 
 type AnswerLabelInput = Pick<
   MappedAnswer,
@@ -81,4 +81,46 @@ export function answerTechTail(answer: AnswerLabelInput | null | undefined): str
 export function degradedNotice(answer: AnswerLabelInput | null | undefined): string {
   if (!answer?.degraded) return ''
   return '已切换到基础回答'
+}
+
+// P5 stp-v2 来源域文案（设计 §4.5）。未知值返回 null，调用方按 fail-closed 不渲染域标记。
+export function sourceDomainLabel(domain: SemanticSourceDomain | undefined | null): string | null {
+  if (domain === 'GENERAL') return '通用知识'
+  if (domain === 'PORTFOLIO') return '作品集资料'
+  if (domain === 'SYNTHESIS') return '跨域综合'
+  return null
+}
+
+// P5 stp-v2 Block 支持类型文案（设计 §4.5）。未知值返回 null。
+export function supportKindLabel(kind: AnswerSupportKind | undefined | null): string | null {
+  if (kind === 'VERIFIED_PUBLIC_EVIDENCE') return '✓已验证证据'
+  if (kind === 'GENERAL_KNOWLEDGE') return '通用知识'
+  if (kind === 'DERIVED_FROM_TASKS') return '由通用+作品集推导'
+  return null
+}
+
+// P5 stp-v2 降级类型文案（设计 §4.5）。未知值返回 null。
+export function degradationKindLabel(kind: PublicDegradationKind | undefined | null): string | null {
+  if (kind === 'RETRIEVAL_FALLBACK') return '检索回退'
+  if (kind === 'EXPRESSION_FALLBACK') return '表达回退'
+  if (kind === 'CROSS_DOMAIN_EXPRESSION_FALLBACK') return '跨域表达回退'
+  if (kind === 'CONTENT_BACKEND_FALLBACK') return '内容后端回退'
+  return null
+}
+
+// P5 来源组成文案（设计 §4.5/§9.5）。未知值返回 null。
+export function sourceCompositionLabel(composition: SourceComposition | undefined | null): string | null {
+  if (composition === 'GENERAL_ONLY') return '仅通用知识'
+  if (composition === 'PORTFOLIO_ONLY') return '仅作品集资料'
+  if (composition === 'MULTI_SOURCE') return '多来源'
+  if (composition === 'CROSS_DOMAIN_DERIVED') return '跨域派生'
+  return null
+}
+
+// P5 履约角色文案（仅信任层展示，设计 §4.5/§10.4）。未知值返回 null。
+export function fulfillmentRoleLabel(role: FulfillmentRole | undefined | null): string | null {
+  if (role === 'PRIMARY') return '主'
+  if (role === 'SUPPORTING') return '辅'
+  if (role === 'OPTIONAL') return '可选'
+  return null
 }

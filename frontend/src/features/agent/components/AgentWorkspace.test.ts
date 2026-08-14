@@ -191,7 +191,7 @@ describe('AgentWorkspace', () => {
 
     expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
       action: 'CONFIRM_PLAN',
-      agentTurnContract: 'stp-v1',
+      agentTurnContract: 'stp-v2',
       planConfirmation: {
         confirmationId: 'confirmation-01',
         confirmationPlan: 'opaque-envelope',
@@ -216,7 +216,7 @@ describe('AgentWorkspace', () => {
     const continuation = askQuestionMock.mock.calls[1]?.[0]
     expect(continuation).toMatchObject({
       action: 'ASK',
-      agentTurnContract: 'stp-v1',
+      agentTurnContract: 'stp-v2',
       question: '先审阅再比较',
       clarificationResolution: {
         clarificationId: 'clarify-0a1b2c3d4e5f60718293a4b5c6d7e8f9',
@@ -250,7 +250,7 @@ describe('AgentWorkspace', () => {
     const continuation = askQuestionMock.mock.calls[1]?.[0]
     expect(continuation).toMatchObject({
       action: 'ASK',
-      agentTurnContract: 'stp-v1',
+      agentTurnContract: 'stp-v2',
       question: '比较两个项目',
       clarificationResolution: {
         clarificationId: 'clarify-f9e8d7c6b5a4938271605f4e3d2c1b0a',
@@ -511,7 +511,7 @@ describe('AgentWorkspace', () => {
 
     expect(askQuestionMock.mock.calls[1]?.[0]).toMatchObject({
       action: 'REGENERATE_PLAN',
-      agentTurnContract: 'stp-v1',
+      agentTurnContract: 'stp-v2',
       question: '重新比较项目',
       semanticContext: {
         activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
@@ -1240,6 +1240,61 @@ describe('AgentWorkspace', () => {
     expect(wrapper.get('[data-answer-recovery-action]').attributes('data-answer-recovery-action'))
       .toBe('retry')
     expect(wrapper.find('[data-answer-edit]').exists()).toBe(false)
+  })
+
+  it('does not send an unavailable answer as conversation history', async () => {
+    askQuestionMock
+      .mockResolvedValueOnce({
+        ...answerResponse(),
+        resolution: 'CAPABILITY_UNAVAILABLE',
+        title: '服务暂不可用',
+        summary: '',
+        sections: [],
+        evidenceIds: [],
+      })
+      .mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('给我推荐一个项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('textarea').setValue('详细介绍 SQL 审计项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0].messages).toEqual([])
+  })
+
+  it('requests stp-v2 by default and retries with stp-v1 only after explicit consent', async () => {
+    askQuestionMock
+      .mockRejectedValueOnce(new PortfolioApiError('unsupported contract', {
+        kind: 'HTTP',
+        status: 409,
+        code: 'AGENT_TURN_CONTRACT_UNSUPPORTED',
+        requestId: 'req-contract-unsupported',
+        action: 'UPGRADE_REQUIRED',
+        clientRequestId: 'client-contract-unsupported',
+      }))
+      .mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-suggested-question]').trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(askQuestionMock.mock.calls[0]?.[0].agentTurnContract).toBe('stp-v2')
+    const basicMode = wrapper.get('[data-answer-recovery-action="continue-basic-mode"]')
+    expect(basicMode.text()).toBe('以基础模式继续')
+
+    await basicMode.trigger('click')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(2)
+    expect(askQuestionMock.mock.calls[1]?.[0].agentTurnContract).toBe('stp-v1')
+    expect(askQuestionMock.mock.calls[1]?.[0].requestToken)
+      .not.toBe(askQuestionMock.mock.calls[0]?.[0].requestToken)
+    expect(wrapper.findAll('.message--user')).toHaveLength(1)
   })
 
   it('requests safe portfolio navigation for a missing project', async () => {

@@ -29,7 +29,7 @@ export interface TaskComposition {
   degraded: boolean
 }
 export type AnswerIntentSource = 'PRESET' | 'RULE' | 'MODEL' | 'REFERENCE' | 'GLOBAL'
-export type AnswerEvidenceState = 'VERIFIED' | 'NOT_REQUIRED' | 'INSUFFICIENT'
+export type AnswerEvidenceState = 'VERIFIED' | 'NOT_REQUIRED' | 'INSUFFICIENT' | 'MIXED'
 export type Verification =
   | 'VERIFIED'
   | 'PARTIALLY_VERIFIED'
@@ -72,6 +72,8 @@ export type AnswerScope =
 export type BlockSourceScope = 'GENERAL' | 'PORTFOLIO'
 export type SemanticSourceDomain = 'GENERAL' | 'PORTFOLIO' | 'SYNTHESIS'
 export type TurnAction = 'ASK' | 'CONFIRM_PLAN' | 'REGENERATE_PLAN'
+// P5 stp-v2：公共 Semantic Turn Contract 版本（设计 §17.2 / handoff §7）。
+export type SemanticTurnContract = 'stp-v1' | 'stp-v2'
 export type TurnDisposition =
   | 'READY'
   | 'PARTIAL_READY'
@@ -79,6 +81,9 @@ export type TurnDisposition =
   | 'CLARIFICATION_REQUIRED'
   | 'BOUNDARY'
   | 'REJECTED'
+  // P5 stp-v2：Strict Context 失效（设计 §13.9 / handoff §3）。优先于 answerResolution，
+  // 进入专用恢复卡；FE-0 仅保证安全解析不崩溃/不误入通用澄清，恢复卡 UI 在 FE-5。
+  | 'CONTEXT_INVALIDATED'
 export type TaskSummaryDisplayMode = 'HIDDEN' | 'COLLAPSED' | 'EXPANDED'
 export type TaskSummaryStatus =
   | 'COMPLETED'
@@ -157,6 +162,11 @@ export interface AnswerBlock {
   claimIds?: string[]
   evidenceIds?: string[]
   sourceReferences?: PublicSourceReference[]
+  // ── P5 stp-v2（设计 §9.3 / handoff §5）──
+  blockId?: string
+  // 真实来源域，权威。SYNTHESIS 时旧 sourceScope 必须省略或 null（不得伪装 GENERAL）。
+  sourceDomain?: SemanticSourceDomain
+  support?: AnswerBlockSupport
 }
 
 // 统一章节视图：ConversationThread 与 Evidence Desk 只消费该结构。
@@ -171,6 +181,10 @@ export interface AnswerSectionView {
   evidenceIds: string[]
   // P3：公开来源引用（handoff §8）。存在时优先于旧 evidenceIds 渲染。
   sourceReferences?: PublicSourceReference[]
+  // ── P5 stp-v2（设计 §9.3 / §9.7）──
+  blockId?: string
+  sourceDomain?: SemanticSourceDomain
+  support?: AnswerBlockSupport
 }
 
 // 结构化作品推荐（可选字段，仅推荐类回答出现）。
@@ -254,6 +268,8 @@ export interface AgentTurnDisplayTaskResponse {
   goalLabel: string
   sourceDomain: SemanticSourceDomain
   dependencySummary?: string
+  // P5 stp-v2（设计 §10.4 / handoff）：履约角色，只读。
+  fulfillmentRole?: FulfillmentRole
   [field: string]: unknown
 }
 
@@ -361,9 +377,18 @@ export interface AgentTurnSectionResultResponse {
   [field: string]: unknown
 }
 
+// P5 stp-v2：推荐结果项在 stp-v1 字段之外可选携带有序结果项身份（resultItemId/position/subject），
+// 供「第二个继续」等显式结果项续接（设计 §12.12 / handoff §2）。
+export interface AgentTurnRecommendationItemResponse extends Omit<PortfolioRecommendationItem, 'evidenceIds'> {
+  evidenceIds?: string[]
+  resultItemId?: string
+  position?: number
+  subject?: SemanticSubjectReference
+}
+
 export interface AgentTurnRecommendationResultResponse {
   kind: 'RECOMMENDATION_RESULT'
-  recommendations: Array<Omit<PortfolioRecommendationItem, 'evidenceIds'> & { evidenceIds?: string[] }>
+  recommendations: AgentTurnRecommendationItemResponse[]
   [field: string]: unknown
 }
 
@@ -388,6 +413,10 @@ export interface AgentTurnCompletedTaskResponse {
   contextHandle?: string
   // P4：任务级表达状态（设计 §11.2 / handoff §2.2）。缺省视为未提供（兼容旧响应）。
   composition?: TaskComposition
+  // P5 stp-v2（设计 §10.4/§9.4/§11.14，handoff §2/§4）：履约角色、支持聚合、续接句柄。
+  fulfillmentRole?: FulfillmentRole
+  supportSummary?: TaskSupportSummary
+  continuationContext?: ContinuationContext
   [field: string]: unknown
 }
 
@@ -399,7 +428,8 @@ export interface AgentTurnPlanConfirmationResponse extends PlanConfirmationSubmi
 }
 
 export interface AgentTurnBaseResponse {
-  contractVersion: 'stp-v1'
+  // P5 stp-v2：迁移期同时接受 stp-v1/stp-v2（设计 §17.2）。
+  contractVersion: 'stp-v1' | 'stp-v2'
   plan?: AgentTurnDisplayPlanResponse
   planChange?: AgentTurnPlanChangeResponse
   // P3：与 plan 同级的最终执行快照（handoff §7）。两者不可相互替代。
@@ -439,12 +469,23 @@ export interface AgentTurnBoundaryResponse extends AgentTurnBaseResponse {
   completedTasks?: never
 }
 
-/** Known stp-v1 response shapes after discriminant validation. */
+// P5 stp-v2（设计 §13.9 / handoff §3）：Strict Context 失效。contextInvalidation 数据在
+// AnswerResponse 顶层（与 agentTurn 同级），不在此处；映射层负责跨字段一致性校验。
+export interface AgentTurnContextInvalidatedResponse extends AgentTurnBaseResponse {
+  disposition: 'CONTEXT_INVALIDATED'
+  clarification?: never
+  planConfirmation?: never
+  outcome?: never
+  completedTasks?: never
+}
+
+/** Known response shapes after discriminant validation. */
 export type AgentTurnResponse =
   | AgentTurnReadyResponse
   | AgentTurnConfirmationRequiredResponse
   | AgentTurnClarificationRequiredResponse
   | AgentTurnBoundaryResponse
+  | AgentTurnContextInvalidatedResponse
 
 /** Raw wire fallback; never passed to rendering without semantic narrowing. */
 export interface RawAgentTurnResponse {
@@ -489,6 +530,13 @@ export interface AnswerResponse {
   responseKind?: 'ANSWER'
   // P3：会话续接状态与 ResumeToken（handoff §5）。
   conversation?: ConversationResponse
+  // ── P5 stp-v2 顶层字段（均可选；迁移期新旧并存，见设计 §2.2）──
+  sourceComposition?: SourceComposition
+  publicSourceCatalog?: PublicSourceCatalogEntry[]
+  degradationSummary?: PublicDegradationSummary
+  caveats?: PublicAnswerCaveat[]
+  contextInvalidation?: ContextInvalidation
+  contextResolution?: ContextResolution
 }
 
 export interface MappedAnswer {
@@ -519,6 +567,13 @@ export interface MappedAnswer {
   semanticTurn?: import('./semanticTurnView').SemanticTurnView
   // P3：会话续接状态与 ResumeToken（handoff §5）。
   conversation?: MappedConversation
+  // ── P5 stp-v2 顶层字段（可选；FE-1 映射，FE-2..FE-5 渲染）──
+  sourceComposition?: SourceComposition
+  publicSourceCatalog?: PublicSourceCatalogEntry[]
+  degradationSummary?: PublicDegradationSummary
+  caveats?: PublicAnswerCaveat[]
+  contextInvalidation?: ContextInvalidation
+  contextResolution?: ContextResolution
 }
 
 // ── P3 视图模型 ──────────────────────────────────────────────────────────────
@@ -591,6 +646,8 @@ export type ConversationContextType = 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
 export interface ContextReferenceRequest {
   contextHandle: string
   expectedContextType: ConversationContextType
+  // P5 stp-v2（设计 §12.12 / handoff §2）：Context 内的显式结果项选择；缺省=整个 Context。
+  resultItemId?: string
 }
 
 /** 会话可续接性状态闭集（handoff §5）。与 degraded 是不同维度。 */
@@ -662,13 +719,22 @@ export interface ExecutionDisplayPlanResponse {
 
 // ── 幂等完成回执（handoff §4）──────────────────────────────────────────────
 
+// P5 stp-v2 公共闭集（设计 §10.9 / handoff §1）：v2 权威值 + 迁移期保留的旧值。
+// legacy→v2 归一在任务摘要 UI（FE-3）统一处理；这里仅声明前端已知全集。
 export type PublicTaskStatus =
   | 'COMPLETED'
   | 'PARTIAL'
+  | 'EMPTY'
   | 'NOT_SUPPORTED'
-  | 'PRESENTATION_BLOCKED'
-  | 'REJECTED'
+  | 'NOT_APPLICABLE'
+  | 'BLOCKED'
+  | 'UNAVAILABLE'
+  | 'STALE'
   | 'FAILED'
+  | 'REJECTED'
+  | 'NOT_EXECUTED'
+  // ── 迁移期旧值（handoff §1）──
+  | 'PRESENTATION_BLOCKED'
   | 'DEPENDENCY_UNAVAILABLE'
   | 'NOT_EXECUTED_BUDGET'
   | 'CANCELLED'
@@ -686,6 +752,128 @@ export interface CompletionReceiptResponse {
   requestStatus: 'REQUEST_ALREADY_COMPLETED'
   completedTasks: CompletionReceiptTask[]
   conversation: ConversationResponse
+}
+
+// ── P5 stp-v2 公共契约类型（设计 §9/§10/§13，handoff §1—§6）─────────────────
+// 所有字段在后端为闭集；前端按 fail-closed 消费未知值（enumSafety）。FE-0 仅声明类型
+// 与可选字段；完整解析/映射在 FE-1，视觉在 FE-2..FE-5。
+
+export type SourceComposition =
+  | 'GENERAL_ONLY'
+  | 'PORTFOLIO_ONLY'
+  | 'MULTI_SOURCE'          // General+Portfolio 并列，无成功 Synthesis
+  | 'CROSS_DOMAIN_DERIVED'  // 至少一个合法 Synthesis Block
+
+export type AnswerSupportKind =
+  | 'VERIFIED_PUBLIC_EVIDENCE' // 仅 P3 Evidence Promotion 的 Portfolio 内容
+  | 'GENERAL_KNOWLEDGE'        // 明确不是 Portfolio Evidence
+  | 'DERIVED_FROM_TASKS'       // 仅通过 Relation Policy + 跨域 Validator 的 Synthesis
+
+// P5 §9.3：Block 级支持明细（权威）。前端不要求展示完整内部 Material。
+export interface AnswerBlockSupport {
+  kind: AnswerSupportKind
+  statementReferences: StatementSupportReference[]
+  sourceTaskIds: string[]
+  publicSourceKeys: string[]
+  contentVersion?: string
+}
+
+// 响应级 Provenance：消费者可校验来源链；前端不要求展示或理解完整内部 Material（§9.3）。
+export interface StatementSupportReference {
+  statementId: string
+  sourceTaskId?: string
+  publicSourceKeys?: string[]
+  [field: string]: unknown
+}
+
+// P5 §10.4：履约角色，由服务端按用户目标判定；前端只读、不推断、不重排。
+export type FulfillmentRole = 'PRIMARY' | 'SUPPORTING' | 'OPTIONAL'
+
+// P5 §9.4：Task 级支持聚合投影（Block Support 是权威明细）。
+export interface TaskSupportSummary {
+  kind: AnswerSupportKind
+  statementCount: number
+  publicSourceCount: number
+  sourceTaskCount?: number // 仅 Synthesis
+  contentVersion?: string
+}
+
+// P5 §12.12：有序结果项（定稿落在 completedTasks[].resultPayload.recommendations[]，handoff §2）。
+export interface OrderedResultItem {
+  resultItemId: string
+  position: number
+  subject: SemanticSubjectReference
+}
+
+export type PublicDegradationKind =
+  | 'RETRIEVAL_FALLBACK'
+  | 'EXPRESSION_FALLBACK'
+  | 'CROSS_DOMAIN_EXPRESSION_FALLBACK'
+  | 'CONTENT_BACKEND_FALLBACK'
+
+export interface PublicDegradationSummary {
+  degraded: boolean
+  kinds: PublicDegradationKind[]
+  affectedTaskIds: string[]
+}
+
+export interface PublicAnswerCaveat {
+  code: string
+  message: string
+  appliesToBlockIds: string[]
+  sourceTaskIds: string[]
+}
+
+// 与 PublicSourceReference 同构；顶层 publicSourceCatalog 以 referenceKey 去重（设计 §9.7）。
+export interface PublicSourceCatalogEntry {
+  referenceKey: string
+  label: string
+  sourceType: PublicSourceType
+  subjectRoute: string
+  evidenceRoute?: string
+  publishedVersion: string
+}
+
+// Context 失效与版本（设计 §13，handoff §6）
+export type ContextInvalidationRecoveryAction =
+  | 'RESTART_FROM_CURRENT_CONTENT'
+  | 'RESELECT_RESULTS'
+  | 'REASK_WITHOUT_CONTEXT'
+
+// 前端已知 reasonCode 白名单；后端可能产出其它安全码，未知码 fail-closed 文案。
+export type ContextInvalidationReasonCode =
+  | 'CONTEXT_REFERENCE_INVALID'
+  | 'CONTEXT_REFERENCE_EXPIRED'
+  | 'CONTEXT_RESULT_STALE'
+  | 'REFERENCED_SUBJECT_UNAVAILABLE'
+  | 'REFERENCED_PUBLIC_SOURCE_CHANGED'
+  | 'CONTEXT_RESOLUTION_UNAVAILABLE'
+  | 'ROUTING_CONTEXT_CONFLICT'
+  | 'CONTINUATION_GOAL_UNRESOLVED'
+  | 'CONTEXT_SUBJECT_REQUIRED'
+  | 'RESULT_POSITION_OUT_OF_RANGE'
+  | 'RESULT_CONTEXT_AMBIGUITY'
+
+export interface ContextInvalidation {
+  reasonCode: string
+  recoveryAction: ContextInvalidationRecoveryAction
+  contextType: ConversationContextType
+  currentContentVersion: string
+}
+
+export type ContextResolutionMode = 'REVALIDATED_TO_CURRENT'
+
+export interface ContextResolution {
+  mode: ContextResolutionMode
+  contextType: ConversationContextType
+  currentContentVersion: string
+}
+
+// 每个可继续完成任务的续接句柄（completedTasks[].continuationContext，非顶层；handoff §4）。
+export interface ContinuationContext {
+  contextHandle: string
+  contextType: ConversationContextType
+  sourceTaskId: string
 }
 
 /** POST /api/v2/answers 的 200 成功联合类型（handoff §4）。 */

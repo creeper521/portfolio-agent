@@ -75,3 +75,32 @@ export function taskReasonText(item: {
 export function blockedGoalReasonText(reasonCode: string): string {
   return BLOCKED_GOAL_REASON_TEXT[reasonCode] ?? UNKNOWN_BLOCKED_GOAL_REASON_TEXT
 }
+
+// P5 Context 失效 reasonCode 白名单文案（设计 §2.5/§4.5）。未知码 → 克制通用句，不暴露原始码。
+const CONTEXT_REASON_TEXT: Readonly<Record<string, string>> = {
+  CONTEXT_REFERENCE_INVALID: '引用的对话上下文已失效',
+  CONTEXT_REFERENCE_EXPIRED: '引用的对话上下文已过期',
+  CONTEXT_RESULT_STALE: '该上下文已与最新内容不兼容',
+  REFERENCED_SUBJECT_UNAVAILABLE: '引用的主体已不可用',
+  REFERENCED_PUBLIC_SOURCE_CHANGED: '引用的公开来源已更新',
+  CONTEXT_RESOLUTION_UNAVAILABLE: '当前无法解析该上下文',
+  ROUTING_CONTEXT_CONFLICT: '该上下文与当前请求冲突',
+  CONTINUATION_GOAL_UNRESOLVED: '该上下文的任务目标尚未完成',
+  CONTEXT_SUBJECT_REQUIRED: '需要先明确上下文中的主体',
+  RESULT_POSITION_OUT_OF_RANGE: '引用的结果序号超出范围',
+  RESULT_CONTEXT_AMBIGUITY: '存在多个可指代结果，请明确所指',
+}
+const UNKNOWN_CONTEXT_REASON_TEXT = '该对话上下文已不可用，请重新提问'
+
+/** P5 Strict Context 失效原因短句（设计 §13.9/§4.5）。未知码 fail-closed 通用句。 */
+export function contextReasonText(reasonCode: string): string {
+  return CONTEXT_REASON_TEXT[reasonCode] ?? UNKNOWN_CONTEXT_REASON_TEXT
+}
+
+/** P5 Context 失效恢复动作按钮文案（设计 §2.5/§4.4）。未知动作 → 安全「重新提问」。 */
+export function recoveryActionLabel(action: string): string {
+  if (action === 'RESTART_FROM_CURRENT_CONTENT') return '基于最新内容重新开始'
+  if (action === 'RESELECT_RESULTS') return '重新选择结果'
+  if (action === 'REASK_WITHOUT_CONTEXT') return '不带上下文重新提问'
+  return '重新提问'
+}

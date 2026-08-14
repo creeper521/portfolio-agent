@@ -41,6 +41,15 @@
   --red: #7a2e2a;
   --red-hi: #b65d53;
   --red-on-ink: #d27d74;
+  /* P5 stp-v2 来源域色码（鲜明版 B，设计 §4.3）：通用知识=冷灰墨、作品集资料=牛血红、
+     跨域综合=靛蓝紫。饱和底色 + 满高左条 + 实底药丸/徽标，让三类来源一眼可分。 */
+  --agent-source-general: #5b6470;
+  --agent-source-portfolio: var(--red);
+  --agent-source-synthesis: #54507e;
+  /* 饱和底色：12–16% 着色，落在 paper-hi 上保持可读 */
+  --agent-source-general-bg: color-mix(in srgb, var(--agent-source-general) 12%, var(--paper-hi));
+  --agent-source-portfolio-bg: color-mix(in srgb, var(--agent-source-portfolio) 12%, var(--paper-hi));
+  --agent-source-synthesis-bg: color-mix(in srgb, var(--agent-source-synthesis) 16%, var(--paper-hi));
   /* Georgia 承担 Latin display serif；中文衬线由上方自托管 'Noto Serif SC'
      子集兜底（同源加载，无第三方请求），系统 'Songti SC' 为其后援。
      'Noto Sans SC'、'IBM Plex Mono' 仍是用户本机已装时的可选增强。 */

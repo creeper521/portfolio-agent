@@ -7,15 +7,23 @@ import type {
   AgentTurnPlanChangeResponse,
   AgentTurnPayload,
   AgentTurnReadyResponse,
+  AgentTurnRecommendationItemResponse,
   AgentTurnResponse,
   AgentTurnResultPayloadResponse,
   AgentTurnTaskSummaryResponse,
+  AnswerBlockSupport,
+  AnswerEvidenceState,
+  AnswerSupportKind,
+  ContinuationContext,
+  ConversationContextType,
   ExecutionDisplayPlanResponse,
   ExecutionDisplayStageResponse,
   ExecutionDisplayTaskResponse,
   ExecutionFinalStatus,
   ExecutionStageCode,
+  FulfillmentRole,
   InvalidatedPlanReference,
+  OrderedResultItem,
   PendingPlanReference,
   AnswerBlock,
   PlanConfirmationSubmission,
@@ -23,11 +31,14 @@ import type {
   PublicSourceReference,
   SemanticSourceDomain,
   SemanticSubjectReference,
+  StatementSupportReference,
   TaskCompositionMode,
+  TaskSupportSummary,
   TaskSummaryDisplayMode,
   TaskSummaryStatus,
   TurnDisposition,
 } from './answerTypes'
+import { knownEnum, safeEnum } from './enumSafety'
 import { createFrontendDiagnosticEvent } from '../../../shared/diagnostics/frontendDiagnosticTypes'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
@@ -40,6 +51,8 @@ export interface DisplayPlanTaskView {
   goalLabel: string
   sourceDomain: SemanticSourceDomain
   dependencySummary: string | null
+  // P5 stp-v2（设计 §10.4）：履约角色，只读。
+  fulfillmentRole?: FulfillmentRole
 }
 
 export interface DisplayPlanView {
@@ -137,6 +150,10 @@ export interface CompletedTaskBlockView {
   evidenceIds: string[]
   // P3：公开来源引用（handoff §8）。
   sourceReferences?: PublicSourceReference[]
+  // P5 stp-v2（设计 §9.3）：真实来源域（权威）与逐 Block 支持。
+  blockId?: string
+  sourceDomain?: SemanticSourceDomain
+  support?: AnswerBlockSupport
 }
 
 export interface SectionResultView {
@@ -144,9 +161,16 @@ export interface SectionResultView {
   blocks: CompletedTaskBlockView[]
 }
 
+// P5 stp-v2：推荐项视图在 stp-v1 字段之外可选携带有序结果项身份（§12.12 / handoff §2）。
+export interface RecommendationItemView extends PortfolioRecommendationItem {
+  resultItemId?: string
+  position?: number
+  subject?: SemanticSubjectReference
+}
+
 export interface RecommendationResultView {
   kind: 'RECOMMENDATION_RESULT'
-  recommendations: PortfolioRecommendationItem[]
+  recommendations: RecommendationItemView[]
 }
 
 export interface SynthesisResultView {
@@ -176,6 +200,10 @@ export interface CompletedTaskView {
   contextHandle?: string
   // P4：任务级表达状态。缺省（undefined）表示后端未提供，按兼容处理；不渲染差异。
   composition?: TaskCompositionView
+  // P5 stp-v2（设计 §10.4/§9.4/§11.14，handoff §2/§4）：履约角色、支持聚合、续接句柄。
+  fulfillmentRole?: FulfillmentRole
+  supportSummary?: TaskSupportSummary
+  continuationContext?: ContinuationContext
 }
 
 // ── P3 执行快照视图（FINAL，handoff §7）────────────────────────────────────
@@ -206,7 +234,7 @@ export interface ExecutionDisplayPlanView {
  */
 export function hasExecutionAnswerConflict(answer: {
   resolution: 'ANSWERED' | 'PARTIALLY_ANSWERED' | string
-  evidenceState?: 'VERIFIED' | 'NOT_REQUIRED' | 'INSUFFICIENT'
+  evidenceState?: AnswerEvidenceState
   semanticTurn?: { execution?: ExecutionDisplayPlanView }
 }): boolean {
   const execution = answer.semanticTurn?.execution
@@ -220,7 +248,8 @@ export function hasExecutionAnswerConflict(answer: {
 }
 
 export interface SemanticTurnView {
-  contractVersion: 'stp-v1'
+  // P5 stp-v2：迁移期同时接受 stp-v1/stp-v2（设计 §17.2）。
+  contractVersion: 'stp-v1' | 'stp-v2'
   disposition: TurnDisposition
   displayPlan?: DisplayPlanView
   clarification?: ClarificationView
@@ -282,7 +311,9 @@ export function extractOpaquePlanConfirmation(
 }
 
 function isKnownAgentTurnResponse(response: AgentTurnPayload): response is AgentTurnResponse {
-  if (response.contractVersion !== 'stp-v1') return false
+  if (response.contractVersion !== 'stp-v1' && response.contractVersion !== 'stp-v2') return false
+  // P5 stp-v2：Strict Context 失效优先于通用澄清（设计 §13.9 / handoff §3）。
+  if (response.disposition === 'CONTEXT_INVALIDATED') return true
   if (response.disposition === 'READY' || response.disposition === 'PARTIAL_READY') {
     return isReadyResponse(response)
   }
@@ -340,7 +371,7 @@ function isClarificationPayload(value: unknown): value is AgentTurnClarification
 function mapUnknownBoundary(response: AgentTurnPayload): SemanticTurnView {
   const disposition = response.disposition === 'BOUNDARY' ? 'BOUNDARY' : 'REJECTED'
   return {
-    contractVersion: 'stp-v1',
+    contractVersion: response.contractVersion === 'stp-v2' ? 'stp-v2' : 'stp-v1',
     disposition,
     completedTasks: [],
   }
@@ -360,6 +391,7 @@ function mapDisplayPlan(
       goalLabel: task.goalLabel,
       sourceDomain: task.sourceDomain,
       dependencySummary: task.dependencySummary ?? null,
+      ...mapFulfillmentRole(task.fulfillmentRole),
     })),
     constraints: [...(plan.constraints ?? [])],
   }
@@ -499,13 +531,14 @@ function mapCompletedTask(task: AgentTurnCompletedTaskResponse): CompletedTaskVi
     goalLabel: task.goalLabel,
     sourceDomain: task.sourceDomain,
     resultPayload: mapResultPayload(task.resultPayload),
-    // P3：透传不透明 ContextHandle，前端不得生成/解析/修改（handoff §6）。
-    ...(task.contextHandle === undefined || typeof task.contextHandle !== 'string'
-      ? {}
-      : { contextHandle: task.contextHandle }),
-    // P4：严格闭集映射；非法 composition 只丢 metadata 并上报脱敏诊断，
+    // P3/P5：不透明 ContextHandle（stp-v1 兼容）与续接句柄（stp-v2 权威）；不一致 fail closed（handoff §4/§6）。
+    ...mapTaskContextHandle(task),
+    // P4：严格闭集映射 composition；非法 composition 只丢 metadata 并上报脱敏诊断，
     // 不丢失已通过既有契约校验的可信正文与 sourceReferences（handoff §3）。
     ...mapTaskComposition(task.composition),
+    // P5：履约角色与支持聚合（设计 §10.4/§9.4）。
+    ...mapFulfillmentRole(task.fulfillmentRole),
+    ...mapTaskSupportSummary(task.supportSummary),
   }
 }
 
@@ -520,6 +553,8 @@ function mapResultPayload(payload: AgentTurnResultPayloadResponse): CompletedTas
         matchReasons: [...recommendation.matchReasons],
         evidenceIds: [...(recommendation.evidenceIds ?? [])],
         ...mapSourceReferencesField(recommendation.sourceReferences),
+        // P5：有序结果项身份（设计 §12.12 / handoff §2）。
+        ...mapOrderedResultItem(recommendation),
       })),
     }
   }
@@ -545,6 +580,8 @@ function mapCompletedTaskBlock(block: AnswerBlock): CompletedTaskBlockView {
     claimIds: [...(block.claimIds ?? [])],
     evidenceIds: [...(block.evidenceIds ?? [])],
     ...mapSourceReferencesField(block.sourceReferences),
+    // P5：逐 Block 来源域（权威）与支持明细（设计 §9.3 / handoff §5）。
+    ...mapBlockP5Fields(block),
   }
 }
 
@@ -702,6 +739,202 @@ function reportInvalidTaskComposition(): void {
   frontendDiagnostics.report(createFrontendDiagnosticEvent({
     eventName: 'frontend.response.invalid',
     errorCode: 'TASK_COMPOSITION_INVALID',
+    errorKind: 'INVALID_RESPONSE',
+  }))
+}
+
+// ── P5 stp-v2：任务/Block 级新字段校验（设计 §9.3/§9.4/§10.4/§11.14/§12.12，handoff §2/§4/§5）──
+// 均为可选 metadata：缺省视为未提供（兼容旧响应，不报诊断）；提供但非法时只丢该 metadata，
+// 保留已通过既有契约校验的可信正文与 sourceReferences，并上报脱敏诊断。
+const SOURCE_DOMAINS = new Set<SemanticSourceDomain>(['GENERAL', 'PORTFOLIO', 'SYNTHESIS'])
+const FULFILLMENT_ROLES = new Set<FulfillmentRole>(['PRIMARY', 'SUPPORTING', 'OPTIONAL'])
+const SUPPORT_KINDS = new Set<AnswerSupportKind>([
+  'VERIFIED_PUBLIC_EVIDENCE', 'GENERAL_KNOWLEDGE', 'DERIVED_FROM_TASKS',
+])
+const CONTEXT_TYPES = new Set<ConversationContextType>(['RECENT_SEMANTIC_TASK', 'RECOMMENDATION'])
+
+function p5StringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map((entry) => entry.trim())
+}
+
+function mapFulfillmentRole(value: unknown): { fulfillmentRole?: FulfillmentRole } {
+  const role = knownEnum(value, FULFILLMENT_ROLES)
+  return role === undefined ? {} : { fulfillmentRole: role }
+}
+
+function mapSupportKind(value: unknown): AnswerSupportKind | undefined {
+  return knownEnum(value, SUPPORT_KINDS)
+}
+
+function mapStatementReference(value: unknown): StatementSupportReference | null {
+  if (typeof value !== 'object' || value === null) return null
+  const raw = value as Record<string, unknown>
+  if (typeof raw.statementId !== 'string' || !raw.statementId.trim()) return null
+  const ref: StatementSupportReference = { statementId: raw.statementId.trim() }
+  if (typeof raw.sourceTaskId === 'string' && raw.sourceTaskId.trim()) {
+    ref.sourceTaskId = raw.sourceTaskId.trim()
+  }
+  if (Array.isArray(raw.publicSourceKeys)) ref.publicSourceKeys = p5StringArray(raw.publicSourceKeys)
+  return ref
+}
+
+function mapBlockSupport(value: unknown): AnswerBlockSupport | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const kind = mapSupportKind(raw.kind)
+  if (kind === undefined) return undefined
+  const statementReferences = Array.isArray(raw.statementReferences)
+    ? raw.statementReferences
+      .map(mapStatementReference)
+      .filter((ref): ref is StatementSupportReference => ref !== null)
+    : []
+  const support: AnswerBlockSupport = {
+    kind,
+    statementReferences,
+    sourceTaskIds: p5StringArray(raw.sourceTaskIds),
+    publicSourceKeys: p5StringArray(raw.publicSourceKeys),
+  }
+  if (typeof raw.contentVersion === 'string' && raw.contentVersion.trim()) {
+    support.contentVersion = raw.contentVersion.trim()
+  }
+  return support
+}
+
+// sourceDomain 权威；与旧 sourceScope 不一致（含 SYNTHESIS 携带非空 scope）即 fail closed（handoff §5）。
+function mapBlockSourceDomain(block: AnswerBlock): SemanticSourceDomain | undefined {
+  const domain = knownEnum(block.sourceDomain, SOURCE_DOMAINS)
+  if (domain === undefined) return undefined
+  const rawScope = (block as { sourceScope?: AnswerBlock['sourceScope'] | null }).sourceScope
+  if (domain === 'SYNTHESIS') {
+    if (rawScope !== undefined && rawScope !== null) {
+      reportInvalidBlockSourceDomain()
+      return undefined
+    }
+  } else if (rawScope !== undefined && rawScope !== null && rawScope !== domain) {
+    reportInvalidBlockSourceDomain()
+    return undefined
+  }
+  return domain
+}
+
+function mapBlockP5Fields(block: AnswerBlock): {
+  blockId?: string
+  sourceDomain?: SemanticSourceDomain
+  support?: AnswerBlockSupport
+} {
+  const result: {
+    blockId?: string
+    sourceDomain?: SemanticSourceDomain
+    support?: AnswerBlockSupport
+  } = {}
+  if (typeof block.blockId === 'string' && block.blockId.trim()) result.blockId = block.blockId.trim()
+  const sourceDomain = mapBlockSourceDomain(block)
+  if (sourceDomain !== undefined) result.sourceDomain = sourceDomain
+  const support = mapBlockSupport(block.support)
+  if (support !== undefined) result.support = support
+  return result
+}
+
+function mapTaskSupportSummary(value: unknown): { supportSummary?: TaskSupportSummary } {
+  if (value === undefined) return {}
+  if (typeof value !== 'object' || value === null) {
+    reportInvalidSupportSummary()
+    return {}
+  }
+  const raw = value as Record<string, unknown>
+  const kind = mapSupportKind(raw.kind)
+  if (kind === undefined
+    || !Number.isInteger(raw.statementCount) || (raw.statementCount as number) < 0
+    || !Number.isInteger(raw.publicSourceCount) || (raw.publicSourceCount as number) < 0) {
+    reportInvalidSupportSummary()
+    return {}
+  }
+  const summary: TaskSupportSummary = {
+    kind,
+    statementCount: raw.statementCount as number,
+    publicSourceCount: raw.publicSourceCount as number,
+  }
+  if (typeof raw.sourceTaskCount === 'number') summary.sourceTaskCount = raw.sourceTaskCount
+  if (typeof raw.contentVersion === 'string' && raw.contentVersion.trim()) {
+    summary.contentVersion = raw.contentVersion.trim()
+  }
+  return { supportSummary: summary }
+}
+
+function mapContinuationContext(value: unknown): ContinuationContext | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const contextHandle = typeof raw.contextHandle === 'string' ? raw.contextHandle.trim() : ''
+  const contextType = knownEnum(raw.contextType, CONTEXT_TYPES)
+  const sourceTaskId = typeof raw.sourceTaskId === 'string' ? raw.sourceTaskId.trim() : ''
+  if (!contextHandle || contextType === undefined || !sourceTaskId) return undefined
+  return { contextHandle, contextType, sourceTaskId }
+}
+
+// 新旧 context handle 同时存在必须一致，否则 fail closed：丢弃 stp-v2 续接能力，保留可信正文（handoff §4）。
+function mapTaskContextHandle(task: AgentTurnCompletedTaskResponse): {
+  contextHandle?: string
+  continuationContext?: ContinuationContext
+} {
+  const handle = typeof task.contextHandle === 'string' && task.contextHandle.trim()
+    ? task.contextHandle.trim() : undefined
+  const continuation = mapContinuationContext(task.continuationContext)
+  if (handle !== undefined && continuation !== undefined && handle !== continuation.contextHandle) {
+    reportInvalidContextHandle()
+    return handle !== undefined ? { contextHandle: handle } : {}
+  }
+  const result: { contextHandle?: string; continuationContext?: ContinuationContext } = {}
+  if (handle !== undefined) result.contextHandle = handle
+  if (continuation !== undefined) result.continuationContext = continuation
+  return result
+}
+
+// 有序结果项身份：以 resultItemId 为键，附带 position/subject（设计 §12.12 / handoff §2）。
+function mapOrderedResultItem(item: AgentTurnRecommendationItemResponse): {
+  resultItemId?: string
+  position?: number
+  subject?: SemanticSubjectReference
+} {
+  if (typeof item.resultItemId !== 'string' || !item.resultItemId.trim()) return {}
+  const result: {
+    resultItemId?: string
+    position?: number
+    subject?: SemanticSubjectReference
+  } = { resultItemId: item.resultItemId.trim() }
+  if (Number.isInteger(item.position) && (item.position as number) > 0) result.position = item.position
+  if (item.subject !== undefined && typeof item.subject === 'object' && item.subject !== null) {
+    const s = item.subject as { subjectType?: unknown; subjectId?: unknown }
+    if (typeof s.subjectType === 'string' && s.subjectType.trim()
+      && typeof s.subjectId === 'string' && s.subjectId.trim()) {
+      result.subject = { subjectType: s.subjectType.trim(), subjectId: s.subjectId.trim() }
+    }
+  }
+  return result
+}
+
+function reportInvalidBlockSourceDomain(): void {
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'BLOCK_SOURCE_DOMAIN_INVALID',
+    errorKind: 'INVALID_RESPONSE',
+  }))
+}
+
+function reportInvalidSupportSummary(): void {
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'TASK_SUPPORT_SUMMARY_INVALID',
+    errorKind: 'INVALID_RESPONSE',
+  }))
+}
+
+function reportInvalidContextHandle(): void {
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'CONTINUATION_CONTEXT_INVALID',
     errorKind: 'INVALID_RESPONSE',
   }))
 }

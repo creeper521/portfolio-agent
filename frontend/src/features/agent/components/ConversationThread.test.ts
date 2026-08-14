@@ -79,7 +79,7 @@ function mountThread(
   focusTarget: AnswerFocusTarget | null = null,
   failure?: {
     message: string
-    action: 'NONE' | 'RETRY' | 'RETRY_AFTER' | 'CORRECT_INPUT' | 'NAVIGATE_BACK'
+    action: 'NONE' | 'RETRY' | 'RETRY_AFTER' | 'CORRECT_INPUT' | 'NAVIGATE_BACK' | 'UPGRADE_REQUIRED'
     requestId?: string
     retryAfterSeconds?: number
   },
@@ -405,6 +405,20 @@ describe('ConversationThread', () => {
     expect(wrapper.findAll('[data-answer-recovery-action]')).toHaveLength(1)
     expect(wrapper.get('[data-answer-recovery-action]').attributes('data-answer-recovery-action'))
       .toBe('retry')
+  })
+
+  it('offers one explicit basic-mode action for an unsupported stp-v2 contract', async () => {
+    const wrapper = mountThread([], false, null, {
+      message: '当前服务不支持增强回答协议。你可以主动以基础模式继续。',
+      action: 'UPGRADE_REQUIRED',
+    })
+
+    const action = wrapper.get('[data-answer-recovery-action]')
+    expect(wrapper.findAll('[data-answer-recovery-action]')).toHaveLength(1)
+    expect(action.attributes('data-answer-recovery-action')).toBe('continue-basic-mode')
+    expect(action.text()).toBe('以基础模式继续')
+    await action.trigger('click')
+    expect(wrapper.emitted('continueBasicMode')).toEqual([[]])
   })
 
   it('emits a section evidence inspection instead of a follow-up request', async () => {
@@ -1312,5 +1326,459 @@ describe('ConversationThread P3 surfaces', () => {
   it('does not show the conflict notice when execution succeeded', () => {
     const wrapper = mountP3()
     expect(wrapper.find('[data-execution-conflict-notice]').exists()).toBe(false)
+  })
+})
+
+// ── P5 stp-v2 来源域 Block 视觉（鲜明版 B，设计 §4.3/§4.4）──
+describe('ConversationThread P5 source-domain blocks', () => {
+  function p5BlockAnswer() {
+    return mapAnswerResponse({
+      turnId: 'turn-p5-blocks',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [
+          {
+            displayIndex: '01',
+            goalLabel: '通用原理',
+            sourceDomain: 'GENERAL',
+            resultPayload: {
+              kind: 'SECTION_RESULT',
+              blocks: [{
+                sourceScope: 'GENERAL',
+                sourceDomain: 'GENERAL',
+                content: 'RBAC 是常见的访问控制模型。',
+                claimIds: [],
+                evidenceIds: [],
+                support: { kind: 'GENERAL_KNOWLEDGE', statementReferences: [], sourceTaskIds: [], publicSourceKeys: [] },
+              }],
+            },
+          },
+          {
+            displayIndex: '02',
+            goalLabel: '作者实现',
+            sourceDomain: 'PORTFOLIO',
+            resultPayload: {
+              kind: 'SECTION_RESULT',
+              blocks: [{
+                sourceScope: 'PORTFOLIO',
+                sourceDomain: 'PORTFOLIO',
+                sectionType: 'SOLUTION',
+                title: 'SQL 审计的 RBAC',
+                content: '作者在 SQL 审计项目里用 RBAC 隔离了审计师角色。',
+                claimIds: [],
+                evidenceIds: [],
+                support: { kind: 'VERIFIED_PUBLIC_EVIDENCE', statementReferences: [], sourceTaskIds: [], publicSourceKeys: [] },
+              }],
+            },
+          },
+          {
+            displayIndex: '03',
+            goalLabel: '综合结论',
+            sourceDomain: 'SYNTHESIS',
+            resultPayload: {
+              kind: 'SECTION_RESULT',
+              blocks: [{
+                sourceDomain: 'SYNTHESIS',
+                content: '结合通用模型与作者实现，建议优先关注角色隔离。',
+                claimIds: [],
+                evidenceIds: [],
+                support: { kind: 'DERIVED_FROM_TASKS', statementReferences: [], sourceTaskIds: [], publicSourceKeys: [] },
+              }],
+            },
+          },
+        ],
+      },
+    } as never)
+  }
+
+  it('renders distinct solid source pills and support badges per domain', () => {
+    const wrapper = mountThread([semanticMessage('agent-p5-blocks', p5BlockAnswer())])
+
+    // 三类来源域药丸按域色分区（鲜明版 B 实底药丸）
+    expect(wrapper.get('[data-domain="GENERAL"] [data-source-label]').text()).toContain('通用知识')
+    expect(wrapper.get('[data-domain="PORTFOLIO"] [data-source-label]').text()).toContain('作品集资料')
+    expect(wrapper.get('[data-domain="SYNTHESIS"] [data-source-label]').text()).toContain('跨域综合')
+
+    // 支持徽标按支持类型着色
+    expect(wrapper.get('[data-support-badge][data-support="GENERAL_KNOWLEDGE"]').text()).toBe('通用知识')
+    expect(wrapper.get('[data-support-badge][data-support="VERIFIED_PUBLIC_EVIDENCE"]').text()).toBe('✓已验证证据')
+    expect(wrapper.get('[data-support-badge][data-support="DERIVED_FROM_TASKS"]').text()).toBe('由通用+作品集推导')
+  })
+
+  it('gives the SYNTHESIS block a distinct indigo treatment with a header band', () => {
+    const wrapper = mountThread([semanticMessage('agent-p5-synthesis', p5BlockAnswer())])
+    const synthesisBlock = wrapper.get('[data-domain="SYNTHESIS"]')
+    expect(synthesisBlock.classes()).toContain('answer-block')
+    // SYNTHESIS 独有头部色带
+    expect(synthesisBlock.find('.answer-block__head').exists()).toBe(true)
+    // 正文保留
+    expect(synthesisBlock.text()).toContain('结合通用模型与作者实现')
+  })
+
+  it('falls back to the legacy sourceScope when a block lacks sourceDomain and hides the support badge', () => {
+    // 旧响应：只有 sourceScope，无 sourceDomain/support → 仍按域分区，不渲染支持徽标
+    const answer = mapAnswerResponse({
+      turnId: 'turn-legacy-block',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v1',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '作品集事实',
+          sourceDomain: 'PORTFOLIO',
+          resultPayload: {
+            kind: 'SECTION_RESULT',
+            blocks: [{
+              sourceScope: 'PORTFOLIO',
+              content: '受控作品集正文。',
+              claimIds: [],
+              evidenceIds: [],
+            }],
+          },
+        }],
+      },
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-legacy-block', answer)])
+
+    expect(wrapper.get('[data-domain="PORTFOLIO"] [data-source-label]').text()).toContain('作品集资料')
+    // 无 support → 不渲染支持徽标
+    expect(wrapper.find('[data-support-badge]').exists()).toBe(false)
+  })
+})
+
+// ── P5 stp-v2 降级 / 限定语 / 部分完成（设计 §4.4/§9.8/§9.9/§10.8）──
+describe('ConversationThread P5 degradation, caveats and partial completion', () => {
+  function portfolioSectionTask(blockId?: string) {
+    return {
+      displayIndex: '01',
+      goalLabel: '作者实现',
+      sourceDomain: 'PORTFOLIO',
+      resultPayload: {
+        kind: 'SECTION_RESULT',
+        blocks: [{
+          sourceScope: 'PORTFOLIO',
+          ...(blockId ? { blockId } : {}),
+          sectionType: 'SOLUTION',
+          title: '实现概览',
+          content: '受控作品集正文。',
+          claimIds: [],
+          evidenceIds: [],
+        }],
+      },
+    }
+  }
+
+  function mountAnswer(answer: ReturnType<typeof mapAnswerResponse>) {
+    return mountThread([semanticMessage('agent-p5-surface', answer)])
+  }
+
+  it('renders a degradation notice with specific kinds from degradationSummary', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-degraded-kinds',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      degraded: false,
+      degradationSummary: {
+        degraded: true,
+        kinds: ['RETRIEVAL_FALLBACK', 'EXPRESSION_FALLBACK'],
+        affectedTaskIds: [],
+      },
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'PARTIAL' },
+        completedTasks: [portfolioSectionTask()],
+      },
+    } as never)
+
+    const wrapper = mountAnswer(answer)
+    const notice = wrapper.get('[data-degraded-notice]')
+    expect(notice.text()).toContain('检索回退')
+    expect(notice.text()).toContain('表达回退')
+    expect(notice.text()).toContain('基础回答方式')
+  })
+
+  it('renders a partial-completion banner without hiding the trusted body', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-partial',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'PARTIALLY_ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'PARTIAL' },
+        completedTasks: [portfolioSectionTask()],
+      },
+    } as never)
+
+    const wrapper = mountAnswer(answer)
+    expect(wrapper.get('[data-partial-banner]').text()).toContain('已回答部分内容')
+    // 已发布正文仍渲染
+    expect(wrapper.text()).toContain('受控作品集正文。')
+  })
+
+  it('attaches a structured caveat under its target block by blockId', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-caveat-block',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      caveats: [{
+        code: 'NOT_FULL_IMPLEMENTATION',
+        message: '体现不等于完整实现',
+        appliesToBlockIds: ['block-01'],
+        sourceTaskIds: [],
+      }],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [portfolioSectionTask('block-01')],
+      },
+    } as never)
+
+    const wrapper = mountAnswer(answer)
+    // 挂在所涉 Block 下方
+    expect(wrapper.get('[data-caveat-block="block-01"]').text()).toBe('体现不等于完整实现')
+    // 不在通用限定语区重复出现
+    expect(wrapper.find('[data-caveats-general]').exists()).toBe(false)
+  })
+
+  it('renders caveats without a matching block at the answer level', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-caveat-general',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      caveats: [{
+        code: 'GENERAL_NOTE',
+        message: '本回答综合多个来源，仅供参考。',
+        appliesToBlockIds: [],
+        sourceTaskIds: [],
+      }],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [portfolioSectionTask('block-01')],
+      },
+    } as never)
+
+    const wrapper = mountAnswer(answer)
+    expect(wrapper.get('[data-caveats-general] [data-caveat-code="GENERAL_NOTE"]').text())
+      .toBe('本回答综合多个来源，仅供参考。')
+    // 不挂在 Block 下
+    expect(wrapper.find('[data-caveat-block]').exists()).toBe(false)
+  })
+})
+
+// ── P5 stp-v2 Context 失效恢复 + 有序结果续接（设计 §13.9/§13.14/§12.12）──
+describe('ConversationThread P5 context invalidation and result continuation', () => {
+  function invalidatedAnswer() {
+    return mapAnswerResponse({
+      turnId: 'turn-context-invalidated',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'NEEDS_CLARIFICATION',
+      title: '',
+      summary: '',
+      blocks: [],
+      contextInvalidation: {
+        reasonCode: 'CONTEXT_RESULT_STALE',
+        recoveryAction: 'RESTART_FROM_CURRENT_CONTENT',
+        contextType: 'RECOMMENDATION',
+        currentContentVersion: 'public-2026-08-13',
+      },
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'CONTEXT_INVALIDATED',
+      },
+    } as never)
+  }
+
+  it('renders the context-invalidation recovery card and emits recoverContext on the latest message', async () => {
+    const wrapper = mountThread([semanticMessage('agent-invalidated', invalidatedAnswer())])
+
+    const card = wrapper.get('[data-testid="context-invalidated-notice"]')
+    expect(card.text()).toContain('对话上下文已失效')
+    expect(card.text()).toContain('该上下文已与最新内容不兼容')
+    await card.get('[data-action="recover-context"]').trigger('click')
+    expect(wrapper.emitted('recoverContext')).toEqual([[]])
+  })
+
+  it('keeps an older context-invalidation card read-only so only the latest is actionable', () => {
+    const wrapper = mountThread([
+      semanticMessage('agent-invalidated-old', invalidatedAnswer()),
+      semanticMessage('agent-invalidated-new', invalidatedAnswer()),
+    ])
+    const cards = wrapper.findAll('[data-testid="context-invalidated-notice"]')
+    expect(cards).toHaveLength(2)
+    // 旧卡无恢复按钮（只读记录），仅最新卡可操作
+    expect(cards[0]?.find('[data-action="recover-context"]').exists()).toBe(false)
+    expect(cards[1]?.find('[data-action="recover-context"]').exists()).toBe(true)
+  })
+
+  it('renders a contextResolution light notice when revalidation succeeded', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-context-resolved',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      contextResolution: {
+        mode: 'REVALIDATED_TO_CURRENT',
+        contextType: 'RECENT_SEMANTIC_TASK',
+        currentContentVersion: 'public-2026-08-13',
+      },
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '回答',
+          sourceDomain: 'PORTFOLIO',
+          resultPayload: { kind: 'SECTION_RESULT', blocks: [{ sourceScope: 'PORTFOLIO', content: '正文。', claimIds: [], evidenceIds: [] }] },
+        }],
+      },
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-resolved', answer)])
+    expect(wrapper.get('[data-context-resolution]').text()).toContain('重新核对')
+  })
+
+  it('offers a result-item continuation that carries the resultItemId on recommendations', async () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-result-continue',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '推荐后端项目',
+          sourceDomain: 'PORTFOLIO',
+          contextHandle: 'recommendation-handle',
+          resultPayload: {
+            kind: 'RECOMMENDATION_RESULT',
+            recommendations: [{
+              portfolioId: 'sql-audit',
+              title: 'SQL 审计工具',
+              route: '/projects/sql-audit',
+              matchReasons: ['后端交付'],
+              evidenceIds: [],
+              resultItemId: 'result-01',
+              position: 1,
+              subject: { subjectType: 'PROJECT', subjectId: 'sql-audit' },
+            }],
+          },
+        }],
+      },
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-result-continue', answer)])
+
+    const continueBtn = wrapper.get('[data-recommendation-continue]')
+    expect(continueBtn.attributes('data-result-item')).toBe('result-01')
+    await continueBtn.trigger('click')
+    expect(wrapper.emitted('continueFromContext')?.[0]?.[0]).toMatchObject({
+      contextHandle: 'recommendation-handle',
+      expectedContextType: 'RECOMMENDATION',
+      resultItemId: 'result-01',
+    })
+  })
+})
+
+// ── P5 stp-v2「回答构成」信任层（设计 §4.2/§4.4）──
+describe('ConversationThread P5 answer-composition trust layer', () => {
+  it('shows the composition panel for a multi-task answer with roles and composition', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-composition',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      sourceComposition: 'CROSS_DOMAIN_DERIVED',
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [
+          {
+            displayIndex: '01',
+            goalLabel: '作品集事实',
+            sourceDomain: 'PORTFOLIO',
+            fulfillmentRole: 'PRIMARY',
+            resultPayload: { kind: 'SECTION_RESULT', blocks: [{ sourceScope: 'PORTFOLIO', content: '正文一。', claimIds: [], evidenceIds: [] }] },
+          },
+          {
+            displayIndex: '02',
+            goalLabel: '综合结论',
+            sourceDomain: 'SYNTHESIS',
+            fulfillmentRole: 'SUPPORTING',
+            resultPayload: { kind: 'SECTION_RESULT', blocks: [{ sourceDomain: 'SYNTHESIS', content: '正文二。', claimIds: [], evidenceIds: [] }] },
+          },
+        ],
+      },
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-composition', answer)])
+
+    const panel = wrapper.get('[data-testid="answer-composition-panel"]')
+    expect(panel.text()).toContain('跨域派生')
+    expect(panel.get('[data-task-index="01"] [data-role="PRIMARY"]').text()).toBe('主')
+    expect(panel.get('[data-task-index="02"] [data-role="SUPPORTING"]').text()).toBe('辅')
+  })
+
+  it('hides the composition panel for a single-task answer without trust detail', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-single',
+      contentVersion: 'public-2026-08-13',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'READY',
+        outcome: { planOutcome: 'SUCCEEDED' },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '单个任务',
+          sourceDomain: 'PORTFOLIO',
+          resultPayload: { kind: 'SECTION_RESULT', blocks: [{ sourceScope: 'PORTFOLIO', content: '正文。', claimIds: [], evidenceIds: [] }] },
+        }],
+      },
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-single', answer)])
+
+    // 单任务、无角色/支持/组成/降级/限定语 → 不出现信任层入口（设计 §4.4「单任务可隐藏」）
+    expect(wrapper.find('[data-testid="answer-composition-panel"]').exists()).toBe(false)
   })
 })

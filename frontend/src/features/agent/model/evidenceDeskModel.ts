@@ -58,6 +58,8 @@ export function buildEvidenceDeskContext(
   )
 
   // P3：聚合章节与推荐项的公开来源引用，去重保序（按 referenceKey 第一次出现）。
+  // P5（设计 §2.7 规则2/§9.7）：publicSourceCatalog 存在时作为 SOURCES 权威目录（映射层已去重）；
+  // 否则回落聚合 inline sourceReferences。
   const sources: PublicSourceReference[] = []
   const seenSources = new Set<string>()
   const collect = (reference: PublicSourceReference) => {
@@ -65,13 +67,28 @@ export function buildEvidenceDeskContext(
     seenSources.add(reference.referenceKey)
     sources.push(reference)
   }
-  for (const section of message.answer.sections) {
-    for (const reference of section.sourceReferences ?? []) collect(reference)
-  }
-  const recommendation = message.answer.portfolioRecommendation
-  if (recommendation) {
-    for (const item of recommendation.items) {
-      for (const reference of item.sourceReferences ?? []) collect(reference)
+  const catalog = message.answer.publicSourceCatalog
+  if (catalog && catalog.length) {
+    for (const entry of catalog) {
+      const reference: PublicSourceReference = {
+        referenceKey: entry.referenceKey,
+        label: entry.label,
+        sourceType: entry.sourceType,
+        subjectRoute: entry.subjectRoute,
+        publishedVersion: entry.publishedVersion,
+      }
+      if (entry.evidenceRoute) reference.evidenceRoute = entry.evidenceRoute
+      collect(reference)
+    }
+  } else {
+    for (const section of message.answer.sections) {
+      for (const reference of section.sourceReferences ?? []) collect(reference)
+    }
+    const recommendation = message.answer.portfolioRecommendation
+    if (recommendation) {
+      for (const item of recommendation.items) {
+        for (const reference of item.sourceReferences ?? []) collect(reference)
+      }
     }
   }
 

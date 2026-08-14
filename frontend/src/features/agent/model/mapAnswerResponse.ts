@@ -3,18 +3,31 @@ import type {
   AnswerSectionView,
   MappedAnswer,
   AnswerBlock,
+  AnswerBlockSupport,
   CompletionReceiptResponse,
+  ContextInvalidation,
+  ContextInvalidationRecoveryAction,
+  ContextResolution,
+  ContextResolutionMode,
   ConversationContextSummary,
+  ConversationContextType,
   ConversationContinuationStatus,
   LegacyAnswerSection,
   MappedAnswerSuccess,
   MappedCompletionReceipt,
   MappedConversation,
   P3AnswerSuccess,
+  PublicAnswerCaveat,
+  PublicDegradationKind,
+  PublicDegradationSummary,
+  PublicSourceCatalogEntry,
   PublicSourceReference,
+  PublicSourceType,
   RecentTaskType,
+  SourceComposition,
 } from './answerTypes'
 import { resolveAnswerSuccess } from './answerTypes'
+import { knownEnum } from './enumSafety'
 import {
   mapSemanticTurnResponse,
   mapSourceReferencesField,
@@ -32,9 +45,25 @@ import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnos
 const INVALID_TYPED_BLOCK_ERROR = 'Answer response contains an invalid typed block'
 
 export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
-  const semanticTurn = response.agentTurn === undefined
+  let semanticTurn = response.agentTurn === undefined
     ? undefined
     : mapSemanticTurnResponse(response.agentTurn)
+  // ── P5 stp-v2 顶层字段（设计 §2.2）──
+  const sourceComposition = mapSourceComposition(response.sourceComposition)
+  const publicSourceCatalog = mapPublicSourceCatalog(response.publicSourceCatalog)
+  const degradationSummary = mapDegradationSummary(response.degradationSummary)
+  const caveats = mapCaveats(response.caveats)
+  const contextResolution = mapContextResolution(response.contextResolution)
+  let contextInvalidation = mapContextInvalidation(response.contextInvalidation)
+  // 设计 §13.9 / handoff §3：CONTEXT_INVALIDATED 必须伴随非空 contextInvalidation 且 blocks 为空，否则 fail closed。
+  if (semanticTurn !== undefined && semanticTurn.disposition === 'CONTEXT_INVALIDATED') {
+    const blocksEmpty = response.blocks === undefined || response.blocks.length === 0
+    if (contextInvalidation === undefined || !blocksEmpty) {
+      reportInvalidContextInvalidation()
+      contextInvalidation = undefined
+      semanticTurn = { ...semanticTurn, disposition: 'REJECTED', clarification: undefined, completedTasks: [] }
+    }
+  }
   const hasV2Blocks = response.blocks !== undefined
   const authoritativeContent = hasV2Blocks ? response.blocks : response.sections
   const isBlank = !response.title?.trim() && !response.summary?.trim() &&
@@ -93,7 +122,7 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     ),
     coveredTopics: [...new Set(response.coveredTopics ?? [])],
     guidanceStage: response.guidanceStage ?? null,
-    degraded: response.degraded === true,
+    degraded: degradationSummary !== undefined ? degradationSummary.degraded : response.degraded === true,
     referenceContext: response.referenceContext
       ? {
           ...response.referenceContext,
@@ -107,6 +136,13 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     semanticTurn,
     // P3：会话续接状态与 ResumeToken（handoff §5）。
     ...mapConversationField(response.conversation),
+    // P5 stp-v2 顶层字段。
+    ...(sourceComposition === undefined ? {} : { sourceComposition }),
+    ...(publicSourceCatalog === undefined ? {} : { publicSourceCatalog }),
+    ...(degradationSummary === undefined ? {} : { degradationSummary }),
+    ...(caveats === undefined ? {} : { caveats }),
+    ...(contextInvalidation === undefined ? {} : { contextInvalidation }),
+    ...(contextResolution === undefined ? {} : { contextResolution }),
   }
 }
 
@@ -156,8 +192,11 @@ const RECENT_TASK_TYPES: ReadonlySet<RecentTaskType> = new Set([
 ])
 
 const PUBLIC_TASK_STATUSES = new Set<string>([
-  'COMPLETED', 'PARTIAL', 'NOT_SUPPORTED', 'PRESENTATION_BLOCKED', 'REJECTED',
-  'FAILED', 'DEPENDENCY_UNAVAILABLE', 'NOT_EXECUTED_BUDGET', 'CANCELLED',
+  // P5 stp-v2 公共闭集（handoff §1）
+  'COMPLETED', 'PARTIAL', 'EMPTY', 'NOT_SUPPORTED', 'NOT_APPLICABLE', 'BLOCKED',
+  'UNAVAILABLE', 'STALE', 'FAILED', 'REJECTED', 'NOT_EXECUTED',
+  // 迁移期旧值
+  'PRESENTATION_BLOCKED', 'DEPENDENCY_UNAVAILABLE', 'NOT_EXECUTED_BUDGET', 'CANCELLED',
 ])
 
 function isConversationContinuationStatus(value: string): value is ConversationContinuationStatus {
@@ -245,7 +284,24 @@ function mapSemanticBlock(
     evidenceIds: stableDistinct(block.evidenceIds ?? []),
     // 已在语义映射层校验过，这里仅复制（保持不可变）。
     ...(block.sourceReferences === undefined ? {} : { sourceReferences: block.sourceReferences.map(copySourceReference) }),
+    // P5 stp-v2（设计 §9.3 / handoff §5）：逐 Block 来源域（权威）、支持明细与 blockId，
+    // 已在 semanticTurnView 校验通过后透传到统一章节视图供渲染层消费。
+    ...(block.blockId === undefined ? {} : { blockId: block.blockId }),
+    ...(block.sourceDomain === undefined ? {} : { sourceDomain: block.sourceDomain }),
+    ...(block.support === undefined ? {} : { support: copyBlockSupport(block.support) }),
   }
+}
+
+// P5：Block 支持明细是不可变投影；这里深拷贝 statementReferences 与数组，保持视图不可变。
+function copyBlockSupport(support: AnswerBlockSupport): AnswerBlockSupport {
+  const result: AnswerBlockSupport = {
+    kind: support.kind,
+    statementReferences: support.statementReferences.map((reference) => ({ ...reference })),
+    sourceTaskIds: [...support.sourceTaskIds],
+    publicSourceKeys: [...support.publicSourceKeys],
+  }
+  if (support.contentVersion !== undefined) result.contentVersion = support.contentVersion
+  return result
 }
 
 function mapSections(response: AnswerResponse): AnswerSectionView[] {
@@ -441,5 +497,137 @@ function reportInvalidRecommendation(turnId: string): void {
     errorCode: 'PORTFOLIO_RECOMMENDATION_INVALID',
     errorKind: 'INVALID_RESPONSE',
     turnId: turnId,
+  }))
+}
+
+// ── P5 stp-v2 顶层字段校验（设计 §2.2/§9.5/§9.7/§9.9/§10.8/§13.14，handoff §3/§6）──
+const SOURCE_COMPOSITIONS = new Set<SourceComposition>([
+  'GENERAL_ONLY', 'PORTFOLIO_ONLY', 'MULTI_SOURCE', 'CROSS_DOMAIN_DERIVED',
+])
+const DEGRADATION_KINDS = new Set<PublicDegradationKind>([
+  'RETRIEVAL_FALLBACK', 'EXPRESSION_FALLBACK', 'CROSS_DOMAIN_EXPRESSION_FALLBACK', 'CONTENT_BACKEND_FALLBACK',
+])
+const CONTEXT_INVALIDATION_RECOVERY_ACTIONS = new Set<ContextInvalidationRecoveryAction>([
+  'RESTART_FROM_CURRENT_CONTENT', 'RESELECT_RESULTS', 'REASK_WITHOUT_CONTEXT',
+])
+const CONTEXT_RESOLUTION_MODES = new Set<ContextResolutionMode>(['REVALIDATED_TO_CURRENT'])
+const P5_CONTEXT_TYPES = new Set<ConversationContextType>(['RECENT_SEMANTIC_TASK', 'RECOMMENDATION'])
+const CATALOG_SOURCE_TYPES = new Set<PublicSourceType>([
+  'COLLECTION', 'DOCUMENT', 'SCREENSHOT', 'CODE', 'TEST_RESULT',
+])
+const RELATIVE_ROUTE_PATTERN = /^\/[^/][A-Za-z0-9._\-/?&=%~]*$/
+
+function isRelativeSiteRoute(value: string): boolean {
+  return RELATIVE_ROUTE_PATTERN.test(value) && !value.includes('://')
+}
+
+function mapSourceComposition(value: unknown): SourceComposition | undefined {
+  return knownEnum(value, SOURCE_COMPOSITIONS)
+}
+
+function mapCatalogEntry(value: unknown): PublicSourceCatalogEntry | null {
+  if (typeof value !== 'object' || value === null) return null
+  const entry = value as Record<string, unknown>
+  const referenceKey = typeof entry.referenceKey === 'string' ? entry.referenceKey.trim() : ''
+  const label = typeof entry.label === 'string' ? entry.label.trim() : ''
+  const sourceType = typeof entry.sourceType === 'string' ? entry.sourceType : ''
+  const subjectRoute = typeof entry.subjectRoute === 'string' ? entry.subjectRoute.trim() : ''
+  const publishedVersion = typeof entry.publishedVersion === 'string' ? entry.publishedVersion.trim() : ''
+  if (!referenceKey || !label || !subjectRoute || !publishedVersion) return null
+  if (!CATALOG_SOURCE_TYPES.has(sourceType as PublicSourceType)) return null
+  if (!isRelativeSiteRoute(subjectRoute)) return null
+  const result: PublicSourceCatalogEntry = {
+    referenceKey,
+    label,
+    sourceType: sourceType as PublicSourceType,
+    subjectRoute,
+    publishedVersion,
+  }
+  if (typeof entry.evidenceRoute === 'string' && isRelativeSiteRoute(entry.evidenceRoute.trim())) {
+    result.evidenceRoute = entry.evidenceRoute.trim()
+  }
+  return result
+}
+
+// 顶层目录按 referenceKey 去重（设计 §9.7）；同一 key 可被多个 Block 的 publicSourceKeys 引用。
+function mapPublicSourceCatalog(value: unknown): PublicSourceCatalogEntry[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const seen = new Set<string>()
+  const entries: PublicSourceCatalogEntry[] = []
+  for (const raw of value) {
+    const entry = mapCatalogEntry(raw)
+    if (entry === null || seen.has(entry.referenceKey)) continue
+    seen.add(entry.referenceKey)
+    entries.push(entry)
+  }
+  return entries.length > 0 ? entries : undefined
+}
+
+function mapDegradationSummary(value: unknown): PublicDegradationSummary | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  if (raw.degraded !== true && raw.degraded !== false) return undefined
+  const kinds = Array.isArray(raw.kinds)
+    ? raw.kinds
+      .map((kind) => knownEnum(kind, DEGRADATION_KINDS))
+      .filter((kind): kind is PublicDegradationKind => kind !== undefined)
+    : []
+  return {
+    degraded: raw.degraded,
+    kinds,
+    affectedTaskIds: stringLabelArray(raw.affectedTaskIds),
+  }
+}
+
+function mapCaveat(value: unknown): PublicAnswerCaveat | null {
+  if (typeof value !== 'object' || value === null) return null
+  const raw = value as Record<string, unknown>
+  const code = typeof raw.code === 'string' ? raw.code.trim() : ''
+  const message = typeof raw.message === 'string' ? raw.message.trim() : ''
+  if (!code || !message) return null
+  return {
+    code,
+    message,
+    appliesToBlockIds: stringLabelArray(raw.appliesToBlockIds),
+    sourceTaskIds: stringLabelArray(raw.sourceTaskIds),
+  }
+}
+
+function mapCaveats(value: unknown): PublicAnswerCaveat[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const caveats = value
+    .map(mapCaveat)
+    .filter((caveat): caveat is PublicAnswerCaveat => caveat !== null)
+  return caveats.length > 0 ? caveats : undefined
+}
+
+function mapContextInvalidation(value: unknown): ContextInvalidation | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const reasonCode = typeof raw.reasonCode === 'string' ? raw.reasonCode.trim() : ''
+  const recoveryAction = knownEnum(raw.recoveryAction, CONTEXT_INVALIDATION_RECOVERY_ACTIONS)
+  const contextType = knownEnum(raw.contextType, P5_CONTEXT_TYPES)
+  const currentContentVersion = typeof raw.currentContentVersion === 'string' ? raw.currentContentVersion.trim() : ''
+  if (!reasonCode || recoveryAction === undefined || contextType === undefined || !currentContentVersion) {
+    return undefined
+  }
+  return { reasonCode, recoveryAction, contextType, currentContentVersion }
+}
+
+function mapContextResolution(value: unknown): ContextResolution | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const mode = knownEnum(raw.mode, CONTEXT_RESOLUTION_MODES)
+  const contextType = knownEnum(raw.contextType, P5_CONTEXT_TYPES)
+  const currentContentVersion = typeof raw.currentContentVersion === 'string' ? raw.currentContentVersion.trim() : ''
+  if (mode === undefined || contextType === undefined || !currentContentVersion) return undefined
+  return { mode, contextType, currentContentVersion }
+}
+
+function reportInvalidContextInvalidation(): void {
+  frontendDiagnostics.report(createFrontendDiagnosticEvent({
+    eventName: 'frontend.response.invalid',
+    errorCode: 'CONTEXT_INVALIDATION_INVALID',
+    errorKind: 'INVALID_RESPONSE',
   }))
 }

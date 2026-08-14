@@ -8,7 +8,12 @@ import {
   answerTechTail,
   answerVerificationTag,
   blockScopeTag,
+  degradationKindLabel,
   degradedNotice,
+  fulfillmentRoleLabel,
+  sourceCompositionLabel,
+  sourceDomainLabel,
+  supportKindLabel,
 } from './answerLabels'
 
 const base = {
@@ -104,5 +109,42 @@ describe('answerLabels', () => {
     const tail = answerTechTail({ ...base, constructionMode: 'MIXED_COMPOSITION' })
     expect(tail).not.toContain('模型')
     expect(tail).not.toContain('AI')
+  })
+
+  it('labels P5 source domains and support kinds from the closed whitelist (P5)', () => {
+    // 来源域文案（设计 §4.5）
+    expect(sourceDomainLabel('GENERAL')).toBe('通用知识')
+    expect(sourceDomainLabel('PORTFOLIO')).toBe('作品集资料')
+    expect(sourceDomainLabel('SYNTHESIS')).toBe('跨域综合')
+    // 未知/缺失 fail-closed：返回 null，调用方不渲染域标记
+    expect(sourceDomainLabel(undefined)).toBeNull()
+    expect(sourceDomainLabel(null)).toBeNull()
+
+    // 支持类型文案（设计 §4.5）
+    expect(supportKindLabel('VERIFIED_PUBLIC_EVIDENCE')).toBe('✓已验证证据')
+    expect(supportKindLabel('GENERAL_KNOWLEDGE')).toBe('通用知识')
+    expect(supportKindLabel('DERIVED_FROM_TASKS')).toBe('由通用+作品集推导')
+    expect(supportKindLabel(undefined)).toBeNull()
+  })
+
+  it('labels P5 degradation kinds from the closed whitelist (P5)', () => {
+    expect(degradationKindLabel('RETRIEVAL_FALLBACK')).toBe('检索回退')
+    expect(degradationKindLabel('EXPRESSION_FALLBACK')).toBe('表达回退')
+    expect(degradationKindLabel('CROSS_DOMAIN_EXPRESSION_FALLBACK')).toBe('跨域表达回退')
+    expect(degradationKindLabel('CONTENT_BACKEND_FALLBACK')).toBe('内容后端回退')
+    expect(degradationKindLabel(undefined)).toBeNull()
+  })
+
+  it('labels P5 source composition and fulfillment roles from the closed whitelist (P5)', () => {
+    expect(sourceCompositionLabel('GENERAL_ONLY')).toBe('仅通用知识')
+    expect(sourceCompositionLabel('PORTFOLIO_ONLY')).toBe('仅作品集资料')
+    expect(sourceCompositionLabel('MULTI_SOURCE')).toBe('多来源')
+    expect(sourceCompositionLabel('CROSS_DOMAIN_DERIVED')).toBe('跨域派生')
+    expect(sourceCompositionLabel(undefined)).toBeNull()
+
+    expect(fulfillmentRoleLabel('PRIMARY')).toBe('主')
+    expect(fulfillmentRoleLabel('SUPPORTING')).toBe('辅')
+    expect(fulfillmentRoleLabel('OPTIONAL')).toBe('可选')
+    expect(fulfillmentRoleLabel(undefined)).toBeNull()
   })
 })

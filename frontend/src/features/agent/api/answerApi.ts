@@ -10,6 +10,7 @@ import type {
   PlanConfirmationSubmission,
   PortfolioReferenceContext,
   SemanticContextRequest,
+  SemanticTurnContract,
   TurnAction,
   ConversationTopic,
   PortfolioRecommendationContextRequest,
@@ -20,7 +21,8 @@ import { createRequestToken } from './createRequestToken'
 export interface AnswerApiRequest {
   turnId: string
   action?: TurnAction
-  agentTurnContract?: 'stp-v1'
+  // P5 stp-v2：调用方显式声明；生产工作区默认请求 stp-v2，409 仅允许用户主动以 stp-v1 重试。
+  agentTurnContract?: SemanticTurnContract
   planConfirmation?: PlanConfirmationSubmission
   semanticContext?: SemanticContextRequest
   invalidatedPlanReference?: InvalidatedPlanReference
@@ -93,6 +95,10 @@ export function askQuestion(
             contextReference: {
               contextHandle: input.contextReference.contextHandle,
               expectedContextType: input.contextReference.expectedContextType,
+              // P5 stp-v2（设计 §12.12 / handoff §2）：显式结果项选择；缺省不写入。
+              ...(input.contextReference.resultItemId === undefined
+                ? {}
+                : { resultItemId: input.contextReference.resultItemId }),
             },
           }),
       messages: input.messages?.map((message) => ({
