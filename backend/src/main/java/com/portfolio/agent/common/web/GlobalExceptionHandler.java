@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -78,6 +79,17 @@ public class GlobalExceptionHandler {
                 CommonErrorCode.UNSUPPORTED_MEDIA_TYPE);
     }
 
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorResponse> handleResponseStatus(
+            ResponseStatusException exception,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
+        String code = stableStatusCode(exception, status);
+        markRejected(request, code);
+        return response(status, code, publicStatusMessage(status));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(
             Exception exception,
@@ -101,6 +113,22 @@ public class GlobalExceptionHandler {
             CommonErrorCode errorCode
     ) {
         return response(status, errorCode.getCode(), errorCode.getDefaultMessage());
+    }
+
+    private String stableStatusCode(ResponseStatusException exception, HttpStatus status) {
+        String reason = exception.getReason();
+        if (reason != null && reason.matches("[A-Z][A-Z0-9_]{2,63}")) {
+            return reason;
+        }
+        return "HTTP_" + status.value();
+    }
+
+    private String publicStatusMessage(HttpStatus status) {
+        return switch (status) {
+            case BAD_REQUEST -> "请求参数不符合要求";
+            case CONFLICT -> "请求状态冲突，请检查后重试";
+            default -> status.getReasonPhrase();
+        };
     }
 
     private ResponseEntity<ApiErrorResponse> response(

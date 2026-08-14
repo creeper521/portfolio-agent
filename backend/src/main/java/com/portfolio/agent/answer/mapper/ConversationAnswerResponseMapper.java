@@ -126,6 +126,11 @@ public final class ConversationAnswerResponseMapper {
 
     private ConversationAnswerBlockResponse toBlockResponse(
             ConversationAnswerBlock block, boolean stpV1) {
+        return toBlockResponse(block, stpV1, false);
+    }
+
+    private ConversationAnswerBlockResponse toBlockResponse(
+            ConversationAnswerBlock block, boolean stpV1, boolean includePortfolioBlock) {
         if (stpV1) {
             return toBlockResponse(block);
         }
@@ -133,7 +138,7 @@ public final class ConversationAnswerResponseMapper {
                 == ConversationSourceScope.PORTFOLIO
                 ? SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
                 : SemanticRoutingTypes.TaskSourceDomain.GENERAL;
-        if (domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO) {
+        if (domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO && !includePortfolioBlock) {
             return null;
         }
         AnswerSupportKind kind = domain == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
@@ -150,6 +155,13 @@ public final class ConversationAnswerResponseMapper {
 
     private List<ConversationAnswerBlockResponse> topLevelBlocks(
             ConversationAnswerResult result, AgentTurnResult agentTurn, boolean stpV1) {
+        // stp-v2 的普通 Portfolio 内容由 completedTasks 承载；但 preset 的答案是
+        // 按已审核 claim 合同投影的权威正文，不能被自由文本任务的章节替换或过滤掉。
+        if (!stpV1 && result.getQuestionPresetId() != null && !result.getBlocks().isEmpty()) {
+            return deduplicatePublicReferences(result.getBlocks().stream()
+                    .map(block -> toBlockResponse(block, false, true))
+                    .filter(Objects::nonNull).toList(), false);
+        }
         if (agentTurn == null || agentTurn.getOutcome().isEmpty()) {
             return deduplicatePublicReferences(result.getBlocks().stream()
                     .map(block -> toBlockResponse(block, stpV1))

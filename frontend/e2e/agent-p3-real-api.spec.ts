@@ -45,6 +45,64 @@ async function ask(page: Page, question: string) {
   await page.getByRole('button', { name: /发送/ }).click()
 }
 
+test('preset suggestions and all answer-card follow-ups preserve real v2 subject identity', async ({ page }) => {
+  await openAgent(page)
+  await ask(page, QUESTION)
+  await expect(page.locator('.structured-answer').first()).toBeVisible({ timeout: READY_TIMEOUT })
+
+  const presetText = 'SQL 审计工具如何管理异步查询任务，并在页面刷新后恢复任务状态？'
+  const presetRequestPromise = page.waitForRequest(
+    (request) => request.url().includes('/api/v2/answers') && request.method() === 'POST',
+  )
+  const presetResponsePromise = page.waitForResponse(
+    (response) => response.url().includes('/api/v2/answers') && response.request().method() === 'POST',
+  )
+  await page.getByTitle(presetText, { exact: true }).click()
+  const presetRequest = await presetRequestPromise
+  const presetResponse = await presetResponsePromise
+  const presetRequestBody = presetRequest.postDataJSON() as Record<string, unknown>
+  expect(presetRequestBody.questionPresetId).toBe('question-sql-audit-async-and-recovery')
+  expect(presetRequestBody.contractVersion).toMatch(/^pcv1-[a-f0-9]{16}$/)
+  expect(presetResponse.status()).toBe(200)
+  await expect(presetResponse.json()).resolves.toMatchObject({
+    resolution: 'ANSWERED',
+    answerScope: 'PORTFOLIO',
+  })
+  await expect(page.locator('.message--agent').last()).toContainText('执行完成', { timeout: READY_TIMEOUT })
+
+  for (const selector of [
+    '[data-follow-up="expand-section"]',
+    '[data-follow-up="current-status"]',
+    '[data-follow-up="related-question"]',
+    '[data-follow-up="explain-decision"]',
+  ]) {
+    const requestPromise = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/answers') && request.method() === 'POST',
+    )
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes('/api/v2/answers') && response.request().method() === 'POST',
+    )
+    await page.locator(selector).first().click()
+    const request = await requestPromise
+    const response = await responsePromise
+    const requestBody = request.postDataJSON() as {
+      context?: { referenceContext?: unknown }
+      semanticContext?: { activeSubjects?: Array<{ subjectType?: string; subjectId?: string }> }
+    }
+    expect(requestBody.context?.referenceContext).toBeUndefined()
+    expect(requestBody.semanticContext?.activeSubjects).toContainEqual({
+      subjectType: 'PROJECT',
+      subjectId: 'sql-audit',
+    })
+    expect(response.status()).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      resolution: 'ANSWERED',
+      answerScope: 'PORTFOLIO',
+    })
+    await expect(page.locator('.answer-state--error')).toHaveCount(0)
+  }
+})
+
 // 17.1.1 首问收到 AVAILABLE + resumeToken；前端写入内存与 sessionStorage。
 test('first question returns AVAILABLE and stores the resume token only in sessionStorage', async ({ page }) => {
   await openAgent(page)
@@ -123,7 +181,7 @@ test('reload restores only the safe context summary and keeps execution distinct
 
   // 契约断言：若同时存在 plan 与 execution，二者必须分别展示、契约版本独立、execution 必为 FINAL。
   if (firstBody.agentTurn?.plan && firstBody.agentTurn?.execution) {
-    expect(firstBody.agentTurn.contractVersion).toBe('stp-v1')
+    expect(firstBody.agentTurn.contractVersion).toBe('stp-v2')
     expect(firstBody.agentTurn.execution.contractVersion).toBe('p3-display-v1')
     expect(firstBody.agentTurn.execution.snapshotType).toBe('FINAL')
   }
@@ -239,7 +297,7 @@ test('only continuable completed tasks expose a context handle continue entry', 
   expect(entries).toBe(handles.length)
 })
 
-test('recommendations use the atomic P3 result payload and public source references', async ({ page }) => {
+test('recommendations honor requested count and use public source references', async ({ page }) => {
   await openAgent(page)
   const responsePromise = page.waitForResponse(
     (response) => response.url().includes('/api/v2/answers') && response.request().method() === 'POST',
@@ -248,6 +306,8 @@ test('recommendations use the atomic P3 result payload and public source referen
   const body = await (await responsePromise).json() as {
     agentTurn?: {
       completedTasks?: Array<{
+        contextHandle?: string
+        continuationContext?: { contextHandle?: string }
         resultPayload?: {
           kind?: string
           recommendations?: Array<{ sourceReferences?: Array<{ evidenceRoute?: string }> }>
@@ -259,7 +319,7 @@ test('recommendations use the atomic P3 result payload and public source referen
     .map((task) => task.resultPayload)
     .find((payload) => payload?.kind === 'RECOMMENDATION_RESULT')
   expect(recommendation).toBeTruthy()
-  expect(recommendation?.recommendations?.length ?? 0).toBeGreaterThan(0)
+  expect(recommendation?.recommendations).toHaveLength(2)
   for (const item of recommendation?.recommendations ?? []) {
     expect(item.sourceReferences?.length ?? 0).toBeGreaterThan(0)
     for (const source of item.sourceReferences ?? []) {
@@ -267,6 +327,61 @@ test('recommendations use the atomic P3 result payload and public source referen
     }
   }
   await expect(page.locator('[data-portfolio-recommendation]')).toBeVisible({ timeout: READY_TIMEOUT })
+  const recommendationTask = (body.agentTurn?.completedTasks ?? [])
+    .find((task) => task.resultPayload?.kind === 'RECOMMENDATION_RESULT')
+  const contextHandle = recommendationTask?.contextHandle
+    ?? recommendationTask?.continuationContext?.contextHandle
+  if (!contextHandle) {
+    await expect(page.locator('[data-recommendation-refine]')).toHaveCount(0)
+    await expect(page.locator('[data-recommendation-continue]')).toHaveCount(0)
+  } else {
+    const refineRequestPromise = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/answers') && request.method() === 'POST',
+    )
+    const refineResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('/api/v2/answers') && response.request().method() === 'POST',
+    )
+    await page.locator('[data-recommendation-refine="replace"]').first().click()
+    const refineRequest = await refineRequestPromise
+    const refineResponse = await refineResponsePromise
+    const refineBody = refineRequest.postDataJSON() as {
+      context?: { recommendationContext?: unknown }
+      contextReference?: { expectedContextType?: string; contextHandle?: string }
+    }
+    expect(refineBody.context?.recommendationContext).toBeUndefined()
+    expect(refineBody.contextReference).toEqual({
+      expectedContextType: 'RECOMMENDATION',
+      contextHandle,
+    })
+    expect(refineResponse.status()).toBe(200)
+  }
+})
+
+test('a single recommendation fills the grid without an empty column', async ({ page }) => {
+  await openAgent(page)
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().includes('/api/v2/answers') && response.request().method() === 'POST',
+  )
+  await ask(page, '给我推荐一个项目')
+  const body = await (await responsePromise).json() as {
+    agentTurn?: {
+      completedTasks?: Array<{
+        resultPayload?: { kind?: string; recommendations?: unknown[] }
+      }>
+    }
+  }
+  const recommendation = (body.agentTurn?.completedTasks ?? [])
+    .map((task) => task.resultPayload)
+    .find((payload) => payload?.kind === 'RECOMMENDATION_RESULT')
+  expect(recommendation?.recommendations).toHaveLength(1)
+
+  const grid = page.locator('[data-portfolio-recommendation] .reco-grid')
+  const card = grid.locator('[data-recommendation-item]')
+  await expect(card).toHaveCount(1)
+  const [gridBox, cardBox] = await Promise.all([grid.boundingBox(), card.boundingBox()])
+  expect(gridBox).not.toBeNull()
+  expect(cardBox).not.toBeNull()
+  expect(Math.abs((gridBox?.width ?? 0) - (cardBox?.width ?? 0))).toBeLessThan(3)
 })
 
 test('sensitive credential requests are rejected without public evidence', async ({ page }) => {

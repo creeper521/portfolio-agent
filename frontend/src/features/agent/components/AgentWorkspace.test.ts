@@ -1080,43 +1080,77 @@ describe('AgentWorkspace', () => {
     expect(boundary).not.toContain('RETRIEVAL')
   })
 
-  it('sends only stable page-memory references after an explicit follow-up action', async () => {
+  it('sends every answer-card follow-up through explicit semantic subjects', async () => {
     const wrapper = mountWorkspace()
 
     await wrapper.get('textarea').setValue('公开检索问题')
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
-    await wrapper.get('[data-follow-up="current-status"]').trigger('click')
-    await flushPromises()
+    const paths = [
+      { selector: '[data-follow-up="expand-section"]', question: '展开背景' },
+      { selector: '[data-follow-up="current-status"]', question: '查看当前状态' },
+      { selector: '[data-follow-up="related-question"]', question: '查看相关问题' },
+      { selector: '[data-follow-up="explain-decision"]', question: '说明背景的判断' },
+    ]
+    for (const path of paths) {
+      await wrapper.findAll(path.selector)[0]!.trigger('click')
+      await flushPromises()
+    }
 
-    expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      question: '查看当前状态',
-      questionPresetId: undefined,
-      referenceContext: {
-        previousContentVersion: '2026-07-21',
-        projectSlugs: ['sql-audit'],
-        questionPresetId: 'sql-audit-overview',
-        referencedClaimIds: ['claim-sql-audit-delivered'],
-        selectedSectionType: undefined,
-        followUpAction: 'CURRENT_STATUS',
-      },
-    }))
+    expect(askQuestionMock).toHaveBeenCalledTimes(5)
+    for (const [index, path] of paths.entries()) {
+      const body = askQuestionMock.mock.calls[index + 1]?.[0]
+      expect(body).toEqual(expect.objectContaining({
+        question: path.question,
+        questionPresetId: undefined,
+        semanticContext: {
+          activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+          resultReferences: [],
+          audienceRole: 'INTERVIEWER',
+          requestSource: 'REFERENCE',
+          coveredTopics: ['BACKGROUND'],
+        },
+      }))
+      expect(body.referenceContext).toBeUndefined()
+    }
     const body = askQuestionMock.mock.calls[1]?.[0]
     expect(body.messages).toBeDefined()
     expect(body.messages.length).toBeGreaterThanOrEqual(2)
-    expect(body.referenceContext).toEqual({
-      previousContentVersion: '2026-07-21',
-      projectSlugs: ['sql-audit'],
-      questionPresetId: 'sql-audit-overview',
-      referencedClaimIds: ['claim-sql-audit-delivered'],
-      selectedSectionType: undefined,
-      followUpAction: 'CURRENT_STATUS',
-    })
     // 消息历史不应包含原始内部字段
     expect(JSON.stringify(body.messages)).not.toContain('claim-sql-audit-delivered')
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('preserves every explicit subject for a comparison follow-up', async () => {
+    askQuestionMock.mockResolvedValueOnce({
+      ...answerResponse(),
+      referenceContext: {
+        ...answerResponse().referenceContext,
+        projectSlugs: ['sql-audit', 'codegraph-evaluation'],
+      },
+    })
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('比较入口准备')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-follow-up="compare-projects"]').trigger('click')
+    await flushPromises()
+
+    const body = askQuestionMock.mock.calls[1]?.[0]
+    expect(body).toEqual(expect.objectContaining({
+      question: '对比这些项目',
+      projectSlug: null,
+      caseSlug: null,
+      semanticContext: expect.objectContaining({
+        activeSubjects: [
+          { subjectType: 'PROJECT', subjectId: 'sql-audit' },
+          { subjectType: 'PROJECT', subjectId: 'codegraph-evaluation' },
+        ],
+      }),
+    }))
+    expect(body.referenceContext).toBeUndefined()
   })
 
   it('announces when stable references were revalidated against a newer content version', async () => {
@@ -1641,6 +1675,14 @@ caseSlugs: [],
 
     const labels = wrapper.findAll('[data-suggested-follow-up]').map((button) => button.text())
     expect(labels).toEqual(['唯一的后端建议', '补足预设一', '补足预设二'])
+
+    await wrapper.findAll('[data-suggested-follow-up]')[1]!.trigger('click')
+    await flushPromises()
+    expect(askQuestionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionPresetId: 'agent-preset-1',
+      contractVersion: 'pcv1-0000000000000001',
+      projectSlug: 'sql-audit',
+    }))
 
     expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
       eventName: 'frontend.response.invalid',

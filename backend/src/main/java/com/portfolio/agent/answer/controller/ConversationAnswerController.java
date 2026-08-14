@@ -110,9 +110,14 @@ public final class ConversationAnswerController {
         }
         ConversationRequestContext requestContext = requestContext(encodedToken, request);
         if (requestContext == null) {
-            ConversationAnswerResult result = service.answer(
-                    request, clientAddressResolver.resolve(servletRequest));
-            return responseMapper.toResponse(result, null);
+            try {
+                ConversationAnswerResult result = service.answer(
+                        request, clientAddressResolver.resolve(servletRequest));
+                return responseMapper.toResponse(result, null);
+            } catch (RequestReceiptConflictException exception) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT", exception);
+            }
         }
         final ProductionConversationExecution execution;
         try {

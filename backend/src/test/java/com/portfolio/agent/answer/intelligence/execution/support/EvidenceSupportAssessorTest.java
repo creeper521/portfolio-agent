@@ -20,6 +20,8 @@ import com.portfolio.agent.answer.routing.domain.SubjectReference;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,11 +60,33 @@ class EvidenceSupportAssessorTest {
         assertEquals(List.of("IMPACT"), assessment.getOmittedLabels());
     }
 
+    @Test
+    void recommendationSelectsEvidenceFromTheRequestedNumberOfDistinctSubjects() {
+        ValidatedEvidenceBundle bundle = bundle(List.of(
+                candidate("project-a", "responsibility-a", AnswerClaimCategory.RESPONSIBILITY),
+                candidate("project-a", "verification-a", AnswerClaimCategory.VERIFICATION),
+                candidate("project-b", "responsibility-b", AnswerClaimCategory.RESPONSIBILITY)));
+        SemanticTaskParameters.PortfolioRecommend recommendation =
+                new SemanticTaskParameters.PortfolioRecommend(
+                        List.of(), "BACKEND_ENGINEERING", Set.of(), "岗位匹配", 2, "GUEST");
+
+        EvidenceSupportAssessment assessment =
+                new EvidenceSupportAssessor().assessRecommendation(recommendation, bundle);
+
+        assertEquals(List.of("project-a", "project-b"), assessment.getUnitsByCriterion()
+                .get(RecommendationProfiles.PUBLIC_DELIVERY_EVIDENCE).stream()
+                .map(unit -> unit.getSubjectId())
+                .toList());
+    }
+
     private static ValidatedEvidenceBundle bundle(List<ClaimEvidenceCandidate> candidates) {
-        List<CandidateSubject> subjects = candidates.stream()
-                .map(candidate -> new CandidateSubject(candidate.getSubjectId(),
-                        "/projects/" + candidate.getSubjectId(), candidate.getSubjectId(), "public-v1",
-                        List.of(candidate)))
+        Map<String, List<ClaimEvidenceCandidate>> candidatesBySubject = new LinkedHashMap<>();
+        candidates.forEach(candidate -> candidatesBySubject
+                .computeIfAbsent(candidate.getSubjectId(), ignored -> new ArrayList<>())
+                .add(candidate));
+        List<CandidateSubject> subjects = candidatesBySubject.entrySet().stream()
+                .map(entry -> new CandidateSubject(entry.getKey(),
+                        "/projects/" + entry.getKey(), entry.getKey(), "public-v1", entry.getValue()))
                 .toList();
         List<SubjectReference> references = subjects.stream()
                 .map(subject -> SubjectReference.project(subject.getSubjectId(), "public-v1"))

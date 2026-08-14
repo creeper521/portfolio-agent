@@ -95,7 +95,10 @@ public final class EvidenceSupportAssessor {
                 baseline.add(unit);
             }
         }
-        byCriterion.put(RecommendationProfiles.PUBLIC_DELIVERY_EVIDENCE, atMostTwo(baseline));
+        byCriterion.put(RecommendationProfiles.PUBLIC_DELIVERY_EVIDENCE,
+                recommendation == null
+                        ? atMostTwo(baseline)
+                        : firstUnitPerSubject(baseline, recommendation.getRequestedSize().getValue()));
         boolean baselinePresent = !baseline.isEmpty();
         List<String> omitted = new ArrayList<>();
         if (!baselinePresent) omitted.add(RecommendationProfiles.PUBLIC_DELIVERY_EVIDENCE);
@@ -168,6 +171,18 @@ public final class EvidenceSupportAssessor {
 
     private static List<ValidatedEvidenceUnit> atMostTwo(List<ValidatedEvidenceUnit> units) {
         return List.copyOf(units.subList(0, Math.min(2, units.size())));
+    }
+
+    private static List<ValidatedEvidenceUnit> firstUnitPerSubject(
+            List<ValidatedEvidenceUnit> units, int subjectLimit) {
+        Map<String, ValidatedEvidenceUnit> firstBySubject = new LinkedHashMap<>();
+        for (ValidatedEvidenceUnit unit : units) {
+            firstBySubject.putIfAbsent(unit.getSubjectId(), unit);
+            if (firstBySubject.size() == subjectLimit) {
+                break;
+            }
+        }
+        return List.copyOf(firstBySubject.values());
     }
 
     private static EvidenceSupportAssessment.SupportStatus statusFor(boolean all, boolean any) {

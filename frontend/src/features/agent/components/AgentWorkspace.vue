@@ -34,13 +34,13 @@ import {
 } from '../composables/useWorkspaceSplit'
 import type { AgentRouteSeed, AgentSession } from '../model/sessionTypes'
 import type {
-  PortfolioReferenceContext,
   ConversationSuggestedQuestion,
   ConversationTopic,
   ContextReferenceRequest,
   FollowUpAction,
   PortfolioRecommendationContextRequest,
   SemanticContextRequest,
+  SemanticSubjectReference,
   InvalidatedPlanReference,
   PendingPlanReference,
   PlanAdjustmentRequest,
@@ -83,8 +83,6 @@ interface AnswerRequestContext {
   questionPresetId?: string
   contractVersion?: string
   coveredTopics?: readonly ConversationTopic[]
-  // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 改用 contextReference。
-  referenceContext?: PortfolioReferenceContext
   recommendationContext?: PortfolioRecommendationContextRequest
   requestToken?: string
   // P3：从某条结果继续时发送的强类型 Context 引用（handoff §3.2）。
@@ -549,8 +547,6 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         question: preparedContext.question,
         messages: history,
         coveredTopics: preparedContext.coveredTopics,
-        // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 改用 contextReference。
-        referenceContext: preparedContext.referenceContext,
         recommendationContext: preparedContext.recommendationContext,
         // P3：已有会话才发送 ResumeToken；首问不发送（handoff §3.1）。
         resumeToken: session.resumeToken,
@@ -974,12 +970,23 @@ function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
   const session = sessions.activeSession.value
   if (!session) return
   activeAdjustment.value = null
+  const presetCandidates = props.portfolio.questionPresets.filter((preset) => {
+    if (preset.text !== suggestion.text) return false
+    if (suggestion.projectSlug && preset.projectSlug !== suggestion.projectSlug) return false
+    if (suggestion.caseSlug && !preset.caseSlugs.includes(suggestion.caseSlug)) return false
+    return true
+  })
+  const preset = presetCandidates.length === 1 ? presetCandidates[0] : undefined
   void requestAnswer(
     {
       sessionId: session.id,
       projectSlug: suggestion.projectSlug ?? null,
       caseSlug: suggestion.caseSlug ?? null,
       question: suggestion.text,
+      questionPresetId: preset?.id,
+      contractVersion: preset
+        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion
+        : undefined,
     },
     true,
   )
@@ -1089,12 +1096,34 @@ function submitFollowUp(action: FollowUpAction) {
   const session = sessions.activeSession.value
   const project = activeProject.value
   if (!session || !project) return
+  const reference = action.referenceContext
+  const subjects: SemanticSubjectReference[] = [
+    ...(reference.caseSlugs ?? []).map((subjectId) => ({ subjectType: 'CASE', subjectId })),
+    ...(reference.projectSlugs ?? []).map((subjectId) => ({ subjectType: 'PROJECT', subjectId })),
+  ].filter((subject, index, all) =>
+    all.findIndex((candidate) => candidate.subjectType === subject.subjectType
+      && candidate.subjectId === subject.subjectId) === index,
+  ).slice(0, 6)
+  if (!subjects.length) subjects.push({ subjectType: 'PROJECT', subjectId: project.slug })
+  const onlyCase = subjects.length === 1 && subjects[0]?.subjectType === 'CASE'
+    ? subjects[0].subjectId
+    : null
+  const onlyProject = subjects.length === 1 && subjects[0]?.subjectType === 'PROJECT'
+    ? subjects[0].subjectId
+    : null
   void requestAnswer(
     {
       sessionId: session.id,
-      projectSlug: project.slug,
+      projectSlug: onlyCase ? null : onlyProject,
+      caseSlug: onlyCase,
       question: action.question,
-      referenceContext: action.referenceContext,
+      semanticContext: {
+        activeSubjects: subjects,
+        resultReferences: [],
+        audienceRole: session.role,
+        requestSource: 'REFERENCE',
+        coveredTopics: [...session.coveredTopics],
+      },
     },
     true,
   )

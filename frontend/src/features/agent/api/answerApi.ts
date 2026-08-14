@@ -8,7 +8,6 @@ import type {
   P3AnswerSuccess,
   PlanAdjustmentRequest,
   PlanConfirmationSubmission,
-  PortfolioReferenceContext,
   SemanticContextRequest,
   SemanticTurnContract,
   TurnAction,
@@ -40,8 +39,6 @@ export interface AnswerApiRequest {
   question?: string
   messages?: { role: 'USER' | 'ASSISTANT'; content: string }[]
   coveredTopics?: readonly ConversationTopic[]
-  // TRANSITIONAL(p3-e): 旧 P2 完整 Context 回传，P3 最终改用 contextReference。
-  referenceContext?: PortfolioReferenceContext
   recommendationContext?: PortfolioRecommendationContextRequest
   // P3：会话级不透明 ResumeToken（handoff §3.1, §10）。仅通过 Header 携带。
   resumeToken?: string
@@ -111,19 +108,6 @@ export function askQuestion(
         audienceRole: input.audienceRole,
         source: input.source,
         coveredTopics: [...new Set(input.coveredTopics ?? [])],
-        ...(input.referenceContext === undefined
-          ? {}
-          : {
-              referenceContext: {
-                previousContentVersion: input.referenceContext.previousContentVersion,
-                projectSlugs: [...(input.referenceContext.projectSlugs ?? [])],
-                caseSlugs: [...(input.referenceContext.caseSlugs ?? [])],
-                questionPresetId: input.referenceContext.questionPresetId,
-                referencedClaimIds: [...input.referenceContext.referencedClaimIds],
-                selectedSectionType: input.referenceContext.selectedSectionType,
-                followUpAction: input.referenceContext.followUpAction,
-              },
-            }),
         ...(input.recommendationContext === undefined
           ? {}
           : {

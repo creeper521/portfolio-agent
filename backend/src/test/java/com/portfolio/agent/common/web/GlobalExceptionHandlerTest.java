@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -152,6 +153,18 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void responseStatusExceptionKeepsItsPublicStatusAndStableReasonCode() throws Exception {
+        mockMvc.perform(get("/test/conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
+
+        assertThat(events).extracting(DiagnosticEvent::getName)
+                .containsExactly("http.request.started", "http.request.rejected");
+        assertThat(events.get(1).getFields())
+                .containsEntry("error.code", "IDEMPOTENCY_KEY_CONFLICT");
+    }
+
+    @Test
     void rateLimitResponseKeepsRetryAfterHeaderAndBody() throws Exception {
         MvcResult result = mockMvc.perform(get("/test/rate-limited"))
                 .andExpect(status().isTooManyRequests())
@@ -221,6 +234,13 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/rate-limited")
         String rateLimited() {
             throw new RetryableTestException(17);
+        }
+
+        @GetMapping("/test/conflict")
+        String conflict() {
+            throw new ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_KEY_CONFLICT");
         }
 
         String getActiveRequestId() {

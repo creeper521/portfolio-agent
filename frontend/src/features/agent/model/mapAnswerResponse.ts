@@ -81,8 +81,15 @@ export function mapAnswerResponse(response: AnswerResponse): MappedAnswer {
     : undefined
 
   const semanticSections = semanticTurn === undefined ? [] : mapSemanticSections(semanticTurn)
+  // 正式 preset 的正文由后端按已审核 claim 合同投影；即使同时存在用于执行状态展示的
+  // semanticTurn，也必须优先使用该权威正文，不能回退到自由文本路由出的无关章节。
+  const hasPresetContractBlocks = response.questionPresetId !== undefined
+    && response.blocks !== undefined
+    && response.blocks.some((block) => Boolean(block.content?.trim()))
   const sections = semanticTurn === undefined
     ? mapSections(response)
+    : hasPresetContractBlocks
+      ? mapSections(response)
     : semanticSections.length > 0
       ? semanticSections
       : isSafeSemanticCompatibilityProjection(semanticTurn)

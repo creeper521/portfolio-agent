@@ -31,7 +31,7 @@ public final class ConversationAnswerRequest {
     @Size(max = 2000, message = "question must not exceed 2000 characters")
     private final String question;
 
-    @Pattern(regexp = "stp-v[12]", message = "agentTurnContract must be stp-v1 or stp-v2 when present")
+    @Pattern(regexp = "stp-v[0-9]{1,3}", message = "agentTurnContract format is invalid")
     private final String agentTurnContract;
 
     private final TurnAction action;

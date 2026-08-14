@@ -522,6 +522,20 @@ function semanticRecommendationTask(
   )
 }
 
+function recommendationContextHandle(
+  message: AgentSession['messages'][number],
+): string | undefined {
+  const task = semanticRecommendationTask(message)
+  return task?.contextHandle ?? task?.continuationContext?.contextHandle
+}
+
+function canRefineRecommendation(message: AgentSession['messages'][number]): boolean {
+  if (recommendationContextHandle(message)) return true
+  // 只有纯旧版回答保留 P2 兼容入口；P5 任务无 handle 时不展示无效操作。
+  return message.answer?.semanticTurn === undefined
+    && message.answer?.portfolioRecommendation?.context !== undefined
+}
+
 function recommendationItems(message: AgentSession['messages'][number]): RecommendationItemView[] {
   const legacy = message.answer?.portfolioRecommendation?.items
   if (legacy) return legacy
@@ -557,6 +571,15 @@ function refineRecommendation(
   if (props.pending) return
   const ordinal = ordinalLabel(index)
   const question = intent === 'REPLACE' ? `换掉第${ordinal}个` : `为什么推荐第${ordinal}个？`
+  const handle = recommendationContextHandle(message)
+  if (handle) {
+    emit('continueFromContext', {
+      question,
+      contextHandle: handle,
+      expectedContextType: 'RECOMMENDATION',
+    })
+    return
+  }
   if (recommendation) {
     emit('refineRecommendation', {
       question,
@@ -564,13 +587,6 @@ function refineRecommendation(
     })
     return
   }
-  const task = semanticRecommendationTask(message)
-  if (!task?.contextHandle) return
-  emit('continueFromContext', {
-    question,
-    contextHandle: task.contextHandle,
-    expectedContextType: 'RECOMMENDATION',
-  })
 }
 
 function refineWhole(
@@ -579,6 +595,15 @@ function refineWhole(
 ) {
   const recommendation = message.answer?.portfolioRecommendation
   if (props.pending) return
+  const handle = recommendationContextHandle(message)
+  if (handle) {
+    emit('continueFromContext', {
+      question,
+      contextHandle: handle,
+      expectedContextType: 'RECOMMENDATION',
+    })
+    return
+  }
   if (recommendation) {
     emit('refineRecommendation', {
       question,
@@ -586,13 +611,6 @@ function refineWhole(
     })
     return
   }
-  const task = semanticRecommendationTask(message)
-  if (!task?.contextHandle) return
-  emit('continueFromContext', {
-    question,
-    contextHandle: task.contextHandle,
-    expectedContextType: 'RECOMMENDATION',
-  })
 }
 </script>
 
@@ -893,6 +911,7 @@ function refineWhole(
               >{{ caveat.message }}</p>
               <div v-if="message.answer.referenceContext" class="follow-up-actions">
                 <button
+                  data-follow-up="expand-section"
                   type="button"
                   :disabled="pending"
                   @click="followUp(message, `展开${section.title || section.type}`, 'EXPAND_SECTION', section.type, section.claimIds)"
@@ -904,6 +923,7 @@ function refineWhole(
                   @click="inspectSection(message, section)"
                 >查看本节证据</button>
                 <button
+                  data-follow-up="explain-decision"
                   type="button"
                   :disabled="pending"
                   @click="followUp(message, `说明${section.title || section.type}的判断`, 'EXPLAIN_DECISION', section.type, section.claimIds)"
@@ -936,12 +956,14 @@ function refineWhole(
                 @click="followUp(message, '查看当前状态', 'CURRENT_STATUS')"
               >查看当前状态</button>
               <button
+                data-follow-up="related-question"
                 type="button"
                 :disabled="pending"
                 @click="followUp(message, '查看相关问题', 'RELATED_QUESTION')"
               >查看相关问题</button>
               <button
                 v-if="(message.answer.referenceContext.projectSlugs?.length ?? 0) > 1"
+                data-follow-up="compare-projects"
                 type="button"
                 :disabled="pending"
                 @click="followUp(message, '对比这些项目', 'COMPARE_SUBJECTS')"
@@ -1027,7 +1049,7 @@ function refineWhole(
                       :href="item.route"
                       @click.prevent
                     >查看作品 →</a>
-                    <div class="reco-card__actions">
+                    <div v-if="canRefineRecommendation(message)" class="reco-card__actions">
                       <button
                         class="reco-card__action"
                         data-recommendation-refine="replace"
@@ -1055,7 +1077,10 @@ function refineWhole(
                     </div>
                   </div>
                 </div>
-                <div class="reco-card__actions reco-card__actions--group">
+                <div
+                  v-if="canRefineRecommendation(message)"
+                  class="reco-card__actions reco-card__actions--group"
+                >
                   <button
                     class="reco-card__action"
                     data-recommendation-refine="shift-backend"
@@ -1864,6 +1889,10 @@ function refineWhole(
   padding: 20px 18px 16px;
   background: var(--paper-hi);
   transition: background var(--agent-motion-fast) var(--ease);
+}
+
+.reco-card:only-child {
+  grid-column: 1 / -1;
 }
 
 .reco-card:hover {

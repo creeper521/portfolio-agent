@@ -100,7 +100,21 @@ class ConversationAnswerRequestValidationTest {
 
         assertThat(messages(validator.validate(valid))).isEmpty();
         assertThat(messages(validator.validate(invalidAgentTurnContract)))
-                .contains("agentTurnContract must be stp-v1 or stp-v2 when present");
+                .contains("agentTurnContract format is invalid");
+    }
+
+    @Test
+    void syntacticallyValidUnknownContractReachesTheCompatibilityPolicy() {
+        ConversationAnswerRequest request = new ConversationAnswerRequest(
+                "turn-ask", UUID.randomUUID(), null, null,
+                ConversationAnswerRequest.TurnAction.ASK, "safe question", List.of(), null,
+                null, null, null, "stp-v9");
+
+        assertThat(messages(validator.validate(request))).isEmpty();
+        assertThatThrownBy(() -> new SemanticTurnRequestMapper().toInput(request, "public-1"))
+                .isInstanceOf(ApplicationException.class)
+                .extracting(error -> ((ApplicationException) error).getErrorCode())
+                .isEqualTo(AnswerErrorCode.AGENT_TURN_CONTRACT_UNSUPPORTED);
     }
 
     @Test

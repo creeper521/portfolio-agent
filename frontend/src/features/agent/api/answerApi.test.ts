@@ -145,7 +145,7 @@ describe('answer api', () => {
     })
   })
 
-  it('sends preset identity and explicit reference context through v2', async () => {
+  it('sends preset identity and explicit semantic context through v2', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ resolution: 'NEEDS_CLARIFICATION' }), {
         status: 200,
@@ -159,13 +159,12 @@ describe('answer api', () => {
       messages: [{ role: 'ASSISTANT', content: 'previous answer' }],
       questionPresetId: 'sql-audit-overview',
       contractVersion: 'pcv1-0123456789abcdef',
-      referenceContext: {
-        previousContentVersion: '2026-07-21.1',
-        projectSlugs: ['sql-audit'],
-        questionPresetId: 'sql-audit-overview',
-        referencedClaimIds: ['claim-sql-audit-delivered'],
-        selectedSectionType: 'STATUS',
-        followUpAction: 'CURRENT_STATUS',
+      semanticContext: {
+        activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+        resultReferences: [],
+        audienceRole: 'INTERVIEWER',
+        requestSource: 'REFERENCE',
+        coveredTopics: [],
       },
     })
 
@@ -175,15 +174,14 @@ describe('answer api', () => {
     )
     expect(body.questionPresetId).toBe('sql-audit-overview')
     expect(body.contractVersion).toBe('pcv1-0123456789abcdef')
-    expect(body.context.referenceContext).toEqual({
-      previousContentVersion: '2026-07-21.1',
-      projectSlugs: ['sql-audit'],
-      caseSlugs: [],
-      questionPresetId: 'sql-audit-overview',
-      referencedClaimIds: ['claim-sql-audit-delivered'],
-      selectedSectionType: 'STATUS',
-      followUpAction: 'CURRENT_STATUS',
+    expect(body.semanticContext).toEqual({
+      activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+      resultReferences: [],
+      audienceRole: 'INTERVIEWER',
+      requestSource: 'REFERENCE',
+      coveredTopics: [],
     })
+    expect(body.context.referenceContext).toBeUndefined()
     expect(body.context.focusEvidenceIds).toBeUndefined()
     expect(body.messages).toEqual([{ role: 'ASSISTANT', content: 'previous answer' }])
   })

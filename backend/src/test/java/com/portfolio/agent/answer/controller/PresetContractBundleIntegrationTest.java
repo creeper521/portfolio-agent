@@ -93,6 +93,7 @@ class PresetContractBundleIntegrationTest {
                     "published-preset-" + index,
                     preset.path("text").asText(),
                     ("\"questionPresetId\":\"%s\",\"contractVersion\":\"%s\","
+                            + "\"agentTurnContract\":\"stp-v2\","
                             + "\"context\":{%s,\"audienceRole\":\"INTERVIEWER\","
                             + "\"source\":\"AGENT_PAGE\"}")
                             .formatted(
@@ -110,7 +111,14 @@ class PresetContractBundleIntegrationTest {
                             org.hamcrest.Matchers.is("ANSWERED"),
                             org.hamcrest.Matchers.is("PARTIALLY_ANSWERED"))))
                     .andExpect(jsonPath("$.evidenceState").value("VERIFIED"))
-                    .andExpect(jsonPath("$.blocks").isNotEmpty());
+                    .andExpect(jsonPath("$.blocks").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].blockId").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].sectionType").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].title").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].support.kind")
+                            .value("VERIFIED_PUBLIC_EVIDENCE"))
+                    .andExpect(jsonPath("$.blocks[0].support.statementReferences[0].statementId")
+                            .isNotEmpty());
             index++;
         }
     }
@@ -132,6 +140,41 @@ class PresetContractBundleIntegrationTest {
                         org.hamcrest.Matchers.is("PARTIAL_READY"))))
                 .andExpect(jsonPath("$.agentTurn.plan.taskCount").value(2))
                 .andExpect(jsonPath("$.blocks").isNotEmpty());
+    }
+
+    @Test
+    void reusedRequestTokenWithDifferentQuestionReturnsConflictWithoutContextStore() throws Exception {
+        String token = "6b2d8895-4108-4b4d-aee0-21f6e7c4f333";
+        String first = """
+                {"turnId":"idempotency-first","requestToken":"%s",
+                 "question":"请介绍 sql-audit 项目","messages":[]}
+                """.formatted(token);
+        String conflicting = """
+                {"turnId":"idempotency-conflict","requestToken":"%s",
+                 "question":"请介绍 activity-engineering 项目","messages":[]}
+                """.formatted(token);
+
+        mockMvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(first))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(conflicting))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void unknownSemanticTurnContractReturnsPublicConflict() throws Exception {
+        mockMvc.perform(post("/api/v2/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(
+                                "unsupported-contract",
+                                "解释乐观锁",
+                                "\"agentTurnContract\":\"stp-v9\"")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AGENT_TURN_CONTRACT_UNSUPPORTED"));
     }
 
     @Test

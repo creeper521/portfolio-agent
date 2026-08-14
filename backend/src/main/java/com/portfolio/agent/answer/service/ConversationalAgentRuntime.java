@@ -475,12 +475,10 @@ public final class ConversationalAgentRuntime {
                     com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
                     "无法验证公开主体", List.of(), List.of()));
         }
-        if (!hasFailedExecution(agentTurn)
-                && hasValidPreset(request, content) && !hasRenderablePayload(agentTurn)) {
-            List<ConversationAnswerBlock> blocks = presetBlocks(request, content);
-            if (!blocks.isEmpty()) {
-                return blocks;
-            }
+        // Preset 的可见答案必须由已审核合同决定。只绑定主体后再依赖自由文本路由，
+        // 会把“为什么/如何”这类问题退化成无关的项目背景或交付状态。
+        if (hasValidPreset(request, content)) {
+            return presetBlocks(request, content);
         }
         return List.of();
     }
@@ -634,7 +632,8 @@ public final class ConversationalAgentRuntime {
                     }
                     blocks.add(new ConversationAnswerBlock(
                             com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
-                            claim.getStatement(),
+                            presetSectionType(claim), presetSectionTitle(claim),
+                            presetClaimContent(claim),
                             List.of(claim.getId()), claim.getDirectEvidenceIds()));
                 }
                 if (!blocks.isEmpty()) {
@@ -643,6 +642,43 @@ public final class ConversationalAgentRuntime {
             }
         }
         return List.of();
+    }
+
+    private static String presetClaimContent(
+            com.portfolio.agent.answer.domain.AnswerClaimProjection claim) {
+        String statement = claim.getStatement();
+        String detail = claim.getDetail();
+        if (detail == null || detail.isBlank()) {
+            return statement;
+        }
+        return statement + " " + detail;
+    }
+
+    private static com.portfolio.agent.answer.domain.AnswerSectionType presetSectionType(
+            com.portfolio.agent.answer.domain.AnswerClaimProjection claim) {
+        return switch (claim.getCategory()) {
+            case BACKGROUND -> com.portfolio.agent.answer.domain.AnswerSectionType.BACKGROUND;
+            case RESPONSIBILITY -> com.portfolio.agent.answer.domain.AnswerSectionType.RESPONSIBILITY;
+            case TECHNICAL_DECISION, IMPLEMENTATION ->
+                    com.portfolio.agent.answer.domain.AnswerSectionType.SOLUTION;
+            case VERIFICATION -> com.portfolio.agent.answer.domain.AnswerSectionType.VERIFICATION;
+            case OUTCOME -> com.portfolio.agent.answer.domain.AnswerSectionType.STATUS;
+            case LIMITATION, LEARNING, REFLECTION ->
+                    com.portfolio.agent.answer.domain.AnswerSectionType.BOUNDARY;
+        };
+    }
+
+    private static String presetSectionTitle(
+            com.portfolio.agent.answer.domain.AnswerClaimProjection claim) {
+        return switch (presetSectionType(claim)) {
+            case BACKGROUND -> "背景";
+            case RESPONSIBILITY -> "我的职责";
+            case SOLUTION -> "处理方案";
+            case VERIFICATION -> "验证过程";
+            case STATUS -> "结果与状态";
+            case BOUNDARY -> "边界与复盘";
+            case REJECTED -> "说明";
+        };
     }
 
     private List<ConversationAnswerBlock> structuredSubjectBlocks(

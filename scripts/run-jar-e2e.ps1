@@ -382,8 +382,11 @@ try {
 
     $caseAgentRequest = @{
         turnId = 'packaged-case-agent-smoke'
-        requestToken = 'b0b2b34a-b4bf-40db-909a-d2ce8d95fffb'
-        question = $privacySentinel
+        requestToken = [guid]::NewGuid().ToString()
+        # Keep the privacy sentinel inside a semantically valid Case question so this smoke
+        # verifies both scoped routing and visitor-content redaction. A sentinel-only string
+        # is correctly classified as an unsupported general query by the semantic router.
+        question = "How was this case verified? $privacySentinel"
         messages = @()
         context = @{
             projectSlug = $null
@@ -400,8 +403,14 @@ try {
     if ([string]$caseAgentResponse.contentVersion -ne [string]$publicContent.contentVersion) {
         throw 'Packaged Case Agent returned the wrong contentVersion.'
     }
-    if (@($caseAgentResponse.blocks).Count -eq 0) {
-        throw 'Packaged Case Agent returned no answer blocks.'
+    $caseAgentBlocks = @($caseAgentResponse.blocks)
+    $caseAgentTaskBlocks = @(
+        @($caseAgentResponse.agentTurn.completedTasks) |
+            Where-Object { $_.resultPayload.kind -eq 'SECTION_RESULT' } |
+            ForEach-Object { @($_.resultPayload.blocks) }
+    )
+    if (($caseAgentBlocks.Count + $caseAgentTaskBlocks.Count) -eq 0) {
+        throw 'Packaged Case Agent returned no answer blocks in either the legacy or semantic-task projection.'
     }
     $serializedCaseAgentResponse =
             $caseAgentResponse | ConvertTo-Json -Depth 12 -Compress

@@ -90,7 +90,7 @@ test('semantic turn states A through H remain safe and usable', async ({ page })
   const adjustmentRequest = requests.find((request) => request.planAdjustment !== undefined)
   expect(adjustmentRequest).toMatchObject({
     action: 'ASK',
-    agentTurnContract: 'stp-v1',
+    agentTurnContract: 'stp-v2',
     question: '状态 C',
     planAdjustment: {
       instruction: '去掉总结那一步',
@@ -125,7 +125,7 @@ test('semantic turn states A through H remain safe and usable', async ({ page })
   ))
   expect(localContinuationRequest).toMatchObject({
     action: 'ASK',
-    agentTurnContract: 'stp-v1',
+    agentTurnContract: 'stp-v2',
     question: '状态 D',
     clarificationResolution: {
       clarificationId: 'clarify-0000000000000000000000000000000d',
@@ -151,7 +151,7 @@ test('semantic turn states A through H remain safe and usable', async ({ page })
   ))
   expect(criticalContinuationRequest).toMatchObject({
     action: 'ASK',
-    agentTurnContract: 'stp-v1',
+    agentTurnContract: 'stp-v2',
     question: '状态 E',
     clarificationResolution: {
       clarificationId: 'clarify-0000000000000000000000000000000e',

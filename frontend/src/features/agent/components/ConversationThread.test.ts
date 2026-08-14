@@ -93,6 +93,7 @@ function mountThread(
       focusTarget,
       failure,
     },
+    global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
   })
 }
 
