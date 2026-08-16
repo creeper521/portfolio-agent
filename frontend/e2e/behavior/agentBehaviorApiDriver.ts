@@ -12,6 +12,8 @@ import type { BehaviorObservation, BehaviorScenario, BehaviorTurn, TurnTransport
 import {
   appendAcceptedTurn,
   createBehaviorRequest,
+  scenarioSeedFor,
+  scenarioTurnFor,
   type BehaviorConversationState,
   transportOutcomeForError,
 } from './agentBehaviorRequest'
@@ -40,12 +42,6 @@ interface ResponseFacts {
   readonly citationMismatch: boolean
   readonly resumeToken?: string
   readonly contractError: boolean
-}
-
-const EMPTY_STATE: BehaviorConversationState = {
-  acceptedMessages: [],
-  diagnosticTurnIds: [],
-  historyTurnIds: [],
 }
 
 function durationBucket(elapsedMilliseconds: number): BehaviorObservation['durationBucket'] {
@@ -275,10 +271,11 @@ export async function executeApiScenario(
   // Keep the import as a compatibility check: active preset scenarios are generated from this same public snapshot.
   void expandActivePresetScenarios(publicContent.questionPresets)
   const turns = expandScenarioTurns(scenario, publicContent.questionPresets)
-  let state: BehaviorConversationState = EMPTY_STATE
+  const seed = scenarioSeedFor(scenario.initialState, publicContent)
+  let state: BehaviorConversationState = seed.state
   const observations: BehaviorObservation[] = []
   for (const turn of turns) {
-    const prepared = createBehaviorRequest(state, turn)
+    const prepared = createBehaviorRequest(state, scenarioTurnFor(turn, seed))
     const startedAt = Date.now()
     let result: ParsedApiResult
     try {
