@@ -31,6 +31,15 @@ Provider 只通过仓库外临时环境注入，未写入仓库、日志、报�
 
 由于 API Key 已在对话中暴露，必须立即在 DeepSeek 控制台撤销并轮换；本报告不记录 Key，也不记录任何原始问题或回答。
 
+## 发布级 Playwright 结果的拆分解释
+
+已有一次完整发布级 Playwright 记录共 186 条：110 passed、40 failed、36 skipped。这个总数不能直接当作“产品 40 个 Bug”：
+
+- failed 主要集中在本次新增行为审计场景（噪声/澄清、Project/Case semanticContext）以及 Context Store 未启用时仍要求 `AVAILABLE`、resume token、reload recovery 的场景。
+- skipped 主要是显式依赖 PostgreSQL、Hybrid 模型或 live lane 的门控用例。
+- 本报告将可稳定复现且由生产运行时直接观察到的两类行为归为产品缺陷；把 Context Store/模型/浏览器缺失归为环境阻塞；把错误请求体、manifest 注册方式和运行器未选择行为项目归为测试基础设施问题，并已修正后两项。
+- 当前 worktree 可稳定重跑的行为发现数为 39 条（4 个 Playwright project）；浏览器项目仍因缺少 `chrome-headless-shell-1228` 不能在本环境重新执行，API 项目可通过外部 JAR 单独运行。
+
 ## 确认的产品缺陷
 
 ### P1：无意义输入未进入澄清态，并返回 Evidence
