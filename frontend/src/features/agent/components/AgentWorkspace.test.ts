@@ -2144,4 +2144,129 @@ describe('AgentWorkspace P3 conversation context', () => {
     expect(notice.exists()).toBe(true)
     expect(notice.text()).toContain('不保存问题原文')
   })
+
+  // ── P-1：首轮 semanticContext 必须真实进入 /api/v2/answers 请求（审计缺陷 #2）──
+  // 页面可见的主体上下文（Project hint / Case handoff）与网络请求不得再出现
+  // “只构造、不发送”的分叉；本轮显式主体始终高于页面 Hint。
+
+  it('sends the page project as semantic context on the first plain ask', async () => {
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('这个项目做得怎么样')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledTimes(1)
+    expect(askQuestionMock.mock.calls[0]?.[0].semanticContext).toEqual({
+      activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+      resultReferences: [],
+      audienceRole: 'INTERVIEWER',
+      requestSource: 'AGENT_PAGE',
+      coveredTopics: [],
+    })
+  })
+
+  it('sends the case handoff subject as semantic context on the first ask', async () => {
+    const wrapper = mountWorkspace(previewPublicContent, {
+      initialCase: 'codegraph-evaluation',
+    })
+
+    await wrapper.get('textarea').setValue('这个案例的验证是怎么做的')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const request = askQuestionMock.mock.calls[0]?.[0]
+    expect(request.caseSlug).toBe('codegraph-evaluation')
+    expect(request.projectSlug).toBeNull()
+    expect(request.semanticContext).toEqual({
+      activeSubjects: [{ subjectType: 'CASE', subjectId: 'codegraph-evaluation' }],
+      resultReferences: [],
+      audienceRole: 'INTERVIEWER',
+      requestSource: 'CASE',
+      coveredTopics: [],
+    })
+  })
+
+  it('stops sending the cleared case hint and falls back to no subject until an explicit choice', async () => {
+    const wrapper = mountWorkspace(previewPublicContent, {
+      initialCase: 'codegraph-evaluation',
+    })
+
+    await wrapper.get('[data-clear-case-context]').trigger('click')
+    await wrapper.get('textarea').setValue('这个项目做得怎么样')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    // 行为 UI 基线：清除 Case 上下文是显式清空动作，其后普通提问的
+    // semanticContext 不得再携带任何主体（包括展示回退项目 projects[0]）。
+    const cleared = askQuestionMock.mock.calls[0]?.[0]
+    expect(cleared.caseSlug).toBeNull()
+    expect(cleared.semanticContext).toEqual({
+      activeSubjects: [],
+      resultReferences: [],
+      audienceRole: 'INTERVIEWER',
+      requestSource: 'AGENT_PAGE',
+      coveredTopics: [],
+    })
+
+    // 显式主体选择（带主体的建议问题）重建页面主体绑定。
+    const crossProjectSuggestion = wrapper.findAll('[data-suggested-follow-up]')
+      .find((button) => button.text().includes('了解代码图谱评测项目'))
+    expect(crossProjectSuggestion).toBeDefined()
+    await crossProjectSuggestion!.trigger('click')
+    await flushPromises()
+
+    const rebound = askQuestionMock.mock.calls[1]?.[0]
+    expect(rebound.semanticContext).toMatchObject({
+      activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'codegraph-evaluation' }],
+    })
+  })
+
+  it('lets the current-turn explicit subject override the page hint', async () => {
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先问问当前项目')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const crossProjectSuggestion = wrapper.findAll('[data-suggested-follow-up]')
+      .find((button) => button.text().includes('了解代码图谱评测项目'))
+    expect(crossProjectSuggestion).toBeDefined()
+    await crossProjectSuggestion!.trigger('click')
+    await flushPromises()
+
+    const request = askQuestionMock.mock.calls[1]?.[0]
+    expect(request.semanticContext).toMatchObject({
+      activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'codegraph-evaluation' }],
+      resultReferences: [],
+      audienceRole: 'INTERVIEWER',
+      requestSource: 'AGENT_PAGE',
+    })
+    expect(request.projectSlug).toBe('codegraph-evaluation')
+  })
+
+  it('keeps sending semantic context on the next ask after a cancelled request', async () => {
+    askQuestionMock.mockImplementation((input: { signal?: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        input.signal?.addEventListener('abort', () => reject(new Error('cancelled')))
+      }),
+    )
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('textarea').setValue('先取消这个问题')
+    await wrapper.get('.composer').trigger('submit')
+    await wrapper.get('[data-answer-cancel]').trigger('click')
+    await flushPromises()
+
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    await wrapper.get('textarea').setValue('重新提问')
+    await wrapper.get('.composer').trigger('submit')
+    await flushPromises()
+
+    const retry = askQuestionMock.mock.calls[1]?.[0]
+    expect(retry?.semanticContext).toMatchObject({
+      activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
+      requestSource: 'AGENT_PAGE',
+    })
+  })
 })
