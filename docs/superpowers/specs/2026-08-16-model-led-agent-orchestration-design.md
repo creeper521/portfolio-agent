@@ -1,7 +1,7 @@
 # Agent 模型主导语义理解与受控编排重构设计
 
 > **日期：** 2026-08-16
-> **状态：** 第二版已吸收独立架构评审，待复审；不构成生产代码实施授权
+> **状态：** 第三版已吸收两轮独立架构评审，待用户批准；不构成生产代码实施授权
 > **问题来源：** `docs/reports/agent-behavior-full-path-audit-2026-08-16.md`
 > **拟取代范围：** `2026-08-10-semantic-turn-routing-design.md` §2.2、§7.2、§8、§16 中关于规则优先、路由不读取临时对话、Provider 不可用时继续规则编译的条款；其余计划验证、确认、执行和安全边界继续有效
 > **保持有效：** 既有公开事实、安全、证据、确认、执行和 Provider fail-closed 边界
@@ -14,7 +14,7 @@ Agent 的默认语义理解入口改为受控模型，确定性代码不再通�
 
 > 模型负责理解人、推动对话和提出候选行动方案；确定性系统负责事实、安全、能力、计划和执行边界。
 
-单轮主链路固定为：
+单轮入口与互斥分支固定为：
 
 ```text
 用户输入
@@ -23,10 +23,10 @@ Agent 的默认语义理解入口改为受控模型，确定性代码不再通�
 → 受控模型提出 TurnProposal 或 conversationAct
 → 服务端重新绑定公开主体并编译候选计划
 → 服务端验证计划、事实边界和执行权限
-→ CONVERSE 由独立轻量 Conversation Recovery 生成受控交流
-→ 确定性能力执行
-→ 受约束表达或确定性 Composer
-→ 前端展示回答、澄清、确认或交流恢复
+├─ CONVERSE → 服务端模板，或经独立轻量 Conversation Recovery 生成受控交流
+├─ ASK_CLARIFICATION → 服务端生成受控澄清
+└─ PROPOSE_EXECUTION → 确定性能力执行 → 受约束表达或确定性 Composer
+→ 前端展示对应的回答、澄清、确认或交流恢复
 ```
 
 模型有三种合法提议：
@@ -228,11 +228,11 @@ TurnProposal
 
 - `clientTaskKey`：本次输出内局部引用键，不是执行 ID；
 - `taskType`：既有闭集任务类型；
-- `inputSpan`：当前输入中的 `TextSpan`；
-- `subjectCandidates[]`：每个候选分别携带公开 subjectId、basis、可选 evidenceSpan/resultPosition；
+- `inputAnchor`：当前输入中的 `TextAnchor`；
+- `subjectCandidates[]`：每个候选分别携带公开 subjectType、subjectId、basis、可选 evidenceAnchor/resultPosition；
 - `facets[]`：闭集作品集 Fact 维度；
 - `dimensions[]`：闭集比较维度；
-- `topicSpans[]`：通用解释/比较主题在 currentInput 中的原文跨度；
+- `topicAnchors[]`：通用解释/比较主题在 currentInput 中的原文锚点；
 - `careerTrack?`：闭集岗位方向；
 - `capabilityFilters[]`：闭集能力过滤条件；
 - `requestedSize?`：服务端允许范围内的推荐数量；
@@ -249,13 +249,15 @@ TurnProposal
 |---|---|---|
 | `PORTFOLIO_FACT` | 1 个公开主体候选、候选 basis、facets、requestedOutputs | `PortfolioFact`、audienceRole、contentVersion、默认 facet |
 | `PORTFOLIO_COMPARE` | 2–3 个分别带 basis 的公开主体候选、dimensions | `PortfolioCompare`、主体顺序、默认维度 |
-| `PORTFOLIO_RECOMMEND` | careerTrack、capabilityFilters、requestedSize、排除项 | `PortfolioRecommend`、候选范围、数量上限、audienceRole |
-| `PORTFOLIO_REFINE_RECOMMENDATION` | 1 个 recentResult 候选、constraints、requestedSize | `PortfolioRefinement`、原结果完整性和新增/移除约束 |
-| `GENERAL_EXPLANATION` | 1 个 topicSpan、requestedOutputs | 按原文跨度抽取 topic，禁止模型自由生成主题 |
-| `GENERAL_COMPARISON` | 2–3 个 topicSpans、dimensions | 按原文跨度抽取 topics，验证数量与顺序 |
-| `SYNTHESIS` | 2–6 个 sourceTaskKeys、dimensions、requestedOutputs | sourceTaskIds、依赖边、fulfillmentRole 和来源完整性 |
+| `PORTFOLIO_RECOMMEND` | careerTrack、capabilityFilters、requestedSize、排除项 | `PortfolioRecommend`、候选范围、数量上限、audienceRole、固定派生 goal |
+| `PORTFOLIO_REFINE_RECOMMENDATION` | 1 个 recentResult 候选、constraints | `PortfolioRefinement`、原结果完整性和新增/移除约束 |
+| `GENERAL_EXPLANATION` | 1 个 topicAnchor、requestedOutputs | 按原文锚点抽取 topic，禁止模型自由生成主题 |
+| `GENERAL_COMPARISON` | 2–3 个 topicAnchors、dimensions | 按原文锚点抽取 topics，验证数量与顺序 |
+| `SYNTHESIS` | 2–6 个 sourceTaskKeys、dimensions、requestedOutputs | sourceTaskIds、依赖边、fulfillmentRole、固定派生 synthesisGoal 和来源完整性 |
 
-`TextSpan` 由 `startInclusive`、`endExclusive` 和 `text` 组成；服务端必须验证下标合法且 `currentInput.substring(start, end) == text`。`inputSpan`、`topicSpans` 和主体 evidenceSpan 均使用该结构。不同任务允许引用重叠跨度，但不能引用输入之外的文本。
+`TextAnchor` 由 `verbatimText` 和从 1 开始的 `occurrence` 组成。模型不得计算或输出字符偏移；服务端按 Java `String` 的 UTF-16 语义从左到右、以非重叠方式查找 `currentInput` 中第 N 次完全相同的 `verbatimText`，再生成内部 `TextSpan(startInclusive, endExclusive, text)`。原文不存在、occurrence 越界、空文本或超过预算时整个提议无效。这样既保留“必须来自本轮原文”的硬约束，也避免 Emoji/代理对造成模型偏移与 Java 偏移不一致。`inputAnchor`、`topicAnchors` 和主体 `evidenceAnchor` 均使用该结构；不同任务可以锚定重叠原文，但不能引用输入之外的文字。
+
+`responseMode` 到现有领域类型的映射固定为：`CONCISE → ExplanationDepth.BRIEF`、`STANDARD → ExplanationDepth.STANDARD`、`DETAILED → ExplanationDepth.DETAILED`，不得依赖枚举同名反射转换。
 
 ### 7.4 澄清提议
 
@@ -285,7 +287,7 @@ TurnProposal
 
 能力不可用不属于 `CONVERSE`，必须由后端产生 `CAPABILITY_UNAVAILABLE`。规划模型也不得输出交流正文或自由文本建议。
 
-后端验证 conversationAct 后，调用独立轻量 `ConversationRecoveryPort`。该操作只接收 currentInput、闭集 conversationAct 和后端验证过的 `allowedActionIds`，不接收 Portfolio Claim/Evidence、公开主体详情、历史答案正文或工具目录。输出只能包含：
+后端验证 conversationAct 后，默认使用服务端短模板。仅当 `agent.model.operation.conversation-recovery.enabled=true` 且真实评测证明自然度收益、并经单独发布批准时，才调用独立轻量 `ConversationRecoveryPort`。该操作只接收 currentInput、闭集 conversationAct 和后端验证过的 `allowedActionIds`，不接收 Portfolio Claim/Evidence、公开主体详情、reviewedAliases、历史答案正文或工具目录。输出只能包含：
 
 ```text
 ConversationRecoveryDraft
@@ -294,7 +296,7 @@ ConversationRecoveryDraft
 └── suggestedActionIds[]   # 最多 3 个，必须来自输入闭集
 ```
 
-Codec 机械拒绝 URL、Claim/Evidence/Preset ID 自由文本模式、未知 action ID、工具/联网/已执行自述、索要凭据以及 Schema 外字段。建议入口由服务端根据 action ID 渲染，模型不能自由创建能力名称。Recovery 失败或文案未通过校验时使用与 conversationAct 对应的服务端短模板。
+首版 `allowedActionIds` 只来自当前公开快照中状态为 `ACTIVE` 的 `QuestionPreset.presetId`；模型不能自由创建能力名称或顶层能力入口，建议入口由服务端按 ID 渲染。Codec 与后置 Validator 机械拒绝 URL、Claim/Evidence/Preset ID 自由文本模式、未知 action ID、工具/联网/已执行自述、索要凭据、任何经 §10.4 规范化后的 reviewedAlias 以及 Schema 外字段。Recovery 失败或文案未通过校验时使用与 conversationAct 对应的服务端短模板。
 
 Recovery 契约没有“回答正文”字段，任何实质知识问题都必须由 Turn Interpretation 提出 `GENERAL_EXPLANATION` 或 `GENERAL_COMPARISON`，再交给现有通用能力。系统不用问号、长度或关键词建立第二套路由；误分类风险由严格输出能力、冻结对抗集和切换门禁控制。
 
@@ -332,7 +334,7 @@ TurnContext
 
 1. 页面打开 Project/Case 只产生 Hint，不自动强制作品集路由；
 2. 用户本轮明确切换主体时，旧主体和页面 Hint 不得覆盖；
-3. 用户使用“这个项目”等明确指代表达时，模型可以提出 pageHint 主体，但后端验证指代跨度与公开主体；
+3. 用户使用随应用版本审核的 `page-reference-markers` 配置目录中的明确指代表达时，模型可以提出 pageHint 主体；目录首版只包含“这个项目/该项目/这个案例/该案例/它/这个/那个/this project/this case/it”等受审条目，只负责验证主体指代绑定，不判断任务类型，不构成第二套语义引擎；该目录不属于公开内容 Bundle，不改变 schema 4.0 或七文件发布契约；
 4. 同级冲突或无法唯一绑定时澄清，不猜测；
 5. 页面必须显示并允许清除 Hint；清除后本轮请求不得继续携带；
 6. 首轮请求必须真实传递已构造的上下文，禁止只构造但不进入请求；
@@ -340,6 +342,29 @@ TurnContext
 8. 用户在 pendingInteraction 期间明确取消、结束或切换目标时，本轮输入优先，旧待办不得强制续接；
 9. audienceRole、requestSource 和 coveredTopics 保持现有行为，仅作为受控元数据，不提升主体优先级；
 10. 所有上下文只存在于当前标签页内存，刷新或关闭后消失，不同标签页互不共享。
+
+### 8.1 `confirmedSubjects` 生命周期
+
+- 本轮显式主体、用户提交的受控澄清选择，以及任务成功后的实际主体才可进入 confirmedSubjects；模型候选本身不能写入；
+- 列表按最近确认/使用顺序维护，最多保留 3 个，超出时移除最旧项；明确切换主体时将新主体移到首位，但不自动删除仍有效的较早主体；
+- 单数指代“它”只允许绑定最近一次唯一确认的主体；若最近一次成功任务同时包含多个并列主体，则必须澄清；
+- contentVersion 变化、主体不再公开、用户清除当前上下文或标签页刷新时，受影响项立即清除；
+- “第二个”等位置表达不读取 confirmedSubjects，只读取经过签发的 recentResults。
+
+### 8.2 `recentResults` 签发与回传
+
+任务成功后，服务端随 stp-v3 响应签发短时、无状态的结果引用：
+
+```text
+RecentResultReference
+├── position
+├── subjectId
+├── contentVersion
+├── expiresAt
+└── integrityToken
+```
+
+integrityToken 优先复用现有加密/完整性机制覆盖其余四项，不引入通用 Token 抽象。前端只在当前标签页内存中保存，并通过 stp-v3 的 `semanticContext.recentResults` 原样回传；不得写入 URL、浏览器持久存储或日志。后端每次复验位置、主体、版本、过期时间和完整性；篡改、过期、重复位置或 contentVersion 变化均不执行，转为“结果已过期/请重新选择”的受控澄清。P6 建立领域对象、签发和复验，P7 才开放其 stp-v3 传输与 UI 使用。
 
 ## 9. 确定性快速路径
 
@@ -383,7 +408,7 @@ Preset 保持完全确定性执行。模型可以在后续自然回复中推荐�
 - 主体候选和来源依据；
 - 依赖和排除项；
 - responseMode；
-- inputSpan/topicSpans、澄清文案和 conversationAct。
+- inputAnchor/topicAnchors、澄清文案和 conversationAct。
 
 ### 10.3 整体拒绝条件
 
@@ -394,7 +419,7 @@ Preset 保持完全确定性执行。模型可以在后续自然回复中推荐�
 - 排除项被任务重新引入；
 - 提议包含工具、URL、SQL、Provider、Evidence 或私有字段；
 - 提议类型与字段不匹配；
-- inputSpan/topicSpans 不是 currentInput 的精确子串或超过长度预算；
+- inputAnchor/topicAnchors 无法按 occurrence 精确锚定 currentInput 原文或超过长度预算；
 - 模型输出无法严格解析。
 
 不能静默删除非法任务后执行剩余计划，因为用户看到的意图可能已经发生变化。语义缺失应澄清，结构或安全非法应进入安全降级。
@@ -405,13 +430,15 @@ Preset 保持完全确定性执行。模型可以在后续自然回复中推荐�
 
 | subjectBasis | 必须满足 | 不满足时 |
 |---|---|---|
-| `EXPLICIT_TEXT` | candidate.evidenceSpan 精确命中该主体一个 reviewedAlias | 主体冲突或澄清 |
+| `EXPLICIT_TEXT` | candidate.evidenceAnchor 在本轮原文中精确锚定该主体一个 reviewedAlias | 主体冲突或澄清 |
 | `CONFIRMED_CONTEXT` | 主体存在于 confirmedSubjects，contentVersion 仍有效 | 澄清或上下文过期 |
 | `RECENT_RESULT` | candidate.resultPosition 对应 recentResults 中同一主体，引用签名和 contentVersion 有效 | 澄清或结果过期 |
-| `PAGE_HINT` | 主体等于当前未清除的 pageHint，candidate.evidenceSpan 是明确指代表达 | 澄清，不因页面存在自动绑定 |
+| `PAGE_HINT` | 主体等于当前未清除的 pageHint，candidate.evidenceAnchor 精确命中 `page-reference-markers` 条目，且不存在更高优先级的唯一主体来源 | 澄清，不因页面存在自动绑定 |
 | `UNKNOWN` | 不允许绑定任何可执行主体 | 必须澄清 |
 
-如果 currentInput 明确命中主体 X 的 reviewedAlias，而模型把同一任务绑定为 Y，且 X≠Y，则整项按主体冲突处理。该检查只做目录别名与跨度一致性，不重新推断用户的任务类型。
+reviewedAlias 的匹配规范固定为 Unicode NFKC、trim 和 `Locale.ROOT` 大小写折叠；规范化结果只用于目录匹配，原文锚点仍必须来自未经改写的 currentInput。目录加载/发布校验必须保证同类型主体的规范化别名跨主体唯一，冲突时 fail-closed；跨类型同名且提议没有结构化 subjectType 时必须澄清，不得静默选择。运行期一个锚点命中多个同级主体也必须澄清。
+
+如果 currentInput 明确命中主体 X 的 reviewedAlias，而模型把同一任务绑定为 Y，且 X≠Y，则整项按主体冲突处理。PAGE_HINT 检查只验证审核指代表达目录、原文锚点和上下文优先级；上述检查都不重新推断用户的任务类型。
 
 ## 11. Provider 失败与降级
 
@@ -440,13 +467,13 @@ fallback 不是旧规则引擎的永久副本，只允许：
 - 当规范化输入只等于一个 reviewedAlias，或前端发送已验证的 `OVERVIEW` 结构化动作时，生成唯一主体的 `PORTFOLIO_FACT(OVERVIEW)`；
 - 对无法可靠理解的普通 ASK 返回简短、诚实的能力暂不可用提示，并给出 Preset 或公开主题入口。
 
-这是明确的产品取舍：MODEL_LED 启用后，Provider 不可用期间不会继续支持自然语言比较、推荐、多任务或通用问答；只保留上述精确合同和唯一别名概览。该取舍已经在第二版设计中采纳，实施后必须同步 `docs/08-当前实现状态.md`，不能把模型描述成可选而实际成为全部自然语言能力前提。
+这是用户已经确认的产品取舍：MODEL_LED 启用后，Provider 不可用期间不会继续支持自然语言比较、推荐、多任务或通用问答；只保留上述精确合同和唯一别名概览，不增加“介绍 + 别名”等关键词规则。实施后必须同步 `docs/08-当前实现状态.md`，不能把模型描述成可选而实际成为全部自然语言能力前提。
 
-不保留“介绍/比较/推荐/综合/Facet 大词典”作为第二套完整路由。迁移期旧 `SemanticSignalCollector` 只通过显式开关用于回滚，稳定后删除或缩减为上述结构化 fallback。
+不保留“介绍/比较/推荐/综合/Facet 大词典”作为第二套完整路由。迁移期旧 `SemanticSignalCollector` 只通过显式开关用于回滚；用户另行批准生产默认启用且稳定观察窗口通过后，才删除或缩减为上述结构化 fallback。
 
 ## 12. 输出与 HTTP 契约
 
-由于交流恢复不应伪装成 `GENERAL_EXPLANATION` 或 `NOT_SUPPORTED`，本重构引入 `agentTurnContract = stp-v3`。当前 active 仍为 `stp-v1`；已实现但未激活的 `stp-v2` 不再安排消费者激活，迁移直接从 v1 到 v3。
+由于交流恢复不应伪装成 `GENERAL_EXPLANATION` 或 `NOT_SUPPORTED`，本重构引入 `agentTurnContract = stp-v3`。当前前端生产工作区默认请求 `stp-v2`，后端也以 `stp-v2` 作为 CURRENT_CONTRACT；P7 必须从这一真实基线协调迁移，不能按“active v1 直迁”实施。`stp-v1` 只作为显式基础兼容回退。
 
 权威交互类型为：
 
@@ -477,8 +504,10 @@ interaction.kind
 - `CLARIFICATION` 只能包含问题、受控选项和受影响目标摘要，不含 Evidence；
 - `BOUNDARY` 不展示计划或部分执行材料；
 - `ANSWER` 的作品集事实继续经过现有执行、Composer 和 Grounding Validator；
-- `stp-v1` 在迁移窗口只做安全兼容投影；`stp-v2` writer/reader 仅作为未激活历史实现处置，不形成第三条消费链；
-- 前后端完成协商和 E2E 前不得把默认合同切到 `stp-v3`。
+- P7 新后端先同时接受 `stp-v1 / stp-v2 / stp-v3`，其中 v2 只作为现有客户端的限时 read compatibility，v3 才是目标 writer/consumer；
+- 前端默认请求从 `stp-v2` 切到 `stp-v3`，仅普通只读 ASK 在服务端明确返回“不支持 v3”时允许将同一内存输入投影成 v1 兼容请求并自动重试一次；确认、澄清提交等 continuation 不跨合同自动重放；
+- 前后端完成协商、过渡矩阵和 E2E 前不得移除 v2 接受路径，也不得把默认合同切到 `stp-v3`；
+- v2 兼容删除必须晚于旧前端缓存/部署窗口，并有真实请求版本指标证明不再使用，禁止 v1/v2/v3 长期并列演化。
 
 必须增加响应不变量：
 
@@ -489,7 +518,7 @@ interaction.kind != ANSWER
 → answerSections 不得包含 EVIDENCE 类型
 ```
 
-该不变量不等待 stp-v3：审计缺陷热修必须先回补当前 v1 Mapper，使澄清、边界、能力不可用和噪声输入立即无 Evidence；v3 再把它固化为正式合同。
+该不变量不等待 stp-v3：审计缺陷热修必须先回补当前响应 Mapper，使澄清、边界、能力不可用和噪声输入立即无 Evidence，同时不得误伤 `ANSWER/PARTIAL` 的合法 Evidence；v3 再把它固化为正式合同。
 
 ## 13. 配置与运行模式
 
@@ -510,8 +539,9 @@ agent.model.operation.conversation-recovery.timeout
 - `MODEL_LED`：新解释器为唯一语义权威，旧规则不得覆盖；
 - 未配置或 Provider 不可用时进入最小 fallback；
 - 生产切换必须显式配置，不因 Key 存在自动启用。
+- `conversation-recovery.enabled` 默认 `false`；首个 MODEL_LED 发布使用服务端模板，只有独立真实评测和发布批准后才可启用模型 Recovery。
 
-P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入第四种混合运行模式，也不在 stp-v1 页面提前开放。P5/P6 的 MODEL_LED 仅在测试和显式非默认配置中运行；到 P7 完成 v3 前后端协商后才允许用户可见。
+P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入第四种混合运行模式，也不向当前 stp-v2 客户端提前开放。P5/P6 的 MODEL_LED 仅在测试和显式非默认配置中运行；到 P7 完成 v3 前后端协商后才允许用户可见。
 
 ### 13.1 时间、熔断与容量预算
 
@@ -524,7 +554,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | 作品集受约束表达 | 沿用既有最多 4 秒 | Interpretation 后按剩余共享预算决定是否尝试 |
 | 通用回答 | 按剩余共享预算裁剪 | 不得与 Interpretation 合计撞穿请求级 deadline |
 
-每个 operation 拥有独立进程内熔断状态并复用既有 Provider 故障码。剩余预算不足时不发起新模型调用，直接进入该阶段的确定性 fallback。SHADOW 不进入访客响应 deadline，也不得占满正式请求使用的有界执行资源。
+每个 operation 拥有独立的超时配置、请求执行持有者和进程内熔断状态，并复用同一个 Provider Registry 与既有故障码。现有单 RestClient/单 8 秒超时不能直接满足该合同，适配器必须按 operation 使用独立 RestClient 工厂或等价的请求级超时机制。剩余预算不足时不发起新模型调用，直接进入该阶段的确定性 fallback。SHADOW 不进入访客响应 deadline，也不得占满正式请求使用的有界执行资源。
 
 ## 14. 隐私、注入与可观测性
 
@@ -574,14 +604,20 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 10. 通用问题、越出作品集但可回答的问题、时效性问题和不可用能力；
 11. Prompt 注入、伪造主体、伪造 Evidence、索要隐私和越权工具；
 12. Provider 关闭、超时、限流、5xx、非法 JSON、未知字段和截断输出；
-13. stp-v1→v3 协商、v2 不激活处置和前端映射；
+13. 当前 v2→v3 协商、v1 显式回退、v2 限时兼容和前端映射；
 14. 桌面、平板和移动端的澄清、确认、交流恢复与 Evidence 展示；
-15. `PROPOSE_EXECUTION` 空 tasks、非法/越界/重叠 span 和 Kind 字段混用；
+15. `PROPOSE_EXECUTION` 空 tasks、非法/越界/重叠 anchor、重复原文 occurrence、Emoji/代理对和 Kind 字段混用；
 16. subjectBasis 与文本、confirmedSubjects、recentResults、pageHint 的伪造或冲突；
 17. 通用知识问题误判 CONVERSE、寒暄与真实任务混合；
 18. 历史窗口 Prompt 注入、pendingInteraction 期间取消或切换目标；
 19. 慢成功预算、SHADOW 字节级无影响、队列饱和和熔断隔离；
-20. REGENERATE_PLAN、多标签页上下文隔离、序数结果指代和中英字符预算。
+20. REGENERATE_PLAN、多标签页上下文隔离、序数结果指代和中英字符预算；
+21. recentResults 签发、回传、篡改、过期、版本变化与重复位置；
+22. reviewedAlias NFKC/大小写/全半角规范化、同类型冲突启动失败和跨类型冲突澄清；
+23. Recovery 输出含 reviewedAlias 时模板回退，以及 SHADOW 关停排水；
+24. v2 旧客户端、新 v3 客户端、新旧后端和 LEGACY 回滚的过渡矩阵；
+25. `PARTIAL` 安全回答仍保留合法 Evidence，非回答清空修复不得误伤；
+26. Interpretation 2.4 秒慢成功叠加表达调用仍不突破共享/请求预算。
 
 ### 15.2 判定原则
 
@@ -613,7 +649,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 - 通用事实经 CONVERSE/Recovery 输出率、非 ANSWER Evidence 率和未知能力入口率均为 0；
 - 至少 50 个关键场景进行三次真实 Provider 重复运行，以上安全指标三次均满足；
 - 有真实流量时 SHADOW 至少运行 7 天并取得 200 个成功结构样本；尚未部署时允许以 200 场景三次显式回放替代，但 Verdict 必须标记为测试环境而非生产；
-- 只有全部阈值满足，才允许从 `SHADOW` 切换 `MODEL_LED`。
+- 全部阈值满足只是从 `SHADOW` 切换 `MODEL_LED` 的必要条件，不是自动切换指令；生产默认切换仍需用户单独批准。
 
 ## 16. 迁移与回滚
 
@@ -624,17 +660,19 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 3. 建立 `TurnInterpretationPort`、严格 Codec 和提议领域模型，不接生产主链路；
 4. 建立 `ProposalCompiler`、主体硬校验、扩展 Validator 和最小 fallback；
 5. 在授权环境运行异步 `SHADOW`，比较旧规则与冻结期望，不以旧行为一致率作为正确性；
-6. 后端和测试中建立 CONVERSATIONAL、Conversation Recovery 与澄清，不对 stp-v1 用户开放；
+6. 后端和测试中建立 CONVERSATIONAL、Conversation Recovery 与澄清，不向当前 stp-v2 客户端开放；
 7. 在显式非默认环境开放单任务，再开放多任务、依赖和 Context v2；
-8. 前后端直接从 active stp-v1 切换到 stp-v3，interaction.kind 成为唯一公共状态；
-9. 完成真实 Provider、预算、故障、浏览器和回滚验收后再默认启用 MODEL_LED；
-10. 稳定窗口后移除旧规则默认权威，最终只保留最小 fallback 和有限回滚窗口。
+8. 后端先保留 v2 兼容并支持 v3，前端默认从 v2 切换到 v3、以 v1 作为显式基础回退，interaction.kind 成为 v3 唯一公共状态；
+9. 完成真实 Provider、预算、故障、浏览器和回滚验收，形成独立发布结论；代码完成本身不改变生产默认模式；
+10. 用户另行批准生产默认切换且稳定窗口通过后，才移除旧规则默认权威，最终只保留最小 fallback 和有限回滚窗口。
 
 ### 16.2 回滚
 
 - 任一阶段可通过 `agent.routing.mode=LEGACY` 回到冻结旧路由；
 - 回滚不改变公开 Bundle、Preset 合同或 API 数据事实；
-- `stp-v3` 客户端在服务端回滚时必须能收到明确的能力不可用或 v1 安全兼容响应，不回退到未激活的 v2 消费链；
+- 旧 `stp-v2` 客户端访问新后端时，在兼容窗口内必须继续成功；新 `stp-v3` 客户端访问旧后端时，仅普通只读 ASK 可在明确版本 409 后自动回退一次 v1；
+- 仅路由模式回滚到 LEGACY 时，新后端仍须按 v3 返回明确的能力不可用或安全兼容响应；若二进制整体回滚，前端必须按上一条回退 v1；
+- 发布顺序和自动化测试必须禁止“前端默认 v2、后端只接受 v1/v3”以及“前端默认 v3、后端无 v3 且无 v1 回退”两种全站 409 中间态；
 - 回滚开关不允许长期掩盖缺陷，达到稳定门禁后应删除旧大型规则路径。
 
 ## 17. 对现有实现的预期影响
@@ -649,7 +687,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | `RoutingContextResolver` | 适配 pageHint/confirmedSubjects/recentResults 等新优先级 |
 | `SemanticContext` | 版本化重构，消除 `activeSubjects` 对页面 Hint 的混淆；类注释同步说明临时窗口只作语言线索 |
 | `ConversationRecoveryPort` | 新增轻量交流恢复 seam，只消费闭集 act 和 action ID，不接收作品集事实 |
-| `ConversationAnswerResponseMapper` | 先热修 v1 非回答无 Evidence，再增加 stp-v3 唯一 interaction.kind |
+| `ConversationAnswerResponseMapper` | 先热修当前合同的非回答无 Evidence，再增加 stp-v3 唯一 interaction.kind |
 | 前端 Agent Context | 首轮真实传入 Hint，显示、清除并按结构维护临时上下文 |
 
 不预先创建通用 Orchestrator、Tool Registry 或多 Agent 抽象。所有改动限定在当前单轮受控语义编排。
@@ -668,10 +706,11 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 10. 非回答交互永远不携带 Evidence 或 Public Source Catalog；
 11. 对话和模型原文不持久化、不进 URL、不进日志；
 12. SHADOW、MODEL_LED、故障注入、真实 Provider 和浏览器路径均有独立 Verdict；
-13. 完成全量后端、前端、构建、架构、隐私和发布级 E2E 后才允许默认切换；
+13. 完成全量后端、前端、构建、架构、隐私和发布级 E2E 后，才具备申请默认切换的资格；
 14. 文档准确区分“设计通过”“已实现”“真实 Provider 已验收”和“生产已启用”；
 15. 本设计提前承接路线图阶段 5 的部分 CONTEXT-02 指代改进，但不宣称阶段 5 整体完成；
-16. 当前 canary 中依赖 `intentSource=RULE` 的契约在 MODEL_LED 默认启用前完成修订和独立验收。
+16. 当前 canary 中依赖 `intentSource=RULE` 的契约在 MODEL_LED 默认启用前完成修订和独立验收；
+17. P8 代码和验收完成后仍不自动默认启用 MODEL_LED；生产默认切换必须由用户基于真实 Provider、回滚、浏览器和量化门禁结果另行批准。
 
 ## 19. 后续审阅重点
 
@@ -680,7 +719,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 1. 独立 Conversation Recovery 的输出 Schema 是否足够窄且仍保持自然；
 2. 七类任务字段映射是否完整覆盖现有 SemanticTaskParameters；
 3. subjectBasis 硬校验是否仍有静默猜测入口；
-4. v1→v3 直迁与 v2 不激活处置是否会留下长期兼容债务；
+4. v2→v3 协调迁移、v1 显式回退与 v2 限时兼容是否足以避免中间态 409；
 5. 唯一别名概览 fallback 是否过弱或意外扩大；
 6. 四轮解释窗口、20 轮通用窗口和预算关系是否清楚；
 7. SHADOW 数字门禁、异步资源隔离与真实 Provider 样本是否足够；
@@ -694,7 +733,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | P1-2 subjectBasis 无硬校验 | 改为每个 SubjectCandidate 独立 basis，§10.4 增加证据源矩阵 |
 | P1-3 CONVERSE 自由事实通道 | 移除规划模型 conversationReply，新增独立窄 Schema Recovery |
 | P1-4 Provider 故障可用性变化 | §11.2 明确采纳产品取舍并保留精确唯一别名概览 |
-| P2-1 v2/v3 与双状态机 | §12 决定 active v1 直接迁移 v3，interaction.kind 唯一公开权威 |
+| P2-1 v2/v3 与双状态机 | 第二版曾决定 active v1 直接迁移 v3；该事实错误已由第三版 §12、§16 和 §21 取代，interaction.kind 仍为唯一公开权威 |
 | P2-2 分阶段模式不兼容 | P4 只在后端/测试交付，不新增半权威模式 |
 | P2-3 时间预算和 SHADOW | §13.1 固化 2.5s/1.5s 操作预算、独立熔断和异步有界旁路 |
 | P2-4 权威条款与窗口冲突 | 头部声明具体取代范围，§7.1 统一 4/20/6 轮关系 |
@@ -703,3 +742,19 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | P2-7 审计 P1 修复过晚 | 迁移第一步和实施计划 P-1 独立热修 |
 | P2-8 REGENERATE_PLAN 未定义 | §7.1、§9 明确重新模型提议和完整验证 |
 | P3 文档与边界细节 | 登记审计报告，收口能力不可用、Span、role、canary 和 CONTEXT-02 |
+
+## 21. 第二轮独立评审处置
+
+| 评审项 | 第三版处置 |
+|---|---|
+| P1-A 当前 v2 事实与迁移错误 | §12、§16 改为当前前端 v2 → 目标 v3，后端限时保留 v2 接受路径，v1 作为显式基础回退，并增加双向回滚矩阵 |
+| P1-B PAGE_HINT 无可编码规则 | §8、§10.4 引入随应用版本审核的封闭 `page-reference-markers` 配置目录；只验证指代绑定，不判断任务类型，也不改变公开 Bundle 契约 |
+| P2-A recentResults 缺少签发生命周期 | §8.2 固化 position、subjectId、contentVersion、expiry、integrityToken 的无状态签发、标签页内存回传和失效澄清 |
+| P2-B Recovery 仍可能偷渡事实 | §7.5 禁止输出 reviewedAlias，action 首版只取 ACTIVE Preset；模型 Recovery 默认关闭，模板先行 |
+| P2-C operation 预算与单 RestClient 不匹配 | §13.1 要求按 operation 拆分超时、执行持有者和熔断，同时保持单一 Provider Registry |
+| P2-D confirmedSubjects 生命周期缺失 | §8.1 固化入列来源、MRU、最多 3 个、单数指代和清除规则 |
+| P2-E TextSpan 偏移歧义 | §7.3 将模型合同改为原文 `TextAnchor + occurrence`，Java 后端生成 UTF-16 TextSpan |
+| P2-F reviewedAlias 规范与冲突缺失 | §10.4 固化 NFKC、trim、Locale.ROOT 折叠、同类型冲突 fail-closed 和跨类型澄清 |
+| P3 映射与流程小错 | 修正 REFINE/RECOMMEND/SYNTHESIS 映射、responseMode 映射，并把 Recovery 画为执行互斥分支 |
+| P-1 与缓存缺口 | P-1 可与核心重构解耦单独批准，并纳入 `Cache-Control: no-store`；本次仍只完成设计，不实施 |
+| P8 默认启用时机 | 代码完成和生产默认切换解耦；后者需要真实门禁结果和用户单独发布批准 |
