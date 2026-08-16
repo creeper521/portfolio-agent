@@ -425,6 +425,16 @@ export async function installP3Mocks(
     const questionPresetId = typeof requestBody.questionPresetId === 'string'
       ? requestBody.questionPresetId
       : undefined
+    // P-1 合同对齐：纯数字噪声（如 112233）返回受控澄清而非 BOUNDARY 能力说明，
+    // 与后端热修后的真实合同一致（行为 UI 基线「112233 is clarified」）。
+    if (questionPresetId === undefined && /^\d+$/.test(question.trim())) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: withP3Fields(noiseClarificationResponse()),
+      })
+      return
+    }
     const mockResponse = withP3Fields(
       answerResponse(question, questionPresetId, requestBody.context?.referenceContext) as Record<string, unknown>,
     )
@@ -438,6 +448,56 @@ export async function installP3Mocks(
 
 export async function installAnswerApiMock(page: Page) {
   await page.route('**/api/v2/answers', fulfillAnswer)
+}
+
+/**
+ * P-1：纯数字噪声（如 112233）的受控澄清响应——无 Evidence、无来源、
+ * 只提供公开主体选项；与后端热修后的合同一致（澄清不带公开来源）。
+ */
+function noiseClarificationResponse(): Record<string, unknown> {
+  return {
+    requestId: 'request-noise-clarification',
+    turnId: 'turn-noise-clarification',
+    contentVersion: previewPublicContent.contentVersion,
+    resolution: 'NEEDS_CLARIFICATION',
+    answerScope: 'PORTFOLIO',
+    intentSource: 'RULE',
+    evidenceState: 'NOT_REQUIRED',
+    generationMode: 'DETERMINISTIC',
+    verification: 'NOT_APPLICABLE',
+    title: '',
+    summary: '这个问题还无法对应到公开作品集内容。',
+    sections: [],
+    blocks: [],
+    evidenceIds: [],
+    suggestedQuestions: [],
+    agentTurn: {
+      contractVersion: 'stp-v1',
+      disposition: 'CLARIFICATION_REQUIRED',
+      clarification: {
+        clarificationId: 'clarify-noise-0123456789abcdef0123456789abcdef',
+        scope: 'CRITICAL',
+        promptCode: 'ROUTING_SUBJECT_CLARIFICATION_REQUIRED',
+        prompt: '请说明或选择你想了解的公开项目',
+        fields: [{
+          fieldKey: 'subject',
+          inputMode: 'SINGLE_CHOICE',
+          options: previewPublicContent.projects.map((project) => ({
+            value: project.slug,
+            label: project.title,
+            resolution: { kind: 'SUBJECT_REFERENCE', subjectType: 'PROJECT', subjectId: project.slug },
+          })),
+          required: true,
+          affectedGoalLabels: [],
+        }],
+        blockedTaskCount: 1,
+        continuingTaskCount: 0,
+        continuingGoalLabels: [],
+        blockedGoals: [],
+      },
+      reasonCodes: [],
+    },
+  }
 }
 
 // ── P4 任务级 composition Mock（设计 §11 / handoff §2/§6）──────────────────────

@@ -106,10 +106,15 @@ export async function observe(page: Page): Promise<BehaviorUiObservation> {
   const input = page.getByLabel('你的问题')
   const inputValue = await input.inputValue().catch(() => '')
   const url = page.url()
+  const caseContextVisible = await page.locator('[data-case-context]').isVisible().catch(() => false)
   return {
     route: new URL(url).pathname,
-    caseContextVisible: await page.locator('[data-case-context]').isVisible().catch(() => false),
-    caseContextLabel: await page.locator('[data-case-context]').textContent().catch(() => undefined) ?? undefined,
+    caseContextVisible,
+    // textContent() auto-waits for the element; without a case context the
+    // element never attaches, so only read the label when one is visible.
+    caseContextLabel: caseContextVisible
+      ? await page.locator('[data-case-context]').textContent().catch(() => undefined) ?? undefined
+      : undefined,
     inputLength: inputValue.length,
     userMessageCount: await page.locator('.message--user').count(),
     agentMessageCount: await page.locator('.message--agent').count(),

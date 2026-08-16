@@ -16,11 +16,9 @@ import {
 const OVERVIEW = '请详细介绍 SQL 审计与故障排查工具项目：背景、我的职责、技术方案、验证过程和最终状态分别是什么？'
 const UNKNOWN = '112233'
 
+// 每个用例拿到全新浏览器上下文，存储天然为空；不要用 addInitScript 清存储——
+// 它会在用例内的每次加载（含 reload）执行，把 P3 刷新恢复依赖的 ResumeToken 一并清掉。
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
   await installBehaviorUiApi(page)
 })
 
@@ -135,5 +133,6 @@ test('cancelled late response cannot overwrite the newer turn', async ({ page })
   await page.waitForTimeout(900)
   const observation = await observe(page)
   expect(observation.agentMessageCount).toBe(1)
-  await expect(page.locator('.message--agent').last()).toContainText('当前版本只稳定支持')
+  // P-1 合同：纯数字噪声返回受控澄清（见 noiseClarificationResponse），不再是 BOUNDARY 能力说明。
+  await expect(page.locator('.message--agent').last()).toContainText('请说明或选择你想了解的公开项目')
 })
