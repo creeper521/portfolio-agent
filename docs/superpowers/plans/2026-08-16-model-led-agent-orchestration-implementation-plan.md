@@ -1,7 +1,7 @@
 # 模型主导 Agent 编排重构实施计划
 
 > **日期：** 2026-08-16
-> **状态：** 第三版已吸收两轮独立架构评审，待用户批准后执行；当前禁止修改生产代码
+> **状态：** 第四版已吸收三轮独立架构评审与逐项产品决议，待用户整体批准后执行；当前禁止修改生产代码
 > **设计依据：** `docs/superpowers/specs/2026-08-16-model-led-agent-orchestration-design.md`
 > **实施方式：** 隔离 worktree、TDD、分阶段切换、中文提交、最终统一审核
 
@@ -53,7 +53,7 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 - 澄清、边界、能力不可用和噪声结果的 evidenceIds/publicSourceCatalog 必须为空；
 - `ANSWER/PARTIAL` 的安全回答仍保留合法 evidenceIds/publicSourceCatalog，不得被清空修复误伤；
 - Project/Case 构造的 semanticContext 必须真实进入首轮 API 请求；
-- 清除页面 Hint 后的首轮请求不得继续携带旧上下文；
+- 既有 Case 清除入口执行后，首轮请求不得继续携带旧 Case Hint；Project 清除入口归 P6，不在 P-1 虚构现有 UI；
 - `GET /api/v1/public-content` 必须返回 `Cache-Control: no-store`。
 
 ### GREEN
@@ -83,6 +83,8 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 - 相似 Preset 文案不得误走精确 Preset；
 - Project/Case Hint 必须进入首轮请求；
 - 本轮显式主体必须覆盖页面 Hint；
+- 首轮裸“它/这个/那个/it/this/that”不得直接绑定 pageHint，必须澄清且将已验证 pageHint 主体排候选第一位；
+- `PORTFOLIO_RECOMMEND` 目标行为只返回公开 Project，不混入 Case；该项标记为相对现状的行为变化；
 - 澄清、边界和能力不可用响应不得带来源；
 - Provider 故障不得产生错误执行；
 - Prompt 注入不得创建主体、工具或 Evidence。
@@ -91,7 +93,7 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 
 - 扩充行为 fixture、Oracle 和统一 Verdict；
 - 场景标签覆盖输入类型、上下文类型、Provider 状态和 UI 路径；
-- 固化旧链路观察结果，不把当前错误写成期望。
+- 同时记录旧链路观察与第四版目标期望，明确标记“裸代词澄清”和“推荐 Project-only”为待实现行为变化，不把当前错误冻结成新基线。
 
 ### 建议提交
 
@@ -107,10 +109,10 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 - `PROPOSE_EXECUTION` 空任务必须拒绝；
 - inputAnchor/topicAnchors/主体 evidenceAnchor 必须用 `TextAnchor(verbatimText, occurrence)` 精确锚定 currentInput，由后端生成 Java UTF-16 TextSpan；
 - 重复原文、occurrence 越界、Emoji/代理对、空锚点和不存在原文必须确定性拒绝；
-- 多主体任务中的每个 SubjectCandidate 必须分别携带并验证 basis；
+- 多主体任务中的每个 SubjectCandidate 必须分别携带并验证 basis；RECENT_RESULT 使用集合内 position 和可选 resultSetId；
 - 七类任务的强类型参数必须全部可由提议字段与服务端派生规则构造；
 - 自由文本有严格长度和字符预算；
-- 输入投影不包含私有、签名或无关证据字段。
+- 输入投影的 recentResultSets 只含 resultSetId、sourceKind 和公开 items，不包含 issuedAt、expiresAt、integrityToken、私有或无关证据字段。
 
 ### GREEN
 
@@ -143,14 +145,19 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 - 主体显式表达、已确认主体、结果引用和页面 Hint 的优先级必须符合设计；
 - 五种 subjectBasis 必须逐项匹配对应服务端证据源，UNKNOWN 不得绑定；
 - 显式别名 X 与模型候选 Y 冲突时不得执行；
-- PAGE_HINT 只能由随应用版本审核的 `page-reference-markers` 配置目录证明，不得由 Java 散落正则自行扩展；该目录不改变公开 Bundle 契约；
-- reviewedAlias 必须按 NFKC、trim、Locale.ROOT 大小写折叠匹配；同类型跨主体冲突使目录加载/发布 fail-closed，跨类型冲突必须澄清；
+- PAGE_HINT 只能由 `routing/page-reference-markers.v1.json` 中携带相同 subjectType 的完整短语证明；裸代词禁止入目录，配置非法时 fail-closed，不得由 Java 散落正则自行扩展；该目录不改变公开 Bundle 契约；
+- reviewedAlias 与 marker 共用 ReferenceMatchPolicy：NFKC、trim、Locale.ROOT 折叠后检查锚点区间紧邻码点；`SQL` 不命中 `MySQL`，中文短别名只允许审核白名单；
+- 同类型跨主体别名冲突使目录加载/发布 fail-closed，跨类型冲突或更高优先级来源冲突必须澄清；
+- 推荐候选默认取全部公开 Project，再由 exclusions/capabilityFilters 收窄；Case 不混排；
+- REFINE 的 constraints 映射 addedConstraints，验证后的主体排除映射 removedSubjects；
 - Provider 不可用时旧大词典不得成为默认第二路由器。
 
 ### GREEN
 
 - 将 `SemanticPlanCompiler` 收敛为 `ProposalCompiler` 职责；
 - 扩展 `SemanticPlanValidator` 的主体目录、能力与交互验证；
+- 实现版本化 marker 配置加载和唯一 `ReferenceMatchPolicy`，集中处理规范化、锚点边界、类型与短别名白名单；
+- 推荐编译器从全量公开 Project 派生候选，Case 推荐留待未来 recommendationScope 契约；
 - 服务端生成 taskId、planId、fingerprint、确认策略和最终 disposition；
 - 新建只处理合同动作、精确唯一别名概览的 `MinimalTurnFallback`；
 - 为非法提议建立可公开的闭集原因码。
@@ -268,11 +275,13 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 
 - 一到六个任务、超过六个拆分、依赖 DAG、排除和 Synthesis 均有覆盖；
 - pageHint 不能覆盖本轮显式主体；
-- 清除 Hint 后不得继续发送；
-- recentResults 和 confirmedSubjects 必须重新验证 contentVersion；
-- recentResults 必须完成签发→标签页内存→回传→复验全链，覆盖篡改、过期、重复位置和版本变化；
-- recentResults 必须携带 position、subjectId、contentVersion、expiresAt 与 integrityToken，以支持受控序数指代；
-- confirmedSubjects 只由显式主体、受控澄清选择或成功任务更新，按 MRU 最多保留 3 个；最近一轮含多个并列主体时单数“它”必须澄清；
+- 新增 Project Hint 清除入口后不得继续发送旧 Hint；
+- recentResultSets 和 confirmedSubjects 必须重新验证 contentVersion；
+- 以测试传输对象完成 RecentResultSet 签发→解析→复验的服务端闭环，覆盖 token 篡改、过期、重复/断裂位置、3 组/10 项超限、issuedAt 重排和版本变化；
+- integrityToken 必须覆盖 resultSetId、sourceKind、issuedAt、contentVersion、expiresAt、supersedesResultSetId 和有序 items；
+- 新旧集合同时出现时 supersedes 关系必须原子忽略旧集；自环、成环和类型不匹配必须拒绝；只有旧集时允许使用到 expiresAt 的无状态限制必须有测试；
+- P6 前后固定 stp-v2 请求/响应 DTO 序列化必须字节级一致，不得提前加入 result set 字段；
+- confirmedSubjects 只按 FACT、COMPARE 显式主体和受控澄清选择更新，MRU 最多保留 3 个；RECOMMEND/REFINE/GENERAL/SYNTHESIS 不得污染，最近确认组含多个主体时单数“它”必须澄清；
 - pendingInteraction、confirmedSubjects、页面 Hint 和临时窗口使用完整优先级；
 - 历史自由文本不能直接成为事实或主体；
 - 首轮 Case/Project Hint 必须真实到达后端。
@@ -280,8 +289,8 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 ### GREEN
 
 - 实现 `TurnContext` 新字段及 legacy adapter；
-- 后端复用现有完整性机制签发/复验短时无状态 recentResults 引用；
-- 前端按页面内存维护 Hint、确认主体、带签名位置的近期结果、待交互和最近目标；
+- 后端复用现有完整性机制建立短时无状态 RecentResultSet 领域对象、整组签发/复验、issuedAt 排序和 supersession；
+- 前端只定义未接线的 recentResultSets TypeScript 类型与纯存储适配接口，不写入真实标签页会话、不接 v2 HTTP；补 Project Hint 清除 UI；
 - 最多四轮临时对话窗口进入模型输入投影；
 - 保留 audienceRole、requestSource 和 coveredTopics；
 - 开放多任务提议、依赖编译、确认和局部澄清；
@@ -306,6 +315,10 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 - 自动化必须禁止会造成全站 409 的发布中间态；
 - interaction.kind 是唯一公共 UI 权威，v3 不暴露第二套 disposition 状态机；
 - 非 ANSWER 响应存在来源时测试必须失败；
+- stp-v3 完成 RecentResultSet 签发→标签页内存→回传→服务端复验全链；模型输入不得包含完整性 Token；
+- 前端重排合法集合不得改变服务端按 issuedAt 计算的默认最新集合；最大 issuedAt 并列、多集仍歧义时必须澄清；
+- REFINE 必须逐出被引用推荐集并原子保存带 supersedesResultSetId 的新集；陈旧标签页只持旧集时明确允许到期；
+- “第二个”绑定最新合法集合内 position 2；“推荐里的第二个”可由模型提出具体 resultSetId；continuation 在旧后端 409 后不得投影成 v1 重放；
 - 桌面、平板和移动端均能操作澄清、确认、交流恢复和清除 Hint；
 - 读屏文本不能把内部计划或原因码直接读给用户。
 
@@ -313,6 +326,7 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 
 - 增加 stp-v3 DTO 与 Mapper；
 - 新后端先同时接受 v1/v2/v3，前端默认合同再从 v2 切到 v3；普通只读 ASK 可在明确的 v3 不支持 409 后投影为 v1 兼容请求并自动重试一次，continuation 不跨合同自动重放；
+- stp-v3 响应携带签名 RecentResultSet，前端按服务端 issuedAt 维护最多 3 组/10 项并通过 semanticContext 原样回传；服务端验证后仅把无 Token 的最小投影交给模型；
 - 前端按交互类型渲染，不从旧 resolution 猜测 UI；
 - 交流恢复显示为正常 Assistant 消息，不显示证据工作台；
 - 澄清、能力不可用和边界采用不同且自然的文案层级；
@@ -326,7 +340,7 @@ P8 真实 Provider 与发布门禁（默认启用及旧规则清理由后续批�
 
 ### 建议提交
 
-`feat: 交付模型主导编排第三版交互契约`
+`feat: 交付模型主导编排 stp-v3 交互契约`
 
 ## 12. P8：真实 Provider 验收与发布门禁
 

@@ -1,7 +1,7 @@
 # Agent 模型主导语义理解与受控编排重构设计
 
 > **日期：** 2026-08-16
-> **状态：** 第三版已吸收两轮独立架构评审，待用户批准；不构成生产代码实施授权
+> **状态：** 第四版已吸收三轮独立架构评审与逐项产品决议，待用户整体批准；不构成生产代码实施授权
 > **问题来源：** `docs/reports/agent-behavior-full-path-audit-2026-08-16.md`
 > **拟取代范围：** `2026-08-10-semantic-turn-routing-design.md` §2.2、§7.2、§8、§16 中关于规则优先、路由不读取临时对话、Provider 不可用时继续规则编译的条款；其余计划验证、确认、执行和安全边界继续有效
 > **保持有效：** 既有公开事实、安全、证据、确认、执行和 Provider fail-closed 边界
@@ -114,7 +114,8 @@ flowchart TD
     V -->|"需确认"| Q["Plan Confirmation"]
     V -->|"需澄清"| L["Validated Clarification"]
     V -->|"交流恢复"| R["Validated conversationAct"]
-    R --> CR["ConversationRecoveryPort"]
+    R --> T["Server Template\n默认"]
+    R -.->|"enabled + 单独批准"| CR["ConversationRecoveryPort"]
     CR --> CD["Validated Recovery Draft"]
     V -->|"非法/不可用"| D["Minimal Safe Fallback"]
     E --> A["Grounded / Deterministic Answer"]
@@ -180,7 +181,10 @@ TurnInterpretationInput
 ├── context
 │   ├── pageHint?
 │   ├── confirmedSubjects[]
-│   ├── recentResults[]
+│   ├── recentResultSets[]
+│   │   ├── resultSetId
+│   │   ├── sourceKind
+│   │   └── items(position, subjectType, subjectId)[]
 │   ├── pendingInteraction?
 │   ├── lastAcceptedGoal?
 │   ├── ephemeralDialogueWindow[]
@@ -200,7 +204,7 @@ TurnInterpretationInput
 - 签名计划、完整性 Token 或诊断标识；
 - 不受长度和轮数限制的历史对话。
 
-`ephemeralDialogueWindow` 由前端现有标签页内存会话派生，不建立新的历史存储。通用对话仍可使用既有最多 20 轮窗口；Turn Interpretation 只从同一窗口截取最近四轮、八条消息，并受既有 `recent-raw-rounds = 6` 上限约束。它只帮助理解“它”“刚才那个”“换一个”等交流，优先级最低，不能成为事实或主体绑定来源。任何历史自由文本候选都必须回到结构化 recentResults 或公开目录验证。
+`recentResultSets` 在进入模型前必须先由服务端完成完整性、版本、过期和 supersession 校验，再按服务端计算的最近顺序投影；模型只能看到 resultSetId、sourceKind 和公开主体位置，不得看到 issuedAt、expiresAt、integrityToken 或原始请求信封。`ephemeralDialogueWindow` 由前端现有标签页内存会话派生，不建立新的历史存储。通用对话仍可使用既有最多 20 轮窗口；Turn Interpretation 只从同一窗口截取最近四轮、八条消息，并受既有 `recent-raw-rounds = 6` 上限约束。它只帮助理解“它”“刚才那个”“换一个”等交流，优先级最低，不能成为事实或主体绑定来源。任何历史自由文本候选都必须回到已验证的结构化 recentResultSets 或公开目录验证。
 
 `REGENERATE_PLAN` 不走确定性快速路径。它携带当前结构化调整指令、pendingInteraction 和仍有效的上下文重新调用一次 Turn Interpretation；旧问题正文不从服务端存储恢复，只能由本次请求的页面内存输入提供。
 
@@ -229,7 +233,7 @@ TurnProposal
 - `clientTaskKey`：本次输出内局部引用键，不是执行 ID；
 - `taskType`：既有闭集任务类型；
 - `inputAnchor`：当前输入中的 `TextAnchor`；
-- `subjectCandidates[]`：每个候选分别携带公开 subjectType、subjectId、basis、可选 evidenceAnchor/resultPosition；
+- `subjectCandidates[]`：每个候选分别携带公开 subjectType、subjectId、basis、可选 evidenceAnchor/resultSetId/resultPosition；其中 RECENT_RESULT 的 resultPosition 是集合内位置，resultSetId 可省略；
 - `facets[]`：闭集作品集 Fact 维度；
 - `dimensions[]`：闭集比较维度；
 - `topicAnchors[]`：通用解释/比较主题在 currentInput 中的原文锚点；
@@ -249,8 +253,8 @@ TurnProposal
 |---|---|---|
 | `PORTFOLIO_FACT` | 1 个公开主体候选、候选 basis、facets、requestedOutputs | `PortfolioFact`、audienceRole、contentVersion、默认 facet |
 | `PORTFOLIO_COMPARE` | 2–3 个分别带 basis 的公开主体候选、dimensions | `PortfolioCompare`、主体顺序、默认维度 |
-| `PORTFOLIO_RECOMMEND` | careerTrack、capabilityFilters、requestedSize、排除项 | `PortfolioRecommend`、候选范围、数量上限、audienceRole、固定派生 goal |
-| `PORTFOLIO_REFINE_RECOMMENDATION` | 1 个 recentResult 候选、constraints | `PortfolioRefinement`、原结果完整性和新增/移除约束 |
+| `PORTFOLIO_RECOMMEND` | careerTrack、capabilityFilters、requestedSize、排除项 | `PortfolioRecommend`、默认全部公开 Project 候选范围、数量上限、audienceRole、固定派生 goal |
+| `PORTFOLIO_REFINE_RECOMMENDATION` | 1 个 recentResultSet 候选、constraints、主体排除项 | `PortfolioRefinement`；constraints 映射 addedConstraints，验证后的主体排除映射 removedSubjects |
 | `GENERAL_EXPLANATION` | 1 个 topicAnchor、requestedOutputs | 按原文锚点抽取 topic，禁止模型自由生成主题 |
 | `GENERAL_COMPARISON` | 2–3 个 topicAnchors、dimensions | 按原文锚点抽取 topics，验证数量与顺序 |
 | `SYNTHESIS` | 2–6 个 sourceTaskKeys、dimensions、requestedOutputs | sourceTaskIds、依赖边、fulfillmentRole、固定派生 synthesisGoal 和来源完整性 |
@@ -258,6 +262,8 @@ TurnProposal
 `TextAnchor` 由 `verbatimText` 和从 1 开始的 `occurrence` 组成。模型不得计算或输出字符偏移；服务端按 Java `String` 的 UTF-16 语义从左到右、以非重叠方式查找 `currentInput` 中第 N 次完全相同的 `verbatimText`，再生成内部 `TextSpan(startInclusive, endExclusive, text)`。原文不存在、occurrence 越界、空文本或超过预算时整个提议无效。这样既保留“必须来自本轮原文”的硬约束，也避免 Emoji/代理对造成模型偏移与 Java 偏移不一致。`inputAnchor`、`topicAnchors` 和主体 `evidenceAnchor` 均使用该结构；不同任务可以锚定重叠原文，但不能引用输入之外的文字。
 
 `responseMode` 到现有领域类型的映射固定为：`CONCISE → ExplanationDepth.BRIEF`、`STANDARD → ExplanationDepth.STANDARD`、`DETAILED → ExplanationDepth.DETAILED`，不得依赖枚举同名反射转换。
+
+`PORTFOLIO_RECOMMEND` 首版只在公开 Project 中排序，Case 不与 Project 混排。这是相对当前“公开 Project 与 Case 均可能进入候选集”的显式行为收窄，必须进入 P0 目标行为集，并在真实实现后同步 `docs/08-当前实现状态.md`。未来若支持案例推荐，应升级提议契约并新增独立 `recommendationScope = PROJECT | CASE`，不得复用表示输出形式的 requestedOutputs。
 
 ### 7.4 澄清提议
 
@@ -268,7 +274,7 @@ TurnProposal
 - `questionDraft`：不超过 160 个中文字符的自然提问；
 - `candidateSubjectIds[]`：仅作候选，服务端重新过滤和排序。
 
-后端决定澄清范围是 `LOCAL` 还是 `CRITICAL`，生成 clarificationId、fieldKey、promptCode 和正式选项。模型文案违反边界时使用服务端模板。
+后端决定澄清范围是 `LOCAL` 还是 `CRITICAL`，生成 clarificationId、fieldKey、promptCode 和正式选项。模型文案违反边界时使用服务端模板。首轮裸代词无法安全绑定但存在有效 pageHint 时，pageHint 主体可作为澄清候选并排在第一位，例如“你是想了解《X》吗？”；这只是候选排序，不等于主体绑定，仍需用户点击确认。
 
 ### 7.5 交流恢复
 
@@ -308,7 +314,7 @@ Recovery 契约没有“回答正文”字段，任何实质知识问题都必�
 TurnContext
 ├── pageHint?              # 页面可见、可关闭、低优先级
 ├── confirmedSubjects[]    # 用户显式确认或已完成任务主体
-├── recentResults[]        # 带稳定位置的结构化结果引用，不含回答全文
+├── recentResultSets[]     # 分组、签名的结构化结果引用，不含回答全文
 ├── pendingInteraction?    # 待澄清或待确认状态
 ├── lastAcceptedGoal?      # 最近一次被用户接受的结构化目标
 ├── ephemeralDialogueWindow[]
@@ -324,7 +330,7 @@ TurnContext
 > 本轮受控澄清/确认输入
 > pendingInteraction
 > confirmedSubjects
-> recentResults
+> recentResultSets
 > lastAcceptedGoal
 > pageHint
 > ephemeralDialogueWindow（只作语言理解线索，不参与主体绑定）
@@ -334,37 +340,53 @@ TurnContext
 
 1. 页面打开 Project/Case 只产生 Hint，不自动强制作品集路由；
 2. 用户本轮明确切换主体时，旧主体和页面 Hint 不得覆盖；
-3. 用户使用随应用版本审核的 `page-reference-markers` 配置目录中的明确指代表达时，模型可以提出 pageHint 主体；目录首版只包含“这个项目/该项目/这个案例/该案例/它/这个/那个/this project/this case/it”等受审条目，只负责验证主体指代绑定，不判断任务类型，不构成第二套语义引擎；该目录不属于公开内容 Bundle，不改变 schema 4.0 或七文件发布契约；
+3. 用户使用随应用版本审核的 `page-reference-markers` 配置目录中的完整名词短语时，模型可以提出 pageHint 主体；目录首版仅包含 Project 类型的“这个项目/该项目/当前项目/this project/the project”和 Case 类型的“这个案例/该案例/当前案例/this case/the case”，条目必须携带 subjectType 且与 pageHint 类型一致；裸“它/这个/那个/it/this/that”禁止进入 PAGE_HINT 目录，只能通过 confirmedSubjects 或澄清处理；
 4. 同级冲突或无法唯一绑定时澄清，不猜测；
 5. 页面必须显示并允许清除 Hint；清除后本轮请求不得继续携带；
 6. 首轮请求必须真实传递已构造的上下文，禁止只构造但不进入请求；
-7. “第二个”等序数指代只绑定 recentResults 中经过服务端签发并复验的位置，不扫描回答正文；
+7. “第二个”等序数指代只绑定 recentResultSets 中经过服务端签发并复验的集合内位置，不扫描回答正文；
 8. 用户在 pendingInteraction 期间明确取消、结束或切换目标时，本轮输入优先，旧待办不得强制续接；
 9. audienceRole、requestSource 和 coveredTopics 保持现有行为，仅作为受控元数据，不提升主体优先级；
 10. 所有上下文只存在于当前标签页内存，刷新或关闭后消失，不同标签页互不共享。
 
+`page-reference-markers` 固定存放于 `backend/src/main/resources/routing/page-reference-markers.v1.json`，属于不含作品集事实的版本化路由配置，不属于公开内容 Bundle，不改变 schema 4.0 或七文件发布契约。加载时必须校验 schema、subjectType、规范化后去重、完整短语最小长度和闭集数量，任一非法项 fail-closed；修改必须经过代码评审，禁止复制成散落 Java 正则或常量。
+
 ### 8.1 `confirmedSubjects` 生命周期
 
-- 本轮显式主体、用户提交的受控澄清选择，以及任务成功后的实际主体才可进入 confirmedSubjects；模型候选本身不能写入；
+- 本轮显式主体、用户提交的受控澄清选择，以及成功 `PORTFOLIO_FACT` 的实际单主体才可进入 confirmedSubjects；模型候选本身不能写入；
 - 列表按最近确认/使用顺序维护，最多保留 3 个，超出时移除最旧项；明确切换主体时将新主体移到首位，但不自动删除仍有效的较早主体；
-- 单数指代“它”只允许绑定最近一次唯一确认的主体；若最近一次成功任务同时包含多个并列主体，则必须澄清；
+- `PORTFOLIO_COMPARE` 的显式主体作为同一确认组进入列表；单数指代“它”只允许绑定最近一次唯一确认的主体，最近确认组含多个并列主体时必须澄清；
+- `PORTFOLIO_RECOMMEND`、`PORTFOLIO_REFINE_RECOMMENDATION` 的系统选择结果不得写入 confirmedSubjects；GENERAL 和 SYNTHESIS 任务也不写入；
 - contentVersion 变化、主体不再公开、用户清除当前上下文或标签页刷新时，受影响项立即清除；
-- “第二个”等位置表达不读取 confirmedSubjects，只读取经过签发的 recentResults。
+- “第二个”等位置表达不读取 confirmedSubjects，只读取经过签发的 recentResultSets；
+- lastAcceptedGoal 只帮助理解任务延续、约束和输出目标，永远不能独立绑定主体，也不新增第六种 subjectBasis。
 
-### 8.2 `recentResults` 签发与回传
+### 8.2 `recentResultSets` 签发与回传
 
-任务成功后，服务端随 stp-v3 响应签发短时、无状态的结果引用：
+服务端只为成功的 RECOMMENDATION（含 REFINE 后的新推荐集）和 COMPARISON 结果随 stp-v3 响应签发短时、无状态的分组引用；FACT、GENERAL 和 SYNTHESIS 默认不创建结果集：
 
 ```text
-RecentResultReference
-├── position
-├── subjectId
+RecentResultSetEnvelope
+├── resultSetId
+├── sourceKind = RECOMMENDATION | COMPARISON
+├── issuedAt
 ├── contentVersion
 ├── expiresAt
+├── supersedesResultSetId?
+├── items[]
+│   ├── position
+│   ├── subjectType
+│   └── subjectId
 └── integrityToken
 ```
 
-integrityToken 优先复用现有加密/完整性机制覆盖其余四项，不引入通用 Token 抽象。前端只在当前标签页内存中保存，并通过 stp-v3 的 `semanticContext.recentResults` 原样回传；不得写入 URL、浏览器持久存储或日志。后端每次复验位置、主体、版本、过期时间和完整性；篡改、过期、重复位置或 contentVersion 变化均不执行，转为“结果已过期/请重新选择”的受控澄清。P6 建立领域对象、签发和复验，P7 才开放其 stp-v3 传输与 UI 使用。
+单个集合的位置从 1 开始连续编号；RECOMMENDATION 最多 5 项，COMPARISON 最多 3 项。当前标签页最多保留 3 个集合、合计最多 10 项，超过时按服务端签名 issuedAt 最旧的 resultSet 整组逐出；请求超过上限、位置重复/断裂或集合 ID 重复时整体上下文无效。服务端选择默认结果集时必须验证全部信封，再按签名覆盖的 issuedAt 计算唯一最大值，不能信任前端数组顺序；最大 issuedAt 相同时不静默选择，进入澄清。
+
+integrityToken 优先复用现有加密/完整性机制，覆盖 resultSetId、sourceKind、issuedAt、contentVersion、expiresAt、supersedesResultSetId 和全部有序 items，不引入通用 Token 抽象。前端只在当前标签页内存中保存，并通过 stp-v3 的 `semanticContext.recentResultSets` 原样回传；不得写入 URL、浏览器持久存储或日志。后端每次复验完整性、集合类型、位置、公开主体、版本和过期时间；篡改、过期、重复、超限或 contentVersion 变化均不执行，转为受控澄清。
+
+REFINE 成功时，前端必须原子逐出被引用的旧 RECOMMENDATION 集合并保存新集合；supersedesResultSetId 由服务端从已经验证的旧集合派生，模型不得设置。服务端在同一请求同时收到新旧集合时，按签名的 supersession 关系忽略旧集合；supersession 自环、成环或类型不匹配时上下文无效。由于服务端不保存签发状态，如果陈旧标签页只回传仍未过期的旧集合，服务端无法知道它后来已被替代，仍会接受到 expiresAt；跨标签页即时吊销需要服务端状态，明确不在本设计范围内。
+
+P6 只建立 RecentResultSet 领域对象、签发、复验、supersession 和测试传输闭环，并以固定序列化快照保证 stp-v2 请求/响应字节级不变；P7 才开放 stp-v3 传输、标签页内存和 UI 使用。
 
 ## 9. 确定性快速路径
 
@@ -432,11 +454,15 @@ Preset 保持完全确定性执行。模型可以在后续自然回复中推荐�
 |---|---|---|
 | `EXPLICIT_TEXT` | candidate.evidenceAnchor 在本轮原文中精确锚定该主体一个 reviewedAlias | 主体冲突或澄清 |
 | `CONFIRMED_CONTEXT` | 主体存在于 confirmedSubjects，contentVersion 仍有效 | 澄清或上下文过期 |
-| `RECENT_RESULT` | candidate.resultPosition 对应 recentResults 中同一主体，引用签名和 contentVersion 有效 | 澄清或结果过期 |
-| `PAGE_HINT` | 主体等于当前未清除的 pageHint，candidate.evidenceAnchor 精确命中 `page-reference-markers` 条目，且不存在更高优先级的唯一主体来源 | 澄清，不因页面存在自动绑定 |
+| `RECENT_RESULT` | candidate.resultPosition 对应已验证 recentResultSet 内同一主体；resultSetId 存在时必须命中该集合，省略时由服务端选择唯一最新合法集合；签名和 contentVersion 均有效 | 澄清或结果过期 |
+| `PAGE_HINT` | 主体和类型等于当前未清除的 pageHint，candidate.evidenceAnchor 精确命中同类型 `page-reference-markers` 完整短语，且不存在更高优先级的唯一主体来源 | 澄清，不因页面存在自动绑定 |
 | `UNKNOWN` | 不允许绑定任何可执行主体 | 必须澄清 |
 
-reviewedAlias 的匹配规范固定为 Unicode NFKC、trim 和 `Locale.ROOT` 大小写折叠；规范化结果只用于目录匹配，原文锚点仍必须来自未经改写的 currentInput。目录加载/发布校验必须保证同类型主体的规范化别名跨主体唯一，冲突时 fail-closed；跨类型同名且提议没有结构化 subjectType 时必须澄清，不得静默选择。运行期一个锚点命中多个同级主体也必须澄清。
+reviewedAlias 与 page-reference-markers 共用唯一 `ReferenceMatchPolicy`：先构建 Unicode NFKC、trim 和 `Locale.ROOT` 大小写折叠的规范化视图及原文边界映射，再对 TextAnchor 解析区间对应的规范化前后紧邻码点做边界检查，不对整句另跑意图正则。拉丁字母、数字或下划线紧邻英文/数字别名时不得视为独立命中，例如 `SQL` 不得命中 `MySQL`；中文短别名默认禁止，确有需要时必须进入显式审核白名单。原文锚点仍必须来自未经改写的 currentInput。
+
+目录加载/发布校验必须保证同类型主体的规范化别名跨主体唯一，检查短别名是否嵌入其他主体别名或常见技术词，冲突时 fail-closed；跨类型同名且提议没有结构化 subjectType 时必须澄清，不得静默选择。运行期一个锚点命中多个同级主体也必须澄清。PAGE_HINT 目录不含裸代词，因此“其它/它们”等字内嵌套不能建立 PAGE_HINT basis。
+
+“不存在更高优先级的唯一主体来源”按 §8 的优先级逐层机械判定：本轮显式别名、本轮受控澄清/确认、pendingInteraction、confirmedSubjects 的最近唯一确认组、recentResultSets 的有效集合内位置依次尝试；任一高层唯一绑定即停止，任一高层出现不可消解冲突即澄清，不得继续降到 PAGE_HINT。lastAcceptedGoal 只传递任务级目标和约束，不是 subjectBasis，不能独立参与主体绑定。RECENT_RESULT 未提供 resultSetId 时，服务端按签名 issuedAt 选择唯一最新合法且与任务兼容的集合；最大时间并列、显式来源描述与所选集合冲突或多个集合仍同等可能时必须澄清。
 
 如果 currentInput 明确命中主体 X 的 reviewedAlias，而模型把同一任务绑定为 Y，且 X≠Y，则整项按主体冲突处理。PAGE_HINT 检查只验证审核指代表达目录、原文锚点和上下文优先级；上述检查都不重新推断用户的任务类型。
 
@@ -467,7 +493,7 @@ fallback 不是旧规则引擎的永久副本，只允许：
 - 当规范化输入只等于一个 reviewedAlias，或前端发送已验证的 `OVERVIEW` 结构化动作时，生成唯一主体的 `PORTFOLIO_FACT(OVERVIEW)`；
 - 对无法可靠理解的普通 ASK 返回简短、诚实的能力暂不可用提示，并给出 Preset 或公开主题入口。
 
-这是用户已经确认的产品取舍：MODEL_LED 启用后，Provider 不可用期间不会继续支持自然语言比较、推荐、多任务或通用问答；只保留上述精确合同和唯一别名概览，不增加“介绍 + 别名”等关键词规则。实施后必须同步 `docs/08-当前实现状态.md`，不能把模型描述成可选而实际成为全部自然语言能力前提。
+该产品取舍已在本次设计讨论中得到用户确认：MODEL_LED 启用后，Provider 不可用期间不会继续支持自然语言比较、推荐、多任务或通用问答；只保留上述精确合同和唯一别名概览，不增加“介绍 + 别名”等关键词规则。本设计整体批准与生产启用仍是两道独立门禁；真实实施后必须同步 `docs/08-当前实现状态.md`，不能把模型描述成可选而实际成为全部自然语言能力前提。
 
 不保留“介绍/比较/推荐/综合/Facet 大词典”作为第二套完整路由。迁移期旧 `SemanticSignalCollector` 只通过显式开关用于回滚；用户另行批准生产默认启用且稳定观察窗口通过后，才删除或缩减为上述结构化 fallback。
 
@@ -599,25 +625,27 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 5. 单主体事实、比较、推荐、细化和综合；
 6. 一轮多任务、显式顺序、隐含依赖和超过六个任务；
 7. Project Hint、Case Hint、清除 Hint、Hint 与本轮主体冲突；
-8. confirmedSubjects、recentResults、pendingInteraction、lastAcceptedGoal；
-9. “它”“这个”“第二个”“换一个”等指代；
+8. confirmedSubjects、recentResultSets、pendingInteraction、lastAcceptedGoal；
+9. 首轮裸“它”澄清且 pageHint 候选优先、“这个项目/这个案例”类型匹配、“第二个”“换一个”等指代；
 10. 通用问题、越出作品集但可回答的问题、时效性问题和不可用能力；
 11. Prompt 注入、伪造主体、伪造 Evidence、索要隐私和越权工具；
 12. Provider 关闭、超时、限流、5xx、非法 JSON、未知字段和截断输出；
 13. 当前 v2→v3 协商、v1 显式回退、v2 限时兼容和前端映射；
 14. 桌面、平板和移动端的澄清、确认、交流恢复与 Evidence 展示；
 15. `PROPOSE_EXECUTION` 空 tasks、非法/越界/重叠 anchor、重复原文 occurrence、Emoji/代理对和 Kind 字段混用；
-16. subjectBasis 与文本、confirmedSubjects、recentResults、pageHint 的伪造或冲突；
+16. subjectBasis 与文本、confirmedSubjects、recentResultSets、pageHint 的伪造或冲突；
 17. 通用知识问题误判 CONVERSE、寒暄与真实任务混合；
 18. 历史窗口 Prompt 注入、pendingInteraction 期间取消或切换目标；
 19. 慢成功预算、SHADOW 字节级无影响、队列饱和和熔断隔离；
 20. REGENERATE_PLAN、多标签页上下文隔离、序数结果指代和中英字符预算；
-21. recentResults 签发、回传、篡改、过期、版本变化与重复位置；
-22. reviewedAlias NFKC/大小写/全半角规范化、同类型冲突启动失败和跨类型冲突澄清；
-23. Recovery 输出含 reviewedAlias 时模板回退，以及 SHADOW 关停排水；
-24. v2 旧客户端、新 v3 客户端、新旧后端和 LEGACY 回滚的过渡矩阵；
-25. `PARTIAL` 安全回答仍保留合法 Evidence，非回答清空修复不得误伤；
-26. Interpretation 2.4 秒慢成功叠加表达调用仍不突破共享/请求预算。
+21. recentResultSets 整组签发、issuedAt 服务端排序、集合内位置、回传、篡改、过期、版本变化、3 组/10 项上限与重复位置；
+22. supersession 原子替换、新旧集同时回传时忽略旧集、只回传旧集时允许到期，以及模型输入不含 integrityToken；
+23. reviewedAlias/marker 的 NFKC、大小写、全半角和脚本边界；“其它/它们/MySQL”等字内嵌套拒绝、同类型冲突启动失败和跨类型冲突澄清；
+24. Recovery 输出含 reviewedAlias 时模板回退，以及 SHADOW 关停排水；
+25. v2 旧客户端、新 v3 客户端、新旧后端和 LEGACY 回滚的过渡矩阵；P6 前后 v2 固定 DTO 序列化字节级不变；
+26. `PARTIAL` 安全回答仍保留合法 Evidence，非回答清空修复不得误伤；
+27. Interpretation 2.4 秒慢成功叠加表达调用仍不突破共享/请求预算；
+28. 推荐首版只返回公开 Project、不混入 Case；REFINE 只替换被引用的推荐结果集。
 
 ### 15.2 判定原则
 
@@ -684,7 +712,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | `SemanticSignalCollector` | 迁移期回滚使用；稳定后删除或缩减成结构化 fallback |
 | `SemanticPlanCompiler` | 改为只编译严格模型提议，不再通过关键词推断完整语义 |
 | `SemanticPlanValidator` | 保留并增强，成为模型计划进入执行前的核心可信边界 |
-| `RoutingContextResolver` | 适配 pageHint/confirmedSubjects/recentResults 等新优先级 |
+| `RoutingContextResolver` | 适配 pageHint/confirmedSubjects/recentResultSets 等新优先级 |
 | `SemanticContext` | 版本化重构，消除 `activeSubjects` 对页面 Hint 的混淆；类注释同步说明临时窗口只作语言线索 |
 | `ConversationRecoveryPort` | 新增轻量交流恢复 seam，只消费闭集 act 和 action ID，不接收作品集事实 |
 | `ConversationAnswerResponseMapper` | 先热修当前合同的非回答无 Evidence，再增加 stp-v3 唯一 interaction.kind |
@@ -696,7 +724,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 
 1. 普通 ASK 默认由受控模型提出语义提议，旧关键词规则不再先决定意图；
 2. 精确 Preset、安全门禁和签名 continuation 保持确定性；
-3. `112233`、Emoji 和无明确目标表达经闭集 conversationAct 与独立 Recovery 得到自然交流，不返回 `NOT_SUPPORTED` 或 Evidence；
+3. `112233`、Emoji 和无明确目标表达经闭集 conversationAct 与默认服务端模板（或单独批准的 Recovery）得到自然交流，不返回 `NOT_SUPPORTED` 或 Evidence；
 4. 通用事实问题进入通用任务，不通过交流恢复自由编造；
 5. 页面 Hint 真实进入首轮请求，但其优先级低于用户本轮表达；
 6. 模型提出的主体、任务和依赖全部经过后端闭集、公开目录和图不变量验证；
@@ -710,7 +738,9 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 14. 文档准确区分“设计通过”“已实现”“真实 Provider 已验收”和“生产已启用”；
 15. 本设计提前承接路线图阶段 5 的部分 CONTEXT-02 指代改进，但不宣称阶段 5 整体完成；
 16. 当前 canary 中依赖 `intentSource=RULE` 的契约在 MODEL_LED 默认启用前完成修订和独立验收；
-17. P8 代码和验收完成后仍不自动默认启用 MODEL_LED；生产默认切换必须由用户基于真实 Provider、回滚、浏览器和量化门禁结果另行批准。
+17. P8 代码和验收完成后仍不自动默认启用 MODEL_LED；生产默认切换必须由用户基于真实 Provider、回滚、浏览器和量化门禁结果另行批准；
+18. 首轮裸代词不通过 PAGE_HINT 静默绑定，澄清时优先展示 pageHint 主体；推荐首版只返回公开 Project；
+19. recentResultSets 的最近性、集合内位置、supersession 和模型投影均由服务端验证，前端重排不能改变默认解析对象。
 
 ## 19. 后续审阅重点
 
@@ -724,6 +754,7 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 6. 四轮解释窗口、20 轮通用窗口和预算关系是否清楚；
 7. SHADOW 数字门禁、异步资源隔离与真实 Provider 样本是否足够；
 8. 现有 P4 Grounding、通用回答和新模型规划是否真正保持权力隔离。
+9. RecentResultSet 的无状态 supersession、过期容忍和 3 组/10 项边界是否仍有歧义。
 
 ## 20. 第一轮独立评审处置
 
@@ -758,3 +789,18 @@ P4 只交付后端和测试可见的 CONVERSATIONAL/Recovery 能力，不引入�
 | P3 映射与流程小错 | 修正 REFINE/RECOMMEND/SYNTHESIS 映射、responseMode 映射，并把 Recovery 画为执行互斥分支 |
 | P-1 与缓存缺口 | P-1 可与核心重构解耦单独批准，并纳入 `Cache-Control: no-store`；本次仍只完成设计，不实施 |
 | P8 默认启用时机 | 代码完成和生产默认切换解耦；后者需要真实门禁结果和用户单独发布批准 |
+
+## 22. 第三轮独立评审与产品决议处置
+
+| 评审/决议项 | 第四版处置 |
+|---|---|
+| P1 P6/P7 recentResults 阶段矛盾 | §8.2 与计划 P6/P7 改为 P6 后端签发复验和 v2 字节守卫，P7 才开放 stp-v3、标签页内存与全链回传 |
+| 裸“它”字内嵌套 | PAGE_HINT 目录删除全部裸代词，只保留携带 subjectType 的完整名词短语；首轮裸代词澄清并将 pageHint 主体排第一 |
+| reviewedAlias/marker 边界 | §10.4 固化共享 ReferenceMatchPolicy、规范化视图、锚点紧邻码点、ASCII 边界和中文短别名白名单 |
+| PAGE_HINT 高优先级来源定义 | §10.4 将显式输入、受控选择、pending、confirmed 和 recentResultSet 写成逐层停止/冲突澄清算法；lastAcceptedGoal 明确不绑定主体 |
+| 上下文任务职责 | §8.1 固化 FACT/COMPARE/RECOMMEND/REFINE/GENERAL/SYNTHESIS 的 confirmedSubjects 与 result set 写入边界 |
+| recentResults 平铺位置歧义 | §8.2 改为签名 RecentResultSetEnvelope，两个 sourceKind、集合内连续位置、最多 3 组/10 项、issuedAt 服务端排序 |
+| REFINE 无状态替换 | 新集签名 supersedesResultSetId；新旧同时回传时忽略旧集，并明确只持有旧集的陈旧标签页在无状态系统中可使用到期 |
+| 模型输入完整性边界 | §7.1 只投影 resultSetId/sourceKind/items，issuedAt、expiry、integrityToken 留在服务端请求信封层 |
+| 推荐候选域 | 首版显式收窄为公开 Project-only，作为目标行为进入 P0；未来 Case 推荐使用独立 recommendationScope 契约字段 |
+| 其他文档残留 | 修正默认模板流程图、REFINE 字段映射、marker 配置路径、P-1 Case 清除范围和 Provider 取舍确认措辞 |
