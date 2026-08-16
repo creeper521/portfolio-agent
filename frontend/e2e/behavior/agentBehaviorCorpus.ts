@@ -10,6 +10,12 @@ const clarify = makeExpectation(['NEEDS_CLARIFICATION','AWAITING_CONFIRMATION'],
 const boundary = makeExpectation(['BOUNDARY','REJECTED','INVALID_INPUT','NOT_SUPPORTED'], 'FORBIDDEN', false, ['BOUNDARY','REJECTED'])
 const recoveryAnswer: BehaviorExpectation = { ...makeExpectation(['ANSWERED','PARTIALLY_ANSWERED'], 'REQUIRED_PUBLIC', false, ['READY','PARTIAL_READY']), mustNotEnterHistory: true }
 const noise = makeExpectation(['INVALID_INPUT','NEEDS_CLARIFICATION','NOT_SUPPORTED'], 'FORBIDDEN', true, ['CLARIFICATION_REQUIRED','BOUNDARY'])
+// P0 冻结的第四版目标行为（对当前实现为预期失败，待 P4–P7 交付后转绿）：
+// 首轮裸代词只允许澄清，expectedSubjects 显式为空表示不得出现任何绑定主体，
+// Evidence 与来源同样禁止；完整名词短语（“这个项目”等）不在此列。
+const barePronounClarify: BehaviorExpectation = { ...clarify, evidencePolicy: 'FORBIDDEN', expectedSubjects: [] }
+// 首版推荐目标行为：候选域只允许 Project，结果不得混入 Case 主体。
+const projectOnlyRecommendation: BehaviorExpectation = { ...answer, forbiddenSubjectTypes: ['CASE'] }
 const makeScenario = (id: string, lane: BehaviorLane, initialState: BehaviorContextState, turns: readonly BehaviorTurn[], expectation: BehaviorExpectation, requiresExplicitAuthorization = false, responseOrder?: readonly string[]): BehaviorScenario => ({ id, lane, initialState, turns, expectation, requiresExplicitAuthorization, responseOrder })
 
 const scenarios: BehaviorScenario[] = [
@@ -39,8 +45,14 @@ const scenarios: BehaviorScenario[] = [
   makeScenario('unavailable-follow-up','L3_FAKE_PROVIDER','AFTER_FAILED_TURN',[makeTurn('t1','合成不可用','FAILURE_RECOVERY','UNAVAILABLE'),makeTurn('t2','重试','FAILURE_RECOVERY')],recoveryAnswer),
   makeScenario('cancel-retry','L3_FAKE_PROVIDER','AFTER_FAILED_TURN',[makeTurn('t1','取消合成','FAILURE_RECOVERY','CANCELLED'),makeTurn('t2','重试','FAILURE_RECOVERY')],recoveryAnswer),
   makeScenario('out-of-order','L2_HYBRID','SINGLE_SUBJECT',[makeTurn('t1','切换案例','CONTEXT_SWITCH'),makeTurn('t2','继续','AMBIGUOUS_REFERENCE')],clarify,false,['t2','t1']),
+  makeScenario('project-hint-bare-pronoun','L0_BUNDLE','PROJECT_HINT',[makeTurn('t1','它现在做得怎么样？','BARE_PRONOUN'),makeTurn('t2','这个的验证过程呢？','BARE_PRONOUN')],barePronounClarify),
+  makeScenario('case-hint-bare-pronoun','L0_BUNDLE','CASE_HINT',[makeTurn('t1','那个的结果是什么？','BARE_PRONOUN')],barePronounClarify),
+  makeScenario('project-only-recommendation','L0_BUNDLE','FRESH',[makeTurn('t1','推荐几个适合后端岗位的项目','RECOMMENDATION_ASK')],projectOnlyRecommendation),
   makeScenario('live-provider-authorized','L4_LIVE_PROVIDER','FRESH',[makeTurn('t1','经授权的提供商请求','ACTIVE_PRESET')],answer,true),
 ]
 export const BEHAVIOR_SCENARIOS: readonly BehaviorScenario[] = scenarios
+// P0 冻结的第四版目标行为场景：对当前实现为预期失败（RED），
+// 由独立的 v4-targets 行为用例承载，不混入噪声/预设路径。
+export const V4_TARGET_SCENARIO_IDS: readonly string[] = ['project-hint-bare-pronoun', 'case-hint-bare-pronoun', 'project-only-recommendation']
 export function expandActivePresetScenarios(presets: QuestionPreset[]): BehaviorScenario[] { return presets.filter((preset) => preset.availability === 'ACTIVE').map((preset) => makeScenario(`active-preset:${preset.id}`,'L0_BUNDLE','FRESH',[makeTurn(`preset:${preset.id}`,preset.text,'ACTIVE_PRESET')],answer)) }
 export function scenarioById(id: string, additionalScenarios: readonly BehaviorScenario[] = []): BehaviorScenario { const found = [...BEHAVIOR_SCENARIOS, ...additionalScenarios].find((candidate) => candidate.id === id); if (found === undefined) throw new Error(`Unknown behavior scenario: ${id}`); return found }

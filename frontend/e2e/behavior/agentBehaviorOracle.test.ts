@@ -92,6 +92,38 @@ describe('agent behavior hard-invariant oracle', () => {
     expect(evaluateBehavior(scenario, [observation]).map((item) => item.code)).toContain('FAILED_TURN_IN_HISTORY')
   })
 
+  test('rejects any silently bound subject when the target expects none', () => {
+    const scenario = scenarioById('project-hint-bare-pronoun')
+    const silentlyBound = makeObservation(scenario, {
+      subjectReferences: [{ subjectType: 'PROJECT', subjectId: 'hint-project' }],
+    })
+    expect(evaluateBehavior(scenario, [silentlyBound]).map((item) => item.code)).toContain('WRONG_SUBJECT')
+    expect(evaluateBehavior(scenario, [makeObservation(scenario)])).toEqual([])
+  })
+
+  test('rejects recommendations that mix case subjects into a project-only answer', () => {
+    const scenario = scenarioById('project-only-recommendation')
+    const mixed = makeObservation(scenario, {
+      resolution: 'ANSWERED',
+      disposition: 'READY',
+      evidenceState: 'VERIFIED',
+      subjectReferences: [
+        { subjectType: 'PROJECT', subjectId: 'project-a' },
+        { subjectType: 'CASE', subjectId: 'case-b' },
+      ],
+      evidenceIds: ['public-evidence-1'],
+    })
+    expect(evaluateBehavior(scenario, [mixed]).map((item) => item.code)).toContain('FORBIDDEN_SUBJECT_TYPE')
+    const projectOnly = makeObservation(scenario, {
+      resolution: 'ANSWERED',
+      disposition: 'READY',
+      evidenceState: 'VERIFIED',
+      subjectReferences: [{ subjectType: 'PROJECT', subjectId: 'project-a' }],
+      evidenceIds: ['public-evidence-1'],
+    })
+    expect(evaluateBehavior(scenario, [projectOnly])).toEqual([])
+  })
+
   test('assertBehavior throws only a safe violation payload', () => {
     const observation = makeObservation(NOISE_SCENARIO, { leakedPrivateMarker: true })
     expect(() => assertBehavior(NOISE_SCENARIO, [observation])).toThrow(/PRIVATE_LEAK/)

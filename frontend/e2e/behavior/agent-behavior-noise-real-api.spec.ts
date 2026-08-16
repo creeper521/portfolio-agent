@@ -1,10 +1,11 @@
 import { test } from '@playwright/test'
 import { assertBehavior } from './agentBehaviorOracle'
-import { BEHAVIOR_SCENARIOS } from './agentBehaviorCorpus'
+import { BEHAVIOR_SCENARIOS, V4_TARGET_SCENARIO_IDS } from './agentBehaviorCorpus'
 import { executeApiScenario } from './agentBehaviorApiDriver'
 
 const scenarios = BEHAVIOR_SCENARIOS.filter(
   (scenario) => scenario.lane === 'L0_BUNDLE'
+    && !V4_TARGET_SCENARIO_IDS.includes(scenario.id)
     && scenario.turns.some((turn) => turn.inputClass !== 'ACTIVE_PRESET' && turn.inputClass !== 'PRESET_VARIANT'),
 )
 

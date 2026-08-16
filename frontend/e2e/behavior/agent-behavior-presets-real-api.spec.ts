@@ -1,10 +1,12 @@
 import { test } from '@playwright/test'
 import type { QuestionPreset } from '../../src/features/public-content/model/publicContentTypes'
 import { assertBehavior } from './agentBehaviorOracle'
-import { BEHAVIOR_SCENARIOS, expandActivePresetScenarios } from './agentBehaviorCorpus'
+import { BEHAVIOR_SCENARIOS, V4_TARGET_SCENARIO_IDS, expandActivePresetScenarios } from './agentBehaviorCorpus'
 import { executeApiScenario } from './agentBehaviorApiDriver'
 
-const scenarios = BEHAVIOR_SCENARIOS.filter((scenario) => scenario.lane === 'L0_BUNDLE')
+const scenarios = BEHAVIOR_SCENARIOS.filter(
+  (scenario) => scenario.lane === 'L0_BUNDLE' && !V4_TARGET_SCENARIO_IDS.includes(scenario.id),
+)
 
 for (const scenario of scenarios) {
   test(`L0 preset and explicit subject path: ${scenario.id}`, async ({ request, baseURL }) => {

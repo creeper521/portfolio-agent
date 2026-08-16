@@ -7,6 +7,7 @@ export type BehaviorViolationCode =
   | 'CITATION_MISMATCH'
   | 'CONTEXT_LEAK'
   | 'WRONG_SUBJECT'
+  | 'FORBIDDEN_SUBJECT_TYPE'
   | 'UNSUPPORTED_VERIFIED'
   | 'STALE_RESPONSE_OVERWRITE'
   | 'NOISE_NOT_CLARIFIED'
@@ -54,8 +55,18 @@ export function evaluateBehavior(
     if (expectedSubjects.length > 0 && (observedSubjects.length !== expectedSubjects.length || !includesAll(observedSubjects, expectedSubjects))) {
       violations.push(violation('WRONG_SUBJECT', scenario, observation.turnId))
     }
+    // 目标行为冻结（P0）：expectedSubjects 显式为空表示“不得出现任何绑定主体”，
+    // 用于裸代词首轮等不允许静默绑定 pageHint/确认主体的场景。
+    if (expectation.expectedSubjects !== undefined && expectedSubjects.length === 0 && observedSubjects.length > 0) {
+      violations.push(violation('WRONG_SUBJECT', scenario, observation.turnId))
+    }
     if (forbiddenSubjects.some((subject) => observedSubjects.includes(subject))) {
       violations.push(violation('CONTEXT_LEAK', scenario, observation.turnId))
+    }
+    const forbiddenTypes = expectation.forbiddenSubjectTypes ?? []
+    if (forbiddenTypes.length > 0
+      && observation.subjectReferences.some((subject) => forbiddenTypes.includes(subject.subjectType))) {
+      violations.push(violation('FORBIDDEN_SUBJECT_TYPE', scenario, observation.turnId))
     }
 
     if (expectation.evidencePolicy === 'FORBIDDEN') {

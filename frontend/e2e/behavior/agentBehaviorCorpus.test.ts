@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { BEHAVIOR_SCENARIOS, REQUIRED_CONTEXT_STATES, expandActivePresetScenarios, scenarioById } from './agentBehaviorCorpus'
+import { BEHAVIOR_SCENARIOS, REQUIRED_CONTEXT_STATES, V4_TARGET_SCENARIO_IDS, expandActivePresetScenarios, scenarioById } from './agentBehaviorCorpus'
 import type { BehaviorInputClass } from './agentBehaviorTypes'
 
 describe('agent behavior corpus', () => {
@@ -13,10 +13,27 @@ describe('agent behavior corpus', () => {
   })
   test('covers every input class and important transport outcome', () => {
     const classes = new Set(BEHAVIOR_SCENARIOS.flatMap((scenario) => scenario.turns.map((turn) => turn.inputClass)))
-    const required: BehaviorInputClass[] = ['ACTIVE_PRESET','PRESET_VARIANT','NOISE','AMBIGUOUS_REFERENCE','CONTEXT_SWITCH','SECURITY_BOUNDARY','UNKNOWN_SUBJECT','MALFORMED_BOUNDARY','MULTI_TASK_CONTRADICTION','FAILURE_RECOVERY']
+    const required: BehaviorInputClass[] = ['ACTIVE_PRESET','PRESET_VARIANT','NOISE','AMBIGUOUS_REFERENCE','BARE_PRONOUN','RECOMMENDATION_ASK','CONTEXT_SWITCH','SECURITY_BOUNDARY','UNKNOWN_SUBJECT','MALFORMED_BOUNDARY','MULTI_TASK_CONTRADICTION','FAILURE_RECOVERY']
     for (const inputClass of required) expect(classes.has(inputClass)).toBe(true)
     const outcomes = new Set(BEHAVIOR_SCENARIOS.flatMap((scenario) => scenario.turns.map((turn) => turn.transportOutcome).filter(Boolean)))
     for (const outcome of ['REJECTED','TIMED_OUT','UNAVAILABLE','CANCELLED']) expect(outcomes.has(outcome)).toBe(true)
+  })
+  test('freezes v4 target behaviors: bare pronouns clarify without silent binding; recommendations stay project-only', () => {
+    // P0 目标行为冻结（对当前实现为预期失败，待 P4–P7 交付后转绿）：
+    // 首轮裸代词只允许澄清，不得静默绑定 pageHint 主体，也不得携带 Evidence。
+    expect(V4_TARGET_SCENARIO_IDS.every((id) => BEHAVIOR_SCENARIOS.some((scenario) => scenario.id === id))).toBe(true)
+    for (const id of ['project-hint-bare-pronoun', 'case-hint-bare-pronoun']) {
+      const scenario = scenarioById(id)
+      expect(scenario.expectation.mustClarify).toBe(true)
+      expect(scenario.expectation.evidencePolicy).toBe('FORBIDDEN')
+      expect(scenario.expectation.expectedSubjects).toEqual([])
+      expect(scenario.turns.every((turn) => turn.inputClass === 'BARE_PRONOUN')).toBe(true)
+    }
+    // 首版推荐目标行为：结果主体域只允许 Project，不得混入 Case。
+    const recommendation = scenarioById('project-only-recommendation')
+    expect(recommendation.expectation.allowedResolutions).toContain('ANSWERED')
+    expect(recommendation.expectation.evidencePolicy).toBe('REQUIRED_PUBLIC')
+    expect(recommendation.expectation.forbiddenSubjectTypes).toEqual(['CASE'])
   })
   test('protects noise, boundary, and failed turns from evidence and history', () => {
     for (const scenario of BEHAVIOR_SCENARIOS.filter((candidate) => candidate.id.includes('noise') || candidate.id === 'null-blank-boundary' || candidate.id === 'unicode-boundaries')) {

@@ -11,7 +11,7 @@ export default defineConfig({
   reporter: 'line',
   use: { baseURL, trace: 'retain-on-failure' },
   projects: [
-    { name: 'api-l0', testMatch: /agent-behavior-(presets|noise)-real-api\.spec\.ts/ },
+    { name: 'api-l0', testMatch: /agent-behavior-(presets|noise|v4-targets)-real-api\.spec\.ts/ },
     {
       name: 'behavior-desktop',
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
