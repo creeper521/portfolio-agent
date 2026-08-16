@@ -1,0 +1,191 @@
+param(
+    [ValidateSet('L0', 'L1', 'L2', 'L3', 'L4')]
+    [string[]]$Lane = @('L0', 'L1', 'L2', 'L3'),
+    [switch]$RequireLiveProvider,
+    [string]$JarPath = '',
+    [string]$ProviderSecretFile = '',
+    [ValidateSet('DISABLED', 'POSTGRESQL')]
+    [string]$ContextMode = 'DISABLED',
+    [ValidateRange(1, 65535)]
+    [int]$Port = 4173,
+    [string]$MavenExecutable = 'mvn.cmd',
+    [string]$JavaExecutable = 'java.exe'
+)
+
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSScriptRoot
+$jar = if ([string]::IsNullOrWhiteSpace($JarPath)) {
+    Join-Path $root 'backend\target\portfolio-agent.jar'
+} else {
+    [System.IO.Path]::GetFullPath($JarPath)
+}
+
+if ($Lane -contains 'L4' -and -not $RequireLiveProvider) {
+    throw 'L4 requires explicit -RequireLiveProvider authorization.'
+}
+if ($Lane -contains 'L4' -and [string]::IsNullOrWhiteSpace($ProviderSecretFile)) {
+    throw 'L4 requires an outside-repository provider secret file.'
+}
+if ($Lane -contains 'L4' -and -not (Test-Path -LiteralPath $ProviderSecretFile -PathType Leaf)) {
+    throw 'L4 provider secret file is missing.'
+}
+if (($Lane | Select-Object -Unique).Count -ne $Lane.Count) {
+    throw 'Duplicate behavior lanes are not allowed.'
+}
+
+function Get-EnvSnapshot([string]$Name) {
+    $item = Get-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
+    return @{
+        Exists = $null -ne $item
+        Value = if ($null -ne $item) { [string]$item.Value } else { $null }
+    }
+}
+
+function Restore-Env([string]$Name, [hashtable]$Snapshot) {
+    if ($Snapshot.Exists) {
+        Set-Item -LiteralPath "Env:$Name" -Value $Snapshot.Value
+    } else {
+        Remove-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-Command([string]$Command, [string]$Label) {
+    if ($Command -match '[\\/]') {
+        if (-not (Test-Path -LiteralPath $Command -PathType Leaf)) {
+            throw "$Label executable is missing."
+        }
+        return
+    }
+    if ($null -eq (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        throw "$Label executable is unavailable."
+    }
+}
+
+if (($Lane | Where-Object { $_ -in @('L0', 'L1', 'L2', 'L4') }).Count -gt 0) {
+    if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
+        throw 'Packaged JAR is missing; behavior lanes cannot start.'
+    }
+    Assert-Command $JavaExecutable 'Java'
+}
+if ($Lane -contains 'L3') {
+    Assert-Command $MavenExecutable 'Maven'
+}
+
+$environmentNames = @(
+    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+    'PORTFOLIO_AGENT_MODEL_PROVIDER',
+    'PORTFOLIO_MODEL_EXPRESSION_ENABLED',
+    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
+    'PLAYWRIGHT_EXTERNAL_SERVER',
+    'PLAYWRIGHT_REAL_API',
+    'P3_REAL_API',
+    'PLAYWRIGHT_BASE_URL',
+    'PLAYWRIGHT_REAL_RETRIEVAL',
+    'PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED',
+    'PORTFOLIO_MODEL_OP_ROUTING_MODE',
+    'PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF',
+    'PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION',
+    'PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT',
+    'PORTFOLIO_MODEL_OP_GENERAL_MODE',
+    'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
+    'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION',
+    'PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT'
+)
+$providerEnvironmentNames = @()
+if ($Lane -contains 'L4') {
+    foreach ($line in (Get-Content -LiteralPath $ProviderSecretFile)) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) { continue }
+        if ($line -notmatch '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
+            throw 'L4 provider secret file contains an invalid environment entry.'
+        }
+        $providerEnvironmentNames += $Matches[1]
+    }
+    if ('PORTFOLIO_AGENT_DEEPSEEK_API_KEY' -notin $providerEnvironmentNames) {
+        throw 'L4 provider secret file does not define the approved Provider API key variable.'
+    }
+    $environmentNames = @($environmentNames + $providerEnvironmentNames | Select-Object -Unique)
+}
+$environment = @{}
+foreach ($name in $environmentNames) { $environment[$name] = Get-EnvSnapshot $name }
+$results = [System.Collections.Generic.List[object]]::new()
+$secretName = 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+
+try {
+    foreach ($currentLane in $Lane) {
+        $startedAt = Get-Date
+        $status = 'PASS'
+        $exitCode = 0
+        try {
+            if ($currentLane -eq 'L3') {
+                $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
+                    '-Dtest=AgentBehaviorAdversarialProviderIntegrationTest' test
+                $exitCode = $LASTEXITCODE
+                if ($exitCode -ne 0) { throw "L3 test process exited with $exitCode." }
+            } else {
+                $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
+                $env:PLAYWRIGHT_REAL_API = '1'
+                $env:P3_REAL_API = '1'
+                $env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:$Port"
+                $playwrightScript = 'test:e2e'
+                $playwrightArguments = @()
+                if ($currentLane -eq 'L0') {
+                    $playwrightScript = 'test:e2e:behavior'
+                    $playwrightArguments = @('--project=api-l0')
+                } elseif ($currentLane -in @('L1', 'L2')) {
+                    $playwrightScript = 'test:e2e:behavior'
+                    $playwrightArguments = @('--project=runtime')
+                } elseif ($currentLane -eq 'L4') {
+                    $playwrightScript = 'test:e2e:behavior'
+                }
+                if ($currentLane -eq 'L4') {
+                    foreach ($line in (Get-Content -LiteralPath $ProviderSecretFile)) {
+                        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) { continue }
+                        $null = $line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$'
+                        Set-Item -LiteralPath "Env:$($Matches[1])" -Value $Matches[2].Trim()
+                    }
+                    $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
+                    $env:PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED = 'true'
+                    $env:PORTFOLIO_MODEL_OP_ROUTING_MODE = 'ENABLED'
+                    $env:PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF = 'conversational-default'
+                    $env:PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION = 'semantic-route-v1'
+                    $env:PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT = '8s'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
+                    & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
+                        -Port $Port -ContextMode $ContextMode -RequireLiveProvider `
+                        -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
+                } else {
+                    $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                    & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
+                        -Port $Port -ContextMode $ContextMode `
+                        -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
+                }
+                $exitCode = $LASTEXITCODE
+                if ($exitCode -ne 0) { throw "$currentLane process exited with $exitCode." }
+            }
+        } catch {
+            $status = 'FAIL'
+            if ($_.Exception.Message -match 'missing|unavailable|requires|empty') { $status = 'BLOCKED' }
+            $exitCode = if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 }
+        }
+        $results.Add([pscustomobject]@{
+            lane = $currentLane
+            status = $status
+            exitCode = $exitCode
+            durationBucket = if (((Get-Date) - $startedAt).TotalSeconds -lt 5) { 'LT_5_S' } else { 'GTE_5_S' }
+        })
+        if ($status -eq 'BLOCKED' -or $status -eq 'FAIL') { break }
+    }
+} finally {
+    foreach ($name in $environmentNames) { Restore-Env $name $environment[$name] }
+    Remove-Variable -Name secret -ErrorAction SilentlyContinue
+}
+
+$results | ConvertTo-Json -Depth 4 -Compress
+if (@($results | Where-Object { $_.status -ne 'PASS' }).Count -gt 0) { exit 1 }

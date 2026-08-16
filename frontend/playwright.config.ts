@@ -13,6 +13,7 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
   },
+  testIgnore: ['**/behavior/**/*.test.ts', '**/behavior/**/*.spec.ts'],
   projects: [
     {
       name: 'chromium',
