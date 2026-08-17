@@ -109,13 +109,20 @@ public final class TurnProposalCodec {
         return new TurnProposal.TaskProposal(wireTask.getClientTaskKey(), taskType,
                 anchor(wireTask.getInputAnchor(), input), subjectCandidates,
                 parseEnums(RequestedOutput.class, wireTask.getRequestedOutputs(), "requestedOutputs"),
-                List.of(), List.of(), wireTask.getResponseMode() == null
+                anchors(wireTask.getTopicAnchors(), input), wireTask.getSourceTaskKeys() == null
+                        ? List.of() : List.copyOf(wireTask.getSourceTaskKeys()), wireTask.getResponseMode() == null
                         ? TurnProposal.ResponseMode.STANDARD
                         : parseEnum(TurnProposal.ResponseMode.class, wireTask.getResponseMode(), "responseMode"),
                 parseStringSet(wireTask.getFacets(), "facets"),
                 parseStringSet(wireTask.getDimensions(), "dimensions"), wireTask.getCareerTrack(),
                 parseStringSet(wireTask.getCapabilityFilters(), "capabilityFilters"), wireTask.getRequestedSize(),
                 parseStringSet(wireTask.getConstraints(), "constraints"));
+    }
+
+    private List<TextAnchor> anchors(
+            List<WireAnchor> anchors, TurnInterpretationPort.TurnInterpretationInput input) {
+        if (anchors == null) return List.of();
+        return anchors.stream().map(value -> anchor(value, input)).toList();
     }
 
     private TextAnchor anchor(WireAnchor wireAnchor, TurnInterpretationPort.TurnInterpretationInput input) {
@@ -247,6 +254,8 @@ public final class TurnProposalCodec {
         private String taskType;
         private WireAnchor inputAnchor;
         private List<WireSubject> subjectCandidates;
+        private List<WireAnchor> topicAnchors;
+        private List<String> sourceTaskKeys;
         private List<String> requestedOutputs;
         private String responseMode;
         private List<String> facets;
@@ -266,6 +275,10 @@ public final class TurnProposalCodec {
         public void setSubjectCandidates(List<WireSubject> subjectCandidates) {
             this.subjectCandidates = subjectCandidates;
         }
+        public List<WireAnchor> getTopicAnchors() { return topicAnchors; }
+        public void setTopicAnchors(List<WireAnchor> topicAnchors) { this.topicAnchors = topicAnchors; }
+        public List<String> getSourceTaskKeys() { return sourceTaskKeys; }
+        public void setSourceTaskKeys(List<String> sourceTaskKeys) { this.sourceTaskKeys = sourceTaskKeys; }
         public List<String> getRequestedOutputs() { return requestedOutputs; }
         public void setRequestedOutputs(List<String> requestedOutputs) { this.requestedOutputs = requestedOutputs; }
         public String getResponseMode() { return responseMode; }

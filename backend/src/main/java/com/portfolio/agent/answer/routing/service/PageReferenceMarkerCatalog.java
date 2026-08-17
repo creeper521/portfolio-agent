@@ -19,9 +19,15 @@ public final class PageReferenceMarkerCatalog {
     private static final int EXPECTED_MARKER_COUNT = 10;
 
     private final Set<Marker> markers;
+    private final ReferenceMatchPolicy referenceMatchPolicy;
 
     private PageReferenceMarkerCatalog(Set<Marker> markers) {
+        this(markers, new ReferenceMatchPolicy());
+    }
+
+    PageReferenceMarkerCatalog(Set<Marker> markers, ReferenceMatchPolicy referenceMatchPolicy) {
         this.markers = Set.copyOf(markers);
+        this.referenceMatchPolicy = Objects.requireNonNull(referenceMatchPolicy, "referenceMatchPolicy");
     }
 
     public static PageReferenceMarkerCatalog load(InputStream stream) {
@@ -58,13 +64,8 @@ public final class PageReferenceMarkerCatalog {
     public boolean supports(TextAnchor anchor, String currentInput, SubjectType subjectType) {
         Objects.requireNonNull(anchor, "anchor");
         Objects.requireNonNull(subjectType, "subjectType");
-        TextAnchor.TextSpan span;
-        try {
-            span = anchor.resolveIn(currentInput);
-        } catch (IllegalArgumentException exception) {
-            return false;
-        }
-        return markers.contains(new Marker(subjectType, normalize(span.getText())));
+        return markers.stream().anyMatch(marker -> marker.subjectType == subjectType
+                && referenceMatchPolicy.matches(anchor, currentInput, marker.phrase));
     }
 
     private static boolean isBarePronoun(String phrase) {
