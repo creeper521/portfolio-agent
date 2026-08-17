@@ -1,0 +1,15 @@
+{
+  "version": "page-reference-markers.v1",
+  "markers": [
+    { "subjectType": "PROJECT", "phrase": "这个项目" },
+    { "subjectType": "PROJECT", "phrase": "该项目" },
+    { "subjectType": "PROJECT", "phrase": "当前项目" },
+    { "subjectType": "PROJECT", "phrase": "this project" },
+    { "subjectType": "PROJECT", "phrase": "the project" },
+    { "subjectType": "CASE", "phrase": "这个案例" },
+    { "subjectType": "CASE", "phrase": "该案例" },
+    { "subjectType": "CASE", "phrase": "当前案例" },
+    { "subjectType": "CASE", "phrase": "this case" },
+    { "subjectType": "CASE", "phrase": "the case" }
+  ]
+}

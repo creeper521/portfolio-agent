@@ -172,6 +172,30 @@ class ConversationAnswerResponseMapperTest {
     }
 
     @Test
+    void doesNotProjectEvidenceBlocksForNotSupportedStpV2Outcome() {
+        ConversationAnswerResult result = new ConversationAnswerResult(
+                "turn-not-supported", "public-1", ConversationIntent.PORTFOLIO_GROUNDED,
+                ConversationAnswerScope.PORTFOLIO, AnswerResolution.NOT_SUPPORTED, "title",
+                List.of(new com.portfolio.agent.answer.domain.ConversationAnswerBlock(
+                        com.portfolio.agent.answer.domain.ConversationSourceScope.GENERAL,
+                        "stale evidence must not be projected", List.of("claim-1"), List.of("evidence-1"))),
+                List.of(), false).withAgentTurn(AgentTurnResult.ready(
+                        partialPlan(), new SemanticTurnOutcome(List.of(TaskOutcome.notSupported(
+                                "task-02", SemanticRoutingTypes.TaskSourceDomain.GENERAL,
+                                false, "NOT_SUPPORTED"))), false));
+
+        ConversationAnswerResponse response = new ConversationAnswerResponseMapper().toResponse(result);
+
+        assertThat(response.getBlocks()).singleElement().satisfies(block -> {
+            assertThat(block.getClaimIds()).isEmpty();
+            assertThat(block.getEvidenceIds()).isEmpty();
+            assertThat(block.getSourceReferences()).isEmpty();
+        });
+        assertThat(response.getPublicSourceCatalog()).isEmpty();
+        assertThat(response.getSourceComposition()).isNull();
+    }
+
+    @Test
     void mapsOnlyCompletedTaskBodiesWhenThePlanHasBlockedTasks() throws Exception {
         TaskOutcome answered = TaskOutcome.answered(
                 "task-01", SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO,

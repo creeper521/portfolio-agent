@@ -111,6 +111,15 @@ class DefaultTurnRouterDeterministicTest {
     }
 
     @Test
+    void meaninglessNumericInputRequiresClarificationInsteadOfGeneralExplanation() {
+        SemanticTurnDecision decision = router().route(SemanticTurnInput.ask("112233"));
+
+        assertThat(decision.getDisposition())
+                .isEqualTo(SemanticTurnDecision.Disposition.CLARIFICATION_REQUIRED);
+        assertThat(decision.getValidatedPlan()).isEmpty();
+    }
+
+    @Test
     void invalidStructuredSubjectIsRejectedWithoutGeneralFallback() {
         LegacySemanticContextAdapter.LegacyContext legacyContext =
                 LegacySemanticContextAdapter.LegacyContext.ofWithTypedReferences(

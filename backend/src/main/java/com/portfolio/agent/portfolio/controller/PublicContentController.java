@@ -3,6 +3,8 @@ package com.portfolio.agent.portfolio.controller;
 import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,7 +25,8 @@ public class PublicContentController {
     }
 
     @GetMapping
-    public PublicContentResponse getPublicContent() {
-        return responseMapper.toPublicContentResponse(portfolioService.getPublicContent());
+    public ResponseEntity<PublicContentResponse> getPublicContent() {
+        PublicContentResponse response = responseMapper.toPublicContentResponse(portfolioService.getPublicContent());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
     }
 }

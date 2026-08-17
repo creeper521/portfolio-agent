@@ -111,6 +111,14 @@ public final class ClarificationRequest {
                 List.of(new BlockedGoal("继续当前请求", "WAITING_FOR_SUBJECT")));
     }
 
+    static ClarificationRequest unformedRequest() {
+        return new ClarificationRequest(
+                Scope.CRITICAL, "ROUTING_REQUEST_CLARIFICATION_REQUIRED", "请告诉我你想了解的具体问题或公开项目。",
+                List.of(new Field("request", InputMode.SHORT_TEXT, List.of(), true, List.of("继续当前请求"))),
+                1, 0, List.of(),
+                List.of(new BlockedGoal("继续当前请求", "WAITING_FOR_REQUEST")));
+    }
+
     public String getClarificationId() { return clarificationId; }
     public Scope getScope() { return scope; }
     public String getPromptCode() { return promptCode; }

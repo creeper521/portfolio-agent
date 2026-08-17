@@ -77,13 +77,18 @@ public final class ConversationAnswerResponseMapper {
             Map<String, ContextHandle> contextHandles) {
         AgentTurnResult agentTurn = result.getAgentTurn();
         boolean stpV1 = agentTurn == null || agentTurn.isRequestUsesStpV1();
-        List<ConversationAnswerBlockResponse> blocks = topLevelBlocks(result, agentTurn, stpV1);
+        AnswerResolution resolution = publicResolution(result.getResolution(), agentTurn);
+        boolean answerLike = resolution == AnswerResolution.ANSWERED
+                || resolution == AnswerResolution.PARTIALLY_ANSWERED;
+        List<ConversationAnswerBlockResponse> mappedBlocks = topLevelBlocks(result, agentTurn, stpV1);
+        List<ConversationAnswerBlockResponse> blocks = answerLike
+                ? mappedBlocks : redactSources(mappedBlocks);
         return new ConversationAnswerResponse(
                 result.getTurnId(),
                 result.getContentVersion(),
                 result.getIntent(),
                 publicScope(result.getAnswerScope()),
-                publicResolution(result.getResolution(), agentTurn),
+                resolution,
                 result.getTitle(),
                 blocks,
                 result.getSuggestedQuestions().stream()
@@ -103,8 +108,8 @@ public final class ConversationAnswerResponseMapper {
                 result.getSummary(),
                 agentTurn == null ? null : toAgentTurnResponse(agentTurn, result, contextHandles),
                 "ANSWER", conversation,
-                stpV1 ? null : sourceComposition(blocks),
-                stpV1 ? List.of() : publicSourceCatalog(blocks),
+                stpV1 || !answerLike ? null : sourceComposition(blocks),
+                stpV1 || !answerLike ? List.of() : publicSourceCatalog(blocks),
                 stpV1 ? null : agentTurn == null ? null : agentTurn.getContextInvalidation()
                         .map(value -> new ContextInvalidationResponse(value.getReasonCode(),
                                 value.getRecoveryAction(), value.getContextType(),
@@ -122,6 +127,13 @@ public final class ConversationAnswerResponseMapper {
                 block.getContent(),
                 block.getClaimIds(),
                 block.getEvidenceIds());
+    }
+
+    private static List<ConversationAnswerBlockResponse> redactSources(
+            List<ConversationAnswerBlockResponse> blocks) {
+        return blocks.stream().map(block -> new ConversationAnswerBlockResponse(
+                block.getSourceScope(), block.getSectionType(), block.getTitle(), block.getContent(),
+                List.of(), List.of(), List.of())).toList();
     }
 
     private ConversationAnswerBlockResponse toBlockResponse(
