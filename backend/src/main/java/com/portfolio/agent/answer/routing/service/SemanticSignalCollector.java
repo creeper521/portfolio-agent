@@ -134,6 +134,7 @@ public final class SemanticSignalCollector {
             clarificationNeed = SemanticSignals.ClarificationNeed.CRITICAL;
         }
 
+        goals = new ArrayList<>(SemanticGoalDeduplicator.distinctGoals(goals));
         int requestedTaskCount = Math.max(explicitTaskCount(question), goals.size());
         return new SemanticSignals(
                 sourceQuestion,

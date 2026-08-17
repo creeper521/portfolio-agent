@@ -61,4 +61,20 @@ class SemanticPlanCompilerFulfillmentRoleTest {
         assertThat(plan.getTasks()).extracting(SemanticTask::getFulfillmentRole)
                 .containsOnly(TaskFulfillmentRole.PRIMARY);
     }
+
+    @Test
+    void compilerKeepsOneTaskForDuplicateGoalCandidates() {
+        SubjectReference project = SubjectReference.project("project-a", "public-v1");
+        SemanticSignals.GoalCandidate goal = new SemanticSignals.GoalCandidate(
+                SemanticSignals.Intent.PORTFOLIO_FACT, List.of(project));
+        SemanticSignals signals = new SemanticSignals(
+                "介绍 Project A", List.of(goal, goal), List.of(), 2,
+                SemanticSignals.ClarificationNeed.NONE, false, false, false);
+
+        SemanticTurnPlan plan = new SemanticPlanCompiler(new SemanticRoutingPolicy()).compile(signals);
+
+        assertThat(plan.getTasks()).hasSize(1);
+        assertThat(plan.getTasks().getFirst().getFulfillmentRole())
+                .isEqualTo(TaskFulfillmentRole.PRIMARY);
+    }
 }

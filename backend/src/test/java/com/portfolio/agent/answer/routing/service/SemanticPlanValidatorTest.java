@@ -62,6 +62,20 @@ class SemanticPlanValidatorTest {
     }
 
     @Test
+    void rejectsDistinctTaskIdsThatCarryTheSameTaskMeaning() {
+        SemanticTurnPlan plan = plan(
+                List.of(fact("task-01", "project-a"), fact("task-02", "project-a")),
+                List.of(),
+                List.of(),
+                Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY));
+
+        PlanValidationResult result = validator.validate(plan, "stp-v2");
+
+        assertFalse(result.isValid());
+        assertTrue(result.getIssues().contains("PLAN_SEMANTIC_TASK_DUPLICATE"));
+    }
+
+    @Test
     void rejectsMoreThanSixTasks() {
         List<SemanticTask> tasks = new ArrayList<>();
         for (int index = 1; index <= 7; index++) {
