@@ -71,9 +71,13 @@ public final class SemanticPlanValidator {
         }
 
         Set<String> taskIds = new HashSet<>();
+        Set<SemanticTaskKey> semanticKeys = new HashSet<>();
         for (SemanticTask task : tasks) {
             if (!taskIds.add(task.getTaskId())) {
                 issues.add("PLAN_DUPLICATE_TASK_ID");
+            }
+            if (!semanticKeys.add(semanticKey(task))) {
+                issues.add("PLAN_SEMANTIC_TASK_DUPLICATE");
             }
             validateTask(task, plan.getContentVersion(), issues);
         }
@@ -87,6 +91,74 @@ public final class SemanticPlanValidator {
         validateExclusions(plan, taskIds, issues);
         return List.copyOf(issues);
     }
+
+    private SemanticTaskKey semanticKey(SemanticTask task) {
+        return new SemanticTaskKey(
+                task.getTaskType(), task.getSourceDomain(), canonicalParameters(task.getParameters()),
+                subjectKeys(task.getSubjectReferences()),
+                task.getRequestedOutputs().stream().map(Enum::name).sorted().toList(),
+                task.getFulfillmentRole());
+    }
+
+    private List<String> canonicalParameters(SemanticTaskParameters parameters) {
+        if (parameters instanceof SemanticTaskParameters.PortfolioFact fact) {
+            return List.of("subject=" + subjectKey(fact.getSubject()),
+                    "facets=" + enumNames(fact.getFacets()), "audience=" + fact.getAudienceRole());
+        }
+        if (parameters instanceof SemanticTaskParameters.PortfolioCompare comparison) {
+            return List.of("subjects=" + subjectKeys(comparison.getSubjects()),
+                    "dimensions=" + enumNames(comparison.getDimensions()),
+                    "audience=" + comparison.getAudienceRole());
+        }
+        if (parameters instanceof SemanticTaskParameters.PortfolioRecommend recommendation) {
+            return List.of("candidates=" + subjectKeys(recommendation.getCandidateSubjects()),
+                    "track=" + recommendation.getCareerTrack(),
+                    "capabilities=" + enumNames(recommendation.getCapabilityCodes()),
+                    "goal=" + recommendation.getGoal().trim().toLowerCase(java.util.Locale.ROOT),
+                    "size=" + recommendation.getRequestedSize(), "audience=" + recommendation.getAudienceRole());
+        }
+        if (parameters instanceof SemanticTaskParameters.PortfolioRefinement refinement) {
+            return List.of("base=" + subjectKey(refinement.getBaseResultReference()),
+                    "constraints=" + enumNames(refinement.getAddedConstraints()),
+                    "removed=" + subjectKeys(List.copyOf(refinement.getRemovedSubjects())));
+        }
+        if (parameters instanceof SemanticTaskParameters.GeneralExplanation explanation) {
+            return List.of("topic=" + explanation.getTopic().trim().toLowerCase(java.util.Locale.ROOT),
+                    "depth=" + explanation.getDepth(), "audience=" + explanation.getAudienceRole());
+        }
+        if (parameters instanceof SemanticTaskParameters.GeneralComparison comparison) {
+            return List.of("subjects=" + comparison.getSubjects().stream()
+                            .map(value -> value.trim().toLowerCase(java.util.Locale.ROOT)).sorted().toList(),
+                    "dimensions=" + enumNames(comparison.getDimensions()),
+                    "depth=" + comparison.getDepth(), "audience=" + comparison.getAudienceRole());
+        }
+        if (parameters instanceof SemanticTaskParameters.Synthesis synthesis) {
+            return List.of("sources=" + synthesis.getSourceTaskIds().stream().sorted().toList(),
+                    "goal=" + synthesis.getSynthesisGoal().trim().toLowerCase(java.util.Locale.ROOT),
+                    "dimensions=" + enumNames(synthesis.getDimensions()));
+        }
+        throw new IllegalArgumentException("unsupported semantic task parameters");
+    }
+
+    private List<String> subjectKeys(List<SubjectReference> subjects) {
+        return subjects.stream().map(this::subjectKey).sorted().toList();
+    }
+
+    private String subjectKey(SubjectReference subject) {
+        return subject.getSubjectType() + ":" + subject.getSubjectId() + ":" + subject.getContentVersion();
+    }
+
+    private List<String> enumNames(Set<? extends Enum<?>> values) {
+        return values.stream().map(Enum::name).sorted().toList();
+    }
+
+    private record SemanticTaskKey(
+            SemanticRoutingTypes.SemanticTaskType taskType,
+            SemanticRoutingTypes.TaskSourceDomain sourceDomain,
+            List<String> parameters,
+            List<String> subjects,
+            List<String> outputs,
+            TaskFulfillmentRole fulfillmentRole) { }
 
     private void validateRoleDependencies(
             List<SemanticTask> tasks, List<TaskDependency> dependencies, List<String> issues) {

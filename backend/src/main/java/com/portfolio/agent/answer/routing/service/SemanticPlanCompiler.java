@@ -46,10 +46,11 @@ public final class SemanticPlanCompiler {
     SemanticTurnPlan compile(SemanticSignals signals, String currentContentVersion) {
         Objects.requireNonNull(signals, "signals");
         String effectiveContentVersion = requireText(currentContentVersion, "currentContentVersion");
+        List<SemanticSignals.GoalCandidate> goals = SemanticGoalDeduplicator.distinctGoals(signals.getGoals());
         List<SemanticTask> tasks = new ArrayList<>();
-        boolean hasExplicitSynthesisGoal = signals.getGoals().stream()
+        boolean hasExplicitSynthesisGoal = goals.stream()
                 .anyMatch(goal -> goal.getIntent() == SemanticSignals.Intent.SYNTHESIS);
-        for (SemanticSignals.GoalCandidate goal : signals.getGoals()) {
+        for (SemanticSignals.GoalCandidate goal : goals) {
             if (goal.getIntent() == SemanticSignals.Intent.SYNTHESIS) {
                 continue;
             }

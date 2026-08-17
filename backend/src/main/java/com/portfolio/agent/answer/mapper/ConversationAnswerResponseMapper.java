@@ -327,7 +327,10 @@ public final class ConversationAnswerResponseMapper {
                 .toList();
         return new PortfolioRecommendationResponse(
                 projection.getRecommendationBatchId(), items,
-                projection.getSatisfiedConstraints(), projection.getUnsatisfiedConstraints());
+                projection.getSatisfiedConstraints(), projection.getUnsatisfiedConstraints(),
+                projection.getRequestedSize(), projection.getActualSize(),
+                projection.getCandidateScope().name(), projection.getSelectedPortfolioIds(),
+                projection.getReasonCodes());
     }
 
     private int countRenderableRecommendations(AgentTurnResult agentTurn) {

@@ -28,8 +28,16 @@ public final class SemanticSignalCollector {
             Pattern.CASE_INSENSITIVE);
 
     public SemanticSignals collect(SemanticTurnInput input, ResolvedRoutingContext context) {
+        return collect(input, context, context.getSubjects());
+    }
+
+    public SemanticSignals collect(
+            SemanticTurnInput input,
+            ResolvedRoutingContext context,
+            List<SubjectReference> recommendationSubjects) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(recommendationSubjects, "recommendationSubjects");
         String sourceQuestion = input.getRoutingQuestion() == null ? "" : input.getRoutingQuestion().trim();
         String question = normalize(sourceQuestion);
         List<SemanticSignals.GoalCandidate> goals = new ArrayList<>();
@@ -71,7 +79,7 @@ public final class SemanticSignalCollector {
                             .limit(1).toList()));
         } else if (recommendation) {
             goals.add(new SemanticSignals.GoalCandidate(
-                    SemanticSignals.Intent.PORTFOLIO_RECOMMEND, context.getSubjects()));
+                    SemanticSignals.Intent.PORTFOLIO_RECOMMEND, recommendationSubjects));
         }
         if (generalExplanation) {
             goals.add(new SemanticSignals.GoalCandidate(
@@ -126,6 +134,7 @@ public final class SemanticSignalCollector {
             clarificationNeed = SemanticSignals.ClarificationNeed.CRITICAL;
         }
 
+        goals = new ArrayList<>(SemanticGoalDeduplicator.distinctGoals(goals));
         int requestedTaskCount = Math.max(explicitTaskCount(question), goals.size());
         return new SemanticSignals(
                 sourceQuestion,

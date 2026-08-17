@@ -17,6 +17,8 @@ public final class DefaultTurnRouter implements TurnRouter {
     private final GlobalBoundaryGate boundaryGate;
     private final RoutingContextResolver contextResolver;
     private final PublicSubjectCatalog subjectCatalog;
+    private final InputFormationPolicy inputFormationPolicy;
+    private final RecommendationScopePolicy recommendationScopePolicy;
     private final SemanticSignalCollector signalCollector;
     private final SemanticPlanCompiler planCompiler;
     private final SemanticPlanValidator planValidator;
@@ -33,7 +35,8 @@ public final class DefaultTurnRouter implements TurnRouter {
             SemanticPlanValidator planValidator,
             TurnDecisionPolicy decisionPolicy) {
         this(boundaryGate, contextResolver, subjectCatalog, signalCollector, planCompiler,
-                planValidator, decisionPolicy, null, false);
+                planValidator, decisionPolicy, null, false, new InputFormationPolicy(),
+                new RecommendationScopePolicy());
     }
 
     DefaultTurnRouter(
@@ -46,9 +49,45 @@ public final class DefaultTurnRouter implements TurnRouter {
             TurnDecisionPolicy decisionPolicy,
             SemanticClassifierPort semanticClassifier,
             boolean semanticClassifierEnabled) {
+        this(boundaryGate, contextResolver, subjectCatalog, signalCollector, planCompiler,
+                planValidator, decisionPolicy, semanticClassifier, semanticClassifierEnabled,
+                new InputFormationPolicy(), new RecommendationScopePolicy());
+    }
+
+    DefaultTurnRouter(
+            GlobalBoundaryGate boundaryGate,
+            RoutingContextResolver contextResolver,
+            PublicSubjectCatalog subjectCatalog,
+            SemanticSignalCollector signalCollector,
+            SemanticPlanCompiler planCompiler,
+            SemanticPlanValidator planValidator,
+            TurnDecisionPolicy decisionPolicy,
+            SemanticClassifierPort semanticClassifier,
+            boolean semanticClassifierEnabled,
+            InputFormationPolicy inputFormationPolicy) {
+        this(boundaryGate, contextResolver, subjectCatalog, signalCollector, planCompiler,
+                planValidator, decisionPolicy, semanticClassifier, semanticClassifierEnabled,
+                inputFormationPolicy, new RecommendationScopePolicy());
+    }
+
+    DefaultTurnRouter(
+            GlobalBoundaryGate boundaryGate,
+            RoutingContextResolver contextResolver,
+            PublicSubjectCatalog subjectCatalog,
+            SemanticSignalCollector signalCollector,
+            SemanticPlanCompiler planCompiler,
+            SemanticPlanValidator planValidator,
+            TurnDecisionPolicy decisionPolicy,
+            SemanticClassifierPort semanticClassifier,
+            boolean semanticClassifierEnabled,
+            InputFormationPolicy inputFormationPolicy,
+            RecommendationScopePolicy recommendationScopePolicy) {
         this.boundaryGate = Objects.requireNonNull(boundaryGate, "boundaryGate");
         this.contextResolver = Objects.requireNonNull(contextResolver, "contextResolver");
         this.subjectCatalog = Objects.requireNonNull(subjectCatalog, "subjectCatalog");
+        this.inputFormationPolicy = Objects.requireNonNull(inputFormationPolicy, "inputFormationPolicy");
+        this.recommendationScopePolicy = Objects.requireNonNull(
+                recommendationScopePolicy, "recommendationScopePolicy");
         this.signalCollector = Objects.requireNonNull(signalCollector, "signalCollector");
         this.planCompiler = Objects.requireNonNull(planCompiler, "planCompiler");
         this.planValidator = Objects.requireNonNull(planValidator, "planValidator");
@@ -117,6 +156,12 @@ public final class DefaultTurnRouter implements TurnRouter {
         if (boundary.isBoundary()) {
             return SemanticTurnDecision.boundary(new LinkedHashSet<>(boundary.getReasonCodes()));
         }
+        if (input.getAction() != SemanticTurnInput.Action.CONFIRM_PLAN
+                && inputFormationPolicy.evaluate(input.getRoutingQuestion())
+                == InputFormationPolicy.Formation.UNFORMED) {
+            return SemanticTurnDecision.clarificationRequired(
+                    ClarificationRequest.unformedRequest());
+        }
         if (input.getAction() == SemanticTurnInput.Action.CONFIRM_PLAN) {
             return SemanticTurnDecision.rejected(Set.of("ROUTING_CONFIRMATION_VERIFICATION_REQUIRED"));
         }
@@ -135,7 +180,8 @@ public final class DefaultTurnRouter implements TurnRouter {
             return SemanticTurnDecision.clarificationRequired(
                     ClarificationRequest.contextConflict(subjectOptions(null)));
         }
-        SemanticSignals signals = signalCollector.collect(input, context);
+        SemanticSignals signals = signalCollector.collect(
+                input, context, recommendationScopePolicy.authorizedSubjects(context));
         if (signals.getRequestedTaskCount() > 6) {
             return SemanticTurnDecision.clarificationRequired(
                     ClarificationRequest.splitRequired(signals.getRequestedTaskCount()));
