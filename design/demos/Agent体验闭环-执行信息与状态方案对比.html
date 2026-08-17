@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 体验闭环 · 执行信息与状态方案对比（2026-08-17）</title>
+<style>
+  @font-face {
+    font-family: 'Noto Serif SC';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('../../frontend/public/fonts/noto-serif-sc-400-700.woff2') format('woff2');
+  }
+  :root {
+    --paper: #f4eee4;
+    --paper-hi: #fbf7ef;
+    --paper-low: #e9dfd0;
+    --agent-shell-paper: #f3eadb;
+    --agent-rail-paper: #f0e9de;
+    --agent-thread-paper: #f5e8d1;
+    --agent-evidence-paper: #f8f3ea;
+    --agent-hairline: rgba(104, 84, 60, 0.22);
+    --agent-accent: #7a2e2a;
+    --agent-radius-sm: 8px;
+    --agent-radius-md: 12px;
+    --ink: #201c17;
+    --ink-2: #34302a;
+    --muted: #746b5e;
+    --faint: #9c9182;
+    --rule: #cdbfa9;
+    --red: #7a2e2a;
+    --red-hi: #b65d53;
+    --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+    --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #1e1b17;
+    background:
+      radial-gradient(1200px 500px at 70% -10%, rgba(122, 46, 42, 0.16), transparent 60%),
+      #1e1b17;
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+
+  /* ── 顶部控制条 ─────────────────────────────── */
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    padding: 14px 28px;
+    background: rgba(30, 27, 23, 0.92);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(232, 221, 206, 0.14);
+    color: #e8ddce;
+  }
+  .controls__group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .controls__label {
+    font: 10px var(--mono);
+    letter-spacing: 0.14em;
+    color: #94897c;
+  }
+  .controls button {
+    padding: 7px 13px;
+    color: #a99f91;
+    border: 1px solid rgba(232, 221, 206, 0.22);
+    border-radius: 6px;
+    background: transparent;
+    font: 12px var(--sans);
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .controls button:hover { color: #e8ddce; border-color: rgba(232, 221, 206, 0.45); }
+  .controls button[aria-pressed="true"] {
+    color: #fbf7ef;
+    border-color: var(--red-hi);
+    background: rgba(122, 46, 42, 0.55);
+  }
+  .controls__note {
+    margin-left: auto;
+    max-width: 360px;
+    color: #94897c;
+    font: 10.5px/1.6 var(--mono);
+  }
+
+  /* ── 工作台舞台：中央答案列 ─────────────────── */
+  .stage { padding: 34px 20px 80px; }
+  .workspace {
+    max-width: 980px;
+    margin: 0 auto;
+    border-radius: var(--agent-radius-md);
+    overflow: hidden;
+    border: 1px solid rgba(232, 221, 206, 0.16);
+    box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+    background: var(--agent-thread-paper);
+  }
+  .workspace__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 64px;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--agent-hairline);
+    background: var(--agent-shell-paper);
+  }
+  .workspace__title p {
+    margin: 0 0 3px;
+    color: var(--red-hi);
+    font: 11px var(--mono);
+    letter-spacing: 0.13em;
+  }
+  .workspace__title h1 {
+    margin: 0;
+    font: 500 20px var(--serif);
+    color: var(--ink);
+  }
+  .workspace__tools { display: flex; gap: 8px; }
+  .workspace__tools button {
+    padding: 8px 10px;
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: transparent;
+    font: 11px var(--mono);
+    letter-spacing: 0.08em;
+    cursor: pointer;
+  }
+  .thread {
+    width: min(780px, calc(100% - 72px));
+    margin: 26px auto 44px;
+  }
+
+  /* ── 消息通用 ─────────────────────────────── */
+  .message { margin-bottom: 30px; }
+  .message--user { width: fit-content; max-width: 64%; margin-left: auto; }
+  .message--user .meta {
+    margin: 0 0 6px;
+    text-align: right;
+    color: var(--red-hi);
+    font: 11px var(--mono);
+    letter-spacing: 0.13em;
+  }
+  .message--user .body {
+    padding: 4px 0 4px 14px;
+    border-left: 2px solid var(--red);
+    font: 16px/1.7 var(--sans);
+    color: var(--ink);
+  }
+  .message__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    margin: 0 0 12px;
+  }
+  .message__meta-prefix {
+    color: var(--red-hi);
+    font: 11px var(--mono);
+    letter-spacing: 0.13em;
+  }
+  .message__meta-tag {
+    padding: 2px 7px;
+    color: var(--red);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    font-family: var(--mono);
+  }
+  .message__meta-tag[data-verification] {
+    color: #fbf7ef;
+    border-color: var(--red);
+    background: var(--red);
+  }
+
+  /* ── 章节块（作品集域） ─────────────────────── */
+  .answer-block {
+    position: relative;
+    margin: 0 0 14px;
+    padding: 14px 16px 16px 20px;
+    border: 1px solid color-mix(in srgb, var(--red) 42%, var(--rule));
+    border-left: none;
+    border-radius: var(--agent-radius-sm);
+    background: color-mix(in srgb, var(--red) 12%, var(--paper-hi));
+    overflow: hidden;
+  }
+  .answer-block::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 5px;
+    background: var(--red);
+  }
+  .answer-block__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .answer-block__head h4 {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--ink-2);
+    font: 600 13px/1.4 var(--sans);
+  }
+  .source-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--red);
+    color: #fbf7ef;
+    font: 10px var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .source-pill__dot { width: 5px; height: 5px; border-radius: 50%; background: #fbf7ef; }
+  .support-badge {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--red);
+    color: #fbf7ef;
+    font: 10px var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .answer-block p.content {
+    margin: 0;
+    font: 16px/1.85 var(--serif);
+    color: var(--ink);
+  }
+  /* 公开来源引用 chips */
+  .source-reference-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .source-reference {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.125rem 0.45rem;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.45);
+  }
+  .source-reference .type {
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    background: rgba(122, 46, 42, 0.85);
+    color: #fbf7ef;
+    font-size: 0.6875rem;
+  }
+  /* 章节引用按钮：E-01 · 标题 */
+  .citations { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .citation-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 11px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--ink-2);
+    font: 11.5px/1.5 var(--sans);
+    cursor: pointer;
+  }
+  .citation-chip::before {
+    content: "";
+    align-self: center;
+    width: 5px; height: 5px;
+    background: var(--red-hi);
+    transform: rotate(45deg);
+  }
+  .citation-chip:hover { border-color: var(--red); color: var(--red); }
+  .citation-chip .code { font-family: var(--mono); font-size: 10.5px; color: var(--red); }
+
+  /* 回答级来源摘要（新） */
+  .answer-sources {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 4px 0 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 12px/1.6 var(--mono);
+    cursor: pointer;
+  }
+  .answer-sources::before { content: "◈"; color: var(--red-hi); }
+  .answer-sources:hover { color: var(--red); }
+  .answer-sources strong { color: var(--ink-2); font-weight: 600; }
+
+  /* ════════════════════════════════════════════
+     执行信息（回答依据）五种方案
+     A 面板式（初版） / B 三部件 / C 脚注式 / D 边线批注式 / E 目录卡点线式
+     ════════════════════════════════════════════ */
+  [data-variant-of] { display: none; }
+  .stage[data-variant="A"] [data-variant-of="A"],
+  .stage[data-variant="B"] [data-variant-of="B"],
+  .stage[data-variant="C"] [data-variant-of="C"],
+  .stage[data-variant="D"] [data-variant-of="D"],
+  .stage[data-variant="E"] [data-variant-of="E"],
+  .stage[data-variant="F"] [data-variant-of="F"],
+  .stage[data-variant="G"] [data-variant-of="G"] { display: block; }
+
+  /* ── 方案 A：单一面板（初版，供对比） ───────── */
+  .basis-a {
+    margin: 16px 0 4px;
+    border: 1px solid var(--rule);
+    border-radius: var(--agent-radius-sm);
+    background: var(--paper-low);
+    overflow: hidden;
+  }
+  .basis-a__alert {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-hi);
+    color: var(--red);
+    font: 12px/1.6 var(--mono);
+  }
+  .basis-a__alert::before {
+    content: "";
+    align-self: center;
+    width: 7px; height: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+  }
+  .basis-a summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    color: var(--muted);
+    font: 11.5px var(--mono);
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    list-style: none;
+  }
+  .basis-a summary::-webkit-details-marker { display: none; }
+  .basis-a summary::after { content: "▸"; margin-left: auto; color: var(--faint); }
+  .basis-a[open] summary::after { transform: rotate(90deg); }
+  .basis-a summary:hover { color: var(--red); }
+  .basis-a__body { padding: 4px 14px 14px; display: grid; gap: 8px; }
+  .basis-task {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 9px 12px;
+    border: 1px solid var(--rule);
+    background: var(--paper-hi);
+    font: 11.5px/1.55 var(--sans);
+    color: var(--ink-2);
+  }
+  .basis-task__no { color: var(--red); font-family: var(--mono); font-size: 11px; }
+  .basis-task__goal { color: var(--ink); }
+  .basis-task__reason { display: block; margin-top: 2px; color: var(--muted); font: 11px/1.5 var(--sans); }
+  .basis-task__status {
+    font: 10px var(--mono);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1px 6px;
+    background: var(--paper-low);
+  }
+  .basis-task__status[data-s="partial"], .basis-task__status[data-s="failed"], .basis-task__status[data-s="blocked"] {
+    color: var(--red);
+    border-color: var(--red);
+    background: color-mix(in srgb, var(--red) 7%, var(--paper-hi));
+  }
+  .basis-task__stages {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 6px;
+    color: var(--faint);
+    font: 10px var(--mono);
+  }
+  .basis-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin: 2px 0 0;
+    font: 11px/1.6 var(--sans);
+    color: var(--muted);
+  }
+  .basis-meta-row .k {
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── 方案 B：三部件折叠（保留现状结构，去绿色） ── */
+  .basis-b { margin: 16px 0 4px; display: grid; gap: 10px; }
+  .widget {
+    border: 1px solid var(--rule);
+    background: var(--paper-low);
+    overflow: hidden;
+  }
+  .widget > summary {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    padding: 9px 12px;
+    align-items: baseline;
+    gap: 10px;
+    color: var(--muted);
+    background: var(--paper-low);
+    border: 0;
+    font: 11px var(--mono);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    text-align: left;
+    list-style: none;
+  }
+  .widget > summary::-webkit-details-marker { display: none; }
+  .widget .eyebrow { color: var(--red); letter-spacing: 0.1em; flex-shrink: 0; }
+  .widget .flow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .widget .chev { flex-shrink: 0; }
+  .widget__body { padding: 2px 12px 12px; }
+  .exec-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    padding: 6px 0;
+    color: var(--muted);
+    font: 10.5px var(--mono);
+  }
+  .exec-line .st {
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    font-size: 0.6875rem;
+    background: rgba(0, 0, 0, 0.07);
+    color: var(--ink-2);
+  }
+
+  /* ── 方案 C：脚注式（无框，最低视觉层级） ──── */
+  .basis-c { margin: 18px 0 2px; padding-top: 12px; border-top: 1px solid var(--agent-hairline); }
+  .basis-c__alert {
+    margin: 0 0 6px;
+    color: var(--red-hi);
+    font: 11.5px/1.6 var(--mono);
+    letter-spacing: 0.03em;
+  }
+  .basis-c__alert::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+    vertical-align: 1px;
+  }
+  .basis-c summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+    color: var(--faint);
+    font: 11px var(--mono);
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    list-style: none;
+  }
+  .basis-c summary::-webkit-details-marker { display: none; }
+  .basis-c summary::before { content: "※"; color: var(--red-hi); }
+  .basis-c summary::after { content: "▾"; font-size: 9px; transition: transform 140ms ease; }
+  .basis-c[open] summary::after { transform: rotate(180deg); }
+  .basis-c summary:hover { color: var(--red); }
+  .basis-c__body { padding: 8px 0 2px 16px; display: grid; gap: 7px; }
+  .basis-c .task {
+    font: 11.5px/1.6 var(--sans);
+    color: var(--muted);
+  }
+  .basis-c .task .no { font-family: var(--mono); font-size: 10.5px; color: var(--red-hi); margin-right: 8px; }
+  .basis-c .task .goal { color: var(--ink-2); }
+  .basis-c .task .st { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-left: 10px; }
+  .basis-c .task .st[data-s="partial"], .basis-c .task .st[data-s="failed"] { color: var(--red); }
+  .basis-c .task .reason { display: block; margin: 2px 0 0 26px; color: var(--faint); font-size: 11px; }
+  .basis-c .task .stages { display: block; margin: 3px 0 0 26px; color: var(--faint); font: 10px var(--mono); letter-spacing: 0.03em; }
+  .basis-c .meta { font: 10.5px var(--mono); color: var(--faint); letter-spacing: 0.03em; }
+
+  /* ── 方案 D：边线批注式（沿用 P3/P5 提示语汇） ── */
+  .basis-d {
+    margin: 16px 0 4px;
+    padding: 7px 0 7px 14px;
+    border-left: 2px solid var(--rule);
+  }
+  .basis-d[data-partial="true"] { border-left-color: var(--red); }
+  .basis-d__alert {
+    margin: 0 0 4px;
+    color: var(--red);
+    font: 11.5px/1.6 var(--mono);
+    letter-spacing: 0.03em;
+  }
+  .basis-d__alert::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+    vertical-align: 1px;
+  }
+  .basis-d summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 2px 0;
+    color: var(--muted);
+    font: 11px var(--mono);
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    list-style: none;
+  }
+  .basis-d summary::-webkit-details-marker { display: none; }
+  .basis-d summary::after { content: "▸"; color: var(--faint); font-size: 10px; transition: transform 140ms ease; }
+  .basis-d[open] summary::after { transform: rotate(90deg); }
+  .basis-d summary:hover { color: var(--red); }
+  .basis-d__body { padding: 8px 0 2px 10px; display: grid; gap: 0; }
+  .basis-d .task {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px dotted var(--rule);
+    font: 11.5px/1.55 var(--sans);
+    color: var(--muted);
+  }
+  .basis-d .task:last-of-type { border-bottom: 0; }
+  .basis-d .task .no { font-family: var(--mono); font-size: 10.5px; color: var(--red-hi); }
+  .basis-d .task .goal { color: var(--ink-2); }
+  .basis-d .task .reason { display: block; margin-top: 2px; color: var(--faint); font-size: 11px; }
+  .basis-d .task .st {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; white-space: nowrap; color: var(--muted);
+  }
+  .basis-d .task .st[data-s="partial"], .basis-d .task .st[data-s="failed"] { color: var(--red); }
+  .basis-d .task .stages { grid-column: 1 / -1; margin-top: 4px; color: var(--faint); font: 10px var(--mono); }
+  .basis-d .meta { padding: 7px 0 2px; font: 10.5px var(--mono); color: var(--faint); letter-spacing: 0.03em; }
+
+  /* ── 方案 E：目录卡点线式（档案目录卡隐喻） ── */
+  .basis-e { margin: 16px 0 4px; padding: 2px 2px 0; }
+  .basis-e__leader {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 2px;
+    color: var(--muted);
+    font: 11px var(--mono);
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    text-align: left;
+  }
+  .basis-e__leader .mark { color: var(--red-hi); }
+  .basis-e__leader .dots {
+    flex: 1;
+    min-width: 24px;
+    border-bottom: 1px dotted var(--rule);
+    transform: translateY(-3px);
+  }
+  .basis-e__leader .tail { color: var(--faint); font-size: 10px; white-space: nowrap; }
+  .basis-e__leader .tail[data-s="partial"] { color: var(--red); }
+  .basis-e__leader:hover .label, .basis-e__leader:hover .tail { color: var(--red); }
+  .basis-e__body { padding: 6px 4px 2px; display: grid; gap: 0; }
+  .basis-e .task {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    padding: 8px 2px;
+    border-bottom: 1px solid var(--agent-hairline);
+    font: 11.5px/1.55 var(--sans);
+    color: var(--muted);
+  }
+  .basis-e .task:first-child { border-top: 1px solid var(--agent-hairline); }
+  .basis-e .task .no { font-family: var(--mono); font-size: 10.5px; color: var(--red-hi); }
+  .basis-e .task .goal { color: var(--ink-2); }
+  .basis-e .task .st { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .basis-e .task .st[data-s="partial"], .basis-e .task .st[data-s="failed"] { color: var(--red); }
+  .basis-e .task .st[data-s="completed"] { color: var(--muted); }
+  .basis-e .task .reason { flex-basis: 100%; margin: 2px 0 0 22px; color: var(--faint); font-size: 11px; }
+  .basis-e .meta { padding: 8px 2px 2px; font: 10.5px var(--mono); color: var(--faint); letter-spacing: 0.03em; }
+
+  /* ── 方案 F/G：统一答案脚注区（来源 + 依据同区） ── */
+  .answer-foot {
+    margin: 16px 0 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--agent-hairline);
+  }
+  .answer-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+  }
+  .answer-foot__src {
+    color: var(--muted);
+    font: 11px var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .answer-foot__src::before { content: "◈"; color: var(--red-hi); margin-right: 7px; }
+  .answer-foot__src strong { color: var(--ink-2); }
+  .answer-foot__alert {
+    color: var(--red-hi);
+    font: 11px var(--mono);
+    letter-spacing: 0.03em;
+  }
+  .answer-foot__alert::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+    vertical-align: 1px;
+  }
+  .answer-foot__basis {
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--faint);
+    font: 11px var(--mono);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .answer-foot__basis::after { content: " ▸"; font-size: 10px; }
+  .answer-foot__basis:hover { color: var(--red); }
+  .answer-foot__body { padding: 9px 0 3px 18px; display: grid; gap: 7px; }
+  .answer-foot .task {
+    font: 11.5px/1.6 var(--sans);
+    color: var(--muted);
+  }
+  .answer-foot .task .no { font-family: var(--mono); font-size: 10.5px; color: var(--red-hi); margin-right: 8px; }
+  .answer-foot .task .goal { color: var(--ink-2); }
+  .answer-foot .task .st { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-left: 10px; }
+  .answer-foot .task .st[data-s="partial"], .answer-foot .task .st[data-s="failed"] { color: var(--red); }
+  .answer-foot .task .reason { display: block; margin: 2px 0 0 26px; color: var(--faint); font-size: 11px; }
+  .answer-foot .task .stages { display: block; margin: 3px 0 0 26px; color: var(--faint); font: 10px var(--mono); letter-spacing: 0.03em; }
+  .answer-foot .meta { font: 10.5px var(--mono); color: var(--faint); letter-spacing: 0.03em; }
+  /* F：动作按钮沿用现有描边样式，但纳入脚注区，与上方信息行共享一条发丝线 */
+  .answer-foot--buttons .follow-up-actions { margin-top: 12px; }
+  /* G：动作改为 ↳ 安静文字链接，全脚注区单一语汇 */
+  .answer-foot__links { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 5px 18px; }
+  .answer-foot__links button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 11px var(--mono);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .answer-foot__links button::before { content: "↳"; color: var(--red-hi); margin-right: 5px; }
+  .answer-foot__links button:hover { color: var(--red); }
+
+  /* ── 后续操作 ─────────────────────────────── */
+  .follow-up-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+  .follow-up-actions button {
+    min-height: 32px;
+    padding: 6px 10px;
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.35);
+    font: 11px var(--mono);
+    cursor: pointer;
+  }
+  .follow-up-actions button:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── 推荐区（部分 1/3） ─────────────────────── */
+  .reco-headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin: 18px 0 8px;
+  }
+  .reco-headline h3 {
+    margin: 0;
+    font: 600 16px/1.45 var(--serif);
+    color: var(--ink);
+  }
+  .reco-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 9px;
+    border: 1px solid var(--red);
+    border-radius: 4px;
+    color: var(--red);
+    background: color-mix(in srgb, var(--red) 7%, var(--paper-hi));
+    font: 10.5px var(--mono);
+    letter-spacing: 0.06em;
+  }
+  .reco-status::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--red);
+    transform: rotate(45deg);
+  }
+  .reco-reason {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--red);
+    border-radius: var(--agent-radius-sm);
+    background: var(--paper-hi);
+    font: 12.5px/1.6 var(--mono);
+    color: var(--ink-2);
+  }
+  .reco-reason .k {
+    color: var(--red);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .reco-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .reco-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 18px 16px;
+    background: var(--paper-hi);
+  }
+  .reco-card:only-child { grid-column: 1 / -1; }
+  .reco-card__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .reco-card__no { color: var(--red); font: 500 18px var(--mono); }
+  .reco-card__title { flex: 1; color: var(--ink); font: 500 18px/1.3 var(--serif); }
+  .reco-card__reason {
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--rule);
+    color: var(--muted);
+    font: 13px/1.7 var(--serif);
+  }
+  .reco-recover {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+  }
+  .reco-recover__primary {
+    min-height: 36px;
+    padding: 8px 16px;
+    color: #fbf7ef;
+    border: 0;
+    border-radius: var(--agent-radius-sm);
+    background: var(--red);
+    font: 12px var(--mono);
+    letter-spacing: 0.08em;
+    cursor: pointer;
+  }
+  .reco-recover__primary:hover { background: color-mix(in srgb, var(--red) 82%, black); }
+
+  /* ── 澄清卡（噪声输入） ─────────────────────── */
+  .turn-clarification {
+    margin: 18px 0;
+    padding: 16px;
+    border: 1px solid var(--red);
+    border-radius: var(--agent-radius-sm);
+    background: var(--paper-hi);
+  }
+  .turn-clarification .eyebrow {
+    margin: 0 0 8px;
+    color: var(--red);
+    font: 11px var(--mono);
+    letter-spacing: 0.1em;
+  }
+  .turn-clarification .prompt {
+    position: relative;
+    margin: 0;
+    padding-left: 18px;
+    color: var(--ink);
+    font: 500 17px/1.5 var(--serif);
+  }
+  .turn-clarification .prompt::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0.6em;
+    width: 7px; height: 7px;
+    background: var(--red);
+    transform: rotate(45deg);
+  }
+  .safe-entries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--rule);
+  }
+  .safe-entries button {
+    min-height: 34px;
+    padding: 7px 14px;
+    color: var(--ink-2);
+    border: 1px solid var(--rule);
+    border-radius: var(--agent-radius-sm);
+    background: rgba(255, 255, 255, 0.5);
+    font: 12.5px var(--sans);
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .safe-entries button:hover { border-color: var(--red); color: var(--red); }
+  .safe-entries button .hint { display: block; margin-top: 2px; color: var(--faint); font: 10px var(--mono); }
+
+  .stage[data-variant="F"] .answer-sources,
+  .stage[data-variant="G"] .answer-sources,
+  .stage[data-variant="F"] .standalone-actions,
+  .stage[data-variant="G"] .standalone-actions { display: none; }
+
+  /* ── 场景切换 ─────────────────────────────── */
+  .scenario { display: none; }
+  .scenario[data-active] { display: block; }
+
+  /* ── 底部说明 ─────────────────────────────── */
+  .legend {
+    max-width: 980px;
+    margin: 22px auto 0;
+    padding: 16px 20px;
+    border: 1px solid rgba(232, 221, 206, 0.16);
+    border-radius: var(--agent-radius-md);
+    color: #a99f91;
+    font: 12px/1.8 var(--sans);
+  }
+  .legend h2 { margin: 0 0 8px; color: #e8ddce; font: 500 15px var(--serif); }
+  .legend strong { color: #e8ddce; font-weight: 600; }
+  .legend code { color: #d27d74; font-family: var(--mono); font-size: 11px; }
+  .legend dl { margin: 0; display: grid; gap: 6px; }
+  .legend dt { color: #e8ddce; font-weight: 600; margin-top: 6px; }
+  .legend dd { margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="controls__group">
+    <span class="controls__label">场景</span>
+    <button type="button" data-scenario="success" aria-pressed="true">成功回答</button>
+    <button type="button" data-scenario="partial" aria-pressed="false">部分推荐 1/3</button>
+    <button type="button" data-scenario="noise" aria-pressed="false">噪声澄清</button>
+  </div>
+  <div class="controls__group" id="variantGroup">
+    <span class="controls__label">回答依据样式</span>
+    <button type="button" data-variant="A" aria-pressed="false">A · 面板式（初版）</button>
+    <button type="button" data-variant="B" aria-pressed="false">B · 三部件折叠</button>
+    <button type="button" data-variant="C" aria-pressed="false">C · 脚注式</button>
+    <button type="button" data-variant="D" aria-pressed="false">D · 边线批注式</button>
+    <button type="button" data-variant="E" aria-pressed="false">E · 目录卡点线式</button>
+    <button type="button" data-variant="F" aria-pressed="true">F · 统一脚注区</button>
+    <button type="button" data-variant="G" aria-pressed="false">G · 统一脚注区＋链接动作</button>
+  </div>
+  <p class="controls__note">F/G 针对红线圈出的「正文下方堆三行小元素」问题：来源摘要与依据入口合并为一行、共享一条发丝线，收尾变成一个整体。F 保留现有描边按钮；G 把后续动作也统一成 ↳ 文字链接。澄清场景无依据区，开关不生效。</p>
+</div>
+
+<div class="stage" id="stage" data-variant="F">
+  <div class="workspace">
+    <header class="workspace__head">
+      <div class="workspace__title">
+        <p>AGENT CONVERSATION · Agent 对话</p>
+        <h1 data-session-title>SQL 审计与故障排查工具交付了什么</h1>
+      </div>
+      <div class="workspace__tools">
+        <button type="button">会话</button>
+        <button type="button">证据</button>
+      </div>
+    </header>
+
+    <div class="thread">
+
+      <!-- ══ 场景 1：成功回答（SQL 预设） ══ -->
+      <section class="scenario" data-scenario="success" data-active>
+        <article class="message message--user">
+          <p class="meta">YOU</p>
+          <div class="body">SQL 审计与故障排查工具交付了什么？</div>
+        </article>
+
+        <article class="message message--agent">
+          <p class="message__meta">
+            <span class="message__meta-prefix">AGENT · 回答</span>
+            <span class="message__meta-tag" data-verification="VERIFIED">已验证证据</span>
+            <span class="message__meta-tag">作品集资料</span>
+            <span class="message__meta-tag">已根据公开证据整理回答</span>
+          </p>
+
+          <section class="answer-block">
+            <header class="answer-block__head">
+              <h4>交付概览</h4>
+              <span class="source-pill"><span class="source-pill__dot"></span>作品集资料</span>
+              <span class="support-badge">✓已验证证据</span>
+            </header>
+            <p class="content">该工具以命令行交付，覆盖固定路径 SQL 查询、慢查询归档与审计报表三类日常任务。交付物包含可执行程序、参数说明与一套回归脚本，全部在实习环境完成验收。</p>
+            <ul class="source-reference-list">
+              <li class="source-reference"><span class="type">合集</span>E-01 · SQL 审计工具交付证据集</li>
+            </ul>
+            <div class="citations">
+              <button type="button" class="citation-chip"><span class="code">E-01</span>SQL 审计工具交付证据集</button>
+            </div>
+          </section>
+
+          <section class="answer-block">
+            <header class="answer-block__head">
+              <h4>责任与边界</h4>
+              <span class="source-pill"><span class="source-pill__dot"></span>作品集资料</span>
+            </header>
+            <p class="content">本人独立负责查询解析与报表模块；审计策略沿用团队既有约定，未包含在线变更能力。工具定位为排查辅助，不直接修改数据库。</p>
+          </section>
+
+          <button type="button" class="answer-sources">依据 <strong>1 组</strong>已审核公开证据 · 点击在证据工作台查看全部引用</button>
+
+          <!-- 方案 A：单一面板（初版，供对比） -->
+          <details class="basis-a" data-variant-of="A">
+            <summary>查看回答依据</summary>
+            <div class="basis-a__body">
+              <div class="basis-task">
+                <span class="basis-task__no">01</span>
+                <span class="basis-task__goal">介绍 SQL 审计与故障排查工具的交付内容</span>
+                <span class="basis-task__status" data-s="completed">已完成</span>
+                <span class="basis-task__stages">范围确认 · 完成 &nbsp;/&nbsp; 材料检索 · 完成 &nbsp;/&nbsp; 证据校验 · 完成 &nbsp;/&nbsp; 结果组织 · 完成</span>
+              </div>
+              <p class="basis-meta-row"><span class="k">来源组成</span>仅作品集资料</p>
+            </div>
+          </details>
+
+          <!-- 方案 B：三部件折叠 -->
+          <div class="basis-b" data-variant-of="B">
+            <details class="widget" open>
+              <summary><span class="eyebrow">任务摘要</span><span class="flow">介绍 SQL 审计与故障排查工具的交付内容 · 1 步已完成</span><span class="chev">−</span></summary>
+              <div class="widget__body">
+                <div class="basis-task">
+                  <span class="basis-task__no">01</span>
+                  <span class="basis-task__goal">介绍 SQL 审计与故障排查工具的交付内容</span>
+                  <span class="basis-task__status" data-s="completed">已完成</span>
+                </div>
+              </div>
+            </details>
+            <details class="widget">
+              <summary><span class="eyebrow">执行概览</span><span class="flow">执行完成</span><span class="chev">+</span></summary>
+              <div class="widget__body">
+                <div class="exec-line">范围确认 <span class="st">完成</span></div>
+                <div class="exec-line">材料检索 <span class="st">完成</span></div>
+                <div class="exec-line">证据校验 <span class="st">完成</span></div>
+                <div class="exec-line">结果组织 <span class="st">完成</span></div>
+              </div>
+            </details>
+            <details class="widget">
+              <summary><span class="eyebrow">回答构成</span><span class="flow">来源组成 · 仅作品集资料</span><span class="chev">+</span></summary>
+            </details>
+          </div>
+
+          <!-- 方案 C：脚注式 -->
+          <details class="basis-c" data-variant-of="C">
+            <summary>查看回答依据</summary>
+            <div class="basis-c__body">
+              <p class="task" style="margin:0">
+                <span class="no">01</span><span class="goal">介绍 SQL 审计与故障排查工具的交付内容</span><span class="st" data-s="completed">已完成</span>
+                <span class="stages">范围确认 · 材料检索 · 证据校验 · 结果组织 —— 均已完成</span>
+              </p>
+              <p class="meta" style="margin:0">来源组成 · 仅作品集资料</p>
+            </div>
+          </details>
+
+          <!-- 方案 D：边线批注式 -->
+          <div class="basis-d" data-variant-of="D">
+            <details>
+              <summary>查看回答依据</summary>
+              <div class="basis-d__body">
+                <div class="task">
+                  <span class="no">01</span>
+                  <span class="goal">介绍 SQL 审计与故障排查工具的交付内容</span>
+                  <span class="st" data-s="completed">已完成</span>
+                  <span class="stages">范围确认 · 材料检索 · 证据校验 · 结果组织 —— 均已完成</span>
+                </div>
+                <p class="meta" style="margin:0">来源组成 · 仅作品集资料</p>
+              </div>
+            </details>
+          </div>
+
+          <!-- 方案 E：目录卡点线式 -->
+          <div class="basis-e" data-variant-of="E">
+            <button type="button" class="basis-e__leader" data-toggle="e1">
+              <span class="mark">※</span>
+              <span class="label">查看回答依据</span>
+              <span class="dots"></span>
+              <span class="tail" data-s="completed">1 项任务 · 1 组公开证据</span>
+            </button>
+            <div class="basis-e__body" id="e1" hidden>
+              <div class="task">
+                <span class="no">01</span>
+                <span class="goal">介绍 SQL 审计与故障排查工具的交付内容</span>
+                <span class="st" data-s="completed">已完成</span>
+                <span class="reason">范围确认 · 材料检索 · 证据校验 · 结果组织 —— 均已完成</span>
+              </div>
+              <p class="meta" style="margin:0">来源组成 · 仅作品集资料</p>
+            </div>
+          </div>
+
+          <div class="follow-up-actions standalone-actions">
+            <button type="button">展开本节</button>
+            <button type="button">查看本节证据</button>
+            <button type="button">说明判断</button>
+          </div>
+
+          <!-- 方案 F：统一脚注区（来源 + 依据一行，按钮沿用） -->
+          <footer class="answer-foot answer-foot--buttons" data-variant-of="F">
+            <div class="answer-foot__row">
+              <span class="answer-foot__src">依据 <strong>1 组</strong>已审核公开证据</span>
+              <button type="button" class="answer-foot__basis" data-toggle="f1" aria-pressed="false">查看回答依据</button>
+            </div>
+            <div class="answer-foot__body" id="f1" hidden>
+              <p class="task" style="margin:0">
+                <span class="no">01</span><span class="goal">介绍 SQL 审计与故障排查工具的交付内容</span><span class="st" data-s="completed">已完成</span>
+                <span class="stages">范围确认 · 材料检索 · 证据校验 · 结果组织 —— 均已完成</span>
+              </p>
+              <p class="meta" style="margin:0">来源组成 · 仅作品集资料</p>
+            </div>
+            <div class="follow-up-actions">
+              <button type="button">展开本节</button>
+              <button type="button">查看本节证据</button>
+              <button type="button">说明判断</button>
+            </div>
+          </footer>
+
+          <!-- 方案 G：统一脚注区 + 后续动作也统一为 ↳ 文字链接 -->
+          <footer class="answer-foot" data-variant-of="G">
+            <div class="answer-foot__row">
+              <span class="answer-foot__src">依据 <strong>1 组</strong>已审核公开证据</span>
+              <button type="button" class="answer-foot__basis" data-toggle="g1" aria-pressed="false">查看回答依据</button>
+            </div>
+            <div class="answer-foot__body" id="g1" hidden>
+              <p class="task" style="margin:0">
+                <span class="no">01</span><span class="goal">介绍 SQL 审计与故障排查工具的交付内容</span><span class="st" data-s="completed">已完成</span>
+                <span class="stages">范围确认 · 材料检索 · 证据校验 · 结果组织 —— 均已完成</span>
+              </p>
+              <p class="meta" style="margin:0">来源组成 · 仅作品集资料</p>
+            </div>
+            <div class="answer-foot__links">
+              <button type="button">展开本节</button>
+              <button type="button">查看本节证据</button>
+              <button type="button">说明判断</button>
+            </div>
+          </footer>
+        </article>
+      </section>
+
+      <!-- ══ 场景 2：部分推荐 1/3 ══ -->
+      <section class="scenario" data-scenario="partial">
+        <article class="message message--user">
+          <p class="meta">YOU</p>
+          <div class="body">给我推荐三个项目</div>
+        </article>
+
+        <article class="message message--agent">
+          <p class="message__meta">
+            <span class="message__meta-prefix">AGENT · 部分完成</span>
+            <span class="message__meta-tag">作品集资料</span>
+          </p>
+
+          <div class="reco-headline">
+            <h3>找到 1/3 个符合条件的项目</h3>
+            <span class="reco-status">部分完成</span>
+          </div>
+
+          <p class="reco-reason">
+            <span class="k">未满足原因</span>
+            <span>其余公开项目的证据完整度暂不足，暂不能进入推荐结果</span>
+          </p>
+
+          <div class="reco-grid">
+            <div class="reco-card">
+              <div class="reco-card__top">
+                <span class="reco-card__no">01</span>
+                <span class="reco-card__title">SQL 审计与故障排查工具</span>
+              </div>
+              <p class="reco-card__reason">完整经历固定路径查询到可交付工具的演进；包含命令行交付、回归脚本与审计报表三类已验证材料</p>
+            </div>
+          </div>
+
+          <div class="reco-recover">
+            <button type="button" class="reco-recover__primary">放宽条件重新推荐</button>
+          </div>
+
+          <!-- 方案 A：面板式 · 部分完成自动展开 -->
+          <details class="basis-a" data-variant-of="A" open>
+            <div class="basis-a__alert">本轮部分完成 · 找到 1/3 个符合条件的项目</div>
+            <summary>查看回答依据</summary>
+            <div class="basis-a__body">
+              <div class="basis-task">
+                <span class="basis-task__no">01</span>
+                <span class="basis-task__goal">推荐 3 个公开项目</span>
+                <span class="basis-task__status" data-s="partial">部分完成</span>
+                <span class="basis-task__reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- 方案 B：三部件 · 任务摘要自动展开 -->
+          <div class="basis-b" data-variant-of="B">
+            <details class="widget" open>
+              <summary><span class="eyebrow">任务状态</span><span class="flow">1/1 完成 · 1 证据不足</span><span class="chev">−</span></summary>
+              <div class="widget__body">
+                <div class="basis-task">
+                  <span class="basis-task__no">01</span>
+                  <span class="basis-task__goal">推荐 3 个公开项目</span>
+                  <span class="basis-task__status" data-s="partial">部分完成</span>
+                  <span class="basis-task__reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+                </div>
+              </div>
+            </details>
+            <details class="widget">
+              <summary><span class="eyebrow">执行概览</span><span class="flow">部分完成</span><span class="chev">+</span></summary>
+            </details>
+            <details class="widget">
+              <summary><span class="eyebrow">回答构成</span><span class="flow">来源组成 · 仅作品集资料</span><span class="chev">+</span></summary>
+            </details>
+          </div>
+
+          <!-- 方案 C：脚注式 · 异常态 -->
+          <div class="basis-c" data-variant-of="C">
+            <p class="basis-c__alert">本轮部分完成 · 找到 1/3 个符合条件的项目</p>
+            <details open>
+              <summary>查看回答依据</summary>
+              <div class="basis-c__body">
+                <p class="task" style="margin:0">
+                  <span class="no">01</span><span class="goal">推荐 3 个公开项目</span><span class="st" data-s="partial">部分完成</span>
+                  <span class="reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+                </p>
+              </div>
+            </details>
+          </div>
+
+          <!-- 方案 D：边线批注式 · 异常态 -->
+          <div class="basis-d" data-variant-of="D" data-partial="true">
+            <p class="basis-d__alert">本轮部分完成 · 找到 1/3 个符合条件的项目</p>
+            <details open>
+              <summary>查看回答依据</summary>
+              <div class="basis-d__body">
+                <div class="task">
+                  <span class="no">01</span>
+                  <span class="goal">推荐 3 个公开项目</span>
+                  <span class="st" data-s="partial">部分完成</span>
+                  <span class="reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <!-- 方案 E：目录卡点线式 · 异常态 -->
+          <div class="basis-e" data-variant-of="E">
+            <button type="button" class="basis-e__leader" data-toggle="e2" aria-pressed="true">
+              <span class="mark">◆</span>
+              <span class="label">本轮部分完成</span>
+              <span class="dots"></span>
+              <span class="tail" data-s="partial">找到 1/3 个符合条件的项目</span>
+            </button>
+            <div class="basis-e__body" id="e2">
+              <div class="task">
+                <span class="no">01</span>
+                <span class="goal">推荐 3 个公开项目</span>
+                <span class="st" data-s="partial">部分完成</span>
+                <span class="reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 方案 F：统一脚注区 · 异常态 -->
+          <footer class="answer-foot answer-foot--buttons" data-variant-of="F">
+            <div class="answer-foot__row">
+              <span class="answer-foot__alert">本轮部分完成 · 找到 1/3 个符合条件的项目</span>
+              <button type="button" class="answer-foot__basis" data-toggle="f2" aria-pressed="true">查看回答依据</button>
+            </div>
+            <div class="answer-foot__body" id="f2">
+              <p class="task" style="margin:0">
+                <span class="no">01</span><span class="goal">推荐 3 个公开项目</span><span class="st" data-s="partial">部分完成</span>
+                <span class="reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+              </p>
+            </div>
+          </footer>
+
+          <!-- 方案 G：统一脚注区 + 链接动作 · 异常态 -->
+          <footer class="answer-foot" data-variant-of="G">
+            <div class="answer-foot__row">
+              <span class="answer-foot__alert">本轮部分完成 · 找到 1/3 个符合条件的项目</span>
+              <button type="button" class="answer-foot__basis" data-toggle="g2" aria-pressed="true">查看回答依据</button>
+            </div>
+            <div class="answer-foot__body" id="g2">
+              <p class="task" style="margin:0">
+                <span class="no">01</span><span class="goal">推荐 3 个公开项目</span><span class="st" data-s="partial">部分完成</span>
+                <span class="reason">未满足原因：其余公开项目的证据完整度暂不足</span>
+              </p>
+            </div>
+            <div class="answer-foot__links">
+              <button type="button">放宽条件重新推荐</button>
+              <button type="button">换掉这个</button>
+            </div>
+          </footer>
+        </article>
+      </section>
+
+      <!-- ══ 场景 3：噪声澄清 ══ -->
+      <section class="scenario" data-scenario="noise">
+        <article class="message message--user">
+          <p class="meta">YOU</p>
+          <div class="body">1</div>
+        </article>
+
+        <article class="message message--agent">
+          <p class="message__meta">
+            <span class="message__meta-prefix">AGENT</span>
+          </p>
+
+          <section class="turn-clarification">
+            <p class="eyebrow">需要澄清</p>
+            <p class="prompt">想了解什么？可以说明要了解、比较还是推荐作品。</p>
+            <div class="safe-entries">
+              <button type="button">了解项目<span class="hint">→ 介绍一下你的公开项目</span></button>
+              <button type="button">比较项目<span class="hint">→ 比较一下你的公开项目</span></button>
+              <button type="button">推荐项目<span class="hint">→ 给我推荐两个项目</span></button>
+            </div>
+          </section>
+        </article>
+      </section>
+
+    </div>
+  </div>
+
+  <aside class="legend">
+    <h2>五种「回答依据」样式的定位</h2>
+    <dl>
+      <dt>A · 面板式（初版）</dt>
+      <dd>独立面板 + 底色 + 边框。信息承载最强，但与正文抢视觉层级——即你反馈的问题，保留作对照。</dd>
+      <dt>B · 三部件折叠</dt>
+      <dd>保留现有「任务摘要 / 执行概览 / 回答构成」结构，仅折叠与翻译文案。改动最小，但仍有三处状态表达。</dd>
+      <dt>C · 脚注式</dt>
+      <dd>无框。一条发丝分隔线 + 「※ 查看回答依据」小字入口，展开为缩进纯文本脚注。视觉层级最低，最贴近「工程档案的脚注」隐喻；异常态为一行暗红小字（◆ 本轮部分完成 · 1/3），不设面板。</dd>
+      <dt>D · 边线批注式</dt>
+      <dd>2px 灰褐左边线 + 透明底，与现有「公开内容已更新」「部分完成横幅」等提示语汇同源，风格延续性最好；异常态左边线转暗红。展开内容用点线分行，无嵌套框。</dd>
+      <dt>E · 目录卡点线式</dt>
+      <dd>档案目录卡隐喻：「查看回答依据 ········· 1 项任务 · 1 组证据」点线引导，行尾摘要常驻可见（不展开也知道几项任务、几组证据）；异常态 ◆ + 「找到 1/3」。展开后为发丝线台账行。</dd>
+      <dt>F · 统一脚注区（针对红线圈出的堆叠问题）</dt>
+      <dd>正文收尾只有一个区：一条发丝线之上是「◈ 依据 N 组已审核公开证据 …… 查看回答依据 ▸」同一行（左信息右入口），展开内容缩进在区内，后续动作按钮排在区尾。原来散落的三行小元素（◈ 一行、※ 一行、按钮一排）合并为一个有节奏的整体。</dd>
+      <dt>G · 统一脚注区＋链接动作</dt>
+      <dd>同 F，但后续动作从描边按钮改为「↳ 展开本节」式安静文字链接，整个脚注区只有一种语汇，视觉最统一；代价是动作的可点击感略弱（适合动作重要性低的场景）。</dd>
+    </dl>
+    <p style="margin-top:12px">规格硬性要求（各方案均已体现，无需再选）：无绿色状态色，状态靠形状+文字（◆部分完成）；成功默认收起、异常自动展开摘要；任务名优先于四阶段；引用显示 <code>E-01 · 标题</code>；meta 行枚举译为「已根据公开证据整理回答」；推荐不足显示「找到 1/3 个」+原因+单一恢复操作；噪声输入只显示澄清卡与三类安全入口。安全入口按钮的小字（→ 实际提交的问题）仅为 demo 说明，实施时不显示。</p>
+  </aside>
+</div>
+
+<script>
+  const stage = document.getElementById('stage');
+  const variantGroup = document.getElementById('variantGroup');
+  const titleEl = document.querySelector('[data-session-title]');
+  const titles = { success: 'SQL 审计与故障排查工具交付了什么', partial: '推荐三个项目', noise: '待补充问题' };
+  let currentScenario = 'success';
+
+  document.querySelectorAll('[data-scenario]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentScenario = btn.dataset.scenario;
+      document.querySelectorAll('[data-scenario]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll('.scenario').forEach((s) => {
+        if (s.dataset.scenario === currentScenario) s.setAttribute('data-active', '');
+        else s.removeAttribute('data-active');
+      });
+      titleEl.textContent = titles[currentScenario];
+      variantGroup.style.opacity = currentScenario === 'noise' ? '0.35' : '1';
+    });
+  });
+
+  document.querySelectorAll('[data-variant]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-variant]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      stage.dataset.variant = btn.dataset.variant;
+    });
+  });
+
+  // 方案 E 的目录卡行展开/收起
+  document.querySelectorAll('[data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const body = document.getElementById(btn.dataset.toggle);
+      const open = body.hasAttribute('hidden');
+      if (open) body.removeAttribute('hidden');
+      else body.setAttribute('hidden', '');
+      btn.setAttribute('aria-pressed', String(open));
+    });
+  });
+</script>
+</body>
+</html>
