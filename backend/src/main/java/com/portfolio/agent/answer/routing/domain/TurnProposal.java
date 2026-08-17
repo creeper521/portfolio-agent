@@ -209,6 +209,7 @@ public final class TurnProposal {
             }
             this.requestedSize = requestedSize;
             this.constraints = copyEnumNames(constraints, "constraints");
+            validateTaskFieldMatrix();
         }
 
         public String getClientTaskKey() { return clientTaskKey; }
@@ -225,6 +226,31 @@ public final class TurnProposal {
         public Set<String> getCapabilityFilters() { return capabilityFilters; }
         public Optional<Integer> getRequestedSize() { return Optional.ofNullable(requestedSize); }
         public Set<String> getConstraints() { return constraints; }
+
+        private void validateTaskFieldMatrix() {
+            boolean hasSubjects = !subjectCandidates.isEmpty();
+            boolean hasTopics = !topicAnchors.isEmpty();
+            boolean hasSources = !sourceTaskKeys.isEmpty();
+            boolean hasFacets = !facets.isEmpty();
+            boolean hasDimensions = !dimensions.isEmpty();
+            boolean hasRecommendationFields = careerTrack != null || !capabilityFilters.isEmpty()
+                    || requestedSize != null || !constraints.isEmpty();
+            boolean invalid = switch (taskType) {
+                case PORTFOLIO_FACT -> hasTopics || hasSources || hasDimensions || hasRecommendationFields;
+                case PORTFOLIO_COMPARE -> hasTopics || hasSources || hasFacets || hasRecommendationFields;
+                case PORTFOLIO_RECOMMEND -> hasTopics || hasSources || hasFacets || hasDimensions;
+                case PORTFOLIO_REFINE_RECOMMENDATION -> hasTopics || hasSources || hasFacets
+                        || hasDimensions || careerTrack != null || !capabilityFilters.isEmpty()
+                        || requestedSize != null;
+                case GENERAL_EXPLANATION -> hasSubjects || hasTopics || hasSources || hasFacets
+                        || hasDimensions || hasRecommendationFields;
+                case GENERAL_COMPARISON -> hasSubjects || hasSources || hasFacets || hasRecommendationFields;
+                case SYNTHESIS -> hasSubjects || hasTopics || hasFacets || hasRecommendationFields;
+            };
+            if (invalid) {
+                throw new IllegalArgumentException("task proposal contains fields incompatible with taskType");
+            }
+        }
     }
 
     public enum ResponseMode { CONCISE, STANDARD, DETAILED }

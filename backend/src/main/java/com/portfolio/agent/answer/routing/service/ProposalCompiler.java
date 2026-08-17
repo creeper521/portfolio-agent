@@ -28,11 +28,13 @@ public final class ProposalCompiler {
     private final SemanticRoutingPolicy routingPolicy;
     private final SemanticPlanValidator planValidator;
     private final PageReferenceMarkerCatalog pageReferenceMarkerCatalog;
+    private final ReferenceMatchPolicy referenceMatchPolicy;
 
     public ProposalCompiler(SemanticRoutingPolicy routingPolicy) {
         this.routingPolicy = Objects.requireNonNull(routingPolicy, "routingPolicy");
         this.planValidator = new SemanticPlanValidator(new PlanFingerprintService());
         this.pageReferenceMarkerCatalog = loadPageReferenceMarkerCatalog();
+        this.referenceMatchPolicy = new ReferenceMatchPolicy();
     }
 
     public ProposalCompilationResult compile(
@@ -321,6 +323,12 @@ public final class ProposalCompiler {
                 .resolveIn(input.getCurrentInput());
         for (SubjectReference publicSubject : input.getPublicSubjects()) {
             if (sameSubject(candidate, publicSubject)) {
+                boolean aliasMatches = input.describe(publicSubject).orElseThrow()
+                        .getReviewedAliases().stream().anyMatch(alias -> referenceMatchPolicy.matches(
+                                candidate.getEvidenceAnchor().orElseThrow(), input.getCurrentInput(), alias));
+                if (!aliasMatches) {
+                    throw new SubjectNotPublicException();
+                }
                 return validated(publicSubject);
             }
         }

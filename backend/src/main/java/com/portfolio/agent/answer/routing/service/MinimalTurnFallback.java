@@ -2,24 +2,25 @@ package com.portfolio.agent.answer.routing.service;
 
 import com.portfolio.agent.answer.routing.domain.SubjectReference;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
 /** Deliberately narrow fallback that cannot become a second natural-language routing engine. */
 public final class MinimalTurnFallback {
 
+    private final ReferenceMatchPolicy referenceMatchPolicy = new ReferenceMatchPolicy();
+
     public Resolution resolve(String currentInput, List<SubjectReference> publicSubjects) {
         if (currentInput == null || currentInput.isBlank() || publicSubjects == null) {
             return Resolution.notApplicable();
         }
-        String normalizedInput = normalize(currentInput);
         List<SubjectReference> matches = new ArrayList<>();
         for (SubjectReference subject : publicSubjects) {
-            if (subject != null && normalize(subject.getSubjectId()).equals(normalizedInput)) {
+            if (subject != null && referenceMatchPolicy.matches(
+                    new com.portfolio.agent.answer.routing.domain.TextAnchor(currentInput.trim(), 1),
+                    currentInput, subject.getSubjectId())) {
                 matches.add(subject);
             }
         }
@@ -27,10 +28,6 @@ public final class MinimalTurnFallback {
             return Resolution.notApplicable();
         }
         return Resolution.exactAliasOverview(matches.getFirst());
-    }
-
-    private String normalize(String value) {
-        return Normalizer.normalize(value, Normalizer.Form.NFKC).trim().toLowerCase(Locale.ROOT);
     }
 
     public enum Disposition { EXACT_ALIAS_OVERVIEW, NOT_APPLICABLE }
