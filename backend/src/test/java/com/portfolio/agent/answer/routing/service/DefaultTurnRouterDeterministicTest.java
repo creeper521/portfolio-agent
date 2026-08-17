@@ -120,6 +120,34 @@ class DefaultTurnRouterDeterministicTest {
     }
 
     @Test
+    void unformedInputStopsBeforeOptionalClassifierCanBindAnActiveProject() {
+        AtomicInteger calls = new AtomicInteger();
+        SubjectReference project = new SubjectReference(
+                SubjectType.PROJECT, "project-a", SubjectResolutionSource.EXPLICIT_REFERENCE, "content-v1");
+        SemanticClassifierPort classifier = ignored -> {
+            calls.incrementAndGet();
+            return SemanticClassifierPort.SemanticClassificationResult.success(
+                    List.of(new SemanticClassifierPort.SemanticTaskCandidate(
+                            SemanticRoutingTypes.SemanticTaskType.PORTFOLIO_FACT,
+                            "介绍项目", List.of(project), Set.of(),
+                            Set.of(SemanticRoutingTypes.RequestedOutput.SUMMARY))),
+                    List.of(), List.of());
+        };
+        LegacySemanticContextAdapter.LegacyContext activeProject =
+                LegacySemanticContextAdapter.LegacyContext.ofWithTypedReferences(
+                        "project-a", null, List.of(), List.of(), List.of(),
+                        "INTERVIEWER", "AGENT_PAGE", Set.of(), "content-v1");
+
+        SemanticTurnDecision decision = router(classifier).route(new SemanticTurnInput(
+                "1", null, activeProject, List.of(), List.of(), List.of()));
+
+        assertThat(decision.getDisposition())
+                .isEqualTo(SemanticTurnDecision.Disposition.CLARIFICATION_REQUIRED);
+        assertThat(decision.getValidatedPlan()).isEmpty();
+        assertThat(calls).hasValue(0);
+    }
+
+    @Test
     void invalidStructuredSubjectIsRejectedWithoutGeneralFallback() {
         LegacySemanticContextAdapter.LegacyContext legacyContext =
                 LegacySemanticContextAdapter.LegacyContext.ofWithTypedReferences(
