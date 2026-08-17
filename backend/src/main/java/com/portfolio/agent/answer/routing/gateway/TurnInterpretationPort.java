@@ -26,6 +26,7 @@ public interface TurnInterpretationPort {
         private final List<SubjectReference> confirmedSubjects;
         private final List<SubjectReference> pendingInteractionSubjects;
         private final SubjectReference pageHint;
+        private final List<PublicSubjectDescriptor> publicSubjectDescriptors;
 
         public TurnInterpretationInput(
                 String currentInput,
@@ -58,6 +59,17 @@ public interface TurnInterpretationPort {
                 List<SubjectReference> confirmedSubjects,
                 List<SubjectReference> pendingInteractionSubjects,
                 SubjectReference pageHint) {
+            this(currentInput, publicSubjects, allowedTaskTypes, confirmedSubjects,
+                    pendingInteractionSubjects, pageHint, publicSubjects.stream()
+                            .map(subject -> new PublicSubjectDescriptor(subject, Set.of(subject.getSubjectId())))
+                            .toList());
+        }
+
+        public TurnInterpretationInput(
+                String currentInput, List<SubjectReference> publicSubjects,
+                Set<SemanticTaskType> allowedTaskTypes, List<SubjectReference> confirmedSubjects,
+                List<SubjectReference> pendingInteractionSubjects, SubjectReference pageHint,
+                List<PublicSubjectDescriptor> publicSubjectDescriptors) {
             if (currentInput == null || currentInput.isBlank() || currentInput.length() > MAX_CURRENT_INPUT_LENGTH) {
                 throw new IllegalArgumentException("currentInput must be non-blank and within the supported length");
             }
@@ -83,6 +95,13 @@ public interface TurnInterpretationPort {
                 throw new IllegalArgumentException("pageHint must belong to the public catalog");
             }
             this.pageHint = pageHint;
+            this.publicSubjectDescriptors = List.copyOf(Objects.requireNonNull(
+                    publicSubjectDescriptors, "publicSubjectDescriptors"));
+            if (this.publicSubjectDescriptors.size() != this.publicSubjects.size()
+                    || !this.publicSubjectDescriptors.stream().map(PublicSubjectDescriptor::getSubject)
+                    .collect(java.util.stream.Collectors.toSet()).equals(Set.copyOf(this.publicSubjects))) {
+                throw new IllegalArgumentException("publicSubjectDescriptors must exactly describe publicSubjects");
+            }
         }
 
         public String getCurrentInput() { return currentInput; }
@@ -91,6 +110,26 @@ public interface TurnInterpretationPort {
         public List<SubjectReference> getConfirmedSubjects() { return confirmedSubjects; }
         public List<SubjectReference> getPendingInteractionSubjects() { return pendingInteractionSubjects; }
         public Optional<SubjectReference> getPageHint() { return Optional.ofNullable(pageHint); }
+        public List<PublicSubjectDescriptor> getPublicSubjectDescriptors() { return publicSubjectDescriptors; }
+        public Optional<PublicSubjectDescriptor> describe(SubjectReference subject) {
+            return publicSubjectDescriptors.stream().filter(value -> value.getSubject().equals(subject)).findFirst();
+        }
+    }
+
+    final class PublicSubjectDescriptor {
+        private final SubjectReference subject;
+        private final Set<String> reviewedAliases;
+
+        public PublicSubjectDescriptor(SubjectReference subject, Set<String> reviewedAliases) {
+            this.subject = Objects.requireNonNull(subject, "subject");
+            this.reviewedAliases = Set.copyOf(Objects.requireNonNull(reviewedAliases, "reviewedAliases"));
+            if (this.reviewedAliases.isEmpty() || this.reviewedAliases.stream().anyMatch(
+                    alias -> alias == null || alias.isBlank())) {
+                throw new IllegalArgumentException("reviewedAliases are required");
+            }
+        }
+        public SubjectReference getSubject() { return subject; }
+        public Set<String> getReviewedAliases() { return reviewedAliases; }
     }
 
     final class TurnInterpretationResult {

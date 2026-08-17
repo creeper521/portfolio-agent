@@ -124,7 +124,9 @@ public final class SemanticPlanValidator {
             case PORTFOLIO_COMPARE -> task.getSourceDomain() == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
                     && task.getParameters() instanceof SemanticTaskParameters.PortfolioCompare;
             case PORTFOLIO_RECOMMEND -> task.getSourceDomain() == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
-                    && task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend;
+                    && task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend recommendation
+                    && recommendation.getCandidateSubjects().stream().allMatch(subject ->
+                    subject.getSubjectType() == SemanticRoutingTypes.SubjectType.PROJECT);
             case PORTFOLIO_REFINE_RECOMMENDATION -> task.getSourceDomain()
                     == SemanticRoutingTypes.TaskSourceDomain.PORTFOLIO
                     && task.getParameters() instanceof SemanticTaskParameters.PortfolioRefinement;
