@@ -13,19 +13,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RuntimeCompositePrivacyTest {
 
     @Test
-    void p3BlockSerializationExposesReferencesButNotInternalIds() throws Exception {
+    void p3BlockSerializationExposesPublishedReferencesAndAnchors() throws Exception {
         ConversationAnswerBlockResponse block = new ConversationAnswerBlockResponse(
                 ConversationSourceScope.PORTFOLIO,
                 "Bounded answer",
-                List.of("internal-claim"),
-                List.of("internal-evidence"),
+                List.of("published-claim"),
+                List.of("published-evidence"),
                 List.of(new PublicSourceReferenceResponse(
                         "REF-1", "Published source", "public-v1", "DOCUMENT",
                         "/projects/sql-audit", "/evidence/REF-1")));
 
         String json = new ObjectMapper().writeValueAsString(block);
 
-        assertThat(json).contains("sourceReferences", "REF-1", "/projects/sql-audit");
-        assertThat(json).doesNotContain("claimIds", "evidenceIds", "internal-claim", "internal-evidence");
+        assertThat(json).contains("sourceReferences", "REF-1", "/projects/sql-audit")
+                .contains("claimIds", "evidenceIds", "published-claim", "published-evidence");
     }
 }

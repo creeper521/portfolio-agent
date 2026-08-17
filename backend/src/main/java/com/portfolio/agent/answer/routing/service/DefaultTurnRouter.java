@@ -141,7 +141,9 @@ public final class DefaultTurnRouter implements TurnRouter {
                     ClarificationRequest.splitRequired(signals.getRequestedTaskCount()));
         }
         if (signals.getClarificationNeed() == SemanticSignals.ClarificationNeed.CRITICAL) {
-            ClarificationRequest clarification = signals.hasUnresolvedPortfolioGoal()
+            ClarificationRequest clarification = signals.getGoals().isEmpty()
+                    ? ClarificationRequest.unformedRequest()
+                    : signals.hasUnresolvedPortfolioGoal()
                     ? ClarificationRequest.contextConflict(subjectOptions(null))
                     : ClarificationRequest.comparisonSubjects(
                             ClarificationRequest.Scope.CRITICAL, 0,

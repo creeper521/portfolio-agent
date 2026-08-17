@@ -14,6 +14,8 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
+    [string]$PlaywrightScript = 'test:e2e',
+    [string[]]$PlaywrightArguments = @(),
     [ValidateRange(1, 65535)]
     [int]$Port = 4173,
     [ValidateRange(1, 300)]
@@ -440,7 +442,12 @@ try {
         $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
     }
 
-    & $NpmExecutable --prefix (Join-Path $root 'frontend') run test:e2e -- --workers=1
+    $playwrightCommand = @(
+        '--prefix', (Join-Path $root 'frontend'),
+        'run', $PlaywrightScript,
+        '--', '--workers=1'
+    ) + @($PlaywrightArguments)
+    & $NpmExecutable @playwrightCommand
     $playwrightExitCode = $LASTEXITCODE
 }
 finally {

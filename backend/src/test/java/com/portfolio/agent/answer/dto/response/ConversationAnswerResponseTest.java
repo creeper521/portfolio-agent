@@ -141,8 +141,8 @@ class ConversationAnswerResponseTest {
                 .contains("\"summary\":\"公开项目摘要\"")
                 .contains("\"sectionType\":\"SOLUTION\"")
                 .contains("\"title\":\"技术方案与实现\"")
-                .doesNotContain("\"claimIds\"")
-                .doesNotContain("\"evidenceIds\"");
+                .contains("\"claimIds\":[\"claim-1\"]")
+                .contains("\"evidenceIds\":[\"evidence-1\"]");
     }
 
     @Test

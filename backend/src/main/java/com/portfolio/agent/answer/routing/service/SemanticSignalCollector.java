@@ -117,9 +117,13 @@ public final class SemanticSignalCollector {
         if (goals.isEmpty() && !context.getSubjects().isEmpty()) {
             addFactGoals(goals, context.getSubjects(), question);
         } else if (goals.isEmpty() && !introduction && !comparison && !recommendation && !synthesis
-                && explicitTaskCount(question) <= 6) {
+                && explicitTaskCount(question) <= 6 && containsNaturalLanguageCharacter(sourceQuestion)) {
             goals.add(new SemanticSignals.GoalCandidate(
                     SemanticSignals.Intent.GENERAL_EXPLANATION, List.of()));
+        }
+
+        if (goals.isEmpty() && clarificationNeed == SemanticSignals.ClarificationNeed.NONE) {
+            clarificationNeed = SemanticSignals.ClarificationNeed.CRITICAL;
         }
 
         int requestedTaskCount = Math.max(explicitTaskCount(question), goals.size());
@@ -152,6 +156,11 @@ public final class SemanticSignalCollector {
             return;
         }
         goals.add(SemanticSignals.GoalCandidate.portfolioFact(List.of(subjects.get(0)), facets));
+    }
+
+    private static boolean containsNaturalLanguageCharacter(String value) {
+        return value.codePoints().anyMatch(codePoint -> Character.isLetter(codePoint)
+                || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN);
     }
 
     private static Set<PortfolioFacet> requestedPortfolioFacets(String question) {

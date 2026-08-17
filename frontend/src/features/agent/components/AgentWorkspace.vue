@@ -147,6 +147,10 @@ const completionReceipt = ref<{
 const clearPending = ref(false)
 const resolvedContractVersions = new Map<string, string>()
 const semanticContinuations = new Map<string, SemanticContinuation>()
+// P-1：清除 Case 上下文是访客的显式清空动作。其后到下一次显式主体选择（建议
+// 问题、结果续接）或新会话之前的普通提问，不得把展示回退项目（projects[0]）
+// 静默当作页面主体发送——与行为 UI 基线「clearing 后 activeSubjects 为空」一致。
+const subjectHintCleared = ref(false)
 // 调整模式（决策 1 · 方案 B）：页面级单例状态，记录正在调整的会话与计划引用。
 // planReference 缺失时不得进入调整态（后端合同尚未暴露待确认计划标识）。
 const activeAdjustment = ref<{
@@ -271,6 +275,8 @@ function syncActiveEvidence() {
 
 function createSession(initialEvidenceId = '') {
   resetEvidenceFocus()
+  // 新会话重建页面主体绑定（见 subjectHintCleared 注释）。
+  subjectHintCleared.value = false
   const project = activeProject.value
   const evidenceId =
     initialEvidenceId ||
@@ -360,9 +366,9 @@ function buildSemanticContext(
 ): SemanticContextRequest {
   const activeSubjects = context.caseSlug
     ? [{ subjectType: 'CASE', subjectId: context.caseSlug }]
-    : context.projectSlug
-      ? [{ subjectType: 'PROJECT', subjectId: context.projectSlug }]
-      : []
+    : subjectHintCleared.value || !context.projectSlug
+      ? []
+      : [{ subjectType: 'PROJECT', subjectId: context.projectSlug }]
   return {
     activeSubjects,
     resultReferences: [],
@@ -472,20 +478,29 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
     return
   }
 
-  if (context.question && context.action === undefined) {
+  // P-1（审计缺陷 #2）：构造出的 semanticContext 必须真实进入请求。
+  // 修复前它只写入 semanticContinuations（澄清/调整续接用），wire 请求仍缺
+  // 首轮主体上下文；continuation 存储与实际发送必须来自同一份上下文。
+  const semanticContext = context.question && context.action === undefined
+    ? context.semanticContext ?? buildSemanticContext(session, context)
+    : context.semanticContext
+  if (context.question && context.action === undefined && semanticContext) {
     semanticContinuations.set(session.id, {
       question: context.question,
-      semanticContext: context.semanticContext ?? buildSemanticContext(session, context),
+      semanticContext,
     })
   }
 
-  const preparedContext = context.requestToken
-    ? context
-    : {
-        ...context,
-        coveredTopics: context.coveredTopics ?? [...session.coveredTopics],
-        requestToken: createRequestToken(),
-      }
+  const preparedContext: AnswerRequestContext = {
+    ...context,
+    ...(semanticContext === undefined ? {} : { semanticContext }),
+    ...(context.requestToken
+      ? {}
+      : {
+          coveredTopics: context.coveredTopics ?? [...session.coveredTopics],
+          requestToken: createRequestToken(),
+        }),
+  }
   const controller = new AbortController()
   clearFocusedAnswer()
   // P3：新一轮请求开始时清除上一轮的回执/续接提示（恢复卡由活跃会话摘要驱动，不受影响）。
@@ -970,6 +985,8 @@ function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
   const session = sessions.activeSession.value
   if (!session) return
   activeAdjustment.value = null
+  // 带主体的建议问题是显式主体选择，重建页面主体绑定（见 subjectHintCleared 注释）。
+  if (suggestion.projectSlug || suggestion.caseSlug) subjectHintCleared.value = false
   const presetCandidates = props.portfolio.questionPresets.filter((preset) => {
     if (preset.text !== suggestion.text) return false
     if (suggestion.projectSlug && preset.projectSlug !== suggestion.projectSlug) return false
@@ -994,6 +1011,8 @@ function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
 
 function clearCaseContext() {
   activeCaseSlug.value = ''
+  // 清除后不再把展示回退项目当作页面主体（见 subjectHintCleared 注释）。
+  subjectHintCleared.value = true
   syncActiveEvidence()
 }
 
@@ -1105,6 +1124,8 @@ function submitFollowUp(action: FollowUpAction) {
       && candidate.subjectId === subject.subjectId) === index,
   ).slice(0, 6)
   if (!subjects.length) subjects.push({ subjectType: 'PROJECT', subjectId: project.slug })
+  // 结果续接携带显式结构化主体，重建页面主体绑定（见 subjectHintCleared 注释）。
+  subjectHintCleared.value = false
   const onlyCase = subjects.length === 1 && subjects[0]?.subjectType === 'CASE'
     ? subjects[0].subjectId
     : null
