@@ -187,3 +187,30 @@ caseSlugs: [],
     expect(result.recoveredCount).toBe(0)
   })
 })
+
+describe('completeSuggestedQuestions · 体验闭环 preferredProjects', () => {
+  it('补全建议优先围绕当前推荐结果集合，而不是页面默认项目', () => {
+    const result = completeSuggestedQuestions(
+      [],
+      portfolioWithPresets(),
+      { preferredProjects: ['codegraph-evaluation'] },
+    )
+
+    expect(result.questions).toHaveLength(3)
+    expect(result.questions[0]).toEqual({
+      text: '预设问题 C',
+      projectSlug: 'codegraph-evaluation',
+      caseSlug: null,
+      facet: null,
+    })
+    expect(result.questions[0]?.projectSlug).not.toBe('sql-audit')
+  })
+
+  it('无 preferredProjects 时保持原有稳定顺序', () => {
+    const result = completeSuggestedQuestions([], portfolioWithPresets())
+
+    expect(result.questions.map((item) => item.text)).toEqual([
+      '预设问题 A', '预设问题 B', '预设问题 C',
+    ])
+  })
+})

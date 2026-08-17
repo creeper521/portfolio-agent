@@ -402,6 +402,52 @@ interface SemanticContinuation {
   semanticContext: SemanticContextRequest
 }
 
+// 体验闭环（2026-08-17）：自由追问携带最近一轮后端签发的可信续接句柄，
+// 「第二个呢」等指代由服务端在可信 Context 内定位，不依赖页面默认项目猜测主体。
+function latestContinuationReference(
+  session: NonNullable<typeof sessions.activeSession.value>,
+): ContextReferenceRequest | undefined {
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const answer = session.messages[index]?.answer
+    if (!answer?.semanticTurn) continue
+    if (answer.semanticTurn.disposition !== 'READY'
+      && answer.semanticTurn.disposition !== 'PARTIAL_READY') continue
+    const tasks = [...answer.semanticTurn.completedTasks]
+    for (let taskIndex = tasks.length - 1; taskIndex >= 0; taskIndex -= 1) {
+      const task = tasks[taskIndex]
+      if (!task) continue
+      const handle = task.continuationContext?.contextHandle ?? task.contextHandle
+      if (!handle) continue
+      const expectedContextType = task.continuationContext?.contextType
+        ?? (task.resultPayload.kind === 'RECOMMENDATION_RESULT'
+          ? 'RECOMMENDATION'
+          : 'RECENT_SEMANTIC_TASK')
+      return { contextHandle: handle, expectedContextType }
+    }
+  }
+  return undefined
+}
+
+// 体验闭环 §7：推荐回答后的补全建议优先围绕当前结果集合。
+function recommendedProjectSlugs(
+  mapped: ReturnType<typeof mapAnswerResponse>,
+): string[] {
+  const semanticResult = mapped.semanticTurn?.completedTasks.find(
+    (task) => task.resultPayload.kind === 'RECOMMENDATION_RESULT',
+  )?.resultPayload
+  const items = semanticResult?.kind === 'RECOMMENDATION_RESULT'
+    ? semanticResult.recommendations
+    : mapped.portfolioRecommendation?.items ?? []
+  const slugs: string[] = []
+  for (const item of items) {
+    const slug = props.portfolio.projects.find(
+      (project) => project.slug === item.portfolioId,
+    )?.slug
+    if (slug && !slugs.includes(slug)) slugs.push(slug)
+  }
+  return slugs
+}
+
 // FE-F08：continuation 生命周期统一收口。
 // 仅当一轮到达「已回答且无待确认/待澄清/失效」终态时才清除；
 // 待确认、澄清中、计划失效都仍需原问题与结构化上下文。
@@ -637,6 +683,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         .filter((message) => message.role === 'USER')
         .slice(-6)
         .map((message) => message.content),
+      preferredProjects: recommendedProjectSlugs(mapped),
     })
     mapped.suggestedQuestions = completed.questions
     if (completed.recoveredCount > 0) {
@@ -775,6 +822,8 @@ function submit(question: string) {
       contractVersion: preset
         ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion
         : undefined,
+      // 体验闭环：最近一轮有可信句柄时，普通追问自动携带，由后端裁决是否消费。
+      contextReference: latestContinuationReference(session),
     },
     true,
   )
@@ -1484,6 +1533,7 @@ onBeforeUnmount(() => {
       :completion-receipt="completionReceipt"
       :resume-unavailable="resume.resumeUnavailable.value"
       :clear-pending="clearPending"
+      :evidence-catalog="portfolio.evidence"
       @submit="submit"
       @submit-suggestion="submitSuggestion"
       @follow-up="submitFollowUp"

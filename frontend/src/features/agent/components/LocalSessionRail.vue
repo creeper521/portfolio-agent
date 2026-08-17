@@ -90,7 +90,10 @@ function confirmClear() {
           v-else
           class="session-select"
           type="button"
-          :title="session.title"
+          :title="session.titleDetail ?? session.title"
+          :aria-label="session.titleDetail
+            ? `会话：${session.title}（问题：${session.titleDetail}）`
+            : `会话：${session.title}`"
           :aria-current="session.id === activeId ? 'true' : undefined"
           @click="emit('select', session.id)"
         >

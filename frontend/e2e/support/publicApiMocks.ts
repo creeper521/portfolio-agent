@@ -124,7 +124,10 @@ function answerResponse(
   const comparison = !questionPresetId && /比较.*(项目|案例)/.test(question)
   const recommendation = !questionPresetId && question.trim() === RECOMMENDATION_QUESTION
   const unsupported = !questionPresetId && /提升了多少性能|性能提升/.test(question)
+  // 存量修复（体验闭环验证时发现）：应用侧 follow-up 早已不发送 context.referenceContext，
+  // 改按受控 follow-up 问句前缀识别（展开/说明/查看状态/查看相关/对比），维持旧断言语义。
   const followUp = Boolean(referenceContext)
+    || (!questionPresetId && /^(展开|说明|查看当前状态|查看相关问题|对比这些项目)/.test(question.trim()))
   const answered = matched || retrieved || focused || comparison || recommendation || followUp
   const evidenceIds = answered ? [evidence.id] : []
   const resolution = rejected ? 'REJECTED' : unsupported ? 'NOT_SUPPORTED' : answered ? 'ANSWERED' : 'BOUNDARY'
@@ -1098,4 +1101,313 @@ export async function installGuidedAnswerMock(
       },
     })
   })
+}
+
+// ── 体验闭环（2026-08-17 交接规格 §11 场景 A–F）──────────────────────────────
+// 后端确定性路由闭环字段（requestedSize/actualSize/reasonCodes 等）尚未上线，
+// 此处按冻结契约出合同 fixture：噪声澄清、1/3 部分推荐、2/2 完整推荐与句柄续接。
+// 注意：这些响应不经 withP3Fields 加工，sourceReferences 保持缺省，
+// 以便验证旧 evidenceId 回退路径上的「E-01 · 标题」引用渲染。
+
+export interface ClosureRequestLogEntry {
+  question: string
+  contextReference?: {
+    contextHandle?: string
+    expectedContextType?: string
+    resultItemId?: string
+  }
+}
+
+const CLOSURE_HANDLE = 'reco-handle-closure'
+const CLOSURE_CONTENT_VERSION = previewPublicContent.contentVersion
+
+// 推荐候选（preview 公开数据只有 1 个 Project；合成另外两个公开作品条目，
+// 仅供推荐卡渲染，路由均指向站内公开页面）。
+const CLOSURE_RECO_CANDIDATES = [
+  { slug: 'sql-audit', title: 'SQL 审计与故障排查工具', evidenceId: 'sql-audit-delivery-set' },
+  { slug: 'codegraph-evaluation', title: '代码图谱工具端到端评测', evidenceId: 'evidence-case-codegraph' },
+  { slug: 'multilingual-image-preservation', title: '多语言图片上传保留修复', evidenceId: 'evidence-case-multilingual' },
+]
+
+function closureEnvelope(body: Record<string, unknown>): Record<string, unknown> {
+  return {
+    responseKind: 'ANSWER',
+    conversation: { continuationStatus: 'AVAILABLE' },
+    ...body,
+  }
+}
+
+function closureNoiseClarification(): Record<string, unknown> {
+  return closureEnvelope({
+    requestId: 'request-closure-noise',
+    turnId: 'turn-closure-noise',
+    contentVersion: CLOSURE_CONTENT_VERSION,
+    resolution: 'NEEDS_CLARIFICATION',
+    answerScope: 'PORTFOLIO',
+    intentSource: 'RULE',
+    evidenceState: 'NOT_REQUIRED',
+    generationMode: 'DETERMINISTIC',
+    verification: 'NOT_APPLICABLE',
+    title: '',
+    summary: '',
+    sections: [],
+    blocks: [],
+    evidenceIds: [],
+    suggestedQuestions: [],
+    agentTurn: {
+      contractVersion: 'stp-v2',
+      disposition: 'CLARIFICATION_REQUIRED',
+      clarification: {
+        clarificationId: 'clarify-closure-0123456789abcdef0123456789abcdef',
+        scope: 'CRITICAL',
+        promptCode: 'ROUTING_INPUT_UNFORMED',
+        prompt: '想了解什么？可以说明要了解、比较还是推荐作品。',
+        fields: [],
+        blockedTaskCount: 0,
+        continuingTaskCount: 0,
+        continuingGoalLabels: [],
+        blockedGoals: [],
+      },
+    },
+  })
+}
+
+function closureExecution(finalStatus: string, overallStatus: string): Record<string, unknown> {
+  return {
+    contractVersion: 'p3-display-v1',
+    snapshotType: 'FINAL',
+    overallStatus,
+    tasks: [{
+      displayIndex: '01',
+      finalStatus,
+      stages: [
+        { code: 'SCOPE_CONFIRMED', label: '确认查询范围', status: 'COMPLETED' },
+        { code: 'MATERIALS_RETRIEVED', label: '查找已发布材料', status: 'COMPLETED' },
+        { code: 'EVIDENCE_VALIDATED', label: '核验证据', status: 'COMPLETED' },
+        { code: 'RESULT_COMPOSED', label: '形成回答', status: finalStatus },
+      ],
+    }],
+  }
+}
+
+function closurePresetAnswer(): Record<string, unknown> {
+  return closureEnvelope({
+    requestId: 'request-closure-preset',
+    turnId: 'turn-closure-preset',
+    contentVersion: CLOSURE_CONTENT_VERSION,
+    questionPresetId: 'sql-audit-overview',
+    contractVersion: 'pcv1-0123456789abcdef',
+    resolution: 'ANSWERED',
+    answerScope: 'PORTFOLIO',
+    intentSource: 'PRESET',
+    evidenceState: 'VERIFIED',
+    generationMode: 'DETERMINISTIC',
+    constructionMode: 'EVIDENCE_COMPOSITION',
+    verification: 'VERIFIED',
+    title: 'SQL 审计与故障排查工具',
+    summary: '该工具以命令行交付，覆盖固定路径 SQL 查询、慢查询归档与审计报表三类日常任务。',
+    blocks: [
+      {
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'BACKGROUND',
+        title: '交付概览',
+        content: '该工具以命令行交付，覆盖固定路径 SQL 查询、慢查询归档与审计报表三类日常任务。',
+        evidenceIds: ['sql-audit-delivery-set'],
+        claimIds: ['claim-sql-audit-delivered'],
+      },
+      {
+        sourceScope: 'PORTFOLIO',
+        sectionType: 'RESPONSIBILITY',
+        title: '责任与边界',
+        content: '本人独立负责查询解析与报表模块；审计策略沿用团队既有约定，不直接修改数据库。',
+        evidenceIds: ['sql-audit-delivery-set'],
+        claimIds: ['claim-sql-audit-delivered'],
+      },
+    ],
+    evidenceIds: ['sql-audit-delivery-set'],
+    suggestedQuestions: [],
+    coveredTopics: ['BACKGROUND'],
+    agentTurn: {
+      contractVersion: 'stp-v2',
+      disposition: 'READY',
+      outcome: { planOutcome: 'SUCCEEDED' },
+      completedTasks: [{
+        displayIndex: '01',
+        goalLabel: '介绍 SQL 审计与故障排查工具项目',
+        sourceDomain: 'PORTFOLIO',
+        contextHandle: 'fact-handle-closure',
+        resultPayload: {
+          kind: 'SECTION_RESULT',
+          blocks: [{
+            sourceScope: 'PORTFOLIO',
+            sectionType: 'BACKGROUND',
+            title: '交付概览',
+            content: '该工具以命令行交付，覆盖固定路径 SQL 查询、慢查询归档与审计报表三类日常任务。',
+            evidenceIds: ['sql-audit-delivery-set'],
+            claimIds: [],
+          }],
+        },
+      }],
+      execution: closureExecution('COMPLETED', 'COMPLETED'),
+    },
+  })
+}
+
+function closureRecommendationAnswer(
+  requestedSize: number,
+  actualSize: number,
+): Record<string, unknown> {
+  const partial = actualSize < requestedSize
+  const items = CLOSURE_RECO_CANDIDATES.slice(0, Math.max(actualSize, 0)).map(
+    (candidate, index) => ({
+      portfolioId: candidate.slug,
+      title: candidate.title,
+      route: `/projects/${candidate.slug}`,
+      matchReasons: ['完整交付闭环与已验证证据'],
+      evidenceIds: [candidate.evidenceId],
+      resultItemId: `result-item-${index + 1}`,
+      position: index + 1,
+      subject: { subjectType: 'PROJECT', subjectId: candidate.slug },
+    }),
+  )
+  return closureEnvelope({
+    requestId: `request-closure-reco-${requestedSize}-${actualSize}`,
+    turnId: `turn-closure-reco-${requestedSize}-${actualSize}`,
+    contentVersion: CLOSURE_CONTENT_VERSION,
+    resolution: partial ? 'PARTIALLY_ANSWERED' : 'ANSWERED',
+    answerScope: 'PORTFOLIO',
+    intentSource: 'RULE',
+    evidenceState: partial ? 'INSUFFICIENT' : 'VERIFIED',
+    generationMode: 'DETERMINISTIC',
+    constructionMode: 'EVIDENCE_COMPOSITION',
+    verification: partial ? 'PARTIALLY_VERIFIED' : 'VERIFIED',
+    title: '',
+    summary: partial
+      ? '已找到 1 个符合条件的项目，其余公开项目的证据完整度暂不足。'
+      : '已根据公开且经过验证的证据完成推荐。',
+    blocks: [],
+    sections: [],
+    evidenceIds: [],
+    suggestedQuestions: [],
+    coveredTopics: [],
+    agentTurn: {
+      contractVersion: 'stp-v2',
+      disposition: partial ? 'PARTIAL_READY' : 'READY',
+      outcome: { planOutcome: partial ? 'PARTIAL' : 'SUCCEEDED' },
+      completedTasks: [{
+        displayIndex: '01',
+        goalLabel: `推荐 ${requestedSize} 个公开项目`,
+        sourceDomain: 'PORTFOLIO',
+        contextHandle: CLOSURE_HANDLE,
+        resultPayload: {
+          kind: 'RECOMMENDATION_RESULT',
+          recommendations: items,
+          requestedSize,
+          actualSize,
+          candidateScope: 'ALL_PUBLISHED_PROJECTS',
+          reasonCodes: partial ? ['INSUFFICIENT_EVIDENCE_SUPPORTED_PROJECTS'] : [],
+          unsatisfiedConstraints: partial ? ['其余公开项目的证据完整度暂不足'] : [],
+        },
+      }],
+      execution: closureExecution(partial ? 'PARTIAL' : 'COMPLETED', partial ? 'PARTIAL' : 'COMPLETED'),
+    },
+  })
+}
+
+function closureSecondItemAnswer(): Record<string, unknown> {
+  const project = CLOSURE_RECO_CANDIDATES[1] ?? CLOSURE_RECO_CANDIDATES[0]
+  return closureEnvelope({
+    requestId: 'request-closure-second',
+    turnId: 'turn-closure-second',
+    contentVersion: CLOSURE_CONTENT_VERSION,
+    resolution: 'ANSWERED',
+    answerScope: 'PORTFOLIO',
+    intentSource: 'REFERENCE',
+    evidenceState: 'VERIFIED',
+    generationMode: 'DETERMINISTIC',
+    constructionMode: 'EVIDENCE_COMPOSITION',
+    verification: 'VERIFIED',
+    title: '',
+    summary: `已定位推荐结果中的第二项：${project.title}。`,
+    blocks: [{
+      sourceScope: 'PORTFOLIO',
+      sectionType: 'BACKGROUND',
+      title: '第二项定位',
+      content: `通过你上一轮的推荐结果定位到第二项：${project.title}。该项目材料均已通过公开审核。`,
+      evidenceIds: [project.evidenceId],
+      claimIds: [],
+    }],
+    evidenceIds: [project.evidenceId],
+    suggestedQuestions: [],
+    coveredTopics: [],
+    agentTurn: {
+      contractVersion: 'stp-v2',
+      disposition: 'READY',
+      outcome: { planOutcome: 'SUCCEEDED' },
+      completedTasks: [{
+        displayIndex: '01',
+        goalLabel: '介绍推荐结果中的第二项',
+        sourceDomain: 'PORTFOLIO',
+        contextHandle: 'fact-handle-closure',
+        resultPayload: {
+          kind: 'SECTION_RESULT',
+          blocks: [{
+            sourceScope: 'PORTFOLIO',
+            sectionType: 'BACKGROUND',
+            title: '第二项定位',
+            content: `通过你上一轮的推荐结果定位到第二项：${project.title}。该项目材料均已通过公开审核。`,
+            evidenceIds: [],
+            claimIds: [],
+          }],
+        },
+      }],
+      execution: closureExecution('COMPLETED', 'COMPLETED'),
+    },
+  })
+}
+
+/**
+ * 体验闭环合同 fixture 安装器（场景 A–F）。
+ * onRequest 回调暴露每次 /answers 请求的问题与 contextReference（用于句柄断言）。
+ */
+export async function installExperienceClosureMocks(
+  page: Page,
+  options: { onRequest?: (entry: ClosureRequestLogEntry) => void } = {},
+) {
+  await page.route('**/api/v1/public-content', fulfillPublicContent)
+  await installDiagnosticsApiMock(page)
+  await page.route('**/api/v2/answers', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    const body = route.request().postDataJSON() as {
+      question?: unknown
+      contextReference?: Record<string, unknown>
+    }
+    const question = typeof body.question === 'string' ? body.question.trim() : ''
+    const rawReference = body.contextReference
+    options.onRequest?.({
+      question,
+      contextReference: rawReference === undefined ? undefined : {
+        contextHandle: typeof rawReference.contextHandle === 'string' ? rawReference.contextHandle : undefined,
+        expectedContextType: typeof rawReference.expectedContextType === 'string' ? rawReference.expectedContextType : undefined,
+        resultItemId: typeof rawReference.resultItemId === 'string' ? rawReference.resultItemId : undefined,
+      },
+    })
+    let response: Record<string, unknown>
+    if (/^\d+$/.test(question)) {
+      response = closureNoiseClarification()
+    } else if (question === '给我推荐三个项目') {
+      response = closureRecommendationAnswer(3, 1)
+    } else if (question === '给我推荐两个项目' || question === '放宽条件重新推荐') {
+      response = closureRecommendationAnswer(2, 2)
+    } else if (question === '第二个呢') {
+      response = closureSecondItemAnswer()
+    } else {
+      response = closurePresetAnswer()
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', json: response })
+  })
+  await installConversationContextMocks(page, { status: 'AVAILABLE' })
 }

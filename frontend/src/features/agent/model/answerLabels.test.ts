@@ -86,19 +86,29 @@ describe('answerLabels', () => {
   })
 
   it('keeps the technical tail and degraded notice honest', () => {
-    expect(answerTechTail(base)).toBe('ANSWERED · EVIDENCE_COMPOSITION')
+    expect(answerTechTail(base)).toBe('已根据公开证据整理回答')
     expect(answerTechTail(null)).toBe('')
     expect(degradedNotice({ ...base, degraded: true })).toBe('已切换到基础回答')
     expect(degradedNotice(base)).toBe('')
     expect(degradedNotice(null)).toBe('')
   })
 
+  it('translates the technical tail without raw protocol enums (closure)', () => {
+    // 交接规格 §5：不展示 ANSWERED · EVIDENCE_COMPOSITION 等协议枚举，
+    // 翻译为一条人类可读状态。
+    expect(answerTechTail({ ...base, constructionMode: 'TEMPLATE' })).toBe('按预设回答整理')
+    expect(answerTechTail({ ...base, constructionMode: 'MODEL_GROUNDED' })).toBe('基于证据表达')
+    expect(answerTechTail({ ...base, constructionMode: 'GENERAL_MODEL' })).toBe('模型通用回答')
+    expect(answerTechTail({ ...base, constructionMode: 'MIXED_COMPOSITION' })).toBe('综合多来源整理')
+    expect(answerTechTail(base)).not.toMatch(/[A-Z_]{3,}/)
+  })
+
   it('distinguishes construction modes and refusal states', () => {
-    expect(answerGenerationTag(base)).toBe('确定性组装')
+    expect(answerGenerationTag(base)).toBe('已根据公开证据整理回答')
     expect(answerGenerationTag({ ...base, constructionMode: 'MODEL_GROUNDED' }))
       .toBe('基于证据表达')
     expect(answerGenerationTag({ ...base, constructionMode: 'GENERAL_MODEL' })).toBe('模型回答')
-    expect(answerGenerationTag({ ...base, constructionMode: 'TEMPLATE' })).toBe('确定性模板')
+    expect(answerGenerationTag({ ...base, constructionMode: 'TEMPLATE' })).toBe('按预设回答整理')
     expect(answerGenerationTag({ ...base, degraded: true })).toBe('降级回答')
     expect(answerGenerationTag({ ...base, resolution: 'REJECTED' })).toBe('拒答')
   })

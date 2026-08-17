@@ -149,10 +149,14 @@ test('长会话标题保持完整并只做视觉省略', async ({ page, isMobile
   await expect(page.locator('.message--agent')).toHaveCount(1)
 
   const mainTitle = page.locator('.conversation__head h1')
-  await expect(mainTitle).toHaveText(LONG_TITLE_QUESTION)
+  // 体验闭环 §8：主标题是可扫描短标题，完整问题作为辅助信息（title/aria-label）。
+  await expect(mainTitle).toHaveText('请详细介绍 SQL 审计与故障排…')
   await expect(mainTitle).toHaveAttribute('title', LONG_TITLE_QUESTION)
   await expect(mainTitle).toHaveAttribute('aria-label', LONG_TITLE_QUESTION)
-  await expect(mainTitle).toHaveCSS('-webkit-line-clamp', '2')
+  // 视觉省略（两行截断）是桌面契约；≤620px 移动端刻意 unset，短标题单行即可放下。
+  if (!isMobile) {
+    await expect(mainTitle).toHaveCSS('-webkit-line-clamp', '2')
+  }
 
   if (isMobile) {
     await page.getByRole('button', { name: '会话', exact: true }).click()

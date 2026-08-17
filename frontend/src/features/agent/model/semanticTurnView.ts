@@ -8,6 +8,7 @@ import type {
   AgentTurnPayload,
   AgentTurnReadyResponse,
   AgentTurnRecommendationItemResponse,
+  AgentTurnRecommendationResultResponse,
   AgentTurnResponse,
   AgentTurnResultPayloadResponse,
   AgentTurnTaskSummaryResponse,
@@ -171,6 +172,11 @@ export interface RecommendationItemView extends PortfolioRecommendationItem {
 export interface RecommendationResultView {
   kind: 'RECOMMENDATION_RESULT'
   recommendations: RecommendationItemView[]
+  // 2026-08-17 体验闭环（后端闭环设计 §9）：推荐数量完整性；缺省视为后端未提供。
+  requestedSize?: number
+  actualSize?: number
+  reasonCodes?: string[]
+  unsatisfiedConstraints?: string[]
 }
 
 export interface SynthesisResultView {
@@ -556,6 +562,7 @@ function mapResultPayload(payload: AgentTurnResultPayloadResponse): CompletedTas
         // P5：有序结果项身份（设计 §12.12 / handoff §2）。
         ...mapOrderedResultItem(recommendation),
       })),
+      ...mapRecommendationCompletionFields(payload),
     }
   }
   if (payload.kind === 'SYNTHESIS_RESULT') {
@@ -569,6 +576,35 @@ function mapResultPayload(payload: AgentTurnResultPayloadResponse): CompletedTas
     kind: payload.kind,
     blocks: payload.blocks.map(mapCompletedTaskBlock),
   }
+}
+
+// 2026-08-17 体验闭环：推荐数量完整性字段（可选 metadata）。缺省视为未提供（兼容旧响应，
+// 不报诊断）；提供但非法（非正整数/非负整数/非字符串数组）时只丢该 metadata 并保留可信推荐。
+function mapRecommendationCompletionFields(payload: AgentTurnRecommendationResultResponse): {
+  requestedSize?: number
+  actualSize?: number
+  reasonCodes?: string[]
+  unsatisfiedConstraints?: string[]
+} {
+  const result: {
+    requestedSize?: number
+    actualSize?: number
+    reasonCodes?: string[]
+    unsatisfiedConstraints?: string[]
+  } = {}
+  if (typeof payload.requestedSize === 'number'
+    && Number.isInteger(payload.requestedSize) && payload.requestedSize > 0) {
+    result.requestedSize = payload.requestedSize
+  }
+  if (typeof payload.actualSize === 'number'
+    && Number.isInteger(payload.actualSize) && payload.actualSize >= 0) {
+    result.actualSize = payload.actualSize
+  }
+  const reasonCodes = p5StringArray(payload.reasonCodes)
+  if (reasonCodes.length) result.reasonCodes = reasonCodes
+  const unsatisfied = p5StringArray(payload.unsatisfiedConstraints)
+  if (unsatisfied.length) result.unsatisfiedConstraints = unsatisfied
+  return result
 }
 
 function mapCompletedTaskBlock(block: AnswerBlock): CompletedTaskBlockView {

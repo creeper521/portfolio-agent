@@ -661,15 +661,16 @@ describe('AgentWorkspace', () => {
     await wrapper.get('[data-suggested-question]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-section-evidence]').trigger('click')
+    // 体验闭环 §6：引用显示公开编号与标题，不显示内部 Evidence ID。
     expect(wrapper.get('[data-citation-id] small').text())
-      .toContain('sql-audit-delivery-set')
+      .toContain('E-01 · SQL 审计工具交付证据集')
 
     await wrapper.get('textarea').setValue('生成更新后的回答')
     await wrapper.get('.composer').trigger('submit')
     await flushPromises()
 
     expect(wrapper.get('[data-citation-id] small').text())
-      .toContain('sql-audit-secondary')
+      .toContain('E-SECONDARY · 次级证据')
     await wrapper.findAll('[role="tab"]')[0]!.trigger('click')
     expect(wrapper.get('.evidence-card--focused').attributes('data-evidence-id'))
       .toBe('sql-audit-secondary')
@@ -2270,5 +2271,78 @@ describe('AgentWorkspace P3 conversation context', () => {
       activeSubjects: [{ subjectType: 'PROJECT', subjectId: 'sql-audit' }],
       requestSource: 'AGENT_PAGE',
     })
+  })
+})
+
+// ── 体验闭环（2026-08-17 交接规格）──
+describe('AgentWorkspace · 体验闭环', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function semanticRecommendationAnswer() {
+    return {
+      requestId: 'request-reco',
+      turnId: 'turn-reco',
+      contentVersion: '2026-07-21',
+      resolution: 'ANSWERED' as const,
+      title: '',
+      summary: '',
+      blocks: [] as never[],
+      evidenceIds: [],
+      suggestedQuestions: [] as never[],
+      agentTurn: {
+        contractVersion: 'stp-v2' as const,
+        disposition: 'READY' as const,
+        outcome: { planOutcome: 'SUCCEEDED' as const },
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '推荐两个项目',
+          sourceDomain: 'PORTFOLIO' as const,
+          contextHandle: 'reco-handle-x',
+          resultPayload: {
+            kind: 'RECOMMENDATION_RESULT' as const,
+            recommendations: [
+              { portfolioId: 'sql-audit', title: 'SQL 审计', route: '/projects/sql-audit', matchReasons: ['理由'], evidenceIds: [] },
+              { portfolioId: 'codegraph-evaluation', title: '代码图谱', route: '/projects/codegraph-evaluation', matchReasons: ['理由'], evidenceIds: [] },
+            ],
+          },
+        }],
+      },
+    }
+  }
+
+  it('推荐后的自由追问自动携带最近可信续接句柄，而不是只靠页面默认项目', async () => {
+    askQuestionMock.mockReset()
+    askQuestionMock.mockResolvedValueOnce(semanticRecommendationAnswer())
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    wrapper.findComponent(ConversationThread).vm.$emit('submit', '给我推荐两个项目')
+    await flushPromises()
+    askQuestionMock.mockClear()
+
+    wrapper.findComponent(ConversationThread).vm.$emit('submit', '第二个呢')
+    await flushPromises()
+
+    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
+      question: '第二个呢',
+      contextReference: {
+        contextHandle: 'reco-handle-x',
+        expectedContextType: 'RECOMMENDATION',
+      },
+    }))
+  })
+
+  it('首轮提问没有可携带句柄时 contextReference 为 undefined', async () => {
+    askQuestionMock.mockReset()
+    askQuestionMock.mockResolvedValueOnce(answerResponse())
+    const wrapper = mountWorkspace()
+
+    wrapper.findComponent(ConversationThread).vm.$emit('submit', '介绍一下 SQL 审计项目')
+    await flushPromises()
+
+    const call = askQuestionMock.mock.calls[0]?.[0] as { contextReference?: unknown }
+    expect(call.contextReference).toBeUndefined()
   })
 })

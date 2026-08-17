@@ -41,6 +41,9 @@ import type {
   RecommendationItemView,
 } from '../model/semanticTurnView'
 import { hasExecutionAnswerConflict } from '../model/semanticTurnView'
+import { deriveRecommendationOutcome } from '../model/recommendationOutcome'
+import type { RecommendationOutcomeView } from '../model/recommendationOutcome'
+import { buildEvidenceLabeler } from '../model/citationLabels'
 import CompactTaskSummary from './CompactTaskSummary.vue'
 import AnswerCompositionPanel from './AnswerCompositionPanel.vue'
 import ContextInvalidatedNotice from './ContextInvalidatedNotice.vue'
@@ -85,6 +88,8 @@ const props = defineProps<{
   resumeUnavailable?: boolean
   // P3：清除流程中间态（DELETE 未确认，handoff §12）。
   clearPending?: boolean
+  // 体验闭环（2026-08-17 §6）：公开证据目录，用于把内部 Evidence ID 映射为「E-01 · 标题」。
+  evidenceCatalog?: ReadonlyArray<{ id: string; code: string; title: string }>
 }>()
 
 const emit = defineEmits<{
@@ -161,6 +166,146 @@ const state = computed(() => {
   if (props.pending) return 'generating'
   return props.session.messages.length ? 'conversation' : 'empty'
 })
+
+// ── 体验闭环（2026-08-17 交接规格）────────────────────────────────────────────
+
+// 公开证据引用标签：内部 Evidence ID → 「E-01 · 标题」；未知 ID 回退通用文案。
+const evidenceLabel = computed(() => buildEvidenceLabeler(props.evidenceCatalog ?? []))
+
+// 澄清/边界/失效轮不是回答：不渲染验证标签、范围标签与执行信息（规格 §4.3/§4.5）。
+function suppressAnswerMeta(message: AgentSession['messages'][number]): boolean {
+  const disposition = message.answer?.semanticTurn?.disposition
+  return disposition === 'CLARIFICATION_REQUIRED'
+    || disposition === 'BOUNDARY'
+    || disposition === 'REJECTED'
+    || disposition === 'CONTEXT_INVALIDATED'
+}
+
+// 噪声澄清（无正文的澄清轮）追加三类安全入口（规格 §4.3）。
+const SAFE_ENTRIES: ReadonlyArray<{ kind: string; label: string; question: string }> = [
+  { kind: 'learn', label: '了解项目', question: '介绍一下你的公开项目' },
+  { kind: 'compare', label: '比较项目', question: '比较一下你的公开项目' },
+  { kind: 'recommend', label: '推荐项目', question: '给我推荐两个项目' },
+]
+
+function needsSafeEntries(message: AgentSession['messages'][number]): boolean {
+  const answer = message.answer
+  if (!answer) return false
+  return answer.semanticTurn?.disposition === 'CLARIFICATION_REQUIRED'
+    && answer.semanticTurn.clarification !== undefined
+    && !(answer.sections ?? []).some((section) => section.content.trim())
+}
+
+function submitSafeEntry(question: string) {
+  if (props.pending) return
+  emit('submit', question)
+}
+
+// 回答级公开来源摘要：优先公开来源引用（目录/inline），回落证据集合（规格 §4.2）。
+function answerSourceCount(message: AgentSession['messages'][number]): number {
+  const answer = message.answer
+  if (!answer) return 0
+  const keys = new Set<string>()
+  for (const entry of answer.publicSourceCatalog ?? []) keys.add(entry.referenceKey)
+  if (keys.size === 0) {
+    for (const section of answer.sections) {
+      for (const reference of section.sourceReferences ?? []) keys.add(reference.referenceKey)
+    }
+    const recommendation = answer.portfolioRecommendation
+    if (recommendation) {
+      for (const item of recommendation.items) {
+        for (const reference of item.sourceReferences ?? []) keys.add(reference.referenceKey)
+      }
+    }
+  }
+  if (keys.size > 0) return keys.size
+  return new Set(answer.evidenceIds).size
+}
+
+function inspectAnswerSources(message: AgentSession['messages'][number]) {
+  const answer = message.answer
+  if (!answer || answerSourceCount(message) === 0) return
+  emit('inspectEvidence', {
+    messageId: message.id,
+    evidenceIds: [...new Set(answer.evidenceIds)],
+  })
+}
+
+// 推荐数量完整性视图：新旧契约统一消费（规格 §4.4/§10）。
+function recommendationOutcomeFor(
+  message: AgentSession['messages'][number],
+): RecommendationOutcomeView {
+  const legacy = message.answer?.portfolioRecommendation
+  if (legacy) {
+    return deriveRecommendationOutcome({
+      itemCount: legacy.items.length,
+      requestedSize: legacy.context.requestedSize,
+      actualSize: legacy.actualSize,
+      reasonCodes: legacy.reasonCodes,
+      unsatisfiedConstraints: legacy.unsatisfiedConstraints,
+    })
+  }
+  const task = semanticRecommendationTask(message)
+  if (task?.resultPayload.kind === 'RECOMMENDATION_RESULT') {
+    return deriveRecommendationOutcome({
+      itemCount: task.resultPayload.recommendations.length,
+      requestedSize: task.resultPayload.requestedSize,
+      actualSize: task.resultPayload.actualSize,
+      reasonCodes: task.resultPayload.reasonCodes,
+      unsatisfiedConstraints: task.resultPayload.unsatisfiedConstraints,
+    })
+  }
+  return deriveRecommendationOutcome({ itemCount: recommendationItems(message).length })
+}
+
+// 原因行：部分完成时用映射后的服务端原因；旧协议 UNKNOWN 时保留原样展示服务端约束文案。
+function recommendationReasonLine(message: AgentSession['messages'][number]): string | null {
+  const outcome = recommendationOutcomeFor(message)
+  if (outcome.fulfillment === 'PARTIAL') return outcome.reasonText
+  const semanticResult = semanticRecommendationTask(message)?.resultPayload
+  const semanticUnsatisfied = semanticResult?.kind === 'RECOMMENDATION_RESULT'
+    ? semanticResult.unsatisfiedConstraints ?? []
+    : []
+  const merged = [
+    ...(message.answer?.portfolioRecommendation?.unsatisfiedConstraints ?? []),
+    ...semanticUnsatisfied,
+  ].filter(Boolean)
+  return merged.length ? merged.join('；') : null
+}
+
+// 部分完成时的唯一主要恢复操作（规格 §4.4）：有可信句柄走续接，否则回传推荐上下文。
+function recoverRecommendation(message: AgentSession['messages'][number]) {
+  if (props.pending) return
+  const handle = recommendationContextHandle(message)
+  if (handle) {
+    emit('continueFromContext', {
+      question: '放宽条件重新推荐',
+      contextHandle: handle,
+      expectedContextType: 'RECOMMENDATION',
+    })
+    return
+  }
+  const recommendation = message.answer?.portfolioRecommendation
+  if (recommendation) {
+    emit('refineRecommendation', {
+      question: '放宽条件重新推荐',
+      recommendationContext: recommendationContextFor(recommendation),
+    })
+  }
+}
+
+// 执行快照任务名映射：displayIndex → goalLabel（completedTasks 权威），缺失不编造。
+function executionTaskLabels(
+  message: AgentSession['messages'][number],
+): Record<string, string> | undefined {
+  const tasks = message.answer?.semanticTurn?.completedTasks ?? []
+  if (!tasks.length) return undefined
+  const labels: Record<string, string> = {}
+  for (const task of tasks) {
+    if (task.displayIndex && task.goalLabel) labels[task.displayIndex] = task.goalLabel
+  }
+  return Object.keys(labels).length ? labels : undefined
+}
 
 // 唯一未决动作（P1 收口）：同一会话任何时刻最多一张卡可交互。
 // 后续 READY、新确认、新澄清、新失效或用户取消都会让旧动作立即失效；
@@ -634,7 +779,7 @@ function refineWhole(
     <header class="conversation__head">
       <div class="conversation__title">
         <p>AGENT CONVERSATION · Agent 对话</p>
-        <h1 :title="session.title" :aria-label="session.title">{{ session.title }}</h1>
+        <h1 :title="session.titleDetail ?? session.title" :aria-label="session.titleDetail ?? session.title">{{ session.title }}</h1>
         <div
           v-if="caseContextTitle"
           class="conversation__case-context"
@@ -763,13 +908,19 @@ function refineWhole(
         >
           <p v-if="message.answer" class="message__meta">
             <span class="message__meta-prefix">AGENT · {{ answerStatusLabel(message.answer) }}</span>
-            <span class="message__meta-tags">
-              <span v-if="answerScopeTag(message.answer)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message.answer) }}</span>
-              <span v-if="!message.answer.degraded && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.evidenceState">{{ answerVerificationTag(message.answer) }}</span>
-              <span v-if="answerSourceTag(message.answer)" class="message__meta-tag">{{ answerSourceTag(message.answer) }}</span>
-              <span v-if="answerGenerationTag(message.answer)" class="message__meta-tag" data-answer-generation>{{ answerGenerationTag(message.answer) }}</span>
-            </span>
-            <span v-if="answerTechTail(message.answer)" class="message__meta-tail">{{ answerTechTail(message.answer) }}</span>
+            <!-- 体验闭环 §4.3/§5：澄清/边界轮不渲染验证与范围标签，成功轮不出现原始枚举。 -->
+            <template v-if="!suppressAnswerMeta(message)">
+              <span class="message__meta-tags">
+                <span v-if="answerScopeTag(message.answer)" class="message__meta-tag" :data-scope="message.answer.answerScope">{{ answerScopeTag(message.answer) }}</span>
+                <span v-if="!message.answer.degraded && answerVerificationTag(message.answer)" class="message__meta-tag" :data-verification="message.answer.evidenceState">{{ answerVerificationTag(message.answer) }}</span>
+                <span v-if="answerSourceTag(message.answer)" class="message__meta-tag">{{ answerSourceTag(message.answer) }}</span>
+                <span v-if="answerGenerationTag(message.answer)" class="message__meta-tag" data-answer-generation>{{ answerGenerationTag(message.answer) }}</span>
+              </span>
+              <span
+                v-if="!answerGenerationTag(message.answer) && answerTechTail(message.answer)"
+                class="message__meta-tail"
+              >{{ answerTechTail(message.answer) }}</span>
+            </template>
           </p>
           <p v-else class="message__meta">{{ message.role === 'AGENT' ? 'AGENT' : 'YOU' }}</p>
           <p
@@ -807,6 +958,17 @@ function refineWhole(
               :readonly-note="clarificationReadonlyNote(message)"
               @submit="$emit('clarificationSubmit', { turnId: message.answer.turnId, ...$event })"
             />
+            <!-- 体验闭环 §4.3：噪声澄清提供三类安全入口，不依赖页面默认项目。 -->
+            <div v-if="needsSafeEntries(message)" class="safe-entries" data-safe-entries>
+              <button
+                v-for="entry in SAFE_ENTRIES"
+                :key="entry.kind"
+                :data-safe-entry="entry.kind"
+                type="button"
+                :disabled="pending"
+                @click="submitSafeEntry(entry.question)"
+              >{{ entry.label }}</button>
+            </div>
             <template v-if="message.answer.semanticTurn?.planChange">
               <p v-if="isPlanChangeDismissed(message)" class="plan-change-dismissed">已暂不处理 · 该计划不会执行，可直接继续提问。</p>
               <PlanInvalidatedNotice
@@ -818,17 +980,7 @@ function refineWhole(
                 @dismiss="$emit('dismissPlanChange', message.answer.turnId)"
               />
             </template>
-            <CompactTaskSummary
-              v-if="message.answer.semanticTurn?.taskSummary && message.answer.semanticTurn.taskSummary.totalCount > 1 && message.answer.semanticTurn.taskSummary.displayMode !== 'HIDDEN'"
-              :summary="message.answer.semanticTurn.taskSummary"
-            />
-            <!-- P3：最终执行快照（FINAL，handoff §7）。只在服务端返回时渲染，无拟真实时进度。 -->
-            <ExecutionSnapshot
-              v-if="message.answer.semanticTurn?.execution"
-              :execution="message.answer.semanticTurn.execution"
-            />
-            <!--
-              P3 防御性展示（handoff §7/§9）：顶层宣称 ANSWERED + VERIFIED，但 FINAL 快照
+            <!-- P3 防御性展示（handoff §7/§9）：顶层宣称 ANSWERED + VERIFIED，但 FINAL 快照
               全任务全阶段 FAILED 时是后端矛盾状态。前端不伪造阶段成功，也不把答案静默
               包装为完整成功，仅以非阻断方式提示本轮执行能力降级。
             -->
@@ -902,7 +1054,8 @@ function refineWhole(
                 v-if="section.sourceReferences && section.sourceReferences.length"
                 :references="section.sourceReferences"
               />
-              <!-- TRANSITIONAL(p3-e): 无 sourceReferences 时回落旧 evidenceId 引用按钮。 -->
+              <!-- TRANSITIONAL(p3-e): 无 sourceReferences 时回落旧 evidenceId 引用按钮；
+                   体验闭环 §6：按钮显示「E-01 · 标题」，不显示内部 Evidence ID。 -->
               <div
                 v-if="(!section.sourceReferences || !section.sourceReferences.length) && section.evidenceIds.length"
                 class="answer-block__citations"
@@ -913,7 +1066,7 @@ function refineWhole(
                   :data-section-citation="eid"
                   type="button"
                   @click="inspectMessageEvidence(message, eid)"
-                >[{{ eid }}]</button>
+                >{{ evidenceLabel(eid) }}</button>
               </div>
               <!-- P5 结构化限定语（设计 §9.9/§4.4）：挂所涉 Block 下方，绝不省略/反转 -->
               <p
@@ -954,6 +1107,30 @@ function refineWhole(
                 :data-caveat-code="caveat.code"
                 role="note"
               >{{ caveat.message }}</p>
+            </div>
+            <!-- 体验闭环 §4.2：回答级公开来源摘要，一行入口打开证据工作台查看全部引用。 -->
+            <button
+              v-if="answerSourceCount(message) > 0 && !suppressAnswerMeta(message)"
+              data-answer-sources
+              type="button"
+              class="answer-sources"
+              @click="inspectAnswerSources(message)"
+            >依据 {{ answerSourceCount(message) }} 组已审核公开证据</button>
+            <!-- 体验闭环 §5（方案 B）：执行信息组置于回答正文之后；成功默认收起、异常自动展开。 -->
+            <div
+              v-if="!suppressAnswerMeta(message) && (message.answer.semanticTurn?.taskSummary?.totalCount || message.answer.semanticTurn?.execution)"
+              class="answer-basis-group"
+              data-answer-basis-group
+            >
+              <CompactTaskSummary
+                v-if="message.answer.semanticTurn?.taskSummary && message.answer.semanticTurn.taskSummary.totalCount > 1 && message.answer.semanticTurn.taskSummary.displayMode !== 'HIDDEN'"
+                :summary="message.answer.semanticTurn.taskSummary"
+              />
+              <ExecutionSnapshot
+                v-if="message.answer.semanticTurn?.execution"
+                :execution="message.answer.semanticTurn.execution"
+                :task-labels="executionTaskLabels(message)"
+              />
             </div>
             <!-- P5「回答构成」信任层（设计 §4.2/§4.4）：默认折叠，单任务无细节时隐藏 -->
             <AnswerCompositionPanel
@@ -1004,27 +1181,25 @@ function refineWhole(
               v-if="message.answer.portfolioRecommendation || recommendationItems(message).length"
               class="portfolio-recommendation"
               data-portfolio-recommendation
-              :aria-label="`作品推荐 · ${recommendationItems(message).length} 项`"
+              :aria-label="recommendationOutcomeFor(message).ariaLabel"
             >
+                <!-- 体验闭环 §4.4：标题区显示请求/实际数量；数量字段缺失时使用中性文案。 -->
+                <div class="reco-headline" data-recommendation-headline>
+                  <h3>{{ recommendationOutcomeFor(message).headline }}</h3>
+                  <span
+                    v-if="recommendationOutcomeFor(message).statusLabel"
+                    class="reco-status"
+                    data-recommendation-status
+                  >{{ recommendationOutcomeFor(message).statusLabel }}</span>
+                </div>
                 <p
-                  v-if="message.answer.portfolioRecommendation?.satisfiedConstraints.length"
-                  class="reco-satisfied"
-                >
-                  <span class="reco-satisfied__code">已满足</span>
-                  <span>{{
-                    message.answer.portfolioRecommendation.satisfiedConstraints.join(' · ')
-                  }}</span>
-                </p>
-                <p
-                  v-if="message.answer.portfolioRecommendation?.unsatisfiedConstraints.length"
+                  v-if="recommendationReasonLine(message)"
                   class="reco-unsatisfied"
                   data-recommendation-unsatisfied
                   role="status"
                 >
-                  <span class="reco-unsatisfied__code">未满足</span>
-                  <span>{{
-                    message.answer.portfolioRecommendation.unsatisfiedConstraints.join(' · ')
-                  }}</span>
+                  <span class="reco-unsatisfied__code">未满足原因</span>
+                  <span>{{ recommendationReasonLine(message) }}</span>
                 </p>
                 <div
                   v-if="recommendationItems(message).length"
@@ -1056,7 +1231,7 @@ function refineWhole(
                         :data-recommendation-evidence="eid"
                         type="button"
                         @click="inspectMessageEvidence(message, eid)"
-                      >EVIDENCE · {{ eid }}</button>
+                      >{{ evidenceLabel(eid) }}</button>
                     </div>
                     <a
                       class="reco-card__link"
@@ -1090,6 +1265,19 @@ function refineWhole(
                       >继续了解这一项</button>
                     </div>
                   </div>
+                </div>
+                <!-- 体验闭环 §4.4：数量不足时的唯一主要恢复操作（不伪装成完整成功）。 -->
+                <div
+                  v-if="recommendationOutcomeFor(message).showRecovery"
+                  class="reco-recover"
+                >
+                  <button
+                    data-recommendation-recovery
+                    type="button"
+                    class="reco-recover__primary"
+                    :disabled="pending"
+                    @click="recoverRecommendation(message)"
+                  >放宽条件重新推荐</button>
                 </div>
                 <div
                   v-if="canRefineRecommendation(message)"
@@ -1132,7 +1320,7 @@ function refineWhole(
               type="button"
               @click="inspectMessageEvidence(message, id)"
             >
-              [{{ id }}]
+              {{ evidenceLabel(id) }}
             </button>
           </footer>
         </article>
@@ -1834,9 +2022,138 @@ function refineWhole(
   opacity: 0.55;
 }
 
+/* —— 体验闭环（2026-08-17）：澄清安全入口 / 回答级来源摘要 / 执行信息组 —— */
+.safe-entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.safe-entries button {
+  min-height: 34px;
+  padding: 7px 14px;
+  color: var(--workspace-text, var(--ink-2));
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: var(--agent-radius-sm);
+  background: rgba(255, 255, 255, 0.5);
+  font: 12.5px var(--sans);
+  cursor: pointer;
+  transition: border-color var(--agent-motion-fast) var(--ease),
+    color var(--agent-motion-fast) var(--ease);
+}
+
+.safe-entries button:not(:disabled):hover {
+  border-color: var(--workspace-accent, var(--red));
+  color: var(--workspace-accent, var(--red));
+}
+
+.safe-entries button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.answer-sources {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 10px;
+  padding: 0;
+  color: var(--workspace-text-secondary, var(--muted));
+  border: 0;
+  background: none;
+  font: 12px/1.6 var(--mono);
+  cursor: pointer;
+}
+
+.answer-sources::before {
+  content: "◈";
+  color: var(--workspace-accent-soft, var(--red-hi));
+}
+
+.answer-sources:hover {
+  color: var(--workspace-accent, var(--red));
+}
+
+/* 方案 B：三个执行部件紧凑成组（等高收起条），与正文保持一个收尾节奏 */
+.answer-basis-group {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.answer-basis-group :deep(.compact-task-summary),
+.answer-basis-group :deep(.execution-snapshot),
+.answer-basis-group :deep(.answer-composition) {
+  margin: 0;
+}
+
 /* —— 结构化作品推荐卡组（复刻证据卡 / 资产卡底盘，沿用现有 token）—— */
 .portfolio-recommendation {
   margin-top: 18px;
+}
+
+/* 体验闭环 §4.4：数量标题 + 部分完成状态（◆ 形状 + 文字，不依赖颜色） */
+.reco-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.reco-headline h3 {
+  margin: 0;
+  color: var(--workspace-text, var(--ink));
+  font: 600 16px/1.45 var(--serif);
+}
+
+.reco-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--workspace-accent, var(--red));
+  border-radius: 4px;
+  color: var(--workspace-accent, var(--red));
+  background: color-mix(in srgb, var(--workspace-accent, var(--red)) 7%, var(--paper-hi));
+  font: 10.5px var(--mono);
+  letter-spacing: 0.06em;
+}
+
+.reco-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--workspace-accent, var(--red));
+  transform: rotate(45deg);
+}
+
+.reco-recover {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+.reco-recover__primary {
+  min-height: 36px;
+  padding: 8px 16px;
+  color: var(--workspace-primary-text, var(--paper-hi));
+  border: 0;
+  border-radius: var(--agent-radius-sm);
+  background: var(--workspace-primary-bg, var(--ink));
+  font: 12px var(--mono);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.reco-recover__primary:not(:disabled):hover {
+  background: var(--ink-2);
+}
+
+.reco-recover__primary:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .reco-satisfied {

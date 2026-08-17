@@ -1783,3 +1783,213 @@ describe('ConversationThread P5 answer-composition trust layer', () => {
     expect(wrapper.find('[data-testid="answer-composition-panel"]').exists()).toBe(false)
   })
 })
+
+// ── 体验闭环（2026-08-17 交接规格）：回答优先、证据按需、执行降噪 ──
+describe('ConversationThread · 体验闭环', () => {
+  function noiseClarificationMessage(): AgentMessage {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-noise',
+      contentVersion: 'public-2026-08-17',
+      resolution: 'NEEDS_CLARIFICATION',
+      title: '',
+      summary: '',
+      blocks: [],
+      agentTurn: {
+        contractVersion: 'stp-v2',
+        disposition: 'CLARIFICATION_REQUIRED',
+        clarification: {
+          scope: 'CRITICAL',
+          prompt: '想了解什么？可以说明要了解、比较还是推荐作品。',
+          fields: [],
+          blockedTaskCount: 0,
+          continuingTaskCount: 0,
+        },
+      },
+    } as never)
+    return semanticMessage('agent-noise', answer)
+  }
+
+  function partialRecommendationMessage(): AgentMessage {
+    const answer = {
+      title: '',
+      summary: '',
+      resolution: 'PARTIALLY_ANSWERED' as const,
+      turnId: 'turn-reco-partial',
+      contentVersion: 'public-2026-08-17',
+      coveredTopics: [],
+      guidanceStage: null,
+      evidenceIds: [],
+      suggestedQuestionPresetIds: [],
+      suggestedQuestions: [],
+      sections: [],
+      semanticTurn: {
+        contractVersion: 'stp-v2' as const,
+        disposition: 'PARTIAL_READY' as const,
+        completedTasks: [{
+          displayIndex: '01',
+          goalLabel: '推荐 3 个公开项目',
+          sourceDomain: 'PORTFOLIO' as const,
+          contextHandle: 'reco-handle',
+          resultPayload: {
+            kind: 'RECOMMENDATION_RESULT' as const,
+            recommendations: [{
+              portfolioId: 'sql-audit',
+              title: 'SQL 审计与故障排查工具',
+              route: '/projects/sql-audit',
+              matchReasons: ['完整交付闭环'],
+              evidenceIds: [],
+            }],
+            requestedSize: 3,
+            actualSize: 1,
+            reasonCodes: ['INSUFFICIENT_EVIDENCE_SUPPORTED_PROJECTS'],
+          },
+        }],
+        execution: {
+          overallStatus: 'PARTIAL' as const,
+          tasks: [{
+            displayIndex: '01',
+            finalStatus: 'PARTIAL' as const,
+            stages: [
+              { code: 'SCOPE_CONFIRMED' as const, label: '确认查询范围', status: 'COMPLETED' as const },
+              { code: 'RESULT_COMPOSED' as const, label: '形成回答', status: 'PARTIAL' as const },
+            ],
+          }],
+        },
+      },
+    }
+    return semanticMessage('agent-reco-partial', answer as never)
+  }
+
+  it('噪声澄清轮不渲染 meta 标签与执行快照，只显示澄清卡和三类安全入口', async () => {
+    const wrapper = mountThread([noiseClarificationMessage()])
+
+    expect(wrapper.find('[data-testid="turn-clarification"]').exists()).toBe(true)
+    expect(wrapper.findAll('.message__meta-tag').length).toBe(0)
+    expect(wrapper.find('[data-execution-snapshot]').exists()).toBe(false)
+    expect(wrapper.find('[data-answer-sources]').exists()).toBe(false)
+
+    const entries = wrapper.findAll('[data-safe-entry]')
+    expect(entries.map((entry) => entry.text())).toEqual(['了解项目', '比较项目', '推荐项目'])
+    await entries[2]?.trigger('click')
+    expect(wrapper.emitted('submit')).toEqual([['给我推荐两个项目']])
+  })
+
+  it('回答级来源摘要显示已审核公开证据组数并触发全量证据聚焦', async () => {
+    const wrapper = mountThread([answerMessageFixture])
+
+    const sources = wrapper.get('[data-answer-sources]')
+    expect(sources.text()).toContain('依据 1 组已审核公开证据')
+    await sources.trigger('click')
+    const event = wrapper.emitted('inspectEvidence')?.[0]?.[0] as {
+      messageId: string
+      evidenceIds: string[]
+      sectionType?: string
+    }
+    expect(event.messageId).toBe('agent-1')
+    expect(event.evidenceIds).toEqual(['sql-audit-delivery-set'])
+    expect(event.sectionType).toBeUndefined()
+  })
+
+  it('无证据引用的回答不渲染来源摘要行', () => {
+    const answer = mapAnswerResponse({
+      turnId: 'turn-general',
+      contentVersion: 'public-2026-08-17',
+      resolution: 'ANSWERED',
+      title: '',
+      summary: '',
+      blocks: [{ sourceScope: 'GENERAL', content: '通用回答。', claimIds: [], evidenceIds: [] }],
+    } as never)
+    const wrapper = mountThread([semanticMessage('agent-general', answer)])
+    expect(wrapper.find('[data-answer-sources]').exists()).toBe(false)
+  })
+
+  it('引用显示公开编号与标题，不显示内部 Evidence ID', () => {
+    const wrapper = mount(ConversationThread, {
+      props: {
+        session: session([answerMessageFixture]),
+        role: 'INTERVIEWER',
+        project: previewPublicContent.projects[0],
+        pending: false,
+        evidenceCatalog: previewPublicContent.evidence,
+      },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+
+    const citation = wrapper.get('[data-section-citation]')
+    expect(citation.text()).toBe('E-01 · SQL 审计工具交付证据集')
+    expect(wrapper.get('.structured-answer').text()).not.toContain('[sql-audit-delivery-set]')
+  })
+
+  it('部分推荐 1/3：明确数量表达、部分完成状态、原因与唯一恢复操作', async () => {
+    const wrapper = mountThread([partialRecommendationMessage()])
+
+    expect(wrapper.get('[data-recommendation-headline] h3').text())
+      .toBe('找到 1/3 个符合条件的项目')
+    expect(wrapper.get('[data-recommendation-status]').text()).toBe('部分完成')
+    expect(wrapper.get('[data-recommendation-unsatisfied]').text())
+      .toContain('其余公开项目的证据完整度暂不足')
+    expect(wrapper.findAll('[data-recommendation-item]')).toHaveLength(1)
+
+    const recovery = wrapper.get('[data-recommendation-recovery]')
+    expect(recovery.text()).toBe('放宽条件重新推荐')
+    await recovery.trigger('click')
+    expect(wrapper.emitted('continueFromContext')?.[0]?.[0]).toEqual({
+      question: '放宽条件重新推荐',
+      contextHandle: 'reco-handle',
+      expectedContextType: 'RECOMMENDATION',
+    })
+
+    const text = wrapper.get('[data-portfolio-recommendation]').text()
+    expect(text).not.toContain('执行完成')
+    expect(wrapper.get('[data-portfolio-recommendation]').attributes('aria-label'))
+      .toContain('1/3')
+  })
+
+  it('旧协议推荐使用中性文案，不宣称全部满足', () => {
+    const wrapper = mountThread([partialRecommendationMessagelessLegacy()])
+
+    expect(wrapper.get('[data-recommendation-headline] h3').text()).toBe('作品推荐 · 2 项')
+    expect(wrapper.find('[data-recommendation-status]').exists()).toBe(false)
+    expect(wrapper.find('[data-recommendation-recovery]').exists()).toBe(false)
+  })
+
+  it('执行快照显示任务名（来自 completedTasks 的 goalLabel）', () => {
+    const wrapper = mountThread([partialRecommendationMessage()])
+    const snapshot = wrapper.get('[data-execution-snapshot]')
+    expect(snapshot.find('[data-execution-task="01"]').text()).toContain('推荐 3 个公开项目')
+  })
+
+  it('meta 行不出现原始协议枚举', () => {
+    const wrapper = mountThread([answerMessageFixture])
+    expect(wrapper.get('.message__meta').text()).not.toMatch(/ANSWERED|EVIDENCE_COMPOSITION|NOT_SUPPORTED/)
+  })
+
+  function partialRecommendationMessagelessLegacy(): AgentMessage {
+    // 旧协议：requestedSize 存在但无 actualSize/reasonCodes → UNKNOWN 中性文案。
+    const answer = {
+      ...answerMessageFixture.answer,
+      turnId: 'turn-reco-legacy',
+      resolution: 'ANSWERED' as const,
+      sections: [],
+      portfolioRecommendation: {
+        recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        context: {
+          recommendationBatchId: 'rec_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          contentVersion: 'public-2026-08-17',
+          careerTrack: null,
+          audienceRole: 'INTERVIEWER',
+          capabilityCodes: ['POSTGRESQL'],
+          requestedSize: 2,
+          selectedPortfolioIds: ['project-1', 'case-2'],
+        },
+        items: [
+          { portfolioId: 'project-1', title: '项目一', route: '/projects/project-one', matchReasons: ['理由'], evidenceIds: ['e1'] },
+          { portfolioId: 'case-2', title: '案例二', route: '/cases/case-two', matchReasons: ['理由'], evidenceIds: ['e2'] },
+        ],
+        satisfiedConstraints: [],
+        unsatisfiedConstraints: [],
+      },
+    }
+    return semanticMessage('agent-reco-legacy', answer as never)
+  }
+})

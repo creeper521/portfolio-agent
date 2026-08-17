@@ -40,7 +40,19 @@ const tabs: Array<{ id: EvidenceDeskTab; label: string }> = [
 
 const showAllEvidence = ref(false)
 const hasFocusedEvidence = computed(() => props.focusEvidenceIds.length > 0)
-const evidenceStatus = computed(() => hasFocusedEvidence.value ? 'ANSWER FOCUSED' : 'PUBLIC INDEX')
+// 体验闭环 §11-F：状态文案中文化，不使用无意义英文枚举。
+const evidenceStatus = computed(() => hasFocusedEvidence.value ? '聚焦当前回答' : '公开证据目录')
+
+// 体验闭环 §6：引用标签显示公开编号与标题，不显示内部 Evidence ID。
+const evidenceLabel = computed(() => {
+  const labels = new Map<string, string>()
+  for (const item of props.evidence) {
+    if (item.code?.trim() && item.title?.trim() && !labels.has(item.id)) {
+      labels.set(item.id, `${item.code.trim()} · ${item.title.trim()}`)
+    }
+  }
+  return (evidenceId: string): string => labels.get(evidenceId) ?? '已审核公开证据'
+})
 
 const orderedEvidence = computed(() => {
   const focused = new Set(props.focusEvidenceIds)
@@ -81,12 +93,12 @@ const orderedEvidence = computed(() => {
     </nav>
 
     <div v-if="tab === 'EVIDENCE'" class="evidence-list">
-      <button
+        <button
         v-if="hasFocusedEvidence"
         type="button"
         class="evidence-list__toggle"
         @click="showAllEvidence = !showAllEvidence"
-      >{{ showAllEvidence ? '只看当前回答证据' : `查看全部 ${evidence.length} 条证据` }}</button>
+      >{{ showAllEvidence ? '只看当前回答证据' : `查看全部 ${evidence.length} 条公开证据` }}</button>
       <article
         v-for="item in orderedEvidence"
         :key="item.id"
@@ -102,7 +114,7 @@ const orderedEvidence = computed(() => {
           :data-evidence-id="item.id"
           @click="emit('select', item.id)"
         >
-          <span class="evidence-card__code">EVIDENCE · {{ item.code }}</span>
+          <span class="evidence-card__code">{{ item.code }}</span>
           <span class="evidence-card__title">{{ item.title }}</span>
           <span class="evidence-card__summary">{{ item.summary }}</span>
           <small>
@@ -132,7 +144,7 @@ const orderedEvidence = computed(() => {
       >
         <span>{{ citation.sectionTitle }}</span>
         <q>{{ citation.excerpt }}</q>
-        <small>引用自 {{ citation.evidenceId }}</small>
+        <small>引用自 {{ evidenceLabel(citation.evidenceId) }}</small>
       </button>
       <p v-if="!citations.length" class="evidence-empty">
         当前回答没有直接引用证据。

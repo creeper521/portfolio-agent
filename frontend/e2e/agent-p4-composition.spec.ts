@@ -96,6 +96,8 @@ test('execution snapshot stays on the four P3 stages with no fake model progress
 
   const snapshot = page.locator('[data-execution-snapshot]')
   await expect(snapshot).toBeVisible({ timeout: READY_TIMEOUT })
+  // 体验闭环 §5：成功回答默认收起执行快照，先展开再校验阶段集合。
+  await snapshot.locator('[data-execution-toggle]').click()
   const codes = await snapshot.locator('[data-stage-code]').evaluateAll((nodes) =>
     nodes.map((node) => (node as HTMLElement).dataset.stageCode ?? ''),
   )

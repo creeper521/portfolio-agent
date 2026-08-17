@@ -225,7 +225,7 @@ describe('useLocalSessions', () => {
     expect(session.activeContextSummary?.canRefine).toBe(true)
   })
 
-  it('keeps the full text of the first question as the session title', () => {
+  it('derives a scannable short title and keeps the full question as auxiliary detail', () => {
     const store = useLocalSessions()
     const session = store.createSession()
     const longQuestion = '请完整介绍一下你在 SQL 审计工具项目中负责的模块边界、关键取舍与最终验证方式'
@@ -237,10 +237,12 @@ describe('useLocalSessions', () => {
       evidenceIds: [],
     })
 
-    expect(store.activeSession.value?.title).toBe(longQuestion)
+    // 体验闭环 §8：可扫描短标题 + 完整问题辅助信息。
+    expect(store.activeSession.value?.title).toBe('请完整介绍一下你在 SQL 审计…')
+    expect(store.activeSession.value?.titleDetail).toBe(longQuestion)
   })
 
-  it('trims the first question without collapsing inner whitespace', () => {
+  it('trims and collapses inner whitespace in the short title', () => {
     const store = useLocalSessions()
     const session = store.createSession()
 
@@ -251,7 +253,44 @@ describe('useLocalSessions', () => {
       evidenceIds: [],
     })
 
-    expect(store.activeSession.value?.title).toBe('第一行问题\n\n第二行问题')
+    expect(store.activeSession.value?.title).toBe('第一行问题 第二行问题')
+    expect(store.activeSession.value?.titleDetail).toBe('第一行问题\n\n第二行问题')
+  })
+
+  it('never lets noise input become the session title (closure)', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+
+    store.appendMessage(session.id, {
+      role: 'USER',
+      content: '1',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(store.activeSession.value?.title).toBe('待补充问题')
+    expect(store.activeSession.value?.titleDetail).toBe('1')
+  })
+
+  it('upgrades the placeholder title when a later real question arrives (closure)', () => {
+    const store = useLocalSessions()
+    const session = store.createSession()
+
+    store.appendMessage(session.id, {
+      role: 'USER',
+      content: '112233',
+      answer: null,
+      evidenceIds: [],
+    })
+    store.appendMessage(session.id, {
+      role: 'USER',
+      content: '给我推荐两个项目',
+      answer: null,
+      evidenceIds: [],
+    })
+
+    expect(store.activeSession.value?.title).toBe('给我推荐两个项目')
+    expect(store.activeSession.value?.titleDetail).toBe('给我推荐两个项目')
   })
 
   it('keeps a manually renamed title longer than forty characters', () => {

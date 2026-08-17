@@ -66,16 +66,31 @@ export function answerGenerationTag(answer: AnswerLabelInput | null | undefined)
   if (!answer) return ''
   if (answer.resolution === 'REJECTED') return '拒答'
   if (answer.degraded) return '降级回答'
-  if (answer.constructionMode === 'EVIDENCE_COMPOSITION') return '确定性组装'
+  if (answer.constructionMode === 'EVIDENCE_COMPOSITION') return '已根据公开证据整理回答'
   if (answer.constructionMode === 'MODEL_GROUNDED') return '基于证据表达'
   if (answer.constructionMode === 'GENERAL_MODEL') return '模型回答'
-  if (answer.constructionMode === 'TEMPLATE') return '确定性模板'
+  if (answer.constructionMode === 'TEMPLATE') return '按预设回答整理'
   return ''
 }
 
+// 交接规格 §5：技术尾注不再输出 ANSWERED · EVIDENCE_COMPOSITION 等协议枚举，
+// 翻译为一条人类可读状态。
 export function answerTechTail(answer: AnswerLabelInput | null | undefined): string {
   if (!answer) return ''
-  return [answer.resolution, answer.constructionMode].filter(Boolean).join(' · ')
+  switch (answer.constructionMode) {
+    case 'EVIDENCE_COMPOSITION':
+      return '已根据公开证据整理回答'
+    case 'MODEL_GROUNDED':
+      return '基于证据表达'
+    case 'GENERAL_MODEL':
+      return '模型通用回答'
+    case 'MIXED_COMPOSITION':
+      return '综合多来源整理'
+    case 'TEMPLATE':
+      return '按预设回答整理'
+    default:
+      return ''
+  }
 }
 
 export function degradedNotice(answer: AnswerLabelInput | null | undefined): string {

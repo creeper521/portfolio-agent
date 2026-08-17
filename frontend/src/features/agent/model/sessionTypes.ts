@@ -16,6 +16,8 @@ export interface AgentMessage {
 export interface AgentSession {
   id: string
   title: string
+  // 体验闭环 §8：完整首问作为辅助信息（悬停/aria），标题本身是可扫描短标题。
+  titleDetail?: string
   role: AudienceRole
   projectSlug: string | null
   evidenceId: string | null

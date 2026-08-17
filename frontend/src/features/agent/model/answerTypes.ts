@@ -217,6 +217,11 @@ export interface PortfolioRecommendation {
   items: PortfolioRecommendationItem[]
   satisfiedConstraints: string[]
   unsatisfiedConstraints: string[]
+  // ── 2026-08-17 体验闭环（交接规格 §3 / 后端闭环设计 §9）──
+  // 新契约可选字段；缺失时前端按 UNKNOWN 中性展示，不宣称全部满足。
+  actualSize?: number
+  candidateScope?: 'ALL_PUBLISHED_PROJECTS' | 'EXPLICIT_PROJECT_SET'
+  reasonCodes?: string[]
 }
 
 export interface PlanConfirmationSubmission {
@@ -389,6 +394,12 @@ export interface AgentTurnRecommendationItemResponse extends Omit<PortfolioRecom
 export interface AgentTurnRecommendationResultResponse {
   kind: 'RECOMMENDATION_RESULT'
   recommendations: AgentTurnRecommendationItemResponse[]
+  // ── 2026-08-17 体验闭环（后端闭环设计 §9）：推荐数量完整性，可选，兼容旧响应。──
+  requestedSize?: number
+  actualSize?: number
+  candidateScope?: 'ALL_PUBLISHED_PROJECTS' | 'EXPLICIT_PROJECT_SET'
+  reasonCodes?: string[]
+  unsatisfiedConstraints?: string[]
   [field: string]: unknown
 }
 

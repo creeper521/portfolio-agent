@@ -9,6 +9,10 @@ import type {
   SessionSeed,
 } from '../model/sessionTypes'
 import { extractOpaquePlanConfirmation } from '../model/semanticTurnView'
+import { shortSessionTitle } from '../model/sessionTitle'
+
+// 体验闭环 §8：噪声输入（纯数字/纯符号/过短）的会话标题占位，可被后续有效问题升级。
+const PENDING_TITLE = '待补充问题'
 
 function makeId(prefix: string) {
   const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
@@ -90,7 +94,20 @@ export function useLocalSessions() {
       session.messages = session.messages.slice(-messageLimit)
     }
     if (session.messages[0]?.role === 'USER' && !manuallyRenamedSessionIds.has(sessionId)) {
-      session.title = session.messages[0].content.trim()
+      // 体验闭环 §8：噪声输入不能成为永久标题；占位标题可被后续有效问题升级。
+      const upgrading = session.title === PENDING_TITLE
+      const source = upgrading
+        ? [...session.messages].reverse().find((message) => message.role === 'USER')
+            ?? session.messages[0]
+        : session.messages[0]
+      const shortTitle = shortSessionTitle(source.content)
+      if (shortTitle) {
+        session.title = shortTitle
+        session.titleDetail = source.content.trim()
+      } else {
+        session.title = PENDING_TITLE
+        session.titleDetail = source.content.trim()
+      }
     }
     sessions.value = [...sessions.value]
   }

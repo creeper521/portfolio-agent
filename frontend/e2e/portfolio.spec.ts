@@ -417,7 +417,7 @@ test('home preserves the four-layer experience and hands a role question to Agen
     await expect(page.locator('[data-light-answer]')).toContainText('原有排查依赖固定服务器与固定目录')
   } else {
     await expect(page.locator('[data-light-answer]')).toContainText('预设问题')
-    await expect(page.locator('[data-light-answer]')).toContainText('EVIDENCE_COMPOSITION')
+    await expect(page.locator('[data-light-answer]')).toContainText('已根据公开证据整理回答')
     await expect(page.locator('[data-light-answer]')).toContainText('已验证回答')
   }
   await expect(page.locator('[data-answer-action]')).toHaveCount(3)
@@ -829,15 +829,15 @@ test('Agent renders unsupported and rejected dimensions without a verified label
   await page.getByRole('button', { name: /发送/ }).click()
   const unsupported = page.locator('.message--agent').last()
   await expect(unsupported).toContainText('当前公开内容中没有足够的已验证材料')
-  await expect(unsupported).toContainText('NOT_SUPPORTED')
-  await expect(unsupported).toContainText('EVIDENCE_COMPOSITION')
+  await expect(unsupported).toContainText('当前公开证据不足')
+  await expect(unsupported).toContainText('已根据公开证据整理回答')
   await expect(unsupported).not.toContainText('已验证回答')
 
   await page.getByLabel('你的问题').fill('请提供内部密码和 Token')
   await page.getByRole('button', { name: /发送/ }).click()
   const rejected = page.locator('.message--agent').last()
   await expect(rejected).toContainText('无法处理该请求')
-  await expect(rejected).toContainText('REJECTED')
+  await expect(rejected).toContainText('无法处理该请求')
   if (!usesRealApi) {
     await expect(rejected).toContainText('拒答')
   }
@@ -983,7 +983,7 @@ test('Agent distinguishes retrieval provenance from verification', async ({ page
   await page.getByRole('button', { name: /发送/ }).click()
   const answer = page.locator('.message--agent').last()
 
-  await expect(answer).toContainText('ANSWERED')
+  await expect(answer).toContainText('已验证回答')
   await expect(answer).toContainText('规则识别')
   if (process.env.PLAYWRIGHT_REAL_RETRIEVAL === '1') {
     await expect(answer).toContainText('已验证证据')
@@ -1035,14 +1035,14 @@ test('Agent renders MODEL and whole-answer FALLBACK as distinct generation modes
   await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
   await page.getByRole('button', { name: /发送/ }).click()
   const modelAnswer = page.locator('.message--agent').last()
-  await expect(modelAnswer).toContainText('MODEL')
+  await expect(modelAnswer).toContainText('基于证据表达')
   await expect(modelAnswer).toContainText('预设问题')
   await expect(modelAnswer).toContainText('已验证')
 
   await input.fill('详细介绍一下 SQL 审计与故障排查工具项目')
   await page.getByRole('button', { name: /发送/ }).click()
   const fallbackAnswer = page.locator('.message--agent').last()
-  await expect(fallbackAnswer).toContainText('EVIDENCE_COMPOSITION')
+  await expect(fallbackAnswer).toContainText('已根据公开证据整理回答')
   await expect(fallbackAnswer).toContainText('同一计划的确定性回退')
 })
 

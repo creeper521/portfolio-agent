@@ -434,7 +434,36 @@ function mapPortfolioRecommendation(response: AnswerResponse): PortfolioRecommen
     })),
     satisfiedConstraints: [...raw.satisfiedConstraints],
     unsatisfiedConstraints: [...raw.unsatisfiedConstraints],
+    // 2026-08-17 体验闭环（交接规格 §3）：新契约可选字段，非法值按缺失处理。
+    ...mapOptionalRecommendationSize(raw.actualSize, 'actualSize'),
+    ...mapOptionalCandidateScope(raw.candidateScope),
+    ...mapOptionalStringArray(raw.reasonCodes, 'reasonCodes'),
   }
+}
+
+function mapOptionalRecommendationSize(
+  value: unknown,
+  key: 'actualSize',
+): { actualSize?: number } {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+    ? { [key]: value }
+    : {}
+}
+
+function mapOptionalCandidateScope(
+  value: unknown,
+): { candidateScope?: PortfolioRecommendation['candidateScope'] } {
+  return value === 'ALL_PUBLISHED_PROJECTS' || value === 'EXPLICIT_PROJECT_SET'
+    ? { candidateScope: value }
+    : {}
+}
+
+function mapOptionalStringArray(value: unknown, key: 'reasonCodes'): { reasonCodes?: string[] } {
+  if (!Array.isArray(value)) return {}
+  const list = value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map((entry) => entry.trim())
+  return list.length ? { [key]: list } : {}
 }
 
 function isValidPortfolioRecommendation(value: unknown): value is PortfolioRecommendation {
