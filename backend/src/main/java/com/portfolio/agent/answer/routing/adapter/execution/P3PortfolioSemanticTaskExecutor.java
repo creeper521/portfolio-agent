@@ -252,7 +252,8 @@ public final class P3PortfolioSemanticTaskExecutor implements SemanticTaskExecut
                 && task.getParameters() instanceof SemanticTaskParameters.PortfolioRecommend parameters) {
             TaskResultPayload.RecommendationResultPayload payload = recommendationPayload(
                     task, parameters, execution, assessment, composition.getPlan());
-            if (assessment.getStatus() == EvidenceSupportAssessment.SupportStatus.PARTIAL) {
+            boolean incomplete = payload.getProjection().getActualSize() < parameters.getRequestedSize().getValue();
+            if (assessment.getStatus() == EvidenceSupportAssessment.SupportStatus.PARTIAL || incomplete) {
                 composedOutcome = TaskOutcome.partiallyAnsweredWithPayloadAndContribution(
                         task.getTaskId(), TaskSourceDomain.PORTFOLIO, payload, contribution,
                         provenance, execution.isDegraded());
@@ -311,14 +312,30 @@ public final class P3PortfolioSemanticTaskExecutor implements SemanticTaskExecut
         satisfied.add(parameters.getCareerTrack().name());
         satisfied.add(parameters.getAudienceRole().name());
         satisfied.addAll(capabilities);
+        java.util.LinkedHashSet<String> reasons = new java.util.LinkedHashSet<>();
+        if (items.size() < parameters.getRequestedSize().getValue()) {
+            if (execution.getCandidateSet().orElseThrow().getCandidateSubjects().size()
+                    < parameters.getRequestedSize().getValue()) {
+                reasons.add("INSUFFICIENT_ELIGIBLE_PROJECTS");
+            } else {
+                reasons.add("INSUFFICIENT_EVIDENCE_SUPPORTED_PROJECTS");
+            }
+        }
+        if (!assessment.getOmittedLabels().isEmpty()) {
+            reasons.add("CAPABILITY_COVERAGE_INCOMPLETE");
+        }
         TaskResultPayload.RecommendationProjection projection =
                 new TaskResultPayload.RecommendationProjection(
                         batchId(task, execution.getCandidateSet().orElseThrow()
                                 .getReturnedContentVersion(), selectedIds),
                         execution.getCandidateSet().orElseThrow().getReturnedContentVersion(),
                         parameters.getCareerTrack().name(), parameters.getAudienceRole().name(),
-                        capabilities, parameters.getRequestedSize().getValue(), selectedIds, items,
-                        List.copyOf(satisfied), assessment.getOmittedLabels());
+                        capabilities, parameters.getRequestedSize().getValue(), items.size(),
+                        parameters.getCandidateSubjects().isEmpty()
+                                ? TaskResultPayload.RecommendationProjection.CandidateScope.ALL_PUBLISHED_PROJECTS
+                                : TaskResultPayload.RecommendationProjection.CandidateScope.EXPLICIT_PROJECT_SET,
+                        selectedIds, items, List.copyOf(satisfied), assessment.getOmittedLabels(),
+                        List.copyOf(reasons));
         return new TaskResultPayload.RecommendationResultPayload(
                 projection, plan.getSections().stream()
                         .map(PortfolioAnswerSection::getContent).toList());

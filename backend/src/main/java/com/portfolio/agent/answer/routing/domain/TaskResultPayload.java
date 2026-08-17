@@ -216,16 +216,21 @@ public sealed interface TaskResultPayload
     /** Complete public recommendation data retained for the single-result legacy projection. */
     final class RecommendationProjection {
 
+        public enum CandidateScope { ALL_PUBLISHED_PROJECTS, EXPLICIT_PROJECT_SET }
+
         private final String recommendationBatchId;
         private final String contentVersion;
         private final String careerTrack;
         private final String audienceRole;
         private final Set<String> capabilityCodes;
         private final int requestedSize;
+        private final int actualSize;
+        private final CandidateScope candidateScope;
         private final List<String> selectedPortfolioIds;
         private final List<RecommendationItem> items;
         private final List<String> satisfiedConstraints;
         private final List<String> unsatisfiedConstraints;
+        private final List<String> reasonCodes;
 
         public RecommendationProjection(
                 String recommendationBatchId,
@@ -238,6 +243,17 @@ public sealed interface TaskResultPayload
                 List<RecommendationItem> items,
                 List<String> satisfiedConstraints,
                 List<String> unsatisfiedConstraints) {
+            this(recommendationBatchId, contentVersion, careerTrack, audienceRole, capabilityCodes,
+                    requestedSize, items.size(), CandidateScope.EXPLICIT_PROJECT_SET,
+                    selectedPortfolioIds, items, satisfiedConstraints, unsatisfiedConstraints,
+                    items.size() < requestedSize ? List.of("INSUFFICIENT_ELIGIBLE_PROJECTS") : List.of());
+        }
+
+        public RecommendationProjection(
+                String recommendationBatchId, String contentVersion, String careerTrack, String audienceRole,
+                Set<String> capabilityCodes, int requestedSize, int actualSize, CandidateScope candidateScope,
+                List<String> selectedPortfolioIds, List<RecommendationItem> items,
+                List<String> satisfiedConstraints, List<String> unsatisfiedConstraints, List<String> reasonCodes) {
             this.recommendationBatchId = requireText(
                     recommendationBatchId, "recommendationBatchId");
             this.contentVersion = requireText(contentVersion, "contentVersion");
@@ -252,10 +268,25 @@ public sealed interface TaskResultPayload
             this.selectedPortfolioIds = copyTextList(
                     selectedPortfolioIds, "selectedPortfolioIds");
             this.items = copyItems(items);
+            if (actualSize != this.items.size() || actualSize != this.selectedPortfolioIds.size()) {
+                throw new IllegalArgumentException("actualSize must match items and selectedPortfolioIds");
+            }
+            if (new java.util.LinkedHashSet<>(this.selectedPortfolioIds).size() != this.selectedPortfolioIds.size()) {
+                throw new IllegalArgumentException("selectedPortfolioIds must be distinct");
+            }
+            this.actualSize = actualSize;
+            this.candidateScope = Objects.requireNonNull(candidateScope, "candidateScope");
             this.satisfiedConstraints = copyTextList(
                     satisfiedConstraints, "satisfiedConstraints");
             this.unsatisfiedConstraints = copyTextList(
                     unsatisfiedConstraints, "unsatisfiedConstraints");
+            this.reasonCodes = copyTextList(reasonCodes, "reasonCodes");
+            if (actualSize == requestedSize && !this.reasonCodes.isEmpty()) {
+                throw new IllegalArgumentException("exact recommendation must not carry reasonCodes");
+            }
+            if (actualSize < requestedSize && this.reasonCodes.isEmpty()) {
+                throw new IllegalArgumentException("partial recommendation requires reasonCodes");
+            }
         }
 
         public String getRecommendationBatchId() { return recommendationBatchId; }
@@ -264,10 +295,13 @@ public sealed interface TaskResultPayload
         public String getAudienceRole() { return audienceRole; }
         public Set<String> getCapabilityCodes() { return capabilityCodes; }
         public int getRequestedSize() { return requestedSize; }
+        public int getActualSize() { return actualSize; }
+        public CandidateScope getCandidateScope() { return candidateScope; }
         public List<String> getSelectedPortfolioIds() { return selectedPortfolioIds; }
         public List<RecommendationItem> getItems() { return items; }
         public List<String> getSatisfiedConstraints() { return satisfiedConstraints; }
         public List<String> getUnsatisfiedConstraints() { return unsatisfiedConstraints; }
+        public List<String> getReasonCodes() { return reasonCodes; }
 
         @Override
         public boolean equals(Object other) {
