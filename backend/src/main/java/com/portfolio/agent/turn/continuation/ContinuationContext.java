@@ -1,10 +1,20 @@
 package com.portfolio.agent.turn.continuation;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        property = "kind", visible = false)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = ContinuationContext.PortfolioFact.class, name = "PORTFOLIO_FACT"),
+        @JsonSubTypes.Type(value = ContinuationContext.PortfolioComparison.class,
+                name = "PORTFOLIO_COMPARISON"),
+        @JsonSubTypes.Type(value = ContinuationContext.Recommendation.class, name = "RECOMMENDATION")
+})
 public abstract sealed class ContinuationContext permits
         ContinuationContext.PortfolioFact,
         ContinuationContext.PortfolioComparison,
@@ -33,9 +43,9 @@ public abstract sealed class ContinuationContext permits
         private final Set<String> subjectIds;
         private final Set<String> facets;
         public PortfolioFact(
-                String handle, String conversationId, String release, Instant expiresAt,
+                String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
                 Set<String> subjectIds, Set<String> facets) {
-            super(handle, conversationId, release, expiresAt);
+            super(contextHandle, conversationId, contentReleaseId, expiresAt);
             this.subjectIds = texts(subjectIds, "subjectIds", false);
             this.facets = texts(facets, "facets", false);
         }
@@ -48,9 +58,9 @@ public abstract sealed class ContinuationContext permits
         private final Set<String> subjectIds;
         private final Set<String> dimensions;
         public PortfolioComparison(
-                String handle, String conversationId, String release, Instant expiresAt,
+                String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
                 Set<String> subjectIds, Set<String> dimensions) {
-            super(handle, conversationId, release, expiresAt);
+            super(contextHandle, conversationId, contentReleaseId, expiresAt);
             this.subjectIds = texts(subjectIds, "subjectIds", false);
             if (this.subjectIds.size() < 2) throw new IllegalArgumentException("comparison requires subjects");
             this.dimensions = texts(dimensions, "dimensions", false);
@@ -71,11 +81,11 @@ public abstract sealed class ContinuationContext permits
         private final List<ResultItem> selectedResults;
 
         public Recommendation(
-                String handle, String conversationId, String release, Instant expiresAt,
+                String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
                 boolean allPublishedAuthorized, Set<String> authorizedSubjectIds, Set<String> constraints,
                 Set<String> preferences, Set<String> exclusions, int resultLimit,
                 String parentContextHandle, List<ResultItem> selectedResults) {
-            super(handle, conversationId, release, expiresAt);
+            super(contextHandle, conversationId, contentReleaseId, expiresAt);
             this.allPublishedAuthorized = allPublishedAuthorized;
             this.authorizedSubjectIds = texts(
                     authorizedSubjectIds, "authorizedSubjectIds", allPublishedAuthorized);

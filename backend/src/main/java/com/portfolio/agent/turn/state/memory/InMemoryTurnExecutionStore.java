@@ -2,8 +2,10 @@ package com.portfolio.agent.turn.state.memory;
 
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionRecord;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
+import com.portfolio.agent.turn.lifecycle.AgentStateStore;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 
 import java.security.MessageDigest;
@@ -17,8 +19,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Local/test implementation with the same single terminal gate as the JDBC store. */
-public final class InMemoryTurnExecutionStore implements TurnExecutionStore {
+public final class InMemoryTurnExecutionStore implements AgentStateStore {
     private final ConcurrentHashMap<UUID, TurnExecutionRecord> records = new ConcurrentHashMap<>();
+    private final ClarificationStore clarificationStore;
+
+    public InMemoryTurnExecutionStore() {
+        this(new ClarificationStore(
+                java.time.Clock.systemUTC(), java.time.Duration.ofMinutes(5)));
+    }
+    public InMemoryTurnExecutionStore(ClarificationStore clarificationStore) {
+        this.clarificationStore = clarificationStore;
+    }
 
     @Override public ClaimResult claim(
             UUID requestId, String conversationId, byte[] fingerprint,
@@ -55,10 +66,11 @@ public final class InMemoryTurnExecutionStore implements TurnExecutionStore {
         return result.get();
     }
 
-    @Override public boolean complete(
+    @Override public synchronized boolean complete(
             UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
-            List<ClarificationStore.Record> challenges, Instant completedAt) {
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate, Instant completedAt) {
         AtomicBoolean completed = new AtomicBoolean();
         records.computeIfPresent(requestId, (key, existing) -> {
             if (existing.getStatus() != TurnExecutionRecord.Status.CLAIMED
@@ -66,6 +78,7 @@ public final class InMemoryTurnExecutionStore implements TurnExecutionStore {
                 return existing;
             }
             completed.set(true);
+            challenges.forEach(clarificationStore::save);
             return existing.completed(snapshot, contexts, challenges, completedAt);
         });
         return completed.get();
@@ -88,5 +101,23 @@ public final class InMemoryTurnExecutionStore implements TurnExecutionStore {
     @Override public void clearConversation(String conversationId) {
         records.entrySet().removeIf(value ->
                 value.getValue().getConversationId().equals(conversationId));
+        clarificationStore.clear(conversationId);
+    }
+    @Override public Optional<ContinuationContext> findContext(
+            String conversationId, String contextHandle, Instant now) {
+        return records.values().stream()
+                .filter(value -> value.getStatus() == TurnExecutionRecord.Status.COMPLETED)
+                .filter(value -> value.getConversationId().equals(conversationId))
+                .flatMap(value -> value.getContexts().stream())
+                .filter(value -> value.getContextHandle().equals(contextHandle))
+                .filter(value -> now.isBefore(value.getExpiresAt())).findFirst();
+    }
+    @Override public ClarificationStore.ConsumeResult consumeClarification(
+            String clarificationId, String conversationId, byte[] resumeTokenHash,
+            String currentContentReleaseId,
+            ClarificationStore.ClarificationAnswer answer, Instant now) {
+        return clarificationStore.consume(
+                clarificationId, conversationId, resumeTokenHash,
+                currentContentReleaseId, answer);
     }
 }

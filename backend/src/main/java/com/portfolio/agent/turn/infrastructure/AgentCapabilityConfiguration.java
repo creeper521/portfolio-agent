@@ -25,13 +25,14 @@ import com.portfolio.agent.turn.capability.synthesis.CrossDomainTaskExecutor;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
-import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
+import com.portfolio.agent.turn.lifecycle.AgentStateStore;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore;
+import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.projection.PublicAgentTurnProjector;
 import com.portfolio.agent.turn.planning.GoalBoundaryPolicy;
 import com.portfolio.agent.turn.planning.GoalInterpretationInputFactory;
@@ -155,29 +156,45 @@ public class AgentCapabilityConfiguration {
     }
 
     @Bean
-    MigrationAgentTurnRuntime conversationalAgentRuntime(
-            PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
-            SemanticPlanCompiler compiler, SemanticTurnEngine semanticTurnEngine) {
-        return new MigrationAgentTurnRuntime(
-                knowledgeGateway, goalResolver, compiler, semanticTurnEngine);
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "portfolio.conversation-context", name = "mode", havingValue = "IN_MEMORY")
+    AgentStateStore inMemoryTurnExecutionStore() {
+        return new com.portfolio.agent.turn.state.memory.InMemoryTurnExecutionStore();
     }
 
     @Bean
-    TurnExecutionStore turnExecutionStore(
-            com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties properties) {
-        return properties.getMode()
-                == com.portfolio.agent.answer.context.domain.ContextStoreMode.IN_MEMORY
-                ? new com.portfolio.agent.turn.state.memory.InMemoryTurnExecutionStore()
-                : new com.portfolio.agent.turn.state.UnavailableTurnExecutionStore();
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "portfolio.conversation-context", name = "mode",
+            havingValue = "DISABLED", matchIfMissing = true)
+    AgentStateStore unavailableTurnExecutionStore() {
+        return new com.portfolio.agent.turn.state.UnavailableTurnExecutionStore();
+    }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "portfolio.conversation-context", name = "mode",
+            havingValue = "IN_MEMORY")
+    ConversationSessionStore inMemoryConversationSessionStore() {
+        return new InMemoryConversationSessionStore();
+    }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "portfolio.conversation-context", name = "mode",
+            havingValue = "DISABLED", matchIfMissing = true)
+    ConversationSessionStore unavailableConversationSessionStore() {
+        return new InMemoryConversationSessionStore();
     }
 
     @Bean
     AgentTurnLifecycleService agentTurnLifecycleService(
             PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
             SemanticPlanCompiler compiler, SemanticTurnEngine engine,
-            TurnExecutionStore store) {
-        byte[] fingerprintSecret = randomSecret();
-        byte[] sessionSecret = randomSecret();
+            AgentStateStore store, ConversationSessionStore sessionStore,
+            com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties properties) {
+        byte[] configuredTokenKey = decodeOrRandom(properties.getCrypto().getCurrentTokenKey());
+        byte[] fingerprintSecret = configuredTokenKey;
+        byte[] sessionSecret = configuredTokenKey;
         java.time.Clock clock = java.time.Clock.systemUTC();
         ContextMutationPlanner planner = new ContextMutationPlanner(() -> {
             byte[] value = new byte[24];
@@ -189,7 +206,7 @@ public class AgentCapabilityConfiguration {
                 new PublicAgentTurnProjector(), planner, store,
                 new RequestFingerprintFactory(fingerprintSecret),
                 new ConversationSessionResolver(
-                        new InMemoryConversationSessionStore(), sessionSecret,
+                        sessionStore, sessionSecret,
                         clock, java.time.Duration.ofMinutes(30)),
                 clock, java.time.Duration.ofSeconds(30),
                 java.time.Duration.ofSeconds(10), java.time.Duration.ofMinutes(30));
@@ -199,5 +216,16 @@ public class AgentCapabilityConfiguration {
         byte[] value = new byte[32];
         new java.security.SecureRandom().nextBytes(value);
         return value;
+    }
+
+    private byte[] decodeOrRandom(String encoded) {
+        if (encoded == null || encoded.isBlank()) return randomSecret();
+        try {
+            byte[] value = java.util.Base64.getDecoder().decode(encoded.trim());
+            if (value.length < 32) throw new IllegalStateException("Agent token key is too short");
+            return value;
+        } catch (IllegalArgumentException failure) {
+            throw new IllegalStateException("Agent token key must be base64", failure);
+        }
     }
 }

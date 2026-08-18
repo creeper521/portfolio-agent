@@ -1,8 +1,16 @@
 package com.portfolio.agent.turn.projection;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Objects;
 
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        property = "kind", visible = false)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = PublicPresentation.Sectioned.class, name = "SECTIONED"),
+        @JsonSubTypes.Type(value = PublicPresentation.Recommendation.class, name = "RECOMMENDATION")
+})
 public sealed interface PublicPresentation
         permits PublicPresentation.Sectioned, PublicPresentation.Recommendation {
     Kind getKind();

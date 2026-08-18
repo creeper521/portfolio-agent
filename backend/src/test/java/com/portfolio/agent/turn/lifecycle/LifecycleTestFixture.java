@@ -25,7 +25,7 @@ final class LifecycleTestFixture {
     private LifecycleTestFixture() { }
 
     static AgentTurnLifecycleService service(
-            TurnExecutionStore store, ResolvedGoalSet resolved) {
+            AgentStateStore store, ResolvedGoalSet resolved) {
         PortfolioKnowledgeGateway knowledge = mock(PortfolioKnowledgeGateway.class);
         RuntimeAnswerContent content = mock(RuntimeAnswerContent.class);
         when(content.getProjects()).thenReturn(java.util.List.of());

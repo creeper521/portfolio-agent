@@ -23,7 +23,8 @@ class TurnExecutionStoreContractTest {
         PublicAgentTurn snapshot = new PublicAgentTurn.Conversational(
                 requestId, "你好", List.of());
         assertThat(store.complete(
-                requestId, fingerprint, snapshot, List.of(), List.of(), now.plusSeconds(1))).isTrue();
+                requestId, fingerprint, snapshot, List.of(), List.of(), null,
+                now.plusSeconds(1))).isTrue();
         TurnExecutionStore.ClaimResult replay = store.claim(
                 requestId, "conversation-1", fingerprint, now.plusSeconds(2), Duration.ofSeconds(10));
         assertThat(replay.status()).isEqualTo(TurnExecutionStore.ClaimResult.Status.REPLAY);
@@ -56,7 +57,7 @@ class TurnExecutionStoreContractTest {
         assertThat(store.complete(
                 requestId, fingerprint,
                 new PublicAgentTurn.Conversational(requestId, "不应提交", List.of()),
-                List.of(), List.of(), now.plusSeconds(2))).isFalse();
+                List.of(), List.of(), null, now.plusSeconds(2))).isFalse();
         assertThat(store.find(requestId).orElseThrow().getStatus())
                 .isEqualTo(TurnExecutionRecord.Status.CANCELLED);
     }

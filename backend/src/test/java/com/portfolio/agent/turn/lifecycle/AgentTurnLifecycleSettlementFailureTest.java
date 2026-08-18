@@ -11,10 +11,10 @@ import static org.mockito.Mockito.when;
 
 class AgentTurnLifecycleSettlementFailureTest {
     @Test void readOnlyAnswerSurvivesPostClaimSettlementFailureWithoutContinuation() {
-        TurnExecutionStore store = mock(TurnExecutionStore.class);
+        AgentStateStore store = mock(AgentStateStore.class);
         when(store.claim(any(), any(), any(), any(), any()))
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
-        when(store.complete(any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalStateException("state unavailable"));
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"));

@@ -39,6 +39,24 @@ class PublicAgentTurnInvariantTest {
                 .doesNotContain("degraded", "completedTasks", "execution");
     }
 
+    @Test void closedKindRoundTripsForEncryptedReplayCodec() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                com.fasterxml.jackson.databind.json.JsonMapper.builder()
+                        .addModule(new com.fasterxml.jackson.module.paramnames.ParameterNamesModule())
+                        .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                        .build();
+        PublicAgentTurn.Answer original = new PublicAgentTurnProjector().project(
+                java.util.UUID.randomUUID(), ProjectionTestFixtures.recommendationPlan(),
+                ProjectionTestFixtures.recommendationOutcome());
+        PublicAgentTurn decoded = mapper.readValue(
+                mapper.writeValueAsBytes(original), PublicAgentTurn.class);
+        assertThat(decoded).isInstanceOf(PublicAgentTurn.Answer.class);
+        PublicPresentation.Recommendation recommendation = (PublicPresentation.Recommendation)
+                ((PublicAgentTurn.Answer) decoded).getAnswer().getGoalResults().getFirst().getPresentation();
+        assertThat(recommendation.getActualSize()).isEqualTo(1);
+        assertThat(recommendation.getItems().getFirst().getRoute()).isEqualTo("/projects/project-a");
+    }
+
     @Test void sourceReferencesMustResolveThroughTheSingleCatalog() {
         AnswerGoalResult goal = new AnswerGoalResult(
                 "goal-one", "目标", AnswerGoalResult.Coverage.FULL,

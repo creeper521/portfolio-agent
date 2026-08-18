@@ -44,9 +44,13 @@ public final class ConversationSessionResolver {
 
     public void commit(Resolution resolution) {
         if (resolution.status() != Status.TENTATIVE) return;
-        store.save(new ConversationSessionStore.Session(
+        store.save(pendingSession(resolution));
+    }
+    public ConversationSessionStore.Session pendingSession(Resolution resolution) {
+        if (resolution.status() != Status.TENTATIVE) return null;
+        return new ConversationSessionStore.Session(
                 resolution.conversationId(), resolution.tokenHash(),
-                clock.instant(), clock.instant().plus(ttl)));
+                clock.instant(), clock.instant().plus(ttl));
     }
     public void clear(Resolution resolution) { store.revoke(resolution.conversationId()); }
 

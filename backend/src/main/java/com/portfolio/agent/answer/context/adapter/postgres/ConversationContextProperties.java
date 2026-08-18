@@ -1,21 +1,20 @@
 package com.portfolio.agent.answer.context.adapter.postgres;
 
-import com.portfolio.agent.answer.context.domain.ContextStoreMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
 @ConfigurationProperties(prefix = "portfolio.conversation-context")
 public class ConversationContextProperties {
-    private ContextStoreMode mode = ContextStoreMode.DISABLED;
+    private Mode mode = Mode.DISABLED;
     private Duration idleTtl = Duration.ofHours(24);
     private Duration absoluteTtl = Duration.ofDays(7);
     private Duration cleanupInterval = Duration.ofMinutes(15);
     private int cleanupBatchSize = 500;
     private final Crypto crypto = new Crypto();
 
-    public ContextStoreMode getMode() { return mode; }
-    public void setMode(ContextStoreMode mode) { this.mode = mode; }
+    public Mode getMode() { return mode; }
+    public void setMode(Mode mode) { this.mode = mode; }
     public Duration getIdleTtl() { return idleTtl; }
     public void setIdleTtl(Duration idleTtl) { this.idleTtl = idleTtl; }
     public Duration getAbsoluteTtl() { return absoluteTtl; }
@@ -63,4 +62,5 @@ public class ConversationContextProperties {
         public String getPreviousPayloadKey() { return previousPayloadKey; }
         public void setPreviousPayloadKey(String value) { previousPayloadKey = value; }
     }
+    public enum Mode { DISABLED, IN_MEMORY, POSTGRESQL }
 }

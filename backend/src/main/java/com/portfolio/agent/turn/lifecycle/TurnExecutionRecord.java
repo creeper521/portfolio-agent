@@ -50,6 +50,15 @@ public final class TurnExecutionRecord {
                 requestId, conversationId, fingerprint, Status.CLAIMED, leaseExpiresAt,
                 null, List.of(), List.of(), null);
     }
+    public static TurnExecutionRecord restore(
+            UUID requestId, String conversationId, byte[] fingerprint,
+            Status status, Instant leaseExpiresAt, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges, Instant terminalAt) {
+        return new TurnExecutionRecord(
+                requestId, conversationId, fingerprint, status, leaseExpiresAt,
+                snapshot, contexts, challenges, terminalAt);
+    }
     public TurnExecutionRecord completed(
             PublicAgentTurn snapshot, List<ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges, Instant completedAt) {

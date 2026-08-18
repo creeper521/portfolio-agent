@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.continuation;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,8 +20,8 @@ public final class ClarificationChallenge {
         this.prompt = text(prompt, "prompt");
         this.fields = List.copyOf(Objects.requireNonNull(fields, "fields"));
         if (this.fields.isEmpty()) throw new IllegalArgumentException("fields are required");
-        this.affectedGoalIds = List.copyOf(
-                Objects.requireNonNull(affectedGoalIds, "affectedGoalIds"));
+        this.affectedGoalIds = affectedGoalIds == null
+                ? List.of() : List.copyOf(affectedGoalIds);
     }
     public String getClarificationId() { return clarificationId; }
     public String getPrompt() { return prompt; }
@@ -27,6 +29,12 @@ public final class ClarificationChallenge {
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<String> getAffectedGoalIds() { return affectedGoalIds; }
 
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
+            property = "kind", visible = false)
+    @JsonSubTypes({
+            @JsonSubTypes.Type(value = SingleChoiceField.class, name = "SINGLE_CHOICE"),
+            @JsonSubTypes.Type(value = TextField.class, name = "TEXT")
+    })
     public sealed interface Field permits SingleChoiceField, TextField {
         Kind getKind();
         String getFieldId();

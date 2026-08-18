@@ -22,7 +22,7 @@ class AgentTurnLifecycleReplayTest {
         store.claim(requestId, conversationId, fingerprint,
                 LifecycleTestFixture.NOW, Duration.ofSeconds(10));
         PublicAgentTurn snapshot = new PublicAgentTurn.Conversational(requestId, "你好", List.of());
-        store.complete(requestId, fingerprint, snapshot, List.of(), List.of(),
+        store.complete(requestId, fingerprint, snapshot, List.of(), List.of(), null,
                 LifecycleTestFixture.NOW.plusSeconds(1));
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("不应执行"));

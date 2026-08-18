@@ -154,7 +154,7 @@ public final class ClarificationStore {
     public record ResolvedAnswer(String fieldId, String bindingKey, String text) { }
     public record ConsumeResult(Status status, Record record, ResolvedAnswer answer) {
         public ConsumeResult { Objects.requireNonNull(status, "status"); }
-        static ConsumeResult of(Status status) { return new ConsumeResult(status, null, null); }
+        public static ConsumeResult of(Status status) { return new ConsumeResult(status, null, null); }
     }
     public enum Status {
         CONSUMED, NOT_FOUND, EXPIRED, ALREADY_CONSUMED,

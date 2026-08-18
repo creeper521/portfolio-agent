@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.lifecycle;
 
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 
 import java.time.Duration;
@@ -17,7 +18,9 @@ public interface TurnExecutionStore {
     boolean complete(
             UUID requestId, byte[] requestFingerprint, PublicAgentTurn publicSnapshot,
             List<ContinuationContext> contexts,
-            List<ClarificationStore.Record> challenges, Instant completedAt);
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            Instant completedAt);
     boolean cancel(UUID requestId, String conversationId, Instant cancelledAt);
     Optional<TurnExecutionRecord> find(UUID requestId);
     void clearConversation(String conversationId);

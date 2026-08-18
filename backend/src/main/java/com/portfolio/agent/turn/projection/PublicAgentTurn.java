@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.projection;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.portfolio.agent.turn.continuation.ClarificationChallenge;
 
 import java.util.List;
@@ -8,6 +10,16 @@ import java.util.Objects;
 import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        property = "kind", visible = false)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = PublicAgentTurn.Answer.class, name = "ANSWER"),
+        @JsonSubTypes.Type(value = PublicAgentTurn.Clarification.class, name = "CLARIFICATION"),
+        @JsonSubTypes.Type(value = PublicAgentTurn.Conversational.class, name = "CONVERSATIONAL"),
+        @JsonSubTypes.Type(value = PublicAgentTurn.Boundary.class, name = "BOUNDARY"),
+        @JsonSubTypes.Type(value = PublicAgentTurn.CapabilityUnavailable.class,
+                name = "CAPABILITY_UNAVAILABLE")
+})
 public abstract sealed class PublicAgentTurn permits
         PublicAgentTurn.Answer,
         PublicAgentTurn.Clarification,
@@ -50,14 +62,14 @@ public abstract sealed class PublicAgentTurn permits
     }
 
     public static final class Conversational extends MessageTurn {
-        public Conversational(UUID requestId, String message, List<SuggestedAction> actions) {
-            super(requestId, message, actions);
+        public Conversational(UUID requestId, String message, List<SuggestedAction> suggestedActions) {
+            super(requestId, message, suggestedActions);
         }
         @Override public Kind getKind() { return Kind.CONVERSATIONAL; }
     }
     public static final class Boundary extends CodedMessageTurn {
-        public Boundary(UUID requestId, String code, String message, List<SuggestedAction> actions) {
-            super(requestId, code, message, actions);
+        public Boundary(UUID requestId, String code, String message, List<SuggestedAction> suggestedActions) {
+            super(requestId, code, message, suggestedActions);
         }
         @Override public Kind getKind() { return Kind.BOUNDARY; }
     }
@@ -65,8 +77,8 @@ public abstract sealed class PublicAgentTurn permits
         private final boolean retryable;
         public CapabilityUnavailable(
                 UUID requestId, String code, String message,
-                boolean retryable, List<SuggestedAction> actions) {
-            super(requestId, code, message, actions); this.retryable = retryable;
+                boolean retryable, List<SuggestedAction> suggestedActions) {
+            super(requestId, code, message, suggestedActions); this.retryable = retryable;
         }
         @Override public Kind getKind() { return Kind.CAPABILITY_UNAVAILABLE; }
         public boolean isRetryable() { return retryable; }
@@ -76,9 +88,10 @@ public abstract sealed class PublicAgentTurn permits
             permits Conversational, CodedMessageTurn {
         private final String message;
         private final List<SuggestedAction> suggestedActions;
-        private MessageTurn(UUID requestId, String message, List<SuggestedAction> actions) {
+        private MessageTurn(UUID requestId, String message, List<SuggestedAction> suggestedActions) {
             super(requestId); this.message = text(message, "message");
-            this.suggestedActions = List.copyOf(Objects.requireNonNull(actions, "actions"));
+            this.suggestedActions = List.copyOf(
+                    Objects.requireNonNull(suggestedActions, "suggestedActions"));
         }
         public String getMessage() { return message; }
         public List<SuggestedAction> getSuggestedActions() { return suggestedActions; }
@@ -86,8 +99,10 @@ public abstract sealed class PublicAgentTurn permits
     public abstract static sealed class CodedMessageTurn extends MessageTurn
             permits Boundary, CapabilityUnavailable {
         private final String code;
-        private CodedMessageTurn(UUID requestId, String code, String message, List<SuggestedAction> actions) {
-            super(requestId, message, actions); this.code = text(code, "code");
+        private CodedMessageTurn(
+                UUID requestId, String code, String message,
+                List<SuggestedAction> suggestedActions) {
+            super(requestId, message, suggestedActions); this.code = text(code, "code");
         }
         public String getCode() { return code; }
     }
