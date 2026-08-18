@@ -73,12 +73,13 @@ export type BlockSourceScope = 'GENERAL' | 'PORTFOLIO'
 export type SemanticSourceDomain = 'GENERAL' | 'PORTFOLIO' | 'SYNTHESIS'
 export type TurnAction = 'ASK' | 'CONFIRM_PLAN' | 'REGENERATE_PLAN'
 // P5 stp-v2：公共 Semantic Turn Contract 版本（设计 §17.2 / handoff §7）。
-export type SemanticTurnContract = 'stp-v1' | 'stp-v2'
+export type SemanticTurnContract = 'stp-v1' | 'stp-v2' | 'stp-v3'
 export type TurnDisposition =
   | 'READY'
   | 'PARTIAL_READY'
   | 'CONFIRMATION_REQUIRED'
   | 'CLARIFICATION_REQUIRED'
+  | 'CONVERSATIONAL'
   | 'BOUNDARY'
   | 'REJECTED'
   // P5 stp-v2：Strict Context 失效（设计 §13.9 / handoff §3）。优先于 answerResolution，
@@ -93,7 +94,6 @@ export type TaskSummaryStatus =
   | 'BLOCKED'
   | 'FAILED'
   | 'CANCELLED'
-export type PlanOutcome = 'SUCCEEDED' | 'PARTIAL' | 'NO_RESULT' | 'FAILED' | 'CANCELLED'
 export type PortfolioKnowledgeFacet =
   | 'OVERVIEW'
   | 'RESPONSIBILITY'
@@ -371,7 +371,6 @@ export interface AgentTurnTaskSummaryResponse {
 }
 
 export interface AgentTurnOutcomeResponse {
-  planOutcome: PlanOutcome
   taskSummary?: AgentTurnTaskSummaryResponse
   [field: string]: unknown
 }
@@ -448,6 +447,33 @@ export interface AgentTurnBaseResponse {
   [field: string]: unknown
 }
 
+export type AgentInteractionKind =
+  | 'ANSWER'
+  | 'CONVERSATIONAL'
+  | 'CLARIFICATION'
+  | 'CONFIRMATION'
+  | 'BOUNDARY'
+  | 'CAPABILITY_UNAVAILABLE'
+
+export interface AgentTurnV3Response {
+  contractVersion: 'stp-v3'
+  disposition?: never
+  interaction: {
+    kind: AgentInteractionKind
+    message?: string
+    actionIds?: string[]
+    reasonCodes?: string[]
+  }
+  plan?: AgentTurnDisplayPlanResponse
+  planChange?: AgentTurnPlanChangeResponse
+  execution?: ExecutionDisplayPlanResponse
+  outcome?: AgentTurnOutcomeResponse
+  completedTasks?: AgentTurnCompletedTaskResponse[]
+  clarification?: AgentTurnClarificationResponse
+  planConfirmation?: AgentTurnPlanConfirmationResponse
+  [field: string]: unknown
+}
+
 export interface AgentTurnReadyResponse extends AgentTurnBaseResponse {
   disposition: 'READY' | 'PARTIAL_READY'
   outcome: AgentTurnOutcomeResponse
@@ -506,6 +532,7 @@ export interface RawAgentTurnResponse {
 }
 
 export type AgentTurnPayload = AgentTurnResponse | RawAgentTurnResponse
+  | AgentTurnV3Response
 
 export interface AnswerResponse {
   requestId?: string

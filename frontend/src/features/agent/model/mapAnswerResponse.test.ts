@@ -514,7 +514,7 @@ describe('mapAnswerResponse', () => {
       agentTurn: {
         contractVersion: 'stp-v1',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '模型任务',

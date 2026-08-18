@@ -52,7 +52,7 @@ describe('mapAnswerSuccess', () => {
     response.agentTurn = {
       contractVersion: 'stp-v1',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [{
         displayIndex: '01',
         goalLabel: '介绍公开项目',
@@ -97,7 +97,7 @@ describe('mapAnswerSuccess', () => {
     response.agentTurn = {
       contractVersion: 'stp-v1',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [],
       execution: {
         contractVersion: 'p3-display-v1',
@@ -134,7 +134,7 @@ describe('mapAnswerSuccess', () => {
     response.agentTurn = {
       contractVersion: 'stp-v1',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [],
       // 契约错误：FINAL 快照不得残留运行中状态（handoff §7）。
       execution: {

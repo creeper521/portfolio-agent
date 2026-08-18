@@ -33,7 +33,7 @@ describe('semantic turn response mapping', () => {
     response.agentTurn = {
       contractVersion: 'stp-v1',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [],
     }
     response.blocks = [{

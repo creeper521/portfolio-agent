@@ -31,7 +31,6 @@ export function partialSuccessResponse(): AnswerResponse {
         }],
       },
       outcome: {
-        planOutcome: 'PARTIAL',
         taskSummary: {
           displayMode: 'EXPANDED',
           totalCount: 3,

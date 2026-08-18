@@ -630,7 +630,6 @@ function p4CompositionResponse(scenario: P4CompositionScenario): Record<string, 
       contractVersion: 'stp-v1',
       disposition: 'READY',
       outcome: {
-        planOutcome: 'SUCCEEDED',
         taskSummary: {
           displayMode: 'EXPANDED',
           totalCount: completedTasks.length,
@@ -820,7 +819,6 @@ function localClarificationSemanticResponse(response: Record<string, unknown>) {
       disposition: 'PARTIAL_READY',
       plan: displayPlan(2),
       outcome: {
-        planOutcome: 'PARTIAL',
         taskSummary: {
           displayMode: 'EXPANDED', totalCount: 2, answeredCount: 1,
           notSupportedCount: 1, emptyCount: 0, blockedCount: 1,
@@ -901,7 +899,6 @@ function readySemanticTurn(
     disposition: 'READY',
     plan: displayPlan(totalCount),
     outcome: {
-      planOutcome: totalCount === answeredCount ? 'SUCCEEDED' : 'PARTIAL',
       taskSummary: {
         displayMode,
         totalCount,
@@ -1230,7 +1227,7 @@ function closurePresetAnswer(): Record<string, unknown> {
     agentTurn: {
       contractVersion: 'stp-v2',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [{
         displayIndex: '01',
         goalLabel: '介绍 SQL 审计与故障排查工具项目',
@@ -1293,7 +1290,7 @@ function closureRecommendationAnswer(
     agentTurn: {
       contractVersion: 'stp-v2',
       disposition: partial ? 'PARTIAL_READY' : 'READY',
-      outcome: { planOutcome: partial ? 'PARTIAL' : 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [{
         displayIndex: '01',
         goalLabel: `推荐 ${requestedSize} 个公开项目`,
@@ -1343,7 +1340,7 @@ function closureSecondItemAnswer(): Record<string, unknown> {
     agentTurn: {
       contractVersion: 'stp-v2',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [{
         displayIndex: '01',
         goalLabel: '介绍推荐结果中的第二项',

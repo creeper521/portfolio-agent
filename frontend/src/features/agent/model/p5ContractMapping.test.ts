@@ -17,7 +17,7 @@ function stpV2Answer(): AnswerResponse {
     agentTurn: {
       contractVersion: 'stp-v2',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [
         {
           displayIndex: '01',
@@ -46,6 +46,23 @@ function firstTask(response: AnswerResponse): Record<string, unknown> {
 }
 
 describe('P5 stp-v2 contract mapping', () => {
+  it('uses stp-v3 interaction.kind as the public UI authority without disposition', () => {
+    const view = mapSemanticTurnResponse({
+      contractVersion: 'stp-v3',
+      interaction: {
+        kind: 'CONVERSATIONAL',
+        message: '我可以继续围绕公开项目交流。',
+        actionIds: ['preset-a'],
+      },
+    })
+
+    expect(view).toMatchObject({
+      contractVersion: 'stp-v3',
+      interactionKind: 'CONVERSATIONAL',
+      disposition: 'CONVERSATIONAL',
+      completedTasks: [],
+    })
+  })
   let reportSpy: ReturnType<typeof vi.spyOn>
   beforeEach(() => {
     reportSpy = vi.spyOn(frontendDiagnostics, 'report')

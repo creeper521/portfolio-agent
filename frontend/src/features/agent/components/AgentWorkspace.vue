@@ -21,6 +21,7 @@ import {
   isPresetContractStale,
   isPresetContractUnavailable,
 } from '../api/presetContractRetry'
+import { askWithV3ContractFallback } from '../api/v3ContractFallback'
 import { createRequestToken } from '../api/createRequestToken'
 import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
 import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
@@ -587,7 +588,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         }
       })
 
-    const response = await askWithPresetContractRetry({
+    const response = await askWithV3ContractFallback({
         turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
         requestToken: preparedContext.requestToken,
         action: preparedContext.action,
@@ -613,7 +614,7 @@ async function requestAnswer(context: AnswerRequestContext, appendUser: boolean)
         resumeToken: session.resumeToken,
         // P3：从结果继续时发送顶层 contextReference（handoff §3.2）。
         contextReference: preparedContext.contextReference,
-      }, askQuestion)
+      }, (request) => askWithPresetContractRetry(request, askQuestion))
     if (disposed || request !== requestVersion) return
     // P3：200 响应先按 responseKind 分流（handoff §4）。requestVersion 是单调 attempt 序号，
     // 更早 attempt 的迟到响应（含旧 Token）在此被丢弃，无法覆盖新回执（handoff §4/§14）。

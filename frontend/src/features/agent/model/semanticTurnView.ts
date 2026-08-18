@@ -255,12 +255,12 @@ export function hasExecutionAnswerConflict(answer: {
 
 export interface SemanticTurnView {
   // P5 stp-v2：迁移期同时接受 stp-v1/stp-v2（设计 §17.2）。
-  contractVersion: 'stp-v1' | 'stp-v2'
+  contractVersion: 'stp-v1' | 'stp-v2' | 'stp-v3'
+  interactionKind?: import('./answerTypes').AgentInteractionKind
   disposition: TurnDisposition
   displayPlan?: DisplayPlanView
   clarification?: ClarificationView
   planChange?: PlanChangeView
-  planOutcome?: 'SUCCEEDED' | 'PARTIAL' | 'NO_RESULT' | 'FAILED' | 'CANCELLED'
   taskSummary?: TaskSummaryView
   completedTasks: CompletedTaskView[]
   // P3：与 plan 同级的最终执行快照（handoff §7）。非法 FINAL（含运行中状态）被丢弃。
@@ -268,6 +268,12 @@ export interface SemanticTurnView {
 }
 
 export function mapSemanticTurnResponse(response: AgentTurnPayload): SemanticTurnView {
+  if (isV3Response(response)) {
+    return mapV3SemanticTurnResponse(response)
+  }
+  if (response.contractVersion === 'stp-v3') {
+    return { contractVersion: 'stp-v3', disposition: 'REJECTED', completedTasks: [] }
+  }
   if (!isKnownAgentTurnResponse(response)) {
     return mapUnknownBoundary(response)
   }
@@ -289,13 +295,58 @@ export function mapSemanticTurnResponse(response: AgentTurnPayload): SemanticTur
       ? {}
       : { clarification: mapClarification(clarificationResponse) }),
     ...(response.planChange === undefined ? {} : { planChange: mapPlanChange(response.planChange) }),
-    ...(readyResponse?.outcome.planOutcome === undefined
-      ? {}
-      : { planOutcome: readyResponse.outcome.planOutcome }),
     ...(readyResponse?.outcome.taskSummary === undefined
       ? {}
       : { taskSummary: mapTaskSummary(readyResponse.outcome.taskSummary) }),
     completedTasks: readyResponse?.completedTasks.map(mapCompletedTask) ?? [],
+    ...(response.execution === undefined ? {} : { execution: mapExecution(response.execution) }),
+  }
+}
+
+function isV3Response(
+  response: AgentTurnPayload,
+): response is import('./answerTypes').AgentTurnV3Response {
+  if (response.contractVersion !== 'stp-v3') return false
+  const interaction = (response as { interaction?: unknown }).interaction
+  if (typeof interaction !== 'object' || interaction === null) return false
+  const kind = (interaction as { kind?: unknown }).kind
+  return kind === 'ANSWER' || kind === 'CONVERSATIONAL' || kind === 'CLARIFICATION'
+    || kind === 'CONFIRMATION' || kind === 'BOUNDARY' || kind === 'CAPABILITY_UNAVAILABLE'
+}
+
+function mapV3SemanticTurnResponse(
+  response: import('./answerTypes').AgentTurnV3Response,
+): SemanticTurnView {
+  const kind = response.interaction.kind
+  const disposition: TurnDisposition = kind === 'ANSWER'
+    ? (response.clarification === undefined ? 'READY' : 'PARTIAL_READY')
+    : kind === 'CONVERSATIONAL'
+      ? 'CONVERSATIONAL'
+      : kind === 'CLARIFICATION'
+        ? 'CLARIFICATION_REQUIRED'
+        : kind === 'CONFIRMATION'
+          ? 'CONFIRMATION_REQUIRED'
+          : kind === 'BOUNDARY'
+            ? 'BOUNDARY'
+            : 'REJECTED'
+  const confirmationReference = response.planConfirmation === undefined
+    ? null
+    : mapPendingPlanReference(response.planConfirmation.pendingPlanReference)
+  return {
+    contractVersion: 'stp-v3',
+    interactionKind: kind,
+    disposition,
+    ...(response.plan === undefined
+      ? {}
+      : { displayPlan: mapDisplayPlan(response.plan, confirmationReference) }),
+    ...(response.clarification === undefined
+      ? {}
+      : { clarification: mapClarification(response.clarification) }),
+    ...(response.planChange === undefined ? {} : { planChange: mapPlanChange(response.planChange) }),
+    ...(response.outcome?.taskSummary === undefined
+      ? {}
+      : { taskSummary: mapTaskSummary(response.outcome.taskSummary) }),
+    completedTasks: response.completedTasks?.map(mapCompletedTask) ?? [],
     ...(response.execution === undefined ? {} : { execution: mapExecution(response.execution) }),
   }
 }

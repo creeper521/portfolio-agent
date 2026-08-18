@@ -1303,7 +1303,7 @@ describe('AgentWorkspace', () => {
     expect(askQuestionMock.mock.calls[1]?.[0].messages).toEqual([])
   })
 
-  it('requests stp-v2 by default and retries with stp-v1 only after explicit consent', async () => {
+  it('keeps stp-v2 as the default writer until the v3 release gate is complete', async () => {
     askQuestionMock
       .mockRejectedValueOnce(new PortfolioApiError('unsupported contract', {
         kind: 'HTTP',
@@ -1321,16 +1321,8 @@ describe('AgentWorkspace', () => {
 
     expect(askQuestionMock).toHaveBeenCalledTimes(1)
     expect(askQuestionMock.mock.calls[0]?.[0].agentTurnContract).toBe('stp-v2')
-    const basicMode = wrapper.get('[data-answer-recovery-action="continue-basic-mode"]')
-    expect(basicMode.text()).toBe('以基础模式继续')
-
-    await basicMode.trigger('click')
-    await flushPromises()
-
-    expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock.mock.calls[1]?.[0].agentTurnContract).toBe('stp-v1')
-    expect(askQuestionMock.mock.calls[1]?.[0].requestToken)
-      .not.toBe(askQuestionMock.mock.calls[0]?.[0].requestToken)
+    expect(wrapper.get('[data-answer-recovery-action="continue-basic-mode"]')
+      .text()).toBe('以基础模式继续')
     expect(wrapper.findAll('.message--user')).toHaveLength(1)
   })
 
@@ -2294,7 +2286,7 @@ describe('AgentWorkspace · 体验闭环', () => {
       agentTurn: {
         contractVersion: 'stp-v2' as const,
         disposition: 'READY' as const,
-        outcome: { planOutcome: 'SUCCEEDED' as const },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '推荐两个项目',

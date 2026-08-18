@@ -1343,7 +1343,7 @@ describe('ConversationThread P5 source-domain blocks', () => {
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [
           {
             displayIndex: '01',
@@ -1435,7 +1435,7 @@ describe('ConversationThread P5 source-domain blocks', () => {
       agentTurn: {
         contractVersion: 'stp-v1',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '作品集事实',
@@ -1503,7 +1503,7 @@ describe('ConversationThread P5 degradation, caveats and partial completion', ()
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'PARTIAL' },
+        outcome: {},
         completedTasks: [portfolioSectionTask()],
       },
     } as never)
@@ -1526,7 +1526,7 @@ describe('ConversationThread P5 degradation, caveats and partial completion', ()
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'PARTIAL' },
+        outcome: {},
         completedTasks: [portfolioSectionTask()],
       },
     } as never)
@@ -1554,7 +1554,7 @@ describe('ConversationThread P5 degradation, caveats and partial completion', ()
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [portfolioSectionTask('block-01')],
       },
     } as never)
@@ -1583,7 +1583,7 @@ describe('ConversationThread P5 degradation, caveats and partial completion', ()
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [portfolioSectionTask('block-01')],
       },
     } as never)
@@ -1657,7 +1657,7 @@ describe('ConversationThread P5 context invalidation and result continuation', (
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '回答',
@@ -1681,7 +1681,7 @@ describe('ConversationThread P5 context invalidation and result continuation', (
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '推荐后端项目',
@@ -1730,7 +1730,7 @@ describe('ConversationThread P5 answer-composition trust layer', () => {
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [
           {
             displayIndex: '01',
@@ -1768,7 +1768,7 @@ describe('ConversationThread P5 answer-composition trust layer', () => {
       agentTurn: {
         contractVersion: 'stp-v2',
         disposition: 'READY',
-        outcome: { planOutcome: 'SUCCEEDED' },
+        outcome: {},
         completedTasks: [{
           displayIndex: '01',
           goalLabel: '单个任务',

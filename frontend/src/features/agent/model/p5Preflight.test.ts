@@ -24,7 +24,7 @@ describe('P5 stp-v2 preflight safety', () => {
     const view = mapSemanticTurnResponse({
       contractVersion: 'stp-v2',
       disposition: 'READY',
-      outcome: { planOutcome: 'SUCCEEDED' },
+      outcome: {},
       completedTasks: [],
     })
     expect(view.completedTasks).toEqual([])

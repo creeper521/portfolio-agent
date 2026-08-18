@@ -10,7 +10,7 @@ function readyTurn(completedTasks: Array<Record<string, unknown>>): AgentTurnPay
   return {
     contractVersion: 'stp-v1',
     disposition: 'READY',
-    outcome: { planOutcome: 'SUCCEEDED' },
+    outcome: {},
     completedTasks,
   } as unknown as AgentTurnPayload
 }
