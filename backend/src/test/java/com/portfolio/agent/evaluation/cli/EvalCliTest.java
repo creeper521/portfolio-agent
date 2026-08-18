@@ -164,11 +164,10 @@ class EvalCliTest {
     }
 
     @Test
-    void providerCommandRunsThreeMockTrialsWithoutRealProviderAuthorization()
+    void providerCommandDoesNotManufactureLegacyConversationMockTrials()
             throws Exception {
-        // HIGH risk + 3 trials makes the case provider-eligible; without
-        // --authorize-real-provider the deterministic mock seam runs all three
-        // trials and the report records providerInvoked instead of INCOMPLETE.
+        // The removed universal conversation model cannot be recreated as a
+        // mock compatibility bridge. Typed capability eval is added separately.
         Path casesDir = Files.createDirectories(tempDir.resolve("cases"));
         Path caseFile = casesDir.resolve("high-case.json");
         Files.writeString(caseFile, """
@@ -222,16 +221,12 @@ class EvalCliTest {
                 "--output-dir", tempDir.resolve("out-provider-mock").toString(),
         });
 
-        // mock answers carry no subject, so SUBJECT_MATCH fails and the run is
-        // a real FAIL verdict — the pipeline ran, it did not fake a pass
-        assertThat(exit).isEqualTo(EvalCli.EXIT_FAIL);
+        assertThat(exit).isEqualTo(EvalCli.EXIT_INCOMPLETE);
         String report = Files.readString(
                 tempDir.resolve("out-provider-mock/report.json"), StandardCharsets.UTF_8);
         assertThat(report).contains("\"mode\":\"PROVIDER\"");
-        assertThat(report).contains("\"verdict\":\"FAIL\"");
-        assertThat(report).contains("\"providerInvoked\":true");
-        assertThat(report).contains("\"trialIndex\":3");
-        assertThat(report).doesNotContain("\"verdict\":\"INCOMPLETE\"");
+        assertThat(report).contains("\"verdict\":\"INCOMPLETE\"");
+        assertThat(report).doesNotContain("\"providerInvoked\":true");
     }
 
     @Test

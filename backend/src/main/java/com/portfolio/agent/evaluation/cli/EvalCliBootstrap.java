@@ -129,24 +129,6 @@ public final class EvalCliBootstrap {
                                 baseUrl, bundle));
             }
         }
-        if (providerAuthorized) {
-            // Real provider: only the Spring-assembled production seam bean is
-            // accepted; when the model is disabled the bean reports a closed
-            // DISABLED failure instead of fabricating a response.
-            com.portfolio.agent.answer.gateway.ConversationalModelPort real =
-                    createModelPort();
-            if (real != null) {
-                executors.add(new com.portfolio.agent.evaluation.execution
-                        .ProviderEvalExecutor(real, "REAL"));
-            }
-        } else {
-            // Default provider mode is mock-only: the deterministic mock seam
-            // exercises the full provider pipeline without any external call.
-            executors.add(new com.portfolio.agent.evaluation.execution
-                    .ProviderEvalExecutor(
-                            new com.portfolio.agent.evaluation.execution
-                                    .MockConversationalModelPort(), "MOCK"));
-        }
         return new EvalHarness(
                 executors,
                 new DeterministicEvalGrader(),
@@ -166,21 +148,6 @@ public final class EvalCliBootstrap {
         try {
             return context.getBean(
                     com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor.class);
-        } catch (RuntimeException failure) {
-            return null;
-        }
-    }
-
-    private com.portfolio.agent.answer.gateway.ConversationalModelPort
-            createModelPort() {
-        org.springframework.context.ConfigurableApplicationContext context =
-                springContext();
-        if (context == null) {
-            return null;
-        }
-        try {
-            return context.getBean(
-                    com.portfolio.agent.answer.gateway.ConversationalModelPort.class);
         } catch (RuntimeException failure) {
             return null;
         }
