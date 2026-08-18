@@ -121,7 +121,9 @@ public final class AgentTurnLifecycleService {
             case CANCELLED: return Result.state(Status.CANCELLED, 0);
             case CLAIMED: break;
         }
-        CancellationSignal cancellation = activeTurns.register(command.getRequestId());
+        CancellationSignal cancellation = new CancellationSignal();
+        Runnable cancelAction = cancellation::cancel;
+        activeTurns.claimOwner(command.getRequestId(), cancelAction);
         try {
             Execution execution = executeClaimed(
                     conversationId, resumeTokenHash, command, cancellation);
@@ -136,7 +138,7 @@ public final class AgentTurnLifecycleService {
                 return new Result(Status.COMPLETED, execution.readOnlyTurn(), 0, true, null);
             }
         } finally {
-            activeTurns.remove(command.getRequestId(), cancellation);
+            activeTurns.releaseOwner(command.getRequestId(), cancelAction);
         }
     }
 
