@@ -3,6 +3,8 @@ package com.portfolio.agent.turn.lifecycle;
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
+import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
+import com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.planning.GoalResolver;
 import com.portfolio.agent.turn.planning.ResolvedGoalSet;
@@ -37,7 +39,14 @@ final class LifecycleTestFixture {
                 mock(SemanticTurnEngine.class), new PublicAgentTurnProjector(),
                 new ContextMutationPlanner(() -> "context_handle_123"), store,
                 new RequestFingerprintFactory(new byte[32]),
+                sessionResolver(),
                 Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(10),
                 Duration.ofSeconds(5), Duration.ofMinutes(10));
+    }
+
+    static ConversationSessionResolver sessionResolver() {
+        return new ConversationSessionResolver(
+                new InMemoryConversationSessionStore(), new byte[32],
+                Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofMinutes(30));
     }
 }

@@ -6,6 +6,7 @@ import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
 import com.portfolio.agent.turn.continuation.ClarificationChallenge;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
+import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.ContinuationReference;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
@@ -45,6 +46,7 @@ public final class AgentTurnLifecycleService {
     private final ContextMutationPlanner mutationPlanner;
     private final TurnExecutionStore store;
     private final RequestFingerprintFactory fingerprintFactory;
+    private final ConversationSessionResolver sessionResolver;
     private final ActiveTurnRegistry activeTurns = new ActiveTurnRegistry();
     private final Clock clock;
     private final Duration leaseDuration;
@@ -56,6 +58,7 @@ public final class AgentTurnLifecycleService {
             SemanticPlanCompiler planCompiler, SemanticTurnEngine engine,
             PublicAgentTurnProjector projector, ContextMutationPlanner mutationPlanner,
             TurnExecutionStore store, RequestFingerprintFactory fingerprintFactory,
+            ConversationSessionResolver sessionResolver,
             Clock clock, Duration leaseDuration,
             Duration executionDuration, Duration contextTtl) {
         this.knowledgeGateway = java.util.Objects.requireNonNull(knowledgeGateway);
@@ -66,13 +69,34 @@ public final class AgentTurnLifecycleService {
         this.mutationPlanner = java.util.Objects.requireNonNull(mutationPlanner);
         this.store = java.util.Objects.requireNonNull(store);
         this.fingerprintFactory = java.util.Objects.requireNonNull(fingerprintFactory);
+        this.sessionResolver = java.util.Objects.requireNonNull(sessionResolver);
         this.clock = java.util.Objects.requireNonNull(clock);
         this.leaseDuration = positive(leaseDuration, "leaseDuration");
         this.executionDuration = positive(executionDuration, "executionDuration");
         this.contextTtl = positive(contextTtl, "contextTtl");
     }
 
-    public Result execute(String conversationId, byte[] resumeTokenHash, AgentTurnCommand command) {
+    public Result execute(String bearerToken, AgentTurnCommand command) {
+        ConversationSessionResolver.Resolution session =
+                sessionResolver.resolve(bearerToken, command.getRequestId());
+        if (session.status() == ConversationSessionResolver.Status.INVALID) {
+            return Result.state(Status.UNAUTHORIZED, 0);
+        }
+        Result result = executeResolved(
+                session.conversationId(), session.tokenHash(), command);
+        boolean canCommitSession = (result.status() == Status.COMPLETED
+                || result.status() == Status.REPLAY) && !result.settlementFailed();
+        if (canCommitSession) sessionResolver.commit(session);
+        if (canCommitSession || session.status() == ConversationSessionResolver.Status.AUTHENTICATED) {
+            return result.withConversation(new ConversationMetadata(
+                    session.conversationId(), session.issuedToken() == null
+                    ? null : session.issuedToken().encode()));
+        }
+        return result;
+    }
+
+    private Result executeResolved(
+            String conversationId, byte[] resumeTokenHash, AgentTurnCommand command) {
         byte[] fingerprint = fingerprintFactory.fingerprint(command);
         TurnExecutionStore.ClaimResult claim;
         try {
@@ -83,7 +107,7 @@ public final class AgentTurnLifecycleService {
             return Result.state(Status.STORE_UNAVAILABLE, 0);
         }
         switch (claim.status()) {
-            case REPLAY: return new Result(Status.REPLAY, claim.replay(), 0, false);
+            case REPLAY: return new Result(Status.REPLAY, claim.replay(), 0, false, null);
             case IN_PROGRESS: return Result.state(Status.IN_PROGRESS, claim.retryAfterSeconds());
             case CONFLICT: return Result.state(Status.CONFLICT, 0);
             case CANCELLED: return Result.state(Status.CANCELLED, 0);
@@ -98,22 +122,49 @@ public final class AgentTurnLifecycleService {
                         command.getRequestId(), fingerprint, execution.settledTurn(),
                         execution.contexts(), execution.challenges(), clock.instant());
                 if (!completed) return Result.state(Status.CANCELLED, 0);
-                return new Result(Status.COMPLETED, execution.settledTurn(), 0, false);
+                return new Result(Status.COMPLETED, execution.settledTurn(), 0, false, null);
             } catch (RuntimeException settlementFailure) {
-                return new Result(Status.COMPLETED, execution.readOnlyTurn(), 0, true);
+                return new Result(Status.COMPLETED, execution.readOnlyTurn(), 0, true, null);
             }
         } finally {
             activeTurns.remove(command.getRequestId(), cancellation);
         }
     }
 
-    public boolean cancel(String conversationId, UUID requestId) {
+    public CancelStatus cancel(String bearerToken, UUID requestId) {
+        ConversationSessionResolver.Resolution session = sessionResolver.resolve(bearerToken, requestId);
+        if (session.status() == ConversationSessionResolver.Status.INVALID) return CancelStatus.UNAUTHORIZED;
         activeTurns.cancel(requestId);
         try {
-            return store.cancel(requestId, conversationId, clock.instant());
+            if (store.cancel(requestId, session.conversationId(), clock.instant())) {
+                return CancelStatus.CANCELLED;
+            }
+            return store.find(requestId).map(value ->
+                    value.getStatus() == TurnExecutionRecord.Status.COMPLETED
+                            ? CancelStatus.ALREADY_COMPLETED
+                            : value.getStatus() == TurnExecutionRecord.Status.CANCELLED
+                            ? CancelStatus.CANCELLED : CancelStatus.NOT_FOUND)
+                    .orElse(CancelStatus.NOT_FOUND);
         } catch (RuntimeException failure) {
-            return false;
+            return CancelStatus.STORE_UNAVAILABLE;
         }
+    }
+
+    public ConversationStatus currentConversation(String bearerToken) {
+        ConversationSessionResolver.Resolution session =
+                sessionResolver.resolve(bearerToken, UUID.randomUUID());
+        return session.status() == ConversationSessionResolver.Status.AUTHENTICATED
+                ? new ConversationStatus(true, session.conversationId())
+                : new ConversationStatus(false, null);
+    }
+
+    public boolean clearConversation(String bearerToken) {
+        ConversationSessionResolver.Resolution session =
+                sessionResolver.resolve(bearerToken, UUID.randomUUID());
+        if (session.status() != ConversationSessionResolver.Status.AUTHENTICATED) return false;
+        store.clearConversation(session.conversationId());
+        sessionResolver.clear(session);
+        return true;
     }
 
     private Execution executeClaimed(
@@ -226,10 +277,20 @@ public final class AgentTurnLifecycleService {
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges) { }
     public record Result(Status status, PublicAgentTurn turn, long retryAfterSeconds,
-                         boolean settlementFailed) {
+                         boolean settlementFailed, ConversationMetadata conversation) {
         static Result state(Status status, long retryAfter) {
-            return new Result(status, null, retryAfter, false);
+            return new Result(status, null, retryAfter, false, null);
+        }
+        Result withConversation(ConversationMetadata value) {
+            return new Result(status, turn, retryAfterSeconds, settlementFailed, value);
         }
     }
-    public enum Status { COMPLETED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED, STORE_UNAVAILABLE }
+    public record ConversationMetadata(String conversationId, String resumeToken) { }
+    public record ConversationStatus(boolean authenticated, String conversationId) { }
+    public enum Status {
+        COMPLETED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED, STORE_UNAVAILABLE, UNAUTHORIZED
+    }
+    public enum CancelStatus {
+        CANCELLED, ALREADY_COMPLETED, NOT_FOUND, UNAUTHORIZED, STORE_UNAVAILABLE
+    }
 }

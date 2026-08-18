@@ -22,7 +22,7 @@ class AgentTurnLifecycleSettlementFailureTest {
                 UUID.randomUUID(), new AgentTurnCommand.FreeText("你好"), null, null);
 
         AgentTurnLifecycleService.Result result = service.execute(
-                "conversation-1", new byte[]{1}, command);
+                null, command);
         assertThat(result.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
         assertThat(result.settlementFailed()).isTrue();
         assertThat(result.turn()).isInstanceOf(

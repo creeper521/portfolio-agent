@@ -17,7 +17,9 @@ class AgentTurnLifecycleReplayTest {
         AgentTurnCommand command = new AgentTurnCommand.Ask(
                 requestId, new AgentTurnCommand.FreeText("你好"), null, null);
         byte[] fingerprint = new RequestFingerprintFactory(new byte[32]).fingerprint(command);
-        store.claim(requestId, "conversation-1", fingerprint,
+        String conversationId = LifecycleTestFixture.sessionResolver()
+                .resolve(null, requestId).conversationId();
+        store.claim(requestId, conversationId, fingerprint,
                 LifecycleTestFixture.NOW, Duration.ofSeconds(10));
         PublicAgentTurn snapshot = new PublicAgentTurn.Conversational(requestId, "你好", List.of());
         store.complete(requestId, fingerprint, snapshot, List.of(), List.of(),
@@ -26,7 +28,7 @@ class AgentTurnLifecycleReplayTest {
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("不应执行"));
 
         AgentTurnLifecycleService.Result result = service.execute(
-                "conversation-1", new byte[]{1}, command);
+                null, command);
         assertThat(result.status()).isEqualTo(AgentTurnLifecycleService.Status.REPLAY);
         assertThat(result.turn()).isSameAs(snapshot);
     }
