@@ -456,3 +456,70 @@ Backend S5-01 已冻结以下新增合同，Frontend Agent 可以立即并行处
 | 旧 v1/v2/v3、`answerTypes`、旧 mapper/component/API 原子删除 | Backend 新 API contract tests 通过并给出切换信号；不得提前加兼容桥 |
 
 Frontend Agent 每关闭一项请在本节追加文件与验证结果。Backend 主开发继续推进 S5-02—S5-06，不等待前端实现。
+
+### 16.2 Backend API/Conversation 合同解除信号（2026-08-18）
+
+以下合同已由 Backend target tests 固定，§16 表格前五项不再阻断，Frontend Agent 可立即完成最终接线：
+
+- 四条路径：`POST /api/agent/turns`、`DELETE /api/agent/turns/{requestId}`、`GET /api/agent/conversations/current`、`DELETE /api/agent/conversations/current`；
+- POST 成功响应仍以根级 `requestId/kind/...` 表示 PublicAgentTurn，不增加 `turn` wrapper；根级 additive envelope 为：
+
+```json
+{
+  "conversation": {
+    "conversationId": "uuid",
+    "resumeToken": "首轮签发或恢复轮换时才出现"
+  }
+}
+```
+
+- Frontend 把 `resumeToken` 仅保存于当前 tab 的 sessionStorage；后续请求发送 `Authorization: Bearer <resumeToken>`，不得写入 body/URL/log/diagnostics。metadata 未携带新 token 时保留当前 token；clear 成功后删除；
+- 所有 Agent 成功/错误/204 响应均 `Cache-Control: no-store`；合法 PublicAgentTurn 为 200；
+- POST 错误：400 malformed；401 `RESUME_TOKEN_INVALID`；409 `TURN_IN_PROGRESS`（同时 `Retry-After` 与 `error.retryAfterSeconds`）、`IDEMPOTENCY_KEY_CONFLICT`、`TURN_CANCELLED`；503 `AGENT_STATE_UNAVAILABLE`；
+- cancel：204 cancel-wins/already-cancelled；409 `TURN_ALREADY_COMPLETED`；404 `TURN_NOT_FOUND`；已有会话带 Bearer，首轮可不带；前端先结束本地 pending，再 best-effort DELETE + abort 原 POST；
+- GET current 只返回 `{conversationId,status:"ACTIVE"}`，无 message/answer/handle/selected item；DELETE current 成功 204；两者必须 Bearer；
+- clarification command 沿用 §4 已冻结结构：`RESOLVE_CLARIFICATION + clarificationId + answer(CHOICE choiceId | TEXT text)`，不发送 fieldId/prompt/subject binding；
+- API error 仍为 `{requestId?,error:{code,message,retryable,retryAfterSeconds?}}`。
+
+Backend tests：`ConversationSessionResolverTest`、`AgentTurnControllerContractTest`、`AgentConversationControllerTest` 与 lifecycle replay 组合 8/8 通过。Frontend 旧链原子删除仍需等新 API 接线、全量 tests/build/E2E 通过后执行。
+
+### 16.1 Frontend Agent 处理结果（2026-08-18，§16.1—§16.5 全部关闭）
+
+**§16.1 sectionKind 闭集 — 已关闭：**
+
+- `model/publicAgentTurn.ts`：新增 `PublicSectionKind` 九值闭合联合（BACKGROUND/RESPONSIBILITY/SOLUTION/VERIFICATION/STATUS/BOUNDARY/GENERAL_PRINCIPLE/PORTFOLIO_EXAMPLE/RELATION），`PublicSection.sectionKind` 收紧为该联合；
+- `model/publicAgentTurnMapper.ts`：`parseSection` 对闭集外值 fail-closed，SECTIONED.sections 与 RECOMMENDATION.supportingSections 共用同一校验。
+
+**§16.2 RECOMMENDATION 冻结字段 — 已关闭：**
+
+- 类型：`RecommendationPresentation` 补齐 `requestedSize/actualSize/items/unsatisfiedConstraints/incompleteReasons/supportingSections`；`RecommendationItem` 补齐 `resultItemId?/label/summary/route/reasons/support`；
+- mapper 不变量：`actualSize === items.length`；items 1—5 项且 ≤ requestedSize；数量不足 ⇔ 必须提供 incompleteReasons、数量完整 ⇔ 不得携带（双向 fail-closed）；item route 必须站内相对；item/supportingSection support 必须由唯一 SourceCatalog 解析；label/summary/reasons 必填。
+
+**§16.3 golden fixture 消费 — 已关闭：**
+
+- `publicAgentTurnMapper.test.ts`：answer-complete 断言改为两个 FULL Goal（SECTIONED + RECOMMENDATION golden 全字段、E-01/E-02 目录、双 continuation）；新增 9 个负向用例（闭集外 sectionKind、actualSize 错、空 items、超 requestedSize、缺口字段双向不一致、绝对 route、来源不可解析、缺 summary、reasons 非数组）；
+- `publicAgentTurnGoldenFixtures.test.ts`：新增 RECOMMENDATION presentation 覆盖断言（golden 已由 Backend 增补，本项从协调项转为已验证）。
+
+**§16.4 fixture-driven 组件 — 已关闭（新增 11 组件 + 8 测试文件）：**
+
+- `PublicAgentTurnMessage.vue`：`switch(turn.kind)` 分发五种闭合 variants，事件只上抛 `select-action`/`submit-clarification`；
+- `AnswerTurnView.vue`：多 Goal 后端顺序分组、PARTIAL 顶部"已完成 N/M 个目标"、NO_RESULT 无空正文、local clarification 贴首个受影响 Goal 并注明"其余 N 个目标将继续"、"查看全部来源"抽屉入口；
+- `GoalResultView.vue`：Goal 正文→Notice→来源层级；FULL 极简不显示覆盖标签，非 FULL 文字+符号表达（不只靠颜色）；
+- `SectionedPresentationView.vue`：章节按后端顺序，克制支持文本（已审核公开证据/通用知识/基于上述内容归纳），来源 chip 由唯一 catalog 解析为"E-01 · 标题"并链接站内 route；
+- `RecommendationPresentationView.vue`：卡片后端顺序、数量缺口只说明一次（计数+incompleteReasons+未满足约束）、`@media (max-width: 640px)` 单列、resultItemId 不进可见文本；
+- `ClarificationTurnView.vue` + `ClarificationChallengeForm.vue`：critical 独立渲染、fieldset/legend + 原生 radio、TEXT limit+计数、提交只携带 clarificationId+闭合答案（上抛为 RESOLVE 载荷形状）；
+- `ConversationalTurnView/BoundaryTurnView/CapabilityUnavailableTurnView.vue`：message+稳定码+可重试文字+动作行，无 answer 语义结构；
+- `SourceDrawer.vue`：role=dialog+aria-modal、Esc/遮罩/按钮三路关闭、Tab 焦点陷阱、关闭后焦点返回触发元素、ContentReleaseId 只在来源详情；
+- `SuggestedActionRow.vue`：动作原样转发（actionId/inputText/continuation），不按 label/位置重建协议；reduced-motion 关闭过渡；
+- 测试覆盖：local/critical clarification、FULL/PARTIAL/NONE、来源抽屉开关/Esc/焦点、恶意脚本 `<script>`/`<img onerror>` 纯文本渲染（DOM 无 script/img 元素）、窄屏单列与 reduced-motion CSS 合同（`?raw` 断言）、heading 层级 h3/h4、radio label 关联。
+- 支撑文件：`model/publicAgentTurnLabels.ts`（纯展示标签）、`src/types/rawImports.d.ts`（`*.vue?raw` 类型声明）。
+
+**§16.5 新组件边界 — 遵守：** 新组件树独立存在、只消费 mapper 输出；未接入旧 endpoint adapter，未修改 AgentWorkspace/ConversationThread，未删除旧链。
+
+**验证：**
+
+- `npm.cmd --prefix frontend test -- --run`：77 文件 **799/799 通过**（上轮 763 + 新增 36）；
+- `npm.cmd --prefix frontend run build`（含 vue-tsc）：通过；
+- 未 commit/push；除前端责任区与本文档外未修改任何文件。
+
+**剩余依赖 Backend 的阻断项（§16 表格不变）：** agentTurnApi 最终接线、conversation envelope/sessionStorage、cancel AbortController+DELETE、clear/resume/handle 转发、clarification 提交 API、旧链原子删除——均等待对应 S5-0x 冻结信号。
