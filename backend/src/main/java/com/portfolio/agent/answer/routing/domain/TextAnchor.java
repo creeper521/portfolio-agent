@@ -51,6 +51,21 @@ public final class TextAnchor {
         throw new IllegalArgumentException("anchor occurrence is absent from currentInput");
     }
 
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof TextAnchor that)) return false;
+        return occurrence == that.occurrence && Objects.equals(verbatimText, that.verbatimText);
+    }
+
+    @Override
+    public int hashCode() { return Objects.hash(verbatimText, occurrence); }
+
+    @Override
+    public String toString() {
+        return "TextAnchor{length=" + verbatimText.length() + ", occurrence=" + occurrence + '}';
+    }
+
     public static final class TextSpan {
 
         private final int startInclusive;

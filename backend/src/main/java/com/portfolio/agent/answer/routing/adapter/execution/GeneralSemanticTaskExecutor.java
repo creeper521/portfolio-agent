@@ -11,18 +11,18 @@ import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.PortfolioGroundingContext;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
 import com.portfolio.agent.answer.gateway.ConversationalModelPort;
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SemanticTaskType;
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
-import com.portfolio.agent.answer.routing.domain.SemanticTask;
-import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
-import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
-import com.portfolio.agent.answer.routing.domain.TaskOutcome;
-import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
-import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
-import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
+import com.portfolio.agent.turn.execution.SemanticTaskExecutor;
+import com.portfolio.agent.turn.execution.TaskArtifact;
+import com.portfolio.agent.turn.execution.TaskExecutionContext;
+import com.portfolio.agent.turn.execution.TaskExecutionResult;
+import com.portfolio.agent.turn.execution.TaskProvenance;
+import com.portfolio.agent.turn.execution.TaskTerminalException;
+import com.portfolio.agent.turn.execution.TaskTerminalReason;
 import com.portfolio.agent.answer.general.service.GeneralMaterialPipeline;
 import com.portfolio.agent.answer.runtime.ModelOperation;
 import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
+import com.portfolio.agent.turn.planning.SemanticTask;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,37 +49,26 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
     }
 
     @Override
-    public TaskSourceDomain getSourceDomain() {
-        return TaskSourceDomain.GENERAL;
+    public SemanticTask.SourceDomain getSourceDomain() {
+        return SemanticTask.SourceDomain.GENERAL;
     }
 
     @Override
-    public TaskOutcome execute(SemanticTaskExecutionContext context) {
+    public TaskExecutionResult execute(TaskExecutionContext context) {
         Objects.requireNonNull(context, "context");
         return execute(
-                context.getSemanticTask(),
-                context.getDependencyOutcomes(),
-                context.getExpectedContentVersion());
+                context.getTask(), context.getContentReleaseId());
     }
 
-    /** Compatibility adapter retained until the P3-E production cutover. */
-    public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
-        return execute(task, availableDependencyOutcomes, "compatibility-general-v1");
-    }
-
-    private TaskOutcome execute(
-            SemanticTask task,
-            List<TaskOutcome> availableDependencyOutcomes,
-            String expectedContentVersion) {
+    private TaskExecutionResult execute(SemanticTask task, String expectedContentVersion) {
         Objects.requireNonNull(task, "task");
-        Objects.requireNonNull(availableDependencyOutcomes, "availableDependencyOutcomes");
-        if (task.getSourceDomain() != TaskSourceDomain.GENERAL || !isSupported(task.getTaskType())) {
-            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.GENERAL,
-                    false, "GENERAL_TASK_UNSUPPORTED");
+        if (task.getSourceDomain() != SemanticTask.SourceDomain.GENERAL || !isSupported(task.getType())) {
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.REJECTED, TaskTerminalReason.INPUT_REJECTED);
         }
         if (!providerAccess.isAllowed()) {
-            return TaskOutcome.capabilityUnavailable(
-                    task.getTaskId(), TaskSourceDomain.GENERAL, "GENERAL_PROVIDER_UNAVAILABLE");
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.FAILED, TaskTerminalReason.CAPABILITY_UNAVAILABLE);
         }
         GeneralMaterialPipeline.Result generated = materialPipeline.generate(
                 question(task),
@@ -88,47 +77,46 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
                 expectedContentVersion,
                 audienceRole(task));
         if (!generated.isSuccessful() && "GENERAL_PROVIDER_UNAVAILABLE".equals(generated.getFailureCode())) {
-            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.GENERAL,
-                    "GENERAL_PROVIDER_UNAVAILABLE");
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.FAILED, TaskTerminalReason.CAPABILITY_UNAVAILABLE);
         }
         if (operationPolicies.get(ModelOperation.GENERAL_ANSWER_MATERIAL).getMode()
                 != com.portfolio.agent.answer.runtime.OperationMode.ENABLED) {
-            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.GENERAL,
-                    "GENERAL_ANSWER_MATERIAL_DISABLED");
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.FAILED, TaskTerminalReason.CAPABILITY_UNAVAILABLE);
         }
         if (!generated.isSuccessful()) {
-            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.GENERAL,
-                    false, "GENERAL_DRAFT_REJECTED");
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.NO_RESULT, TaskTerminalReason.NO_SUPPORTED_RESULT);
         }
-        return TaskOutcome.answered(
-                task.getTaskId(),
-                TaskSourceDomain.GENERAL,
-                generated.getPayload(),
-                TaskResultProvenance.direct(TaskSourceDomain.GENERAL, List.of(), List.of()),
-                false);
+        return TaskExecutionResult.full(new TaskArtifact(
+                generated.getMaterial(), generated.getPresentation(), TaskProvenance.none()));
     }
 
     private String question(SemanticTask task) {
-        if (task.getParameters() instanceof SemanticTaskParameters.GeneralExplanation explanation) {
-            return explanation.getTopic()
+        if (task.getParameters().getParameters()
+                instanceof UserGoalProposal.GeneralExplanationParameters explanation) {
+            return explanation.getTopicAnchor().getText()
                     + "\nDepth: " + explanation.getDepth()
-                    + "\nAudience: " + explanation.getAudienceRole();
+                    + "\nAudience: GUEST";
         }
-        if (task.getParameters() instanceof SemanticTaskParameters.GeneralComparison comparison) {
-            return String.join(" vs ", comparison.getSubjects())
+        if (task.getParameters().getParameters()
+                instanceof UserGoalProposal.GeneralComparisonParameters comparison) {
+            return String.join(" vs ", comparison.getSubjectAnchors().stream()
+                            .map(UserGoalProposal.InputAnchor::getText).toList())
                     + "\nDimensions: " + comparison.getDimensions()
-                    + "\nDepth: " + comparison.getDepth()
-                    + "\nAudience: " + comparison.getAudienceRole();
+                    + "\nDepth: STANDARD"
+                    + "\nAudience: GUEST";
         }
         throw new IllegalArgumentException("unsupported general task parameters");
     }
 
     private String audienceRole(SemanticTask task) {
-        if (task.getParameters() instanceof SemanticTaskParameters.GeneralExplanation explanation) {
-            return explanation.getAudienceRole().name();
-        }
-        if (task.getParameters() instanceof SemanticTaskParameters.GeneralComparison comparison) {
-            return comparison.getAudienceRole().name();
+        if (task.getParameters().getParameters()
+                instanceof UserGoalProposal.GeneralExplanationParameters
+                || task.getParameters().getParameters()
+                instanceof UserGoalProposal.GeneralComparisonParameters) {
+            return "GUEST";
         }
         throw new IllegalArgumentException("unsupported general task parameters");
     }
@@ -144,8 +132,8 @@ public final class GeneralSemanticTaskExecutor implements SemanticTaskExecutor {
                 false);
     }
 
-    private boolean isSupported(SemanticTaskType taskType) {
-        return taskType == SemanticTaskType.GENERAL_EXPLANATION
-                || taskType == SemanticTaskType.GENERAL_COMPARISON;
+    private boolean isSupported(SemanticTask.Type taskType) {
+        return taskType == SemanticTask.Type.GENERAL_EXPLANATION
+                || taskType == SemanticTask.Type.GENERAL_COMPARISON;
     }
 }

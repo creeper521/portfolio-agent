@@ -1,17 +1,24 @@
 package com.portfolio.agent.answer.routing.adapter.execution;
 
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.TaskSourceDomain;
-import com.portfolio.agent.answer.routing.domain.SemanticTask;
-import com.portfolio.agent.answer.routing.domain.SemanticTaskExecutionContext;
-import com.portfolio.agent.answer.routing.domain.SemanticTaskParameters;
-import com.portfolio.agent.answer.routing.domain.TaskOutcome;
-import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
-import com.portfolio.agent.answer.routing.domain.TaskResultProvenance;
-import com.portfolio.agent.answer.routing.service.SemanticTaskExecutor;
+import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
+import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.answer.general.domain.GeneralAnswerMaterial;
 import com.portfolio.agent.answer.synthesis.domain.AllowedRelation;
+import com.portfolio.agent.answer.synthesis.service.CrossDomainExpressionPipeline;
 import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationPolicy;
 import com.portfolio.agent.answer.synthesis.service.DeterministicCrossDomainComposer;
-import com.portfolio.agent.answer.synthesis.service.CrossDomainExpressionPipeline;
+import com.portfolio.agent.turn.execution.SectionedTaskPresentation;
+import com.portfolio.agent.turn.execution.SemanticTaskExecutor;
+import com.portfolio.agent.turn.execution.TaskArtifact;
+import com.portfolio.agent.turn.execution.TaskExecutionContext;
+import com.portfolio.agent.turn.execution.TaskExecutionResult;
+import com.portfolio.agent.turn.execution.TaskProvenance;
+import com.portfolio.agent.turn.execution.TaskSemanticResult;
+import com.portfolio.agent.turn.execution.TaskTerminalException;
+import com.portfolio.agent.turn.execution.TaskTerminalReason;
+import com.portfolio.agent.turn.planning.SemanticTask;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -19,9 +26,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Bounded deterministic synthesis that only reuses successful upstream payloads and provenance. */
+/** Synthesis consumes semantic results only; rendered upstream text is never an input. */
 public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExecutor {
-
     private final boolean relationsEnabled;
     private final CrossDomainRelationPolicy relationPolicy;
     private final DeterministicCrossDomainComposer composer;
@@ -49,173 +55,91 @@ public final class DeterministicSynthesisTaskExecutor implements SemanticTaskExe
         this.expressionPipeline = expressionPipeline;
     }
 
-    @Override
-    public TaskSourceDomain getSourceDomain() {
-        return TaskSourceDomain.SYNTHESIS;
+    @Override public SemanticTask.SourceDomain getSourceDomain() {
+        return SemanticTask.SourceDomain.SYNTHESIS;
     }
 
-    @Override
-    public TaskOutcome execute(SemanticTaskExecutionContext context) {
-        Objects.requireNonNull(context, "context");
-        return execute(context.getSemanticTask(), context.getDependencyOutcomes(),
-                context.isModelExpressionAttemptAllowed());
-    }
-
-    /** Compatibility adapter retained until the P3-E production cutover. */
-    public TaskOutcome execute(SemanticTask task, List<TaskOutcome> availableDependencyOutcomes) {
-        return execute(task, availableDependencyOutcomes, false);
-    }
-
-    private TaskOutcome execute(
-            SemanticTask task, List<TaskOutcome> availableDependencyOutcomes,
-            boolean modelExpressionAttemptAllowed) {
-        Objects.requireNonNull(task, "task");
-        Objects.requireNonNull(availableDependencyOutcomes, "availableDependencyOutcomes");
-        if (task.getSourceDomain() != TaskSourceDomain.SYNTHESIS
-                || !(task.getParameters() instanceof SemanticTaskParameters.Synthesis parameters)) {
-            return TaskOutcome.notSupported(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    false, "SYNTHESIS_TASK_UNSUPPORTED");
+    @Override public TaskExecutionResult execute(TaskExecutionContext context) {
+        SemanticTask task = Objects.requireNonNull(context, "context").getTask();
+        if (task.getSourceDomain() != SemanticTask.SourceDomain.SYNTHESIS
+                || !(task.getParameters().getParameters()
+                instanceof UserGoalProposal.ApplyConceptParameters parameters)) {
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.REJECTED, TaskTerminalReason.INPUT_REJECTED);
         }
-        List<TaskOutcome> inputs = matchingSuccessfulInputs(parameters, availableDependencyOutcomes);
-        if (inputs.size() < 2) {
-            return TaskOutcome.blocked(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "SYNTHESIS_INPUT_INSUFFICIENT").withFulfillmentRole(task.getFulfillmentRole());
-        }
-        TaskResultProvenance provenance = provenance(inputs);
-        List<String> generalTexts = textsFor(inputs, TaskSourceDomain.GENERAL);
-        List<String> portfolioTexts = textsFor(inputs, TaskSourceDomain.PORTFOLIO);
-        if (generalTexts.isEmpty() || portfolioTexts.isEmpty()) {
-            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
+        GeneralAnswerMaterial general = context.getDependencyResults().stream()
+                .filter(GeneralAnswerMaterial.class::isInstance)
+                .map(GeneralAnswerMaterial.class::cast).findFirst().orElse(null);
+        PortfolioSemanticResult portfolio = context.getDependencyResults().stream()
+                .filter(PortfolioSemanticResult.class::isInstance)
+                .map(PortfolioSemanticResult.class::cast).findFirst().orElse(null);
+        if (general == null || portfolio == null) {
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.NO_RESULT, TaskTerminalReason.DEPENDENCY_UNAVAILABLE);
         }
         if (!relationsEnabled) {
-            if (task.getFulfillmentRole() == com.portfolio.agent.answer.routing.domain.TaskFulfillmentRole.OPTIONAL) {
-                return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                        "CROSS_DOMAIN_RELATION_DISABLED").withFulfillmentRole(task.getFulfillmentRole());
-            }
-            return TaskOutcome.capabilityUnavailable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "CROSS_DOMAIN_RELATION_DISABLED").withFulfillmentRole(task.getFulfillmentRole());
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.FAILED, TaskTerminalReason.CAPABILITY_UNAVAILABLE);
         }
-        Set<String> sharedConcepts = new LinkedHashSet<>();
-        for (com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.ComparisonDimension dimension
-                : parameters.getDimensions()) {
-            sharedConcepts.add(dimension.name());
-        }
-        String generalMaterial = String.join("\n", generalTexts);
-        String portfolioMaterial = String.join("\n", portfolioTexts);
+        List<String> generalStatements = general.getStatements().stream()
+                .map(statement -> statement.getText()).toList();
+        List<String> portfolioStatements = portfolio.getUnits().stream()
+                .map(unit -> unit.getClaim().getStatement()).toList();
+        Set<String> concepts = Set.of(parameters.getConceptAnchor().getText());
         List<AllowedRelation> relations = relationPolicy.allow(
-                inputs.getFirst().getTaskId(), inputs.getLast().getTaskId(),
-                generalMaterial, portfolioMaterial, sharedConcepts);
+                "general-result", "portfolio-result",
+                String.join("\n", generalStatements), String.join("\n", portfolioStatements), concepts);
         if (relations.isEmpty()) {
-            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.NO_RESULT, TaskTerminalReason.NO_SUPPORTED_RESULT);
         }
-        List<String> blocks = new ArrayList<>(
-                composer.composeAll(generalTexts, portfolioTexts, relations.getFirst()));
-        if (blocks.isEmpty()) {
-            return TaskOutcome.notApplicable(task.getTaskId(), TaskSourceDomain.SYNTHESIS,
-                    "NO_SUPPORTED_CROSS_DOMAIN_RELATION").withFulfillmentRole(task.getFulfillmentRole());
-        }
-        if (modelExpressionAttemptAllowed && expressionPipeline != null) {
-            expressionPipeline.express(generalMaterial, portfolioMaterial, relations.getFirst())
-                    .ifPresent(expression -> {
+        List<String> blocks = new ArrayList<>(composer.composeAll(
+                generalStatements, portfolioStatements, relations.getFirst()));
+        if (context.isModelExpressionAllowed() && expressionPipeline != null) {
+            expressionPipeline.express(
+                    String.join("\n", generalStatements), String.join("\n", portfolioStatements),
+                    relations.getFirst()).ifPresent(expression -> {
                         blocks.clear();
                         blocks.add(expression);
                     });
         }
-        boolean degraded = inputs.stream().anyMatch(TaskOutcome::isDegraded);
-        TaskOutcome.TaskEvidenceState evidenceState = inputs.stream().anyMatch(
-                outcome -> outcome.getEvidenceState() == TaskOutcome.TaskEvidenceState.PARTIAL)
-                ? TaskOutcome.TaskEvidenceState.PARTIAL
-                : TaskOutcome.TaskEvidenceState.SUFFICIENT;
-        TaskResultPayload.SynthesisResultPayload payload =
-                new TaskResultPayload.SynthesisResultPayload(blocks, provenance);
-        return TaskOutcome.create(
-                task.getTaskId(),
-                TaskOutcome.TaskExecutionStatus.SUCCEEDED,
-                TaskOutcome.TaskResolution.ANSWERED,
-                evidenceState,
-                degraded,
-                Set.of(),
-                null,
-                TaskSourceDomain.SYNTHESIS,
-                provenance,
-                payload).withFulfillmentRole(task.getFulfillmentRole());
+        if (blocks.isEmpty()) {
+            throw new TaskTerminalException(
+                    TaskTerminalException.Kind.NO_RESULT, TaskTerminalReason.NO_SUPPORTED_RESULT);
+        }
+        List<PublicSourceReferenceValue> sources = portfolio.getUnits().stream()
+                .map(unit -> unit.getSourceReference())
+                .map(value -> new PublicSourceReferenceValue(
+                        value.getReferenceKey(), value.getLabel(), value.getPublishedVersion(),
+                        value.getSourceType(), value.getSubjectRoute(), value.getEvidenceRoute()))
+                .collect(java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toMap(
+                                PublicSourceReferenceValue::getReferenceKey, value -> value,
+                                (left, right) -> left, java.util.LinkedHashMap::new),
+                        values -> List.copyOf(values.values())));
+        List<SectionedTaskPresentation.Section> sections = blocks.stream()
+                .map(block -> new SectionedTaskPresentation.Section(
+                        AnswerSectionType.SOLUTION, "关联", block, sources)).toList();
+        CrossDomainSemanticResult result = new CrossDomainSemanticResult(
+                parameters.getConceptAnchor().getText(), generalStatements, portfolioStatements);
+        return TaskExecutionResult.full(new TaskArtifact(
+                result, new SectionedTaskPresentation(null, sections),
+                new TaskProvenance(sources.stream()
+                        .map(PublicSourceReferenceValue::getReferenceKey).toList())));
     }
 
-    private List<TaskOutcome> matchingSuccessfulInputs(
-            SemanticTaskParameters.Synthesis parameters,
-            List<TaskOutcome> availableDependencyOutcomes) {
-        List<TaskOutcome> inputs = new ArrayList<>();
-        for (String sourceTaskId : parameters.getSourceTaskIds()) {
-            TaskOutcome match = find(sourceTaskId, availableDependencyOutcomes);
-            if (match != null && match.hasRenderablePayload() && match.getProvenance().isPresent()) {
-                inputs.add(match);
-            }
+    public static final class CrossDomainSemanticResult implements TaskSemanticResult {
+        private final String concept;
+        private final List<String> generalStatements;
+        private final List<String> portfolioStatements;
+        public CrossDomainSemanticResult(
+                String concept, List<String> generalStatements, List<String> portfolioStatements) {
+            this.concept = Objects.requireNonNull(concept, "concept");
+            this.generalStatements = List.copyOf(generalStatements);
+            this.portfolioStatements = List.copyOf(portfolioStatements);
         }
-        return List.copyOf(inputs);
-    }
-
-    private TaskOutcome find(String taskId, List<TaskOutcome> outcomes) {
-        for (TaskOutcome outcome : outcomes) {
-            if (taskId.equals(outcome.getTaskId())) {
-                return outcome;
-            }
-        }
-        return null;
-    }
-
-    private TaskResultProvenance provenance(List<TaskOutcome> inputs) {
-        Set<TaskSourceDomain> originDomains = new LinkedHashSet<>();
-        List<String> sourceTaskIds = new ArrayList<>();
-        List<String> claimIds = new ArrayList<>();
-        List<String> evidenceIds = new ArrayList<>();
-        for (TaskOutcome input : inputs) {
-            TaskResultProvenance inputProvenance = input.getProvenance().orElseThrow();
-            originDomains.addAll(inputProvenance.getOriginDomains());
-            appendDistinct(sourceTaskIds, input.getTaskId());
-            appendAllDistinct(claimIds, inputProvenance.getClaimIds());
-            appendAllDistinct(evidenceIds, inputProvenance.getEvidenceIds());
-        }
-        return TaskResultProvenance.synthesized(
-                originDomains, sourceTaskIds, claimIds, evidenceIds);
-    }
-
-    private List<String> textsFor(List<TaskOutcome> inputs, TaskSourceDomain domain) {
-        List<String> blocks = new ArrayList<>();
-        for (TaskOutcome input : inputs) {
-            if (!input.getProvenance().orElseThrow().getOriginDomains().contains(domain)) {
-                continue;
-            }
-            if (input.getContribution().isPresent()) {
-                // P4 model wording is presentation-only. Synthesis consumes the
-                // immutable pre-expression contribution produced by Material.
-                appendAllDistinct(blocks,
-                        input.getContribution().orElseThrow().getSupportedStatements());
-                continue;
-            }
-            TaskResultPayload payload = input.getResultPayload().orElseThrow();
-            if (payload instanceof TaskResultPayload.SectionResultPayload section) {
-                appendAllDistinct(blocks, section.getBlocks());
-            } else if (payload instanceof TaskResultPayload.RecommendationResultPayload recommendation) {
-                appendDistinct(blocks, recommendation.getRecommendation());
-                appendAllDistinct(blocks, recommendation.getSupportingBlocks());
-            } else if (payload instanceof TaskResultPayload.SynthesisResultPayload synthesis) {
-                appendAllDistinct(blocks, synthesis.getBlocks());
-            }
-        }
-        return List.copyOf(blocks);
-    }
-
-    private void appendAllDistinct(List<String> values, List<String> candidates) {
-        for (String candidate : candidates) {
-            appendDistinct(values, candidate);
-        }
-    }
-
-    private void appendDistinct(List<String> values, String candidate) {
-        if (candidate != null && !candidate.isBlank() && !values.contains(candidate.trim())) {
-            values.add(candidate.trim());
-        }
+        public String getConcept() { return concept; }
+        public List<String> getGeneralStatements() { return generalStatements; }
+        public List<String> getPortfolioStatements() { return portfolioStatements; }
     }
 }

@@ -1,6 +1,6 @@
 package com.portfolio.agent.answer.routing.architecture;
 
-import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
+import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -11,13 +11,18 @@ class SemanticRoutingArchitectureTest {
 
     @Test
     void runtimeHasNoLegacyGlobalRoutingOrPortfolioResolutionDependency() {
-        assertThat(Arrays.stream(ConversationalAgentRuntime.class.getDeclaredFields())
+        assertThat(Arrays.stream(MigrationAgentTurnRuntime.class.getDeclaredFields())
                 .map(field -> field.getType().getSimpleName()))
                 .doesNotContain(
                         "ConversationIntentRouter",
                         "PortfolioIntelligence",
                         "PortfolioIntelligenceAnswerAssembler",
                         "ConversationalModelPort",
-                        "ConversationWindowManager");
+                        "ConversationWindowManager",
+                        "TurnRouter",
+                        "PlanConfirmationService");
+        assertThat(Arrays.stream(MigrationAgentTurnRuntime.class.getDeclaredFields())
+                .map(field -> field.getType().getSimpleName()))
+                .contains("GoalResolver", "SemanticPlanCompiler", "SemanticTurnEngine");
     }
 }

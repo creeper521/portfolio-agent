@@ -12,7 +12,8 @@ class PageReferenceMarkerCatalogTest {
 
     @Test
     void acceptsOnlyConfiguredCompleteMarkersForTheirDeclaredSubjectType() {
-        InputStream stream = getClass().getResourceAsStream("/routing/page-reference-markers.v1.json");
+        InputStream stream = getClass().getResourceAsStream(
+                "/public-data/routing/page-reference-markers.v1.json");
         PageReferenceMarkerCatalog catalog = PageReferenceMarkerCatalog.load(stream);
 
         assertThat(catalog.supports(new TextAnchor("这个项目", 1), "介绍这个项目", SubjectType.PROJECT)).isTrue();
