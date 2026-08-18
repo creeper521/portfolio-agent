@@ -28,12 +28,12 @@ class ClarificationChallengeStoreTest {
 
         ClarificationStore.ConsumeResult consumed = store.consume(
                 "clarification-1", "conversation-1", new byte[]{1, 2, 3}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("field-subject", "choice-a"));
+                new ClarificationStore.ClarificationAnswer.Choice("choice-a"));
         assertThat(consumed.status()).isEqualTo(ClarificationStore.Status.CONSUMED);
         assertThat(consumed.answer().bindingKey()).isEqualTo("subject:project-a");
         assertThat(store.consume(
                 "clarification-1", "conversation-1", new byte[]{1, 2, 3}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("field-subject", "choice-a")).status())
+                new ClarificationStore.ClarificationAnswer.Choice("choice-a")).status())
                 .isEqualTo(ClarificationStore.Status.ALREADY_CONSUMED);
     }
 
@@ -41,15 +41,15 @@ class ClarificationChallengeStoreTest {
         ClarificationStore store = storeWithTextChallenge();
         assertThat(store.consume(
                 "clarification-text", "conversation-1", new byte[]{9}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Text("field-text", "补充内容")).status())
+                new ClarificationStore.ClarificationAnswer.Text("补充内容")).status())
                 .isEqualTo(ClarificationStore.Status.UNAUTHORIZED);
         assertThat(store.consume(
                 "clarification-text", "conversation-1", new byte[]{4}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Text("unknown", "补充内容")).status())
+                new ClarificationStore.ClarificationAnswer.Text("这段文字明显超过二十个字符的限制因此必须被拒绝")).status())
                 .isEqualTo(ClarificationStore.Status.INVALID_ANSWER);
         assertThat(store.consume(
                 "clarification-text", "conversation-1", new byte[]{4}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Text("field-text", "补充内容")).status())
+                new ClarificationStore.ClarificationAnswer.Text("补充内容")).status())
                 .isEqualTo(ClarificationStore.Status.CONSUMED);
     }
 

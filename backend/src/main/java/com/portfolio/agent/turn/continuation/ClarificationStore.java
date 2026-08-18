@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,14 +74,18 @@ public final class ClarificationStore {
 
     private ResolvedAnswer resolve(Record record, ClarificationAnswer answer) {
         if (answer instanceof ClarificationAnswer.Choice choice) {
-            Map<String, String> choices = record.choiceBindings().get(choice.fieldId());
-            String binding = choices == null ? null : choices.get(choice.choiceId());
-            return binding == null ? null : new ResolvedAnswer(choice.fieldId(), binding, null);
+            List<Map.Entry<String, Map<String, String>>> matches = record.choiceBindings().entrySet()
+                    .stream().filter(value -> value.getValue().containsKey(choice.choiceId())).toList();
+            if (matches.size() != 1) return null;
+            String binding = matches.getFirst().getValue().get(choice.choiceId());
+            return new ResolvedAnswer(matches.getFirst().getKey(), binding, null);
         }
         if (answer instanceof ClarificationAnswer.Text text) {
-            TextBinding binding = record.textBindings().get(text.fieldId());
+            if (record.textBindings().size() != 1) return null;
+            Map.Entry<String, TextBinding> match = record.textBindings().entrySet().iterator().next();
+            TextBinding binding = match.getValue();
             if (binding == null || text.text().length() > binding.limit()) return null;
-            return new ResolvedAnswer(text.fieldId(), binding.bindingKey(), text.text().trim());
+            return new ResolvedAnswer(match.getKey(), binding.bindingKey(), text.text().trim());
         }
         return null;
     }
@@ -135,15 +140,13 @@ public final class ClarificationStore {
     }
     public sealed interface ClarificationAnswer
             permits ClarificationAnswer.Choice, ClarificationAnswer.Text {
-        record Choice(String fieldId, String choiceId) implements ClarificationAnswer {
+        record Choice(String choiceId) implements ClarificationAnswer {
             public Choice {
-                fieldId = ContinuationContext.text(fieldId, "fieldId");
                 choiceId = ContinuationContext.text(choiceId, "choiceId");
             }
         }
-        record Text(String fieldId, String text) implements ClarificationAnswer {
+        record Text(String text) implements ClarificationAnswer {
             public Text {
-                fieldId = ContinuationContext.text(fieldId, "fieldId");
                 text = ContinuationContext.text(text, "text");
             }
         }
