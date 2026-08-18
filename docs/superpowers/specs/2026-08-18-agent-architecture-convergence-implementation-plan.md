@@ -1366,3 +1366,15 @@ General 已收敛为 `SemanticTask -> GeneralKnowledgeRequest -> GeneralKnowledg
 Cross-domain 已收敛为恰好一个 `GeneralSemanticResult` 与一个 `PortfolioSemanticResult` 的真实 fan-in。Executor 使用 Goal 中的精确 concept anchor 选择 definition/mechanism 和已验证 Portfolio statements；不做 substring 关系猜测，不接受任意多输入，不调用模型表达。`CrossDomainSemanticResult` 保存实际选中 statements/caveats/support，deterministic Presentation 分离通用原理、项目实例和关系；Portfolio source 只附着项目与关系 section，不扩散为 General 支持。
 
 旧 `ConversationalModelPort`/summary/classify/generate/review/suggest、General Material 大字段/nullable pipeline、ConversationWindowManager/DynamicQuestionService/DraftValidator、substring RelationPolicy、Cross-domain Expression/Codec/Validator/config，以及对应 mock Provider Eval 兼容链均已删除。冻结零引用门无输出。Slice 4 target 14 tests、Target + HTTP/合同组合 21 tests 通过；Backend 全量 935 tests、0 failure/error、20 environment-skipped；Frontend 69 files、763 tests 与 production build 通过；backend 662 files 与 contracts 15 files privacy check 通过。进入 Slice 5 外部边界原子切换。
+
+### 2026-08-18 · Slice 5（Backend 完成，Frontend 原子切换待完成）
+
+Backend 已建立 D-38 唯一 PublicAgentTurn/Projector、闭合 SECTIONED/RECOMMENDATION、Goal-first coverage/notices/source catalog/support 与 Recommendation golden；建立 typed Continuation、一次性 Clarification、不可扩权 Recommendation child context、HMAC request fingerprint、claim/replay/conflict/cancel terminal gate、加密 Public snapshot/state mutation codec、PostgreSQL Flyway V2 与 Memory/local store。生产 API 已切换为 `/api/agent/turns` 与 `/api/agent/conversations/current` 四条无版本资源，Bearer/no-store/error/Retry-After/conversation envelope 已由 target tests 冻结。
+
+旧 `/api/v2/answers`、`/api/v2/conversation-context`、Migration Runtime/Service、ConversationAnswerResult/Response/Mapper、Completion Receipt、Context Facade/Resolver/MOST_RECENT、p3/p5 Context codecs、旧 DTO 与对应集成测试均已删除。Backend target（含 Projection/Continuation/Lifecycle/API/State）29 tests 通过，PostgreSQL integration 因 Docker 不可用 environment-skipped；Backend 删除后全量 898 tests、0 failure/error、19 environment-skipped。Frontend 已完成合同与 11 个 fixture-driven 组件（799/799 + build），最终 `agentTurnApi`/Workspace/Thread 接线和旧链原子删除仍待 Frontend Agent 落盘，因此 Slice 5 整体尚未关闭。
+
+### 2026-08-18 · Slice 6（Backend 清理完成，联合 Exit Gate 待 Frontend）
+
+Backend 已用 typed `StructuredModelTransport` 统一 Goal/General HTTPS JSON-mode/deadline 传输，删除重复 ChatCompletion DTO；Eval 的旧 HTTP answer client、P5 suite、Legacy benchmark adapter 与 degraded 轴已删除/改为明确 fallback；evaluation/selection benchmark 已通过实际 JAR listing 证明不进入生产包。旧 Selection service、旧 Context/Receipt、推荐状态副本、客户端 expectedContextType 与无主兼容入口均删除；新增 Turn module dependency test，Backend production 零引用门仅有 `P50Latency` 非阶段号误匹配。
+
+最终 package 已成功；完整 Backend/Frontend/Privacy/Docs 复验及复杂度对比将在 Frontend 原子切换落盘后统一执行，当前不得标记总任务完成或部署。
