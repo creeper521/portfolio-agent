@@ -252,7 +252,7 @@ class DeterministicEvalGraderTest {
                           {"sourceDomain":"PORTFOLIO"}
                         ]},"outcome":{"planOutcome":"SUCCEEDED","taskSummary":{
                           "totalCount":1,"answeredCount":1,"blockedCount":0,
-                          "failedCount":0,"degradedCount":0,
+                          "failedCount":0,"fallbackCount":0,
                           "items":[{"sourceDomain":"PORTFOLIO"}]
                         }}}
                         """));
@@ -265,7 +265,7 @@ class DeterministicEvalGraderTest {
                 base.getResolution(), base.getAnswerScope(), base.getGenerationMode(),
                 base.getAnswerSource(), base.getReasonCodes(), base.getDurationMilliseconds(),
                 base.getProviderUsage(), base.getAnswerShape(), shape,
-                base.isDegraded(), base.isProviderInvoked());
+                base.isFallbackUsed(), base.isProviderInvoked());
 
         EvalGrade grade = only(grade(caseWith(List.of(
                 rule("RESOLUTION", EvalSeverity.BLOCKING))), observation),
@@ -325,7 +325,7 @@ class DeterministicEvalGraderTest {
                 base.getSelectedChunkIds(), base.getResolution(), scope,
                 base.getGenerationMode(), base.getAnswerSource(), base.getReasonCodes(),
                 base.getDurationMilliseconds(), base.getProviderUsage(),
-                base.getAnswerShape(), base.isDegraded(), base.isProviderInvoked());
+                base.getAnswerShape(), base.isFallbackUsed(), base.isProviderInvoked());
     }
 
     private EvalObservation observationWithEmptyShape(
@@ -340,7 +340,7 @@ class DeterministicEvalGraderTest {
                 base.getSelectedChunkIds(), base.getResolution(), base.getAnswerScope(),
                 base.getGenerationMode(), base.getAnswerSource(), base.getReasonCodes(),
                 base.getDurationMilliseconds(), base.getProviderUsage(),
-                EvalAnswerShape.empty(), base.isDegraded(), base.isProviderInvoked());
+                EvalAnswerShape.empty(), base.isFallbackUsed(), base.isProviderInvoked());
     }
 
     private EvalObservation observationWithShape(
@@ -361,7 +361,7 @@ class DeterministicEvalGraderTest {
                 base.getSelectedChunkIds(), base.getResolution(), base.getAnswerScope(),
                 base.getGenerationMode(), base.getAnswerSource(), base.getReasonCodes(),
                 base.getDurationMilliseconds(), base.getProviderUsage(),
-                shape, base.isDegraded(), base.isProviderInvoked());
+                shape, base.isFallbackUsed(), base.isProviderInvoked());
     }
 
     private List<EvalGrade> grade(EvalCase evalCase, EvalObservation observation) {
@@ -378,3 +378,5 @@ class DeterministicEvalGraderTest {
                 .findFirst().orElseThrow();
     }
 }
+
+

@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Privacy-safe structural snapshot of an stp-v1 response.
+ * Privacy-safe structural snapshot of an public-agent-turn response.
  *
  * <p>The factory reads an {@code agentTurn} JSON subtree transiently and retains
  * only closed statuses and integer counters. It never retains labels, subjects,
@@ -50,7 +50,7 @@ public final class EvalSemanticTurnShape {
     private final int answeredCount;
     private final int blockedCount;
     private final int failedCount;
-    private final int degradedCount;
+    private final int fallbackCount;
     private final int portfolioSourceTaskCount;
     private final int generalSourceTaskCount;
     private final int synthesisSourceTaskCount;
@@ -67,7 +67,7 @@ public final class EvalSemanticTurnShape {
             int answeredCount,
             int blockedCount,
             int failedCount,
-            int degradedCount,
+            int fallbackCount,
             int portfolioSourceTaskCount,
             int generalSourceTaskCount,
             int synthesisSourceTaskCount,
@@ -82,7 +82,7 @@ public final class EvalSemanticTurnShape {
         this.answeredCount = answeredCount;
         this.blockedCount = blockedCount;
         this.failedCount = failedCount;
-        this.degradedCount = degradedCount;
+        this.fallbackCount = fallbackCount;
         this.portfolioSourceTaskCount = portfolioSourceTaskCount;
         this.generalSourceTaskCount = generalSourceTaskCount;
         this.synthesisSourceTaskCount = synthesisSourceTaskCount;
@@ -116,11 +116,11 @@ public final class EvalSemanticTurnShape {
         int answeredCount = nonNegativeInt(summary, "answeredCount");
         int blockedCount = nonNegativeInt(summary, "blockedCount");
         int failedCount = nonNegativeInt(summary, "failedCount");
-        int degradedCount = nonNegativeInt(summary, "degradedCount");
+        int fallbackCount = nonNegativeInt(summary, "fallbackCount");
         SourceCounts sourceCounts = sourceCounts(summary, plan);
         boolean planInvariantValid = planInvariantValid(
                 disposition, plan, summary, taskCount, answeredCount, blockedCount,
-                failedCount, degradedCount);
+                failedCount, fallbackCount);
         boolean provenanceValid = sourceCounts.valid
                 && (taskCount == 0 || sourceCounts.total() == taskCount);
         return new EvalSemanticTurnShape(
@@ -132,7 +132,7 @@ public final class EvalSemanticTurnShape {
                 answeredCount,
                 blockedCount,
                 failedCount,
-                degradedCount,
+                fallbackCount,
                 sourceCounts.portfolio,
                 sourceCounts.general,
                 sourceCounts.synthesis,
@@ -149,7 +149,7 @@ public final class EvalSemanticTurnShape {
             int answeredCount,
             int blockedCount,
             int failedCount,
-            int degradedCount) {
+            int fallbackCount) {
         if (plan == null) {
             return disposition == Disposition.CLARIFICATION_REQUIRED
                     || disposition == Disposition.BOUNDARY
@@ -173,7 +173,7 @@ public final class EvalSemanticTurnShape {
         return answeredCount <= totalCount
                 && blockedCount <= totalCount
                 && failedCount <= totalCount
-                && degradedCount <= totalCount;
+                && fallbackCount <= totalCount;
     }
 
     private static int dependencyCount(JsonNode plan) {
@@ -293,7 +293,7 @@ public final class EvalSemanticTurnShape {
     public int getAnsweredCount() { return answeredCount; }
     public int getBlockedCount() { return blockedCount; }
     public int getFailedCount() { return failedCount; }
-    public int getDegradedCount() { return degradedCount; }
+    public int getFallbackCount() { return fallbackCount; }
     public int getPortfolioSourceTaskCount() { return portfolioSourceTaskCount; }
     public int getGeneralSourceTaskCount() { return generalSourceTaskCount; }
     public int getSynthesisSourceTaskCount() { return synthesisSourceTaskCount; }
@@ -311,7 +311,7 @@ public final class EvalSemanticTurnShape {
                 + ", answeredCount=" + answeredCount
                 + ", blockedCount=" + blockedCount
                 + ", failedCount=" + failedCount
-                + ", degradedCount=" + degradedCount
+                + ", fallbackCount=" + fallbackCount
                 + ", portfolioSourceTaskCount=" + portfolioSourceTaskCount
                 + ", generalSourceTaskCount=" + generalSourceTaskCount
                 + ", synthesisSourceTaskCount=" + synthesisSourceTaskCount
@@ -331,3 +331,5 @@ public final class EvalSemanticTurnShape {
         }
     }
 }
+
+

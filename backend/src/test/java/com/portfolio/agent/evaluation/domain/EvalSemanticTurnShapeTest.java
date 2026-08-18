@@ -16,7 +16,7 @@ class EvalSemanticTurnShapeTest {
     void capturesOnlySemanticStructureFromAPartialTurn() throws Exception {
         JsonNode agentTurn = mapper.readTree("""
                 {
-                  "contractVersion": "stp-v1",
+                  "contractVersion": "public-agent-turn",
                   "disposition": "PARTIAL_READY",
                   "plan": {
                     "taskCount": 3,
@@ -35,7 +35,7 @@ class EvalSemanticTurnShapeTest {
                       "answeredCount": 1,
                       "blockedCount": 1,
                       "failedCount": 0,
-                      "degradedCount": 1,
+                      "fallbackCount": 1,
                       "items": [
                         {"displayIndex": "01", "goalLabel": "project-a", "status": "COMPLETED", "sourceDomain": "PORTFOLIO"},
                         {"displayIndex": "02", "goalLabel": "compare", "status": "BLOCKED", "sourceDomain": "GENERAL"},
@@ -59,7 +59,7 @@ class EvalSemanticTurnShapeTest {
         assertThat(shape.getAnsweredCount()).isEqualTo(1);
         assertThat(shape.getBlockedCount()).isEqualTo(1);
         assertThat(shape.getFailedCount()).isZero();
-        assertThat(shape.getDegradedCount()).isEqualTo(1);
+        assertThat(shape.getFallbackCount()).isEqualTo(1);
         assertThat(shape.getPortfolioSourceTaskCount()).isEqualTo(1);
         assertThat(shape.getGeneralSourceTaskCount()).isEqualTo(1);
         assertThat(shape.getSynthesisSourceTaskCount()).isEqualTo(1);
@@ -86,3 +86,5 @@ class EvalSemanticTurnShapeTest {
         }
     }
 }
+
+

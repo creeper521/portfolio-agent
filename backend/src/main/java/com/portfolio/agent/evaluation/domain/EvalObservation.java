@@ -33,7 +33,7 @@ public final class EvalObservation {
     private final EvalProviderUsage providerUsage;
     private final EvalAnswerShape answerShape;
     private final EvalSemanticTurnShape semanticTurnShape;
-    private final boolean degraded;
+    private final boolean fallbackUsed;
     private final boolean providerInvoked;
 
     public EvalObservation(
@@ -54,13 +54,13 @@ public final class EvalObservation {
             long durationMilliseconds,
             EvalProviderUsage providerUsage,
             EvalAnswerShape answerShape,
-            boolean degraded,
+            boolean fallbackUsed,
             boolean providerInvoked
     ) {
         this(caseId, layer, trialIndex, status, selectedProjectSlug, selectedCaseSlug,
                 selectedClaimIds, selectedEvidenceIds, selectedChunkIds, resolution,
                 answerScope, generationMode, answerSource, reasonCodes, durationMilliseconds,
-                providerUsage, answerShape, EvalSemanticTurnShape.empty(), degraded,
+                providerUsage, answerShape, EvalSemanticTurnShape.empty(), fallbackUsed,
                 providerInvoked);
     }
 
@@ -83,7 +83,7 @@ public final class EvalObservation {
             EvalProviderUsage providerUsage,
             EvalAnswerShape answerShape,
             EvalSemanticTurnShape semanticTurnShape,
-            boolean degraded,
+            boolean fallbackUsed,
             boolean providerInvoked
     ) {
         this.caseId = Objects.requireNonNull(caseId, "caseId");
@@ -107,7 +107,7 @@ public final class EvalObservation {
         this.providerUsage = Objects.requireNonNull(providerUsage, "providerUsage");
         this.answerShape = Objects.requireNonNull(answerShape, "answerShape");
         this.semanticTurnShape = Objects.requireNonNull(semanticTurnShape, "semanticTurnShape");
-        this.degraded = degraded;
+        this.fallbackUsed = fallbackUsed;
         this.providerInvoked = providerInvoked;
     }
 
@@ -144,7 +144,7 @@ public final class EvalObservation {
         private EvalProviderUsage providerUsage = EvalProviderUsage.unavailable();
         private EvalAnswerShape answerShape = EvalAnswerShape.empty();
         private EvalSemanticTurnShape semanticTurnShape = EvalSemanticTurnShape.empty();
-        private boolean degraded;
+        private boolean fallbackUsed;
         private boolean providerInvoked;
 
         private Builder(String caseId, EvalLayer layer,
@@ -226,8 +226,8 @@ public final class EvalObservation {
             return this;
         }
 
-        public Builder degraded(boolean value) {
-            this.degraded = value;
+        public Builder fallbackUsed(boolean value) {
+            this.fallbackUsed = value;
             return this;
         }
 
@@ -243,7 +243,7 @@ public final class EvalObservation {
                     selectedClaimIds, selectedEvidenceIds, selectedChunkIds,
                     resolution, answerScope, generationMode, answerSource,
                     reasonCodes, durationMilliseconds,
-                    providerUsage, answerShape, semanticTurnShape, degraded, providerInvoked);
+                    providerUsage, answerShape, semanticTurnShape, fallbackUsed, providerInvoked);
         }
     }
 
@@ -272,6 +272,8 @@ public final class EvalObservation {
     public EvalProviderUsage getProviderUsage() { return providerUsage; }
     public EvalAnswerShape getAnswerShape() { return answerShape; }
     public EvalSemanticTurnShape getSemanticTurnShape() { return semanticTurnShape; }
-    public boolean isDegraded() { return degraded; }
+    public boolean isFallbackUsed() { return fallbackUsed; }
     public boolean isProviderInvoked() { return providerInvoked; }
 }
+
+

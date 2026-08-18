@@ -25,7 +25,7 @@ class EvalObservationBuilderTest {
         assertThat(observation.getDurationMilliseconds()).isZero();
         assertThat(observation.getProviderUsage().isAvailable()).isFalse();
         assertThat(observation.getAnswerShape().getBlockCount()).isZero();
-        assertThat(observation.isDegraded()).isFalse();
+        assertThat(observation.isFallbackUsed()).isFalse();
         assertThat(observation.isProviderInvoked()).isFalse();
     }
 
@@ -43,7 +43,7 @@ class EvalObservationBuilderTest {
                 .reasonCodes(List.of("ANSWERED"))
                 .durationMilliseconds(42L)
                 .providerUsage(EvalProviderUsage.available(1, 2, 3))
-                .degraded(true)
+                .fallbackUsed(true)
                 .providerInvoked(true)
                 .build();
 
@@ -53,7 +53,7 @@ class EvalObservationBuilderTest {
         assertThat(observation.getResolution()).isEqualTo(AnswerResolution.ANSWERED);
         assertThat(observation.getDurationMilliseconds()).isEqualTo(42L);
         assertThat(observation.getProviderUsage().getInputTokens()).isEqualTo(1);
-        assertThat(observation.isDegraded()).isTrue();
+        assertThat(observation.isFallbackUsed()).isTrue();
         assertThat(observation.isProviderInvoked()).isTrue();
     }
 
@@ -67,3 +67,5 @@ class EvalObservationBuilderTest {
                 .isInstanceOf(NullPointerException.class);
     }
 }
+
+

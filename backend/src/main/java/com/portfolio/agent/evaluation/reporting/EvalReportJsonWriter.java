@@ -155,7 +155,7 @@ public final class EvalReportJsonWriter {
         entry.put("status", observation.getStatus().name());
         entry.put("reasonCodes", observation.getReasonCodes());
         entry.put("durationMilliseconds", observation.getDurationMilliseconds());
-        entry.put("degraded", observation.isDegraded());
+        entry.put("fallbackUsed", observation.isFallbackUsed());
         entry.put("providerInvoked", observation.isProviderInvoked());
         Map<String, Object> shape = new LinkedHashMap<>();
         shape.put("blockCount", observation.getAnswerShape().getBlockCount());
@@ -199,7 +199,7 @@ public final class EvalReportJsonWriter {
         entry.put("answeredCount", shape.getAnsweredCount());
         entry.put("blockedCount", shape.getBlockedCount());
         entry.put("failedCount", shape.getFailedCount());
-        entry.put("degradedCount", shape.getDegradedCount());
+        entry.put("fallbackCount", shape.getFallbackCount());
         entry.put("portfolioSourceTaskCount", shape.getPortfolioSourceTaskCount());
         entry.put("generalSourceTaskCount", shape.getGeneralSourceTaskCount());
         entry.put("synthesisSourceTaskCount", shape.getSynthesisSourceTaskCount());
@@ -209,3 +209,5 @@ public final class EvalReportJsonWriter {
         return entry;
     }
 }
+
+
