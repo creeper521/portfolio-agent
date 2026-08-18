@@ -25,6 +25,8 @@ import com.portfolio.agent.turn.capability.synthesis.CrossDomainTaskExecutor;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
+import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.OpenAiCompatibleStructuredModelTransport;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
@@ -76,41 +78,40 @@ public class AgentCapabilityConfiguration {
     }
 
     @Bean
+    StructuredModelTransport structuredModelTransport(
+            ObjectMapper mapper, ModelExpressionProperties modelProperties,
+            ModelProviderRegistrySnapshot registry) {
+        return new OpenAiCompatibleStructuredModelTransport(
+                HttpClient.newBuilder().connectTimeout(modelProperties.getTimeout()).build(),
+                mapper, registry.getRequiredDescriptor(modelProperties.getProvider()),
+                modelProperties.apiKeyFor(modelProperties.getProvider()),
+                modelProperties.getTimeout());
+    }
+
+    @Bean
     GoalInterpretationPort goalInterpretationPort(
             ObjectMapper objectMapper,
-            ModelExpressionProperties modelProperties,
-            ModelProviderRegistrySnapshot registry,
             GoalInterpretationProperties properties,
-            DiagnosticEventPublisher diagnostics,
+            StructuredModelTransport transport,
             ConversationProviderAccess providerAccess,
             ModelOperationPolicyRegistry operationPolicies) {
         if (!providerAccess.isAllowed()
                 || operationPolicies.get(ModelOperation.TURN_INTERPRETATION).getMode() != OperationMode.ENABLED) {
             return input -> { throw new GoalInterpretationUnavailableException(); };
         }
-        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.getTimeout()).build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(properties.getTimeout());
         return new GoalInterpretationAdapter(
-                RestClient.builder().requestFactory(requestFactory), objectMapper,
-                new GoalProposalCodec(), registry.getRequiredDescriptor(modelProperties.getProvider()),
-                modelProperties.apiKeyFor(modelProperties.getProvider()),
-                properties.getMaxOutputTokens(), diagnostics);
+                transport, objectMapper, new GoalProposalCodec(),
+                properties.getMaxOutputTokens(), properties.getTimeout(), java.time.Clock.systemUTC());
     }
 
     @Bean
     GeneralKnowledgeModelPort generalKnowledgeModelPort(
             ObjectMapper objectMapper,
             ModelExpressionProperties modelProperties,
-            ModelProviderRegistrySnapshot registry,
+            StructuredModelTransport transport,
             ModelOperationPolicyRegistry operationPolicies) {
-        ModelOperationPolicy policy = operationPolicies.get(ModelOperation.GENERAL_KNOWLEDGE);
-        Duration timeout = policy.getTimeout() == null ? Duration.ofSeconds(3) : policy.getTimeout();
         return new OpenAiCompatibleGeneralKnowledgeAdapter(
-                HttpClient.newBuilder().connectTimeout(timeout).build(), objectMapper,
-                registry.getRequiredDescriptor(modelProperties.getProvider()),
-                modelProperties.apiKeyFor(modelProperties.getProvider()),
-                modelProperties.getMaxTokens(), timeout);
+                transport, objectMapper, modelProperties.getMaxTokens());
     }
 
     @Bean
