@@ -190,68 +190,6 @@ class PortfolioSnapshotJsonReaderTest {
     }
 
     @Test
-    void legacyResourceRenamesAliasesAndNormalizesCaseFields() {
-        PortfolioSnapshot snapshot = reader.readLegacyResource(legacyResourceBytes());
-
-        assertThat(snapshot.getPublishedAt()).isNotNull();
-        assertThat(snapshot.getCases()).isEmpty();
-        assertThat(snapshot.getQuestions()).singleElement().satisfies(question ->
-                assertThat(question.getCaseIds()).isEmpty());
-        assertThat(snapshot.getTimeline()).singleElement().satisfies(event ->
-                assertThat(event.getCaseIds()).isEmpty());
-    }
-
-    @Test
-    void legacyResourceRequiresQuestions() throws Exception {
-        ObjectNode root = legacyRoot();
-        root.remove("questions");
-
-        assertThatThrownBy(() -> reader.readLegacyResource(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("questions is required and must be an array");
-    }
-
-    @Test
-    void legacyResourceRequiresTimeline() throws Exception {
-        ObjectNode root = legacyRoot();
-        root.remove("timeline");
-
-        assertThatThrownBy(() -> reader.readLegacyResource(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("timeline is required and must be an array");
-    }
-
-    @Test
-    void legacyResourceRejectsNonArrayQuestions() throws Exception {
-        ObjectNode root = legacyRoot();
-        root.put("questions", "not-an-array");
-
-        assertThatThrownBy(() -> reader.readLegacyResource(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("questions is required and must be an array");
-    }
-
-    @Test
-    void legacyResourceRejectsNonArrayTimeline() throws Exception {
-        ObjectNode root = legacyRoot();
-        root.put("timeline", "not-an-array");
-
-        assertThatThrownBy(() -> reader.readLegacyResource(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("timeline is required and must be an array");
-    }
-
-    @Test
-    void legacyResourceRejectsUnknownField() throws Exception {
-        ObjectNode root = legacyRoot();
-        root.put("internalNotes", "secret");
-
-        assertThatThrownBy(() -> reader.readLegacyResource(objectMapper.writeValueAsBytes(root)))
-                .isInstanceOf(InvalidPortfolioSnapshotException.class)
-                .hasMessageContaining("legacy portfolio resource field set is not canonical");
-    }
-
-    @Test
     void bundleRejectsLegacyPublishedAtField() {
         String json = canonicalJson("2.0", "", "", "");
         String withPublishedAt = json.replace(

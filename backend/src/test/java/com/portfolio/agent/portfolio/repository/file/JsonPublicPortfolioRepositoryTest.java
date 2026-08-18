@@ -23,68 +23,6 @@ import static org.mockito.Mockito.mock;
 class JsonPublicPortfolioRepositoryTest {
 
     @Test
-    void loadsReviewedPublicSnapshotFromClasspath() {
-        List<DiagnosticEvent> events = new ArrayList<>();
-        JsonPublicPortfolioRepository repository = new JsonPublicPortfolioRepository(
-                new ObjectMapper().findAndRegisterModules(),
-                new ClassPathResource("public-data/public-portfolio.v1.json"),
-                new PortfolioSnapshotValidator(),
-                diagnostics(events)
-        );
-
-        RuntimeContentSnapshot snapshot = repository.getSnapshot();
-        ProjectProfile project = snapshot.getProjects().getFirst();
-
-        assertThat(snapshot.getSchemaVersion()).isEqualTo("2.0");
-        assertThat(snapshot.getCases()).isEmpty();
-        assertThat(snapshot.getClaims())
-                .extracting(claim -> claim.getId())
-                .containsExactly(
-                        "claim-sql-audit-background",
-                        "claim-sql-audit-responsibility",
-                        "claim-sql-audit-technical-decision",
-                        "claim-sql-audit-verification",
-                        "claim-sql-audit-delivered",
-                        "claim-sql-audit-documented-handoff");
-        assertThat(snapshot.getClaimEvidenceLinks()).hasSize(6);
-        assertThat(snapshot.getRuntimeBundleHash()).startsWith("sha256:");
-        assertThat(snapshot.getLoadedAt()).isNotNull();
-        assertThat(repository.getSnapshot()).isSameAs(snapshot);
-        assertThat(project.getCode()).isEqualTo("P-01");
-        assertThat(project.getSlug()).isEqualTo("sql-audit");
-        assertThat(project.getStatus()).isEqualTo(ProjectStatus.DELIVERED);
-        assertThat(project.getContributionType()).isEqualTo(ContributionType.PRIMARY);
-        assertThat(snapshot.getEvidence()).hasSize(2);
-        assertThat(snapshot.getEvidence())
-                .extracting(com.portfolio.agent.portfolio.domain.EvidenceRecord::getCode)
-                .contains("E-01");
-        assertThat(snapshot.getTimeline()).singleElement()
-                .extracting(TimelineEvent::getId)
-                .isEqualTo("timeline-sql-audit-delivery");
-        assertThat(snapshot.getQuestionPresets()).singleElement()
-                .satisfies(preset -> {
-                    assertThat(preset.getId()).isEqualTo("sql-audit-overview");
-                    assertThat(preset.isDeterministicEntry()).isTrue();
-                    assertThat(preset.getAudiences())
-                            .containsExactly("INTERVIEWER", "MENTOR", "HR", "GUEST");
-                    assertThat(preset.getContractStatus())
-                            .isEqualTo(com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE);
-                    assertThat(preset.getContractSubjectId()).isEqualTo("sql-audit-project");
-                    assertThat(preset.getContractVersion()).matches("pcv1-[a-f0-9]{16}");
-                });
-        assertThat(events).singleElement().satisfies(event -> {
-            assertThat(event.getName()).isEqualTo("content.bundle.loaded");
-            assertThat(event.getFields())
-                    .containsEntry("schema.version", "2.0")
-                    .containsEntry("content.version", snapshot.getContentVersion())
-                    .containsEntry("retrieval.enabled", false)
-                    .containsEntry("document.count", 0)
-                    .containsEntry("vector.dimension", 0)
-                    .containsKey("duration.bucket");
-        });
-    }
-
-    @Test
     void loadedReleaseBundlePublishesValidatedRetrievalMetadata() {
         List<DiagnosticEvent> events = new ArrayList<>();
 

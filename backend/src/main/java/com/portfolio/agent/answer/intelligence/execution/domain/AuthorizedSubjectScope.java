@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Closed subject authorization compiled by P2/P3, never inferred by retrieval. */
+/** Closed subject authorization compiled by planning, never inferred by retrieval. */
 public final class AuthorizedSubjectScope {
 
     public enum ScopeMode {

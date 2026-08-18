@@ -28,7 +28,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Production retrieval and P3 composition wiring. */
+/** Production Portfolio retrieval and semantic-result wiring. */
 @Configuration(proxyBeanMethods = false)
 public class PortfolioExecutionConfiguration {
 

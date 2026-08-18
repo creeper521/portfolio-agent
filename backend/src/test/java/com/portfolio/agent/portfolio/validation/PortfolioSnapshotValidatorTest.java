@@ -17,14 +17,6 @@ class PortfolioSnapshotValidatorTest {
     private final PortfolioSnapshotValidator validator = new PortfolioSnapshotValidator();
 
     @Test
-    void acceptsSchemaTwoNormalizedCompatibilitySnapshot() {
-        PortfolioSnapshot snapshot = new PortfolioSnapshotJsonReader(objectMapper)
-                .readLegacyResource(legacySchemaTwoJson().getBytes(StandardCharsets.UTF_8));
-
-        assertThatCode(() -> validator.validate(snapshot)).doesNotThrowAnyException();
-    }
-
-    @Test
     void acceptsSchemaThreeCaseOnlyQuestionFixture() {
         assertThatCode(() -> validate(validSchemaThreeJson())).doesNotThrowAnyException();
     }

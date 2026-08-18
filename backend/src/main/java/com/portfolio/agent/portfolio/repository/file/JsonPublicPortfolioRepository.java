@@ -73,29 +73,6 @@ public class JsonPublicPortfolioRepository implements PublicPortfolioRepository 
         }
     }
 
-    public JsonPublicPortfolioRepository(
-            ObjectMapper objectMapper,
-            Resource resource,
-            PortfolioSnapshotValidator validator,
-            ApplicationStartupDiagnostics startupDiagnostics
-    ) {
-        long startedAt = System.nanoTime();
-        try {
-            byte[] bytes = resource.getContentAsByteArray();
-            PortfolioSnapshot loaded = new PortfolioSnapshotJsonReader(objectMapper)
-                    .readLegacyResource(bytes);
-            validator.validate(loaded);
-            this.snapshot = new RuntimeContentSnapshot(loaded, sha256(bytes), Instant.now());
-            publishLoaded(startupDiagnostics, startedAt);
-        } catch (IOException | IllegalArgumentException | NoSuchAlgorithmException exception) {
-            startupDiagnostics.contentBundleFailed();
-            throw new InvalidPortfolioSnapshotException("unable to load public portfolio snapshot", exception);
-        } catch (RuntimeException exception) {
-            startupDiagnostics.contentBundleFailed();
-            throw exception;
-        }
-    }
-
     private void publishLoaded(
             ApplicationStartupDiagnostics startupDiagnostics,
             long startedAt

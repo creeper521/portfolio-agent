@@ -33,7 +33,7 @@ public final class EvalExecutionInput {
     }
 
     /**
-     * Creates an executor input with an already-compiled P2 task. The task is
+     * Creates an executor input with an already-compiled semantic task. The task is
      * deliberately supplied separately from oracle/maintenance metadata.
      */
     public EvalExecutionInput(String caseId, List<EvalMessage> messages, EvalLayer layer,

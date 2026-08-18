@@ -18,10 +18,6 @@ public final class PortfolioSnapshotJsonReader {
             "schemaVersion", "contentVersion", "owner", "projects",
             "cases", "collections", "claims", "evidence", "claimEvidenceLinks", "timelineEvents",
             "questionPresets");
-    private static final Set<String> LEGACY_FIELDS = Set.of(
-            "schemaVersion", "contentVersion", "publishedAt", "owner", "projects",
-            "claims", "evidence", "claimEvidenceLinks", "questions", "timeline");
-
     private final ObjectMapper objectMapper;
     private final ObjectMapper strictMapper;
 
@@ -76,41 +72,6 @@ public final class PortfolioSnapshotJsonReader {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             throw invalid("unable to read portfolio.json: " + exception.getMessage(), exception);
-        }
-    }
-
-    public PortfolioSnapshot readLegacyResource(byte[] bytes) {
-        try {
-            JsonNode parsed = objectMapper.readTree(bytes);
-            require(parsed instanceof ObjectNode,
-                    "legacy portfolio resource must contain a JSON object");
-            ObjectNode root = (ObjectNode) parsed;
-            String schemaVersion = requiredText(root, "schemaVersion");
-            require("2.0".equals(schemaVersion),
-                    "unsupported schemaVersion: " + schemaVersion);
-            ArrayNode questions = requiredArray(root, "questions");
-            ArrayNode timeline = requiredArray(root, "timeline");
-            requireExactFields(
-                    root,
-                    LEGACY_FIELDS,
-                    "legacy portfolio resource field set is not canonical");
-            root.set("questionPresets", questions);
-            root.remove("questions");
-            root.set("timelineEvents", timeline);
-            root.remove("timeline");
-            ArrayNode cases = root.putArray("cases");
-            root.putArray("collections");
-            normalizeProjects(requiredArray(root, "projects"));
-            normalizeCases(cases);
-            normalizeArray(questions, "caseIds");
-            normalizeArray(timeline, "caseIds");
-            return strictMapper.treeToValue(root, PortfolioSnapshot.class);
-        } catch (InvalidPortfolioSnapshotException exception) {
-            throw exception;
-        } catch (IOException | IllegalArgumentException exception) {
-            throw invalid(
-                    "unable to read legacy portfolio resource: " + exception.getMessage(),
-                    exception);
         }
     }
 

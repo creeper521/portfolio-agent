@@ -2,7 +2,7 @@ package com.portfolio.agent.answer.domain;
 
 import java.util.Objects;
 
-/** Stable public citation data carried across the P3-to-response boundary. */
+/** Stable public citation data carried across the Portfolio presentation boundary. */
 public final class PublicSourceReferenceValue {
     private final String referenceKey;
     private final String label;
