@@ -26,6 +26,13 @@ import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
 import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
+import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
+import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
+import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
+import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
+import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
+import com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore;
+import com.portfolio.agent.turn.projection.PublicAgentTurnProjector;
 import com.portfolio.agent.turn.planning.GoalBoundaryPolicy;
 import com.portfolio.agent.turn.planning.GoalInterpretationInputFactory;
 import com.portfolio.agent.turn.planning.GoalInterpretationPort;
@@ -50,7 +57,8 @@ import java.util.List;
 @EnableConfigurationProperties({
         ConversationalAgentProperties.class,
         ModelOperationProperties.class,
-        GoalInterpretationProperties.class
+        GoalInterpretationProperties.class,
+        com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties.class
 })
 public class AgentCapabilityConfiguration {
     @Bean
@@ -134,16 +142,62 @@ public class AgentCapabilityConfiguration {
     }
 
     @Bean
-    MigrationAgentTurnRuntime conversationalAgentRuntime(
+    GoalResolver goalResolver(
             PortfolioKnowledgeGateway knowledgeGateway,
-            GoalInterpretationPort goalInterpretationPort,
-            SemanticTurnEngine semanticTurnEngine,
-            DiagnosticEventPublisher diagnostics) {
-        GoalResolver resolver = new GoalResolver(
+            GoalInterpretationPort goalInterpretationPort) {
+        return new GoalResolver(
                 goalInterpretationPort, new PortfolioReviewedGoalSource(knowledgeGateway),
                 new GoalInterpretationInputFactory(), new MinimalGoalFallback(), new GoalBoundaryPolicy());
+    }
+
+    @Bean SemanticPlanCompiler semanticPlanCompiler() {
+        return new SemanticPlanCompiler(new SemanticPlanValidator());
+    }
+
+    @Bean
+    MigrationAgentTurnRuntime conversationalAgentRuntime(
+            PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
+            SemanticPlanCompiler compiler, SemanticTurnEngine semanticTurnEngine) {
         return new MigrationAgentTurnRuntime(
-                knowledgeGateway, resolver,
-                new SemanticPlanCompiler(new SemanticPlanValidator()), semanticTurnEngine);
+                knowledgeGateway, goalResolver, compiler, semanticTurnEngine);
+    }
+
+    @Bean
+    TurnExecutionStore turnExecutionStore(
+            com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties properties) {
+        return properties.getMode()
+                == com.portfolio.agent.answer.context.domain.ContextStoreMode.IN_MEMORY
+                ? new com.portfolio.agent.turn.state.memory.InMemoryTurnExecutionStore()
+                : new com.portfolio.agent.turn.state.UnavailableTurnExecutionStore();
+    }
+
+    @Bean
+    AgentTurnLifecycleService agentTurnLifecycleService(
+            PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
+            SemanticPlanCompiler compiler, SemanticTurnEngine engine,
+            TurnExecutionStore store) {
+        byte[] fingerprintSecret = randomSecret();
+        byte[] sessionSecret = randomSecret();
+        java.time.Clock clock = java.time.Clock.systemUTC();
+        ContextMutationPlanner planner = new ContextMutationPlanner(() -> {
+            byte[] value = new byte[24];
+            new java.security.SecureRandom().nextBytes(value);
+            return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(value);
+        });
+        return new AgentTurnLifecycleService(
+                knowledgeGateway, goalResolver, compiler, engine,
+                new PublicAgentTurnProjector(), planner, store,
+                new RequestFingerprintFactory(fingerprintSecret),
+                new ConversationSessionResolver(
+                        new InMemoryConversationSessionStore(), sessionSecret,
+                        clock, java.time.Duration.ofMinutes(30)),
+                clock, java.time.Duration.ofSeconds(30),
+                java.time.Duration.ofSeconds(10), java.time.Duration.ofMinutes(30));
+    }
+
+    private byte[] randomSecret() {
+        byte[] value = new byte[32];
+        new java.security.SecureRandom().nextBytes(value);
+        return value;
     }
 }
