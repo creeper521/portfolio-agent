@@ -121,13 +121,6 @@ public final class EvalCliBootstrap {
                 executors.add(new com.portfolio.agent.evaluation.execution
                         .PortfolioEvalExecutor(portfolioExecutor, bundle));
             }
-            if (baseUrl != null && !baseUrl.isBlank()) {
-                executors.add(new com.portfolio.agent.evaluation.execution
-                        .HttpEvalExecutor(
-                                new com.portfolio.agent.evaluation.execution
-                                        .JdkEvalAnswerClient(mapper),
-                                baseUrl, bundle));
-            }
         }
         return new EvalHarness(
                 executors,
