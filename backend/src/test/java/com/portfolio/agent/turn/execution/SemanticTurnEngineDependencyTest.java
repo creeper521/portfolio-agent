@@ -42,7 +42,7 @@ class SemanticTurnEngineDependencyTest {
         try (java.util.concurrent.ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             SemanticTurnOutcome outcome = new SemanticTurnEngine(executors, pool, 3).execute(
                     crossDomainPlan(), TurnDeadline.after(Duration.ofSeconds(2), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false);
+                    new CancellationSignal(), false);
             assertThat(received.get()).isEqualTo(1);
             assertThat(outcome.getTaskOutcomes().get(2).getTerminal())
                     .isInstanceOf(TaskOutcome.Produced.class);
@@ -67,7 +67,7 @@ class SemanticTurnEngineDependencyTest {
         try (java.util.concurrent.ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             SemanticTurnOutcome outcome = new SemanticTurnEngine(executors, pool, 3).execute(
                     crossDomainPlan(), TurnDeadline.after(Duration.ofSeconds(2), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false);
+                    new CancellationSignal(), false);
             assertThat(synthesisCalls.get()).isZero();
             assertThat(outcome.getTaskOutcomes().get(2).getTerminal())
                     .isInstanceOf(TaskOutcome.Blocked.class);

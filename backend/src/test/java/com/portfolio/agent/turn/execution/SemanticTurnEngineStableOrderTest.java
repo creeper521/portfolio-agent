@@ -47,7 +47,7 @@ class SemanticTurnEngineStableOrderTest {
             SemanticTurnOutcome outcome = new SemanticTurnEngine(List.of(executor), pool, 2).execute(
                     new SemanticPlanValidator().validate(plan),
                     TurnDeadline.after(Duration.ofSeconds(1), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false);
+                    new CancellationSignal(), false);
             assertThat(outcome.getTaskOutcomes()).extracting(TaskOutcome::getTaskId)
                     .containsExactly("task-first", "task-second");
         }

@@ -58,7 +58,7 @@ public final class PortfolioEvalExecutor implements EvalExecutor {
                             new com.portfolio.agent.turn.execution.TurnDeadline(
                                     deadline, java.time.Clock.systemUTC()),
                             new com.portfolio.agent.turn.execution.CancellationSignal(),
-                            List.of(), false, false);
+                            false, false);
             executor.execute(executionContext);
             return pass(input, task);
         } catch (com.portfolio.agent.turn.execution.TaskTerminalException terminal) {
@@ -130,4 +130,3 @@ public final class PortfolioEvalExecutor implements EvalExecutor {
                 EvalAnswerShape.empty(), false, false);
     }
 }
-

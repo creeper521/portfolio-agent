@@ -49,7 +49,7 @@ class SemanticTurnEngineParallelismTest {
             SemanticTurnOutcome outcome = engine.execute(
                     new SemanticPlanValidator().validate(plan()),
                     TurnDeadline.after(Duration.ofSeconds(2), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false);
+                    new CancellationSignal(), false);
 
             assertThat(maximum.get()).isEqualTo(2);
             assertThat(outcome.getTaskOutcomes()).extracting(TaskOutcome::getTaskId)

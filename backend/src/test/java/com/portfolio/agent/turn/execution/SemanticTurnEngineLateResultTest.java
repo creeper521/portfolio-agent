@@ -42,7 +42,7 @@ class SemanticTurnEngineLateResultTest {
             java.util.concurrent.Future<SemanticTurnOutcome> execution = caller.submit(() -> engine.execute(
                     ExecutionTestPlanFactory.oneGeneralTask(),
                     TurnDeadline.after(Duration.ofMillis(40), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false));
+                    new CancellationSignal(), false));
 
             assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
             SemanticTurnOutcome outcome = execution.get(1, TimeUnit.SECONDS);

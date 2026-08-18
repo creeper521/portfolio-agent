@@ -28,7 +28,7 @@ class SemanticTurnEngineDeadlineTest {
         try (java.util.concurrent.ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             SemanticTurnOutcome outcome = new SemanticTurnEngine(List.of(executor), pool, 1).execute(
                     ExecutionTestPlanFactory.oneGeneralTask(),
-                    new TurnDeadline(clock.instant(), clock), new CancellationSignal(), List.of(), false);
+                    new TurnDeadline(clock.instant(), clock), new CancellationSignal(), false);
             assertThat(calls.get()).isZero();
             assertThat(outcome.getTaskOutcomes().getFirst().getTerminal())
                     .isInstanceOf(TaskOutcome.TimedOut.class);
@@ -61,7 +61,7 @@ class SemanticTurnEngineDeadlineTest {
             java.util.concurrent.Future<SemanticTurnOutcome> future = caller.submit(() -> engine.execute(
                     ExecutionTestPlanFactory.twoGeneralTasks(),
                     TurnDeadline.after(java.time.Duration.ofMillis(50), Clock.systemUTC()),
-                    new CancellationSignal(), List.of(), false));
+                    new CancellationSignal(), false));
             assertThat(lateStarted.await(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
             SemanticTurnOutcome outcome = future.get(1, java.util.concurrent.TimeUnit.SECONDS);
             assertThat(outcome.getTaskOutcomes().get(0).getTerminal())

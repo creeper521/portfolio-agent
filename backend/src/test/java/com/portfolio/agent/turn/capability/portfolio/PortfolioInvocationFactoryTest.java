@@ -75,6 +75,6 @@ class PortfolioInvocationFactoryTest {
         return new TaskExecutionContext(
                 task, List.of(), "public-1",
                 TurnDeadline.after(Duration.ofSeconds(1), Clock.systemUTC()),
-                new CancellationSignal(), List.of(), false, false);
+                new CancellationSignal(), false, false);
     }
 }

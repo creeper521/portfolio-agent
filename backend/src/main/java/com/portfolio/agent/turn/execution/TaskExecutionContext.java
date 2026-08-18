@@ -1,6 +1,5 @@
 package com.portfolio.agent.turn.execution;
 
-import com.portfolio.agent.answer.routing.domain.AuthorizedContextReference;
 import com.portfolio.agent.turn.planning.SemanticTask;
 
 import java.util.List;
@@ -12,22 +11,18 @@ public final class TaskExecutionContext {
     private final String contentReleaseId;
     private final TurnDeadline deadline;
     private final CancellationSignal cancellation;
-    private final List<AuthorizedContextReference> authorizedContextReferences;
     private final boolean modelExpressionAllowed;
     private final boolean presetRequest;
 
     public TaskExecutionContext(
             SemanticTask task, List<TaskSemanticResult> dependencyResults,
             String contentReleaseId, TurnDeadline deadline, CancellationSignal cancellation,
-            List<AuthorizedContextReference> authorizedContextReferences,
             boolean modelExpressionAllowed, boolean presetRequest) {
         this.task = Objects.requireNonNull(task, "task");
         this.dependencyResults = List.copyOf(Objects.requireNonNull(dependencyResults, "dependencyResults"));
         this.contentReleaseId = Objects.requireNonNull(contentReleaseId, "contentReleaseId");
         this.deadline = Objects.requireNonNull(deadline, "deadline");
         this.cancellation = Objects.requireNonNull(cancellation, "cancellation");
-        this.authorizedContextReferences = List.copyOf(
-                Objects.requireNonNull(authorizedContextReferences, "authorizedContextReferences"));
         this.modelExpressionAllowed = modelExpressionAllowed;
         this.presetRequest = presetRequest;
     }
@@ -37,9 +32,6 @@ public final class TaskExecutionContext {
     public String getContentReleaseId() { return contentReleaseId; }
     public TurnDeadline getDeadline() { return deadline; }
     public CancellationSignal getCancellation() { return cancellation; }
-    public List<AuthorizedContextReference> getAuthorizedContextReferences() {
-        return authorizedContextReferences;
-    }
     public boolean isModelExpressionAllowed() { return modelExpressionAllowed; }
     public boolean isPresetRequest() { return presetRequest; }
 }

@@ -22,7 +22,7 @@ class SemanticTurnEngineCancellationTest {
             SemanticTurnOutcome outcome = new SemanticTurnEngine(List.of(executor), pool, 1).execute(
                     ExecutionTestPlanFactory.oneGeneralTask(),
                     TurnDeadline.after(Duration.ofSeconds(1), Clock.systemUTC()),
-                    cancellation, List.of(), false);
+                    cancellation, false);
             assertThat(calls.get()).isZero();
             assertThat(outcome.getTaskOutcomes().getFirst().getTerminal())
                     .isInstanceOf(TaskOutcome.Cancelled.class);
@@ -57,7 +57,7 @@ class SemanticTurnEngineCancellationTest {
             java.util.concurrent.Future<SemanticTurnOutcome> future = caller.submit(() -> engine.execute(
                     ExecutionTestPlanFactory.oneGeneralTask(),
                     TurnDeadline.after(Duration.ofSeconds(2), Clock.systemUTC()),
-                    cancellation, List.of(), false));
+                    cancellation, false));
             assertThat(started.await(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
             cancellation.cancel();
             SemanticTurnOutcome outcome = future.get(1, java.util.concurrent.TimeUnit.SECONDS);

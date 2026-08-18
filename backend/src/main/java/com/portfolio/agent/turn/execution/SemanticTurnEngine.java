@@ -1,6 +1,5 @@
 package com.portfolio.agent.turn.execution;
 
-import com.portfolio.agent.answer.routing.domain.AuthorizedContextReference;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import com.portfolio.agent.turn.planning.ValidatedSemanticTurnPlan;
 
@@ -40,7 +39,6 @@ public final class SemanticTurnEngine {
             ValidatedSemanticTurnPlan validatedPlan,
             TurnDeadline deadline,
             CancellationSignal cancellation,
-            List<AuthorizedContextReference> authorizedContextReferences,
             boolean presetRequest) {
         Objects.requireNonNull(validatedPlan, "validatedPlan");
         com.portfolio.agent.turn.planning.SemanticTurnPlan plan = validatedPlan.getPlan();
@@ -64,7 +62,7 @@ public final class SemanticTurnEngine {
             for (int offset = 0; offset < runnable.size(); offset += maxParallelTasks) {
                 int end = Math.min(runnable.size(), offset + maxParallelTasks);
                 if (!executeBatch(runnable.subList(offset, end), plan, outcomes, deadline,
-                        cancellation, authorizedContextReferences, expressionTaskId, presetRequest)) break;
+                        cancellation, expressionTaskId, presetRequest)) break;
             }
         }
         for (SemanticTask task : plan.getTasks()) {
@@ -84,7 +82,6 @@ public final class SemanticTurnEngine {
             Map<String, TaskOutcome> outcomes,
             TurnDeadline deadline,
             CancellationSignal cancellation,
-            List<AuthorizedContextReference> references,
             String expressionTaskId,
             boolean presetRequest) {
         CompletionService<TaskOutcome> completions = new ExecutorCompletionService<>(executorService);
@@ -93,7 +90,7 @@ public final class SemanticTurnEngine {
         for (SemanticTask task : tasks) {
             Future<TaskOutcome> future = completions.submit(() -> executeTask(task,
                     scheduler.dependencyResults(plan, task.getTaskId(), outcomes),
-                    plan.getContentReleaseId(), deadline, cancellation, references,
+                    plan.getContentReleaseId(), deadline, cancellation,
                     task.getTaskId().equals(expressionTaskId), presetRequest));
             taskIds.put(future, task.getTaskId());
         }
@@ -125,7 +122,6 @@ public final class SemanticTurnEngine {
     private TaskOutcome executeTask(
             SemanticTask task, List<TaskSemanticResult> dependencyResults,
             String contentReleaseId, TurnDeadline deadline, CancellationSignal cancellation,
-            List<AuthorizedContextReference> references,
             boolean modelExpressionAllowed, boolean presetRequest) {
         SemanticTaskExecutor executor = executors.get(task.getSourceDomain());
         if (executor == null) return new TaskOutcome(task.getTaskId(),
@@ -133,7 +129,7 @@ public final class SemanticTurnEngine {
         try {
             TaskExecutionResult result = executor.execute(new TaskExecutionContext(
                     task, dependencyResults, contentReleaseId, deadline, cancellation,
-                    references, modelExpressionAllowed, presetRequest));
+                    modelExpressionAllowed, presetRequest));
             return new TaskOutcome(task.getTaskId(),
                     new TaskOutcome.Produced(result.getArtifact(), result.getFulfillment()));
         } catch (TaskTerminalException terminal) {

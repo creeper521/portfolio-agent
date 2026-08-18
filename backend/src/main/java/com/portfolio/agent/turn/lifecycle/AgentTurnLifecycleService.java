@@ -228,7 +228,7 @@ public final class AgentTurnLifecycleService {
         SemanticTurnPlan plan = validated.getPlan();
         SemanticTurnOutcome outcome = engine.execute(
                 validated, TurnDeadline.after(executionDuration, clock),
-                cancellation, List.of(), command instanceof AgentTurnCommand.Ask ask
+                cancellation, command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.Preset);
         List<ContextMutationPlanner.Mutation> mutations = mutationPlanner.plan(
                 conversationId, plan, outcome, clock.instant().plus(contextTtl),
