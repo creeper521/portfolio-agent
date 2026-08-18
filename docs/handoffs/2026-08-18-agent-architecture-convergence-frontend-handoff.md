@@ -429,3 +429,30 @@ grep -rn "PlanOutcome\|planOutcome" frontend/src frontend/e2e → 无输出
 - `npm.cmd --prefix frontend run build`（含 vue-tsc）：通过。
 
 未 commit/push；除上述前端责任区文件与本文档外未修改任何文件。Slice 2 前端阻断项解除。
+
+## 16. Slice 5 Frontend 并行任务与阻断清单（2026-08-18）
+
+Backend S5-01 已冻结以下新增合同，Frontend Agent 可以立即并行处理，不必等待 Lifecycle/API：
+
+1. `sectionKind` 闭集固定为 `BACKGROUND / RESPONSIBILITY / SOLUTION / VERIFICATION / STATUS / BOUNDARY / GENERAL_PRINCIPLE / PORTFOLIO_EXAMPLE / RELATION`。请把 `PublicSection.sectionKind: string` 改为该闭合联合，并在 mapper 对闭集外值 fail-closed。
+2. `RECOMMENDATION` 固定字段为：
+   - Presentation：`kind/requestedSize/actualSize/items/unsatisfiedConstraints/incompleteReasons/supportingSections`；
+   - Item：`resultItemId/label/summary/route/reasons/support`；
+   - `route` 必须是站内相对路径，`support.publicSourceKeys` 必须由唯一 SourceCatalog 解析；
+   - `actualSize === items.length`，1—5 项且不得超过 requestedSize；数量不足必须有 incompleteReasons，数量完整时不得有缺口字段。
+3. 共享 8-fixture 集合保持不变；`answer-complete.json` 已新增第二个 FULL Goal 作为 RECOMMENDATION golden。Backend 结构门通过，Frontend mapper 能解析；当前 `publicAgentTurnMapper.test.ts` 仅因旧断言硬编码 goalResults 长度为 1 而红。请改为两个 FULL Goal，并补 Recommendation 完整字段、来源解析、route、数量不变量与组件测试。
+4. 可立即实现 fixture-driven 组件：`PublicAgentTurnMessage`、`AnswerTurnView`、`GoalResultView`、`SectionedPresentationView`、`RecommendationPresentationView`、`ClarificationTurnView`、`SourceDrawer`；补 local/critical clarification、FULL/PARTIAL/NONE、来源抽屉、恶意纯文本 escaped、responsive/accessibility focused tests。
+5. `ConversationThread/AgentWorkspace` 可先建立只消费 PublicAgentTurn 的新组件边界，但在后端新 API 可用前不要接入旧 endpoint adapter，也不要删除仍支撑当前生产路由的旧链。
+
+仍依赖 Backend、暂时阻断最终接线的项目：
+
+| Frontend 项目 | Backend 解除条件 |
+|---|---|
+| `agentTurnApi.ts` 最终 request/response 与错误映射 | S5-06 四条无版本 API 路径、状态码、Header 与 `AgentApiErrorResponse` 固定 |
+| `conversationId/resumeToken` sessionStorage、签发与轮换 | S5-03/S5-06 conversation envelope 与 Header 精确字段固定 |
+| cancel 的 AbortController + DELETE | S5-04/S5-06 cancel 路径与 Bearer/requestId 验证固定 |
+| clear/resume、handle/action 转发 | S5-02/S5-05 Context/Continuation 与 clear 语义固定 |
+| clarification choice/text 提交 | S5-02/S5-06 ResolveClarification DTO 与错误码固定 |
+| 旧 v1/v2/v3、`answerTypes`、旧 mapper/component/API 原子删除 | Backend 新 API contract tests 通过并给出切换信号；不得提前加兼容桥 |
+
+Frontend Agent 每关闭一项请在本节追加文件与验证结果。Backend 主开发继续推进 S5-02—S5-06，不等待前端实现。

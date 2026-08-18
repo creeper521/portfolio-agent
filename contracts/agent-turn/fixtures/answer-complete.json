@@ -38,6 +38,36 @@
         "continuation": {
           "contextHandle": "ctx_fixture_overview"
         }
+      },
+      {
+        "goalId": "goal-recommendation",
+        "label": "推荐一个代表项目",
+        "coverage": "FULL",
+        "presentation": {
+          "kind": "RECOMMENDATION",
+          "requestedSize": 1,
+          "actualSize": 1,
+          "items": [
+            {
+              "resultItemId": "item-goal-recommendation-1",
+              "label": "Agent 能力集成 MVP",
+              "summary": "该项目集中展示了受约束 Agent 能力的工程实现。",
+              "route": "/projects/agent-capability-mvp",
+              "reasons": ["具备完整的公开实现与验证材料"],
+              "support": {
+                "kind": "VERIFIED_PUBLIC_EVIDENCE",
+                "publicSourceKeys": ["source-agent-mvp"]
+              }
+            }
+          ],
+          "unsatisfiedConstraints": [],
+          "incompleteReasons": [],
+          "supportingSections": []
+        },
+        "notices": [],
+        "continuation": {
+          "contextHandle": "ctx_fixture_recommendation"
+        }
       }
     ],
     "sourceCatalog": {
@@ -46,6 +76,13 @@
           "key": "source-sql-audit",
           "code": "E-01",
           "label": "SQL 审计工具公开交付证据集",
+          "type": "PUBLIC_EVIDENCE",
+          "route": "/evidence"
+        },
+        {
+          "key": "source-agent-mvp",
+          "code": "E-02",
+          "label": "Agent 能力集成 MVP 公开交付证据集",
           "type": "PUBLIC_EVIDENCE",
           "route": "/evidence"
         }
