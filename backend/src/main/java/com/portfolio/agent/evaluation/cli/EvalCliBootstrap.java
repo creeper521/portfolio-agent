@@ -47,9 +47,7 @@ public final class EvalCliBootstrap {
      */
     static final String[] FORCED_OFF_ARGS = {
             "--spring.main.web-application-type=none",
-            "--portfolio.model-expression.enabled=false",
             "--portfolio.conversational-agent.enabled=false",
-            "--portfolio.model-expression.external-data-policy-approved=false",
             "--portfolio.conversational-agent.visitor-data-policy-approved=false",
             "--portfolio.retrieval.profile=KEYWORD_ONLY"
     };
@@ -117,11 +115,11 @@ public final class EvalCliBootstrap {
                 new KeywordRetriever(), new VectorRetriever(), new ReciprocalRankFusion(),
                 new RetrievalContextValidator(), offlineEmbedding));
         if (withIntelligence) {
-            com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor
-                    p3Executor = createP3Executor();
-            if (p3Executor != null) {
+            com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor
+                    portfolioExecutor = createPortfolioExecutor();
+            if (portfolioExecutor != null) {
                 executors.add(new com.portfolio.agent.evaluation.execution
-                        .P3EvalExecutor(p3Executor, bundle));
+                        .PortfolioEvalExecutor(portfolioExecutor, bundle));
             }
             if (baseUrl != null && !baseUrl.isBlank()) {
                 executors.add(new com.portfolio.agent.evaluation.execution
@@ -158,8 +156,8 @@ public final class EvalCliBootstrap {
                 bundle);
     }
 
-    private com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor
-            createP3Executor() {
+    private com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor
+            createPortfolioExecutor() {
         org.springframework.context.ConfigurableApplicationContext context =
                 springContext();
         if (context == null) {
@@ -167,8 +165,7 @@ public final class EvalCliBootstrap {
         }
         try {
             return context.getBean(
-                    com.portfolio.agent.answer.routing.adapter.execution
-                            .P3PortfolioSemanticTaskExecutor.class);
+                    com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor.class);
         } catch (RuntimeException failure) {
             return null;
         }

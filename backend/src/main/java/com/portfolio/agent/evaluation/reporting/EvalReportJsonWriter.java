@@ -192,7 +192,7 @@ public final class EvalReportJsonWriter {
                 observation.getSemanticTurnShape();
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("disposition", shape.getDisposition().name());
-        entry.put("planOutcome", shape.getPlanOutcome().name());
+        entry.put("planOutcome", shape.getCoverageOutcome().name());
         entry.put("taskCount", shape.getTaskCount());
         entry.put("dependencyCount", shape.getDependencyCount());
         entry.put("modelCallCount", shape.getModelCallCount());

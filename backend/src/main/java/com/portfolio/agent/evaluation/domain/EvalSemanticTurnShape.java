@@ -32,7 +32,7 @@ public final class EvalSemanticTurnShape {
         UNKNOWN
     }
 
-    public enum PlanOutcome {
+    public enum CoverageOutcome {
         SUCCEEDED,
         PARTIAL,
         NO_RESULT,
@@ -43,7 +43,7 @@ public final class EvalSemanticTurnShape {
     }
 
     private final Disposition disposition;
-    private final PlanOutcome planOutcome;
+    private final CoverageOutcome coverageOutcome;
     private final int taskCount;
     private final int dependencyCount;
     private final int modelCallCount;
@@ -60,7 +60,7 @@ public final class EvalSemanticTurnShape {
 
     private EvalSemanticTurnShape(
             Disposition disposition,
-            PlanOutcome planOutcome,
+            CoverageOutcome coverageOutcome,
             int taskCount,
             int dependencyCount,
             int modelCallCount,
@@ -75,7 +75,7 @@ public final class EvalSemanticTurnShape {
             boolean provenanceValid,
             boolean privacySafe) {
         this.disposition = Objects.requireNonNull(disposition, "disposition");
-        this.planOutcome = Objects.requireNonNull(planOutcome, "planOutcome");
+        this.coverageOutcome = Objects.requireNonNull(coverageOutcome, "coverageOutcome");
         this.taskCount = taskCount;
         this.dependencyCount = dependencyCount;
         this.modelCallCount = modelCallCount;
@@ -93,7 +93,7 @@ public final class EvalSemanticTurnShape {
 
     public static EvalSemanticTurnShape empty() {
         return new EvalSemanticTurnShape(
-                Disposition.UNKNOWN, PlanOutcome.NONE,
+                Disposition.UNKNOWN, CoverageOutcome.NONE,
                 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, true, true, true);
     }
@@ -125,7 +125,7 @@ public final class EvalSemanticTurnShape {
                 && (taskCount == 0 || sourceCounts.total() == taskCount);
         return new EvalSemanticTurnShape(
                 disposition,
-                parsePlanOutcome(text(outcome, "planOutcome")),
+                parseCoverageOutcome(text(outcome, "planOutcome")),
                 taskCount,
                 dependencyCount,
                 0,
@@ -277,16 +277,16 @@ public final class EvalSemanticTurnShape {
         }
     }
 
-    private static PlanOutcome parsePlanOutcome(String value) {
+    private static CoverageOutcome parseCoverageOutcome(String value) {
         try {
-            return value == null ? PlanOutcome.NONE : PlanOutcome.valueOf(value);
+            return value == null ? CoverageOutcome.NONE : CoverageOutcome.valueOf(value);
         } catch (IllegalArgumentException ignored) {
-            return PlanOutcome.UNKNOWN;
+            return CoverageOutcome.UNKNOWN;
         }
     }
 
     public Disposition getDisposition() { return disposition; }
-    public PlanOutcome getPlanOutcome() { return planOutcome; }
+    public CoverageOutcome getCoverageOutcome() { return coverageOutcome; }
     public int getTaskCount() { return taskCount; }
     public int getDependencyCount() { return dependencyCount; }
     public int getModelCallCount() { return modelCallCount; }
@@ -304,7 +304,7 @@ public final class EvalSemanticTurnShape {
     @Override
     public String toString() {
         return "EvalSemanticTurnShape{disposition=" + disposition
-                + ", planOutcome=" + planOutcome
+                + ", coverageOutcome=" + coverageOutcome
                 + ", taskCount=" + taskCount
                 + ", dependencyCount=" + dependencyCount
                 + ", modelCallCount=" + modelCallCount

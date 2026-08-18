@@ -53,7 +53,7 @@ class EvalSemanticTurnShapeTest {
         EvalSemanticTurnShape shape = EvalSemanticTurnShape.from(agentTurn);
 
         assertThat(shape.getDisposition()).isEqualTo(EvalSemanticTurnShape.Disposition.PARTIAL_READY);
-        assertThat(shape.getPlanOutcome()).isEqualTo(EvalSemanticTurnShape.PlanOutcome.PARTIAL);
+        assertThat(shape.getCoverageOutcome()).isEqualTo(EvalSemanticTurnShape.CoverageOutcome.PARTIAL);
         assertThat(shape.getTaskCount()).isEqualTo(3);
         assertThat(shape.getDependencyCount()).isEqualTo(3);
         assertThat(shape.getAnsweredCount()).isEqualTo(1);

@@ -33,12 +33,7 @@ class EvalCliBootstrapTest {
 
         try {
             assertThat(context.getEnvironment().getProperty(
-                    "portfolio.model-expression.enabled")).isEqualTo("false");
-            assertThat(context.getEnvironment().getProperty(
                     "portfolio.conversational-agent.enabled")).isEqualTo("false");
-            assertThat(context.getEnvironment().getProperty(
-                    "portfolio.model-expression.external-data-policy-approved"))
-                    .isEqualTo("false");
             assertThat(context.getEnvironment().getProperty(
                     "portfolio.conversational-agent.visitor-data-policy-approved"))
                     .isEqualTo("false");

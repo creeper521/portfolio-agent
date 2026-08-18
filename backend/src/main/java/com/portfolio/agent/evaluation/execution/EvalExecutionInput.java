@@ -3,7 +3,7 @@ package com.portfolio.agent.evaluation.execution;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalMessage;
 import com.portfolio.agent.evaluation.domain.EvalSubjectRef;
-import com.portfolio.agent.answer.routing.domain.SemanticTask;
+import com.portfolio.agent.turn.planning.SemanticTask;
 import java.util.List;
 import java.util.Objects;
 
