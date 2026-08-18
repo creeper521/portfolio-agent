@@ -1,6 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import type { PublicAgentTurn } from './publicAgentTurn'
+import { parsePublicAgentTurn } from './publicAgentTurnMapper'
+
 // 测试专用合同 fixture loader（S0-01 / 前端交接 §9）：
 // 从仓库根 contracts/agent-turn/fixtures 直读主开发 Agent 冻结的共享 Golden Fixtures，
 // 不复制数据到 frontend。仅被 *.test.ts 引用，不进入应用构建图。
@@ -57,4 +60,19 @@ export function loadPublicAgentTurnGoldenFixtures(): readonly GoldenFixture[] {
     fileName,
     turn: JSON.parse(readFileSync(resolve(directory, fileName), 'utf8')) as unknown,
   }))
+}
+
+/** 测试便捷入口：按文件名读取并解析共享 golden fixture（解析失败直接抛错）。 */
+export function parseGoldenFixture(fileName: string): PublicAgentTurn {
+  const fixture = loadPublicAgentTurnGoldenFixtures().find(
+    (candidate) => candidate.fileName === fileName,
+  )
+  if (fixture === undefined) {
+    throw new Error(`缺少 fixture ${fileName}`)
+  }
+  const parsed = parsePublicAgentTurn(fixture.turn)
+  if (!parsed.ok) {
+    throw new Error(`${fileName} 解析失败：${parsed.error.violations.join('；')}`)
+  }
+  return parsed.turn
 }

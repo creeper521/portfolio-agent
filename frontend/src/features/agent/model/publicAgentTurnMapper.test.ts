@@ -64,7 +64,7 @@ function asArray(value: unknown): unknown[] {
 }
 
 describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
-  it('answer-complete：COMPLETE、单 FULL Goal、SECTIONED、来源目录与续接动作', () => {
+  it('answer-complete：COMPLETE、两个 FULL Goal（SECTIONED + RECOMMENDATION golden）、来源目录与续接动作', () => {
     const turn = parseFixture('answer-complete.json')
     expect(turn.kind).toBe('ANSWER')
     if (turn.kind !== 'ANSWER') {
@@ -72,21 +72,46 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
     }
     expect(turn.answer.resolution).toBe('COMPLETE')
     expect(turn.answer.contentReleaseId).toBe('2026-08-05.1')
-    expect(turn.answer.goalResults).toHaveLength(1)
-    const goal = turn.answer.goalResults[0]
-    expect(goal.coverage).toBe('FULL')
-    expect(goal.notices).toEqual([])
-    if (goal.presentation === undefined || goal.presentation.kind !== 'SECTIONED') {
+    expect(turn.answer.goalResults).toHaveLength(2)
+
+    const sectionedGoal = turn.answer.goalResults[0]
+    expect(sectionedGoal.coverage).toBe('FULL')
+    expect(sectionedGoal.notices).toEqual([])
+    if (sectionedGoal.presentation === undefined || sectionedGoal.presentation.kind !== 'SECTIONED') {
       throw new Error('期望 SECTIONED presentation')
     }
-    expect(goal.presentation.sections).toHaveLength(2)
-    expect(goal.presentation.sections[0].support.kind).toBe('VERIFIED_PUBLIC_EVIDENCE')
-    expect(goal.presentation.sections[0].support.publicSourceKeys).toEqual(['source-sql-audit'])
-    expect(turn.answer.sourceCatalog.sources).toHaveLength(1)
-    expect(turn.answer.sourceCatalog.sources[0].code).toBe('E-01')
-    expect(turn.answer.sourceCatalog.sources[0].route).toBe('/evidence')
+    expect(sectionedGoal.presentation.sections).toHaveLength(2)
+    expect(sectionedGoal.presentation.sections[0].sectionKind).toBe('BACKGROUND')
+    expect(sectionedGoal.presentation.sections[0].support.kind).toBe('VERIFIED_PUBLIC_EVIDENCE')
+    expect(sectionedGoal.presentation.sections[0].support.publicSourceKeys).toEqual(['source-sql-audit'])
+    expect(sectionedGoal.continuation?.contextHandle).toBe('ctx_fixture_overview')
+
+    const recommendationGoal = turn.answer.goalResults[1]
+    expect(recommendationGoal.coverage).toBe('FULL')
+    if (
+      recommendationGoal.presentation === undefined
+      || recommendationGoal.presentation.kind !== 'RECOMMENDATION'
+    ) {
+      throw new Error('期望 RECOMMENDATION presentation')
+    }
+    const recommendation = recommendationGoal.presentation
+    expect(recommendation.requestedSize).toBe(1)
+    expect(recommendation.actualSize).toBe(1)
+    expect(recommendation.items).toHaveLength(1)
+    const item = recommendation.items[0]
+    expect(item.resultItemId).toBe('item-goal-recommendation-1')
+    expect(item.label).toBe('Agent 能力集成 MVP')
+    expect(item.route).toBe('/projects/agent-capability-mvp')
+    expect(item.reasons).toEqual(['具备完整的公开实现与验证材料'])
+    expect(item.support.publicSourceKeys).toEqual(['source-agent-mvp'])
+    expect(recommendation.unsatisfiedConstraints).toEqual([])
+    expect(recommendation.incompleteReasons).toEqual([])
+    expect(recommendation.supportingSections).toEqual([])
+    expect(recommendationGoal.continuation?.contextHandle).toBe('ctx_fixture_recommendation')
+
+    expect(turn.answer.sourceCatalog.sources).toHaveLength(2)
+    expect(turn.answer.sourceCatalog.sources.map((source) => source.code)).toEqual(['E-01', 'E-02'])
     expect(turn.answer.sourceComposition).toEqual(['VERIFIED_PUBLIC_EVIDENCE'])
-    expect(goal.continuation?.contextHandle).toBe('ctx_fixture_overview')
     const action = turn.answer.suggestedActions?.[0]
     expect(action?.actionId).toBe('continue-verification')
     expect(action?.continuation?.contextHandle).toBe('ctx_fixture_overview')
@@ -279,5 +304,75 @@ describe('parsePublicAgentTurn：合同破损 fail-closed', () => {
     })
     const parsed = parsePublicAgentTurn(value)
     expect(parsed.ok).toBe(true)
+  })
+})
+
+describe('parsePublicAgentTurn：sectionKind 闭集与 RECOMMENDATION 冻结不变量', () => {
+  function recommendationOf(turn: Record<string, unknown>): Record<string, unknown> {
+    const goals = asArray(asRecord(asRecord(turn).answer).goalResults)
+    return asRecord(asRecord(goals[1]).presentation)
+  }
+
+  function sectionedOf(turn: Record<string, unknown>): Record<string, unknown> {
+    const goals = asArray(asRecord(asRecord(turn).answer).goalResults)
+    return asRecord(asRecord(goals[0]).presentation)
+  }
+
+  it('sectionKind 闭集外的值 fail-closed（SECTIONED 与 supportingSections 共用）', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const sections = asArray(sectionedOf(turn).sections)
+      asRecord(sections[0]).sectionKind = 'OVERVIEW'
+    }), 'sectionKind 必须是')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      recommendationOf(turn).supportingSections = [
+        { sectionId: 's-x', sectionKind: 'RANDOM', title: 't', content: 'c', support: { kind: 'GENERAL_KNOWLEDGE', publicSourceKeys: [] } },
+      ]
+    }), 'sectionKind 必须是')
+  })
+
+  it('actualSize 必须等于 items 数量，items 为 1—5 且不得超过 requestedSize', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      recommendationOf(turn).actualSize = 2
+    }), 'actualSize 必须等于 items 数量')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      recommendationOf(turn).items = []
+      recommendationOf(turn).actualSize = 0
+    }), 'items 数量必须在 1—5 之间')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      items.push(JSON.parse(JSON.stringify(items[0])) as unknown)
+      recommendationOf(turn).actualSize = 2
+    }), '不得超过 requestedSize')
+  })
+
+  it('数量缺口字段与 actualSize/requestedSize 一致性 fail-closed', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      recommendationOf(turn).incompleteReasons = ['候选不足']
+    }), '数量完整时不得携带 incompleteReasons')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      recommendationOf(turn).requestedSize = 3
+    }), '数量不足时必须提供 incompleteReasons')
+  })
+
+  it('推荐项 route 必须站内相对、support 必须可解析', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      asRecord(items[0]).route = 'https://example.com/projects/agent-capability-mvp'
+    }), '必须是站内相对路径')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      asRecord(asRecord(items[0]).support).publicSourceKeys = ['source-missing']
+    }), '无法在 answer.sourceCatalog 中解析')
+  })
+
+  it('推荐项 label/summary/reasons 必填', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      delete asRecord(items[0]).summary
+    }), 'summary 必须是非空字符串')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      asRecord(items[0]).reasons = '具备完整的公开实现与验证材料'
+    }), 'reasons 必须是 JSON 数组')
   })
 })

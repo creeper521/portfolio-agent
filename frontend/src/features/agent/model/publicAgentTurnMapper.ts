@@ -11,6 +11,7 @@ import type {
   PublicAgentTurn,
   PublicAgentTurnParseResult,
   PublicSection,
+  PublicSectionKind,
   PublicSourceReference,
   PublicSupport,
   RecommendationItem,
@@ -38,6 +39,19 @@ const ANSWER_RESOLUTIONS: readonly string[] = ['COMPLETE', 'PARTIAL', 'NO_RESULT
 const GOAL_COVERAGES: readonly string[] = ['FULL', 'PARTIAL', 'NONE']
 
 const PRESENTATION_KINDS: readonly string[] = ['SECTIONED', 'RECOMMENDATION']
+
+// S5-01 冻结的 sectionKind 闭集（前端交接 §16.1）。
+const SECTION_KINDS: readonly PublicSectionKind[] = [
+  'BACKGROUND',
+  'RESPONSIBILITY',
+  'SOLUTION',
+  'VERIFICATION',
+  'STATUS',
+  'BOUNDARY',
+  'GENERAL_PRINCIPLE',
+  'PORTFOLIO_EXAMPLE',
+  'RELATION',
+]
 
 const SUPPORT_KINDS: readonly string[] = [
   'GENERAL_KNOWLEDGE',
@@ -385,6 +399,50 @@ function parseSupport(
   return { kind, publicSourceKeys }
 }
 
+function parseSection(
+  value: unknown,
+  violations: Violations,
+  where: string,
+  sourceKeys: ReadonlySet<string>,
+): PublicSection | undefined {
+  if (!isRecord(value)) {
+    violations.add(`${where} 必须是 JSON 对象`)
+    return undefined
+  }
+  const sectionId = text(value.sectionId, violations, `${where}.sectionId`)
+  const title = text(value.title, violations, `${where}.title`)
+  const content = text(value.content, violations, `${where}.content`)
+  const sectionKind = SECTION_KINDS.find((kind) => kind === value.sectionKind)
+  if (sectionKind === undefined) {
+    violations.add(`${where}.sectionKind 必须是 ${SECTION_KINDS.join('/')} 之一`)
+    return undefined
+  }
+  const support = parseSupport(value.support, violations, `${where}.support`, sourceKeys)
+  if (sectionId === undefined || title === undefined || content === undefined || support === undefined) {
+    return undefined
+  }
+  return { sectionId, sectionKind, title, content, support }
+}
+
+function stringArrayOf(
+  value: unknown,
+  violations: Violations,
+  where: string,
+): readonly string[] | undefined {
+  const rawValues = arrayOf(value, violations, where)
+  if (rawValues === undefined) {
+    return undefined
+  }
+  const values: string[] = []
+  for (const rawValue of rawValues) {
+    const item = text(rawValue, violations, `${where}[]`)
+    if (item !== undefined) {
+      values.push(item)
+    }
+  }
+  return values
+}
+
 function parsePresentation(
   value: unknown,
   violations: Violations,
@@ -410,38 +468,74 @@ function parsePresentation(
     }
     const sections: PublicSection[] = []
     rawSections.forEach((rawSection, index) => {
-      const sectionWhere = `${where}.sections[${index}]`
-      if (!isRecord(rawSection)) {
-        violations.add(`${sectionWhere} 必须是 JSON 对象`)
-        return
-      }
-      const sectionId = text(rawSection.sectionId, violations, `${sectionWhere}.sectionId`)
-      const sectionKind = text(rawSection.sectionKind, violations, `${sectionWhere}.sectionKind`)
-      const title = text(rawSection.title, violations, `${sectionWhere}.title`)
-      const content = text(rawSection.content, violations, `${sectionWhere}.content`)
-      const support = parseSupport(
-        rawSection.support,
+      const section = parseSection(
+        rawSection,
         violations,
-        `${sectionWhere}.support`,
+        `${where}.sections[${index}]`,
         sourceKeys,
       )
-      if (
-        sectionId === undefined
-        || sectionKind === undefined
-        || title === undefined
-        || content === undefined
-        || support === undefined
-      ) {
-        return
+      if (section !== undefined) {
+        sections.push(section)
       }
-      sections.push({ sectionId, sectionKind, title, content, support })
     })
     return { kind: 'SECTIONED', sections }
+  }
+  return parseRecommendation(value, violations, where, sourceKeys)
+}
+
+function parseRecommendation(
+  value: Record<string, unknown>,
+  violations: Violations,
+  where: string,
+  sourceKeys: ReadonlySet<string>,
+): GoalPresentation | undefined {
+  const requestedSize = value.requestedSize
+  if (typeof requestedSize !== 'number' || !Number.isInteger(requestedSize) || requestedSize < 1) {
+    violations.add(`${where}.requestedSize 必须是 >= 1 的整数`)
+    return undefined
+  }
+  const actualSize = value.actualSize
+  if (typeof actualSize !== 'number' || !Number.isInteger(actualSize) || actualSize < 0) {
+    violations.add(`${where}.actualSize 必须是非负整数`)
+    return undefined
   }
   const rawItems = arrayOf(value.items, violations, `${where}.items`)
   if (rawItems === undefined) {
     return undefined
   }
+  if (rawItems.length < 1 || rawItems.length > 5) {
+    violations.add(`${where}.items 数量必须在 1—5 之间`)
+    return undefined
+  }
+  if (actualSize !== rawItems.length) {
+    violations.add(`${where}.actualSize 必须等于 items 数量`)
+    return undefined
+  }
+  if (rawItems.length > requestedSize) {
+    violations.add(`${where}.items 数量不得超过 requestedSize`)
+    return undefined
+  }
+  const incompleteReasons = stringArrayOf(
+    value.incompleteReasons,
+    violations,
+    `${where}.incompleteReasons`,
+  )
+  const unsatisfiedConstraints = stringArrayOf(
+    value.unsatisfiedConstraints,
+    violations,
+    `${where}.unsatisfiedConstraints`,
+  )
+  if (incompleteReasons === undefined || unsatisfiedConstraints === undefined) {
+    return undefined
+  }
+  const countIncomplete = actualSize < requestedSize
+  if (countIncomplete && incompleteReasons.length === 0) {
+    violations.add(`${where}: 数量不足时必须提供 incompleteReasons`)
+  }
+  if (!countIncomplete && incompleteReasons.length > 0) {
+    violations.add(`${where}: 数量完整时不得携带 incompleteReasons`)
+  }
+
   const items: RecommendationItem[] = []
   rawItems.forEach((rawItem, index) => {
     const itemWhere = `${where}.items[${index}]`
@@ -449,23 +543,65 @@ function parsePresentation(
       violations.add(`${itemWhere} 必须是 JSON 对象`)
       return
     }
-    const support = parseSupport(
-      rawItem.support,
-      violations,
-      `${itemWhere}.support`,
-      sourceKeys,
-    )
-    const resultItemId = optionalText(
-      rawItem.resultItemId,
-      violations,
-      `${itemWhere}.resultItemId`,
-    )
-    if (support === undefined) {
+    const label = text(rawItem.label, violations, `${itemWhere}.label`)
+    const summary = text(rawItem.summary, violations, `${itemWhere}.summary`)
+    const route = text(rawItem.route, violations, `${itemWhere}.route`)
+    const resultItemId = optionalText(rawItem.resultItemId, violations, `${itemWhere}.resultItemId`)
+    const reasons = stringArrayOf(rawItem.reasons, violations, `${itemWhere}.reasons`)
+    const support = parseSupport(rawItem.support, violations, `${itemWhere}.support`, sourceKeys)
+    if (route !== undefined && !route.startsWith('/')) {
+      violations.add(`${itemWhere}: route "${route}" 必须是站内相对路径`)
       return
     }
-    items.push(resultItemId === undefined ? { support } : { support, resultItemId })
+    if (
+      label === undefined
+      || summary === undefined
+      || route === undefined
+      || reasons === undefined
+      || support === undefined
+    ) {
+      return
+    }
+    items.push({
+      ...(resultItemId === undefined ? {} : { resultItemId }),
+      label,
+      summary,
+      route,
+      reasons,
+      support,
+    })
   })
-  return { kind: 'RECOMMENDATION', items }
+
+  const rawSupportingSections = arrayOf(
+    value.supportingSections,
+    violations,
+    `${where}.supportingSections`,
+  )
+  if (rawSupportingSections === undefined) {
+    return undefined
+  }
+  const supportingSections: PublicSection[] = []
+  rawSupportingSections.forEach((rawSection, index) => {
+    const section = parseSection(
+      rawSection,
+      violations,
+      `${where}.supportingSections[${index}]`,
+      sourceKeys,
+    )
+    if (section !== undefined) {
+      supportingSections.push(section)
+    }
+  })
+
+  return {
+    kind: 'RECOMMENDATION',
+    requestedSize,
+    actualSize,
+    items,
+    unsatisfiedConstraints,
+    incompleteReasons,
+    supportingSections,
+  }
 }
 
 function parseSourceCatalog(

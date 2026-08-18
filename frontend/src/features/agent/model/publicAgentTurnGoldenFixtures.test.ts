@@ -129,21 +129,29 @@ describe('PublicAgentTurn 共享 Golden Fixtures（contracts/agent-turn/fixtures
     expect(new Set(resolutions)).toEqual(new Set(['COMPLETE', 'PARTIAL', 'NO_RESULT']))
   })
 
-  it('覆盖 SECTIONED presentation 与 ANSWER 内 local clarification', () => {
-    const sectionedFixtures = fixtures.filter((fixture) => {
-      if (EXPECTED_KIND_BY_FILE[fixture.fileName] !== 'ANSWER') {
-        return false
-      }
-      const goalResults = answerOf(fixture).goalResults
-      if (!Array.isArray(goalResults)) {
-        return false
-      }
-      return goalResults.some((rawGoal) => {
-        const goal = rawGoal as Record<string, unknown>
-        return (goal.presentation as Record<string, unknown> | undefined)?.kind === 'SECTIONED'
+  it('覆盖 SECTIONED 与 RECOMMENDATION presentation 及 ANSWER 内 local clarification', () => {
+    const fixturesWithPresentationKind = (kind: string): readonly GoldenFixture[] =>
+      fixtures.filter((fixture) => {
+        if (EXPECTED_KIND_BY_FILE[fixture.fileName] !== 'ANSWER') {
+          return false
+        }
+        const goalResults = answerOf(fixture).goalResults
+        if (!Array.isArray(goalResults)) {
+          return false
+        }
+        return goalResults.some((rawGoal) => {
+          const goal = rawGoal as Record<string, unknown>
+          return (goal.presentation as Record<string, unknown> | undefined)?.kind === kind
+        })
       })
-    })
-    expect(sectionedFixtures.length, '至少一个 fixture 使用 SECTIONED presentation').toBeGreaterThan(0)
+    expect(
+      fixturesWithPresentationKind('SECTIONED').length,
+      '至少一个 fixture 使用 SECTIONED presentation',
+    ).toBeGreaterThan(0)
+    expect(
+      fixturesWithPresentationKind('RECOMMENDATION').length,
+      '至少一个 fixture 使用 RECOMMENDATION presentation',
+    ).toBeGreaterThan(0)
 
     const localClarificationFixture = fixtures.find(
       (fixture) => fixture.fileName === 'answer-local-clarification.json',

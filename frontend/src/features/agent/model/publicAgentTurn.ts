@@ -57,17 +57,33 @@ export interface SuggestedAction {
   readonly continuation?: ContinuationReference
 }
 
+/** S5-01 冻结的 sectionKind 闭集（前端交接 §16.1）。 */
+export type PublicSectionKind =
+  | 'BACKGROUND'
+  | 'RESPONSIBILITY'
+  | 'SOLUTION'
+  | 'VERIFICATION'
+  | 'STATUS'
+  | 'BOUNDARY'
+  | 'GENERAL_PRINCIPLE'
+  | 'PORTFOLIO_EXAMPLE'
+  | 'RELATION'
+
 export interface PublicSection {
   readonly sectionId: string
-  readonly sectionKind: string
+  readonly sectionKind: PublicSectionKind
   readonly title: string
   readonly content: string
   readonly support: PublicSupport
 }
 
-/** Recommendation item 冻结字段为 support 与可选 resultItemId；其余细节以 fixtures 为准。 */
+/** S5-01 冻结的推荐结果项字段（前端交接 §16.2）。 */
 export interface RecommendationItem {
   readonly resultItemId?: string
+  readonly label: string
+  readonly summary: string
+  readonly route: string
+  readonly reasons: readonly string[]
   readonly support: PublicSupport
 }
 
@@ -78,7 +94,12 @@ export interface SectionedPresentation {
 
 export interface RecommendationPresentation {
   readonly kind: 'RECOMMENDATION'
+  readonly requestedSize: number
+  readonly actualSize: number
   readonly items: readonly RecommendationItem[]
+  readonly unsatisfiedConstraints: readonly string[]
+  readonly incompleteReasons: readonly string[]
+  readonly supportingSections: readonly PublicSection[]
 }
 
 export type GoalPresentation = SectionedPresentation | RecommendationPresentation
@@ -114,6 +135,16 @@ export interface TextField {
 }
 
 export type ClarificationField = SingleChoiceField | TextField
+
+/** 澄清表单提交答案：SINGLE_CHOICE 提交 opaque choiceId，TEXT 提交 bounded 文本。 */
+export type ClarificationFieldAnswer =
+  | { readonly fieldId: string; readonly kind: 'SINGLE_CHOICE'; readonly choiceId: string }
+  | { readonly fieldId: string; readonly kind: 'TEXT'; readonly text: string }
+
+export interface ClarificationSubmissionPayload {
+  readonly clarificationId: string
+  readonly answers: readonly ClarificationFieldAnswer[]
+}
 
 /** 澄清挑战使用 opaque id；前端不接触 promptCode、subject binding 或内部 Task。 */
 export interface ClarificationChallenge {
