@@ -38,7 +38,9 @@ class PortfolioTaskExecutorTest {
         ValidatedEvidenceBundle evidence = mock(ValidatedEvidenceBundle.class);
         ValidatedEvidenceUnit unit = unit();
         PortfolioSemanticResult result = new PortfolioSemanticResult.Fact(
-                PortfolioSemanticResult.Coverage.PARTIAL, List.of(unit), List.of("VERIFICATION"));
+                PortfolioSemanticResult.Coverage.PARTIAL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), List.of(unit), List.of("VERIFICATION"));
         PortfolioPresentation presentation = mock(PortfolioPresentation.class);
         when(invocationFactory.create(context)).thenReturn(invocation);
         when(context.getDeadline()).thenReturn(mock(com.portfolio.agent.turn.execution.TurnDeadline.class));

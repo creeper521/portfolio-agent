@@ -51,7 +51,9 @@ final class CrossDomainTestFixtures {
                         "E-01", "并发实现证据", "public-1", "DOCUMENT",
                         "/projects/project-a", "/evidence/e-01"));
         return new PortfolioSemanticResult.Fact(
-                PortfolioSemanticResult.Coverage.FULL, List.of(unit), List.of());
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), List.of(unit), List.of());
     }
 
     static TaskExecutionContext context(String concept) {

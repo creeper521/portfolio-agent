@@ -65,7 +65,9 @@ class PortfolioFactExpressionCompilerAdversarialTest {
                         "E-01", "Evidence", "public-1", "DOCUMENT",
                         "/projects/project-a", "/evidence/e-01"));
         return new PortfolioSemanticResult.Fact(
-                PortfolioSemanticResult.Coverage.PARTIAL, List.of(unit), List.of("LIMITATION"));
+                PortfolioSemanticResult.Coverage.PARTIAL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), List.of(unit), List.of("LIMITATION"));
     }
 
     private PortfolioPresentation canonical() {

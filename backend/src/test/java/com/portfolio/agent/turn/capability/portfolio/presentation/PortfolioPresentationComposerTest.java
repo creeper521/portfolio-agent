@@ -31,7 +31,9 @@ class PortfolioPresentationComposerTest {
         PortfolioPresentation presentation = new PortfolioPresentationComposer(
                 PresentationPolicy.defaults()).compose(
                 new PortfolioSemanticResult.Fact(
-                        PortfolioSemanticResult.Coverage.FULL, List.of(unit), List.of()));
+                        PortfolioSemanticResult.Coverage.FULL,
+                        com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                                .allPublished("public-1"), List.of(unit), List.of()));
         assertThat(presentation.getSections()).singleElement().satisfies(section -> {
             assertThat(section.getSectionType().name()).isEqualTo("VERIFICATION");
             assertThat(section.getContent()).isEqualTo("通过回归测试验证。");

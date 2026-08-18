@@ -22,7 +22,7 @@ public final class PortfolioSemanticResultFactory {
             case PORTFOLIO_FACT -> fact(invocation, bundle);
             case PORTFOLIO_COMPARE -> comparison(invocation, bundle);
             case PORTFOLIO_RECOMMEND, PORTFOLIO_REFINE_RECOMMENDATION ->
-                    recommendation(task, bundle);
+                    recommendation(task, invocation, bundle);
             default -> throw new IllegalArgumentException("unsupported portfolio task");
         };
     }
@@ -31,18 +31,21 @@ public final class PortfolioSemanticResultFactory {
             PortfolioEvidenceInvocation invocation, ValidatedEvidenceBundle bundle) {
         PortfolioSupportEvaluator.Evaluation support = evaluator.fact(invocation, bundle);
         return support.hasSupport() ? Optional.of(new PortfolioSemanticResult.Fact(
-                support.coverage(), support.getSelectedUnits(), support.getOmissions())) : Optional.empty();
+                support.coverage(), invocation.getSubjectScope(),
+                support.getSelectedUnits(), support.getOmissions())) : Optional.empty();
     }
 
     private Optional<PortfolioSemanticResult> comparison(
             PortfolioEvidenceInvocation invocation, ValidatedEvidenceBundle bundle) {
         PortfolioSupportEvaluator.Evaluation support = evaluator.comparison(invocation, bundle);
         return support.hasSupport() ? Optional.of(new PortfolioSemanticResult.Comparison(
-                support.coverage(), support.getSelectedUnits(), support.getOmissions())) : Optional.empty();
+                support.coverage(), invocation.getSubjectScope(),
+                support.getSelectedUnits(), support.getOmissions())) : Optional.empty();
     }
 
     private Optional<PortfolioSemanticResult> recommendation(
-            SemanticTask task, ValidatedEvidenceBundle bundle) {
+            SemanticTask task, PortfolioEvidenceInvocation invocation,
+            ValidatedEvidenceBundle bundle) {
         PortfolioSupportEvaluator.Evaluation support = evaluator.recommendation(bundle);
         if (!support.hasSupport()) return Optional.empty();
         int requestedSize = task.getParameters().getParameters()
@@ -56,6 +59,7 @@ public final class PortfolioSemanticResultFactory {
         List<String> omissions = coverage == PortfolioSemanticResult.Coverage.FULL
                 ? List.of() : List.of("REQUESTED_SIZE");
         return Optional.of(new PortfolioSemanticResult.Recommendation(
-                coverage, support.getSelectedUnits(), omissions, requestedSize, selectedSubjects));
+                coverage, invocation.getSubjectScope(), support.getSelectedUnits(),
+                omissions, requestedSize, selectedSubjects));
     }
 }

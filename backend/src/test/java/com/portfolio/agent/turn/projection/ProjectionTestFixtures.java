@@ -82,7 +82,9 @@ final class ProjectionTestFixtures {
 
     static TaskArtifact portfolioFactArtifact(List<ValidatedEvidenceUnit> units) {
         PortfolioSemanticResult result = new PortfolioSemanticResult.Fact(
-                PortfolioSemanticResult.Coverage.FULL, units, List.of());
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), units, List.of());
         List<PortfolioPresentation.Section> sections = units.stream().map(unit ->
                 new PortfolioPresentation.Section(
                         AnswerSectionType.SOLUTION, "方案", unit.getClaim().getStatement(),
@@ -111,7 +113,9 @@ final class ProjectionTestFixtures {
     static SemanticTurnOutcome recommendationOutcome() {
         ValidatedEvidenceUnit unit = unit("project-a", "E-01", "项目具备完整交付证据。");
         PortfolioSemanticResult.Recommendation result = new PortfolioSemanticResult.Recommendation(
-                PortfolioSemanticResult.Coverage.PARTIAL, List.of(unit),
+                PortfolioSemanticResult.Coverage.PARTIAL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), List.of(unit),
                 List.of("REQUESTED_SIZE"), 2, List.of("project-a"));
         PortfolioPresentation presentation = new PortfolioPresentation(
                 "推荐", List.of(new PortfolioPresentation.Section(
