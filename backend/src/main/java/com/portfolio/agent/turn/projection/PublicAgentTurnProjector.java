@@ -22,11 +22,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.portfolio.agent.turn.continuation.ContinuationReference;
 
 /** Projects only ordered fulfillment Goals. Supporting Tasks never become public content. */
 public final class PublicAgentTurnProjector {
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
+        return project(requestId, plan, outcome, Map.of());
+    }
+
+    public PublicAgentTurn.Answer project(
+            UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
+            Map<String, ContinuationReference> continuationsByGoal) {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(outcome, "outcome");
@@ -37,7 +44,9 @@ public final class PublicAgentTurnProjector {
         for (UserGoal goal : plan.getUserGoals()) {
             TaskOutcome task = required(taskOutcomes, goal.getFulfillmentTaskId(), "fulfillment task");
             GoalCoverage.Coverage goalCoverage = required(coverage, goal.getGoalId(), "goal coverage");
-            goals.add(projectGoal(goal, task, goalCoverage, sources));
+            goals.add(projectGoal(
+                    goal, task, goalCoverage, sources,
+                    continuationsByGoal.get(goal.getGoalId())));
         }
         PublicAnswer.Resolution resolution = resolution(goals);
         LinkedHashSet<PublicSupport.Kind> composition = new LinkedHashSet<>();
@@ -51,7 +60,8 @@ public final class PublicAgentTurnProjector {
 
     private AnswerGoalResult projectGoal(
             UserGoal goal, TaskOutcome outcome, GoalCoverage.Coverage coverage,
-            LinkedHashMap<String, PublicSourceCatalog.Source> sources) {
+            LinkedHashMap<String, PublicSourceCatalog.Source> sources,
+            ContinuationReference continuation) {
         AnswerGoalResult.Coverage publicCoverage = AnswerGoalResult.Coverage.valueOf(coverage.name());
         if (coverage == GoalCoverage.Coverage.NONE) {
             if (outcome.getProducedArtifact().isPresent()) {
@@ -71,7 +81,7 @@ public final class PublicAgentTurnProjector {
         }
         return new AnswerGoalResult(
                 goal.getGoalId(), goal.getLabel(), publicCoverage,
-                presentation, notices, null);
+                presentation, notices, continuation);
     }
 
     private PublicPresentation presentation(
