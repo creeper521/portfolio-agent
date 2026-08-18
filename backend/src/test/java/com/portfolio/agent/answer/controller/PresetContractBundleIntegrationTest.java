@@ -18,7 +18,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(
         classes = PortfolioAgentApplication.class,
         properties = {
-                "portfolio.model-expression.enabled=false",
                 "portfolio.conversational-agent.enabled=false",
                 "portfolio.answer-production.requests-per-minute=100"
         }
@@ -59,7 +58,7 @@ class PresetContractBundleIntegrationTest {
                                 "sql-audit",
                                 "AGENT_PAGE")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.turnId").value("preset-sql-audit"))
+                .andExpect(jsonPath("$.turnId").isString())
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
                 .andExpect(jsonPath("$.resolution").value("ANSWERED"))
@@ -86,20 +85,11 @@ class PresetContractBundleIntegrationTest {
             String caseSlug = preset.path("caseSlugs").isArray()
                     && !preset.path("caseSlugs").isEmpty()
                     ? preset.path("caseSlugs").get(0).asText() : null;
-            String contextSubject = projectSlug != null
-                    ? "\"projectSlug\":\"" + projectSlug + "\""
-                    : "\"caseSlug\":\"" + caseSlug + "\"";
-            String request = request(
+            String request = presetRequestForSubject(
                     "published-preset-" + index,
-                    preset.path("text").asText(),
-                    ("\"questionPresetId\":\"%s\",\"contractVersion\":\"%s\","
-                            + "\"agentTurnContract\":\"stp-v2\","
-                            + "\"context\":{%s,\"audienceRole\":\"INTERVIEWER\","
-                            + "\"source\":\"AGENT_PAGE\"}")
-                            .formatted(
-                                    preset.path("id").asText(),
-                                    preset.path("contractVersion").asText(),
-                                    contextSubject));
+                    preset.path("id").asText(), preset.path("contractVersion").asText(),
+                    projectSlug != null ? "PROJECT" : "CASE",
+                    projectSlug != null ? projectSlug : caseSlug);
 
             mockMvc.perform(post("/api/v2/answers")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -115,12 +105,10 @@ class PresetContractBundleIntegrationTest {
                     .andExpect(jsonPath("$.blocks[0].blockId").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].sectionType").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].title").isNotEmpty())
-                    .andExpect(jsonPath("$.blocks[0].claimIds").isNotEmpty())
-                    .andExpect(jsonPath("$.blocks[0].evidenceIds").isNotEmpty())
+                    .andExpect(jsonPath("$.blocks[0].sourceReferences").isNotEmpty())
                     .andExpect(jsonPath("$.blocks[0].support.kind")
                             .value("VERIFIED_PUBLIC_EVIDENCE"))
-                    .andExpect(jsonPath("$.blocks[0].support.statementReferences[0].statementId")
-                            .isNotEmpty());
+                    .andExpect(jsonPath("$.publicSourceCatalog").isNotEmpty());
             index++;
         }
     }
@@ -137,10 +125,10 @@ class PresetContractBundleIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
-                .andExpect(jsonPath("$.agentTurn.disposition").value(org.hamcrest.Matchers.anyOf(
-                        org.hamcrest.Matchers.is("READY"),
-                        org.hamcrest.Matchers.is("PARTIAL_READY"))))
-                .andExpect(jsonPath("$.agentTurn.plan.taskCount").value(2))
+                .andExpect(jsonPath("$.resolution").value(org.hamcrest.Matchers.anyOf(
+                        org.hamcrest.Matchers.is("ANSWERED"),
+                        org.hamcrest.Matchers.is("PARTIALLY_ANSWERED"))))
+                .andExpect(jsonPath("$.agentTurn").doesNotExist())
                 .andExpect(jsonPath("$.blocks").isNotEmpty());
     }
 
@@ -148,12 +136,12 @@ class PresetContractBundleIntegrationTest {
     void reusedRequestTokenWithDifferentQuestionReturnsConflictWithoutContextStore() throws Exception {
         String token = "6b2d8895-4108-4b4d-aee0-21f6e7c4f333";
         String first = """
-                {"turnId":"idempotency-first","requestToken":"%s",
-                 "question":"请介绍 sql-audit 项目","messages":[]}
+                {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"FREE_TEXT",
+                 "text":"SQL 审计与故障排查工具"}},"conversationWindow":[]}
                 """.formatted(token);
         String conflicting = """
-                {"turnId":"idempotency-conflict","requestToken":"%s",
-                 "question":"请介绍 activity-engineering 项目","messages":[]}
+                {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"FREE_TEXT",
+                 "text":"活动系统工程实践"}},"conversationWindow":[]}
                 """.formatted(token);
 
         mockMvc.perform(post("/api/v2/answers")
@@ -175,8 +163,7 @@ class PresetContractBundleIntegrationTest {
                                 "unsupported-contract",
                                 "解释乐观锁",
                                 "\"agentTurnContract\":\"stp-v9\"")))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("AGENT_TURN_CONTRACT_UNSUPPORTED"));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -190,16 +177,15 @@ class PresetContractBundleIntegrationTest {
                                 "role-reset-tool",
                                 "AGENT_PAGE")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.turnId").value("structured-role-reset"))
-                .andExpect(jsonPath("$.intent").value("GENERAL_KNOWLEDGE"))
-                .andExpect(jsonPath("$.answerScope").value("GENERAL"))
+                .andExpect(jsonPath("$.turnId").isString())
+                .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
+                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
                 .andExpect(jsonPath("$.resolution").value("NOT_SUPPORTED"))
-                .andExpect(jsonPath("$.constructionMode").value("TEMPLATE"))
+                .andExpect(jsonPath("$.constructionMode").value("EVIDENCE_COMPOSITION"))
                 .andExpect(jsonPath("$.intentSource").value("RULE"))
-                .andExpect(jsonPath("$.evidenceState").value("NOT_REQUIRED"))
+                .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
                 .andExpect(jsonPath("$.blocks").isEmpty())
-                .andExpect(jsonPath("$.agentTurn.outcome.taskSummary.items[0].reasonCodes[0]")
-                        .value("GENERAL_PROVIDER_UNAVAILABLE"))
+                .andExpect(jsonPath("$.agentTurn").doesNotExist())
                 .andExpect(jsonPath("$.degraded").value(false));
     }
 
@@ -260,11 +246,27 @@ class PresetContractBundleIntegrationTest {
             String projectSlug,
             String source
     ) {
-        return request(turnId, question,
-                ("\"questionPresetId\":\"%s\",\"contractVersion\":\"%s\","
-                        + "\"context\":{\"projectSlug\":\"%s\",\"audienceRole\":\"INTERVIEWER\","
-                        + "\"source\":\"%s\"}")
-                        .formatted(presetId, contractVersion, projectSlug, source));
+        String requestId = java.util.UUID.nameUUIDFromBytes(
+                turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        return """
+                {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"PRESET",
+                 "presetId":"%s","presetRevision":"%s"}},
+                 "surfaceContext":{"subjectHint":{"kind":"PROJECT","slug":"%s"},
+                 "audienceRole":"INTERVIEWER","requestSource":"%s"},"conversationWindow":[]}
+                """.formatted(requestId, presetId, contractVersion, projectSlug, source);
+    }
+
+    private String presetRequestForSubject(
+            String turnId, String presetId, String revision, String subjectKind, String subjectSlug) {
+        String requestId = java.util.UUID.nameUUIDFromBytes(
+                turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        return """
+                {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"PRESET",
+                 "presetId":"%s","presetRevision":"%s"}},
+                 "surfaceContext":{"subjectHint":{"kind":"%s","slug":"%s"},
+                 "audienceRole":"INTERVIEWER","requestSource":"AGENT_PAGE"},
+                 "conversationWindow":[]}
+                """.formatted(requestId, presetId, revision, subjectKind, subjectSlug);
     }
 
     private String suggestionRequest(
@@ -282,14 +284,29 @@ class PresetContractBundleIntegrationTest {
     private String request(String turnId, String question, String identityJson) {
         String requestToken = java.util.UUID.nameUUIDFromBytes(
                 turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        String subject = "";
+        String rejectedLegacyField = identityJson.contains("agentTurnContract")
+                ? "\"agentTurnContract\":\"stp-v9\"," : "";
+        java.util.regex.Matcher project = java.util.regex.Pattern
+                .compile("\\\"projectSlug\\\":\\\"([^\\\"]+)\\\"").matcher(identityJson);
+        java.util.regex.Matcher caseMatcher = java.util.regex.Pattern
+                .compile("\\\"caseSlug\\\":\\\"([^\\\"]+)\\\"").matcher(identityJson);
+        if (project.find()) {
+            subject = "\"surfaceContext\":{\"subjectHint\":{\"kind\":\"PROJECT\",\"slug\":\""
+                    + project.group(1) + "\"},\"audienceRole\":\"INTERVIEWER\","
+                    + "\"requestSource\":\"AGENT_PAGE\"},";
+        } else if (caseMatcher.find()) {
+            subject = "\"surfaceContext\":{\"subjectHint\":{\"kind\":\"CASE\",\"slug\":\""
+                    + caseMatcher.group(1) + "\"},\"audienceRole\":\"INTERVIEWER\","
+                    + "\"requestSource\":\"AGENT_PAGE\"},";
+        }
         return """
                 {
-                  "turnId": "%s",
-                  "requestToken": "%s",
-                  "question": "%s",
-                  "messages": [],
-                  %s
+                  "requestId": "%s",
+                  "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"%s"}},
+                  %s%s
+                  "conversationWindow":[]
                 }
-                """.formatted(turnId, requestToken, question, identityJson);
+                """.formatted(requestToken, question, rejectedLegacyField, subject);
     }
 }

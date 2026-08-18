@@ -1,6 +1,7 @@
 package com.portfolio.agent.answer.adapter.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -18,10 +19,12 @@ import com.portfolio.agent.answer.domain.ConversationMessageRole;
 import com.portfolio.agent.answer.domain.ConversationSubjectOption;
 import com.portfolio.agent.answer.domain.ConversationWindow;
 import com.portfolio.agent.answer.domain.PortfolioKnowledgeFacet;
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectResolutionSource;
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
-import com.portfolio.agent.answer.routing.gateway.SemanticClassifierPort;
-import com.portfolio.agent.answer.routing.domain.SubjectReference;
+import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
+import com.portfolio.agent.turn.planning.GoalInterpretationInput;
+import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
+import com.portfolio.agent.turn.planning.GoalKind;
+import com.portfolio.agent.turn.planning.GoalProposalCodec;
+import com.portfolio.agent.turn.planning.GoalSubjectReference;
 import java.net.URI;
 import java.net.http.HttpTimeoutException;
 import java.util.List;
@@ -113,26 +116,25 @@ class AgentBehaviorAdversarialProviderIntegrationTest {
     }
 
     @Test
-    void semanticRoutingProviderPayloadIsDecodedThroughTheClosedCandidateContract() {
+    void goalInterpretationRejectsTaskDagInjectionThroughTheClosedGoalContract() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        OpenAiCompatibleConversationalModelAdapter adapter = adapter(builder);
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                builder, new ObjectMapper().findAndRegisterModules(), new GoalProposalCodec(),
+                descriptor(), "synthetic-key", 600, event -> { });
         server.expect(once(), requestTo(endpoint()))
                 .andRespond(withSuccess(providerResponse(
                         "{\"taskCandidates\":[],\"dependencyCandidates\":[],\"exclusionCandidates\":[]}"),
                         MediaType.APPLICATION_JSON));
 
-        SemanticClassifierPort.SemanticClassificationResult result = adapter.classify(
-                new SemanticClassifierPort.SemanticClassificationInput(
-                        "112233",
-                        List.of(new SubjectReference(
-                                SubjectType.PROJECT, "public-project",
-                                SubjectResolutionSource.EXPLICIT_REFERENCE, "public-v1"))));
+        GoalInterpretationInput input = new GoalInterpretationInput(
+                "介绍 public-project", List.of(),
+                List.of(new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT, "public-project", "公开项目")),
+                Set.of(GoalKind.values()));
 
-        assertThat(result.isSuccessful()).isTrue();
-        assertThat(result.getTaskCandidates()).isEmpty();
-        assertThat(result.getDependencyCandidates()).isEmpty();
-        assertThat(result.getExclusionCandidates()).isEmpty();
+        assertThatThrownBy(() -> adapter.interpret(input))
+                .isInstanceOf(GoalInterpretationUnavailableException.class);
         server.verify();
     }
 

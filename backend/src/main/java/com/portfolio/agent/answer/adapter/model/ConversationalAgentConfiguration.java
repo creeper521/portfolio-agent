@@ -3,46 +3,17 @@ package com.portfolio.agent.answer.adapter.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.domain.ModelPolicy;
 import com.portfolio.agent.answer.domain.ConversationProviderAccess;
-import com.portfolio.agent.answer.domain.AnswerKnowledge;
-import com.portfolio.agent.answer.domain.AnswerSubjectType;
-import com.portfolio.agent.answer.gateway.ConversationDecisionPublisher;
-import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
 import com.portfolio.agent.answer.service.ConversationDraftValidator;
 import com.portfolio.agent.answer.service.ConversationProgressClassifier;
 import com.portfolio.agent.answer.service.ConversationSubjectGuard;
 import com.portfolio.agent.answer.service.ConversationWindowManager;
-import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
-import com.portfolio.agent.answer.service.DeterministicConversationFallback;
 import com.portfolio.agent.answer.service.DynamicQuestionService;
 import com.portfolio.agent.answer.service.PortfolioGroundingAssembler;
-import com.portfolio.agent.answer.intelligence.execution.adapter.bundle.BundlePortfolioCandidateRetrievalAdapter;
-import com.portfolio.agent.answer.intelligence.execution.capability.DefaultPortfolioEvidenceCapability;
-import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioEvidenceCapability;
-import com.portfolio.agent.answer.intelligence.execution.planning.PortfolioCapabilityCatalog;
-import com.portfolio.agent.answer.intelligence.execution.capability.PortfolioCandidateRetrievalPort;
-import com.portfolio.agent.answer.mapper.SemanticTurnRequestMapper;
-import com.portfolio.agent.answer.routing.adapter.crypto.JdkPlanCryptographyAdapter;
-import com.portfolio.agent.answer.routing.adapter.crypto.PlanCryptographyPort;
 import com.portfolio.agent.answer.routing.adapter.execution.DeterministicSynthesisTaskExecutor;
 import com.portfolio.agent.answer.routing.adapter.execution.GeneralSemanticTaskExecutor;
-import com.portfolio.agent.answer.routing.adapter.execution.P3PortfolioSemanticTaskExecutor;
-import com.portfolio.agent.answer.routing.domain.PlanConfirmation;
-import com.portfolio.agent.answer.routing.domain.SemanticRoutingTypes.SubjectType;
-import com.portfolio.agent.answer.routing.service.DefaultTurnRouter;
-import com.portfolio.agent.answer.routing.service.GlobalBoundaryGate;
-import com.portfolio.agent.answer.routing.service.LegacySemanticContextAdapter;
-import com.portfolio.agent.answer.routing.service.PlanConfirmationService;
-import com.portfolio.agent.answer.routing.service.PlanFingerprintService;
-import com.portfolio.agent.answer.routing.service.RoutingContextResolver;
-import com.portfolio.agent.answer.routing.service.SemanticPlanCompiler;
-import com.portfolio.agent.answer.routing.service.SemanticPlanValidator;
-import com.portfolio.agent.answer.routing.service.SemanticRoutingPolicy;
-import com.portfolio.agent.answer.routing.service.SemanticSignalCollector;
-import com.portfolio.agent.answer.routing.service.SemanticTurnCoordinator;
-import com.portfolio.agent.answer.routing.service.TurnDecisionPolicy;
-import com.portfolio.agent.answer.routing.service.TurnRouter;
-import com.portfolio.agent.answer.context.service.AuthorizedContextReferenceService;
+import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationPolicy;
 import com.portfolio.agent.answer.synthesis.service.CrossDomainRelationProperties;
 import com.portfolio.agent.answer.synthesis.service.DeterministicCrossDomainComposer;
@@ -50,6 +21,15 @@ import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
 import com.portfolio.agent.answer.runtime.ModelOperation;
 import com.portfolio.agent.answer.runtime.OperationMode;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
+import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
+import com.portfolio.agent.turn.planning.GoalBoundaryPolicy;
+import com.portfolio.agent.turn.planning.GoalInterpretationInputFactory;
+import com.portfolio.agent.turn.planning.GoalInterpretationPort;
+import com.portfolio.agent.turn.planning.GoalProposalCodec;
+import com.portfolio.agent.turn.planning.GoalResolver;
+import com.portfolio.agent.turn.planning.MinimalGoalFallback;
+import com.portfolio.agent.turn.planning.PortfolioReviewedGoalSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -60,17 +40,15 @@ import org.springframework.web.client.RestClient;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
         ConversationalAgentProperties.class,
         CrossDomainRelationProperties.class,
-        ModelOperationProperties.class
+        ModelOperationProperties.class,
+        GoalInterpretationProperties.class
 })
 public class ConversationalAgentConfiguration {
 
@@ -109,6 +87,34 @@ public class ConversationalAgentConfiguration {
                 modelProperties.apiKeyFor(modelProperties.getProvider()),
                 modelProperties.getMaxTokens(),
                 diagnosticEventPublisher);
+    }
+
+    @Bean
+    GoalInterpretationPort goalInterpretationPort(
+            ObjectMapper objectMapper,
+            ModelExpressionProperties modelProperties,
+            ModelProviderRegistrySnapshot registry,
+            GoalInterpretationProperties properties,
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            ConversationProviderAccess providerAccess,
+            ModelOperationPolicyRegistry operationPolicies) {
+        if (!providerAccess.isAllowed()
+                || operationPolicies.get(ModelOperation.TURN_INTERPRETATION).getMode()
+                != OperationMode.ENABLED) {
+            return input -> {
+                throw new com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException();
+            };
+        }
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(properties.getTimeout()).build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(properties.getTimeout());
+        return new GoalInterpretationAdapter(
+                RestClient.builder().requestFactory(requestFactory), objectMapper,
+                new GoalProposalCodec(),
+                registry.getRequiredDescriptor(modelProperties.getProvider()),
+                modelProperties.apiKeyFor(modelProperties.getProvider()),
+                properties.getMaxOutputTokens(), diagnosticEventPublisher);
     }
 
     @Bean
@@ -157,11 +163,6 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
-    DeterministicConversationFallback deterministicConversationFallback() {
-        return new DeterministicConversationFallback();
-    }
-
-    @Bean
     ConversationSubjectGuard conversationSubjectGuard() {
         return new ConversationSubjectGuard();
     }
@@ -172,100 +173,23 @@ public class ConversationalAgentConfiguration {
     }
 
     @Bean
-    TurnRouter semanticTurnRouter(
-            PortfolioKnowledgeGateway knowledgeGateway,
-            SemanticPlanValidator semanticPlanValidator,
-            OpenAiCompatibleConversationalModelAdapter modelAdapter,
-            ConversationProviderAccess providerAccess,
-            ConversationalAgentProperties properties,
-            ModelOperationPolicyRegistry operationPolicies
-    ) {
-        boolean legacyEnabled = properties.isSemanticClassifierEnabled();
-        boolean operationEnabled = operationPolicies.get(ModelOperation.ROUTING_SEMANTIC_ASSIST)
-                .getMode() == OperationMode.ENABLED;
-        if (legacyEnabled != operationEnabled && (legacyEnabled || operationEnabled)) {
-            throw new IllegalStateException(
-                    "routing semantic assist legacy alias conflicts with operation policy");
-        }
-        return DefaultTurnRouter.fromPublicSubjects(
-                publicSubjects(knowledgeGateway),
-                new GlobalBoundaryGate(),
-                new RoutingContextResolver(new LegacySemanticContextAdapter()),
-                new SemanticSignalCollector(),
-                new SemanticPlanCompiler(new SemanticRoutingPolicy()),
-                semanticPlanValidator,
-                new TurnDecisionPolicy(),
-                modelAdapter,
-                operationEnabled && providerAccess.isAllowed());
-    }
-
-    @Bean
-    SemanticPlanValidator semanticPlanValidator() {
-        return new SemanticPlanValidator(new PlanFingerprintService());
-    }
-
-    @Bean
-    PlanConfirmationService planConfirmationService(
-            ConversationalAgentProperties properties,
-            SemanticPlanValidator semanticPlanValidator
-    ) {
-        return new PlanConfirmationService(
-                confirmationCryptography(properties), semanticPlanValidator, Clock.systemUTC());
-    }
-
-    @Bean
-    PortfolioCapabilityCatalog portfolioCapabilityCatalog() {
-        return new PortfolioCapabilityCatalog();
-    }
-
-    @Bean
     ModelOperationPolicyRegistry modelOperationPolicyRegistry(ModelOperationProperties properties) {
         return properties.toRegistry();
     }
 
     @Bean
-    PortfolioEvidenceCapability portfolioEvidenceCapability(
-            @org.springframework.beans.factory.annotation.Qualifier("primaryPortfolioCandidateRetrievalPort")
-            PortfolioCandidateRetrievalPort primary,
-            @org.springframework.beans.factory.annotation.Qualifier("fallbackPortfolioCandidateRetrievalPort")
-            PortfolioCandidateRetrievalPort fallback) {
-        return new DefaultPortfolioEvidenceCapability(
-                primary, fallback,
-                new com.portfolio.agent.answer.intelligence.execution.validation.EvidencePromotionValidator(),
-                new com.portfolio.agent.answer.intelligence.retrieval.RetrievalFallbackPolicy());
-    }
-
-    @Bean
-    P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor(
-            PortfolioCapabilityCatalog capabilityCatalog,
-            PortfolioEvidenceCapability evidenceCapability,
-            DiagnosticEventPublisher diagnosticEventPublisher,
-            com.portfolio.agent.answer.composition.service.PortfolioAnswerComposition p4Composition,
-            @org.springframework.beans.factory.annotation.Value(
-                    "${portfolio.database.public.enabled:false}") boolean databaseEnabled
-    ) {
-        return new P3PortfolioSemanticTaskExecutor(
-                capabilityCatalog,
-                databaseEnabled
-                        ? com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend.POSTGRESQL
-                        : com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend.BUNDLE,
-                evidenceCapability, diagnosticEventPublisher, p4Composition);
-    }
-
-    @Bean
-    SemanticTurnCoordinator semanticTurnCoordinator(
-            PortfolioCapabilityCatalog capabilityCatalog,
-            PortfolioEvidenceCapability evidenceCapability,
+    SemanticTurnEngine semanticTurnEngine(
             ConversationProviderAccess providerAccess,
             OpenAiCompatibleConversationalModelAdapter modelAdapter,
             ConversationDraftValidator draftValidator,
             PortfolioKnowledgeGateway knowledgeGateway,
-            P3PortfolioSemanticTaskExecutor p3PortfolioSemanticTaskExecutor,
+            com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor portfolioTaskExecutor,
             CrossDomainRelationProperties relationProperties,
-            ModelOperationPolicyRegistry operationPolicies
+            ModelOperationPolicyRegistry operationPolicies,
+            java.util.concurrent.ExecutorService conversationRequestExecutor
     ) {
-        return new SemanticTurnCoordinator(List.of(
-                p3PortfolioSemanticTaskExecutor,
+        return new SemanticTurnEngine(List.of(
+                portfolioTaskExecutor,
                 new GeneralSemanticTaskExecutor(
                         providerAccess, modelAdapter, draftValidator, operationPolicies),
                 new DeterministicSynthesisTaskExecutor(
@@ -273,95 +197,28 @@ public class ConversationalAgentConfiguration {
                         new CrossDomainRelationPolicy(),
                         new DeterministicCrossDomainComposer(),
                         new com.portfolio.agent.answer.synthesis.service.CrossDomainExpressionPipeline(
-                                modelAdapter, operationPolicies))));
+                                modelAdapter, operationPolicies))),
+                conversationRequestExecutor, 4);
     }
 
     @Bean
-    ConversationalAgentRuntime conversationalAgentRuntime(
+    MigrationAgentTurnRuntime conversationalAgentRuntime(
             PortfolioKnowledgeGateway knowledgeGateway,
-            SemanticTurnRequestMapper requestMapper,
-            TurnRouter semanticTurnRouter,
-            PlanConfirmationService planConfirmationService,
-            SemanticTurnCoordinator semanticTurnCoordinator,
-            ConversationDecisionPublisher decisionPublisher,
-            DiagnosticEventPublisher diagnosticEventPublisher,
-            Optional<AuthorizedContextReferenceService> contextReferenceService
+            GoalInterpretationPort goalInterpretationPort,
+            SemanticTurnEngine semanticTurnEngine,
+            DiagnosticEventPublisher diagnosticEventPublisher
     ) {
-        return new ConversationalAgentRuntime(
-                knowledgeGateway,
-                requestMapper,
-                semanticTurnRouter,
-                planConfirmationService,
-                semanticTurnCoordinator,
-                decisionPublisher,
-                diagnosticEventPublisher, contextReferenceService.orElse(null));
-    }
-
-    private List<DefaultTurnRouter.PublicSubjectSpec> publicSubjects(
-            PortfolioKnowledgeGateway knowledgeGateway) {
-        List<DefaultTurnRouter.PublicSubjectSpec> subjects = new ArrayList<>();
-        String contentVersion = knowledgeGateway.getContent().getContentVersion();
-        addPublicSubjects(
-                subjects, knowledgeGateway.getContent().getProjects(), SubjectType.PROJECT, contentVersion);
-        addPublicSubjects(subjects, knowledgeGateway.getContent().getCases(), SubjectType.CASE, contentVersion);
-        return List.copyOf(subjects);
-    }
-
-    private void addPublicSubjects(
-            List<DefaultTurnRouter.PublicSubjectSpec> target,
-            List<AnswerKnowledge> knowledge,
-            SubjectType subjectType,
-            String contentVersion) {
-        for (AnswerKnowledge item : knowledge) {
-            if (!matches(subjectType, item.getSubjectType())) {
-                continue;
-            }
-            Set<String> aliases = new java.util.LinkedHashSet<>();
-            addAlias(aliases, item.getStableId());
-            addAlias(aliases, item.getSlug());
-            addAlias(aliases, item.getTitle());
-            target.add(new DefaultTurnRouter.PublicSubjectSpec(
-                    subjectType, item.getStableId(), contentVersion, item.getTitle(), aliases));
-        }
-    }
-
-    private boolean matches(SubjectType subjectType, AnswerSubjectType sourceType) {
-        return (subjectType == SubjectType.PROJECT && sourceType == AnswerSubjectType.PROJECT)
-                || (subjectType == SubjectType.CASE && sourceType == AnswerSubjectType.CASE);
-    }
-
-    private void addAlias(Set<String> aliases, String value) {
-        if (value != null && !value.isBlank()) {
-            aliases.add(value.trim());
-        }
-    }
-
-    private PlanCryptographyPort confirmationCryptography(ConversationalAgentProperties properties) {
-        try {
-            return JdkPlanCryptographyAdapter.fromBase64(
-                    properties.getPlanConfirmationEncryptionKey(),
-                    properties.getPlanConfirmationIntegrityKey());
-        } catch (IllegalArgumentException exception) {
-            return new PlanCryptographyPort() {
-                @Override
-                public SealedPlan seal(
-                        com.portfolio.agent.answer.routing.service.ValidatedSemanticTurnPlan plan,
-                        PlanConfirmation.Identity identity,
-                        PlanConfirmation.VersionBinding versionBinding) {
-                    throw new IllegalStateException("plan confirmation is unavailable");
-                }
-
-                @Override
-                public boolean isIntegrityValid(PlanConfirmation.Submission submission) {
-                    return false;
-                }
-
-                @Override
-                public OpenedPlan open(PlanConfirmation.Submission submission) {
-                    throw new IllegalArgumentException("plan confirmation is invalid");
-                }
-            };
-        }
+        GoalResolver goalResolver = new GoalResolver(
+                goalInterpretationPort,
+                new PortfolioReviewedGoalSource(knowledgeGateway),
+                new GoalInterpretationInputFactory(),
+                new MinimalGoalFallback(),
+                new GoalBoundaryPolicy());
+        com.portfolio.agent.turn.planning.SemanticPlanCompiler compiler =
+                new com.portfolio.agent.turn.planning.SemanticPlanCompiler(
+                        new com.portfolio.agent.turn.planning.SemanticPlanValidator());
+        return new MigrationAgentTurnRuntime(
+                knowledgeGateway, goalResolver, compiler, semanticTurnEngine);
     }
 
 }

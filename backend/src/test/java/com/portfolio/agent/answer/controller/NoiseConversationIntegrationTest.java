@@ -15,7 +15,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(
         classes = PortfolioAgentApplication.class,
         properties = {
-                "portfolio.model-expression.enabled=false",
                 "portfolio.conversational-agent.enabled=false"
         }
 )
@@ -31,15 +30,13 @@ class NoiseConversationIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "turnId": "turn-noise-112233",
-                                  "requestToken": "b9ff1349-1ea3-4ed1-b46d-31115704b20b",
-                                  "question": "112233",
-                                  "messages": [],
-                                  "context": { "audienceRole": "INTERVIEWER", "source": "AGENT_PAGE" }
+                                  "requestId": "b9ff1349-1ea3-4ed1-b46d-31115704b20b",
+                                  "command": {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"112233"}},
+                                  "conversationWindow": []
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resolution").value("NEEDS_CLARIFICATION"))
+                .andExpect(jsonPath("$.resolution").value("CAPABILITY_UNAVAILABLE"))
                 .andExpect(jsonPath("$.evidenceState").value("NOT_REQUIRED"))
                 .andExpect(jsonPath("$.blocks").isEmpty())
                 .andExpect(jsonPath("$.publicSourceCatalog").doesNotExist());
@@ -51,22 +48,15 @@ class NoiseConversationIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "turnId": "turn-noise-active-project",
-                                  "requestToken": "0ed673a7-7734-4f39-8a0c-9871f550cfa5",
-                                  "question": "1",
-                                  "messages": [],
-                                  "context": { "audienceRole": "INTERVIEWER", "source": "AGENT_PAGE" },
-                                  "semanticContext": {
-                                    "activeSubjects": [
-                                      { "subjectType": "PROJECT", "subjectId": "sql-audit-delivery-set" }
-                                    ],
-                                    "audienceRole": "INTERVIEWER",
-                                    "requestSource": "AGENT_PAGE"
-                                  }
+                                  "requestId": "0ed673a7-7734-4f39-8a0c-9871f550cfa5",
+                                  "command": {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"1"}},
+                                  "surfaceContext": {"subjectHint":{"kind":"PROJECT","slug":"sql-audit"},
+                                    "audienceRole":"INTERVIEWER","requestSource":"AGENT_PAGE"},
+                                  "conversationWindow": []
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resolution").value("NEEDS_CLARIFICATION"))
+                .andExpect(jsonPath("$.resolution").value("CAPABILITY_UNAVAILABLE"))
                 .andExpect(jsonPath("$.evidenceState").value("NOT_REQUIRED"))
                 .andExpect(jsonPath("$.blocks").isEmpty())
                 .andExpect(jsonPath("$.publicSourceCatalog").doesNotExist());

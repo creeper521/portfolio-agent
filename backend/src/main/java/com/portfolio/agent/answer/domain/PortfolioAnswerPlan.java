@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-public final class PortfolioAnswerPlan {
+public final class PortfolioAnswerPlan implements com.portfolio.agent.turn.execution.TaskPresentation {
 
     private final String title;
     private final String summary;

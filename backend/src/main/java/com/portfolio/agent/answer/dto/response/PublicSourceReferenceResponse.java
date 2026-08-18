@@ -2,7 +2,6 @@ package com.portfolio.agent.answer.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
-import com.portfolio.agent.answer.intelligence.execution.validation.PublicSourceReference;
 
 /** Public citation DTO containing only stable reference and public relative routes. */
 public final class PublicSourceReferenceResponse {
@@ -27,12 +26,6 @@ public final class PublicSourceReferenceResponse {
         this.sourceType = sourceType;
         this.subjectRoute = subjectRoute;
         this.evidenceRoute = evidenceRoute;
-    }
-
-    public static PublicSourceReferenceResponse from(PublicSourceReference reference) {
-        return new PublicSourceReferenceResponse(reference.getReferenceKey(),
-                reference.getLabel(), reference.getPublishedVersion(), reference.getSourceType().name(),
-                reference.getSubjectRoute(), reference.getEvidenceRoute());
     }
 
     public static PublicSourceReferenceResponse from(PublicSourceReferenceValue reference) {

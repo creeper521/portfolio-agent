@@ -86,9 +86,8 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
                 "c3-openai-compatible-v1",
                 URI.create(endpoint),
                 modelName,
-                Set.of("c1-policy-v1", "p4-expression-policy-v1"),
-                Set.of("c1.answer.v1", ConversationalAgentProperties.ANSWER_SCHEMA_VERSION,
-                        "portfolio-expression-input.v1", "portfolio-expression-draft.v1"),
+                Set.of("c1-policy-v1"),
+                Set.of("c1.answer.v1", ConversationalAgentProperties.ANSWER_SCHEMA_VERSION),
                 capabilities);
     }
 

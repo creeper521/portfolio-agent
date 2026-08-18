@@ -28,7 +28,6 @@ public final class ConversationAnswerResult {
     private final String questionPresetId;
     private final String contractVersion;
     private final String summary;
-    private final AgentTurnResult agentTurn;
 
     public ConversationAnswerResult(
             String turnId,
@@ -176,36 +175,6 @@ public final class ConversationAnswerResult {
             String contractVersion,
             String summary
     ) {
-        this(turnId, contentVersion, intent, answerScope, resolution, title, blocks,
-                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
-                progress, portfolioRecommendation, constructionMode, intentSource, evidenceState,
-                contextVersionUpdated, questionPresetId, contractVersion, summary, null);
-    }
-
-    private ConversationAnswerResult(
-            String turnId,
-            String contentVersion,
-            ConversationIntent intent,
-            ConversationAnswerScope answerScope,
-            AnswerResolution resolution,
-            String title,
-            List<ConversationAnswerBlock> blocks,
-            List<ConversationSuggestedQuestion> suggestedQuestions,
-            boolean degraded,
-            GenerationMode generationMode,
-            AnswerSource answerSource,
-            String noticeCode,
-            ConversationProgress progress,
-            PortfolioRecommendation portfolioRecommendation,
-            AnswerConstructionMode constructionMode,
-            AnswerIntentSource intentSource,
-            AnswerEvidenceState evidenceState,
-            boolean contextVersionUpdated,
-            String questionPresetId,
-            String contractVersion,
-            String summary,
-            AgentTurnResult agentTurn
-    ) {
         this.turnId = Objects.requireNonNull(turnId, "turnId");
         this.contentVersion = Objects.requireNonNull(contentVersion, "contentVersion");
         this.intent = Objects.requireNonNull(intent, "intent");
@@ -228,7 +197,6 @@ public final class ConversationAnswerResult {
         this.questionPresetId = normalizeNullable(questionPresetId);
         this.contractVersion = normalizeNullable(contractVersion);
         this.summary = normalizeNullable(summary);
-        this.agentTurn = agentTurn;
     }
 
     public String getTurnId() { return turnId; }
@@ -254,7 +222,6 @@ public final class ConversationAnswerResult {
     public String getQuestionPresetId() { return questionPresetId; }
     public String getContractVersion() { return contractVersion; }
     public String getSummary() { return summary; }
-    public AgentTurnResult getAgentTurn() { return agentTurn; }
 
     public ConversationAnswerResult withGuidance(
             List<ConversationSuggestedQuestion> questions,
@@ -281,8 +248,7 @@ public final class ConversationAnswerResult {
                 contextVersionUpdated,
                 questionPresetId,
                 contractVersion,
-                summary,
-                agentTurn);
+                summary);
     }
 
     public ConversationAnswerResult withContextVersionUpdated(boolean updated) {
@@ -290,7 +256,7 @@ public final class ConversationAnswerResult {
                 turnId, contentVersion, intent, answerScope, resolution, title, blocks,
                 suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
                 progress, portfolioRecommendation, constructionMode, intentSource,
-                evidenceState, updated, questionPresetId, contractVersion, summary, agentTurn);
+                evidenceState, updated, questionPresetId, contractVersion, summary);
     }
 
     public ConversationAnswerResult withContractIdentity(String presetId, String version) {
@@ -298,7 +264,7 @@ public final class ConversationAnswerResult {
                 turnId, contentVersion, intent, answerScope, resolution, title, blocks,
                 suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
                 progress, portfolioRecommendation, constructionMode, intentSource,
-                evidenceState, contextVersionUpdated, presetId, version, summary, agentTurn);
+                evidenceState, contextVersionUpdated, presetId, version, summary);
     }
 
     public ConversationAnswerResult withSummary(String newSummary) {
@@ -307,16 +273,7 @@ public final class ConversationAnswerResult {
                 suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
                 progress, portfolioRecommendation, constructionMode, intentSource,
                 evidenceState, contextVersionUpdated, questionPresetId, contractVersion,
-                newSummary, agentTurn);
-    }
-
-    public ConversationAnswerResult withAgentTurn(AgentTurnResult newAgentTurn) {
-        return new ConversationAnswerResult(
-                turnId, contentVersion, intent, answerScope, resolution, title, blocks,
-                suggestedQuestions, degraded, generationMode, answerSource, noticeCode,
-                progress, portfolioRecommendation, constructionMode, intentSource,
-                evidenceState, contextVersionUpdated, questionPresetId, contractVersion,
-                summary, Objects.requireNonNull(newAgentTurn, "newAgentTurn"));
+                newSummary);
     }
 
     private static String normalizeNullable(String value) {
@@ -352,7 +309,8 @@ public final class ConversationAnswerResult {
         if (resolution == AnswerResolution.NOT_SUPPORTED) {
             return AnswerEvidenceState.INSUFFICIENT;
         }
-        if (blocks.stream().anyMatch(block -> !block.getEvidenceIds().isEmpty())) {
+        if (blocks.stream().anyMatch(block -> !block.getEvidenceIds().isEmpty()
+                || !block.getSourceReferences().isEmpty())) {
             return AnswerEvidenceState.VERIFIED;
         }
         if (scope == ConversationAnswerScope.PORTFOLIO

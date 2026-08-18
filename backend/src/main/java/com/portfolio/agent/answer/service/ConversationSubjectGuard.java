@@ -1,31 +1,27 @@
 package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.dto.request.ConversationAnswerContextRequest;
+import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 public final class ConversationSubjectGuard {
 
     public boolean accepts(
-            ConversationAnswerContextRequest context,
+            AgentTurnCommand.SurfaceContext context,
             RuntimeAnswerContent content
     ) {
         if (context == null) {
             return true;
         }
-        boolean hasProjectSlug = hasText(context.getProjectSlug());
-        boolean hasCaseSlug = hasText(context.getCaseSlug());
-        if (!hasProjectSlug && !hasCaseSlug) {
+        AgentTurnCommand.SubjectHint hint = context.getSubjectHint();
+        if (hint == null) {
             return true;
         }
-        if (hasProjectSlug && hasCaseSlug) {
-            return false;
-        }
-        if (hasProjectSlug) {
+        if (hint.getKind() == AgentTurnCommand.SubjectHintKind.PROJECT) {
             return content.getProjects().stream()
-                    .anyMatch(project -> context.getProjectSlug().equals(project.getSlug()));
+                    .anyMatch(project -> hint.getSlug().equals(project.getSlug()));
         }
         return content.getCases().stream()
-                .anyMatch(caseItem -> context.getCaseSlug().equals(caseItem.getSlug()));
+                .anyMatch(caseItem -> hint.getSlug().equals(caseItem.getSlug()));
     }
 
     private boolean hasText(String value) {

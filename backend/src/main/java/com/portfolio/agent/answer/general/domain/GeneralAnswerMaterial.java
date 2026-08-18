@@ -2,7 +2,7 @@ package com.portfolio.agent.answer.general.domain;
 
 import java.util.List;
 
-public final class GeneralAnswerMaterial {
+public final class GeneralAnswerMaterial implements com.portfolio.agent.turn.execution.TaskSemanticResult {
     private final String topic;
     private final List<GeneralStatement> statements;
     private final List<MaterialCaveat> caveats;

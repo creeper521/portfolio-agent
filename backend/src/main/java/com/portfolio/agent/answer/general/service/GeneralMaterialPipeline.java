@@ -14,7 +14,7 @@ import com.portfolio.agent.answer.gateway.ConversationalModelPort;
 import com.portfolio.agent.answer.general.codec.GeneralAnswerMaterialDraftCodec;
 import com.portfolio.agent.answer.runtime.ModelOperation;
 import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
-import com.portfolio.agent.answer.routing.domain.TaskResultPayload;
+import com.portfolio.agent.turn.execution.SectionedTaskPresentation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,17 +73,17 @@ public final class GeneralMaterialPipeline {
 
     public static final class Result {
         private final GeneralAnswerMaterial material;
-        private final TaskResultPayload.SectionResultPayload payload;
+        private final SectionedTaskPresentation presentation;
         private final String failureCode;
-        private Result(GeneralAnswerMaterial material, TaskResultPayload.SectionResultPayload payload, String failureCode) {
-            this.material = material; this.payload = payload; this.failureCode = failureCode;
+        private Result(GeneralAnswerMaterial material, SectionedTaskPresentation presentation, String failureCode) {
+            this.material = material; this.presentation = presentation; this.failureCode = failureCode;
         }
-        public static Result success(GeneralAnswerMaterial material, TaskResultPayload.SectionResultPayload payload) { return new Result(material, payload, null); }
+        public static Result success(GeneralAnswerMaterial material, SectionedTaskPresentation presentation) { return new Result(material, presentation, null); }
         public static Result unavailable() { return new Result(null, null, "GENERAL_PROVIDER_UNAVAILABLE"); }
         public static Result rejected(String failureCode) { return new Result(null, null, failureCode); }
-        public boolean isSuccessful() { return material != null && payload != null; }
+        public boolean isSuccessful() { return material != null && presentation != null; }
         public GeneralAnswerMaterial getMaterial() { return material; }
-        public TaskResultPayload.SectionResultPayload getPayload() { return payload; }
+        public SectionedTaskPresentation getPresentation() { return presentation; }
         public String getFailureCode() { return failureCode; }
     }
 }

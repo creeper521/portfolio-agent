@@ -20,7 +20,7 @@ class AnswerSupportContractTest {
                 "VERIFIED_PUBLIC_EVIDENCE",
                 List.of(new StatementSupportReferenceResponse(
                         "statement-01", List.of("source-01"), "public-v1")),
-                List.of("task-01"), List.of("source-01"), "public-v1");
+                List.of("source-01"), "public-v1");
         ConversationAnswerBlockResponse block = new ConversationAnswerBlockResponse(
                 "block-01", TaskSourceDomain.PORTFOLIO, ConversationSourceScope.PORTFOLIO, null, null,
                 "事实", List.of("claim-01"), List.of("evidence-01"), List.of(), support);

@@ -22,26 +22,24 @@ portfolio:
     cross-domain-relations:
       enabled: ${PORTFOLIO_AGENT_CROSS_DOMAIN_RELATIONS_ENABLED:false}
   model-operations:
-    routing-semantic-assist:
-      mode: ${PORTFOLIO_MODEL_OP_ROUTING_MODE:DISABLED}
-      provider-ref: ${PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF:}
-      schema-version: ${PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION:}
-      timeout: ${PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT:}
+    turn-interpretation:
+      mode: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE:DISABLED}
+      provider-ref: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF:}
+      schema-version: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION:}
+      timeout: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_TIMEOUT:}
     general-answer-material:
       mode: ${PORTFOLIO_MODEL_OP_GENERAL_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION:}
       timeout: ${PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT:}
-    portfolio-expression:
-      mode: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_MODE:DISABLED}
-      provider-ref: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_PROVIDER_REF:}
-      schema-version: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_SCHEMA_VERSION:}
-      timeout: ${PORTFOLIO_MODEL_OP_PORTFOLIO_EXPRESSION_TIMEOUT:}
     cross-domain-expression:
       mode: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_SCHEMA_VERSION:}
       timeout: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_TIMEOUT:}
+  goal-interpretation:
+    timeout: ${PORTFOLIO_GOAL_INTERPRETATION_TIMEOUT:2500ms}
+    max-output-tokens: ${PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS:1600}
   database:
     public:
       enabled: ${PORTFOLIO_PUBLIC_DATABASE_ENABLED:false}
@@ -83,18 +81,6 @@ portfolio:
   retrieval:
     profile: ${PORTFOLIO_RETRIEVAL_PROFILE:DISABLED}
     model-directory: ${PORTFOLIO_RETRIEVAL_MODEL_DIR:}
-  model-expression:
-    enabled: ${PORTFOLIO_MODEL_EXPRESSION_ENABLED:false}
-    provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
-    policy-version: ${PORTFOLIO_MODEL_EXPRESSION_POLICY_VERSION:p4-expression-policy-v1}
-    input-schema-version: ${PORTFOLIO_MODEL_EXPRESSION_INPUT_SCHEMA_VERSION:portfolio-expression-input.v1}
-    draft-schema-version: ${PORTFOLIO_MODEL_EXPRESSION_DRAFT_SCHEMA_VERSION:portfolio-expression-draft.v1}
-    allowed-material-kinds: [FACT]
-    max-output-tokens: ${PORTFOLIO_MODEL_EXPRESSION_MAX_OUTPUT_TOKENS:1600}
-    timeout: ${PORTFOLIO_MODEL_EXPRESSION_TIMEOUT:4s}
-    external-public-data-policy-approved: ${PORTFOLIO_MODEL_EXPRESSION_PUBLIC_DATA_POLICY_APPROVED:false}
-    deepseek-api-key: ${PORTFOLIO_AGENT_DEEPSEEK_API_KEY:}
-    glm-api-key: ${PORTFOLIO_AGENT_GLM_API_KEY:}
   conversational-model:
     enabled: ${PORTFOLIO_MODEL_ENABLED:false}
     provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
@@ -109,7 +95,6 @@ portfolio:
   conversational-agent:
     enabled: ${PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED:false}
     visitor-data-policy-approved: ${PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED:false}
-    semantic-classifier-enabled: ${PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED:false}
     max-history-rounds: 20
     recent-raw-rounds: 6
     max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}

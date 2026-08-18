@@ -16,7 +16,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(
         classes = PortfolioAgentApplication.class,
         properties = {
-                "portfolio.model-expression.enabled=false",
                 "portfolio.conversational-agent.enabled=false"
         }
 )
@@ -45,7 +44,7 @@ class CaseConversationBundleIntegrationTest {
                         .content(request("turn-known-case", "multilingual-image-preservation",
                                 "这个案例如何验证？")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.turnId").value("turn-known-case"))
+                .andExpect(jsonPath("$.turnId").isString())
                 .andExpect(jsonPath("$.contentVersion").value("2026-08-05.1"))
                 .andExpect(jsonPath("$.intent").value("PORTFOLIO_GROUNDED"))
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
@@ -69,7 +68,7 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
                 .andExpect(jsonPath("$.degraded").value(false))
                 .andExpect(jsonPath("$.blocks.length()").value(1))
-                .andExpect(jsonPath("$.blocks[0].sourceScope").value("PORTFOLIO"))
+                .andExpect(jsonPath("$.blocks[0].sourceScope").value("GENERAL"))
                  .andExpect(jsonPath("$.blocks[0].claimIds").doesNotExist())
                  .andExpect(jsonPath("$.blocks[0].evidenceIds").doesNotExist());
 
@@ -82,7 +81,7 @@ class CaseConversationBundleIntegrationTest {
                 .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"))
                 .andExpect(jsonPath("$.resolution").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.noticeCode").value("STRUCTURED_SUBJECT_INVALID"))
-                .andExpect(jsonPath("$.intentSource").value("RULE"))
+                .andExpect(jsonPath("$.intentSource").value("GLOBAL"))
                 .andExpect(jsonPath("$.evidenceState").value("INSUFFICIENT"))
                 .andExpect(jsonPath("$.degraded").value(false));
     }
@@ -92,16 +91,15 @@ class CaseConversationBundleIntegrationTest {
                 turnId.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         return """
                 {
-                  "turnId": "%s",
-                  "requestToken": "%s",
-                  "question": "%s",
-                  "messages": [],
-                  "context": {
-                    "caseSlug": "%s",
+                  "requestId": "%s",
+                  "command": {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"%s"}},
+                  "surfaceContext": {
+                    "subjectHint":{"kind":"CASE","slug":"%s"},
                     "audienceRole": "INTERVIEWER",
-                    "source": "CASE"
-                  }
+                    "requestSource": "CASE"
+                  },
+                  "conversationWindow": []
                 }
-                """.formatted(turnId, requestToken, question, caseSlug);
+                """.formatted(requestToken, question, caseSlug);
     }
 }

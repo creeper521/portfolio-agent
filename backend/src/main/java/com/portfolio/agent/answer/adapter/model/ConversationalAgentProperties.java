@@ -10,14 +10,11 @@ public final class ConversationalAgentProperties {
 
     private boolean enabled;
     private boolean visitorDataPolicyApproved;
-    private boolean semanticClassifierEnabled;
     private int maxHistoryRounds = 20;
     private int recentRawRounds = 6;
     private int maxInputTokens = 12000;
     private int maxSuggestedQuestions = 3;
     private double minimumIntentConfidence = 0.65;
-    private String planConfirmationEncryptionKey = "";
-    private String planConfirmationIntegrityKey = "";
 
     public boolean allowsProviderCalls(
             ModelPolicy modelPolicy,
@@ -38,10 +35,6 @@ public final class ConversationalAgentProperties {
     public void setVisitorDataPolicyApproved(boolean visitorDataPolicyApproved) {
         this.visitorDataPolicyApproved = visitorDataPolicyApproved;
     }
-    public boolean isSemanticClassifierEnabled() { return semanticClassifierEnabled; }
-    public void setSemanticClassifierEnabled(boolean semanticClassifierEnabled) {
-        this.semanticClassifierEnabled = semanticClassifierEnabled;
-    }
     public int getMaxHistoryRounds() { return maxHistoryRounds; }
     public void setMaxHistoryRounds(int maxHistoryRounds) {
         this.maxHistoryRounds = maxHistoryRounds;
@@ -61,15 +54,5 @@ public final class ConversationalAgentProperties {
     public double getMinimumIntentConfidence() { return minimumIntentConfidence; }
     public void setMinimumIntentConfidence(double minimumIntentConfidence) {
         this.minimumIntentConfidence = minimumIntentConfidence;
-    }
-    public String getPlanConfirmationEncryptionKey() { return planConfirmationEncryptionKey; }
-    public void setPlanConfirmationEncryptionKey(String planConfirmationEncryptionKey) {
-        this.planConfirmationEncryptionKey = planConfirmationEncryptionKey == null
-                ? "" : planConfirmationEncryptionKey.strip();
-    }
-    public String getPlanConfirmationIntegrityKey() { return planConfirmationIntegrityKey; }
-    public void setPlanConfirmationIntegrityKey(String planConfirmationIntegrityKey) {
-        this.planConfirmationIntegrityKey = planConfirmationIntegrityKey == null
-                ? "" : planConfirmationIntegrityKey.strip();
     }
 }

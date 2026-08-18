@@ -15,6 +15,7 @@ public final class ConversationAnswerBlock {
     private final String content;
     private final List<String> claimIds;
     private final List<String> evidenceIds;
+    private final List<PublicSourceReferenceValue> sourceReferences;
 
     @JsonCreator
     public ConversationAnswerBlock(
@@ -23,7 +24,7 @@ public final class ConversationAnswerBlock {
             @JsonProperty("claimIds") List<String> claimIds,
             @JsonProperty("evidenceIds") List<String> evidenceIds
     ) {
-        this(sourceScope, null, null, content, claimIds, evidenceIds);
+        this(sourceScope, null, null, content, claimIds, evidenceIds, List.of());
     }
 
     public ConversationAnswerBlock(
@@ -33,12 +34,25 @@ public final class ConversationAnswerBlock {
             String content,
             List<String> claimIds,
             List<String> evidenceIds) {
+        this(sourceScope, sectionType, title, content, claimIds, evidenceIds, List.of());
+    }
+
+    public ConversationAnswerBlock(
+            ConversationSourceScope sourceScope,
+            AnswerSectionType sectionType,
+            String title,
+            String content,
+            List<String> claimIds,
+            List<String> evidenceIds,
+            List<PublicSourceReferenceValue> sourceReferences) {
         this.sourceScope = Objects.requireNonNull(sourceScope, "sourceScope");
         this.sectionType = sectionType;
         this.title = normalizeNullable(title);
         this.content = Objects.requireNonNull(content, "content");
         this.claimIds = stableDistinct(claimIds, "claimIds");
         this.evidenceIds = stableDistinct(evidenceIds, "evidenceIds");
+        this.sourceReferences = List.copyOf(
+                Objects.requireNonNull(sourceReferences, "sourceReferences"));
     }
 
     public ConversationSourceScope getSourceScope() { return sourceScope; }
@@ -47,6 +61,7 @@ public final class ConversationAnswerBlock {
     public String getContent() { return content; }
     public List<String> getClaimIds() { return claimIds; }
     public List<String> getEvidenceIds() { return evidenceIds; }
+    public List<PublicSourceReferenceValue> getSourceReferences() { return sourceReferences; }
 
     private static List<String> stableDistinct(List<String> values, String fieldName) {
         Objects.requireNonNull(values, fieldName);

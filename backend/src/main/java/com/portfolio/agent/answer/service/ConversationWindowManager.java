@@ -2,8 +2,8 @@ package com.portfolio.agent.answer.service;
 
 import com.portfolio.agent.answer.domain.ConversationMessage;
 import com.portfolio.agent.answer.domain.ConversationWindow;
-import com.portfolio.agent.answer.dto.request.ConversationMessageRequest;
 import com.portfolio.agent.answer.gateway.ConversationSummaryPort;
+import com.portfolio.agent.turn.lifecycle.ConversationWindow.Message;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +32,7 @@ public final class ConversationWindowManager {
     }
 
     public ConversationWindow prepare(
-            List<ConversationMessageRequest> history,
+            List<Message> history,
             String currentQuestion
     ) {
         List<ConversationMessage> messages = toDomainMessages(history);
@@ -78,11 +78,14 @@ public final class ConversationWindowManager {
     }
 
     private List<ConversationMessage> toDomainMessages(
-            List<ConversationMessageRequest> history
+            List<Message> history
     ) {
         List<ConversationMessage> messages = new ArrayList<>(history.size());
-        for (ConversationMessageRequest message : history) {
-            messages.add(new ConversationMessage(message.getRole(), message.getContent()));
+        for (Message message : history) {
+            messages.add(new ConversationMessage(
+                    com.portfolio.agent.answer.domain.ConversationMessageRole.valueOf(
+                            message.getRole().name()),
+                    message.getText()));
         }
         return List.copyOf(messages);
     }

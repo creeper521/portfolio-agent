@@ -37,7 +37,7 @@ public final class PortfolioAnswerSection {
         this.sourceReferences = stableDistinctReferences(sourceReferences);
     }
 
-    /** P4 factory: carries only strong public references across the composition seam. */
+    /** Carries only strong public references across the presentation seam. */
     public static PortfolioAnswerSection grounded(
             AnswerSectionType sectionType, String title, String content,
             List<PublicSourceReferenceValue> sourceReferences) {

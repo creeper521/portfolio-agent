@@ -8,8 +8,8 @@ import com.portfolio.agent.answer.adapter.model.ModelExpressionProperties;
 import com.portfolio.agent.answer.adapter.retrieval.RetrievalProperties;
 import com.portfolio.agent.answer.service.AnswerAdmissionGate;
 import com.portfolio.agent.answer.service.AnswerIdempotencyCoordinator;
-import com.portfolio.agent.answer.service.ConversationalAgentRuntime;
-import com.portfolio.agent.answer.service.ProductionConversationService;
+import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
+import com.portfolio.agent.turn.lifecycle.MigrationProductionTurnService;
 import com.portfolio.agent.common.observability.AnonymousSourceHasher;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
@@ -79,8 +79,8 @@ public class AnswerProductionConfiguration {
     }
 
     @Bean
-    ProductionConversationService productionConversationService(
-            ConversationalAgentRuntime runtime,
+    MigrationProductionTurnService productionConversationService(
+            MigrationAgentTurnRuntime runtime,
             AnonymousSourceHasher sourceHasher,
             AnswerAdmissionGate admissionGate,
             AnswerIdempotencyCoordinator<ConversationAnswerResult> idempotency,
@@ -89,7 +89,7 @@ public class AnswerProductionConfiguration {
             Optional<RequestReceiptService> requestReceiptService,
             Optional<ConversationContextCommitter> contextCommitter
     ) {
-        return new ProductionConversationService(
+        return new MigrationProductionTurnService(
                 runtime,
                 sourceHasher,
                 admissionGate,

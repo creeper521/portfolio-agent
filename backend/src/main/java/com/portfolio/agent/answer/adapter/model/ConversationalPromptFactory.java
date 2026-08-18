@@ -26,8 +26,8 @@ public final class ConversationalPromptFactory {
         return prompt("intent", conversation, publicSubjects);
     }
 
-    public String semanticRoutingPrompt(Object routingInput) {
-        return prompt("semantic_route", routingInput, null);
+    public String turnInterpretationPrompt(Object routingInput) {
+        return prompt("turn_interpretation", routingInput, null);
     }
 
     public String summaryPrompt(Object conversation) {
@@ -80,6 +80,29 @@ public final class ConversationalPromptFactory {
 
     private String outputContract(String operation) {
         return switch (operation) {
+            case "turn_interpretation" -> """
+                    Return exactly one JSON object conforming to model-turn-proposal-v1.
+                    Top-level fields are schema, kind and the fields allowed by that kind only.
+                    schema must be model-turn-proposal-v1. kind must be PROPOSE_EXECUTION,
+                    ASK_CLARIFICATION or CONVERSE. Never output task IDs, evidence IDs, tools,
+                    providers, execution state, URLs, credentials or undeclared fields.
+                    Text anchors must copy currentInput verbatim and use a one-based occurrence.
+                    Subject candidates may reference only the reviewed public subject catalog and
+                    must carry an allowed basis. CONVERSE may only use a declared conversationAct
+                    and suggestedActionIds from the allowed closed set.
+                    For PROPOSE_EXECUTION use exactly:
+                    {"schema":"model-turn-proposal-v1","kind":"PROPOSE_EXECUTION","tasks":[{"clientTaskKey":"task-a","taskType":"PORTFOLIO_FACT","inputAnchor":{"verbatimText":"<exact currentInput substring>","occurrence":1},"subjectCandidates":[{"subjectType":"PROJECT","subjectId":"<catalog id>","basis":"EXPLICIT_INPUT","evidenceAnchor":{"verbatimText":"<exact reviewed alias in currentInput>","occurrence":1}}],"requestedOutputs":["SUMMARY"],"facets":["OVERVIEW"]}],"dependencies":[]}
+                    Required task fields are clientTaskKey, taskType, inputAnchor, subjectCandidates
+                    and requestedOutputs. Omit every optional field that is not needed. Allowed
+                    requestedOutputs are SUMMARY, EVIDENCE, COMPARISON, RECOMMENDATION, RISKS,
+                    NEXT_STEPS and DETAILED. For a general explanation use exactly this task shape:
+                    {"clientTaskKey":"task-a","taskType":"GENERAL_EXPLANATION","inputAnchor":{"verbatimText":"<entire currentInput exactly>","occurrence":1},"subjectCandidates":[],"requestedOutputs":["SUMMARY"],"topicAnchors":[{"verbatimText":"<entire currentInput exactly>","occurrence":1}],"responseMode":"STANDARD"}
+                    Wrap it in the same PROPOSE_EXECUTION object with dependencies:[]. Do not add
+                    facets, dimensions or subject fields to a GENERAL_EXPLANATION task.
+                    For CONVERSE use exactly schema, kind, conversationAct
+                    and optionally suggestedActionIds. Allowed conversationAct values are
+                    SOCIAL_ACKNOWLEDGEMENT, UNINTERPRETABLE and OUT_OF_SCOPE.
+                    """;
             case "semantic_route" -> """
                     Return exactly one JSON object with these fields only:
                     taskCandidates, dependencyCandidates, exclusionCandidates.

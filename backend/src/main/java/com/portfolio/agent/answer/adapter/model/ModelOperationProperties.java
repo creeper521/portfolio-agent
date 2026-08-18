@@ -13,26 +13,22 @@ import java.util.Map;
 /** Independent operation configuration; no operation inherits another operation's approval. */
 @ConfigurationProperties(prefix = "portfolio.model-operations")
 public final class ModelOperationProperties {
-    private Settings routingSemanticAssist = new Settings();
+    private Settings turnInterpretation = new Settings();
     private Settings generalAnswerMaterial = new Settings();
-    private Settings portfolioExpression = new Settings();
     private Settings crossDomainExpression = new Settings();
 
     public ModelOperationPolicyRegistry toRegistry() {
         Map<ModelOperation, ModelOperationPolicy> policies = new EnumMap<>(ModelOperation.class);
-        policies.put(ModelOperation.ROUTING_SEMANTIC_ASSIST, routingSemanticAssist.policy(ModelOperation.ROUTING_SEMANTIC_ASSIST));
+        policies.put(ModelOperation.TURN_INTERPRETATION, turnInterpretation.policy(ModelOperation.TURN_INTERPRETATION));
         policies.put(ModelOperation.GENERAL_ANSWER_MATERIAL, generalAnswerMaterial.policy(ModelOperation.GENERAL_ANSWER_MATERIAL));
-        policies.put(ModelOperation.PORTFOLIO_EXPRESSION, portfolioExpression.policy(ModelOperation.PORTFOLIO_EXPRESSION));
         policies.put(ModelOperation.CROSS_DOMAIN_EXPRESSION, crossDomainExpression.policy(ModelOperation.CROSS_DOMAIN_EXPRESSION));
         return new ModelOperationPolicyRegistry(policies);
     }
 
-    public Settings getRoutingSemanticAssist() { return routingSemanticAssist; }
-    public void setRoutingSemanticAssist(Settings value) { routingSemanticAssist = value; }
+    public Settings getTurnInterpretation() { return turnInterpretation; }
+    public void setTurnInterpretation(Settings value) { turnInterpretation = value; }
     public Settings getGeneralAnswerMaterial() { return generalAnswerMaterial; }
     public void setGeneralAnswerMaterial(Settings value) { generalAnswerMaterial = value; }
-    public Settings getPortfolioExpression() { return portfolioExpression; }
-    public void setPortfolioExpression(Settings value) { portfolioExpression = value; }
     public Settings getCrossDomainExpression() { return crossDomainExpression; }
     public void setCrossDomainExpression(Settings value) { crossDomainExpression = value; }
 
