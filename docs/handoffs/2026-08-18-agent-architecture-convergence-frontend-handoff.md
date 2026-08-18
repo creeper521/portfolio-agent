@@ -483,6 +483,17 @@ Frontend Agent 每关闭一项请在本节追加文件与验证结果。Backend 
 
 Backend tests：`ConversationSessionResolverTest`、`AgentTurnControllerContractTest`、`AgentConversationControllerTest` 与 lifecycle replay 组合 8/8 通过。Frontend 旧链原子删除仍需等新 API 接线、全量 tests/build/E2E 通过后执行。
 
+### 16.3 Backend 最终切换信号与 Frontend 当前真实尾项（2026-08-18）
+
+Backend 新 API、State、Continuation、Clarification、cancel/clear 已全部进入唯一生产链；旧 `/api/v2/answers`、`/api/v2/conversation-context`、ConversationAnswer DTO/Mapper、Context/Receipt/MOST_RECENT 全链已删除。Frontend 现在可以并且必须执行 §16 剩余六项及旧链原子删除，不再等待任何 Backend 合同。
+
+主开发 Agent 在共享工作区复验当前前端结果：77 files、799/799 与 build 均通过，但发现两个尚未关闭的真实 Exit Gate：
+
+1. `PublicAgentTurnMessage.test.ts` 三次 Vue warning：`ClarificationTurnView` 无法解析 `SuggestedActionRow`。请补齐组件 import/注册，并以测试 stderr 无该 warning 为门；
+2. Frontend production 仍保留 `/api/v2/answers`、`/api/v2/conversation-context`、stp-v1/v2/v3、PlanConfirmation、degradationSummary、旧 answer mapper/Workspace/Thread 分支。请完成 `agentTurnApi.ts` + sessionStorage/Bearer + cancel/clear/clarification 接线，重写 Workspace/Thread 使用新组件树，再按 S5-08 删除旧 types/mappers/components/tests，不保留 adapter/fallback。
+
+完成后运行：Frontend 全量、build，以及 Slice 5/6 联合零引用门；把精确文件、测试数和 build 结果追加到本节。该项是当前整个架构收敛唯一外部阻断。
+
 ### 16.1 Frontend Agent 处理结果（2026-08-18，§16.1—§16.5 全部关闭）
 
 **§16.1 sectionKind 闭集 — 已关闭：**
