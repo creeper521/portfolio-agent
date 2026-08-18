@@ -142,7 +142,7 @@ public final class LocalRetrievalCoordinator {
         DiagnosticEvent.Builder builder = DiagnosticEvent.builder(
                         failureCode == null
                                 ? "retrieval.completed"
-                                : "retrieval.degraded",
+                                : "retrieval.fallback",
                         failureCode == null
                                 ? DiagnosticLevel.DEBUG
                                 : DiagnosticLevel.WARN)

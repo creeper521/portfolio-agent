@@ -9,7 +9,7 @@ public final class PortfolioRetrievalResult {
     private final List<PortfolioRetrievedSubject> subjects;
     private final List<PortfolioRetrievedPassage> passages;
     private final PortfolioRetrievalSource source;
-    private final boolean degraded;
+    private final boolean fallbackUsed;
     private final String noticeCode;
 
     public PortfolioRetrievalResult(
@@ -17,7 +17,7 @@ public final class PortfolioRetrievalResult {
             List<PortfolioRetrievedSubject> subjects,
             List<PortfolioRetrievedPassage> passages,
             PortfolioRetrievalSource source,
-            boolean degraded,
+            boolean fallbackUsed,
             String noticeCode) {
         if (contentVersion == null || contentVersion.isBlank()) {
             throw new IllegalArgumentException("contentVersion is required");
@@ -26,7 +26,7 @@ public final class PortfolioRetrievalResult {
         this.subjects = List.copyOf(Objects.requireNonNull(subjects, "subjects"));
         this.passages = List.copyOf(Objects.requireNonNull(passages, "passages"));
         this.source = Objects.requireNonNull(source, "source");
-        this.degraded = degraded;
+        this.fallbackUsed = fallbackUsed;
         this.noticeCode = normalizeNullable(noticeCode);
     }
 
@@ -34,14 +34,14 @@ public final class PortfolioRetrievalResult {
     public List<PortfolioRetrievedSubject> getSubjects() { return subjects; }
     public List<PortfolioRetrievedPassage> getPassages() { return passages; }
     public PortfolioRetrievalSource getSource() { return source; }
-    public boolean isDegraded() { return degraded; }
+    public boolean isFallbackUsed() { return fallbackUsed; }
     public String getNoticeCode() { return noticeCode; }
 
     @Override
     public boolean equals(Object other) {
         if (this == other) { return true; }
         if (!(other instanceof PortfolioRetrievalResult that)) { return false; }
-        return degraded == that.degraded
+        return fallbackUsed == that.fallbackUsed
                 && Objects.equals(contentVersion, that.contentVersion)
                 && Objects.equals(subjects, that.subjects)
                 && Objects.equals(passages, that.passages)
@@ -51,14 +51,14 @@ public final class PortfolioRetrievalResult {
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentVersion, subjects, passages, source, degraded, noticeCode);
+        return Objects.hash(contentVersion, subjects, passages, source, fallbackUsed, noticeCode);
     }
 
     @Override
     public String toString() {
         return "PortfolioRetrievalResult{" + "contentVersion='" + contentVersion + '\''
                 + ", subjectCount=" + subjects.size() + ", passageCount=" + passages.size()
-                + ", source=" + source + ", degraded=" + degraded
+                + ", source=" + source + ", fallbackUsed=" + fallbackUsed
                 + ", noticeCode='" + noticeCode + '\'' + '}';
     }
 

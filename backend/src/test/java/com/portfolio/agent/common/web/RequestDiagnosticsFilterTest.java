@@ -41,7 +41,7 @@ class RequestDiagnosticsFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = (servletRequest, servletResponse) -> {
             servletRequest.setAttribute(
-                    HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v2/answers");
+                    HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/agent/turns");
             ((MockHttpServletResponse) servletResponse).setStatus(200);
         };
 
@@ -54,7 +54,7 @@ class RequestDiagnosticsFilterTest {
         assertThat(started.getName()).isEqualTo("http.request.started");
         assertThat(started.getFields()).containsEntry("http.route", "UNRESOLVED");
         assertThat(completed.getName()).isEqualTo("http.request.completed");
-        assertThat(completedFields).containsEntry("http.route", "/api/v2/answers");
+        assertThat(completedFields).containsEntry("http.route", "/api/agent/turns");
         assertThat(response.getHeader("X-Request-Id"))
                 .isEqualTo(completedFields.get("request.id"));
         assertThat(response.getHeader("X-Trace-Id"))
@@ -274,7 +274,7 @@ class RequestDiagnosticsFilterTest {
         RequestDiagnosticsFilter filter = new RequestDiagnosticsFilter(events::add);
 
         MockHttpServletRequest timeoutRequest =
-                new MockHttpServletRequest("POST", "/api/v2/answers");
+                new MockHttpServletRequest("POST", "/api/agent/turns");
         MockHttpServletResponse timeoutResponse = new MockHttpServletResponse();
         filter.doFilter(timeoutRequest, timeoutResponse, (request, response) -> {
             request.setAttribute(

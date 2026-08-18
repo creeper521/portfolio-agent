@@ -51,7 +51,7 @@ class FailoverPortfolioRetrieverTest {
 
         assertThat(fallbackCalls).hasValue(1);
         assertThat(result.getSource().getAdapterId()).isEqualTo("BUNDLE");
-        assertThat(result.isDegraded()).isTrue();
+        assertThat(result.isFallbackUsed()).isTrue();
         assertThat(result.getNoticeCode()).isEqualTo("POSTGRES_RETRIEVAL_UNAVAILABLE");
     }
 
@@ -84,7 +84,7 @@ class FailoverPortfolioRetrieverTest {
         PortfolioRetrievalResult timeoutResult = timeoutRetriever.retrieve(request());
 
         assertThat(timeoutFallbackCalls).hasValue(1);
-        assertThat(timeoutResult.isDegraded()).isTrue();
+        assertThat(timeoutResult.isFallbackUsed()).isTrue();
 
         AtomicInteger invalidFallbackCalls = new AtomicInteger();
         PortfolioRetrievalException invalidQuery = new PortfolioRetrievalException(

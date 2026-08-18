@@ -68,7 +68,6 @@ public final class FrontendDiagnosticEventRequest {
     private final Integer httpStatus;
 
     private final GenerationMode generationMode;
-    private final Boolean degraded;
     private final GuidanceStage guidanceStage;
 
     @Min(0)
@@ -98,7 +97,6 @@ public final class FrontendDiagnosticEventRequest {
             @JsonProperty("durationBucket") DurationBucket durationBucket,
             @JsonProperty("httpStatus") Integer httpStatus,
             @JsonProperty("generationMode") GenerationMode generationMode,
-            @JsonProperty("degraded") Boolean degraded,
             @JsonProperty("guidanceStage") GuidanceStage guidanceStage,
             @JsonProperty("suggestedQuestionCount") Integer suggestedQuestionCount,
             @JsonProperty("contentVersion") String contentVersion,
@@ -117,7 +115,6 @@ public final class FrontendDiagnosticEventRequest {
         this.durationBucket = durationBucket;
         this.httpStatus = httpStatus;
         this.generationMode = generationMode;
-        this.degraded = degraded;
         this.guidanceStage = guidanceStage;
         this.suggestedQuestionCount = suggestedQuestionCount;
         this.contentVersion = contentVersion;
@@ -174,10 +171,6 @@ public final class FrontendDiagnosticEventRequest {
 
     public GenerationMode getGenerationMode() {
         return generationMode;
-    }
-
-    public Boolean getDegraded() {
-        return degraded;
     }
 
     public GuidanceStage getGuidanceStage() {

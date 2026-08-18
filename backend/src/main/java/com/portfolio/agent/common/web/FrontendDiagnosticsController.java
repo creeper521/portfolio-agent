@@ -78,7 +78,6 @@ public final class FrontendDiagnosticsController {
         addOptionalEnumField(builder, "duration.bucket", request.getDurationBucket());
         addOptionalNumberField(builder, "http.status_code", request.getHttpStatus());
         addOptionalEnumField(builder, "generation.mode", request.getGenerationMode());
-        addOptionalBooleanField(builder, "answer.degraded", request.getDegraded());
         addOptionalEnumField(builder, "guidance.stage", request.getGuidanceStage());
         addOptionalNumberField(
                 builder, "suggestion.count", request.getSuggestedQuestionCount());

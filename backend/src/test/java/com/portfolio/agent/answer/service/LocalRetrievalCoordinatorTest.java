@@ -110,7 +110,7 @@ class LocalRetrievalCoordinatorTest {
         assertThat(calls).hasValue(1);
         assertThat(events).hasSize(1);
         DiagnosticEvent event = events.getFirst();
-        assertThat(event.getName()).isEqualTo("retrieval.degraded");
+        assertThat(event.getName()).isEqualTo("retrieval.fallback");
         assertThat(event.getFields())
                 .containsEntry("retrieval.requested_mode", "HYBRID_ENABLED")
                 .containsEntry("retrieval.actual_mode", "KEYWORD_FALLBACK")

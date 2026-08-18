@@ -20,7 +20,6 @@ public final class DiagnosticEvent {
             "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])");
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private static final Set<String> APPROVED_ANSWER_FIELD_KEYS = Set.of(
-            "answer.degraded",
             "answer.resolution",
             "answer.source",
             "answer.scope",
@@ -59,7 +58,6 @@ public final class DiagnosticEvent {
             "duration.bucket",
             "http.status_code",
             "generation.mode",
-            "answer.degraded",
             "guidance.stage",
             "suggestion.count",
             "content.version",
@@ -117,7 +115,7 @@ public final class DiagnosticEvent {
                             "retrieval.fused_candidate_count",
                             "retrieval.accepted_chunk_count",
                             "duration.bucket")),
-                    Map.entry("retrieval.degraded", fields(
+                    Map.entry("retrieval.fallback", fields(
                             "retrieval.requested_mode",
                             "retrieval.actual_mode",
                             "retrieval.decision",
@@ -202,7 +200,6 @@ public final class DiagnosticEvent {
                             "conversation.intent",
                             "answer.scope",
                             "answer.resolution",
-                            "answer.degraded",
                             "answer.source",
                             "generation.mode",
                             "verification.status",

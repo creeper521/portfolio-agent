@@ -115,7 +115,7 @@ class BundlePortfolioRetrieverTest {
 
         assertThat(result.getSubjects()).isEmpty();
         assertThat(result.getPassages()).isEmpty();
-        assertThat(result.isDegraded()).isTrue();
+        assertThat(result.isFallbackUsed()).isTrue();
         assertThat(result.getNoticeCode()).isEqualTo("BUNDLE_RETRIEVAL_UNAVAILABLE");
     }
 

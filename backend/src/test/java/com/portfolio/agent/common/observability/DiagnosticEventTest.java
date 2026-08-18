@@ -66,7 +66,6 @@ class DiagnosticEventTest {
     @Test
     void permitsEveryExplicitlyApprovedAnswerStateKey() {
         Map<String, Object> approvedFields = Map.of(
-                "answer.degraded", false,
                 "answer.resolution", Outcome.SUCCESS,
                 "answer.source", "DETERMINISTIC",
                 "answer.scope", "PORTFOLIO");

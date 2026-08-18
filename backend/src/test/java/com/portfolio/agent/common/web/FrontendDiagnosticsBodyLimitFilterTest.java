@@ -106,7 +106,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
     void doesNotLimitOtherRoutes() throws Exception {
         FrontendDiagnosticsBodyLimitFilter filter = filterWithLimit(16);
         MockHttpServletRequest request =
-                new MockHttpServletRequest("POST", "/api/v2/answers");
+                new MockHttpServletRequest("POST", "/api/agent/turns");
         request.setContent("0123456789abcdefg".getBytes(StandardCharsets.UTF_8));
         MockHttpServletResponse response = new MockHttpServletResponse();
 
