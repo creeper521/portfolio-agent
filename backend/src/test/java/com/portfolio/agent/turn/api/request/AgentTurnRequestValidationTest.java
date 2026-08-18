@@ -1,0 +1,114 @@
+package com.portfolio.agent.turn.api.request;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import org.junit.jupiter.api.Test;
+
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class AgentTurnRequestValidationTest {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+
+    @Test
+    void decodesEveryClosedCommandVariant() throws Exception {
+        assertValid(request("""
+                {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍 SQL 审计项目"}}
+                """));
+        assertValid(request("""
+                {"kind":"ASK","input":{"kind":"PRESET","presetId":"question-sql-audit-detail",
+                 "presetRevision":"pcv1-0123456789abcdef"}}
+                """));
+        assertValid(request("""
+                {"kind":"CONTINUE","contextHandle":"ctx_opaque","resultItemId":"item_opaque",
+                 "text":"继续说明这一项"}
+                """));
+        assertValid(request("""
+                {"kind":"RESOLVE_CLARIFICATION","clarificationId":"clarification_opaque",
+                 "answer":{"kind":"CHOICE","choiceId":"choice_opaque"}}
+                """));
+        assertValid(request("""
+                {"kind":"RESOLVE_CLARIFICATION","clarificationId":"clarification_opaque",
+                 "answer":{"kind":"TEXT","text":"SQL 审计项目"}}
+                """));
+    }
+
+    @Test
+    void rejectsBlankPayloadsAndInvalidConversationOrder() throws Exception {
+        AgentTurnRequest blank = request("""
+                {"kind":"ASK","input":{"kind":"FREE_TEXT","text":" "}}
+                """);
+        assertThat(validator.validate(blank)).isNotEmpty();
+
+        AgentTurnRequest invalidWindow = mapper.readValue("""
+                {
+                  "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}},
+                  "conversationWindow":[
+                    {"role":"ASSISTANT","text":"第一条不能是助手消息"},
+                    {"role":"USER","text":"顺序错误"}
+                  ]
+                }
+                """, AgentTurnRequest.class);
+        assertThat(validator.validate(invalidWindow))
+                .extracting(ConstraintViolation::getMessage)
+                .contains("conversationWindow must alternate USER and ASSISTANT");
+    }
+
+    @Test
+    void rejectsUnknownCommandAndInputKindsDuringDecode() {
+        assertThatThrownBy(() -> request("""
+                {"kind":"CONFIRM_PLAN"}
+                """))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> request("""
+                {"kind":"ASK","input":{"kind":"TASK_GRAPH"}}
+                """))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void keepsOnlySmallSurfaceHintsAndBoundedWindow() throws Exception {
+        AgentTurnRequest request = mapper.readValue("""
+                {
+                  "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍这个项目"}},
+                  "surfaceContext":{
+                    "subjectHint":{"kind":"PROJECT","slug":"sql-audit"},
+                    "audienceRole":"INTERVIEWER",
+                    "requestSource":"AGENT_PAGE"
+                  },
+                  "conversationWindow":[
+                    {"role":"USER","text":"上一轮问题"},
+                    {"role":"ASSISTANT","text":"上一轮公开回答摘要"}
+                  ]
+                }
+                """, AgentTurnRequest.class);
+
+        assertValid(request);
+        assertThat(request.getSurfaceContext().getSubjectHint().getKind())
+                .isEqualTo(AgentTurnRequest.SubjectHintKind.PROJECT);
+        assertThat(request.getConversationWindow()).hasSize(2);
+    }
+
+    private AgentTurnRequest request(String command) throws Exception {
+        return mapper.readValue("""
+                {
+                  "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "command":%s,
+                  "conversationWindow":[]
+                }
+                """.formatted(command), AgentTurnRequest.class);
+    }
+
+    private void assertValid(AgentTurnRequest request) {
+        Set<ConstraintViolation<AgentTurnRequest>> violations = validator.validate(request);
+        assertThat(violations).isEmpty();
+    }
+}
