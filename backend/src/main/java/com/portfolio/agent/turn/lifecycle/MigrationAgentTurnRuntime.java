@@ -152,6 +152,26 @@ public final class MigrationAgentTurnRuntime {
                             sourceScope, section.getSectionType(), section.getTitle(), section.getContent(),
                             List.of(), List.of(), section.getSources()));
                 }
+                continue;
+            }
+            if (presentation instanceof
+                    com.portfolio.agent.turn.capability.general.GeneralPresentation generalPresentation) {
+                for (com.portfolio.agent.turn.capability.general.GeneralPresentation.Section
+                        section : generalPresentation.getSections()) {
+                    blocks.add(new ConversationAnswerBlock(
+                            sourceScope, section.sectionType(), section.title(), section.content(),
+                            List.of(), List.of(), List.of()));
+                }
+                continue;
+            }
+            if (presentation instanceof
+                    com.portfolio.agent.turn.capability.synthesis.CrossDomainPresentation synthesisPresentation) {
+                for (com.portfolio.agent.turn.capability.synthesis.CrossDomainPresentation.Section
+                        section : synthesisPresentation.getSections()) {
+                    blocks.add(new ConversationAnswerBlock(
+                            sourceScope, section.sectionType(), section.title(), section.content(),
+                            List.of(), List.of(), section.sources()));
+                }
             }
         }
         return List.copyOf(blocks);

@@ -14,23 +14,19 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "portfolio.model-operations")
 public final class ModelOperationProperties {
     private Settings turnInterpretation = new Settings();
-    private Settings generalAnswerMaterial = new Settings();
-    private Settings crossDomainExpression = new Settings();
+    private Settings generalKnowledge = new Settings();
 
     public ModelOperationPolicyRegistry toRegistry() {
         Map<ModelOperation, ModelOperationPolicy> policies = new EnumMap<>(ModelOperation.class);
         policies.put(ModelOperation.TURN_INTERPRETATION, turnInterpretation.policy(ModelOperation.TURN_INTERPRETATION));
-        policies.put(ModelOperation.GENERAL_ANSWER_MATERIAL, generalAnswerMaterial.policy(ModelOperation.GENERAL_ANSWER_MATERIAL));
-        policies.put(ModelOperation.CROSS_DOMAIN_EXPRESSION, crossDomainExpression.policy(ModelOperation.CROSS_DOMAIN_EXPRESSION));
+        policies.put(ModelOperation.GENERAL_KNOWLEDGE, generalKnowledge.policy(ModelOperation.GENERAL_KNOWLEDGE));
         return new ModelOperationPolicyRegistry(policies);
     }
 
     public Settings getTurnInterpretation() { return turnInterpretation; }
     public void setTurnInterpretation(Settings value) { turnInterpretation = value; }
-    public Settings getGeneralAnswerMaterial() { return generalAnswerMaterial; }
-    public void setGeneralAnswerMaterial(Settings value) { generalAnswerMaterial = value; }
-    public Settings getCrossDomainExpression() { return crossDomainExpression; }
-    public void setCrossDomainExpression(Settings value) { crossDomainExpression = value; }
+    public Settings getGeneralKnowledge() { return generalKnowledge; }
+    public void setGeneralKnowledge(Settings value) { generalKnowledge = value; }
 
     public static final class Settings {
         private OperationMode mode = OperationMode.DISABLED;

@@ -18,25 +18,17 @@ server:
     include-stacktrace: never
 
 portfolio:
-  agent:
-    cross-domain-relations:
-      enabled: ${PORTFOLIO_AGENT_CROSS_DOMAIN_RELATIONS_ENABLED:false}
   model-operations:
     turn-interpretation:
       mode: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION:}
       timeout: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_TIMEOUT:}
-    general-answer-material:
+    general-knowledge:
       mode: ${PORTFOLIO_MODEL_OP_GENERAL_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION:}
       timeout: ${PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT:}
-    cross-domain-expression:
-      mode: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_MODE:DISABLED}
-      provider-ref: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_PROVIDER_REF:}
-      schema-version: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_SCHEMA_VERSION:}
-      timeout: ${PORTFOLIO_MODEL_OP_CROSS_DOMAIN_TIMEOUT:}
   goal-interpretation:
     timeout: ${PORTFOLIO_GOAL_INTERPRETATION_TIMEOUT:2500ms}
     max-output-tokens: ${PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS:1600}
