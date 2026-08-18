@@ -1,0 +1,12 @@
+package com.portfolio.agent.turn.execution;
+
+public enum TaskTerminalReason {
+    NO_SUPPORTED_RESULT,
+    INPUT_REJECTED,
+    CAPABILITY_UNAVAILABLE,
+    DEPENDENCY_UNAVAILABLE,
+    EXECUTION_FAILED,
+    TURN_CANCELLED,
+    TURN_DEADLINE_EXCEEDED,
+    NOT_SCHEDULED
+}
