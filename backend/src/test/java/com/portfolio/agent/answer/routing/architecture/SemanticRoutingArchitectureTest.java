@@ -10,19 +10,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SemanticRoutingArchitectureTest {
 
     @Test
-    void runtimeHasNoLegacyGlobalRoutingOrPortfolioResolutionDependency() {
+    void runtimeContainsOnlyTheClosedPlanningAndExecutionDependencies() {
         assertThat(Arrays.stream(MigrationAgentTurnRuntime.class.getDeclaredFields())
                 .map(field -> field.getType().getSimpleName()))
-                .doesNotContain(
-                        "ConversationIntentRouter",
-                        "PortfolioIntelligence",
-                        "PortfolioIntelligenceAnswerAssembler",
-                        "ConversationalModelPort",
-                        "ConversationWindowManager",
-                        "TurnRouter",
-                        "PlanConfirmationService");
-        assertThat(Arrays.stream(MigrationAgentTurnRuntime.class.getDeclaredFields())
-                .map(field -> field.getType().getSimpleName()))
-                .contains("GoalResolver", "SemanticPlanCompiler", "SemanticTurnEngine");
+                .containsExactly(
+                        "PortfolioKnowledgeGateway", "GoalResolver",
+                        "SemanticPlanCompiler", "SemanticTurnEngine");
     }
 }
