@@ -1,3 +1,0 @@
-package com.portfolio.agent.answer.composition.domain;
-import java.util.Objects;
-public final class ModelExpressionRequest { private final String schemaVersion; private final String serializedInput; public ModelExpressionRequest(String schemaVersion,String serializedInput){this.schemaVersion=Objects.requireNonNull(schemaVersion);this.serializedInput=Objects.requireNonNull(serializedInput); if(serializedInput.length()>12000) throw new IllegalArgumentException("input exceeds limit");} public String getSchemaVersion(){return schemaVersion;} public String getSerializedInput(){return serializedInput;} @Override public String toString(){return "ModelExpressionRequest{schemaVersion='"+schemaVersion+"', inputSize="+serializedInput.length()+"}";} }

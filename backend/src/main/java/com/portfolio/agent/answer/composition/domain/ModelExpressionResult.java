@@ -1,2 +1,0 @@
-package com.portfolio.agent.answer.composition.domain;
-public final class ModelExpressionResult { private final String response; private ModelExpressionResult(String response){this.response=response;} public static ModelExpressionResult success(String response){return new ModelExpressionResult(response);} public static ModelExpressionResult empty(){return new ModelExpressionResult(null);} public String getResponse(){return response;} public boolean isEmpty(){return response==null||response.isBlank();} }
