@@ -16,7 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = PortfolioAgentApplication.class, properties = {
-        "portfolio.conversational-agent.enabled=false"
+        "portfolio.conversational-agent.enabled=false",
+        "portfolio.conversation-context.mode=IN_MEMORY"
 })
 @AutoConfigureMockMvc
 class AgentTurnClosedContractIntegrationTest {
@@ -25,22 +26,23 @@ class AgentTurnClosedContractIntegrationTest {
 
     @Test
     void exactReviewedAliasExecutesWithoutModelProvider() throws Exception {
-        mockMvc.perform(post("/api/v2/answers")
+        mockMvc.perform(post("/api/agent/turns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(freeText("63f63c75-16e8-49e7-864d-dcd0fe100d50",
                                 "SQL 审计与故障排查工具")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.answerScope").value("PORTFOLIO"));
+                .andExpect(jsonPath("$.kind").value("ANSWER"))
+                .andExpect(jsonPath("$.answer.resolution").value("COMPLETE"));
     }
 
     @Test
     void providerUnavailableWithoutExactFallbackIsCapabilityUnavailable() throws Exception {
-        mockMvc.perform(post("/api/v2/answers")
+        mockMvc.perform(post("/api/agent/turns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(freeText("73f63c75-16e8-49e7-864d-dcd0fe100d50", "112233")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resolution").value("CAPABILITY_UNAVAILABLE"))
-                .andExpect(jsonPath("$.blocks").isEmpty());
+                .andExpect(jsonPath("$.kind").value("CAPABILITY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.answer").doesNotExist());
     }
 
     @Test
@@ -52,30 +54,30 @@ class AgentTurnClosedContractIntegrationTest {
         String presetId = preset.path("id").asText();
         String revision = preset.path("contractVersion").asText();
 
-        mockMvc.perform(post("/api/v2/answers").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content(preset("83f63c75-16e8-49e7-864d-dcd0fe100d50", presetId, revision)))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v2/answers").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content(preset("93f63c75-16e8-49e7-864d-dcd0fe100d50",
                                 presetId, "pcv1-0000000000000000")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.resolution").value("CAPABILITY_UNAVAILABLE"));
+                .andExpect(jsonPath("$.kind").value("CAPABILITY_UNAVAILABLE"));
     }
 
     @Test
     void sameRequestIdWithDifferentCommandConflicts() throws Exception {
         String requestId = "a3f63c75-16e8-49e7-864d-dcd0fe100d50";
-        mockMvc.perform(post("/api/v2/answers").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content(freeText(requestId, "SQL 审计与故障排查工具")))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v2/answers").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content(freeText(requestId, "活动系统工程实践")))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void oldOptionalFieldBagIsRejectedAtHttpBoundary() throws Exception {
-        mockMvc.perform(post("/api/v2/answers").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"turnId":"old","requestToken":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
                                  "question":"你好","messages":[]}

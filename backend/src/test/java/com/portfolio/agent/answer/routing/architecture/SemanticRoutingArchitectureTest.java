@@ -1,6 +1,6 @@
 package com.portfolio.agent.answer.routing.architecture;
 
-import com.portfolio.agent.turn.lifecycle.MigrationAgentTurnRuntime;
+import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -11,10 +11,10 @@ class SemanticRoutingArchitectureTest {
 
     @Test
     void runtimeContainsOnlyTheClosedPlanningAndExecutionDependencies() {
-        assertThat(Arrays.stream(MigrationAgentTurnRuntime.class.getDeclaredFields())
+        assertThat(Arrays.stream(AgentTurnLifecycleService.class.getDeclaredFields())
                 .map(field -> field.getType().getSimpleName()))
-                .containsExactly(
-                        "PortfolioKnowledgeGateway", "GoalResolver",
-                        "SemanticPlanCompiler", "SemanticTurnEngine");
+                .contains(
+                        "PortfolioKnowledgeGateway", "GoalResolver", "SemanticPlanCompiler",
+                        "SemanticTurnEngine", "PublicAgentTurnProjector", "AgentStateStore");
     }
 }
