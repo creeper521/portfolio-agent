@@ -7,7 +7,9 @@ import com.portfolio.agent.turn.continuation.ClarificationChallenge;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
+import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.continuation.ContinuationReference;
+import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.execution.SemanticTurnOutcome;
@@ -23,6 +25,9 @@ import com.portfolio.agent.turn.planning.ResolvedGoalSet;
 import com.portfolio.agent.turn.planning.SemanticPlanCompiler;
 import com.portfolio.agent.turn.planning.SemanticTurnPlan;
 import com.portfolio.agent.turn.planning.ValidatedSemanticTurnPlan;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
+import com.portfolio.agent.turn.planning.GoalKnowledgeRequirement;
+import com.portfolio.agent.turn.planning.GoalRequestedOutput;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.projection.PublicAgentTurnProjector;
 
@@ -44,7 +49,7 @@ public final class AgentTurnLifecycleService {
     private final SemanticTurnEngine engine;
     private final PublicAgentTurnProjector projector;
     private final ContextMutationPlanner mutationPlanner;
-    private final TurnExecutionStore store;
+    private final AgentStateStore store;
     private final RequestFingerprintFactory fingerprintFactory;
     private final ConversationSessionResolver sessionResolver;
     private final ActiveTurnRegistry activeTurns = new ActiveTurnRegistry();
@@ -57,7 +62,7 @@ public final class AgentTurnLifecycleService {
             PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
             SemanticPlanCompiler planCompiler, SemanticTurnEngine engine,
             PublicAgentTurnProjector projector, ContextMutationPlanner mutationPlanner,
-            TurnExecutionStore store, RequestFingerprintFactory fingerprintFactory,
+            AgentStateStore store, RequestFingerprintFactory fingerprintFactory,
             ConversationSessionResolver sessionResolver,
             Clock clock, Duration leaseDuration,
             Duration executionDuration, Duration contextTtl) {
@@ -83,7 +88,8 @@ public final class AgentTurnLifecycleService {
             return Result.state(Status.UNAUTHORIZED, 0);
         }
         Result result = executeResolved(
-                session.conversationId(), session.tokenHash(), command);
+                session.conversationId(), session.tokenHash(),
+                sessionResolver.pendingSession(session), command);
         boolean canCommitSession = (result.status() == Status.COMPLETED
                 || result.status() == Status.REPLAY) && !result.settlementFailed();
         if (canCommitSession) sessionResolver.commit(session);
@@ -96,7 +102,9 @@ public final class AgentTurnLifecycleService {
     }
 
     private Result executeResolved(
-            String conversationId, byte[] resumeTokenHash, AgentTurnCommand command) {
+            String conversationId, byte[] resumeTokenHash,
+            ConversationSessionStore.Session sessionToCreate,
+            AgentTurnCommand command) {
         byte[] fingerprint = fingerprintFactory.fingerprint(command);
         TurnExecutionStore.ClaimResult claim;
         try {
@@ -120,7 +128,8 @@ public final class AgentTurnLifecycleService {
             try {
                 boolean completed = store.complete(
                         command.getRequestId(), fingerprint, execution.settledTurn(),
-                        execution.contexts(), execution.challenges(), clock.instant());
+                        execution.contexts(), execution.challenges(),
+                        sessionToCreate, clock.instant());
                 if (!completed) return Result.state(Status.CANCELLED, 0);
                 return new Result(Status.COMPLETED, execution.settledTurn(), 0, false, null);
             } catch (RuntimeException settlementFailure) {
@@ -171,7 +180,9 @@ public final class AgentTurnLifecycleService {
             String conversationId, byte[] resumeTokenHash,
             AgentTurnCommand command, CancellationSignal cancellation) {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
-        ResolvedGoalSet resolved = goalResolver.resolve(command, resolutionContext(content));
+        ResolvedInput input = resolveInput(
+                conversationId, resumeTokenHash, command, content);
+        ResolvedGoalSet resolved = input.resolved();
         return switch (resolved.getKind()) {
             case CONVERSATIONAL -> simple(new PublicAgentTurn.Conversational(
                     command.getRequestId(), resolved.getMessage().orElseThrow(), List.of()));
@@ -180,13 +191,15 @@ public final class AgentTurnLifecycleService {
                     ? "PUBLIC_SUBJECT_INVALID" : "OUT_OF_SCOPE",
                     resolved.getMessage().orElseThrow(), List.of()));
             case CAPABILITY_UNAVAILABLE -> simple(new PublicAgentTurn.CapabilityUnavailable(
-                    command.getRequestId(), "GOAL_INTERPRETATION_UNAVAILABLE",
-                    resolved.getMessage().orElseThrow(), true, List.of()));
+                    command.getRequestId(), command instanceof AgentTurnCommand.Ask
+                    ? "GOAL_INTERPRETATION_UNAVAILABLE" : "CONTINUATION_UNAVAILABLE",
+                    resolved.getMessage().orElseThrow(), command instanceof AgentTurnCommand.Ask, List.of()));
             case CLARIFICATION -> clarification(
                     conversationId, resumeTokenHash, command.getRequestId(),
                     content.getContentVersion(), resolved.getClarification().orElseThrow());
             case GOALS -> goals(
                     conversationId, resumeTokenHash, command, cancellation, content,
+                    input.parentHandlesByGoal(),
                     planCompiler.compile(
                             resolved.getGoalProposal().orElseThrow(), content.getContentVersion(),
                             resolutionContext(content)));
@@ -196,6 +209,7 @@ public final class AgentTurnLifecycleService {
     private Execution goals(
             String conversationId, byte[] resumeTokenHash, AgentTurnCommand command,
             CancellationSignal cancellation, RuntimeAnswerContent content,
+            Map<String, String> parentHandlesByGoal,
             PlanCompilationResult compilation) {
         if (compilation.getKind() == PlanCompilationResult.Kind.CLARIFICATION_REQUIRED) {
             return clarification(
@@ -217,7 +231,8 @@ public final class AgentTurnLifecycleService {
                 cancellation, List.of(), command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.Preset);
         List<ContextMutationPlanner.Mutation> mutations = mutationPlanner.plan(
-                conversationId, plan, outcome, clock.instant().plus(contextTtl), Map.of());
+                conversationId, plan, outcome, clock.instant().plus(contextTtl),
+                parentHandlesByGoal);
         Map<String, ContinuationReference> continuations = mutations.stream().collect(
                 Collectors.toMap(
                         ContextMutationPlanner.Mutation::goalId,
@@ -252,6 +267,115 @@ public final class AgentTurnLifecycleService {
         return new Execution(turn, turn, List.of(), List.of());
     }
 
+    private ResolvedInput resolveInput(
+            String conversationId, byte[] tokenHash,
+            AgentTurnCommand command, RuntimeAnswerContent content) {
+        if (command instanceof AgentTurnCommand.Continue continuation) {
+            ContinuationContext context;
+            try {
+                context = store.findContext(
+                        conversationId, continuation.getContextHandle(), clock.instant()).orElse(null);
+            } catch (RuntimeException failure) {
+                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
+                        "当前续接状态不可用，请重新提问。"), Map.of());
+            }
+            if (context == null || !resultItemValid(context, continuation.getResultItemId().orElse(null))) {
+                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
+                        "当前续接状态不可用，请重新提问。"), Map.of());
+            }
+            UserGoalProposal proposal = continuationProposal(continuation, context);
+            return new ResolvedInput(
+                    ResolvedGoalSet.goals(proposal),
+                    Map.of("continuation-goal", context.getContextHandle()));
+        }
+        if (command instanceof AgentTurnCommand.ResolveClarification clarification) {
+            ClarificationStore.ClarificationAnswer answer =
+                    clarification.getAnswer() instanceof AgentTurnCommand.ChoiceAnswer choice
+                            ? new ClarificationStore.ClarificationAnswer.Choice(choice.getChoiceId())
+                            : new ClarificationStore.ClarificationAnswer.Text(
+                            ((AgentTurnCommand.TextAnswer) clarification.getAnswer()).getText());
+            ClarificationStore.ConsumeResult consumed;
+            try {
+                consumed = store.consumeClarification(
+                        clarification.getClarificationId(), conversationId, tokenHash,
+                        content.getContentVersion(), answer, clock.instant());
+            } catch (RuntimeException failure) {
+                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
+                        "当前澄清状态不可用，请重新提问。"), Map.of());
+            }
+            if (consumed.status() != ClarificationStore.Status.CONSUMED) {
+                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
+                        "当前澄清状态不可用，请重新提问。"), Map.of());
+            }
+            if (answer instanceof ClarificationStore.ClarificationAnswer.Text text) {
+                AgentTurnCommand.Ask ask = new AgentTurnCommand.Ask(
+                        command.getRequestId(), new AgentTurnCommand.FreeText(text.text()),
+                        command.getSurfaceContext(), command.getConversationWindow());
+                return new ResolvedInput(
+                        goalResolver.resolve(ask, resolutionContext(content)), Map.of());
+            }
+            return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
+                    "当前选择无法恢复为安全目标，请重新提问。"), Map.of());
+        }
+        return new ResolvedInput(
+                goalResolver.resolve(command, resolutionContext(content)), Map.of());
+    }
+
+    private boolean resultItemValid(ContinuationContext context, String resultItemId) {
+        if (resultItemId == null) return true;
+        return context instanceof ContinuationContext.Recommendation recommendation
+                && recommendation.getSelectedResults().stream().anyMatch(value ->
+                value.resultItemId().equals(resultItemId));
+    }
+
+    private UserGoalProposal continuationProposal(
+            AgentTurnCommand.Continue command, ContinuationContext context) {
+        UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor(command.getText(), 0);
+        List<GoalSubjectReference> subjects;
+        GoalKind kind;
+        GoalRequestedOutput output;
+        UserGoalProposal.GoalParameters parameters;
+        if (context instanceof ContinuationContext.PortfolioFact fact) {
+            subjects = subjects(fact.getSubjectIds());
+            kind = GoalKind.PORTFOLIO_FACT;
+            output = GoalRequestedOutput.OVERVIEW;
+            parameters = new UserGoalProposal.PortfolioFactParameters(
+                    fact.getFacets().stream().map(UserGoalProposal.Facet::valueOf)
+                            .collect(Collectors.toSet()));
+        } else if (context instanceof ContinuationContext.PortfolioComparison comparison) {
+            subjects = subjects(comparison.getSubjectIds());
+            kind = GoalKind.PORTFOLIO_COMPARE;
+            output = GoalRequestedOutput.COMPARISON;
+            parameters = new UserGoalProposal.PortfolioCompareParameters(comparison.getDimensions());
+        } else {
+            ContinuationContext.Recommendation recommendation =
+                    (ContinuationContext.Recommendation) context;
+            Set<String> selected = command.getResultItemId().flatMap(item ->
+                    recommendation.getSelectedResults().stream()
+                            .filter(value -> value.resultItemId().equals(item)).findFirst()
+                            .map(ContinuationContext.ResultItem::subjectId)).stream()
+                    .collect(Collectors.toSet());
+            Set<String> scope = !selected.isEmpty() ? selected
+                    : recommendation.isAllPublishedAuthorized()
+                    ? recommendation.getSelectedResults().stream()
+                    .map(ContinuationContext.ResultItem::subjectId).collect(Collectors.toSet())
+                    : recommendation.getAuthorizedSubjectIds();
+            subjects = subjects(scope);
+            kind = GoalKind.PORTFOLIO_REFINE_RECOMMENDATION;
+            output = GoalRequestedOutput.RECOMMENDATION;
+            parameters = new UserGoalProposal.PortfolioRefineParameters(Set.of("USER_REFINEMENT"));
+        }
+        return new UserGoalProposal(List.of(new UserGoalProposal.ProposedGoal(
+                "continuation-goal", kind, anchor, subjects, Set.of(output),
+                GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE, parameters)));
+    }
+
+    private List<GoalSubjectReference> subjects(Set<String> ids) {
+        return ids.stream().sorted().map(value -> new GoalSubjectReference(
+                GoalSubjectReference.Kind.PROJECT, value,
+                GoalSubjectReference.Basis.CONTINUATION, null)).toList();
+    }
+
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {
         List<GoalInterpretationInput.PublicSubjectDescriptor> subjects = new ArrayList<>();
         addSubjects(subjects, content.getProjects(), GoalSubjectReference.Kind.PROJECT);
@@ -276,6 +400,8 @@ public final class AgentTurnLifecycleService {
             PublicAgentTurn readOnlyTurn, PublicAgentTurn settledTurn,
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges) { }
+    private record ResolvedInput(
+            ResolvedGoalSet resolved, Map<String, String> parentHandlesByGoal) { }
     public record Result(Status status, PublicAgentTurn turn, long retryAfterSeconds,
                          boolean settlementFailed, ConversationMetadata conversation) {
         static Result state(Status status, long retryAfter) {

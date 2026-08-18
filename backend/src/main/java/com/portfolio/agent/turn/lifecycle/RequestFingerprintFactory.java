@@ -48,6 +48,20 @@ public final class RequestFingerprintFactory {
                     value(output, "TEXT"); value(output, text.getText());
                 } else throw new IllegalArgumentException("unknown clarification answer");
             } else throw new IllegalArgumentException("unknown command");
+            AgentTurnCommand.SurfaceContext surface = command.getSurfaceContext();
+            if (surface.getSubjectHint() == null) {
+                value(output, "NO_SUBJECT_HINT");
+            } else {
+                value(output, surface.getSubjectHint().getKind().name());
+                value(output, surface.getSubjectHint().getSlug());
+            }
+            value(output, surface.getAudienceRole().map(Enum::name).orElse(""));
+            value(output, surface.getRequestSource().map(Enum::name).orElse(""));
+            output.writeInt(command.getConversationWindow().getMessages().size());
+            for (ConversationWindow.Message message : command.getConversationWindow().getMessages()) {
+                value(output, message.getRole().name());
+                value(output, message.getText());
+            }
         }
         return bytes.toByteArray();
     }
