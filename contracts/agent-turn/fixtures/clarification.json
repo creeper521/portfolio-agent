@@ -1,0 +1,22 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000005",
+  "kind": "CLARIFICATION",
+  "message": "需要补充目标后才能继续。",
+  "clarification": {
+    "clarificationId": "clarification_fixture_critical",
+    "prompt": "你希望了解哪个公开项目？",
+    "fields": [
+      {
+        "fieldId": "field_subject",
+        "kind": "SINGLE_CHOICE",
+        "label": "公开项目",
+        "required": true,
+        "choices": [
+          {"choiceId": "choice_sql", "label": "SQL 审计与故障排查工具"},
+          {"choiceId": "choice_platform", "label": "Agent 能力集成 MVP"}
+        ]
+      }
+    ]
+  },
+  "suggestedActions": []
+}

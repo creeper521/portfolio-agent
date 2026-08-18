@@ -1,0 +1,14 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000008",
+  "kind": "CAPABILITY_UNAVAILABLE",
+  "code": "GOAL_INTERPRETATION_UNAVAILABLE",
+  "message": "当前暂时无法可靠理解这条自由文本请求。",
+  "retryable": true,
+  "suggestedActions": [
+    {
+      "actionId": "choose-reviewed-preset",
+      "label": "选择公开问题",
+      "inputText": "介绍 SQL 审计与故障排查工具"
+    }
+  ]
+}

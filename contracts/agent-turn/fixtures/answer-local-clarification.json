@@ -1,0 +1,72 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000004",
+  "kind": "ANSWER",
+  "answer": {
+    "resolution": "PARTIAL",
+    "contentReleaseId": "2026-08-05.1",
+    "goalResults": [
+      {
+        "goalId": "goal-known-project",
+        "label": "介绍 SQL 审计项目",
+        "coverage": "FULL",
+        "presentation": {
+          "kind": "SECTIONED",
+          "sections": [
+            {
+              "sectionId": "section-overview",
+              "sectionKind": "BACKGROUND",
+              "title": "项目概况",
+              "content": "该项目聚焦 SQL 审计和故障排查的公开工程实践。",
+              "support": {
+                "kind": "VERIFIED_PUBLIC_EVIDENCE",
+                "publicSourceKeys": ["source-sql-audit"]
+              }
+            }
+          ]
+        },
+        "notices": []
+      },
+      {
+        "goalId": "goal-ambiguous-project",
+        "label": "比较另一个项目",
+        "coverage": "NONE",
+        "notices": [
+          {
+            "code": "CAPABILITY_UNAVAILABLE",
+            "message": "需要先明确要比较的另一个公开项目。"
+          }
+        ]
+      }
+    ],
+    "sourceCatalog": {
+      "sources": [
+        {
+          "key": "source-sql-audit",
+          "code": "E-01",
+          "label": "SQL 审计工具公开交付证据集",
+          "type": "PUBLIC_EVIDENCE",
+          "route": "/evidence"
+        }
+      ]
+    },
+    "sourceComposition": ["VERIFIED_PUBLIC_EVIDENCE"],
+    "suggestedActions": [],
+    "localClarification": {
+      "clarificationId": "clarification_fixture_local",
+      "prompt": "请选择另一个要比较的公开项目。",
+      "affectedGoalIds": ["goal-ambiguous-project"],
+      "fields": [
+        {
+          "fieldId": "field_project_choice",
+          "kind": "SINGLE_CHOICE",
+          "label": "另一个项目",
+          "required": true,
+          "choices": [
+            {"choiceId": "choice_activity", "label": "活动系统工程实践"},
+            {"choiceId": "choice_abtest", "label": "周末登录奖励 ABTest"}
+          ]
+        }
+      ]
+    }
+  }
+}

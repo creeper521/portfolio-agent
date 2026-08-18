@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "agent-turn-scenarios-v1",
+  "group": "portfolio-capability",
+  "scenarios": [
+    {
+      "caseId": "portfolio.fact-full-evidence",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "SQL 审计项目的主要技术决策是什么"},
+      "contextSummary": {"surface": "PROJECT_HINT", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "fact", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["fakeCitation=0", "contentVersionMix=0"]
+    },
+    {
+      "caseId": "portfolio.compare-partial-dimension",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "比较 SQL 审计和活动系统的验证方式与部署效果"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "goals": [{"goalKey": "comparison", "coverage": "PARTIAL"}]},
+      "hardErrorExpectations": ["unsupportedDimensionInvented=0"]
+    },
+    {
+      "caseId": "portfolio.recommendation-complete",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "推荐两个能体现后端能力的公开项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "recommendation", "coverage": "FULL", "presentation": "RECOMMENDATION"}]},
+      "hardErrorExpectations": ["unsupportedCandidateSelected=0"]
+    },
+    {
+      "caseId": "portfolio.recommendation-incomplete",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "推荐五个同时满足严格条件的项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "goals": [{"goalKey": "recommendation", "coverage": "PARTIAL", "presentation": "RECOMMENDATION"}]},
+      "hardErrorExpectations": ["resultCountOverclaim=0"]
+    },
+    {
+      "caseId": "portfolio.classified-fallback-full",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍 SQL 审计项目的验证过程"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE", "RETRIEVAL_FALLBACK"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "verification", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["fallbackAttemptsAboveOne=0", "publicFallbackSignal=0"]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "agent-turn-scenarios-v1",
+  "group": "public-contract",
+  "scenarios": [
+    {
+      "caseId": "contract.answer-complete-goal-first",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍 SQL 审计项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PUBLIC_TURN_PROJECTION"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "overview", "coverage": "FULL"}], "publicPresentationCount": 1},
+      "hardErrorExpectations": ["supportingPresentationLeak=0", "publicContractInvalid=0"]
+    },
+    {
+      "caseId": "contract.answer-partial-goal-notice",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍公开项目并回答实时版本"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PUBLIC_TURN_PROJECTION"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "goals": [{"goalKey": "portfolio", "coverage": "FULL"}, {"goalKey": "current", "coverage": "NONE"}]},
+      "hardErrorExpectations": ["internalReasonLeak=0"]
+    },
+    {
+      "caseId": "contract.answer-no-result-no-body",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "查找未公开结论"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PUBLIC_TURN_PROJECTION"],
+      "expected": {"kind": "ANSWER", "resolution": "NO_RESULT", "goals": [{"goalKey": "unsupported", "coverage": "NONE"}], "publicPresentationCount": 0},
+      "hardErrorExpectations": ["placeholderBodyCreated=0"]
+    },
+    {
+      "caseId": "contract.answer-local-clarification",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍 SQL 审计项目并和另一个比较"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["PUBLIC_TURN_PROJECTION", "CLARIFICATION_STATE"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "goals": [{"goalKey": "overview", "coverage": "FULL"}, {"goalKey": "comparison", "coverage": "NONE"}], "localClarification": true},
+      "hardErrorExpectations": ["criticalClarificationMisclassified=0"]
+    },
+    {
+      "caseId": "contract.capability-unavailable-no-answer",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "含糊的自由文本"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION"],
+      "expected": {"kind": "CAPABILITY_UNAVAILABLE"},
+      "hardErrorExpectations": ["answerOnUnavailable=0"]
+    }
+  ]
+}

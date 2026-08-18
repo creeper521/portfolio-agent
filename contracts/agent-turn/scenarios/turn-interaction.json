@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "agent-turn-scenarios-v1",
+  "group": "turn-interaction",
+  "scenarios": [
+    {
+      "caseId": "turn.ask-free-text-answer",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍 SQL 审计项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "portfolio-overview", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["fakeCitation=0", "scopeExpansion=0"]
+    },
+    {
+      "caseId": "turn.ask-reviewed-preset",
+      "command": {"kind": "ASK", "inputKind": "PRESET", "presetId": "question-sql-audit-detail"},
+      "contextSummary": {"surface": "PROJECT_HINT", "window": "EMPTY"},
+      "requiredCapabilities": ["PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "preset-overview", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["presetRevisionBypass=0"]
+    },
+    {
+      "caseId": "turn.continue-explicit-context",
+      "command": {"kind": "CONTINUE", "contextHandle": "opaque-context", "text": "继续说明验证方式"},
+      "contextSummary": {"surface": "NONE", "window": "BOUNDED"},
+      "requiredCapabilities": ["CONTINUATION", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "continued-verification", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["contextScopeExpansion=0"]
+    },
+    {
+      "caseId": "turn.resolve-single-choice",
+      "command": {"kind": "RESOLVE_CLARIFICATION", "clarificationId": "opaque-challenge", "answerKind": "CHOICE", "choiceId": "opaque-choice"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["CLARIFICATION_STATE", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "resolved-subject", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["forgedChoiceAccepted=0"]
+    },
+    {
+      "caseId": "turn.social-conversation",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "你好"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION"],
+      "expected": {"kind": "CONVERSATIONAL"},
+      "hardErrorExpectations": ["answerOnConversation=0"]
+    }
+  ]
+}

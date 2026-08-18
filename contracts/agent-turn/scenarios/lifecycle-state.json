@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "agent-turn-scenarios-v1",
+  "group": "lifecycle-state",
+  "scenarios": [
+    {
+      "caseId": "lifecycle.completed-replay",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍 SQL 审计项目", "requestIdReuse": "SAME_FINGERPRINT"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["TURN_EXECUTION_STORE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "overview", "coverage": "FULL"}], "replay": "EXACT_PUBLIC_TURN"},
+      "hardErrorExpectations": ["duplicateExecution=0"]
+    },
+    {
+      "caseId": "lifecycle.fingerprint-conflict",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "不同请求", "requestIdReuse": "DIFFERENT_FINGERPRINT"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["TURN_EXECUTION_STORE"],
+      "expected": {"apiError": {"status": 409, "code": "IDEMPOTENCY_CONFLICT"}},
+      "hardErrorExpectations": ["conflictingExecutionStarted=0"]
+    },
+    {
+      "caseId": "lifecycle.cancel-wins",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍多个项目", "lifecycleSignal": "CANCEL"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["TURN_CANCELLATION"],
+      "expected": {"publication": "NONE"},
+      "hardErrorExpectations": ["cancelledTurnPublished=0", "lateResultCommitted=0"]
+    },
+    {
+      "caseId": "lifecycle.deadline-preserves-branch",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "解释幂等并介绍两个项目", "lifecycleSignal": "DEADLINE"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["TURN_DEADLINE", "BOUNDED_PARALLEL_EXECUTION"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "goals": [{"goalKey": "completed-branch", "coverage": "FULL"}, {"goalKey": "timed-out-branch", "coverage": "NONE"}]},
+      "hardErrorExpectations": ["deadlineReset=0", "lateResultCommitted=0"]
+    },
+    {
+      "caseId": "lifecycle.atomic-context-settlement",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "推荐两个项目", "settlementSignal": "CONTEXT_WRITE_FAILURE"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["ATOMIC_SETTLEMENT"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "recommendation", "coverage": "FULL", "continuation": "UNAVAILABLE"}]},
+      "hardErrorExpectations": ["partialContextCommit=0"]
+    }
+  ]
+}

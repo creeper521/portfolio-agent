@@ -1,0 +1,32 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000003",
+  "kind": "ANSWER",
+  "answer": {
+    "resolution": "NO_RESULT",
+    "contentReleaseId": "2026-08-05.1",
+    "goalResults": [
+      {
+        "goalId": "goal-unsupported-evidence",
+        "label": "查找未公开的验收结论",
+        "coverage": "NONE",
+        "notices": [
+          {
+            "code": "NO_SUPPORTED_EVIDENCE",
+            "message": "当前公开材料不足以支持这个结论。"
+          }
+        ]
+      }
+    ],
+    "sourceCatalog": {
+      "sources": []
+    },
+    "sourceComposition": [],
+    "suggestedActions": [
+      {
+        "actionId": "ask-public-scope",
+        "label": "查看可公开内容",
+        "inputText": "介绍当前有公开证据支持的项目内容"
+      }
+    ]
+  }
+}

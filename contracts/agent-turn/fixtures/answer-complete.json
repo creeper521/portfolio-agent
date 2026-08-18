@@ -1,0 +1,66 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000001",
+  "kind": "ANSWER",
+  "answer": {
+    "resolution": "COMPLETE",
+    "contentReleaseId": "2026-08-05.1",
+    "goalResults": [
+      {
+        "goalId": "goal-portfolio-overview",
+        "label": "介绍 SQL 审计项目",
+        "coverage": "FULL",
+        "presentation": {
+          "kind": "SECTIONED",
+          "sections": [
+            {
+              "sectionId": "section-background",
+              "sectionKind": "BACKGROUND",
+              "title": "项目背景",
+              "content": "该项目围绕公开的 SQL 审计与故障排查流程展开。",
+              "support": {
+                "kind": "VERIFIED_PUBLIC_EVIDENCE",
+                "publicSourceKeys": ["source-sql-audit"]
+              }
+            },
+            {
+              "sectionId": "section-status",
+              "sectionKind": "STATUS",
+              "title": "交付状态",
+              "content": "公开材料显示核心能力已经完成实现与验证。",
+              "support": {
+                "kind": "VERIFIED_PUBLIC_EVIDENCE",
+                "publicSourceKeys": ["source-sql-audit"]
+              }
+            }
+          ]
+        },
+        "notices": [],
+        "continuation": {
+          "contextHandle": "ctx_fixture_overview"
+        }
+      }
+    ],
+    "sourceCatalog": {
+      "sources": [
+        {
+          "key": "source-sql-audit",
+          "code": "E-01",
+          "label": "SQL 审计工具公开交付证据集",
+          "type": "PUBLIC_EVIDENCE",
+          "route": "/evidence"
+        }
+      ]
+    },
+    "sourceComposition": ["VERIFIED_PUBLIC_EVIDENCE"],
+    "suggestedActions": [
+      {
+        "actionId": "continue-verification",
+        "label": "继续了解验证方式",
+        "inputText": "继续介绍验证方式",
+        "continuation": {
+          "contextHandle": "ctx_fixture_overview"
+        }
+      }
+    ]
+  }
+}

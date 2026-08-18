@@ -1,0 +1,12 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000006",
+  "kind": "CONVERSATIONAL",
+  "message": "你好，我可以介绍公开项目、案例和工程取舍。",
+  "suggestedActions": [
+    {
+      "actionId": "ask-project-overview",
+      "label": "了解代表项目",
+      "inputText": "介绍一个代表性的公开项目"
+    }
+  ]
+}

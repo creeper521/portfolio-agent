@@ -1,0 +1,13 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000007",
+  "kind": "BOUNDARY",
+  "code": "HIGH_RISK_ADVICE_OUT_OF_SCOPE",
+  "message": "当前能力不提供医疗、法律或投资等高风险建议。",
+  "suggestedActions": [
+    {
+      "actionId": "ask-engineering-topic",
+      "label": "改问工程概念",
+      "inputText": "解释一个稳定的工程概念"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "agent-turn-scenarios-v1",
+  "group": "goal-dag",
+  "scenarios": [
+    {
+      "caseId": "dag.single-deep-node",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "介绍周末登录奖励 ABTest"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "PLANNING", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "topology": "SINGLE_DEEP_NODE", "goals": [{"goalKey": "overview", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["modelGeneratedDag=0"]
+    },
+    {
+      "caseId": "dag.independent-goals-stable-order",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "解释幂等，并介绍 SQL 审计项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "GENERAL_KNOWLEDGE", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "topology": "INDEPENDENT_GOALS", "goals": [{"goalKey": "general", "coverage": "FULL"}, {"goalKey": "portfolio", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["goalOrderDrift=0"]
+    },
+    {
+      "caseId": "dag.independent-branch-partial",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "解释幂等，并查询未公开项目"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "GENERAL_KNOWLEDGE", "PORTFOLIO_EVIDENCE"],
+      "expected": {"kind": "ANSWER", "resolution": "PARTIAL", "topology": "INDEPENDENT_GOALS", "goals": [{"goalKey": "general", "coverage": "FULL"}, {"goalKey": "portfolio", "coverage": "NONE"}]},
+      "hardErrorExpectations": ["unrelatedBranchCancelled=0"]
+    },
+    {
+      "caseId": "dag.fanin-blocked-input",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "解释幂等并说明它在未公开项目中的应用"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "GENERAL_KNOWLEDGE", "CROSS_DOMAIN_SYNTHESIS"],
+      "expected": {"kind": "ANSWER", "resolution": "NO_RESULT", "topology": "CROSS_DOMAIN_FAN_IN", "goals": [{"goalKey": "application", "coverage": "NONE"}]},
+      "hardErrorExpectations": ["blockedInputRendered=0"]
+    },
+    {
+      "caseId": "dag.fanin-selected-semantic-results",
+      "command": {"kind": "ASK", "inputKind": "FREE_TEXT", "text": "解释幂等，并用 SQL 审计项目说明它"},
+      "contextSummary": {"surface": "NONE", "window": "EMPTY"},
+      "requiredCapabilities": ["GOAL_INTERPRETATION", "GENERAL_KNOWLEDGE", "PORTFOLIO_EVIDENCE", "CROSS_DOMAIN_SYNTHESIS"],
+      "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "topology": "CROSS_DOMAIN_FAN_IN", "goals": [{"goalKey": "application", "coverage": "FULL"}]},
+      "hardErrorExpectations": ["renderedStringConsumed=0", "supportLeak=0"]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000002",
+  "kind": "ANSWER",
+  "answer": {
+    "resolution": "PARTIAL",
+    "contentReleaseId": "2026-08-05.1",
+    "goalResults": [
+      {
+        "goalId": "goal-general-explanation",
+        "label": "解释幂等",
+        "coverage": "FULL",
+        "presentation": {
+          "kind": "SECTIONED",
+          "sections": [
+            {
+              "sectionId": "section-principle",
+              "sectionKind": "GENERAL_PRINCIPLE",
+              "title": "核心概念",
+              "content": "幂等表示同一操作重复执行时保持稳定的业务结果。",
+              "support": {
+                "kind": "GENERAL_KNOWLEDGE",
+                "publicSourceKeys": []
+              }
+            }
+          ]
+        },
+        "notices": []
+      },
+      {
+        "goalId": "goal-current-version",
+        "label": "查询当前最新版本",
+        "coverage": "NONE",
+        "notices": [
+          {
+            "code": "OUT_OF_SCOPE",
+            "message": "当前能力不查询实时外部版本信息。"
+          }
+        ]
+      }
+    ],
+    "sourceCatalog": {
+      "sources": []
+    },
+    "sourceComposition": ["GENERAL_KNOWLEDGE"],
+    "suggestedActions": [
+      {
+        "actionId": "ask-stable-example",
+        "label": "查看稳定示例",
+        "inputText": "用一个稳定的工程示例说明幂等"
+      }
+    ]
+  }
+}
