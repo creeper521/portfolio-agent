@@ -61,6 +61,16 @@ Assert-DoesNotMatch 'does not reopen an approved architecture' `
     'skill must not freeze an approved architecture'
 Assert-DoesNotMatch 'stop only the conflicting expansion' `
     'skill must not block evidence-driven review with the old stop rule'
+Assert-Matches '(?im)^## Handle Guardian Drift$' `
+    'skill must define a lightweight drift escape hatch'
+Assert-Matches 'newer code, passing tests, or an approved design' `
+    'skill must recognize newer repository evidence over a stale rule'
+Assert-Matches 'GUARDIAN_DRIFT' `
+    'skill must reuse the existing deferred ledger for drift'
+Assert-Matches 'Do not create a separate drift ledger or lifecycle state machine' `
+    'skill must keep drift handling lightweight'
+Assert-Matches 'Do not weaken privacy boundaries' `
+    'skill drift handling must preserve privacy boundaries'
 
 if ($metadata -notmatch '(?m)^policy:\r?\n\s+allow_implicit_invocation: true$') {
     throw 'openai.yaml must explicitly allow implicit invocation'
@@ -71,9 +81,15 @@ if ($agents -notmatch '(?im)^### Default Agent architecture guardian bootstrap$'
 if ($agents -notmatch 'NOT_APPLICABLE.*continue immediately') {
     throw 'AGENTS.md must preserve the fast non-architecture exit'
 }
+if ($agents -notmatch 'GUARDIAN_DRIFT.*deferredItems') {
+    throw 'AGENTS.md must route stale Guardian rules through the existing ledger'
+}
 if ($paradigm -notmatch '(?im)^### 默认轻量 Bootstrap$' -or
         $paradigm -notmatch 'NOT_APPLICABLE.*立即继续') {
     throw 'the architecture paradigm must document the default lightweight bootstrap'
 }
+if ($paradigm -notmatch 'GUARDIAN_DRIFT.*deferredItems') {
+    throw 'the architecture paradigm must document lightweight Guardian drift handling'
+}
 
-Write-Output 'AGENT_ARCHITECTURE_GUARDIAN_TESTS_OK tests=18'
+Write-Output 'AGENT_ARCHITECTURE_GUARDIAN_TESTS_OK tests=25'

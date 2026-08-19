@@ -71,6 +71,12 @@ Environment, authorization or parallel-ownership gates may be `WAIVED`. Copy the
 
 On every later architecture turn, reevaluate `resumeWhen`. If resumption is now independent and in scope, close it before or alongside current work. If repayment would materially expand the user's current request, report it and preserve the ledger. Never inherit an old environment failure without a fresh check.
 
+## Handle Guardian Drift
+
+If a Guardian rule conflicts with newer code, passing tests, or an approved design, treat only that rule as advisory and continue in-scope work. Record one existing `deferredItems` entry with category `GUARDIAN_DRIFT`, the conflicting rule, repository evidence, next update action, and `recheckBy`.
+
+Do not create a separate drift ledger or lifecycle state machine. Repair the repository Skill with a failing regression test, sync the personal installation, then close the existing item. Do not weaken privacy boundaries, external authorization requirements, or evidence-before-completion rules.
+
 ## Complete Honestly
 
 Overall `COMPLETE` requires all hard invariants `PASS` and no unresolved deferred items. Tests at one layer do not substitute for higher-risk gates. Only report Testcontainers, packaged-JAR Browser E2E or a real Provider as passed when that exact gate ran successfully.

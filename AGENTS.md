@@ -35,6 +35,7 @@ Do not treat a historical or superseded plan as active work. Dynamic publication
 - `NOT_APPLICABLE` tasks continue immediately without loading architecture documents or running the architecture status checker.
 - `LEVEL_1` and `LEVEL_2` tasks continue without waiting for repeated architecture approval; an already approved `LEVEL_3` continues through its Replacement Slices.
 - Load the full architecture workflow only for applicable or uncertain Agent boundaries. Pause only before an unauthorized production-authority mutation or a privacy violation; continue diagnosis, safe experiments, and other in-scope work.
+- If a Guardian rule conflicts with newer code, passing tests, or an approved design, continue the task with that rule as advisory and record one `GUARDIAN_DRIFT` item in the existing `deferredItems`; do not create another ledger or weaken privacy boundaries.
 
 - Use Superpowers discovery and design gates for new behavior.
 - Use test-driven development for every feature and bug fix: RED, GREEN, REFACTOR.
