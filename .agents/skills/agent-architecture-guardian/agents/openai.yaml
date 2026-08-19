@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Architecture Guardian"
+  short_description: "Keep this Agent on one production authority and resume deferred gates"
+  default_prompt: "Classify this Portfolio Agent change, protect the hard invariants, and resume any eligible deferred architecture gates before claiming completion."
