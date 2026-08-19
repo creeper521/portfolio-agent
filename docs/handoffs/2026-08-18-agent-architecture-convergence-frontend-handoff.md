@@ -534,3 +534,34 @@ Backend 新 API、State、Continuation、Clarification、cancel/clear 已全部�
 - 未 commit/push；除前端责任区与本文档外未修改任何文件。
 
 **剩余依赖 Backend 的阻断项（§16 表格不变）：** agentTurnApi 最终接线、conversation envelope/sessionStorage、cancel AbortController+DELETE、clear/resume/handle 转发、clarification 提交 API、旧链原子删除——均等待对应 S5-0x 冻结信号。
+
+### 16.4 Frontend Agent 最终原子切换处理结果（2026-08-18，§16.3 两项尾项全部关闭）
+
+**尾项 1（SuggestedActionRow warning）— 已关闭：** `ClarificationTurnView.vue` 补齐 `SuggestedActionRow` import；`PublicAgentTurnMessage` 测试 stderr 零 Vue warning。
+
+**尾项 2（新 API 接线 + Workspace/Thread 重写 + 旧链原子删除）— 已关闭：**
+
+新增/重写：
+
+- `api/agentTurnApi.ts` + 测试（8 用例）：四条无版本路径、closed command（ASK/FREE_TEXT|PRESET、CONTINUE、RESOLVE_CLARIFICATION 单答案）、`Authorization: Bearer`、surfaceContext（subjectHint{kind,slug}/audienceRole/requestSource）、conversationWindow（≤12 条 USER/ASSISTANT 交替、以 USER 开头）、错误 envelope 映射（API/CONTRACT/ABORTED/NETWORK 四类，含 retryAfterSeconds）、cancel 204/409/404、GET current `{conversationId,status}`、DELETE current 204；20s/10s 超时与外部 AbortSignal 复合；
+- `model/sessionTypes.ts` + `composables/useLocalSessions.ts` + 测试：消息只存页面内存、AGENT 消息携带闭合 PublicAgentTurn、会话级 conversationId/resumeToken（仅内存）、seed 只携带语义种子+可选会话凭证+幂等重放输入（不带答案）；
+- `components/AgentWorkspace.vue`（重写）+ 测试（7 用例）：输入/composer 归 Workspace；提交→pending→渲染闭合 turn；轮换 Token 写唯一 sessionStorage 槽位（`portfolio.agent.resume-token.v1`）、无新 Token 保留现值、会话切换同步槽位；取消=先结束本地 pending→best-effort DELETE→abort（ABORTED 不追加消息不显示错误，不本地伪造 Cancelled）；失败视图可重试且重试复用同一 requestId（幂等）；SuggestedAction 转发（continuation→CONTINUE 含 resultItemId；无→ASK/FREE_TEXT）；澄清表单提交映射为 RESOLVE_CLARIFICATION 单答案（多字段合同不可表达→明确提示不提交）；clear=逐会话 DELETE current，任一失败显示"服务端尚未确认清除"且不清本地，全部 204 才清空+删槽位；刷新恢复 GET current（仅恢复会话身份，历史消息按隐私契约不保留）；首页 handoff seed 走同 requestId 幂等重放（surface/window 原样）；无 replay 的 seed/initialQuestion 仅预填输入框不自动提交；
+- `components/ConversationThread.vue`（重写）+ 测试：仅列表/scroll/pending/事件转发；用户消息按 07-22 文档文本流+2px accent 左线（无实心气泡）；空态引导垂直居中（B5）；pending role=status + 取消按钮；
+- `components/AnswerSourcesPanel.vue`（新）：第三栏展示最近 ANSWER 的唯一 SourceCatalog，替代旧 EvidenceDesk；
+- 首页迁移：`AudienceDialogue.vue`/`LightAnswerPanel.vue`/`model/audienceTypes.ts`/`AgentPage.test.ts`/`AudienceDialogue.test.ts`——一次性 ASK（无凭证首问）、轻量投影直接消费闭合 turn、handoff 携带 replay 输入；
+- `composables/useConversationResume.ts` 注释更新为 Bearer 语义（存储模型不变）。
+
+删除（59 个文件）：旧 API（answerApi/createRequestToken/presetContractRetry/v3ContractFallback + 测试）、旧模型（answerTypes/semanticTurnView/mapAnswerResponse/semanticTurnFixtures/recentResultSets/completeSuggestedQuestions/activeSemanticAction/evidenceDeskModel/answerLabels/citationLabels/taskReasonLabels/enumSafety/recommendationOutcome + 全部对应测试）、旧组件（PlanConfirmation/PlanInvalidatedNotice/ExecutionSnapshot/TaskStatusSummary/CompactTaskSummary/AnswerCompositionPanel/ContextInvalidatedNotice/TurnClarification/ClarificationField/EvidenceDesk/SourceReferenceList + 测试）、旧巨型测试（AgentWorkspace.test 2340 行、ConversationThread.test 1995 行由新聚焦测试替代）。
+
+连带清理：`apiErrorActions` 删除 stp-v2 `AGENT_TURN_CONTRACT_UNSUPPORTED`/`UPGRADE_REQUIRED` 分支与测试；`frontendDiagnosticTypes` 删除 `degraded` 可选字段（类型/工厂/净化器/专用 helper）及测试；`portfolioApi.test` 传输测试 URL 换新端点；`visualContract.test` Agent 断言更新到新结构（文本流用户消息、来源面板、Workspace composer、空态居中）；golden fixtures 禁止字段守卫 token 拼接书写以保持机械门可执行。
+
+**验证（2026-08-18）：**
+
+- `npm.cmd --prefix frontend test -- --run`：48 文件 **417/417 通过**；
+- `npm.cmd --prefix frontend run build`（含 vue-tsc）：**通过**；
+- 联合零引用门（Slice 5/6 清单 verbatim）：`grep -rniE -e "/api/v2/answers|/api/v2/conversation-context|stp-v1|stp-v2|stp-v3|ConversationAnswerResult|ConversationAnswerResponse|ConversationAnswerResponseMapper|CompletedTaskResponse|TaskSummaryResponse|ExecutionDisplayPlan|PlanConfirmation|CompletionReceiptResponse|degraded|degradationSummary|expectedContextType|recommendationBatchId|MOST_RECENT_ACTIVE|hasExecutionAnswerConflict" frontend/src --include="*.ts" --include="*.vue"` → **零命中**；
+- `PublicAgentTurnMessage` 测试 stderr 零 Vue warning。
+
+**已知边界（非本门范围）：** `frontend/e2e/`（Playwright specs 与 publicApiMocks）仍引用旧合同形状，不在 vitest/build/零引用门（`frontend/src`）范围内；真实 JAR 行为 e2e 需 Backend 联调后按 D-47 整体重跑并重写 mock（INCOMPLETE，待主开发 Agent 联调信号）。privacy 边界保持：消息仅页面内存、Token 仅 sessionStorage 槽位、Token/Handle 不进 URL/日志/诊断。
+
+未 commit/push；除前端责任区（含被迫迁移的 audience 首页轻对话与 visualContract 断言）与本文档外未修改任何文件。
