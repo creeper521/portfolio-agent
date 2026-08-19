@@ -80,12 +80,13 @@ public class AgentCapabilityConfiguration {
     @Bean
     StructuredModelTransport structuredModelTransport(
             ObjectMapper mapper, ModelExpressionProperties modelProperties,
-            ModelProviderRegistrySnapshot registry) {
+            ModelProviderRegistrySnapshot registry,
+            DiagnosticEventPublisher diagnostics) {
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newBuilder().connectTimeout(modelProperties.getTimeout()).build(),
                 mapper, registry.getRequiredDescriptor(modelProperties.getProvider()),
                 modelProperties.apiKeyFor(modelProperties.getProvider()),
-                modelProperties.getTimeout());
+                modelProperties.getTimeout(), diagnostics);
     }
 
     @Bean

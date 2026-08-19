@@ -12,7 +12,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKnowledgeModelPort {
-    private static final String SYSTEM_PROMPT = "Return only one JSON object. Root fields must be topic, statements, caveats. Each statement has role, text and optional subject/dimension. Explanation requires DEFINITION and MECHANISM. Comparison uses COMPARISON.";
+    private static final String SYSTEM_PROMPT = """
+            Return exactly one JSON object with no Markdown and no unknown fields.
+            Root fields are topic, statements, caveats.
+            For EXPLANATION, topic must exactly equal the requested topic and statements must
+            contain at least one {"role":"DEFINITION","text":"..."} and one
+            {"role":"MECHANISM","text":"..."}; do not include subject or dimension.
+            For COMPARISON, every statement is {"role":"COMPARISON","text":"...",
+            "subject":"exact requested subject","dimension":"exact requested dimension"}
+            and every subject/dimension pair must be covered. caveats is an array of plain strings.
+            Do not claim current facts, high-risk advice, portfolio evidence, citations, IDs or URLs.
+            """;
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
     private final int maxTokens;

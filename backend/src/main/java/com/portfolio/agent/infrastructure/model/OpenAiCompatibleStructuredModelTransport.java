@@ -3,6 +3,9 @@ package com.portfolio.agent.infrastructure.model;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.answer.adapter.model.ModelProviderDescriptor;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,16 +21,19 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     private final ModelProviderDescriptor provider;
     private final String apiKey;
     private final Duration operationTimeout;
+    private final DiagnosticEventPublisher diagnostics;
 
     public OpenAiCompatibleStructuredModelTransport(
             HttpClient client, ObjectMapper mapper, ModelProviderDescriptor provider,
-            String apiKey, Duration operationTimeout) {
+            String apiKey, Duration operationTimeout, DiagnosticEventPublisher diagnostics) {
         this.client = client; this.mapper = mapper; this.provider = provider;
         this.apiKey = apiKey == null ? "" : apiKey;
         this.operationTimeout = operationTimeout;
+        this.diagnostics = diagnostics;
     }
 
     @Override public StructuredModelResponse execute(StructuredModelRequest request) {
+        long startedAt = System.nanoTime();
         long timeout = Math.min(operationTimeout.toMillis(), request.deadline().remainingMillis());
         if (timeout < 1) throw new StructuredModelFailure(StructuredModelFailure.Code.DEADLINE_EXCEEDED);
         try {
@@ -49,14 +55,47 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             if (content == null || !content.isTextual() || content.textValue().isBlank()) {
                 throw new StructuredModelFailure(StructuredModelFailure.Code.INVALID_RESPONSE);
             }
-            return new StructuredModelResponse(content.textValue());
-        } catch (StructuredModelFailure failure) { throw failure; }
+            StructuredModelResponse result = new StructuredModelResponse(content.textValue());
+            publish(request.operation(), true, null, startedAt);
+            return result;
+        } catch (StructuredModelFailure failure) {
+            publish(request.operation(), false, failure.getCode().name(), startedAt);
+            throw failure;
+        }
         catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
+            publish(request.operation(), false,
+                    StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(), startedAt);
             throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);
         } catch (Exception failure) {
+            publish(request.operation(), false,
+                    StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(), startedAt);
             throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);
         }
+    }
+
+    private void publish(String operation, boolean success, String failureCode, long startedAt) {
+        try {
+            DiagnosticEvent.Builder event = DiagnosticEvent.builder(
+                            success ? "provider.call.completed" : "provider.call.failed",
+                            success ? DiagnosticLevel.DEBUG : DiagnosticLevel.WARN)
+                    .field("provider.operation", operation)
+                    .field("event.outcome", success ? "SUCCESS" : "FAILURE")
+                    .field("duration.bucket", durationBucket(startedAt))
+                    .field("response.present", success);
+            if (failureCode != null) event.field("failure.code", failureCode);
+            diagnostics.publish(event.build());
+        } catch (RuntimeException ignored) {
+            // Diagnostics never change model behavior.
+        }
+    }
+
+    private String durationBucket(long startedAt) {
+        long millis = (System.nanoTime() - startedAt) / 1_000_000L;
+        if (millis < 100) return "LT_100_MS";
+        if (millis < 500) return "FROM_100_TO_499_MS";
+        if (millis < 2000) return "FROM_500_TO_1999_MS";
+        return "GTE_2000_MS";
     }
 
     private String body(StructuredModelRequest request) throws Exception {

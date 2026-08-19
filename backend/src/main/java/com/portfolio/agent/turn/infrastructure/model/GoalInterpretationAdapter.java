@@ -17,7 +17,24 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class GoalInterpretationAdapter implements GoalInterpretationPort {
-    private static final String SYSTEM_PROMPT = "Interpret the visitor input into the closed user-goal JSON schema supplied in the data. Emit JSON only. You may describe user goals or a clarification need, but you have no authority to design execution plans, select tools, choose providers, or invent subjects.";
+    private static final String SYSTEM_PROMPT = """
+            Return exactly one JSON object with no Markdown and no unknown fields.
+            Root variants are:
+            {"kind":"CONVERSATIONAL","message":"..."}
+            {"kind":"CLARIFICATION","clarification":{"field":"SUBJECT|GOAL|OUTPUT","prompt":"...","inputAnchor":{"text":"exact substring","start":0}}}
+            or {"kind":"GOALS","goals":[goal]}.
+            Every goal has exactly goalKey, goalKind, inputAnchor, subjectCandidates,
+            requestedOutputs, knowledgeRequirement, parameters. Anchors must copy an exact
+            substring of currentInput and use its zero-based character start.
+            For a stable concept explanation use:
+            {"goalKey":"general-goal","goalKind":"GENERAL_EXPLANATION",
+             "inputAnchor":{"text":"exact request phrase","start":0},
+             "subjectCandidates":[],"requestedOutputs":["EXPLANATION"],
+             "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+             "parameters":{"kind":"GENERAL_EXPLANATION","topicAnchor":{"text":"exact topic substring","start":0},"depth":"STANDARD"}}.
+            Public subjects may only use supplied kind/reference with basis EXPLICIT_NAME and
+            an exact anchor. Never output tasks, dependencies, tools, providers, or invented IDs.
+            """;
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
     private final GoalProposalCodec codec;
