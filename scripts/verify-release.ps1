@@ -53,6 +53,14 @@ try {
     Assert-ExitCode 'Backend architecture check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\agent-architecture-status.test.ps1')
+    Assert-ExitCode 'Agent architecture status checker tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\agent-architecture-status.ps1')
+    Assert-ExitCode 'Agent architecture status check'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
     Assert-ExitCode 'Static bundle checker tests'
 
