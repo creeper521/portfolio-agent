@@ -1,8 +1,8 @@
 # Agent 架构收敛实施计划
 
-- **状态：** `IN_PROGRESS_SLICE_1`
+- **状态：** `COMPLETE_SLICE_0_TO_6`
 - **创建时间：** 2026-08-18
-- **实施授权：** 2026-08-18 用户已明确授权按 Slice 0～6 顺序执行；不含 commit/push/deploy、真实 Provider 调用或前端责任区修改
+- **实施授权：** 2026-08-18 用户已明确授权按 Slice 0～6 顺序执行；后续消息追加授权删除旧权威、分批 commit、Frontend 原子切换联调与真实 Provider 本地验收；未授权 push/deploy
 - **设计依据：** `2026-08-17-agent-architecture-convergence-design.md` 中 D-01～D-47
 - **目标：** 用垂直 Replacement Slice 将当前多版本、多结果、多状态、多入口 Agent 链替换为首次生产唯一架构；新权威进入生产链时同步删除旧权威，不保留永久 fallback/compatibility stack。
 
@@ -1377,4 +1377,4 @@ Backend 已建立 D-38 唯一 PublicAgentTurn/Projector、闭合 SECTIONED/RECOM
 
 Backend 已用 typed `StructuredModelTransport` 统一 Goal/General HTTPS JSON-mode/deadline 传输，删除重复 ChatCompletion DTO；Eval 的旧 HTTP answer client、P5 suite、Legacy benchmark adapter 与 degraded 轴已删除/改为明确 fallback；evaluation/selection benchmark 已通过实际 JAR listing 证明不进入生产包。旧 Selection service、旧 Context/Receipt、推荐状态副本、客户端 expectedContextType 与无主兼容入口均删除；新增 Turn module dependency test，Backend production 零引用门仅有 `P50Latency` 非阶段号误匹配。
 
-最终联合门：Backend 879 tests、0 failure/error、19 environment-skipped；Frontend 48 test files、417/417；vue-tsc/Vite build、Spring Boot package、backend 598 files 与 contracts 15 files privacy check、Turn module dependency test、生产源码零引用门均通过。Answer 主代码由 505 files/42,678 LOC 收敛为 169 files/8,217 LOC；新增最终 `turn+infrastructure` 为 138 files/7,797 LOC，合计仍显著低于旧 Answer。Frontend Agent 生产 TS/Vue 由 75 files/19,940 LOC 收敛为 46 files/6,231 LOC，测试文件由 37 收敛为 18；旧最大兼容测试矩阵已删除。PostgreSQL/Testcontainers 和真实 JAR Browser E2E 因环境及 E2E fixture 尚未迁移保持 INCOMPLETE；未部署。
+最终联合门：Backend 879 tests、0 failure/error、5 个与 Docker 无关的条件 skip；PostgreSQL 16/pgvector Testcontainers、公共库 Flyway 与 Agent State Flyway/Repository 均实际执行。Frontend 48 test files、417/417，vue-tsc/Vite build、Spring Boot package、backend 598 files 与 contracts 15 files privacy check、Turn module dependency test、生产源码零引用门均通过。旧 Browser fixtures/mocks 已由最终 packaged-JAR E2E 原子替换，桌面与移动 Chromium 6/6 通过；真实 DeepSeek 应用 canary 返回 `ANSWER/COMPLETE`，并由安全诊断确认 `GOAL_INTERPRETATION`、`GENERAL_KNOWLEDGE` 两个 Provider operation 均成功。Answer 主代码由 505 files/42,678 LOC 收敛为 169 files/8,217 LOC；新增最终 `turn+infrastructure` 为 138 files/7,797 LOC，合计仍显著低于旧 Answer。Frontend Agent 生产 TS/Vue 由 75 files/19,940 LOC 收敛为 46 files/6,231 LOC，测试文件由 37 收敛为 18；旧最大兼容测试矩阵与旧 E2E 资产已删除。Slice 0—6 本地实现和最终联合验收全部完成；未 push、未部署。

@@ -1,7 +1,7 @@
 # Agent 架构收敛前端交接
 
 - **日期：** 2026-08-18
-- **状态：** Slice 0 共享合同已冻结；Frontend 消费测试与 Slice 5 原子切换待 Frontend Agent 实施
+- **状态：** Slice 0 合同消费与 Slice 5 Frontend 原子切换均已完成；最终 packaged-JAR Browser E2E 已通过
 - **权威设计：** `docs/superpowers/specs/2026-08-17-agent-architecture-convergence-design.md` D-28～D-31、D-38、D-41、D-46
 - **实施计划：** `docs/superpowers/specs/2026-08-18-agent-architecture-convergence-implementation-plan.md`
 - **共享合同：** `contracts/agent-turn/fixtures/*.json`
@@ -562,6 +562,6 @@ Backend 新 API、State、Continuation、Clarification、cancel/clear 已全部�
 - 联合零引用门（Slice 5/6 清单 verbatim）：`grep -rniE -e "/api/v2/answers|/api/v2/conversation-context|stp-v1|stp-v2|stp-v3|ConversationAnswerResult|ConversationAnswerResponse|ConversationAnswerResponseMapper|CompletedTaskResponse|TaskSummaryResponse|ExecutionDisplayPlan|PlanConfirmation|CompletionReceiptResponse|degraded|degradationSummary|expectedContextType|recommendationBatchId|MOST_RECENT_ACTIVE|hasExecutionAnswerConflict" frontend/src --include="*.ts" --include="*.vue"` → **零命中**；
 - `PublicAgentTurnMessage` 测试 stderr 零 Vue warning。
 
-**已知边界（非本门范围）：** `frontend/e2e/`（Playwright specs 与 publicApiMocks）仍引用旧合同形状，不在 vitest/build/零引用门（`frontend/src`）范围内；真实 JAR 行为 e2e 需 Backend 联调后按 D-47 整体重跑并重写 mock（INCOMPLETE，待主开发 Agent 联调信号）。privacy 边界保持：消息仅页面内存、Token 仅 sessionStorage 槽位、Token/Handle 不进 URL/日志/诊断。
+**该边界已于 2026-08-19 关闭：** 旧 Playwright specs、behavior driver/corpus/oracle 与 `publicApiMocks` 已删除，由 `agent-final-contract.spec.ts` 直接驱动最终 packaged JAR；桌面与移动 Chromium 共 6/6 通过，覆盖 preset/replay/Bearer continuation/clear、closed PublicAgentTurn UI、sessionStorage 隔离和 cancel DELETE。移动端验证同时发现并补齐会话/来源抽屉入口。privacy 边界保持：消息仅页面内存、Token 仅 sessionStorage 槽位、Token/Handle 不进 URL/日志/诊断。
 
 未 commit/push；除前端责任区（含被迫迁移的 audience 首页轻对话与 visualContract 断言）与本文档外未修改任何文件。
