@@ -29,6 +29,13 @@ Do not treat a historical or superseded plan as active work. Dynamic publication
 
 ## Workflow
 
+### Default Agent architecture guardian bootstrap
+
+- At the start of every task in this repository, use `agent-architecture-guardian` for a lightweight classification before substantive action.
+- `NOT_APPLICABLE` tasks continue immediately without loading architecture documents or running the architecture status checker.
+- `LEVEL_1` and `LEVEL_2` tasks continue without waiting for repeated architecture approval; an already approved `LEVEL_3` continues through its Replacement Slices.
+- Load the full architecture workflow only for applicable or uncertain Agent boundaries. Pause only before an unauthorized production-authority mutation or a privacy violation; continue diagnosis, safe experiments, and other in-scope work.
+
 - Use Superpowers discovery and design gates for new behavior.
 - Use test-driven development for every feature and bug fix: RED, GREEN, REFACTOR.
 - Use systematic debugging before proposing a fix for unexpected behavior.

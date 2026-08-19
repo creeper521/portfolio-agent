@@ -1,20 +1,32 @@
 ---
 name: agent-architecture-guardian
-description: Use when changing or extending this Portfolio Agent's Command, Goal, Plan, SemanticResult, PublicAgentTurn, API, state, frontend contract, production authority, or when repeated workarounds make the current architecture difficult to extend.
+description: Use when starting every conversation in this Portfolio Agent repository, including ordinary work and changes to Agent behavior, architecture, contracts, state, APIs, production authorities, or designs that have become difficult to extend.
 ---
 
 # Agent Architecture Guardian
 
 Apply only in this repository. Protect constraints, not incumbent implementations. Do not treat an approved architecture as immutable.
 
-Before acting, read completely:
+## Bootstrap
+
+Before loading architecture context, inspect the request and immediately classify it:
+
+- `NOT_APPLICABLE`: no Agent behavior, architecture, contract, state, API, production-authority, or architecture-governance impact. Output `Guardian: NOT_APPLICABLE` and continue immediately. Do not read the architecture documents or run the status checker.
+- `LEVEL_1`: an Agent-adjacent change that preserves all authorities and boundaries.
+- `LEVEL_2`: one deep Agent module changes internally while its external contract stays stable.
+- `LEVEL_3`: an approved production authority, public contract, state, API, or migration changes.
+- `ARCHITECTURE_REVIEW`: evidence suggests that the current design itself obstructs extension or required qualities.
+
+Level 1 and Level 2 work must continue without waiting for repeated architecture confirmation. An approved Level 3 must continue through its Replacement Slices without asking for the same approval again. For uncertain boundaries, classify upward and keep investigating; pause only at the production-mutation or privacy boundary defined below.
+
+For applicable work, report `Guardian`, affected authority, concrete evidence, next action, and whether new approval is required. Then read only the applicable context completely:
 
 1. `docs/16-Agent单权威持续收敛范式.md`;
 2. `docs/agent-architecture-status.json`;
 3. the current authoritative design or implementation plan relevant to the request;
 4. `docs/15-Agent 2.0真实交互问题清单与修复边界.md` when the request concerns Agent 2.0 behavior.
 
-Run `scripts/agent-architecture-status.ps1` before architecture work and before completion claims.
+Run `scripts/agent-architecture-status.ps1` before applicable architecture work and before completion claims.
 
 ## Classify
 

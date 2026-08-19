@@ -1,7 +1,19 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $skillPath = Join-Path $root '.agents\skills\agent-architecture-guardian\SKILL.md'
+$metadataPath = Join-Path $root `
+    '.agents\skills\agent-architecture-guardian\agents\openai.yaml'
+$agentsPath = Join-Path $root 'AGENTS.md'
+$paradigmFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'docs') `
+        -File -Filter '16-*')
+if ($paradigmFiles.Count -ne 1) {
+    throw 'expected exactly one docs/16-* architecture paradigm file'
+}
+$paradigmPath = $paradigmFiles[0].FullName
 $skill = Get-Content -LiteralPath $skillPath -Raw
+$metadata = Get-Content -LiteralPath $metadataPath -Raw
+$agents = Get-Content -LiteralPath $agentsPath -Raw
+$paradigm = Get-Content -LiteralPath $paradigmPath -Raw
 
 function Assert-Matches([string]$pattern, [string]$message) {
     if ($skill -notmatch $pattern) { throw $message }
@@ -23,6 +35,18 @@ if (@($frontmatterKeys | Sort-Object).Count -ne 2 -or
 
 Assert-Matches '(?m)^description: Use when ' `
     'description must start with Use when'
+Assert-Matches '(?m)^description: Use when starting every conversation in this Portfolio Agent repository' `
+    'skill must default to every conversation in this project'
+Assert-Matches '(?im)^## Bootstrap$' `
+    'skill must define a lightweight Bootstrap before loading architecture context'
+Assert-Matches 'NOT_APPLICABLE' `
+    'bootstrap must support an immediate non-architecture exit'
+Assert-Matches 'Do not read the architecture documents or run the status checker' `
+    'NOT_APPLICABLE must avoid the full architecture workflow'
+Assert-Matches 'Level 1 and Level 2.*continue.*without waiting' `
+    'ordinary changes must continue without repeated confirmation'
+Assert-Matches 'approved Level 3.*continue' `
+    'approved architecture replacement must continue without repeated approval'
 Assert-Matches '(?im)^## Architecture Review$' `
     'skill must define an Architecture Review mode'
 Assert-Matches 'Protect constraints, not incumbent implementations\.' `
@@ -38,4 +62,18 @@ Assert-DoesNotMatch 'does not reopen an approved architecture' `
 Assert-DoesNotMatch 'stop only the conflicting expansion' `
     'skill must not block evidence-driven review with the old stop rule'
 
-Write-Output 'AGENT_ARCHITECTURE_GUARDIAN_TESTS_OK tests=9'
+if ($metadata -notmatch '(?m)^policy:\r?\n\s+allow_implicit_invocation: true$') {
+    throw 'openai.yaml must explicitly allow implicit invocation'
+}
+if ($agents -notmatch '(?im)^### Default Agent architecture guardian bootstrap$') {
+    throw 'AGENTS.md must require the project-level default bootstrap'
+}
+if ($agents -notmatch 'NOT_APPLICABLE.*continue immediately') {
+    throw 'AGENTS.md must preserve the fast non-architecture exit'
+}
+if ($paradigm -notmatch '(?im)^### 默认轻量 Bootstrap$' -or
+        $paradigm -notmatch 'NOT_APPLICABLE.*立即继续') {
+    throw 'the architecture paradigm must document the default lightweight bootstrap'
+}
+
+Write-Output 'AGENT_ARCHITECTURE_GUARDIAN_TESTS_OK tests=18'

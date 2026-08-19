@@ -2,3 +2,6 @@ interface:
   display_name: "Agent Architecture Guardian"
   short_description: "Review and evolve this Agent without uncontrolled dual stacks"
   default_prompt: "Use $agent-architecture-guardian to assess whether the current architecture should be preserved, revised, or replaced before implementing this change."
+
+policy:
+  allow_implicit_invocation: true
