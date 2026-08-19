@@ -633,6 +633,22 @@ onBeforeUnmount(() => {
     />
 
     <section class="workspace-thread-pane" aria-label="对话区">
+      <div v-if="sessionsIsDrawer || evidenceIsDrawer" class="workspace-mobile-tools">
+        <button
+          v-if="sessionsIsDrawer"
+          type="button"
+          data-testid="open-session-drawer"
+          :aria-expanded="sessionDrawerOpen"
+          @click="toggleSessions"
+        >会话</button>
+        <button
+          v-if="evidenceIsDrawer"
+          type="button"
+          data-testid="open-source-panel"
+          :aria-expanded="evidenceDrawerOpen"
+          @click="toggleEvidence"
+        >来源</button>
+      </div>
       <p v-if="resumeNotice !== null" class="workspace-notice" role="status">{{ resumeNotice }}</p>
       <p v-if="clearNotice !== null" class="workspace-notice" role="alert">{{ clearNotice }}</p>
       <ConversationThread
@@ -826,6 +842,8 @@ onBeforeUnmount(() => {
   font: 14px/1.6 var(--sans);
 }
 .workspace-composer__input:focus { outline: 2px solid var(--workspace-accent); outline-offset: 1px; }
+.workspace-mobile-tools { display: flex; gap: 0.5rem; padding: 0.5rem 0.75rem 0; }
+.workspace-mobile-tools button { min-height: 2.5rem; padding: 0.4rem 0.8rem; }
 .workspace-composer__send {
   min-height: 44px;
   padding: 10px 20px;
