@@ -37,6 +37,13 @@ try {
     Assert-True ($canonicalResult.Output -match 'deferred.open=0') `
         'canonical status must report no open deferred items'
 
+    $architectureReview = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
+    $architectureReview.overallStatus = 'ARCHITECTURE_REVIEW'
+    $architectureReviewResult = Invoke-Validator `
+        (Write-Fixture 'architecture-review.json' $architectureReview)
+    Assert-True ($architectureReviewResult.ExitCode -eq 0) `
+        'evidence-driven architecture review must be a valid overall status'
+
     $waived = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
     $waived.overallStatus = 'VERIFICATION_IN_PROGRESS'
     $waived.deferredItems = @(
@@ -50,6 +57,10 @@ try {
         'waived status must remain visible as open'
 
     $falseComplete = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
+    $falseComplete.overallStatus = 'COMPLETE'
+    foreach ($invariant in $falseComplete.hardInvariants) {
+        $invariant.status = 'PASS'
+    }
     $falseComplete.deferredItems = $waived.deferredItems
     $falseCompleteResult = Invoke-Validator (Write-Fixture 'false-complete.json' $falseComplete)
     Assert-True ($falseCompleteResult.ExitCode -ne 0) `
@@ -76,7 +87,7 @@ try {
     Assert-True ($incompleteResult.ExitCode -ne 0) `
         'deferred item without a next command must fail'
 
-    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=5'
+    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=6'
 } finally {
     Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

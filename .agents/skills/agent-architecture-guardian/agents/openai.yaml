@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Architecture Guardian"
-  short_description: "Keep this Agent on one production authority and resume deferred gates"
-  default_prompt: "Classify this Portfolio Agent change, protect the hard invariants, and resume any eligible deferred architecture gates before claiming completion."
+  short_description: "Review and evolve this Agent without uncontrolled dual stacks"
+  default_prompt: "Use $agent-architecture-guardian to assess whether the current architecture should be preserved, revised, or replaced before implementing this change."

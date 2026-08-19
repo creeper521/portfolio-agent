@@ -37,7 +37,13 @@ try {
 if ($status.schemaVersion -ne 1) { Add-ValidationError 'schemaVersion must equal 1' }
 if ($status.project -ne 'portfolio-agent') { Add-ValidationError 'project must equal portfolio-agent' }
 
-$overallStatuses = @('PENDING', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETE')
+$overallStatuses = @(
+    'PENDING',
+    'ARCHITECTURE_REVIEW',
+    'IN_PROGRESS',
+    'VERIFICATION_IN_PROGRESS',
+    'COMPLETE'
+)
 if ($status.overallStatus -notin $overallStatuses) {
     Add-ValidationError 'overallStatus is outside the closed set'
 }

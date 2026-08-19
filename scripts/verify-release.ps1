@@ -53,6 +53,10 @@ try {
     Assert-ExitCode 'Backend architecture check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\agent-architecture-guardian.test.ps1')
+    Assert-ExitCode 'Agent architecture guardian tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\agent-architecture-status.test.ps1')
     Assert-ExitCode 'Agent architecture status checker tests'
 
