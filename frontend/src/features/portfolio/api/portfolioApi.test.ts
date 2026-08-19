@@ -44,7 +44,7 @@ describe('portfolio api', () => {
       }), { status: 429, headers: { 'Content-Type': 'application/json' } }),
     ))
 
-    const failure = await request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER })
+    const failure = await request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER })
       .catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(PortfolioApiError)
@@ -71,7 +71,7 @@ describe('portfolio api', () => {
     const report = vi.spyOn(frontendDiagnostics, 'report')
 
     const failure = await request(
-      '/api/v2/answers',
+      '/api/agent/turns',
       { method: 'POST' },
       { operation: RequestOperation.ANSWER },
     ).catch((error: unknown) => error)
@@ -103,9 +103,9 @@ describe('portfolio api', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(request('/api/v2/answers', { method: 'POST' }, {} as never))
+    await expect(request('/api/agent/turns', { method: 'POST' }, {} as never))
       .rejects.toThrow('Request operation is required')
-    await expect(request('/api/v2/answers', { method: 'POST' }, { operation: 'UNKNOWN' } as never))
+    await expect(request('/api/agent/turns', { method: 'POST' }, { operation: 'UNKNOWN' } as never))
       .rejects.toThrow('Request operation is required')
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -129,14 +129,14 @@ describe('portfolio api', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network unavailable')))
     const report = vi.spyOn(frontendDiagnostics, 'report')
 
-    await request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER }).catch(() => undefined)
+    await request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER }).catch(() => undefined)
 
     expect(report).toHaveBeenCalledWith(expect.objectContaining({
       eventName: 'frontend.agent.request.failed',
       errorCode: 'CLIENT_NETWORK_ERROR',
       errorKind: 'NETWORK',
     }))
-    expect(JSON.stringify(report.mock.calls)).not.toContain('/api/v2/answers')
+    expect(JSON.stringify(report.mock.calls)).not.toContain('/api/agent/turns')
   })
 
   it('reports a slow completed answer request after five seconds', async () => {
@@ -148,7 +148,7 @@ describe('portfolio api', () => {
       .mockReturnValueOnce(5_100)
     const report = vi.spyOn(frontendDiagnostics, 'report')
 
-    await expect(request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER })).resolves.toEqual(payload)
+    await expect(request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER })).resolves.toEqual(payload)
 
     expect(report).toHaveBeenCalledWith(expect.objectContaining({
       eventName: 'frontend.agent.request.slow',
@@ -170,7 +170,7 @@ describe('portfolio api', () => {
       json,
     }))
 
-    const failure = request('/api/v2/answers', { method: 'POST' }, {
+    const failure = request('/api/agent/turns', { method: 'POST' }, {
       operation: RequestOperation.ANSWER,
       signal: controller.signal,
     })
@@ -207,7 +207,7 @@ describe('portfolio api', () => {
       })
     }))
 
-    const failure = request('/api/v2/answers', { method: 'POST' }, {
+    const failure = request('/api/agent/turns', { method: 'POST' }, {
       operation: RequestOperation.ANSWER,
       timeoutMs: 1,
     })
@@ -230,7 +230,7 @@ describe('portfolio api', () => {
       }),
     ))
 
-    const failure = await request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER })
+    const failure = await request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER })
       .catch((error: unknown) => error)
 
     expect(failure).toMatchObject({
@@ -247,7 +247,7 @@ describe('portfolio api', () => {
     controller.abort()
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Aborted', 'AbortError')))
 
-    const failure = await request('/api/v2/answers', { method: 'POST' }, {
+    const failure = await request('/api/agent/turns', { method: 'POST' }, {
       operation: RequestOperation.ANSWER,
       signal: controller.signal,
     })
@@ -264,7 +264,7 @@ describe('portfolio api', () => {
   it('classifies a rejected fetch as a retryable network failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
 
-    const failure = await request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER })
+    const failure = await request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER })
       .catch((error: unknown) => error)
 
     expect(failure).toMatchObject({
@@ -282,7 +282,7 @@ describe('portfolio api', () => {
       })
     )))
 
-    const pending = request('/api/v2/answers', { method: 'POST' }, {
+    const pending = request('/api/agent/turns', { method: 'POST' }, {
       operation: RequestOperation.ANSWER,
       timeoutMs: 1,
     })
@@ -301,7 +301,7 @@ describe('portfolio api', () => {
       new Response('{', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     ))
 
-    const failure = await request('/api/v2/answers', { method: 'POST' }, { operation: RequestOperation.ANSWER })
+    const failure = await request('/api/agent/turns', { method: 'POST' }, { operation: RequestOperation.ANSWER })
       .catch((error: unknown) => error)
 
     expect(failure).toMatchObject({
@@ -311,7 +311,7 @@ describe('portfolio api', () => {
     })
   })
 
-  // P3：DELETE /api/v2/conversation-context 幂等返回 204 No Content。
+  // P3：DELETE /api/agent/conversations/current 幂等返回 204 No Content。
   // 不带 expectNoContent 时，空体会被误判为 INVALID_RESPONSE；该选项让 204 直接成功。
   it('resolves without parsing JSON when expectNoContent receives a 204', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
@@ -319,13 +319,13 @@ describe('portfolio api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(request('/api/v2/conversation-context', { method: 'DELETE' }, {
+    await expect(request('/api/agent/conversations/current', { method: 'DELETE' }, {
       operation: RequestOperation.ANSWER,
       expectNoContent: true,
     })).resolves.toBeUndefined()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v2/conversation-context',
+      '/api/agent/conversations/current',
       expect.objectContaining({ method: 'DELETE' }),
     )
   })
@@ -338,7 +338,7 @@ describe('portfolio api', () => {
       }),
     ))
 
-    const failure = await request('/api/v2/conversation-context', { method: 'DELETE' }, {
+    const failure = await request('/api/agent/conversations/current', { method: 'DELETE' }, {
       operation: RequestOperation.ANSWER,
       expectNoContent: true,
     }).catch((error: unknown) => error)
@@ -407,7 +407,7 @@ describe('portfolio api', () => {
       )))
       const report = vi.spyOn(frontendDiagnostics, 'report')
 
-      await request('/api/v2/answers', { method: 'POST' }, {
+      await request('/api/agent/turns', { method: 'POST' }, {
         operation: RequestOperation.ANSWER,
         signal: controller.signal,
       }).catch(() => undefined)
@@ -418,7 +418,7 @@ describe('portfolio api', () => {
         errorCode: expectedErrorCode,
       })
       const serialized = JSON.stringify(report.mock.calls)
-      expect(serialized).not.toContain('/api/v2/answers')
+      expect(serialized).not.toContain('/api/agent/turns')
       expect(serialized).not.toContain('VISITOR_SECRET_TOKEN')
       expect(serialized).not.toContain('visitor question')
     })

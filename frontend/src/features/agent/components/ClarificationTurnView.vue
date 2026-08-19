@@ -2,6 +2,7 @@
 import type { ClarificationTurn, SuggestedAction } from '../model/publicAgentTurn'
 import type { ClarificationSubmissionPayload } from '../model/publicAgentTurn'
 import ClarificationChallengeForm from './ClarificationChallengeForm.vue'
+import SuggestedActionRow from './SuggestedActionRow.vue'
 
 // D-38.13：Critical Clarification 是独立 Turn，无 answer/source/task/execution；
 // 提交事件只携带 clarificationId + 闭合答案，由上层转为 RESOLVE_CLARIFICATION。

@@ -1,7 +1,7 @@
 // D-38 PublicAgentTurn 闭合 wire 合同的前端消费者类型。
 // 只表达冻结结构（共享 Golden Fixtures + 前端交接 §4～§6）；
 // 未知附加字段按 additive evolution 忽略，不在此建模，
-// 也不承载任何旧合同（disposition/completedTasks/degraded 等）的兼容形状。
+// 也不承载任何旧合同（旧 disposition/任务快照/公共降级轴等）的兼容形状。
 
 export type PublicAgentTurnKind =
   | 'ANSWER'

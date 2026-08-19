@@ -9,12 +9,10 @@ const sessions: AgentSession[] = [{
   title: 'SQL 审计项目的取舍',
   role: 'INTERVIEWER',
   projectSlug: 'sql-audit',
-  evidenceId: null,
   seedFingerprint: null,
   createdAt: 1,
   updatedAt: 2,
   messages: [],
-  coveredTopics: [],
 }]
 
 describe('LocalSessionRail', () => {

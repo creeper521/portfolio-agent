@@ -48,10 +48,6 @@ function initialRole(): AudienceRole {
 }
 
 const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
-
-function navigateToPortfolio() {
-  void router.push({ path: '/projects' })
-}
 </script>
 
 <template>
@@ -69,11 +65,9 @@ function navigateToPortfolio() {
     :portfolio="portfolio"
     :initial-role="initialRole()"
     :initial-project="queryString('project')"
-    :initial-evidence="queryString('evidence')"
     :initial-seed="initialSeed"
     :initial-case="caseHandoff?.caseSlug ?? ''"
     :initial-question="caseHandoff?.question ?? ''"
-    @navigate-portfolio="navigateToPortfolio"
   />
   <section v-else-if="status === 'ready' && portfolio" class="route-seed-feedback" data-invalid-handoff role="status">
     <p>这次页面内交接已失效或已被使用。</p>

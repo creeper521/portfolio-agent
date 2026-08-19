@@ -30,7 +30,7 @@ describe('AnswerTurnView', () => {
     expect(goals[1]?.find('.goal-result__label').text()).toBe('推荐一个代表项目')
     expect(wrapper.find('[data-testid="answer-progress"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('COMPLETE')
-    expect(wrapper.text()).not.toContain('degraded')
+    expect(wrapper.text()).not.toContain('已切换到基础回答')
   })
 
   it('PARTIAL 顶部显示"已完成 N/M 个目标"，FULL Goal 不被整体染红', () => {

@@ -1,35 +1,37 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  loadPublicAgentTurnGoldenFixtures,
+} from '../../agent/model/publicAgentTurnFixtureLoader'
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
 import AudienceDialogue from './AudienceDialogue.vue'
 
-const { askQuestionMock } = vi.hoisted(() => ({
-  askQuestionMock: vi.fn(),
+const { submitAgentTurnMock } = vi.hoisted(() => ({
+  submitAgentTurnMock: vi.fn(),
 }))
 
-vi.mock('../../agent/api/answerApi', () => ({
-  askQuestion: askQuestionMock,
-}))
-
-function answerResponse() {
+vi.mock('../../agent/api/agentTurnApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../agent/api/agentTurnApi')>()
   return {
-    requestId: 'request-1',
-    turnId: 'turn-1',
-    contentVersion: '2026-07-21',
-    questionPresetId: 'sql-audit-overview',
-    resolution: 'ANSWERED' as const,
-    answerSource: 'PRESET' as const,
-    generationMode: 'DETERMINISTIC' as const,
-    verification: 'VERIFIED' as const,
-    title: '项目说明',
-    summary: '公开摘要',
-    sections: [
-      { type: 'BACKGROUND' as const, title: '背景', content: '背景内容', evidenceIds: ['sql-audit-delivery-set'] },
-      { type: 'VERIFICATION' as const, title: '验证', content: '验证内容', evidenceIds: ['sql-audit-delivery-set'] },
-    ],
-    evidenceIds: ['sql-audit-delivery-set'],
-    suggestedQuestionPresetIds: ['sql-audit-overview'],
+    ...original,
+    submitAgentTurn: submitAgentTurnMock,
+  }
+})
+
+function goldenTurn(fileName: string) {
+  const fixture = loadPublicAgentTurnGoldenFixtures().find(
+    (candidate) => candidate.fileName === fileName,
+  )
+  if (fixture === undefined) throw new Error(`缺少 fixture ${fileName}`)
+  return JSON.parse(JSON.stringify(fixture.turn)) as Record<string, unknown>
+}
+
+function submitSuccess() {
+  return {
+    ok: true,
+    turn: goldenTurn('answer-complete.json'),
+    conversation: { conversationId: 'conversation-home', resumeToken: 'token-home' },
   }
 }
 
@@ -46,8 +48,12 @@ function mountDialogue() {
 
 describe('AudienceDialogue', () => {
   beforeEach(() => {
-    askQuestionMock.mockReset()
-    askQuestionMock.mockResolvedValue(answerResponse())
+    submitAgentTurnMock.mockReset()
+    submitAgentTurnMock.mockResolvedValue(submitSuccess())
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    )
   })
 
   it('changes recommended questions with the selected visitor role', async () => {
@@ -59,68 +65,77 @@ describe('AudienceDialogue', () => {
     expect(wrapper.findAll('[data-question]')).toHaveLength(1)
   })
 
-  it('shows an API-backed summary after choosing a question', async () => {
+  it('asks via the closed preset command and renders the light PublicAgentTurn projection', async () => {
     const wrapper = mountDialogue()
-
-    expect(wrapper.findAll('[data-question]')).toHaveLength(1)
-    expect(wrapper.get('[data-role="INTERVIEWER"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.get('[data-role="INTERVIEWER"]').classes()).toContain('role-button--active')
 
     await wrapper.get('[data-question]').trigger('click')
     await flushPromises()
 
-    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
-      projectSlug: 'sql-audit',
-      questionPresetId: 'sql-audit-overview',
-      contractVersion: previewPublicContent.questionPresets[0].contractVersion,
-      question: previewPublicContent.questionPresets[0].text,
-      source: 'HOME',
-    }))
-    expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
-    expect(wrapper.get('[data-light-answer]').text()).toContain('E-01')
+    expect(submitAgentTurnMock).toHaveBeenCalledTimes(1)
+    const request = submitAgentTurnMock.mock.calls[0]?.[0] as {
+      requestId: string
+      command: { kind: string; input: { kind: string; presetId?: string } }
+      surfaceContext: { subjectHint: { slug: string }; requestSource: string }
+      conversationWindow: unknown[]
+    }
+    expect(request.command).toEqual({
+      kind: 'ASK',
+      input: {
+        kind: 'PRESET',
+        presetId: previewPublicContent.questionPresets[0].id,
+        presetRevision: previewPublicContent.questionPresets[0].contractVersion,
+      },
+    })
+    expect(request.surfaceContext).toMatchObject({
+      subjectHint: { kind: 'PROJECT', slug: 'sql-audit' },
+      requestSource: 'HOME',
+    })
+    expect(request.conversationWindow).toEqual([])
+
+    const panel = wrapper.get('[data-light-answer]').text()
+    expect(panel).toContain('介绍 SQL 审计项目')
+    expect(panel).toContain('E-01')
     expect(wrapper.findAll('[data-answer-action]')).toHaveLength(3)
   })
 
-  it('accepts a free-form homepage question', async () => {
+  it('accepts a free-form homepage question via ASK/FREE_TEXT', async () => {
     const wrapper = mountDialogue()
 
     await wrapper.get('[data-custom-question]').setValue('如何处理连接异常？')
     await wrapper.get('[data-question-form]').trigger('submit')
     await flushPromises()
 
-    expect(askQuestionMock).toHaveBeenCalledWith(expect.objectContaining({
-      projectSlug: 'sql-audit',
-      question: '如何处理连接异常？',
-      source: 'HOME',
-    }))
-    expect(wrapper.get('[data-light-answer]').text()).toContain('项目说明')
+    const request = submitAgentTurnMock.mock.calls[0]?.[0] as {
+      command: { input: { kind: string; text: string } }
+    }
+    expect(request.command).toEqual({
+      kind: 'ASK',
+      input: { kind: 'FREE_TEXT', text: '如何处理连接异常？' },
+    })
+    expect(wrapper.get('[data-light-answer]').text()).toContain('介绍 SQL 审计项目')
   })
 
-  it('labels rule intent independently from insufficient evidence', async () => {
-    askQuestionMock.mockResolvedValue({
-      ...answerResponse(),
-      questionPresetId: undefined,
-      intentSource: 'RULE' as const,
-      resolution: 'NOT_SUPPORTED' as const,
-      evidenceState: 'INSUFFICIENT' as const,
+  it('renders boundary turns without evidence and with a safe status label', async () => {
+    submitAgentTurnMock.mockResolvedValue({
+      ok: true,
+      turn: goldenTurn('boundary.json'),
+      conversation: null,
     })
     const wrapper = mountDialogue()
 
-    await wrapper.get('[data-custom-question]').setValue('检索公开交付结果')
+    await wrapper.get('[data-custom-question]').setValue('帮我做医疗决策')
     await wrapper.get('[data-question-form]').trigger('submit')
     await flushPromises()
 
     const panel = wrapper.get('[data-light-answer]').text()
-    expect(panel).toContain('规则识别')
-    expect(panel).toContain('当前公开证据不足')
-    expect(panel).not.toContain('RESOLUTION')
-    expect(panel).not.toContain('GENERATION')
-    expect(panel).not.toContain('VERIFICATION')
+    expect(panel).toContain('能力边界')
+    expect(panel).toContain('高风险建议')
+    expect(panel).not.toContain('VERIFIED_PUBLIC_EVIDENCE')
   })
 
   it('disables question input and submission while an answer is pending', async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answerResponse>) => void
-    askQuestionMock.mockReturnValue(
+    let resolveAnswer!: (value: ReturnType<typeof submitSuccess>) => void
+    submitAgentTurnMock.mockReturnValue(
       new Promise((resolve) => {
         resolveAnswer = resolve
       }),
@@ -133,17 +148,19 @@ describe('AudienceDialogue', () => {
     expect(wrapper.get('[data-custom-question]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-question-submit]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-question]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[role="status"]').text()).toContain('正在核对公开事实')
 
-    resolveAnswer(answerResponse())
+    resolveAnswer(submitSuccess())
     await flushPromises()
     expect(wrapper.get('[data-custom-question]').attributes('disabled')).toBeUndefined()
   })
 
-  it('shows a fixed safe error and retries the same question without double incrementing round', async () => {
-    askQuestionMock
-      .mockRejectedValueOnce(new Error('POST https://internal.example/api failed'))
-      .mockResolvedValueOnce(answerResponse())
+  it('shows a fixed safe error on failure and retries the same question once succeeded', async () => {
+    submitAgentTurnMock
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'NETWORK', message: '网络不可用，请稍后重试', retryable: true },
+      })
+      .mockResolvedValueOnce(submitSuccess())
     const wrapper = mountDialogue()
 
     await wrapper.get('[data-custom-question]').setValue('失败后重试的问题')
@@ -157,9 +174,7 @@ describe('AudienceDialogue', () => {
     await wrapper.get('[data-answer-retry]').trigger('click')
     await flushPromises()
 
-    expect(askQuestionMock).toHaveBeenCalledTimes(2)
-    expect(askQuestionMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ question: '失败后重试的问题' }))
-    expect(askQuestionMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ question: '失败后重试的问题' }))
+    expect(submitAgentTurnMock).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('ROUND 01 / 03')
   })
 })

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { askQuestion } from '../../agent/api/answerApi'
-import { mapAnswerResponse } from '../../agent/model/mapAnswerResponse'
-import { resolveAnswerSuccess } from '../../agent/model/answerTypes'
+import { submitAgentTurn } from '../../agent/api/agentTurnApi'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { audienceProfiles } from '../data/audienceProfiles'
 import type { AudienceProfile, HomeAnswerState } from '../model/audienceTypes'
 import LightAnswerPanel from './LightAnswerPanel.vue'
+
+// 首页轻对话：一次性 ASK（无会话凭证首问），结果为闭合 PublicAgentTurn；
+// 重放输入随 handoff 交给 Agent 页精确重放同一轮（D-31 幂等）。
 
 const props = defineProps<{ portfolio: PublicPortfolio }>()
 
@@ -42,32 +43,39 @@ async function ask(question: string, questionPresetId?: string) {
   pending.value = true
   answerError.value = ''
   failedQuestion.value = normalized
-  try {
-    const preset = questionPresetId === undefined
-      ? undefined
-      : props.portfolio.questionPresets.find((item) => item.id === questionPresetId)
-    // P3：响应按 responseKind 分流（handoff §4）。首页一次性问答无 ResumeToken，
-    // 不会出现合法 COMPLETION_RECEIPT；若非 ANSWER 一律视为契约错误并走通用错误 UI。
-    const resolved = resolveAnswerSuccess(await askQuestion({
-      turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
-      projectSlug: project.slug,
-      audienceRole: selectedRole.value.id,
-      source: 'HOME',
-      questionPresetId,
-      contractVersion: preset?.contractVersion,
-      question: normalized,
-    }))
-    if (resolved.kind !== 'ANSWER') {
-      throw new Error('P3_UNEXPECTED_RESPONSE_KIND')
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`
+  const preset = questionPresetId === undefined
+    ? undefined
+    : props.portfolio.questionPresets.find((item) => item.id === questionPresetId)
+  const surfaceContext = {
+    subjectHint: { kind: 'PROJECT' as const, slug: project.slug },
+    audienceRole: selectedRole.value.id,
+    requestSource: 'HOME' as const,
+  }
+  const command = preset === undefined
+    ? { kind: 'ASK' as const, input: { kind: 'FREE_TEXT' as const, text: normalized.slice(0, 2000) } }
+    : {
+      kind: 'ASK' as const,
+      input: { kind: 'PRESET' as const, presetId: preset.id, presetRevision: preset.contractVersion },
     }
-    const mapped = mapAnswerResponse(resolved.response)
+  try {
+    const result = await submitAgentTurn({
+      requestId,
+      command,
+      surfaceContext,
+      conversationWindow: [],
+    })
+    if (!result.ok) {
+      throw new Error(result.failure.code ?? 'AGENT_TURN_FAILED')
+    }
     round.value = Math.min(round.value + 1, 3)
     answer.value = {
       round: round.value,
       question: normalized,
-      answer: mapped,
+      turn: result.turn,
       projectSlug: project.slug,
-      evidenceIds: mapped.evidenceIds,
+      conversation: result.conversation,
+      replay: { requestId, command, surfaceContext },
     }
     customQuestion.value = ''
   } catch {
@@ -81,7 +89,6 @@ function focusCustomQuestion() {
   document.querySelector<HTMLInputElement>('[data-custom-question]')?.focus()
 }
 </script>
-
 <template>
   <section
     id="dialogue"
@@ -159,7 +166,6 @@ function focusCustomQuestion() {
         v-if="answer"
         :role="selectedRole.id"
         :answer="answer"
-        :evidence="portfolio.evidence"
         @follow-up="focusCustomQuestion"
       />
     </div>

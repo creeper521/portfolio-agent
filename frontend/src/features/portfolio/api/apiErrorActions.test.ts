@@ -28,10 +28,7 @@ describe('actionForApiError', () => {
       .toBe('INVALID_CONVERSATION_RESUME_TOKEN')
   })
 
-  // P5 stp-v2：协议不兼容（HTTP 409 + AGENT_TURN_CONTRACT_UNSUPPORTED）。
-  it('maps the stp-v2 contract-unsupported code to UPGRADE_REQUIRED (no auto-retry)', () => {
-    expect(actionForApiError('AGENT_TURN_CONTRACT_UNSUPPORTED')).toBe('UPGRADE_REQUIRED')
-    expect(normalizeApiErrorCode('AGENT_TURN_CONTRACT_UNSUPPORTED'))
-      .toBe('AGENT_TURN_CONTRACT_UNSUPPORTED')
+  it('未知错误码归一化为 UNKNOWN', () => {
+    expect(normalizeApiErrorCode('NOT_A_KNOWN_CODE')).toBe('UNKNOWN')
   })
 })

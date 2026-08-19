@@ -1,16 +1,18 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
-import type { ConversationTopic, MappedAnswer } from './answerTypes'
-import type { OpaquePlanConfirmation } from './semanticTurnView'
+import type { AgentTurnCommand, SurfaceContext } from '../api/agentTurnApi'
+import type { PublicAgentTurn } from './publicAgentTurn'
 
-export interface PendingPlanConfirmation extends OpaquePlanConfirmation {}
+// Slice 5 会话模型：消息只存在页面内存；AGENT 消息携带闭合 PublicAgentTurn。
+// resumeToken 仅会话内存 + 活跃会话的 sessionStorage 槽位（handoff §3）。
 
 export interface AgentMessage {
   id: string
   role: 'USER' | 'AGENT'
+  /** USER：访客输入；AGENT：供会话窗口/无障碍使用的简短文本。 */
   content: string
-  answer?: MappedAnswer | null
+  /** 仅 AGENT 消息：已通过 mapper 校验的闭合 PublicAgentTurn。 */
+  turn?: PublicAgentTurn
   createdAt: number
-  evidenceIds: string[]
 }
 
 export interface AgentSession {
@@ -20,32 +22,32 @@ export interface AgentSession {
   titleDetail?: string
   role: AudienceRole
   projectSlug: string | null
-  evidenceId: string | null
   seedFingerprint: string | null
   createdAt: number
   updatedAt: number
   messages: AgentMessage[]
-  coveredTopics: ConversationTopic[]
-  pendingConfirmation?: PendingPlanConfirmation
-  // P3：该会话绑定的服务端 conversation ResumeToken（仅内存，handoff §10.1）。
-  // 一会话一 Token；不透明值，前端不生成/解析/修改。sessionStorage 只保存活跃会话的 Token。
+  /** 服务端会话身份与凭证：仅页面内存，不落任何持久化存储。 */
+  conversationId?: string
   resumeToken?: string
-  // P3：刷新恢复得到的安全业务上下文摘要（仅活跃会话恢复卡使用）。
-  activeContextSummary?: import('./answerTypes').ConversationContextSummary
 }
 
 export interface SessionSeed {
   title?: string
   role?: AudienceRole
   projectSlug?: string | null
-  evidenceId?: string | null
 }
 
+/** 首页 → Agent 一次性内存交接：只携带语义种子、会话凭证与幂等重放输入，不带答案。 */
 export interface AgentRouteSeed {
   role: AudienceRole
   question: string
-  answer: MappedAnswer
   projectSlug: string | null
-  evidenceIds: string[]
   source: 'HOME' | 'PROJECT' | 'EVIDENCE'
+  conversation?: { conversationId: string; resumeToken: string }
+  /** 同 requestId + 同 fingerprint 精确重放首页轮次（D-31）；surface/window 必须原样。 */
+  replay?: {
+    requestId: string
+    command: AgentTurnCommand
+    surfaceContext?: SurfaceContext
+  }
 }

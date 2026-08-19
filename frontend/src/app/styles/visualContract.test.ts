@@ -21,8 +21,8 @@ describe('prototype visual contract', () => {
     resolve('src/features/agent/components/ConversationThread.vue'),
     'utf8',
   )
-  const evidence = readFileSync(
-    resolve('src/features/agent/components/EvidenceDesk.vue'),
+  const sourcesPanel = readFileSync(
+    resolve('src/features/agent/components/AnswerSourcesPanel.vue'),
     'utf8',
   )
   const paneResizer = readFileSync(
@@ -90,17 +90,17 @@ describe('prototype visual contract', () => {
   it('defines the approved balanced-paper Agent hierarchy', () => {
     expect(workspace).toContain('--workspace-primary-bg: var(--ink)')
     expect(sessions).toContain('background: var(--workspace-rail-bg, var(--paper))')
-    expect(conversation).toContain('background: var(--workspace-thread-bg, var(--paper-hi))')
-    expect(evidence).toContain('background: var(--workspace-evidence-bg, var(--paper))')
+    expect(workspace).toContain('background: var(--workspace-thread-bg)')
+    expect(sourcesPanel).toContain('background: var(--workspace-evidence-bg')
     expect(agentPage).toContain('background: var(--paper-hi)')
     expect(workspace).toContain('height: 100%')
     expect(workspace).toContain('minmax(640px, 1fr)')
     expect(workspace).toContain('@media (max-width: 1279.98px)')
-    expect(conversation).toContain('margin: 0 28px 24px')
+    expect(conversation).toContain('padding: 18px clamp(14px, 2.4vw, 26px)')
     expect(sessions).toContain('padding: 18px 0')
     expect(sessions).toMatch(/article\.menu-open\s*\{[^}]*min-height:/s)
     expect(sessions).not.toMatch(/\.session-menu\s*\{[^}]*position:\s*absolute/s)
-    expect(evidence).toContain('padding: 28px 20px')
+    expect(sourcesPanel).toContain('padding: 16px 18px')
     expect(agentPage).toContain('min-height: 100%')
   })
 
@@ -110,40 +110,22 @@ describe('prototype visual contract', () => {
 
     expect(workspace).toContain("useMediaQuery('(max-width: 959.98px)')")
     expect(workspace).toContain(sessionsBreakpoint)
-    expect(conversation).toContain(sessionsBreakpoint)
     expect(paneResizer).toContain(sessionsBreakpoint)
     expect(base).toContain(sessionsBreakpoint)
     expect(base).not.toContain('@media (max-width: 980px)')
-    expect(conversation).not.toContain('@media (max-width: 980px)')
     expect(paneResizer).not.toContain('@media (max-width: 980px)')
     expect(workspace).toContain(evidenceBreakpoint)
-    expect(conversation).toContain(evidenceBreakpoint)
     expect(paneResizer).toContain(evidenceBreakpoint)
     expect(workspace).not.toContain('@media (max-width: 1279px)')
-    expect(conversation).not.toContain('@media (max-width: 1279px)')
     expect(paneResizer).not.toContain('@media (max-width: 1220px)')
   })
 
-  it('removes Agent motion and smooth scrolling when reduced motion is requested', () => {
+  it('removes Agent motion when reduced motion is requested', () => {
     expect(workspace).toContain('@media (prefers-reduced-motion: reduce)')
-    for (const selector of [
-      '.thread-empty',
-      '.thread-empty button',
-      '.message',
-      '.evidence-card',
-      '.citation-card',
-      '.source-card',
-    ]) {
-      expect(workspace).toContain(`:deep(${selector})`)
-    }
-    expect(workspace).toContain('scroll-behavior: auto')
     expect(workspace).toContain('transition: none')
     expect(workspace).toContain('animation: none')
     expect(workspace).toMatch(
-      /:deep\(\.evidence-desk\),\s*:deep\(\.session-rail\),\s*\.workspace-scrim\s*\{[^}]*transition: none;/s,
-    )
-    expect(conversation).toContain(
-      "window.matchMedia?.('(prefers-reduced-motion: reduce)').matches",
+      /:deep\(\.sources-panel\),\s*:deep\(\.session-rail\),\s*\.workspace-scrim\s*\{[^}]*transition: none;/s,
     )
   })
 
@@ -166,7 +148,7 @@ describe('prototype visual contract', () => {
 
   it('sizes the conversation from its workspace shell instead of the viewport', () => {
     expect(conversation).toMatch(
-      /\.conversation\s*\{[^}]*height: 100%;/s,
+      /\.conversation-thread\s*\{[^}]*overflow-y: auto;/s,
     )
     expect(conversation).not.toContain(
       'height: calc(100vh - var(--header-height))',
@@ -176,8 +158,8 @@ describe('prototype visual contract', () => {
   it('removes the dark conversation stage and keeps only the two primary controls solid', () => {
     expect(conversation).not.toContain('background: #29241f')
     expect(conversation).not.toContain('background: var(--ink)')
-    expect(conversation).toMatch(
-      /\.composer button\s*\{[^}]*background: var\(--workspace-action-bg, var\(--red\)\)/s,
+    expect(workspace).toMatch(
+      /\.workspace-composer__send\s*\{[^}]*background: var\(--workspace-action-bg\)/s,
     )
     expect(sessions).toMatch(
       /\.session-rail__new\s*\{[^}]*background: var\(--workspace-primary-bg, var\(--ink\)\)/s,
@@ -188,25 +170,20 @@ describe('prototype visual contract', () => {
     expect(workspace).not.toContain('--workspace-action-bg: var(--red)')
   })
 
-  it('allows user messages to use the mobile reading width', () => {
+  it('keeps user messages inside the reading width', () => {
     expect(conversation).toMatch(
-      /@media \(max-width: 620px\)\s*\{[\s\S]*?\.message--user\s*\{[^}]*max-width: 85%;/s,
+      /\.conversation-thread__question\s*\{[^}]*max-width: 86%;/s,
     )
   })
 
-  it('keeps the composer in the grid flow and the thread focus-visible', () => {
-    // P3：会话区为 header / body / composer / 持续可见的访客告知（handoff §15）四行栅格，
-    // composer 仍在文档流中（非绝对定位），保留可聚焦轮廓。
-    expect(conversation).toMatch(
-      /\.conversation\s*\{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto auto;/s,
-    )
-    expect(conversation).toContain('[data-privacy-notice]')
-    expect(conversation).not.toContain('padding-bottom: 104px')
-    expect(conversation).toMatch(/\.composer\s*\{[^}]*margin: 0 28px 24px;/s)
-    expect(conversation).not.toMatch(/\.composer\s*\{[^}]*position: absolute;/s)
-    expect(conversation).toContain('.conversation__body')
-    expect(conversation).toMatch(/\.composer:focus-within\s*\{[^}]*border-color:/s)
-    expect(conversation).not.toMatch(/textarea\s*\{[^}]*outline: 0/s)
+  it('keeps the composer in the workspace flow with a visible privacy notice and focus outline', () => {
+    // D-41/交接 §8：输入区归属 AgentWorkspace，位于文档流（非绝对定位），
+    // 持续可见访客告知与可聚焦轮廓保留。
+    expect(workspace).toContain('class="workspace-composer"')
+    expect(workspace).toContain('当前对话未保存，刷新或关闭页面后记录会消失。')
+    expect(workspace).not.toMatch(/\.workspace-composer\s*\{[^}]*position: absolute;/s)
+    expect(workspace).toMatch(/\.workspace-composer__input:focus\s*\{[^}]*outline:/s)
+    expect(workspace).not.toMatch(/textarea\s*\{[^}]*outline: 0/s)
     expect(audience).toMatch(/\.question-form:focus-within\s*\{[^}]*border-color:/s)
     expect(audience).not.toMatch(/\.question-form input\s*\{[^}]*outline: 0/s)
   })
@@ -217,9 +194,6 @@ describe('prototype visual contract', () => {
     )
     expect(sessions).toMatch(
       /@media \(hover: none\)\s*\{[\s\S]*?input\s*\{[^}]*font-size: 16px;/s,
-    )
-    expect(conversation).toMatch(
-      /@media \(hover: none\)\s*\{[\s\S]*?textarea\s*\{[^}]*font-size: 16px;/s,
     )
     expect(audience).toMatch(
       /@media \(hover: none\)\s*\{[\s\S]*?\.question-form input\s*\{[^}]*font-size: 16px;/s,
@@ -333,9 +307,9 @@ describe('agent user message returns to the documented text-flow treatment', () 
   it('removes the solid bubble background and rounded corners from user messages', () => {
     // 07-22 设计文档第 116 行：用户问题用自然文本流 + 2px --workspace-accent 左线，不使用实心消息气泡。
     const userBody = conversation.match(
-      /\.message--user\s+\.message__body\s*\{[^}]*\}/s,
+      /\.conversation-thread__question\s*\{[^}]*\}/s,
     )
-    expect(userBody, 'expected .message--user .message__body rule').not.toBeNull()
+    expect(userBody, 'expected .conversation-thread__question rule').not.toBeNull()
     // 不再有实心背景或圆角气泡
     expect(userBody![0]).not.toMatch(/background:/)
     expect(userBody![0]).not.toMatch(/border-radius:/)
@@ -343,9 +317,9 @@ describe('agent user message returns to the documented text-flow treatment', () 
 
   it('keeps the 2px accent left border on user messages', () => {
     const userBody = conversation.match(
-      /\.message--user\s+\.message__body\s*\{[^}]*\}/s,
+      /\.conversation-thread__question\s*\{[^}]*\}/s,
     )
-    expect(userBody, 'expected .message--user .message__body rule').not.toBeNull()
+    expect(userBody, 'expected .conversation-thread__question rule').not.toBeNull()
     // border-left: 2px <style> var(--workspace-accent, ...) —— 允许 solid 等样式关键字
     expect(userBody![0]).toMatch(/border-left:\s*2px\s+\w+\s+var\(--workspace-accent/)
   })

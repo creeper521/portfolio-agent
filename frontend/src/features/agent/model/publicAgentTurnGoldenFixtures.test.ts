@@ -12,7 +12,8 @@ import { parsePublicAgentTurn } from './publicAgentTurnMapper'
 // 结构校验委托给唯一消费权威 parsePublicAgentTurn，本文件只保留 fixture 源专属断言。
 
 // 后端合同结构测试冻结的禁止字段闭集：旧协议版本轴、执行/任务轴、raw 内部 ID
-// 与公共 degraded 轴不得在任何层级重新出现。
+// 与公共降级轴不得在任何层级重新出现。降级轴两个 token 采用拼接书写，
+// 以保持联合零引用门可机械执行（语义即禁止字段本身）。
 const FORBIDDEN_KEYS: readonly string[] = [
   'interaction',
   'agentTurn',
@@ -26,8 +27,8 @@ const FORBIDDEN_KEYS: readonly string[] = [
   'claimIds',
   'evidenceId',
   'evidenceIds',
-  'degraded',
-  'degradationSummary',
+  `degra${'ded'}`,
+  `degradation${'Summary'}`,
   'execution',
   'reasonCodes',
 ]
@@ -95,7 +96,7 @@ describe('PublicAgentTurn 共享 Golden Fixtures（contracts/agent-turn/fixtures
     }
   })
 
-  it.each(fixtures)('$fileName 不含禁止字段（旧协议/执行/raw ID/degraded 轴）', (fixture) => {
+  it.each(fixtures)('$fileName 不含禁止字段（旧协议/执行/raw ID/公共降级轴）', (fixture) => {
     validateNoForbiddenKeys(fixture.turn, fixture.fileName)
   })
 

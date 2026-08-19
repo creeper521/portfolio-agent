@@ -25,7 +25,6 @@ export type ApiErrorCode =
   | 'REQUEST_IN_PROGRESS'
   | 'IDEMPOTENCY_KEY_CONFLICT'
   | 'INVALID_CONVERSATION_RESUME_TOKEN'
-  | 'AGENT_TURN_CONTRACT_UNSUPPORTED'
   | 'UNKNOWN'
 
 const API_ERROR_CODES = new Set<ApiErrorCode>([
@@ -47,7 +46,6 @@ const API_ERROR_CODES = new Set<ApiErrorCode>([
   'REQUEST_IN_PROGRESS',
   'IDEMPOTENCY_KEY_CONFLICT',
   'INVALID_CONVERSATION_RESUME_TOKEN',
-  'AGENT_TURN_CONTRACT_UNSUPPORTED',
   'UNKNOWN',
 ])
 
@@ -79,10 +77,6 @@ export function actionForApiError(code: string | undefined): ErrorAction {
     // P3：恢复 Token 格式非法——静默处理（清除本地并新建会话），不向用户报错。
     case 'INVALID_CONVERSATION_RESUME_TOKEN':
       return 'NONE'
-    // P5 stp-v2：Semantic Turn Contract 不兼容（HTTP 409）——不自动重试，
-    // 进入升级 / 「以基础模式继续」入口（设计 §3.7、handoff §7）。
-    case 'AGENT_TURN_CONTRACT_UNSUPPORTED':
-      return 'UPGRADE_REQUIRED'
     default:
       return 'RETRY'
   }

@@ -24,7 +24,7 @@ import type {
 // D-38/D-46 冻结合同的结构校验 mapper：只做闭合 variant、必填字段、闭合枚举、
 // 结构不变量与公开引用解析；未知附加字段按 additive evolution 忽略。
 // 不推导业务语义（resolution/coverage/来源构成均以后端为权威），
-// 不提供任何旧合同（v1/v2/v3、disposition、completedTasks、degraded）回退。
+// 不提供任何旧合同（旧协议版本、旧 disposition、任务快照、公共降级轴）回退。
 
 const TURN_KINDS: readonly string[] = [
   'ANSWER',

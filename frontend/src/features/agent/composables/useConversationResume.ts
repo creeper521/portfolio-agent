@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-// P3 会话级 ResumeToken 唯一 sessionStorage 槽位（handoff §10.1, §10.2）。
+// 会话级 ResumeToken 唯一 sessionStorage 槽位（前端交接 §3 / D-46）。
 //
 // 存储模型：
 //   运行期内存：每个 AgentSession 绑定自己的 ResumeToken（见 useLocalSessions）。
@@ -9,8 +9,8 @@ import { ref } from 'vue'
 // 因此多本地会话不共享一个服务端 conversation；切换会话时槽位被替换；新建会话时清空；
 // 刷新后最多恢复刷新前活跃的一个会话；关闭页签后不保证恢复。
 //
-// 安全边界：ResumeToken 只通过 X-Conversation-Resume-Token Header 携带，绝不进入
-// URL/Cookie/日志/埋点/错误上报。槽位只保存不透明 Token 字符串，绝不保存问题、答案、
+// 安全边界：ResumeToken 只通过 Authorization: Bearer Header 携带（D-46），绝不进入
+// URL/body/Cookie/日志/埋点/错误上报。槽位只保存不透明 Token 字符串，绝不保存问题、答案、
 // Context payload、Evidence 或 ContentVersion。禁止 localStorage/IndexedDB/Cookie 降级。
 
 const RESUME_TOKEN_STORAGE_KEY = 'portfolio.agent.resume-token.v1'

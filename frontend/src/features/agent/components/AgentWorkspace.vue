@@ -1,100 +1,66 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 
-import type {
-  AudienceRole,
-  PublicPortfolio,
-} from '../../public-content/model/publicContentTypes'
+import type { AudienceRole, PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
 import {
-  createFrontendDiagnosticEvent,
-  durationBucketFor,
-} from '../../../shared/diagnostics/frontendDiagnosticTypes'
-import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
-import { askQuestion } from '../api/answerApi'
-import {
-  clearConversationContext,
-  fetchConversationContext,
-} from '../api/answerApi'
-import {
-  askWithPresetContractRetry,
-  isPresetContractStale,
-  isPresetContractUnavailable,
-} from '../api/presetContractRetry'
-import { askWithV3ContractFallback } from '../api/v3ContractFallback'
-import { createRequestToken } from '../api/createRequestToken'
-import { PortfolioApiError } from '../../portfolio/api/portfolioApi'
-import type { ErrorAction } from '../../portfolio/api/apiErrorActions'
+  cancelAgentTurn,
+  clearConversation,
+  fetchCurrentConversation,
+  submitAgentTurn,
+  type AgentTurnCommand,
+  type AgentTurnFailure,
+  type ClarificationAnswer,
+  type ConversationWindowMessage,
+  type SurfaceContext,
+} from '../api/agentTurnApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import { useConversationResume } from '../composables/useConversationResume'
 import {
   WORKSPACE_LIMITS,
   fitWorkspaceSplit,
   useWorkspaceSplit,
-  type WorkspaceSplit,
 } from '../composables/useWorkspaceSplit'
-import type { AgentRouteSeed, AgentSession } from '../model/sessionTypes'
 import type {
-  ConversationSuggestedQuestion,
-  ConversationTopic,
-  ContextReferenceRequest,
-  FollowUpAction,
-  PortfolioRecommendationContextRequest,
-  SemanticContextRequest,
-  SemanticSubjectReference,
-  InvalidatedPlanReference,
-  PendingPlanReference,
-  PlanAdjustmentRequest,
-  ClarificationResolutionRequest,
-  SemanticTurnContract,
-} from '../model/answerTypes'
-import { resolveAnswerSuccess } from '../model/answerTypes'
+  AgentRouteSeed,
+  AgentSession,
+} from '../model/sessionTypes'
 import type {
-  ClarificationSubmission,
-  ClarificationView,
-  OpaquePlanConfirmation,
-  PlanAdjustmentBarState,
-} from '../model/semanticTurnView'
-import { resolveActiveSemanticAction } from '../model/activeSemanticAction'
-import { completeSuggestedQuestions } from '../model/completeSuggestedQuestions'
-import {
-  buildEvidenceDeskContext,
-  type AnswerFocusTarget,
-  type EvidenceDeskTab,
-  type EvidenceInspectRequest,
-} from '../model/evidenceDeskModel'
-import { mapAnswerResponse } from '../model/mapAnswerResponse'
+  ClarificationSubmissionPayload,
+  PublicAgentTurn,
+  SuggestedAction,
+} from '../model/publicAgentTurn'
+import AnswerSourcesPanel from './AnswerSourcesPanel.vue'
 import ConversationThread from './ConversationThread.vue'
-import EvidenceDesk from './EvidenceDesk.vue'
 import LocalSessionRail from './LocalSessionRail.vue'
 import PaneResizer from './PaneResizer.vue'
 
-interface AnswerRequestContext {
+// D-41/交接 §8：AgentWorkspace 只负责会话容器、输入、request lifecycle、
+// 内存 Session、active ResumeToken 与 API 协调；业务投影在组件树内。
+// 取消：先结束本地 pending，再 best-effort DELETE + abort；不本地伪造 Cancelled。
+
+const FREE_TEXT_MAX_LENGTH = 2000
+const CONVERSATION_WINDOW_LIMIT = 12
+
+interface PendingTurn {
+  requestId: string
   sessionId: string
-  projectSlug: string | null
-  caseSlug?: string | null
-  question?: string
-  action?: 'ASK' | 'CONFIRM_PLAN' | 'REGENERATE_PLAN'
-  agentTurnContract?: SemanticTurnContract
-  planConfirmation?: OpaquePlanConfirmation
-  semanticContext?: SemanticContextRequest
-  invalidatedPlanReference?: InvalidatedPlanReference
-  planAdjustment?: PlanAdjustmentRequest
-  clarificationResolution?: ClarificationResolutionRequest
-  questionPresetId?: string
-  contractVersion?: string
-  coveredTopics?: readonly ConversationTopic[]
-  recommendationContext?: PortfolioRecommendationContextRequest
-  requestToken?: string
-  // P3：从某条结果继续时发送的强类型 Context 引用（handoff §3.2）。
-  contextReference?: ContextReferenceRequest
+  question: string
+  controller: AbortController
 }
 
-interface AnswerFailureView {
+interface FailureView {
   message: string
-  action: ErrorAction
-  requestId?: string
+  retryable: boolean
   retryAfterSeconds?: number
+  requestId?: string
+  command?: AgentTurnCommand
+  sessionId?: string
+}
+
+interface SuggestionChip {
+  text: string
+  presetId?: string
 }
 
 const props = withDefaults(
@@ -103,7 +69,6 @@ const props = withDefaults(
     initialRole?: AudienceRole
     initialQuestion?: string
     initialProject?: string
-    initialEvidence?: string
     initialCase?: string
     initialSeed?: AgentRouteSeed | null
   }>(),
@@ -111,17 +76,12 @@ const props = withDefaults(
     initialRole: 'INTERVIEWER',
     initialQuestion: '',
     initialProject: '',
-    initialEvidence: '',
     initialCase: '',
     initialSeed: null,
   },
 )
-const emit = defineEmits<{
-  navigatePortfolio: []
-}>()
 
 const sessions = useLocalSessions()
-// P3：会话级 ResumeToken 的唯一 sessionStorage 槽位（handoff §10）。
 const resume = useConversationResume()
 const split = useWorkspaceSplit()
 const workspaceRoot = ref<HTMLElement | null>(null)
@@ -130,48 +90,15 @@ const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
-const activeEvidenceId = ref('')
-const evidenceTab = ref<EvidenceDeskTab>('EVIDENCE')
-const focusedAnswerMessageId = ref('')
-const answerFocusTarget = ref<AnswerFocusTarget | null>(null)
-const pending = ref(false)
-const answerFailure = ref<AnswerFailureView | null>(null)
-const failedRequest = ref<AnswerRequestContext | null>(null)
-// P3：Context 写入失败等非阻断续接提示（独立维度，不降级 Evidence，handoff §5/§13.1）。
-const continuationNotice = ref<string | null>(null)
-// P3：幂等完成回执（handoff §4）。不伪造答案；提示用户可基于已保存 Context 继续。
-const completionReceipt = ref<{
-  turnId: string
-  completedTasks: Array<{ displayIndex: string; status: string; contextHandle?: string }>
-} | null>(null)
-// P3：清除流程中间态（DELETE 未确认时不宣称已清除，handoff §12）。
+const pending = ref<PendingTurn | null>(null)
+const failure = ref<FailureView | null>(null)
 const clearPending = ref(false)
-const resolvedContractVersions = new Map<string, string>()
-const semanticContinuations = new Map<string, SemanticContinuation>()
-// P-1：清除 Case 上下文是访客的显式清空动作。其后到下一次显式主体选择（建议
-// 问题、结果续接）或新会话之前的普通提问，不得把展示回退项目（projects[0]）
-// 静默当作页面主体发送——与行为 UI 基线「clearing 后 activeSubjects 为空」一致。
-const subjectHintCleared = ref(false)
-// 调整模式（决策 1 · 方案 B）：页面级单例状态，记录正在调整的会话与计划引用。
-// planReference 缺失时不得进入调整态（后端合同尚未暴露待确认计划标识）。
-const activeAdjustment = ref<{
-  sessionId: string
-  planReference: PendingPlanReference
-  planTitle: string
-} | null>(null)
-const activeCaseSlug = ref(
-  props.portfolio.cases.some((item) => item.slug === props.initialCase)
-    ? props.initialCase
-    : '',
-)
-let activeRequest: AnswerRequestContext | null = null
-let activeRequestController: AbortController | null = null
-let requestVersion = 0
-let answerFocusRequestId = 0
+const clearNotice = ref<string | null>(null)
+const resumeNotice = ref<string | null>(null)
+const questionDraft = ref('')
+const composerInput = ref<HTMLTextAreaElement | null>(null)
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
-let retryDelayTimer: ReturnType<typeof setInterval> | null = null
-let drawerReturnFocus: HTMLElement | null = null
 
 const effectiveSplit = computed(() =>
   evidenceIsDrawer.value
@@ -210,1274 +137,465 @@ const effectiveMaximums = computed(() => {
   }
 })
 
+const activeCaseSlug = ref(
+  props.portfolio.cases.some((item) => item.slug === props.initialCase)
+    ? props.initialCase
+    : '',
+)
 const activeCase = computed(
   () => props.portfolio.cases.find((item) => item.slug === activeCaseSlug.value),
 )
-
-// 调整条展示状态：只对持有该计划的当前会话展示。
-const adjustmentBarState = computed<PlanAdjustmentBarState | null>(() => {
-  const adjustment = activeAdjustment.value
-  if (!adjustment || adjustment.sessionId !== sessions.activeSessionId.value) return null
-  return { planTitle: adjustment.planTitle }
-})
 
 const activeProject = computed(() => {
   const projectSlug =
     activeCase.value?.projectSlug ||
     sessions.activeSession.value?.projectSlug ||
     props.initialProject
-  return props.portfolio.projects.find((project) => project.slug === projectSlug) ??
-    props.portfolio.projects[0]
+  return props.portfolio.projects.find((project) => project.slug === projectSlug)
+    ?? props.portfolio.projects[0]
 })
 
-const evidenceContext = computed(() =>
-  buildEvidenceDeskContext(
-    sessions.activeSession.value?.messages ?? [],
-    focusedAnswerMessageId.value,
-  ),
-)
+const activeSession = computed<AgentSession | null>(() => sessions.activeSession.value)
 
-// P3：刷新恢复得到的安全 Context Summary（仅活跃会话恢复卡，handoff §11/§17.15）。
-// 只读活跃会话内存中的服务端确定性投影；不展示问题/答案/handle/version。
-const recoveredSummary = computed(
-  () => sessions.activeSession.value?.activeContextSummary ?? null,
-)
-
-function clearFocusedAnswer() {
-  focusedAnswerMessageId.value = ''
-  answerFocusTarget.value = null
-}
-
-function resetEvidenceFocus() {
-  clearFocusedAnswer()
-  evidenceTab.value = 'EVIDENCE'
-}
-
-function coreEvidenceId(
-  session = sessions.activeSession.value,
-) {
-  const caseEvidenceId = activeCase.value?.evidence[0]?.id
-  if (caseEvidenceId) return caseEvidenceId
-  const projectSlug = session?.projectSlug || props.initialProject
-  const project =
-    props.portfolio.projects.find((item) => item.slug === projectSlug) ??
-    props.portfolio.projects[0]
-  return (
-    session?.evidenceId ||
-    project?.evidenceIds[0] ||
-    props.portfolio.evidence[0]?.id ||
-    ''
-  )
-}
-
-function syncActiveEvidence() {
-  activeEvidenceId.value = coreEvidenceId()
-}
-
-function createSession(initialEvidenceId = '') {
-  resetEvidenceFocus()
-  // 新会话重建页面主体绑定（见 subjectHintCleared 注释）。
-  subjectHintCleared.value = false
-  const project = activeProject.value
-  const evidenceId =
-    initialEvidenceId ||
-    activeCase.value?.evidence[0]?.id ||
-    project?.evidenceIds[0] ||
-    props.portfolio.evidence[0]?.id ||
-    ''
-  const session = sessions.createSession({
-    role: props.initialRole,
-    projectSlug: project?.slug ?? null,
-    evidenceId: evidenceId || null,
-  })
-  activeEvidenceId.value = coreEvidenceId(session)
-  // P3：新建会话无 Token，清空唯一槽位与 P3 UI 态（不继承上一会话 Token，handoff §10.1）。
-  syncResumeSlot(session.id)
-  clearActiveConversationUi()
-}
-
-function clearAnswerFailure() {
-  if (retryDelayTimer) clearInterval(retryDelayTimer)
-  retryDelayTimer = null
-  answerFailure.value = null
-  failedRequest.value = null
-}
-
-function failureMessage(action: ErrorAction): string {
-  switch (action) {
-    case 'RETRY_AFTER':
-      return '请求过于频繁，请在倒计时结束后重试'
-    case 'CORRECT_INPUT':
-      return '请检查问题后再试'
-    case 'NAVIGATE_BACK':
-      return '当前项目不可用，请返回作品集后继续浏览'
-    case 'RETRY':
-    default:
-      return 'Agent 暂时无法回答，请稍后重试'
+/** 建议问题：当前 Case 的建议问题优先（FREE_TEXT），其次 AGENT 预设（ASK/PRESET）。 */
+const suggestionChips = computed<readonly SuggestionChip[]>(() => {
+  if (activeCase.value !== undefined && activeCase.value.suggestedQuestions.length > 0) {
+    return activeCase.value.suggestedQuestions.slice(0, 3).map((text) => ({ text }))
   }
-}
+  return props.portfolio.questionPresets
+    .filter((preset) => preset.placements.includes('AGENT'))
+    .slice(0, 3)
+    .map((preset) => ({ text: preset.text, presetId: preset.id }))
+})
 
-function toAnswerFailure(error: unknown): AnswerFailureView {
-  if (error instanceof PortfolioApiError) {
+/** 来源面板：最近一条 ANSWER 的唯一 SourceCatalog。 */
+const activeSources = computed(() => {
+  const messages = [...(activeSession.value?.messages ?? [])]
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const turn = messages[index]?.turn
+    if (turn !== undefined && turn.kind === 'ANSWER') {
+      return turn.answer.sourceCatalog.sources
+    }
+  }
+  return []
+})
+
+function surfaceContextOf(session: AgentSession): SurfaceContext {
+  if (activeCase.value !== undefined) {
     return {
-      message: failureMessage(error.action),
-      action: error.action,
-      requestId: error.requestId,
-      retryAfterSeconds: error.action === 'RETRY_AFTER'
-        ? error.retryAfterSeconds
-        : undefined,
+      subjectHint: { kind: 'CASE', slug: activeCase.value.slug },
+      audienceRole: session.role,
+      requestSource: 'CASE',
     }
   }
-  return {
-    message: failureMessage('RETRY'),
-    action: 'RETRY',
-  }
-}
-
-const failureSuggestions = computed<ConversationSuggestedQuestion[]>(() => {
-  if (!answerFailure.value || answerFailure.value.action === 'NONE') return []
-  const project = activeProject.value
-  if (!project) return []
-  const local = project.suggestedQuestions.map((text) => ({
-    text,
-    projectSlug: project.slug,
-    caseSlug: null,
-    facet: null,
-  }))
-  return completeSuggestedQuestions(local, props.portfolio, {
-    currentQuestion: failedRequest.value?.question,
-    recentQuestions: (sessions.activeSession.value?.messages ?? [])
-      .filter((message) => message.role === 'USER')
-      .slice(-6)
-      .map((message) => message.content),
-  }).questions
-})
-
-function invalidatePendingRequest() {
-  activeRequestController?.abort()
-  activeRequestController = null
-  requestVersion += 1
-  activeRequest = null
-  pending.value = false
-}
-
-function buildSemanticContext(
-  session: NonNullable<typeof sessions.activeSession.value>,
-  context: AnswerRequestContext,
-): SemanticContextRequest {
-  const activeSubjects = context.caseSlug
-    ? [{ subjectType: 'CASE', subjectId: context.caseSlug }]
-    : subjectHintCleared.value || !context.projectSlug
-      ? []
-      : [{ subjectType: 'PROJECT', subjectId: context.projectSlug }]
-  return {
-    activeSubjects,
-    resultReferences: [],
-    audienceRole: session.role,
-    requestSource: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
-    coveredTopics: [...session.coveredTopics],
-  }
-}
-
-function completedConversationHistory(
-  messages: AgentSession['messages'],
-): AgentSession['messages'] {
-  const completed: AgentSession['messages'] = []
-  for (let index = 0; index + 1 < messages.length; index += 1) {
-    const user = messages[index]
-    const assistant = messages[index + 1]
-    if (user?.role !== 'USER' || assistant?.role !== 'AGENT') continue
-    const answer = assistant.answer
-    const hasTrustedContent = answer?.resolution === 'ANSWERED'
-      && (Boolean(answer.summary?.trim())
-        || answer.sections.some((section) => Boolean(section.content.trim())))
-    if (!hasTrustedContent) continue
-    completed.push(user, assistant)
-    index += 1
-  }
-  return completed.slice(-40)
-}
-
-interface SemanticContinuation {
-  question: string
-  semanticContext: SemanticContextRequest
-}
-
-// 体验闭环（2026-08-17）：自由追问携带最近一轮后端签发的可信续接句柄，
-// 「第二个呢」等指代由服务端在可信 Context 内定位，不依赖页面默认项目猜测主体。
-function latestContinuationReference(
-  session: NonNullable<typeof sessions.activeSession.value>,
-): ContextReferenceRequest | undefined {
-  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
-    const answer = session.messages[index]?.answer
-    if (!answer?.semanticTurn) continue
-    if (answer.semanticTurn.disposition !== 'READY'
-      && answer.semanticTurn.disposition !== 'PARTIAL_READY') continue
-    const tasks = [...answer.semanticTurn.completedTasks]
-    for (let taskIndex = tasks.length - 1; taskIndex >= 0; taskIndex -= 1) {
-      const task = tasks[taskIndex]
-      if (!task) continue
-      const handle = task.continuationContext?.contextHandle ?? task.contextHandle
-      if (!handle) continue
-      const expectedContextType = task.continuationContext?.contextType
-        ?? (task.resultPayload.kind === 'RECOMMENDATION_RESULT'
-          ? 'RECOMMENDATION'
-          : 'RECENT_SEMANTIC_TASK')
-      return { contextHandle: handle, expectedContextType }
+  if (session.projectSlug !== null) {
+    return {
+      subjectHint: { kind: 'PROJECT', slug: session.projectSlug },
+      audienceRole: session.role,
+      requestSource: 'AGENT_PAGE',
     }
   }
-  return undefined
+  return { audienceRole: session.role, requestSource: 'AGENT_PAGE' }
 }
 
-// 体验闭环 §7：推荐回答后的补全建议优先围绕当前结果集合。
-function recommendedProjectSlugs(
-  mapped: ReturnType<typeof mapAnswerResponse>,
-): string[] {
-  const semanticResult = mapped.semanticTurn?.completedTasks.find(
-    (task) => task.resultPayload.kind === 'RECOMMENDATION_RESULT',
-  )?.resultPayload
-  const items = semanticResult?.kind === 'RECOMMENDATION_RESULT'
-    ? semanticResult.recommendations
-    : mapped.portfolioRecommendation?.items ?? []
-  const slugs: string[] = []
-  for (const item of items) {
-    const slug = props.portfolio.projects.find(
-      (project) => project.slug === item.portfolioId,
-    )?.slug
-    if (slug && !slugs.includes(slug)) slugs.push(slug)
+function turnWindowSummary(turn: PublicAgentTurn): string {
+  if (turn.kind === 'ANSWER') {
+    return turn.answer.goalResults.map((goal) => goal.label).join('；')
   }
-  return slugs
+  if (turn.kind === 'CLARIFICATION') return turn.clarification.prompt
+  return turn.message
 }
 
-// FE-F08：continuation 生命周期统一收口。
-// 仅当一轮到达「已回答且无待确认/待澄清/失效」终态时才清除；
-// 待确认、澄清中、计划失效都仍需原问题与结构化上下文。
-function settleSemanticContinuation(sessionId: string, answer: ReturnType<typeof mapAnswerResponse>) {
-  const semanticTurn = answer.semanticTurn
-  const hasPendingState = semanticTurn !== undefined
-    && (semanticTurn.disposition === 'CONFIRMATION_REQUIRED'
-      || semanticTurn.clarification !== undefined
-      || semanticTurn.planChange !== undefined)
-  if (!hasPendingState) semanticContinuations.delete(sessionId)
+function conversationWindowOf(session: AgentSession): ConversationWindowMessage[] {
+  const window: ConversationWindowMessage[] = []
+  for (const message of session.messages) {
+    const content = message.role === 'USER'
+      ? message.content
+      : message.turn === undefined
+        ? ''
+        : turnWindowSummary(message.turn)
+    if (content.length === 0) continue
+    window.push({
+      role: message.role === 'USER' ? 'USER' : 'ASSISTANT',
+      content: content.slice(0, FREE_TEXT_MAX_LENGTH),
+    })
+  }
+  const bounded = window.slice(-CONVERSATION_WINDOW_LIMIT)
+  // 合同要求 USER/ASSISTANT 交替且以 USER 开头；截断后若首条不是 USER 则丢弃。
+  return bounded[0]?.role === 'USER' ? bounded : bounded.slice(1)
 }
 
-function clearSemanticContinuation(sessionId: string) {
-  semanticContinuations.delete(sessionId)
+function bindConversationEnvelope(sessionId: string, conversation: {
+  conversationId: string
+  resumeToken?: string
+} | null): void {
+  if (conversation === null) return
+  const isActive = sessions.setSessionConversation(sessionId, conversation)
+  if (isActive && conversation.resumeToken !== undefined) {
+    resume.setActiveToken(conversation.resumeToken)
+  }
 }
 
-// ── P3：ResumeToken / 会话续接 / 恢复 / 清除（handoff §5, §10–§13）──────────────
-
-/** 把指定会话的内存 Token 同步到唯一 sessionStorage 槽位（仅活跃会话）。 */
-function syncResumeSlot(sessionId: string): void {
-  if (sessionId !== sessions.activeSessionId.value) return
-  const token = sessions.getSessionResumeToken(sessionId)
-  if (token) resume.setActiveToken(token)
-  else resume.clearActiveToken()
-}
-
-/**
- * 处理会话续接状态与 ResumeToken（handoff §5）。
- * degraded 与 continuationStatus 是不同维度：Context 写失败不让前端把证据充分的答案标成证据不足。
- */
-function applyConversation(
+function failureViewOf(
   sessionId: string,
-  conversation: ReturnType<typeof mapAnswerResponse>['conversation'],
-): void {
-  if (conversation === undefined) return
-  switch (conversation.continuationStatus) {
-    case 'AVAILABLE':
-      // 首次签发或明确重签时才返回 Token（handoff §17.14）；P3 v1 不逐请求轮换。
-      if (conversation.resumeToken) {
-        const isActive = sessions.setSessionResumeToken(sessionId, conversation.resumeToken)
-        if (isActive) resume.setActiveToken(conversation.resumeToken)
-      }
-      continuationNotice.value = null
-      break
-    case 'PERSISTENCE_UNAVAILABLE':
-      // 非阻断提示：当前答案仍可能完全有效，只是不保证刷新恢复/连续调整（handoff §13.1）。
-      continuationNotice.value = '当前会话的连续追问或刷新恢复暂不可用，但不影响这次回答。'
-      break
-    case 'CONTEXT_EXPIRED':
-      // 依赖 Context 的任务不可用或恢复失败：删除本地 Token 与 handle，按新会话开始。
-      sessions.clearSessionResumeToken(sessionId)
-      syncResumeSlot(sessionId)
-      break
-    case 'CONTEXT_CLEARED':
-      sessions.clearSessionResumeToken(sessionId)
-      syncResumeSlot(sessionId)
-      break
-    case 'NOT_APPLICABLE':
-    default:
-      break
+  requestId: string,
+  command: AgentTurnCommand,
+  f: AgentTurnFailure,
+): FailureView {
+  return {
+    message: f.message,
+    retryable: f.retryable,
+    ...(f.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: f.retryAfterSeconds }),
+    requestId,
+    command,
+    sessionId,
   }
 }
 
-/** 清除当前页签与活跃会话相关的 P3 UI 状态（回执、续接提示）。 */
-function clearActiveConversationUi(): void {
-  completionReceipt.value = null
-  continuationNotice.value = null
+interface TurnOverrides {
+  surfaceContext?: SurfaceContext
+  conversationWindow?: readonly ConversationWindowMessage[]
+  resumeToken?: string
+  displayQuestion?: string
 }
 
-async function requestAnswer(context: AnswerRequestContext, appendUser: boolean) {
-  const session = sessions.sessions.value.find((item) => item.id === context.sessionId)
-  if (!session || pending.value || disposed) {
-    if (!session) clearAnswerFailure()
-    return
-  }
-
-  // P-1（审计缺陷 #2）：构造出的 semanticContext 必须真实进入请求。
-  // 修复前它只写入 semanticContinuations（澄清/调整续接用），wire 请求仍缺
-  // 首轮主体上下文；continuation 存储与实际发送必须来自同一份上下文。
-  const semanticContext = context.question && context.action === undefined
-    ? context.semanticContext ?? buildSemanticContext(session, context)
-    : context.semanticContext
-  if (context.question && context.action === undefined && semanticContext) {
-    semanticContinuations.set(session.id, {
-      question: context.question,
-      semanticContext,
-    })
-  }
-
-  const preparedContext: AnswerRequestContext = {
-    ...context,
-    ...(semanticContext === undefined ? {} : { semanticContext }),
-    ...(context.requestToken
-      ? {}
-      : {
-          coveredTopics: context.coveredTopics ?? [...session.coveredTopics],
-          requestToken: createRequestToken(),
-        }),
-  }
+async function runTurn(
+  sessionId: string,
+  requestId: string,
+  command: AgentTurnCommand,
+  overrides: TurnOverrides = {},
+): Promise<void> {
+  const session = sessions.sessions.value.find((item) => item.id === sessionId)
+  if (session === undefined) return
   const controller = new AbortController()
-  clearFocusedAnswer()
-  // P3：新一轮请求开始时清除上一轮的回执/续接提示（恢复卡由活跃会话摘要驱动，不受影响）。
-  clearActiveConversationUi()
-  if (appendUser) {
-    if (!context.question) return
-    sessions.appendMessage(session.id, {
-      role: 'USER',
-      content: context.question,
-      answer: null,
-      evidenceIds: [],
-    })
+  pending.value = {
+    requestId,
+    sessionId,
+    question: overrides.displayQuestion ?? displayQuestionOf(command),
+    controller,
   }
-  const request = ++requestVersion
-  activeRequest = preparedContext
-  activeRequestController = controller
-  pending.value = true
-  clearAnswerFailure()
-  const requestStartedAt = Date.now()
-  try {
-    // Build conversation history from current session (last 40 messages = 20 rounds)
-    const completedMessages = session.messages.at(-1)?.role === 'USER'
-      ? session.messages.slice(0, -1)
-      : session.messages
-    const history = completedConversationHistory(completedMessages)
-      .map((m) => {
-        let content = m.content
-        if (m.role === 'AGENT' && m.answer) {
-          if (m.answer.summary) {
-            content = m.answer.summary
-          } else if (m.answer.sections?.length) {
-            content = m.answer.sections.map((s) => s.content).join('\n\n')
-          }
-        }
-        return {
-          role: m.role === 'USER' ? 'USER' as const : 'ASSISTANT' as const,
-          content,
-        }
-      })
-
-    const response = await askWithV3ContractFallback({
-        turnId: globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
-        requestToken: preparedContext.requestToken,
-        action: preparedContext.action,
-        agentTurnContract: preparedContext.agentTurnContract ?? 'stp-v2',
-        planConfirmation: preparedContext.planConfirmation,
-        semanticContext: preparedContext.semanticContext,
-        invalidatedPlanReference: preparedContext.invalidatedPlanReference,
-        planAdjustment: preparedContext.planAdjustment,
-        clarificationResolution: preparedContext.clarificationResolution,
-        signal: controller.signal,
-        projectSlug: preparedContext.caseSlug ? null : preparedContext.projectSlug,
-        caseSlug: preparedContext.caseSlug ?? null,
-        audienceRole: session.role,
-        source: context.caseSlug ? 'CASE' : 'AGENT_PAGE',
-        focusEvidenceIds: session.evidenceId ? [session.evidenceId] : [],
-        questionPresetId: preparedContext.questionPresetId,
-        contractVersion: preparedContext.contractVersion,
-        question: preparedContext.question,
-        messages: history,
-        coveredTopics: preparedContext.coveredTopics,
-        recommendationContext: preparedContext.recommendationContext,
-        // P3：已有会话才发送 ResumeToken；首问不发送（handoff §3.1）。
-        resumeToken: session.resumeToken,
-        // P3：从结果继续时发送顶层 contextReference（handoff §3.2）。
-        contextReference: preparedContext.contextReference,
-      }, (request) => askWithPresetContractRetry(request, askQuestion))
-    if (disposed || request !== requestVersion) return
-    // P3：200 响应先按 responseKind 分流（handoff §4）。requestVersion 是单调 attempt 序号，
-    // 更早 attempt 的迟到响应（含旧 Token）在此被丢弃，无法覆盖新回执（handoff §4/§14）。
-    const resolved = resolveAnswerSuccess(response)
-    if (resolved.kind === 'COMPLETION_RECEIPT') {
-      // 幂等完成回执：不伪造答案气泡、不自动换 token 重发。
-      // 可能重签 Token（首轮丢响应恢复）——以回执中的 Token 为准（handoff §4, §17.17）。
-      applyConversation(session.id, resolved.response.conversation)
-      completionReceipt.value = {
-        turnId: resolved.response.turnId,
-        completedTasks: resolved.response.completedTasks.map((task) => ({
-          displayIndex: task.displayIndex,
-          status: task.status,
-          ...(task.contextHandle === undefined ? {} : { contextHandle: task.contextHandle }),
-        })),
-      }
-      return
-    }
-    if (resolved.kind === 'CONTRACT_ERROR') {
-      // 未知 responseKind → 契约错误恢复（不向用户显示原始值，handoff §9）。
-      throw new Error('P3_CONTRACT_ERROR')
-    }
-    const answerResponse = resolved.response
-    if (answerResponse.questionPresetId && answerResponse.contractVersion) {
-      resolvedContractVersions.set(answerResponse.questionPresetId, answerResponse.contractVersion)
-    }
-    if (isPresetContractStale(answerResponse)) {
-      answerFailure.value = {
-        message: '这个推荐问题正在更新，请刷新后重试。',
-        action: 'NONE',
-      }
-      return
-    }
-    if (isPresetContractUnavailable(answerResponse)) {
-      answerFailure.value = {
-        message: '这个推荐问题暂时无法回答，内容正在更新。',
-        action: 'NONE',
-      }
-      return
-    }
-    sessions.acceptSemanticTurnResponse(session.id, answerResponse)
-    const mapped = mapAnswerResponse(answerResponse)
-    // P3：会话续接状态与 ResumeToken（handoff §5）。独立于 degraded，不改 Evidence 状态。
-    applyConversation(session.id, mapped.conversation)
-    settleSemanticContinuation(session.id, mapped)
-    if (activeAdjustment.value?.sessionId === session.id) activeAdjustment.value = null
-    if (!mapped.referenceContext
-      && mapped.resolution === 'ANSWERED'
-      && (mapped.answerScope === 'PORTFOLIO' || mapped.answerScope === 'MIXED')
-      && (preparedContext.projectSlug || preparedContext.caseSlug)) {
-      const referencedClaimIds = [...new Set(
-        mapped.sections.flatMap((section) => section.claimIds ?? []),
-      )]
-      mapped.referenceContext = {
-        previousContentVersion: mapped.contentVersion,
-        projectSlugs: preparedContext.projectSlug ? [preparedContext.projectSlug] : [],
-        caseSlugs: preparedContext.caseSlug ? [preparedContext.caseSlug] : [],
-        questionPresetId: preparedContext.questionPresetId,
-        referencedClaimIds,
-        followUpAction: 'RELATED_QUESTION',
-      }
-    }
-    clearFocusedAnswer()
-    const completed = completeSuggestedQuestions(mapped.suggestedQuestions, props.portfolio, {
-      currentQuestion: preparedContext.question,
-      recentQuestions: session.messages
-        .filter((message) => message.role === 'USER')
-        .slice(-6)
-        .map((message) => message.content),
-      preferredProjects: recommendedProjectSlugs(mapped),
-    })
-    mapped.suggestedQuestions = completed.questions
-    if (completed.recoveredCount > 0) {
-      frontendDiagnostics.report(createFrontendDiagnosticEvent({
-        eventName: 'frontend.response.invalid',
-        errorCode: 'SUGGESTION_CONTRACT_RECOVERED',
-        errorKind: 'INVALID_RESPONSE',
-        turnId: mapped.turnId,
-        recoveredCount: completed.recoveredCount,
-        ...(mapped.guidanceStage === null ? {} : { guidanceStage: mapped.guidanceStage }),
-      }))
-    }
-    sessions.appendMessage(session.id, {
-      role: 'AGENT',
-      content: mapped.summary,
-      answer: mapped,
-      evidenceIds: mapped.evidenceIds,
-    })
-    sessions.applyAnswerProgress(session.id, mapped)
-    frontendDiagnostics.report(createFrontendDiagnosticEvent({
-      eventName: 'frontend.agent.request.completed',
-      turnId: mapped.turnId,
-      durationBucket: durationBucketFor(Date.now() - requestStartedAt),
-      httpStatus: 200,
-      ...(mapped.generationMode === undefined
-        ? {}
-        : { generationMode: mapped.generationMode }),
-      degraded: mapped.degraded === true,
-      ...(mapped.guidanceStage === null
-        ? {}
-        : { guidanceStage: mapped.guidanceStage }),
-      suggestedQuestionCount: mapped.suggestedQuestions.length,
-      contentVersion: mapped.contentVersion,
-    }))
-  } catch (error) {
-    if (disposed || request !== requestVersion) return
-    if (controller.signal.aborted) {
-      clearAnswerFailure()
-      return
-    }
-    // P3：恢复 Token 在 askQuestion 中被判非法（会话已失效）：清除本地 Token 并提示重新提问，
-    // 不静默吞掉（handoff §11/§17.11）。重试会以新会话（无 Token）发送。
-    if (error instanceof PortfolioApiError && error.code === 'INVALID_CONVERSATION_RESUME_TOKEN') {
-      sessions.clearSessionResumeToken(session.id)
-      syncResumeSlot(session.id)
-      failedRequest.value = { ...preparedContext, contextReference: undefined }
-      answerFailure.value = {
-        message: '当前会话已失效，请重新提问以开始新的对话。',
-        action: 'RETRY',
-      }
-      return
-    }
-    if (error instanceof PortfolioApiError
-      && error.code === 'AGENT_TURN_CONTRACT_UNSUPPORTED') {
-      const basicContextReference = preparedContext.contextReference === undefined
-        ? undefined
-        : {
-            contextHandle: preparedContext.contextReference.contextHandle,
-            expectedContextType: preparedContext.contextReference.expectedContextType,
-          }
-      failedRequest.value = {
-        ...preparedContext,
-        agentTurnContract: 'stp-v1',
-        contextReference: basicContextReference,
-        requestToken: createRequestToken(),
-      }
-      answerFailure.value = {
-        message: '当前服务不支持增强回答协议。你可以主动以基础模式继续。',
-        action: 'UPGRADE_REQUIRED',
-        requestId: error.requestId,
-      }
-      return
-    }
-    if (error instanceof PortfolioApiError && error.action === 'NONE') {
-      clearAnswerFailure()
-      return
-    }
-    failedRequest.value = preparedContext
-    const failure = toAnswerFailure(error)
-    // P3：为幂等错误码提供准确文案（动作映射已保证行为，这里只精修文案）。
-    if (error instanceof PortfolioApiError && error.code === 'REQUEST_IN_PROGRESS') {
-      failure.message = '上一个相同请求仍在处理中，请稍候再试（不会重复执行）。'
-    } else if (error instanceof PortfolioApiError && error.code === 'IDEMPOTENCY_KEY_CONFLICT') {
-      failure.message = '请求状态冲突，请刷新页面后再试。'
-    }
-    answerFailure.value = failure
-    if (failure.retryAfterSeconds) {
-      startRetryDelay(failure.retryAfterSeconds)
-    }
-  } finally {
-    if (!disposed && request === requestVersion) {
-      activeRequest = null
-      activeRequestController = null
-      pending.value = false
-    }
-  }
-}
-
-function startRetryDelay(seconds: number) {
-  if (retryDelayTimer) clearInterval(retryDelayTimer)
-  if (!answerFailure.value) return
-  answerFailure.value = {
-    ...answerFailure.value,
-    retryAfterSeconds: Math.max(1, Math.ceil(seconds)),
-  }
-  retryDelayTimer = setInterval(() => {
-    if (!answerFailure.value) return
-    const retryAfterSeconds = Math.max(0, (answerFailure.value.retryAfterSeconds ?? 0) - 1)
-    answerFailure.value = { ...answerFailure.value, retryAfterSeconds }
-    if (retryAfterSeconds === 0 && retryDelayTimer) {
-      clearInterval(retryDelayTimer)
-      retryDelayTimer = null
-    }
-  }, 1_000)
-}
-
-function cancelAnswer() {
-  activeRequestController?.abort()
-}
-
-function submit(question: string) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project) return
-  activeAdjustment.value = null
-  const preset = props.portfolio.questionPresets.find(
-    (item) => item.projectSlug === project.slug && item.text === question,
-  )
-  void requestAnswer(
+  failure.value = null
+  const resumeToken = overrides.resumeToken ?? session.resumeToken
+  const result = await submitAgentTurn(
     {
-      sessionId: session.id,
-      projectSlug: project.slug,
-      caseSlug: activeCaseSlug.value || null,
-      question,
-      questionPresetId: preset?.id,
-      contractVersion: preset
-        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion
-        : undefined,
-      // 体验闭环：最近一轮有可信句柄时，普通追问自动携带，由后端裁决是否消费。
-      contextReference: latestContinuationReference(session),
+      requestId,
+      command,
+      surfaceContext: overrides.surfaceContext ?? surfaceContextOf(session),
+      conversationWindow: overrides.conversationWindow ?? conversationWindowOf(session),
+      ...(resumeToken === undefined ? {} : { resumeToken }),
     },
-    true,
+    { signal: controller.signal },
   )
-}
-
-function confirmSemanticPlan(confirmation: OpaquePlanConfirmation) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project || pending.value) return
-  // stale-click guard + 唯一未决动作校验：仅防止旧卡/过期卡触发，不是安全边界。
-  const action = activeSemanticActionFor(session.id)
-  if (action?.kind !== 'CONFIRMATION' || action.confirmationId !== confirmation.confirmationId) return
-  if (session.pendingConfirmation?.confirmationId !== confirmation.confirmationId) return
-  void requestAnswer({
-    sessionId: session.id,
-    projectSlug: project.slug,
-    caseSlug: activeCaseSlug.value || null,
-    action: 'CONFIRM_PLAN',
-    planConfirmation: confirmation,
-  }, false)
-}
-
-function latestDisplayPlan(sessionId: string) {
-  const session = sessions.sessions.value.find((item) => item.id === sessionId)
-  if (!session) return undefined
-  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
-    const plan = session.messages[index]?.answer?.semanticTurn?.displayPlan
-    if (plan) return plan
-  }
-  return undefined
-}
-
-// 唯一未决动作（P1 收口）：事件身份校验的唯一依据。
-// 旧卡片即使因时序或注入触发事件，也不得消费或清除属于最新轮次的 continuation。
-function activeSemanticActionFor(sessionId: string) {
-  const session = sessions.sessions.value.find((item) => item.id === sessionId)
-  if (!session) return null
-  return resolveActiveSemanticAction(session, (turnId) => sessions.isPlanChangeDismissed(turnId))
-}
-
-// 调整模式（决策 1）：进入需要当前未决动作为待确认计划，且引用齐备。
-function adjustSemanticPlan() {
-  const session = sessions.activeSession.value
-  if (!session || pending.value || !session.pendingConfirmation) return
-  if (activeSemanticActionFor(session.id)?.kind !== 'CONFIRMATION') return
-  const plan = latestDisplayPlan(session.id)
-  if (!plan?.pendingPlanReference) return
-  activeAdjustment.value = {
-    sessionId: session.id,
-    planReference: plan.pendingPlanReference,
-    planTitle: plan.summaryLabel
-      ? `${plan.taskCount} 步 · ${plan.summaryLabel}`
-      : `${plan.taskCount} 项任务`,
-  }
-}
-
-function exitPlanAdjustment() {
-  activeAdjustment.value = null
-}
-
-function submitPlanAdjustment(instruction: string) {
-  const adjustment = activeAdjustment.value
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  const continuation = session ? semanticContinuations.get(session.id) : undefined
-  const trimmed = instruction.trim()
-  if (!adjustment || !session || !project || !continuation || !trimmed || pending.value) return
-  if (adjustment.sessionId !== session.id) return
-  void requestAnswer({
-    sessionId: session.id,
-    projectSlug: project.slug,
-    caseSlug: activeCaseSlug.value || null,
-    action: 'ASK',
-    question: continuation.question,
-    semanticContext: {
-      ...continuation.semanticContext,
-      pendingPlanReference: { ...adjustment.planReference },
-      coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
-    },
-    planAdjustment: {
-      instruction: trimmed,
-      pendingPlanReference: { ...adjustment.planReference },
-    },
-  }, false)
-}
-
-function cancelSemanticPlan() {
-  const session = sessions.activeSession.value
-  if (!session) return
-  sessions.clearPendingConfirmation(session.id)
-  activeAdjustment.value = null
-  clearSemanticContinuation(session.id)
-}
-
-// 澄清提交（§11.1 目标合同）：受控 clarificationResolution，不按 fieldKey 猜类型（FE-F03）。
-// turnId 必须对应当前唯一未决澄清动作，旧澄清卡的事件一律拒绝（FE-F11）。
-function submitClarification(payload: {
-  turnId: string
-  clarification: ClarificationView
-  submission: ClarificationSubmission
-}) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  const continuation = session ? semanticContinuations.get(session.id) : undefined
-  if (!session || !project || !continuation || pending.value) return
-
-  const action = activeSemanticActionFor(session.id)
-  if (action?.kind !== 'CLARIFICATION' || action.turnId !== payload.turnId) return
-
-  const { clarification, submission } = payload
-  if (submission.kind === 'MULTI_CHOICE') {
-    // 合同暂未提供多值 resolution 通道：受控主体引用合并进 activeSubjects（全部受控才可到此）。
-    const references = submission.options
-      .map((option) => option.subjectReference)
-      .filter((reference): reference is NonNullable<typeof reference> => reference !== null)
-    if (references.length !== submission.options.length || references.length === 0) return
-    const existing = continuation.semanticContext.activeSubjects ?? []
-    const merged = [...existing]
-    for (const reference of references) {
-      if (!merged.some((item) => item.subjectType === reference.subjectType
-        && item.subjectId === reference.subjectId)) {
-        merged.push({ ...reference })
-      }
+  if (disposed) return
+  pending.value = null
+  if (!result.ok) {
+    // 取消是本地先行的：ABORTED 不追加消息、不显示错误（交接 §8）。
+    if (result.failure.kind !== 'ABORTED') {
+      failure.value = failureViewOf(sessionId, requestId, command, result.failure)
     }
-    void requestAnswer({
-      sessionId: session.id,
-      projectSlug: project.slug,
-      caseSlug: activeCaseSlug.value || null,
-      action: 'ASK',
-      question: continuation.question,
-      semanticContext: {
-        ...continuation.semanticContext,
-        activeSubjects: merged,
-        coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
-      },
-    }, false)
     return
   }
-
-  if (!clarification.clarificationId || !clarification.promptCode) return
-  const resolution: ClarificationResolutionRequest = submission.kind === 'TEXT'
-    ? {
-        clarificationId: clarification.clarificationId,
-        promptCode: clarification.promptCode,
-        fieldKey: submission.fieldKey,
-        textValue: submission.text,
-      }
-    : {
-        clarificationId: clarification.clarificationId,
-        promptCode: clarification.promptCode,
-        fieldKey: submission.fieldKey,
-        selectedOption: {
-          value: submission.option.value,
-          ...(submission.option.subjectReference === null
-            ? {}
-            : { subjectReference: { ...submission.option.subjectReference } }),
-        },
-      }
-  void requestAnswer({
-    sessionId: session.id,
-    projectSlug: project.slug,
-    caseSlug: activeCaseSlug.value || null,
-    action: 'ASK',
-    question: continuation.question,
-    semanticContext: {
-      ...continuation.semanticContext,
-      coveredTopics: [...(continuation.semanticContext.coveredTopics ?? [])],
-    },
-    clarificationResolution: resolution,
-  }, false)
-}
-
-function regenerateSemanticPlan(turnId: string) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  const continuation = session ? semanticContinuations.get(session.id) : undefined
-  if (!session || !project || !continuation || pending.value) return
-  // 只有当前唯一未决失效动作可以触发重生成；旧失效卡的注入事件一律拒绝。
-  const action = activeSemanticActionFor(session.id)
-  if (action?.kind !== 'PLAN_INVALIDATION' || action.turnId !== turnId) return
-  const invalidatedPlanReference = session.messages
-    .find((message) => message.answer?.turnId === turnId)
-    ?.answer?.semanticTurn?.planChange?.invalidatedPlanReference
-  if (!invalidatedPlanReference) return
-  void requestAnswer({
-    sessionId: session.id,
-    projectSlug: project.slug,
-    caseSlug: activeCaseSlug.value || null,
-    action: 'REGENERATE_PLAN',
-    question: continuation.question,
-    semanticContext: continuation.semanticContext,
-    invalidatedPlanReference,
-  }, false)
-}
-
-// 失效卡「暂不处理」（决策 3）：纯本地 dismiss + continuation 清理，不发请求。
-// 旧失效卡绝不清除新确认计划的 continuation——只有当前未决失效动作可 dismiss。
-function dismissSemanticPlanChange(turnId: string) {
-  const session = sessions.activeSession.value
-  if (!session) return
-  const action = activeSemanticActionFor(session.id)
-  if (action?.kind !== 'PLAN_INVALIDATION' || action.turnId !== turnId) return
-  sessions.dismissPlanChange(turnId)
-  clearSemanticContinuation(session.id)
-}
-
-function submitSuggestion(suggestion: ConversationSuggestedQuestion) {
-  const session = sessions.activeSession.value
-  if (!session) return
-  activeAdjustment.value = null
-  // 带主体的建议问题是显式主体选择，重建页面主体绑定（见 subjectHintCleared 注释）。
-  if (suggestion.projectSlug || suggestion.caseSlug) subjectHintCleared.value = false
-  const presetCandidates = props.portfolio.questionPresets.filter((preset) => {
-    if (preset.text !== suggestion.text) return false
-    if (suggestion.projectSlug && preset.projectSlug !== suggestion.projectSlug) return false
-    if (suggestion.caseSlug && !preset.caseSlugs.includes(suggestion.caseSlug)) return false
-    return true
+  bindConversationEnvelope(sessionId, result.conversation)
+  sessions.appendMessage(sessionId, {
+    role: 'AGENT',
+    content: turnWindowSummary(result.turn),
+    turn: result.turn,
   })
-  const preset = presetCandidates.length === 1 ? presetCandidates[0] : undefined
-  void requestAnswer(
-    {
-      sessionId: session.id,
-      projectSlug: suggestion.projectSlug ?? null,
-      caseSlug: suggestion.caseSlug ?? null,
-      question: suggestion.text,
-      questionPresetId: preset?.id,
-      contractVersion: preset
-        ? resolvedContractVersions.get(preset.id) ?? preset.contractVersion
-        : undefined,
-    },
-    true,
+  await focusComposer()
+}
+
+function displayQuestionOf(command: AgentTurnCommand): string {
+  if (command.kind === 'ASK') {
+    return command.input.kind === 'FREE_TEXT' ? command.input.text : ''
+  }
+  if (command.kind === 'CONTINUE') {
+    return command.text
+  }
+  return '补充澄清'
+}
+
+async function focusComposer(): Promise<void> {
+  await nextTick()
+  composerInput.value?.focus()
+}
+
+function ensureSession(): AgentSession {
+  const current = sessions.activeSession.value
+  if (current !== null) return current
+  return sessions.createSession({
+    role: props.initialRole,
+    projectSlug: props.initialProject || null,
+  })
+}
+
+function submitFreeText(rawText: string): void {
+  const text = rawText.trim()
+  if (text.length === 0 || pending.value !== null) return
+  const session = ensureSession()
+  // conversationWindow 只携带本轮之前的会话历史；本轮输入已在 command 内。
+  const window = conversationWindowOf(session)
+  sessions.appendMessage(session.id, { role: 'USER', content: text })
+  questionDraft.value = ''
+  void runTurn(
+    session.id,
+    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    { kind: 'ASK', input: { kind: 'FREE_TEXT', text: text.slice(0, FREE_TEXT_MAX_LENGTH) } },
+    { conversationWindow: window },
   )
 }
 
-function clearCaseContext() {
-  activeCaseSlug.value = ''
-  // 清除后不再把展示回退项目当作页面主体（见 subjectHintCleared 注释）。
-  subjectHintCleared.value = true
-  syncActiveEvidence()
+function submitPreset(presetId: string): void {
+  if (pending.value !== null) return
+  const preset = props.portfolio.questionPresets.find((item) => item.id === presetId)
+  if (preset === undefined) return
+  const session = ensureSession()
+  const window = conversationWindowOf(session)
+  sessions.appendMessage(session.id, { role: 'USER', content: preset.text })
+  void runTurn(
+    session.id,
+    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    {
+      kind: 'ASK',
+      input: { kind: 'PRESET', presetId: preset.id, presetRevision: preset.contractVersion },
+    },
+    { conversationWindow: window },
+  )
 }
 
-function retryAnswer() {
-  const failure = answerFailure.value
-  if (!failure || !['RETRY', 'RETRY_AFTER'].includes(failure.action)) return
-  if ((failure.retryAfterSeconds ?? 0) > 0) return
-  const context = failedRequest.value
-  if (!context) return
-  const sessionExists = sessions.sessions.value.some((item) => item.id === context.sessionId)
-  if (!sessionExists) {
-    clearAnswerFailure()
+function handleSelectAction(action: SuggestedAction): void {
+  if (pending.value !== null) return
+  const session = ensureSession()
+  const text = action.inputText ?? action.label
+  let command: AgentTurnCommand
+  if (action.continuation !== undefined) {
+    command = {
+      kind: 'CONTINUE',
+      contextHandle: action.continuation.contextHandle,
+      ...(action.continuation.resultItemId === undefined
+        ? {}
+        : { resultItemId: action.continuation.resultItemId }),
+      text,
+    }
+  } else {
+    command = { kind: 'ASK', input: { kind: 'FREE_TEXT', text } }
+  }
+  const window = conversationWindowOf(session)
+  sessions.appendMessage(session.id, { role: 'USER', content: action.label })
+  void runTurn(
+    session.id,
+    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    command,
+    { conversationWindow: window },
+  )
+}
+
+function handleClarification(payload: ClarificationSubmissionPayload): void {
+  if (pending.value !== null) return
+  // 冻结合同：RESOLVE_CLARIFICATION 只携带单一 answer（CHOICE|TEXT）。
+  const first = payload.answers[0]
+  if (payload.answers.length !== 1 || first === undefined) {
+    failure.value = {
+      message: '当前澄清包含多个字段，暂时无法在此提交，请直接换个说法提问。',
+      retryable: false,
+    }
     return
   }
-  void requestAnswer(context, false)
+  const answer: ClarificationAnswer = first.kind === 'SINGLE_CHOICE'
+    ? { kind: 'CHOICE', choiceId: first.choiceId }
+    : { kind: 'TEXT', text: first.text }
+  const session = ensureSession()
+  void runTurn(session.id, globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`, {
+    kind: 'RESOLVE_CLARIFICATION',
+    clarificationId: payload.clarificationId,
+    answer,
+  })
 }
 
-function continueInBasicMode() {
-  if (answerFailure.value?.action !== 'UPGRADE_REQUIRED') return
-  const context = failedRequest.value
-  if (!context || context.agentTurnContract !== 'stp-v1') return
-  if (!sessions.sessions.value.some((item) => item.id === context.sessionId)) {
-    clearAnswerFailure()
+function cancelTurn(): void {
+  const current = pending.value
+  if (current === null) return
+  // 先结束本地等待，再 best-effort DELETE + abort；DELETE 结果不伪造本地状态。
+  pending.value = null
+  const token = sessions.getSessionResumeToken(current.sessionId)
+  void cancelAgentTurn(current.requestId, token)
+  current.controller.abort()
+}
+
+function retryFailure(): void {
+  const current = failure.value
+  if (
+    current === null
+    || current.requestId === undefined
+    || current.command === undefined
+    || current.sessionId === undefined
+  ) {
     return
   }
-  void requestAnswer(context, false)
+  // 幂等重试：同一 requestId 复用（交接 §8/D-30）。
+  failure.value = null
+  void runTurn(current.sessionId, current.requestId, current.command)
 }
 
-function navigateBackFromFailure() {
-  clearAnswerFailure()
-  clearCaseContext()
-  emit('navigatePortfolio')
-}
-
-function previewSplit(key: keyof WorkspaceSplit, value: number) {
-  setEffectiveSplit(key, value)
-}
-
-function adjustSplit(key: keyof WorkspaceSplit, delta: number) {
-  setEffectiveSplit(key, effectiveSplit.value[key] + delta, true)
-}
-
-function setEffectiveSplit(
-  key: keyof WorkspaceSplit,
-  value: number,
-  persistChange = false,
-) {
-  const other: keyof WorkspaceSplit = key === 'sessions' ? 'evidence' : 'sessions'
-  const [minimum] = WORKSPACE_LIMITS[key]
-  const target = Math.min(effectiveMaximums.value[key], Math.max(minimum, value))
-  const next = { ...effectiveSplit.value, [key]: target }
-
-  if (!evidenceIsDrawer.value && Number.isFinite(availableSideWidth.value)) {
-    const overflow = next.sessions + next.evidence - availableSideWidth.value
-    if (overflow > 0) {
-      next[other] = Math.max(WORKSPACE_LIMITS[other][0], next[other] - overflow)
+function removeSession(sessionId: string): void {
+  if (sessionId === sessions.activeSessionId.value) {
+    const token = sessions.getSessionResumeToken(sessionId)
+    if (token !== undefined) {
+      void clearConversation(token)
+      resume.clearActiveToken()
     }
   }
-
-  split.set(other, next[other])
-  split.set(key, next[key], persistChange)
-}
-
-function updateWorkspaceWidth() {
-  const width = workspaceRoot.value?.clientWidth ?? 0
-  if (width > 0) workspaceWidth.value = width
-}
-
-function inspectEvidence(request: EvidenceInspectRequest) {
-  const trigger = document.activeElement
-  drawerReturnFocus =
-    trigger instanceof HTMLElement && trigger !== document.body ? trigger : null
-  focusedAnswerMessageId.value = request.messageId
-  activeEvidenceId.value = request.evidenceIds[0] ?? activeEvidenceId.value
-  evidenceTab.value = 'CITATIONS'
-  sessionDrawerOpen.value = false
-  evidenceDrawerOpen.value = true
-  if (evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
-}
-
-function locateAnswer(target: Omit<AnswerFocusTarget, 'requestId'>) {
-  if (evidenceDrawerOpen.value && evidenceIsDrawer.value) {
-    closeDrawers()
-  }
-  answerFocusRequestId += 1
-  answerFocusTarget.value = {
-    ...target,
-    requestId: answerFocusRequestId,
+  sessions.removeSession(sessionId)
+  if (sessions.sessions.value.length === 0) {
+    createSession()
   }
 }
 
-function toggleSessions() {
-  sessionDrawerOpen.value = !sessionDrawerOpen.value
-  drawerReturnFocus = null
-  if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
-  if (sessionDrawerOpen.value && sessionsIsDrawer.value) focusDrawer('#local-session-rail')
+function createSession(): void {
+  sessions.createSession({
+    role: props.initialRole,
+    projectSlug: props.initialProject || null,
+  })
+  resume.clearActiveToken()
 }
 
-function submitFollowUp(action: FollowUpAction) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project) return
-  const reference = action.referenceContext
-  const subjects: SemanticSubjectReference[] = [
-    ...(reference.caseSlugs ?? []).map((subjectId) => ({ subjectType: 'CASE', subjectId })),
-    ...(reference.projectSlugs ?? []).map((subjectId) => ({ subjectType: 'PROJECT', subjectId })),
-  ].filter((subject, index, all) =>
-    all.findIndex((candidate) => candidate.subjectType === subject.subjectType
-      && candidate.subjectId === subject.subjectId) === index,
-  ).slice(0, 6)
-  if (!subjects.length) subjects.push({ subjectType: 'PROJECT', subjectId: project.slug })
-  // 结果续接携带显式结构化主体，重建页面主体绑定（见 subjectHintCleared 注释）。
-  subjectHintCleared.value = false
-  const onlyCase = subjects.length === 1 && subjects[0]?.subjectType === 'CASE'
-    ? subjects[0].subjectId
-    : null
-  const onlyProject = subjects.length === 1 && subjects[0]?.subjectType === 'PROJECT'
-    ? subjects[0].subjectId
-    : null
-  void requestAnswer(
-    {
-      sessionId: session.id,
-      projectSlug: onlyCase ? null : onlyProject,
-      caseSlug: onlyCase,
-      question: action.question,
-      semanticContext: {
-        activeSubjects: subjects,
-        resultReferences: [],
-        audienceRole: session.role,
-        requestSource: 'REFERENCE',
-        coveredTopics: [...session.coveredTopics],
-      },
-    },
-    true,
-  )
-}
-
-// 推荐调整原样回传当前回答的完整 recommendationContext，仍走 /api/v2/answers。
-// 普通问题（submit / submitSuggestion / submitFollowUp）不构造 recommendationContext，
-// 因此不会携带陈旧推荐上下文。
-function refineRecommendation(action: {
-  question: string
-  recommendationContext: PortfolioRecommendationContextRequest
-}) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project) return
-  void requestAnswer(
-    {
-      sessionId: session.id,
-      projectSlug: project.slug,
-      question: action.question,
-      recommendationContext: action.recommendationContext,
-    },
-    true,
-  )
-}
-
-function toggleEvidence() {
-  evidenceDrawerOpen.value = !evidenceDrawerOpen.value
-  drawerReturnFocus = null
-  if (evidenceDrawerOpen.value) sessionDrawerOpen.value = false
-  if (evidenceDrawerOpen.value && evidenceIsDrawer.value) focusDrawer('#agent-evidence-desk')
-}
-
-// ── P3：从某条结果继续追问（ContextHandle，handoff §3.2/§6）──
-// 只在用户明确从某条结果继续时发送 contextReference；普通追问不发送。
-// Fact/Compare → RECENT_SEMANTIC_TASK；Recommend/Refine → RECOMMENDATION。
-function continueFromContext(action: {
-  question: string
-  contextHandle: string
-  expectedContextType: 'RECENT_SEMANTIC_TASK' | 'RECOMMENDATION'
-  resultItemId?: string
-}) {
-  const session = sessions.activeSession.value
-  const project = activeProject.value
-  if (!session || !project || !action.contextHandle) return
-  void requestAnswer(
-    {
-      sessionId: session.id,
-      projectSlug: project.slug,
-      question: action.question,
-      contextReference: {
-        contextHandle: action.contextHandle,
-        expectedContextType: action.expectedContextType,
-        ...(action.resultItemId ? { resultItemId: action.resultItemId } : {}),
-      },
-    },
-    true,
-  )
-}
-
-// ── P3：主动清除本次对话（handoff §12）──
-// 顺序：对活跃会话 Token 调 DELETE → 收到 204 后清除内存 Token/槽位/恢复卡/UI。
-// 网络失败时不得本地宣称「已清除」；保留仅内存的待重试态（clearPending）。
-async function clearConversation() {
-  const session = sessions.activeSession.value
-  if (!session || clearPending.value) return
-  const token = sessions.getSessionResumeToken(session.id)
-  if (!token) {
-    // 本就无 Token：仅清除本地 P3 UI 态。
-    sessions.clearSessionResumeToken(session.id)
-    resume.clearActiveToken()
-    clearActiveConversationUi()
+async function clearAllSessions(): Promise<void> {
+  if (clearPending.value) return
+  const tokens = sessions.sessions.value
+    .map((session) => session.resumeToken)
+    .filter((token): token is string => token !== undefined)
+  if (tokens.length === 0) {
+    sessions.clearSessions()
+    createSession()
+    clearNotice.value = null
     return
   }
   clearPending.value = true
+  clearNotice.value = null
   try {
-    await clearConversationContext(token)
-    if (disposed) return
-    // 204 成功：清除内存 Token、活跃槽位与恢复卡 UI。
-    sessions.clearSessionResumeToken(session.id)
+    const results = await Promise.all(tokens.map((token) => clearConversation(token)))
+    if (results.includes('FAILED')) {
+      clearNotice.value = '服务端尚未确认清除，请稍后重试。'
+      return
+    }
     resume.clearActiveToken()
-    clearActiveConversationUi()
-    continuationNotice.value = '本次对话的服务端上下文已清除。'
-  } catch {
-    // 不宣称已清除；给出「清除尚未确认」状态（handoff §12）。
-    if (disposed) return
-    continuationNotice.value = '清除尚未在服务端确认，请稍后重试。'
+    sessions.clearSessions()
+    createSession()
   } finally {
     clearPending.value = false
   }
 }
 
-/** 删除单个本地会话前清除其服务端 Context（幂等 DELETE，handoff §12）。 */
-async function clearSessionContext(sessionId: string): Promise<void> {
-  const token = sessions.getSessionResumeToken(sessionId)
-  if (!token) return
-  try {
-    await clearConversationContext(token)
-  } catch {
-    // 静默：删除会话是本地动作；清除失败不阻断 UI 移除，但也不宣称已清除。
-  }
+function toggleSessions(): void {
+  sessionDrawerOpen.value = !sessionDrawerOpen.value
+  if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
 }
 
-function focusDrawer(selector: string) {
-  requestAnimationFrame(() => {
-    const root = document.querySelector<HTMLElement>(selector)
-    root?.querySelector<HTMLElement>('button, a, input, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
-  })
+function toggleEvidence(): void {
+  evidenceDrawerOpen.value = !evidenceDrawerOpen.value
+  if (evidenceDrawerOpen.value) sessionDrawerOpen.value = false
 }
 
-function trapDrawerFocus(event: KeyboardEvent) {
-  if (event.key !== 'Tab') return
-  const selector = sessionDrawerOpen.value && sessionsIsDrawer.value
-    ? '#local-session-rail'
-    : evidenceDrawerOpen.value && evidenceIsDrawer.value
-      ? '#agent-evidence-desk'
-      : ''
-  if (!selector) return
-  const root = document.querySelector<HTMLElement>(selector)
-  const focusable = Array.from(root?.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-  ) ?? [])
-  if (!focusable.length) return
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-// P3：清空全部会话时逐个幂等清除尚存 Token 的服务端 Context（handoff §12）。
-async function clearAllSessions() {
-  invalidatePendingRequest()
-  clearAnswerFailure()
-  resetEvidenceFocus()
-  semanticContinuations.clear()
-  activeAdjustment.value = null
-  clearPending.value = true
-  // 收集所有不同 Token，并发清除但逐项确认结果。
-  const tokens = new Set<string>()
-  for (const session of sessions.sessions.value) {
-    if (session.resumeToken) tokens.add(session.resumeToken)
-  }
-  await Promise.all(
-    [...tokens].map((token) => clearConversationContext(token).catch(() => undefined)),
-  )
-  if (disposed) return
-  sessions.clearSessions()
-  sessions.pruneDismissedPlanChanges()
-  clearPending.value = false
-  resume.clearActiveToken()
-  createSession()
-}
-
-// P3：删除单个本地会话前先幂等清除其服务端 Context（handoff §12）。
-async function removeSession(sessionId: string) {
-  const previousSessionId = sessions.activeSessionId.value
-  if (activeRequest?.sessionId === sessionId) {
-    invalidatePendingRequest()
-  }
-  if (failedRequest.value?.sessionId === sessionId) {
-    clearAnswerFailure()
-  }
-  if (activeAdjustment.value?.sessionId === sessionId) {
-    activeAdjustment.value = null
-  }
-  clearSemanticContinuation(sessionId)
-  await clearSessionContext(sessionId)
-  if (disposed) return
-  sessions.removeSession(sessionId)
-  sessions.pruneDismissedPlanChanges()
-  if (sessions.activeSessionId.value !== previousSessionId) {
-    resetEvidenceFocus()
-    clearActiveConversationUi()
-    if (sessions.activeSession.value) {
-      syncActiveEvidence()
-      syncResumeSlot(sessions.activeSessionId.value)
-    } else {
-      createSession()
-    }
-  }
-}
-
-function selectSession(sessionId: string) {
-  const previousSessionId = sessions.activeSessionId.value
-  sessions.selectSession(sessionId)
-  if (sessions.activeSessionId.value !== previousSessionId) {
-    activeAdjustment.value = null
-    resetEvidenceFocus()
-    clearActiveConversationUi()
-    syncActiveEvidence()
-    // P3：切换活跃会话时把槽位替换为目标会话 Token（handoff §10.1）。
-    syncResumeSlot(sessions.activeSessionId.value)
-  }
-}
-
-function closeDrawers(restoreFocus = false) {
-  const fallbackSelector = evidenceDrawerOpen.value ? '.evidence-toggle' : '.session-toggle'
-  const returnFocus = drawerReturnFocus?.isConnected
-    ? drawerReturnFocus
-    : document.querySelector<HTMLElement>(fallbackSelector)
-  drawerReturnFocus = null
+function closeDrawers(returnFocus = false): void {
   sessionDrawerOpen.value = false
   evidenceDrawerOpen.value = false
-  if (restoreFocus) {
-    requestAnimationFrame(() => {
-      returnFocus?.focus()
+  if (returnFocus) composerInput.value?.focus()
+}
+
+function previewSplit(pane: 'sessions' | 'evidence', width: number): void {
+  split.set(pane, width)
+}
+
+function adjustSplit(pane: 'sessions' | 'evidence', delta: number): void {
+  split.adjust(pane, delta)
+}
+
+// 活跃会话的 Token 变化同步唯一 sessionStorage 槽位（handoff §3）。
+watchEffect(() => {
+  const token = activeSession.value?.resumeToken
+  if (activeSession.value === null) return
+  if (token !== undefined) {
+    resume.setActiveToken(token)
+  } else {
+    resume.clearActiveToken()
+  }
+})
+
+onMounted(async () => {
+  if (workspaceRoot.value !== null && typeof ResizeObserver === 'function') {
+    workspaceResizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (typeof width === 'number') {
+        workspaceWidth.value = width
+      }
     })
-  }
-}
-
-function onWindowKeydown(event: KeyboardEvent) {
-  trapDrawerFocus(event)
-  if (event.key === 'Escape' && (sessionDrawerOpen.value || evidenceDrawerOpen.value)) {
-    closeDrawers(true)
-  }
-}
-
-// P3：在初始化会话清空槽位之前捕获刷新前活跃会话的 ResumeToken（handoff §10/§11）。
-// createSession 会让活跃会话变为无 Token，从而清空槽位；恢复时用捕获值重新绑定。
-const initialResumeToken = resume.getActiveToken()
-
-if (props.initialSeed) {
-  sessions.seedSession(props.initialSeed)
-  syncActiveEvidence()
-} else if (!sessions.activeSession.value) {
-  createSession(props.initialEvidence)
-}
-
-// P3：刷新恢复（handoff §11/§17.10）。只恢复安全 Context Summary，不恢复问题/答案/气泡。
-async function recoverConversation() {
-  if (!initialResumeToken) return
-  const sessionId = sessions.activeSessionId.value
-  if (!sessionId) return
-  try {
-    const summary = await fetchConversationContext(initialResumeToken)
-    if (disposed || sessionId !== sessions.activeSessionId.value) return
-    if (summary.continuationStatus === 'AVAILABLE' && summary.summary) {
-      // 绑定 Token 与安全摘要到当前活跃会话；恢复唯一槽位。
-      sessions.setSessionResumeToken(sessionId, initialResumeToken)
-      sessions.setSessionContextSummary(sessionId, summary.summary)
-      resume.setActiveToken(initialResumeToken)
-    } else {
-      // CONTEXT_EXPIRED / 无 summary：清除本地 Token，按新会话开始。
-      sessions.clearSessionResumeToken(sessionId)
-      resume.clearActiveToken()
-    }
-  } catch {
-    // 网络失败 / 400 非法 Token：不阻断页内问答；过期的非法 Token 已被槽位清空。
-    if (disposed) return
-    continuationNotice.value = '无法确认上次对话是否可恢复，已开始新会话。'
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onWindowKeydown)
-  window.addEventListener('resize', updateWorkspaceWidth)
-  updateWorkspaceWidth()
-  if (typeof ResizeObserver !== 'undefined' && workspaceRoot.value) {
-    workspaceResizeObserver = new ResizeObserver(updateWorkspaceWidth)
     workspaceResizeObserver.observe(workspaceRoot.value)
   }
-  void recoverConversation()
+
+  const seed = props.initialSeed
+  if (seed !== null) {
+    sessions.seedSession(seed)
+    if (seed.conversation !== undefined) {
+      const session = sessions.activeSession.value
+      if (session !== null) {
+        sessions.adoptResumedConversation(session.id, seed.conversation)
+        resume.setActiveToken(seed.conversation.resumeToken)
+      }
+    }
+  }
+
+  // 刷新恢复：只恢复会话身份（历史消息按隐私契约不在浏览器保留）。
+  if (seed?.conversation === undefined) {
+    const storedToken = resume.getActiveToken()
+    if (storedToken !== null) {
+      const current = await fetchCurrentConversation(storedToken)
+      if (disposed) return
+      if (current.ok) {
+        const session = ensureSession()
+        sessions.adoptResumedConversation(session.id, {
+          conversationId: current.conversationId,
+          resumeToken: storedToken,
+        })
+        resumeNotice.value = '已恢复当前会话；历史消息按隐私约定不在浏览器中保留。'
+      } else if (current.invalid) {
+        resume.clearActiveToken()
+      }
+    }
+  }
+  ensureSession()
+
+  if (seed !== null) {
+    if (seed.replay !== undefined) {
+      // 同 requestId 精确重放首页轮次（D-31）：surface/window 原样回放。
+      const session = sessions.activeSession.value
+      if (session !== null) {
+        void runTurn(session.id, seed.replay.requestId, seed.replay.command, {
+          surfaceContext: seed.replay.surfaceContext,
+          conversationWindow: [],
+          ...(seed.conversation === undefined
+            ? {}
+            : { resumeToken: seed.conversation.resumeToken }),
+          displayQuestion: seed.question,
+        })
+      }
+    } else if (seed.question.trim().length > 0) {
+      questionDraft.value = seed.question
+    }
+  } else if (props.initialQuestion.trim().length > 0) {
+    questionDraft.value = props.initialQuestion
+  }
 })
+
 onBeforeUnmount(() => {
   disposed = true
-  if (retryDelayTimer) clearInterval(retryDelayTimer)
-  invalidatePendingRequest()
-  semanticContinuations.clear()
-  activeAdjustment.value = null
+  pending.value?.controller.abort()
   workspaceResizeObserver?.disconnect()
-  window.removeEventListener('keydown', onWindowKeydown)
-  window.removeEventListener('resize', updateWorkspaceWidth)
+  workspaceResizeObserver = null
 })
 </script>
 
 <template>
   <main
-    v-if="activeProject && sessions.activeSession.value"
+    v-if="activeProject && activeSession"
     ref="workspaceRoot"
     class="agent-workspace agent-workspace--prototype"
     :class="{
@@ -1495,7 +613,7 @@ onBeforeUnmount(() => {
       :inert="sessionsIsDrawer && !sessionDrawerOpen ? true : undefined"
       :aria-hidden="sessionsIsDrawer ? String(!sessionDrawerOpen) : undefined"
       @create="createSession"
-      @select="selectSession"
+      @select="sessions.selectSession"
       @rename="sessions.renameSession"
       @remove="removeSession"
       @clear="clearAllSessions"
@@ -1514,55 +632,68 @@ onBeforeUnmount(() => {
       @reset="split.reset"
     />
 
-    <ConversationThread
-      :session="sessions.activeSession.value"
-      :role="sessions.activeSession.value.role"
-      :project="activeProject"
-      :seed-question="initialQuestion"
-      :case-context-title="activeCase?.title"
-      :suggested-questions="activeCase?.suggestedQuestions"
-      :sessions-open="sessionDrawerOpen"
-      :evidence-open="evidenceDrawerOpen"
-      :pending="pending"
-      :failure="answerFailure"
-      :failure-suggestions="failureSuggestions"
-      :focus-target="answerFocusTarget"
-      :adjustment="adjustmentBarState"
-      :dismissed-plan-changes="sessions.dismissedPlanChangeTurnIds.value"
-      :recovery-summary="recoveredSummary"
-      :continuation-notice="continuationNotice"
-      :completion-receipt="completionReceipt"
-      :resume-unavailable="resume.resumeUnavailable.value"
-      :clear-pending="clearPending"
-      :evidence-catalog="portfolio.evidence"
-      @submit="submit"
-      @submit-suggestion="submitSuggestion"
-      @follow-up="submitFollowUp"
-      @refine-recommendation="refineRecommendation"
-      @continue-from-context="continueFromContext"
-      @retry="retryAnswer"
-      @continue-basic-mode="continueInBasicMode"
-      @navigate-back="navigateBackFromFailure"
-      @cancel="cancelAnswer"
-      @inspect-evidence="inspectEvidence"
-      @toggle-sessions="toggleSessions"
-      @toggle-evidence="toggleEvidence"
-      @clear-case-context="clearCaseContext"
-      @clear-conversation="clearConversation"
-      @recover-context="clearConversation"
-      @confirm-plan="confirmSemanticPlan"
-      @adjust-plan="adjustSemanticPlan"
-      @adjust-submit="submitPlanAdjustment"
-      @adjust-exit="exitPlanAdjustment"
-      @cancel-plan="cancelSemanticPlan"
-      @clarification-submit="submitClarification"
-      @regenerate-plan="regenerateSemanticPlan"
-      @dismiss-plan-change="dismissSemanticPlanChange"
-    />
+    <section class="workspace-thread-pane" aria-label="对话区">
+      <p v-if="resumeNotice !== null" class="workspace-notice" role="status">{{ resumeNotice }}</p>
+      <p v-if="clearNotice !== null" class="workspace-notice" role="alert">{{ clearNotice }}</p>
+      <ConversationThread
+        :messages="activeSession.messages"
+        :pending="pending !== null"
+        :pending-question="pending?.question ?? ''"
+        @cancel="cancelTurn"
+        @select-action="handleSelectAction"
+        @submit-clarification="handleClarification"
+      />
+      <div v-if="failure !== null" class="workspace-failure" role="alert" data-testid="turn-failure">
+        <p class="workspace-failure__message">{{ failure.message }}</p>
+        <p v-if="failure.retryAfterSeconds !== undefined" class="workspace-failure__hint">
+          约 {{ failure.retryAfterSeconds }} 秒后可重试
+        </p>
+        <button
+          v-if="failure.retryable"
+          class="workspace-failure__retry"
+          type="button"
+          data-testid="retry-turn"
+          @click="retryFailure"
+        >重试</button>
+      </div>
+      <div class="workspace-composer">
+        <div v-if="suggestionChips.length > 0" class="workspace-composer__suggestions">
+          <button
+            v-for="chip in suggestionChips"
+            :key="chip.presetId ?? chip.text"
+            class="workspace-composer__suggestion"
+            type="button"
+            :disabled="pending !== null"
+            @click="chip.presetId === undefined ? submitFreeText(chip.text) : submitPreset(chip.presetId)"
+          >{{ chip.text }}</button>
+        </div>
+        <form class="workspace-composer__form" @submit.prevent="submitFreeText(questionDraft)">
+          <textarea
+            ref="composerInput"
+            v-model="questionDraft"
+            class="workspace-composer__input"
+            data-testid="question-input"
+            rows="2"
+            :maxlength="FREE_TEXT_MAX_LENGTH"
+            :disabled="pending !== null"
+            aria-label="输入你的问题"
+            placeholder="问问公开项目、案例或工程取舍…"
+            @keydown.enter.exact.prevent="submitFreeText(questionDraft)"
+          ></textarea>
+          <button
+            class="workspace-composer__send"
+            type="submit"
+            data-testid="submit-question"
+            :disabled="pending !== null || questionDraft.trim().length === 0"
+          >发送</button>
+        </form>
+        <p class="workspace-composer__privacy">当前对话未保存，刷新或关闭页面后记录会消失。</p>
+      </div>
+    </section>
 
     <PaneResizer
       class="evidence-resizer"
-      label="调整证据工作台宽度"
+      label="调整来源工作台宽度"
       :value="effectiveSplit.evidence"
       :min="WORKSPACE_LIMITS.evidence[0]"
       :max="effectiveMaximums.evidence"
@@ -1573,19 +704,10 @@ onBeforeUnmount(() => {
       @reset="split.reset"
     />
 
-    <EvidenceDesk
-      :evidence="activeCase?.evidence ?? portfolio.evidence"
-      :project="activeProject"
-      :active-evidence-id="activeEvidenceId"
-      :focus-evidence-ids="evidenceContext.focusEvidenceIds"
-      :citations="evidenceContext.citations"
-      :sources="evidenceContext.sources"
-      :tab="evidenceTab"
+    <AnswerSourcesPanel
+      :sources="activeSources"
       :inert="evidenceIsDrawer && !evidenceDrawerOpen ? true : undefined"
       :aria-hidden="evidenceIsDrawer ? String(!evidenceDrawerOpen) : undefined"
-      @update:tab="evidenceTab = $event"
-      @select="activeEvidenceId = $event"
-      @locate-answer="locateAnswer"
     />
 
     <button
@@ -1624,29 +746,109 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.session-resizer {
-  left: var(--sessions-width);
+.session-resizer { left: var(--sessions-width); }
+.evidence-resizer { right: var(--evidence-width); transform: translateX(6px); }
+.workspace-scrim { display: none; }
+
+.workspace-thread-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--workspace-thread-bg);
 }
 
-.evidence-resizer {
-  right: var(--evidence-width);
-  transform: translateX(6px);
+.workspace-notice {
+  margin: 0;
+  padding: 8px clamp(14px, 2.4vw, 26px);
+  border-bottom: 1px solid var(--workspace-rule);
+  color: var(--workspace-text-secondary);
+  font: 11px/1.6 var(--mono);
 }
 
-.workspace-scrim {
-  display: none;
+.workspace-failure {
+  margin: 0 clamp(14px, 2.4vw, 26px) 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--workspace-accent);
+  background: var(--paper-hi);
+}
+.workspace-failure__message { margin: 0; color: var(--workspace-text); font: 13px/1.6 var(--sans); }
+.workspace-failure__hint { margin: 4px 0 0; color: var(--workspace-text-faint); font: 10px var(--mono); }
+.workspace-failure__retry {
+  min-height: 30px;
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--workspace-accent);
+  border-radius: var(--agent-radius-sm, 8px);
+  background: var(--workspace-accent);
+  color: var(--paper-hi);
+  font: 10px var(--mono);
+  cursor: pointer;
+}
+
+.workspace-composer {
+  border-top: 1px solid var(--workspace-rule);
+  padding: 10px clamp(14px, 2.4vw, 26px) 8px;
+  background: var(--workspace-thread-bg);
+}
+.workspace-composer__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.workspace-composer__suggestion {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--workspace-text-secondary);
+  font: 11px/1.5 var(--sans);
+  cursor: pointer;
+}
+.workspace-composer__suggestion:hover:not(:disabled) {
+  border-color: var(--workspace-accent);
+  color: var(--workspace-accent);
+}
+.workspace-composer__suggestion:disabled { opacity: 0.5; cursor: default; }
+.workspace-composer__form { display: flex; align-items: flex-end; gap: 10px; }
+.workspace-composer__input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 140px;
+  padding: 10px 12px;
+  resize: none;
+  border: 1px solid var(--workspace-rule);
+  border-radius: var(--agent-radius-sm, 8px);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--workspace-text);
+  font: 14px/1.6 var(--sans);
+}
+.workspace-composer__input:focus { outline: 2px solid var(--workspace-accent); outline-offset: 1px; }
+.workspace-composer__send {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--agent-radius-sm, 8px);
+  background: var(--workspace-action-bg);
+  color: var(--paper-hi);
+  font: 12px var(--mono);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.workspace-composer__send:disabled { opacity: 0.45; cursor: not-allowed; }
+.workspace-composer__send:focus-visible { outline: 2px solid var(--workspace-accent); outline-offset: 2px; }
+.workspace-composer__privacy {
+  margin: 6px 0 0;
+  color: var(--workspace-text-faint);
+  font: 10px/1.6 var(--mono);
 }
 
 @media (max-width: 1279.98px) {
-  .agent-workspace {
-    grid-template-columns: var(--sessions-width) minmax(0, 1fr);
-  }
-
-  .evidence-resizer {
-    display: none;
-  }
-
-  :deep(.evidence-desk) {
+  .agent-workspace { grid-template-columns: var(--sessions-width) minmax(0, 1fr); }
+  .evidence-resizer { display: none; }
+  :deep(.sources-panel) {
     position: absolute;
     z-index: 70;
     grid-area: 1 / 1 / -1 / -1;
@@ -1656,11 +858,7 @@ onBeforeUnmount(() => {
     transform: translateX(100%);
     transition: transform 220ms ease;
   }
-
-  .evidence-open :deep(.evidence-desk) {
-    transform: translateX(0);
-  }
-
+  .evidence-open :deep(.sources-panel) { transform: translateX(0); }
   .workspace-scrim {
     position: absolute;
     z-index: 60;
@@ -1674,10 +872,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 959.98px) {
-  .agent-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+  .agent-workspace { grid-template-columns: minmax(0, 1fr); }
   :deep(.session-rail) {
     position: absolute;
     z-index: 70;
@@ -1688,27 +883,13 @@ onBeforeUnmount(() => {
     transform: translateX(-100%);
     transition: transform 220ms ease;
   }
-
-  .sessions-open :deep(.session-rail) {
-    transform: translateX(0);
-  }
+  .sessions-open :deep(.session-rail) { transform: translateX(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :deep(.evidence-desk),
+  :deep(.sources-panel),
   :deep(.session-rail),
   .workspace-scrim {
-    transition: none;
-    animation: none;
-  }
-
-  :deep(.thread-empty),
-  :deep(.thread-empty button),
-  :deep(.message),
-  :deep(.evidence-card),
-  :deep(.citation-card),
-  :deep(.source-card) {
-    scroll-behavior: auto;
     transition: none;
     animation: none;
   }

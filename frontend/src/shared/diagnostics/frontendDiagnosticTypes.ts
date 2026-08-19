@@ -34,7 +34,6 @@ export interface ReportableFrontendEvent {
   guidanceStage?: FrontendGuidanceStage
   httpStatus?: number
   generationMode?: FrontendGenerationMode
-  degraded?: boolean
   suggestedQuestionCount?: number
   contentVersion?: string
 }
@@ -96,7 +95,6 @@ export interface FrontendDiagnosticEventInput {
   guidanceStage?: FrontendGuidanceStage
   httpStatus?: number
   generationMode?: FrontendGenerationMode
-  degraded?: boolean
   suggestedQuestionCount?: number
   contentVersion?: string
 }
@@ -118,7 +116,6 @@ export function createFrontendDiagnosticEvent(input: FrontendDiagnosticEventInpu
     ...(input.guidanceStage === undefined ? {} : { guidanceStage: input.guidanceStage }),
     ...(input.httpStatus === undefined ? {} : { httpStatus: input.httpStatus }),
     ...(input.generationMode === undefined ? {} : { generationMode: input.generationMode }),
-    ...(input.degraded === undefined ? {} : { degraded: input.degraded }),
     ...(input.suggestedQuestionCount === undefined ? {} : {
       suggestedQuestionCount: input.suggestedQuestionCount,
     }),
@@ -159,7 +156,6 @@ export function serializeFrontendEvent(event: unknown): ReportableFrontendEvent 
       Number.isInteger(value) && value >= 100 && value <= 599)) return undefined
     if (!copyOptionalString(event, sanitized, 'generationMode', (value) =>
       GENERATION_MODES.has(value as FrontendGenerationMode))) return undefined
-    if (!copyOptionalBoolean(event, sanitized, 'degraded')) return undefined
     if (!copyOptionalNumber(event, sanitized, 'suggestedQuestionCount', isQuestionCount)) return undefined
     if (!copyOptionalString(event, sanitized, 'contentVersion', (value) =>
       CONTENT_VERSION_PATTERN.test(value))) return undefined
@@ -233,18 +229,6 @@ function copyOptionalNumber(
   if (!Object.prototype.hasOwnProperty.call(source, key)) return true
   const value = source[key]
   if (typeof value !== 'number' || !accepts(value)) return false
-  Object.assign(target, { [key]: value })
-  return true
-}
-
-function copyOptionalBoolean(
-  source: Record<string, unknown>,
-  target: ReportableFrontendEvent,
-  key: 'degraded',
-): boolean {
-  if (!Object.prototype.hasOwnProperty.call(source, key)) return true
-  const value = source[key]
-  if (typeof value !== 'boolean') return false
   Object.assign(target, { [key]: value })
   return true
 }

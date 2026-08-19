@@ -1,22 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
-import type {
-  AudienceRole,
-  PublicEvidence,
-} from '../../public-content/model/publicContentTypes'
-import type { HomeAnswerState } from '../model/audienceTypes'
+import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import { createAgentHandoff } from '../../agent/model/handoffStore'
-import {
-  answerSourceTag,
-  answerStatusLabel,
-  answerTechTail,
-} from '../../agent/model/answerLabels'
+import type { HomeAnswerState } from '../model/audienceTypes'
+import { SUPPORT_KIND_LABELS } from '../../agent/model/publicAgentTurnLabels'
+
+// 首页轻回答：直接呈现闭合 PublicAgentTurn 的轻量投影；
+// “进入 Agent”通过内存 handoff 携带会话凭证与幂等重放输入（不带答案正文）。
 
 const props = defineProps<{
   role: AudienceRole
   answer: HomeAnswerState
-  evidence: PublicEvidence[]
 }>()
 
 defineEmits<{ followUp: [] }>()
@@ -25,31 +20,92 @@ const visibleAnswer = ref('')
 const complete = ref(false)
 let typingTimer: ReturnType<typeof setInterval> | null = null
 
-const citedEvidence = computed(() =>
-  props.evidence.filter((item) => props.answer.evidenceIds.includes(item.id)),
-)
+const turnSummary = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind === 'ANSWER') {
+    const goal = turn.answer.goalResults[0]
+    if (goal?.presentation?.kind === 'SECTIONED' && goal.presentation.sections[0] !== undefined) {
+      return goal.presentation.sections[0].content
+    }
+    if (goal?.presentation?.kind === 'RECOMMENDATION' && goal.presentation.items[0] !== undefined) {
+      return goal.presentation.items[0].summary
+    }
+    return goal?.label ?? ''
+  }
+  if (turn.kind === 'CLARIFICATION') return turn.clarification.prompt
+  return turn.message
+})
+
+const turnTitle = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind === 'ANSWER') return turn.answer.goalResults[0]?.label ?? '回答'
+  if (turn.kind === 'CLARIFICATION') return '需要补充'
+  return '回应'
+})
+
+const turnStatus = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind === 'ANSWER') {
+    if (turn.answer.resolution === 'COMPLETE') return '回答完整'
+    if (turn.answer.resolution === 'PARTIAL') return '部分完成'
+    return '未形成回答'
+  }
+  if (turn.kind === 'CONVERSATIONAL') return '对话回复'
+  if (turn.kind === 'BOUNDARY') return '能力边界'
+  if (turn.kind === 'CAPABILITY_UNAVAILABLE') return '能力暂时不可用'
+  return '需要澄清'
+})
+
+const supportTag = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind !== 'ANSWER') return ''
+  return [...new Set(turn.answer.sourceComposition.map((kind) => SUPPORT_KIND_LABELS[kind]))]
+    .join(' · ')
+})
+
+const answerSections = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind !== 'ANSWER') return []
+  return turn.answer.goalResults.flatMap((goal) => {
+    if (goal.presentation?.kind === 'SECTIONED') {
+      return goal.presentation.sections.map((section) => ({ title: section.title, content: section.content }))
+    }
+    if (goal.presentation?.kind === 'RECOMMENDATION') {
+      return goal.presentation.items.map((item) => ({ title: item.label, content: item.summary }))
+    }
+    return []
+  }).slice(0, 3)
+})
+
+const citedSources = computed(() => {
+  const turn = props.answer.turn
+  if (turn.kind !== 'ANSWER') return []
+  return turn.answer.sourceCatalog.sources
+})
 
 const projectTarget = computed(() =>
   props.answer.projectSlug ? `/projects/${props.answer.projectSlug}` : '/projects',
 )
 
-const agentTarget = computed(() => ({
-  path: '/agent',
-  query: {
-    handoffId: createAgentHandoff({
-      role: props.role,
-      question: props.answer.question,
-      answer: props.answer.answer,
-      projectSlug: props.answer.projectSlug,
-      evidenceIds: props.answer.evidenceIds,
-      source: 'HOME',
-    }),
-  },
-}))
-
-const answerStatus = computed(() => answerStatusLabel(props.answer.answer))
-const sourceTag = computed(() => answerSourceTag(props.answer.answer))
-const techTail = computed(() => answerTechTail(props.answer.answer))
+const agentTarget = computed(() => {
+  const envelope = props.answer.conversation
+  const conversation = envelope !== null && envelope.resumeToken !== undefined
+    ? { conversationId: envelope.conversationId, resumeToken: envelope.resumeToken }
+    : undefined
+  return {
+    path: '/agent',
+    query: {
+      handoffId: createAgentHandoff({
+        role: props.role,
+        question: props.answer.question,
+        projectSlug: props.answer.projectSlug,
+        source: 'HOME',
+        ...(conversation === undefined ? {} : { conversation }),
+        replay: props.answer.replay,
+      }),
+    },
+  }
+})
 
 function stopTyping() {
   if (typingTimer) clearInterval(typingTimer)
@@ -62,7 +118,7 @@ function startTyping() {
     typeof window.matchMedia !== 'function' ||
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (reduced) {
-    visibleAnswer.value = props.answer.answer.summary
+    visibleAnswer.value = turnSummary.value
     complete.value = true
     return
   }
@@ -72,8 +128,8 @@ function startTyping() {
   let index = 0
   typingTimer = setInterval(() => {
     index += 2
-    visibleAnswer.value = props.answer.answer.summary.slice(0, index)
-    if (index >= props.answer.answer.summary.length) {
+    visibleAnswer.value = turnSummary.value.slice(0, index)
+    if (index >= turnSummary.value.length) {
       stopTyping()
       complete.value = true
     }
@@ -89,29 +145,28 @@ onBeforeUnmount(stopTyping)
     <aside>
       <b>{{ role }}</b>
       <span>ROUND {{ String(answer.round).padStart(2, '0') }} / 03</span>
-      <span v-if="sourceTag">SOURCE<br />{{ sourceTag }}</span>
-      <span>{{ techTail }}</span>
+      <span v-if="supportTag">SOURCE<br />{{ supportTag }}</span>
     </aside>
     <div class="light-answer__content">
       <p class="light-answer__speaker">YOU · {{ answer.question }}</p>
-      <h2 class="light-answer__title">{{ answer.answer.title }}</h2>
+      <h2 class="light-answer__title">{{ turnTitle }}</h2>
       <div class="light-answer__text" aria-live="polite">
         {{ visibleAnswer }}<i v-if="!complete" aria-hidden="true"></i>
       </div>
       <div v-if="complete" class="light-answer__sections">
-        <section v-for="section in answer.answer.sections" :key="section.type">
+        <section v-for="section in answerSections" :key="section.title">
           <h3>{{ section.title }}</h3>
           <p>{{ section.content }}</p>
         </section>
       </div>
-      <p v-if="complete" class="light-answer__status">{{ answerStatus }}</p>
-      <div v-if="complete" class="light-answer__cites">
+      <p v-if="complete" class="light-answer__status">{{ turnStatus }}</p>
+      <div v-if="complete && citedSources.length > 0" class="light-answer__cites">
         <RouterLink
-          v-for="item in citedEvidence"
-          :key="item.id"
-          :to="{ path: '/evidence', query: { evidence: item.id } }"
+          v-for="source in citedSources"
+          :key="source.key"
+          :to="source.route"
         >
-          [{{ item.code }}] {{ item.title }}
+          [{{ source.code ?? source.key }}] {{ source.label }}
         </RouterLink>
       </div>
       <div v-if="complete" class="light-answer__actions">
@@ -171,6 +226,7 @@ aside span {
   min-height: 105px;
   color: var(--ink-text-hi);
   font: 17px/2 var(--serif);
+  overflow-wrap: anywhere;
 }
 
 .light-answer__text i {
@@ -181,6 +237,27 @@ aside span {
   vertical-align: -3px;
   background: var(--red-on-ink);
   animation: cursor-blink 0.78s steps(1) infinite;
+}
+
+.light-answer__title {
+  overflow-wrap: anywhere;
+}
+
+.light-answer__sections {
+  margin-top: 18px;
+}
+
+.light-answer__sections h3 {
+  margin: 0 0 4px;
+  color: var(--ink-text-hi);
+  font: 12px var(--mono);
+}
+
+.light-answer__sections p {
+  margin: 0 0 12px;
+  color: var(--ink-text);
+  font: 13px/1.8 var(--serif);
+  overflow-wrap: anywhere;
 }
 
 .light-answer__status {
@@ -208,6 +285,7 @@ aside span {
   border: 1px solid var(--ink-line);
   background: transparent;
   font: 10px var(--mono);
+  text-decoration: none;
 }
 
 .light-answer__actions .primary {
