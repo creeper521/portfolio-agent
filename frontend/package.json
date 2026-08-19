@@ -10,8 +10,7 @@
     "build": "vue-tsc -b && vite build",
     "test": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:behavior": "playwright test --config=playwright.behavior.config.ts",
-    "test:e2e:behavior:jar": "powershell -ExecutionPolicy Bypass -File ../scripts/run-agent-behavior-audit.ps1",
+    "test:e2e:contract": "playwright test agent-final-contract.spec.ts",
     "test:e2e:jar": "powershell -ExecutionPolicy Bypass -File ../scripts/run-jar-e2e.ps1"
   },
   "dependencies": {

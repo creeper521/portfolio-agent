@@ -5,6 +5,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173'
 
 export default defineConfig({
   testDir: './e2e',
+  testMatch: /agent-final-contract\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
@@ -27,7 +28,7 @@ export default defineConfig({
   webServer: externalServer
     ? undefined
     : {
-        command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173',
+        command: 'java -jar ../backend/target/portfolio-agent.jar --spring.profiles.active=local --portfolio.conversation-context.mode=IN_MEMORY --server.port=4173',
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
