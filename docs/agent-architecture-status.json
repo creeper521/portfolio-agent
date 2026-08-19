@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "project": "portfolio-agent",
+  "updatedAt": "2026-08-19",
+  "overallStatus": "COMPLETE",
+  "policy": {
+    "scope": "CURRENT_PROJECT_ONLY",
+    "changePriority": "CURRENT_REQUEST_FIRST_REPAY_INDEPENDENT_DEFERRED_ITEMS",
+    "runtimeRollback": "VERSION_LEVEL_ONLY"
+  },
+  "hardInvariants": [
+    {
+      "id": "SINGLE_RUNTIME_AUTHORITY",
+      "status": "PASS",
+      "evidence": "Slice 0-6 production dependency and zero-reference gates passed."
+    },
+    {
+      "id": "NO_RUNTIME_COMPATIBILITY_BRIDGE",
+      "status": "PASS",
+      "evidence": "Retired Router, Confirmation, versioned API and frontend compatibility chains were deleted."
+    },
+    {
+      "id": "VERSION_LEVEL_ROLLBACK_ONLY",
+      "status": "PASS",
+      "evidence": "Rollback is defined through Git/JAR replacement without runtime dual stack."
+    },
+    {
+      "id": "PUBLIC_CONTRACT_SINGLE_SOURCE",
+      "status": "PASS",
+      "evidence": "Backend serializer and frontend parser consume contracts/agent-turn fixtures."
+    },
+    {
+      "id": "EVIDENCE_BEFORE_COMPLETION",
+      "status": "PASS",
+      "evidence": "Backend, frontend, Testcontainers, packaged-JAR browser and live-provider gates were recorded before completion."
+    },
+    {
+      "id": "PRIVACY_BOUNDARY",
+      "status": "PASS",
+      "evidence": "Public-data, state persistence and provider diagnostics retain the approved privacy boundary."
+    }
+  ],
+  "activeAuthorities": {
+    "httpCommand": "AgentTurnRequest",
+    "userIntent": "UserGoal",
+    "executionPlan": "SemanticPlan",
+    "executionEngine": "SemanticTurnEngine",
+    "publicProjection": "PublicAgentTurnProjector",
+    "publicContract": "PublicAgentTurn",
+    "turnLifecycle": "AgentTurnLifecycleService",
+    "turnState": "AgentStateStore",
+    "frontendTransport": "agentTurnApi",
+    "frontendParser": "parsePublicAgentTurn"
+  },
+  "deferredItems": []
+}

@@ -1,0 +1,26 @@
+{
+  "id": "AGENT-DEFER-001",
+  "title": "Replace with the deferred gate name",
+  "status": "WAIVED",
+  "category": "ENVIRONMENT",
+  "reason": "State the current external condition, not a hypothesis.",
+  "owner": "BACKEND",
+  "affectedGate": "Name the exact Exit Gate that remains open.",
+  "evidence": {
+    "checkedAt": "2026-08-19",
+    "summary": "Record a safe result without secrets, prompts or private paths."
+  },
+  "resumeWhen": {
+    "condition": "Describe the observable condition that permits resumption.",
+    "checkCommand": "Use the repository's exact read-only preflight command."
+  },
+  "nextAction": {
+    "command": "Use the exact verification or implementation command.",
+    "successCondition": "Describe the evidence required to close this item."
+  },
+  "forbiddenClaims": [
+    "Do not claim the affected gate or overall change is complete."
+  ],
+  "createdAt": "2026-08-19",
+  "recheckBy": "2026-08-26"
+}
