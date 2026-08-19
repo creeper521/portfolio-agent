@@ -83,7 +83,7 @@ public final class AgentTurnRequestMapper {
         for (AgentTurnRequest.MessageRequest request : requests) {
             messages.add(new ConversationWindow.Message(
                     ConversationWindow.Role.valueOf(request.getRole().name()),
-                    request.getText()));
+                    request.getContent()));
         }
         return new ConversationWindow(List.copyOf(messages));
     }

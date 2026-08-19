@@ -309,24 +309,24 @@ public final class AgentTurnRequest {
         @NotNull(message = "message role is required")
         private final MessageRole role;
 
-        @NotBlank(message = "message text is required")
-        @Size(max = 4000, message = "message text must not exceed 4000 characters")
-        private final String text;
+        @NotBlank(message = "message content is required")
+        @Size(max = 4000, message = "message content must not exceed 4000 characters")
+        private final String content;
 
         @JsonCreator
         public MessageRequest(
                 @JsonProperty("role") MessageRole role,
-                @JsonProperty("text") String text) {
+                @JsonProperty("content") String content) {
             this.role = role;
-            this.text = text;
+            this.content = content;
         }
 
         public MessageRole getRole() {
             return role;
         }
 
-        public String getText() {
-            return text;
+        public String getContent() {
+            return content;
         }
     }
 

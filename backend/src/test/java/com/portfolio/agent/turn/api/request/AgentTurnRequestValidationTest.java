@@ -51,8 +51,8 @@ class AgentTurnRequestValidationTest {
                   "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
                   "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}},
                   "conversationWindow":[
-                    {"role":"ASSISTANT","text":"第一条不能是助手消息"},
-                    {"role":"USER","text":"顺序错误"}
+                    {"role":"ASSISTANT","content":"第一条不能是助手消息"},
+                    {"role":"USER","content":"顺序错误"}
                   ]
                 }
                 """, AgentTurnRequest.class);
@@ -85,8 +85,8 @@ class AgentTurnRequestValidationTest {
                     "requestSource":"AGENT_PAGE"
                   },
                   "conversationWindow":[
-                    {"role":"USER","text":"上一轮问题"},
-                    {"role":"ASSISTANT","text":"上一轮公开回答摘要"}
+                    {"role":"USER","content":"上一轮问题"},
+                    {"role":"ASSISTANT","content":"上一轮公开回答摘要"}
                   ]
                 }
                 """, AgentTurnRequest.class);

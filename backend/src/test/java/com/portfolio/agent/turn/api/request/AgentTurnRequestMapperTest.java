@@ -22,7 +22,7 @@ class AgentTurnRequestMapperTest {
                     "audienceRole":"INTERVIEWER",
                     "requestSource":"AGENT_PAGE"
                   },
-                  "conversationWindow":[{"role":"USER","text":"上下文"}]
+                  "conversationWindow":[{"role":"USER","content":"上下文"}]
                 }
                 """, AgentTurnRequest.class);
 
