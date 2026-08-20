@@ -503,6 +503,22 @@ session.resumeToken=nextToken;session.resumeToken=void 0;const api={setSessionRe
 '@
     },
     @{
+        File = 'safe-derived-token-flow.ts'
+        Source = @'
+function bearerHeaders(resumeToken: string | undefined) {
+    const token = value.resumeToken
+    session.resumeToken = nextToken
+    return token
+}
+'@
+    },
+    @{
+        File = '.zcode/plans/synthetic-plan.md'
+        Source = @'
+token=synthetic-tool-plan-placeholder
+'@
+    },
+    @{
         File = 'safe-behavior-id.json'
         Source = @'
 {"id":"behavior.private-request.001","title":"synthetic holdout identifier"}
@@ -532,7 +548,10 @@ try {
             -Encoding UTF8
     }
     foreach ($fixture in $safeSourceExamples) {
-        Set-Content -LiteralPath (Join-Path $safeRoot $fixture.File) `
+        $safeSourcePath = Join-Path $safeRoot $fixture.File
+        New-Item -ItemType Directory -Force -Path `
+            ([System.IO.Path]::GetDirectoryName($safeSourcePath)) | Out-Null
+        Set-Content -LiteralPath $safeSourcePath `
             -Value $fixture.Source `
             -Encoding UTF8
     }

@@ -17,7 +17,7 @@ $allowedExtensions = @(
     '.svg', '.csv', '.log', '.conf', '.env', '.ps1', '.sh', '.toml'
 )
 $excludedDirectoryNames = @(
-    '.git', '.idea', '.worktrees', '.claude', '.playwright-cli', '.superpowers', 'node_modules',
+    '.git', '.idea', '.worktrees', '.claude', '.playwright-cli', '.superpowers', '.zcode', 'node_modules',
     'runtime-models', 'docs', 'test', 'test-classes', 'test-results',
     'playwright-report', 'surefire-reports', 'antrun', 'maven-status',
 'logs', 'output', 'target', 'dist'
@@ -42,7 +42,7 @@ $patterns = @(
     @{ Name = 'ipv4-address'; Regex = '(?<![\d.])(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2})(?![\d.])' },
     @{ Name = 'windows-absolute-path'; Regex = '(?i)[a-z]:\\(?:users|code|work|workspace)\\' },
     @{ Name = 'internal-linux-path'; Regex = '(?i)/(?:data|home|opt|srv)/(?:server|internal|company|private|prod)(?:/|\b)' },
-    @{ Name = 'credential-assignment'; Regex = '(?i)(?<![A-Z0-9_$\{])(?!(?:requestToken)\s*(?::|=(?!=)))(?!(?:(?:resume|integrity)Token)\s*(?::|=(?!=))\s*(?:void\s+0|[A-Z_$][A-Z0-9_$]*(?:\.[A-Z_$][A-Z0-9_$]*)*(?:\.trim\(\))?)(?=\s*[,;})\]]))(?!(?:get|set|clear)[A-Z0-9_-]*Token\s*(?::|=(?!=))\s*[A-Z_$][A-Z0-9_$]*(?=\s*[,;})\]]))(?!(?:credentials)\s*(?::|=(?!=))\s*["'']?(?:omit|same-origin|include)["'']?(?:[:,;}\s]|$))(?:[A-Z0-9_-]*(?:password|passwd|secret|token|api[_-]?key))\s*(?::|=(?!=))(?>[ \t]*)(?!["'']?\$(?:\{[A-Z0-9_]+(?::[^}]*)?\}|[A-Z0-9_]+)["'']?)(?!["'']?<[A-Z0-9_-]+>["'']?)[^\s,;]+'; ExcludeExtensions = @('.java') },
+    @{ Name = 'credential-assignment'; Regex = '(?i)(?<![A-Z0-9_$\{])(?!(?:requestToken)\s*(?::|=(?!=)))(?!(?:[A-Z0-9_$]+\.)?(?:resume|integrity)Token\s*(?::|=(?!=))\s*(?:void\s+0|[A-Z_$][A-Z0-9_$]*(?:\.[A-Z_$][A-Z0-9_$]*)*(?:\.trim\(\))?)(?=\s*(?:[,;})\]]|\r?\n|$)))(?!(?:get|set|clear)[A-Z0-9_-]*Token\s*(?::|=(?!=))\s*[A-Z_$][A-Z0-9_$]*(?=\s*(?:[,;})\]]|\r?\n|$)))(?!(?:credentials)\s*(?::|=(?!=))\s*["'']?(?:omit|same-origin|include)["'']?(?:[:,;}\s]|$))(?:[A-Z0-9_-]*(?:password|passwd|secret|token|api[_-]?key))\s*(?::|=(?!=))(?>[ \t]*)(?!(?:string|number|boolean|unknown|undefined|null|never|void|Record|Readonly|Array|Promise)(?:\b|<))(?!(?:Get-EnvironmentSnapshot|Get-EnvironmentVariable)\b)(?![A-Z_$][A-Z0-9_$]*(?:\s*\.\s*[A-Z_$][A-Z0-9_$]*)+)(?!["'']?\$(?:\{[A-Z0-9_]+(?::[^}]*)?\}|[A-Z0-9_]+)["'']?)(?!["'']?<[A-Z0-9_-]+>["'']?)[^\s,;]+'; ExcludeExtensions = @('.java') },
     @{ Name = 'java-credential-literal'; Regex = '(?i)\b(?:[A-Z0-9_]*(?:password|passwd|secret|token|apiKey))\s*=\s*"[^"\r\n]+"'; Extensions = @('.java') },
     @{ Name = 'internal-hostname'; Regex = '(?![A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\.LOCAL\b)(?i:(?<![a-z0-9-])(?<!compose\.)(?<!env\.)(?!(?:compose\.postgres\.local\.ya?ml|env\.postgres\.local)(?:\b|$))(?:https?://)?(?:[a-z0-9-]+\.)+(?:internal|corp|private|local)(?::\d+)?(?:/|\b(?!-)))' },
     @{ Name = 'private-key-material'; Regex = '(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----' },

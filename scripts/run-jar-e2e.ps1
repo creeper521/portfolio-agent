@@ -273,10 +273,11 @@ foreach ($entry in @{
     Set-Item -LiteralPath "Env:$($entry.Key)" -Value ([string]$entry.Value)
 }
 
+$bodyStallAuthorizationValue = 'body-stall-fixture-key'
 if ($Lane -eq 'BODY_STALL') {
     # BODY_STALL 只允许固定的假凭据进入本地 fixture，先清除可能继承的真实 key。
     $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
-    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'body-stall-fixture-key'
+    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = $bodyStallAuthorizationValue
     Remove-Item -LiteralPath 'Env:PORTFOLIO_AGENT_GLM_API_KEY' -ErrorAction SilentlyContinue
 }
 
@@ -448,7 +449,7 @@ if ($Lane -eq 'BODY_STALL') {
         '--portfolio.conversational-model.enabled=true',
         '--portfolio.conversational-model.external-data-policy-approved=true',
         '--portfolio.conversational-model.provider=DEEPSEEK_V4_FLASH',
-        '--portfolio.conversational-model.deepseek-api-key=body-stall-fixture-key',
+        "--portfolio.conversational-model.deepseek-api-key=$bodyStallAuthorizationValue",
         '--portfolio.conversational-agent.enabled=true',
         '--portfolio.conversational-agent.visitor-data-policy-approved=true',
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',

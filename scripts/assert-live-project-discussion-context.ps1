@@ -71,12 +71,16 @@ $recommend = Invoke-Turn @{
 $latencies.Add($recommend.Latency)
 if ($recommend.Body.kind -ne 'ANSWER' -or
         $recommend.Body.answer.contentReleaseId -ne $ExpectedContentVersion) {
-    Stop-DiscussionGate 'PROJECT_DISCUSSION_RECOMMENDATION_FAILED'
+    $kind = [string]$recommend.Body.kind
+    $code = [string]$recommend.Body.code
+    if ($kind -notmatch '^[A-Z_]{1,64}$') { $kind = 'UNKNOWN' }
+    if ($code -notmatch '^[A-Z0-9_]{1,64}$') { $code = 'NONE' }
+    Stop-DiscussionGate "PROJECT_DISCUSSION_RECOMMENDATION_FAILED:$kind`:$code"
 }
 $recommendations = @($recommend.Body.answer.goalResults |
     Where-Object { $_.presentation.kind -eq 'RECOMMENDATION' })
 if ($recommendations.Count -ne 1) {
-    Stop-DiscussionGate 'PROJECT_DISCUSSION_RECOMMENDATION_FAILED'
+    Stop-DiscussionGate "PROJECT_DISCUSSION_RECOMMENDATION_FAILED:PRESENTATION_COUNT:$($recommendations.Count)"
 }
 $items = @($recommendations[0].presentation.items)
 if ($items.Count -ne 2) {
@@ -169,5 +173,5 @@ if ($null -ne $afterExit.activeDiscussion) {
 }
 
 Write-Output ('PROJECT_DISCUSSION_PASS operation=ENTER_RESULT,ROUTE_IN_CONTEXT,EXIT_CONTEXT; ' +
-    'goalKind=PORTFOLIO_RECOMMENDATION,PORTFOLIO_FACT; lockedSubject=true; ' +
+    'goalKind=PORTFOLIO_RECOMMEND,PORTFOLIO_FACT; lockedSubject=true; ' +
     'candidateScope=true; terminal=PASS; latency=' + ($latencies -join ','))
