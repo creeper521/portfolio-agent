@@ -1,7 +1,7 @@
 package com.portfolio.agent.turn.execution;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 
 import java.util.List;
 import java.util.Objects;

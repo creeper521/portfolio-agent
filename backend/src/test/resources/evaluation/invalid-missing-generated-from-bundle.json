@@ -17,7 +17,7 @@
     "input": {"messages": [{"role": "user", "content": "safe synthetic input"}]},
     "oracle": {"expectedSubjects": []},
     "expectations": {"resolution": ["ANSWERED"], "answerScope": ["PORTFOLIO"], "requiredClaimIds": [], "allowedEvidenceIds": [], "forbiddenSubjectSlugs": [], "forbiddenBehaviors": []},
-    "execution": {"layers": ["INTELLIGENCE"], "providerTrials": 1},
+    "execution": {"layers": ["HTTP_E2E"], "providerTrials": 1},
     "graders": [{"type": "SUBJECT_MATCH", "severity": "BLOCKING"}],
     "maintenance": {"subjectRefs": []}
   }]

@@ -4,6 +4,7 @@ import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
+import com.portfolio.agent.turn.execution.TurnDeadline;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -13,17 +14,51 @@ import java.util.UUID;
 
 public interface TurnExecutionStore {
     ClaimResult claim(
-            UUID requestId, String conversationId, byte[] requestFingerprint,
-            Instant now, Duration leaseDuration);
+            UUID requestId, String conversationId, RequestFingerprintSet fingerprints,
+            SessionAccess sessionAccess, Instant now, Duration leaseDuration,
+            TurnDeadline deadline);
     boolean complete(
             UUID requestId, byte[] requestFingerprint, PublicAgentTurn publicSnapshot,
             List<ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges,
             ConversationSessionStore.Session sessionToCreate,
-            Instant completedAt);
+            SessionAccess sessionAccess, Instant completedAt,
+            TurnDeadline deadline);
     boolean cancel(UUID requestId, String conversationId, Instant cancelledAt);
     Optional<TurnExecutionRecord> find(UUID requestId);
-    void clearConversation(String conversationId);
+
+    boolean clearConversation(
+            String conversationId, byte[] tokenHash, Instant clearedAt);
+
+    record SessionAccess(
+            String conversationId, byte[] tokenHash,
+            ConversationSessionStore.Session tentativeSession) {
+        public SessionAccess {
+            tokenHash = tokenHash == null ? null : tokenHash.clone();
+            if (tokenHash != null && tentativeSession != null) {
+                throw new IllegalArgumentException("session access is ambiguous");
+            }
+            if (tentativeSession != null) conversationId = tentativeSession.conversationId();
+            if (!isBlankOrNull(conversationId) && conversationId.length() > 128) {
+                throw new IllegalArgumentException("conversationId is invalid");
+            }
+            if (tokenHash == null && tentativeSession == null) {
+                throw new IllegalArgumentException("session access is required");
+            }
+        }
+        public static SessionAccess authenticated(String conversationId, byte[] tokenHash) {
+            return new SessionAccess(java.util.Objects.requireNonNull(conversationId),
+                    java.util.Objects.requireNonNull(tokenHash), null);
+        }
+        public static SessionAccess tentative(ConversationSessionStore.Session session) {
+            return new SessionAccess(session.conversationId(), null,
+                    java.util.Objects.requireNonNull(session));
+        }
+        @Override public byte[] tokenHash() { return tokenHash == null ? null : tokenHash.clone(); }
+        private static boolean isBlankOrNull(String value) {
+            return value == null || value.isBlank();
+        }
+    }
 
     record ClaimResult(Status status, PublicAgentTurn replay, long retryAfterSeconds) {
         public enum Status { CLAIMED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED }

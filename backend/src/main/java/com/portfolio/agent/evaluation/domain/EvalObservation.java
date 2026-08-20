@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.domain;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.AnswerSource;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
 import java.util.List;
 import java.util.Objects;
 

@@ -21,6 +21,7 @@ public final class PublicContentResponse {
     private final List<TimelineEventResponse> timeline;
     private final Map<String, List<String>> caseSlugsByEvidenceId;
     private final List<QuestionPresetResponse> questionPresets;
+    private final AgentAvailabilityResponse agentAvailability;
 
     public PublicContentResponse(
             String contentVersion,
@@ -35,7 +36,8 @@ public final class PublicContentResponse {
             List<EvidenceResponse> evidence,
             List<TimelineEventResponse> timeline,
             Map<String, List<String>> caseSlugsByEvidenceId,
-            List<QuestionPresetResponse> questionPresets
+            List<QuestionPresetResponse> questionPresets,
+            AgentAvailabilityResponse agentAvailability
     ) {
         this.contentVersion = contentVersion;
         this.runtimeBundleHash = runtimeBundleHash;
@@ -53,6 +55,7 @@ public final class PublicContentResponse {
                 copiedCaseSlugs.put(evidenceId, List.copyOf(caseSlugs)));
         this.caseSlugsByEvidenceId = Map.copyOf(copiedCaseSlugs);
         this.questionPresets = List.copyOf(questionPresets);
+        this.agentAvailability = Objects.requireNonNull(agentAvailability, "agentAvailability");
     }
 
     public String getContentVersion() {
@@ -69,6 +72,10 @@ public final class PublicContentResponse {
 
     public List<QuestionPresetResponse> getQuestionPresets() {
         return questionPresets;
+    }
+
+    public AgentAvailabilityResponse getAgentAvailability() {
+        return agentAvailability;
     }
 
     public OwnerResponse getOwner() {
@@ -123,7 +130,8 @@ public final class PublicContentResponse {
                 && Objects.equals(evidence, that.evidence)
                 && Objects.equals(timeline, that.timeline)
                 && Objects.equals(caseSlugsByEvidenceId, that.caseSlugsByEvidenceId)
-                && Objects.equals(questionPresets, that.questionPresets);
+                && Objects.equals(questionPresets, that.questionPresets)
+                && Objects.equals(agentAvailability, that.agentAvailability);
     }
 
     @Override
@@ -131,7 +139,7 @@ public final class PublicContentResponse {
         return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, collections,
                 projects, cases,
                 claims, claimEvidenceLinks, evidence, timeline, caseSlugsByEvidenceId,
-                questionPresets);
+                questionPresets, agentAvailability);
     }
 
     @Override
@@ -148,6 +156,7 @@ public final class PublicContentResponse {
                 ", timeline=" + timeline +
                 ", caseSlugsByEvidenceId=" + caseSlugsByEvidenceId +
                 ", questionPresets=" + questionPresets +
+                ", agentAvailability=" + agentAvailability +
                 '}';
     }
 }

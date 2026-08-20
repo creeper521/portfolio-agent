@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.planning;
 
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
+import com.portfolio.agent.turn.execution.TurnDeadline;
 
 import java.util.Objects;
 
@@ -24,15 +25,19 @@ public final class GoalResolver {
         this.boundaryPolicy = Objects.requireNonNull(boundaryPolicy, "boundaryPolicy");
     }
 
-    public ResolvedGoalSet resolve(AgentTurnCommand command, GoalResolutionContext context) {
+    public ResolvedGoalSet resolve(
+            AgentTurnCommand command,
+            GoalResolutionContext context,
+            TurnDeadline deadline) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(deadline, "deadline");
         if (!context.matchesHint(command.getSurfaceContext().getSubjectHint())) {
             return ResolvedGoalSet.invalidInput("指定的公开主体不存在或不可用。");
         }
         if (command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.FreeText) {
-            return resolveFreeText(ask, context);
+            return resolveFreeText(ask, context, deadline);
         }
         try {
             return boundaryPolicy.apply(reviewedGoalSource.resolve(command));
@@ -44,10 +49,14 @@ public final class GoalResolver {
 
     private ResolvedGoalSet resolveFreeText(
             AgentTurnCommand.Ask command,
-            GoalResolutionContext context) {
+            GoalResolutionContext context,
+            TurnDeadline deadline) {
+        java.util.Optional<ResolvedGoalSet> deterministic =
+                minimalFallback.tryResolveBeforeProvider(command, context);
+        if (deterministic.isPresent()) return deterministic.orElseThrow();
         try {
             GoalInterpretationResult result = interpretationPort.interpret(
-                    inputFactory.create(command, context));
+                    inputFactory.create(command, context), deadline);
             return switch (result.getKind()) {
                 case GOALS -> boundaryPolicy.apply(result.getGoalProposal().orElseThrow());
                 case CLARIFICATION -> ResolvedGoalSet.clarification(
@@ -56,6 +65,10 @@ public final class GoalResolver {
                         result.getMessage().orElseThrow());
             };
         } catch (GoalInterpretationUnavailableException unavailable) {
+            if (deadline.isExpired()) {
+                return ResolvedGoalSet.capabilityUnavailable(
+                        "目标解释已超过本轮预算，请重新提问。");
+            }
             return minimalFallback.tryResolve(command, context)
                     .map(boundaryPolicy::apply)
                     .orElseGet(() -> ResolvedGoalSet.capabilityUnavailable(

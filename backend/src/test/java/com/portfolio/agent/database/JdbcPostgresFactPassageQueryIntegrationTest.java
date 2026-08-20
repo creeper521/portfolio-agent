@@ -1,10 +1,12 @@
 package com.portfolio.agent.database;
 
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.intelligence.adapter.postgres.JdbcPostgresFactPassageQuery;
-import com.portfolio.agent.answer.intelligence.adapter.postgres.PostgresKnowledgePassageRow;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.JdbcPostgresFactPassageQuery;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.PostgresKnowledgePassageRow;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.repository.postgres.PublicBundleDatabaseImporter;
 import com.portfolio.agent.portfolio.repository.postgres.PublicBundleImportResult;
@@ -71,14 +73,14 @@ class JdbcPostgresFactPassageQueryIntegrationTest {
                 .orElseThrow();
 
         assertThat(row.getClaim().getCategory()).isEqualTo(
-                com.portfolio.agent.answer.domain.AnswerClaimCategory.OUTCOME);
+                com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory.OUTCOME);
         assertThat(row.getClaim().getStatement()).contains("核心版本已完成");
         assertThat(row.getClaim().getDetail()).contains("不声明长期生产效果");
         assertThat(row.getClaim().getAchievementStatus().name()).isNotBlank();
         assertThat(row.getClaim().getContributionType().name()).isNotBlank();
         assertThat(row.getClaim().getVerificationBasis().name()).isNotBlank();
         assertThat(row.getClaim().getVerificationStatus()).isEqualTo(
-                com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus.VERIFIED);
+                com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus.VERIFIED);
         assertThat(row.getClaim().getMateriality().name()).isNotBlank();
         assertThat(row.getClaim().getTopics()).isNotEmpty();
         assertThat(row.getEvidenceReferences()).isNotEmpty()

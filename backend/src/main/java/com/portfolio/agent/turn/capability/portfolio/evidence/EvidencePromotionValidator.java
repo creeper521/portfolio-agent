@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio.evidence;
 
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.ClaimEvidenceCandidate;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.PublicEvidenceDescriptor;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.PortfolioCandidateSet;
@@ -32,7 +33,7 @@ public final class EvidencePromotionValidator {
             String identity = candidate.getClaimId() + "\u0000" + evidence.getEvidenceCode();
             if (!identities.add(identity)) throw new IllegalArgumentException("INTEGRITY_FAILURE");
             units.add(new ValidatedEvidenceUnit(subject.getSubjectId(), candidate.getClaim(),
-                    new PublicSourceReference(
+                    new PublicSourceReferenceValue(
                             evidence.getEvidenceCode(), evidence.getLabel(),
                             evidence.getContentVersion(), evidence.getSourceType().name(),
                             evidence.getSubjectRoute(), evidence.getEvidenceRoute())));

@@ -12,9 +12,10 @@ import static org.mockito.Mockito.when;
 class AgentTurnLifecycleCancellationTest {
     @Test void cancelledTerminalGatePreventsCompletionFromWinning() {
         AgentStateStore store = mock(AgentStateStore.class);
-        when(store.claim(any(), any(), any(), any(), any()))
+        when(store.claim(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
-        when(store.complete(any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+        when(store.cancel(any(), any(), any())).thenReturn(true);
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"));
         AgentTurnLifecycleService.Result result = service.execute(

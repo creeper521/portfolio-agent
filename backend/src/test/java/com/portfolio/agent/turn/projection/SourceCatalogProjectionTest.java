@@ -2,7 +2,9 @@ package com.portfolio.agent.turn.projection;
 
 import com.portfolio.agent.turn.execution.GoalCoverage;
 import com.portfolio.agent.turn.execution.SemanticTurnOutcome;
+import com.portfolio.agent.turn.execution.TaskArtifact;
 import com.portfolio.agent.turn.execution.TaskOutcome;
+import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.GoalRequestedOutput;
 import com.portfolio.agent.turn.planning.SemanticTask;
@@ -20,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SourceCatalogProjectionTest {
     @Test void repeatedSectionReferencesBecomeOneCatalogEntry() {
-        var parameters = new UserGoalProposal.PortfolioFactParameters(
+        UserGoalProposal.PortfolioFactParameters parameters =
+                new UserGoalProposal.PortfolioFactParameters(
                 Set.of(UserGoalProposal.Facet.SOLUTION));
         SemanticTask task = SemanticTask.of(
                 "task-portfolio", SemanticTask.Type.PORTFOLIO_FACT,
@@ -31,8 +34,8 @@ class SourceCatalogProjectionTest {
                 "goal-portfolio", "介绍方案", GoalKind.PORTFOLIO_FACT,
                 List.of(), Set.of(GoalRequestedOutput.SOLUTION), task.getTaskId())),
                 List.of(task), List.of());
-        var unit = ProjectionTestFixtures.unit("project-a", "E-01", "实现说明");
-        var artifact = ProjectionTestFixtures.portfolioFactArtifact(List.of(unit, unit));
+        ValidatedEvidenceUnit unit = ProjectionTestFixtures.unit("project-a", "E-01", "实现说明");
+        TaskArtifact artifact = ProjectionTestFixtures.portfolioFactArtifact(List.of(unit, unit));
         SemanticTurnOutcome outcome = new SemanticTurnOutcome(
                 List.of(new TaskOutcome(task.getTaskId(),
                         new TaskOutcome.Produced(artifact, TaskOutcome.Fulfillment.FULL))),

@@ -77,8 +77,8 @@ class EvalDatasetHasherTest {
                 new EvalCase.Oracle(List.of(new com.portfolio.agent.evaluation.domain.EvalSubjectRef(
                         com.portfolio.agent.portfolio.domain.ClaimSubjectType.PROJECT, "a"))),
                 new EvalCase.Expectations(
-                        List.of(com.portfolio.agent.answer.domain.AnswerResolution.ANSWERED),
-                        List.of(com.portfolio.agent.answer.domain.ConversationAnswerScope.PORTFOLIO),
+                        List.of(com.portfolio.agent.evaluation.domain.AnswerResolution.ANSWERED),
+                        List.of(com.portfolio.agent.evaluation.domain.ConversationAnswerScope.PORTFOLIO),
                         List.of(), List.of(), List.of(), List.of()),
                 new EvalCase.Execution(List.of(com.portfolio.agent.evaluation.domain.EvalLayer.BUNDLE_CONTRACT), 3),
                 List.of(new com.portfolio.agent.evaluation.domain.EvalGraderRule(

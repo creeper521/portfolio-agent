@@ -7,4 +7,4 @@ logging:
 
 portfolio:
   conversation-context:
-    mode: ${PORTFOLIO_CONVERSATION_CONTEXT_MODE:DISABLED}
+    mode: ${PORTFOLIO_CONVERSATION_CONTEXT_MODE:POSTGRESQL}

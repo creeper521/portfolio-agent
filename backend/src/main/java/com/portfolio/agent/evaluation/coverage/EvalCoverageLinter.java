@@ -44,7 +44,7 @@ public final class EvalCoverageLinter {
                 issues.add(new EvalCoverageIssue(
                         "MISSING_DEEP_COVERAGE", subjectRef,
                         "Deep coverage requires an authored maintenance case with HIGH or "
-                                + "INVARIANT risk and an INTELLIGENCE or HTTP_E2E layer; missing "
+                                + "INVARIANT risk and an HTTP_E2E layer; missing "
                                 + state.missingRequirements()));
             }
         }
@@ -136,8 +136,7 @@ public final class EvalCoverageLinter {
 
     private boolean hasDeepLayer(EvalCase evalCase) {
         List<EvalLayer> layers = evalCase.getLayers();
-        return layers != null && (layers.contains(EvalLayer.INTELLIGENCE)
-                || layers.contains(EvalLayer.HTTP_E2E));
+        return layers != null && layers.contains(EvalLayer.HTTP_E2E);
     }
 
     private static final class DeepCoverageState {
@@ -160,7 +159,7 @@ public final class EvalCoverageLinter {
                 missing.add("HIGH_OR_INVARIANT_RISK");
             }
             if (!hasDeepLayer) {
-                missing.add("INTELLIGENCE_OR_HTTP_E2E_LAYER");
+                missing.add("HTTP_E2E_LAYER");
             }
             return missing;
         }

@@ -1,17 +1,17 @@
 package com.portfolio.agent.turn.projection;
 
-import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerClaimProjection;
-import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
-import com.portfolio.agent.answer.domain.AnswerContributionType;
-import com.portfolio.agent.answer.domain.AnswerMateriality;
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerAchievementStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerContributionType;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerMateriality;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificationBasis;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.general.GeneralPresentation;
 import com.portfolio.agent.turn.capability.general.GeneralSemanticResult;
-import com.portfolio.agent.turn.capability.portfolio.evidence.PublicSourceReference;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
 import com.portfolio.agent.turn.capability.portfolio.presentation.PortfolioPresentation;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
@@ -36,7 +36,8 @@ final class ProjectionTestFixtures {
 
     static SemanticTurnPlan generalPlan() {
         UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor("幂等", 0);
-        var parameters = new UserGoalProposal.GeneralExplanationParameters(
+        UserGoalProposal.GeneralExplanationParameters parameters =
+                new UserGoalProposal.GeneralExplanationParameters(
                 anchor, UserGoalProposal.Depth.STANDARD);
         SemanticTask task = SemanticTask.of(
                 "task-general", SemanticTask.Type.GENERAL_EXPLANATION,
@@ -75,7 +76,7 @@ final class ProjectionTestFixtures {
                 AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-" + subjectId));
-        return new ValidatedEvidenceUnit(subjectId, claim, new PublicSourceReference(
+        return new ValidatedEvidenceUnit(subjectId, claim, new PublicSourceReferenceValue(
                 key, "Evidence " + subjectId, "public-1", "DOCUMENT",
                 "/projects/" + subjectId, "/evidence/" + subjectId));
     }
@@ -99,7 +100,8 @@ final class ProjectionTestFixtures {
     }
 
     static SemanticTurnPlan recommendationPlan() {
-        var parameters = new UserGoalProposal.PortfolioRecommendationParameters(2, Set.of());
+        UserGoalProposal.PortfolioRecommendationParameters parameters =
+                new UserGoalProposal.PortfolioRecommendationParameters(2, Set.of());
         SemanticTask task = SemanticTask.of(
                 "task-recommendation", SemanticTask.Type.PORTFOLIO_RECOMMEND,
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_RECOMMEND, parameters, List.of()),

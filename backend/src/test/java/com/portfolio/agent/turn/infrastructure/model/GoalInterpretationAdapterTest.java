@@ -34,9 +34,11 @@ class GoalInterpretationAdapterTest {
                     }]}
                     """);
         }, new ObjectMapper(), new GoalProposalCodec(), 1200,
-                Duration.ofSeconds(2), Clock.systemUTC());
+                Duration.ofSeconds(2));
 
-        GoalInterpretationResult result = adapter.interpret(input());
+        GoalInterpretationResult result = adapter.interpret(
+                input(), com.portfolio.agent.turn.execution.TurnDeadline.after(
+                        Duration.ofSeconds(3), Clock.systemUTC()));
         assertThat(result.getKind()).isEqualTo(GoalInterpretationResult.Kind.GOALS);
         assertThat(captured.get().userPrompt()).contains("allowedGoalKinds", "publicSubjects")
                 .doesNotContain("taskType", "dependencies");

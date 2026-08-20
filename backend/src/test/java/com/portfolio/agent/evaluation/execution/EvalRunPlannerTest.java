@@ -1,7 +1,7 @@
 package com.portfolio.agent.evaluation.execution;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
@@ -100,7 +100,7 @@ class EvalRunPlannerTest {
                 evalCase("smoke.project.demo", EvalSplit.CALIBRATION, EvalRiskLevel.STANDARD,
                         0, true, "project-demo", List.of(EvalLayer.BUNDLE_CONTRACT)),
                 evalCase("answer.role-reset.001", EvalSplit.HOLDOUT, EvalRiskLevel.HIGH,
-                        3, false, "case-role-reset", List.of(EvalLayer.INTELLIGENCE)),
+                        3, false, "case-role-reset", List.of(EvalLayer.HTTP_E2E)),
                 evalCase("regression.provider-timeout.001", EvalSplit.REGRESSION,
                         EvalRiskLevel.INVARIANT, 3, false, "project-demo",
                         List.of(EvalLayer.HTTP_E2E)),
@@ -111,7 +111,7 @@ class EvalRunPlannerTest {
                 evalCase("shallow.high.changed.001", EvalSplit.HOLDOUT, EvalRiskLevel.HIGH,
                         3, false, "case-role-reset", List.of(EvalLayer.BUNDLE_CONTRACT)),
                 evalCase("challenge.private.001", EvalSplit.CHALLENGE, EvalRiskLevel.INVARIANT,
-                        3, false, "project-demo", List.of(EvalLayer.INTELLIGENCE)));
+                        3, false, "project-demo", List.of(EvalLayer.HTTP_E2E)));
     }
 
     private EvalCase evalCase(String id, EvalSplit split, EvalRiskLevel riskLevel,

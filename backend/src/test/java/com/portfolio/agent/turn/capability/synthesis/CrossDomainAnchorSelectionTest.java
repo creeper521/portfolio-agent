@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.synthesis;
 
+import com.portfolio.agent.turn.execution.TaskExecutionContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -9,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 class CrossDomainAnchorSelectionTest {
     @Test void mismatchedAnchorIsNoResultWithoutSubstringGuessing() {
-        var context = CrossDomainTestFixtures.context("并发控制");
+        TaskExecutionContext context = CrossDomainTestFixtures.context("并发控制");
         when(context.getDependencyResults()).thenReturn(List.of(
                 CrossDomainTestFixtures.general("并发"), CrossDomainTestFixtures.portfolio()));
         assertThatThrownBy(() -> new CrossDomainTaskExecutor(new CrossDomainPresentationComposer())

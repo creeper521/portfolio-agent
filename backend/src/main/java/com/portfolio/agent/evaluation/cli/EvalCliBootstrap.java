@@ -6,16 +6,6 @@ import com.portfolio.agent.evaluation.dataset.EvalPolicyLoader;
 import com.portfolio.agent.evaluation.dataset.EvalSuiteLoader;
 import com.portfolio.agent.evaluation.execution.BundleContractEvalExecutor;
 import com.portfolio.agent.evaluation.execution.EvalExecutor;
-import com.portfolio.agent.evaluation.execution.SubjectInternalRetrievalExecutor;
-import com.portfolio.agent.evaluation.execution.FullCorpusRetrievalExecutor;
-import com.portfolio.agent.answer.domain.RetrievalPolicy;
-import com.portfolio.agent.answer.gateway.LocalEmbeddingPort;
-import com.portfolio.agent.answer.service.KeywordRetriever;
-import com.portfolio.agent.answer.service.LocalEmbeddingFailureException;
-import com.portfolio.agent.answer.service.ReciprocalRankFusion;
-import com.portfolio.agent.answer.service.RetrievalContextValidator;
-import com.portfolio.agent.answer.service.RetrievalQueryNormalizer;
-import com.portfolio.agent.answer.service.VectorRetriever;
 import com.portfolio.agent.evaluation.grading.DeterministicEvalGrader;
 import com.portfolio.agent.evaluation.reporting.EvalBaselineComparator;
 import com.portfolio.agent.evaluation.reporting.EvalMetricAggregator;
@@ -53,24 +43,13 @@ public final class EvalCliBootstrap {
     };
 
     private final ObjectMapper mapper;
-    private final boolean providerAuthorized;
-    private final boolean springEnabled;
-    private org.springframework.context.ConfigurableApplicationContext springContext;
-
     public EvalCliBootstrap(boolean providerAuthorized) {
-        this(providerAuthorized, springEnabledByDefault());
+        this(providerAuthorized, false);
     }
 
     EvalCliBootstrap(boolean providerAuthorized, boolean springEnabled) {
         this.mapper = new ObjectMapper()
                 .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        this.providerAuthorized = providerAuthorized;
-        this.springEnabled = springEnabled;
-    }
-
-    private static boolean springEnabledByDefault() {
-        return !"false".equalsIgnoreCase(
-                System.getProperty("portfolio.eval.cli.spring", "true"));
     }
 
     public EvalSuiteLoader createSuiteLoader() {
@@ -97,31 +76,8 @@ public final class EvalCliBootstrap {
     }
 
     public EvalHarness createHarness(RuntimeContentSnapshot bundle) {
-        return createHarness(bundle, null, false);
-    }
-
-    public EvalHarness createHarness(
-            RuntimeContentSnapshot bundle,
-            String baseUrl,
-            boolean withIntelligence) {
         List<EvalExecutor> executors = new ArrayList<>();
         executors.add(new BundleContractEvalExecutor(bundle));
-        executors.add(new SubjectInternalRetrievalExecutor(bundle));
-        LocalEmbeddingPort offlineEmbedding = query -> {
-            throw new LocalEmbeddingFailureException("LOCAL_EMBEDDING_DISABLED");
-        };
-        executors.add(new FullCorpusRetrievalExecutor(
-                bundle, RetrievalPolicy.currentRelease(), new RetrievalQueryNormalizer(),
-                new KeywordRetriever(), new VectorRetriever(), new ReciprocalRankFusion(),
-                new RetrievalContextValidator(), offlineEmbedding));
-        if (withIntelligence) {
-            com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor
-                    portfolioExecutor = createPortfolioExecutor();
-            if (portfolioExecutor != null) {
-                executors.add(new com.portfolio.agent.evaluation.execution
-                        .PortfolioEvalExecutor(portfolioExecutor, bundle));
-            }
-        }
         return new EvalHarness(
                 executors,
                 new DeterministicEvalGrader(),
@@ -129,54 +85,6 @@ public final class EvalCliBootstrap {
                 new EvalBaselineComparator(),
                 new EvalVerdictPolicy(),
                 bundle);
-    }
-
-    private com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor
-            createPortfolioExecutor() {
-        org.springframework.context.ConfigurableApplicationContext context =
-                springContext();
-        if (context == null) {
-            return null;
-        }
-        try {
-            return context.getBean(
-                    com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor.class);
-        } catch (RuntimeException failure) {
-            return null;
-        }
-    }
-
-    /**
-     * Lazily assembled, cached Spring context used by both the intelligence
-     * pipeline and the real provider seam. Always fail-closed: the model,
-     * conversation and data-policy flags are forced off at the highest
-     * precedence, so this context can never enable the real provider on its
-     * own; explicit --authorize-real-provider decides whether the real seam
-     * bean is used by the provider executor.
-     */
-    private org.springframework.context.ConfigurableApplicationContext
-            springContext() {
-        if (!springEnabled) {
-            return null;
-        }
-        if (springContext == null) {
-            try {
-                org.springframework.boot.builder.SpringApplicationBuilder builder =
-                        new org.springframework.boot.builder.SpringApplicationBuilder(
-                                com.portfolio.agent.PortfolioAgentApplication.class)
-                                .web(org.springframework.boot.WebApplicationType.NONE)
-                                .properties("spring.main.banner-mode=off");
-                String[] contextArgs = providerAuthorized
-                        ? new String[]{
-                                "--spring.main.web-application-type=none",
-                                "--portfolio.retrieval.profile=KEYWORD_ONLY"}
-                        : FORCED_OFF_ARGS;
-                springContext = builder.run(contextArgs);
-            } catch (RuntimeException failure) {
-                return null;
-            }
-        }
-        return springContext;
     }
 
     public EvalReportJsonWriter createJsonWriter() {

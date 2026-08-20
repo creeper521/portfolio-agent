@@ -1,7 +1,7 @@
 package com.portfolio.agent.evaluation.coverage;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
@@ -24,8 +24,7 @@ public final class EvalSmokeCaseGenerator {
 
     private static final List<EvalLayer> SMOKE_LAYERS = List.of(
             EvalLayer.BUNDLE_CONTRACT,
-            EvalLayer.FULL_CORPUS_RETRIEVAL,
-            EvalLayer.INTELLIGENCE);
+            EvalLayer.HTTP_E2E);
     private static final List<EvalGraderRule> SMOKE_GRADERS = List.of(
             new EvalGraderRule("SUBJECT_MATCH", EvalSeverity.BLOCKING),
             new EvalGraderRule("REFERENCE_INTEGRITY", EvalSeverity.BLOCKING),

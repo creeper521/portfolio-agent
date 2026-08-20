@@ -34,8 +34,7 @@ class EvalSmokeCaseGeneratorTest {
             assertThat(item.getInputMessages()).hasSize(1);
             assertThat(item.getLayers()).containsExactly(
                     EvalLayer.BUNDLE_CONTRACT,
-                    EvalLayer.FULL_CORPUS_RETRIEVAL,
-                    EvalLayer.INTELLIGENCE);
+                    EvalLayer.HTTP_E2E);
             assertThat(item.getProviderTrials()).isEqualTo(1);
         });
     }

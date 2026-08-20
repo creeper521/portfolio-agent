@@ -11,7 +11,6 @@ import com.portfolio.agent.turn.planning.GoalInterpretationResult;
 import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,8 +20,15 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             Return exactly one JSON object with no Markdown and no unknown fields.
             Root variants are:
             {"kind":"CONVERSATIONAL","message":"..."}
-            {"kind":"CLARIFICATION","clarification":{"field":"SUBJECT|GOAL|OUTPUT","prompt":"...","inputAnchor":{"text":"exact substring","start":0}}}
+            {"kind":"CLARIFICATION","clarification":{"field":"SUBJECT|OUTPUT|REQUESTED_SIZE","prompt":"...","blockedGoal":blockedGoal}}
             or {"kind":"GOALS","goals":[goal]}.
+            blockedGoal is only for portfolio goals and has exactly goalKind, subjects,
+            requestedOutputs, facets, dimensions, requestedSize, constraints, unresolvedField,
+            askedFields, remainingFields, depth. subjects contain only kind/reference public IDs; arrays use closed
+            enum names; requestedSize may be null only when unresolvedField is REQUESTED_SIZE;
+            askedFields contains unresolvedField, depth is 1, and remainingFields contains at most
+            one different allowed field. Never copy visitor text into
+            blockedGoal. Do not return CLARIFICATION for general goals that require raw anchors.
             Every goal has exactly goalKey, goalKind, inputAnchor, subjectCandidates,
             requestedOutputs, knowledgeRequirement, parameters. Anchors must copy an exact
             substring of currentInput and use its zero-based character start.
@@ -40,18 +46,18 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
     private final GoalProposalCodec codec;
     private final int maxTokens;
     private final Duration timeout;
-    private final Clock clock;
     public GoalInterpretationAdapter(
             StructuredModelTransport transport, ObjectMapper mapper,
-            GoalProposalCodec codec, int maxTokens, Duration timeout, Clock clock) {
+            GoalProposalCodec codec, int maxTokens, Duration timeout) {
         this.transport = transport; this.mapper = mapper; this.codec = codec;
-        this.maxTokens = maxTokens; this.timeout = timeout; this.clock = clock;
+        this.maxTokens = maxTokens; this.timeout = timeout;
     }
-    @Override public GoalInterpretationResult interpret(GoalInterpretationInput input) {
+    @Override public GoalInterpretationResult interpret(
+            GoalInterpretationInput input, TurnDeadline deadline) {
         try {
             return codec.decode(transport.execute(new StructuredModelRequest(
                     "GOAL_INTERPRETATION", SYSTEM_PROMPT, prompt(input), maxTokens, 0.0d,
-                    TurnDeadline.after(timeout, clock))).json(), input);
+                    deadline.cappedAt(timeout))).json(), input);
         } catch (StructuredModelFailure | IllegalArgumentException failure) {
             throw new GoalInterpretationUnavailableException(failure);
         }

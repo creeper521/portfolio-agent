@@ -1,8 +1,8 @@
 package com.portfolio.agent.evaluation.domain;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.AnswerSectionMapping;
-import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.evaluation.domain.AnswerSectionMapping;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerBlock;
 
 import java.util.ArrayList;
 import java.util.HashSet;

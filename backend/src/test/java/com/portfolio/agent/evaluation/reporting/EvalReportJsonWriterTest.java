@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.reporting;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
@@ -119,14 +119,14 @@ class EvalReportJsonWriterTest {
                 "NOT_APPLICABLE", "NOT_APPLICABLE", "sha256:model-params",
                 "NOT_APPLICABLE", "NOT_APPLICABLE");
         EvalObservation observation = new EvalObservation(
-                "case-b", EvalLayer.INTELLIGENCE, 1, EvalObservationStatus.PASS,
+                "case-b", EvalLayer.HTTP_E2E, 1, EvalObservationStatus.PASS,
                 null, "case-a", List.of("claim-1"), List.of("E-01"), List.of(),
                 AnswerResolution.ANSWERED, ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
                 List.of("DETERMINISTIC"), 12L, EvalProviderUsage.unavailable(),
                 EvalAnswerShape.empty(), false, false);
         EvalGrade grade = new EvalGrade(
-                "case-b", EvalLayer.INTELLIGENCE, 1, "SUBJECT_MATCH",
+                "case-b", EvalLayer.HTTP_E2E, 1, "SUBJECT_MATCH",
                 EvalSeverity.BLOCKING, true, EvalReasonCode.PASS, 1L, 1L);
         EvalGateResult gate = new EvalGateResult(
                 "routing.top1", new BigDecimal("1.0"), new BigDecimal("0.9"),

@@ -1,8 +1,8 @@
 package com.portfolio.agent.turn.capability.portfolio.semantic;
 
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
-import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;

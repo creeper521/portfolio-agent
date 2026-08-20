@@ -7,14 +7,16 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AgentTurnLifecycleSettlementFailureTest {
-    @Test void readOnlyAnswerSurvivesPostClaimSettlementFailureWithoutContinuation() {
+    @Test void readOnlyAnswerSurvivesSettlementFailureUntilLeaseRecovery() {
         AgentStateStore store = mock(AgentStateStore.class);
-        when(store.claim(any(), any(), any(), any(), any()))
+        when(store.claim(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
-        when(store.complete(any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalStateException("state unavailable"));
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"));
@@ -27,5 +29,7 @@ class AgentTurnLifecycleSettlementFailureTest {
         assertThat(result.settlementFailed()).isTrue();
         assertThat(result.turn()).isInstanceOf(
                 com.portfolio.agent.turn.projection.PublicAgentTurn.Conversational.class);
+        verify(store, never()).cancel(any(), any(), any());
+        verify(store, never()).find(any());
     }
 }

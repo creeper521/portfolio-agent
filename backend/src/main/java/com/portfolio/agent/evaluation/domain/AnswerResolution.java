@@ -1,0 +1,14 @@
+package com.portfolio.agent.evaluation.domain;
+
+public enum AnswerResolution {
+    ANSWERED,
+    PARTIALLY_ANSWERED,
+    PRESENTATION_BLOCKED,
+    AWAITING_CONFIRMATION,
+    NEEDS_CLARIFICATION,
+    NOT_SUPPORTED,
+    CAPABILITY_UNAVAILABLE,
+    BOUNDARY,
+    REJECTED,
+    INVALID_INPUT
+}

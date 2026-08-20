@@ -13,6 +13,7 @@ public final class TurnExecutionRecord {
     private final UUID requestId;
     private final String conversationId;
     private final byte[] requestFingerprint;
+    private final String fingerprintKeyId;
     private final Status status;
     private final Instant leaseExpiresAt;
     private final PublicAgentTurn publicSnapshot;
@@ -22,7 +23,7 @@ public final class TurnExecutionRecord {
 
     private TurnExecutionRecord(
             UUID requestId, String conversationId, byte[] requestFingerprint,
-            Status status, Instant leaseExpiresAt, PublicAgentTurn publicSnapshot,
+            String fingerprintKeyId, Status status, Instant leaseExpiresAt, PublicAgentTurn publicSnapshot,
             List<ContinuationContext> contexts, List<ClarificationStore.Record> challenges,
             Instant terminalAt) {
         this.requestId = Objects.requireNonNull(requestId, "requestId");
@@ -31,6 +32,10 @@ public final class TurnExecutionRecord {
         }
         this.conversationId = conversationId;
         this.requestFingerprint = Objects.requireNonNull(requestFingerprint, "requestFingerprint").clone();
+        if (fingerprintKeyId == null || fingerprintKeyId.isBlank()) {
+            throw new IllegalArgumentException("fingerprintKeyId is required");
+        }
+        this.fingerprintKeyId = fingerprintKeyId;
         this.status = Objects.requireNonNull(status, "status");
         this.leaseExpiresAt = Objects.requireNonNull(leaseExpiresAt, "leaseExpiresAt");
         this.publicSnapshot = publicSnapshot;
@@ -45,35 +50,40 @@ public final class TurnExecutionRecord {
     }
 
     public static TurnExecutionRecord claimed(
-            UUID requestId, String conversationId, byte[] fingerprint, Instant leaseExpiresAt) {
+            UUID requestId, String conversationId, byte[] fingerprint,
+            String fingerprintKeyId, Instant leaseExpiresAt) {
         return new TurnExecutionRecord(
-                requestId, conversationId, fingerprint, Status.CLAIMED, leaseExpiresAt,
+                requestId, conversationId, fingerprint, fingerprintKeyId,
+                Status.CLAIMED, leaseExpiresAt,
                 null, List.of(), List.of(), null);
     }
     public static TurnExecutionRecord restore(
             UUID requestId, String conversationId, byte[] fingerprint,
-            Status status, Instant leaseExpiresAt, PublicAgentTurn snapshot,
+            String fingerprintKeyId, Status status, Instant leaseExpiresAt, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges, Instant terminalAt) {
         return new TurnExecutionRecord(
-                requestId, conversationId, fingerprint, status, leaseExpiresAt,
+                requestId, conversationId, fingerprint, fingerprintKeyId, status, leaseExpiresAt,
                 snapshot, contexts, challenges, terminalAt);
     }
     public TurnExecutionRecord completed(
             PublicAgentTurn snapshot, List<ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges, Instant completedAt) {
         return new TurnExecutionRecord(
-                requestId, conversationId, requestFingerprint, Status.COMPLETED, leaseExpiresAt,
+                requestId, conversationId, requestFingerprint, fingerprintKeyId,
+                Status.COMPLETED, leaseExpiresAt,
                 snapshot, contexts, challenges, completedAt);
     }
     public TurnExecutionRecord cancelled(Instant cancelledAt) {
         return new TurnExecutionRecord(
-                requestId, conversationId, requestFingerprint, Status.CANCELLED, leaseExpiresAt,
+                requestId, conversationId, requestFingerprint, fingerprintKeyId,
+                Status.CANCELLED, leaseExpiresAt,
                 null, List.of(), List.of(), cancelledAt);
     }
     public UUID getRequestId() { return requestId; }
     public String getConversationId() { return conversationId; }
     public byte[] getRequestFingerprint() { return requestFingerprint.clone(); }
+    public String getFingerprintKeyId() { return fingerprintKeyId; }
     public Status getStatus() { return status; }
     public Instant getLeaseExpiresAt() { return leaseExpiresAt; }
     public PublicAgentTurn getPublicSnapshot() { return publicSnapshot; }

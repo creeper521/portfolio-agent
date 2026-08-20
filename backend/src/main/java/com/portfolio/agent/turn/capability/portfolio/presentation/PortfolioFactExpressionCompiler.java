@@ -2,8 +2,8 @@ package com.portfolio.agent.turn.capability.portfolio.presentation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 
 import java.util.ArrayList;

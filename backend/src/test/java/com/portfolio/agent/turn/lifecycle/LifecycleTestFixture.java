@@ -1,7 +1,7 @@
 package com.portfolio.agent.turn.lifecycle;
 
-import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.RuntimeAnswerContent;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore;
@@ -26,6 +26,15 @@ final class LifecycleTestFixture {
 
     static AgentTurnLifecycleService service(
             AgentStateStore store, ResolvedGoalSet resolved) {
+        return service(store, resolved,
+                new RequestFingerprintFactory(new byte[32]), sessionResolver(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    static AgentTurnLifecycleService service(
+            AgentStateStore store, ResolvedGoalSet resolved,
+            RequestFingerprintFactory fingerprints,
+            ConversationSessionResolver sessions, Clock clock) {
         PortfolioKnowledgeGateway knowledge = mock(PortfolioKnowledgeGateway.class);
         RuntimeAnswerContent content = mock(RuntimeAnswerContent.class);
         when(content.getProjects()).thenReturn(java.util.List.of());
@@ -33,15 +42,16 @@ final class LifecycleTestFixture {
         when(content.getContentVersion()).thenReturn("public-1");
         when(knowledge.getContent()).thenReturn(content);
         GoalResolver resolver = mock(GoalResolver.class);
-        when(resolver.resolve(any(), any())).thenReturn(resolved);
+        when(resolver.resolve(any(), any(), any())).thenReturn(resolved);
         return new AgentTurnLifecycleService(
                 knowledge, resolver, mock(SemanticPlanCompiler.class),
                 mock(SemanticTurnEngine.class), new PublicAgentTurnProjector(),
                 new ContextMutationPlanner(() -> "context_handle_123"), store,
-                new RequestFingerprintFactory(new byte[32]),
-                sessionResolver(),
-                Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(10),
-                Duration.ofSeconds(5), Duration.ofMinutes(10));
+                fingerprints, sessions,
+                java.util.concurrent.ForkJoinPool.commonPool(),
+                clock, Duration.ofSeconds(10),
+                Duration.ofSeconds(5), Duration.ofSeconds(1),
+                Duration.ofMinutes(10));
     }
 
     static ConversationSessionResolver sessionResolver() {

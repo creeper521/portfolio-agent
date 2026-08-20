@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.mapper;
 
 import com.portfolio.agent.portfolio.dto.response.CaseDetailResponse;
+import com.portfolio.agent.portfolio.dto.response.AgentAvailabilityResponse;
 import com.portfolio.agent.portfolio.dto.response.CaseCollectionResponse;
 import com.portfolio.agent.portfolio.dto.response.CaseSummaryResponse;
 import com.portfolio.agent.portfolio.dto.response.ClaimEvidenceLinkResponse;
@@ -70,6 +71,12 @@ public class PortfolioResponseMapper {
     }
 
     public PublicContentResponse toPublicContentResponse(PublicContent content) {
+        return toPublicContentResponse(content, AgentAvailabilityResponse.available());
+    }
+
+    public PublicContentResponse toPublicContentResponse(
+            PublicContent content,
+            AgentAvailabilityResponse agentAvailability) {
         Map<String, String> projectSlugsById = projectSlugsById(content);
         Map<String, String> caseSlugsById = caseSlugsById(content);
 
@@ -115,7 +122,8 @@ public class PortfolioResponseMapper {
                                 ),
                                 resolveSlugs(question.getCaseIds(), caseSlugsById)
                         ))
-                        .toList()
+                        .toList(),
+                agentAvailability
         );
     }
 

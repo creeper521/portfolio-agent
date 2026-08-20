@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.planning;
 
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import com.portfolio.agent.turn.lifecycle.ConversationWindow;
+import com.portfolio.agent.turn.execution.TurnDeadline;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ class TurnInputSafetyReplacementTest {
     @Test
     void unknownSurfaceHintFailsBeforeModelOrFallback() {
         GoalResolver resolver = new GoalResolver(
-                input -> { throw new AssertionError("model must not receive unknown subject hint"); },
+                (input, deadline) -> { throw new AssertionError("model must not receive unknown subject hint"); },
                 command -> { throw new AssertionError("reviewed source must not receive unknown hint"); },
                 new GoalInterpretationInputFactory(), new MinimalGoalFallback(), new GoalBoundaryPolicy());
         AgentTurnCommand command = new AgentTurnCommand.Ask(
@@ -51,7 +52,8 @@ class TurnInputSafetyReplacementTest {
                         GoalSubjectReference.Kind.PROJECT, "project-a", "Project A",
                         Set.of("project-a"))), Set.of(GoalKind.values()));
 
-        assertThat(resolver.resolve(command, context).getKind())
+        assertThat(resolver.resolve(command, context, TurnDeadline.after(
+                java.time.Duration.ofSeconds(1), java.time.Clock.systemUTC())).getKind())
                 .isEqualTo(ResolvedGoalSet.Kind.INVALID_INPUT);
     }
 }

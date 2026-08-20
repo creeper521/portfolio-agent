@@ -1,9 +1,9 @@
 package com.portfolio.agent.turn.projection;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.general.GeneralPresentation;
-import com.portfolio.agent.turn.capability.portfolio.evidence.PublicSourceReference;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.presentation.PortfolioPresentation;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 import com.portfolio.agent.turn.capability.synthesis.CrossDomainPresentation;
@@ -106,7 +106,7 @@ public final class PublicAgentTurnProjector {
             for (int index = 0; index < value.getSections().size(); index++) {
                 GeneralPresentation.Section section = value.getSections().get(index);
                 sections.add(new PublicSection(
-                        sectionId(goal, index), PublicSection.Kind.GENERAL_PRINCIPLE,
+                        sectionId(goal, index), AnswerSectionType.GENERAL_PRINCIPLE,
                         section.title(), section.content(),
                         new PublicSupport(PublicSupport.Kind.GENERAL_KNOWLEDGE, List.of())));
             }
@@ -122,10 +122,10 @@ public final class PublicAgentTurnProjector {
                     case 1 -> PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE;
                     default -> PublicSupport.Kind.DERIVED;
                 };
-                PublicSection.Kind sectionKind = switch (index) {
-                    case 0 -> PublicSection.Kind.GENERAL_PRINCIPLE;
-                    case 1 -> PublicSection.Kind.PORTFOLIO_EXAMPLE;
-                    default -> PublicSection.Kind.RELATION;
+                AnswerSectionType sectionKind = switch (index) {
+                    case 0 -> AnswerSectionType.GENERAL_PRINCIPLE;
+                    case 1 -> AnswerSectionType.PORTFOLIO_EXAMPLE;
+                    default -> AnswerSectionType.RELATION;
                 };
                 sections.add(new PublicSection(
                         sectionId(goal, index), sectionKind, section.title(), section.content(),
@@ -148,7 +148,7 @@ public final class PublicAgentTurnProjector {
             units.forEach(value -> addSource(value.getSourceReference(), sources));
             List<String> sourceKeys = units.stream()
                     .map(value -> value.getSourceReference().getReferenceKey()).distinct().toList();
-            PublicSourceReference first = units.getFirst().getSourceReference();
+            PublicSourceReferenceValue first = units.getFirst().getSourceReference();
             items.add(new PublicPresentation.Recommendation.Item(
                     "item-" + goal.getGoalId() + "-" + (index + 1),
                     first.getLabel(),
@@ -215,7 +215,7 @@ public final class PublicAgentTurnProjector {
             UserGoal goal, int index, AnswerSectionType type,
             String title, String content, PublicSupport.Kind support, List<String> keys) {
         return new PublicSection(
-                sectionId(goal, index), PublicSection.Kind.valueOf(type.name()),
+                sectionId(goal, index), type,
                 title, content, new PublicSupport(support, keys));
     }
     private String sectionId(UserGoal goal, int index) {
@@ -231,7 +231,7 @@ public final class PublicAgentTurnProjector {
                         "PUBLIC_EVIDENCE", value.getEvidenceRoute())));
     }
     private void addSource(
-            PublicSourceReference value,
+            PublicSourceReferenceValue value,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources) {
         sources.putIfAbsent(value.getReferenceKey(), new PublicSourceCatalog.Source(
                 value.getReferenceKey(), value.getReferenceKey(), value.getLabel(),

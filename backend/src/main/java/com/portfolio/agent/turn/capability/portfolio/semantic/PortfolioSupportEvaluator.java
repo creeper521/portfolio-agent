@@ -1,6 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio.semantic;
 
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;

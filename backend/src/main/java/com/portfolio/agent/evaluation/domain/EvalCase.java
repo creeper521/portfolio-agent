@@ -2,8 +2,8 @@ package com.portfolio.agent.evaluation.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
 import java.util.List;
 
 public final class EvalCase {

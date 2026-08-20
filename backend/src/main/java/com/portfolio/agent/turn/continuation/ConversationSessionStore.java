@@ -2,11 +2,13 @@ package com.portfolio.agent.turn.continuation;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
+import com.portfolio.agent.turn.execution.TurnDeadline;
 
 public interface ConversationSessionStore {
-    Optional<Session> find(byte[] tokenHash, Instant now);
+    Optional<Session> find(
+            List<byte[]> tokenHashes, Instant now, TurnDeadline deadline);
     void save(Session session);
-    void revoke(String conversationId);
 
     record Session(
             String conversationId, byte[] tokenHash,

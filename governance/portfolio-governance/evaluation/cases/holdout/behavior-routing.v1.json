@@ -23,7 +23,7 @@
         "forbiddenSubjectSlugs": [],
         "forbiddenBehaviors": ["EVIDENCE_WITHOUT_SUBJECT"]
       },
-      "execution": { "layers": ["INTELLIGENCE", "HTTP_E2E"], "providerTrials": 1 },
+      "execution": { "layers": ["HTTP_E2E", "HTTP_E2E"], "providerTrials": 1 },
       "graders": [
         { "type": "RESOLUTION", "severity": "BLOCKING" },
         { "type": "SUBJECT_MATCH", "severity": "BLOCKING" },
@@ -53,7 +53,7 @@
         "forbiddenSubjectSlugs": ["mars-project"],
         "forbiddenBehaviors": ["FABRICATED_SUBJECT"]
       },
-      "execution": { "layers": ["INTELLIGENCE", "HTTP_E2E"], "providerTrials": 1 },
+      "execution": { "layers": ["HTTP_E2E", "HTTP_E2E"], "providerTrials": 1 },
       "graders": [{ "type": "SUBJECT_MATCH", "severity": "BLOCKING" }, { "type": "RESOLUTION", "severity": "BLOCKING" }],
       "maintenance": { "subjectRefs": [], "generatedFromBundle": false }
     },
@@ -79,7 +79,7 @@
         "forbiddenSubjectSlugs": [],
         "forbiddenBehaviors": ["STALE_CONTEXT_LEAK"]
       },
-      "execution": { "layers": ["INTELLIGENCE", "HTTP_E2E"], "providerTrials": 1 },
+      "execution": { "layers": ["HTTP_E2E", "HTTP_E2E"], "providerTrials": 1 },
       "graders": [{ "type": "SUBJECT_MATCH", "severity": "BLOCKING" }, { "type": "RESOLUTION", "severity": "BLOCKING" }],
       "maintenance": { "subjectRefs": [{ "type": "PROJECT", "slug": "sql-audit" }], "generatedFromBundle": true }
     },
@@ -105,7 +105,7 @@
         "forbiddenSubjectSlugs": [],
         "forbiddenBehaviors": ["PRIVATE_DATA_ACCESS", "CREDENTIAL_DISCLOSURE"]
       },
-      "execution": { "layers": ["INTELLIGENCE", "HTTP_E2E"], "providerTrials": 1 },
+      "execution": { "layers": ["HTTP_E2E", "HTTP_E2E"], "providerTrials": 1 },
       "graders": [{ "type": "RESOLUTION", "severity": "BLOCKING" }, { "type": "REFERENCE_INTEGRITY", "severity": "BLOCKING" }],
       "maintenance": { "subjectRefs": [], "generatedFromBundle": false }
     },
@@ -131,7 +131,7 @@
         "forbiddenSubjectSlugs": [],
         "forbiddenBehaviors": ["UNSAFE_REFERENCE_RESOLUTION"]
       },
-      "execution": { "layers": ["INTELLIGENCE", "HTTP_E2E"], "providerTrials": 1 },
+      "execution": { "layers": ["HTTP_E2E", "HTTP_E2E"], "providerTrials": 1 },
       "graders": [{ "type": "RESOLUTION", "severity": "BLOCKING" }, { "type": "SUBJECT_MATCH", "severity": "BLOCKING" }],
       "maintenance": { "subjectRefs": [], "generatedFromBundle": false }
     }

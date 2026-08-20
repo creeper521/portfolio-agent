@@ -74,8 +74,8 @@ public final class EvalRunPlanner {
 
     private boolean hasDeepLayer(EvalCase evalCase) {
         return evalCase.getLayers() != null
-                && (evalCase.getLayers().contains(com.portfolio.agent.evaluation.domain.EvalLayer.INTELLIGENCE)
-                || evalCase.getLayers().contains(com.portfolio.agent.evaluation.domain.EvalLayer.HTTP_E2E));
+                && evalCase.getLayers().contains(
+                        com.portfolio.agent.evaluation.domain.EvalLayer.HTTP_E2E);
     }
 
     private boolean sameSubject(EvalSubjectRef left, EvalSubjectRef right) {

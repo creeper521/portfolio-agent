@@ -1,23 +1,28 @@
 package com.portfolio.agent.turn.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.adapter.model.ConversationalAgentProperties;
-import com.portfolio.agent.answer.adapter.model.GoalInterpretationProperties;
-import com.portfolio.agent.answer.adapter.model.ModelExpressionProperties;
-import com.portfolio.agent.answer.adapter.model.ModelOperationProperties;
-import com.portfolio.agent.answer.adapter.model.ModelProviderRegistrySnapshot;
-import com.portfolio.agent.answer.domain.ConversationProviderAccess;
-import com.portfolio.agent.answer.domain.ModelPolicy;
-import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
-import com.portfolio.agent.answer.runtime.ModelOperation;
-import com.portfolio.agent.answer.runtime.ModelOperationPolicy;
-import com.portfolio.agent.answer.runtime.ModelOperationPolicyRegistry;
-import com.portfolio.agent.answer.runtime.OperationMode;
+import com.portfolio.agent.infrastructure.model.configuration.ConversationalAgentProperties;
+import com.portfolio.agent.infrastructure.model.configuration.GoalInterpretationProperties;
+import com.portfolio.agent.infrastructure.model.configuration.ModelExpressionProperties;
+import com.portfolio.agent.infrastructure.model.configuration.ModelOperationProperties;
+import com.portfolio.agent.infrastructure.model.provider.ModelProviderRegistrySnapshot;
+import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
+import com.portfolio.agent.infrastructure.model.policy.ModelPolicy;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
+import com.portfolio.agent.infrastructure.model.policy.OperationMode;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
+import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
+import com.portfolio.agent.common.observability.AnonymousSourceHasher;
+import com.portfolio.agent.common.web.ClientAddressResolver;
+import com.portfolio.agent.turn.api.AgentRequestAdmissionGate;
 import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
 import com.portfolio.agent.turn.capability.general.GeneralDraftValidator;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeGenerator;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeModelPort;
+import com.portfolio.agent.turn.capability.general.GeneralKnowledgeUnavailableException;
 import com.portfolio.agent.turn.capability.general.GeneralPresentationComposer;
 import com.portfolio.agent.turn.capability.general.GeneralTaskExecutor;
 import com.portfolio.agent.turn.capability.synthesis.CrossDomainPresentationComposer;
@@ -28,6 +33,7 @@ import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnow
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.OpenAiCompatibleStructuredModelTransport;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
+import com.portfolio.agent.turn.lifecycle.ActiveTurnCapacity;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
 import com.portfolio.agent.turn.lifecycle.AgentStateStore;
@@ -55,15 +61,66 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
         ConversationalAgentProperties.class,
         ModelOperationProperties.class,
         GoalInterpretationProperties.class,
-        com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties.class
+        AgentRuntimeProperties.class,
+        com.portfolio.agent.turn.state.configuration.ConversationContextProperties.class
 })
 public class AgentCapabilityConfiguration {
+    @Bean
+    ApplicationStartupDiagnostics applicationStartupDiagnostics(
+            DiagnosticEventPublisher diagnosticEventPublisher,
+            ModelExpressionProperties modelExpressionProperties,
+            ConversationalAgentProperties conversationalAgentProperties,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${portfolio.retrieval.profile:DISABLED}") String retrievalProfile,
+            AgentRuntimeProperties runtimeProperties) {
+        return new ApplicationStartupDiagnostics(
+                diagnosticEventPublisher,
+                modelExpressionProperties.isEnabled(),
+                conversationalAgentProperties.isEnabled(),
+                retrievalProfile,
+                runtimeProperties.getTurnTimeout().toMillis(),
+                runtimeProperties.getRequestsPerMinute(),
+                runtimeProperties.getMaxConcurrentPerSource());
+    }
+
+    @Bean(destroyMethod = "close")
+    ExecutorService conversationRequestExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    @Bean
+    ClientAddressResolver clientAddressResolver(AgentRuntimeProperties properties) {
+        return new ClientAddressResolver(
+                properties.isTrustProxy(), properties.getTrustedProxies());
+    }
+
+    @Bean
+    AnonymousSourceHasher anonymousSourceHasher() {
+        return new AnonymousSourceHasher();
+    }
+
+    @Bean
+    AgentRequestAdmissionGate agentRequestAdmissionGate(AgentRuntimeProperties properties) {
+        return new AgentRequestAdmissionGate(
+                java.time.Clock.systemUTC(),
+                properties.getRequestsPerMinute(),
+                properties.getMaxConcurrentPerSource(),
+                properties.getMaxTrackedSources());
+    }
+
+    @Bean
+    ActiveTurnCapacity activeTurnCapacity(AgentRuntimeProperties properties) {
+        return new ActiveTurnCapacity(properties.getMaxActiveTurns());
+    }
+
     @Bean
     ConversationProviderAccess conversationProviderAccess(
             ConversationalAgentProperties properties,
@@ -81,50 +138,63 @@ public class AgentCapabilityConfiguration {
     StructuredModelTransport structuredModelTransport(
             ObjectMapper mapper, ModelExpressionProperties modelProperties,
             ModelProviderRegistrySnapshot registry,
+            AgentRuntimeProperties runtimeProperties,
             DiagnosticEventPublisher diagnostics) {
         return new OpenAiCompatibleStructuredModelTransport(
-                HttpClient.newBuilder().connectTimeout(modelProperties.getTimeout()).build(),
+                HttpClient.newBuilder()
+                        .connectTimeout(runtimeProperties.getGeneralKnowledgeTimeout())
+                        .build(),
                 mapper, registry.getRequiredDescriptor(modelProperties.getProvider()),
                 modelProperties.apiKeyFor(modelProperties.getProvider()),
-                modelProperties.getTimeout(), diagnostics);
+                runtimeProperties.getGeneralKnowledgeTimeout(), diagnostics);
     }
 
     @Bean
     GoalInterpretationPort goalInterpretationPort(
             ObjectMapper objectMapper,
             GoalInterpretationProperties properties,
+            AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
             ConversationProviderAccess providerAccess,
             ModelOperationPolicyRegistry operationPolicies) {
         if (!providerAccess.isAllowed()
                 || operationPolicies.get(ModelOperation.TURN_INTERPRETATION).getMode() != OperationMode.ENABLED) {
-            return input -> { throw new GoalInterpretationUnavailableException(); };
+            return (input, deadline) -> { throw new GoalInterpretationUnavailableException(); };
         }
         return new GoalInterpretationAdapter(
                 transport, objectMapper, new GoalProposalCodec(),
-                properties.getMaxOutputTokens(), properties.getTimeout(), java.time.Clock.systemUTC());
+                properties.getMaxOutputTokens(), runtimeProperties.getGoalInterpretationTimeout());
     }
 
     @Bean
     GeneralKnowledgeModelPort generalKnowledgeModelPort(
             ObjectMapper objectMapper,
             ModelExpressionProperties modelProperties,
+            AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
+            ConversationProviderAccess providerAccess,
             ModelOperationPolicyRegistry operationPolicies) {
+        if (!providerAccess.isAllowed()
+                || operationPolicies.get(ModelOperation.GENERAL_KNOWLEDGE).getMode()
+                != OperationMode.ENABLED) {
+            return request -> {
+                throw new GeneralKnowledgeUnavailableException(
+                        "general capability is unavailable");
+            };
+        }
         return new OpenAiCompatibleGeneralKnowledgeAdapter(
-                transport, objectMapper, modelProperties.getMaxTokens());
+                transport, objectMapper, modelProperties.getMaxTokens(),
+                runtimeProperties.getGeneralKnowledgeTimeout());
     }
 
     @Bean
     GeneralTaskExecutor generalTaskExecutor(
             ObjectMapper objectMapper,
-            ConversationProviderAccess providerAccess,
-            ModelOperationPolicyRegistry operationPolicies,
             GeneralKnowledgeModelPort modelPort) {
         return new GeneralTaskExecutor(
                 new GeneralKnowledgeGenerator(
-                        providerAccess, operationPolicies, modelPort,
-                        new GeneralDraftCodec(objectMapper), new GeneralDraftValidator()),
+                        modelPort, new GeneralDraftCodec(objectMapper),
+                        new GeneralDraftValidator()),
                 new GeneralPresentationComposer());
     }
 
@@ -160,8 +230,15 @@ public class AgentCapabilityConfiguration {
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode", havingValue = "IN_MEMORY")
-    AgentStateStore inMemoryTurnExecutionStore() {
-        return new com.portfolio.agent.turn.state.memory.InMemoryTurnExecutionStore();
+    AgentStateStore inMemoryTurnExecutionStore(
+            com.portfolio.agent.turn.state.configuration.ConversationContextProperties properties,
+            InMemoryConversationSessionStore sessionStore) {
+        properties.validate();
+        java.time.Clock clock = java.time.Clock.systemUTC();
+        return new com.portfolio.agent.turn.state.memory.InMemoryTurnExecutionStore(
+                new com.portfolio.agent.turn.continuation.ClarificationStore(
+                        clock, properties.getClarificationTtl()),
+                properties.getAbsoluteTtl(), sessionStore, clock);
     }
 
     @Bean
@@ -176,7 +253,7 @@ public class AgentCapabilityConfiguration {
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode",
             havingValue = "IN_MEMORY")
-    ConversationSessionStore inMemoryConversationSessionStore() {
+    InMemoryConversationSessionStore inMemoryConversationSessionStore() {
         return new InMemoryConversationSessionStore();
     }
 
@@ -193,10 +270,26 @@ public class AgentCapabilityConfiguration {
             PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
             SemanticPlanCompiler compiler, SemanticTurnEngine engine,
             AgentStateStore store, ConversationSessionStore sessionStore,
-            com.portfolio.agent.answer.context.adapter.postgres.ConversationContextProperties properties) {
+            com.portfolio.agent.turn.state.configuration.ConversationContextProperties properties,
+            AgentRuntimeProperties runtimeProperties,
+            ExecutorService conversationRequestExecutor) {
         byte[] configuredTokenKey = decodeOrRandom(properties.getCrypto().getCurrentTokenKey());
+        java.util.List<byte[]> previousTokenKeys =
+                properties.getCrypto().getPreviousTokenKey() == null
+                        || properties.getCrypto().getPreviousTokenKey().isBlank()
+                        ? java.util.List.of()
+                        : java.util.List.of(decodeConfigured(
+                        properties.getCrypto().getPreviousTokenKey()));
         byte[] fingerprintSecret = configuredTokenKey;
         byte[] sessionSecret = configuredTokenKey;
+        String fingerprintKeyId = properties.getCrypto().getCurrentTokenKeyId() == null
+                || properties.getCrypto().getCurrentTokenKeyId().isBlank()
+                ? "ephemeral-token" : properties.getCrypto().getCurrentTokenKeyId().trim();
+        java.util.Map<String, byte[]> previousFingerprintKeys =
+                previousTokenKeys.isEmpty() ? java.util.Map.of()
+                        : java.util.Map.of(
+                        properties.getCrypto().getPreviousTokenKeyId().trim(),
+                        previousTokenKeys.getFirst());
         java.time.Clock clock = java.time.Clock.systemUTC();
         ContextMutationPlanner planner = new ContextMutationPlanner(() -> {
             byte[] value = new byte[24];
@@ -206,12 +299,16 @@ public class AgentCapabilityConfiguration {
         return new AgentTurnLifecycleService(
                 knowledgeGateway, goalResolver, compiler, engine,
                 new PublicAgentTurnProjector(), planner, store,
-                new RequestFingerprintFactory(fingerprintSecret),
+                new RequestFingerprintFactory(
+                        fingerprintKeyId, fingerprintSecret, previousFingerprintKeys),
                 new ConversationSessionResolver(
-                        sessionStore, sessionSecret,
-                        clock, java.time.Duration.ofMinutes(30)),
-                clock, java.time.Duration.ofSeconds(30),
-                java.time.Duration.ofSeconds(10), java.time.Duration.ofMinutes(30));
+                        sessionStore, sessionSecret, previousTokenKeys,
+                        clock, properties.getAbsoluteTtl()),
+                conversationRequestExecutor,
+                clock, runtimeProperties.getLeaseDuration(),
+                runtimeProperties.getTurnTimeout(),
+                runtimeProperties.getSettlementReserve(),
+                properties.getAbsoluteTtl());
     }
 
     private byte[] randomSecret() {
@@ -229,5 +326,12 @@ public class AgentCapabilityConfiguration {
         } catch (IllegalArgumentException failure) {
             throw new IllegalStateException("Agent token key must be base64", failure);
         }
+    }
+
+    private byte[] decodeConfigured(String encoded) {
+        if (encoded == null || encoded.isBlank()) {
+            throw new IllegalStateException("Agent token key is required");
+        }
+        return decodeOrRandom(encoded);
     }
 }

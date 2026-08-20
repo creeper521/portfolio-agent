@@ -1,8 +1,8 @@
 package com.portfolio.agent.turn.capability.synthesis;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
-import com.portfolio.agent.turn.capability.portfolio.evidence.PublicSourceReference;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +32,7 @@ public final class CrossDomainPresentationComposer {
         LinkedHashMap<String, PublicSourceReferenceValue> values = new LinkedHashMap<>();
         for (CrossDomainSemanticResult.GroundedPortfolioStatement statement
                 : result.getPortfolioStatements()) {
-            PublicSourceReference source = statement.sourceReference();
+            PublicSourceReferenceValue source = statement.sourceReference();
             values.putIfAbsent(source.getReferenceKey(), new PublicSourceReferenceValue(
                     source.getReferenceKey(), source.getLabel(), source.getPublishedVersion(),
                     source.getSourceType(), source.getSubjectRoute(), source.getEvidenceRoute()));

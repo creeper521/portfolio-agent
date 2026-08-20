@@ -51,7 +51,7 @@ class EvalCliTest {
     }
 
     @Test
-    void offlineWithUnsupportedLayerExitsFail() throws Exception {
+    void offlineSkipsHttpLayerAndFailsTheExecutedCaseGate() throws Exception {
         Path manifest = writeSuite();
         Path policy = writePolicy();
 
@@ -65,30 +65,18 @@ class EvalCliTest {
         assertThat(exit).isEqualTo(EvalCli.EXIT_FAIL);
         String report = Files.readString(
                 tempDir.resolve("out-offline/report.json"), StandardCharsets.UTF_8);
-        assertThat(report).contains("EXECUTOR_MISSING");
+        assertThat(report).contains("\"run.executedCaseCount\"");
+        assertThat(report).doesNotContain("EXECUTOR_MISSING");
     }
 
     @Test
-    void legacyCommandRunsTheLegacySuiteAsAnIndependentOfflineReport() throws Exception {
-        Path manifest = writeSuite("legacy-suite");
-        Path policy = writePolicy();
-
+    void legacyCommandIsRejectedAfterLegacyHarnessRetirement() {
         int exit = EvalCli.run(new String[]{
-                "legacy",
-                "--manifest", manifest.toString(),
-                "--policy", policy.toString(),
-                "--output-dir", tempDir.resolve("out-legacy").toString(),
+                "legacy"
         });
 
-        // legacy runs the same deterministic offline path with its own suite:
-        // unsupported layers report EXECUTOR_MISSING and the report carries the
-        // legacy suite id in its own output directory
-        assertThat(exit).isEqualTo(EvalCli.EXIT_FAIL);
-        String report = Files.readString(
-                tempDir.resolve("out-legacy/report.json"), StandardCharsets.UTF_8);
-        assertThat(report).contains("\"mode\":\"OFFLINE\"", "\"verdict\":\"FAIL\"");
-        assertThat(report).contains("EXECUTOR_MISSING");
-        assertThat(report).contains("\"datasetVersion\":\"2026-08-06.1\"");
+        assertThat(exit).isEqualTo(EvalCli.EXIT_INVALID);
+        assertThat(tempDir.resolve("out-legacy")).doesNotExist();
     }
 
     @Test
@@ -286,7 +274,7 @@ class EvalCliTest {
                       "input": {"messages": [{"role": "user", "content": "介绍 SQL 审计项目"}]},
                       "oracle": {"expectedSubjects": [{"type": "PROJECT", "slug": "sql-audit"}]},
                       "expectations": {"resolution": ["ANSWERED"], "answerScope": ["PORTFOLIO"], "requiredClaimIds": [], "allowedEvidenceIds": [], "forbiddenSubjectSlugs": [], "forbiddenBehaviors": []},
-                      "execution": {"layers": ["INTELLIGENCE"], "providerTrials": 3},
+                      "execution": {"layers": ["HTTP_E2E"], "providerTrials": 3},
                       "graders": [{"type": "SUBJECT_MATCH", "severity": "BLOCKING"}],
                       "maintenance": {"subjectRefs": [{"type": "PROJECT", "slug": "sql-audit"}], "generatedFromBundle": true}
                     }

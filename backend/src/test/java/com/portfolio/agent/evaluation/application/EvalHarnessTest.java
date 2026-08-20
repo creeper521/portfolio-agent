@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.application;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
@@ -55,7 +55,7 @@ class EvalHarnessTest {
                 new EvalVerdictPolicy(),
                 TestBundle.empty());
 
-        EvalCase evalCase = evalCase("case-b", List.of(EvalLayer.INTELLIGENCE), 3);
+        EvalCase evalCase = evalCase("case-b", List.of(EvalLayer.BUNDLE_CONTRACT), 3);
         EvalRunReport report = harness.run(
                 new EvalSuite("1.0", "suite", "2026-08-06.1", List.of(evalCase)),
                 new EvalRunConfig(
@@ -72,7 +72,7 @@ class EvalHarnessTest {
                 .isEqualTo(EvalVerdict.PASS);
         assertThat(executor.inputs).hasSize(1);
         assertThat(executor.inputs.get(0).getCaseId()).isEqualTo("case-b");
-        assertThat(executor.inputs.get(0).getLayer()).isEqualTo(EvalLayer.INTELLIGENCE);
+        assertThat(executor.inputs.get(0).getLayer()).isEqualTo(EvalLayer.BUNDLE_CONTRACT);
         assertThat(executor.inputs.get(0).getTrialIndex()).isEqualTo(1);
     }
 
@@ -132,7 +132,7 @@ class EvalHarnessTest {
         EvalExecutor throwing = new EvalExecutor() {
             @Override
             public boolean supports(EvalLayer layer) {
-                return layer == EvalLayer.INTELLIGENCE;
+                return layer == EvalLayer.BUNDLE_CONTRACT;
             }
 
             @Override
@@ -152,7 +152,7 @@ class EvalHarnessTest {
 
         EvalRunReport report = harness.run(
                 new EvalSuite("1.0", "suite", "2026-08-06.1",
-                        List.of(evalCase("case-e", List.of(EvalLayer.INTELLIGENCE), 1))),
+                        List.of(evalCase("case-e", List.of(EvalLayer.BUNDLE_CONTRACT), 1))),
                 new EvalRunConfig(
                         EvalRunMode.OFFLINE,
                         TestBundle.identity(),
@@ -181,7 +181,7 @@ class EvalHarnessTest {
 
         EvalRunReport report = harness.run(
                 new EvalSuite("1.0", "suite", "2026-08-06.1",
-                        List.of(evalCase("case-u", List.of(EvalLayer.INTELLIGENCE), 1))),
+                        List.of(evalCase("case-u", List.of(EvalLayer.BUNDLE_CONTRACT), 1))),
                 new EvalRunConfig(
                         EvalRunMode.OFFLINE,
                         TestBundle.identity(),
@@ -353,7 +353,7 @@ class EvalHarnessTest {
 
         @Override
         public boolean supports(EvalLayer layer) {
-            return layer == EvalLayer.INTELLIGENCE || layer == EvalLayer.PROVIDER;
+            return layer == EvalLayer.BUNDLE_CONTRACT || layer == EvalLayer.PROVIDER;
         }
 
         @Override

@@ -1,12 +1,12 @@
 package com.portfolio.agent.turn.capability.portfolio.evidence;
 
-import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerClaimProjection;
-import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
-import com.portfolio.agent.answer.domain.AnswerContributionType;
-import com.portfolio.agent.answer.domain.AnswerMateriality;
-import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerAchievementStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerContributionType;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerMateriality;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificationBasis;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.CandidateSubject;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.ClaimEvidenceCandidate;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.PublicEvidenceDescriptor;

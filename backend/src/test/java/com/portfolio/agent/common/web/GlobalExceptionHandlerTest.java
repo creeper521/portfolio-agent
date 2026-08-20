@@ -188,7 +188,7 @@ class GlobalExceptionHandlerTest {
     void errorBodyCanExposeOnlySafeRetryDelay() {
         ApiErrorResponse response = new ApiErrorResponse(
                 "request-id",
-                "ANSWER_RATE_LIMITED",
+                "TEST_RATE_LIMITED",
                 "请求过于频繁，请稍后再试。",
                 12,
                 OffsetDateTime.parse("2026-07-28T00:00:00Z"));

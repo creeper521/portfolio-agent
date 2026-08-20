@@ -5,17 +5,43 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /** Keyed fingerprint of the canonical closed command; raw user text is never persisted. */
 public final class RequestFingerprintFactory {
-    private final byte[] secret;
+    private final List<Key> keys;
     public RequestFingerprintFactory(byte[] secret) {
-        this.secret = Objects.requireNonNull(secret, "secret").clone();
-        if (this.secret.length < 32) throw new IllegalArgumentException("fingerprint secret is too short");
+        this("test-current", secret, java.util.Map.of());
+    }
+    public RequestFingerprintFactory(byte[] currentSecret, List<byte[]> previousSecrets) {
+        this("test-current", currentSecret, indexed(previousSecrets));
+    }
+    public RequestFingerprintFactory(
+            String currentKeyId, byte[] currentSecret,
+            java.util.Map<String, byte[]> previousSecrets) {
+        ArrayList<Key> configured = new ArrayList<>();
+        configured.add(new Key(currentKeyId, requireSecret(currentSecret)));
+        Objects.requireNonNull(previousSecrets, "previousSecrets")
+                .forEach((keyId, value) -> configured.add(
+                        new Key(keyId, requireSecret(value))));
+        keys = List.copyOf(configured);
     }
 
     public byte[] fingerprint(AgentTurnCommand command) {
+        return fingerprint(command, keys.getFirst().secret());
+    }
+
+    public RequestFingerprintSet fingerprints(AgentTurnCommand command) {
+        List<RequestFingerprintSet.Candidate> values = keys.stream()
+                .map(key -> new RequestFingerprintSet.Candidate(
+                        key.keyId(), fingerprint(command, key.secret()))).toList();
+        return new RequestFingerprintSet(
+                values.getFirst().keyId(), values.getFirst().fingerprint(), values);
+    }
+
+    private byte[] fingerprint(AgentTurnCommand command, byte[] secret) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret, "HmacSHA256"));
@@ -23,6 +49,29 @@ public final class RequestFingerprintFactory {
         } catch (Exception exception) {
             throw new IllegalStateException("request fingerprint unavailable", exception);
         }
+    }
+
+    private byte[] requireSecret(byte[] value) {
+        byte[] copy = Objects.requireNonNull(value, "secret").clone();
+        if (copy.length < 32) throw new IllegalArgumentException("fingerprint secret is too short");
+        return copy;
+    }
+
+    private static java.util.Map<String, byte[]> indexed(List<byte[]> values) {
+        java.util.LinkedHashMap<String, byte[]> indexed = new java.util.LinkedHashMap<>();
+        int index = 0;
+        for (byte[] value : values) indexed.put("test-previous-" + index++, value);
+        return java.util.Map.copyOf(indexed);
+    }
+
+    private record Key(String keyId, byte[] secret) {
+        private Key {
+            if (keyId == null || keyId.isBlank()) {
+                throw new IllegalArgumentException("fingerprint key id is required");
+            }
+            secret = secret.clone();
+        }
+        @Override public byte[] secret() { return secret.clone(); }
     }
 
     private byte[] canonical(AgentTurnCommand command) throws Exception {

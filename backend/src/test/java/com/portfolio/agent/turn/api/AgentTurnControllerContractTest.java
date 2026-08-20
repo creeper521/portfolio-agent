@@ -1,6 +1,9 @@
 package com.portfolio.agent.turn.api;
 
 import com.portfolio.agent.turn.api.request.AgentTurnRequestMapper;
+import com.portfolio.agent.common.observability.AnonymousSourceHasher;
+import com.portfolio.agent.common.web.ClientAddressResolver;
+import com.portfolio.agent.turn.lifecycle.ActiveTurnCapacity;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import org.junit.jupiter.api.Test;
@@ -9,7 +12,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -30,7 +37,7 @@ class AgentTurnControllerContractTest {
                 0, false, new AgentTurnLifecycleService.ConversationMetadata(
                 "conversation-1", "resume-token-1")));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
-                new AgentTurnController(lifecycle, new AgentTurnRequestMapper())).build();
+                controller(lifecycle)).build();
         mvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}}}
@@ -50,7 +57,7 @@ class AgentTurnControllerContractTest {
         when(lifecycle.execute(any(), any())).thenReturn(new AgentTurnLifecycleService.Result(
                 AgentTurnLifecycleService.Status.IN_PROGRESS, null, 4, false, null));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
-                new AgentTurnController(lifecycle, new AgentTurnRequestMapper())).build();
+                controller(lifecycle)).build();
         mvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"requestId":"%s","command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}}}
@@ -66,9 +73,21 @@ class AgentTurnControllerContractTest {
         when(lifecycle.cancel(null, requestId))
                 .thenReturn(AgentTurnLifecycleService.CancelStatus.CANCELLED);
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
-                new AgentTurnController(lifecycle, new AgentTurnRequestMapper())).build();
+                controller(lifecycle)).build();
         mvc.perform(delete("/api/agent/turns/{requestId}", requestId))
                 .andExpect(status().isNoContent())
                 .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    private AgentTurnController controller(AgentTurnLifecycleService lifecycle) {
+        return new AgentTurnController(
+                lifecycle,
+                new AgentTurnRequestMapper(),
+                new ClientAddressResolver(false, Set.of()),
+                new AnonymousSourceHasher(new byte[32]),
+                new AgentRequestAdmissionGate(
+                        Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneOffset.UTC),
+                        100, 10, 100),
+                new ActiveTurnCapacity(10));
     }
 }

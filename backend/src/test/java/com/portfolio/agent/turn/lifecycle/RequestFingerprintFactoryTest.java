@@ -43,4 +43,21 @@ class RequestFingerprintFactoryTest {
                         ConversationWindow.Role.USER, "前文"))));
         assertThat(Arrays.equals(factory.fingerprint(plain), factory.fingerprint(scoped))).isFalse();
     }
+
+    @Test void keyringAcceptsOnePreviousFingerprintButWritesCurrent() {
+        byte[] previous = new byte[32];
+        java.util.Arrays.fill(previous, (byte) 1);
+        byte[] current = new byte[32];
+        java.util.Arrays.fill(current, (byte) 2);
+        AgentTurnCommand command = new AgentTurnCommand.Ask(
+                UUID.randomUUID(), new AgentTurnCommand.FreeText("介绍项目"), null, null);
+        byte[] oldFingerprint = new RequestFingerprintFactory(previous).fingerprint(command);
+
+        RequestFingerprintSet rotated = new RequestFingerprintFactory(
+                current, List.of(previous)).fingerprints(command);
+
+        assertThat(rotated.matches(oldFingerprint)).isTrue();
+        assertThat(rotated.current()).containsExactly(
+                new RequestFingerprintFactory(current).fingerprint(command));
+    }
 }

@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.grading;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
@@ -291,7 +291,7 @@ class DeterministicEvalGraderTest {
                         List.of("E-01", "E-02"),
                         List.of("secret-project"),
                         List.of()),
-                new EvalCase.Execution(List.of(EvalLayer.INTELLIGENCE), 3),
+                new EvalCase.Execution(List.of(EvalLayer.HTTP_E2E), 3),
                 graders,
                 new EvalCase.Maintenance(List.of(caseSubject), true));
     }
@@ -304,7 +304,7 @@ class DeterministicEvalGraderTest {
             List<String> evidence,
             AnswerResolution resolution) {
         return new EvalObservation(
-                "answer.safe.001", EvalLayer.INTELLIGENCE, 1, status,
+                "answer.safe.001", EvalLayer.HTTP_E2E, 1, status,
                 projectSlug, caseSlug, claims, evidence, List.of(),
                 resolution, ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
@@ -349,8 +349,8 @@ class DeterministicEvalGraderTest {
         EvalObservation base = observation(status, caseSlug, null,
                 List.of("claim-1"), List.of("E-01"), AnswerResolution.ANSWERED);
         EvalAnswerShape shape = EvalAnswerShape.from(List.of(
-                new com.portfolio.agent.answer.domain.ConversationAnswerBlock(
-                        com.portfolio.agent.answer.domain.ConversationSourceScope.PORTFOLIO,
+                new com.portfolio.agent.evaluation.domain.ConversationAnswerBlock(
+                        com.portfolio.agent.evaluation.domain.ConversationSourceScope.PORTFOLIO,
                         "有效回答",
                         List.of("claim-1"),
                         List.of("E-01"))));
@@ -378,5 +378,4 @@ class DeterministicEvalGraderTest {
                 .findFirst().orElseThrow();
     }
 }
-
 

@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PublicAgentTurnInvariantTest {
     @Test void fullPartialAndNoneShapesFailClosed() {
         PublicPresentation presentation = new PublicPresentation.Sectioned(List.of(
-                new PublicSection("section-one", PublicSection.Kind.GENERAL_PRINCIPLE,
+                new PublicSection("section-one", com.portfolio.agent.turn.execution.AnswerSectionType.GENERAL_PRINCIPLE,
                         "概念", "内容", new PublicSupport(
                         PublicSupport.Kind.GENERAL_KNOWLEDGE, List.of()))));
         assertThatThrownBy(() -> new AnswerGoalResult(
@@ -61,7 +61,7 @@ class PublicAgentTurnInvariantTest {
         AnswerGoalResult goal = new AnswerGoalResult(
                 "goal-one", "目标", AnswerGoalResult.Coverage.FULL,
                 new PublicPresentation.Sectioned(List.of(new PublicSection(
-                        "section-one", PublicSection.Kind.SOLUTION, "方案", "内容",
+                        "section-one", com.portfolio.agent.turn.execution.AnswerSectionType.SOLUTION, "方案", "内容",
                         new PublicSupport(PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE,
                                 List.of("missing-source"))))), List.of(), null);
         assertThatThrownBy(() -> new PublicAnswer(

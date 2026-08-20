@@ -2,18 +2,26 @@ package com.portfolio.agent.infrastructure.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.adapter.model.ModelProviderDescriptor;
+import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
+import com.portfolio.agent.turn.execution.TurnDeadline;
 
 import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URI;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class OpenAiCompatibleStructuredModelTransport implements StructuredModelTransport {
     private final HttpClient client;
@@ -22,27 +30,72 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     private final String apiKey;
     private final Duration operationTimeout;
     private final DiagnosticEventPublisher diagnostics;
+    private final URI endpoint;
 
     public OpenAiCompatibleStructuredModelTransport(
             HttpClient client, ObjectMapper mapper, ModelProviderDescriptor provider,
             String apiKey, Duration operationTimeout, DiagnosticEventPublisher diagnostics) {
+        this(client, mapper, provider, apiKey, operationTimeout, diagnostics,
+                provider.getEndpoint());
+    }
+
+    OpenAiCompatibleStructuredModelTransport(
+            HttpClient client, ObjectMapper mapper, ModelProviderDescriptor provider,
+            String apiKey, Duration operationTimeout,
+            DiagnosticEventPublisher diagnostics, URI endpoint) {
         this.client = client; this.mapper = mapper; this.provider = provider;
         this.apiKey = apiKey == null ? "" : apiKey;
         this.operationTimeout = operationTimeout;
         this.diagnostics = diagnostics;
+        this.endpoint = endpoint;
     }
 
     @Override public StructuredModelResponse execute(StructuredModelRequest request) {
         long startedAt = System.nanoTime();
-        long timeout = Math.min(operationTimeout.toMillis(), request.deadline().remainingMillis());
-        if (timeout < 1) throw new StructuredModelFailure(StructuredModelFailure.Code.DEADLINE_EXCEEDED);
         try {
-            HttpRequest httpRequest = HttpRequest.newBuilder(provider.getEndpoint())
+            TurnDeadline operationDeadline =
+                    request.deadline().cappedAt(operationTimeout);
+            String requestBody = body(request);
+            long timeout = operationDeadline.remainingMillis();
+            if (timeout < 1) {
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.DEADLINE_EXCEEDED);
+            }
+            HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
                     .timeout(Duration.ofMillis(timeout))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(body(request))).build();
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody)).build();
+            CompletableFuture<HttpResponse<String>> future = client.sendAsync(
+                    httpRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response;
+            try {
+                response = future.get(timeout, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException timeoutFailure) {
+                future.cancel(true);
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.DEADLINE_EXCEEDED,
+                        timeoutFailure);
+            } catch (ExecutionException executionFailure) {
+                if (executionFailure.getCause() instanceof HttpTimeoutException) {
+                    throw new StructuredModelFailure(
+                            StructuredModelFailure.Code.DEADLINE_EXCEEDED,
+                            executionFailure.getCause());
+                }
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
+                        executionFailure.getCause());
+            } catch (CancellationException cancelled) {
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
+                        cancelled);
+            } catch (InterruptedException interrupted) {
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
+                        interrupted);
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new StructuredModelFailure(StructuredModelFailure.Code.PROVIDER_REJECTED);
             }
@@ -62,12 +115,7 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             publish(request.operation(), false, failure.getCode().name(), startedAt);
             throw failure;
         }
-        catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
-            publish(request.operation(), false,
-                    StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(), startedAt);
-            throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);
-        } catch (Exception failure) {
+        catch (Exception failure) {
             publish(request.operation(), false,
                     StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(), startedAt);
             throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);

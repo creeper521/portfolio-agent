@@ -78,10 +78,7 @@ public final class EvalCli {
                 "1.0", manifest.getSuiteId(), manifest.getDatasetVersion(), expandedCases);
         EvalPolicy policy = bootstrap.createPolicyLoader().load(policyPath);
 
-        EvalHarness harness = bootstrap.createHarness(
-                bundle,
-                arguments.optional("base-url"),
-                arguments.getCommand() != EvalCliArguments.Command.VALIDATE);
+        EvalHarness harness = bootstrap.createHarness(bundle);
         EvalRunIdentity identity = identity(suite, bundle,
                 manifest.getTrackedCaseFiles(), expandedCases, policyPath);
         EvalProviderAuthorization authorization =
@@ -101,7 +98,6 @@ public final class EvalCli {
                 prerequisite = offlinePrerequisite(arguments, identity);
                 yield EvalRunMode.PERIODIC;
             }
-            case LEGACY -> EvalRunMode.OFFLINE;
         };
 
         EvalRunConfig config = new EvalRunConfig(

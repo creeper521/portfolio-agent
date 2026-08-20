@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.capability.general;
 
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
+import com.portfolio.agent.turn.execution.TaskExecutionResult;
 import com.portfolio.agent.turn.execution.TaskOutcome;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.SemanticTask;
@@ -31,7 +32,7 @@ class GeneralTaskExecutorTest {
         when(context.getDeadline()).thenReturn(GeneralTestFixtures.explanation().getDeadline());
         when(context.getCancellation()).thenReturn(new CancellationSignal());
 
-        var execution = executor.execute(context);
+        TaskExecutionResult execution = executor.execute(context);
         assertThat(execution.getFulfillment()).isEqualTo(TaskOutcome.Fulfillment.FULL);
         assertThat(execution.getArtifact().getSemanticResult()).isInstanceOf(GeneralSemanticResult.class);
         assertThat(execution.getArtifact().getPresentation()).isInstanceOf(GeneralPresentation.class);

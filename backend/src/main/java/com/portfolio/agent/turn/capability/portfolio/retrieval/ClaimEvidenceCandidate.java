@@ -1,7 +1,8 @@
 package com.portfolio.agent.turn.capability.portfolio.retrieval;
 
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerClaimProjection;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
 
 import java.util.Objects;
 
@@ -25,7 +26,7 @@ public final class ClaimEvidenceCandidate {
                 || claim.getDetail().isBlank()) {
             throw new IllegalArgumentException("claim projection is incomplete");
         }
-        if (claim.getVerificationStatus() != com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus.VERIFIED) {
+        if (claim.getVerificationStatus() != com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus.VERIFIED) {
             throw new IllegalArgumentException("candidate claim must be verified");
         }
         if (!"APPROVED".equals(evidence.getPublicStatus())) {

@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.reporting;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
@@ -62,7 +62,7 @@ class EvalReportMarkdownRendererTest {
                 "NOT_APPLICABLE", "NOT_APPLICABLE", "sha256:model-params",
                 "NOT_APPLICABLE", "NOT_APPLICABLE");
         EvalObservation passed = new EvalObservation(
-                "case-a", EvalLayer.INTELLIGENCE, 1, EvalObservationStatus.PASS,
+                "case-a", EvalLayer.HTTP_E2E, 1, EvalObservationStatus.PASS,
                 null, "case-a", List.of("claim-1"), List.of("E-01"), List.of(),
                 AnswerResolution.ANSWERED, ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,
@@ -76,7 +76,7 @@ class EvalReportMarkdownRendererTest {
                 List.of(), 0L, EvalProviderUsage.unavailable(),
                 EvalAnswerShape.empty(), false, false);
         EvalGrade failing = new EvalGrade(
-                "case-fail", EvalLayer.INTELLIGENCE, 1, "SUBJECT_MATCH",
+                "case-fail", EvalLayer.HTTP_E2E, 1, "SUBJECT_MATCH",
                 EvalSeverity.BLOCKING, false, EvalReasonCode.SUBJECT_MISMATCH, 1L, 2L);
         EvalGateResult gate = new EvalGateResult(
                 "routing.top1", new BigDecimal("0.5"), new BigDecimal("0.9"),

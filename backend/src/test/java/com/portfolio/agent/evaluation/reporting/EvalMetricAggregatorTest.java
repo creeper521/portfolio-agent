@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.reporting;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
-import com.portfolio.agent.answer.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
@@ -25,12 +25,12 @@ class EvalMetricAggregatorTest {
 
     @Test
     void aggregatesRatesAndPreservesRawNumeratorAndDenominator() {
-        EvalGrade passing = grade("case-1", EvalLayer.INTELLIGENCE,
+        EvalGrade passing = grade("case-1", EvalLayer.HTTP_E2E,
                 "SUBJECT_MATCH", EvalSeverity.SCORED, true, EvalReasonCode.PASS, 1, 1);
-        EvalGrade failing = grade("case-2", EvalLayer.INTELLIGENCE,
+        EvalGrade failing = grade("case-2", EvalLayer.HTTP_E2E,
                 "SUBJECT_MATCH", EvalSeverity.BLOCKING, false,
                 EvalReasonCode.SUBJECT_MISMATCH, 0, 1);
-        EvalGrade quality = grade("case-1", EvalLayer.INTELLIGENCE,
+        EvalGrade quality = grade("case-1", EvalLayer.HTTP_E2E,
                 "ANSWER_QUALITY", EvalSeverity.SCORED, true, EvalReasonCode.PASS, 1, 1);
 
         EvalMetrics metrics = aggregator.aggregate(
@@ -50,10 +50,10 @@ class EvalMetricAggregatorTest {
 
     @Test
     void countsHardErrorsPerFixedReasonCode() {
-        EvalGrade fake = grade("case-1", EvalLayer.INTELLIGENCE,
+        EvalGrade fake = grade("case-1", EvalLayer.HTTP_E2E,
                 "REFERENCE_INTEGRITY", EvalSeverity.BLOCKING, false,
                 EvalReasonCode.FAKE_CITATION, 0, 1);
-        EvalGrade sufficient = grade("case-2", EvalLayer.INTELLIGENCE,
+        EvalGrade sufficient = grade("case-2", EvalLayer.HTTP_E2E,
                 "RESOLUTION", EvalSeverity.BLOCKING, false,
                 EvalReasonCode.FALSE_SUFFICIENT, 0, 1);
 
@@ -94,7 +94,7 @@ class EvalMetricAggregatorTest {
 
     private EvalObservation observation(String caseId) {
         return new EvalObservation(
-                caseId, EvalLayer.INTELLIGENCE, 1, EvalObservationStatus.PASS,
+                caseId, EvalLayer.HTTP_E2E, 1, EvalObservationStatus.PASS,
                 null, null, List.of(), List.of(), List.of(),
                 AnswerResolution.ANSWERED, ConversationAnswerScope.PORTFOLIO,
                 GenerationMode.DETERMINISTIC, AnswerSource.RETRIEVAL,

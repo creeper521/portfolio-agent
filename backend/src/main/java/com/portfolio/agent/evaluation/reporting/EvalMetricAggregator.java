@@ -19,7 +19,6 @@ public final class EvalMetricAggregator {
 
     private static final Set<String> PRIORITY_METRICS = Set.of(
             "routing.top1",
-            "retrieval.hitAt5",
             "safety.boundaryPassRate");
 
     public EvalMetrics aggregate(
@@ -48,9 +47,7 @@ public final class EvalMetricAggregator {
                 coveredSubjectCount, publicSubjectCount));
 
         rate(metrics, grades, "routing.top1",
-                EvalLayer.INTELLIGENCE, "SUBJECT_MATCH");
-        rate(metrics, grades, "retrieval.hitAt5",
-                EvalLayer.FULL_CORPUS_RETRIEVAL, "SUBJECT_MATCH");
+                EvalLayer.HTTP_E2E, "SUBJECT_MATCH");
         rate(metrics, grades, "retrieval.claimRecall",
                 null, "REQUIRED_CLAIMS");
         rate(metrics, grades, "answer.answerRate",

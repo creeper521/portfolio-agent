@@ -57,7 +57,12 @@ class GoalProposalCodecTest {
     void decodesClarificationAndConversationalResultsWithoutFakeGoals() {
         GoalInterpretationResult clarification = codec.decode("""
                 {"kind":"CLARIFICATION","clarification":{"field":"SUBJECT",
-                 "prompt":"请选择要了解的公开项目","inputAnchor":{"text":"这个项目","start":0}}}
+                 "prompt":"请选择要了解的公开项目","blockedGoal":{
+                   "goalKind":"PORTFOLIO_FACT","subjects":[],
+                   "requestedOutputs":["OVERVIEW"],"facets":["OVERVIEW"],
+                   "dimensions":[],"requestedSize":null,"constraints":[],
+                   "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],"remainingFields":[],"depth":1
+                 }}}
                 """, input("这个项目怎么样"));
         GoalInterpretationResult conversational = codec.decode("""
                 {"kind":"CONVERSATIONAL","message":"你好，我可以介绍公开项目。"}
@@ -66,8 +71,74 @@ class GoalProposalCodecTest {
         assertThat(clarification.getKind()).isEqualTo(GoalInterpretationResult.Kind.CLARIFICATION);
         assertThat(clarification.getClarification().orElseThrow().getField())
                 .isEqualTo(ClarificationProposal.Field.SUBJECT);
+        assertThat(clarification.getClarification().orElseThrow().getBlockedGoal()
+                .getSubjects()).isEmpty();
         assertThat(conversational.getKind()).isEqualTo(GoalInterpretationResult.Kind.CONVERSATIONAL);
         assertThat(conversational.getMessage().orElseThrow()).contains("公开项目");
+    }
+
+    @Test
+    void rejectsClarificationWithoutClosedBlockedGoalOrWithRawAnchor() {
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CLARIFICATION","clarification":{
+                  "field":"SUBJECT","prompt":"请选择项目",
+                  "inputAnchor":{"text":"这个项目","start":0}}}
+                """, input("这个项目怎么样")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CLARIFICATION","clarification":{
+                  "field":"SUBJECT","prompt":"请选择项目","blockedGoal":{
+                    "goalKind":"PORTFOLIO_FACT","subjects":[],
+                    "requestedOutputs":["OVERVIEW"],"facets":["OVERVIEW"],
+                    "dimensions":[],"requestedSize":null,"constraints":[],
+                    "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],"remainingFields":[],"depth":1,
+                    "inputAnchor":{"text":"这个项目","start":0}
+                  }}}
+                """, input("这个项目怎么样")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unknown field");
+    }
+
+    @Test
+    void rejectsBlockedGoalResultOrInventedSubject() {
+        String template = """
+                {"kind":"CLARIFICATION","clarification":{
+                  "field":"OUTPUT","prompt":"请选择输出","blockedGoal":{
+                    "goalKind":"PORTFOLIO_FACT","subjects":[{
+                      "kind":"%s","reference":"%s"}],
+                    "requestedOutputs":[],"facets":["OVERVIEW"],
+                    "dimensions":[],"requestedSize":null,"constraints":[],
+                    "unresolvedField":"OUTPUT","askedFields":["OUTPUT"],"remainingFields":[],"depth":1
+                  }}}
+                """;
+        assertThatThrownBy(() -> codec.decode(
+                template.formatted("RESULT", "result-1"), input("介绍项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-public subject");
+        assertThatThrownBy(() -> codec.decode(
+                template.formatted("PROJECT", "invented-project"), input("介绍项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-public subject");
+    }
+
+    @Test
+    void decodesAtMostOneRemainingDistinctClarificationField() {
+        GoalInterpretationResult result = codec.decode("""
+                {"kind":"CLARIFICATION","clarification":{
+                  "field":"SUBJECT","prompt":"请选择项目","blockedGoal":{
+                    "goalKind":"PORTFOLIO_FACT","subjects":[],
+                    "requestedOutputs":[],"facets":["OVERVIEW"],
+                    "dimensions":[],"requestedSize":null,"constraints":[],
+                    "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],
+                    "remainingFields":["OUTPUT"],"depth":1
+                  }}}
+                """, input("这个项目"));
+
+        BlockedGoalTemplate blocked = result.getClarification()
+                .orElseThrow().getBlockedGoal();
+        assertThat(blocked.getRemainingFields()).containsExactly(ClarificationProposal.Field.OUTPUT);
+        assertThat(blocked.getDepth()).isEqualTo(1);
     }
 
     @Test

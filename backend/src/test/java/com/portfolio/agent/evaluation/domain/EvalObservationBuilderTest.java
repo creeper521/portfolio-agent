@@ -1,9 +1,9 @@
 package com.portfolio.agent.evaluation.domain;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.AnswerSource;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,7 +32,7 @@ class EvalObservationBuilderTest {
     @Test
     void builderCarriesEveryProvidedValue() {
         EvalObservation observation = EvalObservation.builder(
-                "case-2", EvalLayer.INTELLIGENCE, 3, EvalObservationStatus.PASS)
+                "case-2", EvalLayer.HTTP_E2E, 3, EvalObservationStatus.PASS)
                 .selectedProjectSlug("sql-audit")
                 .selectedClaimIds(List.of("claim-1"))
                 .selectedEvidenceIds(List.of("E-01"))
@@ -67,5 +67,4 @@ class EvalObservationBuilderTest {
                 .isInstanceOf(NullPointerException.class);
     }
 }
-
 

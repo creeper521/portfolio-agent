@@ -66,7 +66,7 @@ class PhaseZeroDatasetAcceptanceTest {
         for (EvalCase evalCase : cases) {
             if (evalCase.getId().startsWith("answer.sql-audit.")) {
                 assertThat(evalCase.getLayers())
-                        .contains(EvalLayer.INTELLIGENCE, EvalLayer.HTTP_E2E);
+                        .contains(EvalLayer.HTTP_E2E, EvalLayer.HTTP_E2E);
             }
             for (EvalGraderRule rule : evalCase.getGraders()) {
                 assertThat(knownGraderTypes()).contains(rule.getType());
@@ -118,25 +118,9 @@ class PhaseZeroDatasetAcceptanceTest {
     }
 
     @Test
-    void legacyManifestStaysIndependentFromThePhaseZeroCore() throws Exception {
-        EvalManifestLoader loader = new EvalManifestLoader();
-        EvalManifestLoader.EvalManifest legacy = loader.load(
-                GOVERNANCE.resolve("manifest.legacy.v1.json"));
-
-        assertThat(legacy.getSuiteId()).isEqualTo("portfolio-agent-release-legacy");
-        assertThat(legacy.getTrackedCaseFiles())
-                .singleElement()
-                .satisfies(path -> assertThat(path.toString())
-                        .endsWith("cases" + java.io.File.separator + "regression"
-                                + java.io.File.separator + "legacy.v1.json"));
-
-        EvalSuiteLoader suiteLoader = new EvalSuiteLoader(
-                new com.fasterxml.jackson.databind.ObjectMapper());
-        List<EvalCase> cases = suiteLoader.load(Files.readAllBytes(
-                GOVERNANCE.resolve("cases/regression/legacy.v1.json"))).getCases();
-        assertThat(cases.stream()
-                .filter(caseItem -> caseItem.getId().startsWith("legacy.")))
-                .hasSize(3);
+    void legacyDatasetArtifactsAreRetired() {
+        assertThat(GOVERNANCE.resolve("manifest.legacy.v1.json")).doesNotExist();
+        assertThat(GOVERNANCE.resolve("cases/regression/legacy.v1.json")).doesNotExist();
     }
 
     @Test

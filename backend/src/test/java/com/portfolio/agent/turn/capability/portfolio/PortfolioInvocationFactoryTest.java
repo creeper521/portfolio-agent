@@ -1,7 +1,7 @@
 package com.portfolio.agent.turn.capability.portfolio;
 
-import com.portfolio.agent.answer.intelligence.retrieval.CorpusBackend;
-import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
 import com.portfolio.agent.turn.execution.TurnDeadline;

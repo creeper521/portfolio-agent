@@ -1,6 +1,6 @@
 package com.portfolio.agent.turn.capability.general;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
 
 import java.util.ArrayList;
 import java.util.List;

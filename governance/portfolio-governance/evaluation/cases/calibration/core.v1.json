@@ -44,7 +44,7 @@
       },
       "execution": {
         "layers": [
-          "INTELLIGENCE"
+          "HTTP_E2E"
         ],
         "providerTrials": 3
       },

@@ -1,8 +1,8 @@
 package com.portfolio.agent.evaluation.coverage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
@@ -96,7 +96,7 @@ class EvalCoverageLinterTest {
                 new EvalCase.Expectations(List.of(AnswerResolution.ANSWERED),
                         List.of(ConversationAnswerScope.PORTFOLIO),
                         List.of(), List.of(), List.of(), List.of()),
-                new EvalCase.Execution(List.of(EvalLayer.INTELLIGENCE), 1),
+                new EvalCase.Execution(List.of(EvalLayer.HTTP_E2E), 1),
                 List.of(new EvalGraderRule("SUBJECT_MATCH", EvalSeverity.BLOCKING)),
                 new EvalCase.Maintenance(List.of(subject), false));
     }

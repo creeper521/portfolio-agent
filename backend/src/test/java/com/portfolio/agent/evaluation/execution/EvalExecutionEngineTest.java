@@ -1,10 +1,10 @@
 package com.portfolio.agent.evaluation.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.AnswerSource;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
-import com.portfolio.agent.answer.domain.GenerationMode;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.AnswerSource;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
+import com.portfolio.agent.common.observability.GenerationMode;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalMessage;
@@ -19,11 +19,11 @@ import org.junit.jupiter.api.Test;
 class EvalExecutionEngineTest {
 
     @Test
-    void offlineSkipsHttpLayerButExecutesIntelligenceInMixedCase() {
-        EvalExecutor intelligence = new EvalExecutor() {
+    void offlineSkipsHttpLayerButExecutesBundleContractInMixedCase() {
+        EvalExecutor bundleContract = new EvalExecutor() {
             @Override
             public boolean supports(EvalLayer layer) {
-                return layer == EvalLayer.INTELLIGENCE;
+                return layer == EvalLayer.BUNDLE_CONTRACT;
             }
 
             @Override
@@ -40,10 +40,10 @@ class EvalExecutionEngineTest {
                         .build();
             }
         };
-        EvalExecutionEngine engine = new EvalExecutionEngine(List.of(intelligence));
+        EvalExecutionEngine engine = new EvalExecutionEngine(List.of(bundleContract));
         EvalRunPlan plan = new EvalRunPlan(
                 EvalRunMode.OFFLINE,
-                List.of(evalCase("mixed", List.of(EvalLayer.INTELLIGENCE, EvalLayer.HTTP_E2E)),
+                List.of(evalCase("mixed", List.of(EvalLayer.BUNDLE_CONTRACT, EvalLayer.HTTP_E2E)),
                         evalCase("http-only", List.of(EvalLayer.HTTP_E2E))),
                 false,
                 true);
@@ -56,7 +56,7 @@ class EvalExecutionEngineTest {
 
         assertThat(observations).singleElement().satisfies(observation -> {
             assertThat(observation.getCaseId()).isEqualTo("mixed");
-            assertThat(observation.getLayer()).isEqualTo(EvalLayer.INTELLIGENCE);
+            assertThat(observation.getLayer()).isEqualTo(EvalLayer.BUNDLE_CONTRACT);
             assertThat(observation.getStatus()).isEqualTo(EvalObservationStatus.PASS);
         });
     }

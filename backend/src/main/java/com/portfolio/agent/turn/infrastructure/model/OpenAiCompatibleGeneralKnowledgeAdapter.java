@@ -8,6 +8,7 @@ import com.portfolio.agent.turn.capability.general.GeneralKnowledgeModelPort;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeRequest;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeUnavailableException;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -26,9 +27,12 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
     private final int maxTokens;
+    private final Duration timeout;
     public OpenAiCompatibleGeneralKnowledgeAdapter(
-            StructuredModelTransport transport, ObjectMapper mapper, int maxTokens) {
-        this.transport = transport; this.mapper = mapper; this.maxTokens = maxTokens;
+            StructuredModelTransport transport, ObjectMapper mapper,
+            int maxTokens, Duration timeout) {
+        this.transport = transport; this.mapper = mapper;
+        this.maxTokens = maxTokens; this.timeout = timeout;
     }
     @Override public String generate(GeneralKnowledgeRequest request) {
         try {
@@ -39,7 +43,7 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
             input.put("expectedContentVersion", request.getExpectedContentVersion());
             return transport.execute(new StructuredModelRequest(
                     "GENERAL_KNOWLEDGE", SYSTEM_PROMPT, mapper.writeValueAsString(input),
-                    maxTokens, 0.2d, request.getDeadline())).json();
+                    maxTokens, 0.2d, request.getDeadline().cappedAt(timeout))).json();
         } catch (StructuredModelFailure failure) {
             throw new GeneralKnowledgeUnavailableException("general provider unavailable", failure);
         } catch (Exception failure) {

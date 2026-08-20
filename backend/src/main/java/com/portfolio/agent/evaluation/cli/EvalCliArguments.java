@@ -12,16 +12,14 @@ public final class EvalCliArguments {
         VALIDATE,
         OFFLINE,
         PROVIDER,
-        PERIODIC,
-        LEGACY
+        PERIODIC
     }
 
     private static final Map<String, Command> COMMANDS = Map.of(
             "validate", Command.VALIDATE,
             "offline", Command.OFFLINE,
             "provider", Command.PROVIDER,
-            "periodic", Command.PERIODIC,
-            "legacy", Command.LEGACY);
+            "periodic", Command.PERIODIC);
 
     private final Command command;
     private final Map<String, String> options;

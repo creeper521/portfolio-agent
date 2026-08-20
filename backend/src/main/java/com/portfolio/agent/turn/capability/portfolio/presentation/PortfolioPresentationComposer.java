@@ -1,8 +1,8 @@
 package com.portfolio.agent.turn.capability.portfolio.presentation;
 
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.PublicSourceReferenceValue;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 
 import java.util.ArrayList;
@@ -56,7 +56,7 @@ public final class PortfolioPresentationComposer {
         };
     }
     private PublicSourceReferenceValue source(
-            com.portfolio.agent.turn.capability.portfolio.evidence.PublicSourceReference value) {
+            com.portfolio.agent.turn.execution.PublicSourceReferenceValue value) {
         return new PublicSourceReferenceValue(
                 value.getReferenceKey(), value.getLabel(), value.getPublishedVersion(),
                 value.getSourceType(), value.getSubjectRoute(), value.getEvidenceRoute());

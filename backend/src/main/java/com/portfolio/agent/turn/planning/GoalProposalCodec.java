@@ -195,14 +195,95 @@ public final class GoalProposalCodec {
                 Set.of("kind", "clarification"), "root");
         JsonNode node = root.get("clarification");
         requireObject(node, "clarification");
-        assertFields(node, Set.of("field", "prompt", "inputAnchor"),
-                Set.of("field", "prompt", "inputAnchor"), "clarification");
+        assertFields(node, Set.of("field", "prompt", "blockedGoal"),
+                Set.of("field", "prompt", "blockedGoal"), "clarification");
+        ClarificationProposal.Field field = enumValue(
+                ClarificationProposal.Field.class,
+                requireText(node, "field", 64), "clarification.field");
+        if (field == ClarificationProposal.Field.GOAL) {
+            throw new IllegalArgumentException("raw goal clarification is not persistable");
+        }
+        BlockedGoalTemplate blockedGoal = decodeBlockedGoal(
+                node.get("blockedGoal"), input, field);
         return GoalInterpretationResult.clarification(new ClarificationProposal(
-                enumValue(ClarificationProposal.Field.class,
-                        requireText(node, "field", 64), "clarification.field"),
+                field,
                 requireText(node, "prompt", 400),
-                decodeAnchor(node.get("inputAnchor"), input.getUserText(),
-                        "clarification.inputAnchor")));
+                blockedGoal));
+    }
+
+    private BlockedGoalTemplate decodeBlockedGoal(
+            JsonNode node,
+            GoalInterpretationInput input,
+            ClarificationProposal.Field field) {
+        requireObject(node, "clarification.blockedGoal");
+        Set<String> fields = Set.of(
+                "goalKind", "subjects", "requestedOutputs", "facets", "dimensions",
+                "requestedSize", "constraints", "unresolvedField", "askedFields",
+                "remainingFields", "depth");
+        assertFields(node, fields, fields, "clarification.blockedGoal");
+        GoalKind goalKind = enumValue(GoalKind.class,
+                requireText(node, "goalKind", 64), "clarification.blockedGoal.goalKind");
+        if (!input.getAllowedGoalKinds().contains(goalKind)) {
+            throw new IllegalArgumentException("clarification.blockedGoal.goalKind is not allowed");
+        }
+        ClarificationProposal.Field unresolved = enumValue(
+                ClarificationProposal.Field.class,
+                requireText(node, "unresolvedField", 64),
+                "clarification.blockedGoal.unresolvedField");
+        if (unresolved != field) {
+            throw new IllegalArgumentException("clarification field must match blocked goal");
+        }
+        JsonNode subjectNodes = requireArray(node, "subjects");
+        if (subjectNodes.size() > 5) {
+            throw new IllegalArgumentException("clarification.blockedGoal.subjects is too large");
+        }
+        List<BlockedGoalTemplate.Subject> subjects = new ArrayList<>();
+        Set<String> subjectIds = new HashSet<>();
+        for (int index = 0; index < subjectNodes.size(); index++) {
+            JsonNode subjectNode = subjectNodes.get(index);
+            String path = "clarification.blockedGoal.subjects[" + index + "]";
+            requireObject(subjectNode, path);
+            assertFields(subjectNode, Set.of("kind", "reference"),
+                    Set.of("kind", "reference"), path);
+            GoalSubjectReference.Kind kind = enumValue(
+                    GoalSubjectReference.Kind.class,
+                    requireText(subjectNode, "kind", 64), path + ".kind");
+            String reference = requireText(subjectNode, "reference", 128);
+            if (kind == GoalSubjectReference.Kind.RESULT
+                    || !input.containsPublicSubject(kind, reference)) {
+                throw new IllegalArgumentException(path + " references a non-public subject");
+            }
+            if (!subjectIds.add(kind.name() + ':' + reference)) {
+                throw new IllegalArgumentException(path + " is duplicated");
+            }
+            subjects.add(new BlockedGoalTemplate.Subject(kind, reference));
+        }
+        Set<GoalRequestedOutput> outputs = decodeEnumSet(
+                requireArray(node, "requestedOutputs"), GoalRequestedOutput.class,
+                "clarification.blockedGoal.requestedOutputs", true);
+        Set<UserGoalProposal.Facet> facets = decodeEnumSet(
+                requireArray(node, "facets"), UserGoalProposal.Facet.class,
+                "clarification.blockedGoal.facets", true);
+        Set<String> dimensions = decodeClosedNames(
+                requireArray(node, "dimensions"),
+                "clarification.blockedGoal.dimensions", true);
+        Set<String> constraints = decodeClosedNames(
+                requireArray(node, "constraints"),
+                "clarification.blockedGoal.constraints", true);
+        Set<ClarificationProposal.Field> askedFields = decodeEnumSet(
+                requireArray(node, "askedFields"), ClarificationProposal.Field.class,
+                "clarification.blockedGoal.askedFields", false);
+        List<ClarificationProposal.Field> remainingFields = new ArrayList<>(decodeEnumSet(
+                requireArray(node, "remainingFields"), ClarificationProposal.Field.class,
+                "clarification.blockedGoal.remainingFields", true));
+        int depth = requireInt(node, "depth");
+        if (depth != 1) {
+            throw new IllegalArgumentException("provider clarification depth must start at one");
+        }
+        return new BlockedGoalTemplate(
+                goalKind, subjects, outputs, facets, dimensions,
+                nullableInt(node, "requestedSize"), constraints,
+                unresolved, askedFields, List.copyOf(remainingFields), depth);
     }
 
     private GoalInterpretationResult decodeConversational(JsonNode root) {
@@ -310,6 +391,14 @@ public final class GoalProposalCodec {
         if (value == null || !value.isIntegralNumber()) {
             throw new IllegalArgumentException(field + " must be an integer");
         }
+        return value.intValue();
+    }
+
+    private Integer nullableInt(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null) throw new IllegalArgumentException(field + " is required");
+        if (value.isNull()) return null;
+        if (!value.isIntegralNumber()) throw new IllegalArgumentException(field + " must be an integer or null");
         return value.intValue();
     }
 }

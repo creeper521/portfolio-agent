@@ -4,7 +4,12 @@ import com.portfolio.agent.turn.api.request.AgentTurnRequest;
 import com.portfolio.agent.turn.api.request.AgentTurnRequestMapper;
 import com.portfolio.agent.turn.api.response.AgentApiErrorResponse;
 import com.portfolio.agent.turn.api.response.PublicAgentTurnResponse;
+import com.portfolio.agent.common.observability.AnonymousSourceHasher;
+import com.portfolio.agent.common.web.ClientAddressResolver;
+import com.portfolio.agent.turn.lifecycle.ActiveTurnCapacity;
+import com.portfolio.agent.turn.lifecycle.AgentAdmissionRejectedException;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -24,40 +29,71 @@ import java.util.UUID;
 public final class AgentTurnController {
     private final AgentTurnLifecycleService lifecycle;
     private final AgentTurnRequestMapper mapper;
-    public AgentTurnController(AgentTurnLifecycleService lifecycle, AgentTurnRequestMapper mapper) {
-        this.lifecycle = lifecycle; this.mapper = mapper;
+    private final ClientAddressResolver clientAddressResolver;
+    private final AnonymousSourceHasher sourceHasher;
+    private final AgentRequestAdmissionGate admissionGate;
+    private final ActiveTurnCapacity activeTurnCapacity;
+
+    public AgentTurnController(
+            AgentTurnLifecycleService lifecycle,
+            AgentTurnRequestMapper mapper,
+            ClientAddressResolver clientAddressResolver,
+            AnonymousSourceHasher sourceHasher,
+            AgentRequestAdmissionGate admissionGate,
+            ActiveTurnCapacity activeTurnCapacity) {
+        this.lifecycle = lifecycle;
+        this.mapper = mapper;
+        this.clientAddressResolver = clientAddressResolver;
+        this.sourceHasher = sourceHasher;
+        this.admissionGate = admissionGate;
+        this.activeTurnCapacity = activeTurnCapacity;
     }
 
     @PostMapping
     public ResponseEntity<?> create(
             @Valid @RequestBody AgentTurnRequest request,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            HttpServletRequest httpRequest) {
         Bearer bearer = bearer(authorization, false);
         if (!bearer.valid()) return error(
                 HttpStatus.UNAUTHORIZED, request.getRequestId(), "RESUME_TOKEN_INVALID",
                 "会话凭证无效或已过期。", false, null);
-        AgentTurnLifecycleService.Result result = lifecycle.execute(
-                bearer.token(), mapper.toCommand(request));
-        return switch (result.status()) {
-            case COMPLETED, REPLAY -> ResponseEntity.ok()
-                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .body(new PublicAgentTurnResponse(result.turn(), result.conversation()));
-            case IN_PROGRESS -> error(
-                    HttpStatus.CONFLICT, request.getRequestId(), "TURN_IN_PROGRESS",
-                    "相同请求仍在处理中。", true, result.retryAfterSeconds());
-            case CONFLICT -> error(
-                    HttpStatus.CONFLICT, request.getRequestId(), "IDEMPOTENCY_KEY_CONFLICT",
-                    "同一 requestId 不能用于不同请求。", false, null);
-            case CANCELLED -> error(
-                    HttpStatus.CONFLICT, request.getRequestId(), "TURN_CANCELLED",
-                    "该请求已取消。", false, null);
-            case STORE_UNAVAILABLE -> error(
-                    HttpStatus.SERVICE_UNAVAILABLE, request.getRequestId(), "AGENT_STATE_UNAVAILABLE",
-                    "Agent 状态服务暂时不可用。", true, 3L);
-            case UNAUTHORIZED -> error(
-                    HttpStatus.UNAUTHORIZED, request.getRequestId(), "RESUME_TOKEN_INVALID",
-                    "会话凭证无效或已过期。", false, null);
-        };
+        String sourceHash = sourceHasher.hash(clientAddressResolver.resolve(httpRequest));
+        try (AgentRequestAdmission ignoredSource = admissionGate.acquire(
+                sourceHash, request.getRequestId());
+             ActiveTurnCapacity.Lease ignoredActive = activeTurnCapacity.acquire()) {
+            AgentTurnLifecycleService.Result result = lifecycle.execute(
+                    bearer.token(), mapper.toCommand(request));
+            return switch (result.status()) {
+                case COMPLETED, REPLAY -> ResponseEntity.ok()
+                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                        .body(new PublicAgentTurnResponse(result.turn(), result.conversation()));
+                case IN_PROGRESS -> error(
+                        HttpStatus.CONFLICT, request.getRequestId(), "TURN_IN_PROGRESS",
+                        "相同请求仍在处理中。", true, result.retryAfterSeconds());
+                case CONFLICT -> error(
+                        HttpStatus.CONFLICT, request.getRequestId(), "IDEMPOTENCY_KEY_CONFLICT",
+                        "同一 requestId 不能用于不同请求。", false, null);
+                case CANCELLED -> error(
+                        HttpStatus.CONFLICT, request.getRequestId(), "TURN_CANCELLED",
+                        "该请求已取消。", false, null);
+                case STORE_UNAVAILABLE -> error(
+                        HttpStatus.SERVICE_UNAVAILABLE, request.getRequestId(), "AGENT_STATE_UNAVAILABLE",
+                        "Agent 状态服务暂时不可用。", true, 3L);
+                case UNAUTHORIZED -> error(
+                        HttpStatus.UNAUTHORIZED, request.getRequestId(), "RESUME_TOKEN_INVALID",
+                        "会话凭证无效或已过期。", false, null);
+            };
+        } catch (AgentAdmissionRejectedException rejection) {
+            long retryAfterSeconds = rejection.getRetryAfterSeconds();
+            return error(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    request.getRequestId(),
+                    "RATE_LIMITED",
+                    "请求过于频繁，请稍后再试。",
+                    true,
+                    retryAfterSeconds);
+        }
     }
 
     @DeleteMapping("/{requestId}")

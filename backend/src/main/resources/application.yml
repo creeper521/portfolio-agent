@@ -23,14 +23,11 @@ portfolio:
       mode: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION:}
-      timeout: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_TIMEOUT:}
     general-knowledge:
       mode: ${PORTFOLIO_MODEL_OP_GENERAL_MODE:DISABLED}
       provider-ref: ${PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION:}
-      timeout: ${PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT:}
   goal-interpretation:
-    timeout: ${PORTFOLIO_GOAL_INTERPRETATION_TIMEOUT:2500ms}
     max-output-tokens: ${PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS:1600}
   database:
     public:
@@ -50,8 +47,10 @@ portfolio:
       schema: ${PORTFOLIO_CONTEXT_DATABASE_SCHEMA:agent_context}
   conversation-context:
     mode: ${PORTFOLIO_CONVERSATION_CONTEXT_MODE:DISABLED}
-    idle-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_IDLE_TTL:24h}
-    absolute-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_ABSOLUTE_TTL:7d}
+    idle-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_IDLE_TTL:30m}
+    absolute-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_ABSOLUTE_TTL:30m}
+    clarification-ttl: ${PORTFOLIO_CONVERSATION_CLARIFICATION_TTL:5m}
+    key-rotation-retention: ${PORTFOLIO_CONTEXT_KEY_ROTATION_RETENTION:45m}
     cleanup-interval: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_INTERVAL:15m}
     cleanup-batch-size: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_BATCH_SIZE:500}
     crypto:
@@ -78,7 +77,6 @@ portfolio:
     provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
     model-policy-version: ${PORTFOLIO_MODEL_POLICY_VERSION:c1-policy-v1}
     answer-schema-version: c1.answer.v1
-    timeout: ${PORTFOLIO_MODEL_TIMEOUT:8s}
     max-tokens: ${PORTFOLIO_MODEL_MAX_TOKENS:1200}
     max-model-attempts: 1
     external-data-policy-approved: ${PORTFOLIO_MODEL_DATA_POLICY_APPROVED:false}
@@ -92,10 +90,17 @@ portfolio:
     max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}
     max-suggested-questions: 3
     minimum-intent-confidence: 0.65
-  answer-production:
-    requests-per-minute: ${PORTFOLIO_ANSWER_REQUESTS_PER_MINUTE:10}
-    max-concurrent: ${PORTFOLIO_ANSWER_MAX_CONCURRENT:2}
-    request-timeout: ${PORTFOLIO_ANSWER_REQUEST_TIMEOUT:12s}
-    idempotency-ttl: ${PORTFOLIO_ANSWER_IDEMPOTENCY_TTL:2m}
-    trust-proxy: ${PORTFOLIO_ANSWER_TRUST_PROXY:false}
-    trusted-proxies: ${PORTFOLIO_ANSWER_TRUSTED_PROXIES:}
+  agent-runtime:
+    requests-per-minute: ${PORTFOLIO_AGENT_REQUESTS_PER_MINUTE:10}
+    max-concurrent-per-source: ${PORTFOLIO_AGENT_MAX_CONCURRENT_PER_SOURCE:2}
+    max-active-turns: ${PORTFOLIO_AGENT_MAX_ACTIVE_TURNS:8}
+    max-tracked-sources: ${PORTFOLIO_AGENT_MAX_TRACKED_SOURCES:10000}
+    lease-duration: ${PORTFOLIO_AGENT_LEASE_DURATION:35s}
+    turn-timeout: ${PORTFOLIO_AGENT_TURN_TIMEOUT:20s}
+    settlement-reserve: ${PORTFOLIO_AGENT_SETTLEMENT_RESERVE:2s}
+    goal-interpretation-timeout: ${PORTFOLIO_AGENT_GOAL_INTERPRETATION_TIMEOUT:8s}
+    general-knowledge-timeout: ${PORTFOLIO_AGENT_GENERAL_KNOWLEDGE_TIMEOUT:10s}
+    portfolio-expression-timeout: ${PORTFOLIO_AGENT_PORTFOLIO_EXPRESSION_TIMEOUT:4s}
+    database-operation-timeout: ${PORTFOLIO_AGENT_DATABASE_OPERATION_TIMEOUT:3s}
+    trust-proxy: ${PORTFOLIO_AGENT_TRUST_PROXY:false}
+    trusted-proxies: ${PORTFOLIO_AGENT_TRUSTED_PROXIES:}

@@ -1,12 +1,13 @@
 package com.portfolio.agent.turn.capability.synthesis;
 
+import com.portfolio.agent.turn.execution.TaskExecutionResult;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CrossDomainProvenanceTest {
     @Test void provenanceContainsOnlyActuallySelectedPortfolioSupport() {
-        var execution = new CrossDomainTaskExecutor(new CrossDomainPresentationComposer())
+        TaskExecutionResult execution = new CrossDomainTaskExecutor(new CrossDomainPresentationComposer())
                 .execute(CrossDomainTestFixtures.context("并发控制"));
         assertThat(execution.getArtifact().getProvenance().getPublicSourceKeys())
                 .containsExactly("E-01");

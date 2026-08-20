@@ -208,7 +208,7 @@ public final class EvalHarness {
                 // FAIL: neither the mock nor a real seam produced observations
                 return List.of();
             } else {
-                // offline/legacy runs must have executed at least one case;
+                // Offline runs must have executed at least one case;
                 // an all-skipped or empty run is a failure, not a pass
                 gates.add(gateResult(metrics, "run.executedCaseCount", BigDecimal.ONE,
                         EvalGateResult.EvalComparisonOperator.GE));
@@ -220,7 +220,7 @@ public final class EvalHarness {
                 EvalGateResult.EvalComparisonOperator.LE, EvalSeverity.BLOCKING,
                 EvalReasonCode.EXECUTOR_ERROR);
         // smoke coverage is a contract of suites that expand generated smoke
-        // cases; handwritten-only suites (e.g. legacy) have no such contract
+        // cases; handwritten-only suites have no such contract
         boolean hasGeneratedSmoke = suiteCases.stream().anyMatch(evalCase ->
                 evalCase.getOrigin()
                 == com.portfolio.agent.evaluation.domain.EvalOrigin.BUNDLE_GENERATED);

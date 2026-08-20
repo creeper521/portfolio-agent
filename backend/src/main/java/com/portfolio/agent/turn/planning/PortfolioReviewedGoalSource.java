@@ -1,11 +1,11 @@
 package com.portfolio.agent.turn.planning;
 
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerKnowledge;
-import com.portfolio.agent.answer.domain.AnswerQuestion;
-import com.portfolio.agent.answer.domain.AnswerSubjectType;
-import com.portfolio.agent.answer.domain.RuntimeAnswerContent;
-import com.portfolio.agent.answer.gateway.PortfolioKnowledgeGateway;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerKnowledge;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerQuestion;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerSubjectType;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.RuntimeAnswerContent;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 import java.util.LinkedHashSet;

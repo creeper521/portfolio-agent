@@ -1,6 +1,6 @@
 package com.portfolio.agent.evaluation.execution;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
 import com.portfolio.agent.evaluation.domain.EvalAnswerShape;
 import com.portfolio.agent.evaluation.domain.EvalLayer;
 import com.portfolio.agent.evaluation.domain.EvalObservation;
@@ -50,7 +50,7 @@ class OracleIsolationTest {
     @Test
     void observationCarriesProviderUsageAsAnExplicitAvailabilityValue() {
         EvalObservation observation = new EvalObservation(
-                "answer.safe.001", EvalLayer.INTELLIGENCE, 1, EvalObservationStatus.PASS,
+                "answer.safe.001", EvalLayer.HTTP_E2E, 1, EvalObservationStatus.PASS,
                 null, null, List.of(), List.of(), List.of(), AnswerResolution.ANSWERED,
                 null, null, null, List.of("DETERMINISTIC"), 12,
                 EvalProviderUsage.unavailable(), EvalAnswerShape.empty(), false, true);

@@ -14,10 +14,10 @@ import static org.mockito.Mockito.when;
 class AgentTurnLifecycleContinuationTest {
     @Test void unknownOrCrossConversationHandleDoesNotLeakExistence() {
         AgentStateStore store = mock(AgentStateStore.class);
-        when(store.claim(any(), any(), any(), any(), any()))
+        when(store.claim(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
-        when(store.findContext(any(), any(), any())).thenReturn(Optional.empty());
-        when(store.complete(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(store.findContext(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("unused"));
         AgentTurnLifecycleService.Result result = service.execute(

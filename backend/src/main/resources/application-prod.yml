@@ -1,6 +1,6 @@
 portfolio:
   conversation-context:
-    mode: ${PORTFOLIO_CONVERSATION_CONTEXT_MODE:POSTGRESQL}
+    mode: POSTGRESQL
   diagnostics:
     frontend-ingest-enabled: ${PORTFOLIO_FRONTEND_DIAGNOSTICS_ENABLED:false}
 

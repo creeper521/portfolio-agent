@@ -1,0 +1,1009 @@
+package com.portfolio.agent.turn.capability.portfolio.knowledge;
+
+import com.portfolio.agent.turn.capability.portfolio.knowledge.LocalPortfolioKnowledgeAdapter;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerEvidence;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerKnowledge;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerQuestion;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerRetrievalCorpus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerTimelineEvent;
+import com.portfolio.agent.portfolio.domain.AchievementStatus;
+import com.portfolio.agent.portfolio.domain.CaseStudy;
+import com.portfolio.agent.portfolio.domain.CaseType;
+import com.portfolio.agent.portfolio.domain.CareerTrack;
+import com.portfolio.agent.portfolio.domain.Claim;
+import com.portfolio.agent.portfolio.domain.ClaimCategory;
+import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;
+import com.portfolio.agent.portfolio.domain.ClaimSubjectType;
+import com.portfolio.agent.portfolio.domain.ClaimVerificationStatus;
+import com.portfolio.agent.portfolio.domain.ContributionType;
+import com.portfolio.agent.portfolio.domain.EvidenceRecord;
+import com.portfolio.agent.portfolio.domain.EvidenceStatus;
+import com.portfolio.agent.portfolio.domain.EvidenceType;
+import com.portfolio.agent.portfolio.domain.Materiality;
+import com.portfolio.agent.portfolio.domain.OwnerProfile;
+import com.portfolio.agent.portfolio.domain.PortfolioSnapshot;
+import com.portfolio.agent.portfolio.domain.ProjectProfile;
+import com.portfolio.agent.portfolio.domain.ProjectDisplayTier;
+import com.portfolio.agent.portfolio.domain.ProjectNature;
+import com.portfolio.agent.portfolio.domain.ProjectStatus;
+import com.portfolio.agent.portfolio.domain.QuestionDefinition;
+import com.portfolio.agent.portfolio.domain.ReviewStatus;
+import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
+import com.portfolio.agent.portfolio.domain.RagDocument;
+import com.portfolio.agent.portfolio.domain.RetrievalManifest;
+import com.portfolio.agent.portfolio.domain.RuntimeKeywordIndex;
+import com.portfolio.agent.portfolio.domain.RuntimeRetrievalContent;
+import com.portfolio.agent.portfolio.domain.RuntimeVectorIndex;
+import com.portfolio.agent.portfolio.domain.SupportType;
+import com.portfolio.agent.portfolio.domain.TimelineEvent;
+import com.portfolio.agent.portfolio.domain.VerificationBasis;
+import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDate;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class LocalPortfolioKnowledgeAdapterTest {
+
+    @Test
+    void projectsExposeStableIdsAndRecommendationMetadata() {
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
+        ProjectProfile project = metadataProject(projectClaim);
+        PortfolioSnapshot snapshot = metadataSnapshot(
+                List.of(project), List.of(), List.of(projectClaim));
+
+        AnswerKnowledge knowledge = new LocalPortfolioKnowledgeAdapter(repository(snapshot))
+                .getContent()
+                .getProjects()
+                .getFirst();
+
+        assertThat(knowledge.getStableId()).isEqualTo("project-1");
+        assertThat(knowledge.getSlug()).isEqualTo("sql-audit");
+        assertThat(knowledge.getCareerTrack()).isEqualTo("JAVA_BACKEND");
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("PROJECT_DELIVERY");
+        assertThat(knowledge.getCapabilityCodes()).doesNotContain("JAVA");
+    }
+
+    @Test
+    void casesExposeOnlyTheirOwnClaimTopicsAndKeepTheirOwnStableIds() {
+        Claim projectClaim = claim(
+                "claim-project", ClaimSubjectType.PROJECT, "project-1", "PROJECT_DELIVERY");
+        Claim caseClaim = claim(
+                "claim-case", ClaimSubjectType.CASE, "case-role-reset", "CASE_RECOVERY");
+        ProjectProfile project = metadataProject(projectClaim);
+        CaseStudy caseStudy = new CaseStudy(
+                "case-role-reset",
+                "C-01",
+                "test-role-reset",
+                CaseType.FEATURE,
+                "Role reset",
+                "Summary",
+                "Problem",
+                List.of("Action"),
+                List.of("Decision"),
+                List.of("Verified"),
+                "Outcome",
+                List.of("Limitation"),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                "project-1",
+                List.of(),
+                List.of(caseClaim.getId()),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+        PortfolioSnapshot snapshot = metadataSnapshot(
+                List.of(project), List.of(caseStudy), List.of(projectClaim, caseClaim));
+
+        AnswerKnowledge knowledge = new LocalPortfolioKnowledgeAdapter(repository(snapshot))
+                .getContent()
+                .getCases()
+                .getFirst();
+
+        assertThat(knowledge.getStableId()).isEqualTo("case-role-reset");
+        assertThat(knowledge.getSlug()).isEqualTo("test-role-reset");
+        assertThat(knowledge.getCareerTrack()).isNull();
+        assertThat(knowledge.getCapabilityCodes()).containsExactly("CASE_RECOVERY");
+        assertThat(knowledge.getCapabilityCodes())
+                .doesNotContain("JAVA", "PROJECT_DELIVERY");
+    }
+
+    @Test
+    void answerClaimCategoriesCoverEveryPublicClaimCategory() {
+        assertThat(ClaimCategory.values())
+                .allSatisfy(category -> assertThat(
+                        AnswerClaimCategory.valueOf(category.name()))
+                        .isNotNull());
+    }
+
+    @Test
+    void projectsReviewedPublicRetrievalChunkText() {
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit", List.of())),
+                List.of(), List.of());
+        RagDocument document = new RagDocument(
+                "chunk-1", snapshot.getContentVersion(), List.of("sql-audit"),
+                List.of("claim-1"), "Private-to-retrieval chunk text",
+                List.of("DELIVERY"), LocalDate.parse("2026-07-01"), null, "sha256:test");
+        RuntimeKeywordIndex keywordIndex = new RuntimeKeywordIndex(
+                1, 1.0,
+                List.of(new RuntimeKeywordIndex.DocumentEntry(
+                        "chunk-1", 1, Map.of("交付", 1))),
+                Map.of("交付", 1));
+        RuntimeRetrievalContent retrieval = new RuntimeRetrievalContent(
+                new RetrievalManifest(
+                        "hybrid-rag-v1", "nfkc-bigram-v1", "retrieval-policy-v1",
+                        "BAAI/bge-small-zh-v1.5", "sha256:model", 512, 256,
+                        "L2", "COSINE", 1, "sha256:chunks",
+                        "keyword-index-v1", "vector-index-v1"),
+                List.of(document), keywordIndex,
+                new RuntimeVectorIndex(2, Map.of("chunk-1", new float[]{1.0f, 0.0f})));
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot, retrieval));
+
+        AnswerRetrievalCorpus corpus = adapter.getContent().getRetrievalCorpus().orElseThrow();
+
+        assertThat(corpus.getChunks().get("chunk-1").getTextLength())
+                .isEqualTo(document.getText().length());
+        assertThat(corpus.getChunks().get("chunk-1").getClaimIds())
+                .containsExactly("claim-1");
+        assertThat(corpus.getChunks().get("chunk-1").getText())
+                .isEqualTo(document.getText());
+        assertThat(corpus.getKeywordIndex().getDocumentCount()).isEqualTo(1);
+        assertThat(corpus.copyVectors()).containsKey("chunk-1");
+    }
+
+    @Test
+    void mapsOnlyKnowledgeOwnedByRequestedProject() {
+        ProjectProfile requested = project(
+                "project-1",
+                "sql-audit",
+                List.of("evidence-1")
+        );
+        ProjectProfile other = project(
+                "project-2",
+                "other-project",
+                List.of("evidence-2")
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(other, requested),
+                List.of(
+                        question("question-2", "project-2"),
+                        question("listed-for-wrong-project", "project-2"),
+                        question("question-1", "project-1")
+                ),
+                List.of(
+                        evidence("evidence-2", EvidenceStatus.APPROVED, false),
+                        evidence("evidence-1", EvidenceStatus.APPROVED, false)
+                )
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        Optional<AnswerKnowledge> result = adapter.findBySlug("sql-audit");
+
+        assertThat(result).isPresent();
+        AnswerKnowledge knowledge = result.orElseThrow();
+        assertThat(knowledge.getSlug()).isEqualTo("sql-audit");
+        assertThat(knowledge.getTitle()).isEqualTo("SQL Audit");
+        assertThat(knowledge.getBackground()).isEqualTo("Background");
+        assertThat(knowledge.getResponsibilities()).containsExactly("Responsibility");
+        assertThat(knowledge.getSolution()).isEqualTo("Solution");
+        assertThat(knowledge.getKeyDecisions()).containsExactly("Decision");
+        assertThat(knowledge.getVerification()).containsExactly("Verified");
+        assertThat(knowledge.getOutcome()).isEqualTo("Outcome");
+        assertThat(knowledge.getHandoff()).isEqualTo("Handoff");
+        assertThat(knowledge.getStatus()).isEqualTo("DELIVERED");
+        assertThat(knowledge.getQuestions())
+                .extracting(AnswerQuestion::getCanonicalQuestion)
+                .containsExactly("Canonical question-1");
+        assertThat(knowledge.getQuestions().get(0).getAliases())
+                .containsExactly("Alias question-1");
+        assertThat(knowledge.getQuestions().get(0).getSuggestion())
+                .isEqualTo("Canonical question-1");
+        assertThat(knowledge.getEvidence())
+                .extracting(AnswerEvidence::getId)
+                .containsExactly("evidence-1");
+        assertThat(knowledge.getEvidence().get(0).getType()).isEqualTo("DOCUMENT");
+        assertThat(knowledge.getEvidence().get(0).getPublicStatus()).isEqualTo("APPROVED");
+        assertThat(knowledge.getEvidence().get(0).isRawContentPublic()).isFalse();
+    }
+
+    @Test
+    void mapsReviewedUtf8QuestionAndEvidenceContract() {
+        QuestionDefinition publishedQuestion = new QuestionDefinition(
+                "sql-audit-overview",
+                "请介绍 SQL 审计项目",
+                List.of("SQL 审计项目解决了什么问题？"),
+                List.of("INTERVIEWER"),
+                List.of("project-1"),
+                List.of(),
+                List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10,
+                "project-1",
+                List.of("claim-sql-audit-delivered"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit",
+                        List.of("sql-audit-delivery-set"))),
+                List.of(publishedQuestion),
+                List.of(evidence(
+                        "sql-audit-delivery-set",
+                        EvidenceStatus.APPROVED,
+                        false
+                ))
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        AnswerKnowledge knowledge = adapter.findBySlug("sql-audit").orElseThrow();
+
+        assertThat(knowledge.getQuestions()).hasSize(1);
+        AnswerQuestion mappedQuestion = knowledge.getQuestions().getFirst();
+        assertThat(mappedQuestion.getCanonicalQuestion())
+                .isEqualTo(publishedQuestion.getText());
+        assertThat(mappedQuestion.getAliases()).containsExactlyElementsOf(
+                publishedQuestion.getAliases()
+        );
+        assertThat(mappedQuestion.getSuggestion()).isEqualTo(publishedQuestion.getText());
+        assertThat(knowledge.getEvidence())
+                .extracting(AnswerEvidence::getId)
+                .containsExactly("sql-audit-delivery-set");
+    }
+
+    @Test
+    void includesCaseOnlyTimelineAndExcludesMixedSubjectTimeline() {
+        QuestionDefinition projectQuestion = question(
+                "question-project-sql-audit",
+                "project-1"
+        );
+        QuestionDefinition caseQuestion = new QuestionDefinition(
+                "question-case-role-reset",
+                "测试角色清理功能解决了什么问题？",
+                List.of(),
+                List.of("INTERVIEWER"),
+                List.of(),
+                List.of("case-role-reset"),
+                List.of("OVERVIEW"),
+                List.of(ClaimCategory.OUTCOME),
+                List.of("CASE"),
+                true,
+                10,
+                "case-role-reset",
+                List.of("claim-case-role-reset"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        PortfolioSnapshot snapshot =
+                validCaseBoundarySnapshot(projectQuestion, caseQuestion);
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        List<AnswerTimelineEvent> timeline = adapter.getContent().getTimeline();
+
+        assertThat(timeline).extracting(AnswerTimelineEvent::getId)
+                .containsExactly("timeline-case-only");
+        assertThat(timeline.getFirst().getProjectSlugs()).isEmpty();
+        assertThat(timeline.getFirst().getCaseSlugs()).containsExactly("test-role-reset");
+        assertThat(adapter.getContent().getCapabilities().isPresetAnswers()).isTrue();
+        assertThat(adapter.getContent().getCapabilities().isReadOnlyTools()).isTrue();
+        assertThat(adapter.getContent().getCapabilities().isMultiTurnReferences()).isTrue();
+    }
+
+    @Test
+    void preservesProjectClaimOrderAndRejectsCaseClaimsWithCollidingSubjectIds() {
+        Claim firstInSnapshot = claim(
+                "claim-project-second",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim firstInProject = claim(
+                "claim-project-first",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim collidingCaseClaim = claim(
+                "claim-case-collision",
+                ClaimSubjectType.CASE,
+                "project-1"
+        );
+        ProjectProfile project = new ProjectProfile(
+                "project-1", "P-01", "sql-audit", "SQL Audit", "Summary",
+                "Background", List.of("Responsibility"), "Solution",
+                List.of("Decision"), List.of("Java"), List.of("Verified"),
+                "Outcome", "Handoff", ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(firstInProject.getId(), firstInSnapshot.getId()),
+                List.of(), List.of()
+        );
+        PortfolioSnapshot snapshot = new PortfolioSnapshot(
+                "3.0", "2026-07-23.1",
+                OffsetDateTime.parse("2026-07-23T12:00:00+08:00"),
+                new OwnerProfile("", "Java backend intern", "Engineering portfolio",
+                        null, null, null),
+                List.of(project), List.of(),
+                List.of(firstInSnapshot, collidingCaseClaim, firstInProject),
+                List.of(), List.of(), List.of(), List.of()
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        assertThat(adapter.findBySlug("sql-audit").orElseThrow().getClaims())
+                .extracting(item -> item.getId())
+                .containsExactly("claim-project-first", "claim-project-second");
+    }
+
+    @Test
+    void preservesQuestionAndEvidenceOrder() {
+        ProjectProfile requested = project(
+                "project-1",
+                "sql-audit",
+                List.of("evidence-1", "evidence-2")
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(requested),
+                List.of(
+                        question("question-2", "project-1"),
+                        question("unrelated-question", "another-project"),
+                        question("question-1", "project-1")
+                ),
+                List.of(
+                        evidence("evidence-2", EvidenceStatus.APPROVED, false),
+                        evidence("unrelated-evidence", EvidenceStatus.APPROVED, false),
+                        evidence("evidence-1", EvidenceStatus.APPROVED, false)
+                )
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        AnswerKnowledge knowledge = adapter.findBySlug("sql-audit").orElseThrow();
+
+        assertThat(knowledge.getQuestions())
+                .extracting(AnswerQuestion::getCanonicalQuestion)
+                .containsExactly("Canonical question-2", "Canonical question-1");
+        assertThat(knowledge.getEvidence())
+                .extracting(AnswerEvidence::getId)
+                .containsExactly("evidence-2", "evidence-1");
+    }
+
+    @Test
+    void excludesCaseOnlyQuestionsFromAgentSuggestedQuestions() {
+        String projectQuestion = "SQL 审计项目解决了什么问题？";
+        String caseQuestion = "测试角色清理功能解决了什么问题？";
+        QuestionDefinition projectQuestionDefinition = new QuestionDefinition(
+                "question-project-sql-audit",
+                projectQuestion,
+                List.of("SQL 审计解决了什么？"),
+                List.of("INTERVIEWER"),
+                List.of("project-1"),
+                List.of(),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10,
+                "project-1",
+                List.of("claim-sql-audit-delivered"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        QuestionDefinition caseQuestionDefinition = new QuestionDefinition(
+                "question-case-role-reset",
+                caseQuestion,
+                List.of("测试角色清理有什么作用？"),
+                List.of("INTERVIEWER"),
+                List.of(),
+                List.of("case-role-reset"),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10,
+                "case-role-reset",
+                List.of("claim-case-role-reset"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        PortfolioSnapshot snapshot = validCaseBoundarySnapshot(
+                projectQuestionDefinition,
+                caseQuestionDefinition
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        List<String> suggestedQuestions = adapter.getContent().getProjects().stream()
+                .flatMap(project -> project.getQuestions().stream())
+                .map(AnswerQuestion::getSuggestion)
+                .toList();
+
+        assertThat(suggestedQuestions).contains(projectQuestion);
+        assertThat(suggestedQuestions).doesNotContain(caseQuestion);
+    }
+
+    @Test
+    void mountsActivePresetOnlyToItsContractExecutionSubject() {
+        QuestionDefinition abtestQuestion = new QuestionDefinition(
+                "question-abtest-overview",
+                "AB 实验项目整体背景是什么？",
+                List.of("AB 实验项目概况"),
+                List.of("INTERVIEWER"),
+                List.of("weekend-login-abtest-project"),
+                List.of(
+                        "case-abtest-experiment-design",
+                        "case-abtest-service-sql",
+                        "case-abtest-validation-risk-control"),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.BACKGROUND),
+                List.of("HOME", "PROJECT"),
+                true,
+                10,
+                "weekend-login-abtest-project",
+                List.of("claim-abtest-overview"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+        ProjectProfile project = project(
+                "weekend-login-abtest-project",
+                "weekend-login-abtest",
+                List.of());
+        CaseStudy designCase = abtestCase("case-abtest-experiment-design");
+        CaseStudy serviceCase = abtestCase("case-abtest-service-sql");
+        CaseStudy validationCase = abtestCase("case-abtest-validation-risk-control");
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project),
+                List.of(abtestQuestion),
+                List.of(),
+                List.of(designCase, serviceCase, validationCase)
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        assertThat(adapter.getContent().getProjects())
+                .singleElement()
+                .satisfies(knowledge -> assertThat(knowledge.getQuestions())
+                        .extracting(AnswerQuestion::getId)
+                        .containsExactly("question-abtest-overview"));
+        assertThat(adapter.getContent().getCases())
+                .hasSize(3)
+                .allSatisfy(knowledge -> assertThat(knowledge.getQuestions())
+                        .isEmpty());
+        assertThat(adapter.getContent().getProjects().getFirst().getQuestions()
+                .getFirst().getContractSubjectId())
+                .isEqualTo("weekend-login-abtest-project");
+    }
+
+    private static CaseStudy abtestCase(String id) {
+        return new CaseStudy(
+                id,
+                "C-AB",
+                id.replace("case-", ""),
+                CaseType.FEATURE,
+                "ABTest " + id,
+                "Summary",
+                "Problem",
+                List.of("Action"),
+                List.of(),
+                List.of("Verified"),
+                "Outcome",
+                List.of(),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                "weekend-login-abtest-project",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private static PortfolioSnapshot validCaseBoundarySnapshot(
+            QuestionDefinition projectQuestion,
+            QuestionDefinition caseQuestion
+    ) {
+        String evidenceId = "evidence-1";
+        String timelineId = "timeline-boundary";
+        Claim projectClaim = claim(
+                "claim-project",
+                ClaimSubjectType.PROJECT,
+                "project-1"
+        );
+        Claim caseClaim = claim(
+                "claim-case",
+                ClaimSubjectType.CASE,
+                "case-role-reset"
+        );
+        ProjectProfile project = new ProjectProfile(
+                "project-1",
+                "P-01",
+                "sql-audit",
+                "SQL Audit",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(projectClaim.getId()),
+                List.of(evidenceId),
+                List.of(timelineId)
+        );
+        CaseStudy caseStudy = new CaseStudy(
+                "case-role-reset",
+                "C-01",
+                "test-role-reset",
+                CaseType.FEATURE,
+                "测试角色清理",
+                "测试人员频繁创建新号时清理旧角色状态",
+                "旧账号缓存会影响重复测试",
+                List.of("实现清理角色信息能力"),
+                List.of("保持公开 Case 与 Agent 项目检索隔离"),
+                List.of("通过功能测试验证"),
+                "测试人员可重复创建干净账号",
+                List.of("仅陈述已验证的功能结果"),
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                null,
+                List.of(caseClaim.getId()),
+                List.of(evidenceId),
+                List.of(timelineId),
+                List.of(caseQuestion.getId())
+        );
+        TimelineEvent timeline = new TimelineEvent(
+                timelineId,
+                "2026-07",
+                "公开边界验证",
+                "Case 问题不应进入 Agent 项目问题目录",
+                "构造同时关联项目与 Case 的有效快照",
+                "验证项目问题保留且 Case-only 问题隔离",
+                List.of(project.getId()),
+                List.of(caseStudy.getId()),
+                List.of(projectClaim.getId(), caseClaim.getId()),
+                List.of(evidenceId)
+        );
+        TimelineEvent caseOnlyTimeline = new TimelineEvent(
+                "timeline-case-only",
+                "2026-07",
+                "Case-only event",
+                "Case-only content must stay outside Agent",
+                "Keep the public Case API separate",
+                "Agent content remains project-only",
+                List.of(),
+                List.of(caseStudy.getId()),
+                List.of(caseClaim.getId()),
+                List.of(evidenceId)
+        );
+        EvidenceRecord evidence = evidence(evidenceId, EvidenceStatus.APPROVED, false);
+
+        return new PortfolioSnapshot(
+                "3.0",
+                "2026-07-23.1",
+                OffsetDateTime.parse("2026-07-23T12:00:00+08:00"),
+                new OwnerProfile(
+                        "",
+                        "Java backend intern",
+                        "Engineering portfolio",
+                        null,
+                        null,
+                        null
+                ),
+                List.of(project),
+                List.of(caseStudy),
+                List.of(projectClaim, caseClaim),
+                List.of(
+                        link("link-project", projectClaim.getId(), evidenceId),
+                        link("link-case", caseClaim.getId(), evidenceId)
+                ),
+                List.of(projectQuestion, caseQuestion),
+                List.of(evidence),
+                List.of(timeline, caseOnlyTimeline)
+        );
+    }
+
+    private static Claim claim(String id, ClaimSubjectType subjectType, String subjectId) {
+        return claim(id, subjectType, subjectId, "DELIVERY");
+    }
+
+    private static Claim claim(
+            String id,
+            ClaimSubjectType subjectType,
+            String subjectId,
+            String topic
+    ) {
+        return new Claim(
+                id,
+                subjectType,
+                subjectId,
+                ClaimCategory.OUTCOME,
+                "Reviewed delivery outcome",
+                "Only the reviewed result is stated",
+                AchievementStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                VerificationBasis.EVIDENCE_SUPPORTED,
+                ClaimVerificationStatus.VERIFIED,
+                Materiality.KEY,
+                List.of(topic),
+                Map.of("INTERVIEWER", 100)
+        );
+    }
+
+    private static ClaimEvidenceLink link(String id, String claimId, String evidenceId) {
+        return new ClaimEvidenceLink(
+                id,
+                claimId,
+                evidenceId,
+                SupportType.DIRECT,
+                "Supports the reviewed delivery outcome",
+                ReviewStatus.APPROVED
+        );
+    }
+
+    @Test
+    void filtersEvidenceThatIsNotApprovedOrExposesRawContent() {
+        ProjectProfile requested = project(
+                "project-1",
+                "sql-audit",
+                List.of(
+                        "approved-safe",
+                        "approved-raw",
+                        "pending-safe",
+                        "rejected-safe",
+                        "approved-unknown-raw-status"
+                )
+        );
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(requested),
+                List.of(),
+                List.of(
+                        evidence("approved-safe", EvidenceStatus.APPROVED, false),
+                        evidence("approved-raw", EvidenceStatus.APPROVED, true),
+                        evidence("pending-safe", EvidenceStatus.PENDING, false),
+                        evidence("rejected-safe", EvidenceStatus.REJECTED, false),
+                        evidence("approved-unknown-raw-status", EvidenceStatus.APPROVED, null)
+                )
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        AnswerKnowledge knowledge = adapter.findBySlug("sql-audit").orElseThrow();
+
+        assertThat(knowledge.getEvidence())
+                .extracting(AnswerEvidence::getId)
+                .containsExactly("approved-safe");
+    }
+
+    @Test
+    void returnsEmptyForUnknownProject() {
+        PortfolioSnapshot snapshot = snapshot(
+                List.of(project("project-1", "sql-audit", List.of())),
+                List.of(),
+                List.of()
+        );
+        LocalPortfolioKnowledgeAdapter adapter =
+                new LocalPortfolioKnowledgeAdapter(repository(snapshot));
+
+        Optional<AnswerKnowledge> result = adapter.findBySlug("unknown");
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void answerModelsDefensivelyCopyCollectionsAndKeepCompleteValueSemantics() {
+        List<String> aliases = new ArrayList<>(List.of("Alias"));
+        AnswerQuestion question = new AnswerQuestion("Canonical", aliases, "Suggestion");
+        AnswerQuestion equalQuestion =
+                new AnswerQuestion("Canonical", List.of("Alias"), "Suggestion");
+
+        AnswerEvidence evidence = new AnswerEvidence(
+                "evidence-1",
+                "Evidence",
+                "DOCUMENT",
+                LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-14"),
+                2,
+                "Summary",
+                "APPROVED",
+                false
+        );
+        AnswerEvidence equalEvidence = new AnswerEvidence(
+                "evidence-1",
+                "Evidence",
+                "DOCUMENT",
+                LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-14"),
+                2,
+                "Summary",
+                "APPROVED",
+                false
+        );
+
+        List<String> responsibilities = new ArrayList<>(List.of("Responsibility"));
+        List<String> keyDecisions = new ArrayList<>(List.of("Decision"));
+        List<String> verification = new ArrayList<>(List.of("Verified"));
+        List<AnswerQuestion> questions = new ArrayList<>(List.of(question));
+        List<AnswerEvidence> evidenceList = new ArrayList<>(List.of(evidence));
+        AnswerKnowledge knowledge = new AnswerKnowledge(
+                "sql-audit",
+                "SQL Audit",
+                "Background",
+                responsibilities,
+                "Solution",
+                keyDecisions,
+                verification,
+                "Outcome",
+                "Handoff",
+                "DELIVERED",
+                questions,
+                evidenceList
+        );
+        AnswerKnowledge equalKnowledge = new AnswerKnowledge(
+                "sql-audit",
+                "SQL Audit",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                "DELIVERED",
+                List.of(equalQuestion),
+                List.of(equalEvidence)
+        );
+
+        aliases.add("Later alias");
+        responsibilities.add("Later responsibility");
+        keyDecisions.add("Later decision");
+        verification.add("Later verification");
+        questions.clear();
+        evidenceList.clear();
+
+        assertThat(question.getAliases()).containsExactly("Alias");
+        assertThat(knowledge.getResponsibilities()).containsExactly("Responsibility");
+        assertThat(knowledge.getKeyDecisions()).containsExactly("Decision");
+        assertThat(knowledge.getVerification()).containsExactly("Verified");
+        assertThat(knowledge.getQuestions()).containsExactly(question);
+        assertThat(knowledge.getEvidence()).containsExactly(evidence);
+        assertThat(knowledge.getStableId()).isEqualTo(knowledge.getSlug());
+        assertThat(knowledge.getCareerTrack()).isNull();
+        assertThat(knowledge.getCapabilityCodes()).isEmpty();
+        assertThatThrownBy(() -> question.getAliases().add("Forbidden"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> knowledge.getResponsibilities().add("Forbidden"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> knowledge.getKeyDecisions().add("Forbidden"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> knowledge.getVerification().add("Forbidden"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> knowledge.getQuestions().add(equalQuestion))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> knowledge.getEvidence().add(equalEvidence))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(question).isEqualTo(equalQuestion);
+        assertThat(question.hashCode()).isEqualTo(equalQuestion.hashCode());
+        assertThat(question.toString()).contains("Canonical", "Alias", "Suggestion");
+        assertThat(question).isNotEqualTo(
+                new AnswerQuestion("Canonical", List.of("Alias"), "Different suggestion")
+        );
+        assertThat(evidence).isEqualTo(equalEvidence);
+        assertThat(evidence.hashCode()).isEqualTo(equalEvidence.hashCode());
+        assertThat(evidence.toString()).contains("evidence-1", "DOCUMENT", "APPROVED");
+        assertThat(evidence).isNotEqualTo(new AnswerEvidence(
+                "evidence-1",
+                "Evidence",
+                "DOCUMENT",
+                LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-14"),
+                2,
+                "Summary",
+                "APPROVED",
+                true
+        ));
+        assertThat(knowledge).isEqualTo(equalKnowledge);
+        assertThat(knowledge.hashCode()).isEqualTo(equalKnowledge.hashCode());
+        assertThat(knowledge.toString()).contains("sql-audit", "DELIVERED");
+        assertThat(knowledge).isNotEqualTo(new AnswerKnowledge(
+                "sql-audit",
+                "SQL Audit",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                "IN_PROGRESS",
+                List.of(equalQuestion),
+                List.of(equalEvidence)
+        ));
+    }
+
+    private static PublicPortfolioRepository repository(PortfolioSnapshot snapshot) {
+        return repository(snapshot, null);
+    }
+
+    private static PublicPortfolioRepository repository(
+            PortfolioSnapshot snapshot,
+            RuntimeRetrievalContent retrieval
+    ) {
+        return new PublicPortfolioRepository() {
+            @Override
+            public RuntimeContentSnapshot getSnapshot() {
+                return new RuntimeContentSnapshot(
+                        snapshot,
+                        "sha256:test-runtime-bundle",
+                        Instant.parse("2026-07-21T00:00:00Z"),
+                        retrieval
+                );
+            }
+        };
+    }
+
+    private static PortfolioSnapshot snapshot(
+            List<ProjectProfile> projects,
+            List<QuestionDefinition> questions,
+            List<EvidenceRecord> evidence
+    ) {
+        return snapshot(projects, questions, evidence, List.of());
+    }
+
+    private static PortfolioSnapshot snapshot(
+            List<ProjectProfile> projects,
+            List<QuestionDefinition> questions,
+            List<EvidenceRecord> evidence,
+            List<CaseStudy> cases
+    ) {
+        return new PortfolioSnapshot(
+                "1.0",
+                "2026-07-14.1",
+                OffsetDateTime.parse("2026-07-14T12:00:00+08:00"),
+                null,
+                projects,
+                cases,
+                List.of(),
+                List.of(),
+                questions,
+                evidence,
+                List.of()
+        );
+    }
+
+    private static ProjectProfile project(
+            String id,
+            String slug,
+            List<String> evidenceIds
+    ) {
+        return new ProjectProfile(
+                id,
+                "P-01",
+                slug,
+                "SQL Audit",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                List.of(),
+                evidenceIds,
+                List.of()
+        );
+    }
+
+    private static ProjectProfile metadataProject(Claim projectClaim) {
+        return new ProjectProfile(
+                "project-1",
+                "P-01",
+                "sql-audit",
+                "SQL Audit",
+                "Summary",
+                "Background",
+                List.of("Responsibility"),
+                "Solution",
+                List.of("Decision"),
+                List.of("Java"),
+                List.of("Verified"),
+                "Outcome",
+                "Handoff",
+                ProjectStatus.DELIVERED,
+                ContributionType.PRIMARY,
+                CareerTrack.JAVA_BACKEND,
+                ProjectNature.UNCLASSIFIED,
+                ProjectDisplayTier.PRIMARY,
+                List.of(),
+                List.of(projectClaim.getId()),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private static PortfolioSnapshot metadataSnapshot(
+            List<ProjectProfile> projects,
+            List<CaseStudy> cases,
+            List<Claim> claims
+    ) {
+        return new PortfolioSnapshot(
+                "1.0",
+                "2026-07-31.1",
+                OffsetDateTime.parse("2026-07-31T12:00:00+08:00"),
+                null,
+                projects,
+                cases,
+                claims,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private static QuestionDefinition question(String id, String projectId) {
+        return new QuestionDefinition(
+                id,
+                "Canonical " + id,
+                List.of("Alias " + id),
+                List.of("INTERVIEWER"),
+                List.of(projectId),
+                List.of(),
+                List.of("OVERVIEW"),
+                List.of(com.portfolio.agent.portfolio.domain.ClaimCategory.OUTCOME),
+                List.of("HOME"),
+                true,
+                10,
+                projectId,
+                List.of(id + "-required-claim"),
+                List.of(),
+                new com.portfolio.agent.portfolio.domain.QuestionEvidenceRequirement(1, true),
+                com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE
+        );
+    }
+
+    private static EvidenceRecord evidence(
+            String id,
+            EvidenceStatus status,
+            Boolean rawContentPublic
+    ) {
+        return new EvidenceRecord(
+                id,
+                "E-01",
+                "Evidence " + id,
+                EvidenceType.DOCUMENT,
+                LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-14"),
+                2,
+                "Summary " + id,
+                status,
+                rawContentPublic
+        );
+    }
+}

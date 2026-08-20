@@ -1,6 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio.retrieval;
 
-import com.portfolio.agent.answer.intelligence.retrieval.SearchStrategy;
+import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
 
 import java.util.Objects;

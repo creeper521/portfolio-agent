@@ -1,14 +1,14 @@
 package com.portfolio.agent.turn.capability.portfolio.semantic;
 
-import com.portfolio.agent.answer.domain.AnswerAchievementStatus;
-import com.portfolio.agent.answer.domain.AnswerClaimCategory;
-import com.portfolio.agent.answer.domain.AnswerClaimProjection;
-import com.portfolio.agent.answer.domain.AnswerClaimVerificationStatus;
-import com.portfolio.agent.answer.domain.AnswerContributionType;
-import com.portfolio.agent.answer.domain.AnswerMateriality;
-import com.portfolio.agent.answer.domain.AnswerVerificationBasis;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerAchievementStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerContributionType;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerMateriality;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificationBasis;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
-import com.portfolio.agent.turn.capability.portfolio.evidence.PublicSourceReference;
+import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
 import com.portfolio.agent.turn.planning.GoalSubjectReference;
@@ -26,7 +26,7 @@ final class PortfolioSemanticFixtures {
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-" + claimId));
         return new ValidatedEvidenceUnit(subjectId, claim,
-                new PublicSourceReference(
+                new PublicSourceReferenceValue(
                         "E-" + claimId, "Evidence", "public-1", "DOCUMENT",
                         "/projects/" + subjectId, "/evidence/" + claimId));
     }

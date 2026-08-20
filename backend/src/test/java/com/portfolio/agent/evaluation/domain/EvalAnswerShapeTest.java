@@ -1,8 +1,8 @@
 package com.portfolio.agent.evaluation.domain;
 
-import com.portfolio.agent.answer.domain.AnswerSectionType;
-import com.portfolio.agent.answer.domain.ConversationAnswerBlock;
-import com.portfolio.agent.answer.domain.ConversationSourceScope;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerBlock;
+import com.portfolio.agent.evaluation.domain.ConversationSourceScope;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;

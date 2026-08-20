@@ -1,7 +1,7 @@
 package com.portfolio.agent.evaluation.dataset;
 
-import com.portfolio.agent.answer.domain.AnswerResolution;
-import com.portfolio.agent.answer.domain.ConversationAnswerScope;
+import com.portfolio.agent.evaluation.domain.AnswerResolution;
+import com.portfolio.agent.evaluation.domain.ConversationAnswerScope;
 import com.portfolio.agent.evaluation.dataset.GenerationRuleLoader.GenerationRule;
 import com.portfolio.agent.evaluation.domain.EvalCase;
 import com.portfolio.agent.evaluation.domain.EvalGraderRule;
