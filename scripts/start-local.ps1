@@ -1,6 +1,8 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$SecretsFile,
+    [string]$SecretsFile = '',
+    [ValidateSet('POSTGRESQL', 'IN_MEMORY', 'DISABLED')]
+    [string]$ContextMode = 'POSTGRESQL',
+    [string]$PostgresEnvFile = '',
     [switch]$CheckOnly,
     [ValidateRange(1, 65535)]
     [int]$BackendPort = 8080,
@@ -30,22 +32,36 @@ $script:allowedNames = @(
     'PORTFOLIO_MODEL_PROVIDER',
     'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
     'PORTFOLIO_AGENT_GLM_API_KEY',
-    'PORTFOLIO_MODEL_TIMEOUT',
-    'PORTFOLIO_MODEL_MAX_TOKENS'
+    'PORTFOLIO_MODEL_MAX_TOKENS',
+    'PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS',
+    'PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS'
 )
 $script:generalAiEnvironment = @{
-    PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED = 'true'
-    PORTFOLIO_MODEL_OP_ROUTING_MODE = 'ENABLED'
-    PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF = 'conversational-default'
-    PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION = 'semantic-route-v1'
-    PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT = '8s'
+    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
+    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = 'conversational-default'
+    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal-proposal-v1'
     PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
     PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
     PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
-    PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
 }
+$script:contextEnvironmentNames = @(
+    'PORTFOLIO_CONVERSATION_CONTEXT_MODE',
+    'PORTFOLIO_CONTEXT_DATABASE_URL',
+    'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+    'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+    'PORTFOLIO_CONTEXT_DATABASE_SCHEMA',
+    'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+    'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+    'PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY_ID',
+    'PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY',
+    'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+    'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
+    'PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY_ID',
+    'PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY'
+)
 $script:managedEnvironmentNames = @(
-    $script:allowedNames + @($script:generalAiEnvironment.Keys)
+    $script:allowedNames + @($script:generalAiEnvironment.Keys) +
+        $script:contextEnvironmentNames
 )
 
 function Stop-WithCode([string]$Code) {
@@ -125,6 +141,162 @@ function Assert-LocalConfiguration([hashtable]$Values) {
             [string]::IsNullOrWhiteSpace([string]$Values[$keyName])) {
         Stop-WithCode "LOCAL_CONFIG_PROVIDER_KEY_MISSING:$keyName"
     }
+}
+
+function Resolve-PostgresEnvironmentFile {
+    $path = if ([string]::IsNullOrWhiteSpace($PostgresEnvFile)) {
+        Join-Path $script:repositoryRoot '.env.postgres.local'
+    }
+    else {
+        $PostgresEnvFile
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Stop-WithCode (
+            'LOCAL_POSTGRES_CONFIGURATION_INVALID' + [Environment]::NewLine +
+            'Fix: create or update "' + $path +
+            '" from .env.postgres.example'
+        )
+    }
+    return (Resolve-Path -LiteralPath $path).Path
+}
+
+function Assert-PostgresReady([string]$ResolvedEnvFile) {
+    $postgresTool = Join-Path $PSScriptRoot 'postgres-local.ps1'
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $postgresTool check-context -EnvFile $ResolvedEnvFile `
+            -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 |
+            Out-String)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($exitCode -ne 0) {
+        $recovery = if ($output -match (
+                'POSTGRES_LOCAL_(ENV_FILE_INVALID|ENV_FIELD_INVALID|' +
+                'REQUIRED_ENV_MISSING|PORT_INVALID|IDENTIFIER_INVALID|' +
+                'IDENTIFIERS_NOT_DISTINCT|PASSWORD_UNSAFE|' +
+                'CONTEXT_SCHEMA_FIXED|' +
+                'CRYPTO_KEY_INVALID|CRYPTO_KEY_ID_INVALID|' +
+                'CRYPTO_KEYS_NOT_DISTINCT)')) {
+            'Fix: update "' + $ResolvedEnvFile +
+            '" from .env.postgres.example'
+        }
+        elseif ($output -match (
+                'POSTGRES_LOCAL_(CONTEXT_SCHEMA_UNAVAILABLE|' +
+                'DATABASE_QUERY_FAILED|DATABASE_UNAVAILABLE)')) {
+            'Run: powershell.exe -NoProfile -ExecutionPolicy Bypass ' +
+            '-File scripts\postgres-local.ps1 bootstrap -EnvFile "' +
+            $ResolvedEnvFile + '"'
+        }
+        else {
+            'Run: powershell.exe -NoProfile -ExecutionPolicy Bypass ' +
+            '-File scripts\postgres-local.ps1 start -EnvFile "' +
+            $ResolvedEnvFile + '"'
+        }
+        Stop-WithCode (
+            'LOCAL_POSTGRES_NOT_READY' + [Environment]::NewLine +
+            $recovery
+        )
+    }
+    Write-Output 'LOCAL_POSTGRES_READY'
+}
+
+function Read-PostgresRuntimeSettings([string]$ResolvedEnvFile) {
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $ResolvedEnvFile -Encoding UTF8) {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) {
+            continue
+        }
+        $separator = $trimmed.IndexOf('=')
+        if ($separator -le 0) {
+            Stop-WithCode 'LOCAL_POSTGRES_ENV_FILE_INVALID'
+        }
+        $name = $trimmed.Substring(0, $separator).Trim()
+        $value = $trimmed.Substring($separator + 1)
+        if ($values.ContainsKey($name)) {
+            Stop-WithCode 'LOCAL_POSTGRES_ENV_FILE_INVALID'
+        }
+        $values[$name] = $value
+    }
+    foreach ($name in @(
+        'PORTFOLIO_POSTGRES_PORT',
+        'PORTFOLIO_CONTEXT_DATABASE_NAME',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
+    )) {
+        if (-not $values.ContainsKey($name) -or
+                [string]::IsNullOrWhiteSpace([string]$values[$name])) {
+            Stop-WithCode "LOCAL_POSTGRES_RUNTIME_FIELD_MISSING:$name"
+        }
+    }
+    $port = [string]$values.PORTFOLIO_POSTGRES_PORT
+    $database = [string]$values.PORTFOLIO_CONTEXT_DATABASE_NAME
+    $runtime = @{
+        PORTFOLIO_CONVERSATION_CONTEXT_MODE = 'POSTGRESQL'
+        PORTFOLIO_CONTEXT_DATABASE_URL =
+            "jdbc:postgresql://127.0.0.1:$port/$database"
+        PORTFOLIO_CONTEXT_DATABASE_USERNAME =
+            [string]$values.PORTFOLIO_CONTEXT_DATABASE_USERNAME
+        PORTFOLIO_CONTEXT_DATABASE_PASSWORD =
+            [string]$values.PORTFOLIO_CONTEXT_DATABASE_PASSWORD
+        PORTFOLIO_CONTEXT_DATABASE_SCHEMA = if (
+                $values.ContainsKey('PORTFOLIO_CONTEXT_DATABASE_SCHEMA')) {
+            [string]$values.PORTFOLIO_CONTEXT_DATABASE_SCHEMA
+        }
+        else {
+            'agent_context'
+        }
+    }
+    foreach ($name in $script:contextEnvironmentNames) {
+        if ($name -eq 'PORTFOLIO_CONVERSATION_CONTEXT_MODE' -or
+                $name -eq 'PORTFOLIO_CONTEXT_DATABASE_URL' -or
+                $name -eq 'PORTFOLIO_CONTEXT_DATABASE_USERNAME' -or
+                $name -eq 'PORTFOLIO_CONTEXT_DATABASE_PASSWORD' -or
+                $name -eq 'PORTFOLIO_CONTEXT_DATABASE_SCHEMA') {
+            continue
+        }
+        if ($values.ContainsKey($name)) {
+            $runtime[$name] = [string]$values[$name]
+        }
+    }
+    return $runtime
+}
+
+function Resolve-RuntimeSettings {
+    $settings = @{
+        PORTFOLIO_CONVERSATION_CONTEXT_MODE = $ContextMode
+    }
+    if ($ContextMode -eq 'POSTGRESQL') {
+        $resolvedPostgresEnv = Resolve-PostgresEnvironmentFile
+        Assert-PostgresReady $resolvedPostgresEnv
+        foreach ($entry in (Read-PostgresRuntimeSettings $resolvedPostgresEnv).
+                GetEnumerator()) {
+            $settings[$entry.Key] = $entry.Value
+        }
+    }
+    if ($EnableGeneralAi) {
+        if ([string]::IsNullOrWhiteSpace($SecretsFile)) {
+            Stop-WithCode 'LOCAL_MODEL_SECRETS_REQUIRED'
+        }
+        $modelSettings = Read-LocalSecrets $SecretsFile
+        Assert-LocalConfiguration $modelSettings
+        foreach ($entry in $modelSettings.GetEnumerator()) {
+            $settings[$entry.Key] = $entry.Value
+        }
+        foreach ($entry in $script:generalAiEnvironment.GetEnumerator()) {
+            $settings[$entry.Key] = $entry.Value
+        }
+    }
+    return $settings
 }
 
 function Resolve-CommandPath([string]$Command, [string]$FailureCode) {
@@ -440,16 +612,19 @@ try {
     if ($BackendPort -eq $FrontendPort) {
         Stop-WithCode "LOCAL_PORT_OCCUPIED:$BackendPort"
     }
-    $settings = Read-LocalSecrets $SecretsFile
-    Assert-LocalConfiguration $settings
+    $settings = Resolve-RuntimeSettings
     $toolchain = Assert-Toolchain
     Assert-PortAvailable $BackendPort
     Assert-PortAvailable $FrontendPort
-    Write-Output (
-        'LOCAL_CONFIG_VALID provider=' +
-        [string]$settings.PORTFOLIO_MODEL_PROVIDER +
-        ' checks=6'
-    )
+    if ($EnableGeneralAi) {
+        Write-Output (
+            'LOCAL_CONFIG_VALID provider=' +
+            [string]$settings.PORTFOLIO_MODEL_PROVIDER +
+            ' checks=6'
+        )
+    }
+    $modelMode = if ($EnableGeneralAi) { 'ENABLED' } else { 'DISABLED' }
+    Write-Output "LOCAL_RUNTIME_VALID mode=$ContextMode model=$modelMode"
     Write-Output 'LOCAL_PREFLIGHT_VALID java=21 maven=ready node=ready frontendDependencies=ready ports=ready'
     if ($CheckOnly) {
         exit 0
@@ -513,11 +688,6 @@ try {
         foreach ($entry in $settings.GetEnumerator()) {
             $backendEnvironment[$entry.Key] = $entry.Value
         }
-        if ($EnableGeneralAi) {
-            foreach ($entry in $script:generalAiEnvironment.GetEnumerator()) {
-                $backendEnvironment[$entry.Key] = $entry.Value
-            }
-        }
         $backendEnvironment.PORTFOLIO_DIAGNOSTICS_FRONTEND_INGEST_ENABLED = 'true'
         $backendEnvironment.PORTFOLIO_LOG_DIRECTORY = $LogDirectory
         $backend = Start-OwnedProcess $backendExecutable `
@@ -579,18 +749,23 @@ try {
         [void](Wait-ForHttp $frontendBaseUrl $frontend `
             $ReadinessTimeoutSeconds)
 
-        $probeStatus = Invoke-ProviderProbe $backendBaseUrl `
-            ([string]$publicContent.contentVersion) `
-            $settings
-        if ($probeStatus -eq 'CONNECTED') {
-            Write-Output (
-                'AI_CONNECTED provider=' +
-                [string]$settings.PORTFOLIO_MODEL_PROVIDER +
-                " backend=$backendBaseUrl frontend=$frontendBaseUrl"
-            )
+        if ($EnableGeneralAi) {
+            $probeStatus = Invoke-ProviderProbe $backendBaseUrl `
+                ([string]$publicContent.contentVersion) `
+                $settings
+            if ($probeStatus -eq 'CONNECTED') {
+                Write-Output (
+                    'AI_CONNECTED provider=' +
+                    [string]$settings.PORTFOLIO_MODEL_PROVIDER +
+                    " backend=$backendBaseUrl frontend=$frontendBaseUrl"
+                )
+            }
+            else {
+                Write-Output "AI_DEGRADED:$probeStatus"
+            }
         }
         else {
-            Write-Output "AI_DEGRADED:$probeStatus"
+            Write-Output 'AI_DISABLED'
         }
 
         if (-not $ExitAfterProbe -and $FollowLogs) {

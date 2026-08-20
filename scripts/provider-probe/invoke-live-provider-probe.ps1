@@ -3,6 +3,8 @@ param(
     [string]$BackendBaseUrl,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedContentVersion,
+    [ValidateSet('GENERAL', 'SOCIAL')]
+    [string]$Scenario = 'GENERAL',
     [ValidateRange(1, 300)]
     [int]$TimeoutSeconds = 60,
     [switch]$FailOnDegraded
@@ -10,37 +12,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $checker = Join-Path (Split-Path -Parent $PSScriptRoot) `
-    'assert-live-provider-response.ps1'
+    'assert-live-public-turn-response.ps1'
 
+$question = if ($Scenario -eq 'SOCIAL') {
+    [string]([char]0x4f60) + [char]0x597d
+} else {
+    'Explain optimistic locking and give one concise general example.'
+}
+$expectedKind = if ($Scenario -eq 'SOCIAL') { 'CONVERSATIONAL' } else { 'ANSWER' }
 $requestBody = @{
-    turnId = [guid]::NewGuid()
-    requestToken = [guid]::NewGuid()
-    question = 'Explain optimistic locking and give one concise example.'
-    messages = @()
-    context = @{
-        audienceRole = 'INTERVIEWER'
-        source = 'AGENT_PAGE'
+    requestId = [guid]::NewGuid()
+    command = @{
+        kind = 'ASK'
+        input = @{ kind = 'FREE_TEXT'; text = $question }
     }
+    surfaceContext = @{ audienceRole = 'INTERVIEWER'; requestSource = 'AGENT_PAGE' }
+    conversationWindow = @()
 } | ConvertTo-Json -Depth 6 -Compress
 
 function Resolve-ProbeCategory(
     [object]$Response,
     [string]$AssertionOutput
 ) {
-    $providerCategory = switch ([string]$Response.noticeCode) {
-        'PROVIDER_AUTH_FAILED' { 'PROVIDER_AUTH_FAILED' }
-        'PROVIDER_TIMEOUT' { 'PROVIDER_TIMEOUT' }
-        'PROVIDER_CONNECTION_FAILED' { 'PROVIDER_UNAVAILABLE' }
-        'PROVIDER_EMPTY_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
-        'PROVIDER_INVALID_RESPONSE' { 'PROVIDER_RESPONSE_INVALID' }
-        'PROVIDER_DRAFT_REJECTED' { 'PROVIDER_DRAFT_REJECTED' }
-        'PROVIDER_DISABLED' { 'PROVIDER_POLICY_INCOMPATIBLE' }
-        default { $null }
-    }
-    if ($null -ne $providerCategory) {
-        return $providerCategory
-    }
-    if ($AssertionOutput -match 'LIVE_PROVIDER_ROUTE_BYPASSED') {
+    if ($AssertionOutput -match 'LIVE_PROVIDER_KIND_MISMATCH') {
         return 'PROBE_ROUTE_BYPASSED'
     }
     return 'PROVIDER_RESPONSE_INVALID'
@@ -59,7 +53,7 @@ $responsePath = Join-Path ([System.IO.Path]::GetTempPath()) `
 try {
     try {
         $http = Invoke-WebRequest -UseBasicParsing `
-            -Uri "$BackendBaseUrl/api/v2/answers" `
+            -Uri "$BackendBaseUrl/api/agent/turns" `
             -Method Post `
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($requestBody)) `
@@ -81,7 +75,8 @@ try {
         $assertionOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File $checker `
             -ResponsePath $responsePath `
-            -ExpectedContentVersion $ExpectedContentVersion 2>&1 | Out-String).Trim()
+            -ExpectedContentVersion $ExpectedContentVersion `
+            -ExpectedKind $expectedKind 2>&1 | Out-String).Trim()
         $assertionExitCode = $LASTEXITCODE
     }
     finally {

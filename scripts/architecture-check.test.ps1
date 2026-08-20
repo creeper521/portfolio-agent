@@ -6,6 +6,27 @@ $fixtureRoot = Join-Path $tempRoot ('architecture-check-' + [guid]::NewGuid())
 
 $cases = @(
     @{
+        Name = 'turn-to-answer'
+        File = 'com\portfolio\agent\turn\capability\BadTurnCapability.java'
+        Source = @'
+package com.portfolio.agent.turn.capability;
+import com.portfolio.agent.answer.domain.AnswerResult;
+public final class BadTurnCapability {}
+'@
+        Rule = 'turn-answer-dependency'
+    },
+    @{
+        Name = 'retired-agent-type'
+        File = 'com\portfolio\agent\turn\capability\PortfolioRetriever.java'
+        Source = @'
+package com.portfolio.agent.turn.capability;
+public interface PortfolioRetriever {}
+'@
+        Rule = 'retired-agent-type'
+        ExpectedLine = 2
+        ExpectedStatement = 'interface PortfolioRetriever'
+    },
+    @{
         Name = 'portfolio-service-to-controller'
         File = 'com\portfolio\agent\portfolio\service\BadService.java'
         Source = @'

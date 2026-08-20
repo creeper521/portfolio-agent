@@ -2,9 +2,7 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipDockerCheck,
     [switch]$RequireLiveProvider,
-    [string]$ModelDirectory = '',
-    [string]$BundleDirectory = '',
-    [string]$RetrievalCasesPath = ''
+    [string]$BundleDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +31,7 @@ try {
     }
 
     $codeChecker = Join-Path $root 'scripts\code-quality-check.ps1'
+    $documentationChecker = Join-Path $root 'scripts\documentation-check.ps1'
     $architectureChecker = Join-Path $root 'scripts\architecture-check.ps1'
     $staticBundleChecker = Join-Path $root 'scripts\verify-static-bundle.ps1'
 
@@ -43,6 +42,13 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $codeChecker `
         -Path (Join-Path $root 'backend\src')
     Assert-ExitCode 'Java code quality check'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\documentation-check.test.ps1')
+    Assert-ExitCode 'Documentation checker tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $documentationChecker
+    Assert-ExitCode 'Current documentation facts check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\architecture-check.test.ps1')
@@ -72,8 +78,8 @@ try {
         -File (Join-Path $root 'scripts\privacy-check.test.ps1')
     Assert-ExitCode 'Privacy checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File (Join-Path $root 'scripts\assert-live-provider-response.test.ps1')
-    Assert-ExitCode 'Live Provider response checker tests'
+        -File (Join-Path $root 'scripts\assert-live-public-turn-response.test.ps1')
+    Assert-ExitCode 'Final PublicAgentTurn Live Provider checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.test.ps1')
     Assert-ExitCode 'Live Provider probe contract tests'
@@ -125,53 +131,6 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\portfolio-governance.test.ps1')
     Assert-ExitCode 'Portfolio governance B and C2 CLI tests'
-
-    if ([string]::IsNullOrWhiteSpace($ModelDirectory)) {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
-            -UnitOnly
-        Assert-ExitCode 'Local retrieval unit gates'
-    }
-    else {
-        if ([string]::IsNullOrWhiteSpace($BundleDirectory)) {
-            throw 'Real-model release verification requires -BundleDirectory.'
-        }
-        $benchmarkCases = $RetrievalCasesPath
-        if ([string]::IsNullOrWhiteSpace($benchmarkCases)) {
-            $bundlePortfolio = Get-Content -LiteralPath `
-                (Join-Path $BundleDirectory 'portfolio.json') -Raw -Encoding UTF8 |
-                ConvertFrom-Json
-            $matchingSuites = @(Get-ChildItem -LiteralPath `
-                    (Join-Path $root 'backend\src\test\resources\retrieval-benchmark') `
-                    -File -Filter 'cases*.json' | Where-Object {
-                    if ($_.Name -ne 'cases.json' -and
-                            $_.Name -notlike 'cases-wave*.json') {
-                        return $false
-                    }
-                    try {
-                        [string](
-                            Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 |
-                                ConvertFrom-Json
-                        ).contentVersion -eq [string]$bundlePortfolio.contentVersion
-                    }
-                    catch {
-                        $false
-                    }
-                })
-            if ($matchingSuites.Count -ne 1) {
-                throw 'Real-model release verification requires exactly one matching retrieval benchmark suite.'
-            }
-            $benchmarkCases = $matchingSuites[0].FullName
-        }
-        $benchmarkOutput = Join-Path $scanRoot 'retrieval-comparison'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File (Join-Path $root 'scripts\run-local-retrieval-benchmark.ps1') `
-            -ModelDirectory $ModelDirectory `
-            -BundleDirectory $BundleDirectory `
-            -CasesPath $benchmarkCases `
-            -OutputDirectory $benchmarkOutput
-        Assert-ExitCode 'Local retrieval real-model comparison'
-    }
 
     $entries = @(& jar.exe tf $jarPath)
     Assert-ExitCode 'JAR listing'

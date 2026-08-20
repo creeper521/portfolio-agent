@@ -55,7 +55,6 @@ $environment = @{
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
-    P3_REAL_API = Get-EnvironmentSnapshot 'P3_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
     PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
     PORTFOLIO_MODEL_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_ENABLED'
@@ -95,9 +94,12 @@ try {
     $runnerCommand = Get-Command $runner
     foreach ($parameterName in @(
         'JarPath',
+        'KeytoolExecutable',
         'NpmExecutable',
         'Port',
-        'RequireLiveProvider'
+        'RequireLiveProvider',
+        'Lane',
+        'SkipPlaywright'
     )) {
         if (-not $runnerCommand.Parameters.ContainsKey($parameterName)) {
             throw "Runner is missing testable parameter seam '$parameterName'."
@@ -111,16 +113,120 @@ try {
         throw "Release verifier is missing parameter seam 'RequireLiveProvider'."
     }
     $releaseSource = Get-Content -LiteralPath $releaseVerifier -Raw
-    if ($releaseSource -notmatch 'assert-live-provider-response\.test\.ps1') {
-        throw 'Release verifier does not run the live Provider assertion tests.'
+    if ($releaseSource -notmatch 'assert-live-public-turn-response\.test\.ps1') {
+        throw 'Release verifier does not run the final PublicAgentTurn Provider assertion tests.'
     }
     $runnerSource = Get-Content -LiteralPath $runner -Raw
     if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
         throw 'Packaged runner must call the shared Live Provider probe.'
     }
+    if ($runnerSource -match '/api/v2|stp-v[123]') {
+        throw 'Packaged runner must not reference retired versioned Agent contracts.'
+    }
+    foreach ($lane in @('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE')) {
+        if ($runnerSource -notmatch "(?<![A-Z_])$lane(?![A-Z_])") {
+            throw "Packaged runner is missing explicit lane '$lane'."
+        }
+    }
+    foreach ($bodyStallEvidence in @(
+        'start-provider-body-stall-https.ps1',
+        'jdk.net.hosts.file',
+        'javax.net.ssl.trustStore',
+        'body-stall-fixture-key',
+        'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL',
+        'Remove-BodyStallFixture'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($bodyStallEvidence)) {
+            throw "Packaged BODY_STALL lane is missing '$bodyStallEvidence'."
+        }
+    }
+    foreach ($restoredName in @(
+        'PORTFOLIO_CONVERSATION_CONTEXT_MODE',
+        'PORTFOLIO_CONTEXT_DATABASE_URL',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
+        'PORTFOLIO_MODEL_PROVIDER',
+        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+        'PORTFOLIO_AGENT_GLM_API_KEY',
+        'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
+    )) {
+        if ($runnerSource -notmatch (
+                'function Assert-EarlyRunnerEnvironmentRestored[\s\S]+?' +
+                [regex]::Escape("'$restoredName'") +
+                '[\s\S]+?BODY_STALL early-failure environment restored')) {
+            throw "BODY_STALL early restore assertion is missing '$restoredName'."
+        }
+    }
+    if ($runnerSource -notmatch
+            'function Complete-BodyStallEarlyFailure[\s\S]+?try\s*\{[\s\S]+?Remove-BodyStallFixture[\s\S]+?finally\s*\{[\s\S]+?SetEnvironmentVariable[\s\S]+?Assert-EarlyRunnerEnvironmentRestored') {
+        throw 'BODY_STALL cleanup must restore and assert environment from a finally block.'
+    }
+    if (([regex]::Matches(
+            $runnerSource,
+            '(?m)^\s*Complete-BodyStallEarlyFailure\s*$')).Count -ne 2) {
+        throw 'Both BODY_STALL early catches must use the cleanup-safe restore helper.'
+    }
+    if ($runnerSource -match '(?i)provider.*endpoint.*=|base-url.*fixture') {
+        throw 'BODY_STALL must not add an arbitrary production Provider endpoint override.'
+    }
     if ($runnerSource -match
-            '\$caseAgentResponse\s*\|\s*ConvertTo-Json[\s\S]+assert-live-provider-response') {
+            '\$caseAgentResponse\s*\|\s*ConvertTo-Json[\s\S]+assert-live-public-turn-response') {
         throw 'Case smoke response must not be reused as Live Provider evidence.'
+    }
+
+    $realJava = (Get-Command java.exe -ErrorAction Stop).Source
+    $realKeytool = Join-Path (Split-Path -Parent $realJava) 'keytool.exe'
+    if (-not (Test-Path -LiteralPath $realKeytool -PathType Leaf)) {
+        throw 'BODY_STALL early-failure tests require keytool beside java.exe.'
+    }
+    $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
+    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'original-deepseek-sentinel'
+    $env:PORTFOLIO_AGENT_GLM_API_KEY = 'original-glm-sentinel'
+
+    $previousEarlyFailurePreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $keytoolFailureOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $runner -JarPath $sourceJar -Lane BODY_STALL -ContextMode IN_MEMORY `
+            -JavaExecutable $realJava `
+            -KeytoolExecutable (Join-Path $fixtureRoot 'missing-keytool.exe') `
+            -SkipPlaywright -Port ($port + 20) 2>&1 | Out-String)
+        $keytoolFailureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousEarlyFailurePreference
+    }
+    if ($keytoolFailureExitCode -eq 0 -or
+            $keytoolFailureOutput -notmatch 'BODY_STALL requires keytool' -or
+            $keytoolFailureOutput -notmatch 'BODY_STALL early-failure environment restored') {
+        throw "Missing-keytool path did not restore BODY_STALL environment: $keytoolFailureOutput"
+    }
+
+    $previousStartFailurePreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $startFailureOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $runner -JarPath $sourceJar -Lane BODY_STALL -ContextMode IN_MEMORY `
+            -JavaExecutable (Join-Path $fixtureRoot 'missing-java.exe') `
+            -KeytoolExecutable $realKeytool `
+            -SkipPlaywright -Port ($port + 21) 2>&1 | Out-String)
+        $startFailureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousStartFailurePreference
+    }
+    if ($startFailureExitCode -eq 0 -or
+            $startFailureOutput -notmatch 'BODY_STALL early-failure environment restored') {
+        throw "Application Start-Process failure did not restore BODY_STALL environment: $startFailureOutput"
+    }
+    if (@(Get-NetTCPConnection -LocalPort 443 -State Listen -ErrorAction SilentlyContinue).Count -ne 0 -or
+            @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) `
+                -Directory -Filter 'portfolio-body-stall-*' -ErrorAction SilentlyContinue).Count -ne 0) {
+        throw 'BODY_STALL early-failure tests left a fixture listener or temporary directory.'
     }
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $spacedJar) -Force | Out-Null
@@ -167,11 +273,32 @@ try {
             throw "Expected normal mode to pass '$disabledArgument' exactly once."
         }
     }
-    if ($normalJavaArguments -notmatch
-            '(?<!\S)--portfolio\.answer-production\.requests-per-minute=1000(?!\S)') {
-        throw 'Packaged JAR smoke must use a release-test answer quota.'
+    foreach ($requiredEvidence in @(
+        'Build identity: commit=',
+        'JAR SHA-256: ',
+        'Agent backend closure smoke passed.'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($requiredEvidence)) {
+            throw "Packaged runner is missing evidence '$requiredEvidence'."
+        }
     }
-
+    foreach ($admissionArgument in @(
+        '--portfolio.agent-runtime.requests-per-minute=1000',
+        '--portfolio.agent-runtime.max-concurrent-per-source=1000',
+        '--portfolio.agent-runtime.max-active-turns=1000'
+    )) {
+        $matchCount = ([regex]::Matches(
+            $normalJavaArguments,
+            '(?<!\S)' + [regex]::Escape($admissionArgument) + '(?!\S)'
+        )).Count
+        if ($matchCount -ne 1) {
+            throw "Packaged JAR smoke must pass current admission override '$admissionArgument' exactly once."
+        }
+    }
+    if ($normalJavaArguments -match
+            '(?<!\S)--portfolio\.answer-production\.requests-per-minute(?:=|\s)') {
+        throw 'Packaged JAR smoke must not pass the retired answer-production rate key.'
+    }
     Remove-Item -LiteralPath $javaArgumentCapture -Force
     $previousLiveCaptureErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -200,7 +327,6 @@ try {
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'
     $env:PLAYWRIGHT_REAL_API = 'original-real'
-    $env:P3_REAL_API = 'original-p3-real'
     $env:PLAYWRIGHT_BASE_URL = 'original-base'
     $env:PLAYWRIGHT_REAL_RETRIEVAL = 'original-retrieval'
     $env:PORTFOLIO_MODEL_ENABLED = 'true'
@@ -209,7 +335,7 @@ try {
     $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'true'
     $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'provider-key-must-not-leak'
     $env:PORTFOLIO_MODEL_TIMEOUT = '1ms'
-    $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE = 'DISABLED'
+    $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE = 'IN_MEMORY'
 
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
         -JarPath $spacedJar -NpmExecutable $fakeNpm -Port $port 2>&1 | Out-String)
@@ -225,8 +351,8 @@ try {
     if ($output -notmatch 'Packaged Case API smoke passed\.') {
         throw "Expected packaged Case API smoke evidence. Output: $output"
     }
-    if ($output -notmatch 'Packaged Case Agent smoke passed\.') {
-        throw "Expected packaged Case Agent smoke evidence. Output: $output"
+    if ($output -notmatch 'Packaged final Agent resource smoke passed\.') {
+        throw "Expected final packaged Agent resource smoke evidence. Output: $output"
     }
     foreach ($requiredSmokeEvidence in @(
         'Packaged request correlation smoke passed.',
@@ -404,7 +530,6 @@ finally {
         $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
     Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-    Restore-EnvironmentVariable 'P3_REAL_API' $environment.P3_REAL_API
     Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
         $environment.PLAYWRIGHT_REAL_RETRIEVAL

@@ -2,6 +2,14 @@ $ErrorActionPreference = 'Stop'
 
 $launcher = Join-Path $PSScriptRoot 'start-local.ps1'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+$modelExample = Join-Path $repositoryRoot '.env.example'
+$postgresExample = Join-Path $repositoryRoot '.env.postgres.example'
+$localProfile = Join-Path $repositoryRoot `
+    'backend\src\main\resources\application-local.yml'
+$prodProfile = Join-Path $repositoryRoot `
+    'backend\src\main\resources\application-prod.yml'
+$testLocalProfile = Join-Path $repositoryRoot `
+    'backend\src\test\resources\application-local.yml'
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio-start-local-' + [guid]::NewGuid().ToString('N'))
 $keySentinel = 'key-' + [guid]::NewGuid().ToString('N')
@@ -19,6 +27,27 @@ function Write-Secrets([string]$Path, [string[]]$Lines) {
         $Path,
         $Lines,
         [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
+function Write-PostgresEnvironment([string]$Path) {
+    Write-Secrets $Path @(
+        'PORTFOLIO_POSTGRES_PORT=54329',
+        'PORTFOLIO_POSTGRES_ADMIN_USERNAME=postgres',
+        'PORTFOLIO_POSTGRES_ADMIN_PASSWORD=admin-secret',
+        'PORTFOLIO_PUBLIC_DATABASE_NAME=portfolio_public_dev',
+        'PORTFOLIO_PUBLIC_DATABASE_USERNAME=portfolio_public_owner',
+        'PORTFOLIO_PUBLIC_DATABASE_PASSWORD=public-secret',
+        'PORTFOLIO_GOVERNANCE_DATABASE_NAME=portfolio_governance_dev',
+        'PORTFOLIO_GOVERNANCE_DATABASE_USERNAME=portfolio_governance_owner',
+        'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD=governance-secret',
+        'PORTFOLIO_CONTEXT_DATABASE_NAME=portfolio_context_dev',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME=portfolio_context_owner',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD=context-secret',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID=local-token-v1',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID=local-payload-v1',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY=Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA='
     )
 }
 
@@ -48,13 +77,20 @@ function Invoke-Launcher(
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File $launcher `
-            -SecretsFile $SecretsFile `
-            -BackendPort $backendPort `
-            -FrontendPort $frontendPort `
-            -CheckOnly `
-            @AdditionalArguments 2>&1 | Out-String)
+        $arguments = @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', $launcher,
+            '-ContextMode', 'IN_MEMORY',
+            '-EnableGeneralAi',
+            '-BackendPort', "$backendPort",
+            '-FrontendPort', "$frontendPort",
+            '-CheckOnly'
+        )
+        if (-not [string]::IsNullOrWhiteSpace($SecretsFile)) {
+            $arguments += @('-SecretsFile', $SecretsFile)
+        }
+        $arguments += $AdditionalArguments
+        $output = (& powershell.exe @arguments 2>&1 | Out-String)
         return @{
             ExitCode = $LASTEXITCODE
             Output = $output
@@ -94,6 +130,8 @@ function Invoke-Orchestration(
     try {
         $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File $launcher `
+            -ContextMode IN_MEMORY `
+            -EnableGeneralAi `
             -SecretsFile $SecretsFile `
             -BackendPort $BackendPort `
             -FrontendPort $FrontendPort `
@@ -157,6 +195,205 @@ try {
         Assert-True ($result.Output -notmatch [regex]::Escape($keySentinel)) `
             "Valid $provider output leaked the key."
     }
+
+    $noModelOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $launcher `
+        -ContextMode IN_MEMORY `
+        -BackendPort (Get-FreePort) `
+        -FrontendPort (Get-FreePort) `
+        -CheckOnly 2>&1 | Out-String)
+    Assert-True ($LASTEXITCODE -eq 0) `
+        "No-model IN_MEMORY preflight must not require SecretsFile. Output: $noModelOutput"
+    Assert-True ($noModelOutput -match `
+            'LOCAL_RUNTIME_VALID mode=IN_MEMORY model=DISABLED') `
+        'No-model preflight must report the explicit memory mode.'
+
+    $missingPostgresEnv = Join-Path $fixtureRoot 'missing-postgres.env'
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $postgresFailure = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File $launcher `
+            -ContextMode POSTGRESQL `
+            -PostgresEnvFile $missingPostgresEnv `
+            -BackendPort (Get-FreePort) `
+            -FrontendPort (Get-FreePort) `
+            -CheckOnly 2>&1 | Out-String)
+        $postgresFailureExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    Assert-True ($postgresFailureExitCode -ne 0) `
+        'Standard PostgreSQL mode must refuse launch when readiness cannot run.'
+    Assert-True ($postgresFailure -match `
+            'LOCAL_POSTGRES_CONFIGURATION_INVALID') `
+        'A missing PostgreSQL env file must be classified as configuration.'
+    Assert-True ($postgresFailure -match '\.env\.postgres\.example') `
+        'A missing PostgreSQL env file must point to the reviewed example.'
+    Assert-True ($postgresFailure -notmatch 'postgres-local\.ps1 (start|bootstrap)') `
+        'A missing env file must not recommend a database lifecycle command.'
+
+    $postgresEnv = Join-Path $fixtureRoot 'postgres.env'
+    Write-PostgresEnvironment $postgresEnv
+    $fakeDocker = Join-Path $fixtureRoot 'docker.ps1'
+    @'
+$joined = $args -join ' '
+if ($args[0] -eq 'info' -or
+        ($args[0] -eq 'compose' -and $args[1] -eq 'version')) {
+    Write-Output 'ready'
+    exit 0
+}
+if ($joined -match 'ps -q postgres') {
+    if ($env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE -ne 'CONTAINER_DOWN') {
+        Write-Output 'fake-container-id'
+    }
+    exit 0
+}
+if ($args[0] -eq 'inspect') {
+    Write-Output 'healthy'
+    exit 0
+}
+if ($joined -match '\spsql\s') {
+    if ($env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE -eq 'SCHEMA_MISSING') {
+        Write-Output '0'
+    }
+    elseif ($env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE -eq 'QUERY_FAILED') {
+        exit 42
+    }
+    else {
+        Write-Output '1'
+    }
+    exit 0
+}
+exit 0
+'@ | Set-Content -LiteralPath $fakeDocker -Encoding Ascii
+    $oldPath = $env:PATH
+    $oldDockerMode = $env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE
+    $env:PATH = "$fixtureRoot;$oldPath"
+    try {
+        foreach ($case in @(
+            @{ Mode = 'CONTAINER_DOWN'; Command = 'start' },
+            @{ Mode = 'SCHEMA_MISSING'; Command = 'bootstrap' },
+            @{ Mode = 'QUERY_FAILED'; Command = 'bootstrap' }
+        )) {
+            $env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE = $case.Mode
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                $readinessFailure = (& powershell.exe -NoProfile `
+                    -ExecutionPolicy Bypass -File $launcher `
+                    -ContextMode POSTGRESQL `
+                    -PostgresEnvFile $postgresEnv `
+                    -ReadinessTimeoutSeconds 1 `
+                    -BackendPort (Get-FreePort) `
+                    -FrontendPort (Get-FreePort) `
+                    -CheckOnly 2>&1 | Out-String)
+                $readinessExitCode = $LASTEXITCODE
+            }
+            finally {
+                $ErrorActionPreference = $previousPreference
+            }
+            Assert-True ($readinessExitCode -ne 0) `
+                "$($case.Mode) readiness must fail closed."
+            Assert-True ($readinessFailure -match (
+                    'postgres-local\.ps1 ' + $case.Command)) `
+                "$($case.Mode) must recommend $($case.Command). Output: $readinessFailure"
+        }
+
+        $invalidPostgresEnv = Join-Path $fixtureRoot 'invalid-postgres.env'
+        ((Get-Content -LiteralPath $postgresEnv -Raw) +
+            [Environment]::NewLine + 'PATH=C:\unsafe') |
+            Set-Content -LiteralPath $invalidPostgresEnv -Encoding UTF8
+        $env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE = ''
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $invalidConfigFailure = (& powershell.exe -NoProfile `
+                -ExecutionPolicy Bypass -File $launcher `
+                -ContextMode POSTGRESQL `
+                -PostgresEnvFile $invalidPostgresEnv `
+                -ReadinessTimeoutSeconds 1 `
+                -BackendPort (Get-FreePort) `
+                -FrontendPort (Get-FreePort) `
+                -CheckOnly 2>&1 | Out-String)
+            $invalidConfigExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        Assert-True ($invalidConfigExitCode -ne 0) `
+            'Invalid PostgreSQL configuration must fail closed.'
+        Assert-True ($invalidConfigFailure -match 'Fix: update' -and
+                $invalidConfigFailure -match '\.env\.postgres\.example') `
+            "Invalid config must point to the reviewed example. Output: $invalidConfigFailure"
+        Assert-True ($invalidConfigFailure -notmatch `
+                'postgres-local\.ps1 (start|bootstrap)') `
+            'Invalid configuration must not recommend lifecycle commands.'
+
+        foreach ($invalidCase in @(
+            @{
+                Name = 'duplicate-keys'
+                Content = (Get-Content -LiteralPath $postgresEnv -Raw).Replace(
+                    'Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=',
+                    'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=')
+            },
+            @{
+                Name = 'invalid-schema'
+                Content = ((Get-Content -LiteralPath $postgresEnv -Raw) +
+                    [Environment]::NewLine +
+                    'PORTFOLIO_CONTEXT_DATABASE_SCHEMA=Invalid-Schema')
+            }
+        )) {
+            $invalidPath = Join-Path $fixtureRoot `
+                ("$($invalidCase.Name)-postgres.env")
+            Set-Content -LiteralPath $invalidPath `
+                -Value $invalidCase.Content -Encoding UTF8
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                $invalidOutput = (& powershell.exe -NoProfile `
+                    -ExecutionPolicy Bypass -File $launcher `
+                    -ContextMode POSTGRESQL `
+                    -PostgresEnvFile $invalidPath `
+                    -ReadinessTimeoutSeconds 1 `
+                    -BackendPort (Get-FreePort) `
+                    -FrontendPort (Get-FreePort) `
+                    -CheckOnly 2>&1 | Out-String)
+                $invalidExitCode = $LASTEXITCODE
+            }
+            finally {
+                $ErrorActionPreference = $previousPreference
+            }
+            Assert-True ($invalidExitCode -ne 0) `
+                "$($invalidCase.Name) configuration must fail closed."
+            Assert-True ($invalidOutput -match 'Fix: update' -and
+                    $invalidOutput -match '\.env\.postgres\.example') `
+                "$($invalidCase.Name) must recommend fixing configuration. Output: $invalidOutput"
+            Assert-True ($invalidOutput -notmatch `
+                    'postgres-local\.ps1 (start|bootstrap)') `
+                "$($invalidCase.Name) must not recommend lifecycle commands."
+        }
+    }
+    finally {
+        $env:PATH = $oldPath
+        $env:PORTFOLIO_START_LOCAL_FAKE_DOCKER_MODE = $oldDockerMode
+    }
+
+    $contentOnlyOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $launcher `
+        -ContextMode DISABLED `
+        -BackendPort (Get-FreePort) `
+        -FrontendPort (Get-FreePort) `
+        -CheckOnly 2>&1 | Out-String)
+    Assert-True ($LASTEXITCODE -eq 0) `
+        "Content-only preflight must not require PostgreSQL or SecretsFile. Output: $contentOnlyOutput"
+    Assert-True ($contentOnlyOutput -match `
+            'LOCAL_RUNTIME_VALID mode=DISABLED model=DISABLED') `
+        'Content-only preflight must report Agent State as disabled.'
+
+    Assert-SafeFailure (Invoke-Launcher '') `
+        'LOCAL_MODEL_SECRETS_REQUIRED' 'model-enabled launch without secrets'
 
     $missingFlag = Join-Path $fixtureRoot 'missing-flag.env'
     Write-Secrets $missingFlag @(
@@ -267,8 +504,8 @@ try {
         Assert-True ($fallbackResult.ExitCode -eq 0) `
             "Fallback fixture must leave services in degraded mode. Output: $($fallbackResult.Output)"
         Assert-True ($fallbackResult.Output -match
-                'AI_DEGRADED:PROVIDER_DRAFT_REJECTED') `
-            'Fallback fixture did not report the safe degraded category.'
+                'AI_DEGRADED:PROBE_ROUTE_BYPASSED') `
+            "Fallback fixture did not report the safe degraded category. Output: $($fallbackResult.Output)"
         Assert-True ($fallbackResult.Output -notmatch
                 [regex]::Escape($keySentinel)) `
             'Fallback fixture leaked the key.'
@@ -319,10 +556,9 @@ try {
     Assert-True ($launcherText -match '\[switch\]\$EnableGeneralAi') `
         'Unified launcher must expose explicit General AI opt-in.'
     foreach ($generalAiSetting in @(
-        'PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED',
-        'PORTFOLIO_MODEL_OP_ROUTING_MODE',
-        'PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF',
-        'PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION',
+        'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE',
+        'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF',
+        'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION',
         'PORTFOLIO_MODEL_OP_GENERAL_MODE',
         'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
         'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION'
@@ -330,6 +566,45 @@ try {
         Assert-True ($launcherText -match [regex]::Escape($generalAiSetting)) `
             "General AI opt-in must configure $generalAiSetting."
     }
+    Assert-True ($launcherText -notmatch `
+            'PORTFOLIO_MODEL_OP_ROUTING|PORTFOLIO_SEMANTIC_CLASSIFIER') `
+        'Unified launcher must not write retired routing/classifier keys.'
+    Assert-True ($launcherText -match `
+            '\-File\s+\$postgresTool\s+check-context\s+\-EnvFile') `
+        'Standard local mode must call only PostgreSQL status/readiness.'
+    Assert-True ($launcherText -notmatch `
+            "@\('(start|bootstrap|stop|reset|import-public|activate-public)'") `
+        'Unified launcher must never manage the PostgreSQL lifecycle.'
+
+    $modelExampleText = Get-Content -LiteralPath $modelExample -Raw
+    Assert-True ($modelExampleText -notmatch `
+            'PORTFOLIO_MODEL_EXPRESSION|PORTFOLIO_MODEL_TIMEOUT|PORTFOLIO_MODEL_OP_ROUTING') `
+        'The current model example must not advertise retired aliases.'
+    Assert-True ($modelExampleText -match `
+            'PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS') `
+        'The model example must advertise the current Goal output budget.'
+
+    $postgresExampleText = Get-Content -LiteralPath $postgresExample -Raw
+    foreach ($keyName in @(
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
+    )) {
+        Assert-True ($postgresExampleText -match [regex]::Escape($keyName)) `
+            "The PostgreSQL example must include stable $keyName."
+    }
+
+    $localProfileText = Get-Content -LiteralPath $localProfile -Raw
+    Assert-True ($localProfileText -match `
+            'PORTFOLIO_CONVERSATION_CONTEXT_MODE:POSTGRESQL') `
+        'The local profile must default Agent State to PostgreSQL.'
+    $prodProfileText = Get-Content -LiteralPath $prodProfile -Raw
+    Assert-True ($prodProfileText -match '(?m)^\s+mode:\s+POSTGRESQL\s*$') `
+        'The production profile must require PostgreSQL Agent State.'
+    $testLocalProfileText = Get-Content -LiteralPath $testLocalProfile -Raw
+    Assert-True ($testLocalProfileText.Contains('mode: IN_MEMORY')) `
+        'Spring tests must select IN_MEMORY explicitly instead of depending on a developer database.'
 
     Write-Output 'start-local tests passed'
 }

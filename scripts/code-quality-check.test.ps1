@@ -9,9 +9,13 @@ $unsafeCases = [ordered]@{
         Rule = 'var-local'
         Source = 'class Sample { void run() { var value = "x"; } }'
     }
-    'record-type' = @{
-        Rule = 'record-type'
-        Source = 'record Sample(String value) {}'
+    'var-lambda-parameter' = @{
+        Rule = 'var-local'
+        Source = 'class Sample { java.util.function.Function<String, String> value = (var item) -> item; }'
+    }
+    'var-comment-separated-local' = @{
+        Rule = 'var-local'
+        Source = 'class Sample { void run() { var /* inferred type */ result = call(); } Object call() { return null; } }'
     }
     'lombok-import' = @{
         Rule = 'lombok-import'
@@ -22,7 +26,8 @@ $unsafeCases = [ordered]@{
         Source = '@lombok.Data class Sample {}'
     }
 }
-$safeSource = @'
+$safeSources = [ordered]@{
+    'ordinary-source' = @'
 import org.springframework.beans.factory.annotation.Value;
 
 final class Sample {
@@ -31,6 +36,21 @@ final class Sample {
     String getValue() { return value; }
 }
 '@
+    'record-value-carrier' = 'public record Pair(String left, String right) {}'
+    'record-named-variable' = 'class Sample { void run(ClarificationStore.Record value) { ClarificationStore.Record record = value; } }'
+    'explicit-capital-var-type' = 'final class Var {} class Sample { void run(Var item) {} }'
+    'ignored-var-text' = @'
+final class Sample {
+    // var lineComment = ignored();
+    // import lombok.Data;
+    /* var blockComment = ignored(); @lombok.Data */
+    private final String value = "var stringValue = ignored(); @lombok.Data";
+    private final String block = """
+            var textBlockValue = ignored();
+            """;
+}
+'@
+}
 
 function Invoke-Checker([string]$SourcePath) {
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker -Path $SourcePath 2>&1 | Out-String)
@@ -78,13 +98,15 @@ try {
         }
     }
 
-    $safePath = Join-Path $fixtureRoot 'safe-source'
-    New-Item -ItemType Directory -Path $safePath | Out-Null
-    Set-Content -LiteralPath (Join-Path $safePath 'Sample.java') -Value $safeSource
+    foreach ($case in $safeSources.GetEnumerator()) {
+        $safePath = Join-Path $fixtureRoot $case.Key
+        New-Item -ItemType Directory -Path $safePath | Out-Null
+        Set-Content -LiteralPath (Join-Path $safePath 'Sample.java') -Value $case.Value
 
-    $safeResult = Invoke-Checker $safePath
-    if ($safeResult.ExitCode -ne 0) {
-        throw "Expected safe fixture to pass. Output: $($safeResult.Output)"
+        $safeResult = Invoke-Checker $safePath
+        if ($safeResult.ExitCode -ne 0) {
+            throw "Expected safe fixture '$($case.Key)' to pass. Output: $($safeResult.Output)"
+        }
     }
 
     Write-Output 'code-quality-check tests passed'

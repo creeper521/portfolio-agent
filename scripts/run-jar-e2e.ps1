@@ -1,6 +1,7 @@
 param(
     [string]$JarPath,
     [string]$JavaExecutable = 'java.exe',
+    [string]$KeytoolExecutable = '',
     [string]$NpmExecutable = 'npm.cmd',
     [string]$ReleaseRoot = '',
     [string]$RetrievalProfile = '',
@@ -14,6 +15,9 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
+    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE')]
+    [string]$Lane = 'DEFAULT',
+    [switch]$SkipPlaywright,
     [string]$PlaywrightScript = 'test:e2e',
     [string[]]$PlaywrightArguments = @(),
     [ValidateRange(1, 65535)]
@@ -23,10 +27,20 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$Lane = $Lane.Trim().ToUpperInvariant()
+if ($RequireLiveProvider) {
+    if ($Lane -ne 'DEFAULT' -and $Lane -ne 'LIVE') {
+        throw 'RequireLiveProvider cannot be combined with a non-LIVE lane.'
+    }
+    $Lane = 'LIVE'
+}
 $ContextMode = if ([string]::IsNullOrWhiteSpace($ContextMode)) {
-    'POSTGRESQL'
+    if ($Lane -eq 'CONTENT_ONLY') { 'DISABLED' } else { 'POSTGRESQL' }
 } else {
     $ContextMode.Trim().ToUpperInvariant()
+}
+if ($Lane -eq 'CONTENT_ONLY') {
+    $ContextMode = 'DISABLED'
 }
 $root = Split-Path -Parent $PSScriptRoot
 $jar = if ([string]::IsNullOrWhiteSpace($JarPath)) {
@@ -50,6 +64,20 @@ $jar = (Resolve-Path -LiteralPath $jar).Path
 if ($jar.Contains('"')) {
     throw 'Packaged JAR path contains an unsupported quote character.'
 }
+$jarSha256 = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash.ToLowerInvariant()
+$jarBuiltAtUtc = (Get-Item -LiteralPath $jar).LastWriteTimeUtc.ToString('O')
+$commitSha = if (Test-Path -LiteralPath (Join-Path $root '.git')) {
+    (& git -C $root rev-parse HEAD 2>$null | Out-String).Trim()
+}
+else {
+    '0000000000000000000000000000000000000000'
+}
+if ($commitSha -notmatch '^[a-f0-9]{40}$' -or $jarSha256 -notmatch '^[a-f0-9]{64}$') {
+    throw 'Packaged build identity is invalid.'
+}
+Write-Output "Build identity: commit=$commitSha"
+Write-Output "JAR SHA-256: $jarSha256"
+Write-Output "JAR builtAt UTC: $jarBuiltAtUtc"
 
 function Get-EnvironmentSnapshot([string]$Name) {
     $item = Get-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
@@ -101,6 +129,34 @@ function Assert-CurrentContextKey([string]$KeyId, [string]$Key, [string]$Label) 
     }
 }
 
+function Get-FreeLoopbackPort {
+    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    try {
+        return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+function Invoke-FixtureKeytool(
+    [string]$Executable,
+    [string[]]$Arguments,
+    [string]$FailureMessage
+) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Executable @Arguments 2>&1 | Out-Null
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
+    if ($exitCode -ne 0) { throw $FailureMessage }
+}
+
 function Assert-PackagedLogBoundary(
     [string]$stdoutPath,
     [string]$stderrPath,
@@ -135,9 +191,14 @@ $environment = @{
         'PORTFOLIO_CONVERSATION_CONTEXT_MODE'
     PLAYWRIGHT_EXTERNAL_SERVER = Get-EnvironmentSnapshot 'PLAYWRIGHT_EXTERNAL_SERVER'
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
-    P3_REAL_API = Get-EnvironmentSnapshot 'P3_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
     PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
+    PLAYWRIGHT_ADMISSION = Get-EnvironmentSnapshot 'PLAYWRIGHT_ADMISSION'
+    PLAYWRIGHT_CONTENT_ONLY = Get-EnvironmentSnapshot 'PLAYWRIGHT_CONTENT_ONLY'
+    PLAYWRIGHT_SLOW_PROVIDER = Get-EnvironmentSnapshot 'PLAYWRIGHT_SLOW_PROVIDER'
+    PLAYWRIGHT_DEPTH_TWO = Get-EnvironmentSnapshot 'PLAYWRIGHT_DEPTH_TWO'
+    PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL = Get-EnvironmentSnapshot `
+        'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONTEXT_DATABASE_URL'
     PORTFOLIO_CONTEXT_DATABASE_USERNAME = Get-EnvironmentSnapshot `
@@ -152,9 +213,33 @@ $environment = @{
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID'
     PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
+    PORTFOLIO_MODEL_PROVIDER = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_PROVIDER'
+    PORTFOLIO_AGENT_DEEPSEEK_API_KEY = Get-EnvironmentSnapshot `
+        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+    PORTFOLIO_AGENT_GLM_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_AGENT_GLM_API_KEY'
 }
 
-if ($ContextMode -notin @('POSTGRESQL', 'DISABLED')) {
+function Assert-EarlyRunnerEnvironmentRestored {
+    foreach ($name in @(
+        'PORTFOLIO_CONVERSATION_CONTEXT_MODE',
+        'PORTFOLIO_CONTEXT_DATABASE_URL',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
+        'PORTFOLIO_MODEL_PROVIDER',
+        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+        'PORTFOLIO_AGENT_GLM_API_KEY',
+        'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
+    )) {
+        Assert-EnvironmentRestored -Name $name -Snapshot ($environment[$name])
+    }
+    Write-Output 'BODY_STALL early-failure environment restored.'
+}
+
+if ($ContextMode -notin @('POSTGRESQL', 'IN_MEMORY', 'DISABLED')) {
     throw 'Packaged Context mode is invalid.'
 }
 if ($ContextMode -eq 'POSTGRESQL') {
@@ -183,7 +268,160 @@ foreach ($entry in @{
     Set-Item -LiteralPath "Env:$($entry.Key)" -Value ([string]$entry.Value)
 }
 
+if ($Lane -eq 'BODY_STALL') {
+    # BODY_STALL 只允许固定的假凭据进入本地 fixture，先清除可能继承的真实 key。
+    $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
+    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'body-stall-fixture-key'
+    Remove-Item -LiteralPath 'Env:PORTFOLIO_AGENT_GLM_API_KEY' -ErrorAction SilentlyContinue
+}
+
+$bodyStallFixtureRoot = $null
+$bodyStallFixtureProcess = $null
+$javaVmArguments = @()
+
+function Remove-BodyStallFixture {
+    if ($null -ne $script:bodyStallFixtureProcess) {
+        $script:bodyStallFixtureProcess.Refresh()
+        if (-not $script:bodyStallFixtureProcess.HasExited) {
+            Stop-Process -Id $script:bodyStallFixtureProcess.Id -Force
+            $script:bodyStallFixtureProcess.WaitForExit(5000) | Out-Null
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$script:bodyStallFixtureRoot) -and
+            (Test-Path -LiteralPath $script:bodyStallFixtureRoot)) {
+        $resolved = (Resolve-Path -LiteralPath $script:bodyStallFixtureRoot).Path
+        if (-not ([IO.Path]::GetFileName($resolved)).StartsWith(
+                'portfolio-body-stall-', [StringComparison]::Ordinal)) {
+            throw "Refusing to remove unverified BODY_STALL fixture path: $resolved"
+        }
+        Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
+}
+
+function Complete-BodyStallEarlyFailure {
+    try {
+        Remove-BodyStallFixture
+    }
+    finally {
+        # Environment restoration must run even when fixture cleanup itself fails.
+        foreach ($name in @(
+            'PORTFOLIO_CONVERSATION_CONTEXT_MODE',
+            'PORTFOLIO_CONTEXT_DATABASE_URL',
+            'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+            'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+            'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+            'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+            'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+            'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
+            'PORTFOLIO_MODEL_PROVIDER',
+            'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+            'PORTFOLIO_AGENT_GLM_API_KEY',
+            'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
+        )) {
+            $snapshot = $environment[$name]
+            $value = if ($snapshot.Exists) { [string]$snapshot.Value } else { $null }
+            [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+        }
+        Assert-EarlyRunnerEnvironmentRestored
+    }
+}
+
+if ($Lane -eq 'BODY_STALL') {
+    try {
+        $bodyStallFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) `
+            ('portfolio-body-stall-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $bodyStallFixtureRoot | Out-Null
+        $certificatePath = Join-Path $bodyStallFixtureRoot 'provider.p12'
+        $certificateExportPath = Join-Path $bodyStallFixtureRoot 'provider.cer'
+        $trustStorePath = Join-Path $bodyStallFixtureRoot 'truststore.p12'
+        $hostsPath = Join-Path $bodyStallFixtureRoot 'hosts.txt'
+        $activeSignalPath = Join-Path $bodyStallFixtureRoot 'active.signal'
+        $closedSignalPath = Join-Path $bodyStallFixtureRoot 'closed.signal'
+        $fixtureStdout = Join-Path $bodyStallFixtureRoot 'fixture.stdout.log'
+        $fixtureStderr = Join-Path $bodyStallFixtureRoot 'fixture.stderr.log'
+        $certificatePassword = [guid]::NewGuid().ToString('N')
+        $coordinationPort = Get-FreeLoopbackPort
+
+        $keytool = if ([string]::IsNullOrWhiteSpace($KeytoolExecutable)) {
+            $resolvedJava = (Get-Command $JavaExecutable -ErrorAction Stop).Source
+            Join-Path (Split-Path -Parent $resolvedJava) 'keytool.exe'
+        } else {
+            [IO.Path]::GetFullPath($KeytoolExecutable)
+        }
+        if (-not (Test-Path -LiteralPath $keytool -PathType Leaf)) {
+            throw 'BODY_STALL requires keytool from the selected JDK.'
+        }
+        Invoke-FixtureKeytool $keytool @(
+            '-genkeypair', '-noprompt', '-alias', 'body-stall-provider',
+            '-keyalg', 'RSA', '-keysize', '2048', '-validity', '1',
+            '-storetype', 'PKCS12', '-keystore', $certificatePath,
+            '-storepass', $certificatePassword, '-keypass', $certificatePassword,
+            '-dname', 'CN=api.deepseek.com', '-ext', 'SAN=dns:api.deepseek.com'
+        ) 'BODY_STALL certificate generation failed.'
+        Invoke-FixtureKeytool $keytool @(
+            '-exportcert', '-noprompt', '-alias', 'body-stall-provider',
+            '-keystore', $certificatePath, '-storepass', $certificatePassword,
+            '-file', $certificateExportPath
+        ) 'BODY_STALL certificate export failed.'
+        Invoke-FixtureKeytool $keytool @(
+            '-importcert', '-noprompt', '-alias', 'body-stall-provider',
+            '-file', $certificateExportPath, '-storetype', 'PKCS12',
+            '-keystore', $trustStorePath, '-storepass', $certificatePassword
+        ) 'BODY_STALL truststore generation failed.'
+        [IO.File]::WriteAllText(
+            $hostsPath, "127.0.0.1 api.deepseek.com`n", [Text.UTF8Encoding]::new($false))
+
+        $fixtureScript = Join-Path $root `
+            'scripts\test-fixtures\start-provider-body-stall-https.ps1'
+        $bodyStallFixtureProcess = Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList @(
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                ('"' + $fixtureScript + '"'),
+                '-CertificatePath', ('"' + $certificatePath + '"'),
+                '-CertificatePassword', $certificatePassword,
+                '-CoordinationPort', [string]$coordinationPort,
+                '-ActiveSignalPath', ('"' + $activeSignalPath + '"'),
+                '-ClosedSignalPath', ('"' + $closedSignalPath + '"')
+            ) `
+            -RedirectStandardOutput $fixtureStdout `
+            -RedirectStandardError $fixtureStderr `
+            -PassThru -WindowStyle Hidden
+        $coordinationUrl = "http://127.0.0.1:$coordinationPort/status"
+        $fixtureReady = $false
+        for ($attempt = 0; $attempt -lt 50; $attempt++) {
+            $bodyStallFixtureProcess.Refresh()
+            if ($bodyStallFixtureProcess.HasExited) {
+                throw 'BODY_STALL HTTPS fixture exited before readiness.'
+            }
+            try {
+                $fixtureState = Invoke-RestMethod -UseBasicParsing `
+                    -Uri $coordinationUrl -TimeoutSec 1
+                if ($fixtureState.ready -eq $true -and
+                        [int]$fixtureState.providerRequestCount -eq 0) {
+                    $fixtureReady = $true
+                    break
+                }
+            }
+            catch { }
+            Start-Sleep -Milliseconds 100
+        }
+        if (-not $fixtureReady) { throw 'BODY_STALL HTTPS fixture readiness timed out.' }
+        $env:PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL = $coordinationUrl
+        $javaVmArguments = @(
+            ('"-Djdk.net.hosts.file=' + $hostsPath + '"'),
+            ('"-Djavax.net.ssl.trustStore=' + $trustStorePath + '"'),
+            '-Djavax.net.ssl.trustStoreType=PKCS12',
+            ("-Djavax.net.ssl.trustStorePassword=$certificatePassword")
+        )
+    }
+    catch {
+        Complete-BodyStallEarlyFailure
+        throw
+    }
+}
+
 $quotedJar = '"' + $jar + '"'
+$requestsPerMinute = if ($Lane -eq 'ADMISSION') { 2 } else { 1000 }
 $applicationArguments = @(
     '-jar',
     $quotedJar,
@@ -192,11 +430,27 @@ $applicationArguments = @(
     '--spring.main.banner-mode=off',
     "--portfolio.conversation-context.mode=$ContextMode",
     '--portfolio.diagnostics.frontend-ingest-enabled=true',
-    '--portfolio.answer-production.requests-per-minute=1000'
+    "--portfolio.agent-runtime.requests-per-minute=$requestsPerMinute",
+    '--portfolio.agent-runtime.max-concurrent-per-source=1000',
+    '--portfolio.agent-runtime.max-active-turns=1000'
 )
-if (-not $RequireLiveProvider) {
+if ($Lane -notin @('LIVE', 'BODY_STALL')) {
     $applicationArguments += '--portfolio.model-expression.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
+}
+if ($Lane -eq 'BODY_STALL') {
+    $applicationArguments += @(
+        '--portfolio.conversational-model.enabled=true',
+        '--portfolio.conversational-model.external-data-policy-approved=true',
+        '--portfolio.conversational-model.provider=DEEPSEEK_V4_FLASH',
+        '--portfolio.conversational-model.deepseek-api-key=body-stall-fixture-key',
+        '--portfolio.conversational-agent.enabled=true',
+        '--portfolio.conversational-agent.visitor-data-policy-approved=true',
+        '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
+        '--portfolio.model-operations.turn-interpretation.provider-ref=DEEPSEEK_V4_FLASH',
+        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v1',
+        '--portfolio.model-operations.general-knowledge.mode=DISABLED'
+    )
 }
 if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
     $resolvedReleaseRoot = (Resolve-Path -LiteralPath $ReleaseRoot).Path
@@ -213,14 +467,20 @@ if (-not [string]::IsNullOrWhiteSpace($ModelDirectory)) {
     $applicationArguments += '"--portfolio.retrieval.model-directory=' `
         + $resolvedModelDirectory + '"'
 }
-$process = Start-Process -FilePath $JavaExecutable `
-    -ArgumentList $applicationArguments `
-    -RedirectStandardOutput $stdoutPath `
-    -RedirectStandardError $stderrPath `
-    -PassThru -WindowStyle Hidden
+try {
+    $process = Start-Process -FilePath $JavaExecutable `
+        -ArgumentList ($javaVmArguments + $applicationArguments) `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -PassThru -WindowStyle Hidden
+}
+catch {
+    Complete-BodyStallEarlyFailure
+    throw
+}
 
 Write-Output "Started packaged application process $($process.Id)."
-if (-not $RequireLiveProvider) {
+if ($Lane -notin @('LIVE', 'BODY_STALL')) {
     Write-Output 'Provider calls disabled for deterministic smoke.'
 }
 
@@ -261,7 +521,9 @@ try {
             catch {
                 throw 'Readiness endpoint did not return valid public-content JSON.'
             }
-            $requiredFields = @('contentVersion', 'owner', 'projects', 'evidence', 'timeline')
+            $requiredFields = @(
+                'contentVersion', 'owner', 'projects', 'evidence', 'timeline', 'agentAvailability'
+            )
             foreach ($field in $requiredFields) {
                 $property = $publicContent.PSObject.Properties[$field]
                 if ($null -eq $property -or $null -eq $property.Value) {
@@ -270,6 +532,14 @@ try {
             }
             if ([string]::IsNullOrWhiteSpace([string]$publicContent.contentVersion)) {
                 throw "Readiness public-content JSON has a blank contentVersion."
+            }
+            $expectedAvailability = if ($Lane -eq 'CONTENT_ONLY') {
+                'UNAVAILABLE'
+            } else {
+                'AVAILABLE'
+            }
+            if ([string]$publicContent.agentAvailability.status -cne $expectedAvailability) {
+                throw "Readiness returned unexpected Agent availability for lane $Lane."
             }
 
             $ownedListeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen `
@@ -284,11 +554,12 @@ try {
 
         Start-Sleep -Milliseconds 500
     }
-
     if (-not $ready) {
         throw 'Packaged application did not become ready.'
     }
 
+    Write-Output ("Runtime identity: pid={0} port={1} contentVersion={2}" -f `
+            $process.Id, $Port, [string]$publicContent.contentVersion)
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
 
     $correlationResponse = Invoke-WebRequest -UseBasicParsing `
@@ -382,73 +653,207 @@ try {
     }
     Write-Output 'Packaged Case API smoke passed.'
 
+    if ($Lane -notin @('CONTENT_ONLY', 'BODY_STALL')) {
+    $smokePreset = @($publicContent.questionPresets)[0]
+    if ($null -eq $smokePreset -or
+            [string]::IsNullOrWhiteSpace([string]$smokePreset.id) -or
+            [string]::IsNullOrWhiteSpace([string]$smokePreset.contractVersion)) {
+        throw 'Packaged public-content returned no active preset for Agent smoke.'
+    }
+    $caseAgentRequestId = [guid]::NewGuid().ToString()
     $caseAgentRequest = @{
-        turnId = 'packaged-case-agent-smoke'
-        requestToken = [guid]::NewGuid().ToString()
-        # Keep the privacy sentinel inside a semantically valid Case question so this smoke
-        # verifies both scoped routing and visitor-content redaction. A sentinel-only string
-        # is correctly classified as an unsupported general query by the semantic router.
-        question = "How was this case verified? $privacySentinel"
-        messages = @()
-        context = @{
-            projectSlug = $null
-            caseSlug = 'multilingual-image-preservation'
-            audienceRole = 'INTERVIEWER'
-            source = 'CASE'
+        requestId = $caseAgentRequestId
+        command = @{
+            kind = 'ASK'
+            input = @{
+                kind = 'PRESET'
+                presetId = [string]$smokePreset.id
+                presetRevision = [string]$smokePreset.contractVersion
+            }
         }
-    } | ConvertTo-Json -Depth 5 -Compress
+        surfaceContext = @{
+            audienceRole = 'INTERVIEWER'
+            requestSource = 'AGENT_PAGE'
+        }
+        conversationWindow = @(
+            @{ role = 'USER'; content = $privacySentinel }
+        )
+    } | ConvertTo-Json -Depth 8 -Compress
     $caseAgentResponse = Invoke-RestMethod -UseBasicParsing `
         -Method Post `
-        -Uri "$baseUrl/api/v2/answers" `
+        -Uri "$baseUrl/api/agent/turns" `
         -ContentType 'application/json; charset=utf-8' `
         -Body ([System.Text.Encoding]::UTF8.GetBytes($caseAgentRequest))
-    if ([string]$caseAgentResponse.contentVersion -ne [string]$publicContent.contentVersion) {
-        throw 'Packaged Case Agent returned the wrong contentVersion.'
+    if ([string]$caseAgentResponse.requestId -ne $caseAgentRequestId `
+            -or [string]$caseAgentResponse.kind -ne 'ANSWER' `
+            -or [string]$caseAgentResponse.answer.contentReleaseId `
+                -ne [string]$publicContent.contentVersion) {
+        throw ("Packaged Case Agent returned an invalid final projection: kind={0}; contentReleaseId={1}." -f `
+                [string]$caseAgentResponse.kind,
+                [string]$caseAgentResponse.answer.contentReleaseId)
     }
-    $caseAgentBlocks = @($caseAgentResponse.blocks)
-    $caseAgentTaskBlocks = @(
-        @($caseAgentResponse.agentTurn.completedTasks) |
-            Where-Object { $_.resultPayload.kind -eq 'SECTION_RESULT' } |
-            ForEach-Object { @($_.resultPayload.blocks) }
+    $caseAgentSections = @(
+        @($caseAgentResponse.answer.goalResults) |
+            ForEach-Object { @($_.presentation.sections) }
     )
-    if (($caseAgentBlocks.Count + $caseAgentTaskBlocks.Count) -eq 0) {
-        throw 'Packaged Case Agent returned no answer blocks in either the legacy or semantic-task projection.'
+    if ($caseAgentSections.Count -eq 0) {
+        throw 'Packaged Case Agent returned no sections in the final PublicAgentTurn projection.'
     }
     $serializedCaseAgentResponse =
             $caseAgentResponse | ConvertTo-Json -Depth 12 -Compress
     if ($serializedCaseAgentResponse -match [regex]::Escape($privacySentinel)) {
         throw 'Packaged Case Agent response leaked the visitor-content sentinel.'
     }
-    Write-Output 'Packaged Case Agent smoke passed.'
+    Write-Output 'Packaged final Agent resource smoke passed.'
 
-    if ($RequireLiveProvider) {
-        $probeOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.ps1') `
-            -BackendBaseUrl $baseUrl `
-            -ExpectedContentVersion ([string]$publicContent.contentVersion) `
-            -TimeoutSeconds $ReadinessTimeoutSeconds `
-            -FailOnDegraded 2>&1 | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or $probeOutput -ne 'LIVE_PROVIDER_CONNECTED') {
-            throw "Live Provider verification failed: $probeOutput"
+    if ($SkipPlaywright) {
+        function Invoke-AgentClosureRequest([string]$Question) {
+            $body = @{
+                requestId = [guid]::NewGuid().ToString()
+                command = @{
+                    kind = 'ASK'
+                    input = @{ kind = 'FREE_TEXT'; text = $Question }
+                }
+                surfaceContext = @{
+                    audienceRole = 'INTERVIEWER'
+                    requestSource = 'AGENT_PAGE'
+                }
+                conversationWindow = @()
+            } | ConvertTo-Json -Depth 8 -Compress
+            return Invoke-RestMethod -UseBasicParsing -Method Post `
+                -Uri "$baseUrl/api/agent/turns" `
+                -ContentType 'application/json; charset=utf-8' `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
         }
-        Write-Output 'Packaged Live Provider verification passed.'
+
+        $noiseResponse = Invoke-AgentClosureRequest '1'
+        if ([string]$noiseResponse.kind -notin @('BOUNDARY', 'CAPABILITY_UNAVAILABLE')) {
+            throw "Packaged noise closure returned unexpected PublicAgentTurn kind '$($noiseResponse.kind)'."
+        }
+        $recommendationQuestion = 'recommend 3 projects'
+        $recommendationResponse = Invoke-AgentClosureRequest $recommendationQuestion
+        $recommendation = @($recommendationResponse.answer.goalResults |
+            Where-Object { $_.presentation.kind -eq 'RECOMMENDATION' } |
+            Select-Object -First 1).presentation
+        if ($null -eq $recommendation `
+                -or [int]$recommendation.requestedSize -ne 3 `
+                -or [int]$recommendation.actualSize -gt 3) {
+            throw ("Packaged recommendation closure returned invalid final projection: kind={0} requestedSize={1} actualSize={2}." -f `
+                    [string]$recommendationResponse.kind,
+                    [string]$recommendation.requestedSize,
+                    [string]$recommendation.actualSize)
+        }
+        if ([int]$recommendation.actualSize -lt 3 `
+                -and @($recommendation.incompleteReasons).Count -eq 0) {
+            throw 'Packaged partial recommendation omitted incompleteReasons.'
+        }
+        Write-Output ("Agent backend closure summary: noiseKind={0} recommendationKind={1} requestedSize={2} actualSize={3}" -f `
+                [string]$noiseResponse.kind,
+                [string]$recommendationResponse.kind,
+                [int]$recommendation.requestedSize,
+                [int]$recommendation.actualSize)
+        Write-Output 'Agent backend closure smoke passed.'
     }
 
-    $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
-    $env:PLAYWRIGHT_REAL_API = '1'
-    $env:P3_REAL_API = '1'
-    $env:PLAYWRIGHT_BASE_URL = $baseUrl
-    if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
-        $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
+    }
+    elseif ($Lane -eq 'CONTENT_ONLY') {
+        $disabledRequest = @{
+            requestId = [guid]::NewGuid().ToString()
+            command = @{ kind = 'ASK'; input = @{ kind = 'FREE_TEXT'; text = 'hello' } }
+            conversationWindow = @()
+        } | ConvertTo-Json -Depth 6 -Compress
+        try {
+            $disabledHttp = Invoke-WebRequest -UseBasicParsing -Method Post `
+                -Uri "$baseUrl/api/agent/turns" `
+                -ContentType 'application/json; charset=utf-8' `
+                -Body ([Text.Encoding]::UTF8.GetBytes($disabledRequest))
+            $disabledStatus = [int]$disabledHttp.StatusCode
+            $disabledBody = $disabledHttp.Content | ConvertFrom-Json
+        }
+        catch {
+            $disabledStatus = [int]$_.Exception.Response.StatusCode
+            $disabledBody = if ([string]::IsNullOrWhiteSpace([string]$_.ErrorDetails.Message)) {
+                $null
+            } else {
+                $_.ErrorDetails.Message | ConvertFrom-Json
+            }
+        }
+        if ($disabledStatus -ne 503 -or
+                ($null -ne $disabledBody -and
+                [string]$disabledBody.error.code -ne 'AGENT_STATE_UNAVAILABLE')) {
+            throw 'CONTENT_ONLY direct Agent POST did not fail closed.'
+        }
+        Write-Output 'Packaged content-only API fail-closed smoke passed.'
     }
 
-    $playwrightCommand = @(
-        '--prefix', (Join-Path $root 'frontend'),
-        'run', $PlaywrightScript,
-        '--', '--workers=1'
-    ) + @($PlaywrightArguments)
-    & $NpmExecutable @playwrightCommand
-    $playwrightExitCode = $LASTEXITCODE
+    if ($Lane -eq 'LIVE') {
+        $latencyBuckets = @()
+        foreach ($scenario in @('SOCIAL', 'GENERAL')) {
+            $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+            $probeOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.ps1') `
+                -BackendBaseUrl $baseUrl `
+                -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                -Scenario $scenario `
+                -TimeoutSeconds $ReadinessTimeoutSeconds `
+                -FailOnDegraded 2>&1 | Out-String).Trim()
+            $stopwatch.Stop()
+            if ($LASTEXITCODE -ne 0 -or $probeOutput -ne 'LIVE_PROVIDER_CONNECTED') {
+                throw "Live Provider $scenario verification failed: $probeOutput"
+            }
+            $bucket = if ($stopwatch.Elapsed.TotalSeconds -lt 5) {
+                'LT_5S'
+            } elseif ($stopwatch.Elapsed.TotalSeconds -lt 10) {
+                'LT_10S'
+            } elseif ($stopwatch.Elapsed.TotalSeconds -lt 20) {
+                'LT_20S'
+            } else {
+                'GE_20S'
+            }
+            $latencyBuckets += "$scenario=$bucket"
+        }
+        Write-Output ("Packaged Live Provider verification passed; latency=" + `
+                ($latencyBuckets -join ','))
+    }
+
+    if ($SkipPlaywright) {
+        Write-Output 'Packaged backend/API smoke passed; Playwright skipped by request.'
+    }
+    else {
+        $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
+        $env:PLAYWRIGHT_REAL_API = '1'
+        $env:PLAYWRIGHT_BASE_URL = $baseUrl
+        $env:PLAYWRIGHT_ADMISSION = if ($Lane -eq 'ADMISSION') { '1' } else { '0' }
+        $env:PLAYWRIGHT_CONTENT_ONLY = if ($Lane -eq 'CONTENT_ONLY') { '1' } else { '0' }
+        $env:PLAYWRIGHT_SLOW_PROVIDER = if ($Lane -eq 'BODY_STALL') { '1' } else { '0' }
+        $env:PLAYWRIGHT_DEPTH_TWO = if ($Lane -eq 'DEPTH_TWO') { '1' } else { '0' }
+        if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
+            $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
+        }
+
+        $playwrightCommand = @(
+            '--prefix', (Join-Path $root 'frontend'),
+            'run', $PlaywrightScript,
+            '--', '--workers=1'
+        ) + @($PlaywrightArguments)
+        & $NpmExecutable @playwrightCommand
+        $playwrightExitCode = $LASTEXITCODE
+        if ($Lane -eq 'BODY_STALL') {
+            $bodyStallFixtureProcess.Refresh()
+            if ($bodyStallFixtureProcess.HasExited) {
+                $fixtureFailure = if (Test-Path -LiteralPath $fixtureStderr) {
+                    (Get-Content -LiteralPath $fixtureStderr -Raw).Trim()
+                } else { '' }
+                Write-Output ("BODY_STALL fixture exited unexpectedly: exitCode={0}; detail={1}" -f `
+                        $bodyStallFixtureProcess.ExitCode,
+                        $(if ([string]::IsNullOrWhiteSpace($fixtureFailure)) {
+                            'none'
+                        } else {
+                            $fixtureFailure
+                        }))
+            }
+        }
+    }
 }
 finally {
     try {
@@ -468,21 +873,43 @@ finally {
             $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID
         Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY' `
             $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
+        Restore-EnvironmentVariable 'PORTFOLIO_MODEL_PROVIDER' `
+            $environment.PORTFOLIO_MODEL_PROVIDER
+        Restore-EnvironmentVariable 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' `
+            $environment.PORTFOLIO_AGENT_DEEPSEEK_API_KEY
+        Restore-EnvironmentVariable 'PORTFOLIO_AGENT_GLM_API_KEY' `
+            $environment.PORTFOLIO_AGENT_GLM_API_KEY
         Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-        Restore-EnvironmentVariable 'P3_REAL_API' $environment.P3_REAL_API
         Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
             $environment.PLAYWRIGHT_REAL_RETRIEVAL
+        Restore-EnvironmentVariable 'PLAYWRIGHT_ADMISSION' $environment.PLAYWRIGHT_ADMISSION
+        Restore-EnvironmentVariable 'PLAYWRIGHT_CONTENT_ONLY' $environment.PLAYWRIGHT_CONTENT_ONLY
+        Restore-EnvironmentVariable 'PLAYWRIGHT_SLOW_PROVIDER' $environment.PLAYWRIGHT_SLOW_PROVIDER
+        Restore-EnvironmentVariable 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
+        Restore-EnvironmentVariable 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
+            $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
-        Assert-EnvironmentRestored 'P3_REAL_API' $environment.P3_REAL_API
         Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_RETRIEVAL' `
             $environment.PLAYWRIGHT_REAL_RETRIEVAL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_ADMISSION' $environment.PLAYWRIGHT_ADMISSION
+        Assert-EnvironmentRestored 'PLAYWRIGHT_CONTENT_ONLY' $environment.PLAYWRIGHT_CONTENT_ONLY
+        Assert-EnvironmentRestored 'PLAYWRIGHT_SLOW_PROVIDER' $environment.PLAYWRIGHT_SLOW_PROVIDER
+        Assert-EnvironmentRestored 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
+        Assert-EnvironmentRestored 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
+            $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
+        Assert-EnvironmentRestored 'PORTFOLIO_MODEL_PROVIDER' $environment.PORTFOLIO_MODEL_PROVIDER
+        Assert-EnvironmentRestored 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' `
+            $environment.PORTFOLIO_AGENT_DEEPSEEK_API_KEY
+        Assert-EnvironmentRestored 'PORTFOLIO_AGENT_GLM_API_KEY' `
+            $environment.PORTFOLIO_AGENT_GLM_API_KEY
         Write-Output 'Playwright environment restored.'
     }
     finally {
+        try {
         $process.Refresh()
         if (-not $process.HasExited) {
             Stop-Process -Id $process.Id -Force
@@ -503,6 +930,10 @@ finally {
                     Remove-Item -LiteralPath $logPath -Force
                 }
             }
+        }
+        }
+        finally {
+            Remove-BodyStallFixture
         }
     }
 }

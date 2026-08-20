@@ -166,9 +166,11 @@ try {
     Assert-True (Test-Path -LiteralPath $probeScript -PathType Leaf) `
         "Live Provider probe script does not exist: $probeScript"
     $probeSource = [System.IO.File]::ReadAllText($probeScript)
+    Assert-True ($probeSource -notmatch '/api/v2|stp-v[123]') `
+        'Live Provider probe must use only the final unversioned Agent resources.'
     foreach ($forbidden in @(
         'projectSlug', 'caseSlug', 'questionPresetId', 'contractVersion',
-        'referenceContext', 'recommendationContext'
+        'referenceContext', 'recommendationContext', '/api/v2', 'stp-v'
     )) {
         Assert-True ($probeSource -notmatch "(?m)^\s*$forbidden\s*=") `
             "probe must not construct $forbidden"
@@ -187,8 +189,8 @@ try {
     $degraded = Invoke-Probe $fallbackServer.Port
     Assert-True ($degraded.ExitCode -eq 0) `
         "fallback fixture must degrade without exiting. Output: $($degraded.Output)"
-    Assert-True ($degraded.Output.Trim() -eq 'LIVE_PROVIDER_DEGRADED:PROVIDER_DRAFT_REJECTED') `
-        'fallback fixture must report the safe degraded category.'
+    Assert-True ($degraded.Output.Trim() -eq 'LIVE_PROVIDER_DEGRADED:PROBE_ROUTE_BYPASSED') `
+        "fallback fixture must report the safe degraded category. Output: $($degraded.Output)"
     Assert-True ($degraded.Output -notmatch [regex]::Escape($keySentinel)) `
         'degraded probe leaked the key sentinel.'
     Assert-True ((Count-ProbeTempFiles) -eq $temporaryFilesBefore) `
@@ -197,8 +199,8 @@ try {
     $failing = Invoke-Probe $fallbackServer.Port '-FailOnDegraded'
     Assert-True ($failing.ExitCode -eq 1) `
         '-FailOnDegraded must exit 1 on degraded responses.'
-    Assert-True ($failing.Output.Trim() -eq 'LIVE_PROVIDER_DEGRADED:PROVIDER_DRAFT_REJECTED') `
-        '-FailOnDegraded must still report the safe category.'
+    Assert-True ($failing.Output.Trim() -eq 'LIVE_PROVIDER_DEGRADED:PROBE_ROUTE_BYPASSED') `
+        "-FailOnDegraded must still report the safe category. Output: $($failing.Output)"
     Assert-True ((Count-ProbeTempFiles) -eq $temporaryFilesBefore) `
         'failing probe must clean up its temporary response file.'
 

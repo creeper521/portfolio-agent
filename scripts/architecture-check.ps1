@@ -87,6 +87,11 @@ function Add-ReferenceViolations(
             $Reference -match '^com\.portfolio\.agent\.answer\.') {
         Add-StatementViolation 'portfolio-answer' $File $LineNumber $Display
     }
+
+    if ($SourcePackage -match '^com\.portfolio\.agent\.turn(\.|$)' -and
+            $Reference -match '^com\.portfolio\.agent\.answer\.') {
+        Add-StatementViolation 'turn-answer-dependency' $File $LineNumber $Display
+    }
 }
 
 function Convert-JavaUnicodeEscapes([string]$Source) {
@@ -339,10 +344,10 @@ foreach ($file in $javaFiles) {
     }
 
     $bodySource = $bodyBuilder.ToString()
-    if ($sourcePackage -notmatch '^com\.portfolio\.agent\.answer\.adapter\.retrieval(\.|$)') {
+    if ($sourcePackage -notmatch '^com\.portfolio\.agent\.infrastructure\.retrieval\.adapter(\.|$)') {
         $embeddingImplementation = [regex]::Match(
             $bodySource,
-            '\bimplements\s+(?:com\s*\.\s*portfolio\s*\.\s*agent\s*\.\s*answer\s*\.\s*gateway\s*\.\s*)?LocalEmbeddingPort\b'
+            '\bimplements\s+(?:com\s*\.\s*portfolio\s*\.\s*agent\s*\.\s*infrastructure\s*\.\s*retrieval\s*\.\s*)?LocalEmbeddingPort\b'
         )
         if ($embeddingImplementation.Success) {
             $prefix = $bodySource.Substring(0, $embeddingImplementation.Index)
@@ -360,6 +365,17 @@ foreach ($file in $javaFiles) {
         $prefix = $bodySource.Substring(0, $qualifiedMatch.Index)
         $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
         Add-ReferenceViolations $file $sourcePackage $lineNumber $reference $reference
+    }
+
+    $retiredTypeMatches = [regex]::Matches(
+        $bodySource,
+        '\b(?:class|interface|enum|record)\s+(?:PortfolioRetrieverAdapterSupport|PortfolioConditions|PortfolioRetrievalRequest|PortfolioRetrievalResult|PortfolioRetrievedPassage|PortfolioTaskMode|PortfolioRetrievalException|PortfolioRetrievalFailureKind|PortfolioRetriever)\b'
+    )
+    foreach ($retiredTypeMatch in $retiredTypeMatches) {
+        $prefix = $bodySource.Substring(0, $retiredTypeMatch.Index)
+        $lineNumber = ([regex]::Matches($prefix, "`n")).Count + 1
+        Add-StatementViolation 'retired-agent-type' $file $lineNumber `
+            ([regex]::Replace($retiredTypeMatch.Value, '\s+', ' '))
     }
 }
 

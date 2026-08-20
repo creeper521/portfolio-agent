@@ -1,7 +1,7 @@
 param(
     [Parameter(Position = 0, Mandatory = $true)]
     [ValidateSet(
-        'start', 'bootstrap', 'status', 'verify', 'connections', 'stop', 'reset',
+        'start', 'bootstrap', 'status', 'check-context', 'verify', 'connections', 'stop', 'reset',
         'verify-public-bundle', 'import-public', 'activate-public',
         'scan-markdown', 'import-markdown', 'retry-markdown')]
     [string]$Command,
@@ -58,6 +58,29 @@ function Import-LocalEnvironment {
     }
     $resolved = Resolve-ExistingFile $path 'POSTGRES_LOCAL_ENV_FILE_MISSING'
     $values = @{}
+    $allowed = @(
+        'PORTFOLIO_POSTGRES_PORT',
+        'PORTFOLIO_POSTGRES_ADMIN_USERNAME',
+        'PORTFOLIO_POSTGRES_ADMIN_PASSWORD',
+        'PORTFOLIO_PUBLIC_DATABASE_NAME',
+        'PORTFOLIO_PUBLIC_DATABASE_USERNAME',
+        'PORTFOLIO_PUBLIC_DATABASE_PASSWORD',
+        'PORTFOLIO_GOVERNANCE_DATABASE_NAME',
+        'PORTFOLIO_GOVERNANCE_DATABASE_USERNAME',
+        'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_DATABASE_NAME',
+        'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_DATABASE_SCHEMA',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_PREVIOUS_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
+        'PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_PREVIOUS_PAYLOAD_KEY'
+    )
     foreach ($line in Get-Content -LiteralPath $resolved -Encoding UTF8) {
         $trimmed = $line.Trim()
         if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) {
@@ -69,9 +92,9 @@ function Import-LocalEnvironment {
         }
         $name = $trimmed.Substring(0, $separator).Trim()
         $value = $trimmed.Substring($separator + 1)
-        if ($name -notmatch '^[A-Z][A-Z0-9_]*$' -or
+        if ($name -notin $allowed -or
                 $values.ContainsKey($name)) {
-            Stop-WithCode 'POSTGRES_LOCAL_ENV_FILE_INVALID'
+            Stop-WithCode 'POSTGRES_LOCAL_ENV_FIELD_INVALID'
         }
         $values[$name] = $value
     }
@@ -87,7 +110,11 @@ function Import-LocalEnvironment {
         'PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD',
         'PORTFOLIO_CONTEXT_DATABASE_NAME',
         'PORTFOLIO_CONTEXT_DATABASE_USERNAME',
-        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD'
+        'PORTFOLIO_CONTEXT_DATABASE_PASSWORD',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
+        'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
     )
     foreach ($name in $required) {
         if (-not $values.ContainsKey($name) -or
@@ -140,6 +167,41 @@ function Import-LocalEnvironment {
                 '^[A-Za-z0-9_@%+=:,./!?~-]{12,}$') {
             Stop-WithCode 'POSTGRES_LOCAL_PASSWORD_UNSAFE'
         }
+    }
+    if ($values.ContainsKey('PORTFOLIO_CONTEXT_DATABASE_SCHEMA') -and
+            [string]$values.PORTFOLIO_CONTEXT_DATABASE_SCHEMA -ne
+            'agent_context') {
+        Stop-WithCode 'POSTGRES_LOCAL_CONTEXT_SCHEMA_FIXED'
+    }
+    foreach ($name in @(
+            'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID',
+            'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID')) {
+        if ([string]$values[$name] -notmatch '^[A-Za-z0-9._-]{1,64}$') {
+            Stop-WithCode 'POSTGRES_LOCAL_CRYPTO_KEY_ID_INVALID'
+        }
+    }
+    $decodedKeys = @{}
+    foreach ($name in @(
+            'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
+            'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY')) {
+        try {
+            $decodedKey = [Convert]::FromBase64String([string]$values[$name])
+        }
+        catch {
+            Stop-WithCode 'POSTGRES_LOCAL_CRYPTO_KEY_INVALID'
+        }
+        if ($decodedKey.Length -ne 32) {
+            Stop-WithCode 'POSTGRES_LOCAL_CRYPTO_KEY_INVALID'
+        }
+        $decodedKeys[$name] = $decodedKey
+    }
+    if ($values.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID -eq
+            $values.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID -or
+            [Convert]::ToBase64String(
+                $decodedKeys.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY) -eq
+            [Convert]::ToBase64String(
+                $decodedKeys.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY)) {
+        Stop-WithCode 'POSTGRES_LOCAL_CRYPTO_KEYS_NOT_DISTINCT'
     }
     foreach ($entry in $values.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable(
@@ -247,6 +309,21 @@ function Set-ApplicationDatabaseEnvironment {
         [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_USERNAME
     $env:PORTFOLIO_CONTEXT_DATABASE_PASSWORD =
         [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_PASSWORD
+    $env:PORTFOLIO_CONTEXT_DATABASE_SCHEMA = if (
+            $script:settings.ContainsKey('PORTFOLIO_CONTEXT_DATABASE_SCHEMA')) {
+        [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_SCHEMA
+    }
+    else {
+        'agent_context'
+    }
+    $env:PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID =
+        [string]$script:settings.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID
+    $env:PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY =
+        [string]$script:settings.PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY
+    $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID =
+        [string]$script:settings.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID
+    $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY =
+        [string]$script:settings.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
 }
 
 function Find-Maven {
@@ -376,12 +453,15 @@ SELECT 'selfDistance=' || COALESCE(MIN(embedding <=> embedding), 0)
 FROM retrieval_document rd
 JOIN active_release ar ON ar.release_id = rd.release_id
 WHERE rd.embedding IS NOT NULL;
-    '@
+'@
     Write-Output 'Context database:'
     Invoke-ContainerPsql $context @'
 SELECT 'vector=' || extversion FROM pg_extension WHERE extname = 'vector';
 SELECT 'flyway=' || COALESCE(MAX(version), 'none') FROM agent_context.flyway_schema_history_context WHERE success;
-SELECT 'conversations=' || count(*) FROM agent_context.conversation_context;
+SELECT 'sessions=' || count(*) FROM agent_context.conversation_session;
+SELECT 'executions=' || count(*) FROM agent_context.agent_turn_execution;
+SELECT 'contexts=' || count(*) FROM agent_context.agent_turn_context;
+SELECT 'clarifications=' || count(*) FROM agent_context.agent_turn_clarification;
 '@
     Write-Output 'Governance database:'
     Invoke-ContainerPsql $governance @'
@@ -417,6 +497,31 @@ function Invoke-Connections {
     Write-Output "  Username: $($script:settings.PORTFOLIO_CONTEXT_DATABASE_USERNAME)"
     Write-Output "  JDBC URL: jdbc:postgresql://127.0.0.1:$port/$context"
     Write-Output "Passwords: read from $(Split-Path -Leaf $script:envPath)"
+    Write-Output 'Runtime encryption keys: configured'
+}
+
+function Invoke-ContextReadiness {
+    Assert-DockerAvailable
+    Wait-PostgresHealthy
+    $context = [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_NAME
+    $schema = if ($script:settings.ContainsKey(
+            'PORTFOLIO_CONTEXT_DATABASE_SCHEMA')) {
+        [string]$script:settings.PORTFOLIO_CONTEXT_DATABASE_SCHEMA
+    }
+    else {
+        'agent_context'
+    }
+    $result = Invoke-ContainerPsql $context @"
+SELECT CASE
+    WHEN to_regclass('$schema.agent_turn_execution') IS NOT NULL
+     AND to_regclass('$schema.agent_turn_context') IS NOT NULL
+     AND to_regclass('$schema.agent_turn_clarification') IS NOT NULL
+    THEN 1 ELSE 0 END;
+"@ -Capture
+    if (@($result | Where-Object { $_ -eq '1' }).Count -eq 0) {
+        Stop-WithCode 'POSTGRES_LOCAL_CONTEXT_SCHEMA_UNAVAILABLE'
+    }
+    Write-Output "$context`: Agent State ready"
 }
 
 try {
@@ -465,6 +570,9 @@ try {
                 }
                 Write-Output "$database`: reachable"
             }
+        }
+        'check-context' {
+            Invoke-ContextReadiness
         }
         'verify' {
             Invoke-Verify

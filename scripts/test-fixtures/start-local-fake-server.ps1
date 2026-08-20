@@ -88,31 +88,6 @@ function Write-Response(
     $Stream.Flush()
 }
 
-function Test-SubjectScopedRequest([string]$RequestBody) {
-    if ([string]::IsNullOrWhiteSpace($RequestBody)) {
-        return $false
-    }
-    try {
-        $parsed = $RequestBody | ConvertFrom-Json
-        if ($null -ne $parsed.questionPresetId -or
-                $null -ne $parsed.contractVersion -or
-                $null -ne $parsed.referenceContext -or
-                $null -ne $parsed.recommendationContext) {
-            return $true
-        }
-        $context = $parsed.context
-        if ($null -ne $context -and (
-                -not [string]::IsNullOrWhiteSpace([string]$context.projectSlug) -or
-                -not [string]::IsNullOrWhiteSpace([string]$context.caseSlug))) {
-            return $true
-        }
-    }
-    catch {
-        return $false
-    }
-    return $false
-}
-
 try {
     while ($true) {
         $client = $listener.AcceptTcpClient()
@@ -133,29 +108,60 @@ try {
                 Write-Response $stream 200 'application/json; charset=utf-8' `
                     '{"contentVersion":"test-v1"}'
             }
-            elseif ($path -eq '/api/v2/answers') {
+            elseif ($path -eq '/api/agent/turns') {
                 if ($Mode -eq 'BACKEND_MODEL') {
-                    $body = if (Test-SubjectScopedRequest $requestBody) {
-                        '{"contentVersion":"test-v1","intentSource":"RULE",' +
-                            '"constructionMode":"EVIDENCE_COMPOSITION","evidenceState":"INSUFFICIENT",' +
-                            '"degraded":false,"resolution":"NOT_SUPPORTED",' +
-                            '"blocks":[{"content":"fixture"}]}'
+                    $requestId = try {
+                        [string](($requestBody | ConvertFrom-Json).requestId)
+                    }
+                    catch {
+                        [guid]::NewGuid().ToString()
+                    }
+                    $socialText = [string]([char]0x4f60) + [char]0x597d
+                    $isSocial = try {
+                        [string](($requestBody | ConvertFrom-Json).command.input.text) -ceq $socialText
+                    }
+                    catch {
+                        $false
+                    }
+                    $body = if ($isSocial) {
+                        @{
+                            requestId = $requestId
+                            kind = 'CONVERSATIONAL'
+                            message = 'hello'
+                            conversation = @{ conversationId = 'conversation-fixture' }
+                        }
                     }
                     else {
-                        '{"contentVersion":"test-v1","answerScope":"GENERAL","intentSource":"RULE",' +
-                            '"constructionMode":"GENERAL_MODEL","evidenceState":"NOT_REQUIRED",' +
-                            '"degraded":false,"resolution":"ANSWERED",' +
-                            '"blocks":[{"content":"fixture"}]}'
+                        @{
+                            requestId = $requestId
+                            kind = 'ANSWER'
+                            conversation = @{ conversationId = 'conversation-fixture' }
+                            answer = @{
+                                resolution = 'COMPLETE'
+                                contentReleaseId = 'test-v1'
+                                goalResults = @(@{
+                                    goalId = 'goal-general'
+                                    label = 'general knowledge'
+                                    coverage = 'FULL'
+                                    notices = @()
+                                })
+                                sourceCatalog = @{ sources = @() }
+                                sourceComposition = @('GENERAL_KNOWLEDGE')
+                            }
+                        }
                     }
                 }
                 else {
-                    $body = '{"contentVersion":"test-v1","intentSource":"GLOBAL",' +
-                        '"constructionMode":"TEMPLATE","evidenceState":"NOT_REQUIRED",' +
-                        '"degraded":true,"resolution":"CAPABILITY_UNAVAILABLE",' +
-                        '"noticeCode":"PROVIDER_DRAFT_REJECTED",' +
-                        '"blocks":[{"content":"fixture"}]}'
+                    $body = @{
+                        requestId = [guid]::NewGuid().ToString()
+                        kind = 'CAPABILITY_UNAVAILABLE'
+                        code = 'PROVIDER_DRAFT_REJECTED'
+                        message = 'provider response unavailable'
+                        retryable = $true
+                    }
                 }
-                Write-Response $stream 200 'application/json; charset=utf-8' $body
+                Write-Response $stream 200 'application/json; charset=utf-8' `
+                    ($body | ConvertTo-Json -Depth 8 -Compress)
             }
             else {
                 Write-Response $stream 404 'application/json; charset=utf-8' '{}'

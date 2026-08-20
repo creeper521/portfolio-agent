@@ -70,6 +70,10 @@ PORTFOLIO_GOVERNANCE_DATABASE_PASSWORD=governance-secret
 PORTFOLIO_CONTEXT_DATABASE_NAME=portfolio_context_dev
 PORTFOLIO_CONTEXT_DATABASE_USERNAME=portfolio_context_owner
 PORTFOLIO_CONTEXT_DATABASE_PASSWORD=context-secret
+PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID=local-token-v1
+PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID=local-payload-v1
+PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY=Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=
 '@ | Set-Content -LiteralPath $envFile -Encoding UTF8
 
     $missingEnv = Invoke-Tool @('connections', '-EnvFile',
@@ -92,6 +96,69 @@ PORTFOLIO_CONTEXT_DATABASE_PASSWORD=context-secret
         'connections must not print passwords.'
     Assert-True ($connections.Output -match 'Passwords: read from') `
         'connections must explain where passwords are stored.'
+    Assert-True ($connections.Output -match 'Runtime encryption keys: configured') `
+        'connections must report stable runtime keys without printing them.'
+
+    $missingRuntimeKeyEnv = Join-Path $fixtureRoot 'missing-runtime-key.env'
+    (Get-Content -LiteralPath $envFile -Raw).Replace(
+        'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY_ID=local-token-v1', '') |
+        Set-Content -LiteralPath $missingRuntimeKeyEnv -Encoding UTF8
+    $missingRuntimeKey = Invoke-Tool @(
+        'connections', '-EnvFile', $missingRuntimeKeyEnv)
+    Assert-True ($missingRuntimeKey.ExitCode -ne 0) `
+        'The standard local environment must require stable runtime keys.'
+    Assert-True ($missingRuntimeKey.Output -match `
+            'POSTGRES_LOCAL_REQUIRED_ENV_MISSING') `
+        'Missing runtime keys must return a stable error code.'
+
+    $invalidRuntimeKeyEnv = Join-Path $fixtureRoot 'invalid-runtime-key.env'
+    (Get-Content -LiteralPath $envFile -Raw).Replace(
+        'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=', 'not-base64') |
+        Set-Content -LiteralPath $invalidRuntimeKeyEnv -Encoding UTF8
+    $invalidRuntimeKey = Invoke-Tool @(
+        'connections', '-EnvFile', $invalidRuntimeKeyEnv)
+    Assert-True ($invalidRuntimeKey.ExitCode -ne 0) `
+        'Invalid runtime encryption keys must fail closed.'
+    Assert-True ($invalidRuntimeKey.Output -match `
+            'POSTGRES_LOCAL_CRYPTO_KEY_INVALID') `
+        'Invalid runtime keys must return a stable error code.'
+
+    $duplicateKeyIdEnv = Join-Path $fixtureRoot 'duplicate-key-id.env'
+    (Get-Content -LiteralPath $envFile -Raw).Replace(
+        'local-payload-v1', 'local-token-v1') |
+        Set-Content -LiteralPath $duplicateKeyIdEnv -Encoding UTF8
+    $duplicateKeyId = Invoke-Tool @(
+        'connections', '-EnvFile', $duplicateKeyIdEnv)
+    Assert-True ($duplicateKeyId.ExitCode -ne 0) `
+        'Token and payload key identifiers must be distinct.'
+    Assert-True ($duplicateKeyId.Output -match `
+            'POSTGRES_LOCAL_CRYPTO_KEYS_NOT_DISTINCT') `
+        'Duplicate key identifiers must return a stable error code.'
+
+    $duplicateKeyBytesEnv = Join-Path $fixtureRoot 'duplicate-key-bytes.env'
+    (Get-Content -LiteralPath $envFile -Raw).Replace(
+        'Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=',
+        'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=') |
+        Set-Content -LiteralPath $duplicateKeyBytesEnv -Encoding UTF8
+    $duplicateKeyBytes = Invoke-Tool @(
+        'connections', '-EnvFile', $duplicateKeyBytesEnv)
+    Assert-True ($duplicateKeyBytes.ExitCode -ne 0) `
+        'Token and payload keys must use distinct bytes.'
+    Assert-True ($duplicateKeyBytes.Output -match `
+            'POSTGRES_LOCAL_CRYPTO_KEYS_NOT_DISTINCT') `
+        'Duplicate key bytes must return a stable error code.'
+
+    $unknownFieldEnv = Join-Path $fixtureRoot 'unknown-field.env'
+    ((Get-Content -LiteralPath $envFile -Raw) +
+        [Environment]::NewLine + 'PATH=C:\unsafe') |
+        Set-Content -LiteralPath $unknownFieldEnv -Encoding UTF8
+    $unknownField = Invoke-Tool @(
+        'connections', '-EnvFile', $unknownFieldEnv)
+    Assert-True ($unknownField.ExitCode -ne 0) `
+        'The PostgreSQL env parser must reject unknown uppercase names.'
+    Assert-True ($unknownField.Output -match `
+            'POSTGRES_LOCAL_ENV_FIELD_INVALID') `
+        'Unknown env fields must return a stable error code.'
 
     $unsafeEnv = Join-Path $fixtureRoot 'unsafe.env'
     (Get-Content -LiteralPath $envFile -Raw).Replace(
@@ -158,6 +225,10 @@ if ($joined -match '\spsql\s') {
     if ($env:PORTFOLIO_POSTGRES_FAKE_DOCKER_MODE -eq 'FAIL_PSQL') {
         exit 42
     }
+    if ($env:PORTFOLIO_POSTGRES_FAKE_DOCKER_MODE -eq 'NO_CONTEXT_SCHEMA') {
+        Write-Output '0'
+        exit 0
+    }
     Write-Output '1'
     exit 0
 }
@@ -217,6 +288,42 @@ exit 0
             'status must check the public database.'
         Assert-True ($status.Output -match 'portfolio_governance_dev: reachable') `
             'status must check the governance database.'
+
+        $contextReadiness = Invoke-Tool @(
+            'check-context', '-EnvFile', $envFile,
+            '-TimeoutSeconds', '3') $fakeEnvironment
+        Assert-True ($contextReadiness.ExitCode -eq 0) `
+            "check-context must accept a ready Agent State schema. Output: $($contextReadiness.Output)"
+        Assert-True ($contextReadiness.Output -match `
+                'portfolio_context_dev: Agent State ready') `
+            'check-context must report only the Context runtime readiness.'
+
+        $customSchemaEnv = Join-Path $fixtureRoot 'custom-schema.env'
+        ((Get-Content -LiteralPath $envFile -Raw) +
+            [Environment]::NewLine +
+            'PORTFOLIO_CONTEXT_DATABASE_SCHEMA=custom_agent_state') |
+            Set-Content -LiteralPath $customSchemaEnv -Encoding UTF8
+        $customSchemaReadiness = Invoke-Tool @(
+            'check-context', '-EnvFile', $customSchemaEnv,
+            '-TimeoutSeconds', '3') $fakeEnvironment
+        Assert-True ($customSchemaReadiness.ExitCode -ne 0) `
+            'A custom Context schema must fail before Docker is called.'
+        Assert-True ($customSchemaReadiness.Output -match `
+                'POSTGRES_LOCAL_CONTEXT_SCHEMA_FIXED') `
+            'Custom Context schema rejection must use a stable config error.'
+
+        $missingContextSchema = Invoke-Tool @(
+            'check-context', '-EnvFile', $envFile,
+            '-TimeoutSeconds', '3') @{
+            PATH = $fixtureRoot
+            PORTFOLIO_POSTGRES_FAKE_DOCKER_LOG = $dockerLog
+            PORTFOLIO_POSTGRES_FAKE_DOCKER_MODE = 'NO_CONTEXT_SCHEMA'
+        }
+        Assert-True ($missingContextSchema.ExitCode -ne 0) `
+            'check-context must fail when Agent State migrations are missing.'
+        Assert-True ($missingContextSchema.Output -match `
+                'POSTGRES_LOCAL_CONTEXT_SCHEMA_UNAVAILABLE') `
+            'Missing Agent State schema must return a stable error code.'
 
         $verify = Invoke-Tool @('verify', '-EnvFile', $envFile,
             '-TimeoutSeconds', '3') $fakeEnvironment
@@ -379,6 +486,8 @@ exit 0
     $source = Get-Content -LiteralPath $scriptPath -Raw -Encoding UTF8
     Assert-True ($source -match "'verify-public-bundle'") `
         'Command routing must include verify-public-bundle.'
+    Assert-True ($source -match "'check-context'") `
+        'Command routing must include the read-only Agent State readiness check.'
     Assert-True ($source -match "'import-public'") `
         'Command routing must include import-public.'
     Assert-True ($source -match "'activate-public'") `

@@ -78,14 +78,11 @@ $environmentNames = @(
     'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
     'PLAYWRIGHT_EXTERNAL_SERVER',
     'PLAYWRIGHT_REAL_API',
-    'P3_REAL_API',
     'PLAYWRIGHT_BASE_URL',
     'PLAYWRIGHT_REAL_RETRIEVAL',
-    'PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED',
-    'PORTFOLIO_MODEL_OP_ROUTING_MODE',
-    'PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF',
-    'PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION',
-    'PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT',
+    'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE',
+    'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF',
+    'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION',
     'PORTFOLIO_MODEL_OP_GENERAL_MODE',
     'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
     'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION',
@@ -126,7 +123,6 @@ try {
             } else {
                 $env:PLAYWRIGHT_EXTERNAL_SERVER = '1'
                 $env:PLAYWRIGHT_REAL_API = '1'
-                $env:P3_REAL_API = '1'
                 $env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:$Port"
                 $playwrightScript = 'test:e2e'
                 $playwrightArguments = @()
@@ -147,11 +143,9 @@ try {
                     }
                     $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
                     $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
-                    $env:PORTFOLIO_SEMANTIC_CLASSIFIER_ENABLED = 'true'
-                    $env:PORTFOLIO_MODEL_OP_ROUTING_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_ROUTING_PROVIDER_REF = 'conversational-default'
-                    $env:PORTFOLIO_MODEL_OP_ROUTING_SCHEMA_VERSION = 'semantic-route-v1'
-                    $env:PORTFOLIO_MODEL_OP_ROUTING_TIMEOUT = '8s'
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = 'conversational-default'
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal-proposal-v1'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
