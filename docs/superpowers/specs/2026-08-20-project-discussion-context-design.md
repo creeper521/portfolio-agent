@@ -174,6 +174,7 @@ RecommendationContext 只负责证明“这些 result items 确实由该次推�
 ```
 
 - 原子清除 active pointer；
+- EXIT_CONTEXT 接受 active 或 expired pointer，效果均为只清除 pointer，不调用模型；
 - 返回 `CONVERSATIONAL` 安全确认；
 - 旧 Context 可留到 TTL cleanup，但不再可作为 active discussion 使用。
 
@@ -193,6 +194,12 @@ RecommendationContext 只负责证明“这些 result items 确实由该次推�
 - 当前会话已过期时不能重建，必须形成新会话。
 
 显式按钮 operation 不调用模型；自由文本统一走 ROUTE_IN_CONTEXT 的 AI route proposal。AI 无权提出 clear conversation 或删除历史消息。
+
+### 6.5 服务端上下文优先防御
+
+已认证 Conversation 存在 active 或 expired discussion pointer 时，服务端收到 `ASK + FREE_TEXT` 必须忽略前端 command kind 的路由暗示，使用当前 pointer 按 DISCUSSION interpretationMode 解释；不得按 STANDARD ASK 绕过上下文，也不返回“命令类型错误”。没有 discussion pointer 时才使用 STANDARD mode。
+
+该规则只覆盖自由文本。PRESET、RESOLVE_CLARIFICATION 和 backend-owned continuation action 按各自闭合语义执行。由 ASK 进入的 Discussion Goal settlement 同样校验 pointer generation，切换/退出先发生时旧结果不得提交。
 
 ## 7. 推荐卡与后端动作权威
 
@@ -302,6 +309,7 @@ ActiveDiscussionPointer
 
 - ENTER_RESULT/REENTER：写 Context 后切换 pointer；
 - 切换项目：新 Context 成功后替换 pointer；
+- SWITCH 创建的新 ProjectDiscussionContext 继承原 Context 的 switchCandidateProjectIds，不扩大也不缩减候选集合；
 - EXIT：清 pointer；
 - clear conversation：撤销 Session 并删除/过期化全部 Context；
 - cleanup：删除过期 Context，不得把旧 pointer 恢复为 active。
@@ -374,6 +382,8 @@ ACTIVE 返回 routeContinuation 与 exitAction；EXPIRED 返回 routeContinuatio
 ```
 
 AI 负责理解开放语言；它不直接调用 Lifecycle、不写 State，也不能输出 Context handle、resultItemId、Token、Task、DAG、Provider 或证据。
+
+现有 `CONVERSATIONAL` 根结果继续保留，不塞入 SemanticRouteProposal。STANDARD 与 DISCUSSION mode 都可返回 CONVERSATIONAL，用于开放式社交或 Agent 元问题；该结果不创建 Goal、不修改、不退出也不续期 discussion pointer。“开始新话题、切换项目、重新进入”必须返回对应 closed route，不能伪装成 CONVERSATIONAL。极小安全问候 fast path 继续保留，未覆盖的社交表达由 AI 解释。
 
 ### 12.2 STANDARD 模式收敛
 
@@ -450,6 +460,21 @@ Project Discussion 只扩展同一个 `goal-interpretation-system.txt` 的 STAND
 - STANDARD 模式无可信 Goal 时沿用公开 Goal Interpretation unavailable 终局；
 - 跨项目请求只有 AI 提出合法 SWITCH 且候选唯一时执行，否则澄清；系统不自动扩大到候选集外项目。
 
+### 12.7 模型关闭与能力投影
+
+Public Content 的 `agentAvailability` 增加 closed capability：
+
+```json
+{
+  "status": "AVAILABLE",
+  "freeTextSemanticRouting": "AVAILABLE | DISABLED"
+}
+```
+
+该字段表示配置与启动 readiness，不尝试投影实时外部网络健康。Goal operation 未启用、Provider 未配置或数据审批未满足时为 DISABLED；瞬时 Provider 调用失败仍走 Turn failure，不把 capability 永久切换为 DISABLED。
+
+DISABLED 时前端禁用自由文本 composer 并说明 AI 语义理解未启用；PRESET、Recommendation item discussionAction、EXIT_CONTEXT、REENTER_SUBJECT 等 backend-owned deterministic actions 继续可用。公开作品集浏览不受影响。后端直接收到需要 Free-text Semantic Routing 的请求时返回稳定 `SEMANTIC_ROUTING_UNAVAILABLE`，不使用被删除的自然语言 fallback。
+
 ## 13. Frontend 状态与交互
 
 Workspace 每个 session 增加内存态 `activeDiscussion`，来源只有：
@@ -470,6 +495,7 @@ UI 行为：
 - 切换本地 session 时只显示该 session 的焦点；
 - 刷新后显示恢复提示但消息列表为空；
 - EXPIRED 时展示“重新进入项目”和“开始新话题”，同时允许输入文本进入仅限 REENTER/START_NEW_TOPIC/CLARIFICATION 的 AI route；
+- freeTextSemanticRouting=DISABLED 时禁用自由文本，但不禁用 backend-owned PRESET/discussion/exit/reenter actions；
 - pending、failure、retry 与 discussion 继续按 session 隔离。
 
 前端不得按文案、项目 label、卡片位置或历史文本重建 Context。
@@ -533,12 +559,17 @@ UI 行为：
 - ROUTE_IN_CONTEXT 不允许主体扩张；
 - 通用概念形成 APPLY_GENERAL_CONCEPT_TO_PORTFOLIO；
 - STANDARD free text 的推荐、数量、约束、比较由 AI closed proposal 表达，后端范围校验；
+- STANDARD/DISCUSSION 的 CONVERSATIONAL 不修改 discussion pointer；
+- active/expired pointer 下的 ASK+FREE_TEXT 由服务端强制走 DISCUSSION mode；
+- 模型关闭时 Free-text 请求稳定返回 SEMANTIC_ROUTING_UNAVAILABLE，deterministic actions 不受影响；
 - 生产源码不再出现被删除的自然语言 route regex/phrase list；
 - 承接式 ASK 的 CHOICE 只包含最近 Recommendation selectedResults；
 - 单一候选且 AI route 唯一合法时直接进入，不生成单项 CHOICE；
 - 无效/过期 referenceContextHandle 静默退化普通 ASK，不泄露 Context 状态；
 - Choice 与直接点击汇入同一 enter authority；
 - switch/exit/clear 原子更新 active pointer；
+- EXIT_CONTEXT 对 active/expired pointer 都只清 pointer；
+- SWITCH 后的新 Context 继承同一 switch candidate set；
 - wrong Token/Conversation/release/resultItem fail-closed；
 - switch/exit 与旧 ROUTE_IN_CONTEXT 竞争时，旧结果不能越过 pointer generation 提交；
 - 同 handle 的两个并发只读讨论请求均可结算且不修改 pointer；
@@ -560,6 +591,7 @@ UI 行为：
 - expired 显示 reenter/new-topic 动作，并允许受限 AI route；
 - handle/resultItemId 不进入可见文本、URL 或 storage；
 - pending/retry/cancel 与 discussion session 归属一致。
+- freeTextSemanticRouting=DISABLED 时仅禁用自由文本，不隐藏确定性 actions。
 
 ### 17.3 Browser / Provider
 
@@ -577,6 +609,8 @@ UI 行为：
 10. PostgreSQL 重启后在 TTL 内恢复 active focus；
 11. 真实 Provider 输出只能改变 allowed route、候选引用与 locked scope 内 Goal 参数；
 12. invalid JSON、deadline、cancel 与 late result 保持现有终局语义。
+13. 模型关闭环境中自由文本禁用，PRESET/卡片讨论/退出/重进继续可执行；
+14. 直接 API 误发 ASK+FREE_TEXT 时仍遵守 active/expired discussion pointer。
 
 真实 Provider 验收只记录 operation、公开 GoalKind、locked subject 是否保持、耗时桶和 pass/fail，不记录问题、回答或 Provider 原始响应。
 
