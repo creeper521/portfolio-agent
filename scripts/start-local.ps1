@@ -202,7 +202,7 @@ function Assert-PostgresReady([string]$ResolvedEnvFile) {
             $recovery
         )
     }
-    Write-Output 'LOCAL_POSTGRES_READY'
+    Write-Host 'LOCAL_POSTGRES_READY'
 }
 
 function Read-PostgresRuntimeSettings([string]$ResolvedEnvFile) {
