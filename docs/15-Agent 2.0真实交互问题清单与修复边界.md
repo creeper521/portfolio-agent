@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-20 本地、PostgreSQL 与 packaged-JAR Exit Gate 已通过；仅依赖真实 Provider LIVE 证据的 A2-15 继续待验收
+> **当前状态：** 2026-08-20 本地、PostgreSQL 与 packaged-JAR Exit Gate 已通过；A2-15 待真实 Provider LIVE 验收，A2-19 已复现并进入设计审核
 
 ## 1. 文档目的
 
@@ -103,6 +103,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-16 | P1 | 简单问候“你好”被错误升级为必填澄清 | 已关闭 | Goal Interpretation |
 | A2-17 | P0 | 澄清可以连续生成新的 Critical Clarification，缺少级联终止规则 | 已关闭（最多两层 typed clarification） | Goal/Lifecycle Policy |
 | A2-18 | P0 | 已提交、已一次性消费的历史澄清卡仍可编辑和重复提交 | 已关闭 | Frontend Clarification State |
+| A2-19 | P1 | 承接推荐结果的自由文本无法进入 typed 项目讨论 | 已复现、源码确认；设计待审核 | Semantic Routing / Continuation / Frontend |
 
 ## 4. 问题簇一：推荐与澄清语义断裂
 
@@ -255,6 +256,33 @@ CLARIFICATION
 服务端 ClarificationStore 是一次消费权威；重复提交旧 clarificationId 只能得到 already-consumed/unavailable 终局。前端却继续把它展示为有效操作，制造了必然失败的入口。
 
 后续 UI 必须只有当前会话中最新、未提交、仍有效的一张澄清卡可操作；历史卡应显示安全的已提交/已失效状态，不能再次发出 RESOLVE。
+
+### 4.8 A2-19：承接推荐结果的自由文本无法进入 typed 项目讨论
+
+#### 用户现象
+
+Recommendation Answer 已展示多个公开项目后，用户用承接式省略表达请求选择其中一个继续讨论，界面返回 `GOAL_INTERPRETATION_UNAVAILABLE`，而不是限定项目选择或进入讨论。
+
+#### 运行证据
+
+- 同一运行实例、同一真实 Provider 的明确通用知识请求在 1—5 秒内返回 `ANSWER`，证明模型连接与 General Capability 可用；
+- 承接式输入连续复现为 HTTP 200 `CAPABILITY_UNAVAILABLE`，稳定码为 `GOAL_INTERPRETATION_UNAVAILABLE`；
+- 脱敏诊断只提取闭合枚举：Provider 返回 `CLARIFICATION / SUBJECT / GENERAL_EXPLANATION`；
+- 本地 Codec 随后以 `raw-anchor goal cannot be persisted for clarification` 拒绝该 Proposal；未记录问题、Prompt 或 Provider 原始输出。
+
+#### 源码根因
+
+- RecommendationContext、Goal contextHandle 和 Item resultItemId 已存在，但推荐卡没有生产消费入口；
+- 普通 ASK 没有 typed Recommendation reference，只把文本 ConversationWindow 交给模型；
+- General Goal 依赖当前输入 anchor，不能作为 BlockedGoalTemplate 持久化，现有严格拒绝符合隐私规则；
+- 旧 CONTINUE 对 Recommendation 固定生成 `PORTFOLIO_REFINE_RECOMMENDATION`，且不解释当前 follow-up 文本；
+- `MinimalGoalFallback` 仍用有限关键词、数量正则、约束和指代短语理解开放语言，不能覆盖项目讨论路由。
+
+#### 修复边界
+
+按 [Typed Project Discussion Context 设计](superpowers/specs/2026-08-20-project-discussion-context-design.md) 审核并实施：AI 只提出 closed semantic route、候选引用和 locked scope 内 Goal 参数；后端验证候选集合与状态转换。不得放宽 raw-anchor 持久化规则、解析 Assistant 文本、在前端重建业务命令或新增退出/切换短语表。
+
+只有 STANDARD Free-text Semantic Routing、ProjectDiscussionContext、PostgreSQL V4、前后端合同、packaged Browser 和真实 Provider 原始路径均通过后，才可删除 A2-19。
 
 ## 5. 问题簇二：错误表达与来源上下文
 
