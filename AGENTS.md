@@ -24,20 +24,20 @@ Do not add Spring AI runtime calls, SSE, authentication, dynamic external public
 Read these before changing current behavior:
 
 1. The user's latest explicit decision and this file.
-2. The approved active design `docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md` and active plan `docs/superpowers/plans/2026-08-19-agent-stabilization-and-repository-governance.md`.
+2. The approved active designs and plans indexed by `docs/00-文档状态索引.md`.
 3. Production code, configuration, automated tests, and fresh reproducible evidence.
 4. Maintained current documents, whose complete authoritative set is owned by the map in `docs/00-文档状态索引.md`; do not copy that list here.
 5. Historical designs, plans, reports, handoffs, docs/01-03, docs/07, and docs/11-14. They provide context only and do not prove current behavior.
 
 ## Workflow
 
-### Agent architecture guardian bootstrap
+### Default Agent architecture guardian bootstrap
 
 - At the start of every task, classify whether it affects Agent behavior, contracts, state, API, or production authority.
-- `NOT_APPLICABLE`, `LEVEL_1`, and `LEVEL_2` work continues without repeated approval.
+- `NOT_APPLICABLE` tasks continue immediately without loading the full architecture context; `LEVEL_1` and `LEVEL_2` work continues without repeated approval.
 - The approved `LEVEL_3` stabilization and convergence plan continues through its Replacement Slices.
 - Pause only before an unauthorized production-authority change, privacy violation, destructive action, or external operation requiring new authority.
-- If a Guardian rule conflicts with newer code, passing tests, or an approved design, treat the conflicting rule as advisory, preserve privacy boundaries, and record one `GUARDIAN_DRIFT` item in the existing architecture status ledger.
+- If a Guardian rule conflicts with newer code, passing tests, or an approved design, treat the conflicting rule as advisory, preserve privacy boundaries, and record one `GUARDIAN_DRIFT` item in the existing `deferredItems` architecture status ledger.
 
 ### Engineering discipline
 

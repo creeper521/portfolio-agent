@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-20 本地、PostgreSQL 与 packaged-JAR Exit Gate 已通过；A2-15 待真实 Provider LIVE 验收，A2-19 已复现并进入设计审核
+> **当前状态：** 2026-08-20 本地、PostgreSQL 与 packaged-JAR Exit Gate 已通过；A2-15 待其原始恢复路径 LIVE 验收，A2-19 已进入批准实施，A2-20/A2-21 的真实 Provider 自动行为门已通过且待独立浏览器语义覆盖验收
 
 ## 1. 文档目的
 
@@ -103,7 +103,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-16 | P1 | 简单问候“你好”被错误升级为必填澄清 | 已关闭 | Goal Interpretation |
 | A2-17 | P0 | 澄清可以连续生成新的 Critical Clarification，缺少级联终止规则 | 已关闭（最多两层 typed clarification） | Goal/Lifecycle Policy |
 | A2-18 | P0 | 已提交、已一次性消费的历史澄清卡仍可编辑和重复提交 | 已关闭 | Frontend Clarification State |
-| A2-19 | P1 | 承接推荐结果的自由文本无法进入 typed 项目讨论 | 已复现、源码确认；设计待审核 | Semantic Routing / Continuation / Frontend |
+| A2-19 | P1 | 承接推荐结果的自由文本无法进入 typed 项目讨论 | 已复现、源码确认；批准实施中 | Semantic Routing / Continuation / Frontend |
+| A2-20 | P1 | 通用知识生成文案在中文站点发生语言漂移 | 修复后真实 Provider 自动门通过；待浏览器语义验收 | Goal Interpretation / General Knowledge Prompt |
+| A2-21 | P1 | EXPLANATION depth 未形成可执行的结构与篇幅差异 | 修复后真实 Provider 自动门通过；待浏览器语义验收 | Goal Interpretation / General Knowledge / Presentation |
 
 ## 4. 问题簇一：推荐与澄清语义断裂
 
@@ -283,6 +285,46 @@ Recommendation Answer 已展示多个公开项目后，用户用承接式省略�
 按 [Typed Project Discussion Context 设计](superpowers/specs/2026-08-20-project-discussion-context-design.md) 审核并实施：AI 只提出 closed semantic route、候选引用和 locked scope 内 Goal 参数；后端验证候选集合与状态转换。不得放宽 raw-anchor 持久化规则、解析 Assistant 文本、在前端重建业务命令或新增退出/切换短语表。
 
 只有 STANDARD Free-text Semantic Routing、ProjectDiscussionContext、PostgreSQL V4、前后端合同、packaged Browser 和真实 Provider 原始路径均通过后，才可删除 A2-19。
+
+### 4.9 A2-20：通用知识生成文案发生语言漂移
+
+#### 用户现象与证据
+
+真实页面反馈指出通用概念回答夹杂英文；原截图识别未取得可用结果，因此此前只保留为待验证假设。2026-08-20 在明确授权下，对修改前 HEAD 使用固定合成矩阵运行真实 Provider 基线：三个 EXPLANATION 档位各三次均未通过简体中文判定；CONVERSATIONAL 三次均通过。验收只记录语言、结构、句数桶、公开终局和耗时聚合，没有记录问题、回答、Prompt 或原始模型输出。
+
+#### 源码根因
+
+修改前 Goal Interpretation 与 General Knowledge 的 system prompt 只描述 JSON shape，没有约束 CONVERSATIONAL message、clarification prompt、statement text 和 caveats 的生成语言。确定性展示标题虽为中文，但正文完全由 Provider 自由生成。
+
+#### 修复边界
+
+- 生成文案固定使用简体中文，允许 JWT、PostgreSQL 等技术标识符；
+- topic、subject、dimension、anchor、ID 和闭合枚举仍按请求精确回显，不翻译；
+- 不新增模型调用、重试、日志正文或运行时 prompt 覆盖；
+- 修复后真实 Provider 使用相同固定矩阵，每个 EXPLANATION 档位至少三次，语言门必须全部通过。
+
+2026-08-20 修复后自动行为门使用相同 Provider 与固定矩阵通过：CONCISE、STANDARD、DETAILED 各三次，CONVERSATIONAL 三次，COMPARISON 一次；语言、结构、句数桶与公开终局全部通过。正文未输出或持久化。独立浏览器语义覆盖尚未确认，因此本项暂不删除。
+
+### 4.10 A2-21：depth 未形成可执行的结构与篇幅差异
+
+#### 运行证据
+
+修改前真实 Provider 基线中，CONCISE、STANDARD、DETAILED 各三次均未落入目标结构与句数桶；部分 STANDARD/DETAILED 请求还未形成完整 ANSWER。聚合证据证明 `depth` 字段虽然存在于 typed request，但没有稳定控制最终可见回答。
+
+#### 源码根因
+
+- Goal prompt 只有固定 `STANDARD` 示例，没有从“简要/默认/详细”语义选择 depth 的规则；
+- General prompt 只要求至少一条 DEFINITION 和一条 MECHANISM，没有句数与语义覆盖范围；
+- Validator 不限制同角色重复和 DEFINITION/MECHANISM 顺序，展示层可能产生重复标题。
+
+#### 修复边界
+
+- Goal Interpretation 负责从开放表达提出 closed depth；后端继续验证闭合枚举；
+- General prompt 把 CONCISE/STANDARD/DETAILED 冻结为 2、4—6、8—12 个主句；
+- EXPLANATION 草稿只接受按顺序出现的一条 DEFINITION 和一条 MECHANISM；
+- 修复后相同真实 Provider 矩阵必须同时通过公开终局、固定结构、目标句数桶与简体中文门。
+
+2026-08-20 修复后矩阵中三个 EXPLANATION 档位均为三次 `ANSWER:COMPLETE`，观察到的输出桶分别稳定为 CONCISE、STANDARD、DETAILED。独立浏览器对典型用途、边界、权衡与误区的语义覆盖仍待确认，因此本项暂不删除。
 
 ## 5. 问题簇二：错误表达与来源上下文
 

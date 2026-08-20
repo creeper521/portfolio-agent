@@ -1,8 +1,8 @@
 # Typed Project Discussion Context 设计
-<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
+<!-- DOCUMENT_STATUS: APPROVED -->
 
 > **日期：** 2026-08-20
-> **状态：** 待用户审核；当前不是生产实施依据
+> **状态：** 已由用户批准，作为 Free-text Semantic Routing 与 Project Discussion Context 的 LEVEL_3 实施依据
 > **适用仓库：** `D:\code\agent`
 > **范围：** Free-text Semantic Routing 收敛；推荐结果进入项目讨论、讨论内自由文本、项目切换、刷新恢复、显式退出和过期重建
 

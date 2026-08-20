@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "portfolio-agent",
   "updatedAt": "2026-08-20",
-  "overallStatus": "COMPLETE",
+  "overallStatus": "IN_PROGRESS",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
     "changePriority": "CURRENT_REQUEST_FIRST_REPAY_INDEPENDENT_DEFERRED_ITEMS",
