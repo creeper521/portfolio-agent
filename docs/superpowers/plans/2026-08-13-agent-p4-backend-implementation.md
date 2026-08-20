@@ -1,4 +1,5 @@
 # Agent P4.1 Backend Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **For agentic workers:** Execute this plan task-by-task with explicit RED/GREEN checkpoints. The project owner has requested that Superpowers not be used for implementation; do not invoke Superpowers skills while executing this plan.
 

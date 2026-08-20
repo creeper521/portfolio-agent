@@ -1,4 +1,5 @@
 # Portfolio Agent C2a 本地公开检索设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - 状态：已实现并验证（2026-07-22）
 - 日期：2026-07-22

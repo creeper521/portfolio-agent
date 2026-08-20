@@ -1,4 +1,5 @@
 # Agent 响应式作品窗口设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态：** 待用户书面评审  
 > **日期：** 2026-07-23  

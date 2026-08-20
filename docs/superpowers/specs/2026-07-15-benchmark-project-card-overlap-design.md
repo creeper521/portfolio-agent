@@ -1,4 +1,5 @@
 # Benchmark Project Card Overlap Design
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态（2026-07-20）：** 已完成，属于历史设计探索原型修复；当前生产前端由后续 Vue 重构设计接管。
 

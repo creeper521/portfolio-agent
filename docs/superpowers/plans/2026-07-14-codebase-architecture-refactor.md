@@ -1,4 +1,5 @@
 # 实习作品集 Agent 代码架构重构实施计划
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已被 `2026-07-16-modular-monolith-package-refactor.md` 取代，不再作为可执行计划。下列未勾选项保留原始计划历史，不属于当前待办。
 

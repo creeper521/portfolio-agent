@@ -1,4 +1,5 @@
 # Agent 架构收敛基线
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - **记录时间：** 2026-08-18（Asia/Shanghai）
 - **用途：** Slice 0 复杂度、合同、数据身份与验证基线；只用于前后对比，不设置机械删行 KPI

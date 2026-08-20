@@ -1,4 +1,5 @@
 # Agent 正式页响应式作品窗口迁移设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态：** 已实施并通过单元测试、构建、Playwright 与多视口视觉验收  
 > **日期：** 2026-07-23  

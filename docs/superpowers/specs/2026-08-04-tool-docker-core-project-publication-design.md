@@ -1,4 +1,5 @@
 # Tool 服务 Docker 化运维改造核心项目公开设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-08-04
 **状态：** 已确认设计，待实施计划

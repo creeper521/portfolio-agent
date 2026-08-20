@@ -1,4 +1,5 @@
 # Agent P3 后端实施计划：受限 Portfolio 执行、证据晋升与会话业务上下文
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-12
 > 状态：待在独立开发上下文执行

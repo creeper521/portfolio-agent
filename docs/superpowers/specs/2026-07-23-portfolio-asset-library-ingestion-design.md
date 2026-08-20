@@ -1,4 +1,5 @@
 # Portfolio Asset Library Ingestion Design
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 ## 1. Goal
 

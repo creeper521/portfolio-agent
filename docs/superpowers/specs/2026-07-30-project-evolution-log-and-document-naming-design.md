@@ -1,4 +1,5 @@
 # 项目演进日志与项目文档中文命名设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 日期：2026-07-30  
 状态：已实施

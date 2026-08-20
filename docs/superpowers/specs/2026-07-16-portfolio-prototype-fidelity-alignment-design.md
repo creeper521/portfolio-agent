@@ -1,4 +1,5 @@
 # 作品集前端原型忠实度收口设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-07-16
 **状态：** 已审批并实施；视觉基线继续有效，reduced-motion、焦点和抽屉无障碍仍有待修复项

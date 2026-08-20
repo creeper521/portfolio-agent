@@ -1,4 +1,5 @@
 # P4 前端 Agent 开发提示词
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > 仅在用户书面批准 P4 Spec 后使用。
 

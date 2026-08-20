@@ -1,4 +1,5 @@
 # 前端 AI 开发提示词：Agent 对话内结构化作品推荐
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 你正在修改项目 `D:\code\agent` 的 Vue 3 + TypeScript 前端。
 

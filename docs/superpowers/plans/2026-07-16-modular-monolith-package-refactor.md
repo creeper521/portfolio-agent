@@ -1,4 +1,5 @@
 # Modular Monolith Package Refactor Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已完成。当前 `common / portfolio / answer` 包结构和架构门禁来自本计划；检查项同步为已执行，保留原命令作为历史证据。
 

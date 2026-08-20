@@ -1,43 +1,58 @@
 # Security Policy
+<!-- DOCUMENT_STATUS: CURRENT_AUTHORITY -->
 
-> **Status (2026-07-24):** A/B、默认关闭的 C1、C2 本地公开检索/固定只读工具，以及独立的对话式 Agent v2 后端已经实现。Tool Registry、Hook、Orchestrator、多 Agent、DurableTask 和持久会话仍未准入。
+## 公开数据边界
 
-除 `POST /api/v1/client-diagnostics` 外，公开端点保持只读。该唯一例外只接受封闭、限流、
-不持久化的诊断事件契约，默认关闭；它永不接受访客内容、任意元数据、原始堆栈、URL、
-Headers、请求体、响应体、原始来源地址或凭据。服务端只在内存中对来源地址做 HMAC
-匿名化限流，既不发布也不持久化原始地址。
+公网运行时只能读取已审核、已发布的公开 Bundle 或其受控公开数据库投影。私有 Obsidian 知识库、原始日报、候选审核包、未批准 Evidence、内部截图、凭据和隐私报告不得进入运行制品。
 
-Project and Case answer contexts are explicit and mutually exclusive. Case retrieval
-chunks, tool calls, and context envelopes carry stable `caseSlugs`; they never widen
-implicitly into a related Project or accept mixed Project/Case claims.
+只有标记为 `APPROVED` 的 Evidence 可以公开投影。Project 与 Case 主体必须显式且互斥；未知主体失败关闭，不能隐式扩大为相关 Project，也不能混合不相容的 Claim。
 
-## Public data boundary
+## Agent State
 
-The deployed application reads only the reviewed public snapshot packaged with the backend. The private knowledge base, raw daily reports, candidate snapshots, internal screenshots, credentials, and privacy reports must never be included in runtime artifacts.
+标准本地环境和生产环境使用独立 PostgreSQL Agent State。它只保存完成恢复所需的最小短期状态：
 
-## Reporting a problem
+- request claim、fingerprint 与最终公开 `PublicAgentTurn` replay；
+- Conversation 与 ResumeToken 的单向绑定；
+- typed Continuation Context；
+- typed Clarification Challenge 与消费状态。
 
-Do not open a public issue containing private internship information. Report suspected data exposure directly to the repository owner through a private channel.
+不得保存访客原始问题、完整 `ConversationWindow`、Prompt、模型原始响应、私有 Evidence、原始来源地址或浏览器聊天记录。Clarification 的自由文本只在当前请求内归一化；持久化层只接收闭合、强类型结果。
 
-## Required checks
+Challenge 使用 5 分钟 absolute TTL；Conversation、Continuation Context、已完成 replay 和终局记录统一使用 30 分钟 absolute TTL。读取、刷新、重放或 Token 轮换都不得延长原始过期时间。旧加密密钥的保留窗口必须覆盖 30 分钟 TTL 与清理延迟。
 
-- Evidence must be marked `APPROVED` before it can be returned.
-- Raw evidence is not publicly accessible in V0.
-- Visitor questions must not be stored or logged by the server.
-- v1 外部模型只能接收公开 `AnswerPlan` 白名单载荷，仍不得接收访客原话或历史。
-- v2 只有在 `PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED=true`、公开数据审批、`PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED=true`、Registry 兼容且所选 Provider 密钥存在时，才允许把当前问题和经过预算裁剪的临时历史发送给该 Provider。`turnId`、请求元数据、Cookie、Header 和任何私有资料始终不得发送。
-- Model expression stays disabled unless the selected project-scoped environment key (`PORTFOLIO_AGENT_DEEPSEEK_API_KEY` or `PORTFOLIO_AGENT_GLM_API_KEY`) exists and `PORTFOLIO_MODEL_DATA_POLICY_APPROVED=true`. Provider retention/privacy approval is an operator decision, not inferred by the application.
-- Each process uses at most one selected Provider, one non-streaming attempt, an explicit timeout, no automatic retry, and no cross-Provider resend. Any failure or invalid draft discards the whole draft and uses the same public plan for deterministic fallback.
-- v2 最多接受当前页面内 20 轮用户—Agent 历史；服务端无会话状态。超出输入预算时，仅临时摘要较早轮次并保留最近 6 轮原文，摘要和正文都不得记录或持久化。
-- v2 每轮作品集事实都从当前已审核公开快照重新组装。公网运行时永不读取 Obsidian、候选审核包、原始日报或未发布 Evidence；RAG Chunk 文本必须来自通过 Release Loader 校验的公开 Bundle。
-- v2 工具固定为只读白名单，最多 2 轮、4 次调用；没有 Web Search、动态工具发现或跨 Provider 重发。
-- 回滚 v2 只需设置 `PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED=false` 并重启；v1 能力保持不变。
-- The immutable Model Provider Registry snapshot is `c3-model-registry-v1` and contains only the two reviewed built-ins. It holds no credentials, offers no mutable registration/removal/replacement API, performs no dynamic classpath/file/network discovery, and must not log raw Provider requests or responses. Existing `PORTFOLIO_AGENT_DEEPSEEK_API_KEY` and `PORTFOLIO_AGENT_GLM_API_KEY` ownership remains in `ModelExpressionProperties`.
-- Retrieval uses only the pinned local BGE INT8 ONNX artifact after exact descriptor/file hash verification. Visitor queries, normalized terms, query vectors, scores, candidates, and retrieval context must never leave the process or enter logs/storage.
-- C2 Approval binds exact canonical `portfolio.json`, `presentation.json`, and `rag-documents.jsonl` bytes. Candidates cannot supply indexes; the publish tool must reproduce approved RAG bytes before deriving indexes locally.
-- Visitor questions, answers, and sessions exist only in current-page memory and disappear on refresh or close. They must not enter URLs, browser history, localStorage, sessionStorage, IndexedDB, or service-side storage.
-- Homepage-to-Agent transfer uses a random, short-lived, in-memory, one-time `handoffId` and never puts the question or answer in the URL.
-- Public content and packaged artifacts must pass `scripts/privacy-check.ps1`.
-- Production source/config must also pass `scripts/privacy-check.ps1 -Path backend/src/main` before packaging.
-- Release candidates should use `scripts/verify-release.ps1`, not bare `mvn package`, when claiming full verification.
-- API errors must not include stack traces, local paths, internal hosts, or credentials.
+Token 与 payload 使用不同的 32 字节密钥加密，密钥不得相同；生产密钥不得进入仓库、日志、命令参数或发布包。解密失败、绑定不符、版本漂移或过期记录均失败关闭。
+
+## 浏览器状态
+
+浏览器只允许在当前标签页的 `sessionStorage` 保存一个短期 ResumeToken。关闭标签页后自然清除；服务端返回凭证失效时必须立即删除。
+
+以下内容不得进入 `sessionStorage`、`localStorage`、IndexedDB、URL 或浏览器历史：问题、回答、ConversationWindow、ContextHandle、Clarification 内容、requestId 历史、PublicAgentTurn、Evidence、Prompt 与模型输出。ResumeToken 不得进入 URL、请求正文、日志或诊断事件，只能通过 `Authorization: Bearer` 发送。
+
+## 模型与检索
+
+模型能力默认关闭。只有在数据策略已审批、Provider 配置完整且操作显式启用时，才可发送本轮允许的最小载荷。模型不得接收凭据、Cookie、Header、内部标识、私有资料或持久化会话；没有自动跨 Provider 重发。
+
+公开检索使用审核后的 Bundle 或其公开数据库投影。本地向量、查询词项、候选、分数与检索上下文不得进入日志或外部 Provider。模型表达不能扩大项目状态、个人贡献或生产效果声明，校验失败时丢弃草稿并安全降级。
+
+## 准入与诊断
+
+公开 Turn 受来源速率、来源并发、单实例 Active Turn 和单 Turn 任务并行上限保护。来源地址只在进程内做 HMAC 匿名化，不记录原始地址。公开限流错误使用统一 `RATE_LIMITED`；内部诊断可区分限制来源，但不得泄露地址或凭据。
+
+前端诊断入口默认关闭，只接受封闭、限流、不持久化的结构化事件。它不得接收访客内容、任意元数据、原始堆栈、URL、Header、请求体或响应体。
+
+API 错误不得包含堆栈、路径、内部主机、数据库信息或 Secret。成功与错误响应均应使用 `Cache-Control: no-store`。
+
+## 报告与发布检查
+
+不要在公开 Issue 中提交私有实习信息。疑似数据泄露应通过私密渠道报告给仓库所有者。
+
+发布候选至少运行：
+
+- `scripts/privacy-check.ps1`；
+- `scripts/privacy-check.ps1 -Path backend/src/main`；
+- `scripts/documentation-check.ps1`；
+- `scripts/code-quality-check.ps1`；
+- `scripts/architecture-check.ps1`；
+- `scripts/verify-release.ps1`。
+
+真实 Provider、生产数据库和外部环境验收必须显式授权，并单独保存新鲜证据。

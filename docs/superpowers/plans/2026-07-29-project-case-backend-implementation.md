@@ -1,4 +1,5 @@
 # Project–Case Backend Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **For Codex:** Execute this plan inline with the `executing-plans` and `test-driven-development` skills. Do not stage or commit changes.
 

@@ -1,4 +1,5 @@
 # Portfolio Agent C2a Local Public Retrieval Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 ## Implementation status (2026-07-22)
 

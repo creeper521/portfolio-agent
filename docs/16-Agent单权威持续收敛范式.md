@@ -1,4 +1,5 @@
 # Agent 单权威持续收敛范式
+<!-- DOCUMENT_STATUS: CURRENT_AUTHORITY -->
 
 > **适用范围：** 仅适用于当前 Portfolio Agent 仓库。
 > **目标：** 防止 Command、Goal、Plan、Execution、Projection、State、API 与 Frontend 再次形成长期多权威和新旧双栈。

@@ -1,4 +1,5 @@
 # Retrieval Baseline Comparison
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > **状态：** Wave 0 本地离线基线
 >

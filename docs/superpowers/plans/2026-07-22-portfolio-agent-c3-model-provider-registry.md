@@ -1,4 +1,5 @@
 # Portfolio Agent C3 Model Provider Registry Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **Implementation status (2026-07-22):** Implemented and verified as `c3-model-registry-v1`. The unchecked checklist below is retained as the original implementation record; it is not current outstanding work. Other C3 capabilities remain unadmitted and unimplemented.
 

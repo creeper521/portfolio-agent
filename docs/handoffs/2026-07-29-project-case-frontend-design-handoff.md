@@ -1,4 +1,5 @@
 # Project—Case 前端设计 Handoff
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 **日期：** 2026-07-29
 

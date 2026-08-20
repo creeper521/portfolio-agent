@@ -1,4 +1,5 @@
 # 周末登录奖励 ABTest 作品集项目实施计划
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

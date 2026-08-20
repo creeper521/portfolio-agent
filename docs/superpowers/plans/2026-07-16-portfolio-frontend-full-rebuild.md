@@ -1,4 +1,5 @@
 # 作品集前端全量重构 Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已执行并进入后续真实 API 联调。六路由、四层首页和 Agent 工作台已落地；勾选表示计划步骤已执行，不表示当前已关闭 Verified 语义、query 筛选、隐私和无障碍缺口。
 

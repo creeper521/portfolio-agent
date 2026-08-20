@@ -1,4 +1,5 @@
 # Agent 后端确定性路由闭环设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **日期：** 2026-08-17
 > **状态：** 已批准设计，待实施计划
@@ -236,3 +237,20 @@
 5. 增加推荐数量完整性与部分完成；
 6. 统一正式预设公开投影；
 7. 完成单元、集成和 packaged-JAR 验收。
+
+## 15. 实施验收记录（2026-08-17）
+
+本次验收针对当前工作树构建产物执行；未创建包含本次变更的新提交，因此下列 commit 仅表示工作树基线，不表示变更已经提交。
+
+- 工作树基线 commit：`9980068dec8fa33b06ce59fa27b0de1427b54603`；
+- JAR SHA-256：`9f8212fa005f721ecf8693fa48987d164aee1196095ec4a9622b44b3ad23798c`；
+- JAR 构建时间（UTC）：`2026-08-17T06:35:11.3215799Z`；
+- 运行内容版本：`2026-08-05.1`；
+- 后端全量测试：1256 项，0 failure，0 error，21 项因本机 Docker/Testcontainers 不可用按环境条件跳过；
+- 前端全量测试：65 个文件、723 项通过；`vue-tsc -b` 与 Vite 生产构建通过；
+- 随包运行器自测：通过；
+- 确定性 packaged-JAR 冒烟：通过，运行时 PID/端口/contentVersion 与目标进程一致；噪声输入为 `NEEDS_CLARIFICATION`，三项目推荐为 `ANSWERED`，`taskCount=1`、`requestedSize=3`、`actualSize=3`、`reasonCodeCount=0`；
+- DeepSeek V4 Flash 真实外部 Provider canary：针对同一 JAR 哈希通过；
+- 隐私门禁：结构化 stdout 检查通过，验收输出未记录问题正文、回答正文、Prompt、ResumeToken、密钥或模型原始响应。
+
+结论为：本设计范围内的后端确定性闭环、随包验收与真实 DeepSeek 可调用性已经完成本地验证，尚未生产部署。该证据不启用 `MODEL_LED`，也不外推为 P3-P8、完整 L4 Provider Eval、Docker/PostgreSQL 或真实浏览器 real-api lane 已完成。

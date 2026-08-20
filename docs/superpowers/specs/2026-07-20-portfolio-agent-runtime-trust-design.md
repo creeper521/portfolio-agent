@@ -1,4 +1,5 @@
 # Portfolio Agent 运行时可信度设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - 状态：已实施并验证
 - 日期：2026-07-20

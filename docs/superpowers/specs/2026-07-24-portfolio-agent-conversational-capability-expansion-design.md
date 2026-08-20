@@ -1,4 +1,5 @@
 # Portfolio Agent 对话能力扩展设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-07-24
 > 状态：已确认，待实施计划

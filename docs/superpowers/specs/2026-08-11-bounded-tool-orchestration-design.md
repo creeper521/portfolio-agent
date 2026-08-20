@@ -1,4 +1,5 @@
 # Agent P3：受限 Portfolio 执行、证据晋升与会话业务上下文设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-12
 > 状态：设计决策已收敛，待最终审阅；尚未进入实施

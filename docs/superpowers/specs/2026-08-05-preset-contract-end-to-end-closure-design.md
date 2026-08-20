@@ -1,4 +1,5 @@
 # Preset Contract 端到端闭环纠偏设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-08-05  
 **状态：** 已完成方案讨论，待书面审阅  
@@ -634,4 +635,3 @@ Contract 验证必须在合并后的 HEAD 上重新执行。分支上已通过�
 10. 旧基线生成物、缺字段、Active 集合漂移和 set hash 漂移均能使发布失败。
 11. 兼容资源与 bundle 的 SQL Contract 身份一致。
 12. 所有既有隐私、安全、stale retry、canonical/alias 和引用验证测试继续通过。
-

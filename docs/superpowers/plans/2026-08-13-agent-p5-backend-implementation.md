@@ -1,4 +1,5 @@
 # Agent P5 Backend Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **For backend agent:** 按本计划逐任务执行，严格 RED → GREEN → REFACTOR。项目所有者明确要求不使用 Superpowers；执行时不要调用 Superpowers 技能。未经用户明确授权，不要 stage、commit 或 push。
 

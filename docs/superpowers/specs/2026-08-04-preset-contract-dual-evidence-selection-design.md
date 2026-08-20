@@ -1,4 +1,5 @@
 # Preset Contract 双取证策略设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-08-04
 **状态：** 已完成方案讨论，待书面审阅

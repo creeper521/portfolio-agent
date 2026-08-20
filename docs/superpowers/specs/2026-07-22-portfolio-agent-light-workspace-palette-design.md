@@ -1,4 +1,5 @@
 # Portfolio Agent 浅色工作台配色收口设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态：** 已实施并通过前端测试、构建、Playwright 与多视口视觉验收
 > **日期：** 2026-07-22

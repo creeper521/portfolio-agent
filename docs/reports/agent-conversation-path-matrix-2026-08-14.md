@@ -1,4 +1,5 @@
 # Agent 对话路径全量盘点与实测报告（2026-08-14）
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 ## 1. 结论
 

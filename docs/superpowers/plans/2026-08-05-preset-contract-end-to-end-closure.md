@@ -1,4 +1,5 @@
 # Preset Contract 端到端闭环纠偏实施计划
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

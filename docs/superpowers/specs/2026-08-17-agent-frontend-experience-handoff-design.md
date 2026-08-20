@@ -1,4 +1,5 @@
 # Agent 前端体验闭环交接设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **日期：** 2026-08-17
 > **状态：** 已批准设计，交由前端 Agent 实施

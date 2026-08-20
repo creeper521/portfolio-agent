@@ -1,4 +1,5 @@
 # Portfolio Agent 内容治理与学习闭环设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - 状态：B 第一版已实现并通过 release verification；C 扩展仍未实现
 - 日期：2026-07-21

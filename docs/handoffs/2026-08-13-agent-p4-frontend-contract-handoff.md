@@ -1,4 +1,5 @@
 # Agent P4 前端契约与交互交接
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > 日期：2026-08-13
 > 状态：待前端 Agent 实施

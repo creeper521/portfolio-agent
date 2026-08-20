@@ -1,4 +1,5 @@
 # Agent 动态引导、会话标题与安全本地启动设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 日期：2026-07-30
 状态：已与用户逐段确认，待书面复核

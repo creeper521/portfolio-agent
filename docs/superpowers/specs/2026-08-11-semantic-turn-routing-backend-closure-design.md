@@ -1,4 +1,5 @@
 # P2 Semantic Turn Routing Backend Closure Design
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > Date: 2026-08-11  
 > Status: implemented and backend-gated  

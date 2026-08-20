@@ -1,4 +1,5 @@
 # Portfolio Agent Content Governance Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **Implementation status (2026-07-22):** B first release is implemented and verified. The unchecked checklist below is retained as the original implementation record, not current outstanding work; a real production publication still requires external human approval.
 

@@ -1,4 +1,5 @@
 # 设计稿目录收敛设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 ## 背景
 

@@ -1,4 +1,5 @@
 # PostgreSQL / pgvector 资产包治理与组合推荐设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-07-30
 **状态：** 已完成产品讨论并获确认

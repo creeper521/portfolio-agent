@@ -1,4 +1,5 @@
 # Portfolio V1 Case 与发布收尾设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **状态：** 已确认，等待实施计划  
 **日期：** 2026-07-28  

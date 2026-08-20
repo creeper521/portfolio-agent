@@ -1,4 +1,5 @@
 # Portfolio Agent C3 内置 Model Provider Registry 设计与 ADR
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 状态：已实施并验证
 > 日期：2026-07-22

@@ -1,4 +1,5 @@
 # Agent 架构收敛实施计划
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - **状态：** `COMPLETE_SLICE_0_TO_6`
 - **创建时间：** 2026-08-18

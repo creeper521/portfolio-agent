@@ -1,4 +1,5 @@
 # P5 Agent 混合回答、上下文与运行模式设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-13
 > 状态：讨论中，尚未批准实施

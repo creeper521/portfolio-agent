@@ -1,4 +1,5 @@
 # Live Provider 探针与结构化主体自由问题路由纠偏设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-08-05  
 **状态：** 已完成诊断与方案确认，待实施  
@@ -382,4 +383,3 @@ degraded=false（无 Provider/基础设施故障时）
 8. Preset、Reference、Case smoke、隐私检查和默认 fail-closed 测试继续通过。
 9. `DISABLED` 的文档表述明确为向量关闭、关键词 fallback 可用。
 10. 全量后端、前端、脚本、打包和隐私门禁通过；真实 Provider 仅在显式授权路径执行。
-

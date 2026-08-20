@@ -1,4 +1,5 @@
 # Agent 回答结构化编排设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **日期：** 2026-08-06
 > **讨论确认：** 2026-08-07

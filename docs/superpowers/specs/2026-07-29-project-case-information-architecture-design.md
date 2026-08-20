@@ -1,4 +1,5 @@
 # Project—Case 总览下钻信息架构设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-07-29
 

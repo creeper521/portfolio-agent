@@ -1,4 +1,5 @@
 # Portfolio Agent Light Workspace Palette Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-22）：** 已按 A「均衡纸阶」实施并通过前端测试、生产构建、Playwright 与 `1440×900 / 1219×900 / 980×800 / 390×844` 视觉验收；下方清单保留测试驱动实施记录。
 

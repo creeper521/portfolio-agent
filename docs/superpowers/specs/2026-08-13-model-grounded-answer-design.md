@@ -1,4 +1,5 @@
 # Agent P4：基于已验证证据的受约束模型表达设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-13
 > 状态：用户已批准；后端生产链与 Mock 门禁已实施，默认关闭；真实 Provider 未授权、未验收

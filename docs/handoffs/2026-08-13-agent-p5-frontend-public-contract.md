@@ -1,4 +1,5 @@
 # Agent P5 stp-v2 前端公共契约定稿
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > 日期：2026-08-13
 > 状态：前后端实施依据

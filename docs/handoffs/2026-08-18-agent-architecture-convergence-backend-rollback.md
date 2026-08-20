@@ -1,4 +1,5 @@
 # Agent 架构收敛后端回退方案
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 - **基线提交：** `9980068dec8fa33b06ce59fa27b0de1427b54603`
 - **适用范围：** Slice 1～6 架构替换期间及首次生产发布前后

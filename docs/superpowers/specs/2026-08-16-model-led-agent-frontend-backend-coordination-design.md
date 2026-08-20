@@ -1,4 +1,5 @@
 # 模型主导 Agent 前后端协作与契约冻结设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **日期：** 2026-08-16
 > **状态：** 协作方式已由用户确认；用于拆分后端 Agent 与前端 Agent 的责任，不构成第四版整体实施授权

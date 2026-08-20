@@ -1,4 +1,5 @@
 # Agent 架构收敛前端交接
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 - **日期：** 2026-08-18
 - **状态：** Slice 0 合同消费与 Slice 5 Frontend 原子切换均已完成；最终 packaged-JAR Browser E2E 已通过

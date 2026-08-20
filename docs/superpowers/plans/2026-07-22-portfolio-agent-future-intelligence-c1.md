@@ -1,4 +1,5 @@
 # Portfolio Agent Future Intelligence C1 Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **Implementation status (2026-07-22):** Implemented and verified, disabled by default. C2 and the C3 built-in Model Provider Registry were implemented later. The unchecked checklist below is retained as the original implementation record, not current outstanding work.
 

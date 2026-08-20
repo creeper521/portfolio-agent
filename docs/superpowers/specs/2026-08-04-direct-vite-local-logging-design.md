@@ -1,4 +1,5 @@
 # Direct Vite Local Logging Design
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **Date:** 2026-08-04
 **Status:** Implemented and verified locally

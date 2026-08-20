@@ -1,4 +1,5 @@
 # Portfolio Result and Validation Boundary Refactor Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已完成，对应提交 `a5d13fe`。检查项同步为已执行。
 

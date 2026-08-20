@@ -1,4 +1,5 @@
 # 周末登录奖励 ABTest 作品集项目设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 **日期：** 2026-08-04  
 **状态：** 已确认，待实施  

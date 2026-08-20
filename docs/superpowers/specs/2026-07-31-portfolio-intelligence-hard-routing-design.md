@@ -1,4 +1,5 @@
 # Agent 作品集智能检索与确定性推荐设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 日期：2026-07-31
 

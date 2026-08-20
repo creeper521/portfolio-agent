@@ -1,4 +1,5 @@
 # Public Content Waves 1–3 Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **Status:** ready for implementation after Wave 0  
 > **Approved design:** `docs/superpowers/specs/2026-07-24-full-public-assets-and-hybrid-retrieval-evaluation-design.md`  

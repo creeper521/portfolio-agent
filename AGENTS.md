@@ -1,96 +1,100 @@
 # Project Agent Instructions
+<!-- DOCUMENT_STATUS: CURRENT_AUTHORITY -->
 
-> **Documentation status (2026-07-22):** Current repository authority. See `docs/00-文档状态索引.md` for the status of every design and plan, and `docs/08-当前实现状态.md` for the feature inventory.
+> **Status:** Current repository authority. Current behavior and open limitations are indexed by `docs/00-文档状态索引.md` and `docs/08-当前实现状态.md`.
 
 ## Product boundary
 
-This repository builds a public internship portfolio Agent. Runtime code may read only the reviewed public snapshot under `backend/src/main/resources/public-data/`. It must never read the private Obsidian knowledge base, candidate snapshots, raw daily reports, credentials, or unreviewed screenshots.
+This repository builds a public internship portfolio Agent. Runtime code may read only the reviewed public snapshot under `backend/src/main/resources/public-data/` or its controlled public-database projection. It must never read the private Obsidian knowledge base, candidate review packages, raw daily reports, credentials, or unreviewed screenshots.
 
-The current public content still contains one SQL audit project and one executable preset. The runtime now also contains the implemented A/B/C1/C2 capabilities and the C3 built-in Model Provider Registry documented in `docs/08-当前实现状态.md`; optional model expression and local retrieval remain disabled by default. These runtime additions do not expand the reviewed public factual scope.
+Exact runtime release versions and counts are owned only by the packaged manifest and the canonical checked snapshot block in `docs/08-当前实现状态.md`. Do not duplicate those facts in this file or other maintained documents.
 
-Do not add Spring AI runtime calls, SSE, authentication, dynamic external publication, private search, or further C3 abstractions unless the authoritative design is updated and approved. P3's explicitly approved PostgreSQL Context Store exception permits only encrypted, short-lived, typed business Context and minimal request receipts; it must not persist questions, answers, Evidence text, credentials, private data, or long-term memory. The existing fixed DeepSeek/GLM expression adapters and local BGE embedding path are admitted only under their documented fail-closed configuration and privacy boundaries.
+Agent 2.0 is the only runtime authority: Command → Goal → Plan → Execution → PublicAgentTurn → Settlement. The four unversioned `/api/agent` resources are the only public Agent HTTP surface. The old `answer` package may contain transitional dependencies while the approved Replacement Slices execute, but it is not a second runtime authority and must not receive new behavior.
+
+Standard local development and production use PostgreSQL Agent State. `IN_MEMORY` is limited to fast tests and targeted diagnosis; `DISABLED` is explicit read-only portfolio mode. The State boundary permits only encrypted, short-lived typed context, challenge state, request receipts, and final public replay. It must not persist visitor questions, ConversationWindow, Prompt, raw model output, internal diagnostics, private data, or raw Evidence.
+
+Optional model operations and local public retrieval remain disabled unless explicitly configured. The fixed DeepSeek/GLM adapters and local BGE path are admitted only under their fail-closed privacy and configuration gates. Public PostgreSQL projection and private governance import remain separate, explicitly operated capabilities.
+
+Do not add Spring AI runtime calls, SSE, authentication, dynamic external publication, private search, open-ended ReAct, multi-Agent orchestration, durable tasks, long-term chat storage, or further provider abstractions unless an authoritative design is approved.
+
+`Project.status` and `contributionType` remain authoritative. Never expand a plan, prototype, observation, or collaborative task into an independently delivered result.
 
 ## Source of truth
 
-Read these before changing behavior:
+Read these before changing current behavior:
 
-1. `docs/00-文档状态索引.md`
-2. `docs/04-项目代码约束.md`
-3. `docs/superpowers/specs/2026-07-14-internship-portfolio-v0-design.md`
-4. `docs/superpowers/specs/2026-07-16-modular-monolith-package-design.md`
-5. `docs/superpowers/specs/2026-07-16-portfolio-frontend-full-rebuild-design.md`
-6. `docs/superpowers/specs/2026-07-17-public-content-api-integration-design.md`
-7. `docs/superpowers/specs/2026-07-22-portfolio-agent-light-workspace-palette-design.md`
-8. `docs/01-项目背景.md`, `docs/02-需求探索文档.md`, and `docs/03-可能技术选型.md` for the longer-term roadmap
-
-Do not treat a historical or superseded plan as active work. Dynamic publication, Claim/RAG/model work, and its release contract remain pending until explicitly approved.
-
-`Project.status` and `contributionType` are authoritative. Never expand a plan, prototype, observation, or collaborative task into an independently delivered result.
+1. The user's latest explicit decision and this file.
+2. The approved active design `docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md` and active plan `docs/superpowers/plans/2026-08-19-agent-stabilization-and-repository-governance.md`.
+3. Production code, configuration, automated tests, and fresh reproducible evidence.
+4. Maintained current documents, whose complete authoritative set is owned by the map in `docs/00-文档状态索引.md`; do not copy that list here.
+5. Historical designs, plans, reports, handoffs, docs/01-03, docs/07, and docs/11-14. They provide context only and do not prove current behavior.
 
 ## Workflow
 
-### Default Agent architecture guardian bootstrap
+### Agent architecture guardian bootstrap
 
-- At the start of every task in this repository, use `agent-architecture-guardian` for a lightweight classification before substantive action.
-- `NOT_APPLICABLE` tasks continue immediately without loading architecture documents or running the architecture status checker.
-- `LEVEL_1` and `LEVEL_2` tasks continue without waiting for repeated architecture approval; an already approved `LEVEL_3` continues through its Replacement Slices.
-- Load the full architecture workflow only for applicable or uncertain Agent boundaries. Pause only before an unauthorized production-authority mutation or a privacy violation; continue diagnosis, safe experiments, and other in-scope work.
-- If a Guardian rule conflicts with newer code, passing tests, or an approved design, continue the task with that rule as advisory and record one `GUARDIAN_DRIFT` item in the existing `deferredItems`; do not create another ledger or weaken privacy boundaries.
+- At the start of every task, classify whether it affects Agent behavior, contracts, state, API, or production authority.
+- `NOT_APPLICABLE`, `LEVEL_1`, and `LEVEL_2` work continues without repeated approval.
+- The approved `LEVEL_3` stabilization and convergence plan continues through its Replacement Slices.
+- Pause only before an unauthorized production-authority change, privacy violation, destructive action, or external operation requiring new authority.
+- If a Guardian rule conflicts with newer code, passing tests, or an approved design, treat the conflicting rule as advisory, preserve privacy boundaries, and record one `GUARDIAN_DRIFT` item in the existing architecture status ledger.
 
-- Use Superpowers discovery and design gates for new behavior.
-- Use test-driven development for every feature and bug fix: RED, GREEN, REFACTOR.
-- Use systematic debugging before proposing a fix for unexpected behavior.
-- Production and test Java must not use `var`, declare `record` types, or use Lombok.
-- Use explicit immutable classes for value objects.
+### Engineering discipline
+
+- Use test-driven development for behavior changes and bug fixes.
+- Diagnose unexpected behavior before proposing a fix.
+- Production and test Java must not use `var` or Lombok.
+- `record` is allowed only for pure immutable data carriers. Objects with non-trivial invariants, lifecycle, behavior, or expected evolution use explicit immutable classes.
 - Run fresh verification before claiming completion.
-- Preserve user-owned Git changes. Do not reset, restore, stage, commit, or push without explicit authorization.
-- All future Git commit messages must be written in Chinese. When using Conventional Commits, the `type`/`scope` prefix may retain its conventional English identifier, but the subject and body after the prefix must be in Chinese.
-- Prefix shell commands with `rtk` when it is installed. If unavailable, use the documented raw-command debugging exception.
+- Preserve user-owned changes. Do not reset, restore, stage, commit, or push without explicit authorization.
+- Commit subjects and bodies must be Chinese; a conventional English `type(scope):` prefix is allowed.
+- Prefix shell commands with `rtk` when installed; otherwise use the documented raw-command exception.
 
 ## Documentation maintenance
 
-- Complete each independent feature, important behavior fix, product-boundary change, or technology-selection change by updating `docs/11-项目演进日志.md` before ending the task.
-- Record what changed, how it relates to the previous direction, and its current state. Do not record implementation steps, test procedures, or commit metadata.
-- Pure formatting changes, test-only additions, and behavior-preserving mechanical refactors do not need a separate evolution-log entry.
-- When a capability, default switch, or product boundary changes, also update `docs/08-当前实现状态.md`.
-- When public assets, governance waves, or publication status change, also update `docs/09-作品集资产库状态.md`.
-- Changes to release bundles or content publication must read and follow `docs/05-公开发布包契约.md` and `docs/06-公开内容发布运行手册.md`.
+- Update `docs/11-项目演进日志.md` after an independent feature, important behavior fix, product-boundary change, or technology decision is complete.
+- The log records what changed, its relation to the previous direction, current boundary, and links. It does not contain implementation steps, test procedures, test counts, hashes, or commit metadata.
+- Update `docs/08-当前实现状态.md` when a capability, default, limitation, or deployment state changes.
+- Update `docs/09-作品集资产库状态.md` when public assets or publication state change.
+- Content changes must follow `docs/05-公开发布包契约.md` and `docs/06-公开内容发布运行手册.md`.
+- Current documents use `CURRENT_AUTHORITY`; approved in-flight design and plan use their active markers; historical material must identify itself formally.
+
+### Agent 2.0 dynamic bug ledger
+
+- `docs/15-Agent 2.0真实交互问题清单与修复边界.md` is the single ledger for open Agent 2.0 bugs.
+- Add a reproducible production-path, API, packaged-JAR, browser, database, or real-Provider bug as soon as its evidence is understood.
+- Keep facts separate from hypotheses; update an entry when new evidence changes cause, severity, scope, or required Exit Gate.
+- Remove a bug only after the production fix, targeted regressions, affected suites/builds, risk-appropriate integration gates, and the original user-visible path all pass.
+- When removing a bug, remove its overview row, detailed section, dedicated test-gap text, and dedicated Exit Gate. Record important completed behavior in docs/11; do not create an archive inside docs/15.
+- Bug IDs increase monotonically and are never reused.
 
 ## Technology
 
 - Java 21, Spring Boot, Maven
-- Production and test Java must use explicit types; `var`, `record`, and Lombok are prohibited.
-- Value objects use explicit immutable classes.
 - Vue 3, TypeScript, Vite
-- Vitest and Vue Test Utils
-- Playwright for browser acceptance
+- JUnit, Vitest, Vue Test Utils, Playwright
+- PostgreSQL 16/pgvector and Flyway
 - One executable JAR and one Docker image for production delivery
 
 ## Security
 
-- Public APIs are read-only and must return DTOs, not private source objects.
-- Do not log visitor questions or persist them on the server or in browser storage. P3 may persist only the approved encrypted typed business Context and minimal request receipt; visitor questions and answers remain non-persistent. Questions and answers must not enter URLs or browser history. Homepage-to-Agent handoff uses a random, memory-only, one-time ID with a short expiry.
-- Do not expose stack traces, local paths, internal hosts, IP addresses, credentials, or raw evidence.
-- Only Evidence with `publicStatus = APPROVED` may be returned.
-- Run `scripts/privacy-check.ps1` before packaging.
+- Public browsing APIs are read-only. Agent mutation resources are limited to creating/cancelling a Turn and clearing the current anonymous conversation.
+- Only `publicStatus = APPROVED` Evidence may be returned.
+- Do not log or persist visitor questions.
+- PostgreSQL may retain only the approved encrypted typed State and fixed 30-minute public replay; Clarification challenges use the approved shorter TTL.
+- A browser may store one short-lived ResumeToken in current-tab `sessionStorage`. It must not persist questions, answers, history, Context, challenges, request history, or Evidence.
+- Tokens and Handles must not enter URLs or browser history. Homepage-to-Agent handoff remains random, memory-only, one-time, and short-lived.
+- Do not expose stack traces, paths, internal hosts, source addresses, credentials, or raw Evidence.
+- Run privacy, documentation, quality, architecture, and release gates before packaging claims.
 
 ## Verification commands
 
-Backend:
-
 ```powershell
 mvn.cmd -f backend/pom.xml test
-```
-
-Frontend:
-
-```powershell
 npm.cmd --prefix frontend test -- --run
+npm.cmd --prefix frontend run check
 npm.cmd --prefix frontend run build
-```
-
-Package:
-
-```powershell
-mvn.cmd -f backend/pom.xml package
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/documentation-check.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/privacy-check.ps1 -Path backend/src/main
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 ```

@@ -1,4 +1,5 @@
 # Agent 生产可用性设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态：** 已确认，待实施  
 > **日期：** 2026-07-28  

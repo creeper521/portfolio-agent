@@ -1,4 +1,5 @@
 # Agent 全路径行为审计报告（2026-08-16）
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 ## 结论摘要
 

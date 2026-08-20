@@ -1,4 +1,5 @@
 # Agent 工作区配色调整设计 · 暖调中栏 + 牛血红 CTA
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 状态：**待实施**（design，已与用户确认方向，交付 Codex 执行）
 > 日期：2026-07-23

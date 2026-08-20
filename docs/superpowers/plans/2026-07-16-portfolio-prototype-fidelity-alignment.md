@@ -1,4 +1,5 @@
 # Portfolio Prototype Fidelity Alignment Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已执行。纸张/墨色/暗红视觉和 Agent 呈现已落地；reduced-motion、焦点可见性、动态播报和抽屉焦点仍需后续修复。
 

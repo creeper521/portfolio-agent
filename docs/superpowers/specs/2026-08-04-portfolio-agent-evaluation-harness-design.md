@@ -1,4 +1,5 @@
 # Portfolio Agent 统一评测集与发布门禁设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-04  
 > 状态：已确认；阶段 0 已部分实施，待按第 18 节收口

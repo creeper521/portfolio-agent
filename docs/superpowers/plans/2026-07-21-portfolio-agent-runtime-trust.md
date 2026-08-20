@@ -1,4 +1,5 @@
 # Portfolio Agent Runtime Trust Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **Implementation status (2026-07-22):** A stage is implemented and verified. The unchecked checklist below is retained as the original implementation record, not current outstanding work.
 

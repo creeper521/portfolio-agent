@@ -1,4 +1,5 @@
 # Portfolio Agent 未来智能能力设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - 状态：C1 与 C2 已实现；C3 中仅 Model Provider Registry 已按准入实现，其余能力待真实准入条件满足后再评估
 - 日期：2026-07-21

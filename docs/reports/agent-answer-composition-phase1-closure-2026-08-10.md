@@ -1,4 +1,5 @@
 # Agent Answer Composition 阶段一收口报告（2026-08-10）
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 ## 结论
 

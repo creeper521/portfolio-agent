@@ -1,4 +1,5 @@
 # PortfolioIntelligence 单一内核收敛设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 日期：2026-08-03
 

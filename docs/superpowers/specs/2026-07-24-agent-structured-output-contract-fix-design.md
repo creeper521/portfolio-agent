@@ -1,4 +1,5 @@
 # Agent 结构化输出契约修复设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 ## 1. 背景与问题
 
@@ -151,4 +152,3 @@ operation
 - 回答至少包含一个 `GENERAL` 块。
 - generation 不再因字段结构不匹配降级。
 - 全量自动化测试无失败。
-

@@ -1,4 +1,5 @@
 # 实习作品集 Agent V0 纵向切片设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 状态：已实施，是当前 V0 事实与确定性回答边界
 > 日期：2026-07-14

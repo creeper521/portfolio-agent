@@ -1,4 +1,5 @@
 # 全量公开资产扩增与混合检索价值评测设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 - 状态：已确认，待实施
 - 日期：2026-07-24

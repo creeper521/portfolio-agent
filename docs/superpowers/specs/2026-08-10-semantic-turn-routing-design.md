@@ -1,4 +1,5 @@
 # Agent 统一语义路由与多任务轮次编排设计
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **日期：** 2026-08-10
 > **讨论确认：** 2026-08-10

@@ -1,4 +1,5 @@
 # P5 前端 Agent stp-v2 体验设计与接入方案
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > 日期：2026-08-13
 > 状态：前端设计稿，待评审；后端契约以 P5 Spec 为权威边界

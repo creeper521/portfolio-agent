@@ -1,4 +1,5 @@
 # 阶段 0 E2E 失败定性报告（2026-08-06）
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > **基线：** `git rev-parse HEAD = 13b27ff`（复现时）；桌面 `chromium` 与移动 `mobile-chromium` 双项目
 > **结果：** 62 项中 42 项通过、20 项失败；20 个失败 = 10 个逻辑场景 × 2 项目，桌面与移动错误逐字一致（与布局/平台无关）

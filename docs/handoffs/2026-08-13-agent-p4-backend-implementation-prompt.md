@@ -1,4 +1,5 @@
 # P4 后端开发上下文提示词
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > P4 Spec 已由用户批准；按已冻结 Plan 逐任务执行。
 

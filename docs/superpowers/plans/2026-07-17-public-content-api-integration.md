@@ -1,4 +1,5 @@
 # Portfolio Public Content API Integration Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已完成并通过当时的完整发布验证，对应提交 `574d6f0` 至 `d696511`。检查项同步为已执行。
 

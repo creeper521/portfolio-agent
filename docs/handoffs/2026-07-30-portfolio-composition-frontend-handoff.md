@@ -1,4 +1,5 @@
 # 资产包组合推荐前端变更 Handoff
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > **状态：已被取代。** 独立组合推荐 HTTP 表面已移除。当前前端契约以
 > [`agent-portfolio-recommendation-frontend-ai-prompt.md`](agent-portfolio-recommendation-frontend-ai-prompt.md)

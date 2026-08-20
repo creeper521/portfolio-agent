@@ -1,4 +1,5 @@
 # Portfolio CaseStudy Public Contract Design
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **状态：** 后端纵向切片与首批公开内容已实施并验证
 > **确认日期：** 2026-07-23

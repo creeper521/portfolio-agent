@@ -1,4 +1,5 @@
 # Benchmark Project Card Overlap Implementation Plan
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 > **执行状态（2026-07-20）：** 已完成。该计划只作用于历史设计探索原型，不是当前生产前端待办。
 

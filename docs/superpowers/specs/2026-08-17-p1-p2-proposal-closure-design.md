@@ -1,4 +1,5 @@
 # P1/P2 模型提议合同与编译闭环规格
+<!-- DOCUMENT_STATUS: NON_AUTHORITATIVE -->
 
 ## 目标与边界
 
@@ -41,3 +42,7 @@
 - hostile case：合法 `subjectCandidates` 字段携带公开但与 anchor alias 不一致的主体，必须进入 clarification/rejected，不能仅依赖未知字段失败。
 - `SQL`/`MySQL`、page marker 邻接、fallback alias 的统一匹配回归。
 - Validator 对非 PROJECT recommendation candidate 的 fail-closed 回归。
+
+## 实施状态（2026-08-17）
+
+上述隔离 P1/P2 行为已实现并通过自动化回归：三态编译结果、主体依据澄清、reviewed alias fallback、严格字段矩阵、Codec 透传和值语义均已闭环。`MODEL_LED` 未启用，`DefaultTurnRouter` 生产默认路径、stp-v3、SHADOW、Recovery 与 P3-P8 均未因本次实施改变。
