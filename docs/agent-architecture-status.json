@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "portfolio-agent",
   "updatedAt": "2026-08-20",
-  "overallStatus": "IN_PROGRESS",
+  "overallStatus": "COMPLETE",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
     "changePriority": "CURRENT_REQUEST_FIRST_REPAY_INDEPENDENT_DEFERRED_ITEMS",
@@ -32,7 +32,7 @@
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
       "status": "PASS",
-      "evidence": "Fresh 2026-08-20 evidence includes code-quality, architecture, documentation and privacy gates; 449 frontend tests plus type-check/build; 833 backend tests plus clean package; and PostgreSQL packaged desktop/mobile E2E."
+      "evidence": "Fresh 2026-08-20 evidence includes code-quality, architecture, documentation and privacy gates; 452 frontend tests plus type-check/build; 861 backend tests plus clean package; PostgreSQL packaged desktop/mobile E2E; and the authorized PROJECT_DISCUSSION real-provider plus desktop/mobile Browser lane."
     },
     {
       "id": "PRIVACY_BOUNDARY",

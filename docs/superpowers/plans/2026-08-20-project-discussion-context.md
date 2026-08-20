@@ -1,7 +1,7 @@
 # Typed Project Discussion Context 实施计划
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
-> **状态：** Prompt、STANDARD Routing 与 Project Discussion V4 已完成代码、确定性全量、PostgreSQL 和模型关闭 packaged-JAR 门；等待明确授权运行 PROJECT_DISCUSSION 真实 Provider + Browser lane 后关闭 A2-19。
+> **状态：** 已完成。Prompt、STANDARD Routing、Project Discussion V4、确定性全量、PostgreSQL、模型关闭 packaged-JAR，以及获授权的 PROJECT_DISCUSSION 真实 Provider + 桌面/移动 Browser lane 均已通过；A2-19 已按动态账本规则删除。
 > **批准设计：** docs/superpowers/specs/2026-08-20-project-discussion-context-design.md
 > **关联缺陷：** docs/15-Agent 2.0真实交互问题清单与修复边界.md 中 A2-19
 > **Guardian：** 已批准的 LEVEL_3。实施期间不再重复申请同一架构批准；真实 Provider、外部环境、提交和推送仍按各自边界单独授权。
@@ -117,12 +117,12 @@ Slice 1 和 Slice 2 之间不得反转。Slice 2 可以先写不注册到生产�
 - 修改 backend/src/test/java/com/portfolio/agent/turn/planning/TurnInputSafetyReplacementTest.java
 - 修改 backend/src/test/java/com/portfolio/agent/turn/architecture/SemanticRoutingArchitectureTest.java
 
-- [ ] 先写 Codec RED：模型根结果只接受 CONVERSATIONAL 或 closed SEMANTIC_ROUTE；不再接受旧 GOALS/CLARIFICATION root shape、未知 route、未知字段、模型输出 handle/resultItemId/Token。
-- [ ] 冻结 STANDARD allowed routes：STANDARD_GOAL、ENTER_RECOMMENDED_RESULT、NEEDS_CLARIFICATION；没有 typed Recommendation hint 时 ENTER_RECOMMENDED_RESULT 必须非法。
-- [ ] 冻结 Proposal shape：route、可空 candidateKey、可空 closed Goal；route 与字段组合必须互斥且完备。
-- [ ] 冻结后端校验：GoalKind、requestedSize 1—5、Facet、Output、Depth、dimension/constraint closed names、公开主体和 Goal shape均验证；不读取 confidence。
-- [ ] 冻结 conversational fast path：只覆盖极小安全问候/致谢并且只能产生 CONVERSATIONAL；不得包含项目、推荐、数量、比较、约束、alias 或指代解析。
-- [ ] 运行 focused tests，确认失败原因来自尚未实现新 schema/validator，而不是 fixture 或并行 Prompt 改动。
+- [x] 先写 Codec RED：模型根结果只接受 CONVERSATIONAL 或 closed SEMANTIC_ROUTE；不再接受旧 GOALS/CLARIFICATION root shape、未知 route、未知字段、模型输出 handle/resultItemId/Token。
+- [x] 冻结 STANDARD allowed routes：STANDARD_GOAL、ENTER_RECOMMENDED_RESULT、NEEDS_CLARIFICATION；没有 typed Recommendation hint 时 ENTER_RECOMMENDED_RESULT 必须非法。
+- [x] 冻结 Proposal shape：route、可空 candidateKey、可空 closed Goal；route 与字段组合必须互斥且完备。
+- [x] 冻结后端校验：GoalKind、requestedSize 1—5、Facet、Output、Depth、dimension/constraint closed names、公开主体和 Goal shape均验证；不读取 confidence。
+- [x] 冻结 conversational fast path：只覆盖极小安全问候/致谢并且只能产生 CONVERSATIONAL；不得包含项目、推荐、数量、比较、约束、alias 或指代解析。
+- [x] 运行 focused tests，确认失败原因来自尚未实现新 schema/validator，而不是 fixture 或并行 Prompt 改动。
 
 运行：
 
@@ -132,14 +132,14 @@ Slice 1 和 Slice 2 之间不得反转。Slice 2 可以先写不注册到生产�
 
 ### Task 1.2：实现单一 STANDARD AI seam
 
-- [ ] GoalInterpretationInput 增加可信 interpretationMode=STANDARD 和 closed allowedRoutes；STANDARD 不伪造 discussion state。
-- [ ] Goal prompt 在既有 goal-interpretation-system.txt 中替换旧 GOALS/CLARIFICATION schema 为 closed route schema；保留 CONVERSATIONAL 根结果和 Prompt Slice 的语言/depth/防注入条款。
-- [ ] GoalInterpretationAdapter 仍只调用一次既有 transport；不新增模型调用、重试、provider abstraction 或第三个 prompt。
-- [ ] GoalProposalCodec 严格拒绝未知字段、未知 route、越界 candidateKey、非法 Goal shape；解析结果进入 SemanticRouteProposal。
-- [ ] SemanticRouteValidator 只消费 typed public subject catalog、allowed routes 和候选映射；AI 不能扩大主体、候选或约束集合。
-- [ ] GoalResolver 的顺序固定为：typed PRESET/page subject → SafeConversationalFastPath → AI proposal → validator → GoalBoundaryPolicy。
-- [ ] Provider disabled、超时、invalid JSON 或 validator 拒绝时返回稳定 SEMANTIC_ROUTING_UNAVAILABLE；不再调用本地自然语言 Goal fallback。
-- [ ] Clarification CHOICE/binding 的确定性恢复保持；自由 TEXT 的 AI normalization 仍不进入本 Slice。
+- [x] GoalInterpretationInput 增加可信 interpretationMode=STANDARD 和 closed allowedRoutes；STANDARD 不伪造 discussion state。
+- [x] Goal prompt 在既有 goal-interpretation-system.txt 中替换旧 GOALS/CLARIFICATION schema 为 closed route schema；保留 CONVERSATIONAL 根结果和 Prompt Slice 的语言/depth/防注入条款。
+- [x] GoalInterpretationAdapter 仍只调用一次既有 transport；不新增模型调用、重试、provider abstraction 或第三个 prompt。
+- [x] GoalProposalCodec 严格拒绝未知字段、未知 route、越界 candidateKey、非法 Goal shape；解析结果进入 SemanticRouteProposal。
+- [x] SemanticRouteValidator 只消费 typed public subject catalog、allowed routes 和候选映射；AI 不能扩大主体、候选或约束集合。
+- [x] GoalResolver 的顺序固定为：typed PRESET/page subject → SafeConversationalFastPath → AI proposal → validator → GoalBoundaryPolicy。
+- [x] Provider disabled、超时、invalid JSON 或 validator 拒绝时返回稳定 SEMANTIC_ROUTING_UNAVAILABLE；不再调用本地自然语言 Goal fallback。
+- [x] Clarification CHOICE/binding 的确定性恢复保持；自由 TEXT 的 AI normalization 仍不进入本 Slice。
 
 ### Task 1.3：删除本地 NLP authority 与 refine 前置耦合
 
@@ -152,13 +152,13 @@ Slice 1 和 Slice 2 之间不得反转。Slice 2 可以先写不注册到生产�
 - backend/src/test/java/com/portfolio/agent/turn/planning/DeterministicConversationBoundaryTest.java
 - backend/src/test/java/com/portfolio/agent/turn/planning/GoalResolverTest.java 中所有本地推荐数量、约束、比较、alias、指代和 Provider-failure fallback 断言
 
-- [ ] 删除推荐/项目关键词判断。
-- [ ] 删除阿拉伯数字、中文数字、数量范围正则。
-- [ ] 删除推荐否定、约束、比较与指代短语。
-- [ ] 删除 alias contains/negation 等自然语言扫描。
-- [ ] 删除 Provider 失败后的 Goal fallback。
-- [ ] 用模型 proposal fixture 覆盖推荐数量、比较、约束和主体选择；后端测试只断言 closed 值及范围验证，不把中文表达写成生产规则。
-- [ ] Architecture test 证明 production planning source 不再依赖 Pattern、数字 parser 或 phrase table 来形成 Goal。
+- [x] 删除推荐/项目关键词判断。
+- [x] 删除阿拉伯数字、中文数字、数量范围正则。
+- [x] 删除推荐否定、约束、比较与指代短语。
+- [x] 删除 alias contains/negation 等自然语言扫描。
+- [x] 删除 Provider 失败后的 Goal fallback。
+- [x] 用模型 proposal fixture 覆盖推荐数量、比较、约束和主体选择；后端测试只断言 closed 值及范围验证，不把中文表达写成生产规则。
+- [x] Architecture test 证明 production planning source 不再依赖 Pattern、数字 parser 或 phrase table 来形成 Goal。
 
 零引用：
 
@@ -188,11 +188,11 @@ Slice 1 和 Slice 2 之间不得反转。Slice 2 可以先写不注册到生产�
 - frontend/src/features/agent/components/AgentWorkspace.vue
 - frontend/src/features/agent/components/AgentWorkspace.test.ts
 
-- [ ] AgentAvailabilityResponse 增加 freeTextSemanticRouting=AVAILABLE|DISABLED；status 继续只表示 Turn/State 整体是否可用。
-- [ ] readiness 只根据 TURN_INTERPRETATION 配置和启动完整性投影，不尝试反映瞬时网络健康。
-- [ ] DISABLED 时 composer 禁用并显示中性说明；PRESET 与后续 backend-owned deterministic action 不被隐藏。
-- [ ] 缺字段、未知值和旧损坏响应在前端 fail-closed 为 DISABLED。
-- [ ] 直接 API 提交自由文本时返回稳定 SEMANTIC_ROUTING_UNAVAILABLE；瞬时 Provider 失败仍是本 Turn 的失败，不永久改变 capability。
+- [x] AgentAvailabilityResponse 增加 freeTextSemanticRouting=AVAILABLE|DISABLED；status 继续只表示 Turn/State 整体是否可用。
+- [x] readiness 只根据 TURN_INTERPRETATION 配置和启动完整性投影，不尝试反映瞬时网络健康。
+- [x] DISABLED 时 composer 禁用并显示中性说明；PRESET 与后续 backend-owned deterministic action 不被隐藏。
+- [x] 缺字段、未知值和旧损坏响应在前端 fail-closed 为 DISABLED。
+- [x] 直接 API 提交自由文本时返回稳定 SEMANTIC_ROUTING_UNAVAILABLE；瞬时 Provider 失败仍是本 Turn 的失败，不永久改变 capability。
 
 ### Task 1.5：完成 Slice 1 的替代门、文档和条件式提交
 
@@ -211,13 +211,13 @@ Slice 1 和 Slice 2 之间不得反转。Slice 2 可以先写不注册到生产�
 - scripts/privacy-check.test.ps1
 - scripts/verify-release.ps1
 
-- [ ] 在生产切换开始时把 architecture overallStatus 设为 IN_PROGRESS；activeAuthorities 在新入口真正接入前仍描述当前生产权威。
-- [ ] Contract scenarios 覆盖合法 STANDARD_GOAL、合法 CONVERSATIONAL、非法主体、非法 route、模型关闭和 Provider 失败无 NLP fallback。
-- [ ] 运行 focused backend/frontend tests。
-- [ ] 运行生产源码零引用、code quality、privacy、documentation、architecture gate。
-- [ ] 运行 backend 全量、frontend 全量/check/build 和 clean package。
-- [ ] 更新 docs/08 与 docs/11，只记录已验证的当前行为；A2-19 此时仍保留。
-- [ ] 仅在明确获得提交授权后，创建一个中文小提交；不得捎带并行 Prompt 未归属改动。
+- [x] 在生产切换开始时把 architecture overallStatus 设为 IN_PROGRESS；activeAuthorities 在新入口真正接入前仍描述当前生产权威。
+- [x] Contract scenarios 覆盖合法 STANDARD_GOAL、合法 CONVERSATIONAL、非法主体、非法 route、模型关闭和 Provider 失败无 NLP fallback。
+- [x] 运行 focused backend/frontend tests。
+- [x] 运行生产源码零引用、code quality、privacy、documentation、architecture gate。
+- [x] 运行 backend 全量、frontend 全量/check/build 和 clean package。
+- [x] 更新 docs/08 与 docs/11，只记录已验证的当前行为；A2-19 此时仍保留。
+- [x] 仅在明确获得提交授权后，按 Slice 与文件归属创建中文小提交；不得捎带无关改动。
 
 建议提交：
 
@@ -260,12 +260,12 @@ Slice 1 Exit Gate：
 - 新增 contracts/agent-turn/fixtures/conversation-expired-discussion.json
 - 新增 contracts/agent-turn/fixtures/discussion-context-error.json
 
-- [ ] ASK 增加可选 referenceContextHandle，仅作为不可信解释提示；PRESET 不允许携带。
-- [ ] CONTINUE operation 必填且闭合为 ENTER_RESULT、ROUTE_IN_CONTEXT、EXIT_CONTEXT、REENTER_SUBJECT。
-- [ ] 每个 operation 使用互斥 shape：ENTER_RESULT 仅 handle+item；ROUTE_IN_CONTEXT 仅 handle+text；EXIT_CONTEXT 仅 handle；REENTER_SUBJECT 仅公开 PROJECT subject。
-- [ ] 缺 operation 的旧 CONTINUE、旧 handle+item+text shape、额外字段和 operation/字段错配全部 RED。
-- [ ] 不提供 optional operation、默认 operation、旧 reader 或兼容 fixture。
-- [ ] Conversation Summary fixture 冻结 ACTIVE/EXPIRED 的 backend-owned actions；公共错误冻结 DISCUSSION_* 稳定码。
+- [x] ASK 增加可选 referenceContextHandle，仅作为不可信解释提示；PRESET 不允许携带。
+- [x] CONTINUE operation 必填且闭合为 ENTER_RESULT、ROUTE_IN_CONTEXT、EXIT_CONTEXT、REENTER_SUBJECT。
+- [x] 每个 operation 使用互斥 shape：ENTER_RESULT 仅 handle+item；ROUTE_IN_CONTEXT 仅 handle+text；EXIT_CONTEXT 仅 handle；REENTER_SUBJECT 仅公开 PROJECT subject。
+- [x] 缺 operation 的旧 CONTINUE、旧 handle+item+text shape、额外字段和 operation/字段错配全部 RED。
+- [x] 不提供 optional operation、默认 operation、旧 reader 或兼容 fixture。
+- [x] Conversation Summary fixture 冻结 ACTIVE/EXPIRED 的 backend-owned actions；公共错误冻结 DISCUSSION_* 稳定码。
 
 ### Task 2.2：建立 typed Context、clarification template 与 V4 codec
 
@@ -290,14 +290,14 @@ Slice 1 Exit Gate：
 - backend/src/test/java/com/portfolio/agent/turn/continuation/ClarificationChallengeStoreTest.java
 - backend/src/test/java/com/portfolio/agent/turn/state/postgres/AgentStatePayloadCodecTest.java
 
-- [ ] ProjectDiscussionContext 只保存 handle、conversationId、releaseId、projectId、最多五个 switch candidate IDs、startedAt、expiresAt 和可空 sourceRecommendationHandle。
-- [ ] Context 不保存 label、summary、问题、窗口、Prompt、模型输出、Goal、Plan、Task、Result 或消息。
-- [ ] ActiveDiscussionPointer 只保存 handle、projectId、contextExpiresAt；不新增 ACTIVE/EXPIRED 持久化枚举。
-- [ ] ClarificationStore.Record 从单一 BlockedGoalTemplate 改为 sealed ClarificationResumeTemplate，允许 BlockedGoalTemplate 或 DiscussionSelectionTemplate；两种模板字段与恢复路径严格分离。
-- [ ] DiscussionSelectionTemplate 只保存 Recommendation context handle 和实际允许 result item IDs，不保存输入文本。
-- [ ] V4 为 conversation_session 增加 all-null/all-present 的 pointer 列与约束；handle 作为 generation，不新增第二 session 表或双写。
-- [ ] V4 不迁移短期旧 payload，不增加兼容 view/reader；旧 Context 可失效。
-- [ ] Codec 的正反例覆盖 unknown subtype、oversized candidate set、release/conversation mismatch、加密完整性和隐私字段扫描。
+- [x] ProjectDiscussionContext 只保存 handle、conversationId、releaseId、projectId、最多五个 switch candidate IDs、startedAt、expiresAt 和可空 sourceRecommendationHandle。
+- [x] Context 不保存 label、summary、问题、窗口、Prompt、模型输出、Goal、Plan、Task、Result 或消息。
+- [x] ActiveDiscussionPointer 只保存 handle、projectId、contextExpiresAt；不新增 ACTIVE/EXPIRED 持久化枚举。
+- [x] ClarificationStore.Record 从单一 BlockedGoalTemplate 改为 sealed ClarificationResumeTemplate，允许 BlockedGoalTemplate 或 DiscussionSelectionTemplate；两种模板字段与恢复路径严格分离。
+- [x] DiscussionSelectionTemplate 只保存 Recommendation context handle 和实际允许 result item IDs，不保存输入文本。
+- [x] V4 为 conversation_session 增加 all-null/all-present 的 pointer 列与约束；handle 作为 generation，不新增第二 session 表或双写。
+- [x] V4 不迁移短期旧 payload，不增加兼容 view/reader；旧 Context 可失效。
+- [x] Codec 的正反例覆盖 unknown subtype、oversized candidate set、release/conversation mismatch、加密完整性和隐私字段扫描。
 
 ### Task 2.3：扩展 Session/State 原子 settlement authority
 
@@ -317,14 +317,14 @@ Slice 1 Exit Gate：
 - backend/src/test/java/com/portfolio/agent/turn/state/postgres/AgentStateCleanupIntegrationTest.java
 - backend/src/test/java/com/portfolio/agent/turn/state/postgres/configuration/ConversationContextDatabaseConfigurationTest.java
 
-- [ ] TurnExecutionStore.complete 同时接收 expected pointer generation 与 DiscussionStateMutation；PublicTurn、Context insert 和 pointer update 是一个 terminal transaction。
-- [ ] ENTER/REENTER/SWITCH 只有新 Context 与 PublicTurn 都成功时替换 pointer；失败保留旧 pointer。
-- [ ] EXIT 对 active/expired pointer 原子清空，不调用模型。
-- [ ] ROUTE_IN_CONTEXT settlement 用 expected handle 做 generation guard；切换/退出/clear 先完成时，旧结果不得提交。
-- [ ] 同 handle 的两个并发只读请求可以分别结算，均不续期、不修改 pointer。
-- [ ] clear conversation 撤销 session 并删除/过期化 Context、Challenge 和 pointer。
-- [ ] cleanup 删除过期 Context，不把旧 pointer 恢复 active；Summary 可从 pointer time 派生 EXPIRED。
-- [ ] Memory/PostgreSQL 用同一 contract test 证明 parity；所有 DB 操作仍受 TurnDeadline 和 operation cap。
+- [x] TurnExecutionStore.complete 同时接收 expected pointer generation 与 DiscussionStateMutation；PublicTurn、Context insert 和 pointer update 是一个 terminal transaction。
+- [x] ENTER/REENTER/SWITCH 只有新 Context 与 PublicTurn 都成功时替换 pointer；失败保留旧 pointer。
+- [x] EXIT 对 active/expired pointer 原子清空，不调用模型。
+- [x] ROUTE_IN_CONTEXT settlement 用 expected handle 做 generation guard；切换/退出/clear 先完成时，旧结果不得提交。
+- [x] 同 handle 的两个并发只读请求可以分别结算，均不续期、不修改 pointer。
+- [x] clear conversation 撤销 session 并删除/过期化 Context、Challenge 和 pointer。
+- [x] cleanup 删除过期 Context，不把旧 pointer 恢复 active；Summary 可从 pointer time 派生 EXPIRED。
+- [x] Memory/PostgreSQL 用同一 contract test 证明 parity；所有 DB 操作仍受 TurnDeadline 和 operation cap。
 
 ### Task 2.4：实现唯一 Project Discussion transition authority
 
@@ -356,17 +356,17 @@ Slice 1 Exit Gate：
 - backend/src/test/java/com/portfolio/agent/turn/planning/GoalResolverTest.java
 - backend/src/test/java/com/portfolio/agent/turn/planning/SemanticRouteValidatorTest.java
 
-- [ ] ProjectDiscussionCoordinator 是 ENTER/SWITCH/EXIT/REENTER 的唯一状态转换入口；显式 backend action 不调用模型。
-- [ ] ENTER_RESULT 验证 Conversation、release、TTL 和 selected result 成员关系，复制 bounded switch candidates，创建新 Context，并执行默认 OVERVIEW/RESPONSIBILITY/SOLUTION/VERIFICATION/STATUS 概览 Goal。
-- [ ] 点击历史其他 Recommendation item 仍走同一 ENTER_RESULT authority，成功后直接切换；不二次确认。
-- [ ] REENTER_SUBJECT 验证项目仍属于当前公开 release，创建新 handle 且候选集合仅含当前项目；不复活旧 handle/requestId。
-- [ ] ACTIVE mode 允许 CONTINUE_CURRENT_PROJECT、START_NEW_TOPIC、SWITCH_PROJECT、NEEDS_CLARIFICATION；EXPIRED 只允许 REENTER_PROJECT、START_NEW_TOPIC、NEEDS_CLARIFICATION。
-- [ ] locked project 由服务端注入；模型只能提出 Facet/Output、稳定 concept anchor 与 closed Goal 参数。
-- [ ] 通用概念在 ACTIVE 中形成 APPLY_GENERAL_CONCEPT_TO_PORTFOLIO，不自动退出。
-- [ ] active/expired pointer 下的 ASK+FREE_TEXT 由服务端强制按 DISCUSSION mode；忽略前端 ASK 的路由暗示。
-- [ ] CONVERSATIONAL 不创建 Goal、不修改、不退出、不续期 pointer。
-- [ ] Provider/Codec/validator failure 不修改 pointer，投影 DISCUSSION_INTERPRETATION_UNAVAILABLE 与 backend retry/new-topic action。
-- [ ] DISCUSSION prompt 只扩展现有 goal-interpretation-system.txt 的 interpretationMode、typed state、candidateKey 与 allowed routes；不创建第三个 prompt。
+- [x] ProjectDiscussionCoordinator 是 ENTER/SWITCH/EXIT/REENTER 的唯一状态转换入口；显式 backend action 不调用模型。
+- [x] ENTER_RESULT 验证 Conversation、release、TTL 和 selected result 成员关系，复制 bounded switch candidates，创建新 Context，并执行默认 OVERVIEW/RESPONSIBILITY/SOLUTION/VERIFICATION/STATUS 概览 Goal。
+- [x] 点击历史其他 Recommendation item 仍走同一 ENTER_RESULT authority，成功后直接切换；不二次确认。
+- [x] REENTER_SUBJECT 验证项目仍属于当前公开 release，创建新 handle 且候选集合仅含当前项目；不复活旧 handle/requestId。
+- [x] ACTIVE mode 允许 CONTINUE_CURRENT_PROJECT、START_NEW_TOPIC、SWITCH_PROJECT、NEEDS_CLARIFICATION；EXPIRED 只允许 REENTER_PROJECT、START_NEW_TOPIC、NEEDS_CLARIFICATION。
+- [x] locked project 由服务端注入；模型只能提出 Facet/Output、稳定 concept anchor 与 closed Goal 参数。
+- [x] 通用概念在 ACTIVE 中形成 APPLY_GENERAL_CONCEPT_TO_PORTFOLIO，不自动退出。
+- [x] active/expired pointer 下的 ASK+FREE_TEXT 由服务端强制按 DISCUSSION mode；忽略前端 ASK 的路由暗示。
+- [x] CONVERSATIONAL 不创建 Goal、不修改、不退出、不续期 pointer。
+- [x] Provider/Codec/validator failure 不修改 pointer，投影 DISCUSSION_INTERPRETATION_UNAVAILABLE 与 backend retry/new-topic action。
+- [x] DISCUSSION prompt 只扩展现有 goal-interpretation-system.txt 的 interpretationMode、typed state、candidateKey 与 allowed routes；不创建第三个 prompt。
 
 ### Task 2.5：承接最近 Recommendation 的 typed selection
 
@@ -381,12 +381,12 @@ Slice 1 Exit Gate：
 - backend/src/test/java/com/portfolio/agent/turn/lifecycle/AgentTurnLifecycleClarificationRecoveryTest.java
 - backend/src/test/java/com/portfolio/agent/turn/lifecycle/AgentTurnLifecycleContinuationTest.java
 
-- [ ] referenceContextHandle 只有在同 Conversation、同 release、未过期且为 Recommendation Context 时才构造候选；无效提示静默忽略并走普通 STANDARD，不泄露状态。
-- [ ] 给模型的候选只含临时 C1…C5、公开 label/aliases 和 allowed routes；不含 handle、resultItemId 或候选外项目。
-- [ ] AI 明确提出 ENTER 且 candidateKey 唯一合法时直接进入；单一 result 也不展示单项 CHOICE。
-- [ ] candidate 缺失、零命中、多命中或 NEEDS_CLARIFICATION 时生成一字段 CHOICE，选项严格等于 selectedResults。
-- [ ] Choice 恢复通过 DiscussionSelectionTemplate 汇入同一 ENTER_RESULT authority。
-- [ ] route=STANDARD_GOAL 时完全忽略 recommendation hint。
+- [x] referenceContextHandle 只有在同 Conversation、同 release、未过期且为 Recommendation Context 时才构造候选；无效提示静默忽略并走普通 STANDARD，不泄露状态。
+- [x] 给模型的候选只含临时 C1…C5、公开 label/aliases 和 allowed routes；不含 handle、resultItemId 或候选外项目。
+- [x] AI 明确提出 ENTER 且 candidateKey 唯一合法时直接进入；单一 result 也不展示单项 CHOICE。
+- [x] candidate 缺失、零命中、多命中或 NEEDS_CLARIFICATION 时生成一字段 CHOICE，选项严格等于 selectedResults。
+- [x] Choice 恢复通过 DiscussionSelectionTemplate 汇入同一 ENTER_RESULT authority。
+- [x] route=STANDARD_GOAL 时完全忽略 recommendation hint。
 
 ### Task 2.6：替换 Public projection 与 Conversation Summary
 
@@ -405,13 +405,13 @@ Slice 1 Exit Gate：
 - backend/src/test/java/com/portfolio/agent/turn/contract/PublicAgentTurnGoldenFixtureStructureTest.java
 - backend/src/test/java/com/portfolio/agent/turn/api/AgentConversationControllerTest.java
 
-- [ ] Recommendation item 增加完整 backend-owned discussionAction；前端不得组合 handle/item/subject。
-- [ ] AnswerGoalResult 删除 Goal 级 continuation 字段；Recommendation action 是唯一推荐进入入口。
-- [ ] ACTIVE Summary 返回 public subject、真实 expiresAt、routeContinuation 和 exitAction。
-- [ ] EXPIRED Summary 返回受限 routeContinuation、reenterAction 和 newTopicAction；状态由 pointer time/session expiry/current release 派生。
-- [ ] Subject label/route 每次从当前 reviewed public content 派生；State 不保存。
-- [ ] DISCUSSION_CONTEXT_EXPIRED、UNAVAILABLE、MISMATCH、SUBJECT_UNAVAILABLE、INTERPRETATION_UNAVAILABLE 均使用稳定公开动作且不泄露 handle 所属。
-- [ ] PublicTurn 和错误响应继续 no-store。
+- [x] Recommendation item 增加完整 backend-owned discussionAction；前端不得组合 handle/item/subject。
+- [x] AnswerGoalResult 删除 Goal 级 continuation 字段；Recommendation action 是唯一推荐进入入口。
+- [x] ACTIVE Summary 返回 public subject、真实 expiresAt、routeContinuation 和 exitAction。
+- [x] EXPIRED Summary 返回受限 routeContinuation、reenterAction 和 newTopicAction；状态由 pointer time/session expiry/current release 派生。
+- [x] Subject label/route 每次从当前 reviewed public content 派生；State 不保存。
+- [x] DISCUSSION_CONTEXT_EXPIRED、UNAVAILABLE、MISMATCH、SUBJECT_UNAVAILABLE、INTERPRETATION_UNAVAILABLE 均使用稳定公开动作且不泄露 handle 所属。
+- [x] PublicTurn 和错误响应继续 no-store。
 
 ### Task 2.7：同期删除退休 Continuation/Refine authority
 
@@ -431,11 +431,11 @@ Slice 1 Exit Gate：
 - 删除/改写对应 RecommendationChildContextTest、ContinuationResolverTest、GoalProposalCodecTest、SemanticPlanCompilerTest、PortfolioInvocationFactoryTest、PortfolioSemanticResultFactoryTest
 - 删除旧 contracts fixtures/frontend mapper 中 Goal continuation 消费
 
-- [ ] 普通 Fact/Comparison 结果不再创建 Context。
-- [ ] RecommendationContext 只证明 result membership；ProjectDiscussionContext 只证明当前 locked project。
-- [ ] 讨论内 Goal 不创建普通结果 Context。
-- [ ] PORTFOLIO_REFINE_RECOMMENDATION 生产消费者为零后，同 Slice 删除 enum、parameters、task、invocation、result 和测试。
-- [ ] 不保留 deprecated class、兼容 serializer、optional operation、feature flag 或双栈。
+- [x] 普通 Fact/Comparison 结果不再创建 Context。
+- [x] RecommendationContext 只证明 result membership；ProjectDiscussionContext 只证明当前 locked project。
+- [x] 讨论内 Goal 不创建普通结果 Context。
+- [x] PORTFOLIO_REFINE_RECOMMENDATION 生产消费者为零后，同 Slice 删除 enum、parameters、task、invocation、result 和测试。
+- [x] 不保留 deprecated class、兼容 serializer、optional operation、feature flag 或双栈。
 
 零引用：
 
@@ -479,17 +479,17 @@ Slice 1 Exit Gate：
 - frontend/src/pages/AgentPage.vue
 - frontend/src/pages/AgentPage.test.ts
 
-- [ ] Mapper 严格解析 closed CONTINUE operation、discussionAction、activeDiscussion Summary 和 DISCUSSION_* actions；未知字段/operation fail-closed。
-- [ ] Recommendation 卡只渲染并转发 discussionAction；没有 action 不显示入口。
-- [ ] 当前会话最后一条可见 Recommendation 的全部可操作 item 共享同一 backend handle 时，ASK 机械附带 referenceContextHandle；不从文本/位置/label 重建。
-- [ ] active/expired focus 的自由文本发送 ROUTE_IN_CONTEXT；active pointer 存在时不发送普通 ASK。
-- [ ] 每个 AgentSession 增加内存 activeDiscussion；来源仅 PublicTurn projection 或 current conversation Summary。
-- [ ] active focus 显示项目、真实剩余 TTL 和退出；expired 显示重新进入/开始新话题并允许受限文本 route。
-- [ ] 点击历史另一项目 action 直接切换；失败保持原 focus。
-- [ ] 刷新只恢复 token 与 typed focus，不恢复消息；新会话不继承 focus。
-- [ ] handle、resultItemId、问题、消息和 Context 不进入 URL、history、localStorage 或 sessionStorage；sessionStorage 仍只有当前 tab 的 ResumeToken。
-- [ ] pending、retry、cancel、failure、clarificationConsumed 和 discussion state 按 session 隔离。
-- [ ] freeTextSemanticRouting=DISABLED 时只禁用 composer，不禁用 PRESET/discussion/exit/reenter action。
+- [x] Mapper 严格解析 closed CONTINUE operation、discussionAction、activeDiscussion Summary 和 DISCUSSION_* actions；未知字段/operation fail-closed。
+- [x] Recommendation 卡只渲染并转发 discussionAction；没有 action 不显示入口。
+- [x] 当前会话最后一条可见 Recommendation 的全部可操作 item 共享同一 backend handle 时，ASK 机械附带 referenceContextHandle；不从文本/位置/label 重建。
+- [x] active/expired focus 的自由文本发送 ROUTE_IN_CONTEXT；active pointer 存在时不发送普通 ASK。
+- [x] 每个 AgentSession 增加内存 activeDiscussion；来源仅 PublicTurn projection 或 current conversation Summary。
+- [x] active focus 显示项目、真实剩余 TTL 和退出；expired 显示重新进入/开始新话题并允许受限文本 route。
+- [x] 点击历史另一项目 action 直接切换；失败保持原 focus。
+- [x] 刷新只恢复 token 与 typed focus，不恢复消息；新会话不继承 focus。
+- [x] handle、resultItemId、问题、消息和 Context 不进入 URL、history、localStorage 或 sessionStorage；sessionStorage 仍只有当前 tab 的 ResumeToken。
+- [x] pending、retry、cancel、failure、clarificationConsumed 和 discussion state 按 session 隔离。
+- [x] freeTextSemanticRouting=DISABLED 时只禁用 composer，不禁用 PRESET/discussion/exit/reenter action。
 
 ### Task 2.9：Backend/Frontend focused GREEN
 
@@ -528,13 +528,13 @@ Frontend：
 - 新增 scripts/assert-live-project-discussion-context.ps1
 - 新增 scripts/assert-live-project-discussion-context.test.ps1
 
-- [ ] Fake Provider packaged lane 覆盖设计 §17.3 的桌面与移动端场景，不使用 API mock 替代 packaged JAR。
-- [ ] PostgreSQL 重启后 TTL 内恢复 active focus；过期后 Summary 为 EXPIRED，reenter 生成新 handle。
-- [ ] Browser 检查 storage/URL/history 中无 handle、resultItemId、问题、回答或聊天历史。
-- [ ] Provider invalid JSON、deadline、cancel、late result 不越过 pointer generation。
-- [ ] 实际获得用户授权后才运行真实 Provider；脚本使用固定脱敏输入，任何路径不打印问题、回答、Prompt、原始模型输出、Token、handle 或凭据。
-- [ ] 真实 Provider 只记录 operation、公开 GoalKind、locked subject 是否保持、候选是否属于 typed scope、耗时桶、终局和 pass/fail。
-- [ ] 原始 A2-19 路径必须覆盖“Recommendation → 承接式省略表达 → 限定 CHOICE/直接进入 → 项目讨论”，不能用显式按钮替代。
+- [x] 模型关闭的 deterministic packaged lane 与真实 Provider 专项 lane 覆盖设计 §17.3 的桌面与移动端场景，不使用 API mock 替代 packaged JAR。
+- [x] PostgreSQL 重启后 TTL 内恢复 active focus；过期后 Summary 为 EXPIRED，reenter 生成新 handle。
+- [x] Browser 检查 storage/URL/history 中无 handle、resultItemId、问题、回答或聊天历史。
+- [x] Provider invalid JSON、deadline、cancel、late result 不越过 pointer generation。
+- [x] 实际获得用户授权后才运行真实 Provider；脚本使用固定脱敏输入，任何路径不打印问题、回答、Prompt、原始模型输出、Token、handle 或凭据。
+- [x] 真实 Provider 只记录 operation、公开 GoalKind、locked subject 是否保持、候选是否属于 typed scope、耗时桶、终局和 pass/fail。
+- [x] 原始 A2-19 路径必须覆盖“Recommendation → 承接式省略表达 → 限定 CHOICE/直接进入 → 项目讨论”，不能用显式按钮替代。
 
 运行：
 
@@ -561,18 +561,18 @@ Frontend：
 - scripts/privacy-check.test.ps1
 - scripts/verify-release.ps1
 
-- [ ] 运行旧 authority 零引用门和“恰好两个 prompt”门。
-- [ ] 扫描 State/日志/前端持久化，证明无问题、窗口、Prompt、原始模型输出、Token、handle、消息或私有路径。
-- [ ] 运行 code quality、architecture、documentation、privacy 的脚本自测与生产门。
-- [ ] 运行 backend 全量 test 和 clean package。
-- [ ] 运行 frontend 全量 test/check/build。
-- [ ] 运行 PostgreSQL/Testcontainers、packaged-JAR desktop/mobile。
-- [ ] 运行已授权真实 Provider 原始路径。
-- [ ] 只有上述门全部通过，才从 docs/15 删除 A2-19 的 overview row、4.8、对应测试缺口、批次和 Exit Gate 文本；不创建历史归档。
-- [ ] 更新 docs/08、docs/11、docs/00 与 architecture status，机器状态只写闭合枚举和安全证据，不写输入/输出/Prompt/handle。
-- [ ] overallStatus 只有在硬不变量 PASS、deferredItems 为空且所有风险门真实通过后才恢复 COMPLETE。
-- [ ] 再运行 scripts/agent-architecture-status.ps1，输出必须与账本一致。
-- [ ] 仅在明确获得提交授权后创建一个中文小提交；不得暂存或提交不属于本 Slice 的并行改动。
+- [x] 运行旧 authority 零引用门和“恰好两个 prompt”门。
+- [x] 扫描 State/日志/前端持久化，证明无问题、窗口、Prompt、原始模型输出、Token、handle、消息或私有路径。
+- [x] 运行 code quality、architecture、documentation、privacy 的脚本自测与生产门。
+- [x] 运行 backend 全量 test 和 clean package。
+- [x] 运行 frontend 全量 test/check/build。
+- [x] 运行 PostgreSQL/Testcontainers、packaged-JAR desktop/mobile。
+- [x] 运行已授权真实 Provider 原始路径。
+- [x] 只有上述门全部通过，才从 docs/15 删除 A2-19 的 overview row、4.8、对应测试缺口、批次和 Exit Gate 文本；不创建历史归档。
+- [x] 更新 docs/08、docs/11、docs/00 与 architecture status，机器状态只写闭合枚举和安全证据，不写输入/输出/Prompt/handle。
+- [x] overallStatus 只有在硬不变量 PASS、deferredItems 为空且所有风险门真实通过后才恢复 COMPLETE。
+- [x] 再运行 scripts/agent-architecture-status.ps1，输出必须与账本一致。
+- [x] 仅在明确获得提交授权后按文件归属创建中文小提交；不得暂存或提交无关改动。
 
 全量命令：
 
