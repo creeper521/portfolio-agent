@@ -163,5 +163,8 @@ export interface PublicPortfolio {
   timeline: TimelineEvent[]
   questionPresets: QuestionPreset[]
   /** 中性部署能力投影；UNAVAILABLE 时公开内容仍可浏览。 */
-  agentAvailability: { readonly status: 'AVAILABLE' | 'UNAVAILABLE' }
+  agentAvailability: {
+    readonly status: 'AVAILABLE' | 'UNAVAILABLE'
+    readonly freeTextSemanticRouting: 'AVAILABLE' | 'DISABLED'
+  }
 }

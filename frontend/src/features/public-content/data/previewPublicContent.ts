@@ -195,7 +195,10 @@ export const previewPublicContent: PublicPortfolio = {
   contentVersion: '2026-07-21.1',
   runtimeBundleHash: 'sha256:preview-runtime',
   publishedAt: '2026-07-14T00:00:00+08:00',
-  agentAvailability: { status: 'AVAILABLE' },
+  agentAvailability: {
+    status: 'AVAILABLE',
+    freeTextSemanticRouting: 'AVAILABLE',
+  },
   owner: {
     name: '',
     role: 'Java 后端开发实习生',

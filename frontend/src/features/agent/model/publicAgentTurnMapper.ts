@@ -157,14 +157,28 @@ function parseContinuation(
     violations.add(`${where} 必须是 JSON 对象`)
     return undefined
   }
-  const contextHandle = text(value.contextHandle, violations, `${where}.contextHandle`)
-  const resultItemId = optionalText(value.resultItemId, violations, `${where}.resultItemId`)
-  if (contextHandle === undefined) {
-    return undefined
+  const operation = text(value.operation, violations, `${where}.operation`)
+  if (operation === 'ENTER_RESULT') {
+    const contextHandle = text(value.contextHandle, violations, `${where}.contextHandle`)
+    const resultItemId = text(value.resultItemId, violations, `${where}.resultItemId`)
+    return contextHandle === undefined || resultItemId === undefined
+      ? undefined : { operation, contextHandle, resultItemId }
   }
-  return resultItemId === undefined
-    ? { contextHandle }
-    : { contextHandle, resultItemId }
+  if (operation === 'ROUTE_IN_CONTEXT' || operation === 'EXIT_CONTEXT') {
+    const contextHandle = text(value.contextHandle, violations, `${where}.contextHandle`)
+    return contextHandle === undefined ? undefined : { operation, contextHandle }
+  }
+  if (operation === 'REENTER_SUBJECT') {
+    if (!isRecord(value.subject) || value.subject.kind !== 'PROJECT') {
+      violations.add(`${where}.subject 必须是 PROJECT subject`)
+      return undefined
+    }
+    const reference = text(value.subject.reference, violations, `${where}.subject.reference`)
+    return reference === undefined
+      ? undefined : { operation, subject: { kind: 'PROJECT', reference } }
+  }
+  violations.add(`${where}.operation 不在闭合集合中`)
+  return undefined
 }
 
 function parseSuggestedActions(
@@ -549,6 +563,9 @@ function parseRecommendation(
     const resultItemId = optionalText(rawItem.resultItemId, violations, `${itemWhere}.resultItemId`)
     const reasons = stringArrayOf(rawItem.reasons, violations, `${itemWhere}.reasons`)
     const support = parseSupport(rawItem.support, violations, `${itemWhere}.support`, sourceKeys)
+    const discussionAction = rawItem.discussionAction === undefined
+      ? undefined
+      : parseSuggestedActions([rawItem.discussionAction], violations, `${itemWhere}.discussionAction`)?.[0]
     if (route !== undefined && !route.startsWith('/')) {
       violations.add(`${itemWhere}: route "${route}" 必须是站内相对路径`)
       return
@@ -569,6 +586,7 @@ function parseRecommendation(
       route,
       reasons,
       support,
+      ...(discussionAction === undefined ? {} : { discussionAction }),
     })
   })
 
@@ -810,16 +828,12 @@ function parseAnswer(
         catalog.keys,
       )
       : undefined
-    const continuation = rawGoal.continuation === undefined
-      ? undefined
-      : parseContinuation(rawGoal.continuation, violations, `${goalWhere}.continuation`)
     goalResults.push({
       goalId,
       label,
       coverage,
       ...(presentation === undefined ? {} : { presentation }),
       notices,
-      ...(continuation === undefined ? {} : { continuation }),
     })
   })
 

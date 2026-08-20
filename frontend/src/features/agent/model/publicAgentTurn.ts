@@ -43,11 +43,14 @@ export interface GoalNotice {
   readonly message: string
 }
 
-/** 续接引用：contextHandle 定位公开 Goal Result，resultItemId 选择其中一项。 */
-export interface ContinuationReference {
-  readonly contextHandle: string
-  readonly resultItemId?: string
-}
+export type ContinuationReference =
+  | { readonly operation: 'ENTER_RESULT'; readonly contextHandle: string; readonly resultItemId: string }
+  | { readonly operation: 'ROUTE_IN_CONTEXT'; readonly contextHandle: string }
+  | { readonly operation: 'EXIT_CONTEXT'; readonly contextHandle: string }
+  | {
+    readonly operation: 'REENTER_SUBJECT'
+    readonly subject: { readonly kind: 'PROJECT'; readonly reference: string }
+  }
 
 /** 后端是业务 action 唯一权威；前端只转发 actionId/inputText/continuation。 */
 export interface SuggestedAction {
@@ -85,6 +88,7 @@ export interface RecommendationItem {
   readonly route: string
   readonly reasons: readonly string[]
   readonly support: PublicSupport
+  readonly discussionAction?: SuggestedAction
 }
 
 export interface SectionedPresentation {
@@ -110,7 +114,6 @@ export interface AnswerGoalResult {
   readonly coverage: GoalCoverage
   readonly presentation?: GoalPresentation
   readonly notices: readonly GoalNotice[]
-  readonly continuation?: ContinuationReference
 }
 
 export interface ClarificationChoice {

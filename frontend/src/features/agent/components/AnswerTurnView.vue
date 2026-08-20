@@ -64,6 +64,7 @@ function forwardClarification(payload: ClarificationSubmissionPayload): void {
       :key="goal.goalId"
       :goal="goal"
       :source-catalog="answer.sourceCatalog"
+      @select-action="forwardAction"
     >
       <template #appendix>
         <template v-if="localClarification !== undefined && goal.goalId === firstAffectedGoalId">

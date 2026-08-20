@@ -97,7 +97,7 @@ describe('AgentPage', () => {
     if (state.portfolio.value !== null) {
       state.portfolio.value = {
         ...state.portfolio.value,
-        agentAvailability: { status: 'UNAVAILABLE' },
+        agentAvailability: { status: 'UNAVAILABLE', freeTextSemanticRouting: 'DISABLED' },
       }
     }
     const { wrapper } = await mountAgentPage(state)

@@ -1,5 +1,5 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
-import type { PublicAgentTurn } from '../model/publicAgentTurn'
+import type { ContinuationReference, PublicAgentTurn, SuggestedAction } from '../model/publicAgentTurn'
 import { parsePublicAgentTurn } from '../model/publicAgentTurnMapper'
 
 // D-46 / 前端交接 §2-§4/§16.2：四条无版本 Agent 资源的唯一前端传输层。
@@ -15,12 +15,32 @@ export type ClarificationAnswer =
   | { readonly kind: 'TEXT'; readonly text: string }
 
 export type AgentTurnCommand =
-  | { readonly kind: 'ASK'; readonly input: AskCommandInput }
+  | {
+    readonly kind: 'ASK'
+    readonly input: AskCommandInput
+    readonly referenceContextHandle?: string
+  }
   | {
     readonly kind: 'CONTINUE'
+    readonly operation: 'ENTER_RESULT'
     readonly contextHandle: string
-    readonly resultItemId?: string
+    readonly resultItemId: string
+  }
+  | {
+    readonly kind: 'CONTINUE'
+    readonly operation: 'ROUTE_IN_CONTEXT'
+    readonly contextHandle: string
     readonly text: string
+  }
+  | {
+    readonly kind: 'CONTINUE'
+    readonly operation: 'EXIT_CONTEXT'
+    readonly contextHandle: string
+  }
+  | {
+    readonly kind: 'CONTINUE'
+    readonly operation: 'REENTER_SUBJECT'
+    readonly subject: { readonly kind: 'PROJECT'; readonly reference: string }
   }
   | {
     readonly kind: 'RESOLVE_CLARIFICATION'
@@ -64,8 +84,28 @@ export type AgentTurnTransportResult =
 export type CancelTurnResult = 'CANCELLED' | 'ALREADY_COMPLETED' | 'NOT_FOUND' | 'FAILED'
 export type ClearConversationResult = 'CLEARED' | 'FAILED'
 export type CurrentConversationResult =
-  | { readonly ok: true; readonly conversationId: string; readonly status: string }
+  | {
+    readonly ok: true
+    readonly conversationId: string
+    readonly status: string
+    readonly activeDiscussion?: CurrentDiscussionSummary
+  }
   | { readonly ok: false; readonly invalid: boolean }
+
+export interface CurrentDiscussionSummary {
+  readonly status: 'ACTIVE' | 'EXPIRED'
+  readonly subject: {
+    readonly kind: 'PROJECT'
+    readonly reference: string
+    readonly label: string
+    readonly route: string
+  }
+  readonly expiresAt: string
+  readonly routeContinuation: Extract<ContinuationReference, { operation: 'ROUTE_IN_CONTEXT' }>
+  readonly exitAction?: SuggestedAction
+  readonly reenterAction?: SuggestedAction
+  readonly newTopicAction?: SuggestedAction
+}
 
 const TURNS_PATH = '/api/agent/turns'
 const CURRENT_CONVERSATION_PATH = '/api/agent/conversations/current'
@@ -80,6 +120,66 @@ function bearerHeaders(resumeToken: string | undefined): Record<string, string> 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function currentContinuation(value: unknown): ContinuationReference | null {
+  if (!isRecord(value) || typeof value.operation !== 'string') return null
+  if (value.operation === 'ENTER_RESULT') {
+    return typeof value.contextHandle === 'string' && typeof value.resultItemId === 'string'
+      ? { operation: value.operation, contextHandle: value.contextHandle, resultItemId: value.resultItemId }
+      : null
+  }
+  if (value.operation === 'ROUTE_IN_CONTEXT' || value.operation === 'EXIT_CONTEXT') {
+    return typeof value.contextHandle === 'string'
+      ? { operation: value.operation, contextHandle: value.contextHandle }
+      : null
+  }
+  if (value.operation === 'REENTER_SUBJECT' && isRecord(value.subject)
+      && value.subject.kind === 'PROJECT' && typeof value.subject.reference === 'string') {
+    return { operation: value.operation, subject: { kind: 'PROJECT', reference: value.subject.reference } }
+  }
+  return null
+}
+
+function currentAction(value: unknown): SuggestedAction | null {
+  if (!isRecord(value) || typeof value.actionId !== 'string' || typeof value.label !== 'string') return null
+  const continuation = currentContinuation(value.continuation)
+  if (continuation === null) return null
+  return { actionId: value.actionId, label: value.label, continuation }
+}
+
+function currentDiscussion(value: unknown): CurrentDiscussionSummary | null {
+  if (!isRecord(value) || (value.status !== 'ACTIVE' && value.status !== 'EXPIRED')
+      || !isRecord(value.subject) || value.subject.kind !== 'PROJECT'
+      || typeof value.subject.reference !== 'string' || typeof value.subject.label !== 'string'
+      || typeof value.subject.route !== 'string' || !value.subject.route.startsWith('/')
+      || typeof value.expiresAt !== 'string' || Number.isNaN(Date.parse(value.expiresAt))) return null
+  const route = currentContinuation(value.routeContinuation)
+  if (route === null || route.operation !== 'ROUTE_IN_CONTEXT') return null
+  const exitAction = value.exitAction === undefined || value.exitAction === null
+    ? undefined : currentAction(value.exitAction)
+  const reenterAction = value.reenterAction === undefined || value.reenterAction === null
+    ? undefined : currentAction(value.reenterAction)
+  const newTopicAction = value.newTopicAction === undefined || value.newTopicAction === null
+    ? undefined : currentAction(value.newTopicAction)
+  if ((value.exitAction != null && exitAction === null)
+      || (value.reenterAction != null && reenterAction === null)
+      || (value.newTopicAction != null && newTopicAction === null)) return null
+  const validExitAction = exitAction ?? undefined
+  const validReenterAction = reenterAction ?? undefined
+  const validNewTopicAction = newTopicAction ?? undefined
+  return {
+    status: value.status,
+    subject: {
+      kind: 'PROJECT', reference: value.subject.reference,
+      label: value.subject.label, route: value.subject.route,
+    },
+    expiresAt: value.expiresAt,
+    routeContinuation: route,
+    ...(validExitAction === undefined ? {} : { exitAction: validExitAction }),
+    ...(validReenterAction === undefined ? {} : { reenterAction: validReenterAction }),
+    ...(validNewTopicAction === undefined ? {} : { newTopicAction: validNewTopicAction }),
+  }
 }
 
 function parseConversationEnvelope(value: unknown): ConversationEnvelope | null {
@@ -287,10 +387,17 @@ export async function fetchCurrentConversation(
   if (!isRecord(payload) || typeof payload.conversationId !== 'string') {
     return { ok: false, invalid: false }
   }
+  const activeDiscussion = payload.activeDiscussion === undefined || payload.activeDiscussion === null
+    ? undefined : currentDiscussion(payload.activeDiscussion)
+  if (payload.activeDiscussion != null && activeDiscussion === null) {
+    return { ok: false, invalid: false }
+  }
+  const validActiveDiscussion = activeDiscussion ?? undefined
   return {
     ok: true,
     conversationId: payload.conversationId,
     status: typeof payload.status === 'string' ? payload.status : 'UNKNOWN',
+    ...(validActiveDiscussion === undefined ? {} : { activeDiscussion: validActiveDiscussion }),
   }
 }
 

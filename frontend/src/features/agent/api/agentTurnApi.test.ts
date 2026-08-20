@@ -237,6 +237,48 @@ describe('cancel / current / clear', () => {
     expect(await fetchCurrentConversation('token-1')).toEqual({ ok: false, invalid: true })
   })
 
+  it('GET current 解析 ACTIVE typed focus 与 backend-owned actions', async () => {
+    const fetch = stubFetch()
+    fetch.mockResolvedValue(jsonResponse(200, {
+      conversationId: 'conversation-1',
+      status: 'ACTIVE',
+      activeDiscussion: {
+        status: 'ACTIVE',
+        subject: {
+          kind: 'PROJECT',
+          reference: 'project-a',
+          label: '项目 A',
+          route: '/projects/project-a',
+        },
+        expiresAt: '2026-08-20T08:30:00Z',
+        routeContinuation: {
+          operation: 'ROUTE_IN_CONTEXT',
+          contextHandle: 'discussion_handle_123',
+        },
+        exitAction: {
+          actionId: 'discussion-exit',
+          label: '结束讨论',
+          continuation: {
+            operation: 'EXIT_CONTEXT',
+            contextHandle: 'discussion_handle_123',
+          },
+        },
+      },
+    }))
+
+    await expect(fetchCurrentConversation('token-1')).resolves.toMatchObject({
+      ok: true,
+      activeDiscussion: {
+        status: 'ACTIVE',
+        subject: { reference: 'project-a' },
+        routeContinuation: {
+          operation: 'ROUTE_IN_CONTEXT',
+          contextHandle: 'discussion_handle_123',
+        },
+      },
+    })
+  })
+
   it('DELETE current 204 为 CLEARED，其余为 FAILED', async () => {
     const fetch = stubFetch()
     fetch.mockResolvedValue(new Response(null, { status: 204 }))

@@ -84,7 +84,6 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
     expect(sectionedGoal.presentation.sections[0].sectionKind).toBe('BACKGROUND')
     expect(sectionedGoal.presentation.sections[0].support.kind).toBe('VERIFIED_PUBLIC_EVIDENCE')
     expect(sectionedGoal.presentation.sections[0].support.publicSourceKeys).toEqual(['source-sql-audit'])
-    expect(sectionedGoal.continuation?.contextHandle).toBe('ctx_fixture_overview')
 
     const recommendationGoal = turn.answer.goalResults[1]
     expect(recommendationGoal.coverage).toBe('FULL')
@@ -103,18 +102,22 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
     expect(item.label).toBe('Agent 能力集成 MVP')
     expect(item.route).toBe('/projects/agent-capability-mvp')
     expect(item.reasons).toEqual(['具备完整的公开实现与验证材料'])
+    expect(item.discussionAction?.continuation).toEqual({
+      operation: 'ENTER_RESULT',
+      contextHandle: 'ctx_fixture_recommendation',
+      resultItemId: 'item-goal-recommendation-1',
+    })
     expect(item.support.publicSourceKeys).toEqual(['source-agent-mvp'])
     expect(recommendation.unsatisfiedConstraints).toEqual([])
     expect(recommendation.incompleteReasons).toEqual([])
     expect(recommendation.supportingSections).toEqual([])
-    expect(recommendationGoal.continuation?.contextHandle).toBe('ctx_fixture_recommendation')
 
     expect(turn.answer.sourceCatalog.sources).toHaveLength(2)
     expect(turn.answer.sourceCatalog.sources.map((source) => source.code)).toEqual(['E-01', 'E-02'])
     expect(turn.answer.sourceComposition).toEqual(['VERIFIED_PUBLIC_EVIDENCE'])
     const action = turn.answer.suggestedActions?.[0]
     expect(action?.actionId).toBe('continue-verification')
-    expect(action?.continuation?.contextHandle).toBe('ctx_fixture_overview')
+    expect(action?.continuation).toBeUndefined()
   })
 
   it('answer-partial：PARTIAL、FULL+NONE 多 Goal、缺口 notice 挂在对应 Goal', () => {
@@ -188,7 +191,7 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
     if (capability.kind !== 'CAPABILITY_UNAVAILABLE') {
       throw new Error('期望 CAPABILITY_UNAVAILABLE')
     }
-    expect(capability.code).toBe('GOAL_INTERPRETATION_UNAVAILABLE')
+    expect(capability.code).toBe('SEMANTIC_ROUTING_UNAVAILABLE')
     expect(capability.retryable).toBe(true)
   })
 })

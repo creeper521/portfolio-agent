@@ -71,7 +71,7 @@ describe('AnswerTurnView', () => {
     expect(wrapper.find('[data-testid="source-drawer"]').exists()).toBe(false)
   })
 
-  it('SuggestedAction 事件原样转发（含 continuation）', async () => {
+  it('SuggestedAction 事件原样转发', async () => {
     const wrapper = mountAnswer('answer-complete.json')
     await wrapper.find('button[data-action-id="continue-verification"]').trigger('click')
     const emitted = wrapper.emitted('select-action')
@@ -80,7 +80,6 @@ describe('AnswerTurnView', () => {
       actionId: 'continue-verification',
       label: '继续了解验证方式',
       inputText: '继续介绍验证方式',
-      continuation: { contextHandle: 'ctx_fixture_overview' },
     })
   })
 })

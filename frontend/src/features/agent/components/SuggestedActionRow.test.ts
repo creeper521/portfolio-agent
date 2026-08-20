@@ -29,15 +29,16 @@ describe('SuggestedActionRow', () => {
   })
 
   it('有 continuation 的动作标记 data-has-continuation，无 continuation 不标记', () => {
-    const turn = parseGoldenFixture('answer-complete.json')
-    if (turn.kind !== 'ANSWER' || turn.answer.suggestedActions === undefined) {
-      throw new Error('期望 ANSWER 带 suggestedActions')
+    const action: SuggestedAction = {
+      actionId: 'discussion-exit',
+      label: '结束讨论',
+      continuation: { operation: 'EXIT_CONTEXT', contextHandle: 'context_fixture_123' },
     }
     const withContinuation = mount(SuggestedActionRow, {
-      props: { actions: turn.answer.suggestedActions },
+      props: { actions: [action] },
     })
     expect(
-      withContinuation.find('button[data-action-id="continue-verification"]').attributes('data-has-continuation'),
+      withContinuation.find('button[data-action-id="discussion-exit"]').attributes('data-has-continuation'),
     ).toBe('true')
 
     const without = mount(SuggestedActionRow, { props: { actions: actionsOf('conversational.json') } })

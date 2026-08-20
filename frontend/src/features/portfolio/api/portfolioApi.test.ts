@@ -32,11 +32,31 @@ describe('portfolio api', () => {
   it('preserves explicit Agent availability from public content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       contentVersion: 'test-v1',
+      agentAvailability: {
+        status: 'AVAILABLE',
+        freeTextSemanticRouting: 'AVAILABLE',
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(getPublicContent()).resolves.toMatchObject({
+      agentAvailability: {
+        status: 'AVAILABLE',
+        freeTextSemanticRouting: 'AVAILABLE',
+      },
+    })
+  })
+
+  it('keeps deterministic turns available while missing free-text readiness fails closed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      contentVersion: 'test-v1',
       agentAvailability: { status: 'AVAILABLE' },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
 
     await expect(getPublicContent()).resolves.toMatchObject({
-      agentAvailability: { status: 'AVAILABLE' },
+      agentAvailability: {
+        status: 'AVAILABLE',
+        freeTextSemanticRouting: 'DISABLED',
+      },
     })
   })
 
@@ -50,7 +70,10 @@ describe('portfolio api', () => {
         headers: { 'Content-Type': 'application/json' },
       })))
       await expect(getPublicContent()).resolves.toMatchObject({
-        agentAvailability: { status: 'UNAVAILABLE' },
+        agentAvailability: {
+          status: 'UNAVAILABLE',
+          freeTextSemanticRouting: 'DISABLED',
+        },
       })
     }
   })

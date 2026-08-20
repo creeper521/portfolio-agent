@@ -84,6 +84,29 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     document.body.innerHTML = ''
   })
 
+  it('free-text disabled only blocks the composer and keeps deterministic presets usable', async () => {
+    const wrapper = mountWorkspace({
+      portfolio: {
+        ...previewPublicContent,
+        agentAvailability: {
+          status: 'AVAILABLE',
+          freeTextSemanticRouting: 'DISABLED',
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="question-input"]').attributes('disabled'))
+      .toBeDefined()
+    expect(wrapper.get('[data-testid="submit-question"]').attributes('disabled'))
+      .toBeDefined()
+    expect(wrapper.get('[data-testid="free-text-routing-disabled"]').text())
+      .toContain('自由文本语义理解未启用')
+    expect(wrapper.findAll('.workspace-composer__suggestion')
+      .some((button) => button.attributes('disabled') === undefined)).toBe(true)
+    wrapper.unmount()
+  })
+
   it('提交 FREE_TEXT 后渲染闭合 turn，并把轮换 Token 写入唯一 sessionStorage 槽位', async () => {
     apiMocks.submitAgentTurn
       .mockResolvedValueOnce(
@@ -112,6 +135,10 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     await submitFreeText(wrapper, '继续介绍验证方式')
     const second = lastSubmitInput()
     expect(second.resumeToken).toBe('token-1')
+    expect(second.command).toMatchObject({
+      kind: 'ASK',
+      referenceContextHandle: 'ctx_fixture_recommendation',
+    })
     expect(second.conversationWindow.map((message) => message.role)).toEqual([
       'USER',
       'ASSISTANT',
@@ -221,21 +248,60 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     wrapper.unmount()
   })
 
-  it('SuggestedAction 转发：有 continuation 发送 CONTINUE，无 continuation 发送 ASK', async () => {
+  it('backend action 转发：推荐讨论发送 closed CONTINUE，普通建议发送 ASK', async () => {
+    apiMocks.fetchCurrentConversation
+      .mockResolvedValueOnce({
+        ok: true,
+        conversationId: 'conversation-1',
+        status: 'ACTIVE',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        conversationId: 'conversation-1',
+        status: 'ACTIVE',
+        activeDiscussion: {
+          status: 'ACTIVE',
+          subject: {
+            kind: 'PROJECT',
+            reference: 'project-a',
+            label: '项目 A',
+            route: '/projects/project-a',
+          },
+          expiresAt: '2026-08-20T08:30:00Z',
+          routeContinuation: {
+            operation: 'ROUTE_IN_CONTEXT',
+            contextHandle: 'discussion_handle_123',
+          },
+          exitAction: {
+            actionId: 'discussion-exit',
+            label: '结束讨论',
+            continuation: {
+              operation: 'EXIT_CONTEXT',
+              contextHandle: 'discussion_handle_123',
+            },
+          },
+        },
+      })
     apiMocks.submitAgentTurn
-      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), null))
+      .mockResolvedValueOnce(submitOk(
+        goldenTurn('answer-complete.json'),
+        { conversationId: 'conversation-1', resumeToken: 'token-1' },
+      ))
       .mockResolvedValueOnce(submitOk(goldenTurn('boundary.json'), null))
       .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
     const wrapper = mountWorkspace()
 
     await submitFreeText(wrapper, '介绍 SQL 审计项目')
-    await wrapper.get('button[data-action-id="continue-verification"]').trigger('click')
+    await wrapper.get('button[data-action-id="discuss-item-goal-recommendation-1"]').trigger('click')
     await flushPromises()
     expect(lastSubmitInput().command).toEqual({
       kind: 'CONTINUE',
-      contextHandle: 'ctx_fixture_overview',
-      text: '继续介绍验证方式',
+      operation: 'ENTER_RESULT',
+      contextHandle: 'ctx_fixture_recommendation',
+      resultItemId: 'item-goal-recommendation-1',
     })
+    expect(wrapper.get('[data-testid="active-discussion"]').text())
+      .toContain('项目 A')
 
     await wrapper.get('[data-action-id="ask-engineering-topic"]').trigger('click')
     await flushPromises()

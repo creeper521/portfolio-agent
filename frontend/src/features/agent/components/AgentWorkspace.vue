@@ -137,6 +137,10 @@ const activeFailure = computed(() => failures.value.get(activeSession.value?.id 
 const tabPendingFull = computed(
   () => activePending.value === null && pendingTurns.value.size >= TAB_PENDING_LIMIT,
 )
+const freeTextRoutingAvailable = computed(
+  () => props.portfolio.agentAvailability.freeTextSemanticRouting === 'AVAILABLE',
+)
+const activeDiscussion = computed(() => activeSession.value?.activeDiscussion)
 
 /** 会话私有草稿（A2-09）：切换会话草稿不串线。 */
 const questionDraft = computed<string>({
@@ -322,6 +326,30 @@ function conversationWindowOf(session: AgentSession): ConversationWindowMessage[
   return bounded[0]?.role === 'USER' ? bounded : bounded.slice(1)
 }
 
+function latestRecommendationReference(
+  session: AgentSession,
+): string | undefined {
+  for (const message of [...session.messages].reverse()) {
+    if (message.turn?.kind !== 'ANSWER') continue
+    for (const goal of [...message.turn.answer.goalResults].reverse()) {
+      if (goal.presentation?.kind !== 'RECOMMENDATION') continue
+      const handles = goal.presentation.items.map((item) => {
+        const continuation = item.discussionAction?.continuation
+        return continuation?.operation === 'ENTER_RESULT'
+          ? continuation.contextHandle
+          : undefined
+      })
+      if (
+        handles.length > 0
+        && handles.every((handle): handle is string => handle !== undefined)
+        && new Set(handles).size === 1
+      ) return handles[0]
+      return undefined
+    }
+  }
+  return undefined
+}
+
 function bindConversationEnvelope(sessionId: string, conversation: {
   conversationId: string
   resumeToken?: string
@@ -413,6 +441,11 @@ async function runTurn(
     content: turnWindowSummary(result.turn),
     turn: result.turn,
   })
+  const nextToken = sessions.getSessionResumeToken(sessionId)
+  if (nextToken !== undefined) {
+    const current = await fetchCurrentConversation(nextToken)
+    if (current.ok) sessions.setActiveDiscussion(sessionId, current.activeDiscussion)
+  }
   await focusComposer()
 }
 
@@ -421,7 +454,10 @@ function displayQuestionOf(command: AgentTurnCommand): string {
     return command.input.kind === 'FREE_TEXT' ? command.input.text : ''
   }
   if (command.kind === 'CONTINUE') {
-    return command.text
+    if (command.operation === 'ROUTE_IN_CONTEXT') return command.text
+    if (command.operation === 'ENTER_RESULT') return '进入项目讨论'
+    if (command.operation === 'EXIT_CONTEXT') return '结束项目讨论'
+    return '重新进入项目讨论'
   }
   return '补充澄清'
 }
@@ -446,16 +482,41 @@ function newRequestId(): string {
 
 function submitFreeText(rawText: string): void {
   const text = rawText.trim()
-  if (text.length === 0 || activePending.value !== null || tabPendingFull.value) return
+  if (
+    !freeTextRoutingAvailable.value
+    || text.length === 0
+    || activePending.value !== null
+    || tabPendingFull.value
+  ) return
   const session = ensureSession()
   // conversationWindow 只携带本轮之前的会话历史；本轮输入已在 command 内。
   const window = conversationWindowOf(session)
   const messageId = sessions.appendMessage(session.id, { role: 'USER', content: text })
   session.draft = ''
+  const referenceContextHandle =
+    session.activeDiscussion === undefined
+      ? latestRecommendationReference(session)
+      : undefined
+  const command: AgentTurnCommand = session.activeDiscussion === undefined
+    ? {
+      kind: 'ASK',
+      input: {
+        kind: 'FREE_TEXT',
+        text: text.slice(0, FREE_TEXT_MAX_LENGTH),
+      },
+      ...(referenceContextHandle === undefined
+        ? {} : { referenceContextHandle }),
+    }
+    : {
+      kind: 'CONTINUE',
+      operation: 'ROUTE_IN_CONTEXT',
+      contextHandle: session.activeDiscussion.routeContinuation.contextHandle,
+      text: text.slice(0, FREE_TEXT_MAX_LENGTH),
+    }
   void runTurn(
     session.id,
     newRequestId(),
-    { kind: 'ASK', input: { kind: 'FREE_TEXT', text: text.slice(0, FREE_TEXT_MAX_LENGTH) } },
+    command,
     { conversationWindow: window, ...(messageId === null ? {} : { userMessageId: messageId }) },
   )
 }
@@ -484,13 +545,15 @@ function handleSelectAction(action: SuggestedAction): void {
   const text = action.inputText ?? action.label
   let command: AgentTurnCommand
   if (action.continuation !== undefined) {
-    command = {
-      kind: 'CONTINUE',
-      contextHandle: action.continuation.contextHandle,
-      ...(action.continuation.resultItemId === undefined
-        ? {}
-        : { resultItemId: action.continuation.resultItemId }),
-      text,
+    const continuation = action.continuation
+    if (continuation.operation === 'ENTER_RESULT') {
+      command = { kind: 'CONTINUE', ...continuation }
+    } else if (continuation.operation === 'REENTER_SUBJECT') {
+      command = { kind: 'CONTINUE', ...continuation }
+    } else if (continuation.operation === 'EXIT_CONTEXT') {
+      command = { kind: 'CONTINUE', ...continuation }
+    } else {
+      command = { kind: 'CONTINUE', ...continuation, text }
     }
   } else {
     command = { kind: 'ASK', input: { kind: 'FREE_TEXT', text } }
@@ -747,6 +810,8 @@ onMounted(async () => {
         sessions.adoptResumedConversation(session.id, {
           conversationId: current.conversationId,
           resumeToken: storedToken,
+          ...(current.activeDiscussion === undefined
+            ? {} : { activeDiscussion: current.activeDiscussion }),
         })
         resumeNotice.value = {
           text: '已恢复当前会话；历史消息按隐私约定不在浏览器中保留。',
@@ -897,13 +962,44 @@ onBeforeUnmount(() => {
           role="status"
           data-testid="tab-pending-notice"
         >已有两个请求正在处理；可先浏览其他会话，稍后再提问。</p>
+        <div
+          v-if="activeDiscussion !== undefined"
+          class="workspace-composer__discussion"
+          :data-discussion-status="activeDiscussion.status"
+          data-testid="active-discussion"
+        >
+          <p>当前讨论：{{ activeDiscussion.subject.label }}</p>
+          <p>{{ activeDiscussion.status === 'ACTIVE' ? '讨论进行中' : '讨论已过期' }}</p>
+          <button
+            v-if="activeDiscussion.exitAction !== undefined"
+            type="button"
+            data-testid="exit-discussion"
+            @click="handleSelectAction(activeDiscussion.exitAction)"
+          >{{ activeDiscussion.exitAction.label }}</button>
+          <button
+            v-if="activeDiscussion.reenterAction !== undefined"
+            type="button"
+            data-testid="reenter-discussion"
+            @click="handleSelectAction(activeDiscussion.reenterAction)"
+          >{{ activeDiscussion.reenterAction.label }}</button>
+          <button
+            v-if="activeDiscussion.newTopicAction !== undefined"
+            type="button"
+            data-testid="new-topic"
+            @click="handleSelectAction(activeDiscussion.newTopicAction)"
+          >{{ activeDiscussion.newTopicAction.label }}</button>
+        </div>
         <div v-if="suggestionChips.length > 0" class="workspace-composer__suggestions">
           <button
             v-for="chip in suggestionChips"
             :key="chip.presetId ?? chip.text"
             class="workspace-composer__suggestion"
             type="button"
-            :disabled="activePending !== null || tabPendingFull"
+            :disabled="
+              activePending !== null
+              || tabPendingFull
+              || (chip.presetId === undefined && !freeTextRoutingAvailable)
+            "
             @click="chip.presetId === undefined ? submitFreeText(chip.text) : submitPreset(chip.presetId)"
           >{{ chip.text }}</button>
         </div>
@@ -915,7 +1011,7 @@ onBeforeUnmount(() => {
             data-testid="question-input"
             rows="2"
             :maxlength="FREE_TEXT_MAX_LENGTH"
-            :disabled="activePending !== null"
+            :disabled="activePending !== null || !freeTextRoutingAvailable"
             aria-label="输入你的问题"
             placeholder="问问公开项目、案例或工程取舍…"
             @keydown.enter.exact.prevent="submitFreeText(questionDraft)"
@@ -924,9 +1020,20 @@ onBeforeUnmount(() => {
             class="workspace-composer__send"
             type="submit"
             data-testid="submit-question"
-            :disabled="activePending !== null || tabPendingFull || questionDraft.trim().length === 0"
+            :disabled="
+              activePending !== null
+              || tabPendingFull
+              || !freeTextRoutingAvailable
+              || questionDraft.trim().length === 0
+            "
           >发送</button>
         </form>
+        <p
+          v-if="!freeTextRoutingAvailable"
+          class="workspace-composer__routing-disabled"
+          data-testid="free-text-routing-disabled"
+          role="status"
+        >当前部署的自由文本语义理解未启用；已发布预设与确定性操作仍可使用。</p>
         <p class="workspace-composer__privacy">当前对话未保存，刷新或关闭页面后记录会消失。</p>
       </div>
     </section>
@@ -1090,6 +1197,20 @@ onBeforeUnmount(() => {
   color: var(--workspace-text-faint);
   font: 10px/1.6 var(--mono);
 }
+.workspace-composer__routing-disabled {
+  margin: 8px 0 0;
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11px/1.6 var(--mono);
+}
+.workspace-composer__discussion {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: var(--agent-radius-sm, 8px);
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11px/1.6 var(--mono);
+}
+.workspace-composer__discussion p { margin: 0; }
 .workspace-composer__tab-limit {
   margin: 0 0 8px;
   padding: 6px 10px;

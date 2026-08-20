@@ -6,6 +6,7 @@ import type {
   AgentSession,
   SessionSeed,
 } from '../model/sessionTypes'
+import type { CurrentDiscussionSummary } from '../api/agentTurnApi'
 import { shortSessionTitle } from '../model/sessionTitle'
 
 // 体验闭环 §8：噪声输入（纯数字/纯符号/过短）的会话标题占位，可被后续有效问题升级。
@@ -199,12 +200,17 @@ export function useLocalSessions() {
 
   function adoptResumedConversation(
     sessionId: string,
-    conversation: { conversationId: string; resumeToken: string },
+    conversation: {
+      conversationId: string
+      resumeToken: string
+      activeDiscussion?: CurrentDiscussionSummary
+    },
   ): void {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) return
     session.conversationId = conversation.conversationId
     session.resumeToken = conversation.resumeToken
+    session.activeDiscussion = conversation.activeDiscussion
     sessions.value = [...sessions.value]
   }
 
@@ -213,6 +219,17 @@ export function useLocalSessions() {
     if (!session) return
     session.conversationId = undefined
     session.resumeToken = undefined
+    session.activeDiscussion = undefined
+    sessions.value = [...sessions.value]
+  }
+
+  function setActiveDiscussion(
+    sessionId: string,
+    activeDiscussion: CurrentDiscussionSummary | undefined,
+  ): void {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.activeDiscussion = activeDiscussion
     sessions.value = [...sessions.value]
   }
 
@@ -230,6 +247,7 @@ export function useLocalSessions() {
     getSessionResumeToken,
     adoptResumedConversation,
     clearSessionConversation,
+    setActiveDiscussion,
     markMessageDelivery,
     markClarificationConsumed,
     removeSession,

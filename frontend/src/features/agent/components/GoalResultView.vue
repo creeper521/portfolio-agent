@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnswerGoalResult, PublicSourceCatalog } from '../model/publicAgentTurn'
+import type { AnswerGoalResult, PublicSourceCatalog, SuggestedAction } from '../model/publicAgentTurn'
 import { GOAL_COVERAGE_LABELS } from '../model/publicAgentTurnLabels'
 import RecommendationPresentationView from './RecommendationPresentationView.vue'
 import SectionedPresentationView from './SectionedPresentationView.vue'
@@ -10,6 +10,10 @@ import SectionedPresentationView from './SectionedPresentationView.vue'
 defineProps<{
   goal: AnswerGoalResult
   sourceCatalog: PublicSourceCatalog
+}>()
+
+const emit = defineEmits<{
+  'select-action': [action: SuggestedAction]
 }>()
 </script>
 
@@ -34,6 +38,7 @@ defineProps<{
       v-else-if="goal.presentation !== undefined && goal.presentation.kind === 'RECOMMENDATION'"
       :presentation="goal.presentation"
       :source-catalog="sourceCatalog"
+      @select-action="emit('select-action', $event)"
     />
     <slot name="appendix" />
   </section>

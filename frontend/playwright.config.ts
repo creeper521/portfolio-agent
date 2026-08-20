@@ -10,10 +10,13 @@ const slowProviderLane = process.env.PLAYWRIGHT_SLOW_PROVIDER === '1'
 const admissionLane = process.env.PLAYWRIGHT_ADMISSION === '1'
 const contentOnlyLane = process.env.PLAYWRIGHT_CONTENT_ONLY === '1'
 const depthTwoLane = process.env.PLAYWRIGHT_DEPTH_TWO === '1'
+const projectDiscussionLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: contentOnlyLane
+  testMatch: projectDiscussionLane
+    ? /agent-project-discussion\.spec\.ts/
+    : contentOnlyLane
     ? /agent-content-only\.spec\.ts/
     : slowProviderLane
       ? /agent-slow-provider\.spec\.ts/
@@ -29,7 +32,7 @@ export default defineConfig({
       : undefined,
   use: {
     baseURL,
-    trace: 'retain-on-failure',
+    trace: projectDiscussionLane ? 'off' : 'retain-on-failure',
   },
   testIgnore: ['**/behavior/**/*.test.ts', '**/behavior/**/*.spec.ts'],
   projects: contentOnlyLane

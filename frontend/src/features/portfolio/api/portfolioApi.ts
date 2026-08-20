@@ -273,11 +273,18 @@ export async function getPublicContent(): Promise<PublicPortfolio> {
     && availability !== null
     && !Array.isArray(availability)
     && (availability as Record<string, unknown>).status === 'AVAILABLE'
+  const freeTextSemanticRouting = available
+    && (availability as Record<string, unknown>).freeTextSemanticRouting === 'AVAILABLE'
+      ? 'AVAILABLE'
+      : 'DISABLED'
   // 旧服务或损坏响应缺少能力投影时，公开内容仍可浏览，
   // 但 Agent 提交入口必须 fail-closed，不能把“不知道”当成“可用”。
   return {
     ...payload,
-    agentAvailability: { status: available ? 'AVAILABLE' : 'UNAVAILABLE' },
+    agentAvailability: {
+      status: available ? 'AVAILABLE' : 'UNAVAILABLE',
+      freeTextSemanticRouting,
+    },
   } as unknown as PublicPortfolio
 }
 

@@ -15,6 +15,15 @@ import {
 const TURNS = '/api/agent/turns'
 const CURRENT = '/api/agent/conversations/current'
 
+async function freeTextAvailable(request: import('@playwright/test').APIRequestContext) {
+  const response = await request.get('/api/v1/public-content')
+  if (!response.ok()) return false
+  const content = await response.json() as {
+    agentAvailability?: { freeTextSemanticRouting?: string }
+  }
+  return content.agentAvailability?.freeTextSemanticRouting === 'AVAILABLE'
+}
+
 test('final API supports preset, replay, Bearer continuation and clear', async ({ request }) => {
   const contentResponse = await request.get('/api/v1/public-content')
   expect(contentResponse.ok()).toBeTruthy()
@@ -53,7 +62,14 @@ test('final API supports preset, replay, Bearer continuation and clear', async (
     headers: { Authorization: `Bearer ${token}` },
     data: {
       requestId: crypto.randomUUID(),
-      command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: 'SQL 审计与故障排查工具' } },
+      command: {
+        kind: 'ASK',
+        input: {
+          kind: 'PRESET',
+          presetId: preset.id,
+          presetRevision: preset.contractVersion,
+        },
+      },
       conversationWindow: [
         { role: 'USER', content: '介绍公开项目' },
         { role: 'ASSISTANT', content: '已介绍一个项目' },
@@ -81,10 +97,9 @@ test('final API supports preset, replay, Bearer continuation and clear', async (
 
 test('final UI renders closed PublicAgentTurn and keeps token out of localStorage', async ({ page, isMobile }) => {
   await page.goto('/agent')
-  await page.getByTestId('question-input').fill('SQL 审计与故障排查工具')
   const responsePromise = page.waitForResponse((response) =>
     new URL(response.url()).pathname === TURNS && response.request().method() === 'POST')
-  await page.getByTestId('submit-question').click()
+  await page.locator('.workspace-composer__suggestion').first().click()
   const response = await responsePromise
   expect(response.status()).toBe(200)
   await expect(page.locator('[data-turn-kind="ANSWER"]')).toBeVisible()
@@ -107,7 +122,8 @@ test('final UI renders closed PublicAgentTurn and keeps token out of localStorag
     sessionStorage.getItem('portfolio.agent.resume-token.v1'))).toBeNull()
 })
 
-test('问候与失败都归属原会话，新会话不继承其状态', async ({ page, isMobile }) => {
+test('问候与失败都归属原会话，新会话不继承其状态', async ({ page, request, isMobile }) => {
+  test.skip(!(await freeTextAvailable(request)), '模型关闭 lane 不提供自由文本')
   await page.goto('/agent')
   await page.getByTestId('question-input').fill('你好')
   await page.getByTestId('submit-question').click()
@@ -131,8 +147,7 @@ test('cancel sends final DELETE resource and leaves no error turn', async ({ pag
     await route.continue()
   })
   await page.goto('/agent')
-  await page.getByTestId('question-input').fill('SQL 审计与故障排查工具')
-  await page.getByTestId('submit-question').click()
+  await page.locator('.workspace-composer__suggestion').first().click()
   await expect(page.getByTestId('conversation-pending')).toBeVisible()
   const deleteRequest = page.waitForRequest((request) =>
     /\/api\/agent\/turns\/[0-9a-f-]+$/i.test(new URL(request.url()).pathname)
@@ -148,7 +163,8 @@ test('cancel sends final DELETE resource and leaves no error turn', async ({ pag
 // DEFAULT lane 用高配额验证交互；10 RPM 只在独立 ADMISSION lane 内验证，
 // 避免限流窗口污染其他浏览器用例。
 
-test('两个会话的 pending 占满标签页槽位，第三个会话的新提问被阻止，取消后释放', async ({ page, isMobile }) => {
+test('两个会话的 pending 占满标签页槽位，第三个会话的新提问被阻止，取消后释放', async ({ page, request, isMobile }) => {
+  test.skip(!(await freeTextAvailable(request)), '模型关闭 lane 不提供自由文本并发输入')
   test.setTimeout(75_000)
   const delayedResponses = await delayTurnResponsesAfterBackend(page, 20_000)
   await page.goto('/agent')
@@ -195,7 +211,8 @@ test('两个会话的 pending 占满标签页槽位，第三个会话的新提�
   await delayedResponses.stop()
 })
 
-test('澄清挑战恢复推荐目标：CONSUMED 只读、当前/最近来源切换、预设脱困入口发出 PRESET', async ({ page, isMobile }) => {
+test('澄清挑战恢复推荐目标：CONSUMED 只读、当前/最近来源切换、预设脱困入口发出 PRESET', async ({ page, request, isMobile }) => {
+  test.skip(!(await freeTextAvailable(request)), '模型关闭 lane 不提供语义澄清')
   await page.goto('/agent')
 
   // “推荐 9 个项目”数量越界，确定性进入 REQUESTED_SIZE 澄清，不依赖模型。
@@ -268,9 +285,8 @@ test('前端等待超时投影 TIMEOUT，并以同 requestId 重试取得终局'
   const delayedResponses = await delayTurnResponsesAfterBackend(page, 26_000)
   await page.goto('/agent')
 
-  await page.getByTestId('question-input').fill('SQL 审计与故障排查工具')
   const askPost = nextTurnPost(page)
-  await page.getByTestId('submit-question').click()
+  await page.locator('.workspace-composer__suggestion').first().click()
   const original = await askPost
   const firstSettled = await delayedResponses.firstSettled
   expect(firstSettled.status).toBe(200)
@@ -316,9 +332,8 @@ test('真实来源限流返回双通道 429，前端显示限流恢复', async (
 
   // 页面内同一路径的提问得到同样的 429：类别投影 + 剩余秒数 + 重试入口。
   await page.goto('/agent')
-  await page.getByTestId('question-input').fill('SQL 审计与故障排查工具')
   const limited = nextTurnResponse(page)
-  await page.getByTestId('submit-question').click()
+  await page.locator('.workspace-composer__suggestion').first().click()
   expect((await limited).status()).toBe(429)
   await expect(page.locator('[data-failure-category="RATE_LIMITED"]')).toBeVisible()
   await expect(page.getByTestId('turn-failure')).toContainText(/约 \d+ 秒后可重试/)

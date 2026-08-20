@@ -6,6 +6,7 @@ import type {
   PublicSourceReference,
   RecommendationItem,
   RecommendationPresentation,
+  SuggestedAction,
 } from '../model/publicAgentTurn'
 import { SUPPORT_KIND_LABELS } from '../model/publicAgentTurnLabels'
 
@@ -15,6 +16,10 @@ import { SUPPORT_KIND_LABELS } from '../model/publicAgentTurnLabels'
 const props = defineProps<{
   presentation: RecommendationPresentation
   sourceCatalog: PublicSourceCatalog
+}>()
+
+const emit = defineEmits<{
+  'select-action': [action: SuggestedAction]
 }>()
 
 const countIncomplete = computed(
@@ -59,6 +64,13 @@ function sourcesOf(item: RecommendationItem): readonly PublicSourceReference[] {
             :data-source-key="source.key"
           >{{ source.code === undefined ? source.label : `${source.code} · ${source.label}` }}</RouterLink>
         </p>
+        <button
+          v-if="item.discussionAction !== undefined"
+          class="recommendation-presentation__discussion"
+          type="button"
+          :data-action-id="item.discussionAction.actionId"
+          @click="emit('select-action', item.discussionAction)"
+        >{{ item.discussionAction.label }}</button>
       </li>
     </ul>
     <div v-if="presentation.supportingSections.length > 0" class="recommendation-presentation__supporting">
@@ -131,6 +143,15 @@ function sourcesOf(item: RecommendationItem): readonly PublicSourceReference[] {
   text-decoration: none;
 }
 .recommendation-presentation__source:hover { text-decoration: underline; }
+.recommendation-presentation__discussion {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workspace-text, var(--ink));
+  cursor: pointer;
+}
 /* D-41.17：推荐窄屏单列 */
 @media (max-width: 640px) {
   .recommendation-presentation__items { grid-template-columns: 1fr; }

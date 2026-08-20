@@ -1,5 +1,5 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
-import type { AgentTurnCommand, SurfaceContext } from '../api/agentTurnApi'
+import type { AgentTurnCommand, CurrentDiscussionSummary, SurfaceContext } from '../api/agentTurnApi'
 import type { PublicAgentTurn } from './publicAgentTurn'
 
 // Slice 5 会话模型：消息只存在页面内存；AGENT 消息携带闭合 PublicAgentTurn。
@@ -35,6 +35,8 @@ export interface AgentSession {
   /** 服务端会话身份与凭证：仅页面内存，不落任何持久化存储。 */
   conversationId?: string
   resumeToken?: string
+  /** 服务端 typed discussion focus；仅页面内存，由 Turn/Summary 刷新。 */
+  activeDiscussion?: CurrentDiscussionSummary
 }
 
 export interface SessionSeed {
