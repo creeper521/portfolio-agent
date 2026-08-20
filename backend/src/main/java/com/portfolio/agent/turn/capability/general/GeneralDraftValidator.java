@@ -16,10 +16,10 @@ public final class GeneralDraftValidator {
                         value.role(), value.text(), value.subject(), value.dimension()))
                 .toList();
         if (request.getKind() == GeneralKnowledgeRequest.Kind.EXPLANATION) {
-            if (statements.stream().anyMatch(value -> value.getRole() == GeneralSemanticResult.Role.COMPARISON)
-                    || statements.stream().noneMatch(value -> value.getRole() == GeneralSemanticResult.Role.DEFINITION)
-                    || statements.stream().noneMatch(value -> value.getRole() == GeneralSemanticResult.Role.MECHANISM)) {
-                throw new IllegalArgumentException("explanation roles are incomplete");
+            if (statements.size() != 2
+                    || statements.get(0).getRole() != GeneralSemanticResult.Role.DEFINITION
+                    || statements.get(1).getRole() != GeneralSemanticResult.Role.MECHANISM) {
+                throw new IllegalArgumentException("explanation roles are invalid");
             }
         } else {
             validateComparisonCoverage(request, statements);

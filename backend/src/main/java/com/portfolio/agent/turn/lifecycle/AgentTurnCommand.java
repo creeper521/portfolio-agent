@@ -35,18 +35,40 @@ public abstract class AgentTurnCommand {
 
     public static final class Ask extends AgentTurnCommand {
         private final AskInput input;
+        private final String referenceContextHandle;
 
         public Ask(
                 UUID requestId,
                 AskInput input,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
+            this(requestId, input, null, surfaceContext, conversationWindow);
+        }
+
+        public Ask(
+                UUID requestId,
+                AskInput input,
+                String referenceContextHandle,
+                SurfaceContext surfaceContext,
+                ConversationWindow conversationWindow) {
             super(requestId, surfaceContext, conversationWindow);
             this.input = Objects.requireNonNull(input, "input");
+            this.referenceContextHandle = referenceContextHandle == null
+                    ? null : requireOpaque(
+                    referenceContextHandle, "referenceContextHandle");
+            if (this.referenceContextHandle != null
+                    && !(input instanceof FreeText)) {
+                throw new IllegalArgumentException(
+                        "referenceContextHandle requires FREE_TEXT");
+            }
         }
 
         public AskInput getInput() {
             return input;
+        }
+
+        public Optional<String> getReferenceContextHandle() {
+            return Optional.ofNullable(referenceContextHandle);
         }
     }
 
@@ -86,36 +108,83 @@ public abstract class AgentTurnCommand {
     }
 
     public static final class Continue extends AgentTurnCommand {
+        private final ContinueOperation operation;
         private final String contextHandle;
         private final String resultItemId;
         private final String text;
+        private final ContinueSubject subject;
 
         public Continue(
                 UUID requestId,
+                ContinueOperation operation,
                 String contextHandle,
                 String resultItemId,
                 String text,
+                ContinueSubject subject,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
             super(requestId, surfaceContext, conversationWindow);
-            this.contextHandle = requireOpaque(contextHandle, "contextHandle");
+            this.operation = Objects.requireNonNull(operation, "operation");
+            this.contextHandle = contextHandle == null
+                    ? null : requireOpaque(contextHandle, "contextHandle");
             this.resultItemId = resultItemId == null
                     ? null
                     : requireOpaque(resultItemId, "resultItemId");
-            this.text = requireText(text, "text", 2000);
+            this.text = text == null ? null : requireText(text, "text", 2000);
+            this.subject = subject;
+            if (!operationShapeValid()) {
+                throw new IllegalArgumentException(
+                        "continue operation fields do not match");
+            }
         }
 
-        public String getContextHandle() {
-            return contextHandle;
+        public ContinueOperation getOperation() {
+            return operation;
+        }
+
+        public Optional<String> getContextHandle() {
+            return Optional.ofNullable(contextHandle);
         }
 
         public Optional<String> getResultItemId() {
             return Optional.ofNullable(resultItemId);
         }
 
-        public String getText() {
-            return text;
+        public Optional<String> getText() {
+            return Optional.ofNullable(text);
         }
+
+        public Optional<ContinueSubject> getSubject() {
+            return Optional.ofNullable(subject);
+        }
+
+        private boolean operationShapeValid() {
+            return switch (operation) {
+                case ENTER_RESULT -> contextHandle != null
+                        && resultItemId != null && text == null && subject == null;
+                case ROUTE_IN_CONTEXT -> contextHandle != null
+                        && resultItemId == null && text != null && subject == null;
+                case EXIT_CONTEXT -> contextHandle != null
+                        && resultItemId == null && text == null && subject == null;
+                case REENTER_SUBJECT -> contextHandle == null
+                        && resultItemId == null && text == null && subject != null;
+            };
+        }
+    }
+
+    public static final class ContinueSubject {
+        private final ContinueSubjectKind kind;
+        private final String reference;
+
+        public ContinueSubject(
+                ContinueSubjectKind kind, String reference) {
+            this.kind = Objects.requireNonNull(kind, "kind");
+            this.reference = requirePattern(
+                    reference, "reference", "[A-Za-z0-9._-]{1,128}");
+        }
+
+        public ContinueSubjectKind getKind() { return kind; }
+        public String getReference() { return reference; }
     }
 
     public static final class ResolveClarification extends AgentTurnCommand {
@@ -221,6 +290,17 @@ public abstract class AgentTurnCommand {
     public enum SubjectHintKind {
         PROJECT,
         CASE
+    }
+
+    public enum ContinueOperation {
+        ENTER_RESULT,
+        ROUTE_IN_CONTEXT,
+        EXIT_CONTEXT,
+        REENTER_SUBJECT
+    }
+
+    public enum ContinueSubjectKind {
+        PROJECT
     }
 
     public enum AudienceRole {

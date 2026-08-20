@@ -25,23 +25,25 @@ class AgentTurnClosedContractIntegrationTest {
     @Autowired private MockMvc mockMvc;
 
     @Test
-    void exactReviewedAliasExecutesWithoutModelProvider() throws Exception {
+    void freeTextDoesNotUseReviewedAliasAsAProviderFallback() throws Exception {
         mockMvc.perform(post("/api/agent/turns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(freeText("63f63c75-16e8-49e7-864d-dcd0fe100d50",
                                 "SQL 审计与故障排查工具")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.kind").value("ANSWER"))
-                .andExpect(jsonPath("$.answer.resolution").value("COMPLETE"));
+                .andExpect(jsonPath("$.kind").value("CAPABILITY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.code").value("SEMANTIC_ROUTING_UNAVAILABLE"))
+                .andExpect(jsonPath("$.answer").doesNotExist());
     }
 
     @Test
-    void providerUnavailableWithoutExactFallbackIsCapabilityUnavailable() throws Exception {
+    void providerUnavailableWithoutFallbackUsesStableSemanticRoutingCode() throws Exception {
         mockMvc.perform(post("/api/agent/turns")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(freeText("73f63c75-16e8-49e7-864d-dcd0fe100d50", "112233")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.kind").value("CAPABILITY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.code").value("SEMANTIC_ROUTING_UNAVAILABLE"))
                 .andExpect(jsonPath("$.answer").doesNotExist());
     }
 

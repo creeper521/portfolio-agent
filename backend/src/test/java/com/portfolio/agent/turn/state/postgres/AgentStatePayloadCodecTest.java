@@ -41,9 +41,9 @@ class AgentStatePayloadCodecTest {
         AgentStatePayloadCodec.Envelope envelope = codec.encodeChallenge(
                 requestId, "conversation-1", record);
 
-        assertThat(codec.decodeChallenge(
-                requestId, "conversation-1", "clarification_nullable_size_1", envelope)
-                .blockedGoal().getRequestedSize()).isNull();
+        ClarificationStore.Record decoded = codec.decodeChallenge(
+                requestId, "conversation-1", "clarification_nullable_size_1", envelope);
+        assertThat(((BlockedGoalTemplate) decoded.resumeTemplate()).getRequestedSize()).isNull();
     }
 
     @Test void previousPayloadKeyRemainsReadableButNewWritesUseCurrentKey() {
@@ -104,7 +104,7 @@ class AgentStatePayloadCodecTest {
         String typedPlaintextProbe = JsonMapper.builder()
                 .addModule(new ParameterNamesModule())
                 .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).build()
-                .writeValueAsString(record.blockedGoal());
+                .writeValueAsString(record.resumeTemplate());
 
         assertThat(ciphertextProbe).doesNotContain(visitorQuestion, conversationWindow);
         assertThat(typedPlaintextProbe).doesNotContain(visitorQuestion, conversationWindow);
@@ -123,7 +123,7 @@ class AgentStatePayloadCodecTest {
                 (com.fasterxml.jackson.databind.ObjectMapper) mapperField.get(codec);
 
         assertThatThrownBy(() -> mapper.readValue("""
-                {"goalKind":"PORTFOLIO_RECOMMEND","subjects":[],
+                {"templateKind":"BLOCKED_GOAL","goalKind":"PORTFOLIO_RECOMMEND","subjects":[],
                  "requestedOutputs":["RECOMMENDATION"],"facets":[],"dimensions":[],
                  "requestedSize":null,"constraints":[],"unresolvedField":"REQUESTED_SIZE",
                  "remainingFields":[],"depth":1}
@@ -151,9 +151,7 @@ class AgentStatePayloadCodecTest {
                         "goal-one", "目标",
                         com.portfolio.agent.turn.projection.AnswerGoalResult.Coverage.FULL,
                         new com.portfolio.agent.turn.projection.PublicPresentation.Sectioned(
-                                List.of(section)), List.of(),
-                        new com.portfolio.agent.turn.continuation.ContinuationReference(
-                                "context_handle_123", null));
+                                List.of(section)), List.of());
         com.portfolio.agent.turn.projection.PublicAnswer withoutLocal =
                 new com.portfolio.agent.turn.projection.PublicAnswer(
                         com.portfolio.agent.turn.projection.PublicAnswer.Resolution.COMPLETE,
@@ -175,8 +173,8 @@ class AgentStatePayloadCodecTest {
         com.portfolio.agent.turn.projection.SuggestedAction action =
                 new com.portfolio.agent.turn.projection.SuggestedAction(
                         "action-continue", "继续", null,
-                        new com.portfolio.agent.turn.continuation.ContinuationReference(
-                                "context_handle_456", null));
+                        com.portfolio.agent.turn.continuation.ContinuationReference
+                                .exitContext("context_handle_456"));
 
         assertRoundTrip(codec, requestId,
                 new PublicAgentTurn.Answer(requestId, withoutLocal));
@@ -218,10 +216,12 @@ class AgentStatePayloadCodecTest {
                         .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).build(),
                 "state-key-1", new byte[32]);
         UUID requestId = UUID.randomUUID();
-        ContinuationContext.PortfolioFact context = new ContinuationContext.PortfolioFact(
+        com.portfolio.agent.turn.continuation.ProjectDiscussionContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
                 "context_handle_123", "conversation-1", "public-1",
                 java.time.Instant.parse("2026-08-18T00:05:00Z"),
-                java.util.Set.of("project-a"), java.util.Set.of("SOLUTION"));
+                "project-a", java.util.Set.of("project-a"),
+                java.time.Instant.parse("2026-08-18T00:00:00Z"), null);
         ClarificationChallenge challenge = new ClarificationChallenge(
                 "clarification_123", "请补充", List.of(
                 new ClarificationChallenge.SingleChoiceField(
@@ -240,12 +240,13 @@ class AgentStatePayloadCodecTest {
                 codec.encodeChallenge(requestId, "conversation-1", record);
         assertThat(codec.decodeContext(
                 requestId, "conversation-1", "context_handle_123", contextEnvelope).getKind())
-                .isEqualTo(com.portfolio.agent.turn.continuation.ContinuationContext.Kind.PORTFOLIO_FACT);
+                .isEqualTo(com.portfolio.agent.turn.continuation.ContinuationContext.Kind.PROJECT_DISCUSSION);
         ClarificationStore.Record decoded = codec.decodeChallenge(
                 requestId, "conversation-1", "clarification_123", challengeEnvelope);
         assertThat(decoded.challenge().getPrompt()).isEqualTo("请补充");
-        assertThat(decoded.blockedGoal().getGoalKind())
+        BlockedGoalTemplate decodedGoal = (BlockedGoalTemplate) decoded.resumeTemplate();
+        assertThat(decodedGoal.getGoalKind())
                 .isEqualTo(com.portfolio.agent.turn.planning.GoalKind.PORTFOLIO_RECOMMEND);
-        assertThat(decoded.blockedGoal().getConstraints()).containsExactly("BACKEND");
+        assertThat(decodedGoal.getConstraints()).containsExactly("BACKEND");
     }
 }

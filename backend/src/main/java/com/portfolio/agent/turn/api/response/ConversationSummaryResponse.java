@@ -1,0 +1,106 @@
+package com.portfolio.agent.turn.api.response;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.portfolio.agent.turn.continuation.ActiveDiscussionPointer;
+import com.portfolio.agent.turn.continuation.ContinuationReference;
+import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
+import com.portfolio.agent.turn.projection.SuggestedAction;
+
+import java.time.Instant;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public final class ConversationSummaryResponse {
+    private final String conversationId;
+    private final String status;
+    private final ActiveDiscussion activeDiscussion;
+
+    public ConversationSummaryResponse(
+            String conversationId,
+            AgentTurnLifecycleService.DiscussionSummary discussion) {
+        this.conversationId = conversationId;
+        this.status = "ACTIVE";
+        this.activeDiscussion = discussion == null
+                ? null : new ActiveDiscussion(discussion);
+    }
+
+    public String getConversationId() { return conversationId; }
+    public String getStatus() { return status; }
+    public ActiveDiscussion getActiveDiscussion() {
+        return activeDiscussion;
+    }
+
+    public static final class ActiveDiscussion {
+        private final ActiveDiscussionPointer.Status status;
+        private final Subject subject;
+        private final Instant expiresAt;
+        private final ContinuationReference routeContinuation;
+        private final SuggestedAction exitAction;
+        private final SuggestedAction reenterAction;
+        private final SuggestedAction newTopicAction;
+
+        private ActiveDiscussion(
+                AgentTurnLifecycleService.DiscussionSummary summary) {
+            this.status = summary.status();
+            this.subject = new Subject(
+                    "PROJECT", summary.projectId(),
+                    summary.label(), summary.route());
+            this.expiresAt = summary.expiresAt();
+            this.routeContinuation =
+                    ContinuationReference.routeInContext(
+                            summary.contextHandle());
+            if (status == ActiveDiscussionPointer.Status.ACTIVE) {
+                this.exitAction = new SuggestedAction(
+                        "discussion-exit",
+                        "结束讨论", null,
+                        ContinuationReference.exitContext(
+                                summary.contextHandle()));
+                this.reenterAction = null;
+                this.newTopicAction = null;
+            } else {
+                this.exitAction = null;
+                this.reenterAction = new SuggestedAction(
+                        "discussion-reenter",
+                        "重新进入项目", null,
+                        ContinuationReference.reenterSubject(
+                                summary.projectId()));
+                this.newTopicAction = new SuggestedAction(
+                        "discussion-new-topic",
+                        "开始新话题", null,
+                        ContinuationReference.exitContext(
+                                summary.contextHandle()));
+            }
+        }
+
+        public ActiveDiscussionPointer.Status getStatus() { return status; }
+        public Subject getSubject() { return subject; }
+        public Instant getExpiresAt() { return expiresAt; }
+        public ContinuationReference getRouteContinuation() {
+            return routeContinuation;
+        }
+        public SuggestedAction getExitAction() { return exitAction; }
+        public SuggestedAction getReenterAction() { return reenterAction; }
+        public SuggestedAction getNewTopicAction() {
+            return newTopicAction;
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static final class Subject {
+        private final String kind;
+        private final String reference;
+        private final String label;
+        private final String route;
+        private Subject(
+                String kind, String reference,
+                String label, String route) {
+            this.kind = kind;
+            this.reference = reference;
+            this.label = label;
+            this.route = route;
+        }
+        public String getKind() { return kind; }
+        public String getReference() { return reference; }
+        public String getLabel() { return label; }
+        public String getRoute() { return route; }
+    }
+}

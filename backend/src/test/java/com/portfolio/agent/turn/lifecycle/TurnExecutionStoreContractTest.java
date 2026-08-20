@@ -122,11 +122,11 @@ class TurnExecutionStoreContractTest {
                 new com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore(), clock);
         UUID requestId = UUID.randomUUID();
         byte[] fingerprint = new byte[32];
-        com.portfolio.agent.turn.continuation.ContinuationContext.PortfolioFact context =
-                new com.portfolio.agent.turn.continuation.ContinuationContext.PortfolioFact(
+        com.portfolio.agent.turn.continuation.ProjectDiscussionContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
                         "context_memory_clamp_1", "conversation-1", "public-1",
-                        now.plus(Duration.ofHours(1)), java.util.Set.of("project-a"),
-                        java.util.Set.of("OVERVIEW"));
+                        now.plus(Duration.ofHours(1)), "project-a",
+                        java.util.Set.of("project-a"), now, null);
         claim(store, requestId, "conversation-1", fingerprint, now,
                 Duration.ofSeconds(35), deadline());
         complete(store, requestId, fingerprint,

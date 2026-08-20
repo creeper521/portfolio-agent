@@ -32,6 +32,7 @@ import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.OpenAiCompatibleStructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.SystemPromptCatalog;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import com.portfolio.agent.turn.lifecycle.ActiveTurnCapacity;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
@@ -48,7 +49,8 @@ import com.portfolio.agent.turn.planning.GoalInterpretationPort;
 import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 import com.portfolio.agent.turn.planning.GoalResolver;
-import com.portfolio.agent.turn.planning.MinimalGoalFallback;
+import com.portfolio.agent.turn.planning.SafeConversationalFastPath;
+import com.portfolio.agent.turn.planning.SemanticRouteValidator;
 import com.portfolio.agent.turn.planning.PortfolioReviewedGoalSource;
 import com.portfolio.agent.turn.planning.SemanticPlanCompiler;
 import com.portfolio.agent.turn.planning.SemanticPlanValidator;
@@ -73,6 +75,11 @@ import java.util.concurrent.Executors;
         com.portfolio.agent.turn.state.configuration.ConversationContextProperties.class
 })
 public class AgentCapabilityConfiguration {
+    @Bean
+    SystemPromptCatalog systemPromptCatalog() {
+        return new SystemPromptCatalog();
+    }
+
     @Bean
     ApplicationStartupDiagnostics applicationStartupDiagnostics(
             DiagnosticEventPublisher diagnosticEventPublisher,
@@ -155,6 +162,7 @@ public class AgentCapabilityConfiguration {
             GoalInterpretationProperties properties,
             AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
+            SystemPromptCatalog prompts,
             ConversationProviderAccess providerAccess,
             ModelOperationPolicyRegistry operationPolicies) {
         if (!providerAccess.isAllowed()
@@ -163,6 +171,7 @@ public class AgentCapabilityConfiguration {
         }
         return new GoalInterpretationAdapter(
                 transport, objectMapper, new GoalProposalCodec(),
+                prompts.goalInterpretation(),
                 properties.getMaxOutputTokens(), runtimeProperties.getGoalInterpretationTimeout());
     }
 
@@ -172,6 +181,7 @@ public class AgentCapabilityConfiguration {
             ModelExpressionProperties modelProperties,
             AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
+            SystemPromptCatalog prompts,
             ConversationProviderAccess providerAccess,
             ModelOperationPolicyRegistry operationPolicies) {
         if (!providerAccess.isAllowed()
@@ -183,7 +193,8 @@ public class AgentCapabilityConfiguration {
             };
         }
         return new OpenAiCompatibleGeneralKnowledgeAdapter(
-                transport, objectMapper, modelProperties.getMaxTokens(),
+                transport, objectMapper, prompts.generalKnowledge(),
+                modelProperties.getMaxTokens(),
                 runtimeProperties.getGeneralKnowledgeTimeout());
     }
 
@@ -220,7 +231,9 @@ public class AgentCapabilityConfiguration {
             GoalInterpretationPort goalInterpretationPort) {
         return new GoalResolver(
                 goalInterpretationPort, new PortfolioReviewedGoalSource(knowledgeGateway),
-                new GoalInterpretationInputFactory(), new MinimalGoalFallback(), new GoalBoundaryPolicy());
+                new GoalInterpretationInputFactory(),
+                new SafeConversationalFastPath(), new SemanticRouteValidator(),
+                new GoalBoundaryPolicy());
     }
 
     @Bean SemanticPlanCompiler semanticPlanCompiler() {

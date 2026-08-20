@@ -52,7 +52,9 @@ public final class ConversationSessionResolver {
             ResumeToken token = ResumeToken.of(tokenBytes);
             String conversationId = UUID.nameUUIDFromBytes(
                     requestIdBytes(requestId)).toString();
-            return new Resolution(Status.TENTATIVE, conversationId, hash(token), token);
+            return new Resolution(
+                    Status.TENTATIVE, conversationId,
+                    hash(token), token, null);
         }
         ResumeToken token;
         try { token = ResumeToken.parse(bearerToken); }
@@ -62,7 +64,7 @@ public final class ConversationSessionResolver {
                 store.find(hashes, clock.instant(), deadline);
         return found.map(session -> new Resolution(
                         Status.AUTHENTICATED, session.conversationId(),
-                        session.tokenHash(), null))
+                        session.tokenHash(), null, session))
                 .orElseGet(Resolution::invalid);
     }
 
@@ -98,12 +100,16 @@ public final class ConversationSessionResolver {
 
     public record Resolution(
             Status status, String conversationId,
-            byte[] tokenHash, ResumeToken issuedToken) {
+            byte[] tokenHash, ResumeToken issuedToken,
+            ConversationSessionStore.Session session) {
         public Resolution {
             tokenHash = tokenHash == null ? null : tokenHash.clone();
         }
         @Override public byte[] tokenHash() { return tokenHash == null ? null : tokenHash.clone(); }
-        static Resolution invalid() { return new Resolution(Status.INVALID, null, null, null); }
+        static Resolution invalid() {
+            return new Resolution(
+                    Status.INVALID, null, null, null, null);
+        }
     }
     public enum Status { TENTATIVE, AUTHENTICATED, INVALID }
 }

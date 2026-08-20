@@ -105,8 +105,6 @@ public final class SemanticPlanCompiler {
             case PORTFOLIO_FACT -> subjects == 1;
             case PORTFOLIO_COMPARE -> subjects >= 2 && subjects <= 5;
             case PORTFOLIO_RECOMMEND -> subjects == 0;
-            case PORTFOLIO_REFINE_RECOMMENDATION -> subjects == 1
-                    && goal.getSubjectCandidates().get(0).getKind() == GoalSubjectReference.Kind.RESULT;
             case GENERAL_EXPLANATION, GENERAL_COMPARISON -> subjects == 0;
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> subjects == 1
                     && goal.getSubjectCandidates().get(0).getKind() != GoalSubjectReference.Kind.RESULT;
@@ -118,8 +116,6 @@ public final class SemanticPlanCompiler {
             case PORTFOLIO_FACT -> SemanticTask.Type.PORTFOLIO_FACT;
             case PORTFOLIO_COMPARE -> SemanticTask.Type.PORTFOLIO_COMPARE;
             case PORTFOLIO_RECOMMEND -> SemanticTask.Type.PORTFOLIO_RECOMMEND;
-            case PORTFOLIO_REFINE_RECOMMENDATION ->
-                    SemanticTask.Type.PORTFOLIO_REFINE_RECOMMENDATION;
             case GENERAL_EXPLANATION -> SemanticTask.Type.GENERAL_EXPLANATION;
             case GENERAL_COMPARISON -> SemanticTask.Type.GENERAL_COMPARISON;
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO ->

@@ -43,6 +43,37 @@ class ConversationSessionResolverTest {
                 .isEqualTo(ConversationSessionResolver.Status.INVALID);
     }
 
+    @Test
+    void authenticatedResolutionCarriesTheTypedDiscussionPointer() {
+        Instant now = Instant.parse("2026-08-20T08:00:00Z");
+        InMemoryConversationSessionStore store =
+                new InMemoryConversationSessionStore();
+        ConversationSessionResolver resolver =
+                new ConversationSessionResolver(
+                        store, new byte[32],
+                        Clock.fixed(now, ZoneOffset.UTC),
+                        Duration.ofMinutes(30));
+        ConversationSessionResolver.Resolution issued =
+                resolver.resolve(null, UUID.randomUUID(), deadline(now));
+        ConversationSessionStore.Session pending =
+                resolver.pendingSession(issued);
+        ActiveDiscussionPointer pointer = new ActiveDiscussionPointer(
+                "discussion_handle_123", "project-a",
+                now.plus(Duration.ofMinutes(30)));
+        store.save(new ConversationSessionStore.Session(
+                pending.conversationId(), pending.tokenHash(),
+                pending.createdAt(), pending.expiresAt(), pointer));
+
+        ConversationSessionResolver.Resolution authenticated =
+                resolver.resolve(
+                        issued.issuedToken().encode(),
+                        UUID.randomUUID(), deadline(now));
+
+        assertThat(authenticated.session()).isNotNull();
+        assertThat(authenticated.session().activeDiscussion())
+                .contains(pointer);
+    }
+
     @Test void previousTokenKeyAuthenticatesUntilTheOriginalAbsoluteExpiry() {
         Instant now = Instant.parse("2026-08-19T00:00:00Z");
         InMemoryConversationSessionStore store = new InMemoryConversationSessionStore();

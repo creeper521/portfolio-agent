@@ -5,44 +5,45 @@ import java.util.Optional;
 
 public final class GoalInterpretationResult {
     private final Kind kind;
-    private final UserGoalProposal goalProposal;
-    private final ClarificationProposal clarification;
+    private final SemanticRouteProposal routeProposal;
     private final String message;
 
     private GoalInterpretationResult(
             Kind kind,
-            UserGoalProposal goalProposal,
-            ClarificationProposal clarification,
+            SemanticRouteProposal routeProposal,
             String message) {
         this.kind = Objects.requireNonNull(kind, "kind");
-        this.goalProposal = goalProposal;
-        this.clarification = clarification;
+        this.routeProposal = routeProposal;
         this.message = message;
     }
 
-    public static GoalInterpretationResult goals(UserGoalProposal proposal) {
-        return new GoalInterpretationResult(Kind.GOALS,
-                Objects.requireNonNull(proposal, "proposal"), null, null);
-    }
-
-    public static GoalInterpretationResult clarification(ClarificationProposal proposal) {
-        return new GoalInterpretationResult(Kind.CLARIFICATION, null,
-                Objects.requireNonNull(proposal, "proposal"), null);
+    public static GoalInterpretationResult semanticRoute(
+            SemanticRouteProposal proposal) {
+        return new GoalInterpretationResult(
+                Kind.SEMANTIC_ROUTE,
+                Objects.requireNonNull(proposal, "proposal"),
+                null);
     }
 
     public static GoalInterpretationResult conversational(String message) {
         if (message == null || message.isBlank() || message.length() > 400) {
-            throw new IllegalArgumentException("conversational message is required and bounded");
+            throw new IllegalArgumentException(
+                    "conversational message is required and bounded");
         }
-        return new GoalInterpretationResult(Kind.CONVERSATIONAL, null, null, message);
+        return new GoalInterpretationResult(
+                Kind.CONVERSATIONAL, null, message);
     }
 
     public Kind getKind() { return kind; }
-    public Optional<UserGoalProposal> getGoalProposal() { return Optional.ofNullable(goalProposal); }
-    public Optional<ClarificationProposal> getClarification() {
-        return Optional.ofNullable(clarification);
+    public Optional<SemanticRouteProposal> getRouteProposal() {
+        return Optional.ofNullable(routeProposal);
     }
-    public Optional<String> getMessage() { return Optional.ofNullable(message); }
+    public Optional<String> getMessage() {
+        return Optional.ofNullable(message);
+    }
 
-    public enum Kind { GOALS, CLARIFICATION, CONVERSATIONAL }
+    public enum Kind {
+        SEMANTIC_ROUTE,
+        CONVERSATIONAL
+    }
 }

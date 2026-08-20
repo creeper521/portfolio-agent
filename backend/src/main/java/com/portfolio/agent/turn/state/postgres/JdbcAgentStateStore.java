@@ -174,6 +174,21 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             ConversationSessionStore.Session sessionToCreate, SessionAccess sessionAccess,
             Instant completedAt,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
+        return complete(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                com.portfolio.agent.turn.continuation.DiscussionStateMutation.none());
+    }
+
+    @Override public boolean complete(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess,
+            Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation) {
         requireDatabaseTime(deadline);
         return Boolean.TRUE.equals(transactions.execute(status -> {
             applyDatabaseTimeout(deadline);
@@ -201,6 +216,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                         tokenKeyId, time(sessionToCreate.createdAt()), time(sessionToCreate.createdAt()),
                         time(sessionToCreate.expiresAt()), time(sessionToCreate.expiresAt()), 0, 0);
             }
+            if (!applyDiscussionMutation(
+                    row.conversationId(), discussionMutation, deadline)) {
+                status.setRollbackOnly();
+                return false;
+            }
             for (ContinuationContext context : contexts) {
                 AgentStatePayloadCodec.Envelope contextEnvelope = codec.encodeContext(
                         requestId, row.conversationId().toString(), context);
@@ -227,6 +247,46 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             if (updated != 1) status.setRollbackOnly();
             return updated == 1;
         }));
+    }
+
+    private boolean applyDiscussionMutation(
+            UUID conversationId,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation mutation,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline) {
+        if (mutation.isNone()) return true;
+        applyDatabaseTimeout(deadline);
+        String current = jdbc.queryForObject(
+                "SELECT active_discussion_handle FROM " + sessionTable
+                        + " WHERE conversation_id=? FOR UPDATE",
+                String.class, conversationId);
+        String expected = mutation.getExpectedGeneration().orElse(null);
+        if (expected == null ? current != null : !expected.equals(current)) {
+            return false;
+        }
+        return switch (mutation.getKind()) {
+            case NONE, GUARD -> true;
+            case CLEAR -> jdbc.update(
+                    "UPDATE " + sessionTable
+                            + " SET active_discussion_handle=NULL,"
+                            + " active_discussion_project_id=NULL,"
+                            + " active_discussion_expires_at=NULL,"
+                            + " revision=revision+1 WHERE conversation_id=?",
+                    conversationId) == 1;
+            case REPLACE -> {
+                com.portfolio.agent.turn.continuation.ActiveDiscussionPointer replacement =
+                        mutation.getReplacement().orElseThrow();
+                yield jdbc.update(
+                        "UPDATE " + sessionTable
+                                + " SET active_discussion_handle=?,"
+                                + " active_discussion_project_id=?,"
+                                + " active_discussion_expires_at=?,"
+                                + " revision=revision+1 WHERE conversation_id=?",
+                        replacement.getContextHandle(),
+                        replacement.getProjectId(),
+                        time(replacement.getContextExpiresAt()),
+                        conversationId) == 1;
+            }
+        };
     }
 
     private void applyDatabaseTimeout(
@@ -283,7 +343,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             ClarificationStore.Record rebound = new ClarificationStore.Record(
                     current.conversationId(), tentativeSession.tokenHash(),
                     current.contentReleaseId(), current.challenge(),
-                    current.choiceBindings(), current.textBindings(), current.blockedGoal());
+                    current.choiceBindings(), current.textBindings(), current.resumeTemplate());
             AgentStatePayloadCodec.Envelope envelope = codec.encodeChallenge(
                     challenge.sourceRequestId(), conversationId, rebound);
             applyDatabaseTimeout(deadline);
@@ -338,7 +398,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return new ClarificationStore.Record(
                 current.conversationId(), tokenHash, current.contentReleaseId(),
                 current.challenge(), current.choiceBindings(), current.textBindings(),
-                current.blockedGoal());
+                current.resumeTemplate());
     }
 
     private long requireDatabaseTime(

@@ -40,7 +40,8 @@ class TurnInputSafetyReplacementTest {
         GoalResolver resolver = new GoalResolver(
                 (input, deadline) -> { throw new AssertionError("model must not receive unknown subject hint"); },
                 command -> { throw new AssertionError("reviewed source must not receive unknown hint"); },
-                new GoalInterpretationInputFactory(), new MinimalGoalFallback(), new GoalBoundaryPolicy());
+                new GoalInterpretationInputFactory(), new SafeConversationalFastPath(),
+                new SemanticRouteValidator(), new GoalBoundaryPolicy());
         AgentTurnCommand command = new AgentTurnCommand.Ask(
                 UUID.randomUUID(), new AgentTurnCommand.FreeText("这个项目如何实现"),
                 new AgentTurnCommand.SurfaceContext(

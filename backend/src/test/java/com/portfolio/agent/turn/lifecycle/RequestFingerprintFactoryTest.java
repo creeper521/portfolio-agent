@@ -24,7 +24,9 @@ class RequestFingerprintFactoryTest {
         byte[] ask = factory.fingerprint(new AgentTurnCommand.Ask(
                 UUID.randomUUID(), new AgentTurnCommand.FreeText("abc"), null, null));
         byte[] continuation = factory.fingerprint(new AgentTurnCommand.Continue(
-                UUID.randomUUID(), "context1", null, "abc", null, null));
+                UUID.randomUUID(),
+                AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
+                "context1", null, "abc", null, null, null));
         assertThat(Arrays.equals(ask, continuation)).isFalse();
     }
 

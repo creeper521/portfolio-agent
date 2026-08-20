@@ -12,12 +12,21 @@ public interface ConversationSessionStore {
 
     record Session(
             String conversationId, byte[] tokenHash,
-            Instant createdAt, Instant expiresAt) {
+            Instant createdAt, Instant expiresAt,
+            ActiveDiscussionPointer activeDiscussionPointer) {
+        public Session(
+                String conversationId, byte[] tokenHash,
+                Instant createdAt, Instant expiresAt) {
+            this(conversationId, tokenHash, createdAt, expiresAt, null);
+        }
         public Session {
             conversationId = ContinuationContext.text(conversationId, "conversationId");
             tokenHash = tokenHash.clone();
             if (!createdAt.isBefore(expiresAt)) throw new IllegalArgumentException("session expiry is invalid");
         }
         @Override public byte[] tokenHash() { return tokenHash.clone(); }
+        public Optional<ActiveDiscussionPointer> activeDiscussion() {
+            return Optional.ofNullable(activeDiscussionPointer);
+        }
     }
 }

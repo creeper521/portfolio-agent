@@ -20,7 +20,7 @@
     },
     {
       "caseId": "turn.continue-explicit-context",
-      "command": {"kind": "CONTINUE", "contextHandle": "opaque-context", "text": "继续说明验证方式"},
+      "command": {"kind": "CONTINUE", "operation": "ROUTE_IN_CONTEXT", "contextHandle": "opaque-context", "text": "继续说明验证方式"},
       "contextSummary": {"surface": "NONE", "window": "BOUNDED"},
       "requiredCapabilities": ["CONTINUATION", "PORTFOLIO_EVIDENCE"],
       "expected": {"kind": "ANSWER", "resolution": "COMPLETE", "goals": [{"goalKey": "continued-verification", "coverage": "FULL"}]},

@@ -114,9 +114,10 @@ class JdbcAgentStateStoreIntegrationTest {
         String contextHandle = "context_database_lock_1";
         claim(capped, contextRequest, conversationId, fingerprint, now,
                 Duration.ofSeconds(10), deadline(Duration.ofSeconds(5)));
-        ContinuationContext.PortfolioFact context = new ContinuationContext.PortfolioFact(
+        com.portfolio.agent.turn.continuation.ProjectDiscussionContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
                 contextHandle, conversationId, "public-1", now.plus(Duration.ofMinutes(30)),
-                java.util.Set.of("project-a"), java.util.Set.of("OVERVIEW"));
+                "project-a", java.util.Set.of("project-a"), now, null);
         assertThat(complete(capped,
                 contextRequest, fingerprint,
                 new PublicAgentTurn.Conversational(contextRequest, "已完成", List.of()),
@@ -493,9 +494,10 @@ class JdbcAgentStateStoreIntegrationTest {
         String conversationId = UUID.randomUUID().toString();
         byte[] fingerprint = new byte[32];
         String contextHandle = "context_absolute_ttl_1";
-        ContinuationContext.PortfolioFact context = new ContinuationContext.PortfolioFact(
+        com.portfolio.agent.turn.continuation.ProjectDiscussionContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
                 contextHandle, conversationId, "public-1", now.plus(Duration.ofMinutes(30)),
-                Set.of("project-a"), Set.of("OVERVIEW"));
+                "project-a", Set.of("project-a"), now, null);
         assertThat(claim(store, requestId, conversationId, fingerprint, now,
                 Duration.ofSeconds(35), deadline(Duration.ofSeconds(5))).status())
                 .isEqualTo(TurnExecutionStore.ClaimResult.Status.CLAIMED);
@@ -583,9 +585,11 @@ class JdbcAgentStateStoreIntegrationTest {
         UUID requestId = UUID.randomUUID();
         String conversationId = UUID.randomUUID().toString();
         byte[] fingerprint = new byte[32];
-        ContinuationContext.PortfolioFact context = new ContinuationContext.PortfolioFact(
+        com.portfolio.agent.turn.continuation.ProjectDiscussionContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
                 "context_duplicate_1", conversationId, "public-1",
-                now.plus(Duration.ofMinutes(30)), Set.of("project-a"), Set.of("OVERVIEW"));
+                now.plus(Duration.ofMinutes(30)), "project-a",
+                Set.of("project-a"), now, null);
         claim(store, requestId, conversationId, fingerprint, now,
                 Duration.ofSeconds(35), deadline(Duration.ofSeconds(5)));
 

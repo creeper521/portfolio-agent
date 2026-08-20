@@ -31,7 +31,9 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
                 session.tokenHash(), existing.tokenHash());
         if (revokedAt != null && !replacement) return;
         Session effective = existing == null || replacement ? session : new Session(
-                session.conversationId(), session.tokenHash(), existing.createdAt(), existing.expiresAt());
+                session.conversationId(), session.tokenHash(),
+                existing.createdAt(), existing.expiresAt(),
+                existing.activeDiscussion().orElse(null));
         sessions.entrySet().removeIf(value ->
                 value.getValue().conversationId().equals(session.conversationId()));
         if (replacement) revokedConversations.remove(session.conversationId());
@@ -65,6 +67,29 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
             String conversationId, byte[] tokenHash, Instant clearedAt) {
         if (!authorize(conversationId, tokenHash, clearedAt)) return false;
         revokedConversations.put(conversationId, clearedAt);
+        return true;
+    }
+    public synchronized boolean applyDiscussionMutation(
+            String conversationId, byte[] tokenHash,
+            DiscussionStateMutation mutation, Instant now) {
+        if (mutation.isNone()) return true;
+        if (!authorize(conversationId, tokenHash, now)) return false;
+        java.util.Map.Entry<String, Session> entry = sessions.entrySet().stream()
+                .filter(value -> value.getValue().conversationId()
+                        .equals(conversationId))
+                .findFirst().orElse(null);
+        if (entry == null) return false;
+        Session currentSession = entry.getValue();
+        ActiveDiscussionPointer current =
+                currentSession.activeDiscussion().orElse(null);
+        if (!mutation.matches(current)) return false;
+        Session updated = new Session(
+                currentSession.conversationId(),
+                currentSession.tokenHash(),
+                currentSession.createdAt(),
+                currentSession.expiresAt(),
+                mutation.result(current));
+        sessions.put(entry.getKey(), updated);
         return true;
     }
     public synchronized int cleanup(Instant now, int limit) {

@@ -24,7 +24,8 @@ class GoalResolverTest {
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
             receivedDeadline.set(deadline);
-            return GoalInterpretationResult.goals(proposal);
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(proposal));
         }, command -> {
             reviewedCalls.incrementAndGet();
             return proposal;
@@ -48,7 +49,8 @@ class GoalResolverTest {
         UserGoalProposal proposal = generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
-            return GoalInterpretationResult.goals(proposal);
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(proposal));
         }, command -> {
             reviewedCalls.incrementAndGet();
             return proposal;
@@ -74,7 +76,7 @@ class GoalResolverTest {
     }
 
     @Test
-    void providerFailureMayUseExactReviewedPublicAliasOnly() {
+    void providerFailureDoesNotUseReviewedAliasAsANaturalLanguageFallback() {
         GoalResolver resolver = resolver((input, deadline) -> {
             throw new GoalInterpretationUnavailableException();
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
@@ -82,9 +84,9 @@ class GoalResolverTest {
         ResolvedGoalSet result = resolver.resolve(
                 freeText("SQL 审计项目"), context(), deadline());
 
-        assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.GOALS);
-        assertThat(result.getGoalProposal().orElseThrow().getGoals().get(0).getGoalKind())
-                .isEqualTo(GoalKind.PORTFOLIO_FACT);
+        assertThat(result.getKind())
+                .isEqualTo(ResolvedGoalSet.Kind.CAPABILITY_UNAVAILABLE);
+        assertThat(result.getGoalProposal()).isEmpty();
     }
 
     @Test
@@ -116,7 +118,8 @@ class GoalResolverTest {
                 ClarificationProposal.Field.SUBJECT, "请选择项目",
                 blocked);
         GoalResolver resolver = resolver(
-                (input, deadline) -> GoalInterpretationResult.clarification(clarification),
+                (input, deadline) -> GoalInterpretationResult.semanticRoute(
+                        SemanticRouteProposal.needsClarification(clarification)),
                 command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
         ResolvedGoalSet result = resolver.resolve(
@@ -127,11 +130,13 @@ class GoalResolverTest {
     }
 
     @Test
-    void recommendationWithoutCountDefaultsToTwoBeforeProvider() {
+    void recommendationQuantityComesFromTheClosedProviderProposal() {
         AtomicInteger modelCalls = new AtomicInteger();
+        UserGoalProposal proposal = recommendationProposal(2, Set.of());
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
-            throw new AssertionError("deterministic recommendation must not call provider");
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(proposal));
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
         ResolvedGoalSet result = resolver.resolve(
@@ -143,46 +148,30 @@ class GoalResolverTest {
         assertThat(goal.getSubjectCandidates()).isEmpty();
         assertThat(((UserGoalProposal.PortfolioRecommendationParameters)
                 goal.getParameters()).getRequestedSize()).isEqualTo(2);
-        assertThat(modelCalls).hasValue(0);
+        assertThat(modelCalls).hasValue(1);
     }
 
     @Test
-    void recommendationAcceptsOneToFiveAndInvalidCountClarifiesOnce() {
+    void recommendationConstraintAndSizeAreNotParsedFromVisitorText() {
         AtomicInteger modelCalls = new AtomicInteger();
+        UserGoalProposal proposal = recommendationProposal(
+                5, Set.of("POSTGRESQL"));
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
-            throw new AssertionError("deterministic recommendation must not call provider");
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(proposal));
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
-        ResolvedGoalSet direct = resolver.resolve(
-                freeText("推荐 5 个 PostgreSQL 项目"), context(), deadline());
-        ResolvedGoalSet invalid = resolver.resolve(
-                freeText("推荐 0 个项目"), context(), deadline());
-        ResolvedGoalSet range = resolver.resolve(
-                freeText("推荐 2-3 个项目"), context(), deadline());
-        ResolvedGoalSet chineseCompound = resolver.resolve(
-                freeText("推荐十二个项目"), context(), deadline());
-        ResolvedGoalSet overflow = resolver.resolve(
-                freeText("推荐 999999999999999999999999 个项目"), context(), deadline());
-        ResolvedGoalSet version = resolver.resolve(
-                freeText("推荐 2 个 Java 17 项目"), context(), deadline());
-        ResolvedGoalSet multiple = resolver.resolve(
-                freeText("推荐 2 个或 3 个项目"), context(), deadline());
+        ResolvedGoalSet result = resolver.resolve(
+                freeText("给我找一些作品"), context(), deadline());
 
-        assertThat(((UserGoalProposal.PortfolioRecommendationParameters) direct
-                .getGoalProposal().orElseThrow().getGoals().getFirst().getParameters())
-                .getRequestedSize()).isEqualTo(5);
-        assertThat(invalid.getKind()).isEqualTo(ResolvedGoalSet.Kind.CLARIFICATION);
-        assertThat(invalid.getClarification().orElseThrow().getField())
-                .isEqualTo(ClarificationProposal.Field.REQUESTED_SIZE);
-        assertThat(range.getKind()).isEqualTo(ResolvedGoalSet.Kind.CLARIFICATION);
-        assertThat(chineseCompound.getKind()).isEqualTo(ResolvedGoalSet.Kind.CLARIFICATION);
-        assertThat(overflow.getKind()).isEqualTo(ResolvedGoalSet.Kind.CLARIFICATION);
-        assertThat(((UserGoalProposal.PortfolioRecommendationParameters) version
-                .getGoalProposal().orElseThrow().getGoals().getFirst().getParameters())
-                .getRequestedSize()).isEqualTo(2);
-        assertThat(multiple.getKind()).isEqualTo(ResolvedGoalSet.Kind.CLARIFICATION);
-        assertThat(modelCalls).hasValue(0);
+        UserGoalProposal.PortfolioRecommendationParameters parameters =
+                (UserGoalProposal.PortfolioRecommendationParameters) result
+                        .getGoalProposal().orElseThrow().getGoals()
+                        .getFirst().getParameters();
+        assertThat(parameters.getRequestedSize()).isEqualTo(5);
+        assertThat(parameters.getConstraints()).containsExactly("POSTGRESQL");
+        assertThat(modelCalls).hasValue(1);
     }
 
     @Test
@@ -191,7 +180,8 @@ class GoalResolverTest {
         UserGoalProposal providerProposal = recommendationProposal(2, Set.of());
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
-            return GoalInterpretationResult.goals(providerProposal);
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(providerProposal));
         }, command -> providerProposal);
 
         ResolvedGoalSet negated = resolver.resolve(
@@ -243,7 +233,8 @@ class GoalResolverTest {
             GoalInterpretationPort port, ReviewedGoalSource reviewedGoalSource) {
         return new GoalResolver(
                 port, reviewedGoalSource, new GoalInterpretationInputFactory(),
-                new MinimalGoalFallback(), new GoalBoundaryPolicy());
+                new SafeConversationalFastPath(), new SemanticRouteValidator(),
+                new GoalBoundaryPolicy());
     }
 
     private GoalResolutionContext context() {
@@ -270,8 +261,12 @@ class GoalResolverTest {
     }
 
     private AgentTurnCommand continuation() {
-        return new AgentTurnCommand.Continue(UUID.randomUUID(), "context_opaque", null, "继续",
-                AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
+        return new AgentTurnCommand.Continue(
+                UUID.randomUUID(),
+                AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
+                "context_opaque", null, "继续", null,
+                AgentTurnCommand.SurfaceContext.empty(),
+                ConversationWindow.empty());
     }
 
     private AgentTurnCommand clarification() {

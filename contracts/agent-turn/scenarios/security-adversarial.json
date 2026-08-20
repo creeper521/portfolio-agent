@@ -20,7 +20,7 @@
     },
     {
       "caseId": "security.cross-conversation-handle",
-      "command": {"kind": "CONTINUE", "contextHandle": "foreign-context", "text": "继续"},
+      "command": {"kind": "CONTINUE", "operation": "ROUTE_IN_CONTEXT", "contextHandle": "foreign-context", "text": "继续"},
       "contextSummary": {"surface": "NONE", "window": "EMPTY"},
       "requiredCapabilities": ["CONTINUATION_AUTHORIZATION"],
       "expected": {"kind": "CAPABILITY_UNAVAILABLE"},

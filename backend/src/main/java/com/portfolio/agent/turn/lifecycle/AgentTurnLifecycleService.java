@@ -9,15 +9,21 @@ import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
-import com.portfolio.agent.turn.continuation.ContinuationReference;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ActiveDiscussionPointer;
+import com.portfolio.agent.turn.continuation.DiscussionStateMutation;
+import com.portfolio.agent.turn.continuation.ProjectDiscussionContext;
+import com.portfolio.agent.turn.continuation.ProjectDiscussionCoordinator;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.SemanticTurnEngine;
 import com.portfolio.agent.turn.execution.SemanticTurnOutcome;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.turn.planning.ClarificationProposal;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
+import com.portfolio.agent.turn.planning.DiscussionSelectionTemplate;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
+import com.portfolio.agent.turn.planning.GoalInterpretationResult;
+import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.GoalResolutionContext;
 import com.portfolio.agent.turn.planning.GoalResolver;
@@ -26,6 +32,7 @@ import com.portfolio.agent.turn.planning.PlanCompilationResult;
 import com.portfolio.agent.turn.planning.ResolvedGoalSet;
 import com.portfolio.agent.turn.planning.SemanticPlanCompiler;
 import com.portfolio.agent.turn.planning.SemanticTurnPlan;
+import com.portfolio.agent.turn.planning.SemanticRouteProposal;
 import com.portfolio.agent.turn.planning.ValidatedSemanticTurnPlan;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
 import com.portfolio.agent.turn.planning.GoalKnowledgeRequirement;
@@ -69,6 +76,7 @@ public final class AgentTurnLifecycleService {
     private final Duration turnTimeout;
     private final Duration settlementReserve;
     private final Duration contextTtl;
+    private final ProjectDiscussionCoordinator discussionCoordinator;
 
     public AgentTurnLifecycleService(
             PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
@@ -98,6 +106,11 @@ public final class AgentTurnLifecycleService {
             throw new IllegalArgumentException("settlementReserve must be shorter than turnTimeout");
         }
         this.contextTtl = positive(contextTtl, "contextTtl");
+        this.discussionCoordinator = new ProjectDiscussionCoordinator(
+                () -> "discussion_"
+                        + UUID.randomUUID().toString().replace("-", ""),
+                clock, contextTtl.compareTo(Duration.ofMinutes(30)) > 0
+                ? Duration.ofMinutes(30) : contextTtl);
     }
 
     public Result execute(String bearerToken, AgentTurnCommand command) {
@@ -109,9 +122,13 @@ public final class AgentTurnLifecycleService {
         if (session.status() == ConversationSessionResolver.Status.INVALID) {
             return Result.state(Status.UNAUTHORIZED, 0);
         }
+        ConversationSessionStore.Session pendingSession =
+                sessionResolver.pendingSession(session);
+        ConversationSessionStore.Session sessionAuthority =
+                session.session() == null ? pendingSession : session.session();
         Result result = executeResolved(
                 session.conversationId(), session.tokenHash(),
-                sessionResolver.pendingSession(session), command,
+                pendingSession, sessionAuthority, command,
                 turnStartedAt, turnDeadline);
         boolean canCommitSession = (result.status() == Status.COMPLETED
                 || result.status() == Status.REPLAY) && !result.settlementFailed();
@@ -126,6 +143,7 @@ public final class AgentTurnLifecycleService {
     private Result executeResolved(
             String conversationId, byte[] resumeTokenHash,
             ConversationSessionStore.Session sessionToCreate,
+            ConversationSessionStore.Session sessionAuthority,
             AgentTurnCommand command, Instant turnStartedAt,
             TurnDeadline turnDeadline) {
         RequestFingerprintSet fingerprints = fingerprintFactory.fingerprints(command);
@@ -171,7 +189,8 @@ public final class AgentTurnLifecycleService {
         activeTurns.claimOwner(command.getRequestId(), cancelAction);
         try {
             Execution execution = executeClaimed(
-                    conversationId, resumeTokenHash, command, cancellation,
+                    conversationId, resumeTokenHash, sessionAuthority,
+                    command, cancellation,
                     turnDeadline);
             return settle(
                     command.getRequestId(), fingerprint,
@@ -194,7 +213,8 @@ public final class AgentTurnLifecycleService {
                 () -> store.complete(
                         requestId, fingerprint, execution.settledTurn(),
                         execution.contexts(), execution.challenges(),
-                        sessionToCreate, sessionAccess, clock.instant(), turnDeadline));
+                        sessionToCreate, sessionAccess, clock.instant(),
+                        turnDeadline, execution.discussionMutation()));
         try {
             boolean completed = settlement.get(remainingMillis, TimeUnit.MILLISECONDS);
             if (!completed) return Result.state(Status.CANCELLED, 0);
@@ -244,9 +264,33 @@ public final class AgentTurnLifecycleService {
                 clock.instant().plus(turnTimeout), clock);
         ConversationSessionResolver.Resolution session =
                 sessionResolver.resolve(bearerToken, UUID.randomUUID(), deadline);
-        return session.status() == ConversationSessionResolver.Status.AUTHENTICATED
-                ? new ConversationStatus(true, session.conversationId())
-                : new ConversationStatus(false, null);
+        if (session.status()
+                != ConversationSessionResolver.Status.AUTHENTICATED) {
+            return new ConversationStatus(false, null, null);
+        }
+        DiscussionSummary discussion = session.session()
+                .activeDiscussion().map(pointer ->
+                        discussionSummary(pointer, knowledgeGateway.getContent()))
+                .orElse(null);
+        return new ConversationStatus(
+                true, session.conversationId(), discussion);
+    }
+
+    private DiscussionSummary discussionSummary(
+            ActiveDiscussionPointer pointer,
+            RuntimeAnswerContent content) {
+        AnswerKnowledge project = content.getProjects().stream()
+                .filter(value -> value.getStableId()
+                        .equals(pointer.getProjectId()))
+                .findFirst().orElse(null);
+        return new DiscussionSummary(
+                pointer.statusAt(clock.instant()),
+                pointer.getProjectId(),
+                project == null ? "项目已不可用" : project.getTitle(),
+                project == null ? "/projects"
+                        : "/projects/" + project.getSlug(),
+                pointer.getContextExpiresAt(),
+                pointer.getContextHandle());
     }
 
     public boolean clearConversation(String bearerToken) {
@@ -261,12 +305,68 @@ public final class AgentTurnLifecycleService {
 
     private Execution executeClaimed(
             String conversationId, byte[] resumeTokenHash,
+            ConversationSessionStore.Session sessionAuthority,
             AgentTurnCommand command, CancellationSignal cancellation,
             TurnDeadline turnDeadline) {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
+        if (command instanceof AgentTurnCommand.Continue continuation) {
+            if (continuation.getOperation()
+                    == AgentTurnCommand.ContinueOperation.ENTER_RESULT) {
+                return enterDiscussion(
+                        conversationId, sessionAuthority,
+                        continuation, cancellation, content, turnDeadline);
+            }
+            if (continuation.getOperation()
+                    == AgentTurnCommand.ContinueOperation.REENTER_SUBJECT) {
+                return reenterDiscussion(
+                        conversationId, sessionAuthority,
+                        continuation, cancellation, content, turnDeadline);
+            }
+            if (continuation.getOperation()
+                    == AgentTurnCommand.ContinueOperation.EXIT_CONTEXT) {
+                return exitDiscussion(
+                        sessionAuthority, continuation);
+            }
+            if (continuation.getOperation()
+                    == AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT) {
+                return routeDiscussion(
+                        conversationId, sessionAuthority,
+                        command, continuation.getText().orElseThrow(),
+                        cancellation, content, turnDeadline);
+            }
+        }
+        if (command instanceof AgentTurnCommand.Ask ask
+                && ask.getInput() instanceof AgentTurnCommand.FreeText freeText
+                && sessionAuthority != null
+                && sessionAuthority.activeDiscussion().isPresent()) {
+            return routeDiscussion(
+                    conversationId, sessionAuthority,
+                    command, freeText.getText(),
+                    cancellation, content, turnDeadline);
+        }
+        if (command instanceof AgentTurnCommand.Ask ask
+                && ask.getInput() instanceof AgentTurnCommand.FreeText freeText
+                && ask.getReferenceContextHandle().isPresent()) {
+            Execution referenced = routeRecommendationReference(
+                    conversationId, resumeTokenHash, sessionAuthority,
+                    command, freeText.getText(),
+                    ask.getReferenceContextHandle().orElseThrow(),
+                    cancellation, content, turnDeadline);
+            if (referenced != null) return referenced;
+        }
         ResolvedInput input = resolveInput(
                 conversationId, resumeTokenHash, command, content,
                 turnDeadline.minus(settlementReserve));
+        if (input.discussionSelection() != null) {
+            DiscussionSelectionResolution selection = input.discussionSelection();
+            AgentTurnCommand.Continue enter = new AgentTurnCommand.Continue(
+                    command.getRequestId(), AgentTurnCommand.ContinueOperation.ENTER_RESULT,
+                    selection.contextHandle(), selection.resultItemId(), null, null,
+                    command.getSurfaceContext(), command.getConversationWindow());
+            return enterDiscussion(
+                    conversationId, sessionAuthority, enter,
+                    cancellation, content, turnDeadline);
+        }
         ResolvedGoalSet resolved = input.resolved();
         return switch (resolved.getKind()) {
             case CONVERSATIONAL -> simple(new PublicAgentTurn.Conversational(
@@ -281,14 +381,13 @@ public final class AgentTurnLifecycleService {
                             : List.of()));
             case CAPABILITY_UNAVAILABLE -> simple(new PublicAgentTurn.CapabilityUnavailable(
                     command.getRequestId(), command instanceof AgentTurnCommand.Ask
-                    ? "GOAL_INTERPRETATION_UNAVAILABLE" : "CONTINUATION_UNAVAILABLE",
+                    ? "SEMANTIC_ROUTING_UNAVAILABLE" : "CONTINUATION_UNAVAILABLE",
                     resolved.getMessage().orElseThrow(), command instanceof AgentTurnCommand.Ask, List.of()));
             case CLARIFICATION -> clarification(
                     conversationId, resumeTokenHash, command.getRequestId(),
                     content, resolved.getClarification().orElseThrow());
             case GOALS -> goals(
                     conversationId, resumeTokenHash, command, cancellation, content,
-                    input.parentHandlesByGoal(),
                     planCompiler.compile(
                             resolved.getGoalProposal().orElseThrow(), content.getContentVersion(),
                             resolutionContext(content)),
@@ -296,10 +395,583 @@ public final class AgentTurnLifecycleService {
         };
     }
 
+    private Execution routeRecommendationReference(
+            String conversationId,
+            byte[] tokenHash,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand command,
+            String text,
+            String referenceContextHandle,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline) {
+        if (session == null) return null;
+        ContinuationContext loaded;
+        try {
+            loaded = store.findContext(
+                    conversationId, referenceContextHandle,
+                    clock.instant(),
+                    deadline.minus(settlementReserve)).orElse(null);
+        } catch (RuntimeException unavailable) {
+            return null;
+        }
+        if (!(loaded instanceof ContinuationContext.Recommendation recommendation)
+                || !recommendation.getContentReleaseId()
+                .equals(content.getContentVersion())) {
+            return null;
+        }
+        List<GoalInterpretationInput.RouteCandidate> candidates =
+                recommendationRouteCandidates(recommendation, content);
+        if (candidates.size()
+                != recommendation.getSelectedResults().size()) {
+            return null;
+        }
+        GoalInterpretationInput input = new GoalInterpretationInput(
+                text,
+                command.getConversationWindow().getMessages().stream()
+                        .map(message -> message.getRole().name()
+                                + ":" + message.getText())
+                        .toList(),
+                resolutionContext(content).getPublicSubjects(),
+                Set.of(GoalKind.values()),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null, candidates,
+                Set.of(
+                        SemanticRouteProposal.Route.STANDARD_GOAL,
+                        SemanticRouteProposal.Route.ENTER_RECOMMENDED_RESULT,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION));
+        GoalInterpretationResult interpretation;
+        try {
+            interpretation = goalResolver.interpretTyped(
+                    input, deadline.minus(settlementReserve));
+        } catch (GoalInterpretationUnavailableException
+                 | IllegalArgumentException unavailable) {
+            return simple(new PublicAgentTurn.CapabilityUnavailable(
+                    command.getRequestId(),
+                    "SEMANTIC_ROUTING_UNAVAILABLE",
+                    "当前暂时无法可靠理解这条自由文本请求。",
+                    true, List.of()));
+        }
+        if (interpretation.getKind()
+                == GoalInterpretationResult.Kind.CONVERSATIONAL) {
+            return simple(new PublicAgentTurn.Conversational(
+                    command.getRequestId(),
+                    interpretation.getMessage().orElseThrow(),
+                    List.of()));
+        }
+        SemanticRouteProposal proposal =
+                interpretation.getRouteProposal().orElseThrow();
+        return switch (proposal.getRoute()) {
+            case STANDARD_GOAL -> goals(
+                    conversationId, tokenHash,
+                    command, cancellation, content,
+                    planCompiler.compile(
+                            proposal.getGoalProposal().orElseThrow(),
+                            content.getContentVersion(),
+                            resolutionContext(content)),
+                    deadline.minus(settlementReserve));
+            case ENTER_RECOMMENDED_RESULT -> {
+                String candidateKey =
+                        proposal.getCandidateKey().orElseThrow();
+                yield enterRecommendationCandidate(
+                        conversationId, session, command, cancellation,
+                        content, deadline, recommendation, candidates,
+                        candidateKey);
+            }
+            case NEEDS_CLARIFICATION ->
+                    recommendation.getSelectedResults().size() == 1
+                            ? enterRecommendationCandidate(
+                            conversationId, session, command, cancellation,
+                            content, deadline, recommendation, candidates,
+                            candidates.getFirst().getCandidateKey())
+                            : recommendationSelectionClarification(
+                            conversationId, tokenHash,
+                            command.getRequestId(),
+                            content, recommendation, candidates);
+            default -> discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_INTERPRETATION_UNAVAILABLE");
+        };
+    }
+
+    private Execution enterRecommendationCandidate(
+            String conversationId,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand command,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline,
+            ContinuationContext.Recommendation recommendation,
+            List<GoalInterpretationInput.RouteCandidate> candidates,
+            String candidateKey) {
+        String projectId = candidateProjectId(candidateKey, candidates);
+        String resultItemId = recommendation.getSelectedResults().stream()
+                .filter(item -> item.subjectId().equals(projectId))
+                .map(ContinuationContext.ResultItem::resultItemId)
+                .findFirst().orElseThrow();
+        ProjectDiscussionCoordinator.Transition transition =
+                discussionCoordinator.enter(
+                        conversationId,
+                        content.getContentVersion(),
+                        recommendation,
+                        resultItemId,
+                        publicProjectIds(content),
+                        session.expiresAt());
+        return executeDiscussionTransition(
+                command, cancellation, content, deadline,
+                null, transition);
+    }
+
+    private List<GoalInterpretationInput.RouteCandidate>
+            recommendationRouteCandidates(
+            ContinuationContext.Recommendation recommendation,
+            RuntimeAnswerContent content) {
+        List<GoalInterpretationInput.RouteCandidate> candidates =
+                new ArrayList<>();
+        for (int index = 0;
+                index < recommendation.getSelectedResults().size();
+                index++) {
+            ContinuationContext.ResultItem item =
+                    recommendation.getSelectedResults().get(index);
+            AnswerKnowledge project = content.getProjects().stream()
+                    .filter(value -> value.getStableId()
+                            .equals(item.subjectId()))
+                    .findFirst().orElse(null);
+            if (project == null) continue;
+            candidates.add(new GoalInterpretationInput.RouteCandidate(
+                    "C" + (index + 1),
+                    GoalSubjectReference.Kind.PROJECT,
+                    project.getStableId(),
+                    project.getTitle(),
+                    Set.of(
+                            project.getStableId(),
+                            project.getSlug(),
+                            project.getTitle())));
+        }
+        return List.copyOf(candidates);
+    }
+
+    private Execution recommendationSelectionClarification(
+            String conversationId,
+            byte[] tokenHash,
+            UUID requestId,
+            RuntimeAnswerContent content,
+            ContinuationContext.Recommendation recommendation,
+            List<GoalInterpretationInput.RouteCandidate> candidates) {
+        String clarificationId =
+                "clarification_"
+                        + requestId.toString().replace("-", "");
+        List<ClarificationChallenge.Choice> choices =
+                new ArrayList<>();
+        Map<String, String> bindings =
+                new LinkedHashMap<>();
+        Set<String> allowedItems =
+                new java.util.LinkedHashSet<>();
+        for (int index = 0; index < candidates.size(); index++) {
+            GoalInterpretationInput.RouteCandidate candidate =
+                    candidates.get(index);
+            ContinuationContext.ResultItem item =
+                    recommendation.getSelectedResults().get(index);
+            String choiceId = "choice_result_" + (index + 1);
+            choices.add(new ClarificationChallenge.Choice(
+                    choiceId, candidate.getLabel()));
+            bindings.put(
+                    choiceId, "result-item:" + item.resultItemId());
+            allowedItems.add(item.resultItemId());
+        }
+        ChallengeDefinition definition = choiceChallenge(
+                clarificationId,
+                "请选择要继续讨论的推荐项目。",
+                "field_recommendation_result",
+                "推荐项目", choices, bindings);
+        DiscussionSelectionTemplate template =
+                new DiscussionSelectionTemplate(
+                        recommendation.getContextHandle(),
+                        Set.copyOf(allowedItems));
+        ClarificationStore.Record record =
+                new ClarificationStore.Record(
+                        conversationId, tokenHash,
+                        content.getContentVersion(),
+                        definition.challenge(),
+                        definition.choiceBindings(),
+                        definition.textBindings(),
+                        template);
+        PublicAgentTurn turn = new PublicAgentTurn.Clarification(
+                requestId,
+                "需要确认要讨论的推荐项目。",
+                definition.challenge(), List.of());
+        return new Execution(
+                turn, turn, List.of(), List.of(record),
+                DiscussionStateMutation.none());
+    }
+
+    private Execution routeDiscussion(
+            String conversationId,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand command,
+            String text,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline) {
+        ActiveDiscussionPointer pointer =
+                session.activeDiscussion().orElse(null);
+        if (pointer == null) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        if (command instanceof AgentTurnCommand.Continue continuation
+                && !pointer.matchesGeneration(
+                continuation.getContextHandle().orElseThrow())) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_MISMATCH");
+        }
+        GoalInterpretationInput.PublicSubjectDescriptor locked =
+                resolutionContext(content).getPublicSubjects().stream()
+                .filter(subject ->
+                        subject.getKind()
+                        == GoalSubjectReference.Kind.PROJECT
+                        && subject.getReference()
+                        .equals(pointer.getProjectId()))
+                .findFirst().orElse(null);
+        if (locked == null) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_SUBJECT_UNAVAILABLE");
+        }
+        ActiveDiscussionPointer.Status pointerStatus =
+                pointer.statusAt(clock.instant());
+        ProjectDiscussionContext context = null;
+        if (pointerStatus == ActiveDiscussionPointer.Status.ACTIVE) {
+            ContinuationContext loaded = store.findContext(
+                    conversationId, pointer.getContextHandle(),
+                    clock.instant(),
+                    deadline.minus(settlementReserve)).orElse(null);
+            if (!(loaded instanceof ProjectDiscussionContext discussion)) {
+                return discussionUnavailable(
+                        command.getRequestId(),
+                        "DISCUSSION_CONTEXT_UNAVAILABLE");
+            }
+            context = discussion;
+        }
+        List<GoalInterpretationInput.RouteCandidate> candidates =
+                context == null ? List.of()
+                        : routeCandidates(context, content);
+        Set<SemanticRouteProposal.Route> routes =
+                pointerStatus == ActiveDiscussionPointer.Status.ACTIVE
+                        ? Set.of(
+                        SemanticRouteProposal.Route.CONTINUE_CURRENT_PROJECT,
+                        SemanticRouteProposal.Route.START_NEW_TOPIC,
+                        SemanticRouteProposal.Route.SWITCH_PROJECT,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION)
+                        : Set.of(
+                        SemanticRouteProposal.Route.REENTER_PROJECT,
+                        SemanticRouteProposal.Route.START_NEW_TOPIC,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION);
+        GoalInterpretationInput input =
+                new GoalInterpretationInput(
+                        text,
+                        command.getConversationWindow().getMessages().stream()
+                                .map(message -> message.getRole().name()
+                                        + ":" + message.getText())
+                                .toList(),
+                        resolutionContext(content).getPublicSubjects(),
+                        Set.of(
+                                GoalKind.PORTFOLIO_FACT,
+                                GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO),
+                        GoalInterpretationInput.InterpretationMode.DISCUSSION,
+                        pointerStatus == ActiveDiscussionPointer.Status.ACTIVE
+                                ? GoalInterpretationInput.DiscussionState.ACTIVE
+                                : GoalInterpretationInput.DiscussionState.EXPIRED,
+                        locked, candidates, routes);
+        GoalInterpretationResult interpretation;
+        try {
+            interpretation = goalResolver.interpretTyped(
+                    input, deadline.minus(settlementReserve));
+        } catch (GoalInterpretationUnavailableException
+                 | IllegalArgumentException unavailable) {
+            return withMutation(
+                    discussionUnavailable(
+                            command.getRequestId(),
+                            "DISCUSSION_INTERPRETATION_UNAVAILABLE"),
+                    DiscussionStateMutation.guard(
+                            pointer.getContextHandle()));
+        }
+        if (interpretation.getKind()
+                == GoalInterpretationResult.Kind.CONVERSATIONAL) {
+            return withMutation(
+                    simple(new PublicAgentTurn.Conversational(
+                            command.getRequestId(),
+                            interpretation.getMessage().orElseThrow(),
+                            List.of())),
+                    DiscussionStateMutation.guard(
+                            pointer.getContextHandle()));
+        }
+        SemanticRouteProposal proposal =
+                interpretation.getRouteProposal().orElseThrow();
+        return switch (proposal.getRoute()) {
+            case CONTINUE_CURRENT_PROJECT -> {
+                Execution execution = goals(
+                        conversationId, new byte[0],
+                        command, cancellation, content,
+                        planCompiler.compile(
+                                proposal.getGoalProposal().orElseThrow(),
+                                content.getContentVersion(),
+                                resolutionContext(content)),
+                        deadline.minus(settlementReserve));
+                yield withMutation(
+                        execution,
+                        DiscussionStateMutation.guard(
+                                pointer.getContextHandle()));
+            }
+            case START_NEW_TOPIC -> exitDiscussion(
+                    command.getRequestId(), pointer.getContextHandle());
+            case SWITCH_PROJECT -> {
+                if (context == null) {
+                    yield discussionUnavailable(
+                            command.getRequestId(),
+                            "DISCUSSION_CONTEXT_EXPIRED");
+                }
+                String projectId = candidateProjectId(
+                        proposal.getCandidateKey().orElseThrow(),
+                        candidates);
+                ProjectDiscussionCoordinator.Transition transition =
+                        discussionCoordinator.switchProject(
+                                context, projectId,
+                                publicProjectIds(content),
+                                session.expiresAt());
+                yield executeDiscussionTransition(
+                        command, cancellation, content, deadline,
+                        pointer.getContextHandle(), transition);
+            }
+            case REENTER_PROJECT -> {
+                ProjectDiscussionCoordinator.Transition transition =
+                        discussionCoordinator.reenter(
+                                conversationId,
+                                content.getContentVersion(),
+                                pointer.getProjectId(),
+                                publicProjectIds(content),
+                                session.expiresAt());
+                yield executeDiscussionTransition(
+                        command, cancellation, content, deadline,
+                        pointer.getContextHandle(), transition);
+            }
+            case NEEDS_CLARIFICATION -> withMutation(
+                    discussionUnavailable(
+                            command.getRequestId(),
+                            "DISCUSSION_INTERPRETATION_UNAVAILABLE"),
+                    DiscussionStateMutation.guard(
+                            pointer.getContextHandle()));
+            case STANDARD_GOAL, ENTER_RECOMMENDED_RESULT ->
+                    discussionUnavailable(
+                            command.getRequestId(),
+                            "DISCUSSION_INTERPRETATION_UNAVAILABLE");
+        };
+    }
+
+    private List<GoalInterpretationInput.RouteCandidate> routeCandidates(
+            ProjectDiscussionContext context,
+            RuntimeAnswerContent content) {
+        List<GoalInterpretationInput.RouteCandidate> candidates =
+                new ArrayList<>();
+        int index = 1;
+        for (String projectId :
+                context.getSwitchCandidateProjectIds().stream()
+                        .sorted().toList()) {
+            AnswerKnowledge project = content.getProjects().stream()
+                    .filter(value -> value.getStableId().equals(projectId))
+                    .findFirst().orElse(null);
+            if (project == null) continue;
+            candidates.add(new GoalInterpretationInput.RouteCandidate(
+                    "C" + index++,
+                    GoalSubjectReference.Kind.PROJECT,
+                    project.getStableId(),
+                    project.getTitle(),
+                    Set.of(
+                            project.getStableId(),
+                            project.getSlug(),
+                            project.getTitle())));
+        }
+        return List.copyOf(candidates);
+    }
+
+    private String candidateProjectId(
+            String candidateKey,
+            List<GoalInterpretationInput.RouteCandidate> candidates) {
+        return candidates.stream()
+                .filter(candidate -> candidate.getCandidateKey()
+                        .equals(candidateKey))
+                .map(GoalInterpretationInput.RouteCandidate::getReference)
+                .findFirst().orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "candidate is outside discussion scope"));
+    }
+
+    private Execution withMutation(
+            Execution execution,
+            DiscussionStateMutation mutation) {
+        return new Execution(
+                execution.readOnlyTurn(),
+                execution.settledTurn(),
+                execution.contexts(),
+                execution.challenges(),
+                mutation);
+    }
+
+    private Execution enterDiscussion(
+            String conversationId,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand.Continue command,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline) {
+        if (session == null) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        ContinuationContext context = store.findContext(
+                conversationId,
+                command.getContextHandle().orElseThrow(),
+                clock.instant(),
+                deadline.minus(settlementReserve)).orElse(null);
+        if (!(context instanceof ContinuationContext.Recommendation recommendation)) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        ProjectDiscussionCoordinator.Transition transition;
+        try {
+            transition = discussionCoordinator.enter(
+                    conversationId,
+                    content.getContentVersion(),
+                    recommendation,
+                    command.getResultItemId().orElseThrow(),
+                    publicProjectIds(content),
+                    session.expiresAt());
+        } catch (IllegalArgumentException invalid) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        return executeDiscussionTransition(
+                command, cancellation, content, deadline,
+                session.activeDiscussion()
+                        .map(ActiveDiscussionPointer::getContextHandle)
+                        .orElse(null),
+                transition);
+    }
+
+    private Execution reenterDiscussion(
+            String conversationId,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand.Continue command,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline) {
+        if (session == null || command.getSubject().isEmpty()) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        ProjectDiscussionCoordinator.Transition transition;
+        try {
+            transition = discussionCoordinator.reenter(
+                    conversationId,
+                    content.getContentVersion(),
+                    command.getSubject().orElseThrow().getReference(),
+                    publicProjectIds(content),
+                    session.expiresAt());
+        } catch (IllegalArgumentException invalid) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_SUBJECT_UNAVAILABLE");
+        }
+        return executeDiscussionTransition(
+                command, cancellation, content, deadline,
+                session.activeDiscussion()
+                        .map(ActiveDiscussionPointer::getContextHandle)
+                        .orElse(null),
+                transition);
+    }
+
+    private Execution executeDiscussionTransition(
+            AgentTurnCommand command,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline,
+            String expectedGeneration,
+            ProjectDiscussionCoordinator.Transition transition) {
+        Execution overview = goals(
+                transition.context().getConversationId(),
+                new byte[0],
+                command,
+                cancellation,
+                content,
+                planCompiler.compile(
+                        transition.overviewGoal(),
+                        content.getContentVersion(),
+                        resolutionContext(content)),
+                deadline.minus(settlementReserve));
+        if (!(overview.settledTurn() instanceof PublicAgentTurn.Answer)) {
+            return overview;
+        }
+        List<ContinuationContext> contexts =
+                new ArrayList<>(overview.contexts());
+        contexts.add(transition.context());
+        return new Execution(
+                overview.readOnlyTurn(),
+                overview.settledTurn(),
+                List.copyOf(contexts),
+                overview.challenges(),
+                DiscussionStateMutation.replace(
+                        expectedGeneration, transition.pointer()));
+    }
+
+    private Execution exitDiscussion(
+            ConversationSessionStore.Session session,
+            AgentTurnCommand.Continue command) {
+        ActiveDiscussionPointer pointer = session == null
+                ? null : session.activeDiscussion().orElse(null);
+        String expected = command.getContextHandle().orElseThrow();
+        if (pointer == null || !pointer.matchesGeneration(expected)) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_MISMATCH");
+        }
+        return exitDiscussion(command.getRequestId(), expected);
+    }
+
+    private Execution exitDiscussion(
+            UUID requestId, String expected) {
+        PublicAgentTurn turn = new PublicAgentTurn.Conversational(
+                requestId,
+                "已结束当前项目讨论，你可以开始新的话题。",
+                List.of());
+        return new Execution(
+                turn, turn, List.of(), List.of(),
+                DiscussionStateMutation.clear(expected));
+    }
+
+    private Execution discussionUnavailable(UUID requestId, String code) {
+        PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
+                requestId, code,
+                "当前项目讨论状态不可用，请重新进入项目。",
+                false, List.of());
+        return simple(turn);
+    }
+
+    private Set<String> publicProjectIds(RuntimeAnswerContent content) {
+        return content.getProjects().stream()
+                .map(AnswerKnowledge::getStableId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     private Execution goals(
             String conversationId, byte[] resumeTokenHash, AgentTurnCommand command,
             CancellationSignal cancellation, RuntimeAnswerContent content,
-            Map<String, String> parentHandlesByGoal,
             PlanCompilationResult compilation,
             TurnDeadline executionDeadline) {
         if (compilation.getKind() == PlanCompilationResult.Kind.CLARIFICATION_REQUIRED) {
@@ -321,20 +993,20 @@ public final class AgentTurnLifecycleService {
                 cancellation, command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.Preset);
         List<ContextMutationPlanner.Mutation> mutations = mutationPlanner.plan(
-                conversationId, plan, outcome, clock.instant().plus(contextTtl),
-                parentHandlesByGoal);
-        Map<String, ContinuationReference> continuations = mutations.stream().collect(
+                conversationId, plan, outcome,
+                clock.instant().plus(contextTtl));
+        Map<String, String> continuations = mutations.stream().collect(
                 Collectors.toMap(
                         ContextMutationPlanner.Mutation::goalId,
-                        value -> new ContinuationReference(
-                                value.context().getContextHandle(), null),
+                        value -> value.context().getContextHandle(),
                         (left, right) -> left, LinkedHashMap::new));
         PublicAgentTurn readOnly = projector.project(command.getRequestId(), plan, outcome);
         PublicAgentTurn settled = projector.project(
                 command.getRequestId(), plan, outcome, continuations);
         return new Execution(
                 readOnly, settled,
-                mutations.stream().map(ContextMutationPlanner.Mutation::context).toList(), List.of());
+                mutations.stream().map(ContextMutationPlanner.Mutation::context).toList(),
+                List.of(), DiscussionStateMutation.none());
     }
 
     private Execution clarification(
@@ -357,7 +1029,9 @@ public final class AgentTurnLifecycleService {
                 proposal.getBlockedGoal());
         PublicAgentTurn turn = new PublicAgentTurn.Clarification(
                 requestId, "需要补充目标后才能继续。", challenge, List.of());
-        return new Execution(turn, turn, List.of(), List.of(record));
+        return new Execution(
+                turn, turn, List.of(), List.of(record),
+                DiscussionStateMutation.none());
     }
 
     private ChallengeDefinition challengeDefinition(
@@ -412,7 +1086,7 @@ public final class AgentTurnLifecycleService {
                         GoalRequestedOutput.VERIFICATION,
                         GoalRequestedOutput.STATUS);
                 case PORTFOLIO_COMPARE -> List.of(GoalRequestedOutput.COMPARISON);
-                case PORTFOLIO_RECOMMEND, PORTFOLIO_REFINE_RECOMMENDATION ->
+                case PORTFOLIO_RECOMMEND ->
                         List.of(GoalRequestedOutput.RECOMMENDATION);
                 default -> List.of();
             };
@@ -462,49 +1136,15 @@ public final class AgentTurnLifecycleService {
     }
 
     private Execution simple(PublicAgentTurn turn) {
-        return new Execution(turn, turn, List.of(), List.of());
+        return new Execution(
+                turn, turn, List.of(), List.of(),
+                DiscussionStateMutation.none());
     }
 
     private ResolvedInput resolveInput(
             String conversationId, byte[] tokenHash,
             AgentTurnCommand command, RuntimeAnswerContent content,
             TurnDeadline deadline) {
-        if (command instanceof AgentTurnCommand.Continue continuation) {
-            ContinuationContext context;
-            Future<Optional<ContinuationContext>> contextTask = stateExecutor.submit(() ->
-                    store.findContext(
-                            conversationId, continuation.getContextHandle(),
-                            clock.instant(), deadline));
-            try {
-                long remainingMillis = deadline.remainingMillis();
-                if (remainingMillis < 1) {
-                    contextTask.cancel(true);
-                    return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                            "当前续接状态不可用，请重新提问。"), Map.of());
-                }
-                context = contextTask.get(remainingMillis, TimeUnit.MILLISECONDS).orElse(null);
-            } catch (TimeoutException timeout) {
-                contextTask.cancel(true);
-                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前续接状态不可用，请重新提问。"), Map.of());
-            } catch (InterruptedException interrupted) {
-                contextTask.cancel(true);
-                Thread.currentThread().interrupt();
-                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前续接状态不可用，请重新提问。"), Map.of());
-            } catch (ExecutionException | RuntimeException failure) {
-                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前续接状态不可用，请重新提问。"), Map.of());
-            }
-            if (context == null || !resultItemValid(context, continuation.getResultItemId().orElse(null))) {
-                return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前续接状态不可用，请重新提问。"), Map.of());
-            }
-            UserGoalProposal proposal = continuationProposal(continuation, context);
-            return new ResolvedInput(
-                    ResolvedGoalSet.goals(proposal),
-                    Map.of("continuation-goal", context.getContextHandle()));
-        }
         if (command instanceof AgentTurnCommand.ResolveClarification clarification) {
             ClarificationStore.ClarificationAnswer answer =
                     clarification.getAnswer() instanceof AgentTurnCommand.ChoiceAnswer choice
@@ -521,27 +1161,44 @@ public final class AgentTurnLifecycleService {
                 if (remainingMillis < 1) {
                     consumeTask.cancel(true);
                     return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                            "当前澄清状态不可用，请重新提问。"), Map.of());
+                            "当前澄清状态不可用，请重新提问。"));
                 }
                 consumed = consumeTask.get(remainingMillis, TimeUnit.MILLISECONDS);
             } catch (TimeoutException timeout) {
                 consumeTask.cancel(true);
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前澄清状态不可用，请重新提问。"), Map.of());
+                        "当前澄清状态不可用，请重新提问。"));
             } catch (InterruptedException interrupted) {
                 consumeTask.cancel(true);
                 Thread.currentThread().interrupt();
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前澄清状态不可用，请重新提问。"), Map.of());
+                        "当前澄清状态不可用，请重新提问。"));
             } catch (ExecutionException | RuntimeException failure) {
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前澄清状态不可用，请重新提问。"), Map.of());
+                        "当前澄清状态不可用，请重新提问。"));
             }
             if (consumed.status() != ClarificationStore.Status.CONSUMED) {
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
-                        "当前澄清状态不可用，请重新提问。"), Map.of());
+                        "当前澄清状态不可用，请重新提问。"));
             }
-            BlockedGoalTemplate template = consumed.record().blockedGoal();
+            if (consumed.record().resumeTemplate() instanceof DiscussionSelectionTemplate selection) {
+                String binding = consumed.answer().bindingKey();
+                if (!binding.startsWith("result-item:")) {
+                    return new ResolvedInput(ResolvedGoalSet.invalidInput(
+                            "澄清答案无法绑定推荐结果。"));
+                }
+                String resultItemId = binding.substring("result-item:".length());
+                if (!selection.allows(resultItemId)) {
+                    return new ResolvedInput(ResolvedGoalSet.invalidInput(
+                            "澄清答案超出推荐范围。"));
+                }
+                return new ResolvedInput(
+                        ResolvedGoalSet.capabilityUnavailable("typed selection"),
+                        new DiscussionSelectionResolution(
+                                selection.getRecommendationContextHandle(), resultItemId));
+            }
+            BlockedGoalTemplate template =
+                    (BlockedGoalTemplate) consumed.record().resumeTemplate();
             ClarificationAnswerNormalizer normalizer = new ClarificationAnswerNormalizer();
             java.util.Optional<BlockedGoalTemplate.ResolutionValue> normalized =
                     normalizer.normalize(
@@ -549,7 +1206,7 @@ public final class AgentTurnLifecycleService {
                             resolutionContext(content).getPublicSubjects());
             if (normalized.isEmpty()) {
                 return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                        "澄清答案没有形成新的有效信息，请重新提问。"), Map.of());
+                        "澄清答案没有形成新的有效信息，请重新提问。"));
             }
             BlockedGoalTemplate.Resolution resolution = template.resolve(
                     normalized.orElseThrow());
@@ -558,72 +1215,18 @@ public final class AgentTurnLifecycleService {
                 return new ResolvedInput(ResolvedGoalSet.clarification(
                         new ClarificationProposal(
                                 next.getUnresolvedField(),
-                                "需要继续补充一个闭合目标字段。", next)), Map.of());
+                                "需要继续补充一个闭合目标字段。", next)));
             }
             if (resolution.kind() != BlockedGoalTemplate.Resolution.Kind.RESOLVED) {
                 return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                        "澄清答案无法恢复为安全目标，请重新提问。"), Map.of());
+                        "澄清答案无法恢复为安全目标，请重新提问。"));
             }
             return new ResolvedInput(
-                    ResolvedGoalSet.goals(resolution.proposal()), Map.of());
+                    ResolvedGoalSet.goals(resolution.proposal()));
         }
         return new ResolvedInput(
-                goalResolver.resolve(command, resolutionContext(content), deadline), Map.of());
-    }
-
-    private boolean resultItemValid(ContinuationContext context, String resultItemId) {
-        if (resultItemId == null) return true;
-        return context instanceof ContinuationContext.Recommendation recommendation
-                && recommendation.getSelectedResults().stream().anyMatch(value ->
-                value.resultItemId().equals(resultItemId));
-    }
-
-    private UserGoalProposal continuationProposal(
-            AgentTurnCommand.Continue command, ContinuationContext context) {
-        UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor(command.getText(), 0);
-        List<GoalSubjectReference> subjects;
-        GoalKind kind;
-        GoalRequestedOutput output;
-        UserGoalProposal.GoalParameters parameters;
-        if (context instanceof ContinuationContext.PortfolioFact fact) {
-            subjects = subjects(fact.getSubjectIds());
-            kind = GoalKind.PORTFOLIO_FACT;
-            output = GoalRequestedOutput.OVERVIEW;
-            parameters = new UserGoalProposal.PortfolioFactParameters(
-                    fact.getFacets().stream().map(UserGoalProposal.Facet::valueOf)
-                            .collect(Collectors.toSet()));
-        } else if (context instanceof ContinuationContext.PortfolioComparison comparison) {
-            subjects = subjects(comparison.getSubjectIds());
-            kind = GoalKind.PORTFOLIO_COMPARE;
-            output = GoalRequestedOutput.COMPARISON;
-            parameters = new UserGoalProposal.PortfolioCompareParameters(comparison.getDimensions());
-        } else {
-            ContinuationContext.Recommendation recommendation =
-                    (ContinuationContext.Recommendation) context;
-            Set<String> selected = command.getResultItemId().flatMap(item ->
-                    recommendation.getSelectedResults().stream()
-                            .filter(value -> value.resultItemId().equals(item)).findFirst()
-                            .map(ContinuationContext.ResultItem::subjectId)).stream()
-                    .collect(Collectors.toSet());
-            Set<String> scope = !selected.isEmpty() ? selected
-                    : recommendation.isAllPublishedAuthorized()
-                    ? recommendation.getSelectedResults().stream()
-                    .map(ContinuationContext.ResultItem::subjectId).collect(Collectors.toSet())
-                    : recommendation.getAuthorizedSubjectIds();
-            subjects = subjects(scope);
-            kind = GoalKind.PORTFOLIO_REFINE_RECOMMENDATION;
-            output = GoalRequestedOutput.RECOMMENDATION;
-            parameters = new UserGoalProposal.PortfolioRefineParameters(Set.of("USER_REFINEMENT"));
-        }
-        return new UserGoalProposal(List.of(new UserGoalProposal.ProposedGoal(
-                "continuation-goal", kind, anchor, subjects, Set.of(output),
-                GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE, parameters)));
-    }
-
-    private List<GoalSubjectReference> subjects(Set<String> ids) {
-        return ids.stream().sorted().map(value -> new GoalSubjectReference(
-                GoalSubjectReference.Kind.PROJECT, value,
-                GoalSubjectReference.Basis.CONTINUATION, null)).toList();
+                goalResolver.resolve(
+                        command, resolutionContext(content), deadline));
     }
 
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {
@@ -649,9 +1252,17 @@ public final class AgentTurnLifecycleService {
     private record Execution(
             PublicAgentTurn readOnlyTurn, PublicAgentTurn settledTurn,
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
-            List<ClarificationStore.Record> challenges) { }
+            List<ClarificationStore.Record> challenges,
+            DiscussionStateMutation discussionMutation) { }
     private record ResolvedInput(
-            ResolvedGoalSet resolved, Map<String, String> parentHandlesByGoal) { }
+            ResolvedGoalSet resolved,
+            DiscussionSelectionResolution discussionSelection) {
+        private ResolvedInput(ResolvedGoalSet resolved) {
+            this(resolved, null);
+        }
+    }
+    private record DiscussionSelectionResolution(
+            String contextHandle, String resultItemId) { }
     private record ChallengeDefinition(
             ClarificationChallenge challenge,
             Map<String, Map<String, String>> choiceBindings,
@@ -666,7 +1277,22 @@ public final class AgentTurnLifecycleService {
         }
     }
     public record ConversationMetadata(String conversationId, String resumeToken) { }
-    public record ConversationStatus(boolean authenticated, String conversationId) { }
+    public record ConversationStatus(
+            boolean authenticated,
+            String conversationId,
+            DiscussionSummary discussion) {
+        public ConversationStatus(
+                boolean authenticated, String conversationId) {
+            this(authenticated, conversationId, null);
+        }
+    }
+    public record DiscussionSummary(
+            ActiveDiscussionPointer.Status status,
+            String projectId,
+            String label,
+            String route,
+            Instant expiresAt,
+            String contextHandle) { }
     public enum Status {
         COMPLETED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED, STORE_UNAVAILABLE, UNAUTHORIZED
     }

@@ -116,17 +116,6 @@ public final class UserGoalProposal {
         public Set<String> getConstraints() { return constraints; }
     }
 
-    public static final class PortfolioRefineParameters implements GoalParameters {
-        private final Set<String> constraints;
-
-        public PortfolioRefineParameters(Set<String> constraints) {
-            this.constraints = copyNames(constraints, "constraints");
-        }
-
-        @Override public GoalKind getGoalKind() { return GoalKind.PORTFOLIO_REFINE_RECOMMENDATION; }
-        public Set<String> getConstraints() { return constraints; }
-    }
-
     public static final class GeneralExplanationParameters implements GoalParameters {
         private final InputAnchor topicAnchor;
         private final Depth depth;

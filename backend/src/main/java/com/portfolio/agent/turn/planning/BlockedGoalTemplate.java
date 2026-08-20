@@ -13,7 +13,7 @@ import java.util.Set;
  * InputAnchor、ConversationWindow、Prompt 或模型原始输出。恢复完整目标时使用
  * 服务端固定语义锚点，避免为了续接而长期保留访客原文。</p>
  */
-public final class BlockedGoalTemplate {
+public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate {
     private static final String RESTORED_STATEMENT = "已澄清的公开目标";
 
     private final GoalKind goalKind;
@@ -157,8 +157,6 @@ public final class BlockedGoalTemplate {
             case PORTFOLIO_COMPARE -> new UserGoalProposal.PortfolioCompareParameters(dimensions);
             case PORTFOLIO_RECOMMEND -> new UserGoalProposal.PortfolioRecommendationParameters(
                     Objects.requireNonNull(resolvedSize, "requestedSize"), resolvedConstraints);
-            case PORTFOLIO_REFINE_RECOMMENDATION ->
-                    throw new IllegalArgumentException("refinement clarification is unsupported");
             default -> throw new IllegalArgumentException("goal kind cannot be restored safely");
         };
         UserGoalProposal.InputAnchor safeAnchor = new UserGoalProposal.InputAnchor(
@@ -205,8 +203,6 @@ public final class BlockedGoalTemplate {
                     throw new IllegalArgumentException("missing requestedSize must be unresolved");
                 }
             }
-            case PORTFOLIO_REFINE_RECOMMENDATION ->
-                    throw new IllegalArgumentException("refinement clarification is unsupported");
             default -> throw new IllegalArgumentException("unsupported blocked goal kind");
         }
         if (requestedOutputs.isEmpty()
@@ -241,7 +237,6 @@ public final class BlockedGoalTemplate {
                             || field == ClarificationProposal.Field.OUTPUT;
             case PORTFOLIO_RECOMMEND ->
                     field == ClarificationProposal.Field.REQUESTED_SIZE;
-            case PORTFOLIO_REFINE_RECOMMENDATION -> false;
             default -> false;
         };
         if (!allowed) throw new IllegalArgumentException("unresolved field does not match goal kind");
@@ -265,7 +260,7 @@ public final class BlockedGoalTemplate {
                 default -> false;
             });
             case PORTFOLIO_COMPARE -> outputs.equals(Set.of(GoalRequestedOutput.COMPARISON));
-            case PORTFOLIO_RECOMMEND, PORTFOLIO_REFINE_RECOMMENDATION ->
+            case PORTFOLIO_RECOMMEND ->
                     outputs.equals(Set.of(GoalRequestedOutput.RECOMMENDATION));
             default -> false;
         };
@@ -283,8 +278,6 @@ public final class BlockedGoalTemplate {
                     && resolvedSubjects.size() <= 5 && !dimensions.isEmpty();
             case PORTFOLIO_RECOMMEND -> resolvedSubjects.isEmpty()
                     && resolvedSize != null && resolvedSize >= 1 && resolvedSize <= 5;
-            case PORTFOLIO_REFINE_RECOMMENDATION -> resolvedSubjects.size() == 1
-                    && !resolvedConstraints.isEmpty();
             default -> false;
         };
     }
@@ -323,15 +316,13 @@ public final class BlockedGoalTemplate {
             case PORTFOLIO_FACT -> "clarified-portfolio-fact";
             case PORTFOLIO_COMPARE -> "clarified-portfolio-comparison";
             case PORTFOLIO_RECOMMEND -> "clarified-portfolio-recommendation";
-            case PORTFOLIO_REFINE_RECOMMENDATION -> "clarified-portfolio-refinement";
             default -> throw new IllegalArgumentException("unsupported blocked goal kind");
         };
     }
 
     private GoalKnowledgeRequirement knowledgeRequirement(GoalKind kind) {
         return switch (kind) {
-            case PORTFOLIO_FACT, PORTFOLIO_COMPARE, PORTFOLIO_RECOMMEND,
-                    PORTFOLIO_REFINE_RECOMMENDATION ->
+            case PORTFOLIO_FACT, PORTFOLIO_COMPARE, PORTFOLIO_RECOMMEND ->
                     GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE;
             default -> throw new IllegalArgumentException("unsupported blocked goal kind");
         };

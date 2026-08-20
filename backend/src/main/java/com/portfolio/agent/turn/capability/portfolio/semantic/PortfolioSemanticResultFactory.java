@@ -21,7 +21,7 @@ public final class PortfolioSemanticResultFactory {
         return switch (task.getType()) {
             case PORTFOLIO_FACT -> fact(invocation, bundle);
             case PORTFOLIO_COMPARE -> comparison(invocation, bundle);
-            case PORTFOLIO_RECOMMEND, PORTFOLIO_REFINE_RECOMMENDATION ->
+            case PORTFOLIO_RECOMMEND ->
                     recommendation(task, invocation, bundle);
             default -> throw new IllegalArgumentException("unsupported portfolio task");
         };
@@ -48,9 +48,10 @@ public final class PortfolioSemanticResultFactory {
             ValidatedEvidenceBundle bundle) {
         PortfolioSupportEvaluator.Evaluation support = evaluator.recommendation(bundle);
         if (!support.hasSupport()) return Optional.empty();
-        int requestedSize = task.getParameters().getParameters()
-                instanceof UserGoalProposal.PortfolioRecommendationParameters recommendation
-                ? recommendation.getRequestedSize() : 1;
+        int requestedSize =
+                ((UserGoalProposal.PortfolioRecommendationParameters)
+                        task.getParameters().getParameters())
+                        .getRequestedSize();
         List<String> selectedSubjects = support.getSelectedUnits().stream()
                 .map(value -> value.getSubjectId()).distinct().limit(requestedSize).toList();
         if (selectedSubjects.isEmpty()) return Optional.empty();

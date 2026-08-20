@@ -1,7 +1,6 @@
 package com.portfolio.agent.turn.projection;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.portfolio.agent.turn.continuation.ContinuationReference;
 
 import java.util.List;
 import java.util.Objects;
@@ -14,12 +13,10 @@ public final class AnswerGoalResult {
     private final Coverage coverage;
     private final PublicPresentation presentation;
     private final List<GoalNotice> notices;
-    private final ContinuationReference continuation;
 
     public AnswerGoalResult(
             String goalId, String label, Coverage coverage,
-            PublicPresentation presentation, List<GoalNotice> notices,
-            ContinuationReference continuation) {
+            PublicPresentation presentation, List<GoalNotice> notices) {
         if (goalId == null || !goalId.matches("[a-z0-9][a-z0-9-]{1,95}")) {
             throw new IllegalArgumentException("goalId is invalid");
         }
@@ -29,7 +26,6 @@ public final class AnswerGoalResult {
         this.coverage = Objects.requireNonNull(coverage, "coverage");
         this.presentation = presentation;
         this.notices = List.copyOf(Objects.requireNonNull(notices, "notices"));
-        this.continuation = continuation;
         boolean hasGapNotice = this.notices.stream().anyMatch(value -> !NON_GAP_NOTICE.equals(value.code()));
         if (coverage == Coverage.FULL && (presentation == null || hasGapNotice)) {
             throw new IllegalArgumentException("FULL goal invariant failed");
@@ -46,6 +42,5 @@ public final class AnswerGoalResult {
     public Coverage getCoverage() { return coverage; }
     public PublicPresentation getPresentation() { return presentation; }
     public List<GoalNotice> getNotices() { return notices; }
-    public ContinuationReference getContinuation() { return continuation; }
     public enum Coverage { FULL, PARTIAL, NONE }
 }

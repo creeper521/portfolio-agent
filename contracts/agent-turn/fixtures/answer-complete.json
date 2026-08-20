@@ -34,10 +34,7 @@
             }
           ]
         },
-        "notices": [],
-        "continuation": {
-          "contextHandle": "ctx_fixture_overview"
-        }
+        "notices": []
       },
       {
         "goalId": "goal-recommendation",
@@ -57,6 +54,15 @@
               "support": {
                 "kind": "VERIFIED_PUBLIC_EVIDENCE",
                 "publicSourceKeys": ["source-agent-mvp"]
+              },
+              "discussionAction": {
+                "actionId": "discuss-item-goal-recommendation-1",
+                "label": "与我讨论",
+                "continuation": {
+                  "operation": "ENTER_RESULT",
+                  "contextHandle": "ctx_fixture_recommendation",
+                  "resultItemId": "item-goal-recommendation-1"
+                }
               }
             }
           ],
@@ -64,10 +70,7 @@
           "incompleteReasons": [],
           "supportingSections": []
         },
-        "notices": [],
-        "continuation": {
-          "contextHandle": "ctx_fixture_recommendation"
-        }
+        "notices": []
       }
     ],
     "sourceCatalog": {
@@ -93,10 +96,7 @@
       {
         "actionId": "continue-verification",
         "label": "继续了解验证方式",
-        "inputText": "继续介绍验证方式",
-        "continuation": {
-          "contextHandle": "ctx_fixture_overview"
-        }
+        "inputText": "继续介绍验证方式"
       }
     ]
   }

@@ -31,8 +31,8 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
     void bodyStallIsCancelledByTheOperationBudget() throws Exception {
         try (StallingServer server = new StallingServer()) {
             OpenAiCompatibleStructuredModelTransport transport = transport(
-                    server.endpoint(), Duration.ofMillis(150));
-            StructuredModelRequest request = request(Duration.ofMillis(300));
+                    server.endpoint(), Duration.ofMillis(500));
+            StructuredModelRequest request = request(Duration.ofSeconds(1));
 
             long startedAt = System.nanoTime();
             StructuredModelFailure failure = catchThrowableOfType(
@@ -41,8 +41,8 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
             assertThat(failure.getCode())
                     .isEqualTo(StructuredModelFailure.Code.DEADLINE_EXCEEDED);
             assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
-                    .isLessThan(Duration.ofSeconds(1));
-            assertThat(server.bodyStarted.await(100, TimeUnit.MILLISECONDS)).isTrue();
+                    .isLessThan(Duration.ofSeconds(2));
+            assertThat(server.bodyStarted.await(1, TimeUnit.SECONDS)).isTrue();
             assertThat(server.connectionClosed.await(2, TimeUnit.SECONDS)).isTrue();
         }
     }

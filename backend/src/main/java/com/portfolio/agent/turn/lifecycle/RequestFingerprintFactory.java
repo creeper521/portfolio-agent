@@ -85,10 +85,21 @@ public final class RequestFingerprintFactory {
                     value(output, "PRESET"); value(output, preset.getPresetId());
                     value(output, preset.getPresetRevision());
                 } else throw new IllegalArgumentException("unknown ask input");
+                value(output, ask.getReferenceContextHandle().orElse(""));
             } else if (command instanceof AgentTurnCommand.Continue continuation) {
-                value(output, "CONTINUE"); value(output, continuation.getContextHandle());
+                value(output, "CONTINUE"); value(output, continuation.getOperation().name());
+                value(output, continuation.getContextHandle().orElse(""));
                 value(output, continuation.getResultItemId().orElse(""));
-                value(output, continuation.getText());
+                value(output, continuation.getText().orElse(""));
+                if (continuation.getSubject().isPresent()) {
+                    AgentTurnCommand.ContinueSubject subject =
+                            continuation.getSubject().orElseThrow();
+                    value(output, subject.getKind().name());
+                    value(output, subject.getReference());
+                } else {
+                    value(output, "");
+                    value(output, "");
+                }
             } else if (command instanceof AgentTurnCommand.ResolveClarification clarification) {
                 value(output, "RESOLVE_CLARIFICATION"); value(output, clarification.getClarificationId());
                 if (clarification.getAnswer() instanceof AgentTurnCommand.ChoiceAnswer choice) {

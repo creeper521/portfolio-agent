@@ -19,15 +19,28 @@ class AgentTurnRequestValidationTest {
     @Test
     void decodesEveryClosedCommandVariant() throws Exception {
         assertValid(request("""
-                {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍 SQL 审计项目"}}
+                {"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍 SQL 审计项目"},
+                 "referenceContextHandle":"ctx_reference"}
                 """));
         assertValid(request("""
                 {"kind":"ASK","input":{"kind":"PRESET","presetId":"question-sql-audit-detail",
                  "presetRevision":"pcv1-0123456789abcdef"}}
                 """));
         assertValid(request("""
-                {"kind":"CONTINUE","contextHandle":"ctx_opaque","resultItemId":"item_opaque",
-                 "text":"继续说明这一项"}
+                {"kind":"CONTINUE","operation":"ENTER_RESULT",
+                 "contextHandle":"ctx_opaque","resultItemId":"item_opaque"}
+                """));
+        assertValid(request("""
+                {"kind":"CONTINUE","operation":"ROUTE_IN_CONTEXT",
+                 "contextHandle":"ctx_opaque","text":"继续说明这一项"}
+                """));
+        assertValid(request("""
+                {"kind":"CONTINUE","operation":"EXIT_CONTEXT",
+                 "contextHandle":"ctx_opaque"}
+                """));
+        assertValid(request("""
+                {"kind":"CONTINUE","operation":"REENTER_SUBJECT",
+                 "subject":{"kind":"PROJECT","reference":"sql-audit"}}
                 """));
         assertValid(request("""
                 {"kind":"RESOLVE_CLARIFICATION","clarificationId":"clarification_opaque",
@@ -71,6 +84,21 @@ class AgentTurnRequestValidationTest {
                 {"kind":"ASK","input":{"kind":"TASK_GRAPH"}}
                 """))
                 .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void rejectsRetiredContinueShapeAndOperationFieldMismatch() throws Exception {
+        AgentTurnRequest retired = request("""
+                {"kind":"CONTINUE","contextHandle":"ctx_opaque",
+                 "resultItemId":"item_opaque","text":"旧形状"}
+                """);
+        AgentTurnRequest mismatched = request("""
+                {"kind":"CONTINUE","operation":"EXIT_CONTEXT",
+                 "contextHandle":"ctx_opaque","text":"不允许"}
+                """);
+
+        assertThat(validator.validate(retired)).isNotEmpty();
+        assertThat(validator.validate(mismatched)).isNotEmpty();
     }
 
     @Test

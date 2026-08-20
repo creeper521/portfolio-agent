@@ -127,21 +127,46 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
             ConversationSessionStore.Session sessionToCreate, SessionAccess sessionAccess,
             Instant completedAt,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
+        return complete(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                com.portfolio.agent.turn.continuation.DiscussionStateMutation.none());
+    }
+
+    @Override public synchronized boolean complete(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess,
+            Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation) {
         if (deadline.isExpired()) return false;
         if (!authorizeSettlementSession(sessionAccess, sessionToCreate, completedAt)) return false;
-        AtomicBoolean completed = new AtomicBoolean();
-        records.computeIfPresent(requestId, (key, existing) -> {
-            if (existing.getStatus() != TurnExecutionRecord.Status.CLAIMED
-                    || !MessageDigest.isEqual(existing.getRequestFingerprint(), fingerprint)
-                    || !completedAt.isBefore(absoluteExpiries.get(requestId))) {
-                return existing;
-            }
-            completed.set(true);
-            clarificationStore.saveAllAtomically(challenges);
-            if (sessionToCreate != null) sessionStore.save(sessionToCreate);
-            return existing.completed(snapshot, contexts, challenges, completedAt);
-        });
-        return completed.get();
+        TurnExecutionRecord existing = records.get(requestId);
+        Instant absoluteExpiry = absoluteExpiries.get(requestId);
+        if (existing == null
+                || existing.getStatus() != TurnExecutionRecord.Status.CLAIMED
+                || !MessageDigest.isEqual(
+                existing.getRequestFingerprint(), fingerprint)
+                || absoluteExpiry == null
+                || !completedAt.isBefore(absoluteExpiry)) {
+            return false;
+        }
+        if (sessionToCreate != null) sessionStore.save(sessionToCreate);
+        byte[] tokenHash = sessionAccess.tokenHash() != null
+                ? sessionAccess.tokenHash()
+                : sessionToCreate.tokenHash();
+        if (!sessionStore.applyDiscussionMutation(
+                existing.getConversationId(), tokenHash,
+                discussionMutation, completedAt)) {
+            return false;
+        }
+        clarificationStore.saveAllAtomically(challenges);
+        records.put(requestId, existing.completed(
+                snapshot, contexts, challenges, completedAt));
+        return true;
     }
 
     @Override public synchronized boolean cancel(
@@ -241,6 +266,6 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         return new ClarificationStore.Record(
                 current.conversationId(), tokenHash, current.contentReleaseId(),
                 current.challenge(), current.choiceBindings(), current.textBindings(),
-                current.blockedGoal());
+                current.resumeTemplate());
     }
 }

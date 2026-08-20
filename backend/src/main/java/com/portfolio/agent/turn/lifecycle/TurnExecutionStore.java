@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.lifecycle;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
+import com.portfolio.agent.turn.continuation.DiscussionStateMutation;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 
@@ -24,6 +25,24 @@ public interface TurnExecutionStore {
             ConversationSessionStore.Session sessionToCreate,
             SessionAccess sessionAccess, Instant completedAt,
             TurnDeadline deadline);
+    default boolean complete(
+            UUID requestId, byte[] requestFingerprint,
+            PublicAgentTurn publicSnapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            TurnDeadline deadline,
+            DiscussionStateMutation discussionMutation) {
+        if (discussionMutation.isNone()) {
+            return complete(
+                    requestId, requestFingerprint, publicSnapshot,
+                    contexts, challenges, sessionToCreate,
+                    sessionAccess, completedAt, deadline);
+        }
+        throw new UnsupportedOperationException(
+                "discussion settlement is unavailable");
+    }
     boolean cancel(UUID requestId, String conversationId, Instant cancelledAt);
     Optional<TurnExecutionRecord> find(UUID requestId);
 

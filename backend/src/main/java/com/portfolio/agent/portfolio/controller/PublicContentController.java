@@ -2,6 +2,7 @@ package com.portfolio.agent.portfolio.controller;
 
 import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
 import com.portfolio.agent.portfolio.dto.response.AgentAvailabilityResponse;
+import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
 import org.springframework.http.CacheControl;
@@ -22,13 +23,20 @@ public class PublicContentController {
     public PublicContentController(
             PortfolioService portfolioService,
             PortfolioResponseMapper responseMapper,
-            @Value("${portfolio.conversation-context.mode:DISABLED}") String contextMode
+            @Value("${portfolio.conversation-context.mode:DISABLED}") String contextMode,
+            @Value("${portfolio.model-operations.turn-interpretation.mode:DISABLED}")
+            String turnInterpretationMode,
+            ConversationProviderAccess providerAccess
     ) {
         this.portfolioService = portfolioService;
         this.responseMapper = responseMapper;
         this.agentAvailability = "DISABLED".equalsIgnoreCase(contextMode)
                 ? AgentAvailabilityResponse.unavailable()
-                : AgentAvailabilityResponse.available();
+                : AgentAvailabilityResponse.available(
+                        "ENABLED".equalsIgnoreCase(turnInterpretationMode)
+                                && providerAccess.isAllowed()
+                                ? AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE
+                                : AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
     }
 
     @GetMapping

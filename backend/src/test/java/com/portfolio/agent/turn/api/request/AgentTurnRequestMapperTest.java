@@ -45,8 +45,8 @@ class AgentTurnRequestMapperTest {
                  "presetRevision":"pcv1-0123456789abcdef"}}
                 """));
         AgentTurnCommand continuation = requestMapper.toCommand(read("""
-                {"kind":"CONTINUE","contextHandle":"ctx_opaque","resultItemId":"item_opaque",
-                 "text":"继续"}
+                {"kind":"CONTINUE","operation":"ENTER_RESULT",
+                 "contextHandle":"ctx_opaque","resultItemId":"item_opaque"}
                 """));
         AgentTurnCommand clarification = requestMapper.toCommand(read("""
                 {"kind":"RESOLVE_CLARIFICATION","clarificationId":"clarification_opaque",
@@ -56,6 +56,8 @@ class AgentTurnRequestMapperTest {
         assertThat(((AgentTurnCommand.Ask) preset).getInput())
                 .isInstanceOf(AgentTurnCommand.Preset.class);
         assertThat(continuation).isInstanceOf(AgentTurnCommand.Continue.class);
+        assertThat(((AgentTurnCommand.Continue) continuation).getOperation())
+                .isEqualTo(AgentTurnCommand.ContinueOperation.ENTER_RESULT);
         assertThat(((AgentTurnCommand.Continue) continuation).getResultItemId())
                 .contains("item_opaque");
         assertThat(clarification).isInstanceOf(AgentTurnCommand.ResolveClarification.class);

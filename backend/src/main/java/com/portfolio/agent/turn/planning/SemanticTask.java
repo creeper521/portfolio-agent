@@ -50,8 +50,8 @@ public final class SemanticTask {
 
     private static SourceDomain sourceDomain(Type type) {
         return switch (type) {
-            case PORTFOLIO_FACT, PORTFOLIO_COMPARE, PORTFOLIO_RECOMMEND,
-                    PORTFOLIO_REFINE_RECOMMENDATION -> SourceDomain.PORTFOLIO;
+            case PORTFOLIO_FACT, PORTFOLIO_COMPARE,
+                    PORTFOLIO_RECOMMEND -> SourceDomain.PORTFOLIO;
             case GENERAL_EXPLANATION, GENERAL_COMPARISON -> SourceDomain.GENERAL;
             case CROSS_DOMAIN_SYNTHESIS -> SourceDomain.SYNTHESIS;
         };
@@ -61,7 +61,6 @@ public final class SemanticTask {
         PORTFOLIO_FACT,
         PORTFOLIO_COMPARE,
         PORTFOLIO_RECOMMEND,
-        PORTFOLIO_REFINE_RECOMMENDATION,
         GENERAL_EXPLANATION,
         GENERAL_COMPARISON,
         CROSS_DOMAIN_SYNTHESIS

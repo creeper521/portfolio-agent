@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.planning;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,208 +13,378 @@ class GoalProposalCodecTest {
     private final GoalProposalCodec codec = new GoalProposalCodec();
 
     @Test
-    void decodesClosedUserGoalsWithoutTaskOrDagAuthority() {
-        GoalInterpretationInput input = input("请介绍 SQL 审计项目，并解释幂等");
-        GoalInterpretationResult result = codec.decode("""
-                {
-                  "kind":"GOALS",
-                  "goals":[
-                    {
-                      "goalKey":"portfolio-overview",
-                      "goalKind":"PORTFOLIO_FACT",
-                      "inputAnchor":{"text":"介绍 SQL 审计项目","start":1},
-                      "subjectCandidates":[{
-                        "kind":"PROJECT","reference":"sql-audit","basis":"EXPLICIT_INPUT",
-                        "anchor":{"text":"SQL 审计项目","start":4}
-                      }],
-                      "requestedOutputs":["OVERVIEW"],
-                      "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
-                      "parameters":{"kind":"PORTFOLIO_FACT","facets":["BACKGROUND","STATUS"]}
-                    },
-                    {
-                      "goalKey":"general-idempotency",
-                      "goalKind":"GENERAL_EXPLANATION",
-                      "inputAnchor":{"text":"解释幂等","start":14},
-                      "subjectCandidates":[],
-                      "requestedOutputs":["EXPLANATION"],
-                      "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
-                      "parameters":{"kind":"GENERAL_EXPLANATION",
-                        "topicAnchor":{"text":"幂等","start":16},"depth":"STANDARD"}
-                    }
-                  ]
-                }
-                """, input);
+    void decodesAClosedStandardSemanticRoute() {
+        GoalInterpretationResult result = codec.decode(standardPortfolioRoute(
+                "sql-audit"), input("介绍 SQL 审计项目"));
 
-        assertThat(result.getKind()).isEqualTo(GoalInterpretationResult.Kind.GOALS);
-        assertThat(result.getGoalProposal().orElseThrow().getGoals()).hasSize(2);
-        UserGoalProposal.ProposedGoal first = result.getGoalProposal().orElseThrow().getGoals().get(0);
-        assertThat(first.getGoalKind()).isEqualTo(GoalKind.PORTFOLIO_FACT);
-        assertThat(first.getParameters()).isInstanceOf(UserGoalProposal.PortfolioFactParameters.class);
-        assertThat(first.getSubjectCandidates()).extracting(GoalSubjectReference::getReference)
-                .containsExactly("sql-audit");
+        assertThat(result.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.SEMANTIC_ROUTE);
+        SemanticRouteProposal route =
+                result.getRouteProposal().orElseThrow();
+        assertThat(route.getRoute())
+                .isEqualTo(SemanticRouteProposal.Route.STANDARD_GOAL);
+        assertThat(route.getGoalProposal().orElseThrow().getGoals())
+                .singleElement()
+                .extracting(UserGoalProposal.ProposedGoal::getGoalKind)
+                .isEqualTo(GoalKind.PORTFOLIO_FACT);
     }
 
     @Test
-    void decodesClarificationAndConversationalResultsWithoutFakeGoals() {
+    void decodesAndPreservesAllGeneralExplanationDepths() {
+        for (UserGoalProposal.Depth expected :
+                UserGoalProposal.Depth.values()) {
+            GoalInterpretationResult result = codec.decode("""
+                    {
+                      "kind":"SEMANTIC_ROUTE",
+                      "route":"STANDARD_GOAL",
+                      "candidateKey":null,
+                      "goal":{
+                        "goalKey":"general-goal",
+                        "goalKind":"GENERAL_EXPLANATION",
+                        "inputAnchor":{"text":"解释幂等","start":0},
+                        "subjectCandidates":[],
+                        "requestedOutputs":["EXPLANATION"],
+                        "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+                        "parameters":{
+                          "kind":"GENERAL_EXPLANATION",
+                          "topicAnchor":{"text":"幂等","start":2},
+                          "depth":"%s"
+                        }
+                      },
+                      "clarification":null
+                    }
+                    """.formatted(expected.name()), input("解释幂等"));
+
+            UserGoalProposal.GeneralExplanationParameters parameters =
+                    (UserGoalProposal.GeneralExplanationParameters) result
+                            .getRouteProposal().orElseThrow()
+                            .getGoalProposal().orElseThrow()
+                            .getGoals().getFirst().getParameters();
+            assertThat(parameters.getDepth()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void decodesClosedClarificationAndConversationalResults() {
         GoalInterpretationResult clarification = codec.decode("""
-                {"kind":"CLARIFICATION","clarification":{"field":"SUBJECT",
-                 "prompt":"请选择要了解的公开项目","blockedGoal":{
-                   "goalKind":"PORTFOLIO_FACT","subjects":[],
-                   "requestedOutputs":["OVERVIEW"],"facets":["OVERVIEW"],
-                   "dimensions":[],"requestedSize":null,"constraints":[],
-                   "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],"remainingFields":[],"depth":1
-                 }}}
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"NEEDS_CLARIFICATION",
+                  "candidateKey":null,
+                  "goal":null,
+                  "clarification":{
+                    "field":"SUBJECT",
+                    "prompt":"请选择要了解的公开项目",
+                    "blockedGoal":{
+                      "goalKind":"PORTFOLIO_FACT",
+                      "subjects":[],
+                      "requestedOutputs":["OVERVIEW"],
+                      "facets":["OVERVIEW"],
+                      "dimensions":[],
+                      "requestedSize":null,
+                      "constraints":[],
+                      "unresolvedField":"SUBJECT",
+                      "askedFields":["SUBJECT"],
+                      "remainingFields":[],
+                      "depth":1
+                    }
+                  }
+                }
                 """, input("这个项目怎么样"));
         GoalInterpretationResult conversational = codec.decode("""
                 {"kind":"CONVERSATIONAL","message":"你好，我可以介绍公开项目。"}
                 """, input("你好"));
 
-        assertThat(clarification.getKind()).isEqualTo(GoalInterpretationResult.Kind.CLARIFICATION);
-        assertThat(clarification.getClarification().orElseThrow().getField())
+        assertThat(clarification.getRouteProposal().orElseThrow()
+                .getClarification().orElseThrow().getField())
                 .isEqualTo(ClarificationProposal.Field.SUBJECT);
-        assertThat(clarification.getClarification().orElseThrow().getBlockedGoal()
-                .getSubjects()).isEmpty();
-        assertThat(conversational.getKind()).isEqualTo(GoalInterpretationResult.Kind.CONVERSATIONAL);
-        assertThat(conversational.getMessage().orElseThrow()).contains("公开项目");
+        assertThat(conversational.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.CONVERSATIONAL);
     }
 
     @Test
-    void rejectsClarificationWithoutClosedBlockedGoalOrWithRawAnchor() {
-        assertThatThrownBy(() -> codec.decode("""
-                {"kind":"CLARIFICATION","clarification":{
-                  "field":"SUBJECT","prompt":"请选择项目",
-                  "inputAnchor":{"text":"这个项目","start":0}}}
-                """, input("这个项目怎么样")))
-                .isInstanceOf(IllegalArgumentException.class);
+    void decodesOnlyCandidateKeysAndNeverStateHandles() {
+        GoalInterpretationResult result = codec.decode("""
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"ENTER_RECOMMENDED_RESULT",
+                  "candidateKey":"C1",
+                  "goal":null,
+                  "clarification":null
+                }
+                """, candidateInput());
 
+        assertThat(result.getRouteProposal().orElseThrow()
+                .getCandidateKey()).contains("C1");
         assertThatThrownBy(() -> codec.decode("""
-                {"kind":"CLARIFICATION","clarification":{
-                  "field":"SUBJECT","prompt":"请选择项目","blockedGoal":{
-                    "goalKind":"PORTFOLIO_FACT","subjects":[],
-                    "requestedOutputs":["OVERVIEW"],"facets":["OVERVIEW"],
-                    "dimensions":[],"requestedSize":null,"constraints":[],
-                    "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],"remainingFields":[],"depth":1,
-                    "inputAnchor":{"text":"这个项目","start":0}
-                  }}}
-                """, input("这个项目怎么样")))
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"ENTER_RECOMMENDED_RESULT",
+                  "candidateKey":"C1",
+                  "goal":null,
+                  "clarification":null,
+                  "contextHandle":"secret-handle"
+                }
+                """, candidateInput()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unknown field");
     }
 
     @Test
-    void rejectsBlockedGoalResultOrInventedSubject() {
-        String template = """
-                {"kind":"CLARIFICATION","clarification":{
-                  "field":"OUTPUT","prompt":"请选择输出","blockedGoal":{
-                    "goalKind":"PORTFOLIO_FACT","subjects":[{
-                      "kind":"%s","reference":"%s"}],
-                    "requestedOutputs":[],"facets":["OVERVIEW"],
-                    "dimensions":[],"requestedSize":null,"constraints":[],
-                    "unresolvedField":"OUTPUT","askedFields":["OUTPUT"],"remainingFields":[],"depth":1
-                  }}}
+    void candidateClarificationUsesBackendOwnedSelectionTemplate() {
+        String proposal = """
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"NEEDS_CLARIFICATION",
+                  "candidateKey":null,
+                  "goal":null,
+                  "clarification":null
+                }
                 """;
+
+        GoalInterpretationResult result = codec.decode(
+                proposal, candidateInput());
+        assertThat(result.getRouteProposal().orElseThrow()
+                .getClarification()).isEmpty();
         assertThatThrownBy(() -> codec.decode(
-                template.formatted("RESULT", "result-1"), input("介绍项目")))
+                proposal, input("这个项目怎么样")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("non-public subject");
-        assertThatThrownBy(() -> codec.decode(
-                template.formatted("PROJECT", "invented-project"), input("介绍项目")))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("non-public subject");
+                .hasMessageContaining("clarification is required");
     }
 
     @Test
-    void decodesAtMostOneRemainingDistinctClarificationField() {
+    void decodesDiscussionRouteWithoutAllowingTheModelToNameTheLockedSubject() {
         GoalInterpretationResult result = codec.decode("""
-                {"kind":"CLARIFICATION","clarification":{
-                  "field":"SUBJECT","prompt":"请选择项目","blockedGoal":{
-                    "goalKind":"PORTFOLIO_FACT","subjects":[],
-                    "requestedOutputs":[],"facets":["OVERVIEW"],
-                    "dimensions":[],"requestedSize":null,"constraints":[],
-                    "unresolvedField":"SUBJECT","askedFields":["SUBJECT"],
-                    "remainingFields":["OUTPUT"],"depth":1
-                  }}}
-                """, input("这个项目"));
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"CONTINUE_CURRENT_PROJECT",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"discussion-goal",
+                    "goalKind":"PORTFOLIO_FACT",
+                    "inputAnchor":{"text":"介绍实现","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["SOLUTION"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{
+                      "kind":"PORTFOLIO_FACT",
+                      "facets":["SOLUTION"]
+                    }
+                  },
+                  "clarification":null
+                }
+                """, discussionInput());
 
-        BlockedGoalTemplate blocked = result.getClarification()
-                .orElseThrow().getBlockedGoal();
-        assertThat(blocked.getRemainingFields()).containsExactly(ClarificationProposal.Field.OUTPUT);
-        assertThat(blocked.getDepth()).isEqualTo(1);
+        assertThat(result.getRouteProposal().orElseThrow().getRoute())
+                .isEqualTo(
+                        SemanticRouteProposal.Route.CONTINUE_CURRENT_PROJECT);
+        assertThat(result.getRouteProposal().orElseThrow()
+                .getGoalProposal().orElseThrow().getGoals().getFirst()
+                .getSubjectCandidates()).isEmpty();
     }
 
     @Test
-    void rejectsTaskDagAndUnknownFieldInjection() {
+    void rejectsRetiredGoalsAndClarificationRootShapes() {
         assertThatThrownBy(() -> codec.decode("""
-                {"kind":"GOALS","goals":[{
-                  "goalKey":"g1","goalKind":"GENERAL_EXPLANATION",
-                  "inputAnchor":{"text":"解释幂等","start":0},
-                  "subjectCandidates":[],"requestedOutputs":["EXPLANATION"],
-                  "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
-                  "taskType":"GENERAL_EXPLANATION",
-                  "parameters":{"kind":"GENERAL_EXPLANATION",
-                    "topicAnchor":{"text":"幂等","start":2},"depth":"STANDARD"}
-                }],"dependencies":[]}
+                {"kind":"GOALS","goals":[]}
                 """, input("解释幂等")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unknown field");
+                .hasMessageContaining("unsupported");
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CLARIFICATION","clarification":{}}
+                """, input("这个项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unsupported");
     }
 
     @Test
-    void rejectsDuplicateKeysAndDamagedJsonWithoutRepair() {
-        assertThatThrownBy(() -> codec.decode("""
-                {"kind":"CONVERSATIONAL","kind":"GOALS","goals":[]}
-                """, input("你好")))
+    void rejectsInventedPublicSubjectAndMismatchedAnchor() {
+        assertThatThrownBy(() -> codec.decode(
+                standardPortfolioRoute("invented-project"),
+                input("介绍 SQL 审计项目")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("invalid goal proposal JSON");
-        assertThatThrownBy(() -> codec.decode("{kind:GOALS", input("你好")))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("invalid goal proposal JSON");
-    }
-
-    @Test
-    void rejectsAnchorThatDoesNotMatchOriginalInput() {
+                .hasMessageContaining("non-public subject");
         assertThatThrownBy(() -> codec.decode("""
-                {"kind":"GOALS","goals":[{
-                  "goalKey":"g1","goalKind":"GENERAL_EXPLANATION",
-                  "inputAnchor":{"text":"不存在的原文","start":0},
-                  "subjectCandidates":[],"requestedOutputs":["EXPLANATION"],
-                  "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
-                  "parameters":{"kind":"GENERAL_EXPLANATION",
-                    "topicAnchor":{"text":"幂等","start":2},"depth":"STANDARD"}
-                }]}
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"general-goal",
+                    "goalKind":"GENERAL_EXPLANATION",
+                    "inputAnchor":{"text":"不存在","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["EXPLANATION"],
+                    "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+                    "parameters":{
+                      "kind":"GENERAL_EXPLANATION",
+                      "topicAnchor":{"text":"幂等","start":2},
+                      "depth":"STANDARD"
+                    }
+                  },
+                  "clarification":null
+                }
                 """, input("解释幂等")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("anchor");
     }
 
     @Test
-    void rejectsMoreThanSixGoalsAndOversizedProviderOutput() {
-        String repeated = """
-                {"goalKey":"g%s","goalKind":"GENERAL_EXPLANATION",
-                 "inputAnchor":{"text":"幂等","start":0},"subjectCandidates":[],
-                 "requestedOutputs":["EXPLANATION"],
-                 "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
-                 "parameters":{"kind":"GENERAL_EXPLANATION",
-                   "topicAnchor":{"text":"幂等","start":0},"depth":"STANDARD"}}
-                """;
-        String goals = java.util.stream.IntStream.rangeClosed(1, 7)
-                .mapToObj(index -> repeated.formatted(index))
-                .collect(java.util.stream.Collectors.joining(","));
-        assertThatThrownBy(() -> codec.decode(
-                "{\"kind\":\"GOALS\",\"goals\":[" + goals + "]}", input("幂等")))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("between one and six");
+    void normalizesWrongStartOnlyWhenAnchorTextIsUnique() {
+        GoalInterpretationResult result = codec.decode("""
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"general-goal",
+                    "goalKind":"GENERAL_EXPLANATION",
+                    "inputAnchor":{"text":"解释 Redis 的持久化机制","start":1},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["EXPLANATION"],
+                    "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+                    "parameters":{
+                      "kind":"GENERAL_EXPLANATION",
+                      "topicAnchor":{"text":"Redis 的持久化机制","start":0},
+                      "depth":"STANDARD"
+                    }
+                  },
+                  "clarification":null
+                }
+                """, input("解释 Redis 的持久化机制"));
 
-        assertThatThrownBy(() -> codec.decode(" ".repeat(30000), input("幂等")))
+        UserGoalProposal.ProposedGoal goal = result.getRouteProposal()
+                .orElseThrow().getGoalProposal().orElseThrow()
+                .getGoals().getFirst();
+        assertThat(goal.getInputAnchor().getStart()).isZero();
+        assertThat(((UserGoalProposal.GeneralExplanationParameters)
+                goal.getParameters()).getTopicAnchor().getStart()).isEqualTo(3);
+
+        assertThatThrownBy(() -> codec.decode("""
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"general-goal",
+                    "goalKind":"GENERAL_EXPLANATION",
+                    "inputAnchor":{"text":"解释幂等与幂等","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["EXPLANATION"],
+                    "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+                    "parameters":{
+                      "kind":"GENERAL_EXPLANATION",
+                      "topicAnchor":{"text":"幂等","start":1},
+                      "depth":"STANDARD"
+                    }
+                  },
+                  "clarification":null
+                }
+                """, input("解释幂等与幂等")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("anchor");
+    }
+
+    @Test
+    void rejectsDuplicateKeysDamagedJsonAndOversizedOutput() {
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CONVERSATIONAL","kind":"SEMANTIC_ROUTE"}
+                """, input("你好")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid goal proposal JSON");
+        assertThatThrownBy(() -> codec.decode(
+                "{kind:SEMANTIC_ROUTE", input("你好")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid goal proposal JSON");
+        assertThatThrownBy(() -> codec.decode(
+                " ".repeat(30000), input("幂等")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("bounded");
     }
 
+    private String standardPortfolioRoute(String reference) {
+        return """
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"portfolio-overview",
+                    "goalKind":"PORTFOLIO_FACT",
+                    "inputAnchor":{"text":"介绍 SQL 审计项目","start":0},
+                    "subjectCandidates":[{
+                      "kind":"PROJECT",
+                      "reference":"%s",
+                      "basis":"EXPLICIT_INPUT",
+                      "anchor":{"text":"SQL 审计项目","start":3}
+                    }],
+                    "requestedOutputs":["OVERVIEW"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{
+                      "kind":"PORTFOLIO_FACT",
+                      "facets":["OVERVIEW"]
+                    }
+                  },
+                  "clarification":null
+                }
+                """.formatted(reference);
+    }
+
     private GoalInterpretationInput input(String text) {
         return new GoalInterpretationInput(
-                text, List.of(), List.of(
-                        new GoalInterpretationInput.PublicSubjectDescriptor(
-                                GoalSubjectReference.Kind.PROJECT, "sql-audit", "SQL 审计项目")),
-                java.util.Set.of(GoalKind.values()));
+                text,
+                List.of(),
+                List.of(new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit",
+                        "SQL 审计项目")),
+                Set.of(GoalKind.values()));
+    }
+
+    private GoalInterpretationInput candidateInput() {
+        return new GoalInterpretationInput(
+                "继续第二个",
+                List.of(),
+                List.of(new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit",
+                        "SQL 审计项目")),
+                Set.of(GoalKind.values()),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null,
+                List.of(new GoalInterpretationInput.RouteCandidate(
+                        "C1",
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit",
+                        "SQL 审计项目",
+                        Set.of("SQL 审计项目"))),
+                Set.of(
+                        SemanticRouteProposal.Route.STANDARD_GOAL,
+                        SemanticRouteProposal.Route.ENTER_RECOMMENDED_RESULT,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION));
+    }
+
+    private GoalInterpretationInput discussionInput() {
+        GoalInterpretationInput.PublicSubjectDescriptor locked =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit",
+                        "SQL 审计项目");
+        return new GoalInterpretationInput(
+                "介绍实现",
+                List.of(),
+                List.of(locked),
+                Set.of(
+                        GoalKind.PORTFOLIO_FACT,
+                        GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO),
+                GoalInterpretationInput.InterpretationMode.DISCUSSION,
+                GoalInterpretationInput.DiscussionState.ACTIVE,
+                locked,
+                List.of(),
+                Set.of(
+                        SemanticRouteProposal.Route.CONTINUE_CURRENT_PROJECT,
+                        SemanticRouteProposal.Route.START_NEW_TOPIC,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION));
     }
 }

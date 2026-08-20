@@ -85,7 +85,7 @@ class AgentTurnLifecycleDeadlineTest {
             Thread.sleep(120);
             return TurnExecutionStore.ClaimResult.claimed();
         });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(true);
         GoalResolver resolver = mock(GoalResolver.class);
         when(resolver.resolve(any(), any(), any())).thenAnswer(invocation -> {
@@ -111,7 +111,7 @@ class AgentTurnLifecycleDeadlineTest {
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
         CountDownLatch settlementStarted = new CountDownLatch(1);
         AtomicReference<Boolean> settlementInterrupted = new AtomicReference<>(false);
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     settlementStarted.countDown();
                     while (true) {
@@ -211,7 +211,7 @@ class AgentTurnLifecycleDeadlineTest {
                     }
                     return TurnExecutionStore.ClaimResult.replay(storedTurn.get());
                 });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     storedTurn.set(invocation.getArgument(2));
                     return true;

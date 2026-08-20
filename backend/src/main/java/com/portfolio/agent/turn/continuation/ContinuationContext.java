@@ -10,15 +10,14 @@ import java.util.Set;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
         property = "kind", visible = false)
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = ContinuationContext.PortfolioFact.class, name = "PORTFOLIO_FACT"),
-        @JsonSubTypes.Type(value = ContinuationContext.PortfolioComparison.class,
-                name = "PORTFOLIO_COMPARISON"),
-        @JsonSubTypes.Type(value = ContinuationContext.Recommendation.class, name = "RECOMMENDATION")
+        @JsonSubTypes.Type(value = ContinuationContext.Recommendation.class,
+                name = "RECOMMENDATION"),
+        @JsonSubTypes.Type(value = ProjectDiscussionContext.class,
+                name = "PROJECT_DISCUSSION")
 })
 public abstract sealed class ContinuationContext permits
-        ContinuationContext.PortfolioFact,
-        ContinuationContext.PortfolioComparison,
-        ContinuationContext.Recommendation {
+        ContinuationContext.Recommendation,
+        ProjectDiscussionContext {
     private final String contextHandle;
     private final String conversationId;
     private final String contentReleaseId;
@@ -37,37 +36,9 @@ public abstract sealed class ContinuationContext permits
     public String getContentReleaseId() { return contentReleaseId; }
     public Instant getExpiresAt() { return expiresAt; }
     public abstract Kind getKind();
-    public enum Kind { PORTFOLIO_FACT, PORTFOLIO_COMPARISON, RECOMMENDATION }
-
-    public static final class PortfolioFact extends ContinuationContext {
-        private final Set<String> subjectIds;
-        private final Set<String> facets;
-        public PortfolioFact(
-                String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
-                Set<String> subjectIds, Set<String> facets) {
-            super(contextHandle, conversationId, contentReleaseId, expiresAt);
-            this.subjectIds = texts(subjectIds, "subjectIds", false);
-            this.facets = texts(facets, "facets", false);
-        }
-        @Override public Kind getKind() { return Kind.PORTFOLIO_FACT; }
-        public Set<String> getSubjectIds() { return subjectIds; }
-        public Set<String> getFacets() { return facets; }
-    }
-
-    public static final class PortfolioComparison extends ContinuationContext {
-        private final Set<String> subjectIds;
-        private final Set<String> dimensions;
-        public PortfolioComparison(
-                String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
-                Set<String> subjectIds, Set<String> dimensions) {
-            super(contextHandle, conversationId, contentReleaseId, expiresAt);
-            this.subjectIds = texts(subjectIds, "subjectIds", false);
-            if (this.subjectIds.size() < 2) throw new IllegalArgumentException("comparison requires subjects");
-            this.dimensions = texts(dimensions, "dimensions", false);
-        }
-        @Override public Kind getKind() { return Kind.PORTFOLIO_COMPARISON; }
-        public Set<String> getSubjectIds() { return subjectIds; }
-        public Set<String> getDimensions() { return dimensions; }
+    public enum Kind {
+        RECOMMENDATION,
+        PROJECT_DISCUSSION
     }
 
     public static final class Recommendation extends ContinuationContext {
@@ -77,14 +48,13 @@ public abstract sealed class ContinuationContext permits
         private final Set<String> preferences;
         private final Set<String> exclusions;
         private final int resultLimit;
-        private final String parentContextHandle;
         private final List<ResultItem> selectedResults;
 
         public Recommendation(
                 String contextHandle, String conversationId, String contentReleaseId, Instant expiresAt,
                 boolean allPublishedAuthorized, Set<String> authorizedSubjectIds, Set<String> constraints,
                 Set<String> preferences, Set<String> exclusions, int resultLimit,
-                String parentContextHandle, List<ResultItem> selectedResults) {
+                List<ResultItem> selectedResults) {
             super(contextHandle, conversationId, contentReleaseId, expiresAt);
             this.allPublishedAuthorized = allPublishedAuthorized;
             this.authorizedSubjectIds = texts(
@@ -97,7 +67,6 @@ public abstract sealed class ContinuationContext permits
             this.exclusions = texts(exclusions, "exclusions", true);
             if (resultLimit < 1 || resultLimit > 5) throw new IllegalArgumentException("resultLimit is invalid");
             this.resultLimit = resultLimit;
-            this.parentContextHandle = parentContextHandle == null ? null : text(parentContextHandle, "parent");
             this.selectedResults = List.copyOf(Objects.requireNonNull(selectedResults, "selectedResults"));
             if (this.selectedResults.isEmpty() || this.selectedResults.size() > resultLimit
                     || this.selectedResults.stream().map(ResultItem::resultItemId).distinct().count()
@@ -114,27 +83,8 @@ public abstract sealed class ContinuationContext permits
         public Set<String> getPreferences() { return preferences; }
         public Set<String> getExclusions() { return exclusions; }
         public int getResultLimit() { return resultLimit; }
-        public String getParentContextHandle() { return parentContextHandle; }
         public List<ResultItem> getSelectedResults() { return selectedResults; }
 
-        public Recommendation child(
-                String childHandle, String currentRelease, Instant childExpiresAt,
-                Set<String> childAuthorizedSubjects, Set<String> additionalConstraints,
-                Set<String> childPreferences, Set<String> childExclusions,
-                int childResultLimit, List<ResultItem> childResults) {
-            Set<String> scope = texts(childAuthorizedSubjects, "childAuthorizedSubjects", false);
-            if (!allPublishedAuthorized && !authorizedSubjectIds.containsAll(scope)) {
-                throw new IllegalArgumentException("child context cannot expand authorized scope");
-            }
-            java.util.LinkedHashSet<String> mergedConstraints = new java.util.LinkedHashSet<>(constraints);
-            mergedConstraints.addAll(texts(additionalConstraints, "additionalConstraints", true));
-            java.util.LinkedHashSet<String> mergedExclusions = new java.util.LinkedHashSet<>(exclusions);
-            mergedExclusions.addAll(texts(childExclusions, "childExclusions", true));
-            return new Recommendation(
-                    childHandle, getConversationId(), currentRelease, childExpiresAt,
-                    false, scope, mergedConstraints, childPreferences, mergedExclusions,
-                    childResultLimit, getContextHandle(), childResults);
-        }
     }
 
     public record ResultItem(String resultItemId, String subjectId) {

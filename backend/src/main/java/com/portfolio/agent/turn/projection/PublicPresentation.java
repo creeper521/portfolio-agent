@@ -74,9 +74,11 @@ public sealed interface PublicPresentation
             private final String route;
             private final List<String> reasons;
             private final PublicSupport support;
+            private final SuggestedAction discussionAction;
             public Item(
                     String resultItemId, String label, String summary, String route,
-                    List<String> reasons, PublicSupport support) {
+                    List<String> reasons, PublicSupport support,
+                    SuggestedAction discussionAction) {
                 this.resultItemId = text(resultItemId, "resultItemId");
                 this.label = text(label, "label");
                 this.summary = text(summary, "summary");
@@ -84,6 +86,7 @@ public sealed interface PublicPresentation
                         "route-validator", null, "route-validator", null, route).getRoute();
                 this.reasons = texts(reasons, "reasons");
                 this.support = Objects.requireNonNull(support, "support");
+                this.discussionAction = discussionAction;
             }
             public String getResultItemId() { return resultItemId; }
             public String getLabel() { return label; }
@@ -91,6 +94,9 @@ public sealed interface PublicPresentation
             public String getRoute() { return route; }
             public List<String> getReasons() { return reasons; }
             public PublicSupport getSupport() { return support; }
+            public SuggestedAction getDiscussionAction() {
+                return discussionAction;
+            }
         }
 
         private static List<String> texts(List<String> values, String name) {

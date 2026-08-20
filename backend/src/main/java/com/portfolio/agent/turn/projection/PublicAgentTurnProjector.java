@@ -33,7 +33,7 @@ public final class PublicAgentTurnProjector {
 
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
-            Map<String, ContinuationReference> continuationsByGoal) {
+            Map<String, String> continuationsByGoal) {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(outcome, "outcome");
@@ -61,7 +61,7 @@ public final class PublicAgentTurnProjector {
     private AnswerGoalResult projectGoal(
             UserGoal goal, TaskOutcome outcome, GoalCoverage.Coverage coverage,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources,
-            ContinuationReference continuation) {
+            String continuationHandle) {
         AnswerGoalResult.Coverage publicCoverage = AnswerGoalResult.Coverage.valueOf(coverage.name());
         if (coverage == GoalCoverage.Coverage.NONE) {
             if (outcome.getProducedArtifact().isPresent()) {
@@ -69,11 +69,12 @@ public final class PublicAgentTurnProjector {
             }
             return new AnswerGoalResult(
                     goal.getGoalId(), goal.getLabel(), publicCoverage, null,
-                    List.of(notice(outcome)), null);
+                    List.of(notice(outcome)));
         }
         TaskArtifact artifact = outcome.getProducedArtifact().orElseThrow(() ->
                 new IllegalArgumentException("produced goal requires fulfillment artifact"));
-        PublicPresentation presentation = presentation(goal, artifact, sources);
+        PublicPresentation presentation = presentation(
+                goal, artifact, sources, continuationHandle);
         List<GoalNotice> notices = coverage == GoalCoverage.Coverage.PARTIAL
                 ? gapNotices(artifact) : List.of();
         if (coverage == GoalCoverage.Coverage.FULL && !notices.isEmpty()) {
@@ -81,14 +82,16 @@ public final class PublicAgentTurnProjector {
         }
         return new AnswerGoalResult(
                 goal.getGoalId(), goal.getLabel(), publicCoverage,
-                presentation, notices, continuation);
+                presentation, notices);
     }
 
     private PublicPresentation presentation(
             UserGoal goal, TaskArtifact artifact,
-            LinkedHashMap<String, PublicSourceCatalog.Source> sources) {
+            LinkedHashMap<String, PublicSourceCatalog.Source> sources,
+            String continuationHandle) {
         if (artifact.getSemanticResult() instanceof PortfolioSemanticResult.Recommendation recommendation) {
-            return recommendation(goal, recommendation, sources);
+            return recommendation(
+                    goal, recommendation, sources, continuationHandle);
         }
         if (artifact.getPresentation() instanceof PortfolioPresentation value) {
             List<PublicSection> sections = new ArrayList<>();
@@ -138,7 +141,8 @@ public final class PublicAgentTurnProjector {
 
     private PublicPresentation.Recommendation recommendation(
             UserGoal goal, PortfolioSemanticResult.Recommendation result,
-            LinkedHashMap<String, PublicSourceCatalog.Source> sources) {
+            LinkedHashMap<String, PublicSourceCatalog.Source> sources,
+            String continuationHandle) {
         List<PublicPresentation.Recommendation.Item> items = new ArrayList<>();
         for (int index = 0; index < result.getSelectedSubjectIds().size(); index++) {
             String subjectId = result.getSelectedSubjectIds().get(index);
@@ -149,13 +153,24 @@ public final class PublicAgentTurnProjector {
             List<String> sourceKeys = units.stream()
                     .map(value -> value.getSourceReference().getReferenceKey()).distinct().toList();
             PublicSourceReferenceValue first = units.getFirst().getSourceReference();
+            String resultItemId =
+                    "item-" + goal.getGoalId() + "-" + (index + 1);
+            SuggestedAction discussionAction = continuationHandle == null
+                    ? null : new SuggestedAction(
+                    "discuss-" + resultItemId,
+                    "与我讨论", null,
+                    ContinuationReference.enterResult(
+                            continuationHandle, resultItemId));
             items.add(new PublicPresentation.Recommendation.Item(
-                    "item-" + goal.getGoalId() + "-" + (index + 1),
+                    resultItemId,
                     first.getLabel(),
                     units.stream().map(value -> value.getClaim().getStatement())
                             .collect(java.util.stream.Collectors.joining("\n")),
                     first.getSubjectRoute(), List.of(),
-                    new PublicSupport(PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE, sourceKeys)));
+                    new PublicSupport(
+                            PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE,
+                            sourceKeys),
+                    discussionAction));
         }
         List<String> incompleteReasons = result.getCoverage() == PortfolioSemanticResult.Coverage.PARTIAL
                 ? (result.getOmissions().isEmpty() ? List.of("公开结果数量不足") : result.getOmissions())

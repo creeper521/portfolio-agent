@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.SystemPromptCatalog;
 import com.portfolio.agent.infrastructure.model.configuration.ModelExpressionProperties;
 import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
@@ -23,11 +24,19 @@ class AgentCapabilityConfigurationTest {
     private final AgentCapabilityConfiguration configuration =
             new AgentCapabilityConfiguration();
     private final StructuredModelTransport transport = request -> null;
+    private final SystemPromptCatalog prompts = new SystemPromptCatalog();
+
+    @Test void promptCatalogLoadsEvenWhenModelOperationsAreDisabled() {
+        SystemPromptCatalog catalog = configuration.systemPromptCatalog();
+
+        assertThat(catalog.goalInterpretation()).isNotBlank();
+        assertThat(catalog.generalKnowledge()).isNotBlank();
+    }
 
     @Test void disabledProviderIsProjectedAsUnavailableTypedPort() {
         GeneralKnowledgeModelPort port = configuration.generalKnowledgeModelPort(
                 new ObjectMapper(), new ModelExpressionProperties(),
-                new AgentRuntimeProperties(), transport,
+                new AgentRuntimeProperties(), transport, prompts,
                 new ConversationProviderAccess(false), enabledGeneralPolicy());
 
         assertThatThrownBy(() -> port.generate(null))
@@ -37,7 +46,7 @@ class AgentCapabilityConfigurationTest {
     @Test void enabledProviderBuildsTheRealGeneralAdapter() {
         GeneralKnowledgeModelPort port = configuration.generalKnowledgeModelPort(
                 new ObjectMapper(), new ModelExpressionProperties(),
-                new AgentRuntimeProperties(), transport,
+                new AgentRuntimeProperties(), transport, prompts,
                 new ConversationProviderAccess(true), enabledGeneralPolicy());
 
         assertThat(port).isInstanceOf(OpenAiCompatibleGeneralKnowledgeAdapter.class);

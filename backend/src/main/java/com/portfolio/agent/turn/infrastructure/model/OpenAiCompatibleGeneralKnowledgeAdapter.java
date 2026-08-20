@@ -13,25 +13,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKnowledgeModelPort {
-    private static final String SYSTEM_PROMPT = """
-            Return exactly one JSON object with no Markdown and no unknown fields.
-            Root fields are topic, statements, caveats.
-            For EXPLANATION, topic must exactly equal the requested topic and statements must
-            contain at least one {"role":"DEFINITION","text":"..."} and one
-            {"role":"MECHANISM","text":"..."}; do not include subject or dimension.
-            For COMPARISON, every statement is {"role":"COMPARISON","text":"...",
-            "subject":"exact requested subject","dimension":"exact requested dimension"}
-            and every subject/dimension pair must be covered. caveats is an array of plain strings.
-            Do not claim current facts, high-risk advice, portfolio evidence, citations, IDs or URLs.
-            """;
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
+    private final String systemPrompt;
     private final int maxTokens;
     private final Duration timeout;
     public OpenAiCompatibleGeneralKnowledgeAdapter(
             StructuredModelTransport transport, ObjectMapper mapper,
-            int maxTokens, Duration timeout) {
+            String systemPrompt, int maxTokens, Duration timeout) {
         this.transport = transport; this.mapper = mapper;
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            throw new IllegalArgumentException("systemPrompt is required");
+        }
+        this.systemPrompt = systemPrompt;
         this.maxTokens = maxTokens; this.timeout = timeout;
     }
     @Override public String generate(GeneralKnowledgeRequest request) {
@@ -42,7 +36,7 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
             input.put("depth", request.getDepth()); input.put("audience", request.getAudience());
             input.put("expectedContentVersion", request.getExpectedContentVersion());
             return transport.execute(new StructuredModelRequest(
-                    "GENERAL_KNOWLEDGE", SYSTEM_PROMPT, mapper.writeValueAsString(input),
+                    "GENERAL_KNOWLEDGE", systemPrompt, mapper.writeValueAsString(input),
                     maxTokens, 0.2d, request.getDeadline().cappedAt(timeout))).json();
         } catch (StructuredModelFailure failure) {
             throw new GeneralKnowledgeUnavailableException("general provider unavailable", failure);

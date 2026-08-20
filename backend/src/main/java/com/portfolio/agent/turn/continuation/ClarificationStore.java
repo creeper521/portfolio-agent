@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.continuation;
 
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
+import com.portfolio.agent.turn.planning.ClarificationRecoveryTemplate;
+import com.portfolio.agent.turn.planning.DiscussionSelectionTemplate;
 
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -114,7 +116,7 @@ public final class ClarificationStore {
             Record rebound = new Record(
                     current.conversationId(), newTokenHash, current.contentReleaseId(),
                     current.challenge(), current.choiceBindings(), current.textBindings(),
-                    current.blockedGoal());
+                    current.resumeTemplate());
             validateBindings(rebound);
             entries.put(item.getKey(), new Entry(
                     rebound, item.getValue().expiresAt(), false));
@@ -173,8 +175,20 @@ public final class ClarificationStore {
 
     private void validateBlockedFieldBinding(
             Record record, ClarificationChallenge.Field publicField) {
+        if (record.resumeTemplate() instanceof DiscussionSelectionTemplate selection) {
+            boolean invalid = !(publicField instanceof ClarificationChallenge.SingleChoiceField)
+                    || record.choiceBindings().values().stream()
+                    .flatMap(value -> value.values().stream())
+                    .anyMatch(value -> !value.startsWith("result-item:")
+                            || !selection.allows(value.substring("result-item:".length())));
+            if (invalid) {
+                throw new IllegalArgumentException("discussion selection binding is invalid");
+            }
+            return;
+        }
+        BlockedGoalTemplate goal = (BlockedGoalTemplate) record.resumeTemplate();
         com.portfolio.agent.turn.planning.ClarificationProposal.Field blockedField =
-                record.blockedGoal().getUnresolvedField();
+                goal.getUnresolvedField();
         String requiredPrefix = switch (blockedField) {
             case SUBJECT -> "subject:";
             case OUTPUT -> "output:";
@@ -217,7 +231,7 @@ public final class ClarificationStore {
             ClarificationChallenge challenge,
             Map<String, Map<String, String>> choiceBindings,
             Map<String, TextBinding> textBindings,
-            BlockedGoalTemplate blockedGoal) {
+            ClarificationRecoveryTemplate resumeTemplate) {
         public Record {
             conversationId = ContinuationContext.text(conversationId, "conversationId");
             resumeTokenHash = Objects.requireNonNull(resumeTokenHash, "resumeTokenHash").clone();
@@ -228,7 +242,7 @@ public final class ClarificationStore {
                     copiedChoices.put(field, Map.copyOf(choices)));
             choiceBindings = Map.copyOf(copiedChoices);
             textBindings = Map.copyOf(Objects.requireNonNull(textBindings, "textBindings"));
-            Objects.requireNonNull(blockedGoal, "blockedGoal");
+            Objects.requireNonNull(resumeTemplate, "resumeTemplate");
         }
         @Override public byte[] resumeTokenHash() { return resumeTokenHash.clone(); }
     }

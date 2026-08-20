@@ -22,7 +22,10 @@ class PublicAgentTurnProjectorTest {
     @Test void recommendationIsTheOnlyOrderedRecommendationAuthority() {
         PublicAnswer answer = new PublicAgentTurnProjector().project(
                 UUID.randomUUID(), ProjectionTestFixtures.recommendationPlan(),
-                ProjectionTestFixtures.recommendationOutcome()).getAnswer();
+                ProjectionTestFixtures.recommendationOutcome(),
+                java.util.Map.of(
+                        "goal-recommendation",
+                        "recommendation_context_123")).getAnswer();
         assertThat(answer.getResolution()).isEqualTo(PublicAnswer.Resolution.PARTIAL);
         PublicPresentation.Recommendation presentation =
                 (PublicPresentation.Recommendation) answer.getGoalResults().getFirst().getPresentation();
@@ -31,6 +34,16 @@ class PublicAgentTurnProjectorTest {
         assertThat(presentation.getItems()).extracting(
                 PublicPresentation.Recommendation.Item::getResultItemId)
                 .containsExactly("item-goal-recommendation-1");
+        SuggestedAction action = presentation.getItems().getFirst()
+                .getDiscussionAction();
+        assertThat(action.getLabel()).isEqualTo("与我讨论");
+        assertThat(action.getContinuation().getOperation())
+                .isEqualTo(
+                        com.portfolio.agent.turn.continuation.ContinuationReference.Operation.ENTER_RESULT);
+        assertThat(action.getContinuation().getContextHandle())
+                .isEqualTo("recommendation_context_123");
+        assertThat(action.getContinuation().getResultItemId())
+                .isEqualTo("item-goal-recommendation-1");
         assertThat(presentation.getIncompleteReasons()).containsExactly("REQUESTED_SIZE");
     }
 }

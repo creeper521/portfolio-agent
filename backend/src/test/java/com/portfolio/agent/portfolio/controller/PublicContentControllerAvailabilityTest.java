@@ -5,6 +5,7 @@ import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
+import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -26,7 +27,10 @@ class PublicContentControllerAvailabilityTest {
                 org.mockito.ArgumentMatchers.any(AgentAvailabilityResponse.class)))
                 .thenReturn(response);
 
-        new PublicContentController(service, mapper, "DISABLED").getPublicContent();
+        new PublicContentController(
+                service, mapper, "DISABLED", "ENABLED",
+                new ConversationProviderAccess(true))
+                .getPublicContent();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
                 ArgumentCaptor.forClass(AgentAvailabilityResponse.class);
@@ -34,6 +38,9 @@ class PublicContentControllerAvailabilityTest {
                 org.mockito.ArgumentMatchers.eq(content), availability.capture());
         assertThat(availability.getValue().getStatus())
                 .isEqualTo(AgentAvailabilityResponse.Status.UNAVAILABLE);
+        assertThat(availability.getValue().getFreeTextSemanticRouting())
+                .isEqualTo(
+                        AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
     }
 
     @Test
@@ -48,7 +55,10 @@ class PublicContentControllerAvailabilityTest {
                 org.mockito.ArgumentMatchers.any(AgentAvailabilityResponse.class)))
                 .thenReturn(response);
 
-        new PublicContentController(service, mapper, "POSTGRESQL").getPublicContent();
+        new PublicContentController(
+                service, mapper, "POSTGRESQL", "ENABLED",
+                new ConversationProviderAccess(true))
+                .getPublicContent();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
                 ArgumentCaptor.forClass(AgentAvailabilityResponse.class);
@@ -56,5 +66,66 @@ class PublicContentControllerAvailabilityTest {
                 org.mockito.ArgumentMatchers.eq(content), availability.capture());
         assertThat(availability.getValue().getStatus())
                 .isEqualTo(AgentAvailabilityResponse.Status.AVAILABLE);
+        assertThat(availability.getValue().getFreeTextSemanticRouting())
+                .isEqualTo(
+                        AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE);
+    }
+
+    @Test
+    void persistentStateKeepsDeterministicAgentAvailableWhenFreeTextIsDisabled() {
+        PortfolioService service = mock(PortfolioService.class);
+        PortfolioResponseMapper mapper = mock(PortfolioResponseMapper.class);
+        PublicContent content = mock(PublicContent.class);
+        PublicContentResponse response = mock(PublicContentResponse.class);
+        when(service.getPublicContent()).thenReturn(content);
+        when(mapper.toPublicContentResponse(
+                org.mockito.ArgumentMatchers.eq(content),
+                org.mockito.ArgumentMatchers.any(AgentAvailabilityResponse.class)))
+                .thenReturn(response);
+
+        new PublicContentController(
+                service, mapper, "POSTGRESQL", "DISABLED",
+                new ConversationProviderAccess(true))
+                .getPublicContent();
+
+        ArgumentCaptor<AgentAvailabilityResponse> availability =
+                ArgumentCaptor.forClass(AgentAvailabilityResponse.class);
+        verify(mapper).toPublicContentResponse(
+                org.mockito.ArgumentMatchers.eq(content),
+                availability.capture());
+        assertThat(availability.getValue().getStatus())
+                .isEqualTo(AgentAvailabilityResponse.Status.AVAILABLE);
+        assertThat(availability.getValue().getFreeTextSemanticRouting())
+                .isEqualTo(
+                        AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
+    }
+
+    @Test
+    void providerPrivacyGateDisablesFreeTextWithoutDisablingDeterministicTurns() {
+        PortfolioService service = mock(PortfolioService.class);
+        PortfolioResponseMapper mapper = mock(PortfolioResponseMapper.class);
+        PublicContent content = mock(PublicContent.class);
+        PublicContentResponse response = mock(PublicContentResponse.class);
+        when(service.getPublicContent()).thenReturn(content);
+        when(mapper.toPublicContentResponse(
+                org.mockito.ArgumentMatchers.eq(content),
+                org.mockito.ArgumentMatchers.any(AgentAvailabilityResponse.class)))
+                .thenReturn(response);
+
+        new PublicContentController(
+                service, mapper, "POSTGRESQL", "ENABLED",
+                new ConversationProviderAccess(false))
+                .getPublicContent();
+
+        ArgumentCaptor<AgentAvailabilityResponse> availability =
+                ArgumentCaptor.forClass(AgentAvailabilityResponse.class);
+        verify(mapper).toPublicContentResponse(
+                org.mockito.ArgumentMatchers.eq(content),
+                availability.capture());
+        assertThat(availability.getValue().getStatus())
+                .isEqualTo(AgentAvailabilityResponse.Status.AVAILABLE);
+        assertThat(availability.getValue().getFreeTextSemanticRouting())
+                .isEqualTo(
+                        AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
     }
 }

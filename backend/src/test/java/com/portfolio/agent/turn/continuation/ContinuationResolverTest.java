@@ -38,7 +38,7 @@ class ContinuationResolverTest {
     private ContinuationContext.Recommendation recommendation(String handle) {
         return new ContinuationContext.Recommendation(
                 handle, "conversation-1", "public-1", now.plusSeconds(300),
-                false, Set.of("project-a"), Set.of(), Set.of(), Set.of(), 1, null,
+                false, Set.of("project-a"), Set.of(), Set.of(), Set.of(), 1,
                 List.of(new ContinuationContext.ResultItem("item-a", "project-a")));
     }
 }

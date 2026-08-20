@@ -16,13 +16,13 @@ class PublicAgentTurnInvariantTest {
                         PublicSupport.Kind.GENERAL_KNOWLEDGE, List.of()))));
         assertThatThrownBy(() -> new AnswerGoalResult(
                 "goal-one", "目标", AnswerGoalResult.Coverage.FULL,
-                null, List.of(), null)).isInstanceOf(IllegalArgumentException.class);
+                null, List.of())).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new AnswerGoalResult(
                 "goal-one", "目标", AnswerGoalResult.Coverage.PARTIAL,
-                presentation, List.of(), null)).isInstanceOf(IllegalArgumentException.class);
+                presentation, List.of())).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new AnswerGoalResult(
                 "goal-one", "目标", AnswerGoalResult.Coverage.NONE,
-                presentation, List.of(new GoalNotice("NO_RESULT", "无结果")), null))
+                presentation, List.of(new GoalNotice("NO_RESULT", "无结果"))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -63,7 +63,7 @@ class PublicAgentTurnInvariantTest {
                 new PublicPresentation.Sectioned(List.of(new PublicSection(
                         "section-one", com.portfolio.agent.turn.execution.AnswerSectionType.SOLUTION, "方案", "内容",
                         new PublicSupport(PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE,
-                                List.of("missing-source"))))), List.of(), null);
+                                List.of("missing-source"))))), List.of());
         assertThatThrownBy(() -> new PublicAnswer(
                 PublicAnswer.Resolution.COMPLETE, "public-1", List.of(goal),
                 new PublicSourceCatalog(List.of()),

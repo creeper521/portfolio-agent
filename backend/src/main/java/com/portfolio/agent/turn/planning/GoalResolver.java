@@ -1,7 +1,7 @@
 package com.portfolio.agent.turn.planning;
 
-import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 import java.util.Objects;
 
@@ -9,20 +9,29 @@ public final class GoalResolver {
     private final GoalInterpretationPort interpretationPort;
     private final ReviewedGoalSource reviewedGoalSource;
     private final GoalInterpretationInputFactory inputFactory;
-    private final MinimalGoalFallback minimalFallback;
+    private final SafeConversationalFastPath conversationalFastPath;
+    private final SemanticRouteValidator routeValidator;
     private final GoalBoundaryPolicy boundaryPolicy;
 
     public GoalResolver(
             GoalInterpretationPort interpretationPort,
             ReviewedGoalSource reviewedGoalSource,
             GoalInterpretationInputFactory inputFactory,
-            MinimalGoalFallback minimalFallback,
+            SafeConversationalFastPath conversationalFastPath,
+            SemanticRouteValidator routeValidator,
             GoalBoundaryPolicy boundaryPolicy) {
-        this.interpretationPort = Objects.requireNonNull(interpretationPort, "interpretationPort");
-        this.reviewedGoalSource = Objects.requireNonNull(reviewedGoalSource, "reviewedGoalSource");
-        this.inputFactory = Objects.requireNonNull(inputFactory, "inputFactory");
-        this.minimalFallback = Objects.requireNonNull(minimalFallback, "minimalFallback");
-        this.boundaryPolicy = Objects.requireNonNull(boundaryPolicy, "boundaryPolicy");
+        this.interpretationPort = Objects.requireNonNull(
+                interpretationPort, "interpretationPort");
+        this.reviewedGoalSource = Objects.requireNonNull(
+                reviewedGoalSource, "reviewedGoalSource");
+        this.inputFactory = Objects.requireNonNull(
+                inputFactory, "inputFactory");
+        this.conversationalFastPath = Objects.requireNonNull(
+                conversationalFastPath, "conversationalFastPath");
+        this.routeValidator = Objects.requireNonNull(
+                routeValidator, "routeValidator");
+        this.boundaryPolicy = Objects.requireNonNull(
+                boundaryPolicy, "boundaryPolicy");
     }
 
     public ResolvedGoalSet resolve(
@@ -32,8 +41,10 @@ public final class GoalResolver {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(deadline, "deadline");
-        if (!context.matchesHint(command.getSurfaceContext().getSubjectHint())) {
-            return ResolvedGoalSet.invalidInput("指定的公开主体不存在或不可用。");
+        if (!context.matchesHint(
+                command.getSurfaceContext().getSubjectHint())) {
+            return ResolvedGoalSet.invalidInput(
+                    "指定的公开主体不存在或不可用。");
         }
         if (command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.FreeText) {
@@ -51,28 +62,58 @@ public final class GoalResolver {
             AgentTurnCommand.Ask command,
             GoalResolutionContext context,
             TurnDeadline deadline) {
-        java.util.Optional<ResolvedGoalSet> deterministic =
-                minimalFallback.tryResolveBeforeProvider(command, context);
-        if (deterministic.isPresent()) return deterministic.orElseThrow();
+        java.util.Optional<ResolvedGoalSet> conversational =
+                conversationalFastPath.tryResolve(command);
+        if (conversational.isPresent()) {
+            return conversational.orElseThrow();
+        }
+        GoalInterpretationInput input = inputFactory.create(command, context);
         try {
-            GoalInterpretationResult result = interpretationPort.interpret(
-                    inputFactory.create(command, context), deadline);
+            GoalInterpretationResult result =
+                    interpretTyped(input, deadline);
             return switch (result.getKind()) {
-                case GOALS -> boundaryPolicy.apply(result.getGoalProposal().orElseThrow());
-                case CLARIFICATION -> ResolvedGoalSet.clarification(
-                        result.getClarification().orElseThrow());
+                case SEMANTIC_ROUTE -> resolveRoute(
+                        result.getRouteProposal().orElseThrow());
                 case CONVERSATIONAL -> ResolvedGoalSet.conversational(
                         result.getMessage().orElseThrow());
             };
-        } catch (GoalInterpretationUnavailableException unavailable) {
+        } catch (GoalInterpretationUnavailableException
+                 | IllegalArgumentException unavailable) {
             if (deadline.isExpired()) {
                 return ResolvedGoalSet.capabilityUnavailable(
                         "目标解释已超过本轮预算，请重新提问。");
             }
-            return minimalFallback.tryResolve(command, context)
-                    .map(boundaryPolicy::apply)
-                    .orElseGet(() -> ResolvedGoalSet.capabilityUnavailable(
-                            "当前暂时无法可靠理解这条自由文本请求。"));
+            return ResolvedGoalSet.capabilityUnavailable(
+                    "当前暂时无法可靠理解这条自由文本请求。");
         }
+    }
+
+    public GoalInterpretationResult interpretTyped(
+            GoalInterpretationInput input,
+            TurnDeadline deadline) {
+        GoalInterpretationResult result =
+                interpretationPort.interpret(input, deadline);
+        if (result.getKind()
+                == GoalInterpretationResult.Kind.CONVERSATIONAL) {
+            return result;
+        }
+        return GoalInterpretationResult.semanticRoute(
+                routeValidator.validate(
+                        result.getRouteProposal().orElseThrow(), input));
+    }
+
+    private ResolvedGoalSet resolveRoute(SemanticRouteProposal proposal) {
+        return switch (proposal.getRoute()) {
+            case STANDARD_GOAL -> boundaryPolicy.apply(
+                    proposal.getGoalProposal().orElseThrow());
+            case NEEDS_CLARIFICATION -> ResolvedGoalSet.clarification(
+                    proposal.getClarification().orElseThrow());
+            case ENTER_RECOMMENDED_RESULT,
+                    CONTINUE_CURRENT_PROJECT,
+                    START_NEW_TOPIC,
+                    SWITCH_PROJECT,
+                    REENTER_PROJECT -> ResolvedGoalSet.capabilityUnavailable(
+                    "当前语义路由需要有效的 typed 项目上下文。");
+        };
     }
 }

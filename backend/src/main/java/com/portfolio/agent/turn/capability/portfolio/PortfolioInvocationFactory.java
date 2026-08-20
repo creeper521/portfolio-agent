@@ -39,12 +39,6 @@ public final class PortfolioInvocationFactory {
                     ? AuthorizedSubjectScope.allPublished(context.getContentReleaseId())
                     : AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
             facets.add(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION);
-        } else if (parameters instanceof UserGoalProposal.PortfolioRefineParameters) {
-            if (task.getSubjectReferences().isEmpty()) {
-                throw new IllegalArgumentException("refinement requires an authorized subject scope");
-            }
-            scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
-            facets.add(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION);
         } else {
             throw new IllegalArgumentException("unsupported portfolio parameters");
         }

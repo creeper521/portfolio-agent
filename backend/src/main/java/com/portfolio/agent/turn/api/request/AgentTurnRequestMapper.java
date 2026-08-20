@@ -20,12 +20,21 @@ public final class AgentTurnRequestMapper {
         if (command instanceof AgentTurnRequest.AskCommandRequest ask) {
             return new AgentTurnCommand.Ask(
                     request.getRequestId(), mapAskInput(ask.getInput()),
+                    ask.getReferenceContextHandle(),
                     surfaceContext, conversationWindow);
         }
         if (command instanceof AgentTurnRequest.ContinueCommandRequest continuation) {
             return new AgentTurnCommand.Continue(
-                    request.getRequestId(), continuation.getContextHandle(),
+                    request.getRequestId(),
+                    AgentTurnCommand.ContinueOperation.valueOf(
+                            continuation.getOperation().name()),
+                    continuation.getContextHandle(),
                     continuation.getResultItemId(), continuation.getText(),
+                    continuation.getSubject() == null ? null
+                            : new AgentTurnCommand.ContinueSubject(
+                            AgentTurnCommand.ContinueSubjectKind.valueOf(
+                                    continuation.getSubject().getKind().name()),
+                            continuation.getSubject().getReference()),
                     surfaceContext, conversationWindow);
         }
         if (command instanceof AgentTurnRequest.ResolveClarificationCommandRequest clarification) {

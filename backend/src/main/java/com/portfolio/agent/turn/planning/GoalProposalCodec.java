@@ -33,24 +33,91 @@ public final class GoalProposalCodec {
         requireObject(root, "root");
         String kind = requireText(root, "kind", 64);
         return switch (kind) {
-            case "GOALS" -> decodeGoals(root, input);
-            case "CLARIFICATION" -> decodeClarification(root, input);
+            case "SEMANTIC_ROUTE" -> decodeSemanticRoute(root, input);
             case "CONVERSATIONAL" -> decodeConversational(root);
             default -> throw new IllegalArgumentException("unsupported goal interpretation kind");
         };
     }
 
-    private GoalInterpretationResult decodeGoals(JsonNode root, GoalInterpretationInput input) {
-        assertFields(root, Set.of("kind", "goals"), Set.of("kind", "goals"), "root");
-        JsonNode goalsNode = requireArray(root, "goals");
-        if (goalsNode.isEmpty() || goalsNode.size() > 6) {
-            throw new IllegalArgumentException("goals must contain between one and six items");
+    private GoalInterpretationResult decodeSemanticRoute(
+            JsonNode root, GoalInterpretationInput input) {
+        Set<String> fields = Set.of(
+                "kind", "route", "candidateKey", "goal", "clarification");
+        assertFields(root, fields, fields, "root");
+        SemanticRouteProposal.Route route = enumValue(
+                SemanticRouteProposal.Route.class,
+                requireText(root, "route", 64), "root.route");
+        JsonNode candidateNode = root.get("candidateKey");
+        JsonNode goalNode = root.get("goal");
+        JsonNode clarificationNode = root.get("clarification");
+        SemanticRouteProposal proposal = switch (route) {
+            case STANDARD_GOAL -> {
+                requireNull(candidateNode, "root.candidateKey");
+                requireNull(clarificationNode, "root.clarification");
+                if (goalNode == null || goalNode.isNull()) {
+                    throw new IllegalArgumentException(
+                            "root.goal is required for STANDARD_GOAL");
+                }
+                yield SemanticRouteProposal.standardGoal(
+                        new UserGoalProposal(List.of(
+                                decodeGoal(goalNode, input, "root.goal"))));
+            }
+            case ENTER_RECOMMENDED_RESULT -> {
+                requireNull(goalNode, "root.goal");
+                requireNull(clarificationNode, "root.clarification");
+                yield SemanticRouteProposal.enterRecommendedResult(
+                        requireText(root, "candidateKey", 2));
+            }
+            case NEEDS_CLARIFICATION -> {
+                requireNull(candidateNode, "root.candidateKey");
+                requireNull(goalNode, "root.goal");
+                if ((clarificationNode == null || clarificationNode.isNull())
+                        && input.getInterpretationMode()
+                        == GoalInterpretationInput.InterpretationMode.STANDARD
+                        && input.getRouteCandidates().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "root.clarification is required");
+                }
+                yield clarificationNode == null || clarificationNode.isNull()
+                        ? SemanticRouteProposal.needsClarification()
+                        : SemanticRouteProposal.needsClarification(
+                        decodeClarificationValue(clarificationNode, input));
+            }
+            case CONTINUE_CURRENT_PROJECT -> {
+                requireDiscussion(input);
+                requireNull(candidateNode, "root.candidateKey");
+                requireNull(clarificationNode, "root.clarification");
+                if (goalNode == null || goalNode.isNull()) {
+                    throw new IllegalArgumentException(
+                            "root.goal is required for discussion continuation");
+                }
+                yield SemanticRouteProposal.discussion(
+                        route, null,
+                        new UserGoalProposal(List.of(
+                                decodeGoal(goalNode, input, "root.goal"))));
+            }
+            case SWITCH_PROJECT -> {
+                requireDiscussion(input);
+                requireNull(goalNode, "root.goal");
+                requireNull(clarificationNode, "root.clarification");
+                yield SemanticRouteProposal.discussion(
+                        route, requireText(root, "candidateKey", 2), null);
+            }
+            case START_NEW_TOPIC, REENTER_PROJECT -> {
+                requireDiscussion(input);
+                requireNull(candidateNode, "root.candidateKey");
+                requireNull(goalNode, "root.goal");
+                requireNull(clarificationNode, "root.clarification");
+                yield SemanticRouteProposal.stateRoute(route);
+            }
+        };
+        return GoalInterpretationResult.semanticRoute(proposal);
+    }
+
+    private void requireNull(JsonNode node, String path) {
+        if (node != null && !node.isNull()) {
+            throw new IllegalArgumentException(path + " must be null");
         }
-        List<UserGoalProposal.ProposedGoal> goals = new ArrayList<>();
-        for (int index = 0; index < goalsNode.size(); index++) {
-            goals.add(decodeGoal(goalsNode.get(index), input, "goals[" + index + "]"));
-        }
-        return GoalInterpretationResult.goals(new UserGoalProposal(List.copyOf(goals)));
     }
 
     private UserGoalProposal.ProposedGoal decodeGoal(
@@ -151,12 +218,6 @@ public final class GoalProposalCodec {
                         requireInt(node, "requestedSize"),
                         decodeClosedNames(requireArray(node, "constraints"), path + ".constraints", true));
             }
-            case PORTFOLIO_REFINE_RECOMMENDATION -> {
-                assertFields(node, Set.of("kind", "constraints"),
-                        Set.of("kind", "constraints"), path);
-                yield new UserGoalProposal.PortfolioRefineParameters(
-                        decodeClosedNames(requireArray(node, "constraints"), path + ".constraints", false));
-            }
             case GENERAL_EXPLANATION -> {
                 assertFields(node, Set.of("kind", "topicAnchor", "depth"),
                         Set.of("kind", "topicAnchor", "depth"), path);
@@ -189,11 +250,8 @@ public final class GoalProposalCodec {
         };
     }
 
-    private GoalInterpretationResult decodeClarification(
-            JsonNode root, GoalInterpretationInput input) {
-        assertFields(root, Set.of("kind", "clarification"),
-                Set.of("kind", "clarification"), "root");
-        JsonNode node = root.get("clarification");
+    private ClarificationProposal decodeClarificationValue(
+            JsonNode node, GoalInterpretationInput input) {
         requireObject(node, "clarification");
         assertFields(node, Set.of("field", "prompt", "blockedGoal"),
                 Set.of("field", "prompt", "blockedGoal"), "clarification");
@@ -205,10 +263,10 @@ public final class GoalProposalCodec {
         }
         BlockedGoalTemplate blockedGoal = decodeBlockedGoal(
                 node.get("blockedGoal"), input, field);
-        return GoalInterpretationResult.clarification(new ClarificationProposal(
+        return new ClarificationProposal(
                 field,
                 requireText(node, "prompt", 400),
-                blockedGoal));
+                blockedGoal);
     }
 
     private BlockedGoalTemplate decodeBlockedGoal(
@@ -295,10 +353,28 @@ public final class GoalProposalCodec {
             JsonNode node, String input, String path) {
         requireObject(node, path);
         assertFields(node, Set.of("text", "start"), Set.of("text", "start"), path);
-        UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor(
-                requireText(node, "text", 256), requireInt(node, "start"));
-        anchor.requireMatches(input);
-        return anchor;
+        String text = requireText(node, "text", 256);
+        int claimedStart = requireInt(node, "start");
+        UserGoalProposal.InputAnchor claimed =
+                new UserGoalProposal.InputAnchor(text, claimedStart);
+        try {
+            claimed.requireMatches(input);
+            return claimed;
+        } catch (IllegalArgumentException mismatch) {
+            int uniqueStart = input.indexOf(text);
+            if (uniqueStart < 0 || input.indexOf(text, uniqueStart + 1) >= 0) {
+                throw mismatch;
+            }
+            return new UserGoalProposal.InputAnchor(text, uniqueStart);
+        }
+    }
+
+    private void requireDiscussion(GoalInterpretationInput input) {
+        if (input.getInterpretationMode()
+                != GoalInterpretationInput.InterpretationMode.DISCUSSION) {
+            throw new IllegalArgumentException(
+                    "discussion route requires DISCUSSION mode");
+        }
     }
 
     private Set<String> decodeClosedNames(JsonNode array, String path, boolean allowEmpty) {

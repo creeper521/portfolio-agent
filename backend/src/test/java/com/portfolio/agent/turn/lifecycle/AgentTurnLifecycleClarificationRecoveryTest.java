@@ -126,7 +126,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                     }
                     return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.NOT_FOUND);
                 });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(true);
         java.util.concurrent.ExecutorService executor =
                 java.util.concurrent.Executors.newCachedThreadPool();
@@ -149,7 +149,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
     }
 
     @Test
-    void blockingContinuationReadCannotExceedTurnDeadline() {
+    void routeWithoutActiveDiscussionFailsBeforeReadingAnUntrustedHandle() {
         Clock clock = Clock.systemUTC();
         java.util.concurrent.atomic.AtomicBoolean interrupted =
                 new java.util.concurrent.atomic.AtomicBoolean();
@@ -165,7 +165,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
             }
             return java.util.Optional.empty();
         });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(true);
         java.util.concurrent.ExecutorService executor =
                 java.util.concurrent.Executors.newCachedThreadPool();
@@ -176,13 +176,15 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         long startedAt = System.nanoTime();
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.Continue(
-                        UUID.randomUUID(), "context_blocking_123", null,
-                        "继续", null, null));
+                        UUID.randomUUID(),
+                        AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
+                        "context_blocking_123", null,
+                        "继续", null, null, null));
 
         assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
                 .isLessThan(Duration.ofSeconds(1));
         assertThat(result.turn()).isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
-        assertThat(interrupted).isTrue();
+        assertThat(interrupted).isFalse();
         executor.shutdownNow();
     }
 

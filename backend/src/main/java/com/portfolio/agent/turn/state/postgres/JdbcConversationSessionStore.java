@@ -70,16 +70,39 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
             applyDatabaseTimeout(deadline);
             try {
                 return Optional.ofNullable(jdbc.queryForObject(
-                    "SELECT conversation_id, resume_token_hash, created_at, absolute_expires_at FROM " + table
+                    "SELECT conversation_id, resume_token_hash, created_at,"
+                            + " absolute_expires_at, active_discussion_handle,"
+                            + " active_discussion_project_id,"
+                            + " active_discussion_expires_at FROM " + table
                             + " WHERE resume_token_hash IN (" + placeholders(tokenHashes.size())
                             + ") AND revoked_at IS NULL"
                             + " AND absolute_expires_at>? AND token_key_id IN ("
                             + placeholders(supportedTokenKeyIds.size()) + ")",
-                    (result, index) -> new Session(
-                            result.getObject("conversation_id", UUID.class).toString(),
-                            result.getBytes("resume_token_hash"),
-                            result.getObject("created_at", OffsetDateTime.class).toInstant(),
-                            result.getObject("absolute_expires_at", OffsetDateTime.class).toInstant()),
+                    (result, index) -> {
+                        OffsetDateTime discussionExpiry = result.getObject(
+                                "active_discussion_expires_at",
+                                OffsetDateTime.class);
+                        com.portfolio.agent.turn.continuation.ActiveDiscussionPointer pointer =
+                                discussionExpiry == null ? null
+                                        : new com.portfolio.agent.turn.continuation.ActiveDiscussionPointer(
+                                        result.getString(
+                                                "active_discussion_handle"),
+                                        result.getString(
+                                                "active_discussion_project_id"),
+                                        discussionExpiry.toInstant());
+                        return new Session(
+                                result.getObject(
+                                        "conversation_id", UUID.class)
+                                        .toString(),
+                                result.getBytes("resume_token_hash"),
+                                result.getObject(
+                                        "created_at", OffsetDateTime.class)
+                                        .toInstant(),
+                                result.getObject(
+                                        "absolute_expires_at",
+                                        OffsetDateTime.class).toInstant(),
+                                pointer);
+                    },
                         findParameters(tokenHashes, time(now), supportedTokenKeyIds)));
             } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
         });

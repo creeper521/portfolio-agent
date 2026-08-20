@@ -21,27 +21,43 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GoalInterpretationAdapterTest {
     @Test void sendsOnlyGoalLevelAuthorityAndDecodesStrictProposal() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
+        String systemPrompt = "goal-system-prompt";
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(request -> {
             captured.set(request);
             return new StructuredModelResponse("""
-                    {"kind":"GOALS","goals":[{
-                      "goalKey":"general-goal","goalKind":"GENERAL_EXPLANATION",
-                      "inputAnchor":{"text":"解释幂等","start":0},
-                      "subjectCandidates":[],"requestedOutputs":["EXPLANATION"],
-                      "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
-                      "parameters":{"kind":"GENERAL_EXPLANATION",
-                        "topicAnchor":{"text":"幂等","start":2},"depth":"STANDARD"}
-                    }]}
+                    {
+                      "kind":"SEMANTIC_ROUTE",
+                      "route":"STANDARD_GOAL",
+                      "candidateKey":null,
+                      "goal":{
+                        "goalKey":"general-goal",
+                        "goalKind":"GENERAL_EXPLANATION",
+                        "inputAnchor":{"text":"解释幂等","start":0},
+                        "subjectCandidates":[],
+                        "requestedOutputs":["EXPLANATION"],
+                        "knowledgeRequirement":"STABLE_GENERAL_EXPLANATION",
+                        "parameters":{"kind":"GENERAL_EXPLANATION",
+                          "topicAnchor":{"text":"幂等","start":2},"depth":"STANDARD"}
+                      },
+                      "clarification":null
+                    }
                     """);
-        }, new ObjectMapper(), new GoalProposalCodec(), 1200,
+        }, new ObjectMapper(), new GoalProposalCodec(), systemPrompt, 1200,
                 Duration.ofSeconds(2));
 
         GoalInterpretationResult result = adapter.interpret(
                 input(), com.portfolio.agent.turn.execution.TurnDeadline.after(
                         Duration.ofSeconds(3), Clock.systemUTC()));
-        assertThat(result.getKind()).isEqualTo(GoalInterpretationResult.Kind.GOALS);
-        assertThat(captured.get().userPrompt()).contains("allowedGoalKinds", "publicSubjects")
+        assertThat(result.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.SEMANTIC_ROUTE);
+        assertThat(captured.get().systemPrompt()).isEqualTo(systemPrompt);
+        assertThat(captured.get().userPrompt()).contains(
+                        "interpretationMode", "discussionState",
+                        "allowedRoutes", "routeCandidates",
+                        "allowedGoalKinds", "publicSubjects")
                 .doesNotContain("taskType", "dependencies");
+        assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
+        assertThat(captured.get().temperature()).isZero();
     }
 
     private GoalInterpretationInput input() {

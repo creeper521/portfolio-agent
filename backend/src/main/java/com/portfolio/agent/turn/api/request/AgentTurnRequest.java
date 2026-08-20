@@ -93,13 +93,32 @@ public final class AgentTurnRequest {
         @NotNull(message = "ask input is required")
         private final AskInputRequest input;
 
+        @Pattern(regexp = "[A-Za-z0-9_-]{8,256}",
+                message = "referenceContextHandle format is invalid")
+        private final String referenceContextHandle;
+
         @JsonCreator
-        public AskCommandRequest(@JsonProperty("input") AskInputRequest input) {
+        public AskCommandRequest(
+                @JsonProperty("input") AskInputRequest input,
+                @JsonProperty("referenceContextHandle")
+                String referenceContextHandle) {
             this.input = input;
+            this.referenceContextHandle = referenceContextHandle;
         }
 
         public AskInputRequest getInput() {
             return input;
+        }
+
+        public String getReferenceContextHandle() {
+            return referenceContextHandle;
+        }
+
+        @AssertTrue(message =
+                "referenceContextHandle is allowed only for FREE_TEXT")
+        public boolean isReferenceContextShapeValid() {
+            return referenceContextHandle == null
+                    || input instanceof FreeTextInputRequest;
         }
     }
 
@@ -153,25 +172,37 @@ public final class AgentTurnRequest {
     }
 
     public static final class ContinueCommandRequest implements CommandRequest {
-        @NotBlank(message = "contextHandle is required")
+        @NotNull(message = "continue operation is required")
+        private final ContinueOperation operation;
+
         @Pattern(regexp = "[A-Za-z0-9_-]{8,256}", message = "contextHandle format is invalid")
         private final String contextHandle;
 
         @Pattern(regexp = "[A-Za-z0-9_-]{8,256}", message = "resultItemId format is invalid")
         private final String resultItemId;
 
-        @NotBlank(message = "text is required")
         @Size(max = 2000, message = "text must not exceed 2000 characters")
         private final String text;
 
+        @Valid
+        private final ContinueSubjectRequest subject;
+
         @JsonCreator
         public ContinueCommandRequest(
+                @JsonProperty("operation") ContinueOperation operation,
                 @JsonProperty("contextHandle") String contextHandle,
                 @JsonProperty("resultItemId") String resultItemId,
-                @JsonProperty("text") String text) {
+                @JsonProperty("text") String text,
+                @JsonProperty("subject") ContinueSubjectRequest subject) {
+            this.operation = operation;
             this.contextHandle = contextHandle;
             this.resultItemId = resultItemId;
             this.text = text;
+            this.subject = subject;
+        }
+
+        public ContinueOperation getOperation() {
+            return operation;
         }
 
         public String getContextHandle() {
@@ -185,6 +216,48 @@ public final class AgentTurnRequest {
         public String getText() {
             return text;
         }
+
+        public ContinueSubjectRequest getSubject() {
+            return subject;
+        }
+
+        @AssertTrue(message = "continue operation fields do not match")
+        public boolean isOperationShapeValid() {
+            if (operation == null) return false;
+            return switch (operation) {
+                case ENTER_RESULT -> contextHandle != null
+                        && resultItemId != null && text == null && subject == null;
+                case ROUTE_IN_CONTEXT -> contextHandle != null
+                        && resultItemId == null
+                        && text != null && !text.isBlank()
+                        && subject == null;
+                case EXIT_CONTEXT -> contextHandle != null
+                        && resultItemId == null && text == null && subject == null;
+                case REENTER_SUBJECT -> contextHandle == null
+                        && resultItemId == null && text == null && subject != null;
+            };
+        }
+    }
+
+    public static final class ContinueSubjectRequest {
+        @NotNull(message = "continue subject kind is required")
+        private final ContinueSubjectKind kind;
+
+        @NotBlank(message = "continue subject reference is required")
+        @Pattern(regexp = "[A-Za-z0-9._-]{1,128}",
+                message = "continue subject reference format is invalid")
+        private final String reference;
+
+        @JsonCreator
+        public ContinueSubjectRequest(
+                @JsonProperty("kind") ContinueSubjectKind kind,
+                @JsonProperty("reference") String reference) {
+            this.kind = kind;
+            this.reference = reference;
+        }
+
+        public ContinueSubjectKind getKind() { return kind; }
+        public String getReference() { return reference; }
     }
 
     public static final class ResolveClarificationCommandRequest implements CommandRequest {
@@ -332,6 +405,10 @@ public final class AgentTurnRequest {
 
     public enum MessageRole { USER, ASSISTANT }
     public enum SubjectHintKind { PROJECT, CASE }
+    public enum ContinueOperation {
+        ENTER_RESULT, ROUTE_IN_CONTEXT, EXIT_CONTEXT, REENTER_SUBJECT
+    }
+    public enum ContinueSubjectKind { PROJECT }
     public enum AudienceRole { INTERVIEWER, MENTOR, HR, GUEST }
     public enum RequestSource { HOME, PROJECT, CASE, AGENT_PAGE }
 

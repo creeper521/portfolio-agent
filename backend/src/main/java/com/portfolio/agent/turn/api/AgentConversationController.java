@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.api;
 
 import com.portfolio.agent.turn.api.response.AgentApiErrorResponse;
+import com.portfolio.agent.turn.api.response.ConversationSummaryResponse;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -26,7 +27,8 @@ public final class AgentConversationController {
                 lifecycle.currentConversation(bearer.token());
         if (!status.authenticated()) return unauthorized();
         return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(new ConversationSummary(status.conversationId(), "ACTIVE"));
+                .body(new ConversationSummaryResponse(
+                        status.conversationId(), status.discussion()));
     }
 
     @DeleteMapping
@@ -42,5 +44,4 @@ public final class AgentConversationController {
                 .body(AgentApiErrorResponse.of(
                         null, "RESUME_TOKEN_INVALID", "会话凭证无效或已过期。", false, null));
     }
-    public record ConversationSummary(String conversationId, String status) { }
 }
