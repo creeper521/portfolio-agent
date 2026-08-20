@@ -61,7 +61,7 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
     @retry="retry"
   />
   <AgentWorkspace
-    v-else-if="status === 'ready' && portfolio && !invalidHandoff"
+    v-else-if="status === 'ready' && portfolio && !invalidHandoff && portfolio.agentAvailability.status === 'AVAILABLE'"
     :portfolio="portfolio"
     :initial-role="initialRole()"
     :initial-project="queryString('project')"
@@ -69,6 +69,15 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
     :initial-case="caseHandoff?.caseSlug ?? ''"
     :initial-question="caseHandoff?.question ?? ''"
   />
+  <section
+    v-else-if="status === 'ready' && portfolio && portfolio.agentAvailability.status === 'UNAVAILABLE'"
+    class="agent-unavailable"
+    data-testid="agent-unavailable"
+    role="status"
+  >
+    <p>当前部署仅提供作品集浏览，Agent 提问暂未启用。</p>
+    <RouterLink to="/projects">浏览公开项目</RouterLink>
+  </section>
   <section v-else-if="status === 'ready' && portfolio" class="route-seed-feedback" data-invalid-handoff role="status">
     <p>这次页面内交接已失效或已被使用。</p>
     <RouterLink to="/agent">开始新的临时对话</RouterLink>
@@ -76,7 +85,8 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
 </template>
 
 <style scoped>
-.route-seed-feedback {
+.route-seed-feedback,
+.agent-unavailable {
   display: grid;
   min-height: 100%;
   place-content: center;
@@ -86,11 +96,13 @@ const initialSeed = ref<AgentRouteSeed | null>(handoffSeed)
   font: 12px/1.7 var(--mono);
 }
 
-.route-seed-feedback p {
+.route-seed-feedback p,
+.agent-unavailable p {
   margin: 0;
 }
 
-.route-seed-feedback a {
+.route-seed-feedback a,
+.agent-unavailable a {
   justify-self: center;
   padding: 9px 13px;
   color: var(--red);

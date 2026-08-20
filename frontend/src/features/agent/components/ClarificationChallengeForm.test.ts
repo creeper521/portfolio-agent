@@ -74,4 +74,26 @@ describe('ClarificationChallengeForm', () => {
     expect(wrapper.text()).not.toContain('promptCode')
     expect(wrapper.text()).not.toContain('fieldKey')
   })
+
+  // A2-18：CONSUMED/SUPERSEDED 只渲染只读摘要，不提供任何提交入口。
+  it('CONSUMED/SUPERSEDED 状态渲染只读卡且无表单与提交按钮', () => {
+    const turn = parseGoldenFixture('clarification.json')
+    if (turn.kind !== 'CLARIFICATION') throw new Error('期望 CLARIFICATION')
+    const challenge = turn.clarification
+    const consumed = mount(ClarificationChallengeForm, {
+      props: { challenge, state: 'CONSUMED' },
+    })
+    expect(consumed.find('[data-testid="clarification-readonly"]').exists()).toBe(true)
+    expect(consumed.attributes('data-clarification-state')).toBe('CONSUMED')
+    expect(consumed.text()).toContain('不可重复提交')
+    expect(consumed.find('[data-testid="clarification-form"]').exists()).toBe(false)
+    expect(consumed.find('button[data-clarification-submit]').exists()).toBe(false)
+
+    const superseded = mount(ClarificationChallengeForm, {
+      props: { challenge, state: 'SUPERSEDED' },
+    })
+    expect(superseded.attributes('data-clarification-state')).toBe('SUPERSEDED')
+    expect(superseded.text()).toContain('已被后续轮次取代')
+    expect(superseded.find('button[data-clarification-submit]').exists()).toBe(false)
+  })
 })

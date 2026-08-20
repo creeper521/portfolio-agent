@@ -162,6 +162,48 @@ describe('submitAgentTurn', () => {
     if (aborted.ok) throw new Error('期望失败')
     expect(aborted.failure.kind).toBe('ABORTED')
   })
+
+  // A2-10：内部等待计时器超时必须与用户主动取消区分；超时结果可重试（A2-14）。
+  it('内部计时器超时映射为 TIMEOUT，外部取消仍为 ABORTED', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetch = stubFetch()
+      fetch.mockImplementation(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'))
+            })
+          }),
+      )
+      const pending = submitAgentTurn({
+        requestId: '10000000-0000-4000-8000-000000000002',
+        command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '慢问题' } },
+      })
+      await vi.advanceTimersByTimeAsync(24_999)
+      expect(fetch.mock.results[0]?.value).toBeInstanceOf(Promise)
+      await vi.advanceTimersByTimeAsync(1)
+      const timedOut = await pending
+      if (timedOut.ok) throw new Error('期望失败')
+      expect(timedOut.failure.kind).toBe('TIMEOUT')
+      expect(timedOut.failure.retryable).toBe(true)
+
+      const external = new AbortController()
+      const cancellable = submitAgentTurn(
+        {
+          requestId: '10000000-0000-4000-8000-000000000003',
+          command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '取消问题' } },
+        },
+        { signal: external.signal },
+      )
+      external.abort()
+      const cancelled = await cancellable
+      if (cancelled.ok) throw new Error('期望失败')
+      expect(cancelled.failure.kind).toBe('ABORTED')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('cancel / current / clear', () => {

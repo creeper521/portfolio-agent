@@ -73,14 +73,16 @@ export function useLocalSessions() {
     sessions.value = [...sessions.value]
   }
 
-  function appendMessage(sessionId: string, message: Omit<AgentMessage, 'id' | 'createdAt'>) {
+  /** 追加消息并返回其 id，供调用方后续标记送达/澄清消费状态。 */
+  function appendMessage(sessionId: string, message: Omit<AgentMessage, 'id' | 'createdAt'>): string | null {
     const session = sessions.value.find((item) => item.id === sessionId)
-    if (!session) return
+    if (!session) return null
 
     const timestamp = Date.now()
+    const messageId = makeId('message')
     session.messages.push({
       ...message,
-      id: makeId('message'),
+      id: messageId,
       createdAt: timestamp,
     })
     session.updatedAt = timestamp
@@ -104,6 +106,37 @@ export function useLocalSessions() {
       }
     }
     sessions.value = [...sessions.value]
+    return messageId
+  }
+
+  /** 标记 USER 轮次送达状态；失败/取消的轮次不进入 conversationWindow（A2-04）。 */
+  function markMessageDelivery(sessionId: string, messageId: string, failed: boolean): void {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    const message = session?.messages.find((item) => item.id === messageId)
+    if (!message) return
+    message.failed = failed
+    sessions.value = [...sessions.value]
+  }
+
+  /** 标记澄清挑战已被提交消费；挑战卡转只读，防止重复 RESOLVE（A2-18）。 */
+  function markClarificationConsumed(sessionId: string, clarificationId: string): boolean {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return false
+    const message = session.messages.find((item) => {
+      const turn = item.turn
+      if (turn === undefined) return false
+      if (turn.kind === 'CLARIFICATION') {
+        return turn.clarification.clarificationId === clarificationId
+      }
+      if (turn.kind === 'ANSWER' && turn.answer.localClarification !== undefined) {
+        return turn.answer.localClarification.clarificationId === clarificationId
+      }
+      return false
+    })
+    if (!message) return false
+    message.clarificationConsumed = true
+    sessions.value = [...sessions.value]
+    return true
   }
 
   function removeSession(sessionId: string) {
@@ -197,6 +230,8 @@ export function useLocalSessions() {
     getSessionResumeToken,
     adoptResumedConversation,
     clearSessionConversation,
+    markMessageDelivery,
+    markClarificationConsumed,
     removeSession,
     clearSessions,
   }

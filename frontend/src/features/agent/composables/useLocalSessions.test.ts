@@ -90,4 +90,48 @@ describe('useLocalSessions', () => {
     expect(activeSession.value?.messages[0]).toMatchObject({ role: 'USER', content: '介绍代表项目' })
     expect(activeSession.value?.messages[0]?.turn).toBeUndefined()
   })
+
+  it('appendMessage 返回消息 id，markMessageDelivery 切换 failed 标记（A2-04）', () => {
+    const { activeSession, createSession, appendMessage, markMessageDelivery } = useLocalSessions()
+    const session = createSession()
+    const messageId = appendMessage(session.id, { role: 'USER', content: '会失败的问题' })
+    expect(typeof messageId).toBe('string')
+
+    markMessageDelivery(session.id, messageId ?? '', true)
+    expect(activeSession.value?.messages[0]?.failed).toBe(true)
+
+    markMessageDelivery(session.id, messageId ?? '', false)
+    expect(activeSession.value?.messages[0]?.failed).toBe(false)
+
+    // 未知 id / 未知会话安全无操作。
+    markMessageDelivery(session.id, 'message-unknown', true)
+    markMessageDelivery('session-unknown', messageId ?? '', true)
+    expect(activeSession.value?.messages[0]?.failed).toBe(false)
+  })
+
+  it('markClarificationConsumed 标记 CRITICAL 与 ANSWER 内嵌挑战，未知 id 无操作（A2-18）', () => {
+    const { activeSession, createSession, appendMessage, markClarificationConsumed } =
+      useLocalSessions()
+    const session = createSession()
+    appendMessage(session.id, { role: 'USER', content: '问题' })
+    appendMessage(session.id, {
+      role: 'AGENT',
+      content: '澄清',
+      turn: parseGoldenFixture('clarification.json'),
+    })
+    appendMessage(session.id, {
+      role: 'AGENT',
+      content: '回答',
+      turn: parseGoldenFixture('answer-local-clarification.json'),
+    })
+
+    expect(markClarificationConsumed(session.id, 'clarification_fixture_critical')).toBe(true)
+    expect(markClarificationConsumed(session.id, 'clarification_fixture_local')).toBe(true)
+    const messages = activeSession.value?.messages ?? []
+    expect(messages[1]?.clarificationConsumed).toBe(true)
+    expect(messages[2]?.clarificationConsumed).toBe(true)
+
+    expect(markClarificationConsumed(session.id, 'clarification_unknown')).toBe(false)
+    expect(markClarificationConsumed('session-unknown', 'clarification_fixture_critical')).toBe(false)
+  })
 })

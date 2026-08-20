@@ -140,7 +140,7 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     wrapper.unmount()
   })
 
-  it('API 失败显示可重试错误，重试复用同一 requestId（幂等）', async () => {
+  it('API 失败按类别显示可行动文案，重试复用同一 requestId（幂等）', async () => {
     apiMocks.submitAgentTurn
       .mockResolvedValueOnce({
         ok: false,
@@ -156,7 +156,9 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     const wrapper = mountWorkspace()
 
     await submitFreeText(wrapper, '会失败的问题')
-    expect(wrapper.get('[data-testid="turn-failure"]').text()).toContain('状态暂不可用')
+    const failure = wrapper.get('[data-testid="turn-failure"]')
+    expect(failure.attributes('data-failure-category')).toBe('SERVICE_UNAVAILABLE')
+    expect(failure.text()).toContain('Agent 服务暂时不可用')
     const failedRequestId = lastSubmitInput().requestId
 
     await wrapper.get('[data-testid="retry-turn"]').trigger('click')
@@ -164,6 +166,58 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
 
     expect(wrapper.find('[data-testid="conversational-turn"]').exists()).toBe(true)
     expect(lastSubmitInput().requestId).toBe(failedRequestId)
+    wrapper.unmount()
+  })
+
+  it('超时不再被静默吞掉：显示超时类别与重试入口，重试成功后解除失败标记（A2-10/A2-14）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'TIMEOUT', code: 'REQUEST_TIMEOUT', message: '等待超时', retryable: true },
+      })
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '慢回复问题')
+    const failure = wrapper.get('[data-testid="turn-failure"]')
+    expect(failure.attributes('data-failure-category')).toBe('TIMEOUT')
+    expect(failure.text()).toContain('回答可能仍在生成')
+    // 超时轮次先标记 failed，不进入后续会话窗口。
+    expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(true)
+    const timedOutRequestId = lastSubmitInput().requestId
+
+    await wrapper.get('[data-testid="retry-turn"]').trigger('click')
+    await flushPromises()
+
+    expect(lastSubmitInput().requestId).toBe(timedOutRequestId)
+    expect(wrapper.find('[data-testid="conversational-turn"]').exists()).toBe(true)
+    expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('失败 USER 轮次被排除出 conversationWindow，后续请求保持 USER 起始交替（A2-04）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: {
+          kind: 'API',
+          status: 400,
+          code: 'VALIDATION_ERROR',
+          message: '校验失败',
+          retryable: false,
+        },
+      })
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '会失败的问题')
+    expect(wrapper.find('[data-testid="retry-turn"]').exists()).toBe(false)
+    expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(true)
+
+    await submitFreeText(wrapper, '第二个问题')
+    const input = lastSubmitInput()
+    // 窗口只携带本轮之前的历史；失败轮次被排除后为空，而不是携带失败问题。
+    expect(input.conversationWindow).toEqual([])
     wrapper.unmount()
   })
 
@@ -207,6 +261,209 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
       kind: 'RESOLVE_CLARIFICATION',
       clarificationId: 'clarification_fixture_critical',
       answer: { kind: 'CHOICE', choiceId: 'choice_sql' },
+    })
+    wrapper.unmount()
+  })
+
+  it('澄清答案记为 USER 轮次且原卡转只读，后续窗口保持 USER 起始交替（A2-03/A2-18）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '随便看看')
+    await wrapper.get('input[type="radio"][value="choice_sql"]').setValue()
+    await wrapper.get('button[data-clarification-submit]').trigger('submit')
+    await flushPromises()
+
+    // 澄清答案以公开选项标签记为 USER 轮次。
+    const userMessages = wrapper.findAll('[data-message-role="USER"]')
+    expect(userMessages.at(-1)?.text()).toBe('SQL 审计与故障排查工具')
+    // 原挑战卡立即只读，不再出现可提交表单。
+    expect(wrapper.find('[data-clarification-state="CONSUMED"]').exists()).toBe(true)
+    expect(wrapper.find('button[data-clarification-submit]').exists()).toBe(false)
+
+    await submitFreeText(wrapper, '继续追问')
+    const input = lastSubmitInput()
+    expect(input.conversationWindow.map((message) => message.role)).toEqual([
+      'USER',
+      'ASSISTANT',
+      'USER',
+      'ASSISTANT',
+    ])
+    wrapper.unmount()
+  })
+
+  it('新对话不继承旧会话的失败与 pending，切回旧会话可各自操作（A2-07/08）', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValue({
+      ok: false,
+      failure: {
+        kind: 'API',
+        status: 503,
+        code: 'AGENT_STATE_UNAVAILABLE',
+        message: '状态暂不可用',
+        retryable: true,
+      },
+    })
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '旧会话问题')
+    expect(wrapper.find('[data-testid="turn-failure"]').exists()).toBe(true)
+
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="turn-failure"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="conversation-pending"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="question-input"]').attributes('disabled')).toBeUndefined()
+
+    // 切回旧会话：失败仍归属原会话，可重试。
+    await wrapper.get('button.session-select').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="turn-failure"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="retry-turn"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('会话 A pending 时不阻塞会话 B 输入；B 的取消不作用于 A（A2-08）', async () => {    apiMocks.submitAgentTurn.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="question-input"]').setValue('会话A的问题')
+    await wrapper.get('[data-testid="submit-question"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="conversation-pending"]').exists()).toBe(true)
+
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="conversation-pending"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="question-input"]').attributes('disabled')).toBeUndefined()
+
+    apiMocks.submitAgentTurn.mockResolvedValueOnce(
+      submitOk(goldenTurn('conversational.json'), null),
+    )
+    await submitFreeText(wrapper, '会话B的问题')
+    expect(lastSubmitInput().command).toMatchObject({
+      kind: 'ASK',
+      input: { kind: 'FREE_TEXT', text: '会话B的问题' },
+    })
+    // B 会话没有取消按钮，无法误取消 A 的请求。
+    expect(wrapper.find('[data-testid="cancel-turn"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('标签页合计最多两个 pending：第三个会话仅提示，一个完成后自动解除（§11.1）', async () => {
+    let resolveFirst: (value: unknown) => void = () => {}
+    apiMocks.submitAgentTurn
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockReturnValue(new Promise(() => {}))
+      .mockReturnValue(new Promise(() => {}))
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await submitFreeText(wrapper, '问题一')
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    await submitFreeText(wrapper, '问题二')
+    expect(apiMocks.submitAgentTurn).toHaveBeenCalledTimes(2)
+
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    const notice = wrapper.get('[data-testid="tab-pending-notice"]')
+    expect(notice.text()).toContain('已有两个请求正在处理')
+    expect(notice.attributes('role')).toBe('status')
+    expect(wrapper.get('[data-testid="submit-question"]').attributes('disabled')).toBeDefined()
+    // 输入区仍可打字（草稿按会话保留），但提交被拦截。
+    const input = wrapper.get('[data-testid="question-input"]').element as HTMLTextAreaElement
+    expect(input.disabled).toBe(false)
+
+    await wrapper.get('[data-testid="question-input"]').setValue('问题三')
+    await wrapper.get('[data-testid="submit-question"]').trigger('submit')
+    await flushPromises()
+    expect(apiMocks.submitAgentTurn).toHaveBeenCalledTimes(2)
+
+    // 第一个请求完成后腾出槽位，提示消失、可继续提交。
+    resolveFirst(submitOk(goldenTurn('conversational.json'), null))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="tab-pending-notice"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="submit-question"]').trigger('submit')
+    await flushPromises()
+    expect(apiMocks.submitAgentTurn).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+  })
+
+  it('草稿按会话隔离：切换会话不串草稿（A2-09）', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+    await wrapper.get('[data-testid="question-input"]').setValue('会话A的草稿')
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    const inputElement = wrapper.get('[data-testid="question-input"]').element as HTMLTextAreaElement
+    expect(inputElement.value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('来源栏标题区分当前/最近回答并随 stale 弱化（A2-06）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '介绍 SQL 审计项目')
+    const panel = wrapper.get('.sources-panel')
+    expect(panel.text()).toContain('当前回答来源')
+    expect(panel.attributes('data-sources-stale')).toBeUndefined()
+
+    await submitFreeText(wrapper, '再来一个问题')
+    expect(wrapper.get('.sources-panel').text()).toContain('最近回答来源')
+    expect(wrapper.get('.sources-panel').attributes('data-sources-stale')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('被正文引用的来源提供定位入口，点击定位到回答内 section（B7）', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValue(
+      submitOk(goldenTurn('answer-complete.json'), null),
+    )
+    const wrapper = mountWorkspace()
+    await submitFreeText(wrapper, '介绍 SQL 审计项目')
+
+    const locateButton = wrapper.get('[data-locate-source-key="source-sql-audit"]')
+    await locateButton.trigger('click')
+    await flushPromises()
+
+    const thread = wrapper.getComponent({ name: 'ConversationThread' })
+    expect(thread.props('focusTarget')).toMatchObject({ sectionId: 'section-background' })
+    const section = wrapper.get('[data-section-id="section-background"]')
+    expect(section.classes()).toContain('conversation-thread--located')
+    wrapper.unmount()
+  })
+
+  it('无后端建议时澄清卡脱困入口只消费已发布 QuestionPreset（PRESET 命令）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '你好')
+    const fallback = wrapper.get('[data-testid="clarification-preset-fallback"]')
+    expect(fallback.text()).toContain('请介绍 SQL 审计工具的完整迭代过程。')
+
+    await wrapper.get('[data-fallback-preset="sql-audit-overview"]').trigger('click')
+    await flushPromises()
+
+    expect(lastSubmitInput().command).toEqual({
+      kind: 'ASK',
+      input: {
+        kind: 'PRESET',
+        presetId: 'sql-audit-overview',
+        presetRevision: 'pcv1-0123456789abcdef',
+      },
     })
     wrapper.unmount()
   })

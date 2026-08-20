@@ -45,7 +45,7 @@ export interface ConversationEnvelope {
   readonly resumeToken?: string
 }
 
-export type AgentTurnFailureKind = 'API' | 'CONTRACT' | 'ABORTED' | 'NETWORK'
+export type AgentTurnFailureKind = 'API' | 'CONTRACT' | 'ABORTED' | 'NETWORK' | 'TIMEOUT'
 
 export interface AgentTurnFailure {
   readonly kind: AgentTurnFailureKind
@@ -69,7 +69,9 @@ export type CurrentConversationResult =
 
 const TURNS_PATH = '/api/agent/turns'
 const CURRENT_CONVERSATION_PATH = '/api/agent/conversations/current'
-const REQUEST_TIMEOUT_MS = 20_000
+// 跨端预算（docs/15 §11.4）：服务端 Turn 在 20 秒内结算，
+// 前端多等待 5 秒只为覆盖传输和响应投影，不代替服务端 deadline。
+const REQUEST_TIMEOUT_MS = 25_000
 const SHORT_TIMEOUT_MS = 10_000
 
 function bearerHeaders(resumeToken: string | undefined): Record<string, string> {
@@ -118,6 +120,9 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
+/** 仅内部等待计时器触发的 abort 会抛出该错误；用户主动取消仍走 ABORTED（A2-10）。 */
+class TurnTimeoutError extends Error {}
+
 async function fetchWithTimeout(
   input: string,
   init: RequestInit,
@@ -125,7 +130,11 @@ async function fetchWithTimeout(
   externalSignal?: AbortSignal,
 ): Promise<Response> {
   const timeoutController = new AbortController()
-  const timer = setTimeout(() => timeoutController.abort(), timeoutMs)
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    timeoutController.abort()
+  }, timeoutMs)
   const composite = new AbortController()
   const onExternalAbort = () => composite.abort()
   const onTimeoutAbort = () => composite.abort()
@@ -133,6 +142,9 @@ async function fetchWithTimeout(
   timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true })
   try {
     return await fetch(input, { ...init, signal: composite.signal })
+  } catch (error) {
+    if (timedOut && isAbortError(error)) throw new TurnTimeoutError('request timeout')
+    throw error
   } finally {
     clearTimeout(timer)
     externalSignal?.removeEventListener('abort', onExternalAbort)
@@ -174,6 +186,18 @@ export async function submitAgentTurn(
       options.signal,
     )
   } catch (error) {
+    if (error instanceof TurnTimeoutError) {
+      // 超时不取消服务端 Active Turn：最终结果仍可由同 requestId 重放取回（A2-11/A2-14）。
+      return {
+        ok: false,
+        failure: {
+          kind: 'TIMEOUT',
+          code: 'REQUEST_TIMEOUT',
+          message: '等待超时：回答可能仍在生成',
+          retryable: true,
+        },
+      }
+    }
     if (isAbortError(error)) {
       return {
         ok: false,

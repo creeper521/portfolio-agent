@@ -11,11 +11,15 @@ import type {
 // 前端不接触 promptCode、subject binding 或内部 Task；SINGLE_CHOICE 用原生
 // radio group（fieldset/legend），TEXT 用 bounded textarea。提交事件只携带
 // clarificationId + 闭合答案，由上层在未来 API 接线时转为 RESOLVE_CLARIFICATION。
+// A2-18：CONSUMED/SUPERSEDED 状态只保留只读摘要，不再提供提交入口。
+
+export type ClarificationCardState = 'ACTIVE' | 'CONSUMED' | 'SUPERSEDED'
 
 const props = defineProps<{
   challenge: ClarificationChallenge
   submitLabel?: string
   disabled?: boolean
+  state?: ClarificationCardState
 }>()
 
 const emit = defineEmits<{
@@ -36,7 +40,17 @@ const answered = computed(() =>
   }),
 )
 
-const submitDisabled = computed(() => Boolean(props.disabled) || !answered.value)
+const cardState = computed<ClarificationCardState>(() => props.state ?? 'ACTIVE')
+
+const readonlyNote = computed(() =>
+  cardState.value === 'CONSUMED'
+    ? '已提交，答案已并入后续回复，不可重复提交。'
+    : '此澄清已被后续轮次取代，仅作记录，不可再提交。',
+)
+
+const submitDisabled = computed(
+  () => Boolean(props.disabled) || cardState.value !== 'ACTIVE' || !answered.value,
+)
 
 function textLimitOf(field: { limit?: number }): number {
   return field.limit === undefined ? TEXT_FALLBACK_LIMIT : field.limit
@@ -63,7 +77,12 @@ function submit(): void {
 </script>
 
 <template>
-  <form class="clarification-form" data-testid="clarification-form" @submit.prevent="submit">
+  <form
+    v-if="cardState === 'ACTIVE'"
+    class="clarification-form"
+    data-testid="clarification-form"
+    @submit.prevent="submit"
+  >
     <p class="clarification-form__prompt">{{ challenge.prompt }}</p>
     <fieldset
       v-for="field in challenge.fields"
@@ -117,6 +136,15 @@ function submit(): void {
       <span v-if="!answered" class="clarification-form__hint">请完成必填项后提交</span>
     </div>
   </form>
+  <div
+    v-else
+    class="clarification-form clarification-form--readonly"
+    :data-clarification-state="cardState"
+    data-testid="clarification-readonly"
+  >
+    <p class="clarification-form__prompt">{{ challenge.prompt }}</p>
+    <p class="clarification-form__note">{{ readonlyNote }}</p>
+  </div>
 </template>
 
 <style scoped>
@@ -184,6 +212,13 @@ function submit(): void {
 }
 .clarification-form__textarea:focus { outline: 2px solid var(--workspace-accent, var(--red)); outline-offset: 1px; }
 .clarification-form__hint { margin: 4px 0 0; color: var(--workspace-text-faint, var(--faint)); font: 10px/1.6 var(--mono); }
+.clarification-form--readonly { border-color: var(--workspace-rule, var(--rule)); }
+.clarification-form--readonly .clarification-form__prompt::before { background: var(--workspace-rule, var(--rule)); }
+.clarification-form__note {
+  margin: 8px 0 0;
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 11px/1.6 var(--mono);
+}
 .clarification-form__submit-row { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; }
 .clarification-form__submit {
   min-height: 34px;

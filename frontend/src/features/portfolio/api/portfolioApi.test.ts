@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getPortfolio, getProject } from './portfolioApi'
+import { getPortfolio, getProject, getPublicContent } from './portfolioApi'
 import { PortfolioApiError, RequestOperation, request } from './portfolioApi'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
@@ -27,6 +27,32 @@ describe('portfolio api', () => {
     const headers = new Headers(requestInit.headers)
     expect(headers.get('X-Client-Session-Id')).toMatch(/^[0-9a-f-]{36}$/)
     expect(headers.get('X-Client-Request-Id')).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('preserves explicit Agent availability from public content', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      contentVersion: 'test-v1',
+      agentAvailability: { status: 'AVAILABLE' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(getPublicContent()).resolves.toMatchObject({
+      agentAvailability: { status: 'AVAILABLE' },
+    })
+  })
+
+  it('fails closed when public content omits or corrupts Agent availability', async () => {
+    for (const payload of [
+      { contentVersion: 'legacy' },
+      { contentVersion: 'broken', agentAvailability: { status: 'UNKNOWN' } },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })))
+      await expect(getPublicContent()).resolves.toMatchObject({
+        agentAvailability: { status: 'UNAVAILABLE' },
+      })
+    }
   })
 
   it('returns a stable message when the project request cannot reach the network', async () => {

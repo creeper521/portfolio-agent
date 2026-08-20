@@ -30,6 +30,7 @@ import type {
   PublicAgentTurn,
   SuggestedAction,
 } from '../model/publicAgentTurn'
+import { projectTurnFailure, type TurnFailureCategory } from '../model/turnFailureProjection'
 import AnswerSourcesPanel from './AnswerSourcesPanel.vue'
 import ConversationThread from './ConversationThread.vue'
 import LocalSessionRail from './LocalSessionRail.vue'
@@ -38,24 +39,39 @@ import PaneResizer from './PaneResizer.vue'
 // D-41/交接 §8：AgentWorkspace 只负责会话容器、输入、request lifecycle、
 // 内存 Session、active ResumeToken 与 API 协调；业务投影在组件树内。
 // 取消：先结束本地 pending，再 best-effort DELETE + abort；不本地伪造 Cancelled。
+// A2-07/08/09：pending、failure、draft、notice 一律归属 session，
+// 渲染与操作只作用于当前活跃会话；pending 允许跨会话并存，结果回流原会话。
+// A2-03/04/18：USER 轮次先落账后请求；失败/取消轮次标记 failed 并排除出
+// conversationWindow；澄清提交即把原挑战卡转只读，禁止重复 RESOLVE。
 
 const FREE_TEXT_MAX_LENGTH = 2000
 const CONVERSATION_WINDOW_LIMIT = 12
+// §11.1 已冻结：标签页合计 pending 上限与后端来源级最大并发 2 对齐，
+// 超出时不发必然 409 TURN_IN_PROGRESS 的请求，仅提示等待。
+const TAB_PENDING_LIMIT = 2
 
 interface PendingTurn {
   requestId: string
   sessionId: string
   question: string
   controller: AbortController
+  userMessageId?: string
 }
 
 interface FailureView {
+  category: TurnFailureCategory
   message: string
+  hint?: string
   retryable: boolean
   retryAfterSeconds?: number
   requestId?: string
   command?: AgentTurnCommand
-  sessionId?: string
+  userMessageId?: string
+}
+
+interface WorkspaceNotice {
+  text: string
+  sessionId: string
 }
 
 interface SuggestionChip {
@@ -90,15 +106,46 @@ const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
-const pending = ref<PendingTurn | null>(null)
-const failure = ref<FailureView | null>(null)
+const pendingTurns = ref(new Map<string, PendingTurn>())
+const failures = ref(new Map<string, FailureView>())
 const clearPending = ref(false)
-const clearNotice = ref<string | null>(null)
-const resumeNotice = ref<string | null>(null)
-const questionDraft = ref('')
+const clearNotice = ref<WorkspaceNotice | null>(null)
+const resumeNotice = ref<WorkspaceNotice | null>(null)
 const composerInput = ref<HTMLTextAreaElement | null>(null)
+const focusTarget = ref<{ sectionId: string; nonce: number } | null>(null)
+let locateNonce = 0
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
+
+function mapSet<Value>(source: Map<string, Value>, key: string, value: Value): Map<string, Value> {
+  const next = new Map(source)
+  next.set(key, value)
+  return next
+}
+
+function mapDelete<Value>(source: Map<string, Value>, key: string): Map<string, Value> {
+  if (!source.has(key)) return source
+  const next = new Map(source)
+  next.delete(key)
+  return next
+}
+
+const activeSession = computed<AgentSession | null>(() => sessions.activeSession.value)
+const activePending = computed(() => pendingTurns.value.get(activeSession.value?.id ?? '') ?? null)
+const activeFailure = computed(() => failures.value.get(activeSession.value?.id ?? '') ?? null)
+/** 当前会话无 pending 但标签页 pending 已满：禁止发起任何新轮次，仅提示（§11.1）。 */
+const tabPendingFull = computed(
+  () => activePending.value === null && pendingTurns.value.size >= TAB_PENDING_LIMIT,
+)
+
+/** 会话私有草稿（A2-09）：切换会话草稿不串线。 */
+const questionDraft = computed<string>({
+  get: () => sessions.activeSession.value?.draft ?? '',
+  set: (value: string) => {
+    const session = sessions.activeSession.value
+    if (session !== null) session.draft = value
+  },
+})
 
 const effectiveSplit = computed(() =>
   evidenceIsDrawer.value
@@ -155,8 +202,6 @@ const activeProject = computed(() => {
     ?? props.portfolio.projects[0]
 })
 
-const activeSession = computed<AgentSession | null>(() => sessions.activeSession.value)
-
 /** 建议问题：当前 Case 的建议问题优先（FREE_TEXT），其次 AGENT 预设（ASK/PRESET）。 */
 const suggestionChips = computed<readonly SuggestionChip[]>(() => {
   if (activeCase.value !== undefined && activeCase.value.suggestedQuestions.length > 0) {
@@ -179,6 +224,56 @@ const activeSources = computed(() => {
   }
   return []
 })
+
+/** 最近一条 turn（A2-06）：来源栏标题按它区分"当前/最近"。 */
+const latestTurn = computed(() => {
+  const messages = [...(activeSession.value?.messages ?? [])]
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const turn = messages[index]?.turn
+    if (turn !== undefined) return turn
+  }
+  return null
+})
+
+const sourcesHeading = computed(() =>
+  latestTurn.value?.kind === 'ANSWER' ? '当前回答来源' : '最近回答来源',
+)
+
+const sourcesStale = computed(
+  () => latestTurn.value?.kind !== 'ANSWER' && activeSources.value.length > 0,
+)
+
+/** B7：来源 key → 最近引用它的 sectionId（最新回答优先）。 */
+const citedSectionByKey = computed(() => {
+  const map = new Map<string, string>()
+  const messages = [...(activeSession.value?.messages ?? [])]
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const turn = messages[index]?.turn
+    if (turn === undefined || turn.kind !== 'ANSWER') continue
+    for (const goal of turn.answer.goalResults) {
+      const presentation = goal.presentation
+      if (presentation === undefined) continue
+      const sections = presentation.kind === 'SECTIONED'
+        ? presentation.sections
+        : presentation.supportingSections
+      for (const section of sections) {
+        for (const key of section.support.publicSourceKeys) {
+          if (!map.has(key)) map.set(key, section.sectionId)
+        }
+      }
+    }
+  }
+  return map
+})
+
+const citedSourceKeys = computed(() => [...citedSectionByKey.value.keys()])
+
+function locateSource(sourceKey: string): void {
+  const sectionId = citedSectionByKey.value.get(sourceKey)
+  if (sectionId === undefined) return
+  locateNonce += 1
+  focusTarget.value = { sectionId, nonce: locateNonce }
+}
 
 function surfaceContextOf(session: AgentSession): SurfaceContext {
   if (activeCase.value !== undefined) {
@@ -209,6 +304,8 @@ function turnWindowSummary(turn: PublicAgentTurn): string {
 function conversationWindowOf(session: AgentSession): ConversationWindowMessage[] {
   const window: ConversationWindowMessage[] = []
   for (const message of session.messages) {
+    // A2-04：失败/取消的 USER 轮次不进入会话窗口，维持 USER/ASSISTANT 交替。
+    if (message.failed === true) continue
     const content = message.role === 'USER'
       ? message.content
       : message.turn === undefined
@@ -241,14 +338,18 @@ function failureViewOf(
   requestId: string,
   command: AgentTurnCommand,
   f: AgentTurnFailure,
+  userMessageId?: string,
 ): FailureView {
+  const view = projectTurnFailure(f)
   return {
-    message: f.message,
-    retryable: f.retryable,
-    ...(f.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: f.retryAfterSeconds }),
+    category: view.category,
+    message: view.message,
+    ...(view.hint === undefined ? {} : { hint: view.hint }),
+    retryable: view.retryable,
+    ...(view.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: view.retryAfterSeconds }),
     requestId,
     command,
-    sessionId,
+    ...(userMessageId === undefined ? {} : { userMessageId }),
   }
 }
 
@@ -257,6 +358,7 @@ interface TurnOverrides {
   conversationWindow?: readonly ConversationWindowMessage[]
   resumeToken?: string
   displayQuestion?: string
+  userMessageId?: string
 }
 
 async function runTurn(
@@ -268,13 +370,14 @@ async function runTurn(
   const session = sessions.sessions.value.find((item) => item.id === sessionId)
   if (session === undefined) return
   const controller = new AbortController()
-  pending.value = {
+  pendingTurns.value = mapSet(pendingTurns.value, sessionId, {
     requestId,
     sessionId,
     question: overrides.displayQuestion ?? displayQuestionOf(command),
     controller,
-  }
-  failure.value = null
+    ...(overrides.userMessageId === undefined ? {} : { userMessageId: overrides.userMessageId }),
+  })
+  failures.value = mapDelete(failures.value, sessionId)
   const resumeToken = overrides.resumeToken ?? session.resumeToken
   const result = await submitAgentTurn(
     {
@@ -286,14 +389,23 @@ async function runTurn(
     },
     { signal: controller.signal },
   )
+  pendingTurns.value = mapDelete(pendingTurns.value, sessionId)
   if (disposed) return
-  pending.value = null
   if (!result.ok) {
     // 取消是本地先行的：ABORTED 不追加消息、不显示错误（交接 §8）。
-    if (result.failure.kind !== 'ABORTED') {
-      failure.value = failureViewOf(sessionId, requestId, command, result.failure)
+    if (result.failure.kind === 'ABORTED') return
+    failures.value = mapSet(
+      failures.value,
+      sessionId,
+      failureViewOf(sessionId, requestId, command, result.failure, overrides.userMessageId),
+    )
+    if (overrides.userMessageId !== undefined) {
+      sessions.markMessageDelivery(sessionId, overrides.userMessageId, true)
     }
     return
+  }
+  if (overrides.userMessageId !== undefined) {
+    sessions.markMessageDelivery(sessionId, overrides.userMessageId, false)
   }
   bindConversationEnvelope(sessionId, result.conversation)
   sessions.appendMessage(sessionId, {
@@ -328,42 +440,46 @@ function ensureSession(): AgentSession {
   })
 }
 
+function newRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`
+}
+
 function submitFreeText(rawText: string): void {
   const text = rawText.trim()
-  if (text.length === 0 || pending.value !== null) return
+  if (text.length === 0 || activePending.value !== null || tabPendingFull.value) return
   const session = ensureSession()
   // conversationWindow 只携带本轮之前的会话历史；本轮输入已在 command 内。
   const window = conversationWindowOf(session)
-  sessions.appendMessage(session.id, { role: 'USER', content: text })
-  questionDraft.value = ''
+  const messageId = sessions.appendMessage(session.id, { role: 'USER', content: text })
+  session.draft = ''
   void runTurn(
     session.id,
-    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    newRequestId(),
     { kind: 'ASK', input: { kind: 'FREE_TEXT', text: text.slice(0, FREE_TEXT_MAX_LENGTH) } },
-    { conversationWindow: window },
+    { conversationWindow: window, ...(messageId === null ? {} : { userMessageId: messageId }) },
   )
 }
 
 function submitPreset(presetId: string): void {
-  if (pending.value !== null) return
+  if (activePending.value !== null || tabPendingFull.value) return
   const preset = props.portfolio.questionPresets.find((item) => item.id === presetId)
   if (preset === undefined) return
   const session = ensureSession()
   const window = conversationWindowOf(session)
-  sessions.appendMessage(session.id, { role: 'USER', content: preset.text })
+  const messageId = sessions.appendMessage(session.id, { role: 'USER', content: preset.text })
   void runTurn(
     session.id,
-    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    newRequestId(),
     {
       kind: 'ASK',
       input: { kind: 'PRESET', presetId: preset.id, presetRevision: preset.contractVersion },
     },
-    { conversationWindow: window },
+    { conversationWindow: window, ...(messageId === null ? {} : { userMessageId: messageId }) },
   )
 }
 
 function handleSelectAction(action: SuggestedAction): void {
-  if (pending.value !== null) return
+  if (activePending.value !== null || tabPendingFull.value) return
   const session = ensureSession()
   const text = action.inputText ?? action.label
   let command: AgentTurnCommand
@@ -380,63 +496,125 @@ function handleSelectAction(action: SuggestedAction): void {
     command = { kind: 'ASK', input: { kind: 'FREE_TEXT', text } }
   }
   const window = conversationWindowOf(session)
-  sessions.appendMessage(session.id, { role: 'USER', content: action.label })
+  const messageId = sessions.appendMessage(session.id, { role: 'USER', content: action.label })
   void runTurn(
     session.id,
-    globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`,
+    newRequestId(),
     command,
-    { conversationWindow: window },
+    { conversationWindow: window, ...(messageId === null ? {} : { userMessageId: messageId }) },
   )
 }
 
+/** 澄清卡脱困入口只消费已发布预设：有 presetId 走 PRESET 命令，否则 FREE_TEXT（§11 第 6 项）。 */
+function handleFallbackAsk(entry: { text: string; presetId?: string }): void {
+  if (entry.presetId === undefined) {
+    submitFreeText(entry.text)
+    return
+  }
+  submitPreset(entry.presetId)
+}
+
+/** 澄清答案的展示摘要：CHOICE 用公开选项标签，TEXT 用原文（docs/15 §11.2）。 */
+function clarificationAnswerSummary(
+  session: AgentSession,
+  clarificationId: string,
+  answer: ClarificationSubmissionPayload['answers'][number],
+): string {
+  if (answer.kind === 'TEXT') return answer.text
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const turn = session.messages[index]?.turn
+    if (turn === undefined) continue
+    const challenge = turn.kind === 'CLARIFICATION'
+      ? turn.clarification
+      : turn.kind === 'ANSWER' && turn.answer.localClarification?.clarificationId === clarificationId
+        ? turn.answer.localClarification
+        : undefined
+    if (challenge === undefined || challenge.clarificationId !== clarificationId) continue
+    for (const field of challenge.fields) {
+      if (field.kind !== 'SINGLE_CHOICE') continue
+      const choice = field.choices.find((item) => item.choiceId === answer.choiceId)
+      if (choice !== undefined) return choice.label
+    }
+  }
+  return '补充澄清'
+}
+
 function handleClarification(payload: ClarificationSubmissionPayload): void {
-  if (pending.value !== null) return
+  if (activePending.value !== null || tabPendingFull.value) return
+  const session = ensureSession()
   // 冻结合同：RESOLVE_CLARIFICATION 只携带单一 answer（CHOICE|TEXT）。
   const first = payload.answers[0]
   if (payload.answers.length !== 1 || first === undefined) {
-    failure.value = {
-      message: '当前澄清包含多个字段，暂时无法在此提交，请直接换个说法提问。',
+    failures.value = mapSet(failures.value, session.id, {
+      category: 'CONVERSATION_MISMATCH',
+      message: '当前澄清包含多个字段，暂时无法在此提交。',
+      hint: '请直接换个说法提问。',
       retryable: false,
-    }
+    })
     return
   }
   const answer: ClarificationAnswer = first.kind === 'SINGLE_CHOICE'
     ? { kind: 'CHOICE', choiceId: first.choiceId }
     : { kind: 'TEXT', text: first.text }
-  const session = ensureSession()
-  void runTurn(session.id, globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`, {
-    kind: 'RESOLVE_CLARIFICATION',
-    clarificationId: payload.clarificationId,
-    answer,
-  })
+  // A2-03：澄清答案记为 USER 轮次，窗口保持交替；A2-18：原挑战卡立即转只读。
+  const summary = clarificationAnswerSummary(session, payload.clarificationId, first)
+  const messageId = sessions.appendMessage(session.id, { role: 'USER', content: summary })
+  sessions.markClarificationConsumed(session.id, payload.clarificationId)
+  void runTurn(
+    session.id,
+    newRequestId(),
+    {
+      kind: 'RESOLVE_CLARIFICATION',
+      clarificationId: payload.clarificationId,
+      answer,
+    },
+    {
+      displayQuestion: summary,
+      ...(messageId === null ? {} : { userMessageId: messageId }),
+    },
+  )
 }
 
 function cancelTurn(): void {
-  const current = pending.value
+  const current = activePending.value
   if (current === null) return
   // 先结束本地等待，再 best-effort DELETE + abort；DELETE 结果不伪造本地状态。
-  pending.value = null
+  pendingTurns.value = mapDelete(pendingTurns.value, current.sessionId)
+  if (current.userMessageId !== undefined) {
+    sessions.markMessageDelivery(current.sessionId, current.userMessageId, true)
+  }
   const token = sessions.getSessionResumeToken(current.sessionId)
   void cancelAgentTurn(current.requestId, token)
   current.controller.abort()
 }
 
 function retryFailure(): void {
-  const current = failure.value
+  const current = activeFailure.value
   if (
     current === null
     || current.requestId === undefined
     || current.command === undefined
-    || current.sessionId === undefined
+    || tabPendingFull.value
   ) {
     return
   }
-  // 幂等重试：同一 requestId 复用（交接 §8/D-30）。
-  failure.value = null
-  void runTurn(current.sessionId, current.requestId, current.command)
+  // 幂等重试：同一 requestId 复用（交接 §8/D-30）；成功后同轮次解除 failed 标记。
+  const sessionId = activeSession.value?.id
+  if (sessionId === undefined) return
+  failures.value = mapDelete(failures.value, sessionId)
+  void runTurn(sessionId, current.requestId, current.command, {
+    ...(current.userMessageId === undefined ? {} : { userMessageId: current.userMessageId }),
+  })
 }
 
 function removeSession(sessionId: string): void {
+  const pending = pendingTurns.value.get(sessionId)
+  if (pending !== undefined) {
+    pendingTurns.value = mapDelete(pendingTurns.value, sessionId)
+    void cancelAgentTurn(pending.requestId, sessions.getSessionResumeToken(sessionId))
+    pending.controller.abort()
+  }
+  failures.value = mapDelete(failures.value, sessionId)
   if (sessionId === sessions.activeSessionId.value) {
     const token = sessions.getSessionResumeToken(sessionId)
     if (token !== undefined) {
@@ -460,29 +638,44 @@ function createSession(): void {
 
 async function clearAllSessions(): Promise<void> {
   if (clearPending.value) return
+  for (const pending of pendingTurns.value.values()) {
+    pendingTurns.value = mapDelete(pendingTurns.value, pending.sessionId)
+    void cancelAgentTurn(pending.requestId, sessions.getSessionResumeToken(pending.sessionId))
+    pending.controller.abort()
+  }
   const tokens = sessions.sessions.value
     .map((session) => session.resumeToken)
     .filter((token): token is string => token !== undefined)
   if (tokens.length === 0) {
     sessions.clearSessions()
     createSession()
-    clearNotice.value = null
+    attachClearNotice(null)
     return
   }
   clearPending.value = true
-  clearNotice.value = null
   try {
     const results = await Promise.all(tokens.map((token) => clearConversation(token)))
     if (results.includes('FAILED')) {
-      clearNotice.value = '服务端尚未确认清除，请稍后重试。'
+      attachClearNotice('服务端尚未确认清除，请稍后重试。')
       return
     }
     resume.clearActiveToken()
     sessions.clearSessions()
     createSession()
+    clearNotice.value = null
   } finally {
     clearPending.value = false
   }
+}
+
+/** 通知归属会话（A2-09）：sessionId 为空时归属随后创建的活跃会话。 */
+function attachClearNotice(text: string | null): void {
+  const sessionId = sessions.activeSessionId.value
+  if (text === null || sessionId === '') {
+    clearNotice.value = null
+    return
+  }
+  clearNotice.value = { text, sessionId }
 }
 
 function toggleSessions(): void {
@@ -555,7 +748,10 @@ onMounted(async () => {
           conversationId: current.conversationId,
           resumeToken: storedToken,
         })
-        resumeNotice.value = '已恢复当前会话；历史消息按隐私约定不在浏览器中保留。'
+        resumeNotice.value = {
+          text: '已恢复当前会话；历史消息按隐私约定不在浏览器中保留。',
+          sessionId: session.id,
+        }
       } else if (current.invalid) {
         resume.clearActiveToken()
       }
@@ -587,7 +783,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposed = true
-  pending.value?.controller.abort()
+  for (const pending of pendingTurns.value.values()) {
+    pending.controller.abort()
+  }
   workspaceResizeObserver?.disconnect()
   workspaceResizeObserver = null
 })
@@ -649,23 +847,43 @@ onBeforeUnmount(() => {
           @click="toggleEvidence"
         >来源</button>
       </div>
-      <p v-if="resumeNotice !== null" class="workspace-notice" role="status">{{ resumeNotice }}</p>
-      <p v-if="clearNotice !== null" class="workspace-notice" role="alert">{{ clearNotice }}</p>
+      <p
+        v-if="resumeNotice !== null && resumeNotice.sessionId === activeSession.id"
+        class="workspace-notice"
+        role="status"
+      >{{ resumeNotice.text }}</p>
+      <p
+        v-if="clearNotice !== null && clearNotice.sessionId === activeSession.id"
+        class="workspace-notice"
+        role="alert"
+      >{{ clearNotice.text }}</p>
       <ConversationThread
         :messages="activeSession.messages"
-        :pending="pending !== null"
-        :pending-question="pending?.question ?? ''"
+        :pending="activePending !== null"
+        :pending-question="activePending?.question ?? ''"
+        :focus-target="focusTarget"
+        :fallback-presets="suggestionChips"
         @cancel="cancelTurn"
         @select-action="handleSelectAction"
         @submit-clarification="handleClarification"
+        @ask="handleFallbackAsk"
       />
-      <div v-if="failure !== null" class="workspace-failure" role="alert" data-testid="turn-failure">
-        <p class="workspace-failure__message">{{ failure.message }}</p>
-        <p v-if="failure.retryAfterSeconds !== undefined" class="workspace-failure__hint">
-          约 {{ failure.retryAfterSeconds }} 秒后可重试
+      <div
+        v-if="activeFailure !== null"
+        class="workspace-failure"
+        role="alert"
+        data-testid="turn-failure"
+        :data-failure-category="activeFailure.category"
+      >
+        <p class="workspace-failure__message">{{ activeFailure.message }}</p>
+        <p v-if="activeFailure.hint !== undefined" class="workspace-failure__hint">
+          {{ activeFailure.hint }}
+        </p>
+        <p v-if="activeFailure.retryAfterSeconds !== undefined" class="workspace-failure__hint">
+          约 {{ activeFailure.retryAfterSeconds }} 秒后可重试
         </p>
         <button
-          v-if="failure.retryable"
+          v-if="activeFailure.retryable"
           class="workspace-failure__retry"
           type="button"
           data-testid="retry-turn"
@@ -673,13 +891,19 @@ onBeforeUnmount(() => {
         >重试</button>
       </div>
       <div class="workspace-composer">
+        <p
+          v-if="tabPendingFull"
+          class="workspace-composer__tab-limit"
+          role="status"
+          data-testid="tab-pending-notice"
+        >已有两个请求正在处理；可先浏览其他会话，稍后再提问。</p>
         <div v-if="suggestionChips.length > 0" class="workspace-composer__suggestions">
           <button
             v-for="chip in suggestionChips"
             :key="chip.presetId ?? chip.text"
             class="workspace-composer__suggestion"
             type="button"
-            :disabled="pending !== null"
+            :disabled="activePending !== null || tabPendingFull"
             @click="chip.presetId === undefined ? submitFreeText(chip.text) : submitPreset(chip.presetId)"
           >{{ chip.text }}</button>
         </div>
@@ -691,7 +915,7 @@ onBeforeUnmount(() => {
             data-testid="question-input"
             rows="2"
             :maxlength="FREE_TEXT_MAX_LENGTH"
-            :disabled="pending !== null"
+            :disabled="activePending !== null"
             aria-label="输入你的问题"
             placeholder="问问公开项目、案例或工程取舍…"
             @keydown.enter.exact.prevent="submitFreeText(questionDraft)"
@@ -700,7 +924,7 @@ onBeforeUnmount(() => {
             class="workspace-composer__send"
             type="submit"
             data-testid="submit-question"
-            :disabled="pending !== null || questionDraft.trim().length === 0"
+            :disabled="activePending !== null || tabPendingFull || questionDraft.trim().length === 0"
           >发送</button>
         </form>
         <p class="workspace-composer__privacy">当前对话未保存，刷新或关闭页面后记录会消失。</p>
@@ -722,8 +946,12 @@ onBeforeUnmount(() => {
 
     <AnswerSourcesPanel
       :sources="activeSources"
+      :heading="sourcesHeading"
+      :stale="sourcesStale"
+      :cited-source-keys="citedSourceKeys"
       :inert="evidenceIsDrawer && !evidenceDrawerOpen ? true : undefined"
       :aria-hidden="evidenceIsDrawer ? String(!evidenceDrawerOpen) : undefined"
+      @locate="locateSource"
     />
 
     <button
@@ -861,6 +1089,13 @@ onBeforeUnmount(() => {
   margin: 6px 0 0;
   color: var(--workspace-text-faint);
   font: 10px/1.6 var(--mono);
+}
+.workspace-composer__tab-limit {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--workspace-accent);
+  color: var(--workspace-text-secondary);
+  font: 11px/1.6 var(--mono);
 }
 
 @media (max-width: 1279.98px) {

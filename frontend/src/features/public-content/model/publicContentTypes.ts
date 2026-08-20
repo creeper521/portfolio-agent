@@ -162,4 +162,6 @@ export interface PublicPortfolio {
   evidence: PublicEvidence[]
   timeline: TimelineEvent[]
   questionPresets: QuestionPreset[]
+  /** 中性部署能力投影；UNAVAILABLE 时公开内容仍可浏览。 */
+  agentAvailability: { readonly status: 'AVAILABLE' | 'UNAVAILABLE' }
 }

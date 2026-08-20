@@ -13,6 +13,10 @@ export interface AgentMessage {
   /** 仅 AGENT 消息：已通过 mapper 校验的闭合 PublicAgentTurn。 */
   turn?: PublicAgentTurn
   createdAt: number
+  /** USER 轮次送达标记：true 表示请求失败或已取消，不进入 conversationWindow（A2-04）。 */
+  failed?: boolean
+  /** 携带澄清挑战的 AGENT 消息：true 表示答案已提交，挑战卡转只读（A2-18）。 */
+  clarificationConsumed?: boolean
 }
 
 export interface AgentSession {
@@ -26,6 +30,8 @@ export interface AgentSession {
   createdAt: number
   updatedAt: number
   messages: AgentMessage[]
+  /** 会话私有输入草稿：切换会话不串草稿（A2-09）；仅页面内存。 */
+  draft?: string
   /** 服务端会话身份与凭证：仅页面内存，不落任何持久化存储。 */
   conversationId?: string
   resumeToken?: string

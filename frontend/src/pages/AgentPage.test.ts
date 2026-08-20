@@ -92,6 +92,21 @@ describe('AgentPage', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('公开内容加载失败')
   })
 
+  it('content-only 部署显示中性不可用提示且不挂载提交界面', async () => {
+    const state = readyPublicContentState()
+    if (state.portfolio.value !== null) {
+      state.portfolio.value = {
+        ...state.portfolio.value,
+        agentAvailability: { status: 'UNAVAILABLE' },
+      }
+    }
+    const { wrapper } = await mountAgentPage(state)
+
+    expect(wrapper.get('[data-testid="agent-unavailable"]').text()).toContain('仅提供作品集浏览')
+    expect(wrapper.find('[data-testid="question-input"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="submit-question"]').exists()).toBe(false)
+  })
+
   it('consumes a homepage handoff once, replays the turn, and invalidates reuse', async () => {
     submitAgentTurnMock.mockResolvedValue({
       ok: true,

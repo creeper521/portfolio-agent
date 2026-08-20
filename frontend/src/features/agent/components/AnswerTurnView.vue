@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import type { AnswerTurn, SuggestedAction } from '../model/publicAgentTurn'
 import type { ClarificationSubmissionPayload } from '../model/publicAgentTurn'
+import type { ClarificationCardState } from './ClarificationChallengeForm.vue'
 import ClarificationChallengeForm from './ClarificationChallengeForm.vue'
 import GoalResultView from './GoalResultView.vue'
 import SourceDrawer from './SourceDrawer.vue'
@@ -14,6 +15,8 @@ import SuggestedActionRow from './SuggestedActionRow.vue'
 
 const props = defineProps<{
   turn: AnswerTurn
+  interactionDisabled?: boolean
+  clarificationState?: ClarificationCardState
 }>()
 
 const emit = defineEmits<{
@@ -67,6 +70,8 @@ function forwardClarification(payload: ClarificationSubmissionPayload): void {
           <ClarificationChallengeForm
             :challenge="localClarification"
             :submit-label="answer.goalResults.length > 1 ? '提交并继续' : '提交补充'"
+            :disabled="interactionDisabled"
+            :state="clarificationState"
             @submit="forwardClarification"
           />
           <p v-if="continuedGoalNotice" class="answer-turn__continued">{{ continuedGoalNotice }}</p>

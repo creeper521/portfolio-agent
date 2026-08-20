@@ -262,8 +262,23 @@ export function getProject(slug: string): Promise<ProjectDetail> {
   return request<ProjectDetail>(`/api/v1/projects/${encodeURIComponent(slug)}`, { method: 'GET' }, { operation: RequestOperation.PROJECT })
 }
 
-export function getPublicContent(): Promise<PublicPortfolio> {
-  return request<PublicPortfolio>('/api/v1/public-content', { method: 'GET' }, { operation: RequestOperation.PUBLIC_CONTENT })
+export async function getPublicContent(): Promise<PublicPortfolio> {
+  const payload = await request<Record<string, unknown>>(
+    '/api/v1/public-content',
+    { method: 'GET' },
+    { operation: RequestOperation.PUBLIC_CONTENT },
+  )
+  const availability = payload.agentAvailability
+  const available = typeof availability === 'object'
+    && availability !== null
+    && !Array.isArray(availability)
+    && (availability as Record<string, unknown>).status === 'AVAILABLE'
+  // 旧服务或损坏响应缺少能力投影时，公开内容仍可浏览，
+  // 但 Agent 提交入口必须 fail-closed，不能把“不知道”当成“可用”。
+  return {
+    ...payload,
+    agentAvailability: { status: available ? 'AVAILABLE' : 'UNAVAILABLE' },
+  } as unknown as PublicPortfolio
 }
 
 function reportSlowAnswer(
