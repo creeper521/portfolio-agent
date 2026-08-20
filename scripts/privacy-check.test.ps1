@@ -501,6 +501,12 @@ const request = { integrityToken: response.planConfirmation.integrityToken }
         Source = @'
 session.resumeToken=nextToken;session.resumeToken=void 0;const api={setSessionResumeToken:a,getSessionResumeToken:b,clearSessionResumeToken:c};const payload={resumeToken:e.resumeToken,integrityToken:e.confirmation.integrityToken};
 '@
+    },
+    @{
+        File = 'safe-behavior-id.json'
+        Source = @'
+{"id":"behavior.private-request.001","title":"synthetic holdout identifier"}
+'@
     }
 )
 

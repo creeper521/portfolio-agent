@@ -117,6 +117,15 @@ try {
         throw 'Release verifier does not run the final PublicAgentTurn Provider assertion tests.'
     }
     $runnerSource = Get-Content -LiteralPath $runner -Raw
+    if ($runnerSource -notmatch "'PROJECT_DISCUSSION'") {
+        throw 'Packaged runner must expose a dedicated project discussion lane.'
+    }
+    if ($runnerSource -notmatch 'PLAYWRIGHT_PROJECT_DISCUSSION') {
+        throw 'Project discussion lane must select its dedicated Playwright spec.'
+    }
+    if ($runnerSource -notmatch 'assert-live-project-discussion-context\.ps1') {
+        throw 'Project discussion lane must run the privacy-safe live aggregate gate.'
+    }
     if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
         throw 'Packaged runner must call the shared Live Provider probe.'
     }

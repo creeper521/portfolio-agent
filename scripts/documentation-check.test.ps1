@@ -106,6 +106,14 @@ The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
         'docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md'
     $activePlan = `
         'docs/superpowers/plans/2026-08-19-agent-stabilization-and-repository-governance.md'
+    $generalAnswerSpec = `
+        'docs/superpowers/specs/2026-08-20-general-answer-language-and-depth-prompt-design.md'
+    $generalAnswerPlan = `
+        'docs/superpowers/plans/2026-08-20-general-answer-language-and-depth-prompt.md'
+    $projectDiscussionSpec = `
+        'docs/superpowers/specs/2026-08-20-project-discussion-context-design.md'
+    $projectDiscussionPlan = `
+        'docs/superpowers/plans/2026-08-20-project-discussion-context.md'
     Write-Utf8File (Join-Path $Path $activeSpec) @"
 # Approved design fixture
 <!-- DOCUMENT_STATUS: APPROVED -->
@@ -117,6 +125,30 @@ See [active plan](../plans/2026-08-19-agent-stabilization-and-repository-governa
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
 See [approved spec](../specs/2026-08-19-agent-stabilization-and-repository-governance-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $generalAnswerSpec) @"
+# Approved general answer design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+
+See [active plan](../plans/2026-08-20-general-answer-language-and-depth-prompt.md).
+"@
+    Write-Utf8File (Join-Path $Path $generalAnswerPlan) @"
+# Active general answer plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+
+See [approved spec](../specs/2026-08-20-general-answer-language-and-depth-prompt-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $projectDiscussionSpec) @"
+# Approved project discussion design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+
+See [active plan](../plans/2026-08-20-project-discussion-context.md).
+"@
+    Write-Utf8File (Join-Path $Path $projectDiscussionPlan) @"
+# Active project discussion plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+
+See [approved spec](../specs/2026-08-20-project-discussion-context-design.md).
 "@
     Add-Content -LiteralPath (Join-Path $Path 'docs/superpowers/specs/example.md') `
         -Encoding UTF8 -Value `

@@ -81,6 +81,12 @@ try {
         -File (Join-Path $root 'scripts\assert-live-public-turn-response.test.ps1')
     Assert-ExitCode 'Final PublicAgentTurn Live Provider checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\assert-live-general-answer-quality.test.ps1')
+    Assert-ExitCode 'General answer quality checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\assert-live-project-discussion-context.test.ps1')
+    Assert-ExitCode 'Project discussion live checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.test.ps1')
     Assert-ExitCode 'Live Provider probe contract tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
@@ -134,6 +140,16 @@ try {
 
     $entries = @(& jar.exe tf $jarPath)
     Assert-ExitCode 'JAR listing'
+    $requiredPromptEntries = @(
+        'BOOT-INF/classes/prompts/goal-interpretation-system.txt',
+        'BOOT-INF/classes/prompts/general-knowledge-system.txt'
+    )
+    $missingPromptEntries = @($requiredPromptEntries | Where-Object {
+        $_ -notin $entries
+    })
+    if ($missingPromptEntries.Count -gt 0) {
+        throw "JAR is missing required system prompts: $($missingPromptEntries -join ', ')"
+    }
     $forbiddenEntries = @($entries | Where-Object {
         $_ -match '(?i)(private-kb|candidate-snapshot|raw-evidence|unreviewed-screenshot|privacy-report)'
     })
@@ -179,6 +195,13 @@ try {
     }
     & powershell.exe @jarE2eArguments
     Assert-ExitCode 'Packaged JAR Playwright integration tests'
+
+    if ($RequireLiveProvider) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\run-jar-e2e.ps1') `
+            -Lane PROJECT_DISCUSSION -RequireLiveProvider
+        Assert-ExitCode 'Packaged project discussion Provider integration tests'
+    }
 
     if (-not $SkipDockerCheck) {
         if (Get-Command docker -ErrorAction SilentlyContinue) {

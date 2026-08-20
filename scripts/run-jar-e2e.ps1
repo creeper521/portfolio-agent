@@ -15,7 +15,7 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
-    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE')]
+    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION')]
     [string]$Lane = 'DEFAULT',
     [switch]$SkipPlaywright,
     [string]$PlaywrightScript = 'test:e2e',
@@ -29,10 +29,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $Lane = $Lane.Trim().ToUpperInvariant()
 if ($RequireLiveProvider) {
-    if ($Lane -ne 'DEFAULT' -and $Lane -ne 'LIVE') {
+    if ($Lane -notin @('DEFAULT', 'LIVE', 'PROJECT_DISCUSSION')) {
         throw 'RequireLiveProvider cannot be combined with a non-LIVE lane.'
     }
-    $Lane = 'LIVE'
+    if ($Lane -eq 'DEFAULT') { $Lane = 'LIVE' }
+}
+if ($Lane -eq 'PROJECT_DISCUSSION' -and -not $RequireLiveProvider) {
+    throw 'PROJECT_DISCUSSION requires explicit RequireLiveProvider authorization.'
 }
 $ContextMode = if ([string]::IsNullOrWhiteSpace($ContextMode)) {
     if ($Lane -eq 'CONTENT_ONLY') { 'DISABLED' } else { 'POSTGRESQL' }
@@ -197,6 +200,8 @@ $environment = @{
     PLAYWRIGHT_CONTENT_ONLY = Get-EnvironmentSnapshot 'PLAYWRIGHT_CONTENT_ONLY'
     PLAYWRIGHT_SLOW_PROVIDER = Get-EnvironmentSnapshot 'PLAYWRIGHT_SLOW_PROVIDER'
     PLAYWRIGHT_DEPTH_TWO = Get-EnvironmentSnapshot 'PLAYWRIGHT_DEPTH_TWO'
+    PLAYWRIGHT_PROJECT_DISCUSSION = Get-EnvironmentSnapshot `
+        'PLAYWRIGHT_PROJECT_DISCUSSION'
     PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL = Get-EnvironmentSnapshot `
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
@@ -434,7 +439,7 @@ $applicationArguments = @(
     '--portfolio.agent-runtime.max-concurrent-per-source=1000',
     '--portfolio.agent-runtime.max-active-turns=1000'
 )
-if ($Lane -notin @('LIVE', 'BODY_STALL')) {
+if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     $applicationArguments += '--portfolio.model-expression.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
 }
@@ -480,7 +485,7 @@ catch {
 }
 
 Write-Output "Started packaged application process $($process.Id)."
-if ($Lane -notin @('LIVE', 'BODY_STALL')) {
+if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     Write-Output 'Provider calls disabled for deterministic smoke.'
 }
 
@@ -653,7 +658,7 @@ try {
     }
     Write-Output 'Packaged Case API smoke passed.'
 
-    if ($Lane -notin @('CONTENT_ONLY', 'BODY_STALL')) {
+    if ($Lane -notin @('CONTENT_ONLY', 'BODY_STALL', 'PROJECT_DISCUSSION')) {
     $smokePreset = @($publicContent.questionPresets)[0]
     if ($null -eq $smokePreset -or
             [string]::IsNullOrWhiteSpace([string]$smokePreset.id) -or
@@ -730,7 +735,8 @@ try {
         if ([string]$noiseResponse.kind -notin @('BOUNDARY', 'CAPABILITY_UNAVAILABLE')) {
             throw "Packaged noise closure returned unexpected PublicAgentTurn kind '$($noiseResponse.kind)'."
         }
-        $recommendationQuestion = 'recommend 3 projects'
+        $recommendationQuestion = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String('5o6o6I2QIDMg5Liq6aG555uu'))
         $recommendationResponse = Invoke-AgentClosureRequest $recommendationQuestion
         $recommendation = @($recommendationResponse.answer.goalResults |
             Where-Object { $_.presentation.kind -eq 'RECOMMENDATION' } |
@@ -738,8 +744,9 @@ try {
         if ($null -eq $recommendation `
                 -or [int]$recommendation.requestedSize -ne 3 `
                 -or [int]$recommendation.actualSize -gt 3) {
-            throw ("Packaged recommendation closure returned invalid final projection: kind={0} requestedSize={1} actualSize={2}." -f `
+            throw ("Packaged recommendation closure returned invalid final projection: kind={0} code={1} requestedSize={2} actualSize={3}." -f `
                     [string]$recommendationResponse.kind,
+                    [string]$recommendationResponse.code,
                     [string]$recommendation.requestedSize,
                     [string]$recommendation.actualSize)
         }
@@ -816,6 +823,20 @@ try {
                 ($latencyBuckets -join ','))
     }
 
+    if ($Lane -eq 'PROJECT_DISCUSSION') {
+        $discussionOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\assert-live-project-discussion-context.ps1') `
+            -BackendBaseUrl $baseUrl `
+            -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+            -TimeoutSeconds $ReadinessTimeoutSeconds `
+            -AuthorizeRealProvider 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or
+                $discussionOutput -notmatch '^PROJECT_DISCUSSION_PASS operation=') {
+            throw "Project discussion live verification failed: $discussionOutput"
+        }
+        Write-Output $discussionOutput
+    }
+
     if ($SkipPlaywright) {
         Write-Output 'Packaged backend/API smoke passed; Playwright skipped by request.'
     }
@@ -827,6 +848,11 @@ try {
         $env:PLAYWRIGHT_CONTENT_ONLY = if ($Lane -eq 'CONTENT_ONLY') { '1' } else { '0' }
         $env:PLAYWRIGHT_SLOW_PROVIDER = if ($Lane -eq 'BODY_STALL') { '1' } else { '0' }
         $env:PLAYWRIGHT_DEPTH_TWO = if ($Lane -eq 'DEPTH_TWO') { '1' } else { '0' }
+        $env:PLAYWRIGHT_PROJECT_DISCUSSION = if ($Lane -eq 'PROJECT_DISCUSSION') {
+            '1'
+        } else {
+            '0'
+        }
         if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
             $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
         }
@@ -888,6 +914,8 @@ finally {
         Restore-EnvironmentVariable 'PLAYWRIGHT_CONTENT_ONLY' $environment.PLAYWRIGHT_CONTENT_ONLY
         Restore-EnvironmentVariable 'PLAYWRIGHT_SLOW_PROVIDER' $environment.PLAYWRIGHT_SLOW_PROVIDER
         Restore-EnvironmentVariable 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
+        Restore-EnvironmentVariable 'PLAYWRIGHT_PROJECT_DISCUSSION' `
+            $environment.PLAYWRIGHT_PROJECT_DISCUSSION
         Restore-EnvironmentVariable 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
@@ -899,6 +927,8 @@ finally {
         Assert-EnvironmentRestored 'PLAYWRIGHT_CONTENT_ONLY' $environment.PLAYWRIGHT_CONTENT_ONLY
         Assert-EnvironmentRestored 'PLAYWRIGHT_SLOW_PROVIDER' $environment.PLAYWRIGHT_SLOW_PROVIDER
         Assert-EnvironmentRestored 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
+        Assert-EnvironmentRestored 'PLAYWRIGHT_PROJECT_DISCUSSION' `
+            $environment.PLAYWRIGHT_PROJECT_DISCUSSION
         Assert-EnvironmentRestored 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PORTFOLIO_MODEL_PROVIDER' $environment.PORTFOLIO_MODEL_PROVIDER

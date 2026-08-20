@@ -45,6 +45,10 @@ $historicalDirectories = @(
 $activeWorkArtifactStatuses = [ordered]@{
     'docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md' = 'APPROVED'
     'docs/superpowers/plans/2026-08-19-agent-stabilization-and-repository-governance.md' = 'ACTIVE'
+    'docs/superpowers/specs/2026-08-20-general-answer-language-and-depth-prompt-design.md' = 'APPROVED'
+    'docs/superpowers/plans/2026-08-20-general-answer-language-and-depth-prompt.md' = 'ACTIVE'
+    'docs/superpowers/specs/2026-08-20-project-discussion-context-design.md' = 'APPROVED'
+    'docs/superpowers/plans/2026-08-20-project-discussion-context.md' = 'ACTIVE'
 }
 $activeWorkArtifactFiles = @($activeWorkArtifactStatuses.Keys)
 
