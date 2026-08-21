@@ -17,7 +17,9 @@ $checker = Join-Path (Split-Path -Parent $PSScriptRoot) `
 $question = if ($Scenario -eq 'SOCIAL') {
     [string]([char]0x4f60) + [char]0x597d
 } else {
-    'Explain optimistic locking and give one concise general example.'
+    [System.Text.Encoding]::UTF8.GetString(
+        [System.Convert]::FromBase64String(
+            '6Kej6YeK5LiA5LiLIFJlZGlzIOeahOaMgeS5heWMluacuuWItg=='))
 }
 $expectedKind = if ($Scenario -eq 'SOCIAL') { 'CONVERSATIONAL' } else { 'ANSWER' }
 $requestBody = @{

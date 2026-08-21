@@ -168,6 +168,8 @@ try {
     $probeSource = [System.IO.File]::ReadAllText($probeScript)
     Assert-True ($probeSource -notmatch '/api/v2|stp-v[123]') `
         'Live Provider probe must use only the final unversioned Agent resources.'
+    Assert-True ($probeSource -notmatch 'Explain optimistic locking') `
+        'General canary must follow the approved Simplified Chinese language contract.'
     foreach ($forbidden in @(
         'projectSlug', 'caseSlug', 'questionPresetId', 'contractVersion',
         'referenceContext', 'recommendationContext', '/api/v2', 'stp-v'

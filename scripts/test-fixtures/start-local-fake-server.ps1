@@ -24,29 +24,28 @@ $listener = [System.Net.Sockets.TcpListener]::new(
 $listener.Start()
 
 function Read-Request([System.Net.Sockets.NetworkStream]$Stream) {
-    $reader = [System.IO.StreamReader]::new(
-        $Stream,
-        [System.Text.Encoding]::UTF8,
-        $false,
-        1024,
-        $true
-    )
-    $requestLine = ''
-    try {
-        $requestLine = $reader.ReadLine()
-        if ($null -eq $requestLine) {
-            $requestLine = ''
+    $headerBytes = [System.Collections.Generic.List[byte]]::new()
+    $terminator = [byte[]]@(13, 10, 13, 10)
+    while ($headerBytes.Count -lt 65536) {
+        $value = $Stream.ReadByte()
+        if ($value -lt 0) { break }
+        $headerBytes.Add([byte]$value)
+        if ($headerBytes.Count -ge 4) {
+            $offset = $headerBytes.Count - 4
+            if ($headerBytes[$offset] -eq $terminator[0] -and
+                    $headerBytes[$offset + 1] -eq $terminator[1] -and
+                    $headerBytes[$offset + 2] -eq $terminator[2] -and
+                    $headerBytes[$offset + 3] -eq $terminator[3]) {
+                break
+            }
         }
     }
-    catch {
-        $requestLine = ''
-    }
+    $header = [System.Text.Encoding]::ASCII.GetString(
+        $headerBytes.ToArray())
+    $lines = @($header -split "`r`n")
+    $requestLine = if ($lines.Count -gt 0) { $lines[0] } else { '' }
     $contentLength = 0
-    while (-not [string]::IsNullOrEmpty($requestLine)) {
-        $line = $reader.ReadLine()
-        if ([string]::IsNullOrEmpty($line)) {
-            break
-        }
+    foreach ($line in $lines) {
         if ($line.StartsWith(
                 'Content-Length:',
                 [System.StringComparison]::OrdinalIgnoreCase
@@ -58,10 +57,17 @@ function Read-Request([System.Net.Sockets.NetworkStream]$Stream) {
     }
     $body = ''
     if ($contentLength -gt 0) {
-        $buffer = [char[]]::new($contentLength)
-        $read = $reader.ReadBlock($buffer, 0, $contentLength)
+        $buffer = [byte[]]::new($contentLength)
+        $read = 0
+        while ($read -lt $contentLength) {
+            $count = $Stream.Read(
+                $buffer, $read, $contentLength - $read)
+            if ($count -le 0) { break }
+            $read += $count
+        }
         if ($read -gt 0) {
-            $body = -join $buffer[0..($read - 1)]
+            $body = [System.Text.Encoding]::UTF8.GetString(
+                $buffer, 0, $read)
         }
     }
     return [pscustomobject]@{

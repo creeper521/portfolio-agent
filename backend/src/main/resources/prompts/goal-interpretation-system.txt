@@ -38,6 +38,9 @@ goal that would require persisting a raw anchor.
 A goal has exactly goalKey, goalKind, inputAnchor, subjectCandidates,
 requestedOutputs, knowledgeRequirement and parameters. Anchors must copy an
 exact substring of currentInput and use its zero-based character start.
+Calculate every anchor start from currentInput independently. Any numeric start
+shown in an example is illustrative only; never copy it unless the anchor
+actually begins at that offset.
 For a stable concept explanation use:
 {"goalKey":"general-goal","goalKind":"GENERAL_EXPLANATION",
  "inputAnchor":{"text":"exact request phrase","start":0},

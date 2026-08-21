@@ -814,7 +814,9 @@ try {
 
     if ($Lane -eq 'LIVE') {
         $latencyBuckets = @()
-        foreach ($scenario in @('SOCIAL', 'GENERAL')) {
+        # GENERAL provider behavior is owned by the stricter multi-scenario
+        # quality gate below; do not add a second stochastic one-shot gate.
+        foreach ($scenario in @('SOCIAL')) {
             $stopwatch = [Diagnostics.Stopwatch]::StartNew()
             $probeOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
                 -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.ps1') `
@@ -840,12 +842,22 @@ try {
         }
         Write-Output ("Packaged Live Provider verification passed; latency=" + `
                 ($latencyBuckets -join ','))
-        $qualityOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
-            -BackendBaseUrl $baseUrl `
-            -ExpectedContentVersion ([string]$publicContent.contentVersion) `
-            -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or
+        $qualityOutput = ''
+        $qualityExitCode = 1
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $qualityOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
+                -BackendBaseUrl $baseUrl `
+                -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 | Out-String).Trim()
+            $qualityExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($qualityExitCode -ne 0 -or
                 $qualityOutput -notmatch '(?m)^GENERAL_QUALITY_PASS$') {
             throw "Live Provider general quality verification failed: $qualityOutput"
         }

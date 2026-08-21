@@ -158,6 +158,8 @@ try {
         'assertion mode must fail on an English response.'
     Assert-True ($failing.Output -match 'GENERAL_QUALITY_GATE_FAILED') `
         "failure output must contain the stable code: $($failing.Output)"
+    Assert-True ($failing.Output -match 'scenario=CONCISE.*language=0/1') `
+        'failure output must retain privacy-safe aggregate diagnostics.'
     Assert-True ($failing.Output -notmatch 'This explanation|plain text') `
         'failure output leaked the response body.'
 

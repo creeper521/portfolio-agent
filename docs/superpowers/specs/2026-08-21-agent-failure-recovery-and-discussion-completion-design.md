@@ -57,6 +57,7 @@ pending、failure 与异步回调的删除或覆盖必须同时匹配 sessionId 
 ## 7. A2-29：验证门
 
 - `RequireLiveProvider` 运行真实 General Quality canary；Baseline 仍只采集，不增加 Provider 重试，不改变批准句数桶。
+- General Quality canary 是真实通用回答的唯一权威门；旧 GENERAL one-shot probe 不再重复拦截。失败时可输出语言、结构、句数桶、终局与延迟的聚合指标，但不得输出问题或模型正文。
 - packaged runner 所有 HTTP 调用使用 absolute deadline 派生的有界 timeout，finally 必须恢复环境并停止进程。
 - privacy checker 增加 typed credential literal 负例，豁免只覆盖无赋值声明或可信派生值。
 - 共享 fixtures 覆盖 ACTIVE/EXPIRED Summary、revision、DISCUSSION errors/actions 与 free-text capability。

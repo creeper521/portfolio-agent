@@ -355,6 +355,9 @@ try {
             throw "LIVE lane is missing general quality contract '$liveQualityContract'."
         }
     }
+    if ($runnerSource -match "@\('SOCIAL', 'GENERAL'\)") {
+        throw 'LIVE lane must not duplicate the General Quality authority with a one-shot probe.'
+    }
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'
     $env:PLAYWRIGHT_REAL_API = 'original-real'

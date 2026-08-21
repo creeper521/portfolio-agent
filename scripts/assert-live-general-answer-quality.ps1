@@ -256,7 +256,15 @@ function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
         return @{
             Language = $false; Structure = $false; Bucket = $false
             Terminal = $false; Observed = 'INVALID'; Latency = $timer.ElapsedMilliseconds
-            PublicTerminal = if ($null -eq $response) { 'MISSING' } else { [string]$response.kind }
+            PublicTerminal = if ($null -eq $response) {
+                'MISSING'
+            }
+            elseif ([string]::IsNullOrWhiteSpace([string]$response.code)) {
+                [string]$response.kind
+            }
+            else {
+                [string]$response.kind + ':' + [string]$response.code
+            }
         }
     }
 
@@ -351,10 +359,10 @@ try {
             $observed, $publicTerminals, $average)
     }
 
+    $lines | Write-Output
     if (-not $Baseline -and -not $gatePassed) {
         Stop-Quality 'GENERAL_QUALITY_GATE_FAILED'
     }
-    $lines | Write-Output
     if (-not $Baseline) {
         Write-Output 'GENERAL_QUALITY_PASS'
     }

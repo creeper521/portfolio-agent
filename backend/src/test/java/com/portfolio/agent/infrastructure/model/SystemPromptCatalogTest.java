@@ -22,13 +22,17 @@ class SystemPromptCatalogTest {
                         "SEMANTIC_ROUTE", "STANDARD_GOAL",
                         "interpretationMode", "allowedRoutes",
                         "Simplified Chinese", "Depth selection",
+                        "Calculate every anchor start",
                         "untrusted content")
                 .doesNotContain(
                         "{\"kind\":\"GOALS\"",
                         "{\"kind\":\"CLARIFICATION\"")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
         assertThat(catalog.generalKnowledge())
-                .contains("Simplified Chinese", "CONCISE", "DETAILED", "untrusted content")
+                .contains(
+                        "Simplified Chinese", "CONCISE", "DETAILED",
+                        "literal separator ` vs `",
+                        "only sentence terminator", "untrusted content")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
     }
 
