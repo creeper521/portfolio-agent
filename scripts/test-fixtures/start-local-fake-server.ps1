@@ -104,7 +104,7 @@ try {
                 Write-Response $stream 200 'text/html; charset=utf-8' `
                     '<!doctype html><title>fake vite</title>'
             }
-            elseif ($path -eq '/api/v1/public-content') {
+            elseif ($path -eq '/api/portfolio') {
                 Write-Response $stream 200 'application/json; charset=utf-8' `
                     '{"contentVersion":"test-v1"}'
             }

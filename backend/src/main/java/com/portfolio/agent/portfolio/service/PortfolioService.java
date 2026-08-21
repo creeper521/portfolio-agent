@@ -8,11 +8,8 @@ import com.portfolio.agent.portfolio.domain.EvidenceStatus;
 import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
-import com.portfolio.agent.portfolio.exception.CaseNotFoundException;
-import com.portfolio.agent.portfolio.exception.ProjectNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.service.result.CaseDetails;
-import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.springframework.stereotype.Service;
@@ -30,43 +27,6 @@ public class PortfolioService {
 
     public PortfolioService(PublicPortfolioRepository repository) {
         this.repository = repository;
-    }
-
-    public PortfolioOverview getPortfolio() {
-        RuntimeContentSnapshot snapshot = repository.getSnapshot();
-        Map<String, Integer> caseCountsByProjectId = new LinkedHashMap<>();
-        for (CaseStudy caseStudy : snapshot.getCases()) {
-            if (caseStudy.getProjectId() != null) {
-                caseCountsByProjectId.merge(caseStudy.getProjectId(), 1, Integer::sum);
-            }
-        }
-        return new PortfolioOverview(
-                snapshot.getContentVersion(),
-                snapshot.getPublishedAt(),
-                snapshot.getOwner(),
-                snapshot.getProjects(),
-                snapshot.getCollections(),
-                caseCountsByProjectId
-        );
-    }
-
-    public ProjectDetails getProject(String slug) {
-        RuntimeContentSnapshot snapshot = repository.getSnapshot();
-        ProjectProfile project = findProject(snapshot, slug);
-        return toProjectDetails(snapshot, project);
-    }
-
-    public List<CaseDetails> getCases() {
-        RuntimeContentSnapshot snapshot = repository.getSnapshot();
-        return snapshot.getCases().stream()
-                .map(caseStudy -> toCaseDetails(snapshot, caseStudy))
-                .toList();
-    }
-
-    public CaseDetails getCase(String slug) {
-        RuntimeContentSnapshot snapshot = repository.getSnapshot();
-        CaseStudy caseStudy = findCase(snapshot, slug);
-        return toCaseDetails(snapshot, caseStudy);
     }
 
     public PublicContent getPublicContent() {
@@ -209,17 +169,4 @@ public class PortfolioService {
                 caseStudy, evidence, suggestedQuestions, projectSlug, collectionSlugs);
     }
 
-    private ProjectProfile findProject(RuntimeContentSnapshot snapshot, String slug) {
-        return snapshot.getProjects().stream()
-                .filter(project -> project.getSlug().equals(slug))
-                .findFirst()
-                .orElseThrow(() -> new ProjectNotFoundException(slug));
-    }
-
-    private CaseStudy findCase(RuntimeContentSnapshot snapshot, String slug) {
-        return snapshot.getCases().stream()
-                .filter(caseStudy -> caseStudy.getSlug().equals(slug))
-                .findFirst()
-                .orElseThrow(() -> new CaseNotFoundException(slug));
-    }
 }

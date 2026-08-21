@@ -46,7 +46,7 @@ class FrontendDiagnosticsControllerTest {
         MockMvc mvc = mvc(true, 30, events);
         MDC.put("request.id", "current-ingest-request-id");
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .with(request -> {
                             request.setRemoteAddr("198.51.100.9");
                             return request;
@@ -90,7 +90,7 @@ class FrontendDiagnosticsControllerTest {
         List<DiagnosticEvent> events = new ArrayList<>();
         MockMvc mvc = mvc(true, 30, events);
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch().replace(
                                 "frontend.agent.request.failed",
@@ -106,7 +106,7 @@ class FrontendDiagnosticsControllerTest {
         List<DiagnosticEvent> events = new ArrayList<>();
         MockMvc mvc = mvcWithBodyFilter(false, 30, events::add);
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().isNotFound());
@@ -118,7 +118,7 @@ class FrontendDiagnosticsControllerTest {
     void disabledIngestReturnsNotFoundBeforeMalformedJsonIsParsed() throws Exception {
         MockMvc mvc = mvcWithBodyFilter(false, 30, event -> { });
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{"))
                 .andExpect(status().isNotFound());
@@ -131,7 +131,7 @@ class FrontendDiagnosticsControllerTest {
                 "]}",
                 "],\"unexpected\":\"closed-contract\"}");
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(status().isNotFound());
@@ -141,7 +141,7 @@ class FrontendDiagnosticsControllerTest {
     void disabledIngestReturnsNotFoundBeforeBodySizeIsChecked() throws Exception {
         MockMvc mvc = mvcWithBodyFilter(false, 30, event -> { });
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(" ".repeat(16_385)))
                 .andExpect(status().isNotFound());
@@ -159,7 +159,7 @@ class FrontendDiagnosticsControllerTest {
         }
         content.append("]}");
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content.toString()))
                 .andExpect(status().isBadRequest());
@@ -197,11 +197,11 @@ class FrontendDiagnosticsControllerTest {
     void returnsTooManyRequestsAfterThePerSourceEventBudgetIsConsumed() throws Exception {
         MockMvc mvc = mvc(true, 1, new ArrayList<>());
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().isAccepted());
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().isTooManyRequests());
@@ -219,7 +219,7 @@ class FrontendDiagnosticsControllerTest {
                 events::add);
         MockMvc mvc = mvc(controller);
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .with(request -> {
                             request.setRemoteAddr("192.0.2.10");
                             request.addHeader("X-Forwarded-For", "198.51.100.11");
@@ -228,7 +228,7 @@ class FrontendDiagnosticsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().isAccepted());
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .with(request -> {
                             request.setRemoteAddr("192.0.2.10");
                             request.addHeader("X-Forwarded-For", "198.51.100.12");
@@ -247,7 +247,7 @@ class FrontendDiagnosticsControllerTest {
             throw new IllegalStateException("publisher unavailable");
         });
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().isAccepted());
@@ -260,7 +260,7 @@ class FrontendDiagnosticsControllerTest {
             throw publisherFailure;
         });
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBatch()))
                 .andExpect(status().is5xxServerError());
@@ -268,7 +268,7 @@ class FrontendDiagnosticsControllerTest {
 
     private void assertBadRequest(String content) throws Exception {
         MockMvc mvc = mvc(true, 30, new ArrayList<>());
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(status().isBadRequest());

@@ -149,7 +149,7 @@ export async function selectSessionByTitle(
 }
 
 export async function firstPublicPreset(request: APIRequestContext): Promise<PublicPreset> {
-  const contentResponse = await request.get('/api/v1/public-content')
+  const contentResponse = await request.get('/api/portfolio')
   expect(contentResponse.ok()).toBeTruthy()
   const content = await contentResponse.json() as { questionPresets: Array<{ id: string; contractVersion: string }> }
   const preset = content.questionPresets[0]

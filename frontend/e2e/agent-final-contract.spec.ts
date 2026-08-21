@@ -16,7 +16,7 @@ const TURNS = '/api/agent/turns'
 const CURRENT = '/api/agent/conversations/current'
 
 async function freeTextAvailable(request: import('@playwright/test').APIRequestContext) {
-  const response = await request.get('/api/v1/public-content')
+  const response = await request.get('/api/portfolio')
   if (!response.ok()) return false
   const content = await response.json() as {
     agentAvailability?: { freeTextSemanticRouting?: string }
@@ -25,7 +25,7 @@ async function freeTextAvailable(request: import('@playwright/test').APIRequestC
 }
 
 test('final API supports preset, replay, Bearer continuation and clear', async ({ request }) => {
-  const contentResponse = await request.get('/api/v1/public-content')
+  const contentResponse = await request.get('/api/portfolio')
   expect(contentResponse.ok()).toBeTruthy()
   const content = await contentResponse.json() as {
     questionPresets: Array<{ id: string; contractVersion: string }>

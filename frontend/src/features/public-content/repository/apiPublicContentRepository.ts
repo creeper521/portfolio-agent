@@ -1,4 +1,4 @@
-import { getPublicContent } from '../../portfolio/api/portfolioApi'
+import { getPortfolioSnapshot } from '../../portfolio/api/portfolioApi'
 import type { PublicPortfolio } from '../model/publicContentTypes'
 import type { PublicContentRepository } from './publicContentRepository'
 
@@ -6,7 +6,7 @@ export class ApiPublicContentRepository implements PublicContentRepository {
   private cached: Promise<PublicPortfolio> | null = null
   private readonly loader: () => Promise<PublicPortfolio>
 
-  constructor(loader: () => Promise<PublicPortfolio> = getPublicContent) {
+  constructor(loader: () => Promise<PublicPortfolio> = getPortfolioSnapshot) {
     this.loader = loader
   }
 

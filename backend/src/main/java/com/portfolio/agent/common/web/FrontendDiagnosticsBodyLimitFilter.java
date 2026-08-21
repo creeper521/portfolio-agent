@@ -25,7 +25,7 @@ import java.util.Objects;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public final class FrontendDiagnosticsBodyLimitFilter extends OncePerRequestFilter {
 
-    private static final String INGEST_PATH = "/api/v1/client-diagnostics";
+    private static final String INGEST_PATH = "/api/client-diagnostics";
 
     private final FrontendDiagnosticProperties properties;
 

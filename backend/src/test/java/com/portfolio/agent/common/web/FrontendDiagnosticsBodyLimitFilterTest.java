@@ -58,7 +58,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
     void rejectsKnownOversizedContentLengthBeforeCallingTheChain() throws Exception {
         FrontendDiagnosticsBodyLimitFilter filter = filterWithLimit(16);
         MockHttpServletRequest request =
-                new MockHttpServletRequest("POST", "/api/v1/client-diagnostics");
+                new MockHttpServletRequest("POST", "/api/client-diagnostics");
         request.setContent("0123456789abcdefg".getBytes(StandardCharsets.UTF_8));
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicBoolean chainCalled = new AtomicBoolean();
@@ -78,7 +78,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
                 .build();
         String content = "{\"events\":[]}" + " ".repeat(16_385);
 
-        mvc.perform(post("/api/v1/client-diagnostics")
+        mvc.perform(post("/api/client-diagnostics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(status().isPayloadTooLarge());
@@ -88,7 +88,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
     void allowsBodyAtTheConfiguredLimit() throws Exception {
         FrontendDiagnosticsBodyLimitFilter filter = filterWithLimit(16);
         MockHttpServletRequest request =
-                new MockHttpServletRequest("POST", "/api/v1/client-diagnostics");
+                new MockHttpServletRequest("POST", "/api/client-diagnostics");
         request.setContent("0123456789abcdef".getBytes(StandardCharsets.UTF_8));
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -128,7 +128,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
             List<com.portfolio.agent.common.observability.DiagnosticEvent> events
     ) throws Exception {
         MockHttpServletRequest request =
-                new MockHttpServletRequest("POST", "/api/v1/client-diagnostics");
+                new MockHttpServletRequest("POST", "/api/client-diagnostics");
         request.setContent(body.getBytes(StandardCharsets.UTF_8));
         MockHttpServletResponse response = new MockHttpServletResponse();
         int previousEventCount = events.size();
@@ -172,7 +172,7 @@ class FrontendDiagnosticsBodyLimitFilterTest {
     @RestController
     private static final class DiagnosticBodyController {
 
-        @PostMapping("/api/v1/client-diagnostics")
+        @PostMapping("/api/client-diagnostics")
         ResponseEntity<Void> ingest(@RequestBody Map<String, Object> body) throws IOException {
             return ResponseEntity.accepted().build();
         }

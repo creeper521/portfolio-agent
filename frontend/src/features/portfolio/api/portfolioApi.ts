@@ -1,7 +1,6 @@
 import { createClientRequestId, getClientSessionId } from '../../../shared/diagnostics/clientCorrelation'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 import { createFrontendDiagnosticEvent, durationBucketFor } from '../../../shared/diagnostics/frontendDiagnosticTypes'
-import type { PortfolioHome, ProjectDetail } from '../model/portfolioTypes'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import {
   actionForApiError,
@@ -31,7 +30,6 @@ export type ApiFailureKind = 'HTTP' | 'TIMEOUT' | 'NETWORK' | 'INVALID_RESPONSE'
 
 export enum RequestOperation {
   PUBLIC_CONTENT = 'PUBLIC_CONTENT',
-  PROJECT = 'PROJECT',
   ANSWER = 'ANSWER',
 }
 
@@ -254,17 +252,9 @@ async function requestInternal<T>(
   }
 }
 
-export function getPortfolio(): Promise<PortfolioHome> {
-  return request<PortfolioHome>('/api/v1/portfolio', { method: 'GET' }, { operation: RequestOperation.PUBLIC_CONTENT })
-}
-
-export function getProject(slug: string): Promise<ProjectDetail> {
-  return request<ProjectDetail>(`/api/v1/projects/${encodeURIComponent(slug)}`, { method: 'GET' }, { operation: RequestOperation.PROJECT })
-}
-
-export async function getPublicContent(): Promise<PublicPortfolio> {
+export async function getPortfolioSnapshot(): Promise<PublicPortfolio> {
   const payload = await request<Record<string, unknown>>(
-    '/api/v1/public-content',
+    '/api/portfolio',
     { method: 'GET' },
     { operation: RequestOperation.PUBLIC_CONTENT },
   )
@@ -326,7 +316,7 @@ function diagnosticEventNameFor(
   if (operation === RequestOperation.ANSWER) {
     return errorKind === 'CANCELLED' ? 'frontend.agent.request.cancelled' : 'frontend.agent.request.failed'
   }
-  if (operation === RequestOperation.PUBLIC_CONTENT || operation === RequestOperation.PROJECT) {
+  if (operation === RequestOperation.PUBLIC_CONTENT) {
     return 'frontend.content.load.failed'
   }
   return undefined
@@ -334,6 +324,5 @@ function diagnosticEventNameFor(
 
 function isRequestOperation(value: unknown): value is RequestOperation {
   return value === RequestOperation.PUBLIC_CONTENT
-    || value === RequestOperation.PROJECT
     || value === RequestOperation.ANSWER
 }

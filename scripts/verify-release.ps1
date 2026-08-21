@@ -51,6 +51,14 @@ try {
     Assert-ExitCode 'Current documentation facts check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\public-api-surface-check.test.ps1')
+    Assert-ExitCode 'Public API surface checker tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\public-api-surface-check.ps1')
+    Assert-ExitCode 'Retired public API zero-reference check'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\architecture-check.test.ps1')
     Assert-ExitCode 'Architecture checker tests'
 

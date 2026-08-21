@@ -15,6 +15,13 @@ $stdoutValidationRunner = Join-Path $fixtureRoot 'run-jar-e2e-stdout-fixture.ps1
 $latePlaintextRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-plaintext.ps1'
 $lateLeakRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-leak.ps1'
 $port = 43173
+$runnerSource = Get-Content -LiteralPath $runner -Raw -Encoding UTF8
+if ($runnerSource -notmatch [regex]::Escape('/api/portfolio')) {
+    throw 'Packaged runner must load the unversioned portfolio snapshot.'
+}
+if ($runnerSource -notmatch [regex]::Escape('/api/client-diagnostics')) {
+    throw 'Packaged runner must use the unversioned diagnostic endpoint.'
+}
 
 function Get-EnvironmentSnapshot([string]$Name) {
     $value = [System.Environment]::GetEnvironmentVariable(
@@ -357,8 +364,8 @@ try {
         throw "Expected spaced JAR path to start and own the test port. Output: $output"
     }
 
-    if ($output -notmatch 'Packaged Case API smoke passed\.') {
-        throw "Expected packaged Case API smoke evidence. Output: $output"
+    if ($output -notmatch 'Packaged portfolio snapshot Case smoke passed\.') {
+        throw "Expected packaged portfolio snapshot Case smoke evidence. Output: $output"
     }
     if ($output -notmatch 'Packaged final Agent resource smoke passed\.') {
         throw "Expected final packaged Agent resource smoke evidence. Output: $output"
