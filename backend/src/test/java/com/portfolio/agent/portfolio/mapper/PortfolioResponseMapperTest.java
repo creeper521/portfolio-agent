@@ -20,7 +20,7 @@ import com.portfolio.agent.portfolio.domain.ProjectNature;
 import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
-import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
+import com.portfolio.agent.portfolio.dto.response.PortfolioSnapshotResponse;
 import com.portfolio.agent.portfolio.dto.response.QuestionPresetResponse;
 import com.portfolio.agent.portfolio.service.result.CaseDetails;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
@@ -42,8 +42,8 @@ class PortfolioResponseMapperTest {
 
     @Test
     void mapsCasesAndZeroOneManyCaseRelationsWithoutChangingProjectRelations() {
-        PublicContentResponse response =
-                mapper.toPublicContentResponse(publicContentWithThreeCases());
+        PortfolioSnapshotResponse response =
+                mapper.toPortfolioSnapshotResponse(publicContentWithThreeCases());
 
         assertThat(response.getCases())
                 .extracting("slug")
@@ -127,8 +127,8 @@ class PortfolioResponseMapperTest {
 
     @Test
     void publicContentCaseRelationsAreDeeplyImmutable() {
-        PublicContentResponse response =
-                mapper.toPublicContentResponse(publicContentWithThreeCases());
+        PortfolioSnapshotResponse response =
+                mapper.toPortfolioSnapshotResponse(publicContentWithThreeCases());
 
         assertThatThrownBy(() -> response.getCases().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
@@ -143,8 +143,8 @@ class PortfolioResponseMapperTest {
 
     @Test
     void serializesExplicitNullProjectSlugForCaseOnlyQuestionPreset() throws Exception {
-        PublicContentResponse response =
-                mapper.toPublicContentResponse(publicContentWithThreeCases());
+        PortfolioSnapshotResponse response =
+                mapper.toPortfolioSnapshotResponse(publicContentWithThreeCases());
         QuestionPresetResponse caseOnly = response.getQuestionPresets().stream()
                 .filter(item -> item.getId().equals("question-case-role-reset-overview"))
                 .findFirst()
@@ -170,7 +170,7 @@ class PortfolioResponseMapperTest {
                 ))
         );
 
-        assertThatThrownBy(() -> mapper.toPublicContentResponse(invalid))
+        assertThatThrownBy(() -> mapper.toPortfolioSnapshotResponse(invalid))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("missing-project");
     }
@@ -189,7 +189,7 @@ class PortfolioResponseMapperTest {
                 )
         );
 
-        PublicContentResponse response = mapper.toPublicContentResponse(withDraft);
+        PortfolioSnapshotResponse response = mapper.toPortfolioSnapshotResponse(withDraft);
 
         assertThat(response.getQuestionPresets())
                 .extracting(QuestionPresetResponse::getId)

@@ -83,6 +83,6 @@ describe('HomePage', () => {
 
     expect(state.retry).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('公开内容暂时无法加载，请稍后重试')
-    expect(wrapper.text()).not.toContain('/api/v1/public-content')
+    expect(wrapper.text()).not.toContain('/api/portfolio')
   })
 })

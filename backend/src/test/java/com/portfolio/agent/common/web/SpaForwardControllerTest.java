@@ -46,7 +46,7 @@ class SpaForwardControllerTest {
 
     @Test
     void doesNotCaptureApiRoutes() throws Exception {
-        mockMvc.perform(get("/api/v1/portfolio"))
+        mockMvc.perform(get("/api/portfolio"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.projects[0].slug").value("sql-audit"));
     }

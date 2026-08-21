@@ -56,7 +56,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 
 
 生产使用 `prod` Profile，并强制 PostgreSQL；缺少数据库、schema 或加密配置时应失败关闭，不能退回内存。
 
-## 公开 Agent API
+## 公开 HTTP API
+
+公开作品集与前端诊断使用以下无版本资源：
+
+- `GET /api/portfolio`：一次返回同一 `contentVersion` 的完整公开作品集快照；
+- `POST /api/client-diagnostics`：接收经过白名单约束的前端安全诊断事件。
+
+### Agent
 
 公开 Agent 只有以下四条无版本资源：
 
@@ -67,7 +74,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 
 
 除首次创建会话外，客户端通过 `Authorization: Bearer <ResumeToken>` 证明会话归属。成功响应和错误响应均禁止缓存；`429 RATE_LIMITED` 同时提供标准 `Retry-After` Header 与 JSON `retryAfterSeconds`。
 
-公开内容浏览继续使用 `/api/v1` 下的只读资源；Agent API 不取代 Project、Case、Evidence 与 `public-content` 接口。
+页面从 `/api/portfolio` 的原子快照派生 Project、Case、Evidence 与 Timeline；不再维护独立摘要、详情或版本化内容路由。
 
 ## 验证
 

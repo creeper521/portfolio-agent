@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getPortfolio, getProject, getPublicContent } from './portfolioApi'
+import { getPortfolioSnapshot } from './portfolioApi'
 import { PortfolioApiError, RequestOperation, request } from './portfolioApi'
 import { frontendDiagnostics } from '../../../shared/diagnostics/frontendDiagnostics'
 
@@ -11,8 +11,12 @@ describe('portfolio api', () => {
     vi.useRealTimers()
   })
 
-  it('loads the public portfolio summary', async () => {
-    const payload = { owner: { role: 'Java 后端开发实习生' }, projects: [] }
+  it('loads the public portfolio snapshot from the unversioned resource', async () => {
+    const payload = {
+      owner: { role: 'Java 后端开发实习生' },
+      projects: [],
+      agentAvailability: { status: 'AVAILABLE', freeTextSemanticRouting: 'AVAILABLE' },
+    }
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(payload), {
         status: 200,
@@ -21,8 +25,8 @@ describe('portfolio api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(getPortfolio()).resolves.toEqual(payload)
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/portfolio', expect.objectContaining({ method: 'GET' }))
+    await expect(getPortfolioSnapshot()).resolves.toEqual(payload)
+    expect(fetchMock).toHaveBeenCalledWith('/api/portfolio', expect.objectContaining({ method: 'GET' }))
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = new Headers(requestInit.headers)
     expect(headers.get('X-Client-Session-Id')).toMatch(/^[0-9a-f-]{36}$/)
@@ -38,7 +42,7 @@ describe('portfolio api', () => {
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
 
-    await expect(getPublicContent()).resolves.toMatchObject({
+    await expect(getPortfolioSnapshot()).resolves.toMatchObject({
       agentAvailability: {
         status: 'AVAILABLE',
         freeTextSemanticRouting: 'AVAILABLE',
@@ -52,7 +56,7 @@ describe('portfolio api', () => {
       agentAvailability: { status: 'AVAILABLE' },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
 
-    await expect(getPublicContent()).resolves.toMatchObject({
+    await expect(getPortfolioSnapshot()).resolves.toMatchObject({
       agentAvailability: {
         status: 'AVAILABLE',
         freeTextSemanticRouting: 'DISABLED',
@@ -69,7 +73,7 @@ describe('portfolio api', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })))
-      await expect(getPublicContent()).resolves.toMatchObject({
+      await expect(getPortfolioSnapshot()).resolves.toMatchObject({
         agentAvailability: {
           status: 'UNAVAILABLE',
           freeTextSemanticRouting: 'DISABLED',
@@ -78,10 +82,10 @@ describe('portfolio api', () => {
     }
   })
 
-  it('returns a stable message when the project request cannot reach the network', async () => {
+  it('returns a stable message when the portfolio snapshot cannot reach the network', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
 
-    await expect(getProject('sql-audit')).rejects.toThrow('暂时无法连接作品集服务，请稍后重试')
+    await expect(getPortfolioSnapshot()).rejects.toThrow('暂时无法连接作品集服务，请稍后重试')
   })
 
   it('keeps structured error code and retry delay from a safe error response', async () => {
@@ -168,7 +172,7 @@ describe('portfolio api', () => {
       .mockReturnValueOnce(4_999)
     const report = vi.spyOn(frontendDiagnostics, 'report')
 
-    await expect(getPortfolio()).resolves.toEqual(payload)
+    await expect(getPortfolioSnapshot()).resolves.toMatchObject(payload)
 
     expect(now).toHaveBeenCalledTimes(2)
     expect(report).not.toHaveBeenCalled()

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('DISABLED 部署仍可浏览公开内容，但不显示 Agent 提交入口', async ({ page, request }) => {
-  const content = await request.get('/api/v1/public-content')
+  const content = await request.get('/api/portfolio')
   expect(content.status()).toBe(200)
   expect((await content.json()).agentAvailability).toEqual({ status: 'UNAVAILABLE' })
 

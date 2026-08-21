@@ -126,7 +126,7 @@ describe('diagnostic transport', () => {
     window.dispatchEvent(new Event('pagehide'))
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/client-diagnostics', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/client-diagnostics', expect.objectContaining({
       method: 'POST',
       keepalive: true,
     }))

@@ -1,6 +1,6 @@
 import { serializeFrontendEvent, type ReportableFrontendEvent } from './frontendDiagnosticTypes'
 
-const DIAGNOSTIC_ENDPOINT = '/api/v1/client-diagnostics'
+const DIAGNOSTIC_ENDPOINT = '/api/client-diagnostics'
 const MAX_QUEUE_SIZE = 20
 const MAX_BATCH_SIZE = 10
 const UPLOAD_TIMEOUT_MS = 2_000

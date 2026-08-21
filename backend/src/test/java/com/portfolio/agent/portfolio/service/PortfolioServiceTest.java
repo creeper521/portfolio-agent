@@ -1,6 +1,5 @@
 package com.portfolio.agent.portfolio.service;
 
-import com.portfolio.agent.common.exception.PublicResourceErrorCode;
 import com.portfolio.agent.portfolio.domain.AchievementStatus;
 import com.portfolio.agent.portfolio.domain.CareerTrack;
 import com.portfolio.agent.portfolio.domain.CaseCollection;
@@ -19,12 +18,8 @@ import com.portfolio.agent.portfolio.domain.ProjectStatus;
 import com.portfolio.agent.portfolio.domain.QuestionDefinition;
 import com.portfolio.agent.portfolio.domain.TimelineEvent;
 import com.portfolio.agent.portfolio.domain.RuntimeContentSnapshot;
-import com.portfolio.agent.portfolio.exception.CaseNotFoundException;
 import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
-import com.portfolio.agent.portfolio.service.result.CaseDetails;
-import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
-import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -36,41 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PortfolioServiceTest {
-
-    @Test
-    void getProjectReadsExactlyOneSnapshot() {
-        CountingRepository repository = new CountingRepository(snapshot());
-        PortfolioService service = new PortfolioService(repository);
-
-        ProjectDetails details = service.getProject("sql-audit");
-
-        assertThat(details.getProject().getSlug()).isEqualTo("sql-audit");
-        assertThat(repository.reads).isEqualTo(1);
-    }
-
-    @Test
-    void getPortfolioReturnsApplicationModelInsteadOfResponseDto() {
-        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
-
-        PortfolioOverview overview = service.getPortfolio();
-
-        assertThat(overview.getContentVersion()).isEqualTo("2026-07-14.1");
-        assertThat(overview.getProjects()).hasSize(1);
-        assertThat(overview.getCollections()).extracting(CaseCollection::getSlug)
-                .containsExactly("engineering-operations");
-    }
-
-    @Test
-    void projectDetailsDeriveCaseCountAndConfiguredFeaturedCaseOrder() {
-        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
-
-        ProjectDetails details = service.getProject("sql-audit");
-
-        assertThat(details.getCaseCount()).isEqualTo(2);
-        assertThat(details.getFeaturedCases())
-                .extracting(item -> item.getCaseStudy().getSlug())
-                .containsExactly("multilingual-image-preservation");
-    }
 
     @Test
     void getPublicContentReadsOneSnapshotAndBuildsReverseEvidenceLinks() {
@@ -93,79 +53,6 @@ class PortfolioServiceTest {
                 .containsExactly("sql-audit");
         assertThat(content.getTimeline()).extracting(TimelineEvent::getId)
                 .containsExactly("timeline-1");
-    }
-
-    @Test
-    void getCasesPreservesBundleOrder() {
-        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
-
-        List<CaseDetails> cases = service.getCases();
-
-        assertThat(cases)
-                .extracting(details -> details.getCaseStudy().getSlug())
-                .containsExactly(
-                        "multilingual-image-preservation",
-                        "provider-evaluation"
-                );
-    }
-
-    @Test
-    void returnsCaseDetailsWithOnlyOwnApprovedNonRawEvidenceAndCaseQuestions() {
-        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
-
-        CaseDetails result = service.getCase("multilingual-image-preservation");
-
-        assertThat(result.getCaseStudy().getCode()).isEqualTo("CASE-01");
-        assertThat(result.getEvidence()).extracting(EvidenceRecord::getId)
-                .containsExactly("evidence-case-multilingual-implementation-and-regression");
-        assertThat(result.getProjectSlug()).isEqualTo("sql-audit");
-        assertThat(result.getCollectionSlugs()).containsExactly("engineering-operations");
-        assertThat(result.getSuggestedQuestions())
-                .containsExactly("多语言图片上传修复解决了什么问题？");
-    }
-
-    @Test
-    void returnsNullProjectSlugForStandaloneCase() {
-        PortfolioSnapshot base = snapshot();
-        CaseStudy standaloneCase = caseStudy(
-                "case-standalone",
-                "CASE-03",
-                "standalone-case",
-                CaseType.FEATURE,
-                List.of(),
-                null
-        );
-        PortfolioSnapshot withStandaloneCase = new PortfolioSnapshot(
-                base.getSchemaVersion(),
-                base.getContentVersion(),
-                base.getPublishedAt(),
-                base.getOwner(),
-                base.getProjects(),
-                List.of(standaloneCase),
-                base.getClaims(),
-                base.getClaimEvidenceLinks(),
-                base.getQuestions(),
-                base.getEvidence(),
-                base.getTimeline()
-        );
-        PortfolioService service =
-                new PortfolioService(new CountingRepository(withStandaloneCase));
-
-        CaseDetails result = service.getCase("standalone-case");
-
-        assertThat(result.getProjectSlug()).isNull();
-    }
-
-    @Test
-    void getCaseMatchesExactSlugAndUnknownCaseUsesStableErrorCode() {
-        PortfolioService service = new PortfolioService(new CountingRepository(snapshot()));
-
-        assertThatThrownBy(() -> service.getCase("MULTILINGUAL-IMAGE-PRESERVATION"))
-                .isInstanceOfSatisfying(
-                        CaseNotFoundException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(PublicResourceErrorCode.CASE_NOT_FOUND)
-                );
     }
 
     @Test

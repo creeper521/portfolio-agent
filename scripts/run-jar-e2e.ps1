@@ -501,7 +501,7 @@ try {
 
         $response = $null
         try {
-            $response = Invoke-WebRequest -UseBasicParsing "$baseUrl/api/v1/public-content"
+            $response = Invoke-WebRequest -UseBasicParsing "$baseUrl/api/portfolio"
         }
         catch {
             $process.Refresh()
@@ -569,7 +569,7 @@ try {
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
 
     $correlationResponse = Invoke-WebRequest -UseBasicParsing `
-        "$baseUrl/api/v1/public-content"
+        "$baseUrl/api/portfolio"
     if (
         [string]::IsNullOrWhiteSpace(
             [string]$correlationResponse.Headers['X-Request-Id']
@@ -598,7 +598,7 @@ try {
     } | ConvertTo-Json -Depth 5 -Compress
     $diagnosticResponse = Invoke-WebRequest -UseBasicParsing `
         -Method Post `
-        -Uri "$baseUrl/api/v1/client-diagnostics" `
+        -Uri "$baseUrl/api/client-diagnostics" `
         -ContentType 'application/json; charset=utf-8' `
         -Body ([System.Text.Encoding]::UTF8.GetBytes($diagnosticBatch))
     if ($diagnosticResponse.StatusCode -ne 202) {
@@ -621,7 +621,7 @@ try {
     try {
         $unknownFieldStatus = (Invoke-WebRequest -UseBasicParsing `
             -Method Post `
-            -Uri "$baseUrl/api/v1/client-diagnostics" `
+            -Uri "$baseUrl/api/client-diagnostics" `
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($unknownFieldBatch))).StatusCode
     }
@@ -637,7 +637,7 @@ try {
     try {
         $oversizedStatus = (Invoke-WebRequest -UseBasicParsing `
             -Method Post `
-            -Uri "$baseUrl/api/v1/client-diagnostics" `
+            -Uri "$baseUrl/api/client-diagnostics" `
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($oversizedBody))).StatusCode
     }
@@ -649,15 +649,16 @@ try {
     }
     Write-Output 'Packaged client diagnostics body-limit smoke passed.'
 
-    $caseResponse = Invoke-RestMethod -UseBasicParsing `
-        "$baseUrl/api/v1/cases/multilingual-image-preservation"
-    if ([string]$caseResponse.slug -ne 'multilingual-image-preservation') {
-        throw 'Packaged Case API returned the wrong subject.'
+    $caseResponse = @($publicContent.cases) | Where-Object {
+        [string]$_.slug -eq 'multilingual-image-preservation'
+    } | Select-Object -First 1
+    if ($null -eq $caseResponse) {
+        throw 'Packaged portfolio snapshot omitted the expected Case.'
     }
     if (@($caseResponse.evidence).Count -eq 0) {
-        throw 'Packaged Case API returned no public evidence.'
+        throw 'Packaged portfolio snapshot Case returned no public evidence.'
     }
-    Write-Output 'Packaged Case API smoke passed.'
+    Write-Output 'Packaged portfolio snapshot Case smoke passed.'
 
     if ($Lane -notin @('CONTENT_ONLY', 'BODY_STALL', 'PROJECT_DISCUSSION')) {
     $smokePreset = @($publicContent.questionPresets)[0]

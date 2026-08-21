@@ -1,12 +1,19 @@
 package com.portfolio.agent.portfolio.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.PortfolioAgentApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,51 +26,12 @@ class PortfolioControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @Test
-    void returnsPortfolioHomeSummary() throws Exception {
-        mockMvc.perform(get("/api/v1/portfolio"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.owner.role").value("Java 后端开发实习生"))
-                .andExpect(jsonPath("$.projects[0].slug").value("sql-audit"))
-                .andExpect(jsonPath("$.projects[0].status").value("DELIVERED"))
-                .andExpect(jsonPath("$.projects[0].contributionType").value("PRIMARY"));
-    }
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
-    void returnsProjectDetailWithApprovedEvidenceAndSuggestion() throws Exception {
-        mockMvc.perform(get("/api/v1/projects/sql-audit"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("SQL 审计与故障排查工具"))
-                .andExpect(jsonPath("$.responsibilities.length()").value(4))
-                .andExpect(jsonPath("$.evidence[0].title").value("SQL 审计工具交付证据集"))
-                .andExpect(jsonPath("$.evidence[0].publicStatus").value("APPROVED"))
-                .andExpect(jsonPath("$.evidence.length()").value(4))
-                .andExpect(jsonPath("$.suggestedQuestions.length()").value(6));
-    }
-
-    @Test
-    void returnsNotFoundForUnknownProject() throws Exception {
-        mockMvc.perform(get("/api/v1/projects/not-found"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    void formerThemeProjectSlugsRemainProjectNotFound() throws Exception {
-        for (String slug : java.util.List.of(
-                "context-engineering-evaluation",
-                "technical-writing",
-                "engineering-delivery-learning")) {
-            mockMvc.perform(get("/api/v1/projects/{slug}", slug))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("PROJECT_NOT_FOUND"));
-        }
-    }
-
-    @Test
-    void returnsCompleteReviewedPublicContent() throws Exception {
-        mockMvc.perform(get("/api/v1/public-content"))
+    void returnsAtomicPortfolioSnapshotWithFrozenTopLevelContract() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/portfolio"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.contentVersion").value("2026-08-05.1"))
@@ -111,6 +79,26 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.cases.length()").value(52))
                 .andExpect(jsonPath("$.caseSlugsByEvidenceId").isMap())
                 .andExpect(jsonPath("$.caseSlugsByEvidenceId['evidence-case-role-reset-guide-and-acceptance'][0]")
-                        .value("test-role-reset"));
+                        .value("test-role-reset"))
+                .andReturn();
+
+        JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
+        Set<String> names = new LinkedHashSet<>();
+        root.fieldNames().forEachRemaining(names::add);
+        assertThat(names).containsExactlyInAnyOrder(
+                "contentVersion",
+                "runtimeBundleHash",
+                "publishedAt",
+                "owner",
+                "collections",
+                "projects",
+                "cases",
+                "claims",
+                "claimEvidenceLinks",
+                "evidence",
+                "timeline",
+                "caseSlugsByEvidenceId",
+                "questionPresets",
+                "agentAvailability");
     }
 }

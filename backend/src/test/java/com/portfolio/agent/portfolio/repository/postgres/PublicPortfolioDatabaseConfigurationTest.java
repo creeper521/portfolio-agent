@@ -6,6 +6,7 @@ import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.BundledPublicPortfolioRepositoryConfiguration;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
+import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import com.portfolio.agent.portfolio.controller.PortfolioController;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
@@ -138,6 +139,11 @@ class PublicPortfolioDatabaseConfigurationTest {
         @Bean
         ApplicationStartupDiagnostics applicationStartupDiagnostics() {
             return mock(ApplicationStartupDiagnostics.class);
+        }
+
+        @Bean
+        ConversationProviderAccess conversationProviderAccess() {
+            return new ConversationProviderAccess(false);
         }
 
         @Bean

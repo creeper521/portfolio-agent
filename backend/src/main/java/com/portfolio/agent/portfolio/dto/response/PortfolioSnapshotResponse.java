@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public final class PublicContentResponse {
+public final class PortfolioSnapshotResponse {
 
     private final String contentVersion;
     private final String runtimeBundleHash;
@@ -23,7 +23,7 @@ public final class PublicContentResponse {
     private final List<QuestionPresetResponse> questionPresets;
     private final AgentAvailabilityResponse agentAvailability;
 
-    public PublicContentResponse(
+    public PortfolioSnapshotResponse(
             String contentVersion,
             String runtimeBundleHash,
             OffsetDateTime publishedAt,
@@ -58,66 +58,25 @@ public final class PublicContentResponse {
         this.agentAvailability = Objects.requireNonNull(agentAvailability, "agentAvailability");
     }
 
-    public String getContentVersion() {
-        return contentVersion;
-    }
-
-    public OffsetDateTime getPublishedAt() {
-        return publishedAt;
-    }
-
-    public String getRuntimeBundleHash() {
-        return runtimeBundleHash;
-    }
-
-    public List<QuestionPresetResponse> getQuestionPresets() {
-        return questionPresets;
-    }
-
-    public AgentAvailabilityResponse getAgentAvailability() {
-        return agentAvailability;
-    }
-
-    public OwnerResponse getOwner() {
-        return owner;
-    }
-
-    public List<CaseCollectionResponse> getCollections() {
-        return collections;
-    }
-
-    public List<ProjectDetailResponse> getProjects() {
-        return projects;
-    }
-
-    public List<CaseDetailResponse> getCases() {
-        return cases;
-    }
-
+    public String getContentVersion() { return contentVersion; }
+    public String getRuntimeBundleHash() { return runtimeBundleHash; }
+    public OffsetDateTime getPublishedAt() { return publishedAt; }
+    public OwnerResponse getOwner() { return owner; }
+    public List<CaseCollectionResponse> getCollections() { return collections; }
+    public List<ProjectDetailResponse> getProjects() { return projects; }
+    public List<CaseDetailResponse> getCases() { return cases; }
     public List<ClaimResponse> getClaims() { return claims; }
-
     public List<ClaimEvidenceLinkResponse> getClaimEvidenceLinks() { return claimEvidenceLinks; }
-
-    public List<EvidenceResponse> getEvidence() {
-        return evidence;
-    }
-
-    public List<TimelineEventResponse> getTimeline() {
-        return timeline;
-    }
-
-    public Map<String, List<String>> getCaseSlugsByEvidenceId() {
-        return caseSlugsByEvidenceId;
-    }
+    public List<EvidenceResponse> getEvidence() { return evidence; }
+    public List<TimelineEventResponse> getTimeline() { return timeline; }
+    public Map<String, List<String>> getCaseSlugsByEvidenceId() { return caseSlugsByEvidenceId; }
+    public List<QuestionPresetResponse> getQuestionPresets() { return questionPresets; }
+    public AgentAvailabilityResponse getAgentAvailability() { return agentAvailability; }
 
     @Override
     public boolean equals(Object other) {
-        if (this == other) {
-            return true;
-        }
-        if (!(other instanceof PublicContentResponse that)) {
-            return false;
-        }
+        if (this == other) return true;
+        if (!(other instanceof PortfolioSnapshotResponse that)) return false;
         return Objects.equals(contentVersion, that.contentVersion)
                 && Objects.equals(runtimeBundleHash, that.runtimeBundleHash)
                 && Objects.equals(publishedAt, that.publishedAt)
@@ -137,14 +96,13 @@ public final class PublicContentResponse {
     @Override
     public int hashCode() {
         return Objects.hash(contentVersion, runtimeBundleHash, publishedAt, owner, collections,
-                projects, cases,
-                claims, claimEvidenceLinks, evidence, timeline, caseSlugsByEvidenceId,
-                questionPresets, agentAvailability);
+                projects, cases, claims, claimEvidenceLinks, evidence, timeline,
+                caseSlugsByEvidenceId, questionPresets, agentAvailability);
     }
 
     @Override
     public String toString() {
-        return "PublicContentResponse{" +
+        return "PortfolioSnapshotResponse{" +
                 "contentVersion='" + contentVersion + '\'' +
                 ", runtimeBundleHash='" + runtimeBundleHash + '\'' +
                 ", publishedAt=" + publishedAt +

@@ -8,14 +8,12 @@ import com.portfolio.agent.portfolio.dto.response.ClaimEvidenceLinkResponse;
 import com.portfolio.agent.portfolio.dto.response.ClaimResponse;
 import com.portfolio.agent.portfolio.dto.response.EvidenceResponse;
 import com.portfolio.agent.portfolio.dto.response.OwnerResponse;
-import com.portfolio.agent.portfolio.dto.response.PortfolioHomeResponse;
+import com.portfolio.agent.portfolio.dto.response.PortfolioSnapshotResponse;
 import com.portfolio.agent.portfolio.dto.response.ProjectDetailResponse;
-import com.portfolio.agent.portfolio.dto.response.ProjectSummaryResponse;
-import com.portfolio.agent.portfolio.dto.response.PublicContentResponse;
 import com.portfolio.agent.portfolio.dto.response.QuestionPresetResponse;
 import com.portfolio.agent.portfolio.dto.response.TimelineEventResponse;
+import com.portfolio.agent.portfolio.domain.PresetContractStatus;
 import com.portfolio.agent.portfolio.service.result.CaseDetails;
-import com.portfolio.agent.portfolio.service.result.PortfolioOverview;
 import com.portfolio.agent.portfolio.service.result.ProjectDetails;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
 import org.springframework.stereotype.Component;
@@ -26,21 +24,6 @@ import java.util.Map;
 
 @Component
 public class PortfolioResponseMapper {
-
-    public PortfolioHomeResponse toPortfolioResponse(PortfolioOverview overview) {
-        return new PortfolioHomeResponse(
-                overview.getContentVersion(),
-                overview.getPublishedAt(),
-                OwnerResponse.from(overview.getOwner()),
-                overview.getProjects().stream()
-                        .map(project -> ProjectSummaryResponse.from(
-                                project, overview.getCaseCount(project.getId())))
-                        .toList(),
-                overview.getCollections().stream()
-                        .map(CaseCollectionResponse::from)
-                        .toList()
-        );
-    }
 
     public ProjectDetailResponse toProjectResponse(ProjectDetails details) {
         return ProjectDetailResponse.from(
@@ -54,12 +37,6 @@ public class PortfolioResponseMapper {
         );
     }
 
-    public List<CaseSummaryResponse> toCaseResponses(List<CaseDetails> details) {
-        return details.stream()
-                .map(this::toCaseSummaryResponse)
-                .toList();
-    }
-
     public CaseDetailResponse toCaseResponse(CaseDetails details) {
         return CaseDetailResponse.from(
                 details.getCaseStudy(),
@@ -70,17 +47,17 @@ public class PortfolioResponseMapper {
         );
     }
 
-    public PublicContentResponse toPublicContentResponse(PublicContent content) {
-        return toPublicContentResponse(content, AgentAvailabilityResponse.available());
+    public PortfolioSnapshotResponse toPortfolioSnapshotResponse(PublicContent content) {
+        return toPortfolioSnapshotResponse(content, AgentAvailabilityResponse.available());
     }
 
-    public PublicContentResponse toPublicContentResponse(
+    public PortfolioSnapshotResponse toPortfolioSnapshotResponse(
             PublicContent content,
             AgentAvailabilityResponse agentAvailability) {
         Map<String, String> projectSlugsById = projectSlugsById(content);
         Map<String, String> caseSlugsById = caseSlugsById(content);
 
-        return new PublicContentResponse(
+        return new PortfolioSnapshotResponse(
                 content.getContentVersion(),
                 content.getRuntimeBundleHash(),
                 content.getPublishedAt(),
@@ -112,7 +89,7 @@ public class PortfolioResponseMapper {
                 content.getCaseSlugsByEvidenceId(),
                 content.getQuestionPresets().stream()
                         .filter(question -> question.getContractStatus()
-                                == com.portfolio.agent.portfolio.domain.PresetContractStatus.ACTIVE)
+                                == PresetContractStatus.ACTIVE)
                         .map(question -> QuestionPresetResponse.from(
                                 question,
                                 firstProjectSlug(

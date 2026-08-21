@@ -698,7 +698,7 @@ try {
             'BACKEND_STDERR'
         $backendBaseUrl = "http://127.0.0.1:$BackendPort"
         $publicContentResponse = Wait-ForHttp `
-            "$backendBaseUrl/api/v1/public-content" `
+            "$backendBaseUrl/api/portfolio" `
             $backend `
             $ReadinessTimeoutSeconds
         try {
