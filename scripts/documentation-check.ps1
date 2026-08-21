@@ -49,6 +49,8 @@ $activeWorkArtifactStatuses = [ordered]@{
     'docs/superpowers/plans/2026-08-20-general-answer-language-and-depth-prompt.md' = 'ACTIVE'
     'docs/superpowers/specs/2026-08-20-project-discussion-context-design.md' = 'APPROVED'
     'docs/superpowers/plans/2026-08-20-project-discussion-context.md' = 'ACTIVE'
+    'docs/superpowers/specs/2026-08-21-agent-failure-recovery-and-discussion-completion-design.md' = 'APPROVED'
+    'docs/superpowers/plans/2026-08-21-agent-failure-recovery-and-discussion-completion.md' = 'ACTIVE'
     'docs/superpowers/specs/2026-08-21-portfolio-public-api-convergence-design.md' = 'APPROVED'
     'docs/superpowers/plans/2026-08-21-portfolio-public-api-convergence.md' = 'ACTIVE'
 }

@@ -456,7 +456,7 @@ Project Discussion 只扩展同一个 `goal-interpretation-system.txt` 的 STAND
 
 - Provider/Codec 失败时不修改 active pointer；
 - DISCUSSION 模式不回退普通 ASK，也不维护自然语言短语表；
-- 无可信 route 时返回 `DISCUSSION_INTERPRETATION_UNAVAILABLE` 与 backend-owned retry/new-topic actions；
+- 无可信 route 时返回 `DISCUSSION_INTERPRETATION_UNAVAILABLE` 与 backend-owned 新 request retry/exit actions；该结果已终局结算，同 requestId 只做幂等重放，不重新调用 Provider；
 - STANDARD 模式无可信 Goal 时沿用公开 Goal Interpretation unavailable 终局；
 - 跨项目请求只有 AI 提出合法 SWITCH 且候选唯一时执行，否则澄清；系统不自动扩大到候选集外项目。
 
@@ -508,7 +508,7 @@ UI 行为：
 | `DISCUSSION_CONTEXT_UNAVAILABLE` | handle 不存在、错误 Conversation 或 Token | 重新从公开项目进入 |
 | `DISCUSSION_CONTEXT_MISMATCH` | handle 不是当前 active pointer | 使用当前焦点或重新选择 |
 | `DISCUSSION_SUBJECT_UNAVAILABLE` | 项目不再属于当前 ContentRelease | 退出讨论 |
-| `DISCUSSION_INTERPRETATION_UNAVAILABLE` | locked scope 内无法可靠形成 Goal | 同 requestId retry / 退出 |
+| `DISCUSSION_INTERPRETATION_UNAVAILABLE` | locked scope 内无法可靠形成 Goal | 新 requestId retry / 退出 |
 
 错误不得泄露 handle 是否属于其他会话、内部 State、Prompt、Provider 输出或校验路径。错误响应与 PublicTurn 均禁止缓存。
 

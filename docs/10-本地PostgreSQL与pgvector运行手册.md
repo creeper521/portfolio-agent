@@ -84,6 +84,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 
 
 - Turn claim lease：35 秒；
 - Clarification Challenge：5 分钟 absolute TTL；
+- Project Discussion Context：默认 20 分钟 absolute TTL，并受 Session absolute expiry 裁剪；
 - Conversation Session、Continuation Context、PublicAgentTurn replay 与终局记录：30 分钟 absolute TTL；
 - key rotation retention：至少覆盖 30 分钟 TTL 和 cleanup 延迟；
 - cleanup：小批量删除过期和孤儿状态，读取不续期。

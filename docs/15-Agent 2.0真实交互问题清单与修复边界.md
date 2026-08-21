@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-20 本地、PostgreSQL 与 packaged-JAR Exit Gate 已通过；A2-15 待其原始恢复路径 LIVE 验收，A2-20/A2-21 的真实 Provider 自动行为门已通过且待独立浏览器语义覆盖验收
+> **当前状态：** 2026-08-21 已批准失败恢复与项目讨论补完设计；A2-22—A2-29 进入实施，架构状态为 IN_PROGRESS
 
 ## 1. 文档目的
 
@@ -105,6 +105,20 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-18 | P0 | 已提交、已一次性消费的历史澄清卡仍可编辑和重复提交 | 已关闭 | Frontend Clarification State |
 | A2-20 | P1 | 通用知识生成文案在中文站点发生语言漂移 | 修复后真实 Provider 自动门通过；待浏览器语义验收 | Goal Interpretation / General Knowledge Prompt |
 | A2-21 | P1 | EXPLANATION depth 未形成可执行的结构与篇幅差异 | 修复后真实 Provider 自动门通过；待浏览器语义验收 | Goal Interpretation / General Knowledge / Presentation |
+| A2-22 | P1 | 同 requestId 重试未冻结完整提交身份 | 源码确认、批准实施 | Frontend Retry / Idempotency |
+| A2-23 | P1 | Clarification 消费早于 terminal settlement | 源码确认、批准实施 | Clarification State / Settlement |
+| A2-24 | P1 | 单候选 NEEDS_CLARIFICATION 被后端强制进入讨论 | 源码确认、批准实施 | Semantic Routing / Lifecycle |
+| A2-25 | P2 | PostgreSQL Session replacement 残留 expired discussion pointer | 源码确认、批准实施 | PostgreSQL Session State |
+| A2-26 | P1 | ENTER discussion TTL 被来源 Recommendation 过期时间裁剪 | 源码确认、批准实施 | Discussion Lifecycle |
+| A2-27 | P2 | Pending 清理缺少 requestId generation guard | 源码确认、批准实施 | Frontend Turn Lifecycle |
+| A2-28 | P1 | Discussion 权威投影、revision、TTL 与恢复动作未闭合 | 源码确认、批准实施 | Public Contract / Frontend State |
+| A2-29 | P1 | Provider、Browser、共享合同与隐私门覆盖不足 | 源码确认、批准实施 | Release Verification |
+
+### 3.1 A2-22—A2-29 修复边界
+
+本批次以 [失败恢复与项目讨论补完设计](superpowers/specs/2026-08-21-agent-failure-recovery-and-discussion-completion-design.md) 为唯一实施依据：前端重试必须原样复用内存态提交快照；Clarification 使用 V5 reservation 并在 terminal transaction 消费；Project Discussion 修复单候选、TTL 和 Session replacement parity；V6 提升现有 Session revision 并让成功 Turn 返回当前权威 discussion summary。不得用前端推测状态、模型重试、兼容旧合同或持久化原始输入规避问题。
+
+只有 A2-22—A2-29 的针对性、全量、PostgreSQL、packaged Browser、隐私与获授权 Provider 门全部通过后，才可删除对应条目并恢复架构 COMPLETE。
 
 ## 4. 问题簇一：推荐与澄清语义断裂
 

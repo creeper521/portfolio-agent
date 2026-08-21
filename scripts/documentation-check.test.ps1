@@ -114,6 +114,10 @@ The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
         'docs/superpowers/specs/2026-08-20-project-discussion-context-design.md'
     $projectDiscussionPlan = `
         'docs/superpowers/plans/2026-08-20-project-discussion-context.md'
+    $failureRecoverySpec = `
+        'docs/superpowers/specs/2026-08-21-agent-failure-recovery-and-discussion-completion-design.md'
+    $failureRecoveryPlan = `
+        'docs/superpowers/plans/2026-08-21-agent-failure-recovery-and-discussion-completion.md'
     $portfolioApiSpec = `
         'docs/superpowers/specs/2026-08-21-portfolio-public-api-convergence-design.md'
     $portfolioApiPlan = `
@@ -153,6 +157,18 @@ See [active plan](../plans/2026-08-20-project-discussion-context.md).
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
 See [approved spec](../specs/2026-08-20-project-discussion-context-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $failureRecoverySpec) @"
+# Approved failure recovery design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+
+See [active plan](../plans/2026-08-21-agent-failure-recovery-and-discussion-completion.md).
+"@
+    Write-Utf8File (Join-Path $Path $failureRecoveryPlan) @"
+# Active failure recovery plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+
+See [approved spec](../specs/2026-08-21-agent-failure-recovery-and-discussion-completion-design.md).
 "@
     Write-Utf8File (Join-Path $Path $portfolioApiSpec) @"
 # Approved portfolio API convergence design fixture
