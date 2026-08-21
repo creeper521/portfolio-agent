@@ -15,8 +15,11 @@ class DiscussionSelectionTemplateTest {
 
     @Test
     void oneConsumeChoiceCanOnlySelectAnActualRecommendationResult() {
+        java.time.Instant now =
+                java.time.Instant.parse("2026-08-20T08:00:00Z");
         ClarificationStore store = new ClarificationStore(
-                Clock.systemUTC(), Duration.ofMinutes(5));
+                Clock.fixed(now, java.time.ZoneOffset.UTC),
+                Duration.ofMinutes(5));
         ClarificationChallenge challenge = new ClarificationChallenge(
                 "clarification_selection_1",
                 "请选择推荐项目",
@@ -42,13 +45,15 @@ class DiscussionSelectionTemplateTest {
                         "choice_b", "result-item:item-b")),
                 Map.of(), template));
 
-        ClarificationStore.ConsumeResult consumed = store.consume(
+        ClarificationStore.ReserveResult consumed = store.reserve(
                 "clarification_selection_1",
                 "conversation-1", new byte[32], "release-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice_b"));
+                new ClarificationStore.ClarificationAnswer.Choice("choice_b"),
+                java.util.UUID.randomUUID(),
+                now.plusSeconds(20));
 
         assertThat(consumed.status())
-                .isEqualTo(ClarificationStore.Status.CONSUMED);
+                .isEqualTo(ClarificationStore.Status.RESERVED);
         assertThat(consumed.record().resumeTemplate())
                 .isSameAs(template);
         assertThat(consumed.answer().bindingKey())

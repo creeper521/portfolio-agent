@@ -22,6 +22,9 @@ const emit = defineEmits<{
     <p v-if="turn.retryable !== undefined" class="capability-unavailable-turn__retryable" data-testid="turn-retryable">
       {{ turn.retryable ? '稍后可以重试' : '当前无法重试，请调整提问方式' }}
     </p>
+    <p v-if="turn.retryAfterSeconds !== undefined" class="capability-unavailable-turn__retryable">
+      约 {{ turn.retryAfterSeconds }} 秒后可重新提交
+    </p>
     <SuggestedActionRow
       v-if="turn.suggestedActions !== undefined"
       :actions="turn.suggestedActions"

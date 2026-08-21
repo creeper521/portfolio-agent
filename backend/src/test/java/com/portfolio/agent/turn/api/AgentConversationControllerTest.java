@@ -24,6 +24,7 @@ class AgentConversationControllerTest {
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.conversationId").value("conversation-1"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.discussionRevision").value(0))
                 .andExpect(jsonPath("$.messages").doesNotExist())
                 .andExpect(jsonPath("$.handles").doesNotExist());
         mvc.perform(get("/api/agent/conversations/current")).andExpect(status().isUnauthorized());
@@ -35,7 +36,7 @@ class AgentConversationControllerTest {
                 mock(AgentTurnLifecycleService.class);
         when(lifecycle.currentConversation("token"))
                 .thenReturn(new AgentTurnLifecycleService.ConversationStatus(
-                        true, "conversation-1",
+                        true, "conversation-1", 3,
                         new AgentTurnLifecycleService.DiscussionSummary(
                                 com.portfolio.agent.turn.continuation.ActiveDiscussionPointer.Status.ACTIVE,
                                 "project-a", "项目 A", "/projects/project-a",
@@ -50,6 +51,7 @@ class AgentConversationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeDiscussion.status")
                         .value("ACTIVE"))
+                .andExpect(jsonPath("$.discussionRevision").value(3))
                 .andExpect(jsonPath("$.activeDiscussion.subject.reference")
                         .value("project-a"))
                 .andExpect(jsonPath("$.activeDiscussion.routeContinuation.operation")

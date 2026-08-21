@@ -62,7 +62,7 @@ public final class ProjectDiscussionCoordinator {
                 conversationId, contentReleaseId,
                 selected.subjectId(), candidates,
                 recommendation.getContextHandle(),
-                earlier(recommendation.getExpiresAt(), sessionExpiresAt));
+                sessionExpiresAt);
     }
 
     public Transition reenter(

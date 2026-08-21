@@ -85,8 +85,8 @@ class AgentTurnLifecycleDeadlineTest {
             Thread.sleep(120);
             return TurnExecutionStore.ClaimResult.claimed();
         });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(true);
+        when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new TurnExecutionStore.SettlementResult(true, null));
         GoalResolver resolver = mock(GoalResolver.class);
         when(resolver.resolve(any(), any(), any())).thenAnswer(invocation -> {
             goalDeadline.set(invocation.getArgument(2));
@@ -111,14 +111,15 @@ class AgentTurnLifecycleDeadlineTest {
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
         CountDownLatch settlementStarted = new CountDownLatch(1);
         AtomicReference<Boolean> settlementInterrupted = new AtomicReference<>(false);
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     settlementStarted.countDown();
                     while (true) {
                         LockSupport.parkNanos(Duration.ofMillis(5).toNanos());
                         if (Thread.interrupted()) {
                             settlementInterrupted.set(true);
-                            return false;
+                            return new TurnExecutionStore.SettlementResult(
+                                    false, null);
                         }
                     }
                 });
@@ -211,10 +212,10 @@ class AgentTurnLifecycleDeadlineTest {
                     }
                     return TurnExecutionStore.ClaimResult.replay(storedTurn.get());
                 });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     storedTurn.set(invocation.getArgument(2));
-                    return true;
+                    return new TurnExecutionStore.SettlementResult(true, null);
                 });
         CountDownLatch ownerInGoal = new CountDownLatch(1);
         CountDownLatch releaseOwner = new CountDownLatch(1);

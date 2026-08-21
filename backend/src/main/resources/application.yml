@@ -50,6 +50,7 @@ portfolio:
     idle-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_IDLE_TTL:30m}
     absolute-ttl: ${PORTFOLIO_CONVERSATION_CONTEXT_ABSOLUTE_TTL:30m}
     clarification-ttl: ${PORTFOLIO_CONVERSATION_CLARIFICATION_TTL:5m}
+    discussion-ttl: ${PORTFOLIO_CONVERSATION_DISCUSSION_TTL:20m}
     key-rotation-retention: ${PORTFOLIO_CONTEXT_KEY_ROTATION_RETENTION:45m}
     cleanup-interval: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_INTERVAL:15m}
     cleanup-batch-size: ${PORTFOLIO_CONVERSATION_CONTEXT_CLEANUP_BATCH_SIZE:500}
@@ -89,7 +90,6 @@ portfolio:
     recent-raw-rounds: 6
     max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}
     max-suggested-questions: 3
-    minimum-intent-confidence: 0.65
   agent-runtime:
     requests-per-minute: ${PORTFOLIO_AGENT_REQUESTS_PER_MINUTE:10}
     max-concurrent-per-source: ${PORTFOLIO_AGENT_MAX_CONCURRENT_PER_SOURCE:2}

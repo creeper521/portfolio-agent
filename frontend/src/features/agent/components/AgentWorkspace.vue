@@ -12,6 +12,7 @@ import {
   type AgentTurnFailure,
   type ClarificationAnswer,
   type ConversationWindowMessage,
+  type CurrentDiscussionSummary,
   type SurfaceContext,
 } from '../api/agentTurnApi'
 import { useLocalSessions } from '../composables/useLocalSessions'
@@ -58,15 +59,24 @@ interface PendingTurn {
   userMessageId?: string
 }
 
+/** A2-22：同 requestId 重试只消费这一份页面内存快照，不重算指纹输入。 */
+interface TurnSubmissionSnapshot {
+  readonly requestId: string
+  readonly command: AgentTurnCommand
+  readonly surfaceContext: SurfaceContext
+  readonly conversationWindow: readonly ConversationWindowMessage[]
+  readonly resumeToken?: string
+  readonly displayQuestion: string
+  readonly userMessageId?: string
+}
+
 interface FailureView {
   category: TurnFailureCategory
   message: string
   hint?: string
   retryable: boolean
   retryAfterSeconds?: number
-  requestId?: string
-  command?: AgentTurnCommand
-  userMessageId?: string
+  submission?: TurnSubmissionSnapshot
 }
 
 interface WorkspaceNotice {
@@ -130,6 +140,16 @@ function mapDelete<Value>(source: Map<string, Value>, key: string): Map<string, 
   return next
 }
 
+function deletePendingGeneration(
+  source: Map<string, PendingTurn>,
+  sessionId: string,
+  requestId: string,
+): Map<string, PendingTurn> {
+  return source.get(sessionId)?.requestId === requestId
+    ? mapDelete(source, sessionId)
+    : source
+}
+
 const activeSession = computed<AgentSession | null>(() => sessions.activeSession.value)
 const activePending = computed(() => pendingTurns.value.get(activeSession.value?.id ?? '') ?? null)
 const activeFailure = computed(() => failures.value.get(activeSession.value?.id ?? '') ?? null)
@@ -141,6 +161,19 @@ const freeTextRoutingAvailable = computed(
   () => props.portfolio.agentAvailability.freeTextSemanticRouting === 'AVAILABLE',
 )
 const activeDiscussion = computed(() => activeSession.value?.activeDiscussion)
+const discussionPaused = computed(
+  () => activeDiscussion.value !== undefined
+    && activeSession.value?.discussionPaused === true,
+)
+const discussionClock = ref(Date.now())
+let discussionClockTimer: ReturnType<typeof setInterval> | null = null
+const discussionExpiryLabel = computed(() => {
+  const discussion = activeDiscussion.value
+  if (discussion === undefined) return ''
+  const remaining = Date.parse(discussion.expiresAt) - discussionClock.value
+  if (remaining <= 0 || discussion.status === 'EXPIRED') return '已到期'
+  return `剩余约 ${Math.max(1, Math.ceil(remaining / 60_000))} 分钟`
+})
 
 /** 会话私有草稿（A2-09）：切换会话草稿不串线。 */
 const questionDraft = computed<string>({
@@ -353,6 +386,8 @@ function latestRecommendationReference(
 function bindConversationEnvelope(sessionId: string, conversation: {
   conversationId: string
   resumeToken?: string
+  discussionRevision: number
+  activeDiscussion?: CurrentDiscussionSummary
 } | null): void {
   if (conversation === null) return
   const isActive = sessions.setSessionConversation(sessionId, conversation)
@@ -362,11 +397,8 @@ function bindConversationEnvelope(sessionId: string, conversation: {
 }
 
 function failureViewOf(
-  sessionId: string,
-  requestId: string,
-  command: AgentTurnCommand,
+  submission: TurnSubmissionSnapshot,
   f: AgentTurnFailure,
-  userMessageId?: string,
 ): FailureView {
   const view = projectTurnFailure(f)
   return {
@@ -375,9 +407,7 @@ function failureViewOf(
     ...(view.hint === undefined ? {} : { hint: view.hint }),
     retryable: view.retryable,
     ...(view.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: view.retryAfterSeconds }),
-    requestId,
-    command,
-    ...(userMessageId === undefined ? {} : { userMessageId }),
+    submission,
   }
 }
 
@@ -387,6 +417,7 @@ interface TurnOverrides {
   resumeToken?: string
   displayQuestion?: string
   userMessageId?: string
+  submission?: TurnSubmissionSnapshot
 }
 
 async function runTurn(
@@ -397,43 +428,75 @@ async function runTurn(
 ): Promise<void> {
   const session = sessions.sessions.value.find((item) => item.id === sessionId)
   if (session === undefined) return
+  const submission: TurnSubmissionSnapshot = overrides.submission ?? {
+    requestId,
+    command,
+    surfaceContext: overrides.surfaceContext ?? surfaceContextOf(session),
+    conversationWindow: overrides.conversationWindow ?? conversationWindowOf(session),
+    ...((overrides.resumeToken ?? session.resumeToken) === undefined
+      ? {}
+      : { resumeToken: overrides.resumeToken ?? session.resumeToken }),
+    displayQuestion: overrides.displayQuestion ?? displayQuestionOf(command),
+    ...(overrides.userMessageId === undefined
+      ? {}
+      : { userMessageId: overrides.userMessageId }),
+  }
   const controller = new AbortController()
   pendingTurns.value = mapSet(pendingTurns.value, sessionId, {
-    requestId,
+    requestId: submission.requestId,
     sessionId,
-    question: overrides.displayQuestion ?? displayQuestionOf(command),
+    question: submission.displayQuestion,
     controller,
-    ...(overrides.userMessageId === undefined ? {} : { userMessageId: overrides.userMessageId }),
+    ...(submission.userMessageId === undefined ? {} : { userMessageId: submission.userMessageId }),
   })
   failures.value = mapDelete(failures.value, sessionId)
-  const resumeToken = overrides.resumeToken ?? session.resumeToken
   const result = await submitAgentTurn(
     {
-      requestId,
-      command,
-      surfaceContext: overrides.surfaceContext ?? surfaceContextOf(session),
-      conversationWindow: overrides.conversationWindow ?? conversationWindowOf(session),
-      ...(resumeToken === undefined ? {} : { resumeToken }),
+      requestId: submission.requestId,
+      command: submission.command,
+      surfaceContext: submission.surfaceContext,
+      conversationWindow: submission.conversationWindow,
+      ...(submission.resumeToken === undefined ? {} : { resumeToken: submission.resumeToken }),
     },
     { signal: controller.signal },
   )
-  pendingTurns.value = mapDelete(pendingTurns.value, sessionId)
-  if (disposed) return
+  const ownsGeneration = pendingTurns.value.get(sessionId)?.requestId
+    === submission.requestId
+  pendingTurns.value = deletePendingGeneration(
+    pendingTurns.value, sessionId, submission.requestId,
+  )
+  // Every callback side effect belongs to the exact request generation that
+  // installed the pending entry. A cancelled/replaced request may still settle
+  // after AbortSignal; it must not mutate the successor turn or conversation.
+  if (disposed || !ownsGeneration) return
   if (!result.ok) {
     // 取消是本地先行的：ABORTED 不追加消息、不显示错误（交接 §8）。
     if (result.failure.kind === 'ABORTED') return
+    if (result.failure.kind === 'CONTRACT') {
+      sessions.setDiscussionPaused(sessionId, true)
+    }
     failures.value = mapSet(
       failures.value,
       sessionId,
-      failureViewOf(sessionId, requestId, command, result.failure, overrides.userMessageId),
+      failureViewOf(submission, result.failure),
     )
-    if (overrides.userMessageId !== undefined) {
-      sessions.markMessageDelivery(sessionId, overrides.userMessageId, true)
+    if (submission.userMessageId !== undefined) {
+      sessions.markMessageDelivery(sessionId, submission.userMessageId, true)
     }
     return
   }
-  if (overrides.userMessageId !== undefined) {
-    sessions.markMessageDelivery(sessionId, overrides.userMessageId, false)
+  if (submission.userMessageId !== undefined) {
+    sessions.markMessageDelivery(sessionId, submission.userMessageId, false)
+  }
+  if (submission.command.kind === 'RESOLVE_CLARIFICATION'
+      && result.turn.kind === 'CAPABILITY_UNAVAILABLE'
+      && result.turn.code === 'CLARIFICATION_IN_PROGRESS') {
+    sessions.markClarificationConsumed(
+      sessionId, submission.command.clarificationId, false,
+    )
+    if (submission.userMessageId !== undefined) {
+      sessions.markMessageDelivery(sessionId, submission.userMessageId, true)
+    }
   }
   bindConversationEnvelope(sessionId, result.conversation)
   sessions.appendMessage(sessionId, {
@@ -441,11 +504,6 @@ async function runTurn(
     content: turnWindowSummary(result.turn),
     turn: result.turn,
   })
-  const nextToken = sessions.getSessionResumeToken(sessionId)
-  if (nextToken !== undefined) {
-    const current = await fetchCurrentConversation(nextToken)
-    if (current.ok) sessions.setActiveDiscussion(sessionId, current.activeDiscussion)
-  }
   await focusComposer()
 }
 
@@ -484,6 +542,7 @@ function submitFreeText(rawText: string): void {
   const text = rawText.trim()
   if (
     !freeTextRoutingAvailable.value
+    || discussionPaused.value
     || text.length === 0
     || activePending.value !== null
     || tabPendingFull.value
@@ -541,6 +600,7 @@ function submitPreset(presetId: string): void {
 
 function handleSelectAction(action: SuggestedAction): void {
   if (activePending.value !== null || tabPendingFull.value) return
+  if (action.continuation === undefined && !freeTextRoutingAvailable.value) return
   const session = ensureSession()
   const text = action.inputText ?? action.label
   let command: AgentTurnCommand
@@ -642,7 +702,9 @@ function cancelTurn(): void {
   const current = activePending.value
   if (current === null) return
   // 先结束本地等待，再 best-effort DELETE + abort；DELETE 结果不伪造本地状态。
-  pendingTurns.value = mapDelete(pendingTurns.value, current.sessionId)
+  pendingTurns.value = deletePendingGeneration(
+    pendingTurns.value, current.sessionId, current.requestId,
+  )
   if (current.userMessageId !== undefined) {
     sessions.markMessageDelivery(current.sessionId, current.userMessageId, true)
   }
@@ -655,8 +717,7 @@ function retryFailure(): void {
   const current = activeFailure.value
   if (
     current === null
-    || current.requestId === undefined
-    || current.command === undefined
+    || current.submission === undefined
     || tabPendingFull.value
   ) {
     return
@@ -665,9 +726,12 @@ function retryFailure(): void {
   const sessionId = activeSession.value?.id
   if (sessionId === undefined) return
   failures.value = mapDelete(failures.value, sessionId)
-  void runTurn(sessionId, current.requestId, current.command, {
-    ...(current.userMessageId === undefined ? {} : { userMessageId: current.userMessageId }),
-  })
+  void runTurn(
+    sessionId,
+    current.submission.requestId,
+    current.submission.command,
+    { submission: current.submission },
+  )
 }
 
 function removeSession(sessionId: string): void {
@@ -777,6 +841,9 @@ watchEffect(() => {
 })
 
 onMounted(async () => {
+  discussionClockTimer = setInterval(() => {
+    discussionClock.value = Date.now()
+  }, 30_000)
   if (workspaceRoot.value !== null && typeof ResizeObserver === 'function') {
     workspaceResizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width
@@ -808,9 +875,10 @@ onMounted(async () => {
       if (current.ok) {
         const session = ensureSession()
         sessions.adoptResumedConversation(session.id, {
-          conversationId: current.conversationId,
-          resumeToken: storedToken,
-          ...(current.activeDiscussion === undefined
+            conversationId: current.conversationId,
+            resumeToken: storedToken,
+            discussionRevision: current.discussionRevision,
+            ...(current.activeDiscussion === undefined
             ? {} : { activeDiscussion: current.activeDiscussion }),
         })
         resumeNotice.value = {
@@ -819,6 +887,13 @@ onMounted(async () => {
         }
       } else if (current.invalid) {
         resume.clearActiveToken()
+      } else if (current.reason === 'CONTRACT_INVALID') {
+        resume.clearActiveToken()
+        const session = ensureSession()
+        resumeNotice.value = {
+          text: '会话状态结构异常，已停止恢复并开始新的本地会话。',
+          sessionId: session.id,
+        }
       }
     }
   }
@@ -848,6 +923,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposed = true
+  if (discussionClockTimer !== null) clearInterval(discussionClockTimer)
   for (const pending of pendingTurns.value.values()) {
     pending.controller.abort()
   }
@@ -970,6 +1046,7 @@ onBeforeUnmount(() => {
         >
           <p>当前讨论：{{ activeDiscussion.subject.label }}</p>
           <p>{{ activeDiscussion.status === 'ACTIVE' ? '讨论进行中' : '讨论已过期' }}</p>
+          <p data-testid="discussion-expiry">{{ discussionExpiryLabel }}</p>
           <button
             v-if="activeDiscussion.exitAction !== undefined"
             type="button"
@@ -998,7 +1075,8 @@ onBeforeUnmount(() => {
             :disabled="
               activePending !== null
               || tabPendingFull
-              || (chip.presetId === undefined && !freeTextRoutingAvailable)
+              || (chip.presetId === undefined
+                && (!freeTextRoutingAvailable || discussionPaused))
             "
             @click="chip.presetId === undefined ? submitFreeText(chip.text) : submitPreset(chip.presetId)"
           >{{ chip.text }}</button>
@@ -1011,7 +1089,11 @@ onBeforeUnmount(() => {
             data-testid="question-input"
             rows="2"
             :maxlength="FREE_TEXT_MAX_LENGTH"
-            :disabled="activePending !== null || !freeTextRoutingAvailable"
+            :disabled="
+              activePending !== null
+              || !freeTextRoutingAvailable
+              || discussionPaused
+            "
             aria-label="输入你的问题"
             placeholder="问问公开项目、案例或工程取舍…"
             @keydown.enter.exact.prevent="submitFreeText(questionDraft)"
@@ -1024,10 +1106,17 @@ onBeforeUnmount(() => {
               activePending !== null
               || tabPendingFull
               || !freeTextRoutingAvailable
+              || discussionPaused
               || questionDraft.trim().length === 0
             "
           >发送</button>
         </form>
+        <p
+          v-if="discussionPaused"
+          class="workspace-composer__routing-disabled"
+          data-testid="discussion-state-paused"
+          role="alert"
+        >讨论状态结构异常，已暂停自由文本续谈。你仍可结束当前讨论。</p>
         <p
           v-if="!freeTextRoutingAvailable"
           class="workspace-composer__routing-disabled"

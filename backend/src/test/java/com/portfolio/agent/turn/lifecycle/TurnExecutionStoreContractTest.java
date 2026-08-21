@@ -243,6 +243,85 @@ class TurnExecutionStoreContractTest {
                 .isEqualTo(TurnExecutionStore.ClaimResult.Status.REPLAY);
     }
 
+    @Test void clarificationIsConsumedOnlyBySuccessfulTerminalSettlement() {
+        com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore sessions =
+                new com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore();
+        com.portfolio.agent.turn.continuation.ClarificationStore clarifications =
+                new com.portfolio.agent.turn.continuation.ClarificationStore(
+                        Clock.fixed(now, ZoneOffset.UTC), Duration.ofMinutes(5));
+        InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore(
+                clarifications, Duration.ofMinutes(30), sessions,
+                Clock.fixed(now, ZoneOffset.UTC));
+        String conversationId = "conversation-reservation";
+        byte[] tokenHash = new byte[32];
+        com.portfolio.agent.turn.continuation.ConversationSessionStore.Session session =
+                new com.portfolio.agent.turn.continuation.ConversationSessionStore.Session(
+                        conversationId, tokenHash, now,
+                        now.plus(Duration.ofMinutes(30)));
+        sessions.save(session);
+        TurnExecutionStore.SessionAccess access =
+                TurnExecutionStore.SessionAccess.authenticated(
+                        conversationId, tokenHash);
+
+        UUID challengeRequest = UUID.randomUUID();
+        byte[] challengeFingerprint = new byte[32];
+        store.claim(challengeRequest, conversationId,
+                RequestFingerprintSet.single(challengeFingerprint), access,
+                now, Duration.ofSeconds(35), deadline());
+        com.portfolio.agent.turn.continuation.ClarificationChallenge challenge =
+                new com.portfolio.agent.turn.continuation.ClarificationChallenge(
+                        "clarification-reservation", "请选择数量", List.of(
+                        new com.portfolio.agent.turn.continuation.ClarificationChallenge.SingleChoiceField(
+                                "field-size", "数量", true, List.of(
+                                new com.portfolio.agent.turn.continuation.ClarificationChallenge.Choice(
+                                        "choice-size-2", "2 个项目")))), List.of());
+        com.portfolio.agent.turn.continuation.ClarificationStore.Record record =
+                new com.portfolio.agent.turn.continuation.ClarificationStore.Record(
+                        conversationId, tokenHash, "public-1", challenge,
+                        java.util.Map.of("field-size", java.util.Map.of(
+                                "choice-size-2", "size:2")), java.util.Map.of(),
+                        com.portfolio.agent.turn.planning.BlockedGoalTemplate.recommendation(
+                                null, java.util.Set.of(),
+                                com.portfolio.agent.turn.planning.ClarificationProposal.Field.REQUESTED_SIZE));
+        assertThat(store.complete(
+                challengeRequest, challengeFingerprint,
+                new PublicAgentTurn.Clarification(
+                        challengeRequest, "补充", challenge, List.of()),
+                List.of(), List.of(record), null, access,
+                now.plusSeconds(1), deadline())).isTrue();
+
+        UUID resolveRequest = UUID.randomUUID();
+        byte[] resolveFingerprint = new byte[32];
+        store.claim(resolveRequest, conversationId,
+                RequestFingerprintSet.single(resolveFingerprint), access,
+                now.plusSeconds(2), Duration.ofSeconds(35), deadline());
+        com.portfolio.agent.turn.continuation.ClarificationStore.ClarificationAnswer answer =
+                new com.portfolio.agent.turn.continuation.ClarificationStore.ClarificationAnswer.Choice(
+                        "choice-size-2");
+        assertThat(store.reserveClarification(
+                "clarification-reservation", conversationId, tokenHash,
+                "public-1", answer, resolveRequest, now.plusSeconds(20),
+                now.plusSeconds(2), deadline()).status())
+                .isEqualTo(com.portfolio.agent.turn.continuation.ClarificationStore.Status.RESERVED);
+
+        assertThat(store.complete(
+                resolveRequest, new byte[]{9},
+                new PublicAgentTurn.Conversational(
+                        resolveRequest, "不得结算", List.of()),
+                List.of(), List.of(), null, access,
+                now.plusSeconds(3), deadline(),
+                com.portfolio.agent.turn.continuation.DiscussionStateMutation.none(),
+                com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.consume(
+                        "clarification-reservation", answer))).isFalse();
+        assertThat(store.cancel(
+                resolveRequest, conversationId, now.plusSeconds(4))).isTrue();
+        assertThat(store.reserveClarification(
+                "clarification-reservation", conversationId, tokenHash,
+                "public-1", answer, UUID.randomUUID(), now.plusSeconds(20),
+                now.plusSeconds(4), deadline()).status())
+                .isEqualTo(com.portfolio.agent.turn.continuation.ClarificationStore.Status.RESERVED);
+    }
+
     private TurnDeadline deadline() {
         return TurnDeadline.after(
                 Duration.ofSeconds(5), Clock.fixed(now, ZoneOffset.UTC));

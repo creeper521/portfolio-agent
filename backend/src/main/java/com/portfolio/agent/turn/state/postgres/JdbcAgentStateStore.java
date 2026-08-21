@@ -43,6 +43,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
     private final Duration challengeTtl;
     private final int cleanupBatchSize;
     private final Clock clock;
+    private final JdbcConversationSessionWriter sessionWriter;
 
     public JdbcAgentStateStore(
             JdbcTemplate jdbc, TransactionTemplate transactions,
@@ -74,6 +75,8 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             throw new IllegalArgumentException("tokenKeyId is required");
         }
         this.tokenKeyId = tokenKeyId;
+        this.sessionWriter = new JdbcConversationSessionWriter(
+                jdbc, sessionTable, tokenKeyId);
         this.supportedTokenKeyIds = Set.copyOf(
                 java.util.Objects.requireNonNull(supportedTokenKeyIds, "supportedTokenKeyIds"));
         if (!this.supportedTokenKeyIds.contains(tokenKeyId)) {
@@ -148,7 +151,12 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                             fingerprints.current(), fingerprints.currentKeyId(),
                             time(now), requestId);
                 }
-                return ClaimResult.replay(payload(row).publicTurn());
+                return ClaimResult.replay(
+                        payload(row).publicTurn(),
+                        selectSession(conversationId, false)
+                                .map(value -> sessionSnapshot(
+                                        conversationId, value))
+                                .orElse(null));
             }
             if (row.status() == TurnExecutionRecord.Status.CANCELLED) {
                 return ClaimResult.state(ClaimResult.Status.CANCELLED);
@@ -189,37 +197,84 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             Instant completedAt,
             com.portfolio.agent.turn.execution.TurnDeadline deadline,
             com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation) {
+        return complete(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation,
+                com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.none());
+    }
+
+    @Override public boolean complete(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess,
+            Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
+        return settleWithSession(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation, clarificationMutation).completed();
+    }
+
+    @Override public SettlementResult completeWithSession(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
+        return settleWithSession(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation, clarificationMutation);
+    }
+
+    private SettlementResult settleWithSession(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
         requireDatabaseTime(deadline);
-        return Boolean.TRUE.equals(transactions.execute(status -> {
+        SettlementResult result = transactions.execute(status -> {
             applyDatabaseTimeout(deadline);
             if (!authorizeSettlementSession(
-                    sessionAccess, sessionToCreate, completedAt)) return false;
+                    sessionAccess, sessionToCreate, completedAt)) {
+                return new SettlementResult(false, null);
+            }
             Row row = select(requestId, true).orElse(null);
             if (row == null || row.status() != TurnExecutionRecord.Status.CLAIMED
                     || !MessageDigest.isEqual(row.fingerprint(), fingerprint)
-                    || !completedAt.isBefore(row.absoluteExpiresAt())) return false;
+                    || !completedAt.isBefore(row.absoluteExpiresAt())) {
+                return new SettlementResult(false, null);
+            }
+            if (!applyClarificationSettlement(
+                    requestId, row.conversationId().toString(),
+                    clarificationMutation, completedAt, deadline)) {
+                status.setRollbackOnly();
+                return new SettlementResult(false, null);
+            }
             AgentStatePayloadCodec.Envelope envelope = codec.encode(
                     requestId, row.conversationId().toString(),
-                    new AgentStatePayloadCodec.SettlementPayload(snapshot, contexts, challenges));
+                    new AgentStatePayloadCodec.SettlementPayload(
+                            snapshot, contexts, challenges));
             if (sessionToCreate != null) {
                 applyDatabaseTimeout(deadline);
-                jdbc.update("INSERT INTO " + sessionTable + " AS existing (conversation_id, resume_token_hash, token_key_id, created_at, last_accessed_at, idle_expires_at, absolute_expires_at, context_count, payload_bytes, revision, revoked_at) "
-                                + "VALUES (?,?,?,?,?,?,?,?,?,0,NULL) ON CONFLICT (conversation_id) DO UPDATE SET "
-                                + "resume_token_hash=EXCLUDED.resume_token_hash, token_key_id=EXCLUDED.token_key_id, "
-                                + "created_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.created_at ELSE existing.created_at END, "
-                                + "last_accessed_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.created_at ELSE existing.last_accessed_at END, "
-                                + "idle_expires_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.absolute_expires_at ELSE existing.absolute_expires_at END, "
-                                + "absolute_expires_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.absolute_expires_at ELSE existing.absolute_expires_at END, "
-                                + "revoked_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN NULL ELSE existing.revoked_at END "
-                                + "WHERE (existing.revoked_at IS NULL AND existing.absolute_expires_at>EXCLUDED.created_at) OR (existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash)",
-                        UUID.fromString(sessionToCreate.conversationId()), sessionToCreate.tokenHash(),
-                        tokenKeyId, time(sessionToCreate.createdAt()), time(sessionToCreate.createdAt()),
-                        time(sessionToCreate.expiresAt()), time(sessionToCreate.expiresAt()), 0, 0);
+                sessionWriter.upsert(sessionToCreate);
             }
             if (!applyDiscussionMutation(
                     row.conversationId(), discussionMutation, deadline)) {
                 status.setRollbackOnly();
-                return false;
+                return new SettlementResult(false, null);
             }
             for (ContinuationContext context : contexts) {
                 AgentStatePayloadCodec.Envelope contextEnvelope = codec.encodeContext(
@@ -244,9 +299,18 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             int updated = jdbc.update("UPDATE " + table + " SET status='COMPLETED', settlement_key_id=?, settlement_nonce=?, settlement_ciphertext=?, updated_at=?, terminal_at=? WHERE request_id=? AND status='CLAIMED'",
                     envelope.keyId(), envelope.nonce(), envelope.ciphertext(),
                     time(completedAt), time(completedAt), requestId);
-            if (updated != 1) status.setRollbackOnly();
-            return updated == 1;
-        }));
+            if (updated != 1) {
+                status.setRollbackOnly();
+                return new SettlementResult(false, null);
+            }
+            ConversationSessionStore.Session current =
+                    selectSession(sessionAccess.conversationId(), false)
+                            .map(value -> sessionSnapshot(
+                                    sessionAccess.conversationId(), value))
+                            .orElse(null);
+            return new SettlementResult(true, current);
+        });
+        return result == null ? new SettlementResult(false, null) : result;
     }
 
     private boolean applyDiscussionMutation(
@@ -459,8 +523,18 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 jdbc.update("DELETE FROM " + table + " WHERE request_id=?", requestId);
                 return false;
             }
-            return jdbc.update("UPDATE " + table + " SET status='CANCELLED', updated_at=?, terminal_at=? WHERE request_id=? AND status='CLAIMED'",
+            boolean cancelled = jdbc.update("UPDATE " + table + " SET status='CANCELLED', updated_at=?, terminal_at=? WHERE request_id=? AND status='CLAIMED'",
                     time(cancelledAt), time(cancelledAt), requestId) == 1;
+            if (cancelled) {
+                applyStandaloneDatabaseTimeout();
+                jdbc.update("UPDATE " + clarificationTable
+                                + " SET reserved_by_request_id=NULL,"
+                                + " reservation_expires_at=NULL"
+                                + " WHERE consumed=false"
+                                + " AND reserved_by_request_id=?",
+                        requestId);
+            }
+            return cancelled;
         }));
     }
 
@@ -672,43 +746,113 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
-    @Override public ClarificationStore.ConsumeResult consumeClarification(
+    @Override public ClarificationStore.ReserveResult reserveClarification(
             String clarificationId, String conversationId, byte[] tokenHash,
             String currentReleaseId, ClarificationStore.ClarificationAnswer answer,
-            Instant now, com.portfolio.agent.turn.execution.TurnDeadline deadline) {
+            UUID requestId, Instant reservationExpiresAt, Instant now,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline) {
         return transactions.execute(status -> {
             applyDatabaseTimeout(deadline);
             ChallengeRow row;
             try {
                 row = jdbc.queryForObject(
-                        "SELECT source_request_id, resume_token_hash, content_release_id, expires_at, consumed, payload_key_id, payload_nonce, payload_ciphertext FROM "
+                        "SELECT source_request_id, resume_token_hash, content_release_id, expires_at, consumed, reserved_by_request_id, reservation_expires_at, payload_key_id, payload_nonce, payload_ciphertext FROM "
                                 + clarificationTable + " WHERE clarification_id=? FOR UPDATE",
                         (result, index) -> challengeRow(result), clarificationId);
             } catch (EmptyResultDataAccessException missing) {
-                return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.NOT_FOUND);
+                return ClarificationStore.ReserveResult.of(ClarificationStore.Status.NOT_FOUND);
             }
-            if (row.consumed()) return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.ALREADY_CONSUMED);
-            if (!now.isBefore(row.expiresAt())) return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.EXPIRED);
+            if (row.consumed()) return ClarificationStore.ReserveResult.of(ClarificationStore.Status.ALREADY_CONSUMED);
+            if (!now.isBefore(row.expiresAt())) return ClarificationStore.ReserveResult.of(ClarificationStore.Status.EXPIRED);
             if (!MessageDigest.isEqual(row.tokenHash(), tokenHash)) {
-                return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.UNAUTHORIZED);
+                return ClarificationStore.ReserveResult.of(ClarificationStore.Status.UNAUTHORIZED);
             }
             if (!row.contentReleaseId().equals(currentReleaseId)) {
-                return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.STALE_RELEASE);
+                return ClarificationStore.ReserveResult.of(ClarificationStore.Status.STALE_RELEASE);
+            }
+            if (row.reservedByRequestId() != null
+                    && !row.reservedByRequestId().equals(requestId)
+                    && now.isBefore(row.reservationExpiresAt())) {
+                return ClarificationStore.ReserveResult.inProgress(
+                        Math.max(1L, Duration.between(
+                                now, row.reservationExpiresAt()).toSeconds()));
             }
             ClarificationStore.Record record = codec.decodeChallenge(
                     row.sourceRequestId(), conversationId, clarificationId, row.envelope());
             ClarificationStore validator = new ClarificationStore(
                     java.time.Clock.fixed(now, ZoneOffset.UTC), Duration.ofMinutes(1));
             validator.save(record);
-            ClarificationStore.ConsumeResult consumed = validator.consume(
-                    clarificationId, conversationId, tokenHash, currentReleaseId, answer);
-            if (consumed.status() == ClarificationStore.Status.CONSUMED) {
+            Instant boundedReservationExpiry = earlier(
+                    reservationExpiresAt, row.expiresAt());
+            ClarificationStore.ReserveResult reserved = validator.reserve(
+                    clarificationId, conversationId, tokenHash,
+                    currentReleaseId, answer, requestId,
+                    boundedReservationExpiry);
+            if (reserved.status() == ClarificationStore.Status.RESERVED) {
                 applyDatabaseTimeout(deadline);
-                jdbc.update("UPDATE " + clarificationTable
-                        + " SET consumed=true WHERE clarification_id=?", clarificationId);
+                int changed = jdbc.update("UPDATE " + clarificationTable
+                                + " SET reserved_by_request_id=?, reservation_expires_at=?"
+                                + " WHERE clarification_id=? AND consumed=false"
+                                + " AND (reserved_by_request_id IS NULL"
+                                + " OR reserved_by_request_id=?"
+                                + " OR reservation_expires_at<=?)",
+                        requestId, time(boundedReservationExpiry),
+                        clarificationId, requestId, time(now));
+                if (changed != 1) {
+                    throw new IllegalStateException(
+                            "clarification reservation lost its row lock");
+                }
             }
-            return consumed;
+            return reserved;
         });
+    }
+
+    private boolean applyClarificationSettlement(
+            UUID requestId, String conversationId,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation mutation,
+            Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline) {
+        if (mutation.isNone()) return true;
+        applyDatabaseTimeout(deadline);
+        ChallengeRow row;
+        try {
+            row = jdbc.queryForObject(
+                    "SELECT source_request_id, resume_token_hash, content_release_id, expires_at, consumed, reserved_by_request_id, reservation_expires_at, payload_key_id, payload_nonce, payload_ciphertext FROM "
+                            + clarificationTable
+                            + " WHERE clarification_id=? FOR UPDATE",
+                    (result, index) -> challengeRow(result),
+                    mutation.clarificationId());
+        } catch (EmptyResultDataAccessException missing) {
+            return false;
+        }
+        if (row.consumed()
+                || row.reservedByRequestId() == null
+                || !row.reservedByRequestId().equals(requestId)
+                || row.reservationExpiresAt() == null
+                || !completedAt.isBefore(row.reservationExpiresAt())) {
+            return false;
+        }
+        ClarificationStore.Record record = codec.decodeChallenge(
+                row.sourceRequestId(), conversationId,
+                mutation.clarificationId(), row.envelope());
+        ClarificationStore validator = new ClarificationStore(
+                java.time.Clock.fixed(completedAt, ZoneOffset.UTC),
+                Duration.ofMinutes(1));
+        validator.save(record);
+        ClarificationStore.ReserveResult validation = validator.reserve(
+                mutation.clarificationId(), conversationId,
+                row.tokenHash(), row.contentReleaseId(), mutation.answer(),
+                requestId, row.reservationExpiresAt());
+        if (validation.status() != ClarificationStore.Status.RESERVED) {
+            return false;
+        }
+        applyDatabaseTimeout(deadline);
+        return jdbc.update("UPDATE " + clarificationTable
+                        + " SET consumed=true, reserved_by_request_id=NULL,"
+                        + " reservation_expires_at=NULL"
+                        + " WHERE clarification_id=? AND consumed=false"
+                        + " AND reserved_by_request_id=?",
+                mutation.clarificationId(), requestId) == 1;
     }
 
     private Optional<Row> select(UUID requestId, boolean lock) {
@@ -724,17 +868,34 @@ public final class JdbcAgentStateStore implements AgentStateStore {
     private Optional<SessionRow> selectSession(String conversationId, boolean lock) {
         try {
             return Optional.ofNullable(jdbc.queryForObject(
-                    "SELECT resume_token_hash, token_key_id, absolute_expires_at, revoked_at FROM "
+                    "SELECT resume_token_hash, token_key_id, created_at,"
+                            + " absolute_expires_at, revoked_at,"
+                            + " active_discussion_handle,"
+                            + " active_discussion_project_id,"
+                            + " active_discussion_expires_at, revision FROM "
                             + sessionTable + " WHERE conversation_id=?"
                             + (lock ? " FOR UPDATE" : ""),
                     (result, index) -> {
                         OffsetDateTime revoked = result.getObject(
                                 "revoked_at", OffsetDateTime.class);
+                        OffsetDateTime discussionExpiry = result.getObject(
+                                "active_discussion_expires_at",
+                                OffsetDateTime.class);
+                        com.portfolio.agent.turn.continuation.ActiveDiscussionPointer pointer =
+                                discussionExpiry == null ? null
+                                        : new com.portfolio.agent.turn.continuation.ActiveDiscussionPointer(
+                                        result.getString("active_discussion_handle"),
+                                        result.getString("active_discussion_project_id"),
+                                        discussionExpiry.toInstant());
                         return new SessionRow(
                                 result.getBytes("resume_token_hash"),
                                 result.getString("token_key_id"),
+                                result.getObject(
+                                        "created_at", OffsetDateTime.class)
+                                        .toInstant(),
                                 result.getObject("absolute_expires_at", OffsetDateTime.class).toInstant(),
-                                revoked == null ? null : revoked.toInstant());
+                                revoked == null ? null : revoked.toInstant(),
+                                pointer, result.getLong("revision"));
                     }, UUID.fromString(conversationId)));
         } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
     }
@@ -756,16 +917,28 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 new AgentStatePayloadCodec.Envelope(
                         row.keyId(), row.nonce(), row.ciphertext()));
     }
+    private ConversationSessionStore.Session sessionSnapshot(
+            String conversationId, SessionRow row) {
+        return new ConversationSessionStore.Session(
+                conversationId, row.tokenHash(), row.createdAt(),
+                row.absoluteExpiresAt(), row.activeDiscussionPointer(),
+                row.discussionRevision());
+    }
     private OffsetDateTime time(Instant value) { return value.atOffset(ZoneOffset.UTC); }
     private Instant earlier(Instant first, Instant second) {
         return first.isBefore(second) ? first : second;
     }
     private ChallengeRow challengeRow(ResultSet result) throws SQLException {
+        OffsetDateTime reservationExpiry = result.getObject(
+                "reservation_expires_at", OffsetDateTime.class);
         return new ChallengeRow(
                 result.getObject("source_request_id", UUID.class),
                 result.getBytes("resume_token_hash"), result.getString("content_release_id"),
                 result.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                result.getBoolean("consumed"), new AgentStatePayloadCodec.Envelope(
+                result.getBoolean("consumed"),
+                result.getObject("reserved_by_request_id", UUID.class),
+                reservationExpiry == null ? null : reservationExpiry.toInstant(),
+                new AgentStatePayloadCodec.Envelope(
                 result.getString("payload_key_id"), result.getBytes("payload_nonce"),
                 result.getBytes("payload_ciphertext")));
     }
@@ -776,10 +949,15 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             Instant absoluteExpiresAt) { }
     private record ChallengeRow(
             UUID sourceRequestId, byte[] tokenHash, String contentReleaseId,
-            Instant expiresAt, boolean consumed, AgentStatePayloadCodec.Envelope envelope) { }
+            Instant expiresAt, boolean consumed,
+            UUID reservedByRequestId, Instant reservationExpiresAt,
+            AgentStatePayloadCodec.Envelope envelope) { }
     private record SessionRow(
             byte[] tokenHash, String tokenKeyId,
-            Instant absoluteExpiresAt, Instant revokedAt) { }
+            Instant createdAt, Instant absoluteExpiresAt,
+            Instant revokedAt,
+            com.portfolio.agent.turn.continuation.ActiveDiscussionPointer activeDiscussionPointer,
+            long discussionRevision) { }
     private record ReplayChallengeRow(
             String clarificationId, UUID sourceRequestId, String contentReleaseId,
             AgentStatePayloadCodec.Envelope envelope) { }

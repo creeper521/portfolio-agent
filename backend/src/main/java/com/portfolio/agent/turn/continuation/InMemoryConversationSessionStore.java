@@ -30,10 +30,16 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
                 && !java.security.MessageDigest.isEqual(
                 session.tokenHash(), existing.tokenHash());
         if (revokedAt != null && !replacement) return;
-        Session effective = existing == null || replacement ? session : new Session(
+        Session effective = existing == null ? session
+                : replacement ? new Session(
+                session.conversationId(), session.tokenHash(),
+                session.createdAt(), session.expiresAt(), null,
+                existing.discussionRevision() + 1)
+                : new Session(
                 session.conversationId(), session.tokenHash(),
                 existing.createdAt(), existing.expiresAt(),
-                existing.activeDiscussion().orElse(null));
+                existing.activeDiscussion().orElse(null),
+                existing.discussionRevision());
         sessions.entrySet().removeIf(value ->
                 value.getValue().conversationId().equals(session.conversationId()));
         if (replacement) revokedConversations.remove(session.conversationId());
@@ -88,7 +94,12 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
                 currentSession.tokenHash(),
                 currentSession.createdAt(),
                 currentSession.expiresAt(),
-                mutation.result(current));
+                mutation.result(current),
+                currentSession.discussionRevision()
+                        + (mutation.getKind()
+                        == DiscussionStateMutation.Kind.REPLACE
+                        || mutation.getKind()
+                        == DiscussionStateMutation.Kind.CLEAR ? 1 : 0));
         sessions.put(entry.getKey(), updated);
         return true;
     }

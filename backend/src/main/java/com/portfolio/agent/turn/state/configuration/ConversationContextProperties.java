@@ -10,6 +10,7 @@ public class ConversationContextProperties {
     private Duration idleTtl = Duration.ofMinutes(30);
     private Duration absoluteTtl = Duration.ofMinutes(30);
     private Duration clarificationTtl = Duration.ofMinutes(5);
+    private Duration discussionTtl = Duration.ofMinutes(20);
     private Duration keyRotationRetention = Duration.ofMinutes(45);
     private Duration cleanupInterval = Duration.ofMinutes(15);
     private int cleanupBatchSize = 500;
@@ -23,6 +24,8 @@ public class ConversationContextProperties {
     public void setAbsoluteTtl(Duration absoluteTtl) { this.absoluteTtl = absoluteTtl; }
     public Duration getClarificationTtl() { return clarificationTtl; }
     public void setClarificationTtl(Duration value) { clarificationTtl = value; }
+    public Duration getDiscussionTtl() { return discussionTtl; }
+    public void setDiscussionTtl(Duration value) { discussionTtl = value; }
     public Duration getKeyRotationRetention() { return keyRotationRetention; }
     public void setKeyRotationRetention(Duration value) { keyRotationRetention = value; }
     public Duration getCleanupInterval() { return cleanupInterval; }
@@ -37,6 +40,9 @@ public class ConversationContextProperties {
                 || !idleTtl.equals(absoluteTtl)
                 || clarificationTtl.isNegative() || clarificationTtl.isZero()
                 || clarificationTtl.compareTo(absoluteTtl) > 0
+                || discussionTtl.isNegative() || discussionTtl.isZero()
+                || discussionTtl.compareTo(Duration.ofMinutes(30)) > 0
+                || discussionTtl.compareTo(absoluteTtl) >= 0
                 || keyRotationRetention.compareTo(absoluteTtl.plus(cleanupInterval)) < 0
                 || cleanupInterval.isNegative() || cleanupInterval.isZero()
                 || cleanupBatchSize < 1 || cleanupBatchSize > 500) {

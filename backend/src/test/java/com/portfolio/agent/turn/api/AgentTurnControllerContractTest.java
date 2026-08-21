@@ -35,7 +35,7 @@ class AgentTurnControllerContractTest {
                 AgentTurnLifecycleService.Status.COMPLETED,
                 new PublicAgentTurn.Conversational(requestId, "你好", List.of()),
                 0, false, new AgentTurnLifecycleService.ConversationMetadata(
-                "conversation-1", "resume-token-1")));
+                "conversation-1", "resume-token-1", 4, null)));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(
                 controller(lifecycle)).build();
         mvc.perform(post("/api/agent/turns").contentType(MediaType.APPLICATION_JSON)
@@ -48,6 +48,8 @@ class AgentTurnControllerContractTest {
                 .andExpect(jsonPath("$.kind").value("CONVERSATIONAL"))
                 .andExpect(jsonPath("$.conversation.conversationId").value("conversation-1"))
                 .andExpect(jsonPath("$.conversation.resumeToken").value("resume-token-1"))
+                .andExpect(jsonPath("$.conversation.discussionRevision").value(4))
+                .andExpect(jsonPath("$.conversation.activeDiscussion").doesNotExist())
                 .andExpect(jsonPath("$.turn").doesNotExist());
     }
 

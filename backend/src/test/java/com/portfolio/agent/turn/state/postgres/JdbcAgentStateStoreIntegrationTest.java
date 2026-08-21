@@ -162,9 +162,10 @@ class JdbcAgentStateStoreIntegrationTest {
             lockConnection.setAutoCommit(false);
             lockClarification(lockConnection, clarificationId);
             long startedAt = System.nanoTime();
-            assertThatThrownBy(() -> capped.consumeClarification(
+            assertThatThrownBy(() -> capped.reserveClarification(
                     clarificationId, conversationId, tokenHash, "public-1",
                     new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                    UUID.randomUUID(), now.plusSeconds(20),
                     now.plusSeconds(2), deadline(Duration.ofSeconds(5))))
                     .isInstanceOf(DataAccessException.class);
             assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
@@ -475,16 +476,18 @@ class JdbcAgentStateStoreIntegrationTest {
         assertThat(store.find(requestId).orElseThrow().getChallenges())
                 .singleElement().satisfies(rebound ->
                 assertThat(rebound.resumeTokenHash()).containsExactly(newTokenHash));
-        assertThat(store.consumeClarification(
+        assertThat(store.reserveClarification(
                 clarificationId, conversationId, oldTokenHash, "public-1",
                 new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), now.plusSeconds(20),
                 now.plusSeconds(3), deadline(Duration.ofSeconds(5))).status())
                 .isEqualTo(ClarificationStore.Status.UNAUTHORIZED);
-        assertThat(store.consumeClarification(
+        assertThat(store.reserveClarification(
                 clarificationId, conversationId, newTokenHash, "public-1",
                 new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), now.plusSeconds(20),
                 now.plusSeconds(3), deadline(Duration.ofSeconds(5))).status())
-                .isEqualTo(ClarificationStore.Status.CONSUMED);
+                .isEqualTo(ClarificationStore.Status.RESERVED);
         assertThat(findSession(sessions(), oldTokenHash, now.plusSeconds(3))).isEmpty();
         assertThat(findSession(sessions(), newTokenHash, now.plusSeconds(3))).isPresent();
     }
@@ -550,9 +553,10 @@ class JdbcAgentStateStoreIntegrationTest {
                 List.of(), List.of(record), null, now,
                 deadline(Duration.ofSeconds(5)))).isTrue();
 
-        ClarificationStore.ConsumeResult expired = store.consumeClarification(
+        ClarificationStore.ReserveResult expired = store.reserveClarification(
                 clarificationId, conversationId, tokenHash, "public-1",
                 new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), now.plus(Duration.ofMinutes(5)).plusSeconds(10),
                 now.plus(Duration.ofMinutes(5)), deadline(Duration.ofSeconds(5)));
 
         assertThat(expired.status()).isEqualTo(ClarificationStore.Status.EXPIRED);
@@ -608,6 +612,199 @@ class JdbcAgentStateStoreIntegrationTest {
                 Integer.class, requestId)).isZero();
     }
 
+    @Test void clarificationReservationIsConsumedInsideTerminalTransaction() {
+        String conversationId = UUID.randomUUID().toString();
+        byte[] fingerprint = new byte[32];
+        UUID challengeRequest = UUID.randomUUID();
+        String clarificationId = "clarification-terminal-reservation";
+        ClarificationChallenge challenge = new ClarificationChallenge(
+                clarificationId, "请选择数量", List.of(
+                new ClarificationChallenge.SingleChoiceField(
+                        "field-size", "数量", true, List.of(
+                        new ClarificationChallenge.Choice(
+                                "choice-size-2", "2 个项目")))), List.of());
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                conversationId, testSession(
+                challengeRequest, conversationId, now).tokenHash(),
+                "public-1", challenge,
+                java.util.Map.of("field-size", java.util.Map.of(
+                        "choice-size-2", "size:2")), java.util.Map.of(),
+                BlockedGoalTemplate.recommendation(
+                        null, Set.of(),
+                        ClarificationProposal.Field.REQUESTED_SIZE));
+        claim(store, challengeRequest, conversationId, fingerprint, now,
+                Duration.ofSeconds(35), deadline(Duration.ofSeconds(5)));
+        assertThat(complete(
+                store, challengeRequest, fingerprint,
+                new PublicAgentTurn.Clarification(
+                        challengeRequest, "补充", challenge, List.of()),
+                List.of(), List.of(record), null, now.plusSeconds(1),
+                deadline(Duration.ofSeconds(5)))).isTrue();
+
+        com.portfolio.agent.turn.continuation.ConversationSessionStore.Session session =
+                testSessions.get(challengeRequest);
+        TurnExecutionStore.SessionAccess access =
+                TurnExecutionStore.SessionAccess.authenticated(
+                        conversationId, session.tokenHash());
+        UUID resolveRequest = UUID.randomUUID();
+        store.claim(resolveRequest, conversationId,
+                RequestFingerprintSet.single(fingerprint), access,
+                now.plusSeconds(2), Duration.ofSeconds(35),
+                deadline(Duration.ofSeconds(5)));
+        ClarificationStore.ClarificationAnswer answer =
+                new ClarificationStore.ClarificationAnswer.Choice(
+                        "choice-size-2");
+        assertThat(store.reserveClarification(
+                clarificationId, conversationId, session.tokenHash(),
+                "public-1", answer, resolveRequest, now.plusSeconds(20),
+                now.plusSeconds(2), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+
+        assertThat(store.complete(
+                resolveRequest, fingerprint,
+                new PublicAgentTurn.Conversational(
+                        resolveRequest, "完成", List.of()),
+                List.of(), List.of(), null, access, now.plusSeconds(3),
+                deadline(Duration.ofSeconds(5)),
+                com.portfolio.agent.turn.continuation.DiscussionStateMutation.none(),
+                com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.consume(
+                        clarificationId, answer))).isTrue();
+        assertThat(store.reserveClarification(
+                clarificationId, conversationId, session.tokenHash(),
+                "public-1", answer, UUID.randomUUID(), now.plusSeconds(20),
+                now.plusSeconds(4), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(ClarificationStore.Status.ALREADY_CONSUMED);
+        assertThat(jdbc.queryForObject(
+                "SELECT reserved_by_request_id IS NULL"
+                        + " AND reservation_expires_at IS NULL"
+                        + " FROM agent_context.agent_turn_clarification"
+                        + " WHERE clarification_id=?",
+                Boolean.class, clarificationId)).isTrue();
+    }
+
+    @Test void concurrentClarificationReservationHasExactlyOneOwner()
+            throws Exception {
+        String conversationId = UUID.randomUUID().toString();
+        byte[] fingerprint = new byte[32];
+        UUID challengeRequest = UUID.randomUUID();
+        String clarificationId = "clarification-concurrent-reservation";
+        ClarificationChallenge challenge = new ClarificationChallenge(
+                clarificationId, "请选择数量", List.of(
+                new ClarificationChallenge.SingleChoiceField(
+                        "field-size", "数量", true, List.of(
+                        new ClarificationChallenge.Choice(
+                                "choice-size-2", "2 个项目")))), List.of());
+        byte[] tokenHash = testSession(
+                challengeRequest, conversationId, now).tokenHash();
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                conversationId, tokenHash, "public-1", challenge,
+                java.util.Map.of("field-size", java.util.Map.of(
+                        "choice-size-2", "size:2")), java.util.Map.of(),
+                BlockedGoalTemplate.recommendation(
+                        null, Set.of(),
+                        ClarificationProposal.Field.REQUESTED_SIZE));
+        claim(store, challengeRequest, conversationId, fingerprint, now,
+                Duration.ofSeconds(35), deadline(Duration.ofSeconds(5)));
+        assertThat(complete(
+                store, challengeRequest, fingerprint,
+                new PublicAgentTurn.Clarification(
+                        challengeRequest, "补充", challenge, List.of()),
+                List.of(), List.of(record), null, now.plusSeconds(1),
+                deadline(Duration.ofSeconds(5)))).isTrue();
+
+        UUID firstRequest = UUID.randomUUID();
+        UUID secondRequest = UUID.randomUUID();
+        ClarificationStore.ClarificationAnswer answer =
+                new ClarificationStore.ClarificationAnswer.Choice(
+                        "choice-size-2");
+        CountDownLatch start = new CountDownLatch(1);
+        try (java.util.concurrent.ExecutorService executor =
+                     Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<ClarificationStore.ReserveResult> first = executor.submit(() -> {
+                start.await();
+                return store.reserveClarification(
+                        clarificationId, conversationId, tokenHash, "public-1",
+                        answer, firstRequest, now.plusSeconds(20),
+                        now.plusSeconds(2), deadline(Duration.ofSeconds(5)));
+            });
+            Future<ClarificationStore.ReserveResult> second = executor.submit(() -> {
+                start.await();
+                return store.reserveClarification(
+                        clarificationId, conversationId, tokenHash, "public-1",
+                        answer, secondRequest, now.plusSeconds(20),
+                        now.plusSeconds(2), deadline(Duration.ofSeconds(5)));
+            });
+            start.countDown();
+            assertThat(List.of(first.get().status(), second.get().status()))
+                    .containsExactlyInAnyOrder(
+                            ClarificationStore.Status.RESERVED,
+                            ClarificationStore.Status.IN_PROGRESS);
+        }
+        assertThat(jdbc.queryForObject(
+                "SELECT reserved_by_request_id FROM"
+                        + " agent_context.agent_turn_clarification"
+                        + " WHERE clarification_id=?",
+                UUID.class, clarificationId))
+                .isIn(firstRequest, secondRequest);
+    }
+
+    @Test void expiredClarificationReservationCanBeReclaimedByDifferentRequest() {
+        String conversationId = UUID.randomUUID().toString();
+        byte[] fingerprint = new byte[32];
+        UUID challengeRequest = UUID.randomUUID();
+        String clarificationId = "clarification-expired-reservation-reclaim";
+        ClarificationChallenge challenge = new ClarificationChallenge(
+                clarificationId, "请选择数量", List.of(
+                new ClarificationChallenge.SingleChoiceField(
+                        "field-size", "数量", true, List.of(
+                        new ClarificationChallenge.Choice(
+                                "choice-size-2", "2 个项目")))), List.of());
+        byte[] tokenHash = testSession(
+                challengeRequest, conversationId, now).tokenHash();
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                conversationId, tokenHash, "public-1", challenge,
+                java.util.Map.of("field-size", java.util.Map.of(
+                        "choice-size-2", "size:2")), java.util.Map.of(),
+                BlockedGoalTemplate.recommendation(
+                        null, Set.of(),
+                        ClarificationProposal.Field.REQUESTED_SIZE));
+        claim(store, challengeRequest, conversationId, fingerprint, now,
+                Duration.ofSeconds(35), deadline(Duration.ofSeconds(5)));
+        assertThat(complete(
+                store, challengeRequest, fingerprint,
+                new PublicAgentTurn.Clarification(
+                        challengeRequest, "补充", challenge, List.of()),
+                List.of(), List.of(record), null, now.plusSeconds(1),
+                deadline(Duration.ofSeconds(5)))).isTrue();
+
+        ClarificationStore.ClarificationAnswer answer =
+                new ClarificationStore.ClarificationAnswer.Choice(
+                        "choice-size-2");
+        UUID firstRequest = UUID.randomUUID();
+        UUID secondRequest = UUID.randomUUID();
+        assertThat(store.reserveClarification(
+                clarificationId, conversationId, tokenHash, "public-1",
+                answer, firstRequest, now.plusSeconds(4),
+                now.plusSeconds(2), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+        assertThat(store.reserveClarification(
+                clarificationId, conversationId, tokenHash, "public-1",
+                answer, secondRequest, now.plusSeconds(8),
+                now.plusSeconds(3), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(ClarificationStore.Status.IN_PROGRESS);
+
+        assertThat(store.reserveClarification(
+                clarificationId, conversationId, tokenHash, "public-1",
+                answer, secondRequest, now.plusSeconds(8),
+                now.plusSeconds(5), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+        assertThat(jdbc.queryForObject(
+                "SELECT reserved_by_request_id FROM"
+                        + " agent_context.agent_turn_clarification"
+                        + " WHERE clarification_id=?",
+                UUID.class, clarificationId)).isEqualTo(secondRequest);
+    }
+
     @Test void atomicClearWinsAgainstConcurrentAuthenticatedClaim() throws Exception {
         String conversationId = UUID.randomUUID().toString();
         byte[] tokenHash = new byte[32];
@@ -658,6 +855,14 @@ class JdbcAgentStateStoreIntegrationTest {
         JdbcConversationSessionStore sessions = sessions();
         sessions.save(new com.portfolio.agent.turn.continuation.ConversationSessionStore.Session(
                 conversationId, oldTokenHash, now, now.plus(Duration.ofMinutes(30))));
+        jdbc.update("UPDATE agent_context.conversation_session"
+                        + " SET active_discussion_handle=?,"
+                        + " active_discussion_project_id=?,"
+                        + " active_discussion_expires_at=?, revision=7"
+                        + " WHERE conversation_id=?",
+                "discussion_stale_123", "project-a",
+                now.plus(Duration.ofMinutes(30)).atOffset(ZoneOffset.UTC),
+                UUID.fromString(conversationId));
         UUID requestId = UUID.randomUUID();
         byte[] fingerprint = new byte[32];
         assertThat(store.clearConversation(
@@ -694,6 +899,14 @@ class JdbcAgentStateStoreIntegrationTest {
                 "SELECT absolute_expires_at FROM agent_context.conversation_session WHERE conversation_id=?",
                 java.time.OffsetDateTime.class, UUID.fromString(conversationId));
         assertThat(expiry.toInstant()).isEqualTo(replacement.expiresAt());
+        assertThat(jdbc.queryForObject(
+                "SELECT active_discussion_handle IS NULL"
+                        + " AND active_discussion_project_id IS NULL"
+                        + " AND active_discussion_expires_at IS NULL"
+                        + " AND revision=8"
+                        + " FROM agent_context.conversation_session"
+                        + " WHERE conversation_id=?",
+                Boolean.class, UUID.fromString(conversationId))).isTrue();
     }
 
     private JdbcConversationSessionStore sessions() {

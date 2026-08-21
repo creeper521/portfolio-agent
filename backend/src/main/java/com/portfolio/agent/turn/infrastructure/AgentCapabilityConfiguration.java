@@ -321,7 +321,7 @@ public class AgentCapabilityConfiguration {
                 clock, runtimeProperties.getLeaseDuration(),
                 runtimeProperties.getTurnTimeout(),
                 runtimeProperties.getSettlementReserve(),
-                properties.getAbsoluteTtl());
+                properties.getDiscussionTtl());
     }
 
     private byte[] randomSecret() {

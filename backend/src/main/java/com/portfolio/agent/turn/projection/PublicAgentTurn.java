@@ -75,13 +75,28 @@ public abstract sealed class PublicAgentTurn permits
     }
     public static final class CapabilityUnavailable extends CodedMessageTurn {
         private final boolean retryable;
+        private final Long retryAfterSeconds;
         public CapabilityUnavailable(
                 UUID requestId, String code, String message,
                 boolean retryable, List<SuggestedAction> suggestedActions) {
-            super(requestId, code, message, suggestedActions); this.retryable = retryable;
+            this(requestId, code, message, retryable, null, suggestedActions);
+        }
+        public CapabilityUnavailable(
+                UUID requestId, String code, String message,
+                boolean retryable, Long retryAfterSeconds,
+                List<SuggestedAction> suggestedActions) {
+            super(requestId, code, message, suggestedActions);
+            this.retryable = retryable;
+            if (retryAfterSeconds != null
+                    && (retryAfterSeconds < 1 || retryAfterSeconds > 300)) {
+                throw new IllegalArgumentException(
+                        "retryAfterSeconds is invalid");
+            }
+            this.retryAfterSeconds = retryAfterSeconds;
         }
         @Override public Kind getKind() { return Kind.CAPABILITY_UNAVAILABLE; }
         public boolean isRetryable() { return retryable; }
+        public Long getRetryAfterSeconds() { return retryAfterSeconds; }
     }
 
     public abstract static sealed class MessageTurn extends PublicAgentTurn

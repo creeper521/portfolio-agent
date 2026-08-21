@@ -13,16 +13,28 @@ public interface ConversationSessionStore {
     record Session(
             String conversationId, byte[] tokenHash,
             Instant createdAt, Instant expiresAt,
-            ActiveDiscussionPointer activeDiscussionPointer) {
+            ActiveDiscussionPointer activeDiscussionPointer,
+            long discussionRevision) {
         public Session(
                 String conversationId, byte[] tokenHash,
                 Instant createdAt, Instant expiresAt) {
-            this(conversationId, tokenHash, createdAt, expiresAt, null);
+            this(conversationId, tokenHash, createdAt, expiresAt, null, 0);
+        }
+        public Session(
+                String conversationId, byte[] tokenHash,
+                Instant createdAt, Instant expiresAt,
+                ActiveDiscussionPointer activeDiscussionPointer) {
+            this(conversationId, tokenHash, createdAt, expiresAt,
+                    activeDiscussionPointer, 0);
         }
         public Session {
             conversationId = ContinuationContext.text(conversationId, "conversationId");
             tokenHash = tokenHash.clone();
             if (!createdAt.isBefore(expiresAt)) throw new IllegalArgumentException("session expiry is invalid");
+            if (discussionRevision < 0) {
+                throw new IllegalArgumentException(
+                        "discussionRevision must not be negative");
+            }
         }
         @Override public byte[] tokenHash() { return tokenHash.clone(); }
         public Optional<ActiveDiscussionPointer> activeDiscussion() {

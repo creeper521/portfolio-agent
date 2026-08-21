@@ -13,7 +13,6 @@ public final class ConversationalAgentProperties {
     private int recentRawRounds = 6;
     private int maxInputTokens = 12000;
     private int maxSuggestedQuestions = 3;
-    private double minimumIntentConfidence = 0.65;
 
     public boolean allowsProviderCalls(
             ModelPolicy modelPolicy,
@@ -49,9 +48,5 @@ public final class ConversationalAgentProperties {
     public int getMaxSuggestedQuestions() { return maxSuggestedQuestions; }
     public void setMaxSuggestedQuestions(int maxSuggestedQuestions) {
         this.maxSuggestedQuestions = maxSuggestedQuestions;
-    }
-    public double getMinimumIntentConfidence() { return minimumIntentConfidence; }
-    public void setMinimumIntentConfidence(double minimumIntentConfidence) {
-        this.minimumIntentConfidence = minimumIntentConfidence;
     }
 }

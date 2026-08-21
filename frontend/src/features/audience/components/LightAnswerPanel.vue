@@ -90,7 +90,13 @@ const projectTarget = computed(() =>
 const agentTarget = computed(() => {
   const envelope = props.answer.conversation
   const conversation = envelope !== null && envelope.resumeToken !== undefined
-    ? { conversationId: envelope.conversationId, resumeToken: envelope.resumeToken }
+    ? {
+      conversationId: envelope.conversationId,
+      resumeToken: envelope.resumeToken,
+      discussionRevision: envelope.discussionRevision,
+      ...(envelope.activeDiscussion === undefined
+        ? {} : { activeDiscussion: envelope.activeDiscussion }),
+    }
     : undefined
   return {
     path: '/agent',

@@ -566,6 +566,11 @@ function parseRecommendation(
     const discussionAction = rawItem.discussionAction === undefined
       ? undefined
       : parseSuggestedActions([rawItem.discussionAction], violations, `${itemWhere}.discussionAction`)?.[0]
+    if (rawItem.discussionAction !== undefined
+        && discussionAction?.continuation?.operation !== 'ENTER_RESULT') {
+      violations.add(`${itemWhere}.discussionAction 必须携带 ENTER_RESULT continuation`)
+      return
+    }
     if (route !== undefined && !route.startsWith('/')) {
       violations.add(`${itemWhere}: route "${route}" 必须是站内相对路径`)
       return
@@ -928,12 +933,22 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
       }
       if (value.kind === 'CAPABILITY_UNAVAILABLE') {
         const retryable = optionalBoolean(value.retryable, violations, 'retryable')
+        const retryAfterSeconds = value.retryAfterSeconds
+        if (retryAfterSeconds !== undefined
+            && (!Number.isSafeInteger(retryAfterSeconds)
+              || Number(retryAfterSeconds) < 1
+              || Number(retryAfterSeconds) > 300)) {
+          violations.add('retryAfterSeconds 必须是 1—300 的整数')
+        }
         return {
           kind: 'CAPABILITY_UNAVAILABLE',
           requestId,
           code,
           message,
           ...(retryable === undefined ? {} : { retryable }),
+          ...(retryAfterSeconds === undefined
+            || typeof retryAfterSeconds !== 'number'
+            ? {} : { retryAfterSeconds }),
           ...(suggestedActions === undefined ? {} : { suggestedActions }),
         }
       }

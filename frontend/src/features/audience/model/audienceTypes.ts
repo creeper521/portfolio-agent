@@ -1,5 +1,5 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
-import type { AgentTurnCommand, SurfaceContext } from '../../agent/api/agentTurnApi'
+import type { AgentTurnCommand, ConversationEnvelope, SurfaceContext } from '../../agent/api/agentTurnApi'
 import type { PublicAgentTurn } from '../../agent/model/publicAgentTurn'
 
 export interface AudienceProfile {
@@ -16,7 +16,7 @@ export interface HomeAnswerState {
   question: string
   turn: PublicAgentTurn
   projectSlug: string | null
-  conversation: { conversationId: string; resumeToken?: string } | null
+  conversation: ConversationEnvelope | null
   replay: {
     requestId: string
     command: AgentTurnCommand

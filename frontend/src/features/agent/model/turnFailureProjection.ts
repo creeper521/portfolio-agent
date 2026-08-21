@@ -39,12 +39,18 @@ function byServerCode(code: string | undefined, status: number | undefined): {
         retryable: false,
       }
     case 'TURN_IN_PROGRESS':
-    case 'IDEMPOTENCY_KEY_CONFLICT':
       return {
         category: 'TURN_CONFLICT',
         message: '当前会话已有请求正在处理。',
         hint: '请稍候片刻再重试这条请求。',
         retryable: true,
+      }
+    case 'IDEMPOTENCY_KEY_CONFLICT':
+      return {
+        category: 'CONVERSATION_MISMATCH',
+        message: '这条请求标识已用于不同内容。',
+        hint: '请重新发起一个新请求；重复当前 requestId 不会改变结果。',
+        retryable: false,
       }
     case 'TURN_CANCELLED':
       return {

@@ -31,7 +31,10 @@ function submitSuccess() {
   return {
     ok: true,
     turn: goldenTurn('answer-complete.json'),
-    conversation: { conversationId: 'conversation-home', resumeToken: 'token-home' },
+    conversation: {
+      conversationId: 'conversation-home', resumeToken: 'token-home',
+      discussionRevision: 0,
+    },
   }
 }
 

@@ -12,19 +12,23 @@ import java.time.Instant;
 public final class ConversationSummaryResponse {
     private final String conversationId;
     private final String status;
+    private final long discussionRevision;
     private final ActiveDiscussion activeDiscussion;
 
     public ConversationSummaryResponse(
             String conversationId,
+            long discussionRevision,
             AgentTurnLifecycleService.DiscussionSummary discussion) {
         this.conversationId = conversationId;
         this.status = "ACTIVE";
+        this.discussionRevision = discussionRevision;
         this.activeDiscussion = discussion == null
                 ? null : new ActiveDiscussion(discussion);
     }
 
     public String getConversationId() { return conversationId; }
     public String getStatus() { return status; }
+    public long getDiscussionRevision() { return discussionRevision; }
     public ActiveDiscussion getActiveDiscussion() {
         return activeDiscussion;
     }
@@ -38,7 +42,7 @@ public final class ConversationSummaryResponse {
         private final SuggestedAction reenterAction;
         private final SuggestedAction newTopicAction;
 
-        private ActiveDiscussion(
+        ActiveDiscussion(
                 AgentTurnLifecycleService.DiscussionSummary summary) {
             this.status = summary.status();
             this.subject = new Subject(

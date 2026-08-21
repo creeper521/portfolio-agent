@@ -76,12 +76,32 @@ class ProjectDiscussionCoordinatorTest {
                 .isNull();
     }
 
+    @Test
+    void switchKeepsTheFrozenCandidateSetAndUsesTheSessionBound() {
+        ProjectDiscussionContext current = new ProjectDiscussionContext(
+                "discussion_current_123", "conversation-1", "release-1",
+                NOW.plus(Duration.ofMinutes(5)), "project-a",
+                Set.of("project-a", "project-b"), NOW,
+                "recommendation_handle_123");
+
+        ProjectDiscussionCoordinator.Transition transition =
+                coordinator.switchProject(
+                        current, "project-b",
+                        Set.of("project-a", "project-b"),
+                        NOW.plus(Duration.ofMinutes(25)));
+
+        assertThat(transition.context().getSwitchCandidateProjectIds())
+                .containsExactlyInAnyOrder("project-a", "project-b");
+        assertThat(transition.context().getExpiresAt())
+                .isEqualTo(NOW.plus(Duration.ofMinutes(25)));
+    }
+
     private ContinuationContext.Recommendation recommendation() {
         return new ContinuationContext.Recommendation(
                 "recommendation_handle_123",
                 "conversation-1",
                 "release-1",
-                NOW.plus(Duration.ofMinutes(30)),
+                NOW.plus(Duration.ofMinutes(2)),
                 true,
                 Set.of(),
                 Set.of(),

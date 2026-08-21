@@ -116,7 +116,7 @@ describe('AgentPage', () => {
         message: '你好，我可以介绍公开项目、案例和工程取舍。',
         suggestedActions: [],
       },
-      conversation: { conversationId: 'conversation-1' },
+      conversation: { conversationId: 'conversation-1', discussionRevision: 0 },
     })
     const handoffId = createAgentHandoff({
       role: 'INTERVIEWER',

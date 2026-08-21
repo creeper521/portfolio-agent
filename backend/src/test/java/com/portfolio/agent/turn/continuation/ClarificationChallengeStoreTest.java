@@ -14,11 +14,65 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ClarificationChallengeStoreTest {
+    @Test void reservationHasOneOwnerAndConsumptionWaitsForTerminalCommit() {
+        Instant now = Instant.parse("2026-08-18T00:00:00Z");
+        ClarificationStore store = storeWithSizeChallenge();
+        UUID owner = UUID.randomUUID();
+        UUID competitor = UUID.randomUUID();
+        ClarificationStore.ClarificationAnswer answer =
+                new ClarificationStore.ClarificationAnswer.Choice(
+                        "choice_size_2");
+
+        ClarificationStore.ReserveResult reserved = store.reserve(
+                "clarification-size", "conversation-1", new byte[]{4},
+                "public-1", answer, owner, now.plusSeconds(20));
+        assertThat(reserved.status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+        assertThat(store.reserve(
+                "clarification-size", "conversation-1", new byte[]{4},
+                "public-1", answer, competitor,
+                now.plusSeconds(20)).status())
+                .isEqualTo(ClarificationStore.Status.IN_PROGRESS);
+
+        assertThat(store.commitReservation(
+                "clarification-size", owner, answer,
+                now.plusSeconds(1))).isTrue();
+        assertThat(store.reserve(
+                "clarification-size", "conversation-1", new byte[]{4},
+                "public-1", answer, competitor,
+                now.plusSeconds(20)).status())
+                .isEqualTo(ClarificationStore.Status.ALREADY_CONSUMED);
+    }
+
+    @Test void expiredReservationCanBeReclaimedByAnotherRequest() {
+        Instant now = Instant.parse("2026-08-19T00:00:00Z");
+        MutableClock clock = new MutableClock(now);
+        ClarificationStore store = new ClarificationStore(
+                clock, Duration.ofMinutes(5));
+        store.save(sizeRecord("clarification-reclaim"));
+        ClarificationStore.ClarificationAnswer answer =
+                new ClarificationStore.ClarificationAnswer.Choice(
+                        "choice_size_2");
+        assertThat(store.reserve(
+                "clarification-reclaim", "conversation-1", new byte[]{4},
+                "public-1", answer, UUID.randomUUID(),
+                now.plusSeconds(10)).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+
+        clock.advance(Duration.ofSeconds(11));
+        assertThat(store.reserve(
+                "clarification-reclaim", "conversation-1", new byte[]{4},
+                "public-1", answer, UUID.randomUUID(),
+                now.plusSeconds(20)).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
+    }
+
     @Test void consumesOpaqueChoiceExactlyOnceWithinBoundConversation() {
         ClarificationStore store = new ClarificationStore(
                 Clock.fixed(Instant.parse("2026-08-18T00:00:00Z"), ZoneOffset.UTC),
@@ -38,31 +92,41 @@ class ClarificationChallengeStoreTest {
                         ClarificationProposal.Field.SUBJECT,
                         Set.of(ClarificationProposal.Field.SUBJECT), 1)));
 
-        ClarificationStore.ConsumeResult consumed = store.consume(
+        UUID requestId = UUID.randomUUID();
+        ClarificationStore.ReserveResult consumed = store.reserve(
                 "clarification-1", "conversation-1", new byte[]{1, 2, 3}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice-a"));
-        assertThat(consumed.status()).isEqualTo(ClarificationStore.Status.CONSUMED);
+                new ClarificationStore.ClarificationAnswer.Choice("choice-a"),
+                requestId, Instant.parse("2026-08-18T00:00:20Z"));
+        assertThat(consumed.status()).isEqualTo(ClarificationStore.Status.RESERVED);
         assertThat(consumed.answer().bindingKey()).isEqualTo("subject:PROJECT:project-a");
-        assertThat(store.consume(
+        assertThat(store.commitReservation(
+                "clarification-1", requestId,
+                new ClarificationStore.ClarificationAnswer.Choice("choice-a"),
+                Instant.parse("2026-08-18T00:00:01Z"))).isTrue();
+        assertThat(store.reserve(
                 "clarification-1", "conversation-1", new byte[]{1, 2, 3}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice-a")).status())
+                new ClarificationStore.ClarificationAnswer.Choice("choice-a"),
+                UUID.randomUUID(), Instant.parse("2026-08-18T00:00:20Z")).status())
                 .isEqualTo(ClarificationStore.Status.ALREADY_CONSUMED);
     }
 
     @Test void wrongCredentialOrChoiceNeverConsumesChallenge() {
         ClarificationStore store = storeWithSizeChallenge();
-        assertThat(store.consume(
+        assertThat(store.reserve(
                 "clarification-size", "conversation-1", new byte[]{9}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2")).status())
+                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), Instant.parse("2026-08-18T00:00:20Z")).status())
                 .isEqualTo(ClarificationStore.Status.UNAUTHORIZED);
-        assertThat(store.consume(
+        assertThat(store.reserve(
                 "clarification-size", "conversation-1", new byte[]{4}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice_invalid")).status())
+                new ClarificationStore.ClarificationAnswer.Choice("choice_invalid"),
+                UUID.randomUUID(), Instant.parse("2026-08-18T00:00:20Z")).status())
                 .isEqualTo(ClarificationStore.Status.INVALID_ANSWER);
-        assertThat(store.consume(
+        assertThat(store.reserve(
                 "clarification-size", "conversation-1", new byte[]{4}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2")).status())
-                .isEqualTo(ClarificationStore.Status.CONSUMED);
+                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), Instant.parse("2026-08-18T00:00:20Z")).status())
+                .isEqualTo(ClarificationStore.Status.RESERVED);
     }
 
     @Test void rejectsFieldKindAndBindingThatDoNotMatchBlockedGoal() {
@@ -114,9 +178,10 @@ class ClarificationChallengeStoreTest {
 
         clock.advance(Duration.ofMinutes(5));
 
-        assertThat(store.consume(
+        assertThat(store.reserve(
                 "clarification-expiry-a", "conversation-1", new byte[]{4}, "public-1",
-                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2")).status())
+                new ClarificationStore.ClarificationAnswer.Choice("choice_size_2"),
+                UUID.randomUUID(), clock.instant().plusSeconds(10)).status())
                 .isEqualTo(ClarificationStore.Status.EXPIRED);
         assertThat(store.cleanup(clock.instant(), 1)).isEqualTo(1);
         assertThat(store.cleanup(clock.instant(), 1)).isEqualTo(1);

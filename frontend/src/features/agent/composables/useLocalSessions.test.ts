@@ -58,18 +58,58 @@ describe('useLocalSessions', () => {
     const isActive = setSessionConversation(session.id, {
       conversationId: 'conversation-1',
       resumeToken: 'token-1',
+      discussionRevision: 0,
     })
     expect(isActive).toBe(true)
     expect(activeSession.value?.conversationId).toBe('conversation-1')
     expect(getSessionResumeToken(session.id)).toBe('token-1')
 
     // metadata 未携带新 token 时保留当前 token。
-    setSessionConversation(session.id, { conversationId: 'conversation-1' })
+    setSessionConversation(session.id, {
+      conversationId: 'conversation-1',
+      discussionRevision: 0,
+    })
     expect(getSessionResumeToken(session.id)).toBe('token-1')
 
     clearSessionConversation(session.id)
     expect(activeSession.value?.conversationId).toBeUndefined()
     expect(getSessionResumeToken(session.id)).toBeUndefined()
+  })
+
+  it('discussion projection 只按单调 revision 前进，null pointer 也能压住晚到 ACTIVE', () => {
+    const { activeSession, createSession, setSessionConversation } =
+      useLocalSessions()
+    const session = createSession()
+    const active = {
+      status: 'ACTIVE' as const,
+      subject: {
+        kind: 'PROJECT' as const,
+        reference: 'project-a', label: '项目 A',
+        route: '/projects/project-a',
+      },
+      expiresAt: '2026-08-21T12:00:00Z',
+      routeContinuation: {
+        operation: 'ROUTE_IN_CONTEXT' as const,
+        contextHandle: 'discussion_handle_123',
+      },
+    }
+    setSessionConversation(session.id, {
+      conversationId: 'conversation-1',
+      discussionRevision: 2,
+      activeDiscussion: active,
+    })
+    setSessionConversation(session.id, {
+      conversationId: 'conversation-1',
+      discussionRevision: 1,
+    })
+    expect(activeSession.value?.activeDiscussion).toEqual(active)
+
+    setSessionConversation(session.id, {
+      conversationId: 'conversation-1',
+      discussionRevision: 3,
+    })
+    expect(activeSession.value?.discussionRevision).toBe(3)
+    expect(activeSession.value?.activeDiscussion).toBeUndefined()
   })
 
   it('seedSession 按 fingerprint 去重，只种 USER 问题不带答案', () => {

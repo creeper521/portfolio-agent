@@ -86,7 +86,6 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 return existing;
             }
             if (existing.getStatus() == TurnExecutionRecord.Status.COMPLETED) {
-                result.set(ClaimResult.replay(existing.getPublicSnapshot()));
                 List<ClarificationStore.Record> rebound = existing.getChallenges();
                 if (sessionAccess.tentativeSession() != null) {
                     byte[] newTokenHash = sessionAccess.tentativeSession().tokenHash();
@@ -96,6 +95,15 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                     rebound = existing.getChallenges().stream()
                             .map(challenge -> rebind(challenge, newTokenHash)).toList();
                 }
+                byte[] currentTokenHash = sessionAccess.tentativeSession() != null
+                        ? sessionAccess.tentativeSession().tokenHash()
+                        : sessionAccess.tokenHash();
+                ConversationSessionStore.Session currentSession =
+                        sessionStore.find(
+                                List.of(currentTokenHash), now, deadline)
+                                .orElse(null);
+                result.set(ClaimResult.replay(
+                        existing.getPublicSnapshot(), currentSession));
                 return TurnExecutionRecord.restore(
                         existing.getRequestId(), existing.getConversationId(),
                         fingerprints.current(), fingerprints.currentKeyId(),
@@ -142,6 +150,23 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
             Instant completedAt,
             com.portfolio.agent.turn.execution.TurnDeadline deadline,
             com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation) {
+        return complete(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation,
+                com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.none());
+    }
+
+    @Override public synchronized boolean complete(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess,
+            Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
         if (deadline.isExpired()) return false;
         if (!authorizeSettlementSession(sessionAccess, sessionToCreate, completedAt)) return false;
         TurnExecutionRecord existing = records.get(requestId);
@@ -154,6 +179,12 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 || !completedAt.isBefore(absoluteExpiry)) {
             return false;
         }
+        if (!clarificationMutation.isNone()
+                && !clarificationStore.canCommitReservation(
+                clarificationMutation.clarificationId(), requestId,
+                clarificationMutation.answer(), completedAt)) {
+            return false;
+        }
         if (sessionToCreate != null) sessionStore.save(sessionToCreate);
         byte[] tokenHash = sessionAccess.tokenHash() != null
                 ? sessionAccess.tokenHash()
@@ -164,9 +195,37 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
             return false;
         }
         clarificationStore.saveAllAtomically(challenges);
+        if (!clarificationMutation.isNone()
+                && !clarificationStore.commitReservation(
+                clarificationMutation.clarificationId(), requestId,
+                clarificationMutation.answer(), completedAt)) {
+            throw new IllegalStateException(
+                    "clarification reservation changed during settlement");
+        }
         records.put(requestId, existing.completed(
                 snapshot, contexts, challenges, completedAt));
         return true;
+    }
+
+    @Override public synchronized SettlementResult completeWithSession(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
+        boolean completed = complete(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation, clarificationMutation);
+        if (!completed) return new SettlementResult(false, null);
+        byte[] tokenHash = sessionAccess.tokenHash() != null
+                ? sessionAccess.tokenHash() : sessionToCreate.tokenHash();
+        return new SettlementResult(
+                true, sessionStore.find(
+                List.of(tokenHash), completedAt, deadline).orElse(null));
     }
 
     @Override public synchronized boolean cancel(
@@ -179,6 +238,9 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
             cancelled.set(true);
             return existing.cancelled(cancelledAt);
         });
+        if (cancelled.get()) {
+            clarificationStore.releaseReservations(requestId);
+        }
         return cancelled.get();
     }
 
@@ -209,15 +271,17 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 .filter(value -> value.getContextHandle().equals(contextHandle))
                 .filter(value -> now.isBefore(value.getExpiresAt())).findFirst();
     }
-    @Override public ClarificationStore.ConsumeResult consumeClarification(
+    @Override public synchronized ClarificationStore.ReserveResult reserveClarification(
             String clarificationId, String conversationId, byte[] resumeTokenHash,
             String currentContentReleaseId,
-            ClarificationStore.ClarificationAnswer answer, Instant now,
+            ClarificationStore.ClarificationAnswer answer,
+            UUID requestId, Instant reservationExpiresAt, Instant now,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
         if (deadline.isExpired()) throw new IllegalStateException("agent state deadline exceeded");
-        return clarificationStore.consume(
+        return clarificationStore.reserve(
                 clarificationId, conversationId, resumeTokenHash,
-                currentContentReleaseId, answer);
+                currentContentReleaseId, answer,
+                requestId, reservationExpiresAt);
     }
 
     public CleanupResult cleanup(Instant now, int limit) {

@@ -4,6 +4,7 @@ import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.continuation.DiscussionStateMutation;
+import com.portfolio.agent.turn.continuation.ClarificationSettlementMutation;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 
@@ -43,6 +44,41 @@ public interface TurnExecutionStore {
         throw new UnsupportedOperationException(
                 "discussion settlement is unavailable");
     }
+    default boolean complete(
+            UUID requestId, byte[] requestFingerprint,
+            PublicAgentTurn publicSnapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            TurnDeadline deadline,
+            DiscussionStateMutation discussionMutation,
+            ClarificationSettlementMutation clarificationMutation) {
+        if (clarificationMutation.isNone()) {
+            return complete(
+                    requestId, requestFingerprint, publicSnapshot,
+                    contexts, challenges, sessionToCreate, sessionAccess,
+                    completedAt, deadline, discussionMutation);
+        }
+        throw new UnsupportedOperationException(
+                "clarification settlement is unavailable");
+    }
+    default SettlementResult completeWithSession(
+            UUID requestId, byte[] requestFingerprint,
+            PublicAgentTurn publicSnapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            TurnDeadline deadline,
+            DiscussionStateMutation discussionMutation,
+            ClarificationSettlementMutation clarificationMutation) {
+        return new SettlementResult(complete(
+                requestId, requestFingerprint, publicSnapshot,
+                contexts, challenges, sessionToCreate, sessionAccess,
+                completedAt, deadline, discussionMutation,
+                clarificationMutation), null);
+    }
     boolean cancel(UUID requestId, String conversationId, Instant cancelledAt);
     Optional<TurnExecutionRecord> find(UUID requestId);
 
@@ -79,13 +115,26 @@ public interface TurnExecutionStore {
         }
     }
 
-    record ClaimResult(Status status, PublicAgentTurn replay, long retryAfterSeconds) {
+    record ClaimResult(
+            Status status, PublicAgentTurn replay,
+            long retryAfterSeconds,
+            ConversationSessionStore.Session sessionSnapshot) {
         public enum Status { CLAIMED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED }
-        public static ClaimResult claimed() { return new ClaimResult(Status.CLAIMED, null, 0); }
-        public static ClaimResult replay(PublicAgentTurn replay) { return new ClaimResult(Status.REPLAY, replay, 0); }
-        public static ClaimResult state(Status status) { return new ClaimResult(status, null, 0); }
+        public static ClaimResult claimed() { return new ClaimResult(Status.CLAIMED, null, 0, null); }
+        public static ClaimResult replay(PublicAgentTurn replay) { return replay(replay, null); }
+        public static ClaimResult replay(
+                PublicAgentTurn replay,
+                ConversationSessionStore.Session sessionSnapshot) {
+            return new ClaimResult(Status.REPLAY, replay, 0, sessionSnapshot);
+        }
+        public static ClaimResult state(Status status) { return new ClaimResult(status, null, 0, null); }
         public static ClaimResult inProgress(long retryAfter) {
-            return new ClaimResult(Status.IN_PROGRESS, null, Math.max(1, retryAfter));
+            return new ClaimResult(
+                    Status.IN_PROGRESS, null,
+                    Math.max(1, retryAfter), null);
         }
     }
+    record SettlementResult(
+            boolean completed,
+            ConversationSessionStore.Session sessionSnapshot) { }
 }

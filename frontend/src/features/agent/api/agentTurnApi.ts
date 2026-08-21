@@ -63,6 +63,8 @@ export interface ConversationWindowMessage {
 export interface ConversationEnvelope {
   readonly conversationId: string
   readonly resumeToken?: string
+  readonly discussionRevision: number
+  readonly activeDiscussion?: CurrentDiscussionSummary
 }
 
 export type AgentTurnFailureKind = 'API' | 'CONTRACT' | 'ABORTED' | 'NETWORK' | 'TIMEOUT'
@@ -88,9 +90,14 @@ export type CurrentConversationResult =
     readonly ok: true
     readonly conversationId: string
     readonly status: string
+    readonly discussionRevision: number
     readonly activeDiscussion?: CurrentDiscussionSummary
   }
-  | { readonly ok: false; readonly invalid: boolean }
+  | {
+    readonly ok: false
+    readonly invalid: boolean
+    readonly reason?: 'CONTRACT_INVALID'
+  }
 
 export interface CurrentDiscussionSummary {
   readonly status: 'ACTIVE' | 'EXPIRED'
@@ -182,13 +189,48 @@ function currentDiscussion(value: unknown): CurrentDiscussionSummary | null {
   }
 }
 
-function parseConversationEnvelope(value: unknown): ConversationEnvelope | null {
+export function parseConversationEnvelope(value: unknown): ConversationEnvelope | null {
   if (!isRecord(value)) return null
   const conversationId = value.conversationId
   if (typeof conversationId !== 'string' || conversationId.length === 0) return null
   const resumeToken = value.resumeToken
   if (resumeToken !== undefined && typeof resumeToken !== 'string') return null
-  return resumeToken === undefined ? { conversationId } : { conversationId, resumeToken }
+  const discussionRevision = value.discussionRevision
+  if (!Number.isSafeInteger(discussionRevision) || Number(discussionRevision) < 0) return null
+  const activeDiscussion = value.activeDiscussion === undefined || value.activeDiscussion === null
+    ? undefined : currentDiscussion(value.activeDiscussion)
+  if (value.activeDiscussion != null && activeDiscussion === null) return null
+  const validActiveDiscussion = activeDiscussion ?? undefined
+  return {
+    conversationId,
+    discussionRevision: Number(discussionRevision),
+    ...(resumeToken === undefined ? {} : { resumeToken }),
+    ...(validActiveDiscussion === undefined
+      ? {} : { activeDiscussion: validActiveDiscussion }),
+  }
+}
+
+export function parseCurrentConversationPayload(
+  payload: unknown,
+): CurrentConversationResult {
+  if (!isRecord(payload) || typeof payload.conversationId !== 'string'
+      || !Number.isSafeInteger(payload.discussionRevision)
+      || Number(payload.discussionRevision) < 0) {
+    return { ok: false, invalid: false, reason: 'CONTRACT_INVALID' }
+  }
+  const activeDiscussion = payload.activeDiscussion === undefined || payload.activeDiscussion === null
+    ? undefined : currentDiscussion(payload.activeDiscussion)
+  if (payload.activeDiscussion != null && activeDiscussion === null) {
+    return { ok: false, invalid: false, reason: 'CONTRACT_INVALID' }
+  }
+  const validActiveDiscussion = activeDiscussion ?? undefined
+  return {
+    ok: true,
+    conversationId: payload.conversationId,
+    status: typeof payload.status === 'string' ? payload.status : 'UNKNOWN',
+    discussionRevision: Number(payload.discussionRevision),
+    ...(validActiveDiscussion === undefined ? {} : { activeDiscussion: validActiveDiscussion }),
+  }
 }
 
 function parseErrorEnvelope(value: unknown): {
@@ -344,6 +386,17 @@ export async function submitAgentTurn(
     }
   }
   const conversation = isRecord(payload) ? parseConversationEnvelope(payload.conversation) : null
+  if (conversation === null) {
+    return {
+      ok: false,
+      failure: {
+        kind: 'CONTRACT',
+        code: 'PUBLIC_TURN_CONTRACT_INVALID',
+        message: '回答缺少权威会话状态',
+        retryable: false,
+      },
+    }
+  }
   return { ok: true, turn: parsed.turn, conversation }
 }
 
@@ -384,21 +437,7 @@ export async function fetchCurrentConversation(
   if (response.status === 401) return { ok: false, invalid: true }
   if (response.status !== 200) return { ok: false, invalid: false }
   const payload = await readJson(response)
-  if (!isRecord(payload) || typeof payload.conversationId !== 'string') {
-    return { ok: false, invalid: false }
-  }
-  const activeDiscussion = payload.activeDiscussion === undefined || payload.activeDiscussion === null
-    ? undefined : currentDiscussion(payload.activeDiscussion)
-  if (payload.activeDiscussion != null && activeDiscussion === null) {
-    return { ok: false, invalid: false }
-  }
-  const validActiveDiscussion = activeDiscussion ?? undefined
-  return {
-    ok: true,
-    conversationId: payload.conversationId,
-    status: typeof payload.status === 'string' ? payload.status : 'UNKNOWN',
-    ...(validActiveDiscussion === undefined ? {} : { activeDiscussion: validActiveDiscussion }),
-  }
+  return parseCurrentConversationPayload(payload)
 }
 
 export async function clearConversation(resumeToken: string): Promise<ClearConversationResult> {

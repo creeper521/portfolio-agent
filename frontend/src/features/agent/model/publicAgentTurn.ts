@@ -206,6 +206,7 @@ export interface CapabilityUnavailableTurn {
   readonly code: string
   readonly message: string
   readonly retryable?: boolean
+  readonly retryAfterSeconds?: number
   readonly suggestedActions?: readonly SuggestedAction[]
 }
 

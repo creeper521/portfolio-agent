@@ -43,6 +43,7 @@ export function useLocalSessions() {
       createdAt,
       updatedAt: createdAt,
       messages: [],
+      discussionRevision: 0,
     }
     const retainedSessions = sessions.value.filter(
       (item) => item.messages.some((message) => message.role === 'USER'),
@@ -120,7 +121,11 @@ export function useLocalSessions() {
   }
 
   /** 标记澄清挑战已被提交消费；挑战卡转只读，防止重复 RESOLVE（A2-18）。 */
-  function markClarificationConsumed(sessionId: string, clarificationId: string): boolean {
+  function markClarificationConsumed(
+    sessionId: string,
+    clarificationId: string,
+    consumed = true,
+  ): boolean {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) return false
     const message = session.messages.find((item) => {
@@ -135,7 +140,7 @@ export function useLocalSessions() {
       return false
     })
     if (!message) return false
-    message.clarificationConsumed = true
+    message.clarificationConsumed = consumed
     sessions.value = [...sessions.value]
     return true
   }
@@ -181,7 +186,12 @@ export function useLocalSessions() {
   /** 把响应 envelope 的会话身份/新 Token 绑定到会话内存，返回是否为当前活跃会话。 */
   function setSessionConversation(
     sessionId: string,
-    conversation: { conversationId: string; resumeToken?: string },
+    conversation: {
+      conversationId: string
+      resumeToken?: string
+      discussionRevision: number
+      activeDiscussion?: CurrentDiscussionSummary
+    },
   ): boolean {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) return false
@@ -190,6 +200,11 @@ export function useLocalSessions() {
     if (trimmed) {
       session.resumeToken = trimmed
     }
+    const discussionApplied = applyDiscussionState(
+      session, conversation.discussionRevision,
+      conversation.activeDiscussion,
+    )
+    if (discussionApplied) session.discussionPaused = false
     sessions.value = [...sessions.value]
     return sessionId === activeSessionId.value
   }
@@ -203,6 +218,7 @@ export function useLocalSessions() {
     conversation: {
       conversationId: string
       resumeToken: string
+      discussionRevision?: number
       activeDiscussion?: CurrentDiscussionSummary
     },
   ): void {
@@ -210,7 +226,11 @@ export function useLocalSessions() {
     if (!session) return
     session.conversationId = conversation.conversationId
     session.resumeToken = conversation.resumeToken
-    session.activeDiscussion = conversation.activeDiscussion
+    applyDiscussionState(
+      session, conversation.discussionRevision ?? 0,
+      conversation.activeDiscussion,
+    )
+    session.discussionPaused = false
     sessions.value = [...sessions.value]
   }
 
@@ -219,18 +239,30 @@ export function useLocalSessions() {
     if (!session) return
     session.conversationId = undefined
     session.resumeToken = undefined
+    session.discussionRevision = 0
     session.activeDiscussion = undefined
+    session.discussionPaused = false
     sessions.value = [...sessions.value]
   }
 
-  function setActiveDiscussion(
-    sessionId: string,
-    activeDiscussion: CurrentDiscussionSummary | undefined,
-  ): void {
+  function setDiscussionPaused(sessionId: string, paused: boolean): void {
     const session = sessions.value.find((item) => item.id === sessionId)
-    if (!session) return
-    session.activeDiscussion = activeDiscussion
+    if (!session || session.activeDiscussion === undefined) return
+    session.discussionPaused = paused
     sessions.value = [...sessions.value]
+  }
+
+  function applyDiscussionState(
+    session: AgentSession,
+    revision: number,
+    activeDiscussion: CurrentDiscussionSummary | undefined,
+  ): boolean {
+    if (!Number.isSafeInteger(revision) || revision < session.discussionRevision) {
+      return false
+    }
+    session.discussionRevision = revision
+    session.activeDiscussion = activeDiscussion
+    return true
   }
 
   return {
@@ -247,7 +279,7 @@ export function useLocalSessions() {
     getSessionResumeToken,
     adoptResumedConversation,
     clearSessionConversation,
-    setActiveDiscussion,
+    setDiscussionPaused,
     markMessageDelivery,
     markClarificationConsumed,
     removeSession,

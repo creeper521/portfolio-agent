@@ -1,0 +1,38 @@
+{
+  "conversationId": "22222222-2222-4222-8222-222222222222",
+  "status": "ACTIVE",
+  "discussionRevision": 9,
+  "activeDiscussion": {
+    "status": "EXPIRED",
+    "subject": {
+      "kind": "PROJECT",
+      "reference": "project-b",
+      "label": "项目 B",
+      "route": "/projects/project-b"
+    },
+    "expiresAt": "2026-08-21T11:30:00Z",
+    "routeContinuation": {
+      "operation": "ROUTE_IN_CONTEXT",
+      "contextHandle": "discussion_handle_expired_123"
+    },
+    "reenterAction": {
+      "actionId": "discussion-reenter",
+      "label": "重新进入项目",
+      "continuation": {
+        "operation": "REENTER_SUBJECT",
+        "subject": {
+          "kind": "PROJECT",
+          "reference": "project-b"
+        }
+      }
+    },
+    "newTopicAction": {
+      "actionId": "discussion-new-topic",
+      "label": "开始新话题",
+      "continuation": {
+        "operation": "EXIT_CONTEXT",
+        "contextHandle": "discussion_handle_expired_123"
+      }
+    }
+  }
+}

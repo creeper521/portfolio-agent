@@ -22,6 +22,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
     private final Set<String> supportedTokenKeyIds;
     private final Clock clock;
     private final Duration databaseOperationTimeout;
+    private final JdbcConversationSessionWriter writer;
     public JdbcConversationSessionStore(
             JdbcTemplate jdbc, TransactionTemplate transactions,
             String schema, String tokenKeyId) {
@@ -52,6 +53,8 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
         }
         this.table = schema + ".conversation_session";
         this.tokenKeyId = tokenKeyId;
+        this.writer = new JdbcConversationSessionWriter(
+                jdbc, table, tokenKeyId);
         this.supportedTokenKeyIds = Set.copyOf(supportedTokenKeyIds);
         if (!this.supportedTokenKeyIds.contains(tokenKeyId)) {
             throw new IllegalArgumentException("current token key must be supported");
@@ -73,7 +76,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                     "SELECT conversation_id, resume_token_hash, created_at,"
                             + " absolute_expires_at, active_discussion_handle,"
                             + " active_discussion_project_id,"
-                            + " active_discussion_expires_at FROM " + table
+                            + " active_discussion_expires_at, revision FROM " + table
                             + " WHERE resume_token_hash IN (" + placeholders(tokenHashes.size())
                             + ") AND revoked_at IS NULL"
                             + " AND absolute_expires_at>? AND token_key_id IN ("
@@ -101,7 +104,8 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                                 result.getObject(
                                         "absolute_expires_at",
                                         OffsetDateTime.class).toInstant(),
-                                pointer);
+                                pointer,
+                                result.getLong("revision"));
                     },
                         findParameters(tokenHashes, time(now), supportedTokenKeyIds)));
             } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
@@ -110,19 +114,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
     @Override public void save(Session session) {
         transactions.executeWithoutResult(status -> {
             applyDatabaseTimeout();
-            jdbc.update(
-                "INSERT INTO " + table + " AS existing (conversation_id, resume_token_hash, token_key_id, created_at, last_accessed_at, idle_expires_at, absolute_expires_at, context_count, payload_bytes, revision, revoked_at) "
-                        + "VALUES (?,?,?,?,?,?,?,?,?,0,NULL) ON CONFLICT (conversation_id) DO UPDATE SET "
-                        + "resume_token_hash=EXCLUDED.resume_token_hash, token_key_id=EXCLUDED.token_key_id, "
-                        + "created_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.created_at ELSE existing.created_at END, "
-                        + "last_accessed_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.created_at ELSE existing.last_accessed_at END, "
-                        + "idle_expires_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.absolute_expires_at ELSE existing.absolute_expires_at END, "
-                        + "absolute_expires_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN EXCLUDED.absolute_expires_at ELSE existing.absolute_expires_at END, "
-                        + "revoked_at=CASE WHEN existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash THEN NULL ELSE existing.revoked_at END "
-                        + "WHERE (existing.revoked_at IS NULL AND existing.absolute_expires_at>EXCLUDED.created_at) OR (existing.absolute_expires_at<=EXCLUDED.created_at AND existing.resume_token_hash<>EXCLUDED.resume_token_hash)",
-                UUID.fromString(session.conversationId()), session.tokenHash(), tokenKeyId,
-                time(session.createdAt()), time(session.createdAt()), time(session.expiresAt()),
-                    time(session.expiresAt()), 0, 0);
+            writer.upsert(session);
         });
     }
     void revokeForTest(String conversationId) {

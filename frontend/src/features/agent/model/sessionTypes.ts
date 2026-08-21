@@ -35,8 +35,12 @@ export interface AgentSession {
   /** 服务端会话身份与凭证：仅页面内存，不落任何持久化存储。 */
   conversationId?: string
   resumeToken?: string
+  /** Backend-owned monotonic discussion projection generation. */
+  discussionRevision: number
   /** 服务端 typed discussion focus；仅页面内存，由 Turn/Summary 刷新。 */
   activeDiscussion?: CurrentDiscussionSummary
+  /** Contract corruption pauses semantic continuation until authoritative state is restored. */
+  discussionPaused?: boolean
 }
 
 export interface SessionSeed {
@@ -51,7 +55,12 @@ export interface AgentRouteSeed {
   question: string
   projectSlug: string | null
   source: 'HOME' | 'PROJECT' | 'EVIDENCE'
-  conversation?: { conversationId: string; resumeToken: string }
+  conversation?: {
+    conversationId: string
+    resumeToken: string
+    discussionRevision?: number
+    activeDiscussion?: CurrentDiscussionSummary
+  }
   /** 同 requestId + 同 fingerprint 精确重放首页轮次（D-31）；surface/window 必须原样。 */
   replay?: {
     requestId: string

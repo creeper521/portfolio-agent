@@ -28,7 +28,8 @@ public final class AgentConversationController {
         if (!status.authenticated()) return unauthorized();
         return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(new ConversationSummaryResponse(
-                        status.conversationId(), status.discussion()));
+                        status.conversationId(), status.discussionRevision(),
+                        status.discussion()));
     }
 
     @DeleteMapping

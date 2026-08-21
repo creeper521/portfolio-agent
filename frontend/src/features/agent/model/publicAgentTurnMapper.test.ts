@@ -197,6 +197,19 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
 })
 
 describe('parsePublicAgentTurn：合同破损 fail-closed', () => {
+  it('CAPABILITY_UNAVAILABLE 只接受有界 retryAfterSeconds', () => {
+    const valid = parsePublicAgentTurn(mutate('capability-unavailable.json', (turn) => {
+      turn.retryAfterSeconds = 6
+    }))
+    expect(valid.ok).toBe(true)
+    if (valid.ok && valid.turn.kind === 'CAPABILITY_UNAVAILABLE') {
+      expect(valid.turn.retryAfterSeconds).toBe(6)
+    }
+    expectInvalid(mutate('capability-unavailable.json', (turn) => {
+      turn.retryAfterSeconds = 0
+    }), 'retryAfterSeconds 必须是')
+  })
+
   it('根节点不是对象、kind 未知、requestId 非 UUID 均拒绝', () => {
     expectInvalid(null)
     expectInvalid('ANSWER')
@@ -377,5 +390,12 @@ describe('parsePublicAgentTurn：sectionKind 闭集与 RECOMMENDATION 冻结不�
       const items = asArray(recommendationOf(turn).items)
       asRecord(items[0]).reasons = '具备完整的公开实现与验证材料'
     }), 'reasons 必须是 JSON 数组')
+  })
+
+  it('discussionAction 存在时必须是完整 ENTER_RESULT，不能退化成前端自由文本命令', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      const items = asArray(recommendationOf(turn).items)
+      delete asRecord(asRecord(items[0]).discussionAction).continuation
+    }), '必须携带 ENTER_RESULT')
   })
 })

@@ -45,7 +45,10 @@ describe('submitAgentTurn', () => {
     fetch.mockResolvedValue(
       jsonResponse(200, {
         ...goldenTurn('conversational.json'),
-        conversation: { conversationId: 'conversation-1', resumeToken: 'token-1' },
+        conversation: {
+          conversationId: 'conversation-1', resumeToken: 'token-1',
+          discussionRevision: 0,
+        },
       }),
     )
     const result = await submitAgentTurn({
@@ -82,6 +85,7 @@ describe('submitAgentTurn', () => {
       expect(result.conversation).toEqual({
         conversationId: 'conversation-1',
         resumeToken: 'token-1',
+        discussionRevision: 0,
       })
     }
   })
@@ -227,11 +231,15 @@ describe('cancel / current / clear', () => {
 
   it('GET current 解析 {conversationId,status}，401 视为 invalid', async () => {
     const fetch = stubFetch()
-    fetch.mockResolvedValue(jsonResponse(200, { conversationId: 'conversation-1', status: 'ACTIVE' }))
+    fetch.mockResolvedValue(jsonResponse(200, {
+      conversationId: 'conversation-1', status: 'ACTIVE',
+      discussionRevision: 0,
+    }))
     expect(await fetchCurrentConversation('token-1')).toEqual({
       ok: true,
       conversationId: 'conversation-1',
       status: 'ACTIVE',
+      discussionRevision: 0,
     })
     fetch.mockResolvedValue(jsonResponse(401, { error: { code: 'RESUME_TOKEN_INVALID', message: '', retryable: false } }))
     expect(await fetchCurrentConversation('token-1')).toEqual({ ok: false, invalid: true })
@@ -242,6 +250,7 @@ describe('cancel / current / clear', () => {
     fetch.mockResolvedValue(jsonResponse(200, {
       conversationId: 'conversation-1',
       status: 'ACTIVE',
+      discussionRevision: 3,
       activeDiscussion: {
         status: 'ACTIVE',
         subject: {

@@ -6,10 +6,12 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledg
 import com.portfolio.agent.turn.continuation.ClarificationChallenge;
 import com.portfolio.agent.turn.continuation.ClarificationAnswerNormalizer;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
+import com.portfolio.agent.turn.continuation.ClarificationSettlementMutation;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ContinuationReference;
 import com.portfolio.agent.turn.continuation.ActiveDiscussionPointer;
 import com.portfolio.agent.turn.continuation.DiscussionStateMutation;
 import com.portfolio.agent.turn.continuation.ProjectDiscussionContext;
@@ -133,9 +135,16 @@ public final class AgentTurnLifecycleService {
         boolean canCommitSession = (result.status() == Status.COMPLETED
                 || result.status() == Status.REPLAY) && !result.settlementFailed();
         if (canCommitSession || session.status() == ConversationSessionResolver.Status.AUTHENTICATED) {
+            SessionProjection projection = result.sessionProjection() != null
+                    ? result.sessionProjection()
+                    : sessionProjection(sessionAuthority);
             return result.withConversation(new ConversationMetadata(
                     session.conversationId(), session.issuedToken() == null
-                    ? null : session.issuedToken().encode()));
+                    ? null : session.issuedToken().encode(),
+                    projection == null ? 0 : projection.revision(),
+                    projection == null || projection.pointer() == null
+                            ? null : discussionSummary(
+                            projection.pointer(), knowledgeGateway.getContent())));
         }
         return result;
     }
@@ -178,7 +187,10 @@ public final class AgentTurnLifecycleService {
             return Result.state(Status.STORE_UNAVAILABLE, 0);
         }
         switch (claim.status()) {
-            case REPLAY: return new Result(Status.REPLAY, claim.replay(), 0, false, null);
+            case REPLAY: return new Result(
+                    Status.REPLAY, claim.replay(), 0, false, null,
+                    sessionProjection(claim.sessionSnapshot() == null
+                            ? sessionAuthority : claim.sessionSnapshot()));
             case IN_PROGRESS: return Result.state(Status.IN_PROGRESS, claim.retryAfterSeconds());
             case CONFLICT: return Result.state(Status.CONFLICT, 0);
             case CANCELLED: return Result.state(Status.CANCELLED, 0);
@@ -194,7 +206,8 @@ public final class AgentTurnLifecycleService {
                     turnDeadline);
             return settle(
                     command.getRequestId(), fingerprint,
-                    execution, sessionToCreate, sessionAccess, turnDeadline);
+                    execution, sessionToCreate, sessionAuthority,
+                    sessionAccess, turnDeadline);
         } finally {
             activeTurns.releaseOwner(command.getRequestId(), cancelAction);
         }
@@ -203,38 +216,56 @@ public final class AgentTurnLifecycleService {
     private Result settle(
             UUID requestId, byte[] fingerprint,
             Execution execution, ConversationSessionStore.Session sessionToCreate,
+            ConversationSessionStore.Session sessionAuthority,
             TurnExecutionStore.SessionAccess sessionAccess,
             TurnDeadline turnDeadline) {
         long remainingMillis = turnDeadline.remainingMillis();
         if (remainingMillis < 1) {
-            return settlementFailed(execution);
+            return settlementFailed(execution, sessionAuthority);
         }
-        Future<Boolean> settlement = stateExecutor.submit(
-                () -> store.complete(
+        Future<TurnExecutionStore.SettlementResult> settlement =
+                stateExecutor.submit(() -> store.completeWithSession(
                         requestId, fingerprint, execution.settledTurn(),
                         execution.contexts(), execution.challenges(),
                         sessionToCreate, sessionAccess, clock.instant(),
-                        turnDeadline, execution.discussionMutation()));
+                        turnDeadline, execution.discussionMutation(),
+                        execution.clarificationMutation()));
         try {
-            boolean completed = settlement.get(remainingMillis, TimeUnit.MILLISECONDS);
-            if (!completed) return Result.state(Status.CANCELLED, 0);
-            return new Result(Status.COMPLETED, execution.settledTurn(), 0, false, null);
+            TurnExecutionStore.SettlementResult completed =
+                    settlement.get(remainingMillis, TimeUnit.MILLISECONDS);
+            if (!completed.completed()) {
+                return Result.state(Status.CANCELLED, 0);
+            }
+            return new Result(
+                    Status.COMPLETED, execution.settledTurn(), 0,
+                    false, null,
+                    sessionProjection(completed.sessionSnapshot()));
         } catch (TimeoutException timeout) {
             settlement.cancel(true);
-            return settlementFailed(execution);
+            return settlementFailed(execution, sessionAuthority);
         } catch (InterruptedException interrupted) {
             settlement.cancel(true);
-            Result result = settlementFailed(execution);
+            Result result = settlementFailed(execution, sessionAuthority);
             Thread.currentThread().interrupt();
             return result;
         } catch (ExecutionException failure) {
-            return settlementFailed(execution);
+            return settlementFailed(execution, sessionAuthority);
         }
     }
 
-    private Result settlementFailed(Execution execution) {
+    private Result settlementFailed(
+            Execution execution,
+            ConversationSessionStore.Session sessionAuthority) {
         return new Result(
-                Status.COMPLETED, execution.readOnlyTurn(), 0, true, null);
+                Status.COMPLETED, execution.readOnlyTurn(), 0, true, null,
+                sessionProjection(sessionAuthority));
+    }
+
+    private SessionProjection sessionProjection(
+            ConversationSessionStore.Session session) {
+        return session == null ? null : new SessionProjection(
+                session.activeDiscussion().orElse(null),
+                session.discussionRevision());
     }
 
     public CancelStatus cancel(String bearerToken, UUID requestId) {
@@ -273,7 +304,8 @@ public final class AgentTurnLifecycleService {
                         discussionSummary(pointer, knowledgeGateway.getContent()))
                 .orElse(null);
         return new ConversationStatus(
-                true, session.conversationId(), discussion);
+                true, session.conversationId(),
+                session.session().discussionRevision(), discussion);
     }
 
     private DiscussionSummary discussionSummary(
@@ -356,19 +388,20 @@ public final class AgentTurnLifecycleService {
         }
         ResolvedInput input = resolveInput(
                 conversationId, resumeTokenHash, command, content,
-                turnDeadline.minus(settlementReserve));
+                turnDeadline);
         if (input.discussionSelection() != null) {
             DiscussionSelectionResolution selection = input.discussionSelection();
             AgentTurnCommand.Continue enter = new AgentTurnCommand.Continue(
                     command.getRequestId(), AgentTurnCommand.ContinueOperation.ENTER_RESULT,
                     selection.contextHandle(), selection.resultItemId(), null, null,
                     command.getSurfaceContext(), command.getConversationWindow());
-            return enterDiscussion(
+            return withClarificationMutation(enterDiscussion(
                     conversationId, sessionAuthority, enter,
-                    cancellation, content, turnDeadline);
+                    cancellation, content, turnDeadline),
+                    input.clarificationMutation());
         }
         ResolvedGoalSet resolved = input.resolved();
-        return switch (resolved.getKind()) {
+        Execution execution = switch (resolved.getKind()) {
             case CONVERSATIONAL -> simple(new PublicAgentTurn.Conversational(
                     command.getRequestId(), resolved.getMessage().orElseThrow(), List.of()));
             case BOUNDARY, INVALID_INPUT -> simple(new PublicAgentTurn.Boundary(
@@ -380,9 +413,14 @@ public final class AgentTurnLifecycleService {
                             "ask-new-question", "重新提问", "请重新描述你的问题", null))
                             : List.of()));
             case CAPABILITY_UNAVAILABLE -> simple(new PublicAgentTurn.CapabilityUnavailable(
-                    command.getRequestId(), command instanceof AgentTurnCommand.Ask
+                    command.getRequestId(), input.capabilityCode() != null
+                    ? input.capabilityCode()
+                    : command instanceof AgentTurnCommand.Ask
                     ? "SEMANTIC_ROUTING_UNAVAILABLE" : "CONTINUATION_UNAVAILABLE",
-                    resolved.getMessage().orElseThrow(), command instanceof AgentTurnCommand.Ask, List.of()));
+                    resolved.getMessage().orElseThrow(),
+                    input.capabilityCode() != null
+                            || command instanceof AgentTurnCommand.Ask,
+                    input.retryAfterSeconds(), List.of()));
             case CLARIFICATION -> clarification(
                     conversationId, resumeTokenHash, command.getRequestId(),
                     content, resolved.getClarification().orElseThrow());
@@ -393,6 +431,8 @@ public final class AgentTurnLifecycleService {
                             resolutionContext(content)),
                     turnDeadline.minus(settlementReserve));
         };
+        return withClarificationMutation(
+                execution, input.clarificationMutation());
     }
 
     private Execution routeRecommendationReference(
@@ -480,12 +520,7 @@ public final class AgentTurnLifecycleService {
                         candidateKey);
             }
             case NEEDS_CLARIFICATION ->
-                    recommendation.getSelectedResults().size() == 1
-                            ? enterRecommendationCandidate(
-                            conversationId, session, command, cancellation,
-                            content, deadline, recommendation, candidates,
-                            candidates.getFirst().getCandidateKey())
-                            : recommendationSelectionClarification(
+                    recommendationSelectionClarification(
                             conversationId, tokenHash,
                             command.getRequestId(),
                             content, recommendation, candidates);
@@ -693,9 +728,8 @@ public final class AgentTurnLifecycleService {
         } catch (GoalInterpretationUnavailableException
                  | IllegalArgumentException unavailable) {
             return withMutation(
-                    discussionUnavailable(
-                            command.getRequestId(),
-                            "DISCUSSION_INTERPRETATION_UNAVAILABLE"),
+                    discussionInterpretationUnavailable(
+                            command.getRequestId(), text, pointer),
                     DiscussionStateMutation.guard(
                             pointer.getContextHandle()));
         }
@@ -759,15 +793,13 @@ public final class AgentTurnLifecycleService {
                         pointer.getContextHandle(), transition);
             }
             case NEEDS_CLARIFICATION -> withMutation(
-                    discussionUnavailable(
-                            command.getRequestId(),
-                            "DISCUSSION_INTERPRETATION_UNAVAILABLE"),
+                    discussionInterpretationUnavailable(
+                            command.getRequestId(), text, pointer),
                     DiscussionStateMutation.guard(
                             pointer.getContextHandle()));
             case STANDARD_GOAL, ENTER_RECOMMENDED_RESULT ->
-                    discussionUnavailable(
-                            command.getRequestId(),
-                            "DISCUSSION_INTERPRETATION_UNAVAILABLE");
+                    discussionInterpretationUnavailable(
+                            command.getRequestId(), text, pointer);
         };
     }
 
@@ -818,6 +850,16 @@ public final class AgentTurnLifecycleService {
                 execution.contexts(),
                 execution.challenges(),
                 mutation);
+    }
+
+    private Execution withClarificationMutation(
+            Execution execution,
+            ClarificationSettlementMutation mutation) {
+        if (mutation.isNone()) return execution;
+        return new Execution(
+                execution.readOnlyTurn(), execution.settledTurn(),
+                execution.contexts(), execution.challenges(),
+                execution.discussionMutation(), mutation);
     }
 
     private Execution enterDiscussion(
@@ -875,6 +917,14 @@ public final class AgentTurnLifecycleService {
             return discussionUnavailable(
                     command.getRequestId(),
                     "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        if (session.activeDiscussion()
+                .map(pointer -> pointer.statusAt(clock.instant())
+                        == ActiveDiscussionPointer.Status.ACTIVE)
+                .orElse(false)) {
+            return discussionUnavailable(
+                    command.getRequestId(),
+                    "DISCUSSION_CONTEXT_MISMATCH");
         }
         ProjectDiscussionCoordinator.Transition transition;
         try {
@@ -960,6 +1010,23 @@ public final class AgentTurnLifecycleService {
                 requestId, code,
                 "当前项目讨论状态不可用，请重新进入项目。",
                 false, List.of());
+        return simple(turn);
+    }
+
+    private Execution discussionInterpretationUnavailable(
+            UUID requestId, String text,
+            ActiveDiscussionPointer pointer) {
+        PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
+                requestId, "DISCUSSION_INTERPRETATION_UNAVAILABLE",
+                "当前无法可靠理解这条项目讨论请求。",
+                true, List.of(
+                new SuggestedAction(
+                        "discussion-retry", "重试刚才的问题",
+                        text, null),
+                new SuggestedAction(
+                        "discussion-exit", "结束讨论",
+                        null, ContinuationReference.exitContext(
+                        pointer.getContextHandle()))));
         return simple(turn);
     }
 
@@ -1151,25 +1218,28 @@ public final class AgentTurnLifecycleService {
                             ? new ClarificationStore.ClarificationAnswer.Choice(choice.getChoiceId())
                             : new ClarificationStore.ClarificationAnswer.Text(
                             ((AgentTurnCommand.TextAnswer) clarification.getAnswer()).getText());
-            ClarificationStore.ConsumeResult consumed;
-            Future<ClarificationStore.ConsumeResult> consumeTask = stateExecutor.submit(() ->
-                    store.consumeClarification(
+            TurnDeadline operationDeadline = deadline.minus(settlementReserve);
+            ClarificationStore.ReserveResult reserved;
+            Future<ClarificationStore.ReserveResult> reserveTask = stateExecutor.submit(() ->
+                    store.reserveClarification(
                             clarification.getClarificationId(), conversationId, tokenHash,
-                            content.getContentVersion(), answer, clock.instant(), deadline));
+                            content.getContentVersion(), answer,
+                            clarification.getRequestId(), deadline.getExpiresAt(),
+                            clock.instant(), operationDeadline));
             try {
-                long remainingMillis = deadline.remainingMillis();
+                long remainingMillis = operationDeadline.remainingMillis();
                 if (remainingMillis < 1) {
-                    consumeTask.cancel(true);
+                    reserveTask.cancel(true);
                     return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
                             "当前澄清状态不可用，请重新提问。"));
                 }
-                consumed = consumeTask.get(remainingMillis, TimeUnit.MILLISECONDS);
+                reserved = reserveTask.get(remainingMillis, TimeUnit.MILLISECONDS);
             } catch (TimeoutException timeout) {
-                consumeTask.cancel(true);
+                reserveTask.cancel(true);
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
                         "当前澄清状态不可用，请重新提问。"));
             } catch (InterruptedException interrupted) {
-                consumeTask.cancel(true);
+                reserveTask.cancel(true);
                 Thread.currentThread().interrupt();
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
                         "当前澄清状态不可用，请重新提问。"));
@@ -1177,36 +1247,47 @@ public final class AgentTurnLifecycleService {
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
                         "当前澄清状态不可用，请重新提问。"));
             }
-            if (consumed.status() != ClarificationStore.Status.CONSUMED) {
+            if (reserved.status() != ClarificationStore.Status.RESERVED) {
+                if (reserved.status() == ClarificationStore.Status.IN_PROGRESS) {
+                    return new ResolvedInput(
+                            ResolvedGoalSet.capabilityUnavailable(
+                                    "当前澄清正在由另一请求处理，请稍后重新提交。"),
+                            "CLARIFICATION_IN_PROGRESS",
+                            reserved.retryAfterSeconds());
+                }
                 return new ResolvedInput(ResolvedGoalSet.capabilityUnavailable(
                         "当前澄清状态不可用，请重新提问。"));
             }
-            if (consumed.record().resumeTemplate() instanceof DiscussionSelectionTemplate selection) {
-                String binding = consumed.answer().bindingKey();
+            ClarificationSettlementMutation mutation =
+                    ClarificationSettlementMutation.consume(
+                            clarification.getClarificationId(), answer);
+            if (reserved.record().resumeTemplate() instanceof DiscussionSelectionTemplate selection) {
+                String binding = reserved.answer().bindingKey();
                 if (!binding.startsWith("result-item:")) {
                     return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                            "澄清答案无法绑定推荐结果。"));
+                            "澄清答案无法绑定推荐结果。"), mutation);
                 }
                 String resultItemId = binding.substring("result-item:".length());
                 if (!selection.allows(resultItemId)) {
                     return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                            "澄清答案超出推荐范围。"));
+                            "澄清答案超出推荐范围。"), mutation);
                 }
                 return new ResolvedInput(
                         ResolvedGoalSet.capabilityUnavailable("typed selection"),
                         new DiscussionSelectionResolution(
-                                selection.getRecommendationContextHandle(), resultItemId));
+                                selection.getRecommendationContextHandle(), resultItemId),
+                        mutation, null, null);
             }
             BlockedGoalTemplate template =
-                    (BlockedGoalTemplate) consumed.record().resumeTemplate();
+                    (BlockedGoalTemplate) reserved.record().resumeTemplate();
             ClarificationAnswerNormalizer normalizer = new ClarificationAnswerNormalizer();
             java.util.Optional<BlockedGoalTemplate.ResolutionValue> normalized =
                     normalizer.normalize(
-                            template, consumed.answer(),
+                            template, reserved.answer(),
                             resolutionContext(content).getPublicSubjects());
             if (normalized.isEmpty()) {
                 return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                        "澄清答案没有形成新的有效信息，请重新提问。"));
+                        "澄清答案没有形成新的有效信息，请重新提问。"), mutation);
             }
             BlockedGoalTemplate.Resolution resolution = template.resolve(
                     normalized.orElseThrow());
@@ -1215,18 +1296,19 @@ public final class AgentTurnLifecycleService {
                 return new ResolvedInput(ResolvedGoalSet.clarification(
                         new ClarificationProposal(
                                 next.getUnresolvedField(),
-                                "需要继续补充一个闭合目标字段。", next)));
+                                "需要继续补充一个闭合目标字段。", next)), mutation);
             }
             if (resolution.kind() != BlockedGoalTemplate.Resolution.Kind.RESOLVED) {
                 return new ResolvedInput(ResolvedGoalSet.invalidInput(
-                        "澄清答案无法恢复为安全目标，请重新提问。"));
+                        "澄清答案无法恢复为安全目标，请重新提问。"), mutation);
             }
             return new ResolvedInput(
-                    ResolvedGoalSet.goals(resolution.proposal()));
+                    ResolvedGoalSet.goals(resolution.proposal()), mutation);
         }
         return new ResolvedInput(
                 goalResolver.resolve(
-                        command, resolutionContext(content), deadline));
+                        command, resolutionContext(content),
+                        deadline.minus(settlementReserve)));
     }
 
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {
@@ -1253,12 +1335,40 @@ public final class AgentTurnLifecycleService {
             PublicAgentTurn readOnlyTurn, PublicAgentTurn settledTurn,
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges,
-            DiscussionStateMutation discussionMutation) { }
+            DiscussionStateMutation discussionMutation,
+            ClarificationSettlementMutation clarificationMutation) {
+        private Execution(
+                PublicAgentTurn readOnlyTurn,
+                PublicAgentTurn settledTurn,
+                List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
+                List<ClarificationStore.Record> challenges,
+                DiscussionStateMutation discussionMutation) {
+            this(readOnlyTurn, settledTurn, contexts, challenges,
+                    discussionMutation,
+                    ClarificationSettlementMutation.none());
+        }
+    }
     private record ResolvedInput(
             ResolvedGoalSet resolved,
-            DiscussionSelectionResolution discussionSelection) {
+            DiscussionSelectionResolution discussionSelection,
+            ClarificationSettlementMutation clarificationMutation,
+            String capabilityCode,
+            Long retryAfterSeconds) {
         private ResolvedInput(ResolvedGoalSet resolved) {
-            this(resolved, null);
+            this(resolved, null, ClarificationSettlementMutation.none(),
+                    null, null);
+        }
+        private ResolvedInput(
+                ResolvedGoalSet resolved,
+                ClarificationSettlementMutation clarificationMutation) {
+            this(resolved, null, clarificationMutation, null, null);
+        }
+        private ResolvedInput(
+                ResolvedGoalSet resolved,
+                String capabilityCode,
+                Long retryAfterSeconds) {
+            this(resolved, null, ClarificationSettlementMutation.none(),
+                    capabilityCode, retryAfterSeconds);
         }
     }
     private record DiscussionSelectionResolution(
@@ -1268,24 +1378,53 @@ public final class AgentTurnLifecycleService {
             Map<String, Map<String, String>> choiceBindings,
             Map<String, ClarificationStore.TextBinding> textBindings) { }
     public record Result(Status status, PublicAgentTurn turn, long retryAfterSeconds,
-                         boolean settlementFailed, ConversationMetadata conversation) {
+                         boolean settlementFailed,
+                         ConversationMetadata conversation,
+                         SessionProjection sessionProjection) {
+        public Result(
+                Status status, PublicAgentTurn turn,
+                long retryAfterSeconds, boolean settlementFailed,
+                ConversationMetadata conversation) {
+            this(status, turn, retryAfterSeconds,
+                    settlementFailed, conversation, null);
+        }
         static Result state(Status status, long retryAfter) {
-            return new Result(status, null, retryAfter, false, null);
+            return new Result(
+                    status, null, retryAfter, false, null, null);
         }
         Result withConversation(ConversationMetadata value) {
-            return new Result(status, turn, retryAfterSeconds, settlementFailed, value);
+            return new Result(
+                    status, turn, retryAfterSeconds, settlementFailed,
+                    value, sessionProjection);
         }
     }
-    public record ConversationMetadata(String conversationId, String resumeToken) { }
+    public record ConversationMetadata(
+            String conversationId, String resumeToken,
+            long discussionRevision,
+            DiscussionSummary discussion) {
+        public ConversationMetadata(
+                String conversationId, String resumeToken) {
+            this(conversationId, resumeToken, 0, null);
+        }
+    }
     public record ConversationStatus(
             boolean authenticated,
             String conversationId,
+            long discussionRevision,
             DiscussionSummary discussion) {
         public ConversationStatus(
                 boolean authenticated, String conversationId) {
-            this(authenticated, conversationId, null);
+            this(authenticated, conversationId, 0, null);
+        }
+        public ConversationStatus(
+                boolean authenticated, String conversationId,
+                DiscussionSummary discussion) {
+            this(authenticated, conversationId, 0, discussion);
         }
     }
+    public record SessionProjection(
+            ActiveDiscussionPointer pointer,
+            long revision) { }
     public record DiscussionSummary(
             ActiveDiscussionPointer.Status status,
             String projectId,

@@ -109,14 +109,49 @@ class AgentTurnLifecycleClarificationRecoveryTest {
     }
 
     @Test
-    void blockingClarificationConsumeCannotExceedTurnDeadline() throws Exception {
+    void activeReservationReturnsStableRetryableCapabilityWithRetryAfter() {
+        AgentStateStore store = mock(AgentStateStore.class);
+        when(store.claim(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(TurnExecutionStore.ClaimResult.claimed());
+        when(store.reserveClarification(
+                any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(ClarificationStore.ReserveResult.inProgress(6));
+        when(store.completeWithSession(
+                any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any()))
+                .thenReturn(new TurnExecutionStore.SettlementResult(true, null));
+        AgentTurnLifecycleService service = service(
+                store, mock(GoalResolver.class),
+                mock(SemanticPlanCompiler.class), Clock.systemUTC(),
+                Duration.ofSeconds(5),
+                java.util.concurrent.ForkJoinPool.commonPool());
+
+        AgentTurnLifecycleService.Result result = service.execute(
+                null, new AgentTurnCommand.ResolveClarification(
+                        UUID.randomUUID(), "clarification_busy_1",
+                        new AgentTurnCommand.ChoiceAnswer("choice_size_2"),
+                        null, null));
+
+        assertThat(result.turn())
+                .isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
+        PublicAgentTurn.CapabilityUnavailable unavailable =
+                (PublicAgentTurn.CapabilityUnavailable) result.turn();
+        assertThat(unavailable.getCode())
+                .isEqualTo("CLARIFICATION_IN_PROGRESS");
+        assertThat(unavailable.isRetryable()).isTrue();
+        assertThat(unavailable.getRetryAfterSeconds()).isEqualTo(6);
+    }
+
+    @Test
+    void blockingClarificationReservationCannotExceedTurnDeadline() throws Exception {
         Clock clock = Clock.systemUTC();
         java.util.concurrent.atomic.AtomicBoolean interrupted =
                 new java.util.concurrent.atomic.AtomicBoolean();
         AgentStateStore store = mock(AgentStateStore.class);
         when(store.claim(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(TurnExecutionStore.ClaimResult.claimed());
-        when(store.consumeClarification(any(), any(), any(), any(), any(), any(), any()))
+        when(store.reserveClarification(
+                any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     try {
                         Thread.sleep(5_000);
@@ -124,10 +159,11 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                         interrupted.set(true);
                         throw expected;
                     }
-                    return ClarificationStore.ConsumeResult.of(ClarificationStore.Status.NOT_FOUND);
+                    return ClarificationStore.ReserveResult.of(
+                            ClarificationStore.Status.NOT_FOUND);
                 });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(true);
+        when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new TurnExecutionStore.SettlementResult(true, null));
         java.util.concurrent.ExecutorService executor =
                 java.util.concurrent.Executors.newCachedThreadPool();
         AgentTurnLifecycleService service = service(
@@ -165,8 +201,8 @@ class AgentTurnLifecycleClarificationRecoveryTest {
             }
             return java.util.Optional.empty();
         });
-        when(store.complete(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(true);
+        when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new TurnExecutionStore.SettlementResult(true, null));
         java.util.concurrent.ExecutorService executor =
                 java.util.concurrent.Executors.newCachedThreadPool();
         AgentTurnLifecycleService service = service(

@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 
 /** Short-lived, one-consume clarification authority bound to conversation and token hash. */
 public final class ClarificationStore {
@@ -47,40 +48,111 @@ public final class ClarificationStore {
         Instant expiresAt = clock.instant().plus(ttl);
         copied.forEach(record -> entries.put(
                 record.challenge().getClarificationId(),
-                new Entry(record, expiresAt, false)));
+                new Entry(record, expiresAt, false, null)));
     }
 
-    public ConsumeResult consume(
-            String clarificationId, String conversationId, byte[] resumeTokenHash,
-            String currentContentReleaseId, ClarificationAnswer answer) {
-        AtomicReference<ConsumeResult> result = new AtomicReference<>(ConsumeResult.of(Status.NOT_FOUND));
+    public ReserveResult reserve(
+            String clarificationId, String conversationId,
+            byte[] resumeTokenHash, String currentContentReleaseId,
+            ClarificationAnswer answer, UUID requestId,
+            Instant reservationExpiresAt) {
+        Objects.requireNonNull(requestId, "requestId");
+        Objects.requireNonNull(reservationExpiresAt, "reservationExpiresAt");
+        Instant now = clock.instant();
+        AtomicReference<ReserveResult> result = new AtomicReference<>(
+                ReserveResult.of(Status.NOT_FOUND));
         entries.computeIfPresent(clarificationId, (key, entry) -> {
-            if (entry.consumed()) {
-                result.set(ConsumeResult.of(Status.ALREADY_CONSUMED));
+            Status invalid = validateAccess(
+                    entry, conversationId, resumeTokenHash,
+                    currentContentReleaseId, now);
+            if (invalid != null) {
+                result.set(ReserveResult.of(invalid));
                 return entry;
             }
-            if (!clock.instant().isBefore(entry.expiresAt())) {
-                result.set(ConsumeResult.of(Status.EXPIRED));
-                return entry;
-            }
-            if (!entry.record().conversationId().equals(conversationId)
-                    || !MessageDigest.isEqual(entry.record().resumeTokenHash(), resumeTokenHash)) {
-                result.set(ConsumeResult.of(Status.UNAUTHORIZED));
-                return entry;
-            }
-            if (!entry.record().contentReleaseId().equals(currentContentReleaseId)) {
-                result.set(ConsumeResult.of(Status.STALE_RELEASE));
+            Reservation current = entry.reservation();
+            if (current != null && !current.requestId().equals(requestId)
+                    && now.isBefore(current.expiresAt())) {
+                long retryAfter = Math.max(1L,
+                        Duration.between(now, current.expiresAt()).toSeconds());
+                result.set(ReserveResult.inProgress(retryAfter));
                 return entry;
             }
             ResolvedAnswer resolved = resolve(entry.record(), answer);
             if (resolved == null) {
-                result.set(ConsumeResult.of(Status.INVALID_ANSWER));
+                result.set(ReserveResult.of(Status.INVALID_ANSWER));
                 return entry;
             }
-            result.set(new ConsumeResult(Status.CONSUMED, entry.record(), resolved));
-            return new Entry(entry.record(), entry.expiresAt(), true);
+            Instant boundedExpiry = reservationExpiresAt.isBefore(entry.expiresAt())
+                    ? reservationExpiresAt : entry.expiresAt();
+            if (!now.isBefore(boundedExpiry)) {
+                result.set(ReserveResult.of(Status.EXPIRED));
+                return entry;
+            }
+            result.set(new ReserveResult(
+                    Status.RESERVED, entry.record(), resolved, 0));
+            return new Entry(
+                    entry.record(), entry.expiresAt(), false,
+                    new Reservation(requestId, boundedExpiry));
         });
         return result.get();
+    }
+
+    public synchronized boolean commitReservation(
+            String clarificationId, UUID requestId,
+            ClarificationAnswer answer, Instant completedAt) {
+        Entry entry = entries.get(clarificationId);
+        if (entry == null || entry.consumed()
+                || entry.reservation() == null
+                || !entry.reservation().requestId().equals(requestId)
+                || !completedAt.isBefore(entry.reservation().expiresAt())
+                || resolve(entry.record(), answer) == null) {
+            return false;
+        }
+        entries.put(clarificationId, new Entry(
+                entry.record(), entry.expiresAt(), true, null));
+        return true;
+    }
+
+    public synchronized boolean canCommitReservation(
+            String clarificationId, UUID requestId,
+            ClarificationAnswer answer, Instant completedAt) {
+        Entry entry = entries.get(clarificationId);
+        return entry != null && !entry.consumed()
+                && entry.reservation() != null
+                && entry.reservation().requestId().equals(requestId)
+                && completedAt.isBefore(entry.reservation().expiresAt())
+                && resolve(entry.record(), answer) != null;
+    }
+
+    public synchronized int releaseReservations(UUID requestId) {
+        int released = 0;
+        for (Map.Entry<String, Entry> item : entries.entrySet()) {
+            Entry entry = item.getValue();
+            if (!entry.consumed() && entry.reservation() != null
+                    && entry.reservation().requestId().equals(requestId)) {
+                entries.put(item.getKey(), new Entry(
+                        entry.record(), entry.expiresAt(), false, null));
+                released++;
+            }
+        }
+        return released;
+    }
+
+    private Status validateAccess(
+            Entry entry, String conversationId, byte[] resumeTokenHash,
+            String currentContentReleaseId, Instant now) {
+        if (entry.consumed()) return Status.ALREADY_CONSUMED;
+        if (!now.isBefore(entry.expiresAt())) return Status.EXPIRED;
+        if (!entry.record().conversationId().equals(conversationId)
+                || !MessageDigest.isEqual(
+                entry.record().resumeTokenHash(), resumeTokenHash)) {
+            return Status.UNAUTHORIZED;
+        }
+        if (!entry.record().contentReleaseId()
+                .equals(currentContentReleaseId)) {
+            return Status.STALE_RELEASE;
+        }
+        return null;
     }
 
     public void clear(String conversationId) {
@@ -119,7 +191,8 @@ public final class ClarificationStore {
                     current.resumeTemplate());
             validateBindings(rebound);
             entries.put(item.getKey(), new Entry(
-                    rebound, item.getValue().expiresAt(), false));
+                    rebound, item.getValue().expiresAt(), false,
+                    item.getValue().reservation()));
         }
         return live.size();
     }
@@ -266,13 +339,25 @@ public final class ClarificationStore {
         }
     }
     public record ResolvedAnswer(String fieldId, String bindingKey, String text) { }
-    public record ConsumeResult(Status status, Record record, ResolvedAnswer answer) {
-        public ConsumeResult { Objects.requireNonNull(status, "status"); }
-        public static ConsumeResult of(Status status) { return new ConsumeResult(status, null, null); }
+    public record ReserveResult(
+            Status status, Record record, ResolvedAnswer answer,
+            long retryAfterSeconds) {
+        public ReserveResult { Objects.requireNonNull(status, "status"); }
+        public static ReserveResult of(Status status) {
+            return new ReserveResult(status, null, null, 0);
+        }
+        public static ReserveResult inProgress(long retryAfterSeconds) {
+            return new ReserveResult(
+                    Status.IN_PROGRESS, null, null,
+                    Math.max(1L, retryAfterSeconds));
+        }
     }
     public enum Status {
-        CONSUMED, NOT_FOUND, EXPIRED, ALREADY_CONSUMED,
+        RESERVED, IN_PROGRESS, NOT_FOUND, EXPIRED, ALREADY_CONSUMED,
         UNAUTHORIZED, STALE_RELEASE, INVALID_ANSWER
     }
-    private record Entry(Record record, Instant expiresAt, boolean consumed) { }
+    private record Reservation(UUID requestId, Instant expiresAt) { }
+    private record Entry(
+            Record record, Instant expiresAt, boolean consumed,
+            Reservation reservation) { }
 }

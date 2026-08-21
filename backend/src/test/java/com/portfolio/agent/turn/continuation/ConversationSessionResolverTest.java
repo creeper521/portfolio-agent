@@ -145,13 +145,19 @@ class ConversationSessionResolverTest {
         byte[] oldHash = new byte[32];
         byte[] replacementHash = new byte[32];
         replacementHash[0] = 1;
+        ActiveDiscussionPointer stalePointer = new ActiveDiscussionPointer(
+                "discussion_stale_123", "project-a",
+                now.plus(Duration.ofMinutes(30)));
         store.save(new ConversationSessionStore.Session(
-                conversationId, oldHash, now, now.plus(Duration.ofMinutes(30))));
+                conversationId, oldHash, now,
+                now.plus(Duration.ofMinutes(30)), stalePointer));
         store.save(new ConversationSessionStore.Session(
                 conversationId, replacementHash, now.plus(Duration.ofMinutes(30)),
                 now.plus(Duration.ofMinutes(60))));
         assertThat(find(store, oldHash, now.plus(Duration.ofMinutes(31)))).isEmpty();
-        assertThat(find(store, replacementHash, now.plus(Duration.ofMinutes(59)))).isPresent();
+        assertThat(find(store, replacementHash, now.plus(Duration.ofMinutes(59))))
+                .hasValueSatisfying(session ->
+                        assertThat(session.activeDiscussion()).isEmpty());
 
         store.revokeIfMatches(
                 conversationId, replacementHash, now.plus(Duration.ofMinutes(59)));

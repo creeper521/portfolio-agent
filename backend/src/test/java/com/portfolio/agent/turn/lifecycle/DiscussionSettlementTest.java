@@ -58,9 +58,11 @@ class DiscussionSettlementTest {
                 DiscussionStateMutation.replace(null, pointer));
 
         assertThat(completed).isTrue();
-        assertThat(sessions.find(
+        ConversationSessionStore.Session settled = sessions.find(
                 List.of(tokenHash), NOW.plusSeconds(2), deadline)
-                .orElseThrow().activeDiscussion()).contains(pointer);
+                .orElseThrow();
+        assertThat(settled.activeDiscussion()).contains(pointer);
+        assertThat(settled.discussionRevision()).isEqualTo(1);
     }
 
     @Test
@@ -101,6 +103,9 @@ class DiscussionSettlementTest {
                         "discussion_handle_old"))).isFalse();
         assertThat(store.find(requestId).orElseThrow().getStatus())
                 .isEqualTo(TurnExecutionRecord.Status.CLAIMED);
+        assertThat(sessions.find(
+                List.of(tokenHash), NOW.plusSeconds(2), deadline)
+                .orElseThrow().discussionRevision()).isZero();
     }
 
     private InMemoryTurnExecutionStore store(

@@ -32,6 +32,14 @@ describe('projectTurnFailure', () => {
     expect(cancelled.retryable).toBe(false)
   })
 
+  it('IDEMPOTENCY_KEY_CONFLICT 不提示等待同请求重试', () => {
+    const conflict = projectTurnFailure(apiFailure('IDEMPOTENCY_KEY_CONFLICT', 409))
+    expect(conflict.category).toBe('CONVERSATION_MISMATCH')
+    expect(conflict.retryable).toBe(false)
+    expect(conflict.hint).toContain('新请求')
+    expect(conflict.hint).not.toContain('稍候')
+  })
+
   it('AGENT_STATE_UNAVAILABLE 与裸 5xx 归类服务不可用且可重试', () => {
     const view = projectTurnFailure(apiFailure('AGENT_STATE_UNAVAILABLE', 503, true))
     expect(view.category).toBe('SERVICE_UNAVAILABLE')

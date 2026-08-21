@@ -49,7 +49,7 @@ class AgentTurnClosedContractIntegrationTest {
 
     @Test
     void reviewedPresetUsesCurrentRevisionAndStaleRevisionFailsClosed() throws Exception {
-        String publicContent = mockMvc.perform(get("/api/v1/public-content"))
+        String publicContent = mockMvc.perform(get("/api/portfolio"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode preset = new ObjectMapper().readTree(publicContent)
                 .path("questionPresets").get(0);

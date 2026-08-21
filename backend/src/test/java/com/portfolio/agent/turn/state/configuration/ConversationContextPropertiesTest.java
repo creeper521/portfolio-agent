@@ -29,6 +29,7 @@ class ConversationContextPropertiesTest {
                         assertThat(properties.getIdleTtl()).isEqualTo(Duration.ofMinutes(30));
                         assertThat(properties.getAbsoluteTtl()).isEqualTo(Duration.ofMinutes(30));
                         assertThat(properties.getClarificationTtl()).isEqualTo(Duration.ofMinutes(5));
+                        assertThat(properties.getDiscussionTtl()).isEqualTo(Duration.ofMinutes(20));
                         assertThat(properties.getKeyRotationRetention())
                                 .isEqualTo(Duration.ofMinutes(45));
                         properties.validate();
@@ -61,6 +62,13 @@ class ConversationContextPropertiesTest {
         assertThat(org.assertj.core.api.Assertions.catchThrowable(reusedId::validate))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("must differ");
+
+        ConversationContextProperties unreachableDiscussion =
+                new ConversationContextProperties();
+        unreachableDiscussion.setDiscussionTtl(Duration.ofMinutes(30));
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+                unreachableDiscussion::validate))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
