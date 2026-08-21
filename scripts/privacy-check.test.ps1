@@ -169,6 +169,7 @@ $unsafeCases = [ordered]@{
     'windows-absolute-path' = 'path=C:\Users\internal\report.md'
     'internal-linux-path' = 'path=/data/server/private/report.md'
     'credential-assignment' = 'password=secret'
+    'typed-credential-assignment' = 'const apiKey: string = "real-value"'
     'hardcoded-resume-token' = 'resumeToken=''hardcoded-secret-value'''
     'internal-hostname' = 'service=https://sql-audit.private.corp/api'
     'private-key-material' = '-----BEGIN PRIVATE KEY-----'
@@ -565,6 +566,7 @@ try {
             'visitor-history-logger' { '.java' }
             'provider-payload-logger' { '.java' }
             'frontend-session-messages-console' { '.ts' }
+            'typed-credential-assignment' { '.ts' }
             'full-answer-logger' { '.java' }
             'prompt-console' { '.ts' }
             'prompt-system-console' { '.java' }

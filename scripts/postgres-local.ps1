@@ -516,6 +516,18 @@ SELECT CASE
     WHEN to_regclass('$schema.agent_turn_execution') IS NOT NULL
      AND to_regclass('$schema.agent_turn_context') IS NOT NULL
      AND to_regclass('$schema.agent_turn_clarification') IS NOT NULL
+     AND (SELECT count(*) FROM information_schema.columns
+          WHERE table_schema='$schema'
+            AND table_name='agent_turn_clarification'
+            AND column_name IN (
+                'reserved_by_request_id', 'reservation_expires_at')) = 2
+     AND (SELECT count(*) FROM information_schema.columns
+          WHERE table_schema='$schema'
+            AND table_name='conversation_session'
+            AND column_name IN (
+                'active_discussion_handle',
+                'active_discussion_project_id',
+                'active_discussion_expires_at', 'revision')) = 4
     THEN 1 ELSE 0 END;
 "@ -Capture
     if (@($result | Where-Object { $_ -eq '1' }).Count -eq 0) {
