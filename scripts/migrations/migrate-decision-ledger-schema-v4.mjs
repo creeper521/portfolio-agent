@@ -3,7 +3,9 @@ import path from "node:path";
 
 const [sourceArgument, targetArgument] = process.argv.slice(2);
 if (!sourceArgument || !targetArgument) {
-  throw new Error("Usage: node migrate-decision-ledger-schema-v4.mjs <source> <target>");
+  throw new Error(
+    "Usage: node scripts/migrations/migrate-decision-ledger-schema-v4.mjs <source> <target>",
+  );
 }
 
 const source = path.resolve(sourceArgument);

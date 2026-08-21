@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const root = resolve(import.meta.dirname, '..')
+const root = resolve(import.meta.dirname, '../..')
 const inventory = resolve(
   process.env.PORTFOLIO_ASSET_INVENTORY
     ?? 'C:/Users/WIN10/Documents/杂项/实习学习-Obsidian/agent_docs_staging/portfolio-governance/candidates/asset-library-2026-07-23.json',
@@ -17,7 +17,7 @@ try {
   const benchmarkPath = join(temporary, 'benchmark.json')
   const governanceBenchmarkPath = join(temporary, 'governance-benchmark.json')
   execFileSync(process.execPath, [
-    resolve(root, 'scripts/build-public-asset-expansion.mjs'),
+    resolve(import.meta.dirname, 'build-public-asset-expansion.mjs'),
     `--inventory=${inventory}`,
     `--base-portfolio=${resolve(root, 'backend/src/main/resources/public-data/bundle/portfolio.json')}`,
     `--base-routes=${resolve(root, 'governance/portfolio-governance/candidates/wave-1-public-routes.json')}`,

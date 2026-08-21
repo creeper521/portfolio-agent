@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = path.resolve(scriptDirectory, "..");
+const repositoryRoot = path.resolve(scriptDirectory, "../..");
 const portfolioPath = path.join(
   repositoryRoot,
   "backend",
