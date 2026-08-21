@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "portfolio-agent",
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-21",
   "overallStatus": "COMPLETE",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
@@ -12,7 +12,7 @@
     {
       "id": "SINGLE_RUNTIME_AUTHORITY",
       "status": "PASS",
-      "evidence": "The unversioned controllers, AgentTurnLifecycleService and PublicAgentTurnProjector are the only callable Agent runtime authorities; the production answer and selection packages are physically absent and full-FQCN zero-reference gates pass."
+      "evidence": "The unversioned Agent controllers, AgentTurnLifecycleService and PublicAgentTurnProjector are the only callable Agent runtime authorities; PortfolioController is the single public portfolio HTTP authority; retired production packages and versioned public routes are absent."
     },
     {
       "id": "NO_RUNTIME_COMPATIBILITY_BRIDGE",
@@ -27,7 +27,7 @@
     {
       "id": "PUBLIC_CONTRACT_SINGLE_SOURCE",
       "status": "PASS",
-      "evidence": "Backend serializer and frontend parser consume contracts/agent-turn fixtures."
+      "evidence": "Backend serializer and frontend parser consume contracts/agent-turn fixtures; PortfolioSnapshotResponse and the frontend PublicContentRepository adapter share the single atomic portfolio snapshot contract."
     },
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
