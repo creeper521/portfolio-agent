@@ -114,6 +114,10 @@ The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
         'docs/superpowers/specs/2026-08-20-project-discussion-context-design.md'
     $projectDiscussionPlan = `
         'docs/superpowers/plans/2026-08-20-project-discussion-context.md'
+    $portfolioApiSpec = `
+        'docs/superpowers/specs/2026-08-21-portfolio-public-api-convergence-design.md'
+    $portfolioApiPlan = `
+        'docs/superpowers/plans/2026-08-21-portfolio-public-api-convergence.md'
     Write-Utf8File (Join-Path $Path $activeSpec) @"
 # Approved design fixture
 <!-- DOCUMENT_STATUS: APPROVED -->
@@ -149,6 +153,18 @@ See [active plan](../plans/2026-08-20-project-discussion-context.md).
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
 See [approved spec](../specs/2026-08-20-project-discussion-context-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $portfolioApiSpec) @"
+# Approved portfolio API convergence design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+
+See [active plan](../plans/2026-08-21-portfolio-public-api-convergence.md).
+"@
+    Write-Utf8File (Join-Path $Path $portfolioApiPlan) @"
+# Active portfolio API convergence plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+
+See [approved spec](../specs/2026-08-21-portfolio-public-api-convergence-design.md).
 "@
     Add-Content -LiteralPath (Join-Path $Path 'docs/superpowers/specs/example.md') `
         -Encoding UTF8 -Value `
