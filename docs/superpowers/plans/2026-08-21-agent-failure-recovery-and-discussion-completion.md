@@ -45,7 +45,7 @@
 - [x] privacy typed credential literal 负例与规则修复。
 - [x] V4/V5/V6 local readiness 与 migration 验证。
 - [ ] 桌面/移动 14 场景矩阵、PostgreSQL restart/reclaim、真实 Provider semantic lane。
-- [ ] 全量 Backend/Frontend、clean package、privacy、documentation、architecture、Docker check。
+- [x] 全量 Backend/Frontend、clean package、privacy、documentation、architecture、Docker check。
 - [ ] 删除 A2-22—A2-29，更新 docs/08、docs/11、计划状态和 architecture COMPLETE。
 
 ## 提交边界
