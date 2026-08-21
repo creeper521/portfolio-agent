@@ -204,6 +204,11 @@ try {
     & powershell.exe @jarE2eArguments
     Assert-ExitCode 'Packaged JAR Playwright integration tests'
 
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\run-jar-e2e.ps1') `
+        -Lane PROJECT_DISCUSSION_EXPIRY
+    Assert-ExitCode 'Packaged short-TTL project discussion integration tests'
+
     if ($RequireLiveProvider) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File (Join-Path $root 'scripts\run-jar-e2e.ps1') `

@@ -11,10 +11,13 @@ const admissionLane = process.env.PLAYWRIGHT_ADMISSION === '1'
 const contentOnlyLane = process.env.PLAYWRIGHT_CONTENT_ONLY === '1'
 const depthTwoLane = process.env.PLAYWRIGHT_DEPTH_TWO === '1'
 const projectDiscussionLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION === '1'
+const projectDiscussionExpiryLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: projectDiscussionLane
+  testMatch: projectDiscussionExpiryLane
+    ? /agent-project-discussion-expiry\.spec\.ts/
+    : projectDiscussionLane
     ? /agent-project-discussion\.spec\.ts/
     : contentOnlyLane
     ? /agent-content-only\.spec\.ts/
@@ -32,7 +35,7 @@ export default defineConfig({
       : undefined,
   use: {
     baseURL,
-    trace: projectDiscussionLane ? 'off' : 'retain-on-failure',
+    trace: projectDiscussionLane || projectDiscussionExpiryLane ? 'off' : 'retain-on-failure',
   },
   testIgnore: ['**/behavior/**/*.test.ts', '**/behavior/**/*.spec.ts'],
   projects: contentOnlyLane

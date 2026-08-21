@@ -133,6 +133,11 @@ try {
     if ($runnerSource -notmatch 'assert-live-project-discussion-context\.ps1') {
         throw 'Project discussion lane must run the privacy-safe live aggregate gate.'
     }
+    if ($runnerSource -notmatch "'PROJECT_DISCUSSION_EXPIRY'" -or
+            $runnerSource -notmatch 'PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY' -or
+            $runnerSource -notmatch 'discussion-ttl=3s') {
+        throw 'Packaged runner must expose a deterministic short-TTL discussion lane.'
+    }
     if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
         throw 'Packaged runner must call the shared Live Provider probe.'
     }
@@ -336,8 +341,18 @@ try {
         '--portfolio.model-expression.enabled=false',
         '--portfolio.conversational-agent.enabled=false'
     )) {
-        if ($liveJavaArguments -match [regex]::Escape($disabledArgument)) {
+    if ($liveJavaArguments -match [regex]::Escape($disabledArgument)) {
             throw "Live Provider mode unexpectedly passed '$disabledArgument'."
+        }
+    }
+
+    $runnerSource = Get-Content -LiteralPath $runner -Raw
+    foreach ($liveQualityContract in @(
+        'assert-live-general-answer-quality.ps1',
+        'GENERAL_QUALITY_PASS'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($liveQualityContract)) {
+            throw "LIVE lane is missing general quality contract '$liveQualityContract'."
         }
     }
 

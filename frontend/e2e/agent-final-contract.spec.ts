@@ -86,6 +86,7 @@ test('final API supports preset, replay, Bearer continuation and clear', async (
   expect(await current.json()).toEqual({
     conversationId: firstTurn.conversation.conversationId,
     status: 'ACTIVE',
+    discussionRevision: 0,
   })
   expect((await request.delete(CURRENT, {
     headers: { Authorization: `Bearer ${token}` },

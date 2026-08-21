@@ -15,7 +15,7 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
-    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION')]
+    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY')]
     [string]$Lane = 'DEFAULT',
     [switch]$SkipPlaywright,
     [string]$PlaywrightScript = 'test:e2e',
@@ -202,6 +202,8 @@ $environment = @{
     PLAYWRIGHT_DEPTH_TWO = Get-EnvironmentSnapshot 'PLAYWRIGHT_DEPTH_TWO'
     PLAYWRIGHT_PROJECT_DISCUSSION = Get-EnvironmentSnapshot `
         'PLAYWRIGHT_PROJECT_DISCUSSION'
+    PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY = Get-EnvironmentSnapshot `
+        'PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY'
     PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL = Get-EnvironmentSnapshot `
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
@@ -444,6 +446,9 @@ if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     $applicationArguments += '--portfolio.model-expression.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
 }
+if ($Lane -eq 'PROJECT_DISCUSSION_EXPIRY') {
+    $applicationArguments += '--portfolio.conversation-context.discussion-ttl=3s'
+}
 if ($Lane -eq 'BODY_STALL') {
     $applicationArguments += @(
         '--portfolio.conversational-model.enabled=true',
@@ -493,7 +498,9 @@ if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
 $playwrightExitCode = 0
 try {
     $ready = $false
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    $readinessDeadline = [DateTimeOffset]::UtcNow.AddSeconds(
+        $ReadinessTimeoutSeconds)
+    for ($attempt = 0; [DateTimeOffset]::UtcNow -lt $readinessDeadline; $attempt++) {
         $process.Refresh()
         if ($process.HasExited) {
             throw "Packaged application exited before readiness with exit code $($process.ExitCode)."
@@ -501,7 +508,10 @@ try {
 
         $response = $null
         try {
-            $response = Invoke-WebRequest -UseBasicParsing "$baseUrl/api/portfolio"
+            $response = Invoke-WebRequest -UseBasicParsing `
+                -TimeoutSec ([Math]::Max(1, [Math]::Min(
+                        2, $ReadinessTimeoutSeconds))) `
+                "$baseUrl/api/portfolio"
         }
         catch {
             $process.Refresh()
@@ -569,6 +579,7 @@ try {
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
 
     $correlationResponse = Invoke-WebRequest -UseBasicParsing `
+        -TimeoutSec $ReadinessTimeoutSeconds `
         "$baseUrl/api/portfolio"
     if (
         [string]::IsNullOrWhiteSpace(
@@ -599,6 +610,7 @@ try {
     $diagnosticResponse = Invoke-WebRequest -UseBasicParsing `
         -Method Post `
         -Uri "$baseUrl/api/client-diagnostics" `
+        -TimeoutSec $ReadinessTimeoutSeconds `
         -ContentType 'application/json; charset=utf-8' `
         -Body ([System.Text.Encoding]::UTF8.GetBytes($diagnosticBatch))
     if ($diagnosticResponse.StatusCode -ne 202) {
@@ -622,6 +634,7 @@ try {
         $unknownFieldStatus = (Invoke-WebRequest -UseBasicParsing `
             -Method Post `
             -Uri "$baseUrl/api/client-diagnostics" `
+            -TimeoutSec $ReadinessTimeoutSeconds `
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($unknownFieldBatch))).StatusCode
     }
@@ -638,6 +651,7 @@ try {
         $oversizedStatus = (Invoke-WebRequest -UseBasicParsing `
             -Method Post `
             -Uri "$baseUrl/api/client-diagnostics" `
+            -TimeoutSec $ReadinessTimeoutSeconds `
             -ContentType 'application/json; charset=utf-8' `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($oversizedBody))).StatusCode
     }
@@ -689,6 +703,7 @@ try {
     $caseAgentResponse = Invoke-RestMethod -UseBasicParsing `
         -Method Post `
         -Uri "$baseUrl/api/agent/turns" `
+        -TimeoutSec $ReadinessTimeoutSeconds `
         -ContentType 'application/json; charset=utf-8' `
         -Body ([System.Text.Encoding]::UTF8.GetBytes($caseAgentRequest))
     if ([string]$caseAgentResponse.requestId -ne $caseAgentRequestId `
@@ -729,6 +744,7 @@ try {
             } | ConvertTo-Json -Depth 8 -Compress
             return Invoke-RestMethod -UseBasicParsing -Method Post `
                 -Uri "$baseUrl/api/agent/turns" `
+                -TimeoutSec $ReadinessTimeoutSeconds `
                 -ContentType 'application/json; charset=utf-8' `
                 -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
         }
@@ -774,6 +790,7 @@ try {
         try {
             $disabledHttp = Invoke-WebRequest -UseBasicParsing -Method Post `
                 -Uri "$baseUrl/api/agent/turns" `
+                -TimeoutSec $ReadinessTimeoutSeconds `
                 -ContentType 'application/json; charset=utf-8' `
                 -Body ([Text.Encoding]::UTF8.GetBytes($disabledRequest))
             $disabledStatus = [int]$disabledHttp.StatusCode
@@ -823,6 +840,16 @@ try {
         }
         Write-Output ("Packaged Live Provider verification passed; latency=" + `
                 ($latencyBuckets -join ','))
+        $qualityOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
+            -BackendBaseUrl $baseUrl `
+            -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+            -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or
+                $qualityOutput -notmatch '(?m)^GENERAL_QUALITY_PASS$') {
+            throw "Live Provider general quality verification failed: $qualityOutput"
+        }
+        Write-Output $qualityOutput
     }
 
     if ($Lane -eq 'PROJECT_DISCUSSION') {
@@ -855,6 +882,8 @@ try {
         } else {
             '0'
         }
+        $env:PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY = if (
+                $Lane -eq 'PROJECT_DISCUSSION_EXPIRY') { '1' } else { '0' }
         if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
             $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
         }
@@ -869,16 +898,8 @@ try {
         if ($Lane -eq 'BODY_STALL') {
             $bodyStallFixtureProcess.Refresh()
             if ($bodyStallFixtureProcess.HasExited) {
-                $fixtureFailure = if (Test-Path -LiteralPath $fixtureStderr) {
-                    (Get-Content -LiteralPath $fixtureStderr -Raw).Trim()
-                } else { '' }
-                Write-Output ("BODY_STALL fixture exited unexpectedly: exitCode={0}; detail={1}" -f `
-                        $bodyStallFixtureProcess.ExitCode,
-                        $(if ([string]::IsNullOrWhiteSpace($fixtureFailure)) {
-                            'none'
-                        } else {
-                            $fixtureFailure
-                        }))
+                throw ("BODY_STALL fixture exited unexpectedly: exitCode={0}" -f `
+                        $bodyStallFixtureProcess.ExitCode)
             }
         }
     }
@@ -918,6 +939,8 @@ finally {
         Restore-EnvironmentVariable 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
         Restore-EnvironmentVariable 'PLAYWRIGHT_PROJECT_DISCUSSION' `
             $environment.PLAYWRIGHT_PROJECT_DISCUSSION
+        Restore-EnvironmentVariable 'PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY' `
+            $environment.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY
         Restore-EnvironmentVariable 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
@@ -931,6 +954,8 @@ finally {
         Assert-EnvironmentRestored 'PLAYWRIGHT_DEPTH_TWO' $environment.PLAYWRIGHT_DEPTH_TWO
         Assert-EnvironmentRestored 'PLAYWRIGHT_PROJECT_DISCUSSION' `
             $environment.PLAYWRIGHT_PROJECT_DISCUSSION
+        Assert-EnvironmentRestored 'PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY' `
+            $environment.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY
         Assert-EnvironmentRestored 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PORTFOLIO_MODEL_PROVIDER' $environment.PORTFOLIO_MODEL_PROVIDER
