@@ -90,6 +90,25 @@ if ($null -ne $privacyInvariant -and $privacyInvariant.status -eq 'PASS') {
     }
 }
 
+$evidenceInvariant = @($status.hardInvariants | Where-Object {
+    $_.id -eq 'EVIDENCE_BEFORE_COMPLETION'
+}) | Select-Object -First 1
+if ($null -ne $evidenceInvariant -and $evidenceInvariant.status -eq 'PASS') {
+    $evidenceText = [string]$evidenceInvariant.evidence
+    foreach ($requiredEvidenceGate in @(
+        'DETERMINISTIC_GATE=PASS',
+        'SCENARIO_RUNTIME=PASS',
+        'BROWSER_BODY=PASS',
+        'POSTGRESQL_JVM_RESTART=PASS',
+        'PROVIDER_QUALITY=PASS'
+    )) {
+        if ($evidenceText -notmatch [regex]::Escape($requiredEvidenceGate)) {
+            Add-ValidationError `
+                "EVIDENCE_BEFORE_COMPLETION PASS requires $requiredEvidenceGate"
+        }
+    }
+}
+
 $requiredAuthorities = @(
     'httpCommand', 'userIntent', 'executionPlan', 'executionEngine',
     'publicProjection', 'publicContract', 'turnLifecycle', 'turnState',

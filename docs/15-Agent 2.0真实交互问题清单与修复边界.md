@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-24 replay 隐私与 Provider 启动期授权两批代码及专项门已落地；A2-30—A2-36、A2-98、A2-99、A2-110 在“真实 Provider × PostgreSQL × packaged JAR × Browser × JVM 重启恢复”总门前保持 IN_PROGRESS
+> **当前状态：** 2026-08-24 replay 隐私、Provider 启动期授权与第一组证据真实性修复已落地；机器账本已对未执行场景、Browser 正文、跨 JVM 与 Provider Quality 明确记为未完成，整体保持 IN_PROGRESS
 
 ## 1. 文档目的
 
@@ -185,19 +185,19 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 当前失败后只能重新提问 | 默认不自动重发，用户明确切换后新 Turn | Provider Selection / Privacy |
 | A2-87 | P1 | Provider 矩阵不独立 | 脚本只测试当前环境 Provider | 每个批准 Provider 独立执行和报告 | Provider Matrix |
 | A2-88 | P1 | Provider 样本量不足 | 单次或少量通过被外推为稳定 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
-| A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 引用的 npm、Playwright 和 Java 资产已删除 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
-| A2-90 | P1 | runner 自测可假绿 | 只检查源码仍写着旧名称 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
+| A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
+| A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 只校验 JSON 结构和数量 | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
 | A2-92 | P1 | Browser happy path 内容断言不足 | 状态/UI有覆盖但不拒绝错误终局 | 解析 body 并断言 kind、resolution、coverage | Browser E2E |
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
 | A2-94 | P1 | Browser 不检查回答完整性 | 空或单句内容可能通过 | 检查 section、证据、数量和非空门 | Browser Quality Gate |
-| A2-95 | P1 | live gate 输出硬编码 goalKind | 输出包含未观测字段 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
+| A2-95 | P1 | live gate 输出硬编码 goalKind | 硬编码字段已删除，脚本自测只允许输出实际采集的 kind、resolution、数量与状态；待真实 Provider 运行留证 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
 | A2-96 | P1 | 缺少跨 JVM PostgreSQL 恢复 | page reload 代替进程重启 | 同一浏览器会话跨真实后端重启恢复 | PostgreSQL / Packaged Browser |
-| A2-97 | P1 | General 单测自造正确句数 | 测试不证明错误句数会被拒绝 | 增加语言、句数、深度负例 | General Tests |
+| A2-97 | P1 | General 单测自造正确句数 | 已增加英文、错误句数、错误 depth bucket 与 section 顺序负例；待真实 Provider 质量矩阵 | 增加语言、句数、深度负例 | General Tests |
 | A2-98 | P1 | privacy check 看不到运行时数据流 | 已补 Lifecycle → PostgreSQL → 解密完整 settlement sentinel 门，待最终总门 | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
 | A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
-| A2-100 | P1 | 不同验证层被合并为 PASS | 状态正确被外推成语义正确 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
-| A2-101 | P2 | 测试数量高估产品覆盖 | 总数掩盖用户场景未执行 | 以用户场景和风险门报告覆盖 | Verification Governance |
+| A2-100 | P1 | 不同验证层被合并为 PASS | release 汇总已拆分 deterministic、scenario runtime、Browser contract/body、PostgreSQL/JVM restart、Provider Quality；未执行层不再被总 PASS 覆盖 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
+| A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总已显式报告 scenario runtime 与风险门未执行；35 条场景仍未进入生产入口运行 | 以用户场景和风险门报告覆盖 | Verification Governance |
 | A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | 脚本设置 `portfolio.model-expression.*`，真实属性前缀已是 `portfolio.conversational-model` | 删除全部退役键和脚本引用 | Configuration Cleanup |
 | A2-103 | P2 | Portfolio expression timeout 无执行消费者 | `agent-runtime.portfolio-expression-timeout` 可绑定且参与配置校验，但没有模型表达调用读取 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
 | A2-104 | P2 | Portfolio expression 编译器未接线 | 生产不可调用 | 实现并接入或物理删除 | Portfolio Expression |
@@ -207,10 +207,10 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-108 | P2 | 零消费者生产类型残留 | 旧 Selection/Presentation/Question 类型只剩定义 | 证明无入口后删除 | Dead Code / Architecture |
 | A2-109 | P2 | 严格 JSON 不拒绝 trailing token | 可能接受首个 JSON 后的额外 token | 启用 FAIL_ON_TRAILING_TOKENS 并补负例 | Goal/General Codec |
 | A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | AGENTS、SECURITY、docs/08、本文与机器状态已统一 persistence-safe 分类，待最终总门 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
-| A2-111 | P1 | Evidence hard invariant 被污染 | 存在硬编码字段和非执行场景 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
-| A2-112 | P1 | Discussion Plan 完成表述过强 | 实施计划头部标记“已完成”，但 Browser 内容层未断言 facet/depth/完整性 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
+| A2-111 | P1 | Evidence hard invariant 被污染 | 机器账本已从 PASS 改为 FAILED；checker 要求五类执行证据齐备才能恢复 PASS，live gate 已删除未观测 goalKind；场景 runtime 仍待补 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
+| A2-112 | P1 | Discussion Plan 完成表述过强 | 计划头部已拆分 State/Lifecycle Complete 与 Semantic Quality Incomplete，Browser facet/depth/完整性仍明确开放 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
 | A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in registry 硬编码 schema 支持，真实 Provider 仍有合同失败 | 分开 Configured、Transport、Schema、Quality 状态 | Provider Registry / Documentation |
-| A2-114 | P2 | 恢复能力表述混淆 | 页面刷新、PostgreSQL 和 JVM 重启被混写 | 三种恢复分别留证 | Recovery Documentation |
+| A2-114 | P2 | 恢复能力表述混淆 | docs/08 已拆分页面刷新、同 JVM PostgreSQL 与跨 JVM 三类状态；跨 JVM 仍为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
 | A2-115 | P1 | 字段存在被误判为功能完成 | 参数、接口、配置出现即被计入能力 | 生产消费、用户可见、负例和全链门全部成立才算完成 | Definition of Done |
 
 #### 3.2.1 证据等级映射
@@ -329,11 +329,21 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - 同一新 packaged JAR 的 DEFAULT/IN_MEMORY Browser 回归实际执行：桌面/移动 `8 passed / 8 lane-specific skipped`，公开 Portfolio availability 与既有 PublicAgentTurn 消费链未回归；Provider 明确关闭，因此不冒充真实接收方证据。
 - 本批不增加 Provider 路由、兼容 reader 或第二 readiness；真实 Provider 接收方及其 packaged Browser 行为仍须后续总门证明，因此 A2-33—A2-35 不关闭。
 
+#### 3.3.3 第三批证据真实性当前证据（仍为 IN_PROGRESS）
+
+- `assert-live-project-discussion-context.test.ps1` 已执行通过：拒绝 `goalKind=` 等未观测字段，要求输出实际响应的 kind、resolution、recommendation item 数和 discussion 状态；未运行真实 Provider 前 A2-95 不关闭。
+- `assert-live-general-answer-quality.test.ps1` 已执行通过：除英文负例外，三句 CONCISE 被归入 `OUTSIDE` 并失败，section 顺序错误也失败；真实 Provider 抽样仍未完成，A2-97 保持 IN_PROGRESS。
+- `write-agent-verification-summary.test.ps1` 已执行通过：Browser contract 与 Browser body、PostgreSQL state 与 JVM restart、场景 runtime 与 Provider Quality 分层；任一层 `NOT_RUN`/`IN_PROGRESS` 时 overall 只能是 `IN_PROGRESS`，`-RequireComplete` 非零退出。
+- `agent-architecture-status.test.ps1` 已执行通过：`EVIDENCE_BEFORE_COMPLETION=PASS` 若缺少 deterministic、scenario runtime、Browser body、PostgreSQL JVM restart、Provider Quality 五类新鲜标记即失败。当前机器账本据真实缺口记为 `FAILED`，不以测试总数或 HTTP 成功恢复 PASS。
+- `run-agent-behavior-audit-assets.test.ps1` 已执行通过：实际确认 `test:e2e`、默认 Playwright spec 与 L0/L3 Java 资产存在；runner 不再引用 `test:e2e:behavior`、`api-l0`、`runtime` project 或已删除的 `AgentBehaviorAdversarialProviderIntegrationTest`。L0/L3 已实跑，分别为 6 tests 与 14 tests、零失败；输出范围明确为 `CONTRACT_MANIFEST_ONLY` 和 `PROVIDER_CODEC_ADVERSARIAL`，不冒充用户场景运行时。
+- 本批后端 clean package 已实跑：874 tests、0 failures、0 errors、4 skipped，Testcontainers 使用 PostgreSQL 16.14。该结果仍不替代 scenario runtime、Browser body、JVM restart 或 Provider Quality。
+- 本组没有修改 Frontend 代码。A2-89 的空 behavior 目录/失效 Playwright 配置、A2-92—A2-94 的 Browser 内容门属于 Frontend Agent 交接；后端 scenario runtime 与跨 JVM runner 继续在本批后续实现。
+
 ### 3.4 本轮审计证据边界
 
 - 已扫描 1310 个仓库文件，其中生产 Java 479、Java 测试 221、Frontend 源码 135、E2E 6、脚本 66、共享合同 23、State Migration 6；
 - 本轮新鲜通过 Frontend 470 tests、类型检查、构建、privacy、code-quality、documentation、architecture、public API、runner/checker 自测；这些绿色结果同时证明当前门无法发现本表中的语义与数据流问题；
-- 当前 shell 无可用 Maven，本轮未宣称新鲜执行 Backend 全量；现有 Surefire 文件显示 864 tests、0 failures、4 skipped，只作为既有文件证据；
+- 2026-08-24 第二批已取得 clean package 的 874 tests、0 failures、0 errors、4 skipped 新鲜证据；该数量只证明对应测试集执行，不替代尚未运行的 35 条用户场景、Browser 正文语义、跨 JVM 恢复或 Provider Quality；
 - 本轮没有执行新的真实 Provider 调用，也没有把任何访客或模型正文写入本文。
 
 ## 4. 问题簇一：推荐与澄清语义断裂

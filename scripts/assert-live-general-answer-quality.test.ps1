@@ -136,6 +136,28 @@ try {
     Assert-True ($passing.Output -notmatch 'Redis|Memcached|SELECT|example\.com') `
         'passing output leaked fixture questions or answers.'
 
+    Write-Fixture 'CONCISE' (Answer @(
+        (Section $conceptTitle ($zhSentence + $zhSentence)),
+        (Section $mechanismTitle $zhSentence)
+    ))
+    $wrongDepth = Invoke-Checker
+    Assert-True ($wrongDepth.ExitCode -eq 1) `
+        'a three-sentence CONCISE answer must fail the depth gate.'
+    Assert-True ($wrongDepth.Output -match `
+        'scenario=CONCISE.*bucket=0/1.*observed=OUTSIDE:1') `
+        'wrong sentence count must be reported as an outside depth bucket.'
+
+    Write-Fixture 'CONCISE' (Answer @(
+        (Section $mechanismTitle $zhSentence),
+        (Section $conceptTitle $zhSentence)
+    ))
+    $wrongStructure = Invoke-Checker
+    Assert-True ($wrongStructure.ExitCode -eq 1) `
+        'reversed required sections must fail the structure gate.'
+    Assert-True ($wrongStructure.Output -match `
+        'scenario=CONCISE.*structure=0/1') `
+        'wrong section order must be reported as a structure failure.'
+
     $englishOne = 'This explanation works (usually).'
     $englishTwo = 'This is plain text; not code.'
     Write-Fixture 'CONCISE' (Answer @(

@@ -16,6 +16,21 @@ Assert-True ($text -notmatch 'ConvertTo-Json.*Write-(Output|Host)') `
     'Live project discussion gate must not print request payloads.'
 Assert-True ($text -match 'PROJECT_DISCUSSION_PASS operation=') `
     'Live gate must emit only aggregate operation evidence.'
+Assert-True ($text -notmatch 'goalKind=') `
+    'Live gate must not report a goalKind that it did not observe.'
+foreach ($observedField in @(
+        'recommendKind=',
+        'recommendResolution=',
+        'recommendationItems=',
+        'followKind=',
+        'routeKind=',
+        'exitKind=',
+        'activeState=',
+        'clearedState='
+    )) {
+    Assert-True ($text -match [regex]::Escape($observedField)) `
+        "Live gate must report observed field $observedField."
+}
 Assert-True ($text -match "kind = 'RESOLVE_CLARIFICATION'") `
     'Live gate must cover bounded selection recovery.'
 Assert-True ($text -match "operation = 'ROUTE_IN_CONTEXT'") `

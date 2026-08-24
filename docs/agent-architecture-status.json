@@ -31,8 +31,8 @@
     },
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
-      "status": "PASS",
-      "evidence": "Fresh 2026-08-21 deterministic evidence includes code-quality, architecture, documentation, privacy and retired-public-API zero-reference gates; 470 frontend tests plus type-check/build; 864 backend tests plus clean package and V1-V6 Testcontainers PostgreSQL; the PostgreSQL packaged-JAR desktop/mobile matrix; and the model-disabled short-TTL ACTIVE-EXPIRED-REENTER-EXIT Browser lane. Authorized real-Provider runs were executed: depth metrics reached 3/3 in successful windows, but subsequent DeepSeek semantic calls returned SEMANTIC_ROUTING_UNAVAILABLE and GLM failed the closed response contract. The final Provider and expanded discussion matrix remain open, so overallStatus remains IN_PROGRESS."
+      "status": "FAILED",
+      "evidence": "As of 2026-08-24, deterministic and privacy gates have fresh evidence, but contracts/agent-turn/scenarios are not executed by a production runtime harness, Browser checks do not yet prove all body semantics, PostgreSQL recovery has not crossed a real JVM restart, and the approved Provider quality matrix remains incomplete. Test totals and HTTP success are not completion evidence."
     },
     {
       "id": "PRIVACY_BOUNDARY",

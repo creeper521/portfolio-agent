@@ -61,6 +61,16 @@ try {
     foreach ($invariant in $falseComplete.hardInvariants) {
         $invariant.status = 'PASS'
     }
+    $falseCompleteEvidence = @($falseComplete.hardInvariants | Where-Object {
+        $_.id -eq 'EVIDENCE_BEFORE_COMPLETION'
+    })[0]
+    $falseCompleteEvidence.evidence = @(
+        'DETERMINISTIC_GATE=PASS',
+        'SCENARIO_RUNTIME=PASS',
+        'BROWSER_BODY=PASS',
+        'POSTGRESQL_JVM_RESTART=PASS',
+        'PROVIDER_QUALITY=PASS'
+    ) -join '; '
     $falseComplete.deferredItems = $waived.deferredItems
     $falseCompleteResult = Invoke-Validator (Write-Fixture 'false-complete.json' $falseComplete)
     Assert-True ($falseCompleteResult.ExitCode -ne 0) `
@@ -90,6 +100,20 @@ try {
         'PRIVACY_BOUNDARY PASS requires fresh') `
         'privacy PASS failure must identify the missing runtime evidence'
 
+    $unsupportedEvidencePass = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
+    $evidenceInvariant = @($unsupportedEvidencePass.hardInvariants | Where-Object {
+        $_.id -eq 'EVIDENCE_BEFORE_COMPLETION'
+    })[0]
+    $evidenceInvariant.status = 'PASS'
+    $evidenceInvariant.evidence = 'Many unit and browser tests passed.'
+    $unsupportedEvidenceResult = Invoke-Validator `
+        (Write-Fixture 'unsupported-evidence-pass.json' $unsupportedEvidencePass)
+    Assert-True ($unsupportedEvidenceResult.ExitCode -ne 0) `
+        'evidence PASS without separated executed gates must fail'
+    Assert-True ($unsupportedEvidenceResult.Output -match `
+        'EVIDENCE_BEFORE_COMPLETION PASS requires') `
+        'evidence PASS failure must identify the missing executed gates'
+
     $incompleteDeferred = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
     $incompleteDeferred.overallStatus = 'VERIFICATION_IN_PROGRESS'
     $template = Get-Content -LiteralPath (Join-Path $root `
@@ -101,7 +125,7 @@ try {
     Assert-True ($incompleteResult.ExitCode -ne 0) `
         'deferred item without a next command must fail'
 
-    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=7'
+    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=8'
 } finally {
     Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

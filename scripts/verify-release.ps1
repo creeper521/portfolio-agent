@@ -85,6 +85,14 @@ try {
     Assert-ExitCode 'Agent architecture status check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\write-agent-verification-summary.test.ps1')
+    Assert-ExitCode 'Agent verification layer summary tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\run-agent-behavior-audit-assets.test.ps1')
+    Assert-ExitCode 'Agent behavior audit asset discovery tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
     Assert-ExitCode 'Static bundle checker tests'
 
@@ -243,7 +251,17 @@ try {
         }
     }
 
-    Write-Output 'Release verification passed.'
+    $postgreSqlState = if ($SkipDockerCheck) { 'NOT_RUN' } else { 'PASS' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\write-agent-verification-summary.ps1') `
+        -Deterministic PASS `
+        -ScenarioRuntime NOT_RUN `
+        -BrowserContract PASS `
+        -BrowserBody IN_PROGRESS `
+        -PostgreSqlState $postgreSqlState `
+        -PostgreSqlJvmRestart NOT_RUN `
+        -ProviderQuality NOT_RUN
+    Assert-ExitCode 'Agent verification layer summary'
 }
 finally {
     Pop-Location

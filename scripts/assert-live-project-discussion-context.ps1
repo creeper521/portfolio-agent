@@ -173,5 +173,12 @@ if ($null -ne $afterExit.activeDiscussion) {
 }
 
 Write-Output ('PROJECT_DISCUSSION_PASS operation=ENTER_RESULT,ROUTE_IN_CONTEXT,EXIT_CONTEXT; ' +
-    'goalKind=PORTFOLIO_RECOMMEND,PORTFOLIO_FACT; lockedSubject=true; ' +
-    'candidateScope=true; terminal=PASS; latency=' + ($latencies -join ','))
+    'recommendKind=' + [string]$recommend.Body.kind + '; ' +
+    'recommendResolution=' + [string]$recommend.Body.answer.resolution + '; ' +
+    'recommendationItems=' + [string]$items.Count + '; ' +
+    'followKind=' + [string]$follow.Body.kind + '; ' +
+    'routeKind=' + [string]$routed.Body.kind + '; ' +
+    'exitKind=' + [string]$exited.Body.kind + '; ' +
+    'activeState=' + [string]$summary.activeDiscussion.status + '; ' +
+    'clearedState=' + [string]($null -eq $afterExit.activeDiscussion).ToString().ToLowerInvariant() + '; ' +
+    'lockedSubject=true; candidateScope=true; latency=' + ($latencies -join ','))

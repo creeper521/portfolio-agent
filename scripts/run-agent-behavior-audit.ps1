@@ -4,8 +4,8 @@ param(
     [switch]$RequireLiveProvider,
     [string]$JarPath = '',
     [string]$ProviderSecretFile = '',
-    [ValidateSet('DISABLED', 'POSTGRESQL')]
-    [string]$ContextMode = 'DISABLED',
+    [ValidateSet('IN_MEMORY', 'POSTGRESQL')]
+    [string]$ContextMode = 'IN_MEMORY',
     [ValidateRange(1, 65535)]
     [int]$Port = 4173,
     [string]$MavenExecutable = 'mvn.cmd',
@@ -61,13 +61,13 @@ function Assert-Command([string]$Command, [string]$Label) {
     }
 }
 
-if (($Lane | Where-Object { $_ -in @('L0', 'L1', 'L2', 'L4') }).Count -gt 0) {
+if (($Lane | Where-Object { $_ -in @('L1', 'L2', 'L4') }).Count -gt 0) {
     if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
         throw 'Packaged JAR is missing; behavior lanes cannot start.'
     }
     Assert-Command $JavaExecutable 'Java'
 }
-if ($Lane -contains 'L3') {
+if (($Lane | Where-Object { $_ -in @('L0', 'L3') }).Count -gt 0) {
     Assert-Command $MavenExecutable 'Maven'
 }
 
@@ -113,11 +113,18 @@ try {
         $status = 'PASS'
         $exitCode = 0
         try {
-            if ($currentLane -eq 'L3') {
+            if ($currentLane -eq 'L0') {
                 $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
                 $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
                 & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
-                    '-Dtest=AgentBehaviorAdversarialProviderIntegrationTest' test
+                    '-Dtest=AgentTurnScenarioManifestTest,AgentTurnClosedContractIntegrationTest' test
+                $exitCode = $LASTEXITCODE
+                if ($exitCode -ne 0) { throw "L0 test process exited with $exitCode." }
+            } elseif ($currentLane -eq 'L3') {
+                $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
+                    '-Dtest=GoalProposalCodecTest,GeneralDraftCodecAdversarialTest,OpenAiCompatibleStructuredModelTransportDeadlineTest' test
                 $exitCode = $LASTEXITCODE
                 if ($exitCode -ne 0) { throw "L3 test process exited with $exitCode." }
             } else {
@@ -126,15 +133,6 @@ try {
                 $env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:$Port"
                 $playwrightScript = 'test:e2e'
                 $playwrightArguments = @()
-                if ($currentLane -eq 'L0') {
-                    $playwrightScript = 'test:e2e:behavior'
-                    $playwrightArguments = @('--project=api-l0')
-                } elseif ($currentLane -in @('L1', 'L2')) {
-                    $playwrightScript = 'test:e2e:behavior'
-                    $playwrightArguments = @('--project=runtime')
-                } elseif ($currentLane -eq 'L4') {
-                    $playwrightScript = 'test:e2e:behavior'
-                }
                 if ($currentLane -eq 'L4') {
                     foreach ($line in (Get-Content -LiteralPath $ProviderSecretFile)) {
                         if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) { continue }
@@ -162,8 +160,13 @@ try {
                 } else {
                     $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
                     $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                    $laneContextMode = if ($currentLane -eq 'L2') {
+                        'POSTGRESQL'
+                    } else {
+                        'IN_MEMORY'
+                    }
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
-                        -Port $Port -ContextMode $ContextMode `
+                        -Port $Port -ContextMode $laneContextMode `
                         -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
                 }
                 $exitCode = $LASTEXITCODE
@@ -178,6 +181,13 @@ try {
             lane = $currentLane
             status = $status
             exitCode = $exitCode
+            evidenceScope = switch ($currentLane) {
+                'L0' { 'CONTRACT_MANIFEST_ONLY' }
+                'L1' { 'PACKAGED_BROWSER_CONTRACT' }
+                'L2' { 'PACKAGED_BROWSER_POSTGRESQL' }
+                'L3' { 'PROVIDER_CODEC_ADVERSARIAL' }
+                'L4' { 'LIVE_PROVIDER_CANARY' }
+            }
             durationBucket = if (((Get-Date) - $startedAt).TotalSeconds -lt 5) { 'LT_5_S' } else { 'GTE_5_S' }
         })
         if ($status -eq 'BLOCKED' -or $status -eq 'FAIL') { break }
