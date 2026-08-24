@@ -80,6 +80,39 @@ class SemanticRouteValidatorTest {
                 .isEqualTo("sql-audit");
     }
 
+    @Test
+    void omittedPageReferenceReceivesTheValidatedDefaultSubject() {
+        GoalInterpretationInput.PublicSubjectDescriptor subject =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit", "SQL 审计项目");
+        GoalInterpretationInput input = new GoalInterpretationInput(
+                "进一步介绍这个项目", List.of(), List.of(subject),
+                Set.of(GoalKind.PORTFOLIO_FACT),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null, List.of(), Set.of(SemanticRouteProposal.Route.STANDARD_GOAL),
+                Set.of(), subject, SemanticTaskParameters.AudienceProfile.INTERVIEWER);
+        UserGoalProposal.InputAnchor anchor =
+                new UserGoalProposal.InputAnchor("进一步介绍这个项目", 0);
+        UserGoalProposal unbound = new UserGoalProposal(List.of(
+                new UserGoalProposal.ProposedGoal(
+                        "page-project", GoalKind.PORTFOLIO_FACT, anchor, List.of(),
+                        Set.of(GoalRequestedOutput.OVERVIEW),
+                        GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(UserGoalProposal.Facet.OVERVIEW),
+                                UserGoalProposal.Depth.STANDARD))));
+
+        GoalSubjectReference bound = validator.validate(
+                        SemanticRouteProposal.standardGoal(unbound), input)
+                .getGoalProposal().orElseThrow().getGoals().getFirst()
+                .getSubjectCandidates().getFirst();
+
+        assertThat(bound.getReference()).isEqualTo("sql-audit");
+        assertThat(bound.getBasis()).isEqualTo(GoalSubjectReference.Basis.SURFACE_HINT);
+        assertThat(bound.getAnchor()).isEmpty();
+    }
+
     private GoalInterpretationInput input(Set<SemanticRouteProposal.Route> routes) {
         return new GoalInterpretationInput(
                 "介绍 SQL 审计项目",

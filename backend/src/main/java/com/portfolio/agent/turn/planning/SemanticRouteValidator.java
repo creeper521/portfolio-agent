@@ -20,12 +20,48 @@ public final class SemanticRouteValidator {
                         "semantic route candidate is outside typed scope");
             }
         });
-        SemanticRouteProposal validated = proposal.getRoute()
-                == SemanticRouteProposal.Route.CONTINUE_CURRENT_PROJECT
-                ? lockDiscussionGoal(proposal, input) : proposal;
+        SemanticRouteProposal validated = switch (proposal.getRoute()) {
+            case CONTINUE_CURRENT_PROJECT -> lockDiscussionGoal(proposal, input);
+            case STANDARD_GOAL -> bindDefaultSubject(proposal, input);
+            default -> proposal;
+        };
         validated.getGoalProposal().ifPresent(goalProposal ->
                 validateGoals(goalProposal, input));
         return validated;
+    }
+
+    private SemanticRouteProposal bindDefaultSubject(
+            SemanticRouteProposal proposal,
+            GoalInterpretationInput input) {
+        GoalInterpretationInput.PublicSubjectDescriptor defaultSubject =
+                input.getDefaultSubject();
+        if (input.getInterpretationMode()
+                != GoalInterpretationInput.InterpretationMode.STANDARD
+                || defaultSubject == null
+                || proposal.getGoalProposal().isEmpty()) {
+            return proposal;
+        }
+        UserGoalProposal source = proposal.getGoalProposal().orElseThrow();
+        java.util.List<UserGoalProposal.ProposedGoal> goals = source.getGoals().stream()
+                .map(goal -> bindDefaultSubject(goal, defaultSubject)).toList();
+        return SemanticRouteProposal.standardGoal(new UserGoalProposal(goals));
+    }
+
+    private UserGoalProposal.ProposedGoal bindDefaultSubject(
+            UserGoalProposal.ProposedGoal goal,
+            GoalInterpretationInput.PublicSubjectDescriptor defaultSubject) {
+        if (!goal.getSubjectCandidates().isEmpty()
+                || goal.getGoalKind() != GoalKind.PORTFOLIO_FACT
+                && goal.getGoalKind() != GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO) {
+            return goal;
+        }
+        return new UserGoalProposal.ProposedGoal(
+                goal.getGoalKey(), goal.getGoalKind(), goal.getInputAnchor(),
+                java.util.List.of(new GoalSubjectReference(
+                        defaultSubject.getKind(), defaultSubject.getReference(),
+                        GoalSubjectReference.Basis.SURFACE_HINT, null)),
+                goal.getRequestedOutputs(), goal.getKnowledgeRequirement(),
+                goal.getParameters());
     }
 
     private SemanticRouteProposal lockDiscussionGoal(

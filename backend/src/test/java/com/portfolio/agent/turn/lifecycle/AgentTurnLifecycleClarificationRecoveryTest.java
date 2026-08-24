@@ -51,7 +51,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                         ClarificationProposal.Field.REQUESTED_SIZE,
                         "provider text must not be persisted VISITOR_SENTINEL", blocked)));
         SemanticPlanCompiler compiler = mock(SemanticPlanCompiler.class);
-        when(compiler.compile(any(), any(), any()))
+        when(compiler.compile(any(), any(), any(), any()))
                 .thenReturn(PlanCompilationResult.rejected("stop-after-capture"));
         AgentTurnLifecycleService service = service(store, resolver, compiler, clock);
 
@@ -99,7 +99,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
 
         assertThat(resolved.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
         ArgumentCaptor<UserGoalProposal> proposal = ArgumentCaptor.forClass(UserGoalProposal.class);
-        verify(compiler).compile(proposal.capture(), any(), any());
+        verify(compiler).compile(proposal.capture(), any(), any(), any());
         UserGoalProposal.PortfolioRecommendationParameters parameters =
                 (UserGoalProposal.PortfolioRecommendationParameters) proposal.getValue()
                         .getGoals().getFirst().getParameters();
@@ -269,7 +269,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.SUBJECT, "provider prompt", firstTemplate)));
         SemanticPlanCompiler compiler = mock(SemanticPlanCompiler.class);
-        when(compiler.compile(any(), any(), any()))
+        when(compiler.compile(any(), any(), any(), any()))
                 .thenReturn(PlanCompilationResult.rejected("captured"));
         com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerKnowledge project =
                 mock(com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerKnowledge.class);
@@ -290,7 +290,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                         new AgentTurnCommand.ChoiceAnswer("choice_subject_1"), null, null));
         assertThat(second.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
         verify(resolver).resolve(any(), any(), any());
-        verify(compiler).compile(any(), any(), any());
+        verify(compiler).compile(any(), any(), any(), any());
     }
 
     private AgentTurnLifecycleService service(

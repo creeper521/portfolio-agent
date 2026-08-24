@@ -436,7 +436,7 @@ public final class AgentTurnLifecycleService {
                     conversationId, resumeTokenHash, command, cancellation, content,
                     planCompiler.compile(
                             resolved.getGoalProposal().orElseThrow(), content.getContentVersion(),
-                            resolutionContext(content)),
+                            resolutionContext(content), audience(command)),
                     turnDeadline.minus(settlementReserve));
         };
         return withClarificationMutation(
@@ -474,13 +474,14 @@ public final class AgentTurnLifecycleService {
                 != recommendation.getSelectedResults().size()) {
             return null;
         }
+        GoalResolutionContext goalContext = resolutionContext(content);
         GoalInterpretationInput input = new GoalInterpretationInput(
                 text,
                 command.getConversationWindow().getMessages().stream()
                         .map(message -> message.getRole().name()
                                 + ":" + message.getText())
                         .toList(),
-                resolutionContext(content).getPublicSubjects(),
+                goalContext.getPublicSubjects(),
                 Set.of(GoalKind.values()),
                 GoalInterpretationInput.InterpretationMode.STANDARD,
                 GoalInterpretationInput.DiscussionState.NONE,
@@ -488,7 +489,10 @@ public final class AgentTurnLifecycleService {
                 Set.of(
                         SemanticRouteProposal.Route.STANDARD_GOAL,
                         SemanticRouteProposal.Route.ENTER_RECOMMENDED_RESULT,
-                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION));
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION),
+                goalContext.getAllowedRecommendationConstraints(),
+                goalContext.resolveHint(command.getSurfaceContext().getSubjectHint()),
+                audience(command));
         GoalInterpretationResult interpretation;
         try {
             interpretation = goalResolver.interpretTyped(
@@ -517,7 +521,7 @@ public final class AgentTurnLifecycleService {
                     planCompiler.compile(
                             proposal.getGoalProposal().orElseThrow(),
                             content.getContentVersion(),
-                            resolutionContext(content)),
+                            resolutionContext(content), audience(command)),
                     deadline.minus(settlementReserve));
             case ENTER_RECOMMENDED_RESULT -> {
                 String candidateKey =
@@ -728,7 +732,9 @@ public final class AgentTurnLifecycleService {
                         pointerStatus == ActiveDiscussionPointer.Status.ACTIVE
                                 ? GoalInterpretationInput.DiscussionState.ACTIVE
                                 : GoalInterpretationInput.DiscussionState.EXPIRED,
-                        locked, candidates, routes);
+                        locked, candidates, routes,
+                        resolutionContext(content).getAllowedRecommendationConstraints(),
+                        null, audience(command));
         GoalInterpretationResult interpretation;
         try {
             interpretation = goalResolver.interpretTyped(
@@ -761,7 +767,7 @@ public final class AgentTurnLifecycleService {
                         planCompiler.compile(
                                 proposal.getGoalProposal().orElseThrow(),
                                 content.getContentVersion(),
-                                resolutionContext(content)),
+                                resolutionContext(content), audience(command)),
                         deadline.minus(settlementReserve));
                 yield withMutation(
                         execution,
@@ -972,7 +978,7 @@ public final class AgentTurnLifecycleService {
                 planCompiler.compile(
                         transition.overviewGoal(),
                         content.getContentVersion(),
-                        resolutionContext(content)),
+                        resolutionContext(content), audience(command)),
                 deadline.minus(settlementReserve));
         if (!(overview.settledTurn() instanceof PublicAgentTurn.Answer)) {
             return overview;
@@ -1340,6 +1346,15 @@ public final class AgentTurnLifecycleService {
                 });
         return new GoalResolutionContext(
                 subjects, Set.of(GoalKind.values()), Set.copyOf(recommendationConstraints));
+    }
+
+    private com.portfolio.agent.turn.planning.SemanticTaskParameters.AudienceProfile audience(
+            AgentTurnCommand command) {
+        return command.getSurfaceContext().getAudienceRole()
+                .map(value -> com.portfolio.agent.turn.planning.SemanticTaskParameters
+                        .AudienceProfile.valueOf(value.name()))
+                .orElse(com.portfolio.agent.turn.planning.SemanticTaskParameters
+                        .AudienceProfile.GUEST);
     }
     private void addSubjects(
             List<GoalInterpretationInput.PublicSubjectDescriptor> target,

@@ -16,8 +16,18 @@ public final class SemanticPlanCompiler {
             UserGoalProposal proposal,
             String contentReleaseId,
             GoalResolutionContext context) {
+        return compile(proposal, contentReleaseId, context,
+                SemanticTaskParameters.AudienceProfile.GUEST);
+    }
+
+    public PlanCompilationResult compile(
+            UserGoalProposal proposal,
+            String contentReleaseId,
+            GoalResolutionContext context,
+            SemanticTaskParameters.AudienceProfile audienceProfile) {
         Objects.requireNonNull(proposal, "proposal");
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(audienceProfile, "audienceProfile");
         for (UserGoalProposal.ProposedGoal goal : proposal.getGoals()) {
             if (!subjectsArePublic(goal, context)) {
                 return PlanCompilationResult.clarificationRequired("PUBLIC_SUBJECT_REQUIRED");
@@ -38,13 +48,14 @@ public final class SemanticPlanCompiler {
                     goalId, safeGoalLabel(proposed.getGoalKind()), proposed.getGoalKind(),
                     proposed.getSubjectCandidates(), proposed.getRequestedOutputs(), fulfillmentTaskId));
             if (proposed.getGoalKind() == GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO) {
-                compileCrossDomain(proposed, fulfillmentTaskId, tasks, dependencies);
+                compileCrossDomain(proposed, fulfillmentTaskId, tasks, dependencies,
+                        audienceProfile);
             } else {
                 tasks.add(SemanticTask.of(
                         fulfillmentTaskId, taskType(proposed.getGoalKind()),
                         new SemanticTaskParameters(
                                 proposed.getGoalKind(), proposed.getParameters(),
-                                proposed.getSubjectCandidates()),
+                                proposed.getSubjectCandidates(), audienceProfile),
                         proposed.getRequestedOutputs()));
             }
         }
@@ -61,7 +72,8 @@ public final class SemanticPlanCompiler {
             UserGoalProposal.ProposedGoal proposed,
             String fulfillmentTaskId,
             List<SemanticTask> tasks,
-            List<TaskDependency> dependencies) {
+            List<TaskDependency> dependencies,
+            SemanticTaskParameters.AudienceProfile audienceProfile) {
         UserGoalProposal.ApplyConceptParameters parameters =
                 (UserGoalProposal.ApplyConceptParameters) proposed.getParameters();
         String generalTaskId = fulfillmentTaskId + "-general";
@@ -74,15 +86,16 @@ public final class SemanticPlanCompiler {
                         Set.of(parameters.getPortfolioFacet()), parameters.getDepth());
         tasks.add(SemanticTask.of(generalTaskId, SemanticTask.Type.GENERAL_EXPLANATION,
                 new SemanticTaskParameters(
-                        GoalKind.GENERAL_EXPLANATION, generalParameters, List.of())));
+                        GoalKind.GENERAL_EXPLANATION, generalParameters, List.of(),
+                        audienceProfile)));
         tasks.add(SemanticTask.of(portfolioTaskId, SemanticTask.Type.PORTFOLIO_FACT,
                 new SemanticTaskParameters(
                         GoalKind.PORTFOLIO_FACT, portfolioParameters,
-                        proposed.getSubjectCandidates())));
+                        proposed.getSubjectCandidates(), audienceProfile)));
         tasks.add(SemanticTask.of(fulfillmentTaskId, SemanticTask.Type.CROSS_DOMAIN_SYNTHESIS,
                 new SemanticTaskParameters(
                         proposed.getGoalKind(), proposed.getParameters(),
-                        proposed.getSubjectCandidates())));
+                        proposed.getSubjectCandidates(), audienceProfile)));
         dependencies.add(new TaskDependency(generalTaskId, fulfillmentTaskId));
         dependencies.add(new TaskDependency(portfolioTaskId, fulfillmentTaskId));
     }

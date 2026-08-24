@@ -57,11 +57,52 @@ public final class PortfolioInvocationFactory {
                 ? CorpusBackend.BUNDLE : null;
         SearchStrategy fallbackStrategy = primaryBackend == CorpusBackend.POSTGRESQL
                 ? (strategy == SearchStrategy.HYBRID ? SearchStrategy.KEYWORD : strategy) : null;
+        List<PortfolioEvidenceInvocation.FacetProfile> orderedFacets = prioritize(
+                facets.stream().distinct().toList(),
+                task.getParameters().getAudienceProfile());
         return new PortfolioEvidenceInvocation(
-                task.getType(), scope, facets.stream().distinct().toList(), dimensions,
+                task.getType(), scope, orderedFacets, dimensions,
                 depth, requestedSize, recommendationConstraints,
                 context.getContentReleaseId(), primaryBackend, strategy,
                 fallbackBackend, fallbackStrategy);
+    }
+
+    private List<PortfolioEvidenceInvocation.FacetProfile> prioritize(
+            List<PortfolioEvidenceInvocation.FacetProfile> facets,
+            com.portfolio.agent.turn.planning.SemanticTaskParameters.AudienceProfile audience) {
+        if (audience == com.portfolio.agent.turn.planning.SemanticTaskParameters
+                .AudienceProfile.GUEST || facets.size() < 2) {
+            return facets;
+        }
+        List<PortfolioEvidenceInvocation.FacetProfile> priority = switch (audience) {
+            case INTERVIEWER -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                    PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
+                    PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
+                    PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                    PortfolioEvidenceInvocation.FacetProfile.LIMITATION);
+            case MENTOR -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
+                    PortfolioEvidenceInvocation.FacetProfile.LIMITATION,
+                    PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                    PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
+                    PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND);
+            case HR -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                    PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                    PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
+                    PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
+                    PortfolioEvidenceInvocation.FacetProfile.LIMITATION);
+            case GUEST -> throw new IllegalStateException("guest priority is not reordered");
+        };
+        return facets.stream().sorted(java.util.Comparator.comparingInt(priority::indexOf))
+                .toList();
     }
 
     private List<PortfolioEvidenceInvocation.FacetProfile> facets(

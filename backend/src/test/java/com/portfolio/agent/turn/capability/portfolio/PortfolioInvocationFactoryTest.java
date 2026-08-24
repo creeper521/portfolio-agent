@@ -110,6 +110,27 @@ class PortfolioInvocationFactoryTest {
                 .containsExactly("CAREER_TRACK_JAVA_BACKEND");
     }
 
+    @Test
+    void audienceProfileChangesPortfolioFacetPriorityWithoutChangingTheEvidenceScope() {
+        PortfolioEvidenceInvocation interviewer = invocationForOverview(
+                UserGoalProposal.Depth.DETAILED,
+                SemanticTaskParameters.AudienceProfile.INTERVIEWER);
+        PortfolioEvidenceInvocation mentor = invocationForOverview(
+                UserGoalProposal.Depth.DETAILED,
+                SemanticTaskParameters.AudienceProfile.MENTOR);
+
+        assertThat(interviewer.getFacets().getFirst())
+                .isEqualTo(PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION);
+        assertThat(mentor.getFacets().getFirst())
+                .isEqualTo(PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION);
+        assertThat(interviewer.getFacets()).containsExactlyInAnyOrderElementsOf(
+                mentor.getFacets());
+        assertThat(interviewer.getSubjectScope().getMode())
+                .isEqualTo(mentor.getSubjectScope().getMode());
+        assertThat(interviewer.getSubjectScope().getSubjects())
+                .isEqualTo(mentor.getSubjectScope().getSubjects());
+    }
+
     private TaskExecutionContext context(SemanticTask task) {
         return new TaskExecutionContext(
                 task, List.of(), "public-1",
@@ -119,6 +140,12 @@ class PortfolioInvocationFactoryTest {
 
     private PortfolioEvidenceInvocation invocationForOverview(
             UserGoalProposal.Depth depth) {
+        return invocationForOverview(depth, SemanticTaskParameters.AudienceProfile.GUEST);
+    }
+
+    private PortfolioEvidenceInvocation invocationForOverview(
+            UserGoalProposal.Depth depth,
+            SemanticTaskParameters.AudienceProfile audience) {
         UserGoalProposal.InputAnchor subjectAnchor =
                 new UserGoalProposal.InputAnchor("project-a", 0);
         GoalSubjectReference subject = new GoalSubjectReference(
@@ -130,7 +157,7 @@ class PortfolioInvocationFactoryTest {
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT,
                         new UserGoalProposal.PortfolioFactParameters(
                                 Set.of(UserGoalProposal.Facet.OVERVIEW), depth),
-                        List.of(subject)),
+                        List.of(subject), audience),
                 Set.of(GoalRequestedOutput.OVERVIEW));
         return new PortfolioInvocationFactory(CorpusBackend.BUNDLE).create(context(task));
     }

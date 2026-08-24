@@ -55,7 +55,8 @@ class GoalInterpretationAdapterTest {
                         "interpretationMode", "discussionState",
                         "allowedRoutes", "routeCandidates",
                         "allowedGoalKinds", "publicSubjects",
-                        "allowedRecommendationConstraints", "CAPABILITY_SQL")
+                        "allowedRecommendationConstraints", "CAPABILITY_SQL",
+                        "defaultSubject", "audienceProfile")
                 .doesNotContain("taskType", "dependencies");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isZero();

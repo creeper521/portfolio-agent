@@ -38,8 +38,15 @@ public final class GoalResolutionContext {
     }
 
     public boolean matchesHint(com.portfolio.agent.turn.lifecycle.AgentTurnCommand.SubjectHint hint) {
-        return hint == null || publicSubjects.stream().anyMatch(subject ->
+        return hint == null || resolveHint(hint) != null;
+    }
+
+    public GoalInterpretationInput.PublicSubjectDescriptor resolveHint(
+            com.portfolio.agent.turn.lifecycle.AgentTurnCommand.SubjectHint hint) {
+        if (hint == null) return null;
+        return publicSubjects.stream().filter(subject ->
                 subject.getKind().name().equals(hint.getKind().name())
-                        && subject.matchesAlias(hint.getSlug()));
+                        && subject.matchesAlias(hint.getSlug()))
+                .findFirst().orElse(null);
     }
 }

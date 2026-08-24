@@ -109,6 +109,19 @@ class SemanticPlanCompilerTest {
     }
 
     @Test
+    void trustedAudiencePropagatesToEveryCrossDomainTask() {
+        SemanticTurnPlan plan = compiler.compile(
+                        new UserGoalProposal(List.of(crossDomain())),
+                        "2026-08-05.1", context(),
+                        SemanticTaskParameters.AudienceProfile.MENTOR)
+                .getPlan().orElseThrow().getPlan();
+
+        assertThat(plan.getTasks()).extracting(task ->
+                        task.getParameters().getAudienceProfile())
+                .containsOnly(SemanticTaskParameters.AudienceProfile.MENTOR);
+    }
+
+    @Test
     void nonPublicPortfolioSubjectRequiresClarification() {
         UserGoalProposal.ProposedGoal goal = new UserGoalProposal.ProposedGoal(
                 "unknown-subject", GoalKind.PORTFOLIO_FACT,

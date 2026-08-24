@@ -16,6 +16,8 @@ public final class GoalInterpretationInput {
     private final List<RouteCandidate> routeCandidates;
     private final Set<SemanticRouteProposal.Route> allowedRoutes;
     private final Set<String> allowedRecommendationConstraints;
+    private final PublicSubjectDescriptor defaultSubject;
+    private final SemanticTaskParameters.AudienceProfile audienceProfile;
 
     public GoalInterpretationInput(
             String userText,
@@ -55,6 +57,25 @@ public final class GoalInterpretationInput {
             List<RouteCandidate> routeCandidates,
             Set<SemanticRouteProposal.Route> allowedRoutes,
             Set<String> allowedRecommendationConstraints) {
+        this(userText, recentMessages, publicSubjects, allowedGoalKinds,
+                interpretationMode, discussionState, lockedSubject,
+                routeCandidates, allowedRoutes, allowedRecommendationConstraints,
+                null, SemanticTaskParameters.AudienceProfile.GUEST);
+    }
+
+    public GoalInterpretationInput(
+            String userText,
+            List<String> recentMessages,
+            List<PublicSubjectDescriptor> publicSubjects,
+            Set<GoalKind> allowedGoalKinds,
+            InterpretationMode interpretationMode,
+            DiscussionState discussionState,
+            PublicSubjectDescriptor lockedSubject,
+            List<RouteCandidate> routeCandidates,
+            Set<SemanticRouteProposal.Route> allowedRoutes,
+            Set<String> allowedRecommendationConstraints,
+            PublicSubjectDescriptor defaultSubject,
+            SemanticTaskParameters.AudienceProfile audienceProfile) {
         if (userText == null || userText.isBlank() || userText.length() > 2000) {
             throw new IllegalArgumentException("userText is required and bounded");
         }
@@ -76,6 +97,8 @@ public final class GoalInterpretationInput {
                 Objects.requireNonNull(allowedRoutes, "allowedRoutes"));
         this.allowedRecommendationConstraints = Set.copyOf(Objects.requireNonNull(
                 allowedRecommendationConstraints, "allowedRecommendationConstraints"));
+        this.defaultSubject = defaultSubject;
+        this.audienceProfile = Objects.requireNonNull(audienceProfile, "audienceProfile");
         if (this.allowedRecommendationConstraints.stream().anyMatch(value ->
                 value == null || !value.matches(
                         "(?:CAREER_TRACK|CAPABILITY)_[A-Z0-9_]{1,64}"))) {
@@ -97,6 +120,12 @@ public final class GoalInterpretationInput {
             throw new IllegalArgumentException(
                     "interpretation mode and discussion state do not match");
         }
+        if (defaultSubject != null && (interpretationMode != InterpretationMode.STANDARD
+                || publicSubjects.stream().noneMatch(subject ->
+                subject.getKind() == defaultSubject.getKind()
+                        && subject.getReference().equals(defaultSubject.getReference())))) {
+            throw new IllegalArgumentException("default subject is outside public scope");
+        }
     }
 
     public String getUserText() { return userText; }
@@ -110,6 +139,10 @@ public final class GoalInterpretationInput {
     public Set<SemanticRouteProposal.Route> getAllowedRoutes() { return allowedRoutes; }
     public Set<String> getAllowedRecommendationConstraints() {
         return allowedRecommendationConstraints;
+    }
+    public PublicSubjectDescriptor getDefaultSubject() { return defaultSubject; }
+    public SemanticTaskParameters.AudienceProfile getAudienceProfile() {
+        return audienceProfile;
     }
     public void requireAllowedRecommendationConstraints(Set<String> values) {
         if (!allowedRecommendationConstraints.containsAll(values)) {

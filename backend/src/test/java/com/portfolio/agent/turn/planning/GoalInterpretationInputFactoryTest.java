@@ -19,7 +19,11 @@ class GoalInterpretationInputFactoryTest {
     void projectsOnlyFreeTextBoundedWindowAndReviewedSubjectDescriptors() {
         AgentTurnCommand.Ask command = new AgentTurnCommand.Ask(
                 UUID.randomUUID(), new AgentTurnCommand.FreeText("介绍这个项目"),
-                AgentTurnCommand.SurfaceContext.empty(),
+                new AgentTurnCommand.SurfaceContext(
+                        new AgentTurnCommand.SubjectHint(
+                                AgentTurnCommand.SubjectHintKind.PROJECT, "sql-audit"),
+                        AgentTurnCommand.AudienceRole.INTERVIEWER,
+                        AgentTurnCommand.RequestSource.PROJECT),
                 new ConversationWindow(List.of(
                         new ConversationWindow.Message(ConversationWindow.Role.USER, "上一问"),
                         new ConversationWindow.Message(ConversationWindow.Role.ASSISTANT, "公开回答摘要"))));
@@ -37,6 +41,10 @@ class GoalInterpretationInputFactoryTest {
                 GoalInterpretationInput.PublicSubjectDescriptor::getReference)
                 .containsExactly("sql-audit");
         assertThat(input.getAllowedGoalKinds()).containsExactly(GoalKind.PORTFOLIO_FACT);
+        assertThat(input.getDefaultSubject()).isNotNull();
+        assertThat(input.getDefaultSubject().getReference()).isEqualTo("sql-audit");
+        assertThat(input.getAudienceProfile())
+                .isEqualTo(SemanticTaskParameters.AudienceProfile.INTERVIEWER);
     }
 
     @Test

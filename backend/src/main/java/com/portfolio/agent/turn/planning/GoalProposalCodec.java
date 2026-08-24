@@ -15,7 +15,7 @@ import java.util.Set;
 
 public final class GoalProposalCodec {
 
-    public static final String SCHEMA_VERSION = "goal.proposal.v3";
+    public static final String SCHEMA_VERSION = "goal.proposal.v4";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
 

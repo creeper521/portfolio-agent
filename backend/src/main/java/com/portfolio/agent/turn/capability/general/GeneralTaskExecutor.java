@@ -50,16 +50,21 @@ public final class GeneralTaskExecutor implements SemanticTaskExecutor {
                 instanceof UserGoalProposal.GeneralExplanationParameters value) {
             return GeneralKnowledgeRequest.explanation(
                     value.getTopicAnchor().getText(), value.getDepth(),
-                    GeneralKnowledgeRequest.Audience.GUEST,
+                    audience(task),
                     context.getContentReleaseId(), context.getDeadline());
         }
         if (task.getParameters().getParameters()
                 instanceof UserGoalProposal.GeneralComparisonParameters value) {
             return GeneralKnowledgeRequest.comparison(
                     value.getSubjectAnchors().stream().map(UserGoalProposal.InputAnchor::getText).toList(),
-                    value.getDimensions(), GeneralKnowledgeRequest.Audience.GUEST,
+                    value.getDimensions(), audience(task),
                     context.getContentReleaseId(), context.getDeadline());
         }
         throw new TaskTerminalException(TaskTerminalException.Kind.REJECTED, TaskTerminalReason.INPUT_REJECTED);
+    }
+
+    private GeneralKnowledgeRequest.Audience audience(SemanticTask task) {
+        return GeneralKnowledgeRequest.Audience.valueOf(
+                task.getParameters().getAudienceProfile().name());
     }
 }

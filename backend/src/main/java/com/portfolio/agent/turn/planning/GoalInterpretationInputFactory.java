@@ -23,6 +23,11 @@ public final class GoalInterpretationInputFactory {
                 java.util.Set.of(
                         SemanticRouteProposal.Route.STANDARD_GOAL,
                         SemanticRouteProposal.Route.NEEDS_CLARIFICATION),
-                context.getAllowedRecommendationConstraints());
+                context.getAllowedRecommendationConstraints(),
+                context.resolveHint(command.getSurfaceContext().getSubjectHint()),
+                command.getSurfaceContext().getAudienceRole()
+                        .map(value -> SemanticTaskParameters.AudienceProfile.valueOf(
+                                value.name()))
+                        .orElse(SemanticTaskParameters.AudienceProfile.GUEST));
     }
 }

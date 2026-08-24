@@ -149,7 +149,7 @@ try {
                     }
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = $declaredProvider
-                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v3'
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v4'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = $declaredProvider
                     $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v1'

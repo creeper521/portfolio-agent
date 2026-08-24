@@ -70,7 +70,7 @@ public final class GeneralKnowledgeRequest {
     public TurnDeadline getDeadline() { return deadline; }
 
     public enum Kind { EXPLANATION, COMPARISON }
-    public enum Audience { GUEST }
+    public enum Audience { INTERVIEWER, MENTOR, HR, GUEST }
 
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank() || value.length() > 256) {

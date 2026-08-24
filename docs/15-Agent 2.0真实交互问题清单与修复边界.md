@@ -130,7 +130,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v3`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v4`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
@@ -148,9 +148,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-50 | P1 | Cross-domain 只是三段拼接 | 通用段、Claim 段和固定关系句组成结果 | 真实解释概念与项目事实的对应关系 | Synthesis / Presentation |
 | A2-51 | P1 | Cross-domain depth 固定 STANDARD | depth 已同时传播到 General 与 Portfolio supporting task；待真实 Provider/Browser 综合门 | depth 贯穿 General、Portfolio 和综合结果 | Planning / Synthesis |
 | A2-52 | P1 | 证据不足时详细回答仍可能显得完整 | 详细 overview 缺任一闭合 profile 即 PARTIAL；待真实 Provider/Browser 缺口文案门 | depth 不达标时返回 PARTIAL 和安全缺口 | Coverage / Presentation |
-| A2-53 | P1 | AudienceRole 不影响回答 | 角色只改变前端文案、问题和指纹 | 闭合 role-to-output 策略被生产消费，并由 typed 差异矩阵断言 | Surface Context / Goal / Presentation |
-| A2-54 | P1 | Page subjectHint 不参与模型理解 | 只验证主体存在，随后从解释输入丢失 | 当前页面主体成为可信默认或锁定主体 | Surface Context / Goal Interpretation |
-| A2-55 | P1 | 页面省略表达不能稳定绑定主体 | 模型仍需从全部公开主体猜测 | 页面内指代直接绑定 typed subject | Goal Resolution / Frontend Handoff |
+| A2-53 | P1 | AudienceRole 不影响回答 | 闭合 Audience 已进入所有 task：General Provider 接收角色，Portfolio 在同一证据范围内按角色调整 facet 优先级；待真实 Provider/Browser typed 差异矩阵 | 闭合 role-to-output 策略被生产消费，并由 typed 差异矩阵断言 | Surface Context / Goal / Presentation |
+| A2-54 | P1 | Page subjectHint 不参与模型理解 | subjectHint 经公开目录解析为 `defaultSubject` 并进入 Goal Interpretation；无效 hint 仍失败关闭，待真实 Provider/Browser | 当前页面主体成为可信默认或锁定主体 | Surface Context / Goal Interpretation |
+| A2-55 | P1 | 页面省略表达不能稳定绑定主体 | STANDARD 单主体 Portfolio/跨域目标省略 subject 时由后端绑定 `SURFACE_HINT`；显式其他公开主体可覆盖默认，待真实 Browser 省略表达门 | 页面内指代直接绑定 typed subject | Goal Resolution / Frontend Handoff |
 | A2-56 | P1 | 多轮只携带薄 Assistant 摘要 | 下一轮主要看到 Goal label | 保存短期、脱敏的 typed turn summary | Conversation Window / Typed State |
 | A2-57 | P1 | 无法可靠理解“进一步展开” | 上一轮 facet/depth 不在状态中 | 上一成功 Goal 的安全语义可被引用 | Multi-turn Goal State |
 | A2-58 | P1 | 无法引用上一回答区块 | 没有安全的结构化 section reference | 后续可引用公开回答的 typed section | Public Presentation / Multi-turn |
@@ -321,7 +321,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 #### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
 
 - `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
-- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v3`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。v3 包含 Portfolio Fact/跨域目标的必填 `depth`、闭合 comparison dimension，以及由当前公开目录提供的 `allowedRecommendationConstraints`，不能沿用旧版本名义。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v4`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。v4 包含 Portfolio Fact/跨域目标的必填 `depth`、闭合 comparison dimension、公开目录约束，以及可信 `defaultSubject/audienceProfile` 输入语义，不能沿用旧版本名义。
 - `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
 - `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
 - Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
@@ -355,12 +355,21 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 
 #### 3.3.5 Recommendation constraints 与 Comparison 表达当前证据（仍为 IN_PROGRESS）
 
-- `GoalProposalCodecTest` 与 `GoalInterpretationAdapterTest` 证明模型只可从当前公开目录投影的 `CAREER_TRACK_*` / `CAPABILITY_*` 中选择约束；目录外值失败关闭，不能复制访客短语建立开放约束。该不兼容输入/输出语义由 `goal.proposal.v3` 明确承载。
+- `GoalProposalCodecTest` 与 `GoalInterpretationAdapterTest` 证明模型只可从当前公开目录投影的 `CAREER_TRACK_*` / `CAPABILITY_*` 中选择约束；目录外值失败关闭，不能复制访客短语建立开放约束。当前不兼容输入/输出语义由 `goal.proposal.v4` 明确承载。
 - `PortfolioInvocationFactoryTest`、`PortfolioSemanticResultFactoryTest` 与 `JdbcPostgresKnowledgeQueryTest` 证明 requestedSize 和闭合约束进入执行：PostgreSQL 先做 typed 目标召回，候选不足或不完全匹配时扩大召回；Bundle/PostgreSQL 都由同一语义层按约束匹配数、证据类别数和稳定 ID 排序，并对缺口形成 `PARTIAL + unsatisfiedConstraints`。
 - `PublicAgentTurnProjectorTest` 与 `PublicAgentTurnInvariantTest` 证明每个推荐项以闭合 reason code 产生固定公开说明和公开 source key；`actualSize == requestedSize` 仍允许报告约束缺口，数量闭合不再冒充目标满足。`PortfolioPresentationComposerTest` 证明 comparison 按请求 dimension 对齐主体 Claim 与来源，不再顺序堆叠。
 - 本批 Backend clean package 于 2026-08-24 实际执行：`886 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；全仓 `privacy-check` 扫描 916 个文件通过，相关脚本自测与当前权威文档检查通过。
 - model-disabled packaged JAR SHA-256 `c7af8e3506bdb6f7291cb8b59778d23405f32510de93d4902773aff82224a7fc` 的 PRESET/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），因此 A2-43—A2-47 仍不移除。
 - 本批未修改 Frontend。后端公开合同现在允许“推荐数量满足但存在 `unsatisfiedConstraints`”；Frontend Agent 需要让 mapper 接受该组合，并在推荐卡明确展示未满足约束。UI 文案、布局与交互由 Frontend Agent 负责，未取得 Browser 正文证据前不得把 A2-44/A2-47 标为完成。
+
+#### 3.3.6 Audience 与页面主体后端证据（仍为 IN_PROGRESS）
+
+- `GoalInterpretationInputFactoryTest` 与 `GoalInterpretationAdapterTest` 证明已验证的 page `subjectHint` 以 `defaultSubject` 进入模型输入，Audience 以闭合 `INTERVIEWER/MENTOR/HR/GUEST` profile 进入同一可信投影；访客不能提供任意 subject ID 或 audience 文本。
+- `SemanticRouteValidatorTest` 证明 STANDARD 模式下，模型对单主体 Portfolio Fact/跨域目标省略 subject 时，后端注入目录验证过的 `SURFACE_HINT` 且不制造输入 anchor；显式选择另一个公开主体仍由原公开目录校验，不把页面默认误作强制锁定。Discussion 继续只使用原有 `CONTINUATION` locked subject。
+- `SemanticPlanCompilerTest`、`GeneralTaskExecutorTest` 与 `PortfolioInvocationFactoryTest` 证明 Audience 传播到跨域的 General/Portfolio/Synthesis 全部 task；General Provider 请求不再硬编码 GUEST，Portfolio 在不扩大 subject/evidence scope 的前提下按角色改变 facet 优先级。
+- 该输入语义变化由 `goal.proposal.v4` 承载。Backend clean package 于 2026-08-24 实际执行：`889 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；全仓 `privacy-check` 扫描 916 个文件通过，启动器与 packaged runner 自测通过。
+- model-disabled packaged JAR SHA-256 `71b8efc92889ffc9ddd630b96f15e5b3c8308806436aa63bc420483919e67911` 的 PRESET/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），因此 A2-53—A2-55 仍不移除。
+- 本批未修改 Frontend。现有 API 字段未改变；Frontend Agent 负责确保 PROJECT/CASE 页面持续发送正确 `subjectHint + requestSource`，并完成角色差异、页面省略表达的 Browser 交互与正文验收。UI 文案与交互设计仍归 Frontend Agent。
 
 ### 3.4 本轮审计证据边界
 

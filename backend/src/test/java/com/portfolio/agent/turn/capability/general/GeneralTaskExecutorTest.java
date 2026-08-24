@@ -11,6 +11,7 @@ import com.portfolio.agent.turn.planning.UserGoalProposal;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,8 +19,12 @@ import static org.mockito.Mockito.when;
 
 class GeneralTaskExecutorTest {
     @Test void executesTypedRequestToResultPresentationAndArtifact() {
+        AtomicReference<GeneralKnowledgeRequest> captured = new AtomicReference<>();
         GeneralTaskExecutor executor = new GeneralTaskExecutor(
-                GeneralTestFixtures.generator(request -> GeneralTestFixtures.VALID_EXPLANATION),
+                GeneralTestFixtures.generator(request -> {
+                    captured.set(request);
+                    return GeneralTestFixtures.VALID_EXPLANATION;
+                }),
                 new GeneralPresentationComposer());
         TaskExecutionContext context = mock(TaskExecutionContext.class);
         UserGoalProposal.GeneralExplanationParameters parameters =
@@ -27,7 +32,9 @@ class GeneralTaskExecutorTest {
                         new UserGoalProposal.InputAnchor("并发控制", 0), UserGoalProposal.Depth.STANDARD);
         when(context.getTask()).thenReturn(SemanticTask.of(
                 "task-general", SemanticTask.Type.GENERAL_EXPLANATION,
-                new SemanticTaskParameters(GoalKind.GENERAL_EXPLANATION, parameters, List.of())));
+                new SemanticTaskParameters(
+                        GoalKind.GENERAL_EXPLANATION, parameters, List.of(),
+                        SemanticTaskParameters.AudienceProfile.INTERVIEWER)));
         when(context.getContentReleaseId()).thenReturn("public-1");
         when(context.getDeadline()).thenReturn(GeneralTestFixtures.explanation().getDeadline());
         when(context.getCancellation()).thenReturn(new CancellationSignal());
@@ -37,5 +44,7 @@ class GeneralTaskExecutorTest {
         assertThat(execution.getArtifact().getSemanticResult()).isInstanceOf(GeneralSemanticResult.class);
         assertThat(execution.getArtifact().getPresentation()).isInstanceOf(GeneralPresentation.class);
         assertThat(execution.getArtifact().getProvenance().getPublicSourceKeys()).isEmpty();
+        assertThat(captured.get().getAudience())
+                .isEqualTo(GeneralKnowledgeRequest.Audience.INTERVIEWER);
     }
 }
