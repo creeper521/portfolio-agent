@@ -7,6 +7,7 @@ import type {
   GoalNotice,
   GoalPresentation,
   LocalClarification,
+  ModelExecutionProjection,
   PublicAnswer,
   PublicAgentTurn,
   PublicAgentTurnParseResult,
@@ -21,10 +22,11 @@ import type {
   TextField,
 } from './publicAgentTurn'
 
-// D-38/D-46 冻结合同的结构校验 mapper：只做闭合 variant、必填字段、闭合枚举、
-// 结构不变量与公开引用解析；未知附加字段按 additive evolution 忽略。
+// 冻结 PublicAgentTurn wire 合同的结构校验 mapper（领域模型层，合同入口）：
+// 只做闭合 variant、必填字段、闭合枚举、结构不变量与公开引用解析；
+// 未知附加字段按 additive evolution 忽略。
 // 不推导业务语义（resolution/coverage/来源构成均以后端为权威），
-// 不提供任何旧合同（旧协议版本、旧 disposition、任务快照、公共降级轴）回退。
+// 不提供任何旧合同（旧协议版本、旧 disposition、任务快照、公共降级轴）回退。（D-38 / D-46）
 
 const TURN_KINDS: readonly string[] = [
   'ANSWER',
@@ -40,7 +42,7 @@ const GOAL_COVERAGES: readonly string[] = ['FULL', 'PARTIAL', 'NONE']
 
 const PRESENTATION_KINDS: readonly string[] = ['SECTIONED', 'RECOMMENDATION']
 
-// S5-01 冻结的 sectionKind 闭集（前端交接 §16.1）。
+// sectionKind 闭合枚举集合：与冻结合同逐字一致，新增取值必须先更新合同。（S5-01 / 前端交接 §16.1）
 const SECTION_KINDS: readonly PublicSectionKind[] = [
   'BACKGROUND',
   'RESPONSIBILITY',
@@ -61,12 +63,25 @@ const SUPPORT_KINDS: readonly string[] = [
 
 const CLARIFICATION_FIELD_KINDS: readonly string[] = ['SINGLE_CHOICE', 'TEXT']
 
-// 只有 CONTINUATION_UNAVAILABLE 不表达内容覆盖缺口、可附着在 FULL Goal 上（D-38.4）。
+// 模型参与度闭合枚举：selectionKind 闭合，MODEL 必须携带 ref+version 而 NONE 不得携带；
+// participation 按该轮实际成功采纳的阶段取值，前端不推导。（设计 §13）
+const MODEL_PARTICIPATIONS: readonly string[] = [
+  'NONE',
+  'GOAL_INTERPRETATION_ONLY',
+  'ANSWER_GENERATION',
+  'GOAL_AND_ANSWER',
+  'ATTEMPTED_UNAVAILABLE',
+]
+
+// 唯一不表达内容覆盖缺口、允许附着在 FULL Goal 上的通知码：
+// 续读不可用属于交互能力缺失，而非内容没覆盖到。（D-38.4）
 const NON_GAP_NOTICE_CODE = 'CONTINUATION_UNAVAILABLE'
 
+// RFC 4122 v1—v5 UUID 形状；后端幂等键合同只接受 UUID。
 const REQUEST_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+/** 违规明细收集器：一次解析累积全部违规再整体返回，而非首个错误即停。 */
 class Violations {
   private readonly entries: string[] = []
 
@@ -133,6 +148,7 @@ function arrayOf(
   return value
 }
 
+/** 校验 requestId：非空且符合 UUID 形状，否则记违规并返回 undefined。 */
 function parseRequestId(
   value: unknown,
   violations: Violations,
@@ -148,6 +164,7 @@ function parseRequestId(
   return requestId
 }
 
+/** 校验并投影四种闭合 continuation 操作；operation 不在闭集内即记违规。 */
 function parseContinuation(
   value: unknown,
   violations: Violations,
@@ -181,6 +198,7 @@ function parseContinuation(
   return undefined
 }
 
+/** 校验建议动作数组；字段缺省视为空数组（可选字段）。单项不合法会记违规（整体仍判失败），但继续解析其余项以收集完整明细。 */
 function parseSuggestedActions(
   value: unknown,
   violations: Violations,
@@ -236,6 +254,7 @@ function parseChoice(
   return { choiceId, label }
 }
 
+/** 校验单选/文本两种闭合字段；SINGLE_CHOICE 至少一个选项，TEXT 的 limit 必须为正数。 */
 function parseChallengeField(
   value: unknown,
   violations: Violations,
@@ -296,6 +315,7 @@ function parseChallengeField(
   return undefined
 }
 
+/** 校验澄清挑战：id + 提示语 + 至少一个字段。 */
 function parseChallenge(
   value: unknown,
   violations: Violations,
@@ -332,6 +352,7 @@ function parseChallenge(
   return { clarificationId, prompt, fields }
 }
 
+/** 校验 ANSWER 内局部澄清；affectedGoalIds 必须全部能解析到同一 answer 的 goalResult。 */
 function parseLocalClarification(
   value: unknown,
   violations: Violations,
@@ -375,6 +396,7 @@ function parseLocalClarification(
   return { ...challenge, affectedGoalIds }
 }
 
+/** 校验支撑声明；publicSourceKeys 必须全部能在 answer.sourceCatalog 解析，否则记违规。 */
 function parseSupport(
   value: unknown,
   violations: Violations,
@@ -413,6 +435,7 @@ function parseSupport(
   return { kind, publicSourceKeys }
 }
 
+/** 校验单个段落：闭合 sectionKind + 必填标题/内容 + 支撑声明。 */
 function parseSection(
   value: unknown,
   violations: Violations,
@@ -457,6 +480,7 @@ function stringArrayOf(
   return values
 }
 
+/** 按 kind 分派：SECTIONED 要求非空段落列表，其余进入 RECOMMENDATION 校验。 */
 function parsePresentation(
   value: unknown,
   violations: Violations,
@@ -497,6 +521,12 @@ function parsePresentation(
   return parseRecommendation(value, violations, where, sourceKeys)
 }
 
+/**
+ * 校验 RECOMMENDATION 呈现的结构不变量：结果项 1—5 个、actualSize 必须等于
+ * 实际项数且不得超过 requestedSize；数量不足必须给出 incompleteReasons，
+ * 数量完整则不得携带；route 必须站内相对路径；discussionAction 必须携带
+ * ENTER_RESULT continuation。
+ */
 function parseRecommendation(
   value: Record<string, unknown>,
   violations: Violations,
@@ -627,6 +657,7 @@ function parseRecommendation(
   }
 }
 
+/** 校验唯一来源目录：key 不得重复、route 必须站内相对路径；同时返回 key 集合供引用解析。 */
 function parseSourceCatalog(
   value: unknown,
   violations: Violations,
@@ -676,6 +707,7 @@ function parseSourceCatalog(
   return { sources, keys }
 }
 
+/** 校验 Goal 通知数组；字段缺省视为空列表。 */
 function parseNotices(
   value: unknown,
   violations: Violations,
@@ -705,6 +737,13 @@ function parseNotices(
   return notices
 }
 
+/**
+ * 校验 ANSWER 载荷。除字段级校验外还检查两组不变量：
+ * 1) coverage × 呈现/通知：FULL、PARTIAL 必须携带 presentation，NONE 不得携带；
+ *    PARTIAL 至少一个覆盖缺口 notice，FULL 不得有缺口 notice，NONE 必须有 notice。
+ * 2) resolution × Goal：COMPLETE 要求全部 FULL；PARTIAL 要求至少一个 Goal 有产出
+ *    且不得全为 FULL；NO_RESULT 要求全部 NONE。
+ */
 function parseAnswer(
   value: unknown,
   violations: Violations,
@@ -882,6 +921,51 @@ function parseAnswer(
   }
 }
 
+/** 校验模型执行投影：participation 闭合；NONE 不得携带 ref/version，MODEL 必须携带。 */
+function parseModelExecution(
+  value: unknown,
+  violations: Violations,
+): ModelExecutionProjection | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!isRecord(value)) {
+    violations.add('modelExecution 必须是 JSON 对象')
+    return undefined
+  }
+  if (!MODEL_PARTICIPATIONS.includes(String(value.participation))) {
+    violations.add(`modelExecution.participation 必须是 ${MODEL_PARTICIPATIONS.join('/')} 之一`)
+    return undefined
+  }
+  const participation = value.participation as ModelExecutionProjection['participation']
+  if (value.selectionKind === 'NONE') {
+    if (value.requestedModelRef !== undefined || value.selectionVersion !== undefined) {
+      violations.add('modelExecution：selectionKind=NONE 不得携带 requestedModelRef/selectionVersion')
+      return undefined
+    }
+    return { selectionKind: 'NONE', participation }
+  }
+  if (value.selectionKind !== 'MODEL') {
+    violations.add('modelExecution.selectionKind 必须是 MODEL/NONE 之一')
+    return undefined
+  }
+  const requestedModelRef = text(
+    value.requestedModelRef,
+    violations,
+    'modelExecution.requestedModelRef',
+  )
+  const selectionVersion = text(
+    value.selectionVersion,
+    violations,
+    'modelExecution.selectionVersion',
+  )
+  if (requestedModelRef === undefined || selectionVersion === undefined) {
+    return undefined
+  }
+  return { selectionKind: 'MODEL', requestedModelRef, selectionVersion, participation }
+}
+
+/** 校验 Turn 根节点并分派到各闭合变体；非 ANSWER 变体不得携带 answer。 */
 function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | undefined {
   if (!isRecord(value)) {
     violations.add('PublicAgentTurn 根节点必须是 JSON 对象')
@@ -900,6 +984,7 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
     violations,
     'suggestedActions',
   )
+  const modelExecution = parseModelExecution(value.modelExecution, violations)
 
   if (value.kind !== 'ANSWER') {
     if (value.answer !== undefined) {
@@ -924,6 +1009,7 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
         message,
         clarification,
         ...(suggestedActions === undefined ? {} : { suggestedActions }),
+        ...(modelExecution === undefined ? {} : { modelExecution }),
       }
     }
     if (value.kind === 'BOUNDARY' || value.kind === 'CAPABILITY_UNAVAILABLE') {
@@ -950,6 +1036,7 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
             || typeof retryAfterSeconds !== 'number'
             ? {} : { retryAfterSeconds }),
           ...(suggestedActions === undefined ? {} : { suggestedActions }),
+          ...(modelExecution === undefined ? {} : { modelExecution }),
         }
       }
       return {
@@ -958,6 +1045,7 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
         code,
         message,
         ...(suggestedActions === undefined ? {} : { suggestedActions }),
+        ...(modelExecution === undefined ? {} : { modelExecution }),
       }
     }
     return {
@@ -965,6 +1053,7 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
       requestId,
       message,
       ...(suggestedActions === undefined ? {} : { suggestedActions }),
+      ...(modelExecution === undefined ? {} : { modelExecution }),
     }
   }
 
@@ -976,9 +1065,19 @@ function parseTurn(value: unknown, violations: Violations): PublicAgentTurn | un
   if (answer === undefined) {
     return undefined
   }
-  return { kind: 'ANSWER', requestId, answer }
+  return {
+    kind: 'ANSWER',
+    requestId,
+    answer,
+    ...(modelExecution === undefined ? {} : { modelExecution }),
+  }
 }
 
+/**
+ * fail-closed 解析未知来源的 PublicAgentTurn JSON。
+ * 当且仅当全部闭合校验通过且无任何违规时返回 ok=true；
+ * 任何违规都收进 violations 一次性返回，绝不猜测字段或回退旧格式。
+ */
 export function parsePublicAgentTurn(value: unknown): PublicAgentTurnParseResult {
   const violations = new Violations()
   const turn = parseTurn(value, violations)

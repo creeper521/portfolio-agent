@@ -1,3 +1,8 @@
+import type {
+  ModelSelection,
+  SelectableModelReference,
+} from '../../agent/model/modelSelection'
+
 export type AudienceRole = 'INTERVIEWER' | 'MENTOR' | 'HR' | 'GUEST'
 export type ProjectStatus = 'DELIVERED' | 'IN_PROGRESS' | 'PROTOTYPE' | 'LEARNING_ONLY'
 export type ContributionType = 'INDEPENDENT' | 'PRIMARY' | 'COLLABORATIVE' | 'OBSERVED_LEARNING'
@@ -162,9 +167,13 @@ export interface PublicPortfolio {
   evidence: PublicEvidence[]
   timeline: TimelineEvent[]
   questionPresets: QuestionPreset[]
-  /** 中性部署能力投影；UNAVAILABLE 时公开内容仍可浏览。 */
+  /** 中性部署能力投影；UNAVAILABLE 时公开内容仍可浏览。
+   * 模型目录字段为 A7 additive 投影：损坏/缺失经 portfolioApi 规范化为空目录（显式 NONE）。 */
   agentAvailability: {
     readonly status: 'AVAILABLE' | 'UNAVAILABLE'
     readonly freeTextSemanticRouting: 'AVAILABLE' | 'DISABLED'
+    readonly modelCatalogVersion: string
+    readonly defaultModelSelection: ModelSelection
+    readonly selectableModels: readonly SelectableModelReference[]
   }
 }

@@ -2,6 +2,9 @@
 import { computed, ref } from 'vue'
 
 import { submitAgentTurn } from '../../agent/api/agentTurnApi'
+import type { AgentTurnCommand, SurfaceContext } from '../../agent/api/agentTurnApi'
+import { newRequestId } from '../../agent/api/requestId'
+import { displayNameOfSelection, type ModelSelection } from '../../agent/model/modelSelection'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { audienceProfiles } from '../data/audienceProfiles'
 import type { AudienceProfile, HomeAnswerState } from '../model/audienceTypes'
@@ -9,6 +12,18 @@ import LightAnswerPanel from './LightAnswerPanel.vue'
 
 // 首页轻对话：一次性 ASK（无会话凭证首问），结果为闭合 PublicAgentTurn；
 // 重放输入随 handoff 交给 Agent 页精确重放同一轮（D-31 幂等）。
+// A2-72/73：失败重试冻结完整提交快照（requestId/命令/surface 原样复用），
+// 不生成新 requestId、不把 Preset 退化成 FREE_TEXT。
+
+/** A2-71：每次提问都是独立单轮，round 只计数已回答次数，不表达多轮会话。 */
+interface FailedSubmission {
+  readonly requestId: string
+  readonly command: AgentTurnCommand
+  readonly surfaceContext: SurfaceContext
+  readonly question: string
+  /** A7：首页轮次使用目录默认选择，失败重试快照原样携带（UI spec §5.1）。 */
+  readonly modelSelection: ModelSelection
+}
 
 const props = defineProps<{ portfolio: PublicPortfolio }>()
 
@@ -18,9 +33,29 @@ const customQuestion = ref('')
 const round = ref(0)
 const pending = ref(false)
 const answerError = ref('')
-const failedQuestion = ref('')
+const failedSubmission = ref<FailedSubmission | null>(null)
 
 const primaryProject = computed(() => props.portfolio.projects[0] ?? null)
+/** 目录默认选择（D-MS-6）：首页不提供切换，统一使用 /api/portfolio 投影默认。 */
+const defaultModelSelection = computed<ModelSelection>(
+  () => props.portfolio.agentAvailability.defaultModelSelection,
+)
+/** 默认未就绪（NONE）但目录非空：首页无选择路径，不得自动发起自由文本 Turn（设计 §8）。 */
+const customQuestionBlocked = computed(
+  () => props.portfolio.agentAvailability.selectableModels.length > 0
+    && defaultModelSelection.value.kind === 'NONE',
+)
+/** 首页徽标（UI spec §2.7）：目录默认模型的显示名；NONE 时不显示徽标。 */
+const defaultModelName = computed(() =>
+  displayNameOfSelection(
+    {
+      modelCatalogVersion: props.portfolio.agentAvailability.modelCatalogVersion,
+      defaultModelSelection: defaultModelSelection.value,
+      selectableModels: props.portfolio.agentAvailability.selectableModels,
+    },
+    defaultModelSelection.value,
+  ),
+)
 const supportedQuestions = computed(() =>
   props.portfolio.questionPresets.filter(
     (preset) => preset.audiences.includes(selectedRole.value.id) &&
@@ -33,6 +68,7 @@ function chooseRole(profile: AudienceProfile) {
   answer.value = null
   customQuestion.value = ''
   round.value = 0
+  failedSubmission.value = null
 }
 
 async function ask(question: string, questionPresetId?: string) {
@@ -40,27 +76,53 @@ async function ask(question: string, questionPresetId?: string) {
   const project = primaryProject.value
   if (!normalized || !project || pending.value) return
 
-  pending.value = true
-  answerError.value = ''
-  failedQuestion.value = normalized
-  const requestId = globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`
   const preset = questionPresetId === undefined
     ? undefined
     : props.portfolio.questionPresets.find((item) => item.id === questionPresetId)
-  const surfaceContext = {
-    subjectHint: { kind: 'PROJECT' as const, slug: project.slug },
+  // 首页无选择路径：默认 NONE 且目录非空时，不自动发起自由文本 Turn（设计 §8）。
+  if (preset === undefined && customQuestionBlocked.value) return
+  const surfaceContext: SurfaceContext = {
+    subjectHint: { kind: 'PROJECT', slug: project.slug },
     audienceRole: selectedRole.value.id,
-    requestSource: 'HOME' as const,
+    requestSource: 'HOME',
   }
-  const command = preset === undefined
-    ? { kind: 'ASK' as const, input: { kind: 'FREE_TEXT' as const, text: normalized.slice(0, 2000) } }
+  const command: AgentTurnCommand = preset === undefined
+    ? { kind: 'ASK', input: { kind: 'FREE_TEXT', text: normalized.slice(0, 2000) } }
     : {
-      kind: 'ASK' as const,
-      input: { kind: 'PRESET' as const, presetId: preset.id, presetRevision: preset.contractVersion },
+      kind: 'ASK',
+      input: { kind: 'PRESET', presetId: preset.id, presetRevision: preset.contractVersion },
     }
+  await executeSubmission(
+    newRequestId(), command, surfaceContext, normalized, defaultModelSelection.value,
+  )
+}
+
+/** A2-72/73：重试只消费冻结快照，同 requestId 幂等回收服务端可能已完成的终局。 */
+async function retryFailedSubmission() {
+  const snapshot = failedSubmission.value
+  if (snapshot === null || pending.value) return
+  await executeSubmission(
+    snapshot.requestId, snapshot.command, snapshot.surfaceContext, snapshot.question,
+    snapshot.modelSelection,
+  )
+}
+
+async function executeSubmission(
+  requestId: string,
+  command: AgentTurnCommand,
+  surfaceContext: SurfaceContext,
+  question: string,
+  modelSelection: ModelSelection,
+) {
+  const project = primaryProject.value
+  if (project === null || pending.value) return
+  pending.value = true
+  answerError.value = ''
+  failedSubmission.value = { requestId, command, surfaceContext, question, modelSelection }
   try {
     const result = await submitAgentTurn({
       requestId,
+      modelSelection,
       command,
       surfaceContext,
       conversationWindow: [],
@@ -71,13 +133,14 @@ async function ask(question: string, questionPresetId?: string) {
     round.value = Math.min(round.value + 1, 3)
     answer.value = {
       round: round.value,
-      question: normalized,
+      question,
       turn: result.turn,
       projectSlug: project.slug,
       conversation: result.conversation,
       replay: { requestId, command, surfaceContext },
     }
     customQuestion.value = ''
+    failedSubmission.value = null
   } catch {
     answerError.value = 'Agent 暂时无法回答，请稍后重试'
   } finally {
@@ -101,7 +164,7 @@ function focusCustomQuestion() {
         <p class="eyebrow">02 · LIGHT CONVERSATION</p>
         <h2 id="audience-title">选择你的视角。</h2>
       </div>
-      <span>ROUND {{ String(round).padStart(2, '0') }} / 03 · HOMEPAGE PREVIEW</span>
+      <span>ANSWERED {{ String(round).padStart(2, '0') }} · HOMEPAGE PREVIEW</span>
     </div>
 
     <div class="page-shell audience-console">
@@ -147,18 +210,21 @@ function focusCustomQuestion() {
           <input
             v-model="customQuestion"
             data-custom-question
-            :disabled="pending"
+            :disabled="pending || customQuestionBlocked"
             aria-label="输入自己的问题"
             placeholder="也可以输入自己的问题"
           />
-          <button data-question-submit type="submit" :disabled="pending">发送 ↵</button>
+          <button data-question-submit type="submit" :disabled="pending || customQuestionBlocked">发送 ↵</button>
         </form>
+        <p v-if="customQuestionBlocked" class="answer-feedback" role="status">
+          目录默认模型暂未就绪：可先使用推荐问题，或进入 Agent 页选择模型后提问。
+        </p>
         <p v-if="pending" class="answer-feedback" role="status">
           正在核对公开事实…
         </p>
         <div v-else-if="answerError" class="answer-feedback answer-feedback--error" role="alert">
           <p>{{ answerError }}</p>
-          <button data-answer-retry type="button" @click="ask(failedQuestion)">重新回答</button>
+          <button data-answer-retry type="button" @click="retryFailedSubmission">重新回答</button>
         </div>
       </section>
 
@@ -166,6 +232,7 @@ function focusCustomQuestion() {
         v-if="answer"
         :role="selectedRole.id"
         :answer="answer"
+        :default-model-name="defaultModelName"
         @follow-up="focusCustomQuestion"
       />
     </div>

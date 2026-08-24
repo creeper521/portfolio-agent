@@ -5,10 +5,12 @@ import {
   loadPublicAgentTurnGoldenFixtures,
 } from '../../agent/model/publicAgentTurnFixtureLoader'
 import { previewPublicContent } from '../../public-content/data/previewPublicContent'
+import { consumeAgentHandoff } from '../../agent/model/handoffStore'
 import AudienceDialogue from './AudienceDialogue.vue'
 
-const { submitAgentTurnMock } = vi.hoisted(() => ({
+const { submitAgentTurnMock, handoffRecorder } = vi.hoisted(() => ({
   submitAgentTurnMock: vi.fn(),
+  handoffRecorder: vi.fn(),
 }))
 
 vi.mock('../../agent/api/agentTurnApi', async (importOriginal) => {
@@ -16,6 +18,15 @@ vi.mock('../../agent/api/agentTurnApi', async (importOriginal) => {
   return {
     ...original,
     submitAgentTurn: submitAgentTurnMock,
+  }
+})
+
+vi.mock('../../agent/model/handoffStore', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../agent/model/handoffStore')>()
+  return {
+    ...original,
+    createAgentHandoff: (seed: Parameters<typeof original.createAgentHandoff>[0]) =>
+      handoffRecorder(seed) as string,
   }
 })
 
@@ -172,12 +183,113 @@ describe('AudienceDialogue', () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Agent 暂时无法回答，请稍后重试')
     expect(wrapper.text()).not.toContain('internal.example')
-    expect(wrapper.text()).toContain('ROUND 00 / 03')
+    expect(wrapper.text()).toContain('ANSWERED 00')
 
     await wrapper.get('[data-answer-retry]').trigger('click')
     await flushPromises()
 
     expect(submitAgentTurnMock).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('ROUND 01 / 03')
+    expect(wrapper.text()).toContain('ANSWERED 01')
+  })
+
+  it('Preset 失败重试原样复用同一 requestId 与 PRESET 身份，不退化为 FREE_TEXT（A2-72/A2-73）', async () => {
+    submitAgentTurnMock
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'TIMEOUT', message: '等待超时', retryable: true },
+      })
+      .mockResolvedValueOnce(submitSuccess())
+    const wrapper = mountDialogue()
+
+    await wrapper.get('[data-question]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Agent 暂时无法回答')
+    const firstCall = JSON.parse(JSON.stringify(submitAgentTurnMock.mock.calls[0]?.[0]))
+
+    await wrapper.get('[data-answer-retry]').trigger('click')
+    await flushPromises()
+
+    expect(submitAgentTurnMock).toHaveBeenCalledTimes(2)
+    expect(submitAgentTurnMock.mock.calls[1]?.[0]).toEqual(firstCall)
+    expect((submitAgentTurnMock.mock.calls[1]?.[0] as { command: { input: { kind: string } } }).command.input.kind).toBe('PRESET')
+  })
+})
+
+describe('AudienceDialogue（模型目录默认选择，UI spec §2.7/§8.3）', () => {
+  beforeEach(() => {
+    submitAgentTurnMock.mockReset()
+    submitAgentTurnMock.mockResolvedValue(submitSuccess())
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    )
+  })
+
+  it('首页轮次携带目录默认 ModelSelection；回答面板显示默认模型徽标', async () => {
+    const wrapper = mountDialogue()
+
+    await wrapper.get('[data-question]').trigger('click')
+    await flushPromises()
+
+    const request = submitAgentTurnMock.mock.calls[0]?.[0] as {
+      modelSelection: { kind: string; modelRef: string; selectionVersion: string }
+    }
+    expect(request.modelSelection).toEqual({
+      kind: 'MODEL',
+      modelRef: 'glm-4-7-flash',
+      selectionVersion: 'glm-4-7-flash-v1',
+    })
+    const badge = wrapper.get('[data-testid="light-answer-model"]')
+    expect(badge.text()).toContain('由 GLM-4.7-Flash · 目录默认 生成')
+    expect(badge.text()).toContain('首页不提供切换，进入 Agent 页后可选')
+    wrapper.unmount()
+  })
+
+  it('handoff 种子不携带模型字段：Agent 页按目录默认初始化（D-MS-6/§2.7）', async () => {
+    const recorded: Array<Record<string, unknown>> = []
+    handoffRecorder.mockImplementation((seed) => {
+      recorded.push(seed as unknown as Record<string, unknown>)
+      return 'handoff-id-test'
+    })
+    const wrapper = mountDialogue()
+
+    await wrapper.get('[data-question]').trigger('click')
+    await flushPromises()
+
+    expect(recorded).toHaveLength(1)
+    const seed = recorded[0]!
+    expect(seed.source).toBe('HOME')
+    expect(seed.replay).toBeDefined()
+    expect(JSON.stringify(seed)).not.toMatch(/modelSelection|modelRef|selectionVersion/i)
+    wrapper.unmount()
+  })
+
+  it('默认未就绪（NONE）且目录非空：自由文本输入被禁用，预设仍可提交 NONE 选择（设计 §8）', async () => {
+    submitAgentTurnMock.mockResolvedValue(submitSuccess())
+    const wrapper = mount(AudienceDialogue, {
+      props: {
+        portfolio: {
+          ...previewPublicContent,
+          agentAvailability: {
+            ...previewPublicContent.agentAvailability,
+            defaultModelSelection: { kind: 'NONE' },
+          },
+        },
+      },
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a><slot /></a>' } },
+      },
+    })
+
+    expect(wrapper.get('[data-custom-question]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('目录默认模型暂未就绪')
+
+    await wrapper.get('[data-question]').trigger('click')
+    await flushPromises()
+    const request = submitAgentTurnMock.mock.calls[0]?.[0] as {
+      modelSelection: { kind: string }
+    }
+    expect(request?.modelSelection).toEqual({ kind: 'NONE' })
+    wrapper.unmount()
   })
 })

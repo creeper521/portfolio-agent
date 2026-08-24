@@ -192,7 +192,8 @@ describe('parsePublicAgentTurn：共享 Golden Fixtures 正向解析', () => {
       throw new Error('期望 CAPABILITY_UNAVAILABLE')
     }
     expect(capability.code).toBe('SEMANTIC_ROUTING_UNAVAILABLE')
-    expect(capability.retryable).toBe(true)
+    // A7 冻结 fixtures：语义路由不可用随模型目录准入变化，不再是同请求可重试的临时态。
+    expect(capability.retryable).toBe(false)
   })
 })
 
@@ -397,5 +398,57 @@ describe('parsePublicAgentTurn：sectionKind 闭集与 RECOMMENDATION 冻结不�
       const items = asArray(recommendationOf(turn).items)
       delete asRecord(asRecord(items[0]).discussionAction).continuation
     }), '必须携带 ENTER_RESULT')
+  })
+})
+
+describe('parsePublicAgentTurn：modelExecution 公开投影（A7）', () => {
+  it('ANSWER 终局携带 GOAL_AND_ANSWER 投影；确定性终局为 selectionKind=NONE', () => {
+    const answer = parseFixture('answer-complete.json')
+    expect(answer.modelExecution).toEqual({
+      selectionKind: 'MODEL',
+      requestedModelRef: 'glm-4-7-flash',
+      selectionVersion: 'glm-4-7-flash-v1',
+      participation: 'GOAL_AND_ANSWER',
+    })
+    const unavailable = parseFixture('capability-unavailable.json')
+    expect(unavailable.modelExecution).toEqual({
+      selectionKind: 'NONE',
+      participation: 'NONE',
+    })
+  })
+
+  it('ATTEMPTED_UNAVAILABLE 终局保留所选条目投影', () => {
+    const attempted = parseFixture('selected-model-temporarily-unavailable.json')
+    expect(attempted.modelExecution).toEqual({
+      selectionKind: 'MODEL',
+      requestedModelRef: 'qwen-3-7-flash',
+      selectionVersion: 'qwen-3-7-flash-v1',
+      participation: 'ATTEMPTED_UNAVAILABLE',
+    })
+  })
+
+  it('modelExecution 破损 fail-closed：未知 participation、MODEL 缺字段、NONE 携带字段', () => {
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      asRecord(turn.modelExecution).participation = 'PLANNING_ONLY'
+    }), 'participation 必须是')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      delete asRecord(turn.modelExecution).selectionVersion
+    }), 'modelExecution.selectionVersion 必须是非空字符串')
+    expectInvalid(mutate('capability-unavailable.json', (turn) => {
+      asRecord(turn.modelExecution).requestedModelRef = 'glm-4-7-flash'
+    }), 'selectionKind=NONE 不得携带')
+    expectInvalid(mutate('answer-complete.json', (turn) => {
+      asRecord(turn.modelExecution).selectionKind = 'AUTO'
+    }), 'selectionKind 必须是 MODEL/NONE 之一')
+  })
+
+  it('modelExecution 为可选字段：缺失时 turn 仍可解析（additive evolution）', () => {
+    const parsed = parsePublicAgentTurn(mutate('answer-complete.json', (turn) => {
+      delete turn.modelExecution
+    }))
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      expect(parsed.turn.modelExecution).toBeUndefined()
+    }
   })
 })

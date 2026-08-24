@@ -13,6 +13,7 @@ const sessions: AgentSession[] = [{
   createdAt: 1,
   updatedAt: 2,
   messages: [],
+  notices: [],
   discussionRevision: 0,
 }]
 

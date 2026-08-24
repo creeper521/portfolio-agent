@@ -1,19 +1,34 @@
 import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import type { ContinuationReference, PublicAgentTurn, SuggestedAction } from '../model/publicAgentTurn'
+import type { ModelSelection } from '../model/modelSelection'
 import { parsePublicAgentTurn } from '../model/publicAgentTurnMapper'
 
-// D-46 / 前端交接 §2-§4/§16.2：四条无版本 Agent 资源的唯一前端传输层。
-// ResumeToken 只经 Authorization: Bearer 传输，不进 body/URL/日志/诊断；
-// 业务结果一律由 parsePublicAgentTurn fail-closed 解析，不回退旧合同。
+// 四条无版本 /api/agent 资源（提交 Turn、取消 Turn、查询当前会话、清除当前会话）
+// 的唯一前端传输层（API 层）：上层只经此文件访问网络，不直接 fetch。
+// ResumeToken 只经 Authorization: Bearer 请求头传输，绝不进入 URL、请求体、日志或诊断；
+// 业务结果一律由 parsePublicAgentTurn 做 fail-closed 解析，合同不匹配即失败，不回退旧格式。
+// 每个 Turn 请求都显式携带闭合 ModelSelection（不隐式回退默认模型），
+// 其序列化形状以 contracts/agent-turn/request-fixtures 的冻结 fixtures 为准。
+// （D-46 / 前端交接 §2-§4、§16.2；模型目录 Slice A / 设计 §9）
 
+/** 透传 Turn 请求使用的闭合 ModelSelection 类型，调用方无需感知 model 模块路径。 */
+export type { ModelSelection } from '../model/modelSelection'
+
+/** ASK 命令的输入：自由文本提问，或按 id+revision 引用一个预设问题。 */
 export type AskCommandInput =
   | { readonly kind: 'FREE_TEXT'; readonly text: string }
   | { readonly kind: 'PRESET'; readonly presetId: string; readonly presetRevision: string }
 
+/** 澄清挑战的作答载荷：单选提交 opaque choiceId，文本提交 bounded 文本。 */
 export type ClarificationAnswer =
   | { readonly kind: 'CHOICE'; readonly choiceId: string }
   | { readonly kind: 'TEXT'; readonly text: string }
 
+/**
+ * 一次 Agent 轮次的闭合命令变体：新提问（ASK）、四种 Context 续读/跳出
+ * （CONTINUE，经 opaque ContextHandle 引用服务端上下文）、或提交澄清答案
+ * （RESOLVE_CLARIFICATION）。前端不理解 ContextHandle 内容，只原样回传。
+ */
 export type AgentTurnCommand =
   | {
     readonly kind: 'ASK'
@@ -48,18 +63,26 @@ export type AgentTurnCommand =
     readonly answer: ClarificationAnswer
   }
 
+/**
+ * 请求来源表面上下文：告知服务端本次提问从哪个页面、以什么受众视角发起，
+ * 供其做路由与内容裁剪；全部可选，语义由后端定义。
+ */
 export interface SurfaceContext {
   readonly subjectHint?: { readonly kind: 'PROJECT' | 'CASE'; readonly slug: string }
   readonly audienceRole?: AudienceRole
   readonly requestSource?: 'HOME' | 'PROJECT' | 'CASE' | 'AGENT_PAGE'
 }
 
+/** 随请求上送的最小会话窗口消息：仅角色与文本，供服务端裁剪上下文。 */
 export interface ConversationWindowMessage {
   readonly role: 'USER' | 'ASSISTANT'
   readonly content: string
 }
 
-/** 根级 additive envelope（交接 §16.2）：resumeToken 仅首轮签发或轮换时出现。 */
+/**
+ * 响应根级 additive envelope：承载跨轮次的权威会话状态。
+ * resumeToken 只在首轮签发或轮换时出现，继续沿用旧 Token 时省略。（交接 §16.2）
+ */
 export interface ConversationEnvelope {
   readonly conversationId: string
   readonly resumeToken?: string
@@ -67,8 +90,16 @@ export interface ConversationEnvelope {
   readonly activeDiscussion?: CurrentDiscussionSummary
 }
 
+/**
+ * 轮次失败类别闭合集：API（服务端业务错误）、CONTRACT（响应不符合冻结合同）、
+ * ABORTED（用户主动停止等待）、NETWORK（连接失败）、TIMEOUT（本地等待计时到点）。
+ */
 export type AgentTurnFailureKind = 'API' | 'CONTRACT' | 'ABORTED' | 'NETWORK' | 'TIMEOUT'
 
+/**
+ * 结构化轮次失败：传输层不抛异常，一切失败都折叠为该结构向上返回。
+ * status 仅 API 类别携带；code 为服务端稳定码或前端本地码。
+ */
 export interface AgentTurnFailure {
   readonly kind: AgentTurnFailureKind
   readonly status?: number
@@ -79,12 +110,20 @@ export interface AgentTurnFailure {
   readonly retryAfterSeconds?: number
 }
 
+/** submitAgentTurn 的返回：成功携带解析后的 Turn 与会话 envelope，失败携带结构化 failure。 */
 export type AgentTurnTransportResult =
   | { readonly ok: true; readonly turn: PublicAgentTurn; readonly conversation: ConversationEnvelope | null }
   | { readonly ok: false; readonly failure: AgentTurnFailure }
 
+/** 取消 Turn 的结果：已取消 / 已完成不可取消 / 服务端不认识该请求 / 传输失败或未预期状态。 */
 export type CancelTurnResult = 'CANCELLED' | 'ALREADY_COMPLETED' | 'NOT_FOUND' | 'FAILED'
+/** 清除当前会话的结果：仅 204 记为 CLEARED，其余一律 FAILED，由调用方提示重试。 */
 export type ClearConversationResult = 'CLEARED' | 'FAILED'
+/**
+ * fetchCurrentConversation 的返回：ok=true 携带权威会话状态；
+ * ok=false 且 invalid=true 表示 ResumeToken 失效（401，应引导新建会话）；
+ * invalid=false 表示网络失败，或响应不符合合同（reason=CONTRACT_INVALID）。
+ */
 export type CurrentConversationResult =
   | {
     readonly ok: true
@@ -99,6 +138,10 @@ export type CurrentConversationResult =
     readonly reason?: 'CONTRACT_INVALID'
   }
 
+/**
+ * 当前活跃主题讨论（typed discussion focus）的公开摘要：
+ * 完全由服务端下发，前端只展示并在用户触发时回传其中的 continuation，不自行构造。
+ */
 export interface CurrentDiscussionSummary {
   readonly status: 'ACTIVE' | 'EXPIRED'
   readonly subject: {
@@ -108,6 +151,7 @@ export interface CurrentDiscussionSummary {
     readonly route: string
   }
   readonly expiresAt: string
+  /** 继续在当前主题内追问的现成 continuation。 */
   readonly routeContinuation: Extract<ContinuationReference, { operation: 'ROUTE_IN_CONTEXT' }>
   readonly exitAction?: SuggestedAction
   readonly reenterAction?: SuggestedAction
@@ -116,8 +160,8 @@ export interface CurrentDiscussionSummary {
 
 const TURNS_PATH = '/api/agent/turns'
 const CURRENT_CONVERSATION_PATH = '/api/agent/conversations/current'
-// 跨端预算（docs/15 §11.4）：服务端 Turn 在 20 秒内结算，
-// 前端多等待 5 秒只为覆盖传输和响应投影，不代替服务端 deadline。
+// 跨端等待预算：服务端承诺 Turn 在 20 秒内结算，前端只多等 5 秒
+// 覆盖传输与响应投影耗时；该值不替代服务端自身的 deadline。（docs/15 §11.4）
 const REQUEST_TIMEOUT_MS = 25_000
 const SHORT_TIMEOUT_MS = 10_000
 
@@ -129,6 +173,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** 从 unknown 防御性投影 ContinuationReference；形状不合法返回 null（不收集违规明细）。 */
 function currentContinuation(value: unknown): ContinuationReference | null {
   if (!isRecord(value) || typeof value.operation !== 'string') return null
   if (value.operation === 'ENTER_RESULT') {
@@ -148,6 +193,7 @@ function currentContinuation(value: unknown): ContinuationReference | null {
   return null
 }
 
+/** 投影单个 SuggestedAction；actionId/label/continuation 任一不合法即整体返回 null。 */
 function currentAction(value: unknown): SuggestedAction | null {
   if (!isRecord(value) || typeof value.actionId !== 'string' || typeof value.label !== 'string') return null
   const continuation = currentContinuation(value.continuation)
@@ -155,6 +201,11 @@ function currentAction(value: unknown): SuggestedAction | null {
   return { actionId: value.actionId, label: value.label, continuation }
 }
 
+/**
+ * 投影 CurrentDiscussionSummary：对 status、subject.route 前缀、expiresAt 可解析性、
+ * routeContinuation 形状与各可选 action 做严格校验，任一不合法整体返回 null，
+ * 由调用方按"缺少权威会话状态 / 合同无效"处理。
+ */
 function currentDiscussion(value: unknown): CurrentDiscussionSummary | null {
   if (!isRecord(value) || (value.status !== 'ACTIVE' && value.status !== 'EXPIRED')
       || !isRecord(value.subject) || value.subject.kind !== 'PROJECT'
@@ -189,6 +240,11 @@ function currentDiscussion(value: unknown): CurrentDiscussionSummary | null {
   }
 }
 
+/**
+ * fail-closed 解析响应根级 conversation envelope。
+ * 返回 null 表示结构缺失或不合法，submitAgentTurn 会将其判为 CONTRACT 失败，
+ * 绝不构造部分默认值。
+ */
 export function parseConversationEnvelope(value: unknown): ConversationEnvelope | null {
   if (!isRecord(value)) return null
   const conversationId = value.conversationId
@@ -210,6 +266,10 @@ export function parseConversationEnvelope(value: unknown): ConversationEnvelope 
   }
 }
 
+/**
+ * fail-closed 解析 GET current 的响应载荷；结构不匹配时返回
+ * ok=false、invalid=false、reason='CONTRACT_INVALID'，不猜测字段。
+ */
 export function parseCurrentConversationPayload(
   payload: unknown,
 ): CurrentConversationResult {
@@ -233,6 +293,7 @@ export function parseCurrentConversationPayload(
   }
 }
 
+/** 提取服务端错误 envelope（{ error: { code, message, retryable, ... } }）的已知字段；形状不符返回 null。 */
 function parseErrorEnvelope(value: unknown): {
   code?: string
   message?: string
@@ -262,9 +323,17 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
-/** 仅内部等待计时器触发的 abort 会抛出该错误；用户主动取消仍走 ABORTED（A2-10）。 */
+/**
+ * 仅当本地等待计时器触发的 abort 会抛出该错误，用于把"前端等待超时"与
+ * "用户主动取消"区分开：前者映射为 TIMEOUT，后者仍映射为 ABORTED。（A2-10）
+ */
 class TurnTimeoutError extends Error {}
 
+/**
+ * 带本地超时的 fetch：把内部超时 abort 与外部 signal abort 复合到同一个
+ * AbortSignal 上。仅当超时先发生时把 AbortError 转换为 TurnTimeoutError；
+ * 外部取消原样抛 AbortError，由上层映射为 ABORTED。
+ */
 async function fetchWithTimeout(
   input: string,
   init: RequestInit,
@@ -294,20 +363,32 @@ async function fetchWithTimeout(
   }
 }
 
+/** 提交 Turn 的入参；requestId 同时是幂等重放键。 */
 export interface SubmitAgentTurnInput {
+  /** 幂等键：同 requestId 重试可取回同一 Turn 的结算结果。 */
   readonly requestId: string
+  /** 本轮的显式模型选择（MODEL 或 NONE）；服务端不做隐式 Provider 回退。 */
+  readonly modelSelection: ModelSelection
   readonly command: AgentTurnCommand
   readonly surfaceContext?: SurfaceContext
   readonly conversationWindow?: readonly ConversationWindowMessage[]
   readonly resumeToken?: string
 }
 
+/**
+ * 提交一次 Agent 轮次命令并解析响应（POST /api/agent/turns）。
+ *
+ * 成功返回经 fail-closed 解析的 PublicAgentTurn 与 conversation envelope；
+ * 超时、取消、网络错误、非 200、Turn 合同不匹配或缺少权威会话状态，
+ * 一律返回结构化 AgentTurnFailure 而非抛异常。
+ */
 export async function submitAgentTurn(
   input: SubmitAgentTurnInput,
   options: { signal?: AbortSignal } = {},
 ): Promise<AgentTurnTransportResult> {
   const body: Record<string, unknown> = {
     requestId: input.requestId,
+    modelSelection: input.modelSelection,
     command: input.command,
     ...(input.surfaceContext === undefined ? {} : { surfaceContext: input.surfaceContext }),
     conversationWindow: [...(input.conversationWindow ?? [])],
@@ -329,7 +410,8 @@ export async function submitAgentTurn(
     )
   } catch (error) {
     if (error instanceof TurnTimeoutError) {
-      // 超时不取消服务端 Active Turn：最终结果仍可由同 requestId 重放取回（A2-11/A2-14）。
+      // 超时只是停止本地等待，并不取消服务端的 Active Turn：
+      // 最终结果仍可用同一 requestId 幂等重放取回。（A2-11/A2-14）
       return {
         ok: false,
         failure: {
@@ -421,6 +503,11 @@ export async function cancelAgentTurn(
   return 'FAILED'
 }
 
+/**
+ * 用 ResumeToken 查询当前匿名会话状态（GET /api/agent/conversations/current）。
+ * 401 返回 invalid=true（Token 失效，应引导新建会话）；网络失败返回 ok=false
+ * 且 invalid=false；200 但载荷不符合合同按 CONTRACT_INVALID 返回。
+ */
 export async function fetchCurrentConversation(
   resumeToken: string,
 ): Promise<CurrentConversationResult> {
@@ -440,6 +527,10 @@ export async function fetchCurrentConversation(
   return parseCurrentConversationPayload(payload)
 }
 
+/**
+ * 清除当前匿名会话（DELETE /api/agent/conversations/current）。
+ * 仅 204 记为 CLEARED；其余状态与网络失败一律 FAILED，由调用方提示重试。
+ */
 export async function clearConversation(resumeToken: string): Promise<ClearConversationResult> {
   let response: Response
   try {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 
 import type { AudienceRole, PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { useMediaQuery } from '../../../shared/composables/useMediaQuery'
@@ -15,6 +15,16 @@ import {
   type CurrentDiscussionSummary,
   type SurfaceContext,
 } from '../api/agentTurnApi'
+import { newRequestId } from '../api/requestId'
+import {
+  catalogEntryOfSelection,
+  displayNameOfSelection,
+  modelTagOfExecution,
+  parseModelCatalogProjection,
+  EMPTY_MODEL_CATALOG,
+  type ModelCatalogProjection,
+  type ModelSelection,
+} from '../model/modelSelection'
 import { useLocalSessions } from '../composables/useLocalSessions'
 import { useConversationResume } from '../composables/useConversationResume'
 import {
@@ -34,21 +44,31 @@ import type {
 import { projectTurnFailure, type TurnFailureCategory } from '../model/turnFailureProjection'
 import AnswerSourcesPanel from './AnswerSourcesPanel.vue'
 import ConversationThread from './ConversationThread.vue'
+import ModelSelector from './ModelSelector.vue'
 import LocalSessionRail from './LocalSessionRail.vue'
 import PaneResizer from './PaneResizer.vue'
 
-// D-41/交接 §8：AgentWorkspace 只负责会话容器、输入、request lifecycle、
-// 内存 Session、active ResumeToken 与 API 协调；业务投影在组件树内。
-// 取消：先结束本地 pending，再 best-effort DELETE + abort；不本地伪造 Cancelled。
-// A2-07/08/09：pending、failure、draft、notice 一律归属 session，
-// 渲染与操作只作用于当前活跃会话；pending 允许跨会话并存，结果回流原会话。
-// A2-03/04/18：USER 轮次先落账后请求；失败/取消轮次标记 failed 并排除出
-// conversationWindow；澄清提交即把原挑战卡转只读，禁止重复 RESOLVE。
+// Agent 工作台（会话容器）：三栏布局的根组件，只负责会话容器、输入、
+// 请求生命周期（request lifecycle）、内存 Session、活跃 ResumeToken 的
+// sessionStorage 槽位维护与 API 协调；所有业务展示都投影在子组件树内。
+// 会话数据来自 useLocalSessions（页面内存 + 活跃会话的 sessionStorage 槽位），
+// 会话恢复来自 useConversationResume，分栏宽度来自 useWorkspaceSplit，
+// 作品集与预设来自 props.portfolio。本地状态包括 pending 请求表、失败
+// 视图表、清理/恢复通知与抽屉开关；由 AgentPage 直接挂载，不 emit 事件。
+// 取消纪律：先结束本地 pending，再 best-effort DELETE + abort，
+// 不在本地伪造 Cancelled 轮次（D-41）。
+// 会话归属：pending、failure、draft、notice 一律归属各自 session，渲染
+// 与操作只作用于当前活跃会话；pending 允许跨会话并存，结果回流原会话
+// （A2-07/08/09）。
+// 落账纪律：USER 轮次先落账后请求；失败/取消的轮次标记 failed 并排除出
+// conversationWindow；澄清提交即把原挑战卡转只读，禁止重复 RESOLVE
+// （A2-03/04/18）。
 
 const FREE_TEXT_MAX_LENGTH = 2000
+// 发往后端的会话窗口长度上限：只携带最近 N 条摘要，不传完整历史。
 const CONVERSATION_WINDOW_LIMIT = 12
-// §11.1 已冻结：标签页合计 pending 上限与后端来源级最大并发 2 对齐，
-// 超出时不发必然 409 TURN_IN_PROGRESS 的请求，仅提示等待。
+// 标签页合计 pending 上限与后端来源级最大并发 2 对齐：超出时不再发出
+// 必然 409 TURN_IN_PROGRESS 的请求，仅在界面提示等待（§11.1）。
 const TAB_PENDING_LIMIT = 2
 
 interface PendingTurn {
@@ -57,11 +77,16 @@ interface PendingTurn {
   question: string
   controller: AbortController
   userMessageId?: string
+  /** RESOLVE_CLARIFICATION 待处理时携带；取消需据此恢复澄清卡（A2-70）。 */
+  clarificationId?: string
 }
 
-/** A2-22：同 requestId 重试只消费这一份页面内存快照，不重算指纹输入。 */
+/** 同一 requestId 重试时的请求快照：重试只消费这一份页面内存快照，不重算指纹类输入（A2-22）。
+ * 快照含当轮 ModelSelection：同 requestId 重试原样复用（重试不换模型）；
+ * 换模型重问构造全新快照与 requestId，绝不改写旧快照（UI spec §5.1）。 */
 interface TurnSubmissionSnapshot {
   readonly requestId: string
+  readonly modelSelection: ModelSelection
   readonly command: AgentTurnCommand
   readonly surfaceContext: SurfaceContext
   readonly conversationWindow: readonly ConversationWindowMessage[]
@@ -70,6 +95,7 @@ interface TurnSubmissionSnapshot {
   readonly userMessageId?: string
 }
 
+/** 失败轮次的展示投影：由 turnFailureProjection 归类，可携带原提交快照供幂等重试。 */
 interface FailureView {
   category: TurnFailureCategory
   message: string
@@ -79,11 +105,13 @@ interface FailureView {
   submission?: TurnSubmissionSnapshot
 }
 
+/** 归属到具体会话的工作台级通知（清理结果等），切换会话时不串显。 */
 interface WorkspaceNotice {
   text: string
   sessionId: string
 }
 
+/** 建议问题 chip：已发布预设带 presetId（PRESET 命令），Case 建议只有文本（FREE_TEXT）。 */
 interface SuggestionChip {
   text: string
   presetId?: string
@@ -111,22 +139,37 @@ const sessions = useLocalSessions()
 const resume = useConversationResume()
 const split = useWorkspaceSplit()
 const workspaceRoot = ref<HTMLElement | null>(null)
+// 工作台实测宽度（ResizeObserver 维护），用于把两栏宽度收敛到可用空间内。
 const workspaceWidth = ref(Number.POSITIVE_INFINITY)
+// 两个窄屏抽屉的开关：会话栏（≤959.98px）与来源栏（≤1279.98px）变为覆盖式抽屉。
 const sessionDrawerOpen = ref(false)
 const evidenceDrawerOpen = ref(false)
 const sessionsIsDrawer = useMediaQuery('(max-width: 959.98px)')
 const evidenceIsDrawer = useMediaQuery('(max-width: 1279.98px)')
+// sessionId → 进行中的轮次；以替换整表 Map 的方式写入以触发响应式。
 const pendingTurns = ref(new Map<string, PendingTurn>())
+// sessionId → 最近一次失败投影；与 pending 互斥出现。
 const failures = ref(new Map<string, FailureView>())
+/** A7 五个 settled 模型终局的提交快照（UI spec §2.6）：按 requestId 索引并携带归属会话，供双动作复用。 */
+interface ModelFailureContext {
+  sessionId: string
+  submission: TurnSubmissionSnapshot
+  /** 该轮实际失败的 modelRef：以 turn.modelExecution 投影为准，前端不推断。 */
+  failedModelRef: string | null
+}
+const modelFailureContexts = ref(new Map<string, ModelFailureContext>())
 const clearPending = ref(false)
 const clearNotice = ref<WorkspaceNotice | null>(null)
 const resumeNotice = ref<WorkspaceNotice | null>(null)
 const composerInput = ref<HTMLTextAreaElement | null>(null)
+// 传给 ConversationThread 的定位目标；nonce 递增保证重复定位同一 section 也能触发。
 const focusTarget = ref<{ sectionId: string; nonce: number } | null>(null)
 let locateNonce = 0
+// 卸载标记：置位后所有异步回调一律不再触碰会话状态。
 let disposed = false
 let workspaceResizeObserver: ResizeObserver | null = null
 
+// Map 均以"复制新表再替换引用"的方式更新，确保 ref 整体保持响应式。
 function mapSet<Value>(source: Map<string, Value>, key: string, value: Value): Map<string, Value> {
   const next = new Map(source)
   next.set(key, value)
@@ -140,6 +183,7 @@ function mapDelete<Value>(source: Map<string, Value>, key: string): Map<string, 
   return next
 }
 
+/** 仅当该 session 的 pending 仍是这次 requestId 时才移除：防止旧请求的回调误删后继请求的 pending。 */
 function deletePendingGeneration(
   source: Map<string, PendingTurn>,
   sessionId: string,
@@ -160,11 +204,63 @@ const tabPendingFull = computed(
 const freeTextRoutingAvailable = computed(
   () => props.portfolio.agentAvailability.freeTextSemanticRouting === 'AVAILABLE',
 )
+
+// ── 模型目录（UI spec §5.5）：只读 /api/portfolio 投影，随 portfolio 刷新 ──
+
+const modelCatalog = computed<ModelCatalogProjection>(() => {
+  // 目录只读 /api/portfolio 投影；测试或旧快照缺目录字段时按空目录 fail-closed。
+  const availability = props.portfolio.agentAvailability as unknown
+  return parseModelCatalogProjection(availability) ?? EMPTY_MODEL_CATALOG
+})
+
+/** 会话生效选择：显式偏好必须在当前目录内，否则回落目录默认（§2.9 判定输入）。 */
+function effectiveSelectionOf(session: AgentSession): ModelSelection {
+  const preference = session.modelSelection
+  if (preference !== undefined && catalogEntryOfSelection(modelCatalog.value, preference) !== null) {
+    return preference
+  }
+  return modelCatalog.value.defaultModelSelection
+}
+
+/** 目录刷新（如 portfolio 重取）后，失效的显式偏好回退目录默认并插入可见通知；
+ * 该会话存在未完成 pending Turn 时不中途回退（单 Turn 单模型优先），终局后再生效（§2.9）。 */
+function reconcileSessionModelSelections(): void {
+  for (const session of sessions.sessions.value) {
+    const preference = session.modelSelection
+    if (preference === undefined || preference.kind === 'NONE') continue
+    if (catalogEntryOfSelection(modelCatalog.value, preference) !== null) continue
+    if (pendingTurns.value.has(session.id)) continue
+    const fallbackName = displayNameOfSelection(
+      modelCatalog.value,
+      modelCatalog.value.defaultModelSelection,
+    )
+    sessions.setSessionModelSelection(session.id, undefined)
+    sessions.appendSessionNotice(session.id, {
+      kind: 'MODEL_STALE_FALLBACK',
+      title: `${displayNameOfSelection(modelCatalog.value, preference) ?? preference.modelRef} 当前不可用，已回到目录默认 ${fallbackName ?? '确定性回答'}`,
+    })
+  }
+}
+
+watch(modelCatalog, () => {
+  reconcileSessionModelSelections()
+}, { immediate: false })
+
 const activeDiscussion = computed(() => activeSession.value?.activeDiscussion)
+/** 活跃会话的生效模型选择（显式偏好或目录默认）。 */
+const activeModelSelection = computed<ModelSelection | null>(() =>
+  activeSession.value === null ? null : effectiveSelectionOf(activeSession.value),
+)
+/** 目录有可选模型但生效选择为 NONE（默认未就绪）：自由文本必须先显式选择（设计 §8）。 */
+const modelSelectionRequired = computed(
+  () => modelCatalog.value.selectableModels.length > 0
+    && activeModelSelection.value?.kind === 'NONE',
+)
 const discussionPaused = computed(
   () => activeDiscussion.value !== undefined
     && activeSession.value?.discussionPaused === true,
 )
+// 讨论到期标签的本地时钟：30 秒走一次，避免每秒重算倒计时文本。
 const discussionClock = ref(Date.now())
 let discussionClockTimer: ReturnType<typeof setInterval> | null = null
 const discussionExpiryLabel = computed(() => {
@@ -175,6 +271,48 @@ const discussionExpiryLabel = computed(() => {
   return `剩余约 ${Math.max(1, Math.ceil(remaining / 60_000))} 分钟`
 })
 
+/**
+ * 客户端倒计时归零而本地仍是 ACTIVE 时，对权威 discussion summary 做一次
+ * 冷取（fetchCurrentConversation），让 EXPIRED 状态与恢复动作不必刷新
+ * 页面即可出现（A2-76/77）。
+ * 并发控制：in-flight 集合按"会话 + revision + 到期时间"为 key，只阻止
+ * 同一 discussion generation 的并发 GET；冷取失败或服务端仍返回 ACTIVE 时，
+ * 下一个 30 秒时钟周期会再次尝试。
+ */
+const discussionExpirySyncInFlight = new Set<string>()
+const discussionExpirySyncTarget = computed(() => {
+  const session = activeSession.value
+  const discussion = session?.activeDiscussion
+  if (session === null || discussion === undefined) return null
+  if (discussion.status !== 'ACTIVE') return null
+  if (Date.parse(discussion.expiresAt) - discussionClock.value > 0) return null
+  const token = sessions.getSessionResumeToken(session.id)
+  if (token === undefined) return null
+  const key = `${session.id}:${session.discussionRevision}:${discussion.expiresAt}`
+  return { sessionId: session.id, token, key }
+})
+
+watch(discussionExpirySyncTarget, (target) => {
+  if (target === null || discussionExpirySyncInFlight.has(target.key)) return
+  discussionExpirySyncInFlight.add(target.key)
+  void (async () => {
+    try {
+      const current = await fetchCurrentConversation(target.token)
+      if (disposed || !current.ok) return
+      sessions.adoptResumedConversation(target.sessionId, {
+        conversationId: current.conversationId,
+        resumeToken: target.token,
+        discussionRevision: current.discussionRevision,
+        ...(current.activeDiscussion === undefined
+          ? {}
+          : { activeDiscussion: current.activeDiscussion }),
+      })
+    } finally {
+      discussionExpirySyncInFlight.delete(target.key)
+    }
+  })()
+}, { immediate: true })
+
 /** 会话私有草稿（A2-09）：切换会话草稿不串线。 */
 const questionDraft = computed<string>({
   get: () => sessions.activeSession.value?.draft ?? '',
@@ -184,18 +322,23 @@ const questionDraft = computed<string>({
   },
 })
 
+// 生效分栏宽度：来源栏以抽屉形态呈现时直接用持久化值，否则按工作台
+// 实测宽度收敛，保证三栏互不挤压。
 const effectiveSplit = computed(() =>
   evidenceIsDrawer.value
     ? split.state.value
     : fitWorkspaceSplit(split.state.value, workspaceWidth.value),
 )
 
+// 两个侧栏共享的可用总宽 = 工作台宽度 - 对话栏最小宽。
 const availableSideWidth = computed(() =>
   Number.isFinite(workspaceWidth.value)
     ? Math.floor(workspaceWidth.value) - WORKSPACE_LIMITS.chatMin
     : Number.POSITIVE_INFINITY,
 )
 
+// 分隔条 aria 与拖拽的最大值：一侧调宽时另一侧至少保留其最小宽，
+// 两栏上限互相钳制；抽屉形态或宽度未知时退回静态上限。
 const effectiveMaximums = computed(() => {
   if (evidenceIsDrawer.value || !Number.isFinite(availableSideWidth.value)) {
     return {
@@ -221,6 +364,7 @@ const effectiveMaximums = computed(() => {
   }
 })
 
+// 当前 Case 选项：仅接受作品集中真实存在的 slug，避免无效初值。
 const activeCaseSlug = ref(
   props.portfolio.cases.some((item) => item.slug === props.initialCase)
     ? props.initialCase
@@ -230,6 +374,8 @@ const activeCase = computed(
   () => props.portfolio.cases.find((item) => item.slug === activeCaseSlug.value),
 )
 
+// 当前项目上下文：优先 Case 绑定的项目，其次会话保存的项目，最后回落
+// 到初始参数；始终有值以保证模板 v-if 与 surface hint 可用。
 const activeProject = computed(() => {
   const projectSlug =
     activeCase.value?.projectSlug ||
@@ -280,7 +426,7 @@ const sourcesStale = computed(
   () => latestTurn.value?.kind !== 'ANSWER' && activeSources.value.length > 0,
 )
 
-/** B7：来源 key → 最近引用它的 sectionId（最新回答优先）。 */
+// 来源 key → 最近引用它的 sectionId（最新回答优先），供"定位"跳转使用（B7）。
 const citedSectionByKey = computed(() => {
   const map = new Map<string, string>()
   const messages = [...(activeSession.value?.messages ?? [])]
@@ -305,6 +451,7 @@ const citedSectionByKey = computed(() => {
 
 const citedSourceKeys = computed(() => [...citedSectionByKey.value.keys()])
 
+/** 来源"定位"：找到引用该 key 的 section，以递增 nonce 更新 focusTarget 交给 ConversationThread 滚动高亮。 */
 function locateSource(sourceKey: string): void {
   const sectionId = citedSectionByKey.value.get(sourceKey)
   if (sectionId === undefined) return
@@ -312,6 +459,7 @@ function locateSource(sourceKey: string): void {
   focusTarget.value = { sectionId, nonce: locateNonce }
 }
 
+/** 请求表面上下文：优先当前 Case，其次会话绑定的项目，都没有则不带 subjectHint。 */
 function surfaceContextOf(session: AgentSession): SurfaceContext {
   if (activeCase.value !== undefined) {
     return {
@@ -330,6 +478,7 @@ function surfaceContextOf(session: AgentSession): SurfaceContext {
   return { audienceRole: session.role, requestSource: 'AGENT_PAGE' }
 }
 
+/** AGENT 轮次进入 conversationWindow 的短摘要：ANSWER 取 Goal 标签拼接，其余取 prompt/message。 */
 function turnWindowSummary(turn: PublicAgentTurn): string {
   if (turn.kind === 'ANSWER') {
     return turn.answer.goalResults.map((goal) => goal.label).join('；')
@@ -338,11 +487,27 @@ function turnWindowSummary(turn: PublicAgentTurn): string {
   return turn.message
 }
 
+/**
+ * 判定澄清 reservation busy（CLARIFICATION_IN_PROGRESS）：它是可重试的
+ * 临时终局，Challenge 未被消费、本轮对话也未推进；它不属于已结算的
+ * 可信轮次，因此不得进入会话窗口（A2-69）。
+ */
+function isTransientClarificationBusy(turn: PublicAgentTurn): boolean {
+  return turn.kind === 'CAPABILITY_UNAVAILABLE'
+    && turn.code === 'CLARIFICATION_IN_PROGRESS'
+}
+
+/**
+ * 构造发往后端的 conversationWindow：跳过失败/取消的 USER 轮次与临时
+ * busy 终局，AGENT 侧只放窗口摘要；截取最近 N 条后仍需满足"USER 开头
+ * 且 USER/ASSISTANT 交替"的合同，否则丢弃首条。
+ */
 function conversationWindowOf(session: AgentSession): ConversationWindowMessage[] {
   const window: ConversationWindowMessage[] = []
   for (const message of session.messages) {
-    // A2-04：失败/取消的 USER 轮次不进入会话窗口，维持 USER/ASSISTANT 交替。
+    // 失败/取消的 USER 轮次不进入会话窗口，维持 USER/ASSISTANT 交替（A2-04）。
     if (message.failed === true) continue
+    if (message.turn !== undefined && isTransientClarificationBusy(message.turn)) continue
     const content = message.role === 'USER'
       ? message.content
       : message.turn === undefined
@@ -359,12 +524,21 @@ function conversationWindowOf(session: AgentSession): ConversationWindowMessage[
   return bounded[0]?.role === 'USER' ? bounded : bounded.slice(1)
 }
 
+/**
+ * 提取最近的推荐讨论 ContextHandle（作为 ASK 的 referenceContextHandle）：
+ * 只取最近一条 ANSWER 内的推荐；其后的非推荐回答代表话题已切换，
+ * 不得向更早历史回溯旧推荐 Context（A2-59）。
+ */
 function latestRecommendationReference(
   session: AgentSession,
 ): string | undefined {
   for (const message of [...session.messages].reverse()) {
-    if (message.turn?.kind !== 'ANSWER') continue
-    for (const goal of [...message.turn.answer.goalResults].reverse()) {
+    // 调用方已追加当前 USER 消息，因此只跳过无 turn 的记录；
+    // 一旦遇到最近 AGENT 终局就停止，非 ANSWER 同样截断旧 hint。
+    const turn = message.turn
+    if (turn === undefined) continue
+    if (turn.kind !== 'ANSWER') return undefined
+    for (const goal of [...turn.answer.goalResults].reverse()) {
       if (goal.presentation?.kind !== 'RECOMMENDATION') continue
       const handles = goal.presentation.items.map((item) => {
         const continuation = item.discussionAction?.continuation
@@ -379,10 +553,12 @@ function latestRecommendationReference(
       ) return handles[0]
       return undefined
     }
+    return undefined
   }
   return undefined
 }
 
+/** 把服务端返回的会话信封（conversationId/ResumeToken/discussion）写回对应会话；活跃会话的 Token 同步进 sessionStorage 槽位。 */
 function bindConversationEnvelope(sessionId: string, conversation: {
   conversationId: string
   resumeToken?: string
@@ -396,6 +572,7 @@ function bindConversationEnvelope(sessionId: string, conversation: {
   }
 }
 
+/** 由统一失败投影构造展示视图，并挂上原提交快照以便"重试"幂等重放。 */
 function failureViewOf(
   submission: TurnSubmissionSnapshot,
   f: AgentTurnFailure,
@@ -411,6 +588,7 @@ function failureViewOf(
   }
 }
 
+/** 允许调用方覆盖快照的默认值（重试时整体复用 submission，避免重算 window/token）。 */
 interface TurnOverrides {
   surfaceContext?: SurfaceContext
   conversationWindow?: readonly ConversationWindowMessage[]
@@ -418,8 +596,19 @@ interface TurnOverrides {
   displayQuestion?: string
   userMessageId?: string
   submission?: TurnSubmissionSnapshot
+  /** 换模型重问时的新选择：进入全新快照，绝不改写任何旧快照（§5.1）。 */
+  modelSelection?: ModelSelection
 }
 
+/**
+ * 单次轮次的请求生命周期：组装不可变提交快照 -> 登记 pending ->
+ * 发送 submitAgentTurn（可 abort）-> 回调结算。所有回调副作用都只属于
+ * "安装该 pending 项的那一代请求"：被取消/替换的请求可能在 AbortSignal
+ * 之后才返回，绝不允许污染后继轮次或会话状态（generation 校验）。
+ * 成功路径：绑定会话信封、追加 AGENT 消息、焦点回到输入框。
+ * 失败路径：按投影登记失败视图、USER 消息标 failed；CONTRACT 失败额外
+ * 暂停该会话的讨论续谈。
+ */
 async function runTurn(
   sessionId: string,
   requestId: string,
@@ -430,6 +619,7 @@ async function runTurn(
   if (session === undefined) return
   const submission: TurnSubmissionSnapshot = overrides.submission ?? {
     requestId,
+    modelSelection: overrides.modelSelection ?? effectiveSelectionOf(session),
     command,
     surfaceContext: overrides.surfaceContext ?? surfaceContextOf(session),
     conversationWindow: overrides.conversationWindow ?? conversationWindowOf(session),
@@ -448,11 +638,15 @@ async function runTurn(
     question: submission.displayQuestion,
     controller,
     ...(submission.userMessageId === undefined ? {} : { userMessageId: submission.userMessageId }),
+    ...(submission.command.kind === 'RESOLVE_CLARIFICATION'
+      ? { clarificationId: submission.command.clarificationId }
+      : {}),
   })
   failures.value = mapDelete(failures.value, sessionId)
   const result = await submitAgentTurn(
     {
       requestId: submission.requestId,
+      modelSelection: submission.modelSelection,
       command: submission.command,
       surfaceContext: submission.surfaceContext,
       conversationWindow: submission.conversationWindow,
@@ -465,12 +659,11 @@ async function runTurn(
   pendingTurns.value = deletePendingGeneration(
     pendingTurns.value, sessionId, submission.requestId,
   )
-  // Every callback side effect belongs to the exact request generation that
-  // installed the pending entry. A cancelled/replaced request may still settle
-  // after AbortSignal; it must not mutate the successor turn or conversation.
+  // 每个回调副作用都只属于安装 pending 项的那一代请求：被取消/替换的
+  // 请求可能在 AbortSignal 之后才结算，不得改动后继轮次或会话。
   if (disposed || !ownsGeneration) return
   if (!result.ok) {
-    // 取消是本地先行的：ABORTED 不追加消息、不显示错误（交接 §8）。
+    // 取消是本地先行的：ABORTED 不追加消息、不显示错误。
     if (result.failure.kind === 'ABORTED') return
     if (result.failure.kind === 'CONTRACT') {
       sessions.setDiscussionPaused(sessionId, true)
@@ -483,14 +676,26 @@ async function runTurn(
     if (submission.userMessageId !== undefined) {
       sessions.markMessageDelivery(sessionId, submission.userMessageId, true)
     }
+    // 可恢复失败回滚乐观 consumed，卡片与失败重试均为合法再提交入口；
+    // 不可恢复失败保持只读，避免对已失效会话制造必然失败的提交入口（A2-70）。
+    if (
+      submission.command.kind === 'RESOLVE_CLARIFICATION'
+      && result.failure.retryable === true
+    ) {
+      sessions.markClarificationConsumed(
+        sessionId, submission.command.clarificationId, false,
+      )
+    }
     return
   }
   if (submission.userMessageId !== undefined) {
     sessions.markMessageDelivery(sessionId, submission.userMessageId, false)
   }
+  // 澄清 reservation busy（服务端处理中）：挑战未被消费，回滚乐观只读，
+  // 并把本轮 USER 消息标记 failed，等待用户稍后重试提交。
   if (submission.command.kind === 'RESOLVE_CLARIFICATION'
-      && result.turn.kind === 'CAPABILITY_UNAVAILABLE'
-      && result.turn.code === 'CLARIFICATION_IN_PROGRESS') {
+    && result.turn.kind === 'CAPABILITY_UNAVAILABLE'
+    && result.turn.code === 'CLARIFICATION_IN_PROGRESS') {
     sessions.markClarificationConsumed(
       sessionId, submission.command.clarificationId, false,
     )
@@ -504,9 +709,171 @@ async function runTurn(
     content: turnWindowSummary(result.turn),
     turn: result.turn,
   })
+  if (isModelUnavailableTerminal(result.turn)) {
+    recordModelFailureContext(sessionId, result.turn.requestId, submission, result.turn)
+  }
+  // 终局解除 pending 后，补执行被延后的目录失效回退（§2.9）。
+  reconcileSessionModelSelections()
   await focusComposer()
 }
 
+/** A7 冻结的五个 settled 模型不可用终局码（设计 §16.2）；只有它们提供换模型入口。 */
+const MODEL_UNAVAILABLE_CODES: readonly string[] = [
+  'MODEL_SELECTION_STALE',
+  'SELECTED_MODEL_UNAVAILABLE',
+  'SELECTED_MODEL_TEMPORARILY_UNAVAILABLE',
+  'SELECTED_MODEL_RATE_LIMITED',
+  'SELECTED_MODEL_INVALID_RESPONSE',
+]
+
+function isModelUnavailableTerminal(turn: PublicAgentTurn): boolean {
+  return turn.kind === 'CAPABILITY_UNAVAILABLE'
+    && MODEL_UNAVAILABLE_CODES.includes(turn.code)
+}
+
+/** 每会话只保留最新一个模型失败上下文，旧终局的动作入口随新上下文替换。 */
+function recordModelFailureContext(
+  sessionId: string,
+  requestId: string,
+  submission: TurnSubmissionSnapshot,
+  turn: PublicAgentTurn,
+): void {
+  for (const [existingRequestId, existing] of modelFailureContexts.value) {
+    if (existing.sessionId === sessionId && existingRequestId !== requestId) {
+      modelFailureContexts.value = mapDelete(modelFailureContexts.value, existingRequestId)
+    }
+  }
+  const execution = turn.modelExecution
+  modelFailureContexts.value = mapSet(modelFailureContexts.value, requestId, {
+    sessionId,
+    submission,
+    failedModelRef: execution?.selectionKind === 'MODEL' ? execution.requestedModelRef ?? null : null,
+  })
+}
+
+/** 目录内除失败模型外的首选换用条目：目录默认优先，其次第一个其他条目（§2.6 动作二）。 */
+function otherSelectableModelOf(failedModelRef: string | null): {
+  name: string
+  selection: ModelSelection
+} | undefined {
+  const defaultRef = modelCatalog.value.defaultModelSelection.kind === 'MODEL'
+    ? modelCatalog.value.defaultModelSelection.modelRef
+    : null
+  const candidate =
+    (defaultRef !== null && defaultRef !== failedModelRef
+      ? modelCatalog.value.selectableModels.find((model) => model.modelRef === defaultRef)
+      : undefined)
+    ?? modelCatalog.value.selectableModels.find((model) => model.modelRef !== failedModelRef)
+  if (candidate === undefined) return undefined
+  return {
+    name: candidate.displayName,
+    selection: {
+      kind: 'MODEL',
+      modelRef: candidate.modelRef,
+      selectionVersion: candidate.selectionVersion,
+    },
+  }
+}
+
+/** 回答模型标识（§2.5）：只消费该轮 modelExecution 投影。 */
+function modelTagOf(turn: PublicAgentTurn): string | null {
+  if (turn.modelExecution === undefined) return null
+  return modelTagOfExecution(turn.modelExecution, modelCatalog.value)
+}
+
+/** 模型不可用终局的双动作上下文（§2.6）：按消息 turn 判定，仅最新失败上下文提供。 */
+function modelRecoveryOf(
+  turn: PublicAgentTurn,
+): { failedModelName: string; otherModelName?: string } | undefined {
+  if (!isModelUnavailableTerminal(turn)) return undefined
+  const context = modelFailureContexts.value.get(turn.requestId)
+  if (context === undefined) return undefined
+  const failedName = context.failedModelRef === null
+    ? displayNameOfSelection(modelCatalog.value, context.submission.modelSelection)
+    : modelCatalog.value.selectableModels.find(
+        (model) => model.modelRef === context.failedModelRef,
+      )?.displayName ?? context.failedModelRef
+  const other = otherSelectableModelOf(context.failedModelRef)
+  return {
+    failedModelName: failedName ?? '所选模型',
+    ...(other === undefined ? {} : { otherModelName: other.name }),
+  }
+}
+
+/** 切换会话模型偏好（§2.4）：写会话内存 + 插入可见通知；不产生 Turn。 */
+function handleModelSelected(selection: ModelSelection): void {
+  const session = activeSession.value
+  if (session === null || activePending.value !== null) return
+  sessions.setSessionModelSelection(session.id, selection)
+  const nextName = displayNameOfSelection(modelCatalog.value, selection)
+  if (nextName === null) return
+  sessions.appendSessionNotice(session.id, {
+    kind: 'MODEL_SWITCHED',
+    title: `已切换至 ${nextName} · 下一轮回答将由它生成`,
+    detail: '选择仅在本页会话内记忆，刷新后使用目录默认',
+  })
+}
+
+/** 双动作一（§2.6）：同 requestId 重试，原样复用提交快照（含原 ModelSelection）。 */
+function retryModelTurn(requestId: string): void {
+  const context = modelFailureContexts.value.get(requestId)
+  if (context === undefined || tabPendingFull.value) return
+  if (pendingTurns.value.has(context.sessionId)) return
+  failures.value = mapDelete(failures.value, context.sessionId)
+  void runTurn(
+    context.sessionId,
+    context.submission.requestId,
+    context.submission.command,
+    { submission: context.submission },
+  )
+}
+
+/**
+ * 双动作二（§2.6）：换模型重新提问——新 requestId、全新快照、携带新选择；
+ * 绝不改写旧快照。先插入换模型通知（副行携带新请求标识前缀），再进入 pending。
+ */
+function reaskWithModel(requestId: string): void {
+  const context = modelFailureContexts.value.get(requestId)
+  if (context === undefined || tabPendingFull.value) return
+  const sessionId = context.sessionId
+  const submission = context.submission
+  const other = otherSelectableModelOf(context.failedModelRef)
+  if (other === undefined) return
+  const session = sessions.sessions.value.find((item) => item.id === sessionId)
+  if (session === undefined || pendingTurns.value.has(sessionId)) return
+  sessions.setSessionModelSelection(sessionId, other.selection)
+  const newId = newRequestId()
+  sessions.appendSessionNotice(sessionId, {
+    kind: 'MODEL_REASK',
+    title: `已切换至 ${other.name} · 下一轮回答将由它生成`,
+    detail: `新请求标识 ${newId.slice(0, 8)} · 不复用原请求的任何结果`,
+  })
+  failures.value = mapDelete(failures.value, sessionId)
+  const messageId = sessions.appendMessage(sessionId, {
+    role: 'USER',
+    content: userContentOfCommand(submission.command),
+  })
+  void runTurn(sessionId, newId, submission.command, {
+    modelSelection: other.selection,
+    ...(messageId === null ? {} : { userMessageId: messageId }),
+  })
+}
+
+/** 换模型重问的 USER 落账文本：PRESET 用预设公开文本，其余沿用展示短语。 */
+function userContentOfCommand(command: AgentTurnCommand): string {
+  if (command.kind === 'ASK') {
+    const input = command.input
+    if (input.kind === 'PRESET') {
+      return props.portfolio.questionPresets.find(
+        (preset) => preset.id === input.presetId,
+      )?.text ?? displayQuestionOf(command)
+    }
+    return input.text
+  }
+  return displayQuestionOf(command)
+}
+
+/** pending 指示与 USER 落账使用的展示问题文本：按命令类型给出可读的中文短语。 */
 function displayQuestionOf(command: AgentTurnCommand): string {
   if (command.kind === 'ASK') {
     return command.input.kind === 'FREE_TEXT' ? command.input.text : ''
@@ -520,11 +887,13 @@ function displayQuestionOf(command: AgentTurnCommand): string {
   return '补充澄清'
 }
 
+/** 等 DOM 更新后聚焦输入框（新轮次结束、关闭抽屉等场景保持键盘连续性）。 */
 async function focusComposer(): Promise<void> {
   await nextTick()
   composerInput.value?.focus()
 }
 
+/** 取活跃会话；不存在时按初始角色/项目新建一个。 */
 function ensureSession(): AgentSession {
   const current = sessions.activeSession.value
   if (current !== null) return current
@@ -534,15 +903,18 @@ function ensureSession(): AgentSession {
   })
 }
 
-function newRequestId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `turn-${Date.now()}`
-}
-
+/**
+ * 自由文本提交：有活跃讨论时构造 CONTINUE/ROUTE_IN_CONTEXT 续谈命令，
+ * 否则构造 ASK/FREE_TEXT，并附最近推荐的 ContextHandle 作参考。
+ * USER 消息先落账再请求；window 快照取自落账前的会话（本轮输入在
+ * command 内，不重复进窗口）。
+ */
 function submitFreeText(rawText: string): void {
   const text = rawText.trim()
   if (
     !freeTextRoutingAvailable.value
     || discussionPaused.value
+    || modelSelectionRequired.value
     || text.length === 0
     || activePending.value !== null
     || tabPendingFull.value
@@ -580,6 +952,7 @@ function submitFreeText(rawText: string): void {
   )
 }
 
+/** 已发布预设提交：走 ASK/PRESET 命令，携带 presetId 与合同版本。 */
 function submitPreset(presetId: string): void {
   if (activePending.value !== null || tabPendingFull.value) return
   const preset = props.portfolio.questionPresets.find((item) => item.id === presetId)
@@ -598,9 +971,15 @@ function submitPreset(presetId: string): void {
   )
 }
 
+/**
+ * 建议动作统一入口：按 action.continuation 构造 CONTINUE 命令
+ * （ENTER_RESULT/REENTER_SUBJECT/EXIT_CONTEXT 原样透传，ROUTE_IN_CONTEXT
+ * 附加用户可见文本）；无 continuation 时降级为 ASK/FREE_TEXT。
+ */
 function handleSelectAction(action: SuggestedAction): void {
   if (activePending.value !== null || tabPendingFull.value) return
-  if (action.continuation === undefined && !freeTextRoutingAvailable.value) return
+  if (action.continuation === undefined
+    && (!freeTextRoutingAvailable.value || modelSelectionRequired.value)) return
   const session = ensureSession()
   const text = action.inputText ?? action.label
   let command: AgentTurnCommand
@@ -662,6 +1041,11 @@ function clarificationAnswerSummary(
   return '补充澄清'
 }
 
+/**
+ * 澄清提交入口：把表单载荷转为 RESOLVE_CLARIFICATION 命令。合同冻结为
+ * 单一 answer（CHOICE|TEXT），多字段表单在本地直接拦截并提示。提交后
+ * 乐观地把原挑战卡转只读；失败/取消时由 runTurn/cancelTurn 回滚。
+ */
 function handleClarification(payload: ClarificationSubmissionPayload): void {
   if (activePending.value !== null || tabPendingFull.value) return
   const session = ensureSession()
@@ -679,7 +1063,7 @@ function handleClarification(payload: ClarificationSubmissionPayload): void {
   const answer: ClarificationAnswer = first.kind === 'SINGLE_CHOICE'
     ? { kind: 'CHOICE', choiceId: first.choiceId }
     : { kind: 'TEXT', text: first.text }
-  // A2-03：澄清答案记为 USER 轮次，窗口保持交替；A2-18：原挑战卡立即转只读。
+  // 澄清答案记为 USER 轮次以保持窗口交替（A2-03）；原挑战卡立即乐观转只读（A2-18）。
   const summary = clarificationAnswerSummary(session, payload.clarificationId, first)
   const messageId = sessions.appendMessage(session.id, { role: 'USER', content: summary })
   sessions.markClarificationConsumed(session.id, payload.clarificationId)
@@ -698,6 +1082,7 @@ function handleClarification(payload: ClarificationSubmissionPayload): void {
   )
 }
 
+/** 取消当前轮次：先结束本地等待并回滚乐观状态（failed 标记、澄清只读），再 best-effort DELETE + abort。 */
 function cancelTurn(): void {
   const current = activePending.value
   if (current === null) return
@@ -708,11 +1093,18 @@ function cancelTurn(): void {
   if (current.userMessageId !== undefined) {
     sessions.markMessageDelivery(current.sessionId, current.userMessageId, true)
   }
+  // 取消的澄清提交未被服务端消费，乐观 consumed 必须回滚，卡片恢复可提交（A2-70）。
+  if (current.clarificationId !== undefined) {
+    sessions.markClarificationConsumed(
+      current.sessionId, current.clarificationId, false,
+    )
+  }
   const token = sessions.getSessionResumeToken(current.sessionId)
   void cancelAgentTurn(current.requestId, token)
   current.controller.abort()
 }
 
+/** 幂等重试：复用失败时的原 requestId 与提交快照重放（D-30），服务端按幂等语义去重。 */
 function retryFailure(): void {
   const current = activeFailure.value
   if (
@@ -722,7 +1114,6 @@ function retryFailure(): void {
   ) {
     return
   }
-  // 幂等重试：同一 requestId 复用（交接 §8/D-30）；成功后同轮次解除 failed 标记。
   const sessionId = activeSession.value?.id
   if (sessionId === undefined) return
   failures.value = mapDelete(failures.value, sessionId)
@@ -734,6 +1125,7 @@ function retryFailure(): void {
   )
 }
 
+/** 删除本地会话：中止其 pending、best-effort 清理服务端会话（不留孤儿状态到 TTL，A2-75），再移除本地记录；删空则自动新建一个会话。 */
 function removeSession(sessionId: string): void {
   const pending = pendingTurns.value.get(sessionId)
   if (pending !== undefined) {
@@ -742,12 +1134,12 @@ function removeSession(sessionId: string): void {
     pending.controller.abort()
   }
   failures.value = mapDelete(failures.value, sessionId)
-  if (sessionId === sessions.activeSessionId.value) {
-    const token = sessions.getSessionResumeToken(sessionId)
-    if (token !== undefined) {
-      void clearConversation(token)
-      resume.clearActiveToken()
-    }
+  const token = sessions.getSessionResumeToken(sessionId)
+  if (token !== undefined) {
+    void clearConversation(token)
+  }
+  if (sessionId === sessions.activeSessionId.value && token !== undefined) {
+    resume.clearActiveToken()
   }
   sessions.removeSession(sessionId)
   if (sessions.sessions.value.length === 0) {
@@ -755,6 +1147,7 @@ function removeSession(sessionId: string): void {
   }
 }
 
+/** 新建本地会话并清空活跃 ResumeToken 槽位（新会话尚无服务端身份）。 */
 function createSession(): void {
   sessions.createSession({
     role: props.initialRole,
@@ -763,6 +1156,10 @@ function createSession(): void {
   resume.clearActiveToken()
 }
 
+/**
+ * 清空全部本地会话：先中止所有 pending，再逐会话清理服务端会话；
+ * 任一清理失败则保留本地会话并提示稍后重试，避免产生服务端孤儿。
+ */
 async function clearAllSessions(): Promise<void> {
   if (clearPending.value) return
   for (const pending of pendingTurns.value.values()) {
@@ -805,6 +1202,7 @@ function attachClearNotice(text: string | null): void {
   clearNotice.value = { text, sessionId }
 }
 
+// 两个抽屉互斥：打开一个立即收起另一个，避免窄屏双层遮挡。
 function toggleSessions(): void {
   sessionDrawerOpen.value = !sessionDrawerOpen.value
   if (sessionDrawerOpen.value) evidenceDrawerOpen.value = false
@@ -815,12 +1213,14 @@ function toggleEvidence(): void {
   if (evidenceDrawerOpen.value) sessionDrawerOpen.value = false
 }
 
+/** 关闭全部抽屉；returnFocus 时把焦点还给输入框，保持键盘操作连续。 */
 function closeDrawers(returnFocus = false): void {
   sessionDrawerOpen.value = false
   evidenceDrawerOpen.value = false
   if (returnFocus) composerInput.value?.focus()
 }
 
+// 分隔条事件到分栏 composable 的桥接：preview 拖拽实时预览、adjust 键盘微调。
 function previewSplit(pane: 'sessions' | 'evidence', width: number): void {
   split.set(pane, width)
 }
@@ -829,7 +1229,8 @@ function adjustSplit(pane: 'sessions' | 'evidence', delta: number): void {
   split.adjust(pane, delta)
 }
 
-// 活跃会话的 Token 变化同步唯一 sessionStorage 槽位（handoff §3）。
+// 活跃会话的 ResumeToken 变化即时同步唯一 sessionStorage 槽位：
+// 有 Token 即写入，无 Token 即清空（handoff §3）。
 watchEffect(() => {
   const token = activeSession.value?.resumeToken
   if (activeSession.value === null) return
@@ -840,6 +1241,13 @@ watchEffect(() => {
   }
 })
 
+/**
+ * 挂载初始化：启动讨论时钟与工作台宽度观测；处理首页交接种子
+ * （AgentRouteSeed：语义种子、会话凭证、幂等重放）；无种子会话时尝试用
+ * sessionStorage 槽位里的 ResumeToken 恢复会话身份（历史消息按隐私契约
+ * 不在浏览器保留，只恢复会话与讨论状态）；最后确保存在活跃会话并按
+ * 种子/初始参数预填问题草稿或精确重放首页轮次。
+ */
 onMounted(async () => {
   discussionClockTimer = setInterval(() => {
     discussionClock.value = Date.now()
@@ -921,6 +1329,7 @@ onMounted(async () => {
   }
 })
 
+/** 卸载清理：置 disposed 阻断异步回调、停时钟、abort 全部 pending、断开宽度观测。 */
 onBeforeUnmount(() => {
   disposed = true
   if (discussionClockTimer !== null) clearInterval(discussionClockTimer)
@@ -946,6 +1355,8 @@ onBeforeUnmount(() => {
       '--evidence-width': `${effectiveSplit.evidence}px`,
     }"
   >
+    <!-- 三栏工作台：会话栏 | 对话区 | 来源栏；两个 PaneResizer 分别调节左右栏宽，
+         窄屏时侧栏降级为覆盖式抽屉（见样式区断点） -->
     <LocalSessionRail
       :sessions="sessions.historySessions.value"
       :active-id="sessions.activeSessionId.value"
@@ -972,6 +1383,7 @@ onBeforeUnmount(() => {
     />
 
     <section class="workspace-thread-pane" aria-label="对话区">
+      <!-- 窄屏工具条：侧栏为抽屉形态时提供开合入口，两抽屉互斥 -->
       <div v-if="sessionsIsDrawer || evidenceIsDrawer" class="workspace-mobile-tools">
         <button
           v-if="sessionsIsDrawer"
@@ -988,6 +1400,7 @@ onBeforeUnmount(() => {
           @click="toggleEvidence"
         >来源</button>
       </div>
+      <!-- 会话级通知：恢复结果（status）与清理结果（alert）只在自己的会话中显示 -->
       <p
         v-if="resumeNotice !== null && resumeNotice.sessionId === activeSession.id"
         class="workspace-notice"
@@ -1004,11 +1417,17 @@ onBeforeUnmount(() => {
         :pending-question="activePending?.question ?? ''"
         :focus-target="focusTarget"
         :fallback-presets="suggestionChips"
+        :notices="activeSession.notices"
+        :model-tag-of="modelTagOf"
+        :model-recovery-of="modelRecoveryOf"
         @cancel="cancelTurn"
         @select-action="handleSelectAction"
         @submit-clarification="handleClarification"
         @ask="handleFallbackAsk"
+        @retry-same-request="retryModelTurn"
+        @switch-model-reask="reaskWithModel"
       />
+      <!-- 最近一次失败投影：可重试失败提供"重试"（幂等复用原 requestId） -->
       <div
         v-if="activeFailure !== null"
         class="workspace-failure"
@@ -1031,6 +1450,7 @@ onBeforeUnmount(() => {
           @click="retryFailure"
         >重试</button>
       </div>
+      <!-- 输入区：标签页 pending 上限提示 -> 活跃讨论摘要 -> 建议 chip -> 输入表单 -> 隐私提示 -->
       <div class="workspace-composer">
         <p
           v-if="tabPendingFull"
@@ -1038,6 +1458,7 @@ onBeforeUnmount(() => {
           role="status"
           data-testid="tab-pending-notice"
         >已有两个请求正在处理；可先浏览其他会话，稍后再提问。</p>
+        <!-- 活跃讨论（typed discussion）摘要卡：主题、状态、剩余时长与后端下定的退出/重进/换题动作 -->
         <div
           v-if="activeDiscussion !== undefined"
           class="workspace-composer__discussion"
@@ -1066,7 +1487,17 @@ onBeforeUnmount(() => {
             @click="handleSelectAction(activeDiscussion.newTopicAction)"
           >{{ activeDiscussion.newTopicAction.label }}</button>
         </div>
-        <div v-if="suggestionChips.length > 0" class="workspace-composer__suggestions">
+        <div class="workspace-composer__top">
+          <ModelSelector
+            :catalog="modelCatalog"
+            :selection="activeModelSelection ?? { kind: 'NONE' }"
+            :locked="activePending !== null"
+            @select="handleModelSelected"
+          />
+          <div
+            v-if="suggestionChips.length > 0"
+            class="workspace-composer__suggestions workspace-composer__suggestions--inline"
+          >
           <button
             v-for="chip in suggestionChips"
             :key="chip.presetId ?? chip.text"
@@ -1076,11 +1507,18 @@ onBeforeUnmount(() => {
               activePending !== null
               || tabPendingFull
               || (chip.presetId === undefined
-                && (!freeTextRoutingAvailable || discussionPaused))
+                && (!freeTextRoutingAvailable || discussionPaused || modelSelectionRequired))
             "
             @click="chip.presetId === undefined ? submitFreeText(chip.text) : submitPreset(chip.presetId)"
           >{{ chip.text }}</button>
+          </div>
         </div>
+        <p
+          v-if="modelSelectionRequired"
+          class="workspace-composer__model-required"
+          data-testid="model-selection-required"
+          role="status"
+        >目录默认模型暂未就绪：请先在上方选择一个模型，再提交自由文本问题。</p>
         <form class="workspace-composer__form" @submit.prevent="submitFreeText(questionDraft)">
           <textarea
             ref="composerInput"
@@ -1093,6 +1531,7 @@ onBeforeUnmount(() => {
               activePending !== null
               || !freeTextRoutingAvailable
               || discussionPaused
+              || modelSelectionRequired
             "
             aria-label="输入你的问题"
             placeholder="问问公开项目、案例或工程取舍…"
@@ -1107,6 +1546,7 @@ onBeforeUnmount(() => {
               || tabPendingFull
               || !freeTextRoutingAvailable
               || discussionPaused
+              || modelSelectionRequired
               || questionDraft.trim().length === 0
             "
           >发送</button>
@@ -1150,6 +1590,7 @@ onBeforeUnmount(() => {
       @locate="locateSource"
     />
 
+    <!-- 抽屉打开时的遮罩：点击关闭并让焦点回到输入框 -->
     <button
       v-if="sessionDrawerOpen || evidenceDrawerOpen"
       class="workspace-scrim"
@@ -1231,11 +1672,25 @@ onBeforeUnmount(() => {
   padding: 10px clamp(14px, 2.4vw, 26px) 8px;
   background: var(--workspace-thread-bg);
 }
+.workspace-composer__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
 .workspace-composer__suggestions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
+}
+.workspace-composer__suggestions--inline {
+  margin-bottom: 0;
+}
+.workspace-composer__model-required {
+  margin: 0 0 8px;
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 10.5px/1.6 var(--mono);
 }
 .workspace-composer__suggestion {
   min-height: 28px;

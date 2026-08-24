@@ -12,10 +12,15 @@ const contentOnlyLane = process.env.PLAYWRIGHT_CONTENT_ONLY === '1'
 const depthTwoLane = process.env.PLAYWRIGHT_DEPTH_TWO === '1'
 const projectDiscussionLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION === '1'
 const projectDiscussionExpiryLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY === '1'
+// 模型目录 lane（UI spec §8.5）：由 packaged 运行器以 PLAYWRIGHT_MODEL_SELECTION=1
+// 调用，需要公开目录非空的打包 JAR；目录为空时 spec 自身跳过，不伪造合同。
+const modelSelectionLane = process.env.PLAYWRIGHT_MODEL_SELECTION === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: projectDiscussionExpiryLane
+  testMatch: modelSelectionLane
+    ? /agent-model-selection\.spec\.ts/
+    : projectDiscussionExpiryLane
     ? /agent-project-discussion-expiry\.spec\.ts/
     : projectDiscussionLane
     ? /agent-project-discussion\.spec\.ts/
@@ -38,7 +43,12 @@ export default defineConfig({
     trace: projectDiscussionLane || projectDiscussionExpiryLane ? 'off' : 'retain-on-failure',
   },
   testIgnore: ['**/behavior/**/*.test.ts', '**/behavior/**/*.spec.ts'],
-  projects: contentOnlyLane
+  projects: modelSelectionLane
+    ? [
+      { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+      { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    ]
+    : contentOnlyLane
     ? [{ name: 'content-only', use: { ...devices['Desktop Chrome'] } }]
     : slowProviderLane
       ? [{ name: 'slow-provider', use: { ...devices['Desktop Chrome'] } }]

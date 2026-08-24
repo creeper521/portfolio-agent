@@ -12,6 +12,8 @@ import { SUPPORT_KIND_LABELS } from '../../agent/model/publicAgentTurnLabels'
 const props = defineProps<{
   role: AudienceRole
   answer: HomeAnswerState
+  /** 目录默认模型显示名（UI spec §2.7）：徽标说明首页不提供切换；NONE 时不显示。 */
+  defaultModelName?: string | null
 }>()
 
 defineEmits<{ followUp: [] }>()
@@ -150,7 +152,7 @@ onBeforeUnmount(stopTyping)
   <section class="light-answer" data-light-answer>
     <aside>
       <b>{{ role }}</b>
-      <span>ROUND {{ String(answer.round).padStart(2, '0') }} / 03</span>
+      <span>ANSWERED {{ String(answer.round).padStart(2, '0') }}</span>
       <span v-if="supportTag">SOURCE<br />{{ supportTag }}</span>
     </aside>
     <div class="light-answer__content">
@@ -182,6 +184,11 @@ onBeforeUnmount(stopTyping)
           带着上下文进入 Agent →
         </RouterLink>
       </div>
+      <p
+        v-if="complete && defaultModelName !== undefined && defaultModelName !== null"
+        class="light-answer__model"
+        data-testid="light-answer-model"
+      >由 {{ defaultModelName }} · 目录默认 生成 <span>首页不提供切换，进入 Agent 页后可选</span></p>
     </div>
   </section>
 </template>
@@ -281,6 +288,24 @@ aside span {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 20px;
+}
+.light-answer__model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 0;
+  color: var(--ink-text-faint);
+  font: 10.5px/1.6 var(--mono);
+}
+.light-answer__model::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red-on-ink);
+}
+.light-answer__model span {
+  opacity: 0.6;
 }
 
 .light-answer__cites a,

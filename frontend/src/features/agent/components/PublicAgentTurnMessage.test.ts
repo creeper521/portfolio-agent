@@ -34,6 +34,37 @@ describe('PublicAgentTurnMessage', () => {
     }
   })
 
+  it('五个模型不可用终局之一且提供 modelRecovery 时渲染双动作并上抛两个事件（UI spec §2.6）', async () => {
+    const wrapper = mount(PublicAgentTurnMessage, {
+      props: {
+        turn: parseGoldenFixture('selected-model-temporarily-unavailable.json'),
+        modelRecovery: { failedModelName: 'Qwen3.7-Flash', otherModelName: 'GLM-4.7-Flash' },
+      },
+      global: { stubs: { RouterLink: ROUTER_LINK_STUB } },
+    })
+    expect(wrapper.get('[data-testid="model-failure-title"]').text())
+      .toBe('Qwen3.7-Flash 暂时无法完成这次回答')
+    expect(wrapper.text()).toContain('重试本次请求 = 同一请求标识重放，可能直接找回已完成的结果')
+    expect(wrapper.text()).toContain('换模型重新提问 = 发送一条新请求（新标识），由另一模型重新生成回答')
+    await wrapper.get('[data-testid="model-retry-same-request"]').trigger('click')
+    expect(wrapper.emitted('retry-same-request')?.[0]).toEqual([
+      '10000000-0000-4000-8000-00000000000b',
+    ])
+    await wrapper.get('[data-testid="model-switch-reask"]').trigger('click')
+    expect(wrapper.emitted('switch-model-reask')?.[0]).toEqual([
+      '10000000-0000-4000-8000-00000000000b',
+    ])
+    wrapper.unmount()
+  })
+
+  it('非模型终局不出现换模型入口（capability-unavailable 默认单动作路径不变）', () => {
+    const wrapper = mountTurn('capability-unavailable.json')
+    expect(wrapper.find('[data-testid="model-retry-same-request"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="model-switch-reask"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="turn-message"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('非 ANSWER 变体不渲染 answer 语义结构', () => {
     const wrapper = mountTurn('clarification.json')
     expect(wrapper.find('[data-testid="answer-turn"]').exists()).toBe(false)
@@ -51,6 +82,25 @@ describe('PublicAgentTurnMessage', () => {
 
     const capability = mountTurn('capability-unavailable.json')
     expect(capability.find('[data-testid="turn-retryable"]').text()).toContain('重试')
+  })
+
+  it('REPLAY_BODY_NOT_RETAINED 呈现"未保留"语义与重新提问指引，不显示能力故障文案（A2-32）', () => {
+    const turn = {
+      ...parseGoldenFixture('capability-unavailable.json'),
+      code: 'REPLAY_BODY_NOT_RETAINED',
+      message: '该回答未被保留，请重新提问。',
+      retryable: false,
+      suggestedActions: undefined,
+    }
+    const wrapper = mount(PublicAgentTurnMessage, {
+      props: { turn },
+      global: { stubs: { RouterLink: ROUTER_LINK_STUB } },
+    })
+    expect(wrapper.attributes('data-turn-kind')).toBe('CAPABILITY_UNAVAILABLE')
+    expect(wrapper.text()).toContain('该回答未保留')
+    expect(wrapper.text()).not.toContain('能力暂时不可用')
+    expect(wrapper.get('[data-testid="turn-retryable"]').text()).toContain('重新提问')
+    expect(wrapper.text()).not.toContain('调整提问方式')
   })
 
   it('clarification 表单提交事件上抛为 RESOLVE 载荷形状', async () => {

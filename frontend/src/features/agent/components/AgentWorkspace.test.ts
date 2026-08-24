@@ -56,6 +56,7 @@ async function submitFreeText(wrapper: ReturnType<typeof mountWorkspace>, text: 
 
 function lastSubmitInput(): {
   requestId: string
+  modelSelection: { kind: string; modelRef?: string; selectionVersion?: string }
   command: AgentTurnCommand
   resumeToken?: string
   conversationWindow: { role: string; content: string }[]
@@ -81,6 +82,7 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     document.body.innerHTML = ''
   })
 
@@ -143,6 +145,42 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
       'USER',
       'ASSISTANT',
     ])
+    wrapper.unmount()
+  })
+
+  it('推荐之后的非推荐回答停止附带旧推荐 handle（A2-59）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-partial.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '推荐两个项目')
+    await submitFreeText(wrapper, '介绍 Redis 的原理')
+    await submitFreeText(wrapper, '再帮我推荐别的')
+
+    expect(lastSubmitInput().command).toEqual({
+      kind: 'ASK',
+      input: { kind: 'FREE_TEXT', text: '再帮我推荐别的' },
+    })
+    wrapper.unmount()
+  })
+
+  it('推荐之后的非 ANSWER 终局也会立即截断旧推荐 handle（A2-59）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '推荐两个项目')
+    await submitFreeText(wrapper, '谢谢')
+    await submitFreeText(wrapper, '再聊一个新话题')
+
+    expect(lastSubmitInput().command).toEqual({
+      kind: 'ASK',
+      input: { kind: 'FREE_TEXT', text: '再聊一个新话题' },
+    })
     wrapper.unmount()
   })
 
@@ -268,6 +306,35 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     expect(lastSubmitInput().requestId).toBe(timedOutRequestId)
     expect(wrapper.find('[data-testid="conversational-turn"]').exists()).toBe(true)
     expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('Provider 正文轮超时重试收到 REPLAY_BODY_NOT_RETAINED：终局如实呈现、无失败视图、无 failed 残留（A2-32/A2-14 修订）', async () => {
+    const replayTerminal = goldenTurn('capability-unavailable.json')
+    replayTerminal.code = 'REPLAY_BODY_NOT_RETAINED'
+    replayTerminal.message = '该回答未被保留，请重新提问。'
+    replayTerminal.retryable = false
+    delete replayTerminal.suggestedActions
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'TIMEOUT', code: 'REQUEST_TIMEOUT', message: '等待超时', retryable: true },
+      })
+      .mockResolvedValueOnce(submitOk(replayTerminal, null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '慢回复的通用问题')
+    const timedOutRequestId = lastSubmitInput().requestId
+
+    await wrapper.get('[data-testid="retry-turn"]').trigger('click')
+    await flushPromises()
+
+    expect(lastSubmitInput().requestId).toBe(timedOutRequestId)
+    expect(wrapper.find('[data-testid="turn-failure"]').exists()).toBe(false)
+    expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(false)
+    const terminal = wrapper.get('[data-testid="capability-unavailable-turn"]')
+    expect(terminal.text()).toContain('该回答未保留')
+    expect(terminal.text()).toContain('重新提问')
     wrapper.unmount()
   })
 
@@ -526,6 +593,74 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="capability-unavailable-turn"]').text())
       .toContain('约 6 秒后可重新提交')
+    wrapper.unmount()
+  })
+
+  it('reservation busy 终局不进入会话窗口：第三轮请求窗口仍严格 USER/ASSISTANT 交替（A2-69）', async () => {
+    const busy = goldenTurn('capability-unavailable.json')
+    busy.code = 'CLARIFICATION_IN_PROGRESS'
+    busy.message = '当前澄清正在由另一请求处理，请稍后重新提交。'
+    busy.retryable = true
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+      .mockResolvedValueOnce(submitOk(busy, null))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '需要澄清的问题')
+    await wrapper.get('input[type="radio"][value="choice_sql"]').setValue()
+    await wrapper.get('button[data-clarification-submit]').trigger('submit')
+    await flushPromises()
+
+    await submitFreeText(wrapper, '换个新问题')
+
+    const roles = lastSubmitInput().conversationWindow.map((item) => item.role)
+    expect(roles[0]).toBe('USER')
+    for (let index = 0; index < roles.length; index += 1) {
+      expect(roles[index], `roles=${roles.join(',')}`).toBe(index % 2 === 0 ? 'USER' : 'ASSISTANT')
+    }
+    wrapper.unmount()
+  })
+
+  it('取消处理中的澄清恢复卡片可编辑，未接受的答案标记 failed（A2-70）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+      .mockReturnValueOnce(new Promise(() => {}))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '需要澄清的问题')
+    await wrapper.get('input[type="radio"][value="choice_sql"]').setValue()
+    await wrapper.get('button[data-clarification-submit]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-clarification-state="CONSUMED"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="cancel-turn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-clarification-state="CONSUMED"]').exists()).toBe(false)
+    expect(wrapper.find('button[data-clarification-submit]').exists()).toBe(true)
+    expect(wrapper.find('[data-message-failed="true"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('澄清提交可恢复失败后卡片恢复可编辑，失败视图仍提供同 requestId 重试（A2-70/A2-22）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('clarification.json'), null))
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'TIMEOUT', code: 'REQUEST_TIMEOUT', message: '等待超时', retryable: true },
+      })
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '需要澄清的问题')
+    await wrapper.get('input[type="radio"][value="choice_sql"]').setValue()
+    await wrapper.get('button[data-clarification-submit]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="turn-failure"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="retry-turn"]').exists()).toBe(true)
+    expect(wrapper.find('[data-clarification-state="CONSUMED"]').exists()).toBe(false)
+    expect(wrapper.find('button[data-clarification-submit]').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -826,6 +961,219 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     const items = wrapper.findAll('[data-testid="sources-panel-list"] li')
     expect(items).toHaveLength(2)
     expect(items[0]?.attributes('data-source-key')).toBe('source-sql-audit')
+    wrapper.unmount()
+  })
+
+  it('删除非当前会话也 best-effort 清理其服务端会话，不影响活跃会话（A2-75）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), {
+        conversationId: 'conversation-1',
+        resumeToken: 'token-1',
+      }))
+      .mockResolvedValueOnce(submitOk(goldenTurn('conversational.json'), {
+        conversationId: 'conversation-2',
+        resumeToken: 'token-2',
+      }))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '第一个会话的问题')
+    await wrapper.get('button.session-rail__new').trigger('click')
+    await flushPromises()
+    await submitFreeText(wrapper, '第二个会话的问题')
+
+    // 会话轨按新会话在前排序：旧会话（token-1）的菜单在末位。
+    const menus = wrapper.findAll('[data-session-menu]')
+    await menus.at(-1)?.trigger('click')
+    await wrapper.get('[data-session-remove]').trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.clearConversation).toHaveBeenCalledWith('token-1')
+    expect(apiMocks.clearConversation).not.toHaveBeenCalledWith('token-2')
+    expect(sessionStorage.getItem(RESUME_STORAGE_KEY)).toBe('token-2')
+    wrapper.unmount()
+  })
+
+  it('讨论到期后自动冷取权威 EXPIRED 状态与恢复动作，不依赖页面刷新（A2-76/77）', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), {
+      conversationId: 'conversation-1',
+      resumeToken: 'token-1',
+      discussionRevision: 1,
+      activeDiscussion: {
+        status: 'ACTIVE',
+        subject: {
+          kind: 'PROJECT',
+          reference: 'sql-audit-project',
+          label: 'SQL 审计',
+          route: '/projects/sql-audit-project',
+        },
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: 'ctx-discussion-1' },
+      },
+    }))
+    apiMocks.fetchCurrentConversation.mockResolvedValue({
+      ok: true,
+      conversationId: 'conversation-1',
+      status: 'ACTIVE',
+      discussionRevision: 2,
+      activeDiscussion: {
+        status: 'EXPIRED',
+        subject: {
+          kind: 'PROJECT',
+          reference: 'sql-audit-project',
+          label: 'SQL 审计',
+          route: '/projects/sql-audit-project',
+        },
+        expiresAt: new Date(Date.now() - 30_000).toISOString(),
+        routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: 'ctx-discussion-1' },
+        reenterAction: {
+          actionId: 'discussion-reenter',
+          label: '重新进入讨论',
+          continuation: {
+            operation: 'REENTER_SUBJECT',
+            subject: { kind: 'PROJECT', reference: 'sql-audit-project' },
+          },
+        },
+        newTopicAction: {
+          actionId: 'discussion-new-topic',
+          label: '开始新话题',
+          continuation: { operation: 'EXIT_CONTEXT', contextHandle: 'ctx-discussion-1' },
+        },
+      },
+    })
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '推荐两个项目')
+    await flushPromises()
+    await flushPromises()
+
+    expect(apiMocks.fetchCurrentConversation).toHaveBeenCalledWith('token-1')
+    const discussion = wrapper.get('[data-testid="active-discussion"]')
+    expect(discussion.attributes('data-discussion-status')).toBe('EXPIRED')
+    expect(wrapper.get('[data-testid="discussion-expiry"]').text()).toBe('已到期')
+    expect(wrapper.get('[data-testid="reenter-discussion"]').text()).toContain('重新进入讨论')
+    expect(wrapper.get('[data-testid="new-topic"]').text()).toContain('开始新话题')
+    wrapper.unmount()
+  })
+
+  it('讨论到期冷取首次失败后会在下一个时钟周期重试（A2-76/77）', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-24T08:00:00Z'))
+    apiMocks.submitAgentTurn.mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), {
+      conversationId: 'conversation-1',
+      resumeToken: 'token-1',
+      discussionRevision: 1,
+      activeDiscussion: {
+        status: 'ACTIVE',
+        subject: {
+          kind: 'PROJECT', reference: 'sql-audit-project',
+          label: 'SQL 审计', route: '/projects/sql-audit-project',
+        },
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: 'ctx-discussion-1' },
+      },
+    }))
+    apiMocks.fetchCurrentConversation
+      .mockResolvedValueOnce({ ok: false, invalid: false })
+      .mockResolvedValueOnce({
+        ok: true,
+        conversationId: 'conversation-1',
+        status: 'ACTIVE',
+        discussionRevision: 2,
+        activeDiscussion: {
+          status: 'EXPIRED',
+          subject: {
+            kind: 'PROJECT', reference: 'sql-audit-project',
+            label: 'SQL 审计', route: '/projects/sql-audit-project',
+          },
+          expiresAt: new Date(Date.now() - 30_000).toISOString(),
+          routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: 'ctx-discussion-1' },
+          reenterAction: {
+            actionId: 'discussion-reenter', label: '重新进入讨论',
+            continuation: {
+              operation: 'REENTER_SUBJECT',
+              subject: { kind: 'PROJECT', reference: 'sql-audit-project' },
+            },
+          },
+          newTopicAction: {
+            actionId: 'discussion-new-topic', label: '开始新话题',
+            continuation: { operation: 'EXIT_CONTEXT', contextHandle: 'ctx-discussion-1' },
+          },
+        },
+      })
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '推荐两个项目')
+    expect(apiMocks.fetchCurrentConversation).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    await flushPromises()
+
+    expect(apiMocks.fetchCurrentConversation).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="active-discussion"]')
+      .attributes('data-discussion-status')).toBe('EXPIRED')
+    wrapper.unmount()
+  })
+
+  it('同一会话第二次讨论到期也会冷取，不被首次同步记录压住（A2-76/77）', async () => {
+    const expiredSummary = (revision: number, handle: string) => ({
+      ok: true,
+      conversationId: 'conversation-1',
+      status: 'ACTIVE',
+      discussionRevision: revision,
+      activeDiscussion: {
+        status: 'EXPIRED',
+        subject: {
+          kind: 'PROJECT', reference: 'sql-audit-project',
+          label: 'SQL 审计', route: '/projects/sql-audit-project',
+        },
+        expiresAt: new Date(Date.now() - 30_000).toISOString(),
+        routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: handle },
+        reenterAction: {
+          actionId: 'discussion-reenter', label: '重新进入讨论',
+          continuation: {
+            operation: 'REENTER_SUBJECT',
+            subject: { kind: 'PROJECT', reference: 'sql-audit-project' },
+          },
+        },
+        newTopicAction: {
+          actionId: 'discussion-new-topic', label: '开始新话题',
+          continuation: { operation: 'EXIT_CONTEXT', contextHandle: handle },
+        },
+      },
+    })
+    const activeSummary = (revision: number, handle: string) => ({
+      conversationId: 'conversation-1',
+      resumeToken: 'token-1',
+      discussionRevision: revision,
+      activeDiscussion: {
+        status: 'ACTIVE',
+        subject: {
+          kind: 'PROJECT', reference: 'sql-audit-project',
+          label: 'SQL 审计', route: '/projects/sql-audit-project',
+        },
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        routeContinuation: { operation: 'ROUTE_IN_CONTEXT', contextHandle: handle },
+      },
+    })
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), activeSummary(1, 'ctx-1')))
+      .mockResolvedValueOnce(submitOk(goldenTurn('answer-complete.json'), activeSummary(3, 'ctx-2')))
+    apiMocks.fetchCurrentConversation
+      .mockResolvedValueOnce(expiredSummary(2, 'ctx-1'))
+      .mockResolvedValueOnce(expiredSummary(4, 'ctx-2'))
+    const wrapper = mountWorkspace()
+
+    await submitFreeText(wrapper, '第一次进入讨论')
+    expect(apiMocks.fetchCurrentConversation).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-testid="reenter-discussion"]').trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.fetchCurrentConversation).toHaveBeenCalledTimes(2)
+    expect(lastSubmitInput().command).toMatchObject({
+      kind: 'CONTINUE', operation: 'REENTER_SUBJECT',
+    })
+    expect(wrapper.get('[data-testid="active-discussion"]')
+      .attributes('data-discussion-status')).toBe('EXPIRED')
     wrapper.unmount()
   })
 })

@@ -149,6 +149,37 @@ describe('useLocalSessions', () => {
     expect(activeSession.value?.messages[0]?.failed).toBe(false)
   })
 
+
+  it('模型偏好与展示通知只写会话内存：新会话从目录默认（undefined）开始（UI spec §5.4）', () => {
+    const { activeSession, createSession, setSessionModelSelection, appendSessionNotice } = useLocalSessions()
+    const session = createSession()
+    expect(activeSession.value?.modelSelection).toBeUndefined()
+    expect(activeSession.value?.notices).toEqual([])
+
+    const selection = {
+      kind: 'MODEL',
+      modelRef: 'qwen-3-7-flash',
+      selectionVersion: 'qwen-3-7-flash-v1',
+    } as const
+    expect(setSessionModelSelection(session.id, selection)).toBe(true)
+    expect(activeSession.value?.modelSelection).toEqual(selection)
+    expect(setSessionModelSelection(session.id, undefined)).toBe(true)
+    expect(activeSession.value?.modelSelection).toBeUndefined()
+    expect(setSessionModelSelection('session-unknown', undefined)).toBe(false)
+
+    appendSessionNotice(session.id, {
+      kind: 'MODEL_SWITCHED',
+      title: '已切换至 Qwen3.7-Flash · 下一轮回答将由它生成',
+      detail: '选择仅在本页会话内记忆，刷新后使用目录默认',
+    })
+    const notice = activeSession.value?.notices[0]
+    expect(notice?.kind).toBe('MODEL_SWITCHED')
+    expect(notice?.id).toMatch(/^notice-/)
+    expect(notice?.createdAt).toBeGreaterThan(0)
+    // 通知是会话内独立流：不产生 USER/AGENT 消息，不进入 messages。
+    expect(activeSession.value?.messages).toHaveLength(0)
+  })
+
   it('markClarificationConsumed 标记 CRITICAL 与 ANSWER 内嵌挑战，未知 id 无操作（A2-18）', () => {
     const { activeSession, createSession, appendMessage, markClarificationConsumed } =
       useLocalSessions()

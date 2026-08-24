@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { loadPublicAgentTurnGoldenFixtures } from '../model/publicAgentTurnFixtureLoader'
+import {
+  loadPublicAgentTurnGoldenFixtures,
+  loadTurnRequestFixtures,
+} from '../model/publicAgentTurnFixtureLoader'
 import {
   cancelAgentTurn,
   clearConversation,
@@ -8,8 +11,14 @@ import {
   submitAgentTurn,
 } from './agentTurnApi'
 
-// 传输层合同测试：请求形状（Bearer、closed command、conversationWindow）、
+// 传输层合同测试：请求形状（Bearer、closed command、modelSelection、conversationWindow）、
 // 响应分流（200 业务/非 200 错误 envelope/合同破损/网络/中止）、cancel/clear/current。
+
+const MODEL_SELECTION_GLM = {
+  kind: 'MODEL',
+  modelRef: 'glm-4-7-flash',
+  selectionVersion: 'glm-4-7-flash-v1',
+} as const
 
 function goldenTurn(fileName: string): Record<string, unknown> {
   const fixture = loadPublicAgentTurnGoldenFixtures().find(
@@ -53,6 +62,7 @@ describe('submitAgentTurn', () => {
     )
     const result = await submitAgentTurn({
       requestId: '10000000-0000-4000-8000-000000000099',
+      modelSelection: MODEL_SELECTION_GLM,
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍 SQL 审计项目' } },
       surfaceContext: {
         subjectHint: { kind: 'PROJECT', slug: 'sql-audit' },
@@ -71,6 +81,7 @@ describe('submitAgentTurn', () => {
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(body).toEqual({
       requestId: '10000000-0000-4000-8000-000000000099',
+      modelSelection: MODEL_SELECTION_GLM,
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍 SQL 审计项目' } },
       surfaceContext: {
         subjectHint: { kind: 'PROJECT', slug: 'sql-audit' },
@@ -90,6 +101,60 @@ describe('submitAgentTurn', () => {
     }
   })
 
+  it('modelSelection 序列化形状与 A7 冻结请求 fixtures 逐字段一致（GLM/NONE）', async () => {
+    const glmFixture = loadTurnRequestFixtures().find(
+      (candidate) => candidate.fileName === 'turn-request-glm.json',
+    )
+    if (glmFixture === undefined) throw new Error('缺少 turn-request-glm.json')
+    const glmRequest = glmFixture.turn as Record<string, unknown>
+    const fetch = stubFetch()
+    fetch.mockResolvedValue(
+      jsonResponse(200, {
+        ...goldenTurn('answer-complete.json'),
+        conversation: { conversationId: 'conversation-1', discussionRevision: 0 },
+      }),
+    )
+    await submitAgentTurn({
+      requestId: glmRequest.requestId as string,
+      modelSelection: glmRequest.modelSelection as never,
+      command: glmRequest.command as never,
+      conversationWindow: [],
+    })
+    const glmInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(glmInit.body))).toEqual({
+      requestId: glmRequest.requestId,
+      modelSelection: {
+        kind: 'MODEL',
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'glm-4-7-flash-v1',
+      },
+      command: glmRequest.command,
+      conversationWindow: [],
+    })
+
+    const noneFixture = loadTurnRequestFixtures().find(
+      (candidate) => candidate.fileName === 'turn-request-none.json',
+    )
+    if (noneFixture === undefined) throw new Error('缺少 turn-request-none.json')
+    const noneRequest = noneFixture.turn as Record<string, unknown>
+    fetch.mockResolvedValue(
+      jsonResponse(200, {
+        ...goldenTurn('conversational.json'),
+        conversation: { conversationId: 'conversation-1', discussionRevision: 0 },
+      }),
+    )
+    await submitAgentTurn({
+      requestId: noneRequest.requestId as string,
+      modelSelection: noneRequest.modelSelection as never,
+      command: noneRequest.command as never,
+      conversationWindow: [],
+    })
+    const noneBody = JSON.parse(
+      String((fetchMock.mock.calls[1]?.[1] as RequestInit).body),
+    ) as Record<string, unknown>
+    expect(noneBody.modelSelection).toEqual({ kind: 'NONE' })
+  })
+
   it('首轮无 Token 不发送 Authorization；metadata 无新 token 时 conversation 为 null', async () => {
     const fetch = stubFetch()
     const payload = goldenTurn('answer-complete.json')
@@ -97,6 +162,7 @@ describe('submitAgentTurn', () => {
     fetch.mockResolvedValue(jsonResponse(200, payload))
     const result = await submitAgentTurn({
       requestId: '10000000-0000-4000-8000-000000000001',
+      modelSelection: { kind: 'NONE' },
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍' } },
     })
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
@@ -122,6 +188,7 @@ describe('submitAgentTurn', () => {
     )
     const result = await submitAgentTurn({
       requestId: '10000000-0000-4000-8000-000000000009',
+      modelSelection: MODEL_SELECTION_GLM,
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍' } },
     })
     if (result.ok) throw new Error('期望失败')
@@ -137,6 +204,7 @@ describe('submitAgentTurn', () => {
     fetch.mockResolvedValue(jsonResponse(200, { requestId: 'x', kind: 'CONFIRMATION' }))
     const result = await submitAgentTurn({
       requestId: '10000000-0000-4000-8000-000000000001',
+      modelSelection: MODEL_SELECTION_GLM,
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍' } },
     })
     if (result.ok) throw new Error('期望失败')
@@ -149,6 +217,7 @@ describe('submitAgentTurn', () => {
     fetch.mockRejectedValue(new TypeError('failed to fetch'))
     const network = await submitAgentTurn({
       requestId: '10000000-0000-4000-8000-000000000001',
+      modelSelection: MODEL_SELECTION_GLM,
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍' } },
     })
     if (network.ok) throw new Error('期望失败')
@@ -159,6 +228,7 @@ describe('submitAgentTurn', () => {
     const aborted = await submitAgentTurn(
       {
         requestId: '10000000-0000-4000-8000-000000000001',
+        modelSelection: MODEL_SELECTION_GLM,
         command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '介绍' } },
       },
       { signal: AbortSignal.abort() },
@@ -182,6 +252,7 @@ describe('submitAgentTurn', () => {
       )
       const pending = submitAgentTurn({
         requestId: '10000000-0000-4000-8000-000000000002',
+        modelSelection: MODEL_SELECTION_GLM,
         command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '慢问题' } },
       })
       await vi.advanceTimersByTimeAsync(24_999)
@@ -196,6 +267,7 @@ describe('submitAgentTurn', () => {
       const cancellable = submitAgentTurn(
         {
           requestId: '10000000-0000-4000-8000-000000000003',
+          modelSelection: MODEL_SELECTION_GLM,
           command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '取消问题' } },
         },
         { signal: external.signal },

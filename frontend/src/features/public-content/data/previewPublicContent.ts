@@ -198,6 +198,26 @@ export const previewPublicContent: PublicPortfolio = {
   agentAvailability: {
     status: 'AVAILABLE',
     freeTextSemanticRouting: 'AVAILABLE',
+    // 与 contracts/agent-turn/portfolio-model-catalog.json 冻结投影同形的预览目录；
+    // 生产运行时始终读 /api/portfolio，不复制该静态预览。
+    modelCatalogVersion: 'catalog-public-v1',
+    defaultModelSelection: {
+      kind: 'MODEL',
+      modelRef: 'glm-4-7-flash',
+      selectionVersion: 'glm-4-7-flash-v1',
+    },
+    selectableModels: [
+      {
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'glm-4-7-flash-v1',
+        displayName: 'GLM-4.7-Flash',
+      },
+      {
+        modelRef: 'qwen-3-7-flash',
+        selectionVersion: 'qwen-3-7-flash-v1',
+        displayName: 'Qwen3.7-Flash',
+      },
+    ],
   },
   owner: {
     name: '',

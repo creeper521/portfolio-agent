@@ -25,7 +25,17 @@ describe('portfolio api', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(getPortfolioSnapshot()).resolves.toEqual(payload)
+    // A7：缺失目录投影规范化为空目录（显式 NONE），其余字段原样透传。
+    await expect(getPortfolioSnapshot()).resolves.toMatchObject({
+      ...payload,
+      agentAvailability: {
+        status: 'AVAILABLE',
+        freeTextSemanticRouting: 'AVAILABLE',
+        modelCatalogVersion: '',
+        defaultModelSelection: { kind: 'NONE' },
+        selectableModels: [],
+      },
+    })
     expect(fetchMock).toHaveBeenCalledWith('/api/portfolio', expect.objectContaining({ method: 'GET' }))
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = new Headers(requestInit.headers)
@@ -62,6 +72,56 @@ describe('portfolio api', () => {
         freeTextSemanticRouting: 'DISABLED',
       },
     })
+  })
+
+  it('normalizes the A7 model catalog projection and fails closed on corrupt catalogs', async () => {
+    const catalog = {
+      status: 'AVAILABLE',
+      freeTextSemanticRouting: 'AVAILABLE',
+      modelCatalogVersion: 'catalog-public-v1',
+      defaultModelSelection: {
+        kind: 'MODEL',
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'glm-4-7-flash-v1',
+      },
+      selectableModels: [
+        {
+          modelRef: 'glm-4-7-flash',
+          selectionVersion: 'glm-4-7-flash-v1',
+          displayName: 'GLM-4.7-Flash',
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      contentVersion: 'test-v1',
+      agentAvailability: catalog,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    await expect(getPortfolioSnapshot()).resolves.toMatchObject({
+      agentAvailability: {
+        modelCatalogVersion: 'catalog-public-v1',
+        defaultModelSelection: catalog.defaultModelSelection,
+        selectableModels: [catalog.selectableModels[0]],
+      },
+    })
+
+    for (const corrupt of [
+      { ...catalog, selectableModels: 'not-an-array' },
+      { ...catalog, defaultModelSelection: { kind: 'AUTO' } },
+      { ...catalog, modelCatalogVersion: '' },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        contentVersion: 'test-v1',
+        agentAvailability: corrupt,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      await expect(getPortfolioSnapshot()).resolves.toMatchObject({
+        agentAvailability: {
+          modelCatalogVersion: '',
+          defaultModelSelection: { kind: 'NONE' },
+          selectableModels: [],
+        },
+      })
+    }
   })
 
   it('fails closed when public content omits or corrupts Agent availability', async () => {
