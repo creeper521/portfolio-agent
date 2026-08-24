@@ -93,6 +93,10 @@ try {
     Assert-ExitCode 'Agent behavior audit asset discovery tests'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\run-packaged-jvm-restart-api-gate.test.ps1')
+    Assert-ExitCode 'Packaged JVM restart API gate tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
     Assert-ExitCode 'Static bundle checker tests'
 
@@ -259,7 +263,8 @@ try {
         -BrowserContract PASS `
         -BrowserBody IN_PROGRESS `
         -PostgreSqlState $postgreSqlState `
-        -PostgreSqlJvmRestart NOT_RUN `
+        -PostgreSqlJvmRestartApi NOT_RUN `
+        -BrowserJvmRestart NOT_RUN `
         -ProviderQuality NOT_RUN
     Assert-ExitCode 'Agent verification layer summary'
 }

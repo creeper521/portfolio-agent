@@ -27,7 +27,8 @@ $allPass = Invoke-Summary @(
     '-BrowserContract', 'PASS',
     '-BrowserBody', 'PASS',
     '-PostgreSqlState', 'PASS',
-    '-PostgreSqlJvmRestart', 'PASS',
+    '-PostgreSqlJvmRestartApi', 'PASS',
+    '-BrowserJvmRestart', 'PASS',
     '-ProviderQuality', 'PASS',
     '-RequireComplete'
 )
@@ -41,7 +42,8 @@ $partial = Invoke-Summary @(
     '-BrowserContract', 'PASS',
     '-BrowserBody', 'IN_PROGRESS',
     '-PostgreSqlState', 'PASS',
-    '-PostgreSqlJvmRestart', 'NOT_RUN',
+    '-PostgreSqlJvmRestartApi', 'PASS',
+    '-BrowserJvmRestart', 'NOT_RUN',
     '-ProviderQuality', 'NOT_RUN'
 )
 Assert-True ($partial.ExitCode -eq 0) 'partial report mode must remain inspectable.'
@@ -53,6 +55,9 @@ Assert-True ($partialJson.layers.scenarioRuntime -eq 'NOT_RUN') `
 Assert-True ($partialJson.layers.browserContract -eq 'PASS' -and
         $partialJson.layers.browserBody -eq 'IN_PROGRESS') `
     'browser transport/contract and body quality must remain separate.'
+Assert-True ($partialJson.layers.postgreSqlJvmRestartApi -eq 'PASS' -and
+        $partialJson.layers.browserJvmRestart -eq 'NOT_RUN') `
+    'API and same-browser JVM restart evidence must remain separate.'
 
 $requiredPartial = Invoke-Summary @(
     '-Deterministic', 'PASS',
@@ -60,7 +65,8 @@ $requiredPartial = Invoke-Summary @(
     '-BrowserContract', 'PASS',
     '-BrowserBody', 'IN_PROGRESS',
     '-PostgreSqlState', 'PASS',
-    '-PostgreSqlJvmRestart', 'NOT_RUN',
+    '-PostgreSqlJvmRestartApi', 'PASS',
+    '-BrowserJvmRestart', 'NOT_RUN',
     '-ProviderQuality', 'NOT_RUN',
     '-RequireComplete'
 )
@@ -75,7 +81,8 @@ $failed = Invoke-Summary @(
     '-BrowserContract', 'PASS',
     '-BrowserBody', 'PASS',
     '-PostgreSqlState', 'PASS',
-    '-PostgreSqlJvmRestart', 'PASS',
+    '-PostgreSqlJvmRestartApi', 'PASS',
+    '-BrowserJvmRestart', 'PASS',
     '-ProviderQuality', 'PASS'
 )
 $failedJson = $failed.Text | ConvertFrom-Json

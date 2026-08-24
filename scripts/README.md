@@ -29,6 +29,7 @@
 | 工程门禁 | `code-quality-check.ps1`、`architecture-check.ps1`、`documentation-check.ps1`、`privacy-check.ps1` | 检查代码规则、模块依赖、文档事实和隐私边界。 |
 | 发布验证 | `verify-release.ps1`、`verify-static-bundle.ps1`、`run-jar-e2e.ps1` | 构建并验证发布候选、JAR 静态资源和浏览器/API 路径。 |
 | Agent 分层证据 | `write-agent-verification-summary.ps1` | 分开报告确定性、场景运行时、Browser contract/body、PostgreSQL/JVM restart 与 Provider Quality；未执行层不得汇总为 PASS。 |
+| 跨 JVM API 恢复 | `run-packaged-jvm-restart-api-gate.ps1` | 临时 PostgreSQL 上以两个真实 packaged Java 进程验证 Conversation 与 Portfolio replay；明确不替代同浏览器跨重启门。 |
 | Agent 验收 | `run-agent-behavior-audit.ps1`、`assert-live-*.ps1`、`provider-probe/` | 验证 Agent 行为、公开响应及显式授权的真实 Provider 路径。 |
 | 评测 | `run-eval.ps1`、`run-eval-offline.ps1` | 执行评测 CLI 和确定性的离线评测。 |
 | 内容治理 | `portfolio-governance.ps1`、`build-retrieval-bundle.ps1`、`import-public-release.ps1` | 准备、审核、验证和导入公开内容发布包。 |

@@ -10,7 +10,9 @@ param(
     [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
     [string]$PostgreSqlState,
     [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
-    [string]$PostgreSqlJvmRestart,
+    [string]$PostgreSqlJvmRestartApi,
+    [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
+    [string]$BrowserJvmRestart,
     [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
     [string]$ProviderQuality,
     [switch]$RequireComplete
@@ -23,7 +25,8 @@ $layers = [ordered]@{
     browserContract = $BrowserContract
     browserBody = $BrowserBody
     postgreSqlState = $PostgreSqlState
-    postgreSqlJvmRestart = $PostgreSqlJvmRestart
+    postgreSqlJvmRestartApi = $PostgreSqlJvmRestartApi
+    browserJvmRestart = $BrowserJvmRestart
     providerQuality = $ProviderQuality
 }
 $values = @($layers.Values)

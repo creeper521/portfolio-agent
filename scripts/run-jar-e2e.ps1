@@ -15,7 +15,7 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
-    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY')]
+    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY', 'JVM_RESTART')]
     [string]$Lane = 'DEFAULT',
     [switch]$SkipPlaywright,
     [string]$PlaywrightScript = 'test:e2e',
@@ -728,7 +728,95 @@ try {
     }
     Write-Output 'Packaged final Agent resource smoke passed.'
 
-    if ($SkipPlaywright) {
+    if ($Lane -eq 'JVM_RESTART') {
+        if ($ContextMode -ne 'POSTGRESQL') {
+            throw 'JVM_RESTART requires PostgreSQL context mode.'
+        }
+        $resumeToken = [string]$caseAgentResponse.conversation.resumeToken
+        $conversationId = [string]$caseAgentResponse.conversation.conversationId
+        if ([string]::IsNullOrWhiteSpace($resumeToken) -or
+                [string]::IsNullOrWhiteSpace($conversationId)) {
+            throw 'JVM_RESTART initial settlement omitted conversation authority.'
+        }
+        $expectedAnswer = $caseAgentResponse.answer |
+            ConvertTo-Json -Depth 20 -Compress
+
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force
+            if (-not $process.WaitForExit(10000)) {
+                throw 'JVM_RESTART first packaged process did not stop.'
+            }
+        }
+        Assert-PackagedLogBoundary -stdoutPath $stdoutPath `
+            -stderrPath $stderrPath -privacySentinel $privacySentinel
+        foreach ($firstLogPath in @($stdoutPath, $stderrPath)) {
+            if (Test-Path -LiteralPath $firstLogPath -PathType Leaf) {
+                Remove-Item -LiteralPath $firstLogPath -Force
+            }
+        }
+        $restartCaptureId = [guid]::NewGuid().ToString('N')
+        $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+            "portfolio-jar-e2e-restart-$restartCaptureId.stdout.log"
+        $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+            "portfolio-jar-e2e-restart-$restartCaptureId.stderr.log"
+        $process = Start-Process -FilePath $JavaExecutable `
+            -ArgumentList ($javaVmArguments + $applicationArguments) `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath `
+            -PassThru -WindowStyle Hidden
+
+        $restartReady = $false
+        $restartDeadline = [DateTimeOffset]::UtcNow.AddSeconds(
+            $ReadinessTimeoutSeconds)
+        while ([DateTimeOffset]::UtcNow -lt $restartDeadline) {
+            $process.Refresh()
+            if ($process.HasExited) {
+                throw "JVM_RESTART second process exited with $($process.ExitCode)."
+            }
+            try {
+                $restartPortfolio = Invoke-RestMethod -UseBasicParsing `
+                    -Uri "$baseUrl/api/portfolio" -TimeoutSec 2
+                if ([string]$restartPortfolio.contentVersion -eq
+                        [string]$publicContent.contentVersion) {
+                    $restartReady = $true
+                    break
+                }
+            }
+            catch { }
+            Start-Sleep -Milliseconds 100
+        }
+        if (-not $restartReady) {
+            throw 'JVM_RESTART second process readiness timed out.'
+        }
+
+        $restartHeaders = @{ Authorization = "Bearer $resumeToken" }
+        $currentAfterRestart = Invoke-RestMethod -UseBasicParsing `
+            -Method Get -Uri "$baseUrl/api/agent/conversations/current" `
+            -Headers $restartHeaders -TimeoutSec $ReadinessTimeoutSeconds
+        if ([string]$currentAfterRestart.conversationId -ne $conversationId) {
+            throw 'JVM_RESTART did not recover the persisted conversation.'
+        }
+        $replayAfterRestart = Invoke-RestMethod -UseBasicParsing `
+            -Method Post -Uri "$baseUrl/api/agent/turns" `
+            -Headers $restartHeaders `
+            -TimeoutSec $ReadinessTimeoutSeconds `
+            -ContentType 'application/json; charset=utf-8' `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($caseAgentRequest))
+        $actualAnswer = $replayAfterRestart.answer |
+            ConvertTo-Json -Depth 20 -Compress
+        if ([string]$replayAfterRestart.kind -ne 'ANSWER' -or
+                [string]$replayAfterRestart.requestId -ne $caseAgentRequestId -or
+                [string]$replayAfterRestart.conversation.conversationId -ne $conversationId -or
+                $actualAnswer -cne $expectedAnswer) {
+            throw 'JVM_RESTART did not replay the exact persisted Portfolio terminal.'
+        }
+        Write-Output ('PACKAGED_JVM_RESTART_API_PASS ' +
+            'state=POSTGRESQL; processIdentity=CHANGED; conversation=RECOVERED; ' +
+            'replay=EXACT_PUBLIC_TURN')
+    }
+
+    if ($SkipPlaywright -and $Lane -ne 'JVM_RESTART') {
         function Invoke-AgentClosureRequest([string]$Question) {
             $body = @{
                 requestId = [guid]::NewGuid().ToString()

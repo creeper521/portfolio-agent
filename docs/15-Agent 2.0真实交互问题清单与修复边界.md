@@ -192,7 +192,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
 | A2-94 | P1 | Browser 不检查回答完整性 | 空或单句内容可能通过 | 检查 section、证据、数量和非空门 | Browser Quality Gate |
 | A2-95 | P1 | live gate 输出硬编码 goalKind | 硬编码字段已删除，脚本自测只允许输出实际采集的 kind、resolution、数量与状态；待真实 Provider 运行留证 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
-| A2-96 | P1 | 缺少跨 JVM PostgreSQL 恢复 | page reload 代替进程重启 | 同一浏览器会话跨真实后端重启恢复 | PostgreSQL / Packaged Browser |
+| A2-96 | P1 | 缺少跨 JVM PostgreSQL 恢复 | packaged API 已跨两个真实 JVM 恢复 Conversation 与精确 Portfolio replay；同一浏览器会话跨重启仍为 NOT_RUN | 同一浏览器会话跨真实后端重启恢复 | PostgreSQL / Packaged Browser |
 | A2-97 | P1 | General 单测自造正确句数 | 已增加英文、错误句数、错误 depth bucket 与 section 顺序负例；待真实 Provider 质量矩阵 | 增加语言、句数、深度负例 | General Tests |
 | A2-98 | P1 | privacy check 看不到运行时数据流 | 已补 Lifecycle → PostgreSQL → 解密完整 settlement sentinel 门，待最终总门 | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
 | A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
@@ -210,7 +210,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-111 | P1 | Evidence hard invariant 被污染 | 机器账本已从 PASS 改为 FAILED；checker 要求五类执行证据齐备才能恢复 PASS，live gate 已删除未观测 goalKind；场景 runtime 仍待补 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
 | A2-112 | P1 | Discussion Plan 完成表述过强 | 计划头部已拆分 State/Lifecycle Complete 与 Semantic Quality Incomplete，Browser facet/depth/完整性仍明确开放 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
 | A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in registry 硬编码 schema 支持，真实 Provider 仍有合同失败 | 分开 Configured、Transport、Schema、Quality 状态 | Provider Registry / Documentation |
-| A2-114 | P2 | 恢复能力表述混淆 | docs/08 已拆分页面刷新、同 JVM PostgreSQL 与跨 JVM 三类状态；跨 JVM 仍为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
+| A2-114 | P2 | 恢复能力表述混淆 | docs/08 与分层汇总已拆分页面刷新、PostgreSQL、跨 JVM API、同浏览器跨 JVM；前三类有独立状态，最后一类为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
 | A2-115 | P1 | 字段存在被误判为功能完成 | 参数、接口、配置出现即被计入能力 | 生产消费、用户可见、负例和全链门全部成立才算完成 | Definition of Done |
 
 #### 3.2.1 证据等级映射
@@ -337,6 +337,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - `agent-architecture-status.test.ps1` 已执行通过：`EVIDENCE_BEFORE_COMPLETION=PASS` 若缺少 deterministic、scenario runtime、Browser body、PostgreSQL JVM restart、Provider Quality 五类新鲜标记即失败。当前机器账本据真实缺口记为 `FAILED`，不以测试总数或 HTTP 成功恢复 PASS。
 - `run-agent-behavior-audit-assets.test.ps1` 已执行通过：实际确认 `test:e2e`、默认 Playwright spec 与 L0/L3 Java 资产存在；runner 不再引用 `test:e2e:behavior`、`api-l0`、`runtime` project 或已删除的 `AgentBehaviorAdversarialProviderIntegrationTest`。L0/L3 已实跑，分别为 6 tests 与 14 tests、零失败；输出范围明确为 `CONTRACT_MANIFEST_ONLY` 和 `PROVIDER_CODEC_ADVERSARIAL`，不冒充用户场景运行时。
 - 本批后端 clean package 已实跑：874 tests、0 failures、0 errors、4 skipped，Testcontainers 使用 PostgreSQL 16.14。该结果仍不替代 scenario runtime、Browser body、JVM restart 或 Provider Quality。
+- `run-packaged-jvm-restart-api-gate.ps1` 已对提交 `0e5f78b` 的 packaged JAR 实跑：临时 PostgreSQL 16 容器、同一数据库/密钥、两个真实 Java 进程；第二个 JVM 以原 resume token 恢复同一 Conversation，并对同 requestId 返回精确 Portfolio PublicTurn。输出明确为 `browser=NOT_RUN`，因此 A2-96 仍不关闭。
 - 本组没有修改 Frontend 代码。A2-89 的空 behavior 目录/失效 Playwright 配置、A2-92—A2-94 的 Browser 内容门属于 Frontend Agent 交接；后端 scenario runtime 与跨 JVM runner 继续在本批后续实现。
 
 ### 3.4 本轮审计证据边界

@@ -144,9 +144,19 @@ try {
     if ($runnerSource -match '/api/v2|stp-v[123]') {
         throw 'Packaged runner must not reference retired versioned Agent contracts.'
     }
-    foreach ($lane in @('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE')) {
+    foreach ($lane in @('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'JVM_RESTART')) {
         if ($runnerSource -notmatch "(?<![A-Z_])$lane(?![A-Z_])") {
             throw "Packaged runner is missing explicit lane '$lane'."
+        }
+    }
+    foreach ($restartEvidence in @(
+        'PACKAGED_JVM_RESTART_API_PASS',
+        'processIdentity=CHANGED',
+        'conversation=RECOVERED',
+        'replay=EXACT_PUBLIC_TURN'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($restartEvidence)) {
+            throw "Packaged JVM_RESTART lane is missing '$restartEvidence'."
         }
     }
     foreach ($bodyStallEvidence in @(
