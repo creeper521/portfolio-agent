@@ -11,15 +11,25 @@ public final class ModelOutputDiagnostics {
     }
 
     public void rejected(String operation, Layer layer) {
+        rejected(operation, layer, null);
+    }
+
+    public void rejected(String operation, Layer layer, String reason) {
         try {
-            publisher.publish(DiagnosticEvent.builder(
+            if (reason != null && !reason.matches("^[A-Z0-9_]{1,64}$")) {
+                throw new IllegalArgumentException("reason must be a closed value");
+            }
+            DiagnosticEvent.Builder event = DiagnosticEvent.builder(
                             "provider.output.rejected", DiagnosticLevel.WARN)
                     .field("provider.operation", operation)
                     .field("failure.layer", layer)
                     .field("failure.code", layer == Layer.SCHEMA
                             ? "OUTPUT_SCHEMA_REJECTED"
-                            : "OUTPUT_SEMANTIC_REJECTED")
-                    .build());
+                            : "OUTPUT_SEMANTIC_REJECTED");
+            if (reason != null) {
+                event.field("failure.reason", reason);
+            }
+            publisher.publish(event.build());
         } catch (RuntimeException ignored) {
             // Diagnostics never change model behavior.
         }

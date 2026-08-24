@@ -47,6 +47,11 @@ public final class GeneralKnowledgeGenerator {
             }
             try {
                 return validator.validate(request, draft);
+            } catch (GeneralDraftValidationException exception) {
+                outputDiagnostics.rejected(
+                        "GENERAL_KNOWLEDGE", ModelOutputDiagnostics.Layer.SEMANTIC,
+                        exception.getReason().name());
+                throw exception;
             } catch (RuntimeException exception) {
                 outputDiagnostics.rejected(
                         "GENERAL_KNOWLEDGE", ModelOutputDiagnostics.Layer.SEMANTIC);

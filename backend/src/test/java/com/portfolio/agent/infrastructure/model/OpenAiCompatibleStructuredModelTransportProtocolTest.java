@@ -3,6 +3,7 @@ package com.portfolio.agent.infrastructure.model;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
+import com.portfolio.agent.common.observability.DiagnosticLevel;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderKind;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderRegistrySnapshot;
@@ -39,7 +40,8 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
         for (ModelProviderKind provider : ModelProviderKind.values()) {
             try (StubServer server = StubServer.responding(200, successBody())) {
-                transport(provider, server.endpoint(), event -> { }).execute(request());
+                List<DiagnosticEvent> events = new ArrayList<>();
+                transport(provider, server.endpoint(), events::add).execute(request());
 
                 assertThat(server.requestCount).hasValue(1);
                 JsonNode payload = MAPPER.readTree(server.requestBody.get());
@@ -55,6 +57,10 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                         .containsExactlyInAnyOrder(
                                 "model", "messages", "response_format", "thinking",
                                 "stream", "max_tokens", "temperature");
+                assertThat(events).singleElement().satisfies(event -> {
+                    assertThat(event.getName()).isEqualTo("provider.call.completed");
+                    assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.INFO);
+                });
             }
         }
     }
@@ -63,6 +69,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
     void httpFailuresHaveStableCategoriesWithoutRetainingProviderBody() throws Exception {
         assertHttpFailure(401, StructuredModelFailure.Code.AUTHENTICATION_REJECTED);
         assertHttpFailure(403, StructuredModelFailure.Code.AUTHENTICATION_REJECTED);
+        assertHttpFailure(402, StructuredModelFailure.Code.BILLING_REJECTED);
         assertHttpFailure(429, StructuredModelFailure.Code.RATE_LIMITED);
         assertHttpFailure(500, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);
         assertHttpFailure(503, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);

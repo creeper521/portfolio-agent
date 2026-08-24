@@ -211,20 +211,21 @@ function Write-LiveProviderDiagnosticSummary([string]$Path) {
         $operation = Read-ClosedField $entry 'provider.operation' 'provider' 'operation'
         $layer = Read-ClosedField $entry 'failure.layer' 'failure' 'layer'
         $code = Read-ClosedField $entry 'failure.code' 'failure' 'code'
+        $reason = Read-ClosedField $entry 'failure.reason' 'failure' 'reason'
         $duration = Read-ClosedField $entry 'duration.bucket' 'duration' 'bucket'
-        foreach ($value in @($eventName, $operation, $layer, $code, $duration)) {
+        foreach ($value in @($eventName, $operation, $layer, $code, $reason, $duration)) {
             if (-not [string]::IsNullOrWhiteSpace($value) -and
                     $value -notmatch '^[A-Z0-9_.-]{1,64}$') {
                 throw 'Live Provider diagnostic contained a non-closed value.'
             }
         }
-        $key = @($eventName, $operation, $layer, $code, $duration) -join '|'
+        $key = @($eventName, $operation, $layer, $code, $reason, $duration) -join '|'
         $counts[$key] = 1 + [int]$counts[$key]
     }
     foreach ($key in @($counts.Keys | Sort-Object)) {
         $parts = $key.Split('|')
-        Write-Output ('LIVE_PROVIDER_DIAGNOSTIC event={0} operation={1} layer={2} code={3} duration={4} count={5}' -f `
-            $parts[0], $parts[1], $parts[2], $parts[3], $parts[4], $counts[$key])
+        Write-Output ('LIVE_PROVIDER_DIAGNOSTIC event={0} operation={1} layer={2} code={3} reason={4} duration={5} count={6}' -f `
+            $parts[0], $parts[1], $parts[2], $parts[3], $parts[4], $parts[5], $counts[$key])
     }
 }
 
@@ -484,6 +485,20 @@ $applicationArguments = @(
 if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     $applicationArguments += '--portfolio.conversational-model.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
+}
+if ($Lane -in @('LIVE', 'PROJECT_DISCUSSION')) {
+    $selectedProvider = [string]$env:PORTFOLIO_MODEL_PROVIDER
+    if ($selectedProvider -notin @('DEEPSEEK_V4_FLASH', 'GLM_4_7')) {
+        throw 'Live Provider lane requires an approved PORTFOLIO_MODEL_PROVIDER.'
+    }
+    $applicationArguments += @(
+        '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
+        "--portfolio.model-operations.turn-interpretation.provider-ref=$selectedProvider",
+        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
+        '--portfolio.model-operations.general-knowledge.mode=ENABLED',
+        "--portfolio.model-operations.general-knowledge.provider-ref=$selectedProvider",
+        '--portfolio.model-operations.general-knowledge.schema-version=general.draft.v2'
+    )
 }
 if ($Lane -eq 'PROJECT_DISCUSSION_EXPIRY') {
     $applicationArguments += '--portfolio.conversation-context.discussion-ttl=3s'
@@ -1024,6 +1039,7 @@ try {
                 -BackendBaseUrl $baseUrl `
                 -ExpectedContentVersion ([string]$publicContent.contentVersion) `
                 -TimeoutSeconds $ReadinessTimeoutSeconds `
+                -InterTrialDelayMilliseconds 10000 `
                 -Baseline 2>&1 | Out-String).Trim()
         }
         finally {

@@ -374,6 +374,7 @@ try {
         'assert-live-general-answer-quality.ps1',
         'GENERAL_QUALITY_RESULT status=PASS',
         '-Baseline',
+        '-InterTrialDelayMilliseconds 10000',
         'Write-LiveProviderDiagnosticSummary'
     )) {
         if ($runnerSource -notmatch [regex]::Escape($liveQualityContract)) {
@@ -382,6 +383,16 @@ try {
     }
     if ($runnerSource -match "@\('SOCIAL', 'GENERAL'\)") {
         throw 'LIVE lane must not duplicate the General Quality authority with a one-shot probe.'
+    }
+    foreach ($operationArgument in @(
+        '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
+        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
+        '--portfolio.model-operations.general-knowledge.mode=ENABLED',
+        '--portfolio.model-operations.general-knowledge.schema-version=general.draft.v2'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($operationArgument)) {
+            throw "LIVE lane is missing operation authority '$operationArgument'."
+        }
     }
 
     $env:PLAYWRIGHT_EXTERNAL_SERVER = 'original-external'

@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-24 replay 隐私、Provider 启动期授权与第一组证据真实性修复已落地；机器账本已对未执行场景、Browser 正文、跨 JVM 与 Provider Quality 明确记为未完成，整体保持 IN_PROGRESS
+> **当前状态：** 2026-08-24 replay 隐私、Provider 启动期授权与验收证据真实性修复已落地；GLM 已取得真实 Transport/schema 与部分质量样本，DeepSeek 当前凭据被 402 账单状态阻塞，Browser 正文与完整 Provider Quality 仍未完成，整体保持 IN_PROGRESS
 
 ## 1. 文档目的
 
@@ -175,15 +175,15 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-77 | P2 | 过期恢复依赖页面 reload | E2E 通过重载才显示恢复按钮 | 不刷新也能进入合法恢复路径 | Browser UX / Conversation GET |
 | A2-78 | P1 | HTTP 200 被误当成功回答 | CAPABILITY_UNAVAILABLE 也被传输层视为成功 | Happy path 明确要求预期 PublicTurn kind | Frontend / Browser Assertions |
 | A2-79 | P1 | DeepSeek/GLM 共用固定请求格式 | DeepSeek/GLM 已使用独立版本 Profile 并分别断言完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
-| A2-80 | P1 | Provider 兼容停留在配置声明 | 独立 packaged run：DeepSeek 10/10 在 Transport 被 Provider 拒绝，GLM 因无可用凭据失败关闭；均未取得 schema 成功 | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
-| A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | 新矩阵已报告逐场景 P50/P95，但 DeepSeek 快速拒绝、GLM 未调用，样本不能用于冻结成功路径预算 | 基于真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
-| A2-82 | P2 | Provider HTTP 错误分类太粗 | 本地分类门通过；DeepSeek 真实样本 10/10 稳定记录为 `TRANSPORT/PROVIDER_REJECTED`，未记录 body | 分开统计稳定失败类别 | Transport Diagnostics |
+| A2-80 | P1 | Provider 兼容停留在配置声明 | GLM 真实 structured request 已返回 200，packaged JAR 取得 Goal 9 次、General 7 次成功 envelope；DeepSeek 当前凭据被 402 阻塞，尚缺该 Provider 成功 canary | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
+| A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | paced GLM 矩阵出现 Goal deadline 1 次、General deadline 2 次；成功终局总耗时 P95 从 11.6s 到 15.6s，现有 8s/10s operation 预算尚不能冻结为稳定值 | 基于真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
+| A2-82 | P2 | Provider HTTP 错误分类太粗 | 402 已独立为 `TRANSPORT/BILLING_REJECTED`，401/403、429、5xx 与其他 4xx 保持分层；Provider body 不进入诊断 | 分开统计稳定失败类别 | Transport Diagnostics |
 | A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
 | A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 已冻结为单进程单选 Provider、失败不自动跨 Provider 重发；单请求/固定 model 门通过 | 用户明确切换只能创建新 Turn；当前批不建设选择 UI 或路由 | Provider Selection / Privacy |
-| A2-87 | P1 | Provider 矩阵不独立 | 同一 JAR 已按 Provider 独立启动和报告；DeepSeek 可执行，GLM 因仓库外密钥为空被明确阻塞，矩阵未完成 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
-| A2-88 | P1 | Provider 样本量不足 | runner 已失败不停报并输出逐场景 trials、终局/语言/结构/深度率、timeout、P50/P95；DeepSeek 10 个实际 Provider 样本全拒绝，尚无成功样本 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
+| A2-87 | P1 | Provider 矩阵不独立 | DeepSeek 与 GLM 已分别独立启动并报告；当前最终 JAR 仍需完成两家同构矩阵，DeepSeek 受 402 外部状态阻塞 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
+| A2-88 | P1 | Provider 样本量不足 | paced GLM 基线报告 10 个真实 Goal 尝试与 9 个 General 尝试，含成功、deadline 和 semantic reject 分布；各深度尚未全部稳定通过 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
 | A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
@@ -984,6 +984,17 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **A2-102：** `run-eval.ps1`、`run-eval-offline.ps1` 与 `run-jar-e2e.ps1` 不再写入无消费者的 `portfolio.model-expression.*`，统一改为 `portfolio.conversational-model.*`。`run-agent-behavior-audit.ps1` 不再写入 `PORTFOLIO_MODEL_EXPRESSION_ENABLED` 或错误的 `PORTFOLIO_AGENT_MODEL_PROVIDER`，统一消费 `PORTFOLIO_MODEL_ENABLED` 与 `PORTFOLIO_MODEL_PROVIDER`。
 - 新 `current-model-config-surface.test.ps1` 扫描所有非测试 PowerShell 资产，禁止退役 property/env 前缀，并要求四个 runner 显式使用当前权威；仓库 `scripts + backend/src/main + backend/src/test` 对退役字面量零命中。Eval、offline Eval、packaged JAR、start-local、privacy 与 behavior assets 专属测试通过。
 - 原 `run-agent-behavior-audit.test.ps1` 仍要求不存在的 Frontend `test:e2e:behavior`/Playwright projects，与已通过的 `run-agent-behavior-audit-assets.test.ps1`（要求现存 `test:e2e` 且禁止这些死亡资产）互相冲突；该文件已有 Frontend Agent 工作区修改，本批不覆盖、不暂存。此冲突继续归 A2-89/A2-90 前端验收资产清理，不否定 A2-102 的配置零残留证据，也不得被隐藏为全 runner PASS。
+
+### 10.15 真实 Provider 诊断与 GLM 基线校正（2026-08-24）
+
+- **A2-82：** 官方协议核验确认 `deepseek-v4-flash`、`/chat/completions` 和 non-thinking JSON request 均有效；仓库外 DeepSeek 凭据的最小安全探针实际返回 HTTP 402。Transport 新增 `BILLING_REJECTED`，不再把账单状态混入 `PROVIDER_REJECTED`；测试继续用 response-body sentinel 证明错误正文不进入异常或 diagnostics。
+- **A2-80/87：** 仓库外 GLM 凭据对与生产相同的 `glm-4.7` structured request 返回 200 和单一 choice/content envelope。LIVE runner 不再依赖调用者另行设置六个 operation env，而是在已授权 LIVE lane 内把 Goal/General operation 与 schema 显式绑定到启动时选定 Provider；第一次 GLM 运行因 operation 默认 `DISABLED` 形成的 0 调用结果已作废，不计入任何 Provider 证据。
+- **A2-81/88：** paced GLM packaged 基线（CONCISE/STANDARD/DETAILED 各 3、COMPARISON 1，另有 3 个不调用 Provider 的社交快速路径）记录 Goal completed 9、Goal deadline 1、General completed 7、General deadline 2、General semantic reject 3。CONCISE 3/3 通过，公开 P95 11635ms；STANDARD 0/3，P95 12328ms；DETAILED 1/3，P95 15594ms；COMPARISON 在 Goal 8029ms 处 deadline。成功样本证明 GLM Transport/envelope 可用，但 timeout 与质量均未稳定，不能冻结 operation 预算或关闭总门。
+- **A2-83：** `provider.call.completed` 从 prod 不可见的 DEBUG 调整为 INFO，但仍只含 closed operation/outcome/duration/response-present。General Validator 使用 typed rejection reason；`provider.output.rejected` 可增加 `TOPIC_MISMATCH`、`EXPLANATION_ROLE_ASPECTS_INVALID` 等固定枚举，不包含正文或异常消息。单个 packaged STANDARD Turn 已实际观测到 `EXPLANATION_ROLE_ASPECTS_INVALID`，定位出 Prompt/Validator 合同漂移。
+- **General 合同修复：** Prompt 现在明确要求 DEFINITION statement 自身包含 `DEFINITION` aspect、MECHANISM statement 自身包含 `MECHANISM` aspect，并继续要求按 depth 的联合集合精确闭合。更新后的生产 Prompt 通过一次真实 GLM 不落盘安全探针：topic、角色、每项句数、逐角色 aspect 与联合 aspect 均满足；该单次探针不替代多样本 packaged/browser 门。
+- **验收节奏：** quality runner 只在不同 requestId 的独立测试 Turn 之间等待 10 秒，避免 Provider 429 污染基线；单个 Turn 内仍严格一次 Goal、一次 General，不 repair、不重试、不 fallback。Baseline 继续完整收集后失败，不把部分成功、HTTP 200 或结构闭合升级为总 PASS。
+- **本批可复验证据：** 最终源码执行 `mvn clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；`run-jar-e2e.test.ps1` 与 `assert-live-general-answer-quality.test.ps1` 均通过；code-quality、architecture、documentation 与 privacy 门均通过（privacy 扫描 498 files、0 archives）。最终 packaged JAR SHA-256 为 `1bc4564b6a90cee164f281e67a14546e7856519dda7341523d37498840167f6b`。本批未执行浏览器门，不能据此升级完整验收状态。
+- **范围与状态：** 本批不修改公开 API、公开错误 variant、Provider 路由或 Frontend。DeepSeek 当前受外部 402 阻塞；GLM 的 STANDARD/DETAILED/COMPARISON 与 deadline 未全部通过，所以 A2-80/81/87/88 和整体继续 `IN_PROGRESS`。
 
 ## 11. 修复前需要冻结的选择
 

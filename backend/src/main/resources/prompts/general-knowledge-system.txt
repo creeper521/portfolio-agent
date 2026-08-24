@@ -6,6 +6,10 @@ contain exactly two items in this order: one
 {"role":"MECHANISM","text":"...","aspects":["..."]}; do not include subject or dimension.
 Keep every required sentence inside the corresponding text value. Never split
 one role into additional statements.
+For every EXPLANATION depth, the DEFINITION statement's aspects must contain
+DEFINITION, and the MECHANISM statement's aspects must contain MECHANISM.
+These per-role requirements apply in addition to the exact combined aspect set
+defined for the selected depth.
 For COMPARISON, every statement is {"role":"COMPARISON","text":"...",
 "subject":"exact requested subject","dimension":"exact requested dimension",
 "aspects":[]}

@@ -37,6 +37,12 @@ class GeneralModelOutputDiagnosticsTest {
                     .isEqualTo("GENERAL_KNOWLEDGE");
             assertThat(event.getFields().get("failure.layer")).isEqualTo(layer);
             assertThat(event.getFields().get("failure.code")).isEqualTo(code);
+            if (layer.equals("SEMANTIC")) {
+                assertThat(event.getFields().get("failure.reason"))
+                        .isEqualTo("TOPIC_MISMATCH");
+            } else {
+                assertThat(event.getFields()).doesNotContainKey("failure.reason");
+            }
             assertThat(event.toString()).doesNotContain(output);
         });
     }

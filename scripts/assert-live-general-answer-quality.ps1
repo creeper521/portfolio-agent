@@ -7,6 +7,8 @@ param(
     [int]$TrialsPerDepth = 3,
     [ValidateRange(1, 300)]
     [int]$TimeoutSeconds = 30,
+    [ValidateRange(0, 60000)]
+    [int]$InterTrialDelayMilliseconds = 10000,
     [switch]$Baseline,
     [string]$FixtureDirectory
 )
@@ -356,6 +358,11 @@ try {
     foreach ($scenario in Get-Scenarios) {
         $results = @()
         for ($trial = 1; $trial -le $scenario.Trials; $trial++) {
+            if ([string]::IsNullOrWhiteSpace($FixtureDirectory) -and
+                    $InterTrialDelayMilliseconds -gt 0 -and
+                    ($lines.Count -gt 0 -or $trial -gt 1)) {
+                Start-Sleep -Milliseconds $InterTrialDelayMilliseconds
+            }
             $results += Measure-Trial $scenario $trial
         }
         $language = @($results | Where-Object { $_.Language }).Count

@@ -32,6 +32,8 @@ class SystemPromptCatalogTest {
                 .contains(
                         "Simplified Chinese", "CONCISE", "DETAILED",
                         "literal separator ` vs `",
+                        "DEFINITION statement's aspects must contain",
+                        "MECHANISM statement's aspects must contain",
                         "only sentence terminator", "untrusted content")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
     }

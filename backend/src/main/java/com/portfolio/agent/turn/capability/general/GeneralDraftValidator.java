@@ -10,7 +10,8 @@ public final class GeneralDraftValidator {
     public GeneralSemanticResult validate(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
         if (!expectedTopic(request).equals(draft.topic())) {
-            throw new IllegalArgumentException("draft topic does not match request");
+            reject(GeneralDraftValidationException.Reason.TOPIC_MISMATCH,
+                    "draft topic does not match request");
         }
         List<GeneralSemanticResult.Statement> statements = draft.statements().stream()
                 .map(value -> new GeneralSemanticResult.Statement(
@@ -20,13 +21,15 @@ public final class GeneralDraftValidator {
             if (statements.size() != 2
                     || statements.get(0).getRole() != GeneralSemanticResult.Role.DEFINITION
                     || statements.get(1).getRole() != GeneralSemanticResult.Role.MECHANISM) {
-                throw new IllegalArgumentException("explanation roles are invalid");
+                reject(GeneralDraftValidationException.Reason.EXPLANATION_ROLES_INVALID,
+                        "explanation roles are invalid");
             }
             validateExplanationQuality(request, draft);
         } else {
             validateComparisonCoverage(request, statements);
             if (draft.statements().stream().anyMatch(value -> !value.aspects().isEmpty())) {
-                throw new IllegalArgumentException("comparison aspects must be empty");
+                reject(GeneralDraftValidationException.Reason.COMPARISON_ASPECTS_INVALID,
+                        "comparison aspects must be empty");
             }
             statements.forEach(statement -> validateChineseSentences(
                     statement.getText(), 1, 3, "comparison text"));
@@ -52,7 +55,8 @@ public final class GeneralDraftValidator {
         if (!draft.statements().get(0).aspects().contains(GeneralDraftCodec.Aspect.DEFINITION)
                 || !draft.statements().get(1).aspects().contains(
                 GeneralDraftCodec.Aspect.MECHANISM)) {
-            throw new IllegalArgumentException("explanation role aspects are invalid");
+            reject(GeneralDraftValidationException.Reason.EXPLANATION_ROLE_ASPECTS_INVALID,
+                    "explanation role aspects are invalid");
         }
         Set<GeneralDraftCodec.Aspect> actual = EnumSet.noneOf(GeneralDraftCodec.Aspect.class);
         draft.statements().forEach(statement -> actual.addAll(statement.aspects()));
@@ -68,14 +72,16 @@ public final class GeneralDraftValidator {
             case DETAILED -> EnumSet.allOf(GeneralDraftCodec.Aspect.class);
         };
         if (!actual.equals(expected)) {
-            throw new IllegalArgumentException("explanation semantic coverage is invalid");
+            reject(GeneralDraftValidationException.Reason.EXPLANATION_COVERAGE_INVALID,
+                    "explanation semantic coverage is invalid");
         }
     }
 
     private void validateComparisonCoverage(
             GeneralKnowledgeRequest request, List<GeneralSemanticResult.Statement> statements) {
         if (statements.stream().anyMatch(value -> value.getRole() != GeneralSemanticResult.Role.COMPARISON)) {
-            throw new IllegalArgumentException("comparison contains an invalid role");
+            reject(GeneralDraftValidationException.Reason.COMPARISON_ROLE_INVALID,
+                    "comparison contains an invalid role");
         }
         Set<String> expected = new HashSet<>();
         for (String subject : request.getSubjects()) {
@@ -87,11 +93,13 @@ public final class GeneralDraftValidator {
         for (GeneralSemanticResult.Statement statement : statements) {
             String pair = statement.getSubject() + "\u0000" + statement.getDimension();
             if (!actual.add(pair)) {
-                throw new IllegalArgumentException("comparison contains a duplicate pair");
+                reject(GeneralDraftValidationException.Reason.COMPARISON_DUPLICATE_PAIR,
+                        "comparison contains a duplicate pair");
             }
         }
         if (!actual.equals(expected) || statements.size() != expected.size()) {
-            throw new IllegalArgumentException("comparison pairs do not match request");
+            reject(GeneralDraftValidationException.Reason.COMPARISON_COVERAGE_INVALID,
+                    "comparison pairs do not match request");
         }
     }
 
@@ -102,7 +110,8 @@ public final class GeneralDraftValidator {
         for (GeneralDraftCodec.CaveatDraft caveat : caveats) {
             validateChineseSentences(caveat.text(), 1, 2, "caveat");
             if (!texts.add(normalize(caveat.text())) || !kinds.add(caveat.kind())) {
-                throw new IllegalArgumentException("caveats contain duplicates");
+                reject(GeneralDraftValidationException.Reason.CAVEAT_DUPLICATE,
+                        "caveats contain duplicates");
             }
         }
     }
@@ -110,14 +119,20 @@ public final class GeneralDraftValidator {
     private void validateChineseSentences(
             String text, int minimum, int maximum, String name) {
         if (!text.endsWith("。") || text.matches(".*[.!?！？；;].*")) {
-            throw new IllegalArgumentException(name + " has invalid sentence boundaries");
+            reject(GeneralDraftValidationException.Reason.SENTENCE_BOUNDARY_INVALID,
+                    name + " has invalid sentence boundaries");
         }
         List<String> sentences = java.util.Arrays.stream(text.split("。", -1))
                 .filter(value -> !value.isBlank()).toList();
         if (sentences.size() < minimum || sentences.size() > maximum
                 || sentences.stream().anyMatch(value -> !value.matches(".*[\\p{IsHan}].*"))) {
-            throw new IllegalArgumentException(name + " has invalid language or sentence count");
+            reject(GeneralDraftValidationException.Reason.LANGUAGE_OR_SENTENCE_COUNT_INVALID,
+                    name + " has invalid language or sentence count");
         }
+    }
+
+    private void reject(GeneralDraftValidationException.Reason reason, String message) {
+        throw new GeneralDraftValidationException(reason, message);
     }
 
     private String expectedTopic(GeneralKnowledgeRequest request) {

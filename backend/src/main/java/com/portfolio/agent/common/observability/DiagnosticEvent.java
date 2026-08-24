@@ -154,7 +154,8 @@ public final class DiagnosticEvent {
                     Map.entry("provider.output.rejected", fields(
                             "provider.operation",
                             "failure.code",
-                            "failure.layer")),
+                            "failure.layer",
+                            "failure.reason")),
                     Map.entry("expression.eligibility", fields(
                             "task.kind", "material.kind", "expression.disposition",
                             "expression.attempted", "input.size.bucket", "breaker.state")),

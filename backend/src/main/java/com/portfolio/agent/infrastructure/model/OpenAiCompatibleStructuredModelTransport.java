@@ -145,7 +145,7 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
         try {
             DiagnosticEvent.Builder event = DiagnosticEvent.builder(
                             success ? "provider.call.completed" : "provider.call.failed",
-                            success ? DiagnosticLevel.DEBUG : DiagnosticLevel.WARN)
+                            success ? DiagnosticLevel.INFO : DiagnosticLevel.WARN)
                     .field("provider.operation", operation)
                     .field("event.outcome", success ? "SUCCESS" : "FAILURE")
                     .field("duration.bucket", durationBucket(startedAt))
@@ -185,6 +185,9 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     private StructuredModelFailure.Code classifyHttpStatus(int status) {
         if (status == 401 || status == 403) {
             return StructuredModelFailure.Code.AUTHENTICATION_REJECTED;
+        }
+        if (status == 402) {
+            return StructuredModelFailure.Code.BILLING_REJECTED;
         }
         if (status == 429) {
             return StructuredModelFailure.Code.RATE_LIMITED;
