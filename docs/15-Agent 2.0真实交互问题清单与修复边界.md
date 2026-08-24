@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-24 replay 隐私、Provider 启动期授权与验收证据真实性修复已落地；GLM 已取得真实 Transport/schema 与部分质量样本，DeepSeek 当前凭据被 402 账单状态阻塞，Browser 正文与完整 Provider Quality 仍未完成，整体保持 IN_PROGRESS
+> **当前状态：** 2026-08-24 配置化 GLM/Qwen 模型目录、Turn 显式选择、五种 settled 模型错误与 `modelExecution` 已完成后端离线实现和 Maven 全量验证；旧 global/visitor Provider 门、DeepSeek 与单 Provider 权威已退出生产路径。真实 GLM canary 已到达智谱但被 HTTP 429 / 业务码 1305 平台过载拒绝，尚无成功终局；Qwen 调用配置等待用户提供。本轮不包含前端，整体保持 IN_PROGRESS
 
 ## 1. 文档目的
 
@@ -129,9 +129,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-30 | P0 | PublicTurn replay 含访客派生文本 | 已固定 Goal label 并移除原文 retry action；Backend/PostgreSQL sentinel 门通过，待最终总门 | PostgreSQL replay 不含访客问题或其片段 | Projection / State / Privacy |
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
-| A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v5`/`general.draft.v2` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
-| A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
+| A2-33 | P0 | Operation Provider 声明不控制实际调用 | 旧 global Provider、visitor access 与 Operation `provider-ref` 已删除；当前 Turn 的显式 ModelSelection 是唯一接收方选择，Catalog/Provider policy/Operation 三层准入后冻结执行快照，待真实 GLM/Qwen 总门 | 声明选择与真实数据接收方一致，且无第二 Provider 权威 | Model Catalog / Provider Authority |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v5`/`general.draft.v2` 继续由独立 Operation 门与唯一生产 Codec 做启动期精确校验；不再与 Provider 选择混合，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Operation / Codec |
+| A2-35 | P1 | Agent availability 可能误报 | `/api/portfolio` 已只消费冻结的 Catalog 与 Operation readiness，安全投影目录版本、默认选择和可选条目；离线矩阵通过，待真实 Provider 与前端消费总门 | 只投影经过三层准入的安全目录与 Operation readiness | Portfolio API / Model Catalog |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 零实现端口、编译器、可选构造分支与幽灵预算已物理删除；待最终清理总门 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
 | A2-38 | P1 | Portfolio 回答只是 Claim 列表 | 同一 Answer section 的事实已合成为服务端叙述块并聚合全部公开来源；depth/intent 确定性门通过，待 Browser 正文门 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
@@ -174,16 +174,16 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-76 | P2 | Discussion 到期后动作不自动更新 | 只改倒计时文案，不取得 EXPIRED summary | 到期时冷恢复权威动作 | Frontend Discussion Recovery |
 | A2-77 | P2 | 过期恢复依赖页面 reload | E2E 通过重载才显示恢复按钮 | 不刷新也能进入合法恢复路径 | Browser UX / Conversation GET |
 | A2-78 | P1 | HTTP 200 被误当成功回答 | CAPABILITY_UNAVAILABLE 也被传输层视为成功 | Happy path 明确要求预期 PublicTurn kind | Frontend / Browser Assertions |
-| A2-79 | P1 | DeepSeek/GLM 共用固定请求格式 | DeepSeek/GLM 已使用独立版本 Profile 并分别断言完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
-| A2-80 | P1 | Provider 兼容停留在配置声明 | GLM 真实 structured request 已返回 200，packaged JAR 取得 Goal 9 次、General 7 次成功 envelope；DeepSeek 当前凭据被 402 阻塞，尚缺该 Provider 成功 canary | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
-| A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | paced GLM 矩阵出现 Goal deadline 1 次、General deadline 2 次；成功终局总耗时 P95 从 11.6s 到 15.6s，现有 8s/10s operation 预算尚不能冻结为稳定值 | 基于真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
+| A2-79 | P1 | Provider 共用固定请求格式 | GLM/Qwen 已分别使用闭合 `ZHIPU_CHAT_COMPLETIONS` / `DASHSCOPE_CHAT_COMPLETIONS` Profile，并离线断言各自完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
+| A2-80 | P1 | Provider 兼容停留在配置声明 | 配置化目录、两种 Binding/Profile 与显式 modelRef 路由已完成离线门；GLM-4.7-Flash 真实 canary 已到达智谱并得到 HTTP 429 / 业务码 1305，证明路由可达但没有成功 schema/semantic 样本；Qwen3.7-Flash 配置待用户提供 | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
+| A2-81 | P1 | Operation timeout 缺少新目录真实基线 | GLM canary 一次快速返回 1305、后续应用调用贴近 8 秒 Goal deadline 结算为暂时不可用，仍无成功调用 P50/P95；Qwen3.7-Flash 未配置 | 基于两家真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
 | A2-82 | P2 | Provider HTTP 错误分类太粗 | 402 已独立为 `TRANSPORT/BILLING_REJECTED`，401/403、429、5xx 与其他 4xx 保持分层；Provider body 不进入诊断 | 分开统计稳定失败类别 | Transport Diagnostics |
 | A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
-| A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
-| A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 已冻结为单进程单选 Provider、失败不自动跨 Provider 重发；单请求/固定 model 门通过 | 用户明确切换只能创建新 Turn；当前批不建设选择 UI 或路由 | Provider Selection / Privacy |
-| A2-87 | P1 | Provider 矩阵不独立 | DeepSeek 与 GLM 已分别独立启动并报告；当前最终 JAR 仍需完成两家同构矩阵，DeepSeek 受 402 外部状态阻塞 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
-| A2-88 | P1 | Provider 样本量不足 | paced GLM 基线报告 10 个真实 Goal 尝试与 9 个 General 尝试，含成功、deadline 和 semantic reject 分布；各深度尚未全部稳定通过 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
+| A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；显式选择下的单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
+| A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 每个 Turn 已冻结一个显式 ModelSelection；任一失败均不自动跨 Provider 重发，用户换模型必须使用新 requestId；前端交互不在本轮 | 用户明确切换只能创建新 Turn；不得自动 fallback | Provider Selection / Privacy |
+| A2-87 | P1 | Provider 矩阵不独立 | runner 与配置面已迁移为 GLM/Qwen 独立选择和报告；两家新目标的真实同构矩阵均未执行 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
+| A2-88 | P1 | Provider 样本量不足 | 当前只有离线协议、错误映射和执行一致性证据；GLM/Qwen 尚无新目录下可比较的真实成功率、语义率、P50/P95 与超时率 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
 | A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
@@ -197,7 +197,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
 | A2-100 | P1 | 不同验证层被合并为 PASS | release 汇总已拆分 deterministic、scenario runtime、Browser contract/body、PostgreSQL/JVM restart、Provider Quality；未执行层不再被总 PASS 覆盖 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
 | A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总与 scenario runner 已按 35 个用户 case 报告 matched/setup/hard-error coverage；当前 scenario runtime 明确为 FAILED | 以用户场景和风险门报告覆盖 | Verification Governance |
-| A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | Eval、packaged JAR 与 behavior runner 已统一使用当前 `conversational-model`/`PORTFOLIO_MODEL_ENABLED`；生产脚本零残留门通过 | 删除全部退役键和脚本引用 | Configuration Cleanup |
+| A2-102 | P2 | legacy 模型配置仍被脚本使用 | Eval、packaged JAR、启动器、probe 与 behavior runner 已迁移到 `model-runtime`、GLM/Qwen Provider 变量和显式 modelRef；旧 `conversational-model`、global Provider/env 与 operation provider-ref 已退出生产资产 | 删除全部退役键和脚本引用 | Configuration Cleanup |
 | A2-103 | P2 | Portfolio expression timeout 无执行消费者 | 幽灵 expression 能力选择删除，预算字段、环境键和预算关系已同步移除；待最终配置总门 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
 | A2-104 | P2 | Portfolio expression 编译器未接线 | 零生产入口的 Port/Compiler、可选执行分支及孤立测试已物理删除；待最终清理总门 | 实现并接入或物理删除 | Portfolio Expression |
 | A2-105 | P2 | Conversation history 配置无消费者 | `max-history-rounds/recent-raw-rounds/max-input-tokens` 及零消费者属性已删除；待最终配置总门 | 实现唯一消费方或删除 | Conversation Configuration |
@@ -208,7 +208,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | AGENTS、SECURITY、docs/08、本文与机器状态已统一 persistence-safe 分类，待最终总门 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
 | A2-111 | P1 | Evidence hard invariant 被污染 | 机器账本已从 PASS 改为 FAILED；checker 要求五类执行证据齐备才能恢复 PASS，live gate 已删除未观测 goalKind；场景 runtime 仍待补 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
 | A2-112 | P1 | Discussion Plan 完成表述过强 | 计划头部已拆分 State/Lifecycle Complete 与 Semantic Quality Incomplete，Browser facet/depth/完整性仍明确开放 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
-| A2-113 | P1 | Provider registry 支持元数据强于真实证据 | Registry 已只表达 approved configuration/request features，删除 supports/capability/schema-verified 暗示；真实状态继续分层报告 | Configured 不得推导 Transport、Schema 或 Quality | Provider Registry / Documentation |
+| A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in Registry 已由 `ConfiguredModelCatalog` 物理替换；Catalog 只表达配置、公开选择和安全执行元数据，不推导真实 Transport、Schema 或 Quality | Configured 不得推导 Transport、Schema 或 Quality | Model Catalog / Documentation |
 | A2-114 | P2 | 恢复能力表述混淆 | docs/08 与分层汇总已拆分页面刷新、PostgreSQL、跨 JVM API、同浏览器跨 JVM；前三类有独立状态，最后一类为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
 | A2-115 | P1 | 字段存在被误判为功能完成 | 参数、接口、配置出现即被计入能力 | 生产消费、用户可见、负例和全链门全部成立才算完成 | Definition of Done |
 
@@ -303,7 +303,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 2. **验收真实性：** A2-89—A2-101、A2-111—A2-115 必须先恢复真实可执行证据；场景清单、脚本源码字符串和 HTTP 200 不能作为产品通过证据。
 3. **现有行为修复：** A2-53—A2-78 应在不新增第二状态权威的前提下修复；Audience、subjectHint、constraints 必须明确选择“实现”或“删除宣称”。
 4. **产品能力升级：** A2-37—A2-41、A2-43—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
-5. **Provider 收敛：** A2-79—A2-88 与配置化模型目录共用一次目标架构；P0 过渡期只增加 fail-closed 一致性校验，不提前建设第二套路由。
+5. **Provider 收敛：** A2-79—A2-88 使用已批准的配置化 GLM/Qwen 目录作为唯一目标架构；旧单 Provider/global/visitor 权威不得作为兼容层恢复，真实矩阵必须按显式 ModelSelection 独立执行。
 6. **隐私实现机制：** sentinel 只用于验收，不得成为生产清洗或判定机制；生产代码必须使用闭合来源分类，未知或 Provider 派生正文默认拒绝持久化。
 7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
 
@@ -996,6 +996,18 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **本批可复验证据：** 最终源码执行 `mvn clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；`run-jar-e2e.test.ps1` 与 `assert-live-general-answer-quality.test.ps1` 均通过；code-quality、architecture、documentation 与 privacy 门均通过（privacy 扫描 498 files、0 archives）。最终 packaged JAR SHA-256 为 `1bc4564b6a90cee164f281e67a14546e7856519dda7341523d37498840167f6b`。本批未执行浏览器门，不能据此升级完整验收状态。
 - **范围与状态：** 本批不修改公开 API、公开错误 variant、Provider 路由或 Frontend。DeepSeek 当前受外部 402 阻塞；GLM 的 STANDARD/DETAILED/COMPARISON 与 deadline 未全部通过，所以 A2-80/81/87/88 和整体继续 `IN_PROGRESS`。
 
+### 10.16 配置化 GLM/Qwen 目录后端 Replacement Slice（2026-08-24）
+
+本节是当前生产模型权威；本节之前关于 DeepSeek、`conversational-model`、built-in Registry、部署级单 Provider 与旧 GLM model ID 的阶段证据，只能说明替换前行为，不再构成当前目录的 Provider 通过证据。
+
+- **三层准入：** 旧 global Provider、visitor access 与 Operation `provider-ref` 门已删除。模型执行只经过 `model-runtime` 总开关、每个 Provider 的 `enabled + credential + data-policy-approved`、以及 Goal/General 各自的 Operation mode/schema/max-output/timeout。`selectable=false` 且通过 Provider 准入的条目只保留在服务端内部 canary 索引，不进入公开 Snapshot，也不能由访客 Turn 解析。
+- **目录与协议：** `ConfiguredModelCatalog` 从启动配置冻结 GLM `glm-4-7-flash -> glm-4.7-flash` 和 Qwen `qwen-3-7-flash -> qwen3.7-flash`；两个闭合 Profile 分别控制 thinking-disabled 请求形状，共享 Transport 只接受服务端 Binding。DeepSeek、厂商枚举目录、built-in Registry、旧 namespace/env 和全局 Provider 选择已退出生产路径。
+- **Turn 权威：** 所有 Command 根级显式携带 `MODEL(modelRef + selectionVersion)` 或 `NONE`，并进入请求指纹。生命周期先 Claim/Replay，只有新 Claim 才校验当前 Catalog 并冻结一个执行快照；Goal Interpretation 与 General Knowledge 显式使用同一选择，不读取全局默认，不 repair、不自动重试或跨 Provider 重发。
+- **公开与失败合同：** `/api/portfolio` 只公开安全目录版本、默认选择和可选条目；每个 `PublicAgentTurn` 原子携带 `modelExecution`。`MODEL_SELECTION_STALE`、`SELECTED_MODEL_UNAVAILABLE`、`SELECTED_MODEL_TEMPORARILY_UNAVAILABLE`、`SELECTED_MODEL_RATE_LIMITED`、`SELECTED_MODEL_INVALID_RESPONSE` 均形成可回放的 HTTP 200 settled `CAPABILITY_UNAVAILABLE`；结构、认证、指纹冲突与入口限流继续使用非 settled HTTP 错误。
+- **离线证据：** 后端 Slice A 已完成离线实现，Backend clean package 的 Surefire 结果为 `963 tests / 0 failures / 0 errors / 4 skipped`；生产源码 privacy check 通过，架构 checker 明确报告 `overall=IN_PROGRESS` 且无 deferred item，Eval、offline Eval 与 packaged-JAR 三个生产 runner 自测均通过。该证据覆盖目录、协议、显式选择、单 Turn 单模型、五错误码、Settlement/replay、`modelExecution` 与新配置脚本面，不替代真实 Provider 或前端合同消费。
+- **真实 GLM canary：** 使用仓库外 Secret 启动 `glm-4-7-flash` 配置化目录，公开 Catalog 正确投影所选模型，真实请求进入 Provider 后结算为 `SELECTED_MODEL_RATE_LIMITED`。固定无用户数据直连 canary 返回 HTTP 429、业务码 1305“该模型当前访问量过大”，对应智谱平台服务过载而非余额不足；后续一次应用调用在 Goal 的 8 秒预算附近结算为 `SELECTED_MODEL_TEMPORARILY_UNAVAILABLE`。这些证据证明真实路由与错误映射，不构成成功 schema/semantic 或质量 PASS。
+- **仍开放：** GLM-4.7-Flash 与 Qwen3.7-Flash 的真实同构矩阵均未完成，Qwen 调用配置等待用户提供；A2-80/81/87/88 与 Slice A A9 外部门保持 `IN_PROGRESS`。本轮不处理前端模型选择 UI、会话偏好、pending 锁定或换模型交互，也不据后端离线结果关闭前端条目。当前全仓 documentation gate 仍被本轮范围外的前端 UI 设计文档状态标记阻塞，不得记为通过。
+
 ## 11. 修复前需要冻结的选择
 
 以下选择会影响具体代码，但不改变 Agent 2.0 总架构。状态标注为「已冻结」的选择已于 2026-08-19 随前端修复批次确定：
@@ -1007,7 +1019,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 5. **已冻结**：当前 Turn 非 ANSWER 时来源栏显示“最近回答来源”并整体弱化，不隐藏；
 6. **已冻结**：澄清卡脱困入口只消费已发布 QuestionPreset 或后端 `suggestedActions`，前端叶子组件不自造业务问题（2026-08-19 确认第 6 项后由硬编码入口修订为预设驱动）。
 7. **已冻结（2026-08-24）**：Goal/General 的 schema 或 semantic 拒绝直接结束本轮 Provider 能力，不发送 repair Prompt、不以同 Provider 重试；`maxModelAttempts` 只允许 1，其他值失败关闭。未来若改变，必须作为独立产品决策重新完成隐私、成本、deadline 与质量审批；
-8. **已冻结（2026-08-24）**：运行实例只向启动时选定的单一 Provider 发请求；鉴权、限流、超时、Transport、schema 或 semantic 失败均不得自动跨 Provider 重发。用户未来若通过独立批准的选择能力明确切换，必须使用新 requestId 创建新 Turn；本冻结不授权建设多模型路由或前端选择 UI。
+8. **已冻结（2026-08-24 目录替换修订）**：每个 Turn 只向请求中显式选择并在 Claim 后冻结的单一 Provider 发请求；鉴权、限流、超时、Transport、schema 或 semantic 失败均不得自动跨 Provider 重发。用户明确切换模型必须使用新 requestId 创建新 Turn；普通同 requestId replay 必须保留原 ModelSelection。
 
 在这些选择冻结前，不应通过零散条件分支修补 UI。
 
@@ -1068,7 +1080,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 关闭本轮新增条目必须同时满足：
 
 1. **隐私：** 对完整 settlement 解密后的 `publicTurn + contexts + challenges` 扫描固定 sentinel；visitor-derived text 为零，Provider 派生文本的持久化政策有确定性实现和正反例。sentinel 只属于测试，生产只使用显式来源分类与未知来源默认拒绝。
-2. **Provider 授权：** operation provider/schema 与真实 Transport/Codec 在启动期精确一致；错配配置必须失败关闭，公开 availability 不得误报。
+2. **Provider 授权：** model-runtime、所选 Provider 的 credential/data-policy 与对应 Operation schema/预算形成三层独立准入；旧 global/visitor/provider-ref 权威不得恢复，公开 Catalog 与 availability 不得误报。
 3. **语义消费：** AudienceRole、subjectHint、constraints、depth、dimension 等每个保留字段都有生产消费者、反向测试和用户可见差异；不实施的字段、配置和文案同期删除。
 4. **回答质量：** Recommendation、Comparison、Cross-domain 和 General depth 分别有确定性行为门；Portfolio 详细回答只在证据满足时 COMPLETE，否则显式 PARTIAL。
 5. **多轮与前端：** Discussion clarification、reservation busy、cancel、首页 retry、Preset identity、expiry 和会话删除不破坏 requestId、窗口交替、pointer 或服务端清理语义。
@@ -1089,10 +1101,10 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | 运行时隐私门 | A2-98 | Lifecycle → State → PostgreSQL → 解密 settlement 的 sentinel 数据流测试，不以静态扫描代替 |
 | Codec 扫描对象 | A2-99 | 解密后递归扫描 publicTurn、contexts、challenges 的完整 plaintext，五 variant 可回读 |
 | Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
-| Provider 启动授权 | A2-33—A2-35 | Operation/Transport/Codec 启动错配负例与统一 readiness 投影 |
-| Provider Transport | A2-79、A2-82—A2-84 | 两家 Profile 独立 payload；401/403/429/5xx 分类；JSON/envelope 分层；256 KiB + 1 拒绝；body-stall deadline 不回退 |
-| Provider 调用决策 | A2-85—A2-86 | Goal/General schema 拒绝调用数 1；HTTP/JSON/envelope 失败请求数 1 且 payload model 始终为启动选定 Provider；无 repair、retry 或自动 fallback |
-| Provider Registry 证据语义 | A2-113 | Registry 仅暴露 approved configuration/request features；接口不得声明 supports/schema verified/quality verified；真实层由独立执行证据报告 |
+| Provider 启动授权 | A2-33—A2-35 | model-runtime、每 Provider 数据策略/凭据、Operation 三层准入矩阵；旧 global/visitor/provider-ref 零生产权威；安全 Catalog/availability 投影 |
+| Provider Transport | A2-79、A2-82—A2-84 | GLM/Qwen Profile 独立 payload；401/403/429/5xx 分类；JSON/envelope 分层；256 KiB + 1 拒绝；body-stall deadline 不回退 |
+| Provider 调用决策 | A2-85—A2-86 | Goal/General schema 拒绝调用数 1；HTTP/JSON/envelope 失败请求数 1 且 payload model 始终为本 Turn 显式选择；无 repair、retry 或自动 fallback |
+| Provider Catalog 证据语义 | A2-113 | Catalog 仅暴露配置与安全选择事实；接口不得声明 schema verified/quality verified；真实层由独立执行证据报告 |
 | Provider 真实质量 | A2-80—A2-81、A2-87—A2-88 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；一次通过不构成稳定结论 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
@@ -1108,7 +1120,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 2. 再恢复真实可执行的 scenario、Browser、semantic trace 和元测试资产存在性门；
 3. 再修复 Discussion、Frontend、Audience、subjectHint 和 constraints 等现有行为；
 4. 再冻结 AnswerIntent、Portfolio depth/表达和 General 质量；
-5. 最后按**当时已批准的模型目录**执行 Provider Matrix、跨 JVM 恢复和清理门。
+5. 最后按已批准的 GLM-4.7-Flash/Qwen3.7-Flash 配置目录执行 Provider Matrix、跨 JVM 恢复和清理门。
 
 上游能力尚未进入生产路径时，下游 Gate 必须明确报告 `NOT_READY`，不得用 skip、空场景或固定成功字符串记为 PASS。所有 runner 元测试必须解析并验证其引用的 npm script、Playwright project、Java 测试类、fixture 和脚本文件真实存在。
 
@@ -1118,4 +1130,4 @@ Agent 2.0 的单一 Command → Goal → Plan → Execution → Projection → S
 
 但当前产品不能再用“合同闭合”代替“能力完成”。A2-30—A2-115 证明多个输入字段、配置、UI 宣称和场景清单没有进入真实执行或没有被对应质量门验证，同时 settlement replay 与 Provider 配置权威触及隐私硬边界。当前项目更准确的定位是：**安全状态内核较成熟、公开证据投影较可靠，但语义消费、回答表达、多轮理解和验收真实性仍处于系统性补完阶段。**
 
-修复顺序固定为：P0 隐私与 Provider 授权止血 → 证据和行为门真实性 → 现有 Discussion/Frontend 行为 → AnswerIntent 与 Portfolio/General 产品能力 → Provider 目录与稳定性矩阵 → 死配置和过强文档清理。整体状态在全部对应 Exit Gate 通过前保持 `IN_PROGRESS`。
+修复顺序固定为：P0 隐私与 Provider 授权止血 → 证据和行为门真实性 → 现有 Discussion/Frontend 行为 → AnswerIntent 与 Portfolio/General 产品能力 → 已批准目录的真实 GLM/Qwen 稳定性矩阵 → 清理与联合门。配置化目录的后端离线实现已经完成，但真实 Provider、前端和外层发布门尚未全部通过，整体状态继续保持 `IN_PROGRESS`。
