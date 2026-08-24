@@ -372,7 +372,9 @@ try {
     $runnerSource = Get-Content -LiteralPath $runner -Raw
     foreach ($liveQualityContract in @(
         'assert-live-general-answer-quality.ps1',
-        'GENERAL_QUALITY_PASS'
+        'GENERAL_QUALITY_RESULT status=PASS',
+        '-Baseline',
+        'Write-LiveProviderDiagnosticSummary'
     )) {
         if ($runnerSource -notmatch [regex]::Escape($liveQualityContract)) {
             throw "LIVE lane is missing general quality contract '$liveQualityContract'."

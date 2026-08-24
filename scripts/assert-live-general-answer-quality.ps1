@@ -250,12 +250,29 @@ function Get-Sections([object]$Response) {
 
 function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    $response = Get-Response $Scenario $Trial
+    try {
+        $response = Get-Response $Scenario $Trial
+    }
+    catch {
+        $timer.Stop()
+        $timedOut = $timer.Elapsed.TotalSeconds -ge ($TimeoutSeconds * 0.9)
+        return @{
+            Language = $false; Structure = $false; Bucket = $false
+            Terminal = $false; Observed = 'INVALID'
+            Latency = $timer.ElapsedMilliseconds; TimedOut = $timedOut
+            PublicTerminal = if ($timedOut) {
+                'TRANSPORT_TIMEOUT'
+            } else {
+                'TRANSPORT_FAILURE'
+            }
+        }
+    }
     $timer.Stop()
     if ($null -eq $response -or [string]$response.kind -cne $Scenario.ExpectedKind) {
         return @{
             Language = $false; Structure = $false; Bucket = $false
             Terminal = $false; Observed = 'INVALID'; Latency = $timer.ElapsedMilliseconds
+            TimedOut = $false
             PublicTerminal = if ($null -eq $response) {
                 'MISSING'
             }
@@ -275,6 +292,7 @@ function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
             Language = $valid -and (Test-SimplifiedChineseProse @($message))
             Structure = $valid; Bucket = $true; Terminal = $valid
             Observed = 'NONE'; Latency = $timer.ElapsedMilliseconds
+            TimedOut = $false
             PublicTerminal = 'CONVERSATIONAL'
         }
     }
@@ -305,6 +323,7 @@ function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
             Bucket = $observed -ceq $Scenario.ExpectedBucket
             Terminal = $terminal; Observed = $observed
             Latency = $timer.ElapsedMilliseconds
+            TimedOut = $false
             PublicTerminal = 'ANSWER:' + [string]$response.answer.resolution
         }
     }
@@ -314,12 +333,20 @@ function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
         Structure = $terminal -and $sections.Count -gt 0
         Bucket = $true; Terminal = $terminal
         Observed = 'NONE'; Latency = $timer.ElapsedMilliseconds
+        TimedOut = $false
         PublicTerminal = 'ANSWER:' + [string]$response.answer.resolution
     }
 }
 
 function Format-Metric([string]$Name, [int]$Passed, [int]$Total) {
     return "$Name=$Passed/$Total"
+}
+
+function Get-Percentile([long[]]$Values, [double]$Percentile) {
+    $sorted = @($Values | Sort-Object)
+    if ($sorted.Count -eq 0) { return 0 }
+    $index = [math]::Ceiling($Percentile * $sorted.Count) - 1
+    return [long]$sorted[[math]::Max(0, [math]::Min($index, $sorted.Count - 1))]
 }
 
 try {
@@ -335,10 +362,11 @@ try {
         $structure = @($results | Where-Object { $_.Structure }).Count
         $bucket = @($results | Where-Object { $_.Bucket }).Count
         $terminal = @($results | Where-Object { $_.Terminal }).Count
+        $timeouts = @($results | Where-Object { $_.TimedOut }).Count
         $total = $results.Count
-        $latencySum = ($results | ForEach-Object { [long]$_.Latency } |
-            Measure-Object -Sum).Sum
-        $average = [math]::Round([double]$latencySum / [double]$total, 0)
+        [long[]]$latencies = @($results | ForEach-Object { [long]$_.Latency })
+        $p50 = Get-Percentile $latencies 0.50
+        $p95 = Get-Percentile $latencies 0.95
         $observed = @($results | Group-Object { [string]$_.Observed } | ForEach-Object {
             $_.Name + ':' + $_.Count
         }) -join ','
@@ -350,16 +378,21 @@ try {
                 $bucket -ne $total -or $terminal -ne $total) {
             $gatePassed = $false
         }
-        $lines += ('GENERAL_QUALITY scenario={0} trials={1} {2} {3} {4} {5} observed={6} publicTerminal={7} latencyMs={8}' -f `
+        $lines += ('GENERAL_QUALITY scenario={0} trials={1} {2} {3} {4} {5} timeout={6}/{1} observed={7} publicTerminal={8} latencyP50Ms={9} latencyP95Ms={10}' -f `
             $scenario.Id, $total,
             (Format-Metric 'language' $language $total),
             (Format-Metric 'structure' $structure $total),
             (Format-Metric 'bucket' $bucket $total),
             (Format-Metric 'terminal' $terminal $total),
-            $observed, $publicTerminals, $average)
+            $timeouts, $observed, $publicTerminals, $p50, $p95)
     }
 
     $lines | Write-Output
+    Write-Output ('GENERAL_QUALITY_RESULT status=' + $(if ($gatePassed) {
+        'PASS'
+    } else {
+        'FAIL'
+    }))
     if (-not $Baseline -and -not $gatePassed) {
         Stop-Quality 'GENERAL_QUALITY_GATE_FAILED'
     }

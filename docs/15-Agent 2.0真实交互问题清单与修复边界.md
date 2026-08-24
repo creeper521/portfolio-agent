@@ -175,22 +175,22 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-77 | P2 | 过期恢复依赖页面 reload | E2E 通过重载才显示恢复按钮 | 不刷新也能进入合法恢复路径 | Browser UX / Conversation GET |
 | A2-78 | P1 | HTTP 200 被误当成功回答 | CAPABILITY_UNAVAILABLE 也被传输层视为成功 | Happy path 明确要求预期 PublicTurn kind | Frontend / Browser Assertions |
 | A2-79 | P1 | DeepSeek/GLM 共用固定请求格式 | DeepSeek/GLM 已使用独立版本 Profile 并分别断言完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
-| A2-80 | P1 | Provider 兼容停留在配置声明 | Registry 声明不能证明真实模型满足 schema | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
-| A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | 已观察到 Provider 超过 8 秒 | 基于真实 P95 冻结跨端预算 | Timeout Policy / Provider |
-| A2-82 | P2 | Provider HTTP 错误分类太粗 | 401/403、429、5xx 与其他拒绝已分为稳定 code；本地真实 HTTP fixture 通过，待 Provider 运行分布 | 分开统计稳定失败类别 | Transport Diagnostics |
+| A2-80 | P1 | Provider 兼容停留在配置声明 | 独立 packaged run：DeepSeek 10/10 在 Transport 被 Provider 拒绝，GLM 因无可用凭据失败关闭；均未取得 schema 成功 | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
+| A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | 新矩阵已报告逐场景 P50/P95，但 DeepSeek 快速拒绝、GLM 未调用，样本不能用于冻结成功路径预算 | 基于真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
+| A2-82 | P2 | Provider HTTP 错误分类太粗 | 本地分类门通过；DeepSeek 真实样本 10/10 稳定记录为 `TRANSPORT/PROVIDER_REJECTED`，未记录 body | 分开统计稳定失败类别 | Transport Diagnostics |
 | A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
 | A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 已冻结为单进程单选 Provider、失败不自动跨 Provider 重发；单请求/固定 model 门通过 | 用户明确切换只能创建新 Turn；当前批不建设选择 UI 或路由 | Provider Selection / Privacy |
-| A2-87 | P1 | Provider 矩阵不独立 | 脚本只测试当前环境 Provider | 每个批准 Provider 独立执行和报告 | Provider Matrix |
-| A2-88 | P1 | Provider 样本量不足 | 单次或少量通过被外推为稳定 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
+| A2-87 | P1 | Provider 矩阵不独立 | 同一 JAR 已按 Provider 独立启动和报告；DeepSeek 可执行，GLM 因仓库外密钥为空被明确阻塞，矩阵未完成 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
+| A2-88 | P1 | Provider 样本量不足 | runner 已失败不停报并输出逐场景 trials、终局/语言/结构/深度率、timeout、P50/P95；DeepSeek 10 个实际 Provider 样本全拒绝，尚无成功样本 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
 | A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
 | A2-92 | P1 | Browser happy path 内容断言不足 | 状态/UI有覆盖但不拒绝错误终局 | 解析 body 并断言 kind、resolution、coverage | Browser E2E |
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
 | A2-94 | P1 | Browser 不检查回答完整性 | 空或单句内容可能通过 | 检查 section、证据、数量和非空门 | Browser Quality Gate |
-| A2-95 | P1 | live gate 输出硬编码 goalKind | 硬编码字段已删除，脚本自测只允许输出实际采集的 kind、resolution、数量与状态；待真实 Provider 运行留证 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
+| A2-95 | P1 | live gate 输出硬编码 goalKind | 硬编码字段已删除；真实矩阵只输出公开终局、比率、P50/P95 与 closed diagnostics，并移除把快速社交探针称为 Provider 成功的过强文案 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
 | A2-96 | P1 | 缺少跨 JVM PostgreSQL 恢复 | packaged API 已跨两个真实 JVM 恢复 Conversation 与精确 Portfolio replay；同一浏览器会话跨重启仍为 NOT_RUN | 同一浏览器会话跨真实后端重启恢复 | PostgreSQL / Packaged Browser |
 | A2-97 | P1 | General 单测自造正确句数 | 已增加英文、错误句数、错误 depth bucket 与 section 顺序负例；待真实 Provider 质量矩阵 | 增加语言、句数、深度负例 | General Tests |
 | A2-98 | P1 | privacy check 看不到运行时数据流 | 已补 Lifecycle → PostgreSQL → 解密完整 settlement sentinel 门，待最终总门 | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
@@ -970,6 +970,14 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - Registry 通过只形成 `CONFIGURED` 级结论。Transport fixture、真实 schema canary 和质量矩阵分别形成 Transport、Schema、Quality 证据，前一层不得推导后一层；当前 DeepSeek/GLM 的真实结论不因本次重命名改变。
 - **专属门：** Descriptor/Registry tests 断言批准配置正反例、不可变 request features，以及生产接口不存在 `supports`、`isSchemaVerified` 或 `isQualityVerified` 强声明。真实 Provider A2-80/81/87/88 继续保持 `IN_PROGRESS`。
 - **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `765377d375b78b961eb1f918727d2700ec85fa06778f891652a6f3d41eb1a370`。本批未运行真实 Provider 或 Browser，故不提升任何外部验证层状态。
+
+### 10.13 真实 Provider 独立失败矩阵与 runner 修复（2026-08-24）
+
+- **证据门修复：** General quality runner 不再在首个错误终局后中止；每个 scenario 现在始终报告 trials、language/structure/depth/terminal 比率、timeout 比率、公开终局分布和 P50/P95。LIVE packaged runner 跳过随机的单次推荐前置断言，先收集完整矩阵，再统一失败；应用停止后只从 ECS 日志聚合 closed `event/operation/layer/code/duration/count`，正文和输入不进入输出。原“Live Provider verification passed”已收窄为“social public-turn probe completed”，因为快速社交路径不证明 Provider 被调用。
+- **DeepSeek 独立运行：** packaged JAR SHA-256 `765377d375b78b961eb1f918727d2700ec85fa06778f891652a6f3d41eb1a370`、独立 JVM/端口、`IN_MEMORY`。CONCISE/STANDARD/DETAILED 各 3 次、COMPARISON 1 次，共 10 个实际 Goal Provider 调用，公开终局均为 `CAPABILITY_UNAVAILABLE/SEMANTIC_ROUTING_UNAVAILABLE`；closed diagnostics 为 `provider.call.failed/GOAL_INTERPRETATION/TRANSPORT/PROVIDER_REJECTED`，耗时桶 100–499ms 8 次、500–1999ms 2 次。timeout 为 0/10，但没有成功路径样本，不能据此冻结 A2-81。CONVERSATIONAL 3/3 成功且 P95 22ms，但没有对应 Provider diagnostics，属于服务端快速路径，明确不计入 Provider 成功率。
+- **GLM 独立运行：** 使用同一 JAR 在独立 JVM/端口启动；仓库外 Secret 文件声明了 GLM key 变量但值为空，生产 readiness 失败关闭，social probe 报 `PROVIDER_RESPONSE_INVALID`，quality gate 报 `GENERAL_QUALITY_CONFIG_INVALID`，没有发送真实 GLM 请求。该结果只证明配置阻塞被诚实报告，不构成 GLM Transport/schema/quality 证据。
+- **状态：** A2-82 获得真实失败类别分布；A2-80/81/87/88 仍为 `IN_PROGRESS`。DeepSeek 成功率为 0、GLM 未获可用凭据时，禁止把矩阵或整体标为 PASS。
+- **本批验证证据：** `assert-live-general-answer-quality.test.ps1`、`run-jar-e2e.test.ps1`、`run-agent-behavior-audit-assets.test.ps1` 通过；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过。真实矩阵使用本批最终 Backend 源码生成且已通过 920 tests、0 failures、0 errors、4 skipped 的同一 packaged JAR；本批只修改验证脚本与文档，JAR SHA-256 保持 `765377d375b78b961eb1f918727d2700ec85fa06778f891652a6f3d41eb1a370`。
 
 ## 11. 修复前需要冻结的选择
 

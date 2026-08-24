@@ -129,10 +129,14 @@ try {
         "valid quality fixtures must pass: $($passing.Output)"
     Assert-True ($passing.Output -match 'GENERAL_QUALITY_PASS') `
         'valid quality fixtures must emit only the aggregate pass marker.'
+    Assert-True ($passing.Output -match 'GENERAL_QUALITY_RESULT status=PASS') `
+        'valid quality fixtures must emit the aggregate result.'
     Assert-True ($passing.Output -match 'scenario=CONCISE.*observed=CONCISE:1') `
         'quality report must name the observed output bucket.'
     Assert-True ($passing.Output -match 'scenario=CONCISE.*publicTerminal=ANSWER:COMPLETE:1') `
         'quality report must aggregate only the public terminal enum.'
+    Assert-True ($passing.Output -match 'scenario=CONCISE.*timeout=0/1.*latencyP50Ms=\d+.*latencyP95Ms=\d+') `
+        'quality report must include timeout rate and latency percentiles.'
     Assert-True ($passing.Output -notmatch 'Redis|Memcached|SELECT|example\.com') `
         'passing output leaked fixture questions or answers.'
 
@@ -170,6 +174,8 @@ try {
         "baseline mode must collect rather than assert: $($baseline.Output)"
     Assert-True ($baseline.Output -match 'language=0/1') `
         'baseline mode must count the English violation.'
+    Assert-True ($baseline.Output -match 'GENERAL_QUALITY_RESULT status=FAIL') `
+        'baseline mode must report failure without stopping collection.'
     Assert-True ($baseline.Output -notmatch [regex]::Escape($englishOne)) `
         'baseline output leaked the first English response.'
     Assert-True ($baseline.Output -notmatch [regex]::Escape($englishTwo)) `

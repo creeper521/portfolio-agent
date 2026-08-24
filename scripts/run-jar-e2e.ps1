@@ -190,6 +190,44 @@ function Assert-PackagedLogBoundary(
     Write-Output 'Packaged structured stdout privacy smoke passed.'
 }
 
+function Write-LiveProviderDiagnosticSummary([string]$Path) {
+    function Read-ClosedField([object]$Entry, [string]$Literal, [string]$Group, [string]$Name) {
+        $value = [string]$Entry.$Literal
+        if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+        $nested = $Entry.$Group
+        if ($null -ne $nested) { return [string]$nested.$Name }
+        return ''
+    }
+    $counts = @{}
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $entry = $line | ConvertFrom-Json }
+        catch { continue }
+        $eventName = Read-ClosedField $entry 'event.name' 'event' 'name'
+        if ($eventName -notin @(
+                'provider.call.completed',
+                'provider.call.failed',
+                'provider.output.rejected')) { continue }
+        $operation = Read-ClosedField $entry 'provider.operation' 'provider' 'operation'
+        $layer = Read-ClosedField $entry 'failure.layer' 'failure' 'layer'
+        $code = Read-ClosedField $entry 'failure.code' 'failure' 'code'
+        $duration = Read-ClosedField $entry 'duration.bucket' 'duration' 'bucket'
+        foreach ($value in @($eventName, $operation, $layer, $code, $duration)) {
+            if (-not [string]::IsNullOrWhiteSpace($value) -and
+                    $value -notmatch '^[A-Z0-9_.-]{1,64}$') {
+                throw 'Live Provider diagnostic contained a non-closed value.'
+            }
+        }
+        $key = @($eventName, $operation, $layer, $code, $duration) -join '|'
+        $counts[$key] = 1 + [int]$counts[$key]
+    }
+    foreach ($key in @($counts.Keys | Sort-Object)) {
+        $parts = $key.Split('|')
+        Write-Output ('LIVE_PROVIDER_DIAGNOSTIC event={0} operation={1} layer={2} code={3} duration={4} count={5}' -f `
+            $parts[0], $parts[1], $parts[2], $parts[3], $parts[4], $counts[$key])
+    }
+}
+
 $environment = @{
     PORTFOLIO_CONVERSATION_CONTEXT_MODE = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONVERSATION_CONTEXT_MODE'
@@ -848,7 +886,7 @@ try {
             'replay=EXACT_PUBLIC_TURN')
     }
 
-    if ($SkipPlaywright -and $Lane -ne 'JVM_RESTART') {
+    if ($SkipPlaywright -and $Lane -notin @('JVM_RESTART', 'LIVE')) {
         function Invoke-AgentClosureRequest([string]$Question) {
             $body = @{
                 requestId = [guid]::NewGuid().ToString()
@@ -948,6 +986,7 @@ try {
 
     if ($Lane -eq 'LIVE') {
         $latencyBuckets = @()
+        $liveFailures = [System.Collections.Generic.List[string]]::new()
         # GENERAL provider behavior is owned by the stricter multi-scenario
         # quality gate below; do not add a second stochastic one-shot gate.
         foreach ($scenario in @('SOCIAL')) {
@@ -961,7 +1000,7 @@ try {
                 -FailOnDegraded 2>&1 | Out-String).Trim()
             $stopwatch.Stop()
             if ($LASTEXITCODE -ne 0 -or $probeOutput -ne 'LIVE_PROVIDER_CONNECTED') {
-                throw "Live Provider $scenario verification failed: $probeOutput"
+                $liveFailures.Add("$scenario=$probeOutput")
             }
             $bucket = if ($stopwatch.Elapsed.TotalSeconds -lt 5) {
                 'LT_5S'
@@ -974,10 +1013,9 @@ try {
             }
             $latencyBuckets += "$scenario=$bucket"
         }
-        Write-Output ("Packaged Live Provider verification passed; latency=" + `
+        Write-Output ("Packaged social public-turn probe completed; latency=" + `
                 ($latencyBuckets -join ','))
         $qualityOutput = ''
-        $qualityExitCode = 1
         $previousErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
@@ -985,17 +1023,20 @@ try {
                 -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
                 -BackendBaseUrl $baseUrl `
                 -ExpectedContentVersion ([string]$publicContent.contentVersion) `
-                -TimeoutSeconds $ReadinessTimeoutSeconds 2>&1 | Out-String).Trim()
-            $qualityExitCode = $LASTEXITCODE
+                -TimeoutSeconds $ReadinessTimeoutSeconds `
+                -Baseline 2>&1 | Out-String).Trim()
         }
         finally {
             $ErrorActionPreference = $previousErrorActionPreference
         }
-        if ($qualityExitCode -ne 0 -or
-                $qualityOutput -notmatch '(?m)^GENERAL_QUALITY_PASS$') {
-            throw "Live Provider general quality verification failed: $qualityOutput"
-        }
         Write-Output $qualityOutput
+        if ($qualityOutput -notmatch '(?m)^GENERAL_QUALITY_RESULT status=PASS$') {
+            $liveFailures.Add('GENERAL_QUALITY=FAIL')
+        }
+        if ($liveFailures.Count -gt 0) {
+            throw ('Live Provider matrix failed: ' + ($liveFailures -join ','))
+        }
+        Write-Output 'LIVE_PROVIDER_MATRIX_PASS'
     }
 
     if ($Lane -eq 'PROJECT_DISCUSSION') {
@@ -1122,6 +1163,9 @@ finally {
         }
         Write-Output "Packaged application process $($process.Id) is stopped."
         try {
+            if ($Lane -eq 'LIVE') {
+                Write-LiveProviderDiagnosticSummary -Path $stdoutPath
+            }
             Assert-PackagedLogBoundary `
                 -stdoutPath $stdoutPath `
                 -stderrPath $stderrPath `
