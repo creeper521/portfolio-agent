@@ -21,6 +21,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +41,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
             try (StubServer server = StubServer.responding(200, successBody())) {
                 transport(provider, server.endpoint(), event -> { }).execute(request());
 
+                assertThat(server.requestCount).hasValue(1);
                 JsonNode payload = MAPPER.readTree(server.requestBody.get());
                 assertThat(payload.path("model").textValue()).isEqualTo(
                         ModelProviderRegistrySnapshot.builtIn()
@@ -103,6 +105,11 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
             assertThat(failure.getCode()).isEqualTo(expected);
             assertThat(failure).hasMessage(expected.name());
+            assertThat(server.requestCount)
+                    .as("HTTP rejection must not retry or switch provider").hasValue(1);
+            assertThat(MAPPER.readTree(server.requestBody.get()).path("model").textValue())
+                    .isEqualTo(ModelProviderRegistrySnapshot.builtIn()
+                            .getRequiredDescriptor(ModelProviderKind.GLM_4_7).getModelName());
             assertThat(events.toString()).doesNotContain(sentinel);
         }
     }
@@ -118,6 +125,8 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                     StructuredModelFailure.class);
 
             assertThat(failure.getCode()).isEqualTo(expected);
+            assertThat(server.requestCount)
+                    .as("invalid response must not trigger schema repair").hasValue(1);
             assertThat(events).anySatisfy(event -> {
                 assertThat(event.getFields().get("failure.code")).isEqualTo(expected.name());
                 assertThat(event.getFields().get("failure.layer")).isEqualTo(layer);
@@ -147,6 +156,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
     private static final class StubServer implements AutoCloseable {
         private final AtomicReference<String> requestBody = new AtomicReference<>();
+        private final AtomicInteger requestCount = new AtomicInteger();
         private final HttpServer server;
 
         private StubServer(int status, byte[] responseBody) throws IOException {
@@ -166,6 +176,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
         private void respond(HttpExchange exchange, int status, byte[] responseBody)
                 throws IOException {
+            requestCount.incrementAndGet();
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             exchange.sendResponseHeaders(status, responseBody.length);
             try (exchange; var output = exchange.getResponseBody()) {

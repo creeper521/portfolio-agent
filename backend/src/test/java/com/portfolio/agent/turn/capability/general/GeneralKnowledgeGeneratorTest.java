@@ -19,8 +19,13 @@ class GeneralKnowledgeGeneratorTest {
     }
 
     @Test void invalidProviderDraftIsAClosedFailure() {
-        GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator(request -> "{}");
+        AtomicInteger calls = new AtomicInteger();
+        GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator(request -> {
+            calls.incrementAndGet();
+            return "{}";
+        });
         assertThatThrownBy(() -> generator.generate(GeneralTestFixtures.explanation()))
                 .isInstanceOf(GeneralKnowledgeUnavailableException.class);
+        assertThat(calls).as("schema rejection must not trigger repair").hasValue(1);
     }
 }

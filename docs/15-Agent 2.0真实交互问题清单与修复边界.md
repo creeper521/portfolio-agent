@@ -180,8 +180,8 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-82 | P2 | Provider HTTP 错误分类太粗 | 401/403、429、5xx 与其他拒绝已分为稳定 code；本地真实 HTTP fixture 通过，待 Provider 运行分布 | 分开统计稳定失败类别 | Transport Diagnostics |
 | A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
-| A2-85 | P1 | 无同 Provider schema repair 决策 | 小字段偏差导致整轮失败 | 批准后允许一次无状态、有界修复或明确保持禁止 | Provider Reliability / Product Decision |
-| A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 当前失败后只能重新提问 | 默认不自动重发，用户明确切换后新 Turn | Provider Selection / Privacy |
+| A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
+| A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 已冻结为单进程单选 Provider、失败不自动跨 Provider 重发；单请求/固定 model 门通过 | 用户明确切换只能创建新 Turn；当前批不建设选择 UI 或路由 | Provider Selection / Privacy |
 | A2-87 | P1 | Provider 矩阵不独立 | 脚本只测试当前环境 Provider | 每个批准 Provider 独立执行和报告 | Provider Matrix |
 | A2-88 | P1 | Provider 样本量不足 | 单次或少量通过被外推为稳定 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
@@ -220,7 +220,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | 待验证（P0 预防性） | A2-31 | Provider 正文复述输入尚无具体回显样本，必须由完整 settlement sentinel 门确认或排除 |
 | 待验证 | A2-62 | 开放社交回复的语言与复述风险需要真实 Provider 固定样本 |
 | 生产修复已落地、待外层验收 | A2-39—A2-41、A2-48、A2-49、A2-51、A2-52 | deterministic 与 packaged Portfolio 路径已通过；真实 Provider 的 depth/dimension 选择和 Browser 正文差异尚未取得，继续留账 |
-| 源码确认（产品决策） | A2-85、A2-86 | 当前没有 schema repair 或跨 Provider 自动重发；是否改变行为仍需产品批准 |
+| 已冻结（产品决策） | A2-85、A2-86 | 保持无 schema repair、无 Provider retry、无跨 Provider 自动重发；未来改变必须重新审批 |
 | 源码确认 | A2-30、A2-32—A2-38、A2-43—A2-47、A2-50、A2-53—A2-61、A2-63—A2-80、A2-82—A2-84、A2-87—A2-115 | 生产调用链、配置消费、前端状态或测试/文档入口可直接证明现状 |
 
 #### 3.2.2 P0 详细条目
@@ -957,6 +957,13 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - `GeneralModelOutputDiagnosticsTest` 分别驱动 schema/semantic 拒绝；`GoalInterpretationAdapterTest` 与 `GoalResolverTest` 分别驱动 Goal schema 与 typed semantic 拒绝，并用 Provider body/访客 sentinel 证明事件无原文。真实 Provider 的各层发生率仍需 A2-80/87/88 矩阵取得，A2-83 和整体保持 `IN_PROGRESS`。
 - **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `faf356244c75974f46fd2c2fb2fe2d7f6b61728503ab651f61ccccf589894e89`。实现初稿把 diagnostics helper 放入 execution 包时被现有模块依赖门拒绝，移至 `common.observability` 后最终 architecture 门通过；未放宽架构规则。本批未运行真实 Provider 或 Browser，故不形成发生率或终端可用性结论。
 
+### 10.11 Provider repair 与 fallback 产品边界（2026-08-24）
+
+- **A2-85：** 选择保持当前单次调用合同。Goal/General 的 codec 或 validator 拒绝是本轮终局，不把被拒正文再次放入 Prompt，不发送 repair 请求，也不以同一 Provider 重试；配置 `maxModelAttempts != 1` 继续失败关闭。
+- **A2-86：** 运行实例只持有启动时选择的一个 Provider descriptor 和一个 Transport。HTTP、JSON、envelope、schema、semantic 或 timeout 失败不自动发送给另一 Provider。未来用户明确切换 Provider 属于新 Turn、新 requestId 和独立产品能力，不在本批建设。
+- **专属门：** `GeneralKnowledgeGeneratorTest` 与 `GoalInterpretationAdapterTest` 对 schema 拒绝断言 Provider 调用数严格为 1；`OpenAiCompatibleStructuredModelTransportProtocolTest` 对 HTTP/JSON/envelope 失败断言 HTTP 请求数严格为 1，并证明 payload model 始终等于启动选定 Provider。以上关闭产品决策缺口，不替代 A2-80/81/87/88 的真实 Provider 独立质量矩阵。
+- **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `677fc3d9aba3201290315ef1ec4ff7883d07153672bcf61572ed712f84bde8ee`。本批未运行真实 Provider 或 Browser，整体继续保持 `IN_PROGRESS`。
+
 ## 11. 修复前需要冻结的选择
 
 以下选择会影响具体代码，但不改变 Agent 2.0 总架构。状态标注为「已冻结」的选择已于 2026-08-19 随前端修复批次确定：
@@ -967,6 +974,8 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 4. **已冻结（2026-08-24 清理修订）**：同一 absolute timeline 上，Goal/General/DB 单次上限为 8/10/3 秒，18 秒后不再启动新 Task，服务端 Turn 20 秒、前端等待 25 秒、网关至少 30 秒、lease 35 秒；子操作使用 `min(自身上限, Turn 剩余时间)`，不得独立延长 Turn。原 4 秒 Portfolio expression 预算因对应零实现幽灵能力物理删除而退役；确定性 Portfolio 执行继续受 Turn 剩余预算约束，其 PostgreSQL 调用受 DB 3 秒上限约束；
 5. **已冻结**：当前 Turn 非 ANSWER 时来源栏显示“最近回答来源”并整体弱化，不隐藏；
 6. **已冻结**：澄清卡脱困入口只消费已发布 QuestionPreset 或后端 `suggestedActions`，前端叶子组件不自造业务问题（2026-08-19 确认第 6 项后由硬编码入口修订为预设驱动）。
+7. **已冻结（2026-08-24）**：Goal/General 的 schema 或 semantic 拒绝直接结束本轮 Provider 能力，不发送 repair Prompt、不以同 Provider 重试；`maxModelAttempts` 只允许 1，其他值失败关闭。未来若改变，必须作为独立产品决策重新完成隐私、成本、deadline 与质量审批；
+8. **已冻结（2026-08-24）**：运行实例只向启动时选定的单一 Provider 发请求；鉴权、限流、超时、Transport、schema 或 semantic 失败均不得自动跨 Provider 重发。用户未来若通过独立批准的选择能力明确切换，必须使用新 requestId 创建新 Turn；本冻结不授权建设多模型路由或前端选择 UI。
 
 在这些选择冻结前，不应通过零散条件分支修补 UI。
 
@@ -1050,7 +1059,8 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
 | Provider 启动授权 | A2-33—A2-35 | Operation/Transport/Codec 启动错配负例与统一 readiness 投影 |
 | Provider Transport | A2-79、A2-82—A2-84 | 两家 Profile 独立 payload；401/403/429/5xx 分类；JSON/envelope 分层；256 KiB + 1 拒绝；body-stall deadline 不回退 |
-| Provider 真实质量 | A2-80—A2-81、A2-85—A2-88、A2-113 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；repair/fallback 只有产品批准后才改变 |
+| Provider 调用决策 | A2-85—A2-86 | Goal/General schema 拒绝调用数 1；HTTP/JSON/envelope 失败请求数 1 且 payload model 始终为启动选定 Provider；无 repair、retry 或自动 fallback |
+| Provider 真实质量 | A2-80—A2-81、A2-87—A2-88、A2-113 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；一次通过不构成稳定结论 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |

@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,9 +26,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GoalInterpretationAdapterTest {
     @Test void reportsGoalCodecRejectionAsSchemaWithoutProviderBody() {
         List<DiagnosticEvent> events = new ArrayList<>();
+        AtomicInteger calls = new AtomicInteger();
         String providerBody = "{\"privateProviderBody\":\"sentinel\"}";
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
-                request -> new StructuredModelResponse(providerBody),
+                request -> {
+                    calls.incrementAndGet();
+                    return new StructuredModelResponse(providerBody);
+                },
                 new ObjectMapper(), new GoalProposalCodec(), "system", 100,
                 Duration.ofSeconds(2), new ModelOutputDiagnostics(events::add));
 
@@ -42,6 +47,7 @@ class GoalInterpretationAdapterTest {
             assertThat(event.getFields().get("failure.layer")).isEqualTo("SCHEMA");
             assertThat(event.toString()).doesNotContain(providerBody, "sentinel");
         });
+        assertThat(calls).as("schema rejection must not trigger repair").hasValue(1);
     }
 
     @Test void sendsOnlyGoalLevelAuthorityAndDecodesStrictProposal() {
