@@ -26,7 +26,6 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
 
     private static final String FIXED_AUDIENCE_ROLE = "PORTFOLIO_RETRIEVAL";
     private static final String CONTROLLED_QUERY = "portfolio-profile-v1";
-    private static final int FIXED_TARGET_SIZE = 3;
     private static final int MAX_SUBJECTS = 50;
 
     private final PostgresSelectionQuery selectionQuery;
@@ -58,19 +57,57 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
         Objects.requireNonNull(invocation, "invocation");
         Objects.requireNonNull(request, "request");
         SelectionTarget target = new SelectionTarget(
-                null, FIXED_AUDIENCE_ROLE, Set.of(), CONTROLLED_QUERY, FIXED_TARGET_SIZE);
+                invocation.getRecommendationCareerTrack(), FIXED_AUDIENCE_ROLE,
+                invocation.getRecommendationCapabilityCodes(),
+                controlledQuery(invocation),
+                invocation.getRequestedSize() == 0 ? 1 : invocation.getRequestedSize());
         ActiveRelease release = selectionQuery.activeRelease();
         if (invocation.getSubjectScope().getMode() == AuthorizedSubjectScope.Mode.EXACT) {
             return retrieveExact(release, invocation, target);
         }
         CandidateRetrievalResult candidates = candidateRetriever.retrieve(
                 release, target, MAX_SUBJECTS, request.getStrategy());
+        if (!invocation.getRecommendationConstraints().isEmpty()
+                && (candidates.getCandidates().size() < invocation.getRequestedSize()
+                || candidates.getCandidates().stream().anyMatch(value ->
+                !matchesAll(value, invocation)))) {
+            SelectionTarget broadTarget = new SelectionTarget(
+                    null, FIXED_AUDIENCE_ROLE, Set.of(), controlledQuery(invocation),
+                    invocation.getRequestedSize());
+            CandidateRetrievalResult broad = candidateRetriever.retrieve(
+                    release, broadTarget, MAX_SUBJECTS, request.getStrategy());
+            java.util.LinkedHashMap<String, SelectionCandidate> merged =
+                    new java.util.LinkedHashMap<>();
+            candidates.getCandidates().forEach(value ->
+                    merged.put(value.getSubjectId(), value));
+            broad.getCandidates().forEach(value ->
+                    merged.putIfAbsent(value.getSubjectId(), value));
+            candidates = new CandidateRetrievalResult(
+                    release.getReleaseVersion(), candidates.getRetrievalMode(),
+                    List.copyOf(merged.values()));
+        }
         List<String> subjectIds = candidates.getCandidates().stream()
                 .map(SelectionCandidate::getSubjectId)
                 .toList();
         return new PostgresKnowledgeQueryResult(
                 candidates,
                 passageQuery.findPassages(release.getReleaseId(), subjectIds));
+    }
+
+    private String controlledQuery(PortfolioEvidenceInvocation invocation) {
+        if (invocation.getRecommendationConstraints().isEmpty()) {
+            return CONTROLLED_QUERY;
+        }
+        return CONTROLLED_QUERY + " " + String.join(" ",
+                invocation.getRecommendationConstraints().stream().sorted().toList());
+    }
+
+    private boolean matchesAll(
+            SelectionCandidate candidate, PortfolioEvidenceInvocation invocation) {
+        return (invocation.getRecommendationCareerTrack() == null
+                || invocation.getRecommendationCareerTrack().equals(candidate.getCareerTrack()))
+                && candidate.getCapabilityCodes().containsAll(
+                invocation.getRecommendationCapabilityCodes());
     }
 
     private PostgresKnowledgeQueryResult retrieveExact(

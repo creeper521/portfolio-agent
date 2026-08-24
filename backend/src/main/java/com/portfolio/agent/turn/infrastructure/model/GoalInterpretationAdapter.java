@@ -52,6 +52,8 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             projection.put("discussionState", input.getDiscussionState());
             projection.put("allowedGoalKinds", input.getAllowedGoalKinds());
             projection.put("allowedRoutes", input.getAllowedRoutes());
+            projection.put("allowedRecommendationConstraints",
+                    input.getAllowedRecommendationConstraints());
             projection.put("publicSubjects", input.getPublicSubjects().stream().map(subject -> {
                 Map<String, Object> value = new LinkedHashMap<>();
                 value.put("kind", subject.getKind()); value.put("reference", subject.getReference());

@@ -45,5 +45,7 @@ class PublicAgentTurnProjectorTest {
         assertThat(action.getContinuation().getResultItemId())
                 .isEqualTo("item-goal-recommendation-1");
         assertThat(presentation.getIncompleteReasons()).containsExactly("REQUESTED_SIZE");
+        assertThat(presentation.getItems().getFirst().getReasons())
+                .containsExactly("具备公开可验证材料");
     }
 }

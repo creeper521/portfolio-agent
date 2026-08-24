@@ -95,7 +95,8 @@ class PortfolioInvocationFactoryTest {
         SemanticTask task = SemanticTask.of(
                 "task-recommend", SemanticTask.Type.PORTFOLIO_RECOMMEND,
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_RECOMMEND,
-                        new UserGoalProposal.PortfolioRecommendationParameters(3, Set.of()), List.of()),
+                        new UserGoalProposal.PortfolioRecommendationParameters(
+                                3, Set.of("CAREER_TRACK_JAVA_BACKEND")), List.of()),
                 Set.of(GoalRequestedOutput.RECOMMENDATION));
         PortfolioEvidenceInvocation invocation = new PortfolioInvocationFactory(
                 CorpusBackend.BUNDLE).create(context(task));
@@ -104,6 +105,9 @@ class PortfolioInvocationFactoryTest {
                 .isEqualTo(AuthorizedSubjectScope.Mode.ALL_PUBLISHED);
         assertThat(invocation.getPrimaryStrategy()).isEqualTo(SearchStrategy.HYBRID);
         assertThat(invocation.getFallbackBackend()).isNull();
+        assertThat(invocation.getRequestedSize()).isEqualTo(3);
+        assertThat(invocation.getRecommendationConstraints())
+                .containsExactly("CAREER_TRACK_JAVA_BACKEND");
     }
 
     private TaskExecutionContext context(SemanticTask task) {

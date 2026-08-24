@@ -32,7 +32,9 @@ public final class EvidencePromotionValidator {
             PublicEvidenceDescriptor evidence = candidate.getEvidence();
             String identity = candidate.getClaimId() + "\u0000" + evidence.getEvidenceCode();
             if (!identities.add(identity)) throw new IllegalArgumentException("INTEGRITY_FAILURE");
-            units.add(new ValidatedEvidenceUnit(subject.getSubjectId(), candidate.getClaim(),
+            units.add(new ValidatedEvidenceUnit(
+                    subject.getSubjectId(), subject.getTitle(), subject.getCareerTrack(),
+                    subject.getCapabilityCodes(), candidate.getClaim(),
                     new PublicSourceReferenceValue(
                             evidence.getEvidenceCode(), evidence.getLabel(),
                             evidence.getContentVersion(), evidence.getSourceType().name(),

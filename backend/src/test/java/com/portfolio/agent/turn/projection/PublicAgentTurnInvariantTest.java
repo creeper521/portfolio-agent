@@ -70,4 +70,22 @@ class PublicAgentTurnInvariantTest {
                 List.of(PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE), List.of(), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void fullItemCountMayStillReportUnsatisfiedRecommendationConstraints() {
+        PublicPresentation.Recommendation recommendation =
+                new PublicPresentation.Recommendation(
+                        1,
+                        List.of(new PublicPresentation.Recommendation.Item(
+                                "project-a", "项目 A", "公开摘要", "/projects/project-a",
+                                List.of("具备已验证的公开实现证据"),
+                                new PublicSupport(
+                                        PublicSupport.Kind.GENERAL_KNOWLEDGE, List.of()),
+                                null)),
+                        List.of("CAPABILITY_SQL"), List.of(), List.of());
+
+        assertThat(recommendation.getActualSize()).isEqualTo(1);
+        assertThat(recommendation.getUnsatisfiedConstraints())
+                .containsExactly("CAPABILITY_SQL");
+        assertThat(recommendation.getIncompleteReasons()).isEmpty();
+    }
 }

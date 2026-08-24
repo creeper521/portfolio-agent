@@ -45,7 +45,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         InMemoryTurnExecutionStore store = inMemoryStore(clarificationStore, clock);
         GoalResolver resolver = mock(GoalResolver.class);
         BlockedGoalTemplate blocked = BlockedGoalTemplate.recommendation(
-                null, Set.of("BACKEND"), ClarificationProposal.Field.REQUESTED_SIZE);
+                null, Set.of("CAPABILITY_SQL"), ClarificationProposal.Field.REQUESTED_SIZE);
         when(resolver.resolve(any(), any(), any())).thenReturn(
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.REQUESTED_SIZE,
@@ -104,7 +104,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                 (UserGoalProposal.PortfolioRecommendationParameters) proposal.getValue()
                         .getGoals().getFirst().getParameters();
         assertThat(parameters.getRequestedSize()).isEqualTo(3);
-        assertThat(parameters.getConstraints()).containsExactly("BACKEND");
+        assertThat(parameters.getConstraints()).containsExactly("CAPABILITY_SQL");
         verify(resolver).resolve(any(), any(), any());
     }
 

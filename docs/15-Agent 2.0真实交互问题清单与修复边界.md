@@ -130,7 +130,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v2`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v3`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
@@ -138,11 +138,11 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-39 | P1 | Portfolio Fact 缺少 depth | typed Goal、澄清恢复与 cross-domain 子任务已携带 depth；deterministic/package 门通过，待真实 Provider/Browser | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
 | A2-40 | P1 | Portfolio depth 可能成为装饰字段 | depth 已控制检索 profile/候选上限、coverage、区块数与详细内容；待真实 Provider/Browser 差异矩阵 | depth 同时控制检索、覆盖、区块和完成判定 | Goal / Retrieval / Presentation |
 | A2-41 | P1 | requestedOutputs 与 facets 双权威 | typed parameters 已成为下游权威，outputs 只作精确一致性校验并由参数重新派生；待真实 Provider 合同门 | 保留一个 AnswerIntent 权威，其他值由后端派生 | Goal Contract / Validator |
-| A2-43 | P1 | Recommendation constraints 不参与选择 | constraints 被解析和保存但执行层不读取 | 闭合约束真实影响筛选、排序和覆盖 | Recommendation / Retrieval |
-| A2-44 | P1 | 未满足推荐约束不报告 | unsatisfiedConstraints 基本恒为空 | 无法满足时返回 PARTIAL 和明确缺口 | Recommendation / Projection |
-| A2-45 | P1 | 推荐项缺少可验证理由 | 主要截取前 N 个项目并拼接 Claim | 每项返回闭合 reason code、公开说明和 publicSourceKeys | Recommendation / Presentation |
-| A2-46 | P1 | 推荐对目标不敏感 | 用户目标不进入 Recommendation 执行输入，约束也不参与排序 | 固定输入矩阵按 typed 目标产生可断言的候选或排序差异 | Recommendation / Ranking |
-| A2-47 | P1 | Portfolio Comparison 未形成比较 | 多主体 Claim 仅顺序展示 | 按 dimension 对齐差异、取舍和缺口 | Comparison / Presentation |
+| A2-43 | P1 | Recommendation constraints 不参与选择 | 当前公开目录生成闭合约束目录，Codec 拒绝目录外值；Bundle/PostgreSQL 候选元数据进入 typed 执行链并参与排序，待真实 Provider/Browser 总门 | 闭合约束真实影响筛选、排序和覆盖 | Recommendation / Retrieval |
+| A2-44 | P1 | 未满足推荐约束不报告 | 后端按每个已选主体计算约束缺口，任一缺口即 `PARTIAL` 并公开 `unsatisfiedConstraints`；前端展示待 Frontend Agent 接入，整体仍 IN_PROGRESS | 无法满足时返回 PARTIAL 和明确缺口 | Recommendation / Projection |
+| A2-45 | P1 | 推荐项缺少可验证理由 | 每项携带闭合 reason code，投影为固定公开中文说明并绑定公开 source key；待真实 Provider/Browser 总门 | 每项返回闭合 reason code、公开说明和 publicSourceKeys | Recommendation / Presentation |
+| A2-46 | P1 | 推荐对目标不敏感 | requestedSize、career track 与 capability 进入 Invocation；先按约束匹配数、再按证据类别数、最后按稳定 ID 排序，PostgreSQL 不足时扩大召回后由语义层统一判定；待真实 Provider 总门 | 固定输入矩阵按 typed 目标产生可断言的候选或排序差异 | Recommendation / Ranking |
+| A2-47 | P1 | Portfolio Comparison 未形成比较 | 后端按请求 dimension 生成对齐 section，每节按主体聚合 Claim 与来源；待 Browser 正文与真实 Provider 总门 | 按 dimension 对齐差异、取舍和缺口 | Comparison / Presentation |
 | A2-48 | P1 | 未知 comparison dimension 被当成验证 | Codec 与 Invocation 两层已拒绝未知值；待真实 Provider/Browser 比较门 | 未知值必须拒绝或澄清 | Comparison / Validator |
 | A2-49 | P1 | Portfolio dimension 不是闭合集合 | Goal 已改为后端枚举，检索/coverage 只接收五种维度；待真实 Provider/Browser | 使用后端枚举并逐项验证 | Goal Contract / Comparison |
 | A2-50 | P1 | Cross-domain 只是三段拼接 | 通用段、Claim 段和固定关系句组成结果 | 真实解释概念与项目事实的对应关系 | Synthesis / Presentation |
@@ -321,7 +321,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 #### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
 
 - `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
-- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v2`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。`goal.proposal.v2` 明确包含 Portfolio Fact/跨域目标的必填 `depth` 与闭合 comparison dimension，不能继续沿用 v1 名义。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v3`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。v3 包含 Portfolio Fact/跨域目标的必填 `depth`、闭合 comparison dimension，以及由当前公开目录提供的 `allowedRecommendationConstraints`，不能沿用旧版本名义。
 - `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
 - `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
 - Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
@@ -352,6 +352,15 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - packaged runner 原先在 Provider 明确关闭时仍要求自由文本推荐成功，现已按 lane 分离：disabled 必须返回 `CAPABILITY_UNAVAILABLE/SEMANTIC_ROUTING_UNAVAILABLE`，LIVE 才验推荐正文。该修订防止把不可能的配置当作产品失败，也不把 fail-closed 当作推荐成功。
 - 变更后的 Backend 全量于 2026-08-24 实际执行：`881 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；`privacy-check` 扫描 496 个生产文件通过，`start-local.test.ps1`、`run-jar-e2e.test.ps1` 与当前权威文档检查通过。该 deterministic 证据不替代真实 Provider/Browser 语义门。
 - 本批没有修改 Frontend。A2-39—A2-41、A2-48、A2-49、A2-51、A2-52 仍等待真实 Provider 的 typed 选择与 Browser 正文/coverage 观测后才能移除。
+
+#### 3.3.5 Recommendation constraints 与 Comparison 表达当前证据（仍为 IN_PROGRESS）
+
+- `GoalProposalCodecTest` 与 `GoalInterpretationAdapterTest` 证明模型只可从当前公开目录投影的 `CAREER_TRACK_*` / `CAPABILITY_*` 中选择约束；目录外值失败关闭，不能复制访客短语建立开放约束。该不兼容输入/输出语义由 `goal.proposal.v3` 明确承载。
+- `PortfolioInvocationFactoryTest`、`PortfolioSemanticResultFactoryTest` 与 `JdbcPostgresKnowledgeQueryTest` 证明 requestedSize 和闭合约束进入执行：PostgreSQL 先做 typed 目标召回，候选不足或不完全匹配时扩大召回；Bundle/PostgreSQL 都由同一语义层按约束匹配数、证据类别数和稳定 ID 排序，并对缺口形成 `PARTIAL + unsatisfiedConstraints`。
+- `PublicAgentTurnProjectorTest` 与 `PublicAgentTurnInvariantTest` 证明每个推荐项以闭合 reason code 产生固定公开说明和公开 source key；`actualSize == requestedSize` 仍允许报告约束缺口，数量闭合不再冒充目标满足。`PortfolioPresentationComposerTest` 证明 comparison 按请求 dimension 对齐主体 Claim 与来源，不再顺序堆叠。
+- 本批 Backend clean package 于 2026-08-24 实际执行：`886 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；全仓 `privacy-check` 扫描 916 个文件通过，相关脚本自测与当前权威文档检查通过。
+- model-disabled packaged JAR SHA-256 `c7af8e3506bdb6f7291cb8b59778d23405f32510de93d4902773aff82224a7fc` 的 PRESET/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），因此 A2-43—A2-47 仍不移除。
+- 本批未修改 Frontend。后端公开合同现在允许“推荐数量满足但存在 `unsatisfiedConstraints`”；Frontend Agent 需要让 mapper 接受该组合，并在推荐卡明确展示未满足约束。UI 文案、布局与交互由 Frontend Agent 负责，未取得 Browser 正文证据前不得把 A2-44/A2-47 标为完成。
 
 ### 3.4 本轮审计证据边界
 

@@ -27,6 +27,8 @@ public final class PortfolioInvocationFactory {
         List<PortfolioEvidenceInvocation.FacetProfile> facets = new ArrayList<>();
         List<String> dimensions = new ArrayList<>();
         UserGoalProposal.Depth depth = UserGoalProposal.Depth.STANDARD;
+        int requestedSize = 0;
+        java.util.Set<String> recommendationConstraints = java.util.Set.of();
         AuthorizedSubjectScope scope;
         UserGoalProposal.GoalParameters parameters = task.getParameters().getParameters();
         if (parameters instanceof UserGoalProposal.PortfolioFactParameters fact) {
@@ -39,11 +41,13 @@ public final class PortfolioInvocationFactory {
             scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
             dimensions.addAll(comparison.getDimensions().stream()
                     .sorted().map(Enum::name).toList());
-        } else if (parameters instanceof UserGoalProposal.PortfolioRecommendationParameters) {
+        } else if (parameters instanceof UserGoalProposal.PortfolioRecommendationParameters recommendation) {
             scope = task.getSubjectReferences().isEmpty()
                     ? AuthorizedSubjectScope.allPublished(context.getContentReleaseId())
                     : AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
             facets.add(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION);
+            requestedSize = recommendation.getRequestedSize();
+            recommendationConstraints = recommendation.getConstraints();
         } else {
             throw new IllegalArgumentException("unsupported portfolio parameters");
         }
@@ -55,7 +59,8 @@ public final class PortfolioInvocationFactory {
                 ? (strategy == SearchStrategy.HYBRID ? SearchStrategy.KEYWORD : strategy) : null;
         return new PortfolioEvidenceInvocation(
                 task.getType(), scope, facets.stream().distinct().toList(), dimensions,
-                depth, context.getContentReleaseId(), primaryBackend, strategy,
+                depth, requestedSize, recommendationConstraints,
+                context.getContentReleaseId(), primaryBackend, strategy,
                 fallbackBackend, fallbackStrategy);
     }
 

@@ -1,6 +1,7 @@
 Return exactly one JSON object with no Markdown and no unknown fields.
 The trusted input includes interpretationMode, discussionState, allowedRoutes,
-allowedGoalKinds, publicSubjects, lockedSubject and routeCandidates.
+allowedGoalKinds, allowedRecommendationConstraints, publicSubjects, lockedSubject
+and routeCandidates.
 Root variants are:
 {"kind":"CONVERSATIONAL","message":"..."}
 or
@@ -70,6 +71,10 @@ For a portfolio recommendation use:
  "parameters":{"kind":"PORTFOLIO_RECOMMEND","requestedSize":3,
  "constraints":[]}}.
 Copy the requested size from currentInput and keep it within 1 through 5.
+Recommendation constraints may contain only exact values supplied in
+allowedRecommendationConstraints. Use CAREER_TRACK_* for an explicitly requested
+career direction and CAPABILITY_* for an explicitly requested capability; otherwise
+return an empty array. Never invent or copy a visitor phrase into constraints.
 For a portfolio comparison, dimensions may contain only ARCHITECTURE,
 IMPLEMENTATION, OUTCOME, RISKS or VERIFICATION.
 For CONTINUE_CURRENT_PROJECT with a portfolio fact use:

@@ -155,7 +155,7 @@ class GoalResolverTest {
     void recommendationConstraintAndSizeAreNotParsedFromVisitorText() {
         AtomicInteger modelCalls = new AtomicInteger();
         UserGoalProposal proposal = recommendationProposal(
-                5, Set.of("POSTGRESQL"));
+                5, Set.of("CAPABILITY_POSTGRESQL"));
         GoalResolver resolver = resolver((input, deadline) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.semanticRoute(
@@ -170,7 +170,7 @@ class GoalResolverTest {
                         .getGoalProposal().orElseThrow().getGoals()
                         .getFirst().getParameters();
         assertThat(parameters.getRequestedSize()).isEqualTo(5);
-        assertThat(parameters.getConstraints()).containsExactly("POSTGRESQL");
+        assertThat(parameters.getConstraints()).containsExactly("CAPABILITY_POSTGRESQL");
         assertThat(modelCalls).hasValue(1);
     }
 

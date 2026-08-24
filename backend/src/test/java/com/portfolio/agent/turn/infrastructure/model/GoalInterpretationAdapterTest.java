@@ -54,7 +54,8 @@ class GoalInterpretationAdapterTest {
         assertThat(captured.get().userPrompt()).contains(
                         "interpretationMode", "discussionState",
                         "allowedRoutes", "routeCandidates",
-                        "allowedGoalKinds", "publicSubjects")
+                        "allowedGoalKinds", "publicSubjects",
+                        "allowedRecommendationConstraints", "CAPABILITY_SQL")
                 .doesNotContain("taskType", "dependencies");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isZero();
@@ -65,6 +66,12 @@ class GoalInterpretationAdapterTest {
                 "解释幂等", List.of(),
                 List.of(new GoalInterpretationInput.PublicSubjectDescriptor(
                         GoalSubjectReference.Kind.PROJECT, "sql-audit", "SQL 审计项目")),
-                Set.of(GoalKind.values()));
+                Set.of(GoalKind.values()),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null, List.of(), Set.of(
+                        com.portfolio.agent.turn.planning.SemanticRouteProposal.Route.STANDARD_GOAL,
+                        com.portfolio.agent.turn.planning.SemanticRouteProposal.Route.NEEDS_CLARIFICATION),
+                Set.of("CAPABILITY_SQL"));
     }
 }

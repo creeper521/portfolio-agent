@@ -15,6 +15,7 @@ public final class GoalInterpretationInput {
     private final PublicSubjectDescriptor lockedSubject;
     private final List<RouteCandidate> routeCandidates;
     private final Set<SemanticRouteProposal.Route> allowedRoutes;
+    private final Set<String> allowedRecommendationConstraints;
 
     public GoalInterpretationInput(
             String userText,
@@ -25,7 +26,7 @@ public final class GoalInterpretationInput {
                 InterpretationMode.STANDARD, DiscussionState.NONE, null,
                 List.of(), Set.of(
                         SemanticRouteProposal.Route.STANDARD_GOAL,
-                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION));
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION), Set.of());
     }
 
     public GoalInterpretationInput(
@@ -38,6 +39,22 @@ public final class GoalInterpretationInput {
             PublicSubjectDescriptor lockedSubject,
             List<RouteCandidate> routeCandidates,
             Set<SemanticRouteProposal.Route> allowedRoutes) {
+        this(userText, recentMessages, publicSubjects, allowedGoalKinds,
+                interpretationMode, discussionState, lockedSubject,
+                routeCandidates, allowedRoutes, Set.of());
+    }
+
+    public GoalInterpretationInput(
+            String userText,
+            List<String> recentMessages,
+            List<PublicSubjectDescriptor> publicSubjects,
+            Set<GoalKind> allowedGoalKinds,
+            InterpretationMode interpretationMode,
+            DiscussionState discussionState,
+            PublicSubjectDescriptor lockedSubject,
+            List<RouteCandidate> routeCandidates,
+            Set<SemanticRouteProposal.Route> allowedRoutes,
+            Set<String> allowedRecommendationConstraints) {
         if (userText == null || userText.isBlank() || userText.length() > 2000) {
             throw new IllegalArgumentException("userText is required and bounded");
         }
@@ -57,6 +74,14 @@ public final class GoalInterpretationInput {
                 Objects.requireNonNull(routeCandidates, "routeCandidates"));
         this.allowedRoutes = Set.copyOf(
                 Objects.requireNonNull(allowedRoutes, "allowedRoutes"));
+        this.allowedRecommendationConstraints = Set.copyOf(Objects.requireNonNull(
+                allowedRecommendationConstraints, "allowedRecommendationConstraints"));
+        if (this.allowedRecommendationConstraints.stream().anyMatch(value ->
+                value == null || !value.matches(
+                        "(?:CAREER_TRACK|CAPABILITY)_[A-Z0-9_]{1,64}"))) {
+            throw new IllegalArgumentException(
+                    "allowed recommendation constraints are invalid");
+        }
         if (this.allowedRoutes.isEmpty()
                 || this.routeCandidates.size() > 5
                 || this.routeCandidates.stream()
@@ -83,6 +108,15 @@ public final class GoalInterpretationInput {
     public PublicSubjectDescriptor getLockedSubject() { return lockedSubject; }
     public List<RouteCandidate> getRouteCandidates() { return routeCandidates; }
     public Set<SemanticRouteProposal.Route> getAllowedRoutes() { return allowedRoutes; }
+    public Set<String> getAllowedRecommendationConstraints() {
+        return allowedRecommendationConstraints;
+    }
+    public void requireAllowedRecommendationConstraints(Set<String> values) {
+        if (!allowedRecommendationConstraints.containsAll(values)) {
+            throw new IllegalArgumentException(
+                    "recommendation constraints are outside the public catalog");
+        }
+    }
 
     public boolean containsPublicSubject(
             GoalSubjectReference.Kind kind, String reference) {

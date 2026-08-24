@@ -105,7 +105,8 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             if (!candidates.isEmpty()) {
                 subjects.add(new CandidateSubject(
                         subject.getStableId(), route(subject), subject.getTitle(),
-                        content.getContentVersion(), candidates));
+                        content.getContentVersion(), subject.getCareerTrack(),
+                        subject.getCapabilityCodes(), candidates));
             }
         }
         return new PortfolioCandidateSet(
@@ -311,6 +312,9 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             case RECOMMENDATION -> List.of("项目", "技术", "实现", "验证", "结果");
         }));
         invocation.getDimensions().stream()
+                .map(String::toLowerCase)
+                .forEach(terms::add);
+        invocation.getRecommendationConstraints().stream()
                 .map(String::toLowerCase)
                 .forEach(terms::add);
         return List.copyOf(terms);

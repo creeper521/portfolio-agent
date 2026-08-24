@@ -17,6 +17,12 @@ public final class GoalInterpretationInputFactory {
                 .toList();
         return new GoalInterpretationInput(
                 freeText.getText(), recentMessages,
-                context.getPublicSubjects(), context.getAllowedGoalKinds());
+                context.getPublicSubjects(), context.getAllowedGoalKinds(),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE, null, List.of(),
+                java.util.Set.of(
+                        SemanticRouteProposal.Route.STANDARD_GOAL,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION),
+                context.getAllowedRecommendationConstraints());
     }
 }

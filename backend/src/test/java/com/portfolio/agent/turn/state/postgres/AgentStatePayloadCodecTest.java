@@ -260,7 +260,7 @@ class AgentStatePayloadCodecTest {
                 java.util.Map.of("field_detail", java.util.Map.of(
                         "choice_size_2", "size:2")), java.util.Map.of(),
                 BlockedGoalTemplate.recommendation(
-                        null, java.util.Set.of("BACKEND"),
+                        null, java.util.Set.of("CAPABILITY_SQL"),
                         ClarificationProposal.Field.REQUESTED_SIZE));
         AgentStatePayloadCodec.Envelope contextEnvelope =
                 codec.encodeContext(requestId, "conversation-1", context);
@@ -275,6 +275,6 @@ class AgentStatePayloadCodecTest {
         BlockedGoalTemplate decodedGoal = (BlockedGoalTemplate) decoded.resumeTemplate();
         assertThat(decodedGoal.getGoalKind())
                 .isEqualTo(com.portfolio.agent.turn.planning.GoalKind.PORTFOLIO_RECOMMEND);
-        assertThat(decodedGoal.getConstraints()).containsExactly("BACKEND");
+        assertThat(decodedGoal.getConstraints()).containsExactly("CAPABILITY_SQL");
     }
 }

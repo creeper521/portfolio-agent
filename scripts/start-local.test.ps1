@@ -566,7 +566,7 @@ exit 0
         Assert-True ($launcherText -match [regex]::Escape($generalAiSetting)) `
             "General AI opt-in must configure $generalAiSetting."
     }
-    Assert-True ($launcherText -match [regex]::Escape("'goal.proposal.v2'")) `
+    Assert-True ($launcherText -match [regex]::Escape("'goal.proposal.v3'")) `
         'Goal Interpretation must declare the production Codec schema.'
     Assert-True ($launcherText -match [regex]::Escape("'general.draft.v1'")) `
         'General Knowledge must declare the production Codec schema.'

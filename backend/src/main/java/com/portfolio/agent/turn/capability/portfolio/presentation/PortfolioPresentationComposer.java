@@ -16,6 +16,9 @@ public final class PortfolioPresentationComposer {
     }
 
     public PortfolioPresentation compose(PortfolioSemanticResult result) {
+        if (result instanceof PortfolioSemanticResult.Comparison comparison) {
+            return comparison(comparison);
+        }
         List<PortfolioPresentation.Section> sections = new ArrayList<>();
         int characters = 0;
         int maximumSections = maximumSections(result);
@@ -34,6 +37,72 @@ public final class PortfolioPresentationComposer {
             throw new IllegalArgumentException("supported semantic result exceeds presentation bounds");
         }
         return new PortfolioPresentation("回答", sections);
+    }
+
+    private PortfolioPresentation comparison(
+            PortfolioSemanticResult.Comparison result) {
+        List<PortfolioPresentation.Section> sections = new ArrayList<>();
+        int characters = 0;
+        for (com.portfolio.agent.turn.planning.UserGoalProposal.PortfolioComparisonDimension
+                dimension : result.getDimensions()) {
+            List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit>
+                    matching = result.getUnits().stream()
+                    .filter(unit -> comparisonCategory(dimension, unit.getClaim().getCategory()))
+                    .toList();
+            if (matching.isEmpty() || sections.size() >= policy.getMaximumSections()) continue;
+            String content = matching.stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            value -> value.getSubjectTitle(), java.util.LinkedHashMap::new,
+                            java.util.stream.Collectors.mapping(
+                                    value -> value.getClaim().getStatement(),
+                                    java.util.stream.Collectors.toList())))
+                    .entrySet().stream().map(entry -> entry.getKey() + "："
+                            + String.join("；", entry.getValue()))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            if (characters + content.length() > policy.getMaximumCharacters()) break;
+            List<PublicSourceReferenceValue> sources = matching.stream()
+                    .map(value -> source(value.getSourceReference())).distinct().toList();
+            sections.add(new PortfolioPresentation.Section(
+                    comparisonSection(dimension), comparisonLabel(dimension), content, sources));
+            characters += content.length();
+        }
+        if (sections.isEmpty()) {
+            throw new IllegalArgumentException("comparison has no aligned public support");
+        }
+        return new PortfolioPresentation("对比", sections);
+    }
+
+    private boolean comparisonCategory(
+            com.portfolio.agent.turn.planning.UserGoalProposal.PortfolioComparisonDimension dimension,
+            AnswerClaimCategory category) {
+        return switch (dimension) {
+            case ARCHITECTURE -> category == AnswerClaimCategory.TECHNICAL_DECISION;
+            case IMPLEMENTATION -> category == AnswerClaimCategory.IMPLEMENTATION;
+            case OUTCOME -> category == AnswerClaimCategory.OUTCOME;
+            case RISKS -> category == AnswerClaimCategory.LIMITATION;
+            case VERIFICATION -> category == AnswerClaimCategory.VERIFICATION;
+        };
+    }
+
+    private AnswerSectionType comparisonSection(
+            com.portfolio.agent.turn.planning.UserGoalProposal.PortfolioComparisonDimension dimension) {
+        return switch (dimension) {
+            case VERIFICATION -> AnswerSectionType.VERIFICATION;
+            case OUTCOME -> AnswerSectionType.STATUS;
+            case RISKS -> AnswerSectionType.BOUNDARY;
+            case ARCHITECTURE, IMPLEMENTATION -> AnswerSectionType.SOLUTION;
+        };
+    }
+
+    private String comparisonLabel(
+            com.portfolio.agent.turn.planning.UserGoalProposal.PortfolioComparisonDimension dimension) {
+        return switch (dimension) {
+            case ARCHITECTURE -> "架构对比";
+            case IMPLEMENTATION -> "实现对比";
+            case OUTCOME -> "结果对比";
+            case RISKS -> "风险与边界对比";
+            case VERIFICATION -> "验证对比";
+        };
     }
 
     private int maximumSections(PortfolioSemanticResult result) {

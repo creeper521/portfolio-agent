@@ -144,8 +144,10 @@ public final class PublicAgentTurnProjector {
             LinkedHashMap<String, PublicSourceCatalog.Source> sources,
             String continuationHandle) {
         List<PublicPresentation.Recommendation.Item> items = new ArrayList<>();
-        for (int index = 0; index < result.getSelectedSubjectIds().size(); index++) {
-            String subjectId = result.getSelectedSubjectIds().get(index);
+        for (int index = 0; index < result.getItems().size(); index++) {
+            PortfolioSemanticResult.Recommendation.RecommendationItem semanticItem =
+                    result.getItems().get(index);
+            String subjectId = semanticItem.subjectId();
             List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit> units =
                     result.getUnits().stream().filter(value -> value.getSubjectId().equals(subjectId)).toList();
             if (units.isEmpty()) throw new IllegalArgumentException("recommendation item lacks support");
@@ -163,10 +165,11 @@ public final class PublicAgentTurnProjector {
                             continuationHandle, resultItemId));
             items.add(new PublicPresentation.Recommendation.Item(
                     resultItemId,
-                    first.getLabel(),
+                    units.getFirst().getSubjectTitle(),
                     units.stream().map(value -> value.getClaim().getStatement())
                             .collect(java.util.stream.Collectors.joining("\n")),
-                    first.getSubjectRoute(), List.of(),
+                    first.getSubjectRoute(), semanticItem.reasonCodes().stream()
+                            .map(this::recommendationReason).toList(),
                     new PublicSupport(
                             PublicSupport.Kind.VERIFIED_PUBLIC_EVIDENCE,
                             sourceKeys),
@@ -176,7 +179,20 @@ public final class PublicAgentTurnProjector {
                 ? (result.getOmissions().isEmpty() ? List.of("公开结果数量不足") : result.getOmissions())
                 : List.of();
         return new PublicPresentation.Recommendation(
-                result.getRequestedSize(), items, List.of(), incompleteReasons, List.of());
+                result.getRequestedSize(), items, result.getUnsatisfiedConstraints(),
+                incompleteReasons, List.of());
+    }
+
+    private String recommendationReason(
+            PortfolioSemanticResult.Recommendation.RecommendationReasonCode code) {
+        return switch (code) {
+            case CAREER_TRACK_MATCH -> "职业方向符合筛选条件";
+            case CAPABILITY_MATCH -> "能力标签符合筛选条件";
+            case VERIFIED_IMPLEMENTATION -> "具备公开可验证的实现材料";
+            case VERIFIED_VERIFICATION -> "具备公开可验证的验证材料";
+            case VERIFIED_OUTCOME -> "具备公开可验证的结果材料";
+            case VERIFIED_PUBLIC_EVIDENCE -> "具备公开可验证材料";
+        };
     }
 
     private List<GoalNotice> gapNotices(TaskArtifact artifact) {

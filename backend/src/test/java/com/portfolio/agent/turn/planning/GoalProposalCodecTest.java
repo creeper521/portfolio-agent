@@ -81,6 +81,42 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void recommendationConstraintsMustComeFromTrustedPublicCatalog() {
+        String proposal = """
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"recommend-projects",
+                    "goalKind":"PORTFOLIO_RECOMMEND",
+                    "inputAnchor":{"text":"推荐后端项目","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["RECOMMENDATION"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{"kind":"PORTFOLIO_RECOMMEND","requestedSize":2,
+                      "constraints":["%s"]}
+                  },
+                  "clarification":null
+                }
+                """;
+
+        GoalInterpretationResult accepted = codec.decode(
+                proposal.formatted("CAREER_TRACK_JAVA_BACKEND"),
+                recommendationInput());
+        UserGoalProposal.PortfolioRecommendationParameters parameters =
+                (UserGoalProposal.PortfolioRecommendationParameters) accepted
+                        .getRouteProposal().orElseThrow().getGoalProposal().orElseThrow()
+                        .getGoals().getFirst().getParameters();
+        assertThat(parameters.getConstraints())
+                .containsExactly("CAREER_TRACK_JAVA_BACKEND");
+        assertThatThrownBy(() -> codec.decode(
+                proposal.formatted("CAPABILITY_INVENTED"), recommendationInput()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside the public catalog");
+    }
+
+    @Test
     void decodesClosedClarificationAndConversationalResults() {
         GoalInterpretationResult clarification = codec.decode("""
                 {
@@ -401,6 +437,16 @@ class GoalProposalCodecTest {
                         new GoalInterpretationInput.PublicSubjectDescriptor(
                                 GoalSubjectReference.Kind.PROJECT, "agent", "Agent 项目")),
                 Set.of(GoalKind.values()));
+    }
+
+    private GoalInterpretationInput recommendationInput() {
+        return new GoalInterpretationInput(
+                "推荐后端项目", List.of(), List.of(), Set.of(GoalKind.values()),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE, null, List.of(),
+                Set.of(SemanticRouteProposal.Route.STANDARD_GOAL,
+                        SemanticRouteProposal.Route.NEEDS_CLARIFICATION),
+                Set.of("CAREER_TRACK_JAVA_BACKEND", "CAPABILITY_SQL"));
     }
 
     private GoalInterpretationInput candidateInput() {

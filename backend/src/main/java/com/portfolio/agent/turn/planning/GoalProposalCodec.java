@@ -15,7 +15,7 @@ import java.util.Set;
 
 public final class GoalProposalCodec {
 
-    public static final String SCHEMA_VERSION = "goal.proposal.v2";
+    public static final String SCHEMA_VERSION = "goal.proposal.v3";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
 
@@ -146,7 +146,7 @@ public final class GoalProposalCodec {
                 requireText(node, "knowledgeRequirement", 64),
                 path + ".knowledgeRequirement");
         UserGoalProposal.GoalParameters parameters = decodeParameters(
-                node.get("parameters"), goalKind, input.getUserText(), path + ".parameters");
+                node.get("parameters"), goalKind, input, path + ".parameters");
         return new UserGoalProposal.ProposedGoal(
                 requireText(node, "goalKey", 64), goalKind, inputAnchor,
                 subjects, outputs, knowledge, parameters);
@@ -192,7 +192,7 @@ public final class GoalProposalCodec {
     private UserGoalProposal.GoalParameters decodeParameters(
             JsonNode node,
             GoalKind goalKind,
-            String input,
+            GoalInterpretationInput interpretationInput,
             String path) {
         requireObject(node, path);
         String parameterKind = requireText(node, "kind", 64);
@@ -220,15 +220,18 @@ public final class GoalProposalCodec {
             case PORTFOLIO_RECOMMEND -> {
                 assertFields(node, Set.of("kind", "requestedSize", "constraints"),
                         Set.of("kind", "requestedSize", "constraints"), path);
+                Set<String> constraints = decodeClosedNames(
+                        requireArray(node, "constraints"), path + ".constraints", true);
+                interpretationInput.requireAllowedRecommendationConstraints(constraints);
                 yield new UserGoalProposal.PortfolioRecommendationParameters(
-                        requireInt(node, "requestedSize"),
-                        decodeClosedNames(requireArray(node, "constraints"), path + ".constraints", true));
+                        requireInt(node, "requestedSize"), constraints);
             }
             case GENERAL_EXPLANATION -> {
                 assertFields(node, Set.of("kind", "topicAnchor", "depth"),
                         Set.of("kind", "topicAnchor", "depth"), path);
                 yield new UserGoalProposal.GeneralExplanationParameters(
-                        decodeAnchor(node.get("topicAnchor"), input, path + ".topicAnchor"),
+                        decodeAnchor(node.get("topicAnchor"), interpretationInput.getUserText(),
+                                path + ".topicAnchor"),
                         enumValue(UserGoalProposal.Depth.class,
                                 requireText(node, "depth", 64), path + ".depth"));
             }
@@ -238,7 +241,7 @@ public final class GoalProposalCodec {
                 JsonNode anchors = requireArray(node, "subjectAnchors");
                 List<UserGoalProposal.InputAnchor> decoded = new ArrayList<>();
                 for (int index = 0; index < anchors.size(); index++) {
-                    decoded.add(decodeAnchor(anchors.get(index), input,
+                    decoded.add(decodeAnchor(anchors.get(index), interpretationInput.getUserText(),
                             path + ".subjectAnchors[" + index + "]"));
                 }
                 yield new UserGoalProposal.GeneralComparisonParameters(
@@ -249,7 +252,8 @@ public final class GoalProposalCodec {
                 assertFields(node, Set.of("kind", "conceptAnchor", "portfolioFacet", "depth"),
                         Set.of("kind", "conceptAnchor", "portfolioFacet", "depth"), path);
                 yield new UserGoalProposal.ApplyConceptParameters(
-                        decodeAnchor(node.get("conceptAnchor"), input, path + ".conceptAnchor"),
+                        decodeAnchor(node.get("conceptAnchor"), interpretationInput.getUserText(),
+                                path + ".conceptAnchor"),
                         enumValue(UserGoalProposal.Facet.class,
                                 requireText(node, "portfolioFacet", 64), path + ".portfolioFacet"),
                         enumValue(UserGoalProposal.Depth.class,
@@ -337,6 +341,7 @@ public final class GoalProposalCodec {
         Set<String> constraints = decodeClosedNames(
                 requireArray(node, "constraints"),
                 "clarification.blockedGoal.constraints", true);
+        input.requireAllowedRecommendationConstraints(constraints);
         Set<ClarificationProposal.Field> askedFields = decodeEnumSet(
                 requireArray(node, "askedFields"), ClarificationProposal.Field.class,
                 "clarification.blockedGoal.askedFields", false);

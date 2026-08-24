@@ -54,9 +54,9 @@ public sealed interface PublicPresentation
             if (actualSize < requestedSize && this.incompleteReasons.isEmpty()) {
                 throw new IllegalArgumentException("incomplete recommendation requires reasons");
             }
-            if (actualSize == requestedSize && (!this.unsatisfiedConstraints.isEmpty()
-                    || !this.incompleteReasons.isEmpty())) {
-                throw new IllegalArgumentException("complete recommendation cannot report gaps");
+            if (actualSize == requestedSize && !this.incompleteReasons.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "complete recommendation count cannot report size gaps");
             }
         }
         @Override public Kind getKind() { return Kind.RECOMMENDATION; }

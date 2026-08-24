@@ -460,7 +460,7 @@ if ($Lane -eq 'BODY_STALL') {
         '--portfolio.conversational-agent.visitor-data-policy-approved=true',
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
         '--portfolio.model-operations.turn-interpretation.provider-ref=DEEPSEEK_V4_FLASH',
-        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v2',
+        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v3',
         '--portfolio.model-operations.general-knowledge.mode=DISABLED'
     )
 }

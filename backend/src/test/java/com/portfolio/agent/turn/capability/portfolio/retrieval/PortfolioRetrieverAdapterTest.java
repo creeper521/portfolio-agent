@@ -108,6 +108,11 @@ class PortfolioRetrieverAdapterTest {
         assertThat(keyword.getCandidateSet().orElseThrow().getSubjects())
                 .extracting(CandidateSubject::getSubjectId)
                 .containsExactly("project-b", "project-a");
+        assertThat(keyword.getCandidateSet().orElseThrow().getSubjects().getFirst())
+                .satisfies(subject -> {
+                    assertThat(subject.getCareerTrack()).isEqualTo("BACKEND");
+                    assertThat(subject.getCapabilityCodes()).containsExactly("JAVA");
+                });
 
         AtomicBoolean embedded = new AtomicBoolean();
         RetrievalAttemptResult hybrid = new BundlePortfolioRetrieverAdapter(

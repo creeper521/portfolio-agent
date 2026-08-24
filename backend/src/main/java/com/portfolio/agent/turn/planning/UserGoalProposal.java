@@ -117,6 +117,16 @@ public final class UserGoalProposal {
             }
             this.requestedSize = requestedSize;
             this.constraints = copyNamesAllowEmpty(constraints, "constraints");
+            if (this.constraints.stream().anyMatch(value ->
+                    !value.matches("(?:CAREER_TRACK|CAPABILITY)_[A-Z0-9_]{1,64}"))) {
+                throw new IllegalArgumentException(
+                        "recommendation constraints must use a typed prefix");
+            }
+            if (this.constraints.stream().filter(value ->
+                    value.startsWith("CAREER_TRACK_")).count() > 1) {
+                throw new IllegalArgumentException(
+                        "recommendation accepts at most one career track");
+            }
         }
 
         @Override public GoalKind getGoalKind() { return GoalKind.PORTFOLIO_RECOMMEND; }

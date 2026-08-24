@@ -56,7 +56,7 @@ class DeterministicConversationBoundaryTest {
                         Set.of(GoalRequestedOutput.RECOMMENDATION),
                         GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                         new UserGoalProposal.PortfolioRecommendationParameters(
-                                2, Set.of("BACKEND")))));
+                                2, Set.of("CAPABILITY_SQL")))));
     }
 
     private AgentTurnCommand ask(String text) {

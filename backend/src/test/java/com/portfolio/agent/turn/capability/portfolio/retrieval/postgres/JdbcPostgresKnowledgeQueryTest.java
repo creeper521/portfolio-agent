@@ -57,6 +57,40 @@ class JdbcPostgresKnowledgeQueryTest {
                 .containsExactly("claim-1");
     }
 
+    @Test
+    void recommendationUsesTypedConstraintsThenAddsBroadFallbackCandidates() {
+        RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
+        JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
+                selectionQuery,
+                text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
+                (releaseId, subjectIds) -> List.of());
+        PortfolioEvidenceInvocation invocation = new PortfolioEvidenceInvocation(
+                SemanticTask.Type.PORTFOLIO_RECOMMEND,
+                AuthorizedSubjectScope.allPublished("public-1"),
+                List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION), List.of(),
+                com.portfolio.agent.turn.planning.UserGoalProposal.Depth.STANDARD,
+                2, Set.of("CAREER_TRACK_JAVA_BACKEND", "CAPABILITY_SQL"),
+                "public-1", CorpusBackend.POSTGRESQL, SearchStrategy.KEYWORD,
+                CorpusBackend.BUNDLE, SearchStrategy.KEYWORD);
+
+        PostgresKnowledgeQueryResult result = query.retrieve(
+                invocation,
+                new RetrievalRequest(CorpusBackend.POSTGRESQL, SearchStrategy.KEYWORD));
+
+        assertThat(selectionQuery.searchTargets).hasSize(2);
+        assertThat(selectionQuery.searchTargets.getFirst()).satisfies(target -> {
+            assertThat(target.getCareerTrack()).isEqualTo("JAVA_BACKEND");
+            assertThat(target.getCapabilityCodes()).containsExactly("SQL");
+        });
+        assertThat(selectionQuery.searchTargets.get(1)).satisfies(target -> {
+            assertThat(target.getCareerTrack()).isNull();
+            assertThat(target.getCapabilityCodes()).isEmpty();
+        });
+        assertThat(result.getCandidates().getCandidates())
+                .extracting(value -> value.getSubjectId())
+                .containsExactly("project-match", "project-fallback");
+    }
+
     private PortfolioEvidenceInvocation exactInvocation() {
         GoalSubjectReference subject = new GoalSubjectReference(
                 GoalSubjectReference.Kind.PROJECT,
@@ -103,6 +137,7 @@ class JdbcPostgresKnowledgeQueryTest {
     private static final class RecordingSelectionQuery implements PostgresSelectionQuery {
         private final List<List<String>> exactSubjectIds = new ArrayList<>();
         private final List<SelectionTarget> exactTargets = new ArrayList<>();
+        private final List<SelectionTarget> searchTargets = new ArrayList<>();
 
         @Override
         public ActiveRelease activeRelease() {
@@ -112,7 +147,23 @@ class JdbcPostgresKnowledgeQueryTest {
         @Override
         public List<PostgresSelectionRow> searchFts(
                 String releaseId, SelectionTarget target, int limit) {
-            throw new AssertionError("exact scope must not search");
+            searchTargets.add(target);
+            return target.getCareerTrack() == null
+                    ? List.of(selectionRow(
+                    "project-fallback", "AGENT", Set.of("AGENT")))
+                    : List.of(selectionRow(
+                    "project-match", "JAVA_BACKEND", Set.of("SQL")));
+        }
+
+        private PostgresSelectionRow selectionRow(
+                String subjectId, String careerTrack, Set<String> capabilities) {
+            return new PostgresSelectionRow(
+                    subjectId, PortfolioSubjectKind.PROJECT, subjectId,
+                    "Public summary", "/projects/" + subjectId,
+                    careerTrack, capabilities,
+                    List.of(new EvidenceReference(
+                            "claim-" + subjectId, "evidence-" + subjectId,
+                            "Approved evidence")), 1.0);
         }
 
         @Override

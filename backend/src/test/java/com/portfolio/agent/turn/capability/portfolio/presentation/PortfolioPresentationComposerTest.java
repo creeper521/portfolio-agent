@@ -73,6 +73,35 @@ class PortfolioPresentationComposerTest {
         });
     }
 
+    @Test
+    void comparisonAlignsEverySubjectInsideDimensionSections() {
+        ValidatedEvidenceUnit first = titledUnit(
+                "project-a", "项目甲", "a", AnswerClaimCategory.IMPLEMENTATION);
+        ValidatedEvidenceUnit second = titledUnit(
+                "project-b", "项目乙", "b", AnswerClaimCategory.IMPLEMENTATION);
+        PortfolioPresentation presentation = new PortfolioPresentationComposer(
+                PresentationPolicy.defaults()).compose(new PortfolioSemanticResult.Comparison(
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), List.of(first, second), List.of(),
+                List.of(UserGoalProposal.PortfolioComparisonDimension.IMPLEMENTATION)));
+
+        assertThat(presentation.getTitle()).isEqualTo("对比");
+        assertThat(presentation.getSections()).singleElement().satisfies(section -> {
+            assertThat(section.getTitle()).isEqualTo("实现对比");
+            assertThat(section.getContent()).contains("项目甲：", "项目乙：");
+            assertThat(section.getSources()).hasSize(2);
+        });
+    }
+
+    private ValidatedEvidenceUnit titledUnit(
+            String subjectId, String title, String id, AnswerClaimCategory category) {
+        ValidatedEvidenceUnit base = unit(id, category);
+        return new ValidatedEvidenceUnit(
+                subjectId, title, "JAVA_BACKEND", java.util.Set.of("SQL"),
+                base.getClaim(), base.getSourceReference());
+    }
+
     private ValidatedEvidenceUnit unit(String id, AnswerClaimCategory category) {
         AnswerClaimProjection claim = new AnswerClaimProjection(
                 "claim-" + id, category, "陈述" + id, "详细说明" + id,

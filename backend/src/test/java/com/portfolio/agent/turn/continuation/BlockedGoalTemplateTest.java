@@ -20,18 +20,18 @@ class BlockedGoalTemplateTest {
     void serializedTemplateContainsNoVisitorQuestionOrInputAnchor() throws Exception {
         String visitorSentinel = "VISITOR_PRIVATE_SENTINEL_8391";
         BlockedGoalTemplate template = BlockedGoalTemplate.recommendation(
-                null, Set.of("BACKEND"), ClarificationProposal.Field.REQUESTED_SIZE);
+                null, Set.of("CAPABILITY_SQL"), ClarificationProposal.Field.REQUESTED_SIZE);
 
         String json = new ObjectMapper().writeValueAsString(template);
 
         assertThat(json).doesNotContain(visitorSentinel, "inputAnchor", "question", "prompt");
-        assertThat(json).contains("PORTFOLIO_RECOMMEND", "REQUESTED_SIZE", "BACKEND");
+        assertThat(json).contains("PORTFOLIO_RECOMMEND", "REQUESTED_SIZE", "CAPABILITY_SQL");
     }
 
     @Test
     void answerRestoresRecommendationSizeAndConstraintsWithoutRawAnchor() {
         BlockedGoalTemplate template = BlockedGoalTemplate.recommendation(
-                null, Set.of("BACKEND"), ClarificationProposal.Field.REQUESTED_SIZE);
+                null, Set.of("CAPABILITY_SQL"), ClarificationProposal.Field.REQUESTED_SIZE);
 
         BlockedGoalTemplate.Resolution resolution = template.resolve(
                 new BlockedGoalTemplate.RequestedSizeValue(3));
@@ -43,7 +43,7 @@ class BlockedGoalTemplateTest {
         UserGoalProposal.PortfolioRecommendationParameters parameters =
                 (UserGoalProposal.PortfolioRecommendationParameters) goal.getParameters();
         assertThat(parameters.getRequestedSize()).isEqualTo(3);
-        assertThat(parameters.getConstraints()).containsExactly("BACKEND");
+        assertThat(parameters.getConstraints()).containsExactly("CAPABILITY_SQL");
         assertThat(goal.getInputAnchor().getText()).isEqualTo("已澄清的公开目标");
     }
 
@@ -74,7 +74,7 @@ class BlockedGoalTemplateTest {
         assertThat(template.resolve(null).kind())
                 .isEqualTo(BlockedGoalTemplate.Resolution.Kind.NO_INFORMATION);
         assertThat(template.resolve(new BlockedGoalTemplate.ConstraintValue(
-                Set.of("BACKEND"))).kind())
+                Set.of("CAPABILITY_SQL"))).kind())
                 .isEqualTo(BlockedGoalTemplate.Resolution.Kind.NO_INFORMATION);
     }
 

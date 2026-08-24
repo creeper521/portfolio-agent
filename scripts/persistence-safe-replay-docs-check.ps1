@@ -30,9 +30,9 @@ foreach ($requirement in $requirements) {
         continue
     }
     $content = Get-Content -LiteralPath $path -Raw
-    foreach ($token in $requirement.Tokens) {
-        if (-not $content.Contains($token)) {
-            $violations.Add("missing-token:$($requirement.Path):$token")
+    foreach ($requiredMarker in $requirement.Tokens) {
+        if (-not $content.Contains($requiredMarker)) {
+            $violations.Add("missing-marker:$($requirement.Path):$requiredMarker")
         }
     }
 }

@@ -1327,7 +1327,19 @@ public final class AgentTurnLifecycleService {
         List<GoalInterpretationInput.PublicSubjectDescriptor> subjects = new ArrayList<>();
         addSubjects(subjects, content.getProjects(), GoalSubjectReference.Kind.PROJECT);
         addSubjects(subjects, content.getCases(), GoalSubjectReference.Kind.CASE);
-        return new GoalResolutionContext(subjects, Set.of(GoalKind.values()));
+        Set<String> recommendationConstraints = new java.util.LinkedHashSet<>();
+        java.util.stream.Stream.concat(content.getProjects().stream(), content.getCases().stream())
+                .forEach(value -> {
+                    if (value.getCareerTrack() != null
+                            && !"UNCLASSIFIED".equals(value.getCareerTrack())) {
+                        recommendationConstraints.add(
+                                "CAREER_TRACK_" + value.getCareerTrack());
+                    }
+                    value.getCapabilityCodes().forEach(code ->
+                            recommendationConstraints.add("CAPABILITY_" + code));
+                });
+        return new GoalResolutionContext(
+                subjects, Set.of(GoalKind.values()), Set.copyOf(recommendationConstraints));
     }
     private void addSubjects(
             List<GoalInterpretationInput.PublicSubjectDescriptor> target,

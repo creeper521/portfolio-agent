@@ -42,10 +42,6 @@ public final class PortfolioSupportEvaluator {
         return Evaluation.of(selected, omissions);
     }
 
-    public Evaluation recommendation(ValidatedEvidenceBundle bundle) {
-        return Evaluation.of(bundle.getUnits(), List.of());
-    }
-
     private List<AuthorizedSubject> subjects(PortfolioEvidenceInvocation invocation) {
         return invocation.getSubjectScope().getSubjects().stream()
                 .map(value -> new AuthorizedSubject(value.getReference())).toList();
