@@ -149,7 +149,8 @@ public final class DiagnosticEvent {
                             "event.outcome",
                             "duration.bucket",
                             "response.present",
-                            "failure.code")),
+                            "failure.code",
+                            "failure.layer")),
                     Map.entry("expression.eligibility", fields(
                             "task.kind", "material.kind", "expression.disposition",
                             "expression.attempted", "input.size.bucket", "breaker.state")),

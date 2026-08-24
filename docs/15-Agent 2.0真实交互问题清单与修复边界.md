@@ -174,12 +174,12 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-76 | P2 | Discussion 到期后动作不自动更新 | 只改倒计时文案，不取得 EXPIRED summary | 到期时冷恢复权威动作 | Frontend Discussion Recovery |
 | A2-77 | P2 | 过期恢复依赖页面 reload | E2E 通过重载才显示恢复按钮 | 不刷新也能进入合法恢复路径 | Browser UX / Conversation GET |
 | A2-78 | P1 | HTTP 200 被误当成功回答 | CAPABILITY_UNAVAILABLE 也被传输层视为成功 | Happy path 明确要求预期 PublicTurn kind | Frontend / Browser Assertions |
-| A2-79 | P1 | DeepSeek/GLM 共用固定请求格式 | Provider 差异没有闭合 Profile | 每个 Provider 使用独立协议 Profile | Model Transport |
+| A2-79 | P1 | DeepSeek/GLM 共用固定请求格式 | DeepSeek/GLM 已使用独立版本 Profile 并分别断言完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
 | A2-80 | P1 | Provider 兼容停留在配置声明 | Registry 声明不能证明真实模型满足 schema | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
 | A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | 已观察到 Provider 超过 8 秒 | 基于真实 P95 冻结跨端预算 | Timeout Policy / Provider |
-| A2-82 | P2 | Provider HTTP 错误分类太粗 | 鉴权、限流和 5xx 混为拒绝 | 分开统计稳定失败类别 | Transport Diagnostics |
-| A2-83 | P2 | JSON/schema 失败分类不准 | 非法 JSON 可能归为 Transport failure | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
-| A2-84 | P2 | Provider response 无硬字节上限 | 只依赖 timeout 和 max_tokens | 客户端限制响应体字节数 | Model Transport / Resource Bound |
+| A2-82 | P2 | Provider HTTP 错误分类太粗 | 401/403、429、5xx 与其他拒绝已分为稳定 code；本地真实 HTTP fixture 通过，待 Provider 运行分布 | 分开统计稳定失败类别 | Transport Diagnostics |
+| A2-83 | P2 | JSON/schema 失败分类不准 | Transport JSON 与 envelope 已分层并进入安全 diagnostics；operation schema/semantic 分层仍未闭合 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
+| A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
 | A2-85 | P1 | 无同 Provider schema repair 决策 | 小字段偏差导致整轮失败 | 批准后允许一次无状态、有界修复或明确保持禁止 | Provider Reliability / Product Decision |
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 当前失败后只能重新提问 | 默认不自动重发，用户明确切换后新 Turn | Provider Selection / Privacy |
 | A2-87 | P1 | Provider 矩阵不独立 | 脚本只测试当前环境 Provider | 每个批准 Provider 独立执行和报告 | Provider Matrix |
@@ -922,6 +922,16 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 真实 Provider 仍未获得本轮执行授权；依赖该证据的问题继续保持「修复后待验收」，不提前删除。
 
+### 10.7 Provider Transport 收敛进展（2026-08-24）
+
+- **A2-79：** DeepSeek 与 GLM 不再由 Transport 内的一份固定模板隐式共享协议；两者拥有独立、带版本的 `ModelProviderProtocolProfile`。按 2026-08-24 官方协议，两家当前批准字段都包含 `response_format={type:json_object}`、`thinking={type:disabled}` 与 `stream=false`，因此 Profile 当前可生成相同字段，但任何后续变化必须各自修改并通过各自 payload 门，不能扩散到另一 Provider。本批没有引入多模型路由。
+- **A2-82：** 非 2xx 已稳定区分为 `AUTHENTICATION_REJECTED`（401/403）、`RATE_LIMITED`（429）、`PROVIDER_UNAVAILABLE`（5xx）和 `PROVIDER_REJECTED`（其他 4xx）；诊断只保留 closed code/layer 和耗时桶，不记录 Provider response body。
+- **A2-83：** HTTP/连接失败属于 `TRANSPORT`，非法 JSON 属于 `JSON`，Chat Completions 外层形状错误属于 `ENVELOPE`。operation codec 的 schema 与 semantic 失败仍共用 `IllegalArgumentException` 路径，本批没有伪造已完成的四层闭环，因此 A2-83 保持 `IN_PROGRESS`。
+- **A2-84：** `BodyHandlers.ofString()` 已替换为读取期有界 subscriber，UTF-8 响应体超过 256 KiB 即取消订阅并返回 `RESPONSE_TOO_LARGE`；原 absolute deadline 仍覆盖等待响应头和完整响应体，body-stall 与线程中断取消回归继续通过。
+- **专属门：** `OpenAiCompatibleStructuredModelTransportProtocolTest` 覆盖两个 Provider 的完整字段集合、六类 HTTP fixture、JSON/envelope diagnostics、response body sentinel 不进入 diagnostics，以及 256 KiB + 1 拒绝；`OpenAiCompatibleStructuredModelTransportDeadlineTest` 覆盖 body stall 与中断取消。本地门只证明 Transport 行为，不替代 A2-80/81/87/88 的真实 Provider schema、P95、独立矩阵和样本量。
+- **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 916 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 501 个生产文件通过；最终 packaged JAR SHA-256 为 `7bba720235e76e44e1403aae04c7331a574db4c05c2208d10c31fe9e43b6a67d`。本批未运行真实 Provider 或 Browser，因此整体和相关条目继续保持 `IN_PROGRESS`。
+- **范围：** 本批没有修改公开 API、公开错误 variant、Provider 选择或 Frontend。A2-80/81/85—88 未取得新的真实样本或产品冻结决定，状态不变。
+
 ## 11. 修复前需要冻结的选择
 
 以下选择会影响具体代码，但不改变 Agent 2.0 总架构。状态标注为「已冻结」的选择已于 2026-08-19 随前端修复批次确定：
@@ -1013,7 +1023,9 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | 运行时隐私门 | A2-98 | Lifecycle → State → PostgreSQL → 解密 settlement 的 sentinel 数据流测试，不以静态扫描代替 |
 | Codec 扫描对象 | A2-99 | 解密后递归扫描 publicTurn、contexts、challenges 的完整 plaintext，五 variant 可回读 |
 | Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
-| Provider 授权与 schema | A2-33—A2-35、A2-79—A2-88、A2-113 | 启动错配负例、协议 Profile、按批准目录独立 Provider 矩阵 |
+| Provider 启动授权 | A2-33—A2-35 | Operation/Transport/Codec 启动错配负例与统一 readiness 投影 |
+| Provider Transport | A2-79、A2-82—A2-84 | 两家 Profile 独立 payload；401/403/429/5xx 分类；JSON/envelope 分层；256 KiB + 1 拒绝；body-stall deadline 不回退 |
+| Provider 真实质量 | A2-80—A2-81、A2-85—A2-88、A2-113 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；repair/fallback 只有产品批准后才改变 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |

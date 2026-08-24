@@ -7,5 +7,26 @@ public final class StructuredModelFailure extends RuntimeException {
         super(code.name(), cause); this.code = code;
     }
     public Code getCode() { return code; }
-    public enum Code { DEADLINE_EXCEEDED, TRANSPORT_UNAVAILABLE, PROVIDER_REJECTED, INVALID_RESPONSE }
+    public enum Code {
+        DEADLINE_EXCEEDED("TRANSPORT"),
+        TRANSPORT_UNAVAILABLE("TRANSPORT"),
+        AUTHENTICATION_REJECTED("TRANSPORT"),
+        RATE_LIMITED("TRANSPORT"),
+        PROVIDER_UNAVAILABLE("TRANSPORT"),
+        PROVIDER_REJECTED("TRANSPORT"),
+        RESPONSE_TOO_LARGE("TRANSPORT"),
+        RESPONSE_JSON_INVALID("JSON"),
+        RESPONSE_ENVELOPE_INVALID("ENVELOPE"),
+        INVALID_RESPONSE("SEMANTIC");
+
+        private final String layer;
+
+        Code(String layer) {
+            this.layer = layer;
+        }
+
+        public String getLayer() {
+            return layer;
+        }
+    }
 }
