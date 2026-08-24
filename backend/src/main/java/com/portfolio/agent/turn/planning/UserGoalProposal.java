@@ -28,7 +28,6 @@ public final class UserGoalProposal {
         private final GoalKind goalKind;
         private final InputAnchor inputAnchor;
         private final List<GoalSubjectReference> subjectCandidates;
-        private final Set<GoalRequestedOutput> requestedOutputs;
         private final GoalKnowledgeRequirement knowledgeRequirement;
         private final GoalParameters parameters;
 
@@ -48,16 +47,17 @@ public final class UserGoalProposal {
             this.inputAnchor = Objects.requireNonNull(inputAnchor, "inputAnchor");
             this.subjectCandidates = List.copyOf(
                     Objects.requireNonNull(subjectCandidates, "subjectCandidates"));
-            this.requestedOutputs = Set.copyOf(
+            Set<GoalRequestedOutput> suppliedOutputs = Set.copyOf(
                     Objects.requireNonNull(requestedOutputs, "requestedOutputs"));
-            if (this.requestedOutputs.isEmpty()) {
-                throw new IllegalArgumentException("requestedOutputs must not be empty");
-            }
             this.knowledgeRequirement = Objects.requireNonNull(
                     knowledgeRequirement, "knowledgeRequirement");
             this.parameters = Objects.requireNonNull(parameters, "parameters");
             if (parameters.getGoalKind() != goalKind) {
                 throw new IllegalArgumentException("goal parameters must match goalKind");
+            }
+            if (!suppliedOutputs.equals(requestedOutputs(parameters))) {
+                throw new IllegalArgumentException(
+                        "requestedOutputs must match the typed goal parameters");
             }
         }
 
@@ -65,7 +65,9 @@ public final class UserGoalProposal {
         public GoalKind getGoalKind() { return goalKind; }
         public InputAnchor getInputAnchor() { return inputAnchor; }
         public List<GoalSubjectReference> getSubjectCandidates() { return subjectCandidates; }
-        public Set<GoalRequestedOutput> getRequestedOutputs() { return requestedOutputs; }
+        public Set<GoalRequestedOutput> getRequestedOutputs() {
+            return requestedOutputs(parameters);
+        }
         public GoalKnowledgeRequirement getKnowledgeRequirement() { return knowledgeRequirement; }
         public GoalParameters getParameters() { return parameters; }
     }
@@ -76,27 +78,33 @@ public final class UserGoalProposal {
 
     public static final class PortfolioFactParameters implements GoalParameters {
         private final Set<Facet> facets;
+        private final Depth depth;
 
-        public PortfolioFactParameters(Set<Facet> facets) {
+        public PortfolioFactParameters(Set<Facet> facets, Depth depth) {
             this.facets = Set.copyOf(Objects.requireNonNull(facets, "facets"));
             if (this.facets.isEmpty()) {
                 throw new IllegalArgumentException("portfolio fact facets must not be empty");
             }
+            this.depth = Objects.requireNonNull(depth, "depth");
         }
 
         @Override public GoalKind getGoalKind() { return GoalKind.PORTFOLIO_FACT; }
         public Set<Facet> getFacets() { return facets; }
+        public Depth getDepth() { return depth; }
     }
 
     public static final class PortfolioCompareParameters implements GoalParameters {
-        private final Set<String> dimensions;
+        private final Set<PortfolioComparisonDimension> dimensions;
 
-        public PortfolioCompareParameters(Set<String> dimensions) {
-            this.dimensions = copyNames(dimensions, "dimensions");
+        public PortfolioCompareParameters(Set<PortfolioComparisonDimension> dimensions) {
+            this.dimensions = Set.copyOf(Objects.requireNonNull(dimensions, "dimensions"));
+            if (this.dimensions.isEmpty()) {
+                throw new IllegalArgumentException("dimensions must not be empty");
+            }
         }
 
         @Override public GoalKind getGoalKind() { return GoalKind.PORTFOLIO_COMPARE; }
-        public Set<String> getDimensions() { return dimensions; }
+        public Set<PortfolioComparisonDimension> getDimensions() { return dimensions; }
     }
 
     public static final class PortfolioRecommendationParameters implements GoalParameters {
@@ -150,15 +158,19 @@ public final class UserGoalProposal {
     public static final class ApplyConceptParameters implements GoalParameters {
         private final InputAnchor conceptAnchor;
         private final Facet portfolioFacet;
+        private final Depth depth;
 
-        public ApplyConceptParameters(InputAnchor conceptAnchor, Facet portfolioFacet) {
+        public ApplyConceptParameters(
+                InputAnchor conceptAnchor, Facet portfolioFacet, Depth depth) {
             this.conceptAnchor = Objects.requireNonNull(conceptAnchor, "conceptAnchor");
             this.portfolioFacet = Objects.requireNonNull(portfolioFacet, "portfolioFacet");
+            this.depth = Objects.requireNonNull(depth, "depth");
         }
 
         @Override public GoalKind getGoalKind() { return GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO; }
         public InputAnchor getConceptAnchor() { return conceptAnchor; }
         public Facet getPortfolioFacet() { return portfolioFacet; }
+        public Depth getDepth() { return depth; }
     }
 
     public static final class InputAnchor {
@@ -196,6 +208,26 @@ public final class UserGoalProposal {
 
     public enum Facet { OVERVIEW, BACKGROUND, RESPONSIBILITY, SOLUTION, VERIFICATION, STATUS }
     public enum Depth { CONCISE, STANDARD, DETAILED }
+    public enum PortfolioComparisonDimension {
+        ARCHITECTURE, IMPLEMENTATION, OUTCOME, RISKS, VERIFICATION
+    }
+
+    private static Set<GoalRequestedOutput> requestedOutputs(GoalParameters parameters) {
+        if (parameters instanceof PortfolioFactParameters fact) {
+            return fact.getFacets().stream()
+                    .map(value -> GoalRequestedOutput.valueOf(value.name()))
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+        return switch (parameters.getGoalKind()) {
+            case PORTFOLIO_COMPARE, GENERAL_COMPARISON ->
+                    Set.of(GoalRequestedOutput.COMPARISON);
+            case PORTFOLIO_RECOMMEND -> Set.of(GoalRequestedOutput.RECOMMENDATION);
+            case GENERAL_EXPLANATION -> Set.of(GoalRequestedOutput.EXPLANATION);
+            case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> Set.of(GoalRequestedOutput.RELATION);
+            case PORTFOLIO_FACT -> throw new IllegalArgumentException(
+                    "portfolio fact parameters are required");
+        };
+    }
 
     private static Set<String> copyNames(Set<String> values, String name) {
         Set<String> copied = copyNamesAllowEmpty(values, name);

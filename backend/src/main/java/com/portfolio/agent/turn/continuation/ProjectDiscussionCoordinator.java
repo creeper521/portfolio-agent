@@ -153,7 +153,8 @@ public final class ProjectDiscussionCoordinator {
                                         UserGoalProposal.Facet.RESPONSIBILITY,
                                         UserGoalProposal.Facet.SOLUTION,
                                         UserGoalProposal.Facet.VERIFICATION,
-                                        UserGoalProposal.Facet.STATUS)))));
+                                        UserGoalProposal.Facet.STATUS),
+                                UserGoalProposal.Depth.STANDARD))));
     }
 
     private void requireCurrentPublicProjects(

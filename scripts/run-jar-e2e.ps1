@@ -460,7 +460,7 @@ if ($Lane -eq 'BODY_STALL') {
         '--portfolio.conversational-agent.visitor-data-policy-approved=true',
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
         '--portfolio.model-operations.turn-interpretation.provider-ref=DEEPSEEK_V4_FLASH',
-        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v1',
+        '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v2',
         '--portfolio.model-operations.general-knowledge.mode=DISABLED'
     )
 }
@@ -876,27 +876,41 @@ try {
         $recommendationQuestion = [Text.Encoding]::UTF8.GetString(
             [Convert]::FromBase64String('5o6o6I2QIDMg5Liq6aG555uu'))
         $recommendationResponse = Invoke-AgentClosureRequest $recommendationQuestion
-        $recommendation = @($recommendationResponse.answer.goalResults |
-            Where-Object { $_.presentation.kind -eq 'RECOMMENDATION' } |
-            Select-Object -First 1).presentation
-        if ($null -eq $recommendation `
-                -or [int]$recommendation.requestedSize -ne 3 `
-                -or [int]$recommendation.actualSize -gt 3) {
-            throw ("Packaged recommendation closure returned invalid final projection: kind={0} code={1} requestedSize={2} actualSize={3}." -f `
+        if ($RequireLiveProvider) {
+            $recommendation = @($recommendationResponse.answer.goalResults |
+                Where-Object { $_.presentation.kind -eq 'RECOMMENDATION' } |
+                Select-Object -First 1).presentation
+            if ($null -eq $recommendation `
+                    -or [int]$recommendation.requestedSize -ne 3 `
+                    -or [int]$recommendation.actualSize -gt 3) {
+                throw ("Packaged recommendation closure returned invalid final projection: kind={0} code={1} requestedSize={2} actualSize={3}." -f `
+                        [string]$recommendationResponse.kind,
+                        [string]$recommendationResponse.code,
+                        [string]$recommendation.requestedSize,
+                        [string]$recommendation.actualSize)
+            }
+            if ([int]$recommendation.actualSize -lt 3 `
+                    -and @($recommendation.incompleteReasons).Count -eq 0) {
+                throw 'Packaged partial recommendation omitted incompleteReasons.'
+            }
+            Write-Output ("Agent backend closure summary: noiseKind={0} recommendationKind={1} requestedSize={2} actualSize={3}" -f `
+                    [string]$noiseResponse.kind,
                     [string]$recommendationResponse.kind,
-                    [string]$recommendationResponse.code,
-                    [string]$recommendation.requestedSize,
-                    [string]$recommendation.actualSize)
+                    [int]$recommendation.requestedSize,
+                    [int]$recommendation.actualSize)
         }
-        if ([int]$recommendation.actualSize -lt 3 `
-                -and @($recommendation.incompleteReasons).Count -eq 0) {
-            throw 'Packaged partial recommendation omitted incompleteReasons.'
+        else {
+            if ([string]$recommendationResponse.kind -ne 'CAPABILITY_UNAVAILABLE' `
+                    -or [string]$recommendationResponse.code -ne 'SEMANTIC_ROUTING_UNAVAILABLE') {
+                throw ("Provider-disabled recommendation did not fail closed: kind={0} code={1}." -f `
+                        [string]$recommendationResponse.kind,
+                        [string]$recommendationResponse.code)
+            }
+            Write-Output ("Agent backend closure summary: noiseKind={0} recommendationKind={1} code={2} provider=DISABLED" -f `
+                    [string]$noiseResponse.kind,
+                    [string]$recommendationResponse.kind,
+                    [string]$recommendationResponse.code)
         }
-        Write-Output ("Agent backend closure summary: noiseKind={0} recommendationKind={1} requestedSize={2} actualSize={3}" -f `
-                [string]$noiseResponse.kind,
-                [string]$recommendationResponse.kind,
-                [int]$recommendation.requestedSize,
-                [int]$recommendation.actualSize)
         Write-Output 'Agent backend closure smoke passed.'
     }
 

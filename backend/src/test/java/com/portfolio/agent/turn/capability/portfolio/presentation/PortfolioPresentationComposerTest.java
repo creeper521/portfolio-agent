@@ -11,6 +11,7 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificatio
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,6 +19,34 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PortfolioPresentationComposerTest {
+    @Test
+    void depthControlsVisibleBlockCountAndDetailedContent() {
+        List<ValidatedEvidenceUnit> units = List.of(
+                unit("1", AnswerClaimCategory.BACKGROUND),
+                unit("2", AnswerClaimCategory.IMPLEMENTATION),
+                unit("3", AnswerClaimCategory.VERIFICATION));
+        PortfolioPresentationComposer composer = new PortfolioPresentationComposer(
+                PresentationPolicy.defaults());
+
+        PortfolioPresentation concise = composer.compose(new PortfolioSemanticResult.Fact(
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), units, List.of(),
+                UserGoalProposal.Depth.CONCISE));
+        PortfolioPresentation detailed = composer.compose(new PortfolioSemanticResult.Fact(
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"), units, List.of(),
+                UserGoalProposal.Depth.DETAILED));
+
+        assertThat(concise.getSections()).hasSize(2);
+        assertThat(concise.getSections()).allSatisfy(section ->
+                assertThat(section.getContent()).doesNotContain("详细说明"));
+        assertThat(detailed.getSections()).hasSize(3);
+        assertThat(detailed.getSections()).allSatisfy(section ->
+                assertThat(section.getContent()).contains("详细说明"));
+    }
+
     @Test
     void deterministicPresentationBindsEverySectionToItsPublicSource() {
         AnswerClaimProjection claim = new AnswerClaimProjection(
@@ -42,5 +71,18 @@ class PortfolioPresentationComposerTest {
                     com.portfolio.agent.turn.execution.PublicSourceReferenceValue::getReferenceKey)
                     .containsExactly("E-01");
         });
+    }
+
+    private ValidatedEvidenceUnit unit(String id, AnswerClaimCategory category) {
+        AnswerClaimProjection claim = new AnswerClaimProjection(
+                "claim-" + id, category, "陈述" + id, "详细说明" + id,
+                AnswerAchievementStatus.IMPLEMENTED_TESTED,
+                AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
+                AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
+                List.of("evidence-" + id));
+        return new ValidatedEvidenceUnit("project-a", claim,
+                new PublicSourceReferenceValue(
+                        "E-" + id, "公开来源" + id, "public-1", "TEST_RESULT",
+                        "/projects/project-a", "/evidence/e-" + id));
     }
 }

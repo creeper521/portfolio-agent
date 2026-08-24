@@ -60,7 +60,8 @@ final class CrossDomainTestFixtures {
         TaskExecutionContext context = mock(TaskExecutionContext.class);
         UserGoalProposal.ApplyConceptParameters parameters =
                 new UserGoalProposal.ApplyConceptParameters(
-                        new UserGoalProposal.InputAnchor(concept, 0), UserGoalProposal.Facet.SOLUTION);
+                        new UserGoalProposal.InputAnchor(concept, 0),
+                        UserGoalProposal.Facet.SOLUTION, UserGoalProposal.Depth.STANDARD);
         when(context.getTask()).thenReturn(SemanticTask.of(
                 "task-synthesis", SemanticTask.Type.CROSS_DOMAIN_SYNTHESIS,
                 new SemanticTaskParameters(

@@ -32,7 +32,8 @@ public final class PortfolioSemanticResultFactory {
         PortfolioSupportEvaluator.Evaluation support = evaluator.fact(invocation, bundle);
         return support.hasSupport() ? Optional.of(new PortfolioSemanticResult.Fact(
                 support.coverage(), invocation.getSubjectScope(),
-                support.getSelectedUnits(), support.getOmissions())) : Optional.empty();
+                support.getSelectedUnits(), support.getOmissions(),
+                invocation.getDepth())) : Optional.empty();
     }
 
     private Optional<PortfolioSemanticResult> comparison(

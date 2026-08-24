@@ -64,7 +64,8 @@ class SemanticRouteValidatorTest {
                         Set.of(GoalRequestedOutput.SOLUTION),
                         GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                         new UserGoalProposal.PortfolioFactParameters(
-                                Set.of(UserGoalProposal.Facet.SOLUTION)))));
+                                Set.of(UserGoalProposal.Facet.SOLUTION),
+                                UserGoalProposal.Depth.STANDARD))));
 
         SemanticRouteProposal validated = validator.validate(
                 SemanticRouteProposal.discussion(
@@ -133,6 +134,7 @@ class SemanticRouteValidatorTest {
                 Set.of(GoalRequestedOutput.OVERVIEW),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                 new UserGoalProposal.PortfolioFactParameters(
-                        Set.of(UserGoalProposal.Facet.OVERVIEW)))));
+                        Set.of(UserGoalProposal.Facet.OVERVIEW),
+                        UserGoalProposal.Depth.STANDARD))));
     }
 }

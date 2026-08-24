@@ -24,7 +24,8 @@ class SourceCatalogProjectionTest {
     @Test void repeatedSectionReferencesBecomeOneCatalogEntry() {
         UserGoalProposal.PortfolioFactParameters parameters =
                 new UserGoalProposal.PortfolioFactParameters(
-                Set.of(UserGoalProposal.Facet.SOLUTION));
+                Set.of(UserGoalProposal.Facet.SOLUTION),
+                        UserGoalProposal.Depth.STANDARD);
         SemanticTask task = SemanticTask.of(
                 "task-portfolio", SemanticTask.Type.PORTFOLIO_FACT,
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT, parameters, List.of()),

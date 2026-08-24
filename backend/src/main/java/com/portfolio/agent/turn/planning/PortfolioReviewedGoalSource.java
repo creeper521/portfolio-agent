@@ -41,11 +41,14 @@ public final class PortfolioReviewedGoalSource implements ReviewedGoalSource {
                 subjectKind, match.knowledge().getStableId(),
                 GoalSubjectReference.Basis.CONTINUATION, null);
         Set<UserGoalProposal.Facet> facets = facets(match.question());
+        UserGoalProposal.PortfolioFactParameters parameters =
+                new UserGoalProposal.PortfolioFactParameters(
+                        facets, UserGoalProposal.Depth.STANDARD);
         UserGoalProposal.ProposedGoal goal = new UserGoalProposal.ProposedGoal(
                 "preset-goal", GoalKind.PORTFOLIO_FACT, anchor, List.of(subject),
-                Set.of(GoalRequestedOutput.OVERVIEW),
+                outputs(facets),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
-                new UserGoalProposal.PortfolioFactParameters(facets));
+                parameters);
         return new UserGoalProposal(List.of(goal));
     }
 
@@ -76,6 +79,12 @@ public final class PortfolioReviewedGoalSource implements ReviewedGoalSource {
         }
         if (facets.isEmpty()) facets.add(UserGoalProposal.Facet.OVERVIEW);
         return Set.copyOf(facets);
+    }
+
+    private Set<GoalRequestedOutput> outputs(Set<UserGoalProposal.Facet> facets) {
+        return facets.stream()
+                .map(value -> GoalRequestedOutput.valueOf(value.name()))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     private static final class Match {

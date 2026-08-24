@@ -57,20 +57,12 @@ class BlockedGoalTemplateTest {
                 List.of(ClarificationProposal.Field.REQUESTED_SIZE), 1))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        BlockedGoalTemplate second = new BlockedGoalTemplate(
-                GoalKind.PORTFOLIO_FACT, List.of(), Set.of(GoalRequestedOutput.OVERVIEW),
-                Set.of(UserGoalProposal.Facet.OVERVIEW), Set.of(), null, Set.of(),
-                ClarificationProposal.Field.SUBJECT,
-                Set.of(ClarificationProposal.Field.OUTPUT,
-                        ClarificationProposal.Field.SUBJECT), 2);
-        assertThat(second.getDepth()).isEqualTo(2);
         assertThatThrownBy(() -> new BlockedGoalTemplate(
                 GoalKind.PORTFOLIO_FACT, List.of(), Set.of(GoalRequestedOutput.OVERVIEW),
                 Set.of(UserGoalProposal.Facet.OVERVIEW), Set.of(), null, Set.of(),
                 ClarificationProposal.Field.SUBJECT,
-                Set.of(ClarificationProposal.Field.OUTPUT,
-                        ClarificationProposal.Field.SUBJECT),
-                List.of(ClarificationProposal.Field.OUTPUT), 2))
+                Set.of(ClarificationProposal.Field.SUBJECT),
+                List.of(ClarificationProposal.Field.SUBJECT), 1))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -87,35 +79,22 @@ class BlockedGoalTemplateTest {
     }
 
     @Test
-    void twoDistinctFieldsAdvanceOneChallengeAtATimeThenResolve() {
-        BlockedGoalTemplate first = new BlockedGoalTemplate(
-                GoalKind.PORTFOLIO_FACT, List.of(), Set.of(),
+    void outputIsDerivedFromFacetAndCannotBecomeASecondAuthority() {
+        assertThatThrownBy(() -> new BlockedGoalTemplate(
+                GoalKind.PORTFOLIO_FACT, List.of(), Set.of(GoalRequestedOutput.BACKGROUND),
                 Set.of(UserGoalProposal.Facet.OVERVIEW), Set.of(), null, Set.of(),
                 ClarificationProposal.Field.SUBJECT,
                 Set.of(ClarificationProposal.Field.SUBJECT),
-                List.of(ClarificationProposal.Field.OUTPUT), 1);
-
-        BlockedGoalTemplate.Resolution afterSubject = first.resolve(
-                new BlockedGoalTemplate.SubjectValue(List.of(
-                        new BlockedGoalTemplate.Subject(
-                                com.portfolio.agent.turn.planning.GoalSubjectReference.Kind.PROJECT,
-                                "project-a"))));
-
-        assertThat(afterSubject.kind())
-                .isEqualTo(BlockedGoalTemplate.Resolution.Kind.NEXT_CLARIFICATION);
-        BlockedGoalTemplate second = afterSubject.continuation();
-        assertThat(second.getUnresolvedField()).isEqualTo(ClarificationProposal.Field.OUTPUT);
-        assertThat(second.getAskedFields()).containsExactlyInAnyOrder(
-                ClarificationProposal.Field.SUBJECT, ClarificationProposal.Field.OUTPUT);
-        assertThat(second.getDepth()).isEqualTo(2);
-        assertThat(second.getRemainingFields()).isEmpty();
-
-        BlockedGoalTemplate.Resolution completed = second.resolve(
-                new BlockedGoalTemplate.OutputValue(Set.of(GoalRequestedOutput.OVERVIEW)));
-        assertThat(completed.kind()).isEqualTo(BlockedGoalTemplate.Resolution.Kind.RESOLVED);
-        assertThat(completed.proposal().getGoals().getFirst().getSubjectCandidates())
-                .extracting(com.portfolio.agent.turn.planning.GoalSubjectReference::getReference)
-                .containsExactly("project-a");
+                List.of(), 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must match");
+        assertThatThrownBy(() -> new BlockedGoalTemplate(
+                GoalKind.PORTFOLIO_FACT, List.of(), Set.of(GoalRequestedOutput.OVERVIEW),
+                Set.of(UserGoalProposal.Facet.OVERVIEW), Set.of(), null, Set.of(),
+                ClarificationProposal.Field.OUTPUT,
+                Set.of(ClarificationProposal.Field.OUTPUT), List.of(), 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not match goal kind");
     }
 
     @Test

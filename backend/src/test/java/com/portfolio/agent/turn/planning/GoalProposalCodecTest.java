@@ -65,6 +65,22 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void portfolioFactDepthAndComparisonDimensionsAreClosedTypedIntent() {
+        GoalInterpretationResult fact = codec.decode(standardPortfolioRoute(
+                "sql-audit", "DETAILED"), input("介绍 SQL 审计项目"));
+        UserGoalProposal.PortfolioFactParameters factParameters =
+                (UserGoalProposal.PortfolioFactParameters) fact.getRouteProposal()
+                        .orElseThrow().getGoalProposal().orElseThrow()
+                        .getGoals().getFirst().getParameters();
+
+        assertThat(factParameters.getDepth()).isEqualTo(UserGoalProposal.Depth.DETAILED);
+        assertThatThrownBy(() -> codec.decode(standardComparisonRoute("INVENTED"),
+                inputWithTwoSubjects("比较 SQL 审计项目和 Agent 项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not supported");
+    }
+
+    @Test
     void decodesClosedClarificationAndConversationalResults() {
         GoalInterpretationResult clarification = codec.decode("""
                 {
@@ -83,6 +99,7 @@ class GoalProposalCodecTest {
                       "dimensions":[],
                       "requestedSize":null,
                       "constraints":[],
+                      "portfolioDepth":"DETAILED",
                       "unresolvedField":"SUBJECT",
                       "askedFields":["SUBJECT"],
                       "remainingFields":[],
@@ -98,6 +115,9 @@ class GoalProposalCodecTest {
         assertThat(clarification.getRouteProposal().orElseThrow()
                 .getClarification().orElseThrow().getField())
                 .isEqualTo(ClarificationProposal.Field.SUBJECT);
+        assertThat(clarification.getRouteProposal().orElseThrow()
+                .getClarification().orElseThrow().getBlockedGoal().getPortfolioDepth())
+                .isEqualTo(UserGoalProposal.Depth.DETAILED);
         assertThat(conversational.getKind())
                 .isEqualTo(GoalInterpretationResult.Kind.CONVERSATIONAL);
     }
@@ -168,7 +188,8 @@ class GoalProposalCodecTest {
                     "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
                     "parameters":{
                       "kind":"PORTFOLIO_FACT",
-                      "facets":["SOLUTION"]
+                      "facets":["SOLUTION"],
+                      "depth":"STANDARD"
                     }
                   },
                   "clarification":null
@@ -303,6 +324,10 @@ class GoalProposalCodecTest {
     }
 
     private String standardPortfolioRoute(String reference) {
+        return standardPortfolioRoute(reference, "STANDARD");
+    }
+
+    private String standardPortfolioRoute(String reference, String depth) {
         return """
                 {
                   "kind":"SEMANTIC_ROUTE",
@@ -322,12 +347,38 @@ class GoalProposalCodecTest {
                     "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
                     "parameters":{
                       "kind":"PORTFOLIO_FACT",
-                      "facets":["OVERVIEW"]
+                      "facets":["OVERVIEW"],
+                      "depth":"%s"
                     }
                   },
                   "clarification":null
                 }
-                """.formatted(reference);
+                """.formatted(reference, depth);
+    }
+
+    private String standardComparisonRoute(String dimension) {
+        return """
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "goal":{
+                    "goalKey":"portfolio-comparison",
+                    "goalKind":"PORTFOLIO_COMPARE",
+                    "inputAnchor":{"text":"比较 SQL 审计项目和 Agent 项目","start":0},
+                    "subjectCandidates":[
+                      {"kind":"PROJECT","reference":"sql-audit","basis":"EXPLICIT_INPUT",
+                       "anchor":{"text":"SQL 审计项目","start":3}},
+                      {"kind":"PROJECT","reference":"agent","basis":"EXPLICIT_INPUT",
+                       "anchor":{"text":"Agent 项目","start":12}}
+                    ],
+                    "requestedOutputs":["COMPARISON"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{"kind":"PORTFOLIO_COMPARE","dimensions":["%s"]}
+                  },
+                  "clarification":null
+                }
+                """.formatted(dimension);
     }
 
     private GoalInterpretationInput input(String text) {
@@ -338,6 +389,17 @@ class GoalProposalCodecTest {
                         GoalSubjectReference.Kind.PROJECT,
                         "sql-audit",
                         "SQL 审计项目")),
+                Set.of(GoalKind.values()));
+    }
+
+    private GoalInterpretationInput inputWithTwoSubjects(String text) {
+        return new GoalInterpretationInput(
+                text, List.of(),
+                List.of(
+                        new GoalInterpretationInput.PublicSubjectDescriptor(
+                                GoalSubjectReference.Kind.PROJECT, "sql-audit", "SQL 审计项目"),
+                        new GoalInterpretationInput.PublicSubjectDescriptor(
+                                GoalSubjectReference.Kind.PROJECT, "agent", "Agent 项目")),
                 Set.of(GoalKind.values()));
     }
 

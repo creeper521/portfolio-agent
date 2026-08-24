@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SemanticPlanCompilerTest {
 
@@ -24,6 +25,22 @@ class SemanticPlanCompilerTest {
         assertThat(plan.getDependencies()).isEmpty();
         assertThat(plan.getUserGoals()).extracting(UserGoal::getFulfillmentTaskId)
                 .containsExactly("task-goal-1", "task-goal-2");
+    }
+
+    @Test
+    void requestedOutputsCannotContradictTypedAnswerIntent() {
+        UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor("项目", 0);
+
+        assertThatThrownBy(() -> new UserGoalProposal.ProposedGoal(
+                "contradictory", GoalKind.PORTFOLIO_FACT, anchor,
+                SemanticPlanCompilerTest.portfolioFact().getSubjectCandidates(),
+                Set.of(GoalRequestedOutput.STATUS),
+                GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                new UserGoalProposal.PortfolioFactParameters(
+                        Set.of(UserGoalProposal.Facet.SOLUTION),
+                        UserGoalProposal.Depth.STANDARD)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must match");
     }
 
     @Test
@@ -68,6 +85,30 @@ class SemanticPlanCompilerTest {
     }
 
     @Test
+    void crossDomainDepthPropagatesToBothSupportingTasks() {
+        UserGoalProposal.InputAnchor anchor = new UserGoalProposal.InputAnchor("幂等", 0);
+        UserGoalProposal.ProposedGoal goal = new UserGoalProposal.ProposedGoal(
+                "apply-detailed", GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO, anchor,
+                SemanticPlanCompilerTest.portfolioFact().getSubjectCandidates(),
+                Set.of(GoalRequestedOutput.RELATION),
+                GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                new UserGoalProposal.ApplyConceptParameters(
+                        anchor, UserGoalProposal.Facet.SOLUTION,
+                        UserGoalProposal.Depth.DETAILED));
+
+        SemanticTurnPlan plan = compiler.compile(
+                        new UserGoalProposal(List.of(goal)), "2026-08-05.1", context())
+                .getPlan().orElseThrow().getPlan();
+
+        assertThat(((UserGoalProposal.GeneralExplanationParameters) plan.getTasks().get(0)
+                .getParameters().getParameters()).getDepth())
+                .isEqualTo(UserGoalProposal.Depth.DETAILED);
+        assertThat(((UserGoalProposal.PortfolioFactParameters) plan.getTasks().get(1)
+                .getParameters().getParameters()).getDepth())
+                .isEqualTo(UserGoalProposal.Depth.DETAILED);
+    }
+
+    @Test
     void nonPublicPortfolioSubjectRequiresClarification() {
         UserGoalProposal.ProposedGoal goal = new UserGoalProposal.ProposedGoal(
                 "unknown-subject", GoalKind.PORTFOLIO_FACT,
@@ -79,7 +120,8 @@ class SemanticPlanCompilerTest {
                 Set.of(GoalRequestedOutput.OVERVIEW),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                 new UserGoalProposal.PortfolioFactParameters(
-                        Set.of(UserGoalProposal.Facet.OVERVIEW)));
+                        Set.of(UserGoalProposal.Facet.OVERVIEW),
+                        UserGoalProposal.Depth.STANDARD));
 
         PlanCompilationResult result = compiler.compile(
                 new UserGoalProposal(List.of(goal)), "2026-08-05.1", context());
@@ -97,7 +139,8 @@ class SemanticPlanCompilerTest {
                 Set.of(GoalRequestedOutput.OVERVIEW),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                 new UserGoalProposal.PortfolioFactParameters(
-                        Set.of(UserGoalProposal.Facet.OVERVIEW)));
+                        Set.of(UserGoalProposal.Facet.OVERVIEW),
+                        UserGoalProposal.Depth.STANDARD));
     }
 
     static UserGoalProposal.ProposedGoal generalExplanation() {
@@ -118,7 +161,8 @@ class SemanticPlanCompilerTest {
                 Set.of(GoalRequestedOutput.RELATION),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
                 new UserGoalProposal.ApplyConceptParameters(
-                        anchor, UserGoalProposal.Facet.SOLUTION));
+                        anchor, UserGoalProposal.Facet.SOLUTION,
+                        UserGoalProposal.Depth.STANDARD));
     }
 
     static GoalResolutionContext context() {

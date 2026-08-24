@@ -18,10 +18,11 @@ public final class PortfolioPresentationComposer {
     public PortfolioPresentation compose(PortfolioSemanticResult result) {
         List<PortfolioPresentation.Section> sections = new ArrayList<>();
         int characters = 0;
+        int maximumSections = maximumSections(result);
         for (com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit unit
                 : result.getUnits()) {
-            if (sections.size() >= policy.getMaximumSections()) break;
-            String content = unit.getClaim().getStatement();
+            if (sections.size() >= maximumSections) break;
+            String content = content(result, unit);
             int next = characters + content.length();
             if (next > policy.getMaximumCharacters()) break;
             sections.add(new PortfolioPresentation.Section(
@@ -33,6 +34,31 @@ public final class PortfolioPresentationComposer {
             throw new IllegalArgumentException("supported semantic result exceeds presentation bounds");
         }
         return new PortfolioPresentation("回答", sections);
+    }
+
+    private int maximumSections(PortfolioSemanticResult result) {
+        if (!(result instanceof PortfolioSemanticResult.Fact fact)) {
+            return policy.getMaximumSections();
+        }
+        int depthMaximum = switch (fact.getDepth()) {
+            case CONCISE -> 2;
+            case STANDARD, DETAILED -> 8;
+        };
+        return Math.min(policy.getMaximumSections(), depthMaximum);
+    }
+
+    private String content(
+            PortfolioSemanticResult result,
+            com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit unit) {
+        String statement = unit.getClaim().getStatement();
+        if (!(result instanceof PortfolioSemanticResult.Fact fact)
+                || fact.getDepth() != com.portfolio.agent.turn.planning.UserGoalProposal.Depth.DETAILED
+                || unit.getClaim().getDetail() == null
+                || unit.getClaim().getDetail().isBlank()
+                || unit.getClaim().getDetail().equals(statement)) {
+            return statement;
+        }
+        return statement + "\n" + unit.getClaim().getDetail();
     }
 
     private AnswerSectionType section(AnswerClaimCategory category) {

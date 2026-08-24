@@ -316,6 +316,7 @@ try {
     foreach ($requiredEvidence in @(
         'JAR SHA-256: ',
         'Workspace commit (not JAR identity): ',
+        'Provider-disabled recommendation did not fail closed:',
         'Agent backend closure smoke passed.'
     )) {
         if ($runnerSource -notmatch [regex]::Escape($requiredEvidence)) {

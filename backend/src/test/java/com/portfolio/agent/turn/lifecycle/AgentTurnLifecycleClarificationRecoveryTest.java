@@ -252,18 +252,19 @@ class AgentTurnLifecycleClarificationRecoveryTest {
     }
 
     @Test
-    void twoStageClarificationAdvancesWithoutProviderOrFreshAsk() {
+    void subjectClarificationResolvesWithoutProviderOrFreshAsk() {
         Clock clock = Clock.fixed(LifecycleTestFixture.NOW, ZoneOffset.UTC);
         InMemoryTurnExecutionStore store = inMemoryStore(
                 new ClarificationStore(clock, Duration.ofMinutes(5)), clock);
         GoalResolver resolver = mock(GoalResolver.class);
         BlockedGoalTemplate firstTemplate = new BlockedGoalTemplate(
                 com.portfolio.agent.turn.planning.GoalKind.PORTFOLIO_FACT,
-                java.util.List.of(), java.util.Set.of(),
+                java.util.List.of(), java.util.Set.of(
+                        com.portfolio.agent.turn.planning.GoalRequestedOutput.OVERVIEW),
                 java.util.Set.of(UserGoalProposal.Facet.OVERVIEW), java.util.Set.of(),
                 null, java.util.Set.of(), ClarificationProposal.Field.SUBJECT,
                 java.util.Set.of(ClarificationProposal.Field.SUBJECT),
-                java.util.List.of(ClarificationProposal.Field.OUTPUT), 1);
+                java.util.List.of(), 1);
         when(resolver.resolve(any(), any(), any())).thenReturn(
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.SUBJECT, "provider prompt", firstTemplate)));
@@ -287,17 +288,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                 token, new AgentTurnCommand.ResolveClarification(
                         UUID.randomUUID(), firstTurn.getClarification().getClarificationId(),
                         new AgentTurnCommand.ChoiceAnswer("choice_subject_1"), null, null));
-        PublicAgentTurn.Clarification secondTurn = (PublicAgentTurn.Clarification) second.turn();
-        assertThat(secondTurn.getClarification().getFields()).hasSize(1);
-        assertThat(secondTurn.getClarification().getPrompt())
-                .isEqualTo("请选择期望的回答形式。");
-
-        AgentTurnLifecycleService.Result third = service.execute(
-                token, new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(), secondTurn.getClarification().getClarificationId(),
-                        new AgentTurnCommand.ChoiceAnswer("output_overview"), null, null));
-
-        assertThat(third.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
+        assertThat(second.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
         verify(resolver).resolve(any(), any(), any());
         verify(compiler).compile(any(), any(), any());
     }

@@ -96,7 +96,9 @@ class SemanticTurnEngineDependencyTest {
                         GoalSubjectReference.Basis.EXPLICIT_INPUT, anchor)),
                 Set.of(GoalRequestedOutput.RELATION),
                 GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
-                new UserGoalProposal.ApplyConceptParameters(anchor, UserGoalProposal.Facet.SOLUTION));
+                new UserGoalProposal.ApplyConceptParameters(
+                        anchor, UserGoalProposal.Facet.SOLUTION,
+                        UserGoalProposal.Depth.STANDARD));
         GoalResolutionContext context = new GoalResolutionContext(
                 List.of(new GoalInterpretationInput.PublicSubjectDescriptor(
                         GoalSubjectReference.Kind.PROJECT, "sql-audit", "SQL 审计项目")),

@@ -19,8 +19,42 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PortfolioInvocationFactoryTest {
+    @Test
+    void portfolioOverviewDepthChangesRetrievalProfilesAndBounds() {
+        PortfolioEvidenceInvocation concise = invocationForOverview(
+                UserGoalProposal.Depth.CONCISE);
+        PortfolioEvidenceInvocation detailed = invocationForOverview(
+                UserGoalProposal.Depth.DETAILED);
+
+        assertThat(concise.getFacets()).containsExactly(
+                PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                PortfolioEvidenceInvocation.FacetProfile.OUTCOME);
+        assertThat(concise.getMaximumEvidenceUnitsPerSubject()).isEqualTo(2);
+        assertThat(detailed.getFacets()).containsExactly(
+                PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
+                PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
+                PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
+                PortfolioEvidenceInvocation.FacetProfile.LIMITATION);
+        assertThat(detailed.getMaximumEvidenceUnitsPerSubject()).isEqualTo(12);
+    }
+
+    @Test
+    void invocationRejectsUnknownComparisonDimensionInsteadOfDefaultingToVerification() {
+        assertThatThrownBy(() -> new PortfolioEvidenceInvocation(
+                SemanticTask.Type.PORTFOLIO_COMPARE,
+                AuthorizedSubjectScope.allPublished("public-1"),
+                List.of(), List.of("INVENTED"), "public-1",
+                CorpusBackend.BUNDLE, SearchStrategy.EXACT, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unsupported portfolio comparison dimension");
+    }
+
     @Test
     void compilesTaskScopeProfilesReleaseAndFallbackExactlyOnce() {
         UserGoalProposal.InputAnchor subjectAnchor =
@@ -33,7 +67,8 @@ class PortfolioInvocationFactoryTest {
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT,
                         new UserGoalProposal.PortfolioFactParameters(Set.of(
                                 UserGoalProposal.Facet.SOLUTION,
-                                UserGoalProposal.Facet.STATUS)), List.of(subject)),
+                                UserGoalProposal.Facet.STATUS),
+                                UserGoalProposal.Depth.STANDARD), List.of(subject)),
                 Set.of(GoalRequestedOutput.OVERVIEW));
         PortfolioEvidenceInvocation invocation = new PortfolioInvocationFactory(
                 CorpusBackend.POSTGRESQL).create(context(task));
@@ -76,5 +111,23 @@ class PortfolioInvocationFactoryTest {
                 task, List.of(), "public-1",
                 TurnDeadline.after(Duration.ofSeconds(1), Clock.systemUTC()),
                 new CancellationSignal(), false, false);
+    }
+
+    private PortfolioEvidenceInvocation invocationForOverview(
+            UserGoalProposal.Depth depth) {
+        UserGoalProposal.InputAnchor subjectAnchor =
+                new UserGoalProposal.InputAnchor("project-a", 0);
+        GoalSubjectReference subject = new GoalSubjectReference(
+                GoalSubjectReference.Kind.PROJECT, "project-a",
+                GoalSubjectReference.Basis.EXPLICIT_INPUT, subjectAnchor);
+        SemanticTask task = SemanticTask.of(
+                "task-overview-" + depth.name().toLowerCase(),
+                SemanticTask.Type.PORTFOLIO_FACT,
+                new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(UserGoalProposal.Facet.OVERVIEW), depth),
+                        List.of(subject)),
+                Set.of(GoalRequestedOutput.OVERVIEW));
+        return new PortfolioInvocationFactory(CorpusBackend.BUNDLE).create(context(task));
     }
 }

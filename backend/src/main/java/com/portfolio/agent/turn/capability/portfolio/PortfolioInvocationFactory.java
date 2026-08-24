@@ -26,14 +26,19 @@ public final class PortfolioInvocationFactory {
         }
         List<PortfolioEvidenceInvocation.FacetProfile> facets = new ArrayList<>();
         List<String> dimensions = new ArrayList<>();
+        UserGoalProposal.Depth depth = UserGoalProposal.Depth.STANDARD;
         AuthorizedSubjectScope scope;
         UserGoalProposal.GoalParameters parameters = task.getParameters().getParameters();
         if (parameters instanceof UserGoalProposal.PortfolioFactParameters fact) {
             scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
-            fact.getFacets().stream().sorted().forEach(value -> facets.addAll(facets(value)));
+            depth = fact.getDepth();
+            UserGoalProposal.Depth requestedDepth = depth;
+            fact.getFacets().stream().sorted()
+                    .forEach(value -> facets.addAll(facets(value, requestedDepth)));
         } else if (parameters instanceof UserGoalProposal.PortfolioCompareParameters comparison) {
             scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
-            dimensions.addAll(comparison.getDimensions().stream().sorted().toList());
+            dimensions.addAll(comparison.getDimensions().stream()
+                    .sorted().map(Enum::name).toList());
         } else if (parameters instanceof UserGoalProposal.PortfolioRecommendationParameters) {
             scope = task.getSubjectReferences().isEmpty()
                     ? AuthorizedSubjectScope.allPublished(context.getContentReleaseId())
@@ -50,19 +55,44 @@ public final class PortfolioInvocationFactory {
                 ? (strategy == SearchStrategy.HYBRID ? SearchStrategy.KEYWORD : strategy) : null;
         return new PortfolioEvidenceInvocation(
                 task.getType(), scope, facets.stream().distinct().toList(), dimensions,
-                context.getContentReleaseId(), primaryBackend, strategy,
+                depth, context.getContentReleaseId(), primaryBackend, strategy,
                 fallbackBackend, fallbackStrategy);
     }
 
-    private List<PortfolioEvidenceInvocation.FacetProfile> facets(UserGoalProposal.Facet facet) {
+    private List<PortfolioEvidenceInvocation.FacetProfile> facets(
+            UserGoalProposal.Facet facet, UserGoalProposal.Depth depth) {
         return switch (facet) {
-            case OVERVIEW, BACKGROUND -> List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND);
+            case OVERVIEW -> overview(depth);
+            case BACKGROUND -> List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND);
             case RESPONSIBILITY -> List.of(PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY);
             case SOLUTION -> List.of(
                     PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
                     PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION);
             case VERIFICATION -> List.of(PortfolioEvidenceInvocation.FacetProfile.VERIFICATION);
             case STATUS -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
+                    PortfolioEvidenceInvocation.FacetProfile.LIMITATION);
+        };
+    }
+
+    private List<PortfolioEvidenceInvocation.FacetProfile> overview(
+            UserGoalProposal.Depth depth) {
+        return switch (depth) {
+            case CONCISE -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME);
+            case STANDARD -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                    PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                    PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                    PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
+                    PortfolioEvidenceInvocation.FacetProfile.OUTCOME);
+            case DETAILED -> List.of(
+                    PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
+                    PortfolioEvidenceInvocation.FacetProfile.RESPONSIBILITY,
+                    PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
+                    PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
+                    PortfolioEvidenceInvocation.FacetProfile.VERIFICATION,
                     PortfolioEvidenceInvocation.FacetProfile.OUTCOME,
                     PortfolioEvidenceInvocation.FacetProfile.LIMITATION);
         };

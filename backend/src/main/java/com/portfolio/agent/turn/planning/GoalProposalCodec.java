@@ -15,7 +15,7 @@ import java.util.Set;
 
 public final class GoalProposalCodec {
 
-    public static final String SCHEMA_VERSION = "goal.proposal.v1";
+    public static final String SCHEMA_VERSION = "goal.proposal.v2";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
 
@@ -201,16 +201,21 @@ public final class GoalProposalCodec {
         }
         return switch (goalKind) {
             case PORTFOLIO_FACT -> {
-                assertFields(node, Set.of("kind", "facets"), Set.of("kind", "facets"), path);
+                assertFields(node, Set.of("kind", "facets", "depth"),
+                        Set.of("kind", "facets", "depth"), path);
                 yield new UserGoalProposal.PortfolioFactParameters(decodeEnumSet(
                         requireArray(node, "facets"), UserGoalProposal.Facet.class,
-                        path + ".facets", false));
+                        path + ".facets", false),
+                        enumValue(UserGoalProposal.Depth.class,
+                                requireText(node, "depth", 64), path + ".depth"));
             }
             case PORTFOLIO_COMPARE -> {
                 assertFields(node, Set.of("kind", "dimensions"),
                         Set.of("kind", "dimensions"), path);
                 yield new UserGoalProposal.PortfolioCompareParameters(
-                        decodeClosedNames(requireArray(node, "dimensions"), path + ".dimensions", false));
+                        decodeEnumSet(requireArray(node, "dimensions"),
+                                UserGoalProposal.PortfolioComparisonDimension.class,
+                                path + ".dimensions", false));
             }
             case PORTFOLIO_RECOMMEND -> {
                 assertFields(node, Set.of("kind", "requestedSize", "constraints"),
@@ -241,12 +246,14 @@ public final class GoalProposalCodec {
                                 requireArray(node, "dimensions"), path + ".dimensions", false));
             }
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> {
-                assertFields(node, Set.of("kind", "conceptAnchor", "portfolioFacet"),
-                        Set.of("kind", "conceptAnchor", "portfolioFacet"), path);
+                assertFields(node, Set.of("kind", "conceptAnchor", "portfolioFacet", "depth"),
+                        Set.of("kind", "conceptAnchor", "portfolioFacet", "depth"), path);
                 yield new UserGoalProposal.ApplyConceptParameters(
                         decodeAnchor(node.get("conceptAnchor"), input, path + ".conceptAnchor"),
                         enumValue(UserGoalProposal.Facet.class,
-                                requireText(node, "portfolioFacet", 64), path + ".portfolioFacet"));
+                                requireText(node, "portfolioFacet", 64), path + ".portfolioFacet"),
+                        enumValue(UserGoalProposal.Depth.class,
+                                requireText(node, "depth", 64), path + ".depth"));
             }
         };
     }
@@ -277,7 +284,8 @@ public final class GoalProposalCodec {
         requireObject(node, "clarification.blockedGoal");
         Set<String> fields = Set.of(
                 "goalKind", "subjects", "requestedOutputs", "facets", "dimensions",
-                "requestedSize", "constraints", "unresolvedField", "askedFields",
+                "requestedSize", "constraints", "portfolioDepth",
+                "unresolvedField", "askedFields",
                 "remainingFields", "depth");
         assertFields(node, fields, fields, "clarification.blockedGoal");
         GoalKind goalKind = enumValue(GoalKind.class,
@@ -342,6 +350,9 @@ public final class GoalProposalCodec {
         return new BlockedGoalTemplate(
                 goalKind, subjects, outputs, facets, dimensions,
                 nullableInt(node, "requestedSize"), constraints,
+                enumValue(UserGoalProposal.Depth.class,
+                        requireText(node, "portfolioDepth", 64),
+                        "clarification.blockedGoal.portfolioDepth"),
                 unresolved, askedFields, List.copyOf(remainingFields), depth);
     }
 

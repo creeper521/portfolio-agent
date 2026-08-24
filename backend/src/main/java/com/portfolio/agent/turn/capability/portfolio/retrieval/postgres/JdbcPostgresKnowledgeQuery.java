@@ -127,11 +127,13 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                     AnswerClaimCategory.TECHNICAL_DECISION);
         }));
         invocation.getDimensions().forEach(dimension -> categories.add(switch (dimension) {
-            case "ARCHITECTURE", "TECHNICAL_DECISION" -> AnswerClaimCategory.TECHNICAL_DECISION;
+            case "ARCHITECTURE" -> AnswerClaimCategory.TECHNICAL_DECISION;
             case "IMPLEMENTATION" -> AnswerClaimCategory.IMPLEMENTATION;
-            case "IMPACT", "OUTCOME" -> AnswerClaimCategory.OUTCOME;
-            case "RISKS", "LIMITATION" -> AnswerClaimCategory.LIMITATION;
-            default -> AnswerClaimCategory.VERIFICATION;
+            case "OUTCOME" -> AnswerClaimCategory.OUTCOME;
+            case "RISKS" -> AnswerClaimCategory.LIMITATION;
+            case "VERIFICATION" -> AnswerClaimCategory.VERIFICATION;
+            default -> throw new IllegalArgumentException(
+                    "unsupported portfolio comparison dimension");
         }));
         return List.copyOf(categories);
     }

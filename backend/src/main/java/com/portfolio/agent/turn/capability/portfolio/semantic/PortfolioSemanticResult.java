@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.capability.portfolio.semantic;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.execution.TaskSemanticResult;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,10 +37,19 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
     public enum Coverage { FULL, PARTIAL }
 
     public static final class Fact extends PortfolioSemanticResult {
+        private final UserGoalProposal.Depth depth;
+        public Fact(Coverage coverage, AuthorizedSubjectScope authorizedSubjectScope,
+                    List<ValidatedEvidenceUnit> units, List<String> omissions,
+                    UserGoalProposal.Depth depth) {
+            super(coverage, authorizedSubjectScope, units, omissions);
+            this.depth = Objects.requireNonNull(depth, "depth");
+        }
         public Fact(Coverage coverage, AuthorizedSubjectScope authorizedSubjectScope,
                     List<ValidatedEvidenceUnit> units, List<String> omissions) {
-            super(coverage, authorizedSubjectScope, units, omissions);
+            this(coverage, authorizedSubjectScope, units, omissions,
+                    UserGoalProposal.Depth.STANDARD);
         }
+        public UserGoalProposal.Depth getDepth() { return depth; }
     }
     public static final class Comparison extends PortfolioSemanticResult {
         public Comparison(Coverage coverage, AuthorizedSubjectScope authorizedSubjectScope,

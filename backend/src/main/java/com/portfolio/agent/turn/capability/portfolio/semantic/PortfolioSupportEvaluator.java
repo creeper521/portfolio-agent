@@ -20,7 +20,7 @@ public final class PortfolioSupportEvaluator {
             List<ValidatedEvidenceUnit> matches = bundle.getUnits().stream()
                     .filter(unit -> categories(facet).contains(unit.getClaim().getCategory())).toList();
             if (matches.isEmpty()) omissions.add(facet.name());
-            else matches.forEach(unit -> addDistinct(selected, unit));
+            else addDistinct(selected, matches.getFirst());
         }
         return Evaluation.of(selected, omissions);
     }
@@ -66,12 +66,14 @@ public final class PortfolioSupportEvaluator {
 
     private Set<AnswerClaimCategory> dimensionCategories(String dimension) {
         return switch (dimension) {
-            case "ARCHITECTURE", "TECHNICAL_DECISION" ->
+            case "ARCHITECTURE" ->
                     EnumSet.of(AnswerClaimCategory.TECHNICAL_DECISION);
             case "IMPLEMENTATION" -> EnumSet.of(AnswerClaimCategory.IMPLEMENTATION);
-            case "IMPACT", "OUTCOME" -> EnumSet.of(AnswerClaimCategory.OUTCOME);
-            case "RISKS", "LIMITATION" -> EnumSet.of(AnswerClaimCategory.LIMITATION);
-            default -> EnumSet.of(AnswerClaimCategory.VERIFICATION);
+            case "OUTCOME" -> EnumSet.of(AnswerClaimCategory.OUTCOME);
+            case "RISKS" -> EnumSet.of(AnswerClaimCategory.LIMITATION);
+            case "VERIFICATION" -> EnumSet.of(AnswerClaimCategory.VERIFICATION);
+            default -> throw new IllegalArgumentException(
+                    "unsupported portfolio comparison dimension");
         };
     }
 

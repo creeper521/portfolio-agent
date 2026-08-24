@@ -130,25 +130,24 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v1`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v2`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
 | A2-38 | P1 | Portfolio 回答只是 Claim 列表 | Claim statement 被逐条直接投影 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
-| A2-39 | P1 | Portfolio Fact 缺少 depth | 项目简要与详细没有 typed 差异 | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
-| A2-40 | P1 | Portfolio depth 可能成为装饰字段 | 仅补字段不会改变检索或展示 | depth 同时控制检索、覆盖、区块和完成判定 | Goal / Retrieval / Presentation |
-| A2-41 | P1 | requestedOutputs 与 facets 双权威 | 两个集合可合法表达互相矛盾的意图 | 保留一个 AnswerIntent 权威，其他值由后端派生 | Goal Contract / Validator |
-| A2-42 | P1 | Preset outputs/facets 不一致 | Preset output 固定为 OVERVIEW，facet 由公开类别独立派生且可为其他值 | Preset 输出由实际 facet 确定性派生 | Preset / Goal Compilation |
+| A2-39 | P1 | Portfolio Fact 缺少 depth | typed Goal、澄清恢复与 cross-domain 子任务已携带 depth；deterministic/package 门通过，待真实 Provider/Browser | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
+| A2-40 | P1 | Portfolio depth 可能成为装饰字段 | depth 已控制检索 profile/候选上限、coverage、区块数与详细内容；待真实 Provider/Browser 差异矩阵 | depth 同时控制检索、覆盖、区块和完成判定 | Goal / Retrieval / Presentation |
+| A2-41 | P1 | requestedOutputs 与 facets 双权威 | typed parameters 已成为下游权威，outputs 只作精确一致性校验并由参数重新派生；待真实 Provider 合同门 | 保留一个 AnswerIntent 权威，其他值由后端派生 | Goal Contract / Validator |
 | A2-43 | P1 | Recommendation constraints 不参与选择 | constraints 被解析和保存但执行层不读取 | 闭合约束真实影响筛选、排序和覆盖 | Recommendation / Retrieval |
 | A2-44 | P1 | 未满足推荐约束不报告 | unsatisfiedConstraints 基本恒为空 | 无法满足时返回 PARTIAL 和明确缺口 | Recommendation / Projection |
 | A2-45 | P1 | 推荐项缺少可验证理由 | 主要截取前 N 个项目并拼接 Claim | 每项返回闭合 reason code、公开说明和 publicSourceKeys | Recommendation / Presentation |
 | A2-46 | P1 | 推荐对目标不敏感 | 用户目标不进入 Recommendation 执行输入，约束也不参与排序 | 固定输入矩阵按 typed 目标产生可断言的候选或排序差异 | Recommendation / Ranking |
 | A2-47 | P1 | Portfolio Comparison 未形成比较 | 多主体 Claim 仅顺序展示 | 按 dimension 对齐差异、取舍和缺口 | Comparison / Presentation |
-| A2-48 | P1 | 未知 comparison dimension 被当成验证 | 未知闭合名默认映射 VERIFICATION | 未知值必须拒绝或澄清 | Comparison / Validator |
-| A2-49 | P1 | Portfolio dimension 不是闭合集合 | 任意大写名可以进入执行 | 使用后端枚举并逐项验证 | Goal Contract / Comparison |
+| A2-48 | P1 | 未知 comparison dimension 被当成验证 | Codec 与 Invocation 两层已拒绝未知值；待真实 Provider/Browser 比较门 | 未知值必须拒绝或澄清 | Comparison / Validator |
+| A2-49 | P1 | Portfolio dimension 不是闭合集合 | Goal 已改为后端枚举，检索/coverage 只接收五种维度；待真实 Provider/Browser | 使用后端枚举并逐项验证 | Goal Contract / Comparison |
 | A2-50 | P1 | Cross-domain 只是三段拼接 | 通用段、Claim 段和固定关系句组成结果 | 真实解释概念与项目事实的对应关系 | Synthesis / Presentation |
-| A2-51 | P1 | Cross-domain depth 固定 STANDARD | 用户深度不传播到子任务 | depth 贯穿 General、Portfolio 和综合结果 | Planning / Synthesis |
-| A2-52 | P1 | 证据不足时详细回答仍可能显得完整 | 找到部分 Claim 即可形成可见区块 | depth 不达标时返回 PARTIAL 和安全缺口 | Coverage / Presentation |
+| A2-51 | P1 | Cross-domain depth 固定 STANDARD | depth 已同时传播到 General 与 Portfolio supporting task；待真实 Provider/Browser 综合门 | depth 贯穿 General、Portfolio 和综合结果 | Planning / Synthesis |
+| A2-52 | P1 | 证据不足时详细回答仍可能显得完整 | 详细 overview 缺任一闭合 profile 即 PARTIAL；待真实 Provider/Browser 缺口文案门 | depth 不达标时返回 PARTIAL 和安全缺口 | Coverage / Presentation |
 | A2-53 | P1 | AudienceRole 不影响回答 | 角色只改变前端文案、问题和指纹 | 闭合 role-to-output 策略被生产消费，并由 typed 差异矩阵断言 | Surface Context / Goal / Presentation |
 | A2-54 | P1 | Page subjectHint 不参与模型理解 | 只验证主体存在，随后从解释输入丢失 | 当前页面主体成为可信默认或锁定主体 | Surface Context / Goal Interpretation |
 | A2-55 | P1 | 页面省略表达不能稳定绑定主体 | 模型仍需从全部公开主体猜测 | 页面内指代直接绑定 typed subject | Goal Resolution / Frontend Handoff |
@@ -220,9 +219,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | 已复现 + 源码确认 | A2-81 | 已有真实 Provider 超时运行证据，源码预算能解释现象 |
 | 待验证（P0 预防性） | A2-31 | Provider 正文复述输入尚无具体回显样本，必须由完整 settlement sentinel 门确认或排除 |
 | 待验证 | A2-62 | 开放社交回复的语言与复述风险需要真实 Provider 固定样本 |
-| 源码确认（浅修风险） | A2-40、A2-52 | 当前链路没有 depth 消费和证据充足性门；作为 A2-39 的独立防浅修验收项保留 |
+| 生产修复已落地、待外层验收 | A2-39—A2-41、A2-48、A2-49、A2-51、A2-52 | deterministic 与 packaged Portfolio 路径已通过；真实 Provider 的 depth/dimension 选择和 Browser 正文差异尚未取得，继续留账 |
 | 源码确认（产品决策） | A2-85、A2-86 | 当前没有 schema repair 或跨 Provider 自动重发；是否改变行为仍需产品批准 |
-| 源码确认 | A2-30、A2-32—A2-39、A2-41—A2-51、A2-53—A2-61、A2-63—A2-80、A2-82—A2-84、A2-87—A2-115 | 生产调用链、配置消费、前端状态或测试/文档入口可直接证明现状 |
+| 源码确认 | A2-30、A2-32—A2-38、A2-43—A2-47、A2-50、A2-53—A2-61、A2-63—A2-80、A2-82—A2-84、A2-87—A2-115 | 生产调用链、配置消费、前端状态或测试/文档入口可直接证明现状 |
 
 #### 3.2.2 P0 详细条目
 
@@ -303,7 +302,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 1. **P0 隐私止血：** 在任何新语义能力之前关闭 A2-30—A2-36、A2-110；不得用“已加密”替代“不持久化”，不得为了精确 replay 放宽已冻结隐私边界。
 2. **验收真实性：** A2-89—A2-101、A2-111—A2-115 必须先恢复真实可执行证据；场景清单、脚本源码字符串和 HTTP 200 不能作为产品通过证据。
 3. **现有行为修复：** A2-53—A2-78 应在不新增第二状态权威的前提下修复；Audience、subjectHint、constraints 必须明确选择“实现”或“删除宣称”。
-4. **产品能力升级：** A2-37—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
+4. **产品能力升级：** A2-37—A2-41、A2-43—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
 5. **Provider 收敛：** A2-79—A2-88 与配置化模型目录共用一次目标架构；P0 过渡期只增加 fail-closed 一致性校验，不提前建设第二套路由。
 6. **隐私实现机制：** sentinel 只用于验收，不得成为生产清洗或判定机制；生产代码必须使用闭合来源分类，未知或 Provider 派生正文默认拒绝持久化。
 7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
@@ -322,7 +321,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 #### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
 
 - `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
-- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v1`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v2`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。`goal.proposal.v2` 明确包含 Portfolio Fact/跨域目标的必填 `depth` 与闭合 comparison dimension，不能继续沿用 v1 名义。
 - `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
 - `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
 - Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
@@ -342,6 +341,17 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - packaged runner 曾把当前 workspace HEAD 打印成 JAR commit，但 JAR manifest 未嵌入 commit，二者无法建立制品绑定；该字段已改为 `Workspace commit (not JAR identity)`，制品身份只使用实际 SHA-256 与 mtime。未在构建阶段嵌入并验证 commit 前，任何证据不得声称 JAR 对应当前 HEAD。
 - 同一 JAR 的 DEFAULT/IN_MEMORY packaged lane 已在场景审计接线后实跑：scenario runner 先执行 35 条生产 HTTP command，随后 Playwright 桌面/移动共 `8 passed / 8 lane-specific skipped`；Browser 结果继续只算 contract/lifecycle 层，不覆盖 scenario 的 `FAILED` 或 Browser body 的 `IN_PROGRESS`。
 - 本组没有修改 Frontend 代码。A2-89 的空 behavior 目录/失效 Playwright 配置、A2-92—A2-94 的 Browser 内容门属于 Frontend Agent 交接；后端 scenario runtime 与跨 JVM runner 继续在本批后续实现。
+
+#### 3.3.4 Portfolio AnswerIntent 第一批当前证据（仍为 IN_PROGRESS）
+
+- `PortfolioReviewedGoalSourceTest` 与 packaged PRESET 路径证明 reviewed facet 会确定性派生同名 output，不再固定伪报 `OVERVIEW`。
+- `GoalProposalCodecTest`、`SemanticPlanCompilerTest` 与 `BlockedGoalTemplateTest` 证明 Portfolio Fact/cross-domain/澄清恢复携带 `CONCISE/STANDARD/DETAILED`，outputs 与 typed parameters 不一致时失败关闭；澄清不再把 `OUTPUT` 当作可询问字段，未知 comparison dimension 不再降级为 `VERIFICATION`。
+- `PortfolioInvocationFactoryTest`、`PortfolioSupportEvaluatorTest`、`PortfolioPresentationComposerTest` 与 Bundle/PostgreSQL adapter 回归证明 depth 改变 overview 检索 profile、每主体候选上限、必需 coverage profile、公开区块数与 DETAILED detail；缺必需 profile 形成 `PARTIAL` 与闭合 omission，不把存在任意 Claim 当作完整回答。
+- cross-domain supporting tasks 现在从同一个 `ApplyConceptParameters.depth` 派生 General 与 Portfolio depth，不再硬编码 `STANDARD`。
+- model-disabled packaged JAR SHA-256 `2d5a3e18c87adf6ce827069b9c23f382060c84c6db90db3484d87be31fdcad2c` 的 PRESET Agent 终局与隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），因此不据 packaged HTTP 成功关闭真实语义项。
+- packaged runner 原先在 Provider 明确关闭时仍要求自由文本推荐成功，现已按 lane 分离：disabled 必须返回 `CAPABILITY_UNAVAILABLE/SEMANTIC_ROUTING_UNAVAILABLE`，LIVE 才验推荐正文。该修订防止把不可能的配置当作产品失败，也不把 fail-closed 当作推荐成功。
+- 变更后的 Backend 全量于 2026-08-24 实际执行：`881 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；`privacy-check` 扫描 496 个生产文件通过，`start-local.test.ps1`、`run-jar-e2e.test.ps1` 与当前权威文档检查通过。该 deterministic 证据不替代真实 Provider/Browser 语义门。
+- 本批没有修改 Frontend。A2-39—A2-41、A2-48、A2-49、A2-51、A2-52 仍等待真实 Provider 的 typed 选择与 Browser 正文/coverage 观测后才能移除。
 
 ### 3.4 本轮审计证据边界
 
@@ -958,7 +968,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | Codec 扫描对象 | A2-99 | 解密后递归扫描 publicTurn、contexts、challenges 的完整 plaintext，五 variant 可回读 |
 | Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
 | Provider 授权与 schema | A2-33—A2-35、A2-79—A2-88、A2-113 | 启动错配负例、协议 Profile、按批准目录独立 Provider 矩阵 |
-| Portfolio AnswerIntent 与表达 | A2-37—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
+| Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference、Discussion clarification |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |
 | Frontend lifecycle | A2-69—A2-78 | reservation/cancel 窗口、首页 snapshot、合法 UUID、expiry、所有会话 clear |

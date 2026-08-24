@@ -23,6 +23,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
     private final Set<String> dimensions;
     private final Integer requestedSize;
     private final Set<String> constraints;
+    private final UserGoalProposal.Depth portfolioDepth;
     private final ClarificationProposal.Field unresolvedField;
     private final Set<ClarificationProposal.Field> askedFields;
     private final List<ClarificationProposal.Field> remainingFields;
@@ -37,6 +38,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             @JsonProperty(value = "dimensions", required = true) Set<String> dimensions,
             @JsonProperty(value = "requestedSize", required = true) Integer requestedSize,
             @JsonProperty(value = "constraints", required = true) Set<String> constraints,
+            @JsonProperty("portfolioDepth") UserGoalProposal.Depth portfolioDepth,
             @JsonProperty(value = "unresolvedField", required = true) ClarificationProposal.Field unresolvedField,
             @JsonProperty(value = "askedFields", required = true) Set<ClarificationProposal.Field> askedFields,
             @JsonProperty(value = "remainingFields", required = true) List<ClarificationProposal.Field> remainingFields,
@@ -51,9 +53,16 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         this.requestedOutputs = Set.copyOf(
                 Objects.requireNonNull(requestedOutputs, "requestedOutputs"));
         this.facets = Set.copyOf(facets == null ? Set.of() : facets);
+        if (!this.requestedOutputs.equals(outputsDerivedFromParameters(
+                goalKind, this.facets))) {
+            throw new IllegalArgumentException(
+                    "requestedOutputs must match the typed blocked-goal parameters");
+        }
         this.dimensions = closedNames(dimensions, "dimensions", true);
         this.requestedSize = requestedSize;
         this.constraints = closedNames(constraints, "constraints", true);
+        this.portfolioDepth = portfolioDepth == null
+                ? UserGoalProposal.Depth.STANDARD : portfolioDepth;
         this.unresolvedField = Objects.requireNonNull(unresolvedField, "unresolvedField");
         this.askedFields = Set.copyOf(
                 Objects.requireNonNull(askedFields, "askedFields"));
@@ -85,6 +94,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
                 GoalKind.PORTFOLIO_RECOMMEND,
                 List.of(), Set.of(GoalRequestedOutput.RECOMMENDATION),
                 Set.of(), Set.of(), requestedSize, constraints,
+                UserGoalProposal.Depth.STANDARD,
                 unresolvedField, Set.of(unresolvedField), List.of(), 1);
     }
 
@@ -100,7 +110,25 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             Set<ClarificationProposal.Field> askedFields,
             int depth) {
         this(goalKind, subjects, requestedOutputs, facets, dimensions, requestedSize,
-                constraints, unresolvedField, askedFields, List.of(), depth);
+                constraints, UserGoalProposal.Depth.STANDARD,
+                unresolvedField, askedFields, List.of(), depth);
+    }
+
+    public BlockedGoalTemplate(
+            GoalKind goalKind,
+            List<Subject> subjects,
+            Set<GoalRequestedOutput> requestedOutputs,
+            Set<UserGoalProposal.Facet> facets,
+            Set<String> dimensions,
+            Integer requestedSize,
+            Set<String> constraints,
+            ClarificationProposal.Field unresolvedField,
+            Set<ClarificationProposal.Field> askedFields,
+            List<ClarificationProposal.Field> remainingFields,
+            int depth) {
+        this(goalKind, subjects, requestedOutputs, facets, dimensions, requestedSize,
+                constraints, UserGoalProposal.Depth.STANDARD,
+                unresolvedField, askedFields, remainingFields, depth);
     }
 
     public Resolution resolve(ResolutionValue value) {
@@ -130,7 +158,8 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
                 nextAsked.add(nextField);
                 BlockedGoalTemplate continuation = new BlockedGoalTemplate(
                         goalKind, nextSubjects, nextOutputs, facets, dimensions,
-                        nextSize, nextConstraints, nextField, Set.copyOf(nextAsked),
+                        nextSize, nextConstraints, portfolioDepth,
+                        nextField, Set.copyOf(nextAsked),
                         List.of(), depth + 1);
                 return Resolution.next(continuation);
             }
@@ -153,8 +182,11 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             throw new IllegalArgumentException("requested output remains unresolved");
         }
         UserGoalProposal.GoalParameters parameters = switch (goalKind) {
-            case PORTFOLIO_FACT -> new UserGoalProposal.PortfolioFactParameters(facets);
-            case PORTFOLIO_COMPARE -> new UserGoalProposal.PortfolioCompareParameters(dimensions);
+            case PORTFOLIO_FACT -> new UserGoalProposal.PortfolioFactParameters(
+                    facets, portfolioDepth);
+            case PORTFOLIO_COMPARE -> new UserGoalProposal.PortfolioCompareParameters(
+                    dimensions.stream().map(value -> UserGoalProposal.PortfolioComparisonDimension
+                            .valueOf(value)).collect(java.util.stream.Collectors.toUnmodifiableSet()));
             case PORTFOLIO_RECOMMEND -> new UserGoalProposal.PortfolioRecommendationParameters(
                     Objects.requireNonNull(resolvedSize, "requestedSize"), resolvedConstraints);
             default -> throw new IllegalArgumentException("goal kind cannot be restored safely");
@@ -205,13 +237,6 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             }
             default -> throw new IllegalArgumentException("unsupported blocked goal kind");
         }
-        if (requestedOutputs.isEmpty()
-                && !isPending(ClarificationProposal.Field.OUTPUT)) {
-            throw new IllegalArgumentException("requested output is required");
-        }
-        if (!requestedOutputs.isEmpty() && !outputsSupported(goalKind, requestedOutputs)) {
-            throw new IllegalArgumentException("requested output does not match goal kind");
-        }
     }
 
     private boolean isPending(ClarificationProposal.Field field) {
@@ -233,8 +258,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
     private void validateAllowedField(ClarificationProposal.Field field) {
         boolean allowed = switch (goalKind) {
             case PORTFOLIO_FACT, PORTFOLIO_COMPARE ->
-                    field == ClarificationProposal.Field.SUBJECT
-                            || field == ClarificationProposal.Field.OUTPUT;
+                    field == ClarificationProposal.Field.SUBJECT;
             case PORTFOLIO_RECOMMEND ->
                     field == ClarificationProposal.Field.REQUESTED_SIZE;
             default -> false;
@@ -253,16 +277,15 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
-    private boolean outputsSupported(GoalKind kind, Set<GoalRequestedOutput> outputs) {
+    private Set<GoalRequestedOutput> outputsDerivedFromParameters(
+            GoalKind kind, Set<UserGoalProposal.Facet> goalFacets) {
         return switch (kind) {
-            case PORTFOLIO_FACT -> outputs.stream().allMatch(value -> switch (value) {
-                case OVERVIEW, BACKGROUND, RESPONSIBILITY, SOLUTION, VERIFICATION, STATUS -> true;
-                default -> false;
-            });
-            case PORTFOLIO_COMPARE -> outputs.equals(Set.of(GoalRequestedOutput.COMPARISON));
-            case PORTFOLIO_RECOMMEND ->
-                    outputs.equals(Set.of(GoalRequestedOutput.RECOMMENDATION));
-            default -> false;
+            case PORTFOLIO_FACT -> goalFacets.stream()
+                    .map(value -> GoalRequestedOutput.valueOf(value.name()))
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            case PORTFOLIO_COMPARE -> Set.of(GoalRequestedOutput.COMPARISON);
+            case PORTFOLIO_RECOMMEND -> Set.of(GoalRequestedOutput.RECOMMENDATION);
+            default -> throw new IllegalArgumentException("unsupported blocked goal kind");
         };
     }
 
@@ -271,7 +294,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             Set<GoalRequestedOutput> resolvedOutputs,
             Integer resolvedSize,
             Set<String> resolvedConstraints) {
-        if (resolvedOutputs.isEmpty() || !outputsSupported(goalKind, resolvedOutputs)) return false;
+        if (!resolvedOutputs.equals(outputsDerivedFromParameters(goalKind, facets))) return false;
         return switch (goalKind) {
             case PORTFOLIO_FACT -> resolvedSubjects.size() == 1 && !facets.isEmpty();
             case PORTFOLIO_COMPARE -> resolvedSubjects.size() >= 2
@@ -306,6 +329,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
     public Set<String> getDimensions() { return dimensions; }
     public Integer getRequestedSize() { return requestedSize; }
     public Set<String> getConstraints() { return constraints; }
+    public UserGoalProposal.Depth getPortfolioDepth() { return portfolioDepth; }
     public ClarificationProposal.Field getUnresolvedField() { return unresolvedField; }
     public Set<ClarificationProposal.Field> getAskedFields() { return askedFields; }
     public List<ClarificationProposal.Field> getRemainingFields() { return remainingFields; }

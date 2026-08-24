@@ -68,9 +68,10 @@ public final class SemanticPlanCompiler {
         String portfolioTaskId = fulfillmentTaskId + "-portfolio";
         UserGoalProposal.GeneralExplanationParameters generalParameters =
                 new UserGoalProposal.GeneralExplanationParameters(
-                        parameters.getConceptAnchor(), UserGoalProposal.Depth.STANDARD);
+                        parameters.getConceptAnchor(), parameters.getDepth());
         UserGoalProposal.PortfolioFactParameters portfolioParameters =
-                new UserGoalProposal.PortfolioFactParameters(Set.of(parameters.getPortfolioFacet()));
+                new UserGoalProposal.PortfolioFactParameters(
+                        Set.of(parameters.getPortfolioFacet()), parameters.getDepth());
         tasks.add(SemanticTask.of(generalTaskId, SemanticTask.Type.GENERAL_EXPLANATION,
                 new SemanticTaskParameters(
                         GoalKind.GENERAL_EXPLANATION, generalParameters, List.of())));

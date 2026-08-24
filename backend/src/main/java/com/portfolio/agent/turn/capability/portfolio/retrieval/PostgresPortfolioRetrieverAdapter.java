@@ -67,7 +67,8 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
                 .filter(candidate -> passagesBySubject.containsKey(candidate.getSubjectId()))
                 .map(candidate -> toSubject(
                         result.getCandidates().getReleaseVersion(), candidate,
-                        passagesBySubject.get(candidate.getSubjectId())))
+                        passagesBySubject.get(candidate.getSubjectId()),
+                        invocation.getMaximumEvidenceUnitsPerSubject()))
                 .toList();
         return new PortfolioCandidateSet(
                 result.getCandidates().getReleaseVersion(),
@@ -78,11 +79,15 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
     private CandidateSubject toSubject(
             String contentVersion,
             SelectionCandidate subject,
-            List<PostgresKnowledgePassageRow> passages) {
+            List<PostgresKnowledgePassageRow> passages,
+            int maximumEvidenceUnits) {
         List<ClaimEvidenceCandidate> candidates = new ArrayList<>();
         LinkedHashSet<String> identities = new LinkedHashSet<>();
         for (PostgresKnowledgePassageRow passage : passages) {
             for (EvidenceReference evidence : passage.getEvidenceReferences()) {
+                if (candidates.size() >= maximumEvidenceUnits) {
+                    break;
+                }
                 String identity = passage.getClaimId() + "\u0000" + evidence.getEvidenceId();
                 if (!evidence.isApproved() || !identities.add(identity)) {
                     continue;
@@ -96,6 +101,9 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
                 candidates.add(new ClaimEvidenceCandidate(
                         subject.getSubjectId(), passage.getClaim(), descriptor,
                         passage.getClaimCategory().name()));
+            }
+            if (candidates.size() >= maximumEvidenceUnits) {
+                break;
             }
         }
         return new CandidateSubject(

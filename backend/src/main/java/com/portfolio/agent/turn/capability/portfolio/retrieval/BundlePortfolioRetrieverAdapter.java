@@ -100,7 +100,8 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 continue;
             }
             List<ClaimEvidenceCandidate> candidates = candidates(
-                    content.getContentVersion(), subject, corpus, categories, chunkRanks);
+                    content.getContentVersion(), subject, corpus, categories, chunkRanks,
+                    invocation.getMaximumEvidenceUnitsPerSubject());
             if (!candidates.isEmpty()) {
                 subjects.add(new CandidateSubject(
                         subject.getStableId(), route(subject), subject.getTitle(),
@@ -116,7 +117,8 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             AnswerKnowledge subject,
             AnswerRetrievalCorpus corpus,
             List<AnswerClaimCategory> categories,
-            Map<String, Integer> chunkRanks) {
+            Map<String, Integer> chunkRanks,
+            int maximumEvidenceUnits) {
         Map<String, AnswerEvidence> approvedEvidence = subject.getEvidence().stream()
                 .filter(this::isApprovedPublicEvidence)
                 .collect(Collectors.toMap(
@@ -139,7 +141,10 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                         == AnswerClaimVerificationStatus.VERIFIED)
                 .filter(claim -> categories.isEmpty() || categories.contains(claim.getCategory()))
                 .filter(claim -> retrievableClaimIds.contains(claim.getId()))
-                .forEach(claim -> claim.getDirectEvidenceIds().forEach(evidenceId -> {
+                .takeWhile(claim -> candidates.size() < maximumEvidenceUnits)
+                .forEach(claim -> claim.getDirectEvidenceIds().stream()
+                        .takeWhile(evidenceId -> candidates.size() < maximumEvidenceUnits)
+                        .forEach(evidenceId -> {
                     AnswerEvidence evidence = approvedEvidence.get(evidenceId);
                     String identity = claim.getId() + "\u0000" + evidenceId;
                     if (evidence == null || !identities.add(identity)) {
@@ -365,11 +370,13 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                     AnswerClaimCategory.TECHNICAL_DECISION);
         }));
         invocation.getDimensions().forEach(dimension -> categories.add(switch (dimension) {
-            case "ARCHITECTURE", "TECHNICAL_DECISION" -> AnswerClaimCategory.TECHNICAL_DECISION;
+            case "ARCHITECTURE" -> AnswerClaimCategory.TECHNICAL_DECISION;
             case "IMPLEMENTATION" -> AnswerClaimCategory.IMPLEMENTATION;
-            case "IMPACT", "OUTCOME" -> AnswerClaimCategory.OUTCOME;
-            case "RISKS", "LIMITATION" -> AnswerClaimCategory.LIMITATION;
-            default -> AnswerClaimCategory.VERIFICATION;
+            case "OUTCOME" -> AnswerClaimCategory.OUTCOME;
+            case "RISKS" -> AnswerClaimCategory.LIMITATION;
+            case "VERIFICATION" -> AnswerClaimCategory.VERIFICATION;
+            default -> throw new IllegalArgumentException(
+                    "unsupported portfolio comparison dimension");
         }));
         return List.copyOf(categories);
     }

@@ -47,7 +47,8 @@ class PortfolioSemanticResultFactoryTest {
                 new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT,
                         new UserGoalProposal.PortfolioFactParameters(Set.of(
                                 UserGoalProposal.Facet.BACKGROUND,
-                                UserGoalProposal.Facet.VERIFICATION)), List.of()));
+                                UserGoalProposal.Facet.VERIFICATION),
+                                UserGoalProposal.Depth.STANDARD), List.of()));
     }
 
     private PortfolioEvidenceInvocation factInvocation() {
