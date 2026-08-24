@@ -18,7 +18,6 @@ public final class AgentRuntimeProperties implements InitializingBean {
     private Duration settlementReserve = Duration.ofSeconds(2);
     private Duration goalInterpretationTimeout = Duration.ofSeconds(8);
     private Duration generalKnowledgeTimeout = Duration.ofSeconds(10);
-    private Duration portfolioExpressionTimeout = Duration.ofSeconds(4);
     private Duration databaseOperationTimeout = Duration.ofSeconds(3);
     private boolean trustProxy;
     private Set<String> trustedProxies = new LinkedHashSet<>();
@@ -95,14 +94,6 @@ public final class AgentRuntimeProperties implements InitializingBean {
         generalKnowledgeTimeout = positive(value, "generalKnowledgeTimeout");
     }
 
-    public Duration getPortfolioExpressionTimeout() {
-        return portfolioExpressionTimeout;
-    }
-
-    public void setPortfolioExpressionTimeout(Duration value) {
-        portfolioExpressionTimeout = positive(value, "portfolioExpressionTimeout");
-    }
-
     public Duration getDatabaseOperationTimeout() {
         return databaseOperationTimeout;
     }
@@ -124,7 +115,6 @@ public final class AgentRuntimeProperties implements InitializingBean {
         Duration executionWindow = turnTimeout.minus(settlementReserve);
         if (goalInterpretationTimeout.compareTo(executionWindow) >= 0
                 || generalKnowledgeTimeout.compareTo(executionWindow) >= 0
-                || portfolioExpressionTimeout.compareTo(executionWindow) >= 0
                 || databaseOperationTimeout.compareTo(executionWindow) >= 0) {
             throw new IllegalStateException("operation timeout must be shorter than execution window");
         }

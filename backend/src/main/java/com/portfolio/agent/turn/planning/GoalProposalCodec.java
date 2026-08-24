@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
@@ -24,7 +25,8 @@ public final class GoalProposalCodec {
         JsonFactory factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .build();
-        this.mapper = new ObjectMapper(factory);
+        this.mapper = new ObjectMapper(factory)
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         this.conversationalValidator = new ConversationalMessageValidator();
     }
 

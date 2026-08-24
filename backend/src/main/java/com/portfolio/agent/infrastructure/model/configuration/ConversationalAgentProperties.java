@@ -9,10 +9,6 @@ public final class ConversationalAgentProperties {
 
     private boolean enabled;
     private boolean visitorDataPolicyApproved;
-    private int maxHistoryRounds = 20;
-    private int recentRawRounds = 6;
-    private int maxInputTokens = 12000;
-    private int maxSuggestedQuestions = 3;
 
     public boolean allowsProviderCalls(
             ModelPolicy modelPolicy,
@@ -32,21 +28,5 @@ public final class ConversationalAgentProperties {
     public boolean isVisitorDataPolicyApproved() { return visitorDataPolicyApproved; }
     public void setVisitorDataPolicyApproved(boolean visitorDataPolicyApproved) {
         this.visitorDataPolicyApproved = visitorDataPolicyApproved;
-    }
-    public int getMaxHistoryRounds() { return maxHistoryRounds; }
-    public void setMaxHistoryRounds(int maxHistoryRounds) {
-        this.maxHistoryRounds = maxHistoryRounds;
-    }
-    public int getRecentRawRounds() { return recentRawRounds; }
-    public void setRecentRawRounds(int recentRawRounds) {
-        this.recentRawRounds = recentRawRounds;
-    }
-    public int getMaxInputTokens() { return maxInputTokens; }
-    public void setMaxInputTokens(int maxInputTokens) {
-        this.maxInputTokens = maxInputTokens;
-    }
-    public int getMaxSuggestedQuestions() { return maxSuggestedQuestions; }
-    public void setMaxSuggestedQuestions(int maxSuggestedQuestions) {
-        this.maxSuggestedQuestions = maxSuggestedQuestions;
     }
 }

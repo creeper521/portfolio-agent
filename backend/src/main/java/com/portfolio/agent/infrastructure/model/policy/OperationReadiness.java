@@ -1,2 +1,6 @@
 package com.portfolio.agent.infrastructure.model.policy;
-public enum OperationReadiness { DISABLED, AVAILABLE_DETERMINISTIC, AVAILABLE_WITH_DETERMINISTIC_FALLBACK, INCOMPLETE_CONFIGURATION, PROVIDER_UNAVAILABLE }
+public enum OperationReadiness {
+    DISABLED,
+    AVAILABLE_WITH_PROVIDER,
+    INCOMPLETE_CONFIGURATION
+}

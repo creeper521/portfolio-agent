@@ -133,7 +133,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v5`/`general.draft.v2` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
-| A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
+| A2-37 | P1 | Portfolio 表达端口零实现 | 零实现端口、编译器、可选构造分支与幽灵预算已物理删除；待最终清理总门 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
 | A2-38 | P1 | Portfolio 回答只是 Claim 列表 | Claim statement 被逐条直接投影 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
 | A2-39 | P1 | Portfolio Fact 缺少 depth | typed Goal、澄清恢复与 cross-domain 子任务已携带 depth；deterministic/package 门通过，待真实 Provider/Browser | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
 | A2-40 | P1 | Portfolio depth 可能成为装饰字段 | depth 已控制检索 profile/候选上限、coverage、区块数与详细内容；待真实 Provider/Browser 差异矩阵 | depth 同时控制检索、覆盖、区块和完成判定 | Goal / Retrieval / Presentation |
@@ -198,13 +198,13 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-100 | P1 | 不同验证层被合并为 PASS | release 汇总已拆分 deterministic、scenario runtime、Browser contract/body、PostgreSQL/JVM restart、Provider Quality；未执行层不再被总 PASS 覆盖 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
 | A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总与 scenario runner 已按 35 个用户 case 报告 matched/setup/hard-error coverage；当前 scenario runtime 明确为 FAILED | 以用户场景和风险门报告覆盖 | Verification Governance |
 | A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | 脚本设置 `portfolio.model-expression.*`，真实属性前缀已是 `portfolio.conversational-model` | 删除全部退役键和脚本引用 | Configuration Cleanup |
-| A2-103 | P2 | Portfolio expression timeout 无执行消费者 | `agent-runtime.portfolio-expression-timeout` 可绑定且参与配置校验，但没有模型表达调用读取 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
-| A2-104 | P2 | Portfolio expression 编译器未接线 | 生产不可调用 | 实现并接入或物理删除 | Portfolio Expression |
-| A2-105 | P2 | Conversation history 配置无消费者 | 多个 history 字段不影响运行 | 实现唯一消费方或删除 | Conversation Configuration |
-| A2-106 | P2 | maxSuggestedQuestions 配置无消费者 | 前端固定数量，后端配置无效 | 建立唯一权威或删除 | Frontend / Configuration |
-| A2-107 | P2 | Operation readiness 名称过时 | 仍宣称 deterministic fallback | 枚举和文档反映当前真实语义 | Model Policy Cleanup |
-| A2-108 | P2 | 零消费者生产类型残留 | 旧 Selection/Presentation/Question 类型只剩定义 | 证明无入口后删除 | Dead Code / Architecture |
-| A2-109 | P2 | 严格 JSON 不拒绝 trailing token | 可能接受首个 JSON 后的额外 token | 启用 FAIL_ON_TRAILING_TOKENS 并补负例 | Goal/General Codec |
+| A2-103 | P2 | Portfolio expression timeout 无执行消费者 | 幽灵 expression 能力选择删除，预算字段、环境键和预算关系已同步移除；待最终配置总门 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
+| A2-104 | P2 | Portfolio expression 编译器未接线 | 零生产入口的 Port/Compiler、可选执行分支及孤立测试已物理删除；待最终清理总门 | 实现并接入或物理删除 | Portfolio Expression |
+| A2-105 | P2 | Conversation history 配置无消费者 | `max-history-rounds/recent-raw-rounds/max-input-tokens` 及零消费者属性已删除；待最终配置总门 | 实现唯一消费方或删除 | Conversation Configuration |
+| A2-106 | P2 | maxSuggestedQuestions 配置无消费者 | 后端伪权威已删除；前端展示数量与交互验收仍归 Frontend Agent，整体保持 IN_PROGRESS | 建立唯一权威或删除 | Frontend / Configuration |
+| A2-107 | P2 | Operation readiness 名称过时 | 已收敛为 `DISABLED/AVAILABLE_WITH_PROVIDER/INCOMPLETE_CONFIGURATION`；待最终配置总门 | 枚举和文档反映当前真实语义 | Model Policy Cleanup |
+| A2-108 | P2 | 零消费者生产类型残留 | 已证明并删除 `PortfolioSelectionResult`、`SectionedTaskPresentation`、`QuestionStatus`；待全仓零引用总门 | 证明无入口后删除 | Dead Code / Architecture |
+| A2-109 | P2 | 严格 JSON 不拒绝 trailing token | Goal/General Codec 已启用 `FAIL_ON_TRAILING_TOKENS` 并补 `{...} {}` 负例；待真实 Provider 总门 | 启用 FAIL_ON_TRAILING_TOKENS 并补负例 | Goal/General Codec |
 | A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | AGENTS、SECURITY、docs/08、本文与机器状态已统一 persistence-safe 分类，待最终总门 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
 | A2-111 | P1 | Evidence hard invariant 被污染 | 机器账本已从 PASS 改为 FAILED；checker 要求五类执行证据齐备才能恢复 PASS，live gate 已删除未观测 goalKind；场景 runtime 仍待补 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
 | A2-112 | P1 | Discussion Plan 完成表述过强 | 计划头部已拆分 State/Lifecycle Complete 与 Semantic Quality Incomplete，Browser facet/depth/完整性仍明确开放 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
@@ -932,6 +932,15 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 916 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 501 个生产文件通过；最终 packaged JAR SHA-256 为 `7bba720235e76e44e1403aae04c7331a574db4c05c2208d10c31fe9e43b6a67d`。本批未运行真实 Provider 或 Browser，因此整体和相关条目继续保持 `IN_PROGRESS`。
 - **范围：** 本批没有修改公开 API、公开错误 variant、Provider 选择或 Frontend。A2-80/81/85—88 未取得新的真实样本或产品冻结决定，状态不变。
 
+### 10.8 后端幽灵能力与配置清理（2026-08-24）
+
+- **A2-37/103/104：** 生产 `PortfolioTaskExecutor` 始终使用四参数构造，`PortfolioFactExpressionPort` 没有实现，Compiler 只被孤立单测调用。选择冻结边界允许的“物理删除”：移除端口、编译器、可选执行分支、孤立测试、`portfolio-expression-timeout` 配置和预算校验；不借清理接入新的模型表达调用。
+- **A2-105/106：** `max-history-rounds`、`recent-raw-rounds`、`max-input-tokens` 与 `max-suggested-questions` 在后端只有绑定字段和 getter/setter，生产零读取；后端伪权威全部删除。suggested question 的页面数量、布局与交互仍由 Frontend Agent 负责，本批不修改 Frontend，也不据此关闭 A2-106 的前端验收。
+- **A2-107：** Operation readiness 删除未使用且过强的 deterministic/fallback/provider-unavailable 名称，只保留 `DISABLED`、`AVAILABLE_WITH_PROVIDER` 与 `INCOMPLETE_CONFIGURATION`；该状态仍只描述配置 readiness，不声称回答成功。
+- **A2-108：** 全生产源码逐类引用核实后，`PortfolioSelectionResult`、`SectionedTaskPresentation`、`QuestionStatus` 只有定义自身，无 Spring/Jackson/反射注册，也无生产消费者，已物理删除；活跃的 Selection、Presentation 与 Question 类型不做名称驱动清理。
+- **A2-109：** Goal 与 General 两个 Provider 输出 Codec 都启用 `FAIL_ON_TRAILING_TOKENS`，并以合法首个对象后追加第二个 `{}` 的负例证明失败关闭。
+- **本批验证证据：** 2026-08-24 后端 `clean package -DskipFrontend=true` 为 916 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 496 个生产文件通过；删除符号与配置键在 `backend/src/main + backend/src/test` 为零引用；packaged JAR SHA-256 为 `619dced1bee3a3834c2bc77aa22dcabe4ee6da4bf07e05cab63c1669d0306f20`。本批未运行 Frontend、Browser 或真实 Provider，整体保持 `IN_PROGRESS`。
+
 ## 11. 修复前需要冻结的选择
 
 以下选择会影响具体代码，但不改变 Agent 2.0 总架构。状态标注为「已冻结」的选择已于 2026-08-19 随前端修复批次确定：
@@ -939,7 +948,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 1. **已冻结**：pending 时允许切换/新建会话；旧请求后台继续执行，结果与取消入口都归属原会话，不自动取消；每个会话最多一个 pending，同一标签页合计最多两个（与后端来源级最大并发 2 对齐），超出时其他会话仍可浏览但输入区提示“已有两个请求正在处理”并暂停一切新轮次提交；
 2. **已冻结**：澄清答案在页面内存消息中展示公开安全摘要——CHOICE 显示选项标签，TEXT 显示原文；
 3. **已冻结（2026-08-24 修订）**：client timeout 后采用同 requestId 显式重试（复用现有 replay 权威，不自动轮询、不新建结果查询状态机）；超时不取消服务端 Active Turn。确定性 Portfolio Turn 重放原终局；Provider 派生的 General/Conversational 正文不持久化，重放固定返回 `CAPABILITY_UNAVAILABLE/REPLAY_BODY_NOT_RETAINED` 与“该回答未被保留，请重新提问。”，Provider 调用数不得增加；
-4. **已冻结**：同一 absolute timeline 上，Goal/General/Portfolio/DB 单次上限为 8/10/4/3 秒，18 秒后不再启动新 Task，服务端 Turn 20 秒、前端等待 25 秒、网关至少 30 秒、lease 35 秒；子操作使用 `min(自身上限, Turn 剩余时间)`，不得独立延长 Turn；
+4. **已冻结（2026-08-24 清理修订）**：同一 absolute timeline 上，Goal/General/DB 单次上限为 8/10/3 秒，18 秒后不再启动新 Task，服务端 Turn 20 秒、前端等待 25 秒、网关至少 30 秒、lease 35 秒；子操作使用 `min(自身上限, Turn 剩余时间)`，不得独立延长 Turn。原 4 秒 Portfolio expression 预算因对应零实现幽灵能力物理删除而退役；确定性 Portfolio 执行继续受 Turn 剩余预算约束，其 PostgreSQL 调用受 DB 3 秒上限约束；
 5. **已冻结**：当前 Turn 非 ANSWER 时来源栏显示“最近回答来源”并整体弱化，不隐藏；
 6. **已冻结**：澄清卡脱困入口只消费已发布 QuestionPreset 或后端 `suggestedActions`，前端叶子组件不自造业务问题（2026-08-19 确认第 6 项后由硬编码入口修订为预设驱动）。
 
@@ -1031,7 +1040,8 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |
 | Frontend lifecycle | A2-69—A2-78 | reservation/cancel 窗口、首页 snapshot、合法 UUID、expiry、所有会话 clear |
 | 行为与证据真实性 | A2-89—A2-101、A2-111—A2-115 | scenario 参数化执行、Browser body/trace、跨 JVM、只报告观测字段 |
-| 退役结构清理 | A2-102—A2-109 | legacy 配置/空目录/testIgnore/死类型零引用和 trailing-token 负例 |
+| 后端退役结构清理 | A2-103—A2-105、A2-107—A2-109 | expression/config/type 零引用；readiness closed enum；Goal/General trailing-token 负例 |
+| 脚本与前端配置清理 | A2-102、A2-106 | 退役脚本键零引用；Frontend Agent 冻结 suggested question 唯一权威与 Browser 门 |
 
 #### 12.5.2 固定依赖顺序
 

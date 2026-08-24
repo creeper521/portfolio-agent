@@ -86,10 +86,6 @@ portfolio:
   conversational-agent:
     enabled: ${PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED:false}
     visitor-data-policy-approved: ${PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED:false}
-    max-history-rounds: 20
-    recent-raw-rounds: 6
-    max-input-tokens: ${PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS:12000}
-    max-suggested-questions: 3
   agent-runtime:
     requests-per-minute: ${PORTFOLIO_AGENT_REQUESTS_PER_MINUTE:10}
     max-concurrent-per-source: ${PORTFOLIO_AGENT_MAX_CONCURRENT_PER_SOURCE:2}
@@ -100,7 +96,6 @@ portfolio:
     settlement-reserve: ${PORTFOLIO_AGENT_SETTLEMENT_RESERVE:2s}
     goal-interpretation-timeout: ${PORTFOLIO_AGENT_GOAL_INTERPRETATION_TIMEOUT:8s}
     general-knowledge-timeout: ${PORTFOLIO_AGENT_GENERAL_KNOWLEDGE_TIMEOUT:10s}
-    portfolio-expression-timeout: ${PORTFOLIO_AGENT_PORTFOLIO_EXPRESSION_TIMEOUT:4s}
     database-operation-timeout: ${PORTFOLIO_AGENT_DATABASE_OPERATION_TIMEOUT:3s}
     trust-proxy: ${PORTFOLIO_AGENT_TRUST_PROXY:false}
     trusted-proxies: ${PORTFOLIO_AGENT_TRUSTED_PROXIES:}

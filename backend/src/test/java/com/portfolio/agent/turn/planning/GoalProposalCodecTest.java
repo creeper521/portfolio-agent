@@ -15,6 +15,15 @@ class GoalProposalCodecTest {
     private final GoalProposalCodec codec = new GoalProposalCodec();
 
     @Test
+    void rejectsTrailingJsonValue() {
+        assertThatThrownBy(() -> codec.decode(
+                standardPortfolioRoute("sql-audit") + " {}",
+                input("介绍 SQL 审计项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid goal proposal JSON");
+    }
+
+    @Test
     void decodesAClosedStandardSemanticRoute() {
         GoalInterpretationResult result = codec.decode(standardPortfolioRoute(
                 "sql-audit"), input("介绍 SQL 审计项目"));

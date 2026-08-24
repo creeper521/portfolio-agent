@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.capability.general;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
@@ -18,7 +19,8 @@ public final class GeneralDraftCodec {
     private final ObjectMapper objectMapper;
 
     public GeneralDraftCodec(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper.copy();
+        this.objectMapper = objectMapper.copy()
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     }
 
     public Draft decode(String raw) {

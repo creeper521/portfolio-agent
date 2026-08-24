@@ -8,6 +8,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GeneralDraftCodecAdversarialTest {
     private final GeneralDraftCodec codec = new GeneralDraftCodec(new ObjectMapper());
 
+    @Test void rejectsTrailingJsonValue() {
+        assertThatThrownBy(() -> codec.decode(
+                GeneralTestFixtures.VALID_EXPLANATION + " {}"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void rejectsUnknownRootField() {
         assertThatThrownBy(() -> codec.decode(
                 GeneralTestFixtures.VALID_EXPLANATION.replace(
