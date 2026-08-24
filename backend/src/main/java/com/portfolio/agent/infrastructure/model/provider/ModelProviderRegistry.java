@@ -4,7 +4,7 @@ public interface ModelProviderRegistry {
 
     String getSnapshotVersion();
 
-    boolean supports(
+    boolean isApprovedConfiguration(
             ModelProviderKind provider,
             String modelPolicyVersion,
             String answerSchemaVersion);

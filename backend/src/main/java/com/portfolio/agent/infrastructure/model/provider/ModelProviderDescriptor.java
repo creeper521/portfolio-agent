@@ -6,18 +6,18 @@ import java.util.Set;
 
 public final class ModelProviderDescriptor {
 
-    private static final Set<ModelProviderCapability> REQUIRED_CAPABILITIES = Set.of(
-            ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-            ModelProviderCapability.THINKING_CONTROL,
-            ModelProviderCapability.NON_STREAMING);
+    private static final Set<ModelProviderRequestFeature> REQUIRED_REQUEST_FEATURES = Set.of(
+            ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+            ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+            ModelProviderRequestFeature.NON_STREAMING_REQUEST);
 
     private final ModelProviderKind providerId;
     private final String adapterVersion;
     private final URI endpoint;
     private final String modelName;
-    private final Set<String> supportedModelPolicyVersions;
-    private final Set<String> supportedAnswerSchemaVersions;
-    private final Set<ModelProviderCapability> capabilities;
+    private final Set<String> approvedModelPolicyVersions;
+    private final Set<String> approvedAnswerSchemaVersions;
+    private final Set<ModelProviderRequestFeature> requestFeatures;
 
     public ModelProviderDescriptor(
             ModelProviderKind providerId,
@@ -26,29 +26,29 @@ public final class ModelProviderDescriptor {
             String modelName,
             Set<String> policyVersions,
             Set<String> schemaVersions,
-            Set<ModelProviderCapability> capabilities) {
+            Set<ModelProviderRequestFeature> requestFeatures) {
         this.providerId = Objects.requireNonNull(providerId, "providerId");
         this.adapterVersion = requireText(adapterVersion, "adapterVersion");
         this.endpoint = requireHttpsEndpoint(endpoint);
         this.modelName = requireText(modelName, "modelName");
-        this.supportedModelPolicyVersions = copyTextSet(policyVersions, "policyVersions");
-        this.supportedAnswerSchemaVersions = copyTextSet(schemaVersions, "schemaVersions");
-        this.capabilities = copyCapabilities(capabilities);
+        this.approvedModelPolicyVersions = copyTextSet(policyVersions, "policyVersions");
+        this.approvedAnswerSchemaVersions = copyTextSet(schemaVersions, "schemaVersions");
+        this.requestFeatures = copyRequestFeatures(requestFeatures);
     }
 
-    public boolean supports(String policyVersion, String schemaVersion) {
-        return supportedModelPolicyVersions.contains(policyVersion)
-                && supportedAnswerSchemaVersions.contains(schemaVersion)
-                && capabilities.containsAll(REQUIRED_CAPABILITIES);
+    public boolean isApprovedConfiguration(String policyVersion, String schemaVersion) {
+        return approvedModelPolicyVersions.contains(policyVersion)
+                && approvedAnswerSchemaVersions.contains(schemaVersion)
+                && requestFeatures.containsAll(REQUIRED_REQUEST_FEATURES);
     }
 
     public ModelProviderKind getProviderId() { return providerId; }
     public String getAdapterVersion() { return adapterVersion; }
     public URI getEndpoint() { return endpoint; }
     public String getModelName() { return modelName; }
-    public Set<String> getSupportedModelPolicyVersions() { return supportedModelPolicyVersions; }
-    public Set<String> getSupportedAnswerSchemaVersions() { return supportedAnswerSchemaVersions; }
-    public Set<ModelProviderCapability> getCapabilities() { return capabilities; }
+    public Set<String> getApprovedModelPolicyVersions() { return approvedModelPolicyVersions; }
+    public Set<String> getApprovedAnswerSchemaVersions() { return approvedAnswerSchemaVersions; }
+    public Set<ModelProviderRequestFeature> getRequestFeatures() { return requestFeatures; }
 
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
@@ -78,19 +78,20 @@ public final class ModelProviderDescriptor {
         return Set.copyOf(values);
     }
 
-    private static Set<ModelProviderCapability> copyCapabilities(
-            Set<ModelProviderCapability> values) {
+    private static Set<ModelProviderRequestFeature> copyRequestFeatures(
+            Set<ModelProviderRequestFeature> values) {
         if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("capabilities must not be empty");
+            throw new IllegalArgumentException("requestFeatures must not be empty");
         }
-        for (ModelProviderCapability value : values) {
+        for (ModelProviderRequestFeature value : values) {
             if (value == null) {
-                throw new IllegalArgumentException("capabilities must not contain null");
+                throw new IllegalArgumentException("requestFeatures must not contain null");
             }
         }
-        Set<ModelProviderCapability> copied = Set.copyOf(values);
-        if (!copied.containsAll(REQUIRED_CAPABILITIES)) {
-            throw new IllegalArgumentException("capabilities must contain all required capabilities");
+        Set<ModelProviderRequestFeature> copied = Set.copyOf(values);
+        if (!copied.containsAll(REQUIRED_REQUEST_FEATURES)) {
+            throw new IllegalArgumentException(
+                    "requestFeatures must contain all required request features");
         }
         return copied;
     }

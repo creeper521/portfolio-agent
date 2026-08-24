@@ -19,10 +19,14 @@ class ModelProviderRegistrySnapshotTest {
         assertThat(registry.getProviderIds()).containsExactlyInAnyOrder(
                 ModelProviderKind.DEEPSEEK_V4_FLASH,
                 ModelProviderKind.GLM_4_7);
-        assertThat(registry.supports(
+        assertThat(registry.isApprovedConfiguration(
                 ModelProviderKind.GLM_4_7,
                 "c1-policy-v1",
                 "c1.answer.v1")).isTrue();
+        assertThat(ModelProviderRegistry.class.getDeclaredMethods())
+                .extracting(java.lang.reflect.Method::getName)
+                .containsExactlyInAnyOrder(
+                        "getSnapshotVersion", "isApprovedConfiguration");
     }
 
     @Test
@@ -41,7 +45,8 @@ class ModelProviderRegistrySnapshotTest {
         ModelProviderRegistrySnapshot registry = new ModelProviderRegistrySnapshot(
                 "test-registry-v1", List.of(deepSeekDescriptor("adapter-v1")));
 
-        assertThat(registry.supports(ModelProviderKind.GLM_4_7, "c1-policy-v1", "c1.answer.v1"))
+        assertThat(registry.isApprovedConfiguration(
+                ModelProviderKind.GLM_4_7, "c1-policy-v1", "c1.answer.v1"))
                 .isFalse();
         assertThatThrownBy(() -> registry.getRequiredDescriptor(ModelProviderKind.GLM_4_7))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -58,8 +63,8 @@ class ModelProviderRegistrySnapshotTest {
                 "deepseek-v4-flash",
                 Set.of("c1-policy-v1"),
                 Set.of("c1.answer.v1"),
-                Set.of(ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-                        ModelProviderCapability.THINKING_CONTROL,
-                        ModelProviderCapability.NON_STREAMING));
+                Set.of(ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+                        ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+                        ModelProviderRequestFeature.NON_STREAMING_REQUEST));
     }
 }

@@ -35,17 +35,17 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
     }
 
     public static ModelProviderRegistrySnapshot builtIn() {
-        Set<ModelProviderCapability> capabilities = Set.of(
-                ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-                ModelProviderCapability.THINKING_CONTROL,
-                ModelProviderCapability.NON_STREAMING);
+        Set<ModelProviderRequestFeature> requestFeatures = Set.of(
+                ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+                ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+                ModelProviderRequestFeature.NON_STREAMING_REQUEST);
         return new ModelProviderRegistrySnapshot(BUILT_IN_VERSION, List.of(
                 descriptor(ModelProviderKind.DEEPSEEK_V4_FLASH,
                         "https://api.deepseek.com/chat/completions",
-                        "deepseek-v4-flash", capabilities),
+                        "deepseek-v4-flash", requestFeatures),
                 descriptor(ModelProviderKind.GLM_4_7,
                         "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                        "glm-4.7", capabilities)));
+                        "glm-4.7", requestFeatures)));
     }
 
     @Override
@@ -54,12 +54,13 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
     }
 
     @Override
-    public boolean supports(
+    public boolean isApprovedConfiguration(
             ModelProviderKind provider,
             String modelPolicyVersion,
             String answerSchemaVersion) {
         ModelProviderDescriptor descriptor = descriptors.get(provider);
-        return descriptor != null && descriptor.supports(modelPolicyVersion, answerSchemaVersion);
+        return descriptor != null
+                && descriptor.isApprovedConfiguration(modelPolicyVersion, answerSchemaVersion);
     }
 
     public Set<ModelProviderKind> getProviderIds() {
@@ -78,7 +79,7 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
             ModelProviderKind providerId,
             String endpoint,
             String modelName,
-            Set<ModelProviderCapability> capabilities) {
+            Set<ModelProviderRequestFeature> requestFeatures) {
         return new ModelProviderDescriptor(
                 providerId,
                 "c3-openai-compatible-v1",
@@ -86,7 +87,7 @@ public final class ModelProviderRegistrySnapshot implements ModelProviderRegistr
                 modelName,
                 Set.of("c1-policy-v1"),
                 Set.of("c1.answer.v1", CONVERSATION_ANSWER_SCHEMA_VERSION),
-                capabilities);
+                requestFeatures);
     }
 
     private static String requireText(String value, String name) {

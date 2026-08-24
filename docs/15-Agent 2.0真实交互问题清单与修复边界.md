@@ -208,7 +208,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | AGENTS、SECURITY、docs/08、本文与机器状态已统一 persistence-safe 分类，待最终总门 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
 | A2-111 | P1 | Evidence hard invariant 被污染 | 机器账本已从 PASS 改为 FAILED；checker 要求五类执行证据齐备才能恢复 PASS，live gate 已删除未观测 goalKind；场景 runtime 仍待补 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
 | A2-112 | P1 | Discussion Plan 完成表述过强 | 计划头部已拆分 State/Lifecycle Complete 与 Semantic Quality Incomplete，Browser facet/depth/完整性仍明确开放 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
-| A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in registry 硬编码 schema 支持，真实 Provider 仍有合同失败 | 分开 Configured、Transport、Schema、Quality 状态 | Provider Registry / Documentation |
+| A2-113 | P1 | Provider registry 支持元数据强于真实证据 | Registry 已只表达 approved configuration/request features，删除 supports/capability/schema-verified 暗示；真实状态继续分层报告 | Configured 不得推导 Transport、Schema 或 Quality | Provider Registry / Documentation |
 | A2-114 | P2 | 恢复能力表述混淆 | docs/08 与分层汇总已拆分页面刷新、PostgreSQL、跨 JVM API、同浏览器跨 JVM；前三类有独立状态，最后一类为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
 | A2-115 | P1 | 字段存在被误判为功能完成 | 参数、接口、配置出现即被计入能力 | 生产消费、用户可见、负例和全链门全部成立才算完成 | Definition of Done |
 
@@ -964,6 +964,13 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **专属门：** `GeneralKnowledgeGeneratorTest` 与 `GoalInterpretationAdapterTest` 对 schema 拒绝断言 Provider 调用数严格为 1；`OpenAiCompatibleStructuredModelTransportProtocolTest` 对 HTTP/JSON/envelope 失败断言 HTTP 请求数严格为 1，并证明 payload model 始终等于启动选定 Provider。以上关闭产品决策缺口，不替代 A2-80/81/87/88 的真实 Provider 独立质量矩阵。
 - **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `677fc3d9aba3201290315ef1ec4ff7883d07153672bcf61572ed712f84bde8ee`。本批未运行真实 Provider 或 Browser，整体继续保持 `IN_PROGRESS`。
 
+### 10.12 Provider Registry 证据语义收窄（2026-08-24）
+
+- **A2-113：** Registry 只负责启动配置目录，不再用 `supports`、`supported*` 或 `ModelProviderCapability.STRUCTURED_JSON_OUTPUT` 表述外部系统事实。生产 API 收窄为 `isApprovedConfiguration`、`approved*Versions` 和 `ModelProviderRequestFeature`；三个 feature 只描述 Adapter 将发送 JSON-object、thinking-disabled、non-streaming 请求。
+- Registry 通过只形成 `CONFIGURED` 级结论。Transport fixture、真实 schema canary 和质量矩阵分别形成 Transport、Schema、Quality 证据，前一层不得推导后一层；当前 DeepSeek/GLM 的真实结论不因本次重命名改变。
+- **专属门：** Descriptor/Registry tests 断言批准配置正反例、不可变 request features，以及生产接口不存在 `supports`、`isSchemaVerified` 或 `isQualityVerified` 强声明。真实 Provider A2-80/81/87/88 继续保持 `IN_PROGRESS`。
+- **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `765377d375b78b961eb1f918727d2700ec85fa06778f891652a6f3d41eb1a370`。本批未运行真实 Provider 或 Browser，故不提升任何外部验证层状态。
+
 ## 11. 修复前需要冻结的选择
 
 以下选择会影响具体代码，但不改变 Agent 2.0 总架构。状态标注为「已冻结」的选择已于 2026-08-19 随前端修复批次确定：
@@ -1060,7 +1067,8 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | Provider 启动授权 | A2-33—A2-35 | Operation/Transport/Codec 启动错配负例与统一 readiness 投影 |
 | Provider Transport | A2-79、A2-82—A2-84 | 两家 Profile 独立 payload；401/403/429/5xx 分类；JSON/envelope 分层；256 KiB + 1 拒绝；body-stall deadline 不回退 |
 | Provider 调用决策 | A2-85—A2-86 | Goal/General schema 拒绝调用数 1；HTTP/JSON/envelope 失败请求数 1 且 payload model 始终为启动选定 Provider；无 repair、retry 或自动 fallback |
-| Provider 真实质量 | A2-80—A2-81、A2-87—A2-88、A2-113 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；一次通过不构成稳定结论 |
+| Provider Registry 证据语义 | A2-113 | Registry 仅暴露 approved configuration/request features；接口不得声明 supports/schema verified/quality verified；真实层由独立执行证据报告 |
+| Provider 真实质量 | A2-80—A2-81、A2-87—A2-88 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；一次通过不构成稳定结论 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |

@@ -20,17 +20,20 @@ class ModelProviderDescriptorTest {
                 "deepseek-v4-flash",
                 Set.of("c1-policy-v1"),
                 Set.of("c1.answer.v1"),
-                Set.of(ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-                        ModelProviderCapability.THINKING_CONTROL,
-                        ModelProviderCapability.NON_STREAMING));
+                Set.of(ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+                        ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+                        ModelProviderRequestFeature.NON_STREAMING_REQUEST));
 
-        assertThat(descriptor.supports("c1-policy-v1", "c1.answer.v1")).isTrue();
-        assertThat(descriptor.supports("unknown", "c1.answer.v1")).isFalse();
+        assertThat(descriptor.isApprovedConfiguration("c1-policy-v1", "c1.answer.v1"))
+                .isTrue();
+        assertThat(descriptor.isApprovedConfiguration("unknown", "c1.answer.v1"))
+                .isFalse();
         assertThat(ModelProviderDescriptor.class.getDeclaredFields())
                 .extracting(Field::getName)
                 .doesNotContain("apiKey", "secret", "token", "prompt", "request", "response");
         assertThat(ModelProviderDescriptor.class.getDeclaredMethods())
-                .extracting(java.lang.reflect.Method::getName).doesNotContain("toString");
+                .extracting(java.lang.reflect.Method::getName)
+                .doesNotContain("toString", "supports", "isSchemaVerified", "isQualityVerified");
     }
 
     @Test
@@ -55,21 +58,22 @@ class ModelProviderDescriptorTest {
                 "deepseek-v4-flash",
                 Set.of("c1-policy-v1"),
                 Set.of("c1.answer.v1"),
-                Set.of(ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-                        ModelProviderCapability.THINKING_CONTROL,
-                        ModelProviderCapability.NON_STREAMING));
+                Set.of(ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+                        ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+                        ModelProviderRequestFeature.NON_STREAMING_REQUEST));
 
         assertThat(descriptor.getProviderId()).isEqualTo(ModelProviderKind.DEEPSEEK_V4_FLASH);
         assertThat(descriptor.getAdapterVersion()).isEqualTo("adapter-v1");
         assertThat(descriptor.getEndpoint()).isEqualTo(URI.create("https://api.deepseek.com/chat/completions"));
         assertThat(descriptor.getModelName()).isEqualTo("deepseek-v4-flash");
-        assertThat(descriptor.getSupportedModelPolicyVersions()).containsExactly("c1-policy-v1");
-        assertThat(descriptor.getSupportedAnswerSchemaVersions()).containsExactly("c1.answer.v1");
-        assertThat(descriptor.getCapabilities()).containsExactlyInAnyOrder(
-                ModelProviderCapability.STRUCTURED_JSON_OUTPUT,
-                ModelProviderCapability.THINKING_CONTROL,
-                ModelProviderCapability.NON_STREAMING);
-        assertThatThrownBy(() -> descriptor.getCapabilities().add(ModelProviderCapability.NON_STREAMING))
+        assertThat(descriptor.getApprovedModelPolicyVersions()).containsExactly("c1-policy-v1");
+        assertThat(descriptor.getApprovedAnswerSchemaVersions()).containsExactly("c1.answer.v1");
+        assertThat(descriptor.getRequestFeatures()).containsExactlyInAnyOrder(
+                ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
+                ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
+                ModelProviderRequestFeature.NON_STREAMING_REQUEST);
+        assertThatThrownBy(() -> descriptor.getRequestFeatures().add(
+                ModelProviderRequestFeature.NON_STREAMING_REQUEST))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 }

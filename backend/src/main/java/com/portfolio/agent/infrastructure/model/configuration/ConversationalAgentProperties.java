@@ -17,7 +17,7 @@ public final class ConversationalAgentProperties {
         return enabled
                 && visitorDataPolicyApproved
                 && modelPolicy.isModelEnabled()
-                && registry.supports(
+                && registry.isApprovedConfiguration(
                         modelPolicy.getProvider(),
                         modelPolicy.getModelPolicyVersion(),
                         ModelProviderRegistrySnapshot.CONVERSATION_ANSWER_SCHEMA_VERSION);

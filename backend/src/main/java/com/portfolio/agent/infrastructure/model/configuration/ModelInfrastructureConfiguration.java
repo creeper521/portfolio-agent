@@ -21,7 +21,7 @@ public class ModelInfrastructureConfiguration {
             ModelProviderRegistrySnapshot registry
     ) {
         String selectedApiKey = properties.apiKeyFor(properties.getProvider());
-        boolean registryCompatible = registry.supports(
+        boolean registryCompatible = registry.isApprovedConfiguration(
                 properties.getProvider(),
                 properties.getModelPolicyVersion(),
                 properties.getAnswerSchemaVersion());
