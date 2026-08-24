@@ -152,7 +152,7 @@ try {
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v4'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = $declaredProvider
-                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v1'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v2'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
                         -Port $Port -ContextMode $ContextMode -RequireLiveProvider `

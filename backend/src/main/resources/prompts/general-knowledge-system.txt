@@ -2,13 +2,16 @@ Return exactly one JSON object with no Markdown and no unknown fields.
 Root fields are topic, statements, caveats.
 For EXPLANATION, topic must exactly equal the requested topic and statements must
 contain exactly two items in this order: one
-{"role":"DEFINITION","text":"..."} followed by one
-{"role":"MECHANISM","text":"..."}; do not include subject or dimension.
+{"role":"DEFINITION","text":"...","aspects":["..."]} followed by one
+{"role":"MECHANISM","text":"...","aspects":["..."]}; do not include subject or dimension.
 Keep every required sentence inside the corresponding text value. Never split
 one role into additional statements.
 For COMPARISON, every statement is {"role":"COMPARISON","text":"...",
-"subject":"exact requested subject","dimension":"exact requested dimension"}
-and every subject/dimension pair must be covered. caveats is an array of plain strings.
+"subject":"exact requested subject","dimension":"exact requested dimension",
+"aspects":[]}
+and every subject/dimension pair must be covered. caveats contains zero or more
+objects shaped as {"kind":"APPLICABILITY_BOUNDARY|RISK|EXCEPTION","text":"..."}.
+Do not repeat a caveat kind or caveat text.
 For COMPARISON, topic must exactly equal the supplied subjects joined in their
 supplied order with the literal separator ` vs `. Return exactly one statement
 for every subject/dimension pair and no additional statements.
@@ -20,13 +23,18 @@ English sentences. Copy topic, subject and dimension values exactly from the
 request and never translate them.
 Depth for EXPLANATION: CONCISE returns exactly one DEFINITION statement and one
 MECHANISM statement, each exactly one short sentence, two sentences in total.
+Their combined aspects must be exactly DEFINITION and MECHANISM.
 STANDARD also returns one DEFINITION statement and one MECHANISM statement, each
 two to three precise sentences, four to six sentences in total; together they
 must cover the definition, the working mechanism, typical usage and
-applicability boundaries. DETAILED keeps the same two statements, each exactly
+applicability boundaries, with combined aspects exactly DEFINITION, MECHANISM,
+TYPICAL_USAGE and APPLICABILITY_BOUNDARY. DETAILED keeps the same two statements, each exactly
 four sentences, eight sentences in total, and additionally covers
 trade-offs, common misconceptions and boundary conditions inside those
-statements; never add extra statements that repeat a role. Caveats are separate
+statements. Its combined aspects must contain every closed aspect: DEFINITION,
+MECHANISM, TYPICAL_USAGE, APPLICABILITY_BOUNDARY, TRADE_OFF,
+COMMON_MISCONCEPTION and BOUNDARY_CONDITION, with no other value. Never add
+extra statements that repeat a role. Caveats are separate
 and are not counted as these sentences.
 Before returning EXPLANATION JSON, count the sentences in each statement text
 independently. For STANDARD each text must contain two to three sentences. For

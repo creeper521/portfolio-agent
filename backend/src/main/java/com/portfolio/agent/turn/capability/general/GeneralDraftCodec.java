@@ -10,9 +10,11 @@ import java.util.Set;
 
 /** Strict decoder for untrusted provider output. Unknown or shape-mismatched fields fail closed. */
 public final class GeneralDraftCodec {
-    public static final String SCHEMA_VERSION = "general.draft.v1";
+    public static final String SCHEMA_VERSION = "general.draft.v2";
     private static final Set<String> ROOT_FIELDS = Set.of("topic", "statements", "caveats");
-    private static final Set<String> STATEMENT_FIELDS = Set.of("role", "text", "subject", "dimension");
+    private static final Set<String> STATEMENT_FIELDS = Set.of(
+            "role", "text", "subject", "dimension", "aspects");
+    private static final Set<String> CAVEAT_FIELDS = Set.of("kind", "text");
     private final ObjectMapper objectMapper;
 
     public GeneralDraftCodec(ObjectMapper objectMapper) {
@@ -35,18 +37,22 @@ public final class GeneralDraftCodec {
                 GeneralSemanticResult.Role role = GeneralSemanticResult.Role.valueOf(requiredText(node, "role"));
                 statements.add(new StatementDraft(
                         role, requiredText(node, "text"), optionalText(node, "subject"),
-                        optionalText(node, "dimension")));
+                        optionalText(node, "dimension"), enumSet(node, "aspects", Aspect.class)));
             }
             JsonNode caveatsNode = root.get("caveats");
             if (caveatsNode == null || !caveatsNode.isArray() || caveatsNode.size() > 10) {
                 throw new IllegalArgumentException("caveats are invalid");
             }
-            List<String> caveats = new ArrayList<>();
+            List<CaveatDraft> caveats = new ArrayList<>();
             for (JsonNode node : caveatsNode) {
-                if (!node.isTextual() || node.textValue().isBlank() || node.textValue().length() > 1000) {
-                    throw new IllegalArgumentException("caveat is invalid");
+                requireObject(node, CAVEAT_FIELDS, "caveat");
+                String text = requiredText(node, "text");
+                if (text.length() > 1000) {
+                    throw new IllegalArgumentException("caveat text is invalid");
                 }
-                caveats.add(node.textValue().trim());
+                caveats.add(new CaveatDraft(
+                        CaveatKind.valueOf(requiredText(node, "kind")),
+                        text));
             }
             return new Draft(topic, statements, caveats);
         } catch (RuntimeException exception) {
@@ -79,12 +85,35 @@ public final class GeneralDraftCodec {
         return value.textValue().trim();
     }
 
-    public record Draft(String topic, List<StatementDraft> statements, List<String> caveats) {
+    private <E extends Enum<E>> Set<E> enumSet(
+            JsonNode node, String field, Class<E> type) {
+        JsonNode values = node.get(field);
+        if (values == null || !values.isArray() || values.size() > 10) {
+            throw new IllegalArgumentException(field + " is invalid");
+        }
+        java.util.LinkedHashSet<E> decoded = new java.util.LinkedHashSet<>();
+        for (JsonNode value : values) {
+            if (!value.isTextual() || !decoded.add(Enum.valueOf(type, value.textValue()))) {
+                throw new IllegalArgumentException(field + " is invalid");
+            }
+        }
+        return Set.copyOf(decoded);
+    }
+
+    public record Draft(
+            String topic, List<StatementDraft> statements, List<CaveatDraft> caveats) {
         public Draft {
             statements = List.copyOf(statements);
             caveats = List.copyOf(caveats);
         }
     }
     public record StatementDraft(
-            GeneralSemanticResult.Role role, String text, String subject, String dimension) { }
+            GeneralSemanticResult.Role role, String text, String subject, String dimension,
+            Set<Aspect> aspects) { }
+    public record CaveatDraft(CaveatKind kind, String text) { }
+    public enum Aspect {
+        DEFINITION, MECHANISM, TYPICAL_USAGE, APPLICABILITY_BOUNDARY,
+        TRADE_OFF, COMMON_MISCONCEPTION, BOUNDARY_CONDITION
+    }
+    public enum CaveatKind { APPLICABILITY_BOUNDARY, RISK, EXCEPTION }
 }

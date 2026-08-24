@@ -568,7 +568,7 @@ exit 0
     }
     Assert-True ($launcherText -match [regex]::Escape("'goal.proposal.v4'")) `
         'Goal Interpretation must declare the production Codec schema.'
-    Assert-True ($launcherText -match [regex]::Escape("'general.draft.v1'")) `
+    Assert-True ($launcherText -match [regex]::Escape("'general.draft.v2'")) `
         'General Knowledge must declare the production Codec schema.'
     Assert-True ($launcherText -match `
             '(?s)PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF.{0,120}selectedProvider') `

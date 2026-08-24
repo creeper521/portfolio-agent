@@ -23,8 +23,8 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                     captured.set(request);
                     return new StructuredModelResponse("""
                             {"topic":"并发控制","statements":[
-                              {"role":"DEFINITION","text":"定义。"},
-                              {"role":"MECHANISM","text":"机制。"}
+                              {"role":"DEFINITION","text":"定义。","aspects":["DEFINITION"]},
+                              {"role":"MECHANISM","text":"机制。","aspects":["MECHANISM"]}
                             ],"caveats":[]}
                             """);
                 }, new ObjectMapper(), systemPrompt, 1200, Duration.ofSeconds(10));

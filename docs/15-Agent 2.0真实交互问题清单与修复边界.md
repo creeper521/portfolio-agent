@@ -130,7 +130,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v4`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v4`/`general.draft.v2` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
@@ -158,12 +158,12 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-60 | P1 | Discussion NEEDS_CLARIFICATION 未履约 | 模型不确定被投影成解释不可用 | 产生限定澄清且 pointer 不变 | Discussion / Clarification |
 | A2-61 | P1 | Discussion 澄清缺少闭合选择 | 用户只能重试或退出 | 后端提供合法 facet、输出或候选选择 | Discussion / Public Contract |
 | A2-62 | P2 | 开放社交回复约束不足 | 非固定社交输入由模型直接生成 | 语言、长度和复述风险受运行时校验 | Conversational / Validation |
-| A2-63 | P1 | General depth 只依赖 Prompt | Validator 不检查目标句数 | 每档句数成为运行时不变量 | General Validator |
-| A2-64 | P1 | General 简体中文不受运行时保证 | 英文正文仍可能通过结构校验 | 非技术标识的完整英文句被拒绝 | General Validator / Language |
-| A2-65 | P1 | DETAILED 不保证语义完整 | 不校验取舍、误区和边界覆盖 | DETAILED 覆盖批准语义维度 | General Quality |
-| A2-66 | P1 | General Comparison 接受额外 pair | 只要求请求 pair 至少出现 | 实际 pair 与请求完全相等且无重复 | General Comparison Validator |
-| A2-67 | P2 | General caveat 校验过弱 | 只检查数组、非空和长度 | 校验语言、重复、相关性和边界 | General Validator |
-| A2-68 | P1 | 线上质量与验收门倒挂 | 外部采样门比生产 Validator 严格 | 核心质量门同步进入生产校验 | Runtime / Provider Gate |
+| A2-63 | P1 | General depth 只依赖 Prompt | 生产 Validator 已按 depth 强制每条 statement 的句数；待真实 Provider/Browser 质量门 | 每档句数成为运行时不变量 | General Validator |
+| A2-64 | P1 | General 简体中文不受运行时保证 | 生产 Validator 已要求每句含中文字符并拒绝完整英文句；待真实 Provider/Browser | 非技术标识的完整英文句被拒绝 | General Validator / Language |
+| A2-65 | P1 | DETAILED 不保证语义完整 | `general.draft.v2` 已要求闭合 aspect 精确覆盖；aspect 仍是 Provider 自报，待真实正文抽样证明 | DETAILED 覆盖批准语义维度 | General Quality |
+| A2-66 | P1 | General Comparison 接受额外 pair | 生产 Validator 已要求实际 pair 与请求笛卡尔积精确相等且无重复；待真实 Provider/Browser | 实际 pair 与请求完全相等且无重复 | General Comparison Validator |
+| A2-67 | P2 | General caveat 校验过弱 | caveat 已改为闭合 kind + text，并校验中文、句数、长度、kind/text 去重；相关性仍待真实正文抽样 | 校验语言、重复、相关性和边界 | General Validator |
+| A2-68 | P1 | 线上质量与验收门倒挂 | 句数、语言、aspect、exact pair 与 caveat 核心门已进入生产 Validator；真实 Provider/Browser 总门未通过 | 核心质量门同步进入生产校验 | Runtime / Provider Gate |
 | A2-69 | P1 | CLARIFICATION_IN_PROGRESS 污染窗口 | USER 被排除而 Assistant busy 保留 | 临时终局不破坏 USER/ASSISTANT 交替 | Frontend Conversation Window |
 | A2-70 | P1 | 澄清取消后卡片可能永久只读 | 服务端可释放 reservation，UI 不恢复 | 可恢复失败和取消后卡片可再次提交 | Frontend Clarification State |
 | A2-71 | P1 | 首页 Round 不是真多轮 | 每轮新 Conversation、空窗口、无 Token | 改为单轮预览或真正复用会话 | Homepage Dialogue / Session |
@@ -321,7 +321,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 #### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
 
 - `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
-- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v4`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。v4 包含 Portfolio Fact/跨域目标的必填 `depth`、闭合 comparison dimension、公开目录约束，以及可信 `defaultSubject/audienceProfile` 输入语义，不能沿用旧版本名义。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v4`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v2` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。Goal v4 包含 depth、闭合 comparison/constraint 与可信页面/受众输入；General v2 包含闭合 aspects 和 typed caveat，不能沿用旧版本名义。
 - `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
 - `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
 - Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
@@ -370,6 +370,14 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - 该输入语义变化由 `goal.proposal.v4` 承载。Backend clean package 于 2026-08-24 实际执行：`889 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；全仓 `privacy-check` 扫描 916 个文件通过，启动器与 packaged runner 自测通过。
 - model-disabled packaged JAR SHA-256 `71b8efc92889ffc9ddd630b96f15e5b3c8308806436aa63bc420483919e67911` 的 PRESET/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），因此 A2-53—A2-55 仍不移除。
 - 本批未修改 Frontend。现有 API 字段未改变；Frontend Agent 负责确保 PROJECT/CASE 页面持续发送正确 `subjectHint + requestSource`，并完成角色差异、页面省略表达的 Browser 交互与正文验收。UI 文案与交互设计仍归 Frontend Agent。
+
+#### 3.3.7 General 生产质量门当前证据（仍为 IN_PROGRESS）
+
+- `general.draft.v2` 把 explanation aspect 与 caveat kind 变成闭合字段；生产 Codec 拒绝未知/重复枚举、未知字段及超长 caveat。`GeneralDraftValidator` 按 depth 强制每条 statement 句数及逐句中文字符，并要求 explanation 的闭合 aspect 集合精确等于该 depth 需求。
+- Comparison 实际 `(subject, dimension)` 集合必须与请求笛卡尔积精确相等，重复、遗漏或额外 pair 均失败关闭；caveat 要求一至两句中文、kind/text 分别去重。上述门只证明 Provider 声明和结构闭合，不把自报 aspect 当作正文语义正确。
+- `GeneralDraftValidatorTest`、`GeneralDraftCodecAdversarialTest`、`GeneralKnowledgeGeneratorTest`、`GeneralTaskExecutorTest`、`OpenAiCompatibleGeneralKnowledgeAdapterTest` 与 `AgentRuntimeReadinessTest` 的正反例通过；Backend clean package 于 2026-08-24 实际执行：`895 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14。
+- 全仓 `privacy-check` 扫描 916 个文件通过，`start-local.test.ps1`、`run-jar-e2e.test.ps1` 与当前权威文档检查通过。model-disabled packaged JAR SHA-256 `500813176cfb553073c3b927a59fc10682c5685235e66b0b245af6794a469c1a` 的 API/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），未取得真实 Provider 正文或 Browser 证据，A2-63—A2-68 不移除。
+- 本批未修改 Frontend，公开渲染合同未变化；真实正文的语言、深度、Comparison coverage 与 caveat 相关性 Browser 验收仍交由 Frontend Agent 执行，UI/交互设计不在本批范围。
 
 ### 3.4 本轮审计证据边界
 
