@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.execution.CancellationSignal;
@@ -135,7 +136,8 @@ class PortfolioInvocationFactoryTest {
         return new TaskExecutionContext(
                 task, List.of(), "public-1",
                 TurnDeadline.after(Duration.ofSeconds(1), Clock.systemUTC()),
-                new CancellationSignal(), false, false);
+                new CancellationSignal(), false, false,
+                ResolvedModelExecution.none());
     }
 
     private PortfolioEvidenceInvocation invocationForOverview(

@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.execution;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.planning.SemanticTask;
 
 import java.util.List;
@@ -13,11 +14,13 @@ public final class TaskExecutionContext {
     private final CancellationSignal cancellation;
     private final boolean modelExpressionAllowed;
     private final boolean presetRequest;
+    private final ResolvedModelExecution modelExecution;
 
     public TaskExecutionContext(
             SemanticTask task, List<TaskSemanticResult> dependencyResults,
             String contentReleaseId, TurnDeadline deadline, CancellationSignal cancellation,
-            boolean modelExpressionAllowed, boolean presetRequest) {
+            boolean modelExpressionAllowed, boolean presetRequest,
+            ResolvedModelExecution modelExecution) {
         this.task = Objects.requireNonNull(task, "task");
         this.dependencyResults = List.copyOf(Objects.requireNonNull(dependencyResults, "dependencyResults"));
         this.contentReleaseId = Objects.requireNonNull(contentReleaseId, "contentReleaseId");
@@ -25,6 +28,8 @@ public final class TaskExecutionContext {
         this.cancellation = Objects.requireNonNull(cancellation, "cancellation");
         this.modelExpressionAllowed = modelExpressionAllowed;
         this.presetRequest = presetRequest;
+        this.modelExecution = Objects.requireNonNull(
+                modelExecution, "modelExecution");
     }
 
     public SemanticTask getTask() { return task; }
@@ -34,4 +39,5 @@ public final class TaskExecutionContext {
     public CancellationSignal getCancellation() { return cancellation; }
     public boolean isModelExpressionAllowed() { return modelExpressionAllowed; }
     public boolean isPresetRequest() { return presetRequest; }
+    public ResolvedModelExecution getModelExecution() { return modelExecution; }
 }

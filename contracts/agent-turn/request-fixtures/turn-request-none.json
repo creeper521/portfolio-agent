@@ -1,0 +1,15 @@
+{
+  "requestId": "724023ab-1aaf-40f6-a41b-174805123b63",
+  "modelSelection": {
+    "kind": "NONE"
+  },
+  "command": {
+    "kind": "ASK",
+    "input": {
+      "kind": "PRESET",
+      "presetId": "question-sql-audit-detail",
+      "presetRevision": "pcv1-0123456789abcdef"
+    }
+  },
+  "conversationWindow": []
+}

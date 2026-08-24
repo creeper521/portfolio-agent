@@ -65,8 +65,8 @@ public final class DiagnosticEvent {
     private static final Map<String, Set<String>> APPROVED_FIELDS_BY_EVENT =
             Map.ofEntries(
                     Map.entry("application.started", fields(
-                            "model_expression.enabled",
-                            "conversation.enabled",
+                            "model_runtime.enabled",
+                            "model_catalog.selectable_count",
                             "retrieval.profile",
                             "answer.request_timeout_ms",
                             "answer.requests_per_minute",

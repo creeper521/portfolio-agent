@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.infrastructure.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelResponse;
+import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
 import com.portfolio.agent.turn.planning.GoalInterpretationResult;
 import com.portfolio.agent.turn.planning.GoalKind;
@@ -24,23 +25,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoalInterpretationAdapterTest {
+    @Test void noneSelectionDoesNotCallGoalProvider() {
+        AtomicInteger calls = new AtomicInteger();
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                (binding, request) -> {
+                    calls.incrementAndGet();
+                    throw new AssertionError("NONE must not call provider");
+                }, new ObjectMapper(), new GoalProposalCodec(), "system", 100,
+                Duration.ofSeconds(2));
+
+        assertThatThrownBy(() -> adapter.interpret(
+                input(),
+                com.portfolio.agent.turn.execution.TurnDeadline.after(
+                        Duration.ofSeconds(3), Clock.systemUTC()),
+                com.portfolio.agent.infrastructure.model
+                        .ResolvedModelExecution.none()))
+                .isInstanceOf(com.portfolio.agent.turn.planning
+                        .GoalInterpretationUnavailableException.class);
+        assertThat(calls).hasValue(0);
+    }
+
     @Test void reportsGoalCodecRejectionAsSchemaWithoutProviderBody() {
         List<DiagnosticEvent> events = new ArrayList<>();
         AtomicInteger calls = new AtomicInteger();
         String providerBody = "{\"privateProviderBody\":\"sentinel\"}";
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
-                request -> {
+                (binding, request) -> {
                     calls.incrementAndGet();
                     return new StructuredModelResponse(providerBody);
                 },
                 new ObjectMapper(), new GoalProposalCodec(), "system", 100,
                 Duration.ofSeconds(2), new ModelOutputDiagnostics(events::add));
 
-        assertThatThrownBy(() -> adapter.interpret(input(),
+        SelectedModelFailureException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                () -> adapter.interpret(input(),
                 com.portfolio.agent.turn.execution.TurnDeadline.after(
-                        Duration.ofSeconds(3), Clock.systemUTC())))
-                .isInstanceOf(com.portfolio.agent.turn.planning
-                        .GoalInterpretationUnavailableException.class);
+                        Duration.ofSeconds(3), Clock.systemUTC()),
+                ModelExecutionSnapshotFixture.model()),
+                        SelectedModelFailureException.class);
+        assertThat(failure.getCode()).isEqualTo(
+                SelectedModelFailureException.Code.SELECTED_MODEL_INVALID_RESPONSE);
         assertThat(events).singleElement().satisfies(event -> {
             assertThat(event.getFields().get("provider.operation"))
                     .isEqualTo("GOAL_INTERPRETATION");
@@ -53,7 +78,7 @@ class GoalInterpretationAdapterTest {
     @Test void sendsOnlyGoalLevelAuthorityAndDecodesStrictProposal() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
         String systemPrompt = "goal-system-prompt";
-        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(request -> {
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter((binding, request) -> {
             captured.set(request);
             return new StructuredModelResponse("""
                     {
@@ -79,7 +104,8 @@ class GoalInterpretationAdapterTest {
 
         GoalInterpretationResult result = adapter.interpret(
                 input(), com.portfolio.agent.turn.execution.TurnDeadline.after(
-                        Duration.ofSeconds(3), Clock.systemUTC()));
+                        Duration.ofSeconds(3), Clock.systemUTC()),
+                ModelExecutionSnapshotFixture.model());
         assertThat(result.getKind())
                 .isEqualTo(GoalInterpretationResult.Kind.SEMANTIC_ROUTE);
         assertThat(captured.get().systemPrompt()).isEqualTo(systemPrompt);

@@ -1,11 +1,9 @@
 package com.portfolio.agent.turn.infrastructure;
 
-import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
 import com.portfolio.agent.infrastructure.model.policy.OperationMode;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderKind;
 import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 import com.portfolio.agent.turn.state.configuration.ConversationContextProperties;
@@ -21,22 +19,17 @@ public final class AgentRuntimeReadiness {
 
     public AgentRuntimeReadiness(
             ConversationContextProperties.Mode contextMode,
-            ConversationProviderAccess providerAccess,
-            ModelOperationPolicyRegistry policies,
-            ModelProviderKind transportProvider) {
+            ModelOperationPolicyRegistry policies) {
         Objects.requireNonNull(contextMode, "contextMode");
-        Objects.requireNonNull(providerAccess, "providerAccess");
         Objects.requireNonNull(policies, "policies");
-        Objects.requireNonNull(transportProvider, "transportProvider");
         agentAvailable = contextMode != ConversationContextProperties.Mode.DISABLED;
         EnumMap<ModelOperation, Boolean> availability =
                 new EnumMap<>(ModelOperation.class);
         for (ModelOperation operation : ModelOperation.values()) {
             ModelOperationPolicy policy = policies.get(operation);
-            validateEnabledAuthority(policy, transportProvider);
+            validateEnabledAuthority(policy);
             availability.put(operation,
                     agentAvailable
-                            && providerAccess.isAllowed()
                             && policy.getMode() == OperationMode.ENABLED);
         }
         operationAvailability = Map.copyOf(availability);
@@ -50,14 +43,8 @@ public final class AgentRuntimeReadiness {
         return operationAvailability.get(Objects.requireNonNull(operation, "operation"));
     }
 
-    private void validateEnabledAuthority(
-            ModelOperationPolicy policy, ModelProviderKind transportProvider) {
+    private void validateEnabledAuthority(ModelOperationPolicy policy) {
         if (policy.getMode() != OperationMode.ENABLED) return;
-        if (!transportProvider.name().equals(policy.getProviderRef())) {
-            throw new IllegalStateException(
-                    "enabled model operation provider does not match transport: "
-                            + policy.getOperation());
-        }
         if (!expectedSchema(policy.getOperation()).equals(policy.getSchemaVersion())) {
             throw new IllegalStateException(
                     "enabled model operation schema does not match production codec: "

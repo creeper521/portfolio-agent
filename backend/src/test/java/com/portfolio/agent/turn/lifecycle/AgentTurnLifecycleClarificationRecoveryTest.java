@@ -46,7 +46,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         GoalResolver resolver = mock(GoalResolver.class);
         BlockedGoalTemplate blocked = BlockedGoalTemplate.recommendation(
                 null, Set.of("CAPABILITY_SQL"), ClarificationProposal.Field.REQUESTED_SIZE);
-        when(resolver.resolve(any(), any(), any())).thenReturn(
+        when(resolver.resolve(any(), any(), any(), any())).thenReturn(
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.REQUESTED_SIZE,
                         "provider text must not be persisted VISITOR_SENTINEL", blocked)));
@@ -57,7 +57,8 @@ class AgentTurnLifecycleClarificationRecoveryTest {
 
         UUID askRequestId = UUID.randomUUID();
         AgentTurnCommand.Ask ask = new AgentTurnCommand.Ask(
-                askRequestId, new AgentTurnCommand.FreeText("推荐 8 个后端项目"),
+                askRequestId, AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("推荐 8 个后端项目"),
                 null, null);
         AgentTurnLifecycleService.Result first = service.execute(null, ask);
         PublicAgentTurn.Clarification clarification =
@@ -84,7 +85,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         AgentTurnLifecycleService.Result rejectedOldToken = service.execute(
                 first.conversation().resumeToken(),
                 new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         clarification.getClarification().getClarificationId(),
                         new AgentTurnCommand.ChoiceAnswer("choice_size_3"), null, null));
         assertThat(rejectedOldToken.status())
@@ -93,7 +94,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         AgentTurnLifecycleService.Result resolved = service.execute(
                 replay.conversation().resumeToken(),
                 new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         clarification.getClarification().getClarificationId(),
                         new AgentTurnCommand.ChoiceAnswer("choice_size_3"), null, null));
 
@@ -105,7 +106,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                         .getGoals().getFirst().getParameters();
         assertThat(parameters.getRequestedSize()).isEqualTo(3);
         assertThat(parameters.getConstraints()).containsExactly("CAPABILITY_SQL");
-        verify(resolver).resolve(any(), any(), any());
+        verify(resolver).resolve(any(), any(), any(), any());
     }
 
     @Test
@@ -128,7 +129,8 @@ class AgentTurnLifecycleClarificationRecoveryTest {
 
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(), "clarification_busy_1",
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        "clarification_busy_1",
                         new AgentTurnCommand.ChoiceAnswer("choice_size_2"),
                         null, null));
 
@@ -173,7 +175,8 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         long startedAt = System.nanoTime();
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(), "clarification_blocking_1",
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        "clarification_blocking_1",
                         new AgentTurnCommand.ChoiceAnswer("choice_size_2"), null, null));
 
         assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
@@ -212,7 +215,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
         long startedAt = System.nanoTime();
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.Continue(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
                         "context_blocking_123", null,
                         "继续", null, null, null));
@@ -237,7 +240,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                 java.util.Set.of(UserGoalProposal.Facet.OVERVIEW), java.util.Set.of(),
                 null, java.util.Set.of(), ClarificationProposal.Field.SUBJECT,
                 java.util.Set.of(ClarificationProposal.Field.SUBJECT), 1);
-        when(resolver.resolve(any(), any(), any())).thenReturn(
+        when(resolver.resolve(any(), any(), any(), any())).thenReturn(
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.SUBJECT, "provider prompt", blocked)));
         AgentTurnLifecycleService service = service(
@@ -245,7 +248,8 @@ class AgentTurnLifecycleClarificationRecoveryTest {
 
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.Ask(
-                        UUID.randomUUID(), new AgentTurnCommand.FreeText("这个项目"), null, null));
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        new AgentTurnCommand.FreeText("这个项目"), null, null));
 
         assertThat(result.turn()).isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
         assertThat(store.find(result.turn().getRequestId()).orElseThrow().getChallenges()).isEmpty();
@@ -265,7 +269,7 @@ class AgentTurnLifecycleClarificationRecoveryTest {
                 null, java.util.Set.of(), ClarificationProposal.Field.SUBJECT,
                 java.util.Set.of(ClarificationProposal.Field.SUBJECT),
                 java.util.List.of(), 1);
-        when(resolver.resolve(any(), any(), any())).thenReturn(
+        when(resolver.resolve(any(), any(), any(), any())).thenReturn(
                 ResolvedGoalSet.clarification(new ClarificationProposal(
                         ClarificationProposal.Field.SUBJECT, "provider prompt", firstTemplate)));
         SemanticPlanCompiler compiler = mock(SemanticPlanCompiler.class);
@@ -281,15 +285,17 @@ class AgentTurnLifecycleClarificationRecoveryTest {
 
         AgentTurnLifecycleService.Result first = service.execute(
                 null, new AgentTurnCommand.Ask(
-                        UUID.randomUUID(), new AgentTurnCommand.FreeText("这个项目"), null, null));
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        new AgentTurnCommand.FreeText("这个项目"), null, null));
         PublicAgentTurn.Clarification firstTurn = (PublicAgentTurn.Clarification) first.turn();
         String token = first.conversation().resumeToken();
         AgentTurnLifecycleService.Result second = service.execute(
                 token, new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(), firstTurn.getClarification().getClarificationId(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        firstTurn.getClarification().getClarificationId(),
                         new AgentTurnCommand.ChoiceAnswer("choice_subject_1"), null, null));
         assertThat(second.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
-        verify(resolver).resolve(any(), any(), any());
+        verify(resolver).resolve(any(), any(), any(), any());
         verify(compiler).compile(any(), any(), any(), any());
     }
 

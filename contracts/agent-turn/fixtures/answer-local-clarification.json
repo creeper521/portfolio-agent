@@ -1,5 +1,11 @@
 {
   "requestId": "10000000-0000-4000-8000-000000000004",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "glm-4-7-flash",
+    "selectionVersion": "glm-4-7-flash-v1",
+    "participation": "NONE"
+  },
   "kind": "ANSWER",
   "answer": {
     "resolution": "PARTIAL",

@@ -16,6 +16,8 @@ class AgentTurnRequestMapperTest {
         AgentTurnRequest request = mapper.readValue("""
                 {
                   "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "modelSelection":{"kind":"MODEL","modelRef":"qwen-3-7-flash",
+                    "selectionVersion":"qwen-3-7-flash-v1"},
                   "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍这个项目"}},
                   "surfaceContext":{
                     "subjectHint":{"kind":"PROJECT","slug":"sql-audit"},
@@ -36,6 +38,14 @@ class AgentTurnRequestMapperTest {
                 .isEqualTo("63f63c75-16e8-49e7-864d-dcd0fe100d50");
         assertThat(command.getSurfaceContext().getSubjectHint().getSlug()).isEqualTo("sql-audit");
         assertThat(command.getConversationWindow().getMessages()).hasSize(1);
+        assertThat(command.getModelSelection().getKind())
+                .isEqualTo(AgentTurnCommand.ModelSelectionKind.MODEL);
+        assertThat(command.getModelSelection().getModelRef()).contains("qwen-3-7-flash");
+        assertThat(command.getModelSelection().getSelectionVersion())
+                .contains("qwen-3-7-flash-v1");
+        assertThat(command.toString())
+                .contains("qwen-3-7-flash", "qwen-3-7-flash-v1")
+                .doesNotContain("介绍这个项目", "上下文");
     }
 
     @Test
@@ -63,11 +73,18 @@ class AgentTurnRequestMapperTest {
         assertThat(clarification).isInstanceOf(AgentTurnCommand.ResolveClarification.class);
         assertThat(((AgentTurnCommand.ResolveClarification) clarification).getAnswer())
                 .isInstanceOf(AgentTurnCommand.ChoiceAnswer.class);
+        assertThat(preset.getModelSelection().getKind())
+                .isEqualTo(AgentTurnCommand.ModelSelectionKind.NONE);
+        assertThat(continuation.getModelSelection().getKind())
+                .isEqualTo(AgentTurnCommand.ModelSelectionKind.NONE);
+        assertThat(clarification.getModelSelection().getKind())
+                .isEqualTo(AgentTurnCommand.ModelSelectionKind.NONE);
     }
 
     private AgentTurnRequest read(String command) throws Exception {
         return mapper.readValue("""
-                {"requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50","command":%s,
+                {"requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                 "modelSelection":{"kind":"NONE"},"command":%s,
                  "conversationWindow":[]}
                 """.formatted(command), AgentTurnRequest.class);
     }

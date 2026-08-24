@@ -2,10 +2,22 @@ package com.portfolio.agent.infrastructure.model.provider;
 
 import java.util.Map;
 
-/** Provider-owned request protocol, versioned independently per approved provider. */
+/** Closed request shapes admitted by the structured transport. */
 public enum ModelProviderProtocolProfile {
-    DEEPSEEK_CHAT_COMPLETIONS_V1("deepseek-chat-completions-v1"),
-    GLM_CHAT_COMPLETIONS_V1("glm-chat-completions-v1");
+    ZHIPU_CHAT_COMPLETIONS("zhipu-chat-completions-v1") {
+        @Override
+        public void applyStructuredOutputFields(Map<String, Object> payload) {
+            common(payload);
+            payload.put("thinking", Map.of("type", "disabled"));
+        }
+    },
+    DASHSCOPE_CHAT_COMPLETIONS("dashscope-chat-completions-v1") {
+        @Override
+        public void applyStructuredOutputFields(Map<String, Object> payload) {
+            common(payload);
+            payload.put("enable_thinking", false);
+        }
+    };
 
     private final String version;
 
@@ -17,16 +29,26 @@ public enum ModelProviderProtocolProfile {
         return version;
     }
 
-    public void applyStructuredOutputFields(Map<String, Object> payload) {
+    public abstract void applyStructuredOutputFields(Map<String, Object> payload);
+
+    public static ModelProviderProtocolProfile fromConfiguredName(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("protocol profile is required");
+        }
+        return switch (value) {
+            case "ZHIPU_CHAT_COMPLETIONS" -> ZHIPU_CHAT_COMPLETIONS;
+            case "DASHSCOPE_CHAT_COMPLETIONS" -> DASHSCOPE_CHAT_COMPLETIONS;
+            default -> throw new IllegalArgumentException(
+                    "protocol profile is not approved: " + safeCategory(value));
+        };
+    }
+
+    private static void common(Map<String, Object> payload) {
         payload.put("response_format", Map.of("type", "json_object"));
-        payload.put("thinking", Map.of("type", "disabled"));
         payload.put("stream", false);
     }
 
-    public static ModelProviderProtocolProfile forProvider(ModelProviderKind provider) {
-        return switch (provider) {
-            case DEEPSEEK_V4_FLASH -> DEEPSEEK_CHAT_COMPLETIONS_V1;
-            case GLM_4_7 -> GLM_CHAT_COMPLETIONS_V1;
-        };
+    private static String safeCategory(String value) {
+        return value.isBlank() ? "BLANK" : "UNKNOWN";
     }
 }

@@ -32,7 +32,8 @@ public final class GeneralTaskExecutor implements SemanticTaskExecutor {
         }
         GeneralKnowledgeRequest request = request(context);
         try {
-            GeneralSemanticResult result = generator.generate(request);
+            GeneralSemanticResult result = generator.generate(
+                    request, context.getModelExecution());
             return TaskExecutionResult.full(new TaskArtifact(
                     result, presentationComposer.compose(result), TaskProvenance.none()));
         } catch (GeneralKnowledgeUnavailableException exception) {

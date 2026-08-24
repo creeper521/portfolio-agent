@@ -1,5 +1,11 @@
 {
   "requestId": "10000000-0000-4000-8000-000000000005",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "qwen-3-7-flash",
+    "selectionVersion": "qwen-3-7-flash-v1",
+    "participation": "GOAL_INTERPRETATION_ONLY"
+  },
   "kind": "CLARIFICATION",
   "message": "需要补充目标后才能继续。",
   "clarification": {

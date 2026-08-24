@@ -23,6 +23,7 @@ import java.util.UUID;
 /** Authenticated bounded codec for the final public snapshot plus state mutations. */
 public final class AgentStatePayloadCodec {
     private static final int MAX_BYTES = 128 * 1024;
+    private static final String PAYLOAD_VERSION = "agent-state.v2";
     private final ObjectMapper mapper;
     private final String currentKeyId;
     private final Map<String, byte[]> keys;
@@ -156,7 +157,7 @@ public final class AgentStatePayloadCodec {
         return cipher;
     }
     private byte[] aad(UUID requestId, String conversationId, String purpose) {
-        return (requestId + "\n" + conversationId + "\n" + purpose + "\nagent-state.v1")
+        return (requestId + "\n" + conversationId + "\n" + purpose + "\n" + PAYLOAD_VERSION)
                 .getBytes(StandardCharsets.UTF_8);
     }
     public record Envelope(String keyId, byte[] nonce, byte[] ciphertext) {

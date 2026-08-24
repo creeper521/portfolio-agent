@@ -398,7 +398,7 @@ class EvalHarnessTest {
             return com.portfolio.agent.evaluation.domain.EvalPolicy.builder()
                     .policyId("phase-0.v1")
                     .mode("OFFLINE")
-                    .blockingProvider("DEEPSEEK_V4_FLASH")
+                    .blockingProvider("glm-4-7-flash")
                     .publicSubjectSmokeCoverageMinimum(new BigDecimal("1.0"))
                     .namedRouteTopOneMinimum(new BigDecimal("1.0"))
                     .deepSemanticRouteTopOneMinimum(new BigDecimal("0.9"))

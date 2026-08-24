@@ -1,0 +1,16 @@
+{
+  "requestId": "e53d47d2-33c4-4d5d-8840-d3253666a26a",
+  "modelSelection": {
+    "kind": "MODEL",
+    "modelRef": "qwen-3-7-flash",
+    "selectionVersion": "qwen-3-7-flash-v1"
+  },
+  "command": {
+    "kind": "ASK",
+    "input": {
+      "kind": "FREE_TEXT",
+      "text": "解释事务隔离"
+    }
+  },
+  "conversationWindow": []
+}

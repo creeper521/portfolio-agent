@@ -37,8 +37,7 @@ public final class EvalCli {
     static int run(String[] args) {
         try {
             EvalCliArguments arguments = EvalCliArguments.parse(args);
-            EvalCliBootstrap bootstrap = new EvalCliBootstrap(
-                    arguments.hasFlag("authorize-real-provider"));
+            EvalCliBootstrap bootstrap = new EvalCliBootstrap();
             return execute(arguments, bootstrap);
         } catch (IllegalArgumentException failure) {
             System.err.println("eval: " + failure.getMessage());

@@ -64,6 +64,15 @@ public final class AgentTurnController {
              ActiveTurnCapacity.Lease ignoredActive = activeTurnCapacity.acquire()) {
             AgentTurnLifecycleService.Result result = lifecycle.execute(
                     bearer.token(), mapper.toCommand(request));
+            if (result.settlementFailed()) {
+                return error(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        request.getRequestId(),
+                        "AGENT_STATE_UNAVAILABLE",
+                        "Agent 状态服务暂时不可用。",
+                        true,
+                        3L);
+            }
             return switch (result.status()) {
                 case COMPLETED, REPLAY -> ResponseEntity.ok()
                         .header(HttpHeaders.CACHE_CONTROL, "no-store")

@@ -24,28 +24,28 @@ class AgentTurnLifecycleContinuationTest {
 
         AgentTurnLifecycleService.Result result = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("谢谢"), null, null));
 
         assertThat(result.turn())
                 .isInstanceOf(PublicAgentTurn.Conversational.class);
         org.mockito.Mockito.verify(fixture.resolver())
-                .interpretTyped(any(), any());
+                .interpretTyped(any(), any(), any());
         org.mockito.Mockito.verify(fixture.resolver(), org.mockito.Mockito.never())
-                .resolve(any(), any(), any());
+                .resolve(any(), any(), any(), any());
     }
 
     @Test void interpretationFailureDoesNotPersistOriginalTextInSuggestedAction() {
         ActiveFixture fixture = activeFixture(
                 com.portfolio.agent.turn.planning.GoalInterpretationResult
                         .conversational("unused"));
-        when(fixture.resolver().interpretTyped(any(), any())).thenThrow(
+        when(fixture.resolver().interpretTyped(any(), any(), any())).thenThrow(
                 new com.portfolio.agent.turn.planning
                         .GoalInterpretationUnavailableException());
 
         AgentTurnLifecycleService.Result result = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("继续说明验证方式"),
                         null, null));
 
@@ -74,7 +74,7 @@ class AgentTurnLifecycleContinuationTest {
 
         AgentTurnLifecycleService.Result result = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("再说详细一点"), null, null));
 
         PublicAgentTurn.Clarification clarification =
@@ -126,7 +126,7 @@ class AgentTurnLifecycleContinuationTest {
                                 .needsClarification()));
         AgentTurnLifecycleService.Result first = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("再说详细一点"), null, null));
         PublicAgentTurn.Clarification challengeTurn =
                 (PublicAgentTurn.Clarification) first.turn();
@@ -157,7 +157,7 @@ class AgentTurnLifecycleContinuationTest {
 
         AgentTurnLifecycleService.Result resumed = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.ResolveClarification(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         challengeTurn.getClarification().getClarificationId(),
                         new AgentTurnCommand.ChoiceAnswer("choice_facet_solution"),
                         null, null));
@@ -188,7 +188,7 @@ class AgentTurnLifecycleContinuationTest {
 
         AgentTurnLifecycleService.Result result = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("继续当前项目"), null, null));
 
         PublicAgentTurn.Clarification clarification =
@@ -220,7 +220,7 @@ class AgentTurnLifecycleContinuationTest {
 
         AgentTurnLifecycleService.Result result = fixture.service().execute(
                 fixture.token(), new AgentTurnCommand.Continue(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         AgentTurnCommand.ContinueOperation.REENTER_SUBJECT,
                         null, null, null,
                         new AgentTurnCommand.ContinueSubject(
@@ -281,7 +281,7 @@ class AgentTurnLifecycleContinuationTest {
         when(knowledge.getContent()).thenReturn(content);
         com.portfolio.agent.turn.planning.GoalResolver resolver =
                 mock(com.portfolio.agent.turn.planning.GoalResolver.class);
-        when(resolver.interpretTyped(any(), any())).thenReturn(
+        when(resolver.interpretTyped(any(), any(), any())).thenReturn(
                 com.portfolio.agent.turn.planning.GoalInterpretationResult.semanticRoute(
                         com.portfolio.agent.turn.planning.SemanticRouteProposal.needsClarification()));
         com.portfolio.agent.turn.planning.SemanticPlanCompiler compiler =
@@ -302,7 +302,7 @@ class AgentTurnLifecycleContinuationTest {
         AgentTurnLifecycleService.Result result = service.execute(
                 issued.issuedToken().encode(),
                 new AgentTurnCommand.Ask(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         new AgentTurnCommand.FreeText("继续这个项目"),
                         "recommendation_handle_123", null, null));
 
@@ -325,7 +325,7 @@ class AgentTurnLifecycleContinuationTest {
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("unused"));
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.Continue(
-                        UUID.randomUUID(),
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                         AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
                         "context_handle_123", null,
                         "继续说明", null, null, null));
@@ -394,7 +394,7 @@ class AgentTurnLifecycleContinuationTest {
         when(knowledge.getContent()).thenReturn(content);
         com.portfolio.agent.turn.planning.GoalResolver resolver =
                 mock(com.portfolio.agent.turn.planning.GoalResolver.class);
-        when(resolver.interpretTyped(any(), any())).thenReturn(interpretation);
+        when(resolver.interpretTyped(any(), any(), any())).thenReturn(interpretation);
         com.portfolio.agent.turn.planning.SemanticPlanCompiler compiler =
                 mock(com.portfolio.agent.turn.planning.SemanticPlanCompiler.class);
         AgentTurnLifecycleService service = new AgentTurnLifecycleService(

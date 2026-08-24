@@ -1,5 +1,6 @@
 package com.portfolio.agent.infrastructure.model.provider;
 
+import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -12,68 +13,109 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ModelProviderDescriptorTest {
 
     @Test
-    void validatesNonSecretMetadataAndExactCompatibility() {
-        ModelProviderDescriptor descriptor = new ModelProviderDescriptor(
-                ModelProviderKind.DEEPSEEK_V4_FLASH,
-                "c3-openai-compatible-v1",
-                URI.create("https://api.deepseek.com/chat/completions"),
-                "deepseek-v4-flash",
-                Set.of("c1-policy-v1"),
-                Set.of("c1.answer.v1"),
-                Set.of(ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
-                        ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
-                        ModelProviderRequestFeature.NON_STREAMING_REQUEST));
+    void usesAValidatedModelRefAndContainsOnlyNonSecretExecutionMetadata() {
+        ModelProviderDescriptor descriptor = descriptor("glm-4-7-flash");
 
-        assertThat(descriptor.isApprovedConfiguration("c1-policy-v1", "c1.answer.v1"))
-                .isTrue();
-        assertThat(descriptor.isApprovedConfiguration("unknown", "c1.answer.v1"))
-                .isFalse();
+        assertThat(descriptor.getModelRef()).isEqualTo(ModelRef.of("glm-4-7-flash"));
+        assertThat(descriptor.getProtocolProfile())
+                .isEqualTo(ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS);
+        assertThat(descriptor.getDescriptorFingerprint()).matches("[0-9a-f]{64}");
         assertThat(ModelProviderDescriptor.class.getDeclaredFields())
                 .extracting(Field::getName)
-                .doesNotContain("apiKey", "secret", "token", "prompt", "request", "response");
+                .noneMatch(this::looksLikeCredentialField);
+        assertThat(ModelTransportBinding.class.getDeclaredFields())
+                .extracting(Field::getName)
+                .contains("apiKey");
         assertThat(ModelProviderDescriptor.class.getDeclaredMethods())
                 .extracting(java.lang.reflect.Method::getName)
-                .doesNotContain("toString", "supports", "isSchemaVerified", "isQualityVerified");
+                .doesNotContain("toString", "supports", "isApprovedConfiguration");
     }
 
     @Test
-    void rejectsNonHttpsEndpointAndIncompleteCapabilities() {
+    void rejectsInvalidRefEndpointAndExecutionBounds() {
+        assertThatThrownBy(() -> ModelRef.of("GLM_4_7"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("model ref");
         assertThatThrownBy(() -> new ModelProviderDescriptor(
-                ModelProviderKind.DEEPSEEK_V4_FLASH,
-                "adapter-v1",
-                URI.create("http://api.deepseek.com/chat/completions"),
-                "deepseek-v4-flash",
-                Set.of("c1-policy-v1"),
-                Set.of("c1.answer.v1"),
-                Set.of()))
-                .isInstanceOf(IllegalArgumentException.class);
+                ModelRef.of("glm"), "v1", "GLM", 10,
+                URI.create("http://example.test/chat"), "glm",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("HTTPS");
+        assertThatThrownBy(() -> new ModelProviderDescriptor(
+                ModelRef.of("glm"), "v1", "GLM", 10,
+                URI.create("https://example.test/chat"), "glm",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 101))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxOutputTokens");
     }
 
     @Test
-    void copiesValidatedMetadataForImmutableAccess() {
-        ModelProviderDescriptor descriptor = new ModelProviderDescriptor(
-                ModelProviderKind.DEEPSEEK_V4_FLASH,
-                "adapter-v1",
-                URI.create("https://api.deepseek.com/chat/completions"),
-                "deepseek-v4-flash",
-                Set.of("c1-policy-v1"),
-                Set.of("c1.answer.v1"),
-                Set.of(ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
-                        ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
-                        ModelProviderRequestFeature.NON_STREAMING_REQUEST));
+    void queryCredentialsCannotEnterDescriptorFingerprintOrBindingText() {
+        String queryCredential = "query-secret";
+        URI endpointWithQuery = URI.create(
+                "https://example.test/chat?api_key=" + queryCredential);
 
-        assertThat(descriptor.getProviderId()).isEqualTo(ModelProviderKind.DEEPSEEK_V4_FLASH);
-        assertThat(descriptor.getAdapterVersion()).isEqualTo("adapter-v1");
-        assertThat(descriptor.getEndpoint()).isEqualTo(URI.create("https://api.deepseek.com/chat/completions"));
-        assertThat(descriptor.getModelName()).isEqualTo("deepseek-v4-flash");
-        assertThat(descriptor.getApprovedModelPolicyVersions()).containsExactly("c1-policy-v1");
-        assertThat(descriptor.getApprovedAnswerSchemaVersions()).containsExactly("c1.answer.v1");
-        assertThat(descriptor.getRequestFeatures()).containsExactlyInAnyOrder(
-                ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
-                ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
-                ModelProviderRequestFeature.NON_STREAMING_REQUEST);
-        assertThatThrownBy(() -> descriptor.getRequestFeatures().add(
-                ModelProviderRequestFeature.NON_STREAMING_REQUEST))
+        assertThatThrownBy(() -> new ModelProviderDescriptor(
+                ModelRef.of("glm"), "v1", "GLM", 10,
+                endpointWithQuery, "glm",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageNotContaining(queryCredential)
+                .hasMessageNotContaining("api_key");
+        assertThatThrownBy(() -> new ModelTransportBinding(
+                ModelRef.of("glm"), endpointWithQuery, "glm",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                "header-secret", 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageNotContaining(queryCredential)
+                .hasMessageNotContaining("api_key");
+
+        ModelProviderDescriptor descriptor = descriptor("glm");
+        assertThat(descriptor.getDescriptorFingerprint()).doesNotContain(queryCredential);
+        assertThat(descriptor.toString()).doesNotContain(queryCredential);
+    }
+
+    @Test
+    void publicEntryIsImmutableAndExcludesInternalTransportMetadata() {
+        ModelCatalogEntry entry = descriptor("glm").publicEntry();
+
+        assertThat(entry.modelRef()).isEqualTo("glm");
+        assertThat(entry.selectionVersion()).isEqualTo("glm-v1");
+        assertThat(entry.capabilities()).containsExactlyInAnyOrder(
+                ModelCapability.TURN_INTERPRETATION,
+                ModelCapability.GENERAL_KNOWLEDGE);
+        assertThat(entry.toString())
+                .doesNotContain("example.test", "glm-4.7-flash", "fingerprint");
+        assertThatThrownBy(() -> entry.capabilities().add(
+                ModelCapability.GENERAL_KNOWLEDGE))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    private ModelProviderDescriptor descriptor(String ref) {
+        return new ModelProviderDescriptor(
+                ModelRef.of(ref), "glm-v1", "GLM", 10,
+                URI.create("https://example.test/chat"), "glm-4.7-flash",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                Set.of(ModelCapability.TURN_INTERPRETATION,
+                        ModelCapability.GENERAL_KNOWLEDGE),
+                200_000, 8_000);
+    }
+
+    private boolean looksLikeCredentialField(String name) {
+        String normalized = name.toLowerCase();
+        return normalized.contains("password")
+                || normalized.contains("passwd")
+                || normalized.contains("secret")
+                || normalized.contains("token")
+                || normalized.contains("key")
+                || normalized.contains("credential")
+                || normalized.contains("authorization")
+                || normalized.contains("bearer")
+                || normalized.contains("policy")
+                || normalized.contains("schema");
     }
 }

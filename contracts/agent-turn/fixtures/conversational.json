@@ -1,5 +1,9 @@
 {
   "requestId": "10000000-0000-4000-8000-000000000006",
+  "modelExecution": {
+    "selectionKind": "NONE",
+    "participation": "NONE"
+  },
   "kind": "CONVERSATIONAL",
   "message": "你好，我可以介绍公开项目、案例和工程取舍。",
   "suggestedActions": [

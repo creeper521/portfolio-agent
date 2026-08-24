@@ -7,14 +7,17 @@ import java.util.UUID;
 public abstract class AgentTurnCommand {
 
     private final UUID requestId;
+    private final ModelSelection modelSelection;
     private final SurfaceContext surfaceContext;
     private final ConversationWindow conversationWindow;
 
     private AgentTurnCommand(
             UUID requestId,
+            ModelSelection modelSelection,
             SurfaceContext surfaceContext,
             ConversationWindow conversationWindow) {
         this.requestId = Objects.requireNonNull(requestId, "requestId");
+        this.modelSelection = Objects.requireNonNull(modelSelection, "modelSelection");
         this.surfaceContext = surfaceContext == null ? SurfaceContext.empty() : surfaceContext;
         this.conversationWindow = conversationWindow == null
                 ? ConversationWindow.empty()
@@ -23,6 +26,10 @@ public abstract class AgentTurnCommand {
 
     public UUID getRequestId() {
         return requestId;
+    }
+
+    public ModelSelection getModelSelection() {
+        return modelSelection;
     }
 
     public SurfaceContext getSurfaceContext() {
@@ -39,19 +46,21 @@ public abstract class AgentTurnCommand {
 
         public Ask(
                 UUID requestId,
+                ModelSelection modelSelection,
                 AskInput input,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
-            this(requestId, input, null, surfaceContext, conversationWindow);
+            this(requestId, modelSelection, input, null, surfaceContext, conversationWindow);
         }
 
         public Ask(
                 UUID requestId,
+                ModelSelection modelSelection,
                 AskInput input,
                 String referenceContextHandle,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
-            super(requestId, surfaceContext, conversationWindow);
+            super(requestId, modelSelection, surfaceContext, conversationWindow);
             this.input = Objects.requireNonNull(input, "input");
             this.referenceContextHandle = referenceContextHandle == null
                     ? null : requireOpaque(
@@ -116,6 +125,7 @@ public abstract class AgentTurnCommand {
 
         public Continue(
                 UUID requestId,
+                ModelSelection modelSelection,
                 ContinueOperation operation,
                 String contextHandle,
                 String resultItemId,
@@ -123,7 +133,7 @@ public abstract class AgentTurnCommand {
                 ContinueSubject subject,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
-            super(requestId, surfaceContext, conversationWindow);
+            super(requestId, modelSelection, surfaceContext, conversationWindow);
             this.operation = Objects.requireNonNull(operation, "operation");
             this.contextHandle = contextHandle == null
                     ? null : requireOpaque(contextHandle, "contextHandle");
@@ -193,11 +203,12 @@ public abstract class AgentTurnCommand {
 
         public ResolveClarification(
                 UUID requestId,
+                ModelSelection modelSelection,
                 String clarificationId,
                 ClarificationAnswer answer,
                 SurfaceContext surfaceContext,
                 ConversationWindow conversationWindow) {
-            super(requestId, surfaceContext, conversationWindow);
+            super(requestId, modelSelection, surfaceContext, conversationWindow);
             this.clarificationId = requireOpaque(clarificationId, "clarificationId");
             this.answer = Objects.requireNonNull(answer, "answer");
         }
@@ -317,12 +328,100 @@ public abstract class AgentTurnCommand {
         AGENT_PAGE
     }
 
+    public enum ModelSelectionKind {
+        MODEL,
+        NONE
+    }
+
+    public static final class ModelSelection {
+        private final ModelSelectionKind kind;
+        private final String modelRef;
+        private final String selectionVersion;
+
+        private ModelSelection(
+                ModelSelectionKind kind,
+                String modelRef,
+                String selectionVersion) {
+            this.kind = Objects.requireNonNull(kind, "kind");
+            if (kind == ModelSelectionKind.MODEL) {
+                this.modelRef = requireBoundedPattern(
+                        modelRef, "modelRef", 64,
+                        "[a-z0-9]+(?:-[a-z0-9]+)*");
+                this.selectionVersion = requireBoundedPattern(
+                        selectionVersion, "selectionVersion", 128,
+                        "[A-Za-z0-9][A-Za-z0-9._-]*");
+            } else {
+                if (modelRef != null || selectionVersion != null) {
+                    throw new IllegalArgumentException(
+                            "NONE model selection must not carry model fields");
+                }
+                this.modelRef = null;
+                this.selectionVersion = null;
+            }
+        }
+
+        public static ModelSelection model(String modelRef, String selectionVersion) {
+            return new ModelSelection(
+                    ModelSelectionKind.MODEL, modelRef, selectionVersion);
+        }
+
+        public static ModelSelection none() {
+            return new ModelSelection(ModelSelectionKind.NONE, null, null);
+        }
+
+        public ModelSelectionKind getKind() {
+            return kind;
+        }
+
+        public Optional<String> getModelRef() {
+            return Optional.ofNullable(modelRef);
+        }
+
+        public Optional<String> getSelectionVersion() {
+            return Optional.ofNullable(selectionVersion);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ModelSelection that)) {
+                return false;
+            }
+            return kind == that.kind
+                    && Objects.equals(modelRef, that.modelRef)
+                    && Objects.equals(selectionVersion, that.selectionVersion);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kind, modelRef, selectionVersion);
+        }
+
+        @Override
+        public String toString() {
+            return kind == ModelSelectionKind.NONE
+                    ? "ModelSelection{kind=NONE}"
+                    : "ModelSelection{kind=MODEL, modelRef=" + modelRef
+                    + ", selectionVersion=" + selectionVersion + '}';
+        }
+    }
+
     private static String requireOpaque(String value, String name) {
         return requirePattern(value, name, "[A-Za-z0-9_-]{8,256}");
     }
 
     private static String requirePattern(String value, String name, String pattern) {
         if (value == null || !value.matches(pattern)) {
+            throw new IllegalArgumentException(name + " format is invalid");
+        }
+        return value;
+    }
+
+    private static String requireBoundedPattern(
+            String value, String name, int maximumLength, String pattern) {
+        if (value == null || value.length() > maximumLength || !value.matches(pattern)) {
             throw new IllegalArgumentException(name + " format is invalid");
         }
         return value;
@@ -338,6 +437,7 @@ public abstract class AgentTurnCommand {
     @Override
     public String toString() {
         return getClass().getSimpleName() + "{requestId=" + requestId
+                + ", modelSelection=" + modelSelection
                 + ", conversationMessageCount=" + conversationWindow.getMessages().size() + '}';
     }
 }

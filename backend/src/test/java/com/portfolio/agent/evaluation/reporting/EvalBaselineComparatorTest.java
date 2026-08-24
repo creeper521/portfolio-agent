@@ -16,11 +16,11 @@ class EvalBaselineComparatorTest {
     @Test
     void incompatibleDatasetIdentityReturnsNotComparableWithoutDeltas() {
         EvalRunIdentity current = identity("ds-v2", "sha256:new", "bundle-v2", "sha256:b",
-                "DEEPSEEK_V4_FLASH", "deepseek-v4-flash", "judge-v2", "rubric-v2");
+                "glm-4-7-flash", "glm-4.7-flash", "judge-v2", "rubric-v2");
         EvalBaseline baseline = new EvalBaseline(
                 "phase-0-answer-composition",
                 identity("ds-v1", "sha256:old", "bundle-v2", "sha256:b",
-                        "DEEPSEEK_V4_FLASH", "deepseek-v4-flash", "judge-v2", "rubric-v2"),
+                        "glm-4-7-flash", "glm-4.7-flash", "judge-v2", "rubric-v2"),
                 Map.of("routing.top1", new BigDecimal("0.9")),
                 List.of("case-0"));
 
@@ -38,9 +38,9 @@ class EvalBaselineComparatorTest {
     @Test
     void compatibleIdentityComparesSharedCasesAndTracksAddedRemoved() {
         EvalRunIdentity current = identity("ds-v2", "sha256:new", "bundle-v2", "sha256:b",
-                "DEEPSEEK_V4_FLASH", "deepseek-v4-flash", "judge-v2", "rubric-v2");
+                "glm-4-7-flash", "glm-4.7-flash", "judge-v2", "rubric-v2");
         EvalRunIdentity baselineIdentity = identity("ds-v2", "sha256:new", "bundle-v2", "sha256:b",
-                "DEEPSEEK_V4_FLASH", "deepseek-v4-flash", "judge-v2", "rubric-v2");
+                "glm-4-7-flash", "glm-4.7-flash", "judge-v2", "rubric-v2");
         EvalBaseline baseline = new EvalBaseline(
                 "phase-0-answer-composition",
                 baselineIdentity,

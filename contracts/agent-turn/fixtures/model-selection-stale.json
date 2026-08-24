@@ -1,0 +1,14 @@
+{
+  "requestId": "10000000-0000-4000-8000-000000000009",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "glm-4-7-flash",
+    "selectionVersion": "glm-4-7-flash-v0",
+    "participation": "NONE"
+  },
+  "kind": "CAPABILITY_UNAVAILABLE",
+  "code": "MODEL_SELECTION_STALE",
+  "message": "所选模型版本已更新，请刷新模型列表后重新选择。",
+  "retryable": false,
+  "suggestedActions": []
+}

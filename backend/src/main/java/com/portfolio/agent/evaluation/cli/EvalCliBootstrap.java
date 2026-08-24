@@ -32,22 +32,17 @@ public final class EvalCliBootstrap {
     /**
      * Highest-precedence fail-closed arguments applied to every Spring context
      * the eval CLI assembles. Even if the environment pre-sets
-     * PORTFOLIO_MODEL_ENABLED=true, command-line properties win, so validate
+     * PORTFOLIO_MODEL_RUNTIME_ENABLED=true, command-line properties win, so validate
      * and offline processes can never indirectly enable the real provider.
      */
     static final String[] FORCED_OFF_ARGS = {
             "--spring.main.web-application-type=none",
-            "--portfolio.conversational-agent.enabled=false",
-            "--portfolio.conversational-agent.visitor-data-policy-approved=false",
+            "--portfolio.model-runtime.enabled=false",
             "--portfolio.retrieval.profile=KEYWORD_ONLY"
     };
 
     private final ObjectMapper mapper;
-    public EvalCliBootstrap(boolean providerAuthorized) {
-        this(providerAuthorized, false);
-    }
-
-    EvalCliBootstrap(boolean providerAuthorized, boolean springEnabled) {
+    public EvalCliBootstrap() {
         this.mapper = new ObjectMapper()
                 .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     }

@@ -35,7 +35,8 @@ class AgentTurnLifecycleReplayTest {
                         com.portfolio.agent.turn.execution.SemanticTurnEngine.class);
         org.mockito.Mockito.when(engine.execute(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.any()))
                 .thenReturn(generalOutcome(sentinel));
         InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore();
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
@@ -45,7 +46,8 @@ class AgentTurnLifecycleReplayTest {
                 compiler, engine);
         UUID requestId = UUID.randomUUID();
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                requestId, new AgentTurnCommand.FreeText("visitor-general-sentinel"),
+                requestId, AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("visitor-general-sentinel"),
                 null, null);
 
         AgentTurnLifecycleService.Result first = service.execute(null, command);
@@ -63,7 +65,8 @@ class AgentTurnLifecycleReplayTest {
                 .isEqualTo("REPLAY_BODY_NOT_RETAINED");
         org.mockito.Mockito.verify(engine, org.mockito.Mockito.times(1)).execute(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test void providerBodyIsReturnedOnceButSameRequestReplaysBodyNotRetainedTerminal() {
@@ -73,12 +76,12 @@ class AgentTurnLifecycleReplayTest {
         java.util.concurrent.atomic.AtomicInteger providerCalls =
                 new java.util.concurrent.atomic.AtomicInteger();
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                requestId,
+                requestId, AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.FreeText("访客隐私问题-sentinel-原文"),
                 null, null);
         com.portfolio.agent.turn.planning.GoalResolver resolver =
                 new com.portfolio.agent.turn.planning.GoalResolver(
-                        (input, deadline) -> {
+                        (input, deadline, modelExecution) -> {
                             providerCalls.incrementAndGet();
                             return com.portfolio.agent.turn.planning.GoalInterpretationResult
                                     .conversational(providerBody);
@@ -113,7 +116,8 @@ class AgentTurnLifecycleReplayTest {
         InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore();
         UUID requestId = UUID.randomUUID();
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                requestId, new AgentTurnCommand.FreeText("你好"), null, null);
+                requestId, AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("你好"), null, null);
         byte[] fingerprint = new RequestFingerprintFactory(new byte[32]).fingerprint(command);
         String conversationId = LifecycleTestFixture.sessionResolver()
                 .resolve(null, requestId,
@@ -160,7 +164,8 @@ class AgentTurnLifecycleReplayTest {
         java.util.Arrays.fill(currentKey, (byte) 2);
         UUID requestId = UUID.randomUUID();
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                requestId, new AgentTurnCommand.FreeText("你好"), null, null);
+                requestId, AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("你好"), null, null);
         AgentTurnLifecycleService oldService = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"),
                 new RequestFingerprintFactory(previousKey),
@@ -204,7 +209,8 @@ class AgentTurnLifecycleReplayTest {
                         sessions, key, clock, Duration.ofMinutes(30)), clock);
         UUID requestId = UUID.randomUUID();
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                requestId, new AgentTurnCommand.FreeText("你好"), null, null);
+                requestId, AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("你好"), null, null);
         AgentTurnLifecycleService.Result first = service.execute(null, command);
         assertThat(service.clearConversation(first.conversation().resumeToken())).isTrue();
 

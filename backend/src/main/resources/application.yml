@@ -18,17 +18,53 @@ server:
     include-stacktrace: never
 
 portfolio:
+  model-runtime:
+    enabled: ${PORTFOLIO_MODEL_RUNTIME_ENABLED:false}
+    default-model-ref: glm-4-7-flash
+    models:
+      glm-4-7-flash:
+        enabled: ${PORTFOLIO_GLM_ENABLED:false}
+        selectable: true
+        display-name: GLM-4.7-Flash
+        display-order: 10
+        selection-version: glm-4-7-flash-v1
+        endpoint: https://open.bigmodel.cn/api/paas/v4/chat/completions
+        model: glm-4.7-flash
+        api-key: ${PORTFOLIO_GLM_API_KEY:}
+        protocol-profile: ZHIPU_CHAT_COMPLETIONS
+        data-policy-approved: ${PORTFOLIO_GLM_DATA_POLICY_APPROVED:false}
+        structured-output: JSON_OBJECT
+        thinking-mode: DISABLED
+        streaming: false
+        max-context-tokens: 200000
+        max-output-tokens: 128000
+      qwen-3-7-flash:
+        enabled: ${PORTFOLIO_QWEN_ENABLED:false}
+        selectable: true
+        display-name: Qwen3.7-Flash
+        display-order: 20
+        selection-version: qwen-3-7-flash-v1
+        endpoint: ${PORTFOLIO_QWEN_ENDPOINT:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
+        model: qwen3.7-flash
+        api-key: ${PORTFOLIO_QWEN_API_KEY:}
+        protocol-profile: DASHSCOPE_CHAT_COMPLETIONS
+        data-policy-approved: ${PORTFOLIO_QWEN_DATA_POLICY_APPROVED:false}
+        structured-output: JSON_OBJECT
+        thinking-mode: DISABLED
+        streaming: false
+        max-context-tokens: 1000000
+        max-output-tokens: 128000
   model-operations:
     turn-interpretation:
       mode: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE:DISABLED}
-      provider-ref: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION:}
+      max-output-tokens: ${PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS:1600}
+      timeout: ${PORTFOLIO_AGENT_GOAL_INTERPRETATION_TIMEOUT:8s}
     general-knowledge:
       mode: ${PORTFOLIO_MODEL_OP_GENERAL_MODE:DISABLED}
-      provider-ref: ${PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF:}
       schema-version: ${PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION:}
-  goal-interpretation:
-    max-output-tokens: ${PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS:1600}
+      max-output-tokens: ${PORTFOLIO_MODEL_MAX_OUTPUT_TOKENS:1200}
+      timeout: ${PORTFOLIO_AGENT_GENERAL_KNOWLEDGE_TIMEOUT:10s}
   database:
     public:
       enabled: ${PORTFOLIO_PUBLIC_DATABASE_ENABLED:false}
@@ -73,19 +109,6 @@ portfolio:
   retrieval:
     profile: ${PORTFOLIO_RETRIEVAL_PROFILE:DISABLED}
     model-directory: ${PORTFOLIO_RETRIEVAL_MODEL_DIR:}
-  conversational-model:
-    enabled: ${PORTFOLIO_MODEL_ENABLED:false}
-    provider: ${PORTFOLIO_MODEL_PROVIDER:DEEPSEEK_V4_FLASH}
-    model-policy-version: ${PORTFOLIO_MODEL_POLICY_VERSION:c1-policy-v1}
-    answer-schema-version: c1.answer.v1
-    max-tokens: ${PORTFOLIO_MODEL_MAX_TOKENS:1200}
-    max-model-attempts: 1
-    external-data-policy-approved: ${PORTFOLIO_MODEL_DATA_POLICY_APPROVED:false}
-    deepseek-api-key: ${PORTFOLIO_AGENT_DEEPSEEK_API_KEY:}
-    glm-api-key: ${PORTFOLIO_AGENT_GLM_API_KEY:}
-  conversational-agent:
-    enabled: ${PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED:false}
-    visitor-data-policy-approved: ${PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED:false}
   agent-runtime:
     requests-per-minute: ${PORTFOLIO_AGENT_REQUESTS_PER_MINUTE:10}
     max-concurrent-per-source: ${PORTFOLIO_AGENT_MAX_CONCURRENT_PER_SOURCE:2}
@@ -94,8 +117,6 @@ portfolio:
     lease-duration: ${PORTFOLIO_AGENT_LEASE_DURATION:35s}
     turn-timeout: ${PORTFOLIO_AGENT_TURN_TIMEOUT:20s}
     settlement-reserve: ${PORTFOLIO_AGENT_SETTLEMENT_RESERVE:2s}
-    goal-interpretation-timeout: ${PORTFOLIO_AGENT_GOAL_INTERPRETATION_TIMEOUT:8s}
-    general-knowledge-timeout: ${PORTFOLIO_AGENT_GENERAL_KNOWLEDGE_TIMEOUT:10s}
     database-operation-timeout: ${PORTFOLIO_AGENT_DATABASE_OPERATION_TIMEOUT:3s}
     trust-proxy: ${PORTFOLIO_AGENT_TRUST_PROXY:false}
     trusted-proxies: ${PORTFOLIO_AGENT_TRUSTED_PROXIES:}

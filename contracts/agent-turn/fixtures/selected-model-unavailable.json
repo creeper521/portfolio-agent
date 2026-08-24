@@ -1,0 +1,14 @@
+{
+  "requestId": "10000000-0000-4000-8000-00000000000a",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "qwen-3-7-flash",
+    "selectionVersion": "qwen-3-7-flash-v1",
+    "participation": "NONE"
+  },
+  "kind": "CAPABILITY_UNAVAILABLE",
+  "code": "SELECTED_MODEL_UNAVAILABLE",
+  "message": "所选模型当前不可用，请重新选择。",
+  "retryable": false,
+  "suggestedActions": []
+}

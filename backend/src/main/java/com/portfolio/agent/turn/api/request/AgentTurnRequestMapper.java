@@ -13,19 +13,21 @@ public final class AgentTurnRequestMapper {
 
     public AgentTurnCommand toCommand(AgentTurnRequest request) {
         Objects.requireNonNull(request, "request");
+        AgentTurnCommand.ModelSelection modelSelection = mapModelSelection(
+                Objects.requireNonNull(request.getModelSelection(), "request.modelSelection"));
         AgentTurnCommand.SurfaceContext surfaceContext = mapSurfaceContext(request.getSurfaceContext());
         ConversationWindow conversationWindow = mapConversationWindow(request.getConversationWindow());
         AgentTurnRequest.CommandRequest command = Objects.requireNonNull(
                 request.getCommand(), "request.command");
         if (command instanceof AgentTurnRequest.AskCommandRequest ask) {
             return new AgentTurnCommand.Ask(
-                    request.getRequestId(), mapAskInput(ask.getInput()),
+                    request.getRequestId(), modelSelection, mapAskInput(ask.getInput()),
                     ask.getReferenceContextHandle(),
                     surfaceContext, conversationWindow);
         }
         if (command instanceof AgentTurnRequest.ContinueCommandRequest continuation) {
             return new AgentTurnCommand.Continue(
-                    request.getRequestId(),
+                    request.getRequestId(), modelSelection,
                     AgentTurnCommand.ContinueOperation.valueOf(
                             continuation.getOperation().name()),
                     continuation.getContextHandle(),
@@ -39,11 +41,24 @@ public final class AgentTurnRequestMapper {
         }
         if (command instanceof AgentTurnRequest.ResolveClarificationCommandRequest clarification) {
             return new AgentTurnCommand.ResolveClarification(
-                    request.getRequestId(), clarification.getClarificationId(),
+                    request.getRequestId(), modelSelection,
+                    clarification.getClarificationId(),
                     mapClarificationAnswer(clarification.getAnswer()),
                     surfaceContext, conversationWindow);
         }
         throw new IllegalArgumentException("unsupported command request");
+    }
+
+    private AgentTurnCommand.ModelSelection mapModelSelection(
+            AgentTurnRequest.ModelSelectionRequest selection) {
+        if (selection instanceof AgentTurnRequest.ModelModelSelectionRequest model) {
+            return AgentTurnCommand.ModelSelection.model(
+                    model.getModelRef(), model.getSelectionVersion());
+        }
+        if (selection instanceof AgentTurnRequest.NoneModelSelectionRequest) {
+            return AgentTurnCommand.ModelSelection.none();
+        }
+        throw new IllegalArgumentException("unsupported model selection");
     }
 
     private AgentTurnCommand.AskInput mapAskInput(AgentTurnRequest.AskInputRequest input) {

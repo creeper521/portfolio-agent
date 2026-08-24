@@ -16,8 +16,8 @@ public final class ApplicationStartupDiagnostics
             "HYBRID");
 
     private final DiagnosticEventPublisher publisher;
-    private final boolean modelExpressionEnabled;
-    private final boolean conversationEnabled;
+    private final boolean modelRuntimeEnabled;
+    private final int selectableModelCount;
     private final String retrievalProfile;
     private final long answerRequestTimeoutMillis;
     private final int answerRequestsPerMinute;
@@ -25,8 +25,8 @@ public final class ApplicationStartupDiagnostics
 
     public ApplicationStartupDiagnostics(
             DiagnosticEventPublisher publisher,
-            boolean modelExpressionEnabled,
-            boolean conversationEnabled,
+            boolean modelRuntimeEnabled,
+            int selectableModelCount,
             String retrievalProfile,
             long answerRequestTimeoutMillis,
             int answerRequestsPerMinute,
@@ -37,14 +37,15 @@ public final class ApplicationStartupDiagnostics
         if (!RETRIEVAL_PROFILES.contains(retrievalProfile)) {
             throw new IllegalArgumentException("unsupported retrieval profile");
         }
-        if (answerRequestTimeoutMillis <= 0
+        if (selectableModelCount < 0
+                || answerRequestTimeoutMillis <= 0
                 || answerRequestsPerMinute <= 0
                 || answerMaxConcurrent <= 0) {
             throw new IllegalArgumentException(
                     "answer startup diagnostic values must be positive");
         }
-        this.modelExpressionEnabled = modelExpressionEnabled;
-        this.conversationEnabled = conversationEnabled;
+        this.modelRuntimeEnabled = modelRuntimeEnabled;
+        this.selectableModelCount = selectableModelCount;
         this.retrievalProfile = retrievalProfile;
         this.answerRequestTimeoutMillis = answerRequestTimeoutMillis;
         this.answerRequestsPerMinute = answerRequestsPerMinute;
@@ -94,8 +95,8 @@ public final class ApplicationStartupDiagnostics
     public void onApplicationEvent(ApplicationReadyEvent event) {
         publishBestEffort(() -> DiagnosticEvent.builder(
                         "application.started", DiagnosticLevel.INFO)
-                .field("model_expression.enabled", modelExpressionEnabled)
-                .field("conversation.enabled", conversationEnabled)
+                .field("model_runtime.enabled", modelRuntimeEnabled)
+                .field("model_catalog.selectable_count", selectableModelCount)
                 .field("retrieval.profile", retrievalProfile)
                 .field("answer.request_timeout_ms", answerRequestTimeoutMillis)
                 .field("answer.requests_per_minute", answerRequestsPerMinute)

@@ -8,10 +8,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PublicAgentTurnProjectorTest {
     @Test void projectsOnlyOrderedFulfillmentGoalsIntoOneAnswerAuthority() {
+        ModelExecutionProjection modelExecution = ModelExecutionProjection.model(
+                "glm-4-7-flash", "glm-4-7-flash-v1",
+                ModelExecutionProjection.Participation.GOAL_INTERPRETATION_ONLY);
         PublicAgentTurn.Answer turn = new PublicAgentTurnProjector().project(
                 UUID.fromString("10000000-0000-4000-8000-000000000001"),
-                ProjectionTestFixtures.generalPlan(), ProjectionTestFixtures.generalOutcome());
+                ProjectionTestFixtures.generalPlan(), ProjectionTestFixtures.generalOutcome(),
+                modelExecution);
         assertThat(turn.getKind()).isEqualTo(PublicAgentTurn.Kind.ANSWER);
+        assertThat(turn.getModelExecution()).isEqualTo(modelExecution);
         assertThat(turn.getAnswer().getResolution()).isEqualTo(PublicAnswer.Resolution.COMPLETE);
         assertThat(turn.getAnswer().getGoalResults()).extracting(AnswerGoalResult::getGoalId)
                 .containsExactly("goal-general");

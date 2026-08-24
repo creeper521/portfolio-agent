@@ -48,6 +48,6 @@ class RetrievalConfigurationTest {
 
     private ApplicationStartupDiagnostics diagnostics(List<DiagnosticEvent> events) {
         return new ApplicationStartupDiagnostics(
-                events::add, false, false, "HYBRID", 12000, 10, 2);
+                events::add, false, 0, "HYBRID", 12000, 10, 2);
     }
 }

@@ -1,0 +1,14 @@
+{
+  "requestId": "10000000-0000-4000-8000-00000000000d",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "glm-4-7-flash",
+    "selectionVersion": "glm-4-7-flash-v1",
+    "participation": "ATTEMPTED_UNAVAILABLE"
+  },
+  "kind": "CAPABILITY_UNAVAILABLE",
+  "code": "SELECTED_MODEL_INVALID_RESPONSE",
+  "message": "所选模型返回了无法安全采用的结果，请更换模型或使用新请求重试。",
+  "retryable": false,
+  "suggestedActions": []
+}

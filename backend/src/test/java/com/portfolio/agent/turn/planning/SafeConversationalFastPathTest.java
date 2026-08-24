@@ -36,7 +36,7 @@ class SafeConversationalFastPathTest {
     @Test
     void doesNotResolvePresets() {
         AgentTurnCommand.Ask preset = new AgentTurnCommand.Ask(
-                UUID.randomUUID(),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.Preset(
                         "question-sql-audit", "pcv1-0123456789abcdef"),
                 AgentTurnCommand.SurfaceContext.empty(),
@@ -47,7 +47,7 @@ class SafeConversationalFastPathTest {
 
     private AgentTurnCommand.Ask ask(String text) {
         return new AgentTurnCommand.Ask(
-                UUID.randomUUID(),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.FreeText(text),
                 AgentTurnCommand.SurfaceContext.empty(),
                 ConversationWindow.empty());

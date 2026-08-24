@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = PortfolioAgentApplication.class, properties = {
-        "portfolio.conversational-agent.enabled=false",
+        "portfolio.model-runtime.enabled=false",
         "portfolio.conversation-context.mode=IN_MEMORY"
 })
 @AutoConfigureMockMvc
@@ -89,14 +89,16 @@ class AgentTurnClosedContractIntegrationTest {
 
     private String freeText(String requestId, String text) {
         return """
-                {"requestId":"%s","command":{"kind":"ASK","input":{
+                {"requestId":"%s","modelSelection":{"kind":"NONE"},
+                 "command":{"kind":"ASK","input":{
                  "kind":"FREE_TEXT","text":"%s"}},"conversationWindow":[]}
                 """.formatted(requestId, text);
     }
 
     private String preset(String requestId, String presetId, String revision) {
         return """
-                {"requestId":"%s","command":{"kind":"ASK","input":{
+                {"requestId":"%s","modelSelection":{"kind":"NONE"},
+                 "command":{"kind":"ASK","input":{
                  "kind":"PRESET","presetId":"%s","presetRevision":"%s"}},
                  "conversationWindow":[]}
                 """.formatted(requestId, presetId, revision);

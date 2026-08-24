@@ -38,12 +38,13 @@ class TurnInputSafetyReplacementTest {
     @Test
     void unknownSurfaceHintFailsBeforeModelOrFallback() {
         GoalResolver resolver = new GoalResolver(
-                (input, deadline) -> { throw new AssertionError("model must not receive unknown subject hint"); },
+                (input, deadline, modelExecution) -> { throw new AssertionError("model must not receive unknown subject hint"); },
                 command -> { throw new AssertionError("reviewed source must not receive unknown hint"); },
                 new GoalInterpretationInputFactory(), new SafeConversationalFastPath(),
                 new SemanticRouteValidator(), new GoalBoundaryPolicy());
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText("这个项目如何实现"),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("这个项目如何实现"),
                 new AgentTurnCommand.SurfaceContext(
                         new AgentTurnCommand.SubjectHint(
                                 AgentTurnCommand.SubjectHintKind.PROJECT, "unknown-project"),

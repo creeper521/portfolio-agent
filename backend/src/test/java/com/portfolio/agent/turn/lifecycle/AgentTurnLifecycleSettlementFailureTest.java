@@ -21,7 +21,8 @@ class AgentTurnLifecycleSettlementFailureTest {
         AgentTurnLifecycleService service = LifecycleTestFixture.service(
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"));
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText("你好"), null, null);
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("你好"), null, null);
 
         AgentTurnLifecycleService.Result result = service.execute(
                 null, command);

@@ -45,7 +45,7 @@ class AgentTurnLifecycleDeadlineTest {
         Clock clock = Clock.systemUTC();
         GoalResolver resolver = mock(GoalResolver.class);
         AtomicInteger interpretations = new AtomicInteger();
-        when(resolver.resolve(any(), any(), any())).thenAnswer(invocation -> {
+        when(resolver.resolve(any(), any(), any(), any())).thenAnswer(invocation -> {
             interpretations.incrementAndGet();
             TurnDeadline deadline = invocation.getArgument(2);
             while (!deadline.isExpired()) {
@@ -57,7 +57,8 @@ class AgentTurnLifecycleDeadlineTest {
                 resolver, clock, turnTimeout, settlementReserve);
 
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText("解释幂等"),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("解释幂等"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
         long startedAt = System.nanoTime();
         AgentTurnLifecycleService.Result result = service.execute(null, command);
@@ -88,7 +89,7 @@ class AgentTurnLifecycleDeadlineTest {
         when(store.completeWithSession(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new TurnExecutionStore.SettlementResult(true, null));
         GoalResolver resolver = mock(GoalResolver.class);
-        when(resolver.resolve(any(), any(), any())).thenAnswer(invocation -> {
+        when(resolver.resolve(any(), any(), any(), any())).thenAnswer(invocation -> {
             goalDeadline.set(invocation.getArgument(2));
             return ResolvedGoalSet.conversational("你好");
         });
@@ -125,7 +126,7 @@ class AgentTurnLifecycleDeadlineTest {
                 });
         when(store.cancel(any(), any(), any())).thenReturn(true);
         GoalResolver resolver = mock(GoalResolver.class);
-        when(resolver.resolve(any(), any(), any()))
+        when(resolver.resolve(any(), any(), any(), any()))
                 .thenReturn(ResolvedGoalSet.conversational("你好"));
         ExecutorService stateExecutor = Executors.newSingleThreadExecutor();
         AgentTurnLifecycleService service = service(
@@ -220,7 +221,7 @@ class AgentTurnLifecycleDeadlineTest {
         CountDownLatch ownerInGoal = new CountDownLatch(1);
         CountDownLatch releaseOwner = new CountDownLatch(1);
         GoalResolver ownerResolver = mock(GoalResolver.class);
-        when(ownerResolver.resolve(any(), any(), any())).thenAnswer(invocation -> {
+        when(ownerResolver.resolve(any(), any(), any(), any())).thenAnswer(invocation -> {
             ownerInGoal.countDown();
             releaseOwner.await(1, TimeUnit.SECONDS);
             return ResolvedGoalSet.conversational("原 owner 完成");
@@ -271,7 +272,8 @@ class AgentTurnLifecycleDeadlineTest {
 
     private AgentTurnCommand ask() {
         return new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText("你好"),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("你好"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
     }
 

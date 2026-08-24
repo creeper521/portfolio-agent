@@ -31,7 +31,8 @@ class GoalInterpretationInputFactoryTest {
                         "section-goal-1-1", AnswerSectionType.SOLUTION)))),
                 Instant.parse("2026-08-24T05:00:00Z"));
         AgentTurnCommand.Ask command = new AgentTurnCommand.Ask(
-                java.util.UUID.randomUUID(), new AgentTurnCommand.FreeText("进一步展开"),
+                java.util.UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("进一步展开"),
                 null, AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
 
         GoalInterpretationInput input = factory.create(
@@ -50,7 +51,8 @@ class GoalInterpretationInputFactoryTest {
     @Test
     void projectsOnlyFreeTextBoundedWindowAndReviewedSubjectDescriptors() {
         AgentTurnCommand.Ask command = new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText("介绍这个项目"),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("介绍这个项目"),
                 new AgentTurnCommand.SurfaceContext(
                         new AgentTurnCommand.SubjectHint(
                                 AgentTurnCommand.SubjectHintKind.PROJECT, "sql-audit"),
@@ -82,7 +84,7 @@ class GoalInterpretationInputFactoryTest {
     @Test
     void refusesToSendPresetThroughModelInterpretation() {
         AgentTurnCommand.Ask preset = new AgentTurnCommand.Ask(
-                UUID.randomUUID(),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.Preset("question-sql-audit", "pcv1-0123456789abcdef"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
 

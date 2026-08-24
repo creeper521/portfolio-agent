@@ -2,11 +2,27 @@ package com.portfolio.agent.infrastructure.model;
 
 public final class StructuredModelFailure extends RuntimeException {
     private final Code code;
-    public StructuredModelFailure(Code code) { this(code, null); }
+    private final Integer retryAfterSeconds;
+    public StructuredModelFailure(Code code) { this(code, null, null); }
     public StructuredModelFailure(Code code, Throwable cause) {
-        super(code.name(), cause); this.code = code;
+        this(code, null, cause);
+    }
+    public StructuredModelFailure(
+            Code code, Integer retryAfterSeconds, Throwable cause) {
+        super(java.util.Objects.requireNonNull(code, "code").name(), cause);
+        if (retryAfterSeconds != null
+                && (retryAfterSeconds < 1 || retryAfterSeconds > 300)) {
+            throw new IllegalArgumentException("retryAfterSeconds is invalid");
+        }
+        if (retryAfterSeconds != null && code != Code.RATE_LIMITED) {
+            throw new IllegalArgumentException(
+                    "retryAfterSeconds is only valid for rate limiting");
+        }
+        this.code = code;
+        this.retryAfterSeconds = retryAfterSeconds;
     }
     public Code getCode() { return code; }
+    public Integer getRetryAfterSeconds() { return retryAfterSeconds; }
     public enum Code {
         DEADLINE_EXCEEDED("TRANSPORT"),
         TRANSPORT_UNAVAILABLE("TRANSPORT"),

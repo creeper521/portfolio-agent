@@ -28,15 +28,33 @@ import com.portfolio.agent.turn.continuation.ContinuationReference;
 public final class PublicAgentTurnProjector {
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
-        return project(requestId, plan, outcome, Map.of());
+        return project(
+                requestId, plan, outcome, Map.of(),
+                ModelExecutionProjection.none());
+    }
+
+    public PublicAgentTurn.Answer project(
+            UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
+            ModelExecutionProjection modelExecution) {
+        return project(requestId, plan, outcome, Map.of(), modelExecution);
     }
 
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             Map<String, String> continuationsByGoal) {
+        return project(
+                requestId, plan, outcome, continuationsByGoal,
+                ModelExecutionProjection.none());
+    }
+
+    public PublicAgentTurn.Answer project(
+            UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
+            Map<String, String> continuationsByGoal,
+            ModelExecutionProjection modelExecution) {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(outcome, "outcome");
+        Objects.requireNonNull(modelExecution, "modelExecution");
         Map<String, TaskOutcome> taskOutcomes = indexTasks(outcome);
         Map<String, GoalCoverage.Coverage> coverage = indexCoverage(outcome);
         LinkedHashMap<String, PublicSourceCatalog.Source> sources = new LinkedHashMap<>();
@@ -55,7 +73,7 @@ public final class PublicAgentTurnProjector {
                 resolution, plan.getContentReleaseId(), goals,
                 new PublicSourceCatalog(List.copyOf(sources.values())),
                 List.copyOf(composition), List.of(), null);
-        return new PublicAgentTurn.Answer(requestId, answer);
+        return new PublicAgentTurn.Answer(requestId, modelExecution, answer);
     }
 
     private AnswerGoalResult projectGoal(

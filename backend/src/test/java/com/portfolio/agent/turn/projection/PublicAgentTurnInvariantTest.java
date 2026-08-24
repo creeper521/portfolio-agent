@@ -9,6 +9,56 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PublicAgentTurnInvariantTest {
+    @Test void modelExecutionIsClosedAcrossAllSettledParticipationStates() {
+        assertThat(ModelExecutionProjection.none().getParticipation())
+                .isEqualTo(ModelExecutionProjection.Participation.NONE);
+
+        for (ModelExecutionProjection.Participation participation : List.of(
+                ModelExecutionProjection.Participation.NONE,
+                ModelExecutionProjection.Participation.GOAL_INTERPRETATION_ONLY,
+                ModelExecutionProjection.Participation.ANSWER_GENERATION,
+                ModelExecutionProjection.Participation.GOAL_AND_ANSWER,
+                ModelExecutionProjection.Participation.ATTEMPTED_UNAVAILABLE)) {
+            ModelExecutionProjection projection = ModelExecutionProjection.model(
+                    "glm-4-7-flash", "glm-4-7-flash-v1", participation);
+            assertThat(projection.getSelectionKind())
+                    .isEqualTo(ModelExecutionProjection.SelectionKind.MODEL);
+            assertThat(projection.getRequestedModelRef()).isEqualTo("glm-4-7-flash");
+            assertThat(projection.getSelectionVersion()).isEqualTo("glm-4-7-flash-v1");
+            assertThat(projection.getParticipation()).isEqualTo(participation);
+        }
+    }
+
+    @Test void modelExecutionRejectsOpenOrContradictoryShapes() {
+        assertThatThrownBy(() -> new ModelExecutionProjection(
+                ModelExecutionProjection.SelectionKind.NONE,
+                "glm-4-7-flash", null,
+                ModelExecutionProjection.Participation.NONE))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ModelExecutionProjection(
+                ModelExecutionProjection.SelectionKind.NONE,
+                null, null,
+                ModelExecutionProjection.Participation.GOAL_INTERPRETATION_ONLY))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ModelExecutionProjection.model(
+                "https://internal.example/model", "v1",
+                ModelExecutionProjection.Participation.NONE))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void modelExecutionIsRequiredOnEveryDeserializedPublicTurn() {
+        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                com.fasterxml.jackson.databind.json.JsonMapper.builder()
+                        .addModule(new com.fasterxml.jackson.module.paramnames.ParameterNamesModule())
+                        .build();
+
+        assertThatThrownBy(() -> mapper.readValue("""
+                {"requestId":"10000000-0000-4000-8000-000000000006",
+                 "kind":"CONVERSATIONAL","message":"固定公开文本","suggestedActions":[]}
+                """, PublicAgentTurn.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
+    }
+
     @Test void fullPartialAndNoneShapesFailClosed() {
         PublicPresentation presentation = new PublicPresentation.Sectioned(List.of(
                 new PublicSection("section-one", com.portfolio.agent.turn.execution.AnswerSectionType.GENERAL_PRINCIPLE,
@@ -29,9 +79,17 @@ class PublicAgentTurnInvariantTest {
     @Test void serializerEmitsTheClosedDiscriminantsAndOmitsNullableFields() throws Exception {
         PublicAgentTurn.Answer turn = new PublicAgentTurnProjector().project(
                 java.util.UUID.fromString("10000000-0000-4000-8000-000000000001"),
-                ProjectionTestFixtures.generalPlan(), ProjectionTestFixtures.generalOutcome());
+                ProjectionTestFixtures.generalPlan(), ProjectionTestFixtures.generalOutcome(),
+                ModelExecutionProjection.model(
+                        "glm-4-7-flash", "glm-4-7-flash-v1",
+                        ModelExecutionProjection.Participation.GOAL_AND_ANSWER));
         String json = new ObjectMapper().writeValueAsString(turn);
         assertThat(json).contains("\"kind\":\"ANSWER\"")
+                .contains("\"modelExecution\":{")
+                .contains("\"selectionKind\":\"MODEL\"")
+                .contains("\"requestedModelRef\":\"glm-4-7-flash\"")
+                .contains("\"selectionVersion\":\"glm-4-7-flash-v1\"")
+                .contains("\"participation\":\"GOAL_AND_ANSWER\"")
                 .contains("\"resolution\":\"COMPLETE\"")
                 .contains("\"kind\":\"SECTIONED\"")
                 .doesNotContain("\"presentation\":null")

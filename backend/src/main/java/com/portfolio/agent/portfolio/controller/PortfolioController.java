@@ -1,6 +1,7 @@
 package com.portfolio.agent.portfolio.controller;
 
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.portfolio.dto.response.AgentAvailabilityResponse;
 import com.portfolio.agent.portfolio.dto.response.PortfolioSnapshotResponse;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
@@ -23,16 +24,18 @@ public final class PortfolioController {
     public PortfolioController(
             PortfolioService portfolioService,
             PortfolioResponseMapper responseMapper,
-            AgentRuntimeReadiness readiness
+            AgentRuntimeReadiness readiness,
+            ModelCatalogSnapshot modelCatalog
     ) {
         this.portfolioService = portfolioService;
         this.responseMapper = responseMapper;
         this.agentAvailability = !readiness.isAgentAvailable()
-                ? AgentAvailabilityResponse.unavailable()
+                ? AgentAvailabilityResponse.unavailable(modelCatalog)
                 : AgentAvailabilityResponse.available(
                         readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION)
                                 ? AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE
-                                : AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
+                                : AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED,
+                        modelCatalog);
     }
 
     @GetMapping

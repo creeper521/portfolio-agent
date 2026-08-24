@@ -83,7 +83,7 @@ class JsonPublicPortfolioRepositoryTest {
 
     private ApplicationStartupDiagnostics diagnostics(List<DiagnosticEvent> events) {
         return new ApplicationStartupDiagnostics(
-                events::add, false, false, "DISABLED", 12000, 10, 2);
+                events::add, false, 0, "DISABLED", 12000, 10, 2);
     }
 
     private Resource bundleResource(String name) {

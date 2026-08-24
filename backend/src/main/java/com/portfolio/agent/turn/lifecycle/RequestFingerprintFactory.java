@@ -77,6 +77,10 @@ public final class RequestFingerprintFactory {
     private byte[] canonical(AgentTurnCommand command) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
+            AgentTurnCommand.ModelSelection modelSelection = command.getModelSelection();
+            value(output, modelSelection.getKind().name());
+            value(output, modelSelection.getModelRef().orElse(""));
+            value(output, modelSelection.getSelectionVersion().orElse(""));
             if (command instanceof AgentTurnCommand.Ask ask) {
                 value(output, "ASK");
                 if (ask.getInput() instanceof AgentTurnCommand.FreeText freeText) {

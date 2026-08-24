@@ -1,60 +1,89 @@
 package com.portfolio.agent.infrastructure.model.provider;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
+/** Immutable, non-secret execution metadata for one configured model entry. */
 public final class ModelProviderDescriptor {
 
-    private static final Set<ModelProviderRequestFeature> REQUIRED_REQUEST_FEATURES = Set.of(
-            ModelProviderRequestFeature.JSON_OBJECT_REQUEST,
-            ModelProviderRequestFeature.THINKING_DISABLED_REQUEST,
-            ModelProviderRequestFeature.NON_STREAMING_REQUEST);
+    private static final Pattern SELECTION_VERSION_FORMAT =
+            Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
 
-    private final ModelProviderKind providerId;
-    private final String adapterVersion;
+    private final ModelRef modelRef;
+    private final String selectionVersion;
+    private final String displayName;
+    private final int displayOrder;
     private final URI endpoint;
     private final String modelName;
-    private final Set<String> approvedModelPolicyVersions;
-    private final Set<String> approvedAnswerSchemaVersions;
-    private final Set<ModelProviderRequestFeature> requestFeatures;
+    private final ModelProviderProtocolProfile protocolProfile;
+    private final Set<ModelCapability> capabilities;
+    private final int contextWindowBudget;
+    private final int outputBudget;
+    private final String descriptorFingerprint;
 
     public ModelProviderDescriptor(
-            ModelProviderKind providerId,
-            String adapterVersion,
+            ModelRef modelRef,
+            String selectionVersion,
+            String displayName,
+            int displayOrder,
             URI endpoint,
             String modelName,
-            Set<String> policyVersions,
-            Set<String> schemaVersions,
-            Set<ModelProviderRequestFeature> requestFeatures) {
-        this.providerId = Objects.requireNonNull(providerId, "providerId");
-        this.adapterVersion = requireText(adapterVersion, "adapterVersion");
+            ModelProviderProtocolProfile protocolProfile,
+            Set<ModelCapability> capabilities,
+            int maxContextTokens,
+            int maxOutputTokens) {
+        this.modelRef = Objects.requireNonNull(modelRef, "modelRef");
+        this.selectionVersion = requireSelectionVersion(selectionVersion);
+        this.displayName = requireText(displayName, "displayName");
+        this.displayOrder = displayOrder;
         this.endpoint = requireHttpsEndpoint(endpoint);
         this.modelName = requireText(modelName, "modelName");
-        this.approvedModelPolicyVersions = copyTextSet(policyVersions, "policyVersions");
-        this.approvedAnswerSchemaVersions = copyTextSet(schemaVersions, "schemaVersions");
-        this.requestFeatures = copyRequestFeatures(requestFeatures);
+        this.protocolProfile = Objects.requireNonNull(protocolProfile, "protocolProfile");
+        this.capabilities = copyCapabilities(capabilities);
+        if (maxContextTokens < 1) {
+            throw new IllegalArgumentException("maxContextTokens must be positive");
+        }
+        if (maxOutputTokens < 1 || maxOutputTokens > maxContextTokens) {
+            throw new IllegalArgumentException("maxOutputTokens is invalid");
+        }
+        this.contextWindowBudget = maxContextTokens;
+        this.outputBudget = maxOutputTokens;
+        descriptorFingerprint = fingerprint(
+                modelRef.value(), selectionVersion, endpoint.toASCIIString(), modelName,
+                protocolProfile.name(), canonicalCapabilities(capabilities),
+                Integer.toString(maxContextTokens), Integer.toString(maxOutputTokens));
     }
 
-    public boolean isApprovedConfiguration(String policyVersion, String schemaVersion) {
-        return approvedModelPolicyVersions.contains(policyVersion)
-                && approvedAnswerSchemaVersions.contains(schemaVersion)
-                && requestFeatures.containsAll(REQUIRED_REQUEST_FEATURES);
-    }
-
-    public ModelProviderKind getProviderId() { return providerId; }
-    public String getAdapterVersion() { return adapterVersion; }
+    public ModelRef getModelRef() { return modelRef; }
+    public String getSelectionVersion() { return selectionVersion; }
+    public String getDisplayName() { return displayName; }
+    public int getDisplayOrder() { return displayOrder; }
     public URI getEndpoint() { return endpoint; }
     public String getModelName() { return modelName; }
-    public Set<String> getApprovedModelPolicyVersions() { return approvedModelPolicyVersions; }
-    public Set<String> getApprovedAnswerSchemaVersions() { return approvedAnswerSchemaVersions; }
-    public Set<ModelProviderRequestFeature> getRequestFeatures() { return requestFeatures; }
+    public ModelProviderProtocolProfile getProtocolProfile() { return protocolProfile; }
+    public Set<ModelCapability> getCapabilities() { return capabilities; }
+    public int getMaxContextTokens() { return contextWindowBudget; }
+    public int getMaxOutputTokens() { return outputBudget; }
+    public String getDescriptorFingerprint() { return descriptorFingerprint; }
+
+    public ModelCatalogEntry publicEntry() {
+        return new ModelCatalogEntry(
+                modelRef.value(), displayName, displayOrder,
+                selectionVersion, capabilities);
+    }
 
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " is required");
         }
-        return value;
+        return value.strip();
     }
 
     private static URI requireHttpsEndpoint(URI value) {
@@ -62,37 +91,57 @@ public final class ModelProviderDescriptor {
                 || value.getScheme() == null
                 || !"https".equalsIgnoreCase(value.getScheme())
                 || value.getHost() == null
-                || value.getHost().isBlank()) {
+                || value.getHost().isBlank()
+                || value.getUserInfo() != null
+                || value.getRawQuery() != null
+                || value.getFragment() != null) {
             throw new IllegalArgumentException("endpoint must be an HTTPS URI with a host");
         }
         return value;
     }
 
-    private static Set<String> copyTextSet(Set<String> values, String name) {
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException(name + " must not be empty");
+    private static String requireSelectionVersion(String value) {
+        if (value == null
+                || value.length() > 128
+                || !SELECTION_VERSION_FORMAT.matcher(value).matches()) {
+            throw new IllegalArgumentException("selectionVersion format is invalid");
         }
-        for (String value : values) {
-            requireText(value, name + " element");
+        return value;
+    }
+
+    private static Set<ModelCapability> copyCapabilities(Set<ModelCapability> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("capabilities must not be empty");
+        }
+        for (ModelCapability value : values) {
+            if (value == null) {
+                throw new IllegalArgumentException("capabilities must not contain null");
+            }
         }
         return Set.copyOf(values);
     }
 
-    private static Set<ModelProviderRequestFeature> copyRequestFeatures(
-            Set<ModelProviderRequestFeature> values) {
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("requestFeatures must not be empty");
-        }
-        for (ModelProviderRequestFeature value : values) {
-            if (value == null) {
-                throw new IllegalArgumentException("requestFeatures must not contain null");
+    public static String canonicalCapabilities(Set<ModelCapability> values) {
+        return values.stream()
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining(","));
+    }
+
+    public static String fingerprint(String... values) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (String value : values) {
+                byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+                digest.update((byte) (bytes.length >>> 24));
+                digest.update((byte) (bytes.length >>> 16));
+                digest.update((byte) (bytes.length >>> 8));
+                digest.update((byte) bytes.length);
+                digest.update(bytes);
             }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }
-        Set<ModelProviderRequestFeature> copied = Set.copyOf(values);
-        if (!copied.containsAll(REQUIRED_REQUEST_FEATURES)) {
-            throw new IllegalArgumentException(
-                    "requestFeatures must contain all required request features");
-        }
-        return copied;
     }
 }

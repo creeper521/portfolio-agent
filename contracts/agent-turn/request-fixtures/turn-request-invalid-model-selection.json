@@ -1,0 +1,16 @@
+{
+  "requestId": "9824f9cf-fae6-407c-8185-97bcbd1c0d18",
+  "modelSelection": {
+    "kind": "NONE",
+    "modelRef": "glm-4-7-flash"
+  },
+  "command": {
+    "kind": "ASK",
+    "input": {
+      "kind": "PRESET",
+      "presetId": "question-sql-audit-detail",
+      "presetRevision": "pcv1-0123456789abcdef"
+    }
+  },
+  "conversationWindow": []
+}

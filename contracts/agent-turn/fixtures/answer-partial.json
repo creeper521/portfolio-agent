@@ -1,5 +1,11 @@
 {
   "requestId": "10000000-0000-4000-8000-000000000002",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "qwen-3-7-flash",
+    "selectionVersion": "qwen-3-7-flash-v1",
+    "participation": "ANSWER_GENERATION"
+  },
   "kind": "ANSWER",
   "answer": {
     "resolution": "PARTIAL",

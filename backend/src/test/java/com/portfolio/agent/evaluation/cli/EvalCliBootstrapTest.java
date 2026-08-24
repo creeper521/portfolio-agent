@@ -10,20 +10,14 @@ class EvalCliBootstrapTest {
 
     @AfterEach
     void cleanProperties() {
-        System.clearProperty("PORTFOLIO_MODEL_ENABLED");
-        System.clearProperty("PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED");
-        System.clearProperty("PORTFOLIO_MODEL_DATA_POLICY_APPROVED");
-        System.clearProperty("PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED");
+        System.clearProperty("PORTFOLIO_MODEL_RUNTIME_ENABLED");
     }
 
     @Test
     void forcedOffArgumentsWinEvenWhenEnvironmentPreSetsModelEnabledTrue() {
         // Adversarial environment: everything that could enable the real
         // provider is pre-set to true through relaxed-binding system properties.
-        System.setProperty("PORTFOLIO_MODEL_ENABLED", "true");
-        System.setProperty("PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED", "true");
-        System.setProperty("PORTFOLIO_MODEL_DATA_POLICY_APPROVED", "true");
-        System.setProperty("PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED", "true");
+        System.setProperty("PORTFOLIO_MODEL_RUNTIME_ENABLED", "true");
 
         ConfigurableApplicationContext context = new org.springframework.boot.builder
                 .SpringApplicationBuilder(com.portfolio.agent.PortfolioAgentApplication.class)
@@ -33,10 +27,7 @@ class EvalCliBootstrapTest {
 
         try {
             assertThat(context.getEnvironment().getProperty(
-                    "portfolio.conversational-agent.enabled")).isEqualTo("false");
-            assertThat(context.getEnvironment().getProperty(
-                    "portfolio.conversational-agent.visitor-data-policy-approved"))
-                    .isEqualTo("false");
+                    "portfolio.model-runtime.enabled")).isEqualTo("false");
         } finally {
             context.close();
         }

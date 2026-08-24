@@ -124,7 +124,8 @@ class AgentTurnAdmissionControllerTest {
 
     private String freeText(UUID requestId) {
         return """
-                {"requestId":"%s","command":{"kind":"ASK","input":{
+                {"requestId":"%s","modelSelection":{"kind":"NONE"},
+                 "command":{"kind":"ASK","input":{
                  "kind":"FREE_TEXT","text":"你好"}},"conversationWindow":[]}
                 """.formatted(requestId);
     }

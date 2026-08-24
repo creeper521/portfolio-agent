@@ -29,7 +29,7 @@ class PortfolioReviewedGoalSourceTest {
         PortfolioReviewedGoalSource source = new PortfolioReviewedGoalSource(() ->
                 new RuntimeAnswerContent("public-1", "hash-1", List.of(project)));
         AgentTurnCommand command = new AgentTurnCommand.Ask(
-                UUID.randomUUID(),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.Preset(
                         "preset-verification", "pcv1-0123456789abcdef"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());

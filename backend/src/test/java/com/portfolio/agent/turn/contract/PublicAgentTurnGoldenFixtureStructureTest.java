@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.contract;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -9,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -19,18 +21,32 @@ class PublicAgentTurnGoldenFixtureStructureTest {
     private static final Set<String> EXPECTED_FILES = Set.of(
             "answer-complete.json", "answer-partial.json", "answer-no-result.json",
             "answer-local-clarification.json", "clarification.json", "conversational.json",
-            "boundary.json", "capability-unavailable.json");
+            "boundary.json", "capability-unavailable.json",
+            "model-selection-stale.json", "selected-model-unavailable.json",
+            "selected-model-temporarily-unavailable.json",
+            "selected-model-rate-limited.json",
+            "selected-model-invalid-response.json");
+    private static final Map<String, String> MODEL_UNAVAILABLE_FIXTURES = Map.of(
+            "model-selection-stale.json", "MODEL_SELECTION_STALE",
+            "selected-model-unavailable.json", "SELECTED_MODEL_UNAVAILABLE",
+            "selected-model-temporarily-unavailable.json",
+            "SELECTED_MODEL_TEMPORARILY_UNAVAILABLE",
+            "selected-model-rate-limited.json", "SELECTED_MODEL_RATE_LIMITED",
+            "selected-model-invalid-response.json", "SELECTED_MODEL_INVALID_RESPONSE");
     private static final Set<String> TURN_KINDS = Set.of(
             "ANSWER", "CLARIFICATION", "CONVERSATIONAL", "BOUNDARY",
             "CAPABILITY_UNAVAILABLE");
     private static final Set<String> COVERAGES = Set.of("FULL", "PARTIAL", "NONE");
     private static final Set<String> PRESENTATION_KINDS = Set.of("SECTIONED", "RECOMMENDATION");
+    private static final Set<String> MODEL_PARTICIPATION = Set.of(
+            "NONE", "GOAL_INTERPRETATION_ONLY", "ANSWER_GENERATION",
+            "GOAL_AND_ANSWER", "ATTEMPTED_UNAVAILABLE");
     private static final Set<String> FORBIDDEN_KEYS = Set.of(
             "interaction", "agentTurn", "contractVersion", "disposition", "completedTasks",
             "taskId", "sourceTaskId", "sourceTaskIds", "claimId", "claimIds", "evidenceId",
             "evidenceIds", "degraded", "degradationSummary", "execution", "reasonCodes");
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
     void fixturesDefineTheClosedPublicAgentTurnContract() throws Exception {
@@ -47,9 +63,30 @@ class PublicAgentTurnGoldenFixtureStructureTest {
         assertThat(fixtures).extracting(path -> path.getFileName().toString())
                 .containsExactlyInAnyOrderElementsOf(EXPECTED_FILES);
 
+        Set<String> observedParticipation = new HashSet<>();
         for (Path fixture : fixtures) {
             JsonNode turn = mapper.readTree(fixture.toFile());
             validateTurn(fixture.getFileName().toString(), turn);
+            observedParticipation.add(
+                    turn.path("modelExecution").path("participation").asText());
+        }
+        assertThat(observedParticipation).containsAll(MODEL_PARTICIPATION);
+    }
+
+    @Test
+    void fixturesRoundTripThroughTheBackendSerializer() throws Exception {
+        Path directory = repositoryRoot().resolve("contracts/agent-turn/fixtures");
+        for (String fileName : EXPECTED_FILES) {
+            JsonNode fixture = mapper.readTree(directory.resolve(fileName).toFile());
+            PublicAgentTurn turn = mapper.treeToValue(fixture, PublicAgentTurn.class);
+            JsonNode serialized = mapper.valueToTree(turn);
+
+            assertThat(serialized.equals((left, right) -> {
+                if (left.isNumber() && right.isNumber()) {
+                    return left.decimalValue().compareTo(right.decimalValue());
+                }
+                return left.equals(right) ? 0 : 1;
+            }, fixture)).isTrue();
         }
     }
 
@@ -59,6 +96,7 @@ class PublicAgentTurnGoldenFixtureStructureTest {
         String kind = turn.path("kind").asText();
         assertThat(TURN_KINDS).contains(kind);
         assertNoForbiddenKeys(turn, fileName);
+        validateModelExecution(turn.path("modelExecution"));
 
         if ("ANSWER".equals(kind)) {
             assertThat(turn.has("answer")).isTrue();
@@ -70,6 +108,59 @@ class PublicAgentTurnGoldenFixtureStructureTest {
 
         if ("CLARIFICATION".equals(kind)) {
             validateChallenge(turn.path("clarification"));
+        }
+        if ("CAPABILITY_UNAVAILABLE".equals(kind)) {
+            validateCapabilityUnavailable(fileName, turn);
+        }
+    }
+
+    private void validateCapabilityUnavailable(String fileName, JsonNode turn) {
+        String code = turn.path("code").asText();
+        JsonNode execution = turn.path("modelExecution");
+        if ("capability-unavailable.json".equals(fileName)) {
+            assertThat(code).isEqualTo("SEMANTIC_ROUTING_UNAVAILABLE");
+            assertThat(execution.path("selectionKind").asText()).isEqualTo("NONE");
+            assertThat(execution.path("participation").asText()).isEqualTo("NONE");
+            assertThat(turn.path("retryable").asBoolean()).isFalse();
+            return;
+        }
+
+        assertThat(MODEL_UNAVAILABLE_FIXTURES).containsKey(fileName);
+        assertThat(code).isEqualTo(MODEL_UNAVAILABLE_FIXTURES.get(fileName));
+        assertThat(execution.path("selectionKind").asText()).isEqualTo("MODEL");
+        if (Set.of("MODEL_SELECTION_STALE", "SELECTED_MODEL_UNAVAILABLE")
+                .contains(code)) {
+            assertThat(execution.path("participation").asText()).isEqualTo("NONE");
+            assertThat(turn.path("retryable").asBoolean()).isFalse();
+        } else {
+            assertThat(execution.path("participation").asText())
+                    .isEqualTo("ATTEMPTED_UNAVAILABLE");
+            assertThat(turn.path("retryable").asBoolean())
+                    .isEqualTo(Set.of(
+                            "SELECTED_MODEL_TEMPORARILY_UNAVAILABLE",
+                            "SELECTED_MODEL_RATE_LIMITED").contains(code));
+        }
+        if ("SELECTED_MODEL_RATE_LIMITED".equals(code)) {
+            assertThat(turn.path("retryAfterSeconds").asLong()).isBetween(1L, 300L);
+        } else {
+            assertThat(turn.has("retryAfterSeconds")).isFalse();
+        }
+    }
+
+    private void validateModelExecution(JsonNode execution) {
+        assertThat(execution.isObject()).isTrue();
+        String selectionKind = execution.path("selectionKind").asText();
+        String participation = execution.path("participation").asText();
+        assertThat(Set.of("MODEL", "NONE")).contains(selectionKind);
+        assertThat(MODEL_PARTICIPATION).contains(participation);
+        if ("MODEL".equals(selectionKind)) {
+            assertThat(execution.path("requestedModelRef").asText())
+                    .matches("[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?");
+            assertThat(execution.path("selectionVersion").asText()).isNotBlank();
+        } else {
+            assertThat(execution.has("requestedModelRef")).isFalse();
+            assertThat(execution.has("selectionVersion")).isFalse();
+            assertThat(participation).isEqualTo("NONE");
         }
     }
 

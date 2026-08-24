@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.general;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
 import com.portfolio.agent.turn.execution.TaskExecutionResult;
@@ -20,9 +21,12 @@ import static org.mockito.Mockito.when;
 class GeneralTaskExecutorTest {
     @Test void executesTypedRequestToResultPresentationAndArtifact() {
         AtomicReference<GeneralKnowledgeRequest> captured = new AtomicReference<>();
+        AtomicReference<ResolvedModelExecution> capturedExecution =
+                new AtomicReference<>();
         GeneralTaskExecutor executor = new GeneralTaskExecutor(
-                GeneralTestFixtures.generator(request -> {
+                GeneralTestFixtures.generator((request, modelExecution) -> {
                     captured.set(request);
+                    capturedExecution.set(modelExecution);
                     return GeneralTestFixtures.VALID_EXPLANATION;
                 }),
                 new GeneralPresentationComposer());
@@ -38,6 +42,8 @@ class GeneralTaskExecutorTest {
         when(context.getContentReleaseId()).thenReturn("public-1");
         when(context.getDeadline()).thenReturn(GeneralTestFixtures.explanation().getDeadline());
         when(context.getCancellation()).thenReturn(new CancellationSignal());
+        ResolvedModelExecution selected = ResolvedModelExecution.none();
+        when(context.getModelExecution()).thenReturn(selected);
 
         TaskExecutionResult execution = executor.execute(context);
         assertThat(execution.getFulfillment()).isEqualTo(TaskOutcome.Fulfillment.FULL);
@@ -46,5 +52,6 @@ class GeneralTaskExecutorTest {
         assertThat(execution.getArtifact().getProvenance().getPublicSourceKeys()).isEmpty();
         assertThat(captured.get().getAudience())
                 .isEqualTo(GeneralKnowledgeRequest.Audience.INTERVIEWER);
+        assertThat(capturedExecution).hasValue(selected);
     }
 }

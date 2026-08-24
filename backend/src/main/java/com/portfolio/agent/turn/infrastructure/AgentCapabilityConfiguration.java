@@ -1,15 +1,10 @@
 package com.portfolio.agent.turn.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.infrastructure.model.configuration.ConversationalAgentProperties;
-import com.portfolio.agent.infrastructure.model.configuration.GoalInterpretationProperties;
-import com.portfolio.agent.infrastructure.model.configuration.ModelExpressionProperties;
 import com.portfolio.agent.infrastructure.model.configuration.ModelOperationProperties;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderRegistrySnapshot;
-import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
-import com.portfolio.agent.infrastructure.model.policy.ModelPolicy;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
@@ -30,7 +25,10 @@ import com.portfolio.agent.turn.infrastructure.model.GoalInterpretationAdapter;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.OpenAiCompatibleStructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.ModelExecutionResolver;
 import com.portfolio.agent.infrastructure.model.SystemPromptCatalog;
+import com.portfolio.agent.infrastructure.model.configuration.ConfiguredModelCatalog;
+import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.turn.lifecycle.AgentTurnLifecycleService;
 import com.portfolio.agent.turn.lifecycle.ActiveTurnCapacity;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintFactory;
@@ -66,9 +64,7 @@ import java.util.concurrent.Executors;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
-        ConversationalAgentProperties.class,
         ModelOperationProperties.class,
-        GoalInterpretationProperties.class,
         AgentRuntimeProperties.class,
         com.portfolio.agent.turn.state.configuration.ConversationContextProperties.class
 })
@@ -81,15 +77,16 @@ public class AgentCapabilityConfiguration {
     @Bean
     ApplicationStartupDiagnostics applicationStartupDiagnostics(
             DiagnosticEventPublisher diagnosticEventPublisher,
-            ModelExpressionProperties modelExpressionProperties,
-            ConversationalAgentProperties conversationalAgentProperties,
+            com.portfolio.agent.infrastructure.model.configuration.ModelRuntimeProperties
+                    modelRuntimeProperties,
+            ModelCatalogSnapshot modelCatalog,
             @org.springframework.beans.factory.annotation.Value(
                     "${portfolio.retrieval.profile:DISABLED}") String retrievalProfile,
             AgentRuntimeProperties runtimeProperties) {
         return new ApplicationStartupDiagnostics(
                 diagnosticEventPublisher,
-                modelExpressionProperties.isEnabled(),
-                conversationalAgentProperties.isEnabled(),
+                modelRuntimeProperties.isEnabled(),
+                modelCatalog.getEntries().size(),
                 retrievalProfile,
                 runtimeProperties.getTurnTimeout().toMillis(),
                 runtimeProperties.getRequestsPerMinute(),
@@ -127,14 +124,6 @@ public class AgentCapabilityConfiguration {
     }
 
     @Bean
-    ConversationProviderAccess conversationProviderAccess(
-            ConversationalAgentProperties properties,
-            ModelPolicy modelPolicy,
-            ModelProviderRegistrySnapshot registry) {
-        return new ConversationProviderAccess(properties.allowsProviderCalls(modelPolicy, registry));
-    }
-
-    @Bean
     ModelOperationPolicyRegistry modelOperationPolicyRegistry(ModelOperationProperties properties) {
         return properties.toRegistry();
     }
@@ -143,66 +132,72 @@ public class AgentCapabilityConfiguration {
     AgentRuntimeReadiness agentRuntimeReadiness(
             com.portfolio.agent.turn.state.configuration.ConversationContextProperties
                     contextProperties,
-            ConversationProviderAccess providerAccess,
-            ModelOperationPolicyRegistry operationPolicies,
-            ModelPolicy modelPolicy) {
+            ModelOperationPolicyRegistry operationPolicies) {
         return new AgentRuntimeReadiness(
-                contextProperties.getMode(), providerAccess,
-                operationPolicies, modelPolicy.getProvider());
+                contextProperties.getMode(), operationPolicies);
     }
 
     @Bean
     StructuredModelTransport structuredModelTransport(
-            ObjectMapper mapper, ModelExpressionProperties modelProperties,
-            ModelProviderRegistrySnapshot registry,
-            AgentRuntimeProperties runtimeProperties,
+            ObjectMapper mapper,
+            ModelOperationPolicyRegistry operationPolicies,
             DiagnosticEventPublisher diagnostics) {
+        Duration transportTimeout = maximumTransportTimeout(operationPolicies);
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newBuilder()
-                        .connectTimeout(runtimeProperties.getGeneralKnowledgeTimeout())
+                        .connectTimeout(transportTimeout)
                         .build(),
-                mapper, registry.getRequiredDescriptor(modelProperties.getProvider()),
-                modelProperties.apiKeyFor(modelProperties.getProvider()),
-                runtimeProperties.getGeneralKnowledgeTimeout(), diagnostics);
+                mapper, transportTimeout, diagnostics);
+    }
+
+    @Bean
+    ModelExecutionResolver modelExecutionResolver(
+            ModelCatalogSnapshot catalog,
+            ConfiguredModelCatalog configuredCatalog) {
+        return new ModelExecutionResolver(
+                catalog, configuredCatalog::getRequiredBinding);
     }
 
     @Bean
     GoalInterpretationPort goalInterpretationPort(
             ObjectMapper objectMapper,
-            GoalInterpretationProperties properties,
-            AgentRuntimeProperties runtimeProperties,
+            ModelOperationPolicyRegistry operationPolicies,
             StructuredModelTransport transport,
             SystemPromptCatalog prompts,
             AgentRuntimeReadiness readiness,
             DiagnosticEventPublisher diagnostics) {
         if (!readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION)) {
-            return (input, deadline) -> { throw new GoalInterpretationUnavailableException(); };
+            return (input, deadline, modelExecution) -> {
+                throw new GoalInterpretationUnavailableException();
+            };
         }
+        ModelOperationPolicy operation = operationPolicies.get(
+                ModelOperation.TURN_INTERPRETATION);
         return new GoalInterpretationAdapter(
                 transport, objectMapper, new GoalProposalCodec(),
                 prompts.goalInterpretation(),
-                properties.getMaxOutputTokens(), runtimeProperties.getGoalInterpretationTimeout(),
+                operation.getMaxOutputTokens(), operation.getTimeout(),
                 new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }
 
     @Bean
     GeneralKnowledgeModelPort generalKnowledgeModelPort(
             ObjectMapper objectMapper,
-            ModelExpressionProperties modelProperties,
-            AgentRuntimeProperties runtimeProperties,
+            ModelOperationPolicyRegistry operationPolicies,
             StructuredModelTransport transport,
             SystemPromptCatalog prompts,
             AgentRuntimeReadiness readiness) {
         if (!readiness.isOperationAvailable(ModelOperation.GENERAL_KNOWLEDGE)) {
-            return request -> {
+            return (request, modelExecution) -> {
                 throw new GeneralKnowledgeUnavailableException(
                         "general capability is unavailable");
             };
         }
+        ModelOperationPolicy operation = operationPolicies.get(
+                ModelOperation.GENERAL_KNOWLEDGE);
         return new OpenAiCompatibleGeneralKnowledgeAdapter(
                 transport, objectMapper, prompts.generalKnowledge(),
-                modelProperties.getMaxTokens(),
-                runtimeProperties.getGeneralKnowledgeTimeout());
+                operation.getMaxOutputTokens(), operation.getTimeout());
     }
 
     @Bean
@@ -296,6 +291,7 @@ public class AgentCapabilityConfiguration {
             AgentStateStore store, ConversationSessionStore sessionStore,
             com.portfolio.agent.turn.state.configuration.ConversationContextProperties properties,
             AgentRuntimeProperties runtimeProperties,
+            ModelExecutionResolver modelExecutionResolver,
             ExecutorService conversationRequestExecutor) {
         byte[] configuredTokenKey = decodeOrRandom(properties.getCrypto().getCurrentTokenKey());
         java.util.List<byte[]> previousTokenKeys =
@@ -332,13 +328,25 @@ public class AgentCapabilityConfiguration {
                 clock, runtimeProperties.getLeaseDuration(),
                 runtimeProperties.getTurnTimeout(),
                 runtimeProperties.getSettlementReserve(),
-                properties.getDiscussionTtl());
+                properties.getDiscussionTtl(), modelExecutionResolver);
     }
 
     private byte[] randomSecret() {
         byte[] value = new byte[32];
         new java.security.SecureRandom().nextBytes(value);
         return value;
+    }
+
+    private Duration maximumTransportTimeout(
+            ModelOperationPolicyRegistry operationPolicies) {
+        Duration maximum = Duration.ofSeconds(1);
+        for (ModelOperationPolicy policy : operationPolicies.asMap().values()) {
+            Duration timeout = policy.getTimeout();
+            if (timeout != null && timeout.compareTo(maximum) > 0) {
+                maximum = timeout;
+            }
+        }
+        return maximum;
     }
 
     private byte[] decodeOrRandom(String encoded) {

@@ -416,7 +416,7 @@ class EvalCliTest {
                 {
                   "policyId": "phase-0.v1",
                   "mode": "OFFLINE",
-                  "blockingProvider": "DEEPSEEK_V4_FLASH",
+                  "blockingProvider": "glm-4-7-flash",
                   "thresholds": {
                     "blocking": {
                       "publicSubjectSmokeCoverageMinimum": 1.0,

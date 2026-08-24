@@ -2,8 +2,11 @@ package com.portfolio.agent.turn.infrastructure.model;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
+import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
@@ -46,21 +49,38 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
                 outputDiagnostics, "outputDiagnostics");
     }
     @Override public GoalInterpretationResult interpret(
-            GoalInterpretationInput input, TurnDeadline deadline) {
+            GoalInterpretationInput input, TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
+        if (!modelExecution.getSnapshot().supports(
+                ModelCapability.TURN_INTERPRETATION)) {
+            if (modelExecution.getSnapshot().getKind()
+                    == com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot.Kind.MODEL) {
+                throw SelectedModelFailureException.unavailableBeforeAttempt();
+            }
+            throw new GoalInterpretationUnavailableException();
+        }
+        StructuredModelRequest request = new StructuredModelRequest(
+                "GOAL_INTERPRETATION", systemPrompt, prompt(input), maxTokens, 0.0d,
+                deadline.cappedAt(timeout));
+        if (request.deadline().isExpired()) {
+            throw SelectedModelFailureException
+                    .temporarilyUnavailableBeforeAttempt();
+        }
+        modelExecution.markAttempted(
+                ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
         String json;
         try {
-            json = transport.execute(new StructuredModelRequest(
-                    "GOAL_INTERPRETATION", systemPrompt, prompt(input), maxTokens, 0.0d,
-                    deadline.cappedAt(timeout))).json();
+            json = transport.execute(
+                    modelExecution.getRequiredBinding(), request).json();
         } catch (StructuredModelFailure failure) {
-            throw new GoalInterpretationUnavailableException(failure);
+            throw SelectedModelFailureException.from(failure);
         }
         try {
             return codec.decode(json, input);
         } catch (IllegalArgumentException failure) {
             outputDiagnostics.rejected(
                     "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SCHEMA);
-            throw new GoalInterpretationUnavailableException(failure);
+            throw SelectedModelFailureException.invalidResponse(failure);
         }
     }
     private String prompt(GoalInterpretationInput input) {

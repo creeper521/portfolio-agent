@@ -12,11 +12,16 @@ import com.portfolio.agent.turn.planning.GoalRequestedOutput;
 import com.portfolio.agent.turn.planning.GoalSubjectReference;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
+import com.portfolio.agent.turn.projection.ModelExecutionProjection;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
 import com.portfolio.agent.turn.planning.ClarificationProposal;
 import com.portfolio.agent.turn.planning.DiscussionClarificationTemplate;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +30,62 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AgentStatePayloadCodecTest {
+    @Test void v2ModelExecutionIsAtomicallyEncryptedAndReplayedWithThePublicTurn() throws Exception {
+        AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
+                JsonMapper.builder().addModule(new ParameterNamesModule()).build(),
+                "state-key-1", new byte[32]);
+        UUID requestId = UUID.randomUUID();
+        ModelExecutionProjection execution = ModelExecutionProjection.model(
+                "qwen-3-7-flash", "qwen-3-7-flash-v1",
+                ModelExecutionProjection.Participation.ATTEMPTED_UNAVAILABLE);
+        PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
+                requestId, execution, "SELECTED_MODEL_INVALID_RESPONSE",
+                "当前模型没有返回可用结果。", false, List.of());
+
+        AgentStatePayloadCodec.Envelope envelope = codec.encode(
+                requestId, "conversation-1",
+                new AgentStatePayloadCodec.SettlementPayload(
+                        turn, List.of(), List.of()));
+        String ciphertext = new String(
+                envelope.ciphertext(), java.nio.charset.StandardCharsets.UTF_8);
+        PublicAgentTurn decoded = codec.decode(
+                requestId, "conversation-1", envelope).publicTurn();
+
+        assertThat(ciphertext).doesNotContain(
+                "qwen-3-7-flash", "qwen-3-7-flash-v1", "ATTEMPTED_UNAVAILABLE");
+        assertThat(decoded.getModelExecution()).isEqualTo(execution);
+        assertThat(decoded).isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
+    }
+
+    @Test void legacyV1PayloadFailsClosedAfterRequiredModelExecutionUpgrade() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = JsonMapper.builder()
+                .addModule(new ParameterNamesModule()).build();
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 7);
+        AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
+                mapper, "state-key-1", key);
+        UUID requestId = UUID.randomUUID();
+        AgentStatePayloadCodec.SettlementPayload payload =
+                new AgentStatePayloadCodec.SettlementPayload(
+                        new PublicAgentTurn.Conversational(
+                                requestId, ModelExecutionProjection.none(),
+                                "公开回答", List.of()),
+                        List.of(), List.of());
+        AgentStatePayloadCodec.Envelope legacyEnvelope = legacyV1Envelope(
+                mapper, key, requestId, "conversation-1", payload);
+
+        assertThatThrownBy(() -> codec.decode(
+                requestId, "conversation-1", legacyEnvelope))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("integrity");
+
+        AgentStatePayloadCodec.Envelope currentEnvelope = codec.encode(
+                requestId, "conversation-1", payload);
+        assertThat(codec.decode(
+                requestId, "conversation-1", currentEnvelope).publicTurn()
+                .getModelExecution()).isEqualTo(ModelExecutionProjection.none());
+    }
+
     @Test void discussionClarificationTemplateRoundTripsAsTypedEncryptedState() {
         AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
                 JsonMapper.builder().addModule(new ParameterNamesModule())
@@ -348,5 +409,29 @@ class AgentStatePayloadCodecTest {
         assertThat(decodedGoal.getGoalKind())
                 .isEqualTo(com.portfolio.agent.turn.planning.GoalKind.PORTFOLIO_RECOMMEND);
         assertThat(decodedGoal.getConstraints()).containsExactly("CAPABILITY_SQL");
+    }
+
+    private AgentStatePayloadCodec.Envelope legacyV1Envelope(
+            com.fasterxml.jackson.databind.ObjectMapper mapper,
+            byte[] key,
+            UUID requestId,
+            String conversationId,
+            AgentStatePayloadCodec.SettlementPayload payload) throws Exception {
+        byte[] nonce = new byte[12];
+        java.util.Arrays.fill(nonce, (byte) 3);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(
+                Cipher.ENCRYPT_MODE,
+                new SecretKeySpec(key, "AES"),
+                new GCMParameterSpec(128, nonce));
+        cipher.updateAAD((requestId + "\n" + conversationId
+                + "\nsettlement\nagent-state.v1")
+                .getBytes(StandardCharsets.UTF_8));
+        com.fasterxml.jackson.databind.ObjectMapper legacyMapper = mapper.copy()
+                .setSerializationInclusion(
+                        com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS);
+        return new AgentStatePayloadCodec.Envelope(
+                "state-key-1", nonce,
+                cipher.doFinal(legacyMapper.writeValueAsBytes(payload)));
     }
 }

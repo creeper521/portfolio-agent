@@ -2,8 +2,6 @@ package com.portfolio.agent.infrastructure.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
@@ -27,50 +25,59 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 
 public final class OpenAiCompatibleStructuredModelTransport implements StructuredModelTransport {
     static final int MAX_RESPONSE_BYTES = 256 * 1024;
+    static final int DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS = 30;
     private final HttpClient client;
     private final ObjectMapper mapper;
-    private final ModelProviderDescriptor provider;
-    private final String apiKey;
     private final Duration operationTimeout;
     private final DiagnosticEventPublisher diagnostics;
-    private final URI endpoint;
+    private final Function<ModelTransportBinding, URI> endpointResolver;
 
     public OpenAiCompatibleStructuredModelTransport(
-            HttpClient client, ObjectMapper mapper, ModelProviderDescriptor provider,
-            String apiKey, Duration operationTimeout, DiagnosticEventPublisher diagnostics) {
-        this(client, mapper, provider, apiKey, operationTimeout, diagnostics,
-                provider.getEndpoint());
+            HttpClient client, ObjectMapper mapper,
+            Duration operationTimeout, DiagnosticEventPublisher diagnostics) {
+        this(client, mapper, operationTimeout, diagnostics,
+                ModelTransportBinding::getEndpoint);
     }
 
     OpenAiCompatibleStructuredModelTransport(
-            HttpClient client, ObjectMapper mapper, ModelProviderDescriptor provider,
-            String apiKey, Duration operationTimeout,
-            DiagnosticEventPublisher diagnostics, URI endpoint) {
-        this.client = client; this.mapper = mapper; this.provider = provider;
-        this.apiKey = apiKey == null ? "" : apiKey;
-        this.operationTimeout = operationTimeout;
-        this.diagnostics = diagnostics;
-        this.endpoint = endpoint;
+            HttpClient client, ObjectMapper mapper,
+            Duration operationTimeout,
+            DiagnosticEventPublisher diagnostics,
+            Function<ModelTransportBinding, URI> endpointResolver) {
+        this.client = java.util.Objects.requireNonNull(client, "client");
+        this.mapper = java.util.Objects.requireNonNull(mapper, "mapper");
+        this.operationTimeout = java.util.Objects.requireNonNull(
+                operationTimeout, "operationTimeout");
+        this.diagnostics = java.util.Objects.requireNonNull(diagnostics, "diagnostics");
+        this.endpointResolver = java.util.Objects.requireNonNull(
+                endpointResolver, "endpointResolver");
     }
 
-    @Override public StructuredModelResponse execute(StructuredModelRequest request) {
+    @Override
+    public StructuredModelResponse execute(
+            ModelTransportBinding binding, StructuredModelRequest request) {
+        ModelTransportBinding resolvedBinding = java.util.Objects.requireNonNull(
+                binding, "binding");
         long startedAt = System.nanoTime();
         try {
             TurnDeadline operationDeadline =
                     request.deadline().cappedAt(operationTimeout);
-            String requestBody = body(request);
+            String requestBody = body(resolvedBinding, request);
             long timeout = operationDeadline.remainingMillis();
             if (timeout < 1) {
                 throw new StructuredModelFailure(
                         StructuredModelFailure.Code.DEADLINE_EXCEEDED);
             }
+            URI endpoint = java.util.Objects.requireNonNull(
+                    endpointResolver.apply(resolvedBinding), "resolved endpoint");
             HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
                     .timeout(Duration.ofMillis(timeout))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", resolvedBinding.authorizationHeaderValue())
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody)).build();
             CompletableFuture<HttpResponse<byte[]>> future = client.sendAsync(
                     httpRequest, limitedByteArrayHandler(MAX_RESPONSE_BYTES));
@@ -108,7 +115,11 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                         interrupted);
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new StructuredModelFailure(classifyHttpStatus(response.statusCode()));
+                StructuredModelFailure.Code code =
+                        classifyHttpStatus(response.statusCode());
+                Integer retryAfterSeconds = code == StructuredModelFailure.Code.RATE_LIMITED
+                        ? retryAfterSeconds(response) : null;
+                throw new StructuredModelFailure(code, retryAfterSeconds, null);
             }
             JsonNode root;
             try {
@@ -169,15 +180,17 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
         return "GTE_2000_MS";
     }
 
-    private String body(StructuredModelRequest request) throws Exception {
+    private String body(
+            ModelTransportBinding binding,
+            StructuredModelRequest request) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("model", provider.getModelName());
+        payload.put("model", binding.getModelName());
         payload.put("messages", List.of(
                 Map.of("role", "system", "content", request.systemPrompt()),
                 Map.of("role", "user", "content", request.userPrompt())));
-        ModelProviderProtocolProfile.forProvider(provider.getProviderId())
-                .applyStructuredOutputFields(payload);
-        payload.put("max_tokens", request.maxOutputTokens());
+        binding.getProtocolProfile().applyStructuredOutputFields(payload);
+        payload.put("max_tokens", Math.min(
+                request.maxOutputTokens(), binding.getMaxOutputTokens()));
         payload.put("temperature", request.temperature());
         return mapper.writeValueAsString(payload);
     }
@@ -196,6 +209,19 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             return StructuredModelFailure.Code.PROVIDER_UNAVAILABLE;
         }
         return StructuredModelFailure.Code.PROVIDER_REJECTED;
+    }
+
+    private int retryAfterSeconds(HttpResponse<?> response) {
+        String raw = response.headers().firstValue("Retry-After").orElse(null);
+        if (raw == null) {
+            return DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS;
+        }
+        try {
+            long seconds = Long.parseLong(raw.trim());
+            return (int) Math.max(1L, Math.min(300L, seconds));
+        } catch (NumberFormatException invalid) {
+            return DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS;
+        }
     }
 
     private boolean containsCause(Throwable failure, Class<? extends Throwable> type) {

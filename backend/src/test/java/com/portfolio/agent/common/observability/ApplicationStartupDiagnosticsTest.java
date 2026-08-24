@@ -74,8 +74,8 @@ class ApplicationStartupDiagnosticsTest {
             assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.INFO);
             assertThat(event.getFields()).containsExactlyInAnyOrderEntriesOf(
                     java.util.Map.of(
-                            "model_expression.enabled", true,
-                            "conversation.enabled", false,
+                            "model_runtime.enabled", true,
+                            "model_catalog.selectable_count", 2,
                             "retrieval.profile", "HYBRID",
                             "answer.request_timeout_ms", 12000L,
                             "answer.requests_per_minute", 10,
@@ -94,7 +94,7 @@ class ApplicationStartupDiagnosticsTest {
                 .isThrownBy(() -> new ApplicationStartupDiagnostics(
                         event -> { },
                         true,
-                        false,
+                        2,
                         "SENTINEL_MODEL_DIRECTORY",
                         12000,
                         10,
@@ -109,7 +109,7 @@ class ApplicationStartupDiagnosticsTest {
         return new ApplicationStartupDiagnostics(
                 publisher,
                 true,
-                false,
+                2,
                 "HYBRID",
                 12000,
                 10,

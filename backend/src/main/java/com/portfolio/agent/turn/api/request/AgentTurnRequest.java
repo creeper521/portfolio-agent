@@ -21,6 +21,10 @@ public final class AgentTurnRequest {
     private final UUID requestId;
 
     @Valid
+    @NotNull(message = "modelSelection is required")
+    private final ModelSelectionRequest modelSelection;
+
+    @Valid
     @NotNull(message = "command is required")
     private final CommandRequest command;
 
@@ -35,10 +39,12 @@ public final class AgentTurnRequest {
     @JsonCreator
     public AgentTurnRequest(
             @JsonProperty("requestId") UUID requestId,
+            @JsonProperty("modelSelection") ModelSelectionRequest modelSelection,
             @JsonProperty("command") CommandRequest command,
             @JsonProperty("surfaceContext") SurfaceContextRequest surfaceContext,
             @JsonProperty("conversationWindow") List<MessageRequest> conversationWindow) {
         this.requestId = requestId;
+        this.modelSelection = modelSelection;
         this.command = command;
         this.surfaceContext = surfaceContext;
         this.conversationWindow = conversationWindow == null
@@ -48,6 +54,10 @@ public final class AgentTurnRequest {
 
     public UUID getRequestId() {
         return requestId;
+    }
+
+    public ModelSelectionRequest getModelSelection() {
+        return modelSelection;
     }
 
     public CommandRequest getCommand() {
@@ -86,6 +96,60 @@ public final class AgentTurnRequest {
                     name = "RESOLVE_CLARIFICATION")
     })
     public interface CommandRequest {
+    }
+
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
+    @JsonSubTypes({
+            @JsonSubTypes.Type(value = ModelModelSelectionRequest.class, name = "MODEL"),
+            @JsonSubTypes.Type(value = NoneModelSelectionRequest.class, name = "NONE")
+    })
+    public interface ModelSelectionRequest {
+    }
+
+    public static final class ModelModelSelectionRequest implements ModelSelectionRequest {
+        @NotBlank(message = "modelRef is required")
+        @Size(max = 64, message = "modelRef must not exceed 64 characters")
+        @Pattern(regexp = "[a-z0-9]+(?:-[a-z0-9]+)*",
+                message = "modelRef format is invalid")
+        private final String modelRef;
+
+        @NotBlank(message = "selectionVersion is required")
+        @Size(max = 128, message = "selectionVersion must not exceed 128 characters")
+        @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]*",
+                message = "selectionVersion format is invalid")
+        private final String selectionVersion;
+
+        @JsonCreator
+        public ModelModelSelectionRequest(
+                @JsonProperty("modelRef") String modelRef,
+                @JsonProperty("selectionVersion") String selectionVersion) {
+            this.modelRef = modelRef;
+            this.selectionVersion = selectionVersion;
+        }
+
+        public String getModelRef() {
+            return modelRef;
+        }
+
+        public String getSelectionVersion() {
+            return selectionVersion;
+        }
+
+        @JsonAnySetter
+        public void rejectUnknownField(String name, Object value) {
+            throw new IllegalArgumentException("unknown MODEL selection field: " + name);
+        }
+    }
+
+    public static final class NoneModelSelectionRequest implements ModelSelectionRequest {
+        @JsonCreator
+        public NoneModelSelectionRequest() {
+        }
+
+        @JsonAnySetter
+        public void rejectUnknownField(String name, Object value) {
+            throw new IllegalArgumentException("unknown NONE selection field: " + name);
+        }
     }
 
     public static final class AskCommandRequest implements CommandRequest {
@@ -415,6 +479,8 @@ public final class AgentTurnRequest {
     @Override
     public String toString() {
         return "AgentTurnRequest{requestId=" + requestId
+                + ", modelSelection=" + (modelSelection == null
+                ? null : modelSelection.getClass().getSimpleName())
                 + ", command=" + (command == null ? null : command.getClass().getSimpleName())
                 + ", conversationMessageCount=" + conversationWindow.size() + '}';
     }

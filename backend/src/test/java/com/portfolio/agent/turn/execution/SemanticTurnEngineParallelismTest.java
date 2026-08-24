@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.execution;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.SemanticPlanValidator;
 import com.portfolio.agent.turn.planning.SemanticTask;
@@ -18,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,11 +29,15 @@ class SemanticTurnEngineParallelismTest {
         CyclicBarrier barrier = new CyclicBarrier(2);
         AtomicInteger inflight = new AtomicInteger();
         AtomicInteger maximum = new AtomicInteger();
+        ResolvedModelExecution selected = ResolvedModelExecution.none();
+        ConcurrentLinkedQueue<ResolvedModelExecution> received =
+                new ConcurrentLinkedQueue<>();
         SemanticTaskExecutor executor = new SemanticTaskExecutor() {
             @Override public SemanticTask.SourceDomain getSourceDomain() {
                 return SemanticTask.SourceDomain.GENERAL;
             }
             @Override public TaskExecutionResult execute(TaskExecutionContext context) {
+                received.add(context.getModelExecution());
                 int current = inflight.incrementAndGet();
                 maximum.accumulateAndGet(current, Math::max);
                 try {
@@ -49,13 +55,14 @@ class SemanticTurnEngineParallelismTest {
             SemanticTurnOutcome outcome = engine.execute(
                     new SemanticPlanValidator().validate(plan()),
                     TurnDeadline.after(Duration.ofSeconds(2), Clock.systemUTC()),
-                    new CancellationSignal(), false);
+                    new CancellationSignal(), false, selected);
 
             assertThat(maximum.get()).isEqualTo(2);
             assertThat(outcome.getTaskOutcomes()).extracting(TaskOutcome::getTaskId)
                     .containsExactly("task-first", "task-second");
             assertThat(outcome.getGoalCoverage()).extracting(GoalCoverage::getCoverage)
                     .containsExactly(GoalCoverage.Coverage.FULL, GoalCoverage.Coverage.FULL);
+            assertThat(received).hasSize(2).allMatch(value -> value == selected);
         }
     }
 

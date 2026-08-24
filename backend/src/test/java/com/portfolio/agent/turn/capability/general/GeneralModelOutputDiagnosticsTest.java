@@ -24,7 +24,7 @@ class GeneralModelOutputDiagnosticsTest {
     private void assertLayer(String output, String layer, String code) {
         List<DiagnosticEvent> events = new ArrayList<>();
         GeneralKnowledgeGenerator generator = new GeneralKnowledgeGenerator(
-                request -> output,
+                (request, modelExecution) -> output,
                 new GeneralDraftCodec(new ObjectMapper()),
                 new GeneralDraftValidator(),
                 new ModelOutputDiagnostics(events::add));

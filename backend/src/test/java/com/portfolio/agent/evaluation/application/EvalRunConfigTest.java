@@ -61,7 +61,7 @@ class EvalRunConfigTest {
         static EvalPolicy create() {
             return EvalPolicy.builder()
                     .policyId("phase-0.v1").mode("OFFLINE")
-                    .blockingProvider("DEEPSEEK_V4_FLASH")
+                    .blockingProvider("glm-4-7-flash")
                     .publicSubjectSmokeCoverageMinimum(new java.math.BigDecimal("1.0"))
                     .defaultTrials(3).build();
         }

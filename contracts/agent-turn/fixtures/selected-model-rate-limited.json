@@ -1,0 +1,15 @@
+{
+  "requestId": "10000000-0000-4000-8000-00000000000c",
+  "modelExecution": {
+    "selectionKind": "MODEL",
+    "requestedModelRef": "glm-4-7-flash",
+    "selectionVersion": "glm-4-7-flash-v1",
+    "participation": "ATTEMPTED_UNAVAILABLE"
+  },
+  "kind": "CAPABILITY_UNAVAILABLE",
+  "code": "SELECTED_MODEL_RATE_LIMITED",
+  "message": "所选模型请求过于频繁，请稍后使用新请求重试。",
+  "retryable": true,
+  "retryAfterSeconds": 23,
+  "suggestedActions": []
+}

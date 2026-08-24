@@ -1,8 +1,8 @@
 package com.portfolio.agent.infrastructure.model;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderKind;
-import com.portfolio.agent.infrastructure.model.provider.ModelProviderRegistrySnapshot;
+import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
+import com.portfolio.agent.infrastructure.model.provider.ModelRef;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
 
             long startedAt = System.nanoTime();
             StructuredModelFailure failure = catchThrowableOfType(
-                    () -> transport.execute(request), StructuredModelFailure.class);
+                    () -> transport.execute(binding(), request), StructuredModelFailure.class);
 
             assertThat(failure.getCode())
                     .isEqualTo(StructuredModelFailure.Code.DEADLINE_EXCEEDED);
@@ -56,7 +56,7 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
             AtomicBoolean interruptRestored = new AtomicBoolean();
             Thread caller = Thread.ofPlatform().start(() -> {
                 try {
-                    transport.execute(request(Duration.ofSeconds(5)));
+                    transport.execute(binding(), request(Duration.ofSeconds(5)));
                 } catch (StructuredModelFailure failure) {
                     outcome.set(failure);
                     interruptRestored.set(Thread.currentThread().isInterrupted());
@@ -79,9 +79,15 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
             URI endpoint, Duration operationTimeout) {
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newHttpClient(), new ObjectMapper(),
-                ModelProviderRegistrySnapshot.builtIn().getRequiredDescriptor(
-                        ModelProviderKind.DEEPSEEK_V4_FLASH),
-                "test-key", operationTimeout, event -> { }, endpoint);
+                operationTimeout, event -> { }, ignored -> endpoint);
+    }
+
+    private ModelTransportBinding binding() {
+        return new ModelTransportBinding(
+                ModelRef.of("glm"), URI.create("https://example.test/chat"),
+                "glm-4.7-flash",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                "test-key", 32);
     }
 
     private StructuredModelRequest request(Duration timeout) {

@@ -23,7 +23,7 @@ class EvalPolicyLoaderTest {
             {
               "policyId": "phase-0.v1",
               "mode": "OFFLINE",
-              "blockingProvider": "DEEPSEEK_V4_FLASH",
+              "blockingProvider": "glm-4-7-flash",
               "thresholds": {
                 "blocking": {
                   "publicSubjectSmokeCoverageMinimum": 1.0,
@@ -69,7 +69,7 @@ class EvalPolicyLoaderTest {
         EvalPolicy policy = loader.load(write("valid.json", VALID_POLICY));
 
         assertThat(policy.getPolicyId()).isEqualTo("phase-0.v1");
-        assertThat(policy.getBlockingProvider()).isEqualTo("DEEPSEEK_V4_FLASH");
+        assertThat(policy.getBlockingProvider()).isEqualTo("glm-4-7-flash");
         assertThat(policy.getPublicSubjectSmokeCoverageMinimum()).isEqualByComparingTo("1.0");
         assertThat(policy.getProviderP95LatencyMaximumMs()).isEqualTo(20_000L);
         assertThat(policy.getProviderFailureRateMaximum()).isEqualByComparingTo("0.02");

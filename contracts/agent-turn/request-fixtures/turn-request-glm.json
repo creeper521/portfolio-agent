@@ -1,0 +1,16 @@
+{
+  "requestId": "4f33440c-132c-4be2-9ece-90e2a90f9d64",
+  "modelSelection": {
+    "kind": "MODEL",
+    "modelRef": "glm-4-7-flash",
+    "selectionVersion": "glm-4-7-flash-v1"
+  },
+  "command": {
+    "kind": "ASK",
+    "input": {
+      "kind": "FREE_TEXT",
+      "text": "介绍这个项目"
+    }
+  },
+  "conversationWindow": []
+}

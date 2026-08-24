@@ -53,6 +53,60 @@ class AgentTurnRequestValidationTest {
     }
 
     @Test
+    void acceptsClosedModelAndNoneSelections() throws Exception {
+        AgentTurnRequest model = requestWithSelection("""
+                {"kind":"MODEL","modelRef":"glm-4-7-flash",
+                 "selectionVersion":"glm-4-7-flash-v1"}
+                """);
+        AgentTurnRequest none = requestWithSelection("""
+                {"kind":"NONE"}
+                """);
+
+        assertValid(model);
+        assertValid(none);
+        assertThat(model.getModelSelection())
+                .isInstanceOf(AgentTurnRequest.ModelModelSelectionRequest.class);
+        assertThat(none.getModelSelection())
+                .isInstanceOf(AgentTurnRequest.NoneModelSelectionRequest.class);
+    }
+
+    @Test
+    void rejectsMissingOrInvalidModelSelectionShape() throws Exception {
+        AgentTurnRequest missingSelection = mapper.readValue("""
+                {
+                  "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}},
+                  "conversationWindow":[]
+                }
+                """, AgentTurnRequest.class);
+        AgentTurnRequest modelMissingRef = requestWithSelection("""
+                {"kind":"MODEL","selectionVersion":"glm-4-7-flash-v1"}
+                """);
+        AgentTurnRequest modelMissingVersion = requestWithSelection("""
+                {"kind":"MODEL","modelRef":"glm-4-7-flash"}
+                """);
+
+        assertThat(validator.validate(missingSelection))
+                .extracting(ConstraintViolation::getMessage)
+                .contains("modelSelection is required");
+        assertThat(validator.validate(modelMissingRef)).isNotEmpty();
+        assertThat(validator.validate(modelMissingVersion)).isNotEmpty();
+        assertThatThrownBy(() -> requestWithSelection("""
+                {"modelRef":"glm-4-7-flash","selectionVersion":"glm-4-7-flash-v1"}
+                """)).isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> requestWithSelection("""
+                {"kind":"NONE","modelRef":"glm-4-7-flash"}
+                """)).isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> requestWithSelection("""
+                {"kind":"MODEL","modelRef":"glm-4-7-flash",
+                 "selectionVersion":"glm-4-7-flash-v1","endpoint":"https://example.invalid"}
+                """)).isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> requestWithSelection("""
+                {"kind":"DEFAULT"}
+                """)).isInstanceOf(Exception.class);
+    }
+
+    @Test
     void rejectsBlankPayloadsAndInvalidConversationOrder() throws Exception {
         AgentTurnRequest blank = request("""
                 {"kind":"ASK","input":{"kind":"FREE_TEXT","text":" "}}
@@ -62,6 +116,7 @@ class AgentTurnRequestValidationTest {
         AgentTurnRequest invalidWindow = mapper.readValue("""
                 {
                   "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "modelSelection":{"kind":"NONE"},
                   "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}},
                   "conversationWindow":[
                     {"role":"ASSISTANT","content":"第一条不能是助手消息"},
@@ -106,6 +161,8 @@ class AgentTurnRequestValidationTest {
         AgentTurnRequest request = mapper.readValue("""
                 {
                   "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "modelSelection":{"kind":"MODEL","modelRef":"qwen-3-7-flash",
+                    "selectionVersion":"qwen-3-7-flash-v1"},
                   "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"介绍这个项目"}},
                   "surfaceContext":{
                     "subjectHint":{"kind":"PROJECT","slug":"sql-audit"},
@@ -129,10 +186,23 @@ class AgentTurnRequestValidationTest {
         return mapper.readValue("""
                 {
                   "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "modelSelection":{"kind":"MODEL","modelRef":"glm-4-7-flash",
+                    "selectionVersion":"glm-4-7-flash-v1"},
                   "command":%s,
                   "conversationWindow":[]
                 }
                 """.formatted(command), AgentTurnRequest.class);
+    }
+
+    private AgentTurnRequest requestWithSelection(String selection) throws Exception {
+        return mapper.readValue("""
+                {
+                  "requestId":"63f63c75-16e8-49e7-864d-dcd0fe100d50",
+                  "modelSelection":%s,
+                  "command":{"kind":"ASK","input":{"kind":"FREE_TEXT","text":"你好"}},
+                  "conversationWindow":[]
+                }
+                """.formatted(selection), AgentTurnRequest.class);
     }
 
     private void assertValid(AgentTurnRequest request) {

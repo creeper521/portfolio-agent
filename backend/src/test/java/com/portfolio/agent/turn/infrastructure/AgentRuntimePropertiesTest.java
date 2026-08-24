@@ -18,19 +18,18 @@ class AgentRuntimePropertiesTest {
         assertThat(properties.getTurnTimeout()).isEqualTo(Duration.ofSeconds(20));
         assertThat(properties.getSettlementReserve()).isEqualTo(Duration.ofSeconds(2));
         assertThat(properties.getLeaseDuration()).isEqualTo(Duration.ofSeconds(35));
-        assertThat(properties.getGoalInterpretationTimeout()).isEqualTo(Duration.ofSeconds(8));
-        assertThat(properties.getGeneralKnowledgeTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(properties.getDatabaseOperationTimeout()).isEqualTo(Duration.ofSeconds(3));
     }
 
     @Test
-    void rejectsReserveOperationAndLeaseBudgetsOutsideTheTurnRelation() {
+    void rejectsReserveDatabaseAndLeaseBudgetsOutsideTheTurnRelation() {
         AgentRuntimeProperties reserve = new AgentRuntimeProperties();
         reserve.setSettlementReserve(Duration.ofSeconds(20));
         assertThatThrownBy(reserve::afterPropertiesSet)
                 .isInstanceOf(IllegalStateException.class);
 
         AgentRuntimeProperties operation = new AgentRuntimeProperties();
-        operation.setGeneralKnowledgeTimeout(Duration.ofSeconds(18));
+        operation.setDatabaseOperationTimeout(Duration.ofSeconds(18));
         assertThatThrownBy(operation::afterPropertiesSet)
                 .isInstanceOf(IllegalStateException.class);
 

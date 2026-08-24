@@ -20,7 +20,7 @@ class DeterministicConversationBoundaryTest {
         AtomicInteger providerCalls = new AtomicInteger();
         UserGoalProposal recommendationProposal = recommendationProposal();
         GoalResolver resolver = new GoalResolver(
-                (input, deadline) -> {
+                (input, deadline, modelExecution) -> {
                     providerCalls.incrementAndGet();
                     return GoalInterpretationResult.semanticRoute(
                             SemanticRouteProposal.standardGoal(
@@ -61,7 +61,8 @@ class DeterministicConversationBoundaryTest {
 
     private AgentTurnCommand ask(String text) {
         return new AgentTurnCommand.Ask(
-                UUID.randomUUID(), new AgentTurnCommand.FreeText(text),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText(text),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
     }
 

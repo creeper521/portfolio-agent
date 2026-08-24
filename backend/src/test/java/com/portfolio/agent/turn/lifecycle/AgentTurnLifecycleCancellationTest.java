@@ -21,7 +21,8 @@ class AgentTurnLifecycleCancellationTest {
                 store, com.portfolio.agent.turn.planning.ResolvedGoalSet.conversational("你好"));
         AgentTurnLifecycleService.Result result = service.execute(
                 null, new AgentTurnCommand.Ask(
-                        UUID.randomUUID(), new AgentTurnCommand.FreeText("你好"), null, null));
+                        UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                        new AgentTurnCommand.FreeText("你好"), null, null));
         assertThat(result.status()).isEqualTo(AgentTurnLifecycleService.Status.CANCELLED);
         assertThat(result.turn()).isNull();
     }

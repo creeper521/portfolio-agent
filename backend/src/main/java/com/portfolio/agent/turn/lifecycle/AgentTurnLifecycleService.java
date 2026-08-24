@@ -1,5 +1,9 @@
 package com.portfolio.agent.turn.lifecycle;
 
+import com.portfolio.agent.infrastructure.model.ModelExecutionResolutionException;
+import com.portfolio.agent.infrastructure.model.ModelExecutionResolver;
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerKnowledge;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.RuntimeAnswerContent;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
@@ -44,6 +48,8 @@ import com.portfolio.agent.turn.planning.GoalKnowledgeRequirement;
 import com.portfolio.agent.turn.planning.GoalRequestedOutput;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.projection.PublicAgentTurnProjector;
+import com.portfolio.agent.turn.projection.ModelExecutionProjection;
+import com.portfolio.agent.turn.projection.ModelExecutionProjectionFactory;
 import com.portfolio.agent.turn.projection.SuggestedAction;
 
 import java.time.Clock;
@@ -86,6 +92,9 @@ public final class AgentTurnLifecycleService {
     private final Duration settlementReserve;
     private final Duration contextTtl;
     private final ProjectDiscussionCoordinator discussionCoordinator;
+    private final ModelExecutionResolver modelExecutionResolver;
+    private final ModelExecutionProjectionFactory modelExecutionProjectionFactory =
+            new ModelExecutionProjectionFactory();
 
     public AgentTurnLifecycleService(
             PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
@@ -96,7 +105,8 @@ public final class AgentTurnLifecycleService {
             ExecutorService stateExecutor,
             Clock clock, Duration leaseDuration,
             Duration turnTimeout, Duration settlementReserve,
-            Duration contextTtl) {
+            Duration contextTtl,
+            ModelExecutionResolver modelExecutionResolver) {
         this.knowledgeGateway = java.util.Objects.requireNonNull(knowledgeGateway);
         this.goalResolver = java.util.Objects.requireNonNull(goalResolver);
         this.planCompiler = java.util.Objects.requireNonNull(planCompiler);
@@ -115,11 +125,36 @@ public final class AgentTurnLifecycleService {
             throw new IllegalArgumentException("settlementReserve must be shorter than turnTimeout");
         }
         this.contextTtl = positive(contextTtl, "contextTtl");
+        this.modelExecutionResolver = java.util.Objects.requireNonNull(
+                modelExecutionResolver, "modelExecutionResolver");
         this.discussionCoordinator = new ProjectDiscussionCoordinator(
                 () -> "discussion_"
                         + UUID.randomUUID().toString().replace("-", ""),
                 clock, contextTtl.compareTo(Duration.ofMinutes(30)) > 0
                 ? Duration.ofMinutes(30) : contextTtl);
+    }
+
+    AgentTurnLifecycleService(
+            PortfolioKnowledgeGateway knowledgeGateway, GoalResolver goalResolver,
+            SemanticPlanCompiler planCompiler, SemanticTurnEngine engine,
+            PublicAgentTurnProjector projector, ContextMutationPlanner mutationPlanner,
+            AgentStateStore store, RequestFingerprintFactory fingerprintFactory,
+            ConversationSessionResolver sessionResolver,
+            ExecutorService stateExecutor,
+            Clock clock, Duration leaseDuration,
+            Duration turnTimeout, Duration settlementReserve,
+            Duration contextTtl) {
+        this(knowledgeGateway, goalResolver, planCompiler, engine,
+                projector, mutationPlanner, store, fingerprintFactory,
+                sessionResolver, stateExecutor, clock, leaseDuration,
+                turnTimeout, settlementReserve, contextTtl,
+                new ModelExecutionResolver(
+                        com.portfolio.agent.infrastructure.model.provider
+                                .ModelCatalogSnapshot.empty(),
+                        modelRef -> {
+                            throw new IllegalArgumentException(
+                                    "model binding is unavailable in deterministic test lifecycle");
+                        }));
     }
 
     public Result execute(String bearerToken, AgentTurnCommand command) {
@@ -203,17 +238,46 @@ public final class AgentTurnLifecycleService {
             case CANCELLED: return Result.state(Status.CANCELLED, 0);
             case CLAIMED: break;
         }
+        ResolvedModelExecution modelExecution;
+        try {
+            modelExecution = modelExecutionResolver.resolve(
+                    command.getModelSelection());
+        } catch (ModelExecutionResolutionException failure) {
+            Execution unavailable = modelSelectionUnavailable(
+                    command.getRequestId(), failure.getCode());
+            unavailable = withModelExecution(
+                    unavailable,
+                    modelExecutionProjectionFactory.selectionOnly(
+                            command.getModelSelection()));
+            return settle(
+                    command.getRequestId(), fingerprint,
+                    unavailable, sessionToCreate, sessionAuthority,
+                    sessionAccess, turnDeadline);
+        }
         CancellationSignal cancellation = new CancellationSignal();
         Runnable cancelAction = cancellation::cancel;
         activeTurns.claimOwner(command.getRequestId(), cancelAction);
         try {
             Execution execution = executeClaimed(
                     conversationId, resumeTokenHash, sessionAuthority,
-                    command, cancellation,
+                    command, cancellation, modelExecution,
                     turnDeadline);
+            execution = withModelExecution(
+                    execution,
+                    modelExecutionProjectionFactory.project(modelExecution));
             return settle(
                     command.getRequestId(), fingerprint,
                     execution, sessionToCreate, sessionAuthority,
+                    sessionAccess, turnDeadline);
+        } catch (SelectedModelFailureException failure) {
+            Execution unavailable = selectedModelUnavailable(
+                    command.getRequestId(), failure);
+            unavailable = withModelExecution(
+                    unavailable,
+                    modelExecutionProjectionFactory.project(modelExecution));
+            return settle(
+                    command.getRequestId(), fingerprint,
+                    unavailable, sessionToCreate, sessionAuthority,
                     sessionAccess, turnDeadline);
         } finally {
             activeTurns.releaseOwner(command.getRequestId(), cancelAction);
@@ -354,6 +418,7 @@ public final class AgentTurnLifecycleService {
             String conversationId, byte[] resumeTokenHash,
             ConversationSessionStore.Session sessionAuthority,
             AgentTurnCommand command, CancellationSignal cancellation,
+            ResolvedModelExecution modelExecution,
             TurnDeadline turnDeadline) {
         RuntimeAnswerContent content = knowledgeGateway.getContent();
         if (command instanceof AgentTurnCommand.Continue continuation) {
@@ -361,13 +426,15 @@ public final class AgentTurnLifecycleService {
                     == AgentTurnCommand.ContinueOperation.ENTER_RESULT) {
                 return enterDiscussion(
                         conversationId, sessionAuthority,
-                        continuation, cancellation, content, turnDeadline);
+                        continuation, cancellation, content, turnDeadline,
+                        modelExecution);
             }
             if (continuation.getOperation()
                     == AgentTurnCommand.ContinueOperation.REENTER_SUBJECT) {
                 return reenterDiscussion(
                         conversationId, sessionAuthority,
-                        continuation, cancellation, content, turnDeadline);
+                        continuation, cancellation, content, turnDeadline,
+                        modelExecution);
             }
             if (continuation.getOperation()
                     == AgentTurnCommand.ContinueOperation.EXIT_CONTEXT) {
@@ -379,7 +446,7 @@ public final class AgentTurnLifecycleService {
                 return routeDiscussion(
                         conversationId, sessionAuthority,
                         command, continuation.getText().orElseThrow(),
-                        cancellation, content, turnDeadline);
+                        cancellation, content, turnDeadline, modelExecution);
             }
         }
         if (command instanceof AgentTurnCommand.Ask ask
@@ -389,7 +456,7 @@ public final class AgentTurnLifecycleService {
             return routeDiscussion(
                     conversationId, sessionAuthority,
                     command, freeText.getText(),
-                    cancellation, content, turnDeadline);
+                    cancellation, content, turnDeadline, modelExecution);
         }
         if (command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.FreeText freeText
@@ -398,30 +465,31 @@ public final class AgentTurnLifecycleService {
                     conversationId, resumeTokenHash, sessionAuthority,
                     command, freeText.getText(),
                     ask.getReferenceContextHandle().orElseThrow(),
-                    cancellation, content, turnDeadline);
+                    cancellation, content, turnDeadline, modelExecution);
             if (referenced != null) return referenced;
         }
         ResolvedInput input = resolveInput(
                 conversationId, resumeTokenHash, sessionAuthority,
                 command, content,
-                turnDeadline);
+                turnDeadline, modelExecution);
         if (input.discussionClarification() != null) {
             return withClarificationMutation(
                     executeDiscussionClarification(
                             conversationId, sessionAuthority, command,
                             cancellation, content, turnDeadline,
-                            input.discussionClarification()),
+                            input.discussionClarification(), modelExecution),
                     input.clarificationMutation());
         }
         if (input.discussionSelection() != null) {
             DiscussionSelectionResolution selection = input.discussionSelection();
             AgentTurnCommand.Continue enter = new AgentTurnCommand.Continue(
-                    command.getRequestId(), AgentTurnCommand.ContinueOperation.ENTER_RESULT,
+                    command.getRequestId(), command.getModelSelection(),
+                    AgentTurnCommand.ContinueOperation.ENTER_RESULT,
                     selection.contextHandle(), selection.resultItemId(), null, null,
                     command.getSurfaceContext(), command.getConversationWindow());
             return withClarificationMutation(enterDiscussion(
                     conversationId, sessionAuthority, enter,
-                    cancellation, content, turnDeadline),
+                    cancellation, content, turnDeadline, modelExecution),
                     input.clarificationMutation());
         }
         ResolvedGoalSet resolved = input.resolved();
@@ -459,7 +527,7 @@ public final class AgentTurnLifecycleService {
                     planCompiler.compile(
                             resolved.getGoalProposal().orElseThrow(), content.getContentVersion(),
                             resolutionContext(content), audience(command)),
-                    turnDeadline.minus(settlementReserve));
+                    turnDeadline.minus(settlementReserve), modelExecution);
         };
         return withClarificationMutation(
                 execution, input.clarificationMutation());
@@ -474,7 +542,8 @@ public final class AgentTurnLifecycleService {
             String referenceContextHandle,
             CancellationSignal cancellation,
             RuntimeAnswerContent content,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         if (session == null) return null;
         ContinuationContext loaded;
         try {
@@ -518,7 +587,7 @@ public final class AgentTurnLifecycleService {
         GoalInterpretationResult interpretation;
         try {
             interpretation = goalResolver.interpretTyped(
-                    input, deadline.minus(settlementReserve));
+                    input, deadline.minus(settlementReserve), modelExecution);
         } catch (GoalInterpretationUnavailableException
                  | IllegalArgumentException unavailable) {
             return serverFixed(new PublicAgentTurn.CapabilityUnavailable(
@@ -544,14 +613,14 @@ public final class AgentTurnLifecycleService {
                             proposal.getGoalProposal().orElseThrow(),
                             content.getContentVersion(),
                             resolutionContext(content), audience(command)),
-                    deadline.minus(settlementReserve));
+                    deadline.minus(settlementReserve), modelExecution);
             case ENTER_RECOMMENDED_RESULT -> {
                 String candidateKey =
                         proposal.getCandidateKey().orElseThrow();
                 yield enterRecommendationCandidate(
                         conversationId, session, command, cancellation,
                         content, deadline, recommendation, candidates,
-                        candidateKey);
+                        candidateKey, modelExecution);
             }
             case NEEDS_CLARIFICATION ->
                     recommendationSelectionClarification(
@@ -573,7 +642,8 @@ public final class AgentTurnLifecycleService {
             TurnDeadline deadline,
             ContinuationContext.Recommendation recommendation,
             List<GoalInterpretationInput.RouteCandidate> candidates,
-            String candidateKey) {
+            String candidateKey,
+            ResolvedModelExecution modelExecution) {
         String projectId = candidateProjectId(candidateKey, candidates);
         String resultItemId = recommendation.getSelectedResults().stream()
                 .filter(item -> item.subjectId().equals(projectId))
@@ -589,7 +659,7 @@ public final class AgentTurnLifecycleService {
                         session.expiresAt());
         return executeDiscussionTransition(
                 command, cancellation, content, deadline,
-                null, transition);
+                null, transition, modelExecution);
     }
 
     private List<GoalInterpretationInput.RouteCandidate>
@@ -682,7 +752,8 @@ public final class AgentTurnLifecycleService {
             String text,
             CancellationSignal cancellation,
             RuntimeAnswerContent content,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         ActiveDiscussionPointer pointer =
                 session.activeDiscussion().orElse(null);
         if (pointer == null) {
@@ -760,7 +831,7 @@ public final class AgentTurnLifecycleService {
         GoalInterpretationResult interpretation;
         try {
             interpretation = goalResolver.interpretTyped(
-                    input, deadline.minus(settlementReserve));
+                    input, deadline.minus(settlementReserve), modelExecution);
         } catch (GoalInterpretationUnavailableException
                  | IllegalArgumentException unavailable) {
             return withMutation(
@@ -790,7 +861,7 @@ public final class AgentTurnLifecycleService {
                                 proposal.getGoalProposal().orElseThrow(),
                                 content.getContentVersion(),
                                 resolutionContext(content), audience(command)),
-                        deadline.minus(settlementReserve));
+                        deadline.minus(settlementReserve), modelExecution);
                 yield withMutation(
                         execution,
                         DiscussionStateMutation.guard(
@@ -814,7 +885,8 @@ public final class AgentTurnLifecycleService {
                                 session.expiresAt());
                 yield executeDiscussionTransition(
                         command, cancellation, content, deadline,
-                        pointer.getContextHandle(), transition);
+                        pointer.getContextHandle(), transition,
+                        modelExecution);
             }
             case REENTER_PROJECT -> {
                 ProjectDiscussionCoordinator.Transition transition =
@@ -826,7 +898,8 @@ public final class AgentTurnLifecycleService {
                                 session.expiresAt());
                 yield executeDiscussionTransition(
                         command, cancellation, content, deadline,
-                        pointer.getContextHandle(), transition);
+                        pointer.getContextHandle(), transition,
+                        modelExecution);
             }
             case NEEDS_CLARIFICATION -> discussionClarification(
                     conversationId, session.tokenHash(), command.getRequestId(),
@@ -918,7 +991,8 @@ public final class AgentTurnLifecycleService {
             CancellationSignal cancellation,
             RuntimeAnswerContent content,
             TurnDeadline deadline,
-            DiscussionClarificationResolution resolution) {
+            DiscussionClarificationResolution resolution,
+            ResolvedModelExecution modelExecution) {
         if (session == null) {
             return discussionUnavailable(
                     command.getRequestId(), "DISCUSSION_CONTEXT_UNAVAILABLE");
@@ -945,7 +1019,7 @@ public final class AgentTurnLifecycleService {
                                     template.getProjectId(), resolution.facet()),
                             content.getContentVersion(), resolutionContext(content),
                             audience(command)),
-                    deadline.minus(settlementReserve));
+                    deadline.minus(settlementReserve), modelExecution);
             return withMutation(execution,
                     DiscussionStateMutation.guard(template.getContextHandle()));
         }
@@ -970,7 +1044,7 @@ public final class AgentTurnLifecycleService {
         }
         return executeDiscussionTransition(
                 command, cancellation, content, deadline,
-                template.getContextHandle(), transition);
+                template.getContextHandle(), transition, modelExecution);
     }
 
     private List<GoalInterpretationInput.RouteCandidate> routeCandidates(
@@ -1036,13 +1110,27 @@ public final class AgentTurnLifecycleService {
                 execution.semanticState());
     }
 
+    private Execution withModelExecution(
+            Execution execution,
+            ModelExecutionProjection projection) {
+        return new Execution(
+                execution.readOnlyTurn().withModelExecution(projection),
+                execution.settledTurn().withModelExecution(projection),
+                execution.replayTurn().withModelExecution(projection),
+                execution.contexts(), execution.challenges(),
+                execution.discussionMutation(),
+                execution.clarificationMutation(),
+                execution.semanticState());
+    }
+
     private Execution enterDiscussion(
             String conversationId,
             ConversationSessionStore.Session session,
             AgentTurnCommand.Continue command,
             CancellationSignal cancellation,
             RuntimeAnswerContent content,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         if (session == null) {
             return discussionUnavailable(
                     command.getRequestId(),
@@ -1077,7 +1165,7 @@ public final class AgentTurnLifecycleService {
                 session.activeDiscussion()
                         .map(ActiveDiscussionPointer::getContextHandle)
                         .orElse(null),
-                transition);
+                transition, modelExecution);
     }
 
     private Execution reenterDiscussion(
@@ -1086,7 +1174,8 @@ public final class AgentTurnLifecycleService {
             AgentTurnCommand.Continue command,
             CancellationSignal cancellation,
             RuntimeAnswerContent content,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         if (session == null || command.getSubject().isEmpty()) {
             return discussionUnavailable(
                     command.getRequestId(),
@@ -1118,7 +1207,7 @@ public final class AgentTurnLifecycleService {
                 session.activeDiscussion()
                         .map(ActiveDiscussionPointer::getContextHandle)
                         .orElse(null),
-                transition);
+                transition, modelExecution);
     }
 
     private Execution executeDiscussionTransition(
@@ -1127,7 +1216,8 @@ public final class AgentTurnLifecycleService {
             RuntimeAnswerContent content,
             TurnDeadline deadline,
             String expectedGeneration,
-            ProjectDiscussionCoordinator.Transition transition) {
+            ProjectDiscussionCoordinator.Transition transition,
+            ResolvedModelExecution modelExecution) {
         Execution overview = goals(
                 transition.context().getConversationId(),
                 new byte[0],
@@ -1138,7 +1228,7 @@ public final class AgentTurnLifecycleService {
                         transition.overviewGoal(),
                         content.getContentVersion(),
                         resolutionContext(content), audience(command)),
-                deadline.minus(settlementReserve));
+                deadline.minus(settlementReserve), modelExecution);
         if (!(overview.settledTurn() instanceof PublicAgentTurn.Answer)) {
             return overview;
         }
@@ -1212,7 +1302,8 @@ public final class AgentTurnLifecycleService {
             String conversationId, byte[] resumeTokenHash, AgentTurnCommand command,
             CancellationSignal cancellation, RuntimeAnswerContent content,
             PlanCompilationResult compilation,
-            TurnDeadline executionDeadline) {
+            TurnDeadline executionDeadline,
+            ResolvedModelExecution modelExecution) {
         if (compilation.getKind() == PlanCompilationResult.Kind.CLARIFICATION_REQUIRED) {
             return serverFixed(new PublicAgentTurn.Boundary(
                     command.getRequestId(), "PLAN_SUBJECT_UNRESOLVED",
@@ -1230,7 +1321,8 @@ public final class AgentTurnLifecycleService {
         SemanticTurnOutcome outcome = engine.execute(
                 validated, executionDeadline,
                 cancellation, command instanceof AgentTurnCommand.Ask ask
-                && ask.getInput() instanceof AgentTurnCommand.Preset);
+                && ask.getInput() instanceof AgentTurnCommand.Preset,
+                modelExecution);
         List<ContextMutationPlanner.Mutation> mutations = mutationPlanner.plan(
                 conversationId, plan, outcome,
                 clock.instant().plus(contextTtl));
@@ -1384,6 +1476,41 @@ public final class AgentTurnLifecycleService {
                 DiscussionStateMutation.none());
     }
 
+    private Execution modelSelectionUnavailable(
+            UUID requestId,
+            ModelExecutionResolutionException.Code code) {
+        String publicCode = switch (code) {
+            case SELECTED_MODEL_UNAVAILABLE -> "SELECTED_MODEL_UNAVAILABLE";
+            case MODEL_SELECTION_STALE -> "MODEL_SELECTION_STALE";
+        };
+        String message = code
+                == ModelExecutionResolutionException.Code.MODEL_SELECTION_STALE
+                ? "所选模型版本已更新，请刷新模型列表后重新选择。"
+                : "所选模型当前不可用，请重新选择。";
+        return serverFixed(new PublicAgentTurn.CapabilityUnavailable(
+                requestId, publicCode, message, false, List.of()));
+    }
+
+    private Execution selectedModelUnavailable(
+            UUID requestId,
+            SelectedModelFailureException failure) {
+        String message = switch (failure.getCode()) {
+            case SELECTED_MODEL_UNAVAILABLE ->
+                    "所选模型当前不可用，请重新选择。";
+            case SELECTED_MODEL_TEMPORARILY_UNAVAILABLE ->
+                    "所选模型暂时不可用，请稍后使用新请求重试。";
+            case SELECTED_MODEL_RATE_LIMITED ->
+                    "所选模型请求过于频繁，请稍后使用新请求重试。";
+            case SELECTED_MODEL_INVALID_RESPONSE ->
+                    "所选模型返回了无法安全采用的结果，请更换模型或使用新请求重试。";
+        };
+        Long retryAfterSeconds = failure.getRetryAfterSeconds() == null
+                ? null : failure.getRetryAfterSeconds().longValue();
+        return serverFixed(new PublicAgentTurn.CapabilityUnavailable(
+                requestId, failure.getCode().name(), message,
+                failure.isRetryable(), retryAfterSeconds, List.of()));
+    }
+
     private Execution providerBody(PublicAgentTurn turn) {
         return new Execution(
                 turn, turn, replayPolicy.forProviderBody(turn),
@@ -1394,7 +1521,8 @@ public final class AgentTurnLifecycleService {
             String conversationId, byte[] tokenHash,
             ConversationSessionStore.Session sessionAuthority,
             AgentTurnCommand command, RuntimeAnswerContent content,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         if (command instanceof AgentTurnCommand.ResolveClarification clarification) {
             ClarificationStore.ClarificationAnswer answer =
                     clarification.getAnswer() instanceof AgentTurnCommand.ChoiceAnswer choice
@@ -1527,10 +1655,11 @@ public final class AgentTurnLifecycleService {
         return new ResolvedInput(semanticState == null
                 ? goalResolver.resolve(
                 command, resolutionContext(content),
-                deadline.minus(settlementReserve))
+                deadline.minus(settlementReserve), modelExecution)
                 : goalResolver.resolve(
                 command, resolutionContext(content),
-                deadline.minus(settlementReserve), semanticState));
+                deadline.minus(settlementReserve), modelExecution,
+                semanticState));
     }
 
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {

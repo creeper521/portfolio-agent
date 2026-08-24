@@ -49,10 +49,6 @@ class TurnModuleDependencyTest {
         assertThat(turnSources).noneMatch(source ->
                 source.contains("com.portfolio.agent.answer.context")
                         || source.contains("com.portfolio.agent.answer.adapter.model")
-                        || source.contains("com.portfolio.agent.answer.domain.ConversationProviderAccess")
-                        || source.contains("com.portfolio.agent.answer.domain.ModelPolicy")
-                        || source.contains("com.portfolio.agent.answer.domain.ModelProviderKind")
-                        || source.contains("com.portfolio.agent.answer.gateway.ModelProviderRegistry")
                         || source.contains("com.portfolio.agent.answer.runtime.ModelOperation")
                         || source.contains("com.portfolio.agent.answer.runtime.OperationMode")
                         || source.contains("com.portfolio.agent.answer.runtime.OperationReadiness"));

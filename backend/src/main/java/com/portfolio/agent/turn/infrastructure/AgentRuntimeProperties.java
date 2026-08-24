@@ -16,8 +16,6 @@ public final class AgentRuntimeProperties implements InitializingBean {
     private Duration leaseDuration = Duration.ofSeconds(35);
     private Duration turnTimeout = Duration.ofSeconds(20);
     private Duration settlementReserve = Duration.ofSeconds(2);
-    private Duration goalInterpretationTimeout = Duration.ofSeconds(8);
-    private Duration generalKnowledgeTimeout = Duration.ofSeconds(10);
     private Duration databaseOperationTimeout = Duration.ofSeconds(3);
     private boolean trustProxy;
     private Set<String> trustedProxies = new LinkedHashSet<>();
@@ -78,22 +76,6 @@ public final class AgentRuntimeProperties implements InitializingBean {
         settlementReserve = positive(value, "settlementReserve");
     }
 
-    public Duration getGoalInterpretationTimeout() {
-        return goalInterpretationTimeout;
-    }
-
-    public void setGoalInterpretationTimeout(Duration value) {
-        goalInterpretationTimeout = positive(value, "goalInterpretationTimeout");
-    }
-
-    public Duration getGeneralKnowledgeTimeout() {
-        return generalKnowledgeTimeout;
-    }
-
-    public void setGeneralKnowledgeTimeout(Duration value) {
-        generalKnowledgeTimeout = positive(value, "generalKnowledgeTimeout");
-    }
-
     public Duration getDatabaseOperationTimeout() {
         return databaseOperationTimeout;
     }
@@ -113,9 +95,7 @@ public final class AgentRuntimeProperties implements InitializingBean {
                     "claim lease must exceed turn, settlement and recovery budgets");
         }
         Duration executionWindow = turnTimeout.minus(settlementReserve);
-        if (goalInterpretationTimeout.compareTo(executionWindow) >= 0
-                || generalKnowledgeTimeout.compareTo(executionWindow) >= 0
-                || databaseOperationTimeout.compareTo(executionWindow) >= 0) {
+        if (databaseOperationTimeout.compareTo(executionWindow) >= 0) {
             throw new IllegalStateException("operation timeout must be shorter than execution window");
         }
     }

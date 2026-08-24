@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.planning;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import com.portfolio.agent.turn.lifecycle.ConversationWindow;
 import com.portfolio.agent.turn.execution.TurnDeadline;
@@ -25,7 +26,7 @@ class GoalResolverTest {
         List<DiagnosticEvent> events = new ArrayList<>();
         UserGoalProposal proposal = recommendationProposal(2, Set.of());
         GoalResolver resolver = new GoalResolver(
-                (input, deadline) -> GoalInterpretationResult.semanticRoute(
+                (input, deadline, modelExecution) -> GoalInterpretationResult.semanticRoute(
                         SemanticRouteProposal.standardGoal(proposal)),
                 command -> proposal, new GoalInterpretationInputFactory(),
                 new SafeConversationalFastPath(), new SemanticRouteValidator(),
@@ -50,10 +51,13 @@ class GoalResolverTest {
         AtomicInteger modelCalls = new AtomicInteger();
         AtomicInteger reviewedCalls = new AtomicInteger();
         AtomicReference<TurnDeadline> receivedDeadline = new AtomicReference<>();
+        AtomicReference<ResolvedModelExecution> receivedExecution =
+                new AtomicReference<>();
         UserGoalProposal proposal = generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             receivedDeadline.set(deadline);
+            receivedExecution.set(modelExecution);
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(proposal));
         }, command -> {
@@ -62,14 +66,16 @@ class GoalResolverTest {
         });
 
         TurnDeadline deadline = deadline();
+        ResolvedModelExecution selected = ResolvedModelExecution.none();
         ResolvedGoalSet result = resolver.resolve(
-                freeText("解释幂等"), context(), deadline);
+                freeText("解释幂等"), context(), deadline, selected);
 
         assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.GOALS);
         assertThat(result.getGoalProposal()).contains(proposal);
         assertThat(modelCalls).hasValue(1);
         assertThat(reviewedCalls).hasValue(0);
         assertThat(receivedDeadline).hasValue(deadline);
+        assertThat(receivedExecution).hasValue(selected);
     }
 
     @Test
@@ -77,7 +83,7 @@ class GoalResolverTest {
         AtomicReference<GoalInterpretationInput> received = new AtomicReference<>();
         UserGoalProposal proposal = generalProposal(
                 GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             received.set(input);
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(proposal));
@@ -105,7 +111,7 @@ class GoalResolverTest {
         AtomicInteger modelCalls = new AtomicInteger();
         AtomicInteger reviewedCalls = new AtomicInteger();
         UserGoalProposal proposal = generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(proposal));
@@ -123,7 +129,7 @@ class GoalResolverTest {
 
     @Test
     void providerFailureWithoutExactReviewedAliasIsCapabilityUnavailable() {
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             throw new GoalInterpretationUnavailableException();
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
@@ -135,7 +141,7 @@ class GoalResolverTest {
 
     @Test
     void providerFailureDoesNotUseReviewedAliasAsANaturalLanguageFallback() {
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             throw new GoalInterpretationUnavailableException();
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
@@ -149,7 +155,7 @@ class GoalResolverTest {
 
     @Test
     void expiredProviderFailureDoesNotEnterMinimalFallback() {
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             throw new GoalInterpretationUnavailableException();
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
         TurnDeadline expired = new TurnDeadline(
@@ -176,7 +182,7 @@ class GoalResolverTest {
                 ClarificationProposal.Field.SUBJECT, "请选择项目",
                 blocked);
         GoalResolver resolver = resolver(
-                (input, deadline) -> GoalInterpretationResult.semanticRoute(
+                (input, deadline, modelExecution) -> GoalInterpretationResult.semanticRoute(
                         SemanticRouteProposal.needsClarification(clarification)),
                 command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
 
@@ -191,7 +197,7 @@ class GoalResolverTest {
     void recommendationQuantityComesFromTheClosedProviderProposal() {
         AtomicInteger modelCalls = new AtomicInteger();
         UserGoalProposal proposal = recommendationProposal(2, Set.of());
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(proposal));
@@ -214,7 +220,7 @@ class GoalResolverTest {
         AtomicInteger modelCalls = new AtomicInteger();
         UserGoalProposal proposal = recommendationProposal(
                 5, Set.of("CAPABILITY_POSTGRESQL"));
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(proposal));
@@ -236,7 +242,7 @@ class GoalResolverTest {
     void negatedOrConflictingRecommendationConstraintDefersToProvider() {
         AtomicInteger modelCalls = new AtomicInteger();
         UserGoalProposal providerProposal = recommendationProposal(2, Set.of());
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.semanticRoute(
                     SemanticRouteProposal.standardGoal(providerProposal));
@@ -259,7 +265,7 @@ class GoalResolverTest {
     @Test
     void negatedRecommendationIntentDoesNotCreateRecommendationGoal() {
         AtomicInteger modelCalls = new AtomicInteger();
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             return GoalInterpretationResult.conversational("按比较意图继续处理");
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
@@ -277,7 +283,7 @@ class GoalResolverTest {
     @Test
     void greetingAndThanksAreConversationalBeforeProvider() {
         AtomicInteger modelCalls = new AtomicInteger();
-        GoalResolver resolver = resolver((input, deadline) -> {
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
             modelCalls.incrementAndGet();
             throw new AssertionError("safe social input must not call provider");
         }, command -> generalProposal(GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
@@ -310,19 +316,21 @@ class GoalResolverTest {
     }
 
     private AgentTurnCommand freeText(String text) {
-        return new AgentTurnCommand.Ask(UUID.randomUUID(), new AgentTurnCommand.FreeText(text),
+        return new AgentTurnCommand.Ask(UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText(text),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
     }
 
     private AgentTurnCommand preset() {
         return new AgentTurnCommand.Ask(UUID.randomUUID(),
+                AgentTurnCommand.ModelSelection.none(),
                 new AgentTurnCommand.Preset("question-sql-audit", "pcv1-0123456789abcdef"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
     }
 
     private AgentTurnCommand continuation() {
         return new AgentTurnCommand.Continue(
-                UUID.randomUUID(),
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
                 AgentTurnCommand.ContinueOperation.ROUTE_IN_CONTEXT,
                 "context_opaque", null, "继续", null,
                 AgentTurnCommand.SurfaceContext.empty(),
@@ -331,7 +339,8 @@ class GoalResolverTest {
 
     private AgentTurnCommand clarification() {
         return new AgentTurnCommand.ResolveClarification(
-                UUID.randomUUID(), "clarification_opaque",
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                "clarification_opaque",
                 new AgentTurnCommand.ChoiceAnswer("choice_opaque"),
                 AgentTurnCommand.SurfaceContext.empty(), ConversationWindow.empty());
     }

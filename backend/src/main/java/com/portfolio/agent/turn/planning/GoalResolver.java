@@ -1,5 +1,8 @@
 package com.portfolio.agent.turn.planning;
 
+import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
+import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
@@ -51,22 +54,44 @@ public final class GoalResolver {
                 outputDiagnostics, "outputDiagnostics");
     }
 
-    public ResolvedGoalSet resolve(
+    ResolvedGoalSet resolve(
             AgentTurnCommand command,
             GoalResolutionContext context,
             TurnDeadline deadline) {
-        return resolve(command, context, deadline, null);
+        return resolve(
+                command, context, deadline, ResolvedModelExecution.none());
+    }
+
+    ResolvedGoalSet resolve(
+            AgentTurnCommand command,
+            GoalResolutionContext context,
+            TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.ConversationSemanticState
+                    recentSemanticState) {
+        return resolve(
+                command, context, deadline,
+                ResolvedModelExecution.none(), recentSemanticState);
     }
 
     public ResolvedGoalSet resolve(
             AgentTurnCommand command,
             GoalResolutionContext context,
             TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
+        return resolve(command, context, deadline, modelExecution, null);
+    }
+
+    public ResolvedGoalSet resolve(
+            AgentTurnCommand command,
+            GoalResolutionContext context,
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution,
             com.portfolio.agent.turn.continuation.ConversationSemanticState
                     recentSemanticState) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(deadline, "deadline");
+        Objects.requireNonNull(modelExecution, "modelExecution");
         if (!context.matchesHint(
                 command.getSurfaceContext().getSubjectHint())) {
             return ResolvedGoalSet.invalidInput(
@@ -74,7 +99,8 @@ public final class GoalResolver {
         }
         if (command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.FreeText) {
-            return resolveFreeText(ask, context, deadline, recentSemanticState);
+            return resolveFreeText(
+                    ask, context, deadline, modelExecution, recentSemanticState);
         }
         try {
             return boundaryPolicy.apply(reviewedGoalSource.resolve(command));
@@ -88,6 +114,7 @@ public final class GoalResolver {
             AgentTurnCommand.Ask command,
             GoalResolutionContext context,
             TurnDeadline deadline,
+            ResolvedModelExecution modelExecution,
             com.portfolio.agent.turn.continuation.ConversationSemanticState
                     recentSemanticState) {
         java.util.Optional<ResolvedGoalSet> conversational =
@@ -99,7 +126,7 @@ public final class GoalResolver {
                 command, context, recentSemanticState);
         try {
             GoalInterpretationResult result =
-                    interpretTyped(input, deadline);
+                    interpretTyped(input, deadline, modelExecution);
             return switch (result.getKind()) {
                 case SEMANTIC_ROUTE -> resolveRoute(
                         result.getRouteProposal().orElseThrow());
@@ -119,22 +146,40 @@ public final class GoalResolver {
 
     public GoalInterpretationResult interpretTyped(
             GoalInterpretationInput input,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            ResolvedModelExecution modelExecution) {
         GoalInterpretationResult result =
-                interpretationPort.interpret(input, deadline);
+                interpretationPort.interpret(
+                        input, deadline,
+                        Objects.requireNonNull(modelExecution, "modelExecution"));
         if (result.getKind()
                 == GoalInterpretationResult.Kind.CONVERSATIONAL) {
+            modelExecution.markAdopted(
+                    ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
             return result;
         }
         try {
-            return GoalInterpretationResult.semanticRoute(
+            GoalInterpretationResult validated = GoalInterpretationResult.semanticRoute(
                     routeValidator.validate(
                             result.getRouteProposal().orElseThrow(), input));
+            modelExecution.markAdopted(
+                    ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
+            return validated;
         } catch (IllegalArgumentException failure) {
             outputDiagnostics.rejected(
                     "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SEMANTIC);
+            if (modelExecution.getSnapshot().getKind()
+                    == ModelExecutionSnapshot.Kind.MODEL) {
+                throw SelectedModelFailureException.invalidResponse(failure);
+            }
             throw failure;
         }
+    }
+
+    GoalInterpretationResult interpretTyped(
+            GoalInterpretationInput input,
+            TurnDeadline deadline) {
+        return interpretTyped(input, deadline, ResolvedModelExecution.none());
     }
 
     private ResolvedGoalSet resolveRoute(SemanticRouteProposal proposal) {
