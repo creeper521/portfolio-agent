@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.continuation;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
 import com.portfolio.agent.turn.planning.ClarificationRecoveryTemplate;
 import com.portfolio.agent.turn.planning.DiscussionSelectionTemplate;
+import com.portfolio.agent.turn.planning.DiscussionClarificationTemplate;
 
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -259,6 +260,28 @@ public final class ClarificationStore {
             }
             return;
         }
+        if (record.resumeTemplate() instanceof DiscussionClarificationTemplate discussion) {
+            List<String> actualValues = record.choiceBindings().values().stream()
+                    .flatMap(value -> value.values().stream())
+                    .toList();
+            java.util.Set<String> actualBindings = actualValues.stream()
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            java.util.Set<String> expectedBindings = discussion.isReenterAllowed()
+                    ? java.util.Set.of("discussion:reenter")
+                    : discussion.getAllowedFacets().stream()
+                    .map(value -> "discussion:facet:" + value.name())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            boolean invalid = !(publicField instanceof ClarificationChallenge.SingleChoiceField)
+                    || actualValues.size() != actualBindings.size()
+                    || !actualBindings.equals(expectedBindings)
+                    || actualBindings.stream()
+                    .anyMatch(value -> !validDiscussionBinding(discussion, value));
+            if (invalid) {
+                throw new IllegalArgumentException(
+                        "discussion clarification binding is invalid");
+            }
+            return;
+        }
         BlockedGoalTemplate goal = (BlockedGoalTemplate) record.resumeTemplate();
         com.portfolio.agent.turn.planning.ClarificationProposal.Field blockedField =
                 goal.getUnresolvedField();
@@ -285,6 +308,22 @@ public final class ClarificationStore {
             boolean mismatched = record.textBindings().values().stream()
                     .anyMatch(value -> !value.bindingKey().equals(requiredPrefix + "text"));
             if (mismatched) throw new IllegalArgumentException("text binding does not match blocked goal");
+        }
+    }
+
+    private boolean validDiscussionBinding(
+            DiscussionClarificationTemplate template, String value) {
+        if (value.equals("discussion:reenter")) {
+            return template.isReenterAllowed();
+        }
+        String prefix = "discussion:facet:";
+        if (!value.startsWith(prefix)) return false;
+        try {
+            return template.allowsFacet(
+                    com.portfolio.agent.turn.planning.UserGoalProposal.Facet.valueOf(
+                            value.substring(prefix.length())));
+        } catch (IllegalArgumentException invalid) {
+            return false;
         }
     }
 

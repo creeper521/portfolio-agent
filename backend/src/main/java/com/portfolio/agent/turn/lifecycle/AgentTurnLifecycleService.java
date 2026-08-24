@@ -25,6 +25,7 @@ import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.turn.planning.ClarificationProposal;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
 import com.portfolio.agent.turn.planning.DiscussionSelectionTemplate;
+import com.portfolio.agent.turn.planning.DiscussionClarificationTemplate;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
 import com.portfolio.agent.turn.planning.GoalInterpretationResult;
 import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
@@ -404,6 +405,14 @@ public final class AgentTurnLifecycleService {
                 conversationId, resumeTokenHash, sessionAuthority,
                 command, content,
                 turnDeadline);
+        if (input.discussionClarification() != null) {
+            return withClarificationMutation(
+                    executeDiscussionClarification(
+                            conversationId, sessionAuthority, command,
+                            cancellation, content, turnDeadline,
+                            input.discussionClarification()),
+                    input.clarificationMutation());
+        }
         if (input.discussionSelection() != null) {
             DiscussionSelectionResolution selection = input.discussionSelection();
             AgentTurnCommand.Continue enter = new AgentTurnCommand.Continue(
@@ -819,15 +828,149 @@ public final class AgentTurnLifecycleService {
                         command, cancellation, content, deadline,
                         pointer.getContextHandle(), transition);
             }
-            case NEEDS_CLARIFICATION -> withMutation(
-                    discussionInterpretationUnavailable(
-                            command.getRequestId(), pointer),
-                    DiscussionStateMutation.guard(
-                            pointer.getContextHandle()));
+            case NEEDS_CLARIFICATION -> discussionClarification(
+                    conversationId, session.tokenHash(), command.getRequestId(),
+                    content, pointer, pointerStatus);
             case STANDARD_GOAL, ENTER_RECOMMENDED_RESULT ->
                     discussionInterpretationUnavailable(
                             command.getRequestId(), pointer);
         };
+    }
+
+    private Execution discussionClarification(
+            String conversationId,
+            byte[] tokenHash,
+            UUID requestId,
+            RuntimeAnswerContent content,
+            ActiveDiscussionPointer pointer,
+            ActiveDiscussionPointer.Status pointerStatus) {
+        String clarificationId =
+                "clarification_" + requestId.toString().replace("-", "");
+        List<ClarificationChallenge.Choice> choices = new ArrayList<>();
+        Map<String, String> bindings = new LinkedHashMap<>();
+        Set<UserGoalProposal.Facet> facets;
+        boolean reenter;
+        if (pointerStatus == ActiveDiscussionPointer.Status.ACTIVE) {
+            facets = Set.of(
+                    UserGoalProposal.Facet.OVERVIEW,
+                    UserGoalProposal.Facet.RESPONSIBILITY,
+                    UserGoalProposal.Facet.SOLUTION,
+                    UserGoalProposal.Facet.VERIFICATION,
+                    UserGoalProposal.Facet.STATUS);
+            for (UserGoalProposal.Facet facet : List.of(
+                    UserGoalProposal.Facet.OVERVIEW,
+                    UserGoalProposal.Facet.RESPONSIBILITY,
+                    UserGoalProposal.Facet.SOLUTION,
+                    UserGoalProposal.Facet.VERIFICATION,
+                    UserGoalProposal.Facet.STATUS)) {
+                String choiceId = "choice_facet_"
+                        + facet.name().toLowerCase(java.util.Locale.ROOT);
+                choices.add(new ClarificationChallenge.Choice(
+                        choiceId, facetLabel(facet)));
+                bindings.put(choiceId, "discussion:facet:" + facet.name());
+            }
+            reenter = false;
+        } else {
+            facets = Set.of();
+            reenter = true;
+            choices.add(new ClarificationChallenge.Choice(
+                    "choice_reenter_project", "重新进入当前项目"));
+            bindings.put("choice_reenter_project", "discussion:reenter");
+        }
+        ChallengeDefinition definition = choiceChallenge(
+                clarificationId,
+                pointerStatus == ActiveDiscussionPointer.Status.ACTIVE
+                        ? "请选择要继续了解的项目方面。"
+                        : "当前讨论已过期，是否重新进入该项目？",
+                "field_discussion_direction",
+                "讨论方向", choices, bindings);
+        DiscussionClarificationTemplate template =
+                new DiscussionClarificationTemplate(
+                        pointer.getContextHandle(), pointer.getProjectId(),
+                        facets, reenter);
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                conversationId, tokenHash, content.getContentVersion(),
+                definition.challenge(), definition.choiceBindings(),
+                definition.textBindings(), template);
+        PublicAgentTurn turn = new PublicAgentTurn.Clarification(
+                requestId, "需要确认接下来的讨论方向。",
+                definition.challenge(), List.of());
+        return new Execution(
+                turn, turn, turn, List.of(), List.of(record),
+                DiscussionStateMutation.guard(pointer.getContextHandle()));
+    }
+
+    private String facetLabel(UserGoalProposal.Facet facet) {
+        return switch (facet) {
+            case OVERVIEW -> "项目概览";
+            case BACKGROUND -> "项目背景";
+            case RESPONSIBILITY -> "职责范围";
+            case SOLUTION -> "解决方案";
+            case VERIFICATION -> "验证方式";
+            case STATUS -> "当前状态";
+        };
+    }
+
+    private Execution executeDiscussionClarification(
+            String conversationId,
+            ConversationSessionStore.Session session,
+            AgentTurnCommand command,
+            CancellationSignal cancellation,
+            RuntimeAnswerContent content,
+            TurnDeadline deadline,
+            DiscussionClarificationResolution resolution) {
+        if (session == null) {
+            return discussionUnavailable(
+                    command.getRequestId(), "DISCUSSION_CONTEXT_UNAVAILABLE");
+        }
+        ActiveDiscussionPointer pointer = session.activeDiscussion().orElse(null);
+        DiscussionClarificationTemplate template = resolution.template();
+        if (pointer == null
+                || !pointer.getContextHandle().equals(template.getContextHandle())
+                || !pointer.getProjectId().equals(template.getProjectId())) {
+            return discussionUnavailable(
+                    command.getRequestId(), "DISCUSSION_CONTEXT_MISMATCH");
+        }
+        if (resolution.facet() != null) {
+            if (pointer.statusAt(clock.instant())
+                    != ActiveDiscussionPointer.Status.ACTIVE
+                    || !template.allowsFacet(resolution.facet())) {
+                return discussionUnavailable(
+                        command.getRequestId(), "DISCUSSION_CONTEXT_EXPIRED");
+            }
+            Execution execution = goals(
+                    conversationId, new byte[0], command, cancellation, content,
+                    planCompiler.compile(
+                            discussionCoordinator.fact(
+                                    template.getProjectId(), resolution.facet()),
+                            content.getContentVersion(), resolutionContext(content),
+                            audience(command)),
+                    deadline.minus(settlementReserve));
+            return withMutation(execution,
+                    DiscussionStateMutation.guard(template.getContextHandle()));
+        }
+        if (!resolution.reenter() || !template.isReenterAllowed()) {
+            return discussionUnavailable(
+                    command.getRequestId(), "DISCUSSION_INTERPRETATION_UNAVAILABLE");
+        }
+        if (pointer.statusAt(clock.instant())
+                != ActiveDiscussionPointer.Status.EXPIRED) {
+            return discussionUnavailable(
+                    command.getRequestId(), "DISCUSSION_CONTEXT_MISMATCH");
+        }
+        ProjectDiscussionCoordinator.Transition transition;
+        try {
+            transition = discussionCoordinator.reenter(
+                        conversationId, content.getContentVersion(),
+                        template.getProjectId(), publicProjectIds(content),
+                        session.expiresAt());
+        } catch (IllegalArgumentException unavailable) {
+            return discussionUnavailable(
+                    command.getRequestId(), "DISCUSSION_SUBJECT_UNAVAILABLE");
+        }
+        return executeDiscussionTransition(
+                command, cancellation, content, deadline,
+                template.getContextHandle(), transition);
     }
 
     private List<GoalInterpretationInput.RouteCandidate> routeCandidates(
@@ -877,7 +1020,9 @@ public final class AgentTurnLifecycleService {
                 execution.replayTurn(),
                 execution.contexts(),
                 execution.challenges(),
-                mutation);
+                mutation,
+                execution.clarificationMutation(),
+                execution.semanticState());
     }
 
     private Execution withClarificationMutation(
@@ -887,7 +1032,8 @@ public final class AgentTurnLifecycleService {
         return new Execution(
                 execution.readOnlyTurn(), execution.settledTurn(), execution.replayTurn(),
                 execution.contexts(), execution.challenges(),
-                execution.discussionMutation(), mutation);
+                execution.discussionMutation(), mutation,
+                execution.semanticState());
     }
 
     private Execution enterDiscussion(
@@ -1006,7 +1152,9 @@ public final class AgentTurnLifecycleService {
                 List.copyOf(contexts),
                 overview.challenges(),
                 DiscussionStateMutation.replace(
-                        expectedGeneration, transition.pointer()));
+                        expectedGeneration, transition.pointer()),
+                overview.clarificationMutation(),
+                overview.semanticState());
     }
 
     private Execution exitDiscussion(
@@ -1311,6 +1459,40 @@ public final class AgentTurnLifecycleService {
                         ResolvedGoalSet.capabilityUnavailable("typed selection"),
                         new DiscussionSelectionResolution(
                                 selection.getRecommendationContextHandle(), resultItemId),
+                        null, mutation, null, null);
+            }
+            if (reserved.record().resumeTemplate()
+                    instanceof DiscussionClarificationTemplate discussion) {
+                String binding = reserved.answer().bindingKey();
+                if (binding.equals("discussion:reenter")
+                        && discussion.isReenterAllowed()) {
+                    return new ResolvedInput(
+                            ResolvedGoalSet.capabilityUnavailable("typed discussion clarification"),
+                            null,
+                            new DiscussionClarificationResolution(
+                                    discussion, null, true),
+                            mutation, null, null);
+                }
+                String prefix = "discussion:facet:";
+                UserGoalProposal.Facet facet = null;
+                if (binding.startsWith(prefix)) {
+                    try {
+                        facet = UserGoalProposal.Facet.valueOf(
+                                binding.substring(prefix.length()));
+                    } catch (IllegalArgumentException ignored) {
+                        facet = null;
+                    }
+                }
+                if (facet == null || !discussion.allowsFacet(facet)) {
+                    return new ResolvedInput(ResolvedGoalSet.invalidInput(
+                            "澄清答案超出当前讨论范围。"), mutation);
+                }
+                return new ResolvedInput(
+                        ResolvedGoalSet.capabilityUnavailable(
+                                "typed discussion clarification"),
+                        null,
+                        new DiscussionClarificationResolution(
+                                discussion, facet, false),
                         mutation, null, null);
             }
             BlockedGoalTemplate template =
@@ -1426,28 +1608,33 @@ public final class AgentTurnLifecycleService {
     private record ResolvedInput(
             ResolvedGoalSet resolved,
             DiscussionSelectionResolution discussionSelection,
+            DiscussionClarificationResolution discussionClarification,
             ClarificationSettlementMutation clarificationMutation,
             String capabilityCode,
             Long retryAfterSeconds) {
         private ResolvedInput(ResolvedGoalSet resolved) {
-            this(resolved, null, ClarificationSettlementMutation.none(),
+            this(resolved, null, null, ClarificationSettlementMutation.none(),
                     null, null);
         }
         private ResolvedInput(
                 ResolvedGoalSet resolved,
                 ClarificationSettlementMutation clarificationMutation) {
-            this(resolved, null, clarificationMutation, null, null);
+            this(resolved, null, null, clarificationMutation, null, null);
         }
         private ResolvedInput(
                 ResolvedGoalSet resolved,
                 String capabilityCode,
                 Long retryAfterSeconds) {
-            this(resolved, null, ClarificationSettlementMutation.none(),
+            this(resolved, null, null, ClarificationSettlementMutation.none(),
                     capabilityCode, retryAfterSeconds);
         }
     }
     private record DiscussionSelectionResolution(
             String contextHandle, String resultItemId) { }
+    private record DiscussionClarificationResolution(
+            DiscussionClarificationTemplate template,
+            UserGoalProposal.Facet facet,
+            boolean reenter) { }
     private record ChallengeDefinition(
             ClarificationChallenge challenge,
             Map<String, Map<String, String>> choiceBindings,

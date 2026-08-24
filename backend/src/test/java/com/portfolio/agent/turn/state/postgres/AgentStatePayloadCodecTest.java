@@ -14,6 +14,7 @@ import com.portfolio.agent.turn.planning.UserGoalProposal;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
 import com.portfolio.agent.turn.planning.ClarificationProposal;
+import com.portfolio.agent.turn.planning.DiscussionClarificationTemplate;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -24,6 +25,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AgentStatePayloadCodecTest {
+    @Test void discussionClarificationTemplateRoundTripsAsTypedEncryptedState() {
+        AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
+                JsonMapper.builder().addModule(new ParameterNamesModule())
+                        .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                        .build(), "state-key-1", new byte[32]);
+        UUID requestId = UUID.randomUUID();
+        ClarificationChallenge challenge = new ClarificationChallenge(
+                "clarification_discussion_1", "请选择讨论方向", List.of(
+                new ClarificationChallenge.SingleChoiceField(
+                        "field_discussion", "讨论方向", true, List.of(
+                        new ClarificationChallenge.Choice(
+                                "choice_solution", "解决方案")))), List.of());
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                "conversation-1", new byte[32], "public-1", challenge,
+                Map.of("field_discussion", Map.of(
+                        "choice_solution", "discussion:facet:SOLUTION")),
+                Map.of(), new DiscussionClarificationTemplate(
+                "discussion_context_1", "project-1",
+                java.util.Set.of(UserGoalProposal.Facet.SOLUTION), false));
+
+        AgentStatePayloadCodec.Envelope envelope = codec.encodeChallenge(
+                requestId, "conversation-1", record);
+        ClarificationStore.Record decoded = codec.decodeChallenge(
+                requestId, "conversation-1", "clarification_discussion_1", envelope);
+
+        assertThat(decoded.resumeTemplate())
+                .isInstanceOf(DiscussionClarificationTemplate.class);
+        DiscussionClarificationTemplate template =
+                (DiscussionClarificationTemplate) decoded.resumeTemplate();
+        assertThat(template.getAllowedFacets())
+                .containsExactly(UserGoalProposal.Facet.SOLUTION);
+        assertThat(template.getContextHandle()).isEqualTo("discussion_context_1");
+    }
+
     @Test void typedConversationSemanticStateRoundTripsWithoutText() {
         AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
                 JsonMapper.builder().addModule(new ParameterNamesModule())

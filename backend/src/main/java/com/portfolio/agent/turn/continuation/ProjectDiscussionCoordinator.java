@@ -157,6 +157,27 @@ public final class ProjectDiscussionCoordinator {
                                 UserGoalProposal.Depth.STANDARD))));
     }
 
+    public UserGoalProposal fact(
+            String projectId, UserGoalProposal.Facet facet) {
+        Objects.requireNonNull(facet, "facet");
+        UserGoalProposal.InputAnchor anchor =
+                new UserGoalProposal.InputAnchor("项目讨论澄清", 0);
+        return new UserGoalProposal(List.of(
+                new UserGoalProposal.ProposedGoal(
+                        "project-discussion-clarified-fact",
+                        GoalKind.PORTFOLIO_FACT,
+                        anchor,
+                        List.of(new GoalSubjectReference(
+                                GoalSubjectReference.Kind.PROJECT,
+                                projectId,
+                                GoalSubjectReference.Basis.CONTINUATION,
+                                null)),
+                        Set.of(GoalRequestedOutput.valueOf(facet.name())),
+                        GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(facet), UserGoalProposal.Depth.STANDARD))));
+    }
+
     private void requireCurrentPublicProjects(
             Set<String> required, Set<String> currentPublicProjectIds) {
         if (!currentPublicProjectIds.containsAll(required)) {

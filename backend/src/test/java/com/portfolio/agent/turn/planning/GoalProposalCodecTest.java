@@ -221,6 +221,46 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void rejectsConversationalMessagesOutsideRuntimeLanguageAndReplayBoundary() {
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CONVERSATIONAL","message":"This is a complete English response."}
+                """, input("聊聊你能做什么")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("primarily Chinese");
+
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CONVERSATIONAL","message":"你好，API SDK HTTP JSON English technical identifiers are all copied here."}
+                """, input("聊聊你能做什么")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("primarily Chinese");
+
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CONVERSATIONAL","message":"你好，Voici une réponse principalement rédigée en français."}
+                """, input("聊聊你能做什么")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("primarily Chinese");
+
+        String overlong = "这是一条过长的社交回复。".repeat(15);
+        assertThatThrownBy(() -> codec.decode(
+                "{\"kind\":\"CONVERSATIONAL\",\"message\":\""
+                        + overlong + "\"}", input("你好")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bounded");
+
+        assertThatThrownBy(() -> codec.decode("""
+                {"kind":"CONVERSATIONAL","message":"你刚才说想知道这个网站具体能够帮助你做什么，我可以回答。"}
+                """, input("想知道这个网站具体能够帮助你做什么")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats visitor input");
+
+        GoalInterpretationResult accepted = codec.decode("""
+                {"kind":"CONVERSATIONAL","message":"你好，我可以介绍公开项目，也可以回答技术问题。"}
+                """, input("你好"));
+        assertThat(accepted.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.CONVERSATIONAL);
+    }
+
+    @Test
     void decodesOnlyCandidateKeysAndNeverStateHandles() {
         GoalInterpretationResult result = codec.decode("""
                 {

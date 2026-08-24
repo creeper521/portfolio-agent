@@ -155,9 +155,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-57 | P1 | 无法可靠理解“进一步展开” | Goal v5 要求 Provider 显式返回匹配 `recentReference.goalId`，后端才注入 `RECENT_TURN`；facet/depth 已进入可信状态，待真实 Provider | 上一成功 Goal 的安全语义可被引用 | Multi-turn Goal State |
 | A2-58 | P1 | 无法引用上一回答区块 | V7 保存公开 `sectionId/sectionKind`，Goal v5 的 section 引用必须精确属于所引用 Goal；待 Browser 正文门 | 后续可引用公开回答的 typed section | Public Presentation / Multi-turn |
 | A2-59 | P1 | 旧 Recommendation hint 长时间滞留 | 后续不相关话题仍可能附带旧 Context | 新话题或非推荐结果后停止附带 | Frontend Context Routing |
-| A2-60 | P1 | Discussion NEEDS_CLARIFICATION 未履约 | 模型不确定被投影成解释不可用 | 产生限定澄清且 pointer 不变 | Discussion / Clarification |
-| A2-61 | P1 | Discussion 澄清缺少闭合选择 | 用户只能重试或退出 | 后端提供合法 facet、输出或候选选择 | Discussion / Public Contract |
-| A2-62 | P2 | 开放社交回复约束不足 | 非固定社交输入由模型直接生成 | 语言、长度和复述风险受运行时校验 | Conversational / Validation |
+| A2-60 | P1 | Discussion NEEDS_CLARIFICATION 未履约 | 后端已生成短期加密 typed challenge，并以 pointer generation guard 原子结算；待真实 Provider/Browser 原路径 | 产生限定澄清且 pointer 不变 | Discussion / Clarification |
+| A2-61 | P1 | Discussion 澄清缺少闭合选择 | active discussion 已固定为五种合法 facet，expired discussion 只允许重进；choice 与恢复模板精确闭合，待 Browser | 后端提供合法 facet、输出或候选选择 | Discussion / Public Contract |
+| A2-62 | P2 | 开放社交回复约束不足 | Provider-derived Conversational 已强制 160 字上限、中文主体、英文整句/控制字符与较长访客原文连续复述拒绝；待真实 Provider 固定样本 | 语言、长度和复述风险受运行时校验 | Conversational / Validation |
 | A2-63 | P1 | General depth 只依赖 Prompt | 生产 Validator 已按 depth 强制每条 statement 的句数；待真实 Provider/Browser 质量门 | 每档句数成为运行时不变量 | General Validator |
 | A2-64 | P1 | General 简体中文不受运行时保证 | 生产 Validator 已要求每句含中文字符并拒绝完整英文句；待真实 Provider/Browser | 非技术标识的完整英文句被拒绝 | General Validator / Language |
 | A2-65 | P1 | DETAILED 不保证语义完整 | `general.draft.v2` 已要求闭合 aspect 精确覆盖；aspect 仍是 Provider 自报，待真实正文抽样证明 | DETAILED 覆盖批准语义维度 | General Quality |
@@ -389,6 +389,15 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - `postgres-local.test.ps1`、`start-local.test.ps1` 与当前权威 `run-agent-behavior-audit-assets.test.ps1` 已通过。旧 `run-agent-behavior-audit.test.ps1` 在当前 HEAD 与资产门互相矛盾：它要求已删除的 `test:e2e:behavior/api-l0/runtime`；当前工作树另有 Frontend Agent 修改，故本批不覆盖或暂存该文件，也不把该僵尸测试记为通过。
 - 全仓 `privacy-check` 扫描 918 个文件通过；model-disabled packaged JAR SHA-256 `524ba7550bd3a603afd5c1572c66b2f01e819ef44f05c292243fc39e3859cb5f` 的 IN_MEMORY API/隐私 smoke 通过。35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），该结果不冒充真实语义成功。
 - 本批没有修改 Frontend 或公开 API。真实 Provider 是否稳定产生正确 `recentReference`、Browser 是否能以“进一步展开/第 N 个区块”得到正确正文，仍由 Frontend Agent 的 UI/交互与 Browser 语义门验收；A2-56—A2-58 和整体 Agent 2.0 保持 `IN_PROGRESS`。
+
+#### 3.3.9 Discussion 澄清与 Conversational 校验后端证据（仍为 IN_PROGRESS）
+
+- Discussion 的 `NEEDS_CLARIFICATION` 已使用现有 `CLARIFICATION` 公开 variant：active pointer 精确提供 OVERVIEW、RESPONSIBILITY、SOLUTION、VERIFICATION、STATUS 五种服务端 choice；expired pointer 只提供重进 choice。恢复模板与 choice bindings 必须精确闭合，typed template 随 challenge 短期加密保存。
+- 澄清首次结算使用当前 pointer handle 作为 generation guard，不改变 pointer；facet resolve 不再次解释访客文本，而是由后端构造 `CONTINUATION` basis 的锁定项目 Fact Goal。Lifecycle 包装器同步保留成功 Turn 的 V7 semantic state，避免 Discussion 路径丢失短期 typed summary。
+- `ConversationalMessageValidator` 只处理 Provider-derived 开放社交正文：限制 160 字、至少两个中文字符且拉丁字母不超过中文字符两倍，拒绝完整英文句、控制字符，以及不少于 8 字的当前访客输入被连续复述。固定快速问候继续走服务端文案；这里是确定性来源/结构校验，不是关键词清洗或 sentinel 生产机制。
+- `AgentTurnLifecycleContinuationTest`、`DiscussionClarificationTemplateTest`、`AgentStatePayloadCodecTest` 与 `GoalProposalCodecTest` 的定向组合实际执行：`34 tests / 0 failures / 0 errors / 0 skipped`。Backend clean package 实际执行：`912 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14。
+- `code-quality-check`、当前权威文档检查、`run-agent-behavior-audit-assets.test.ps1` 通过；按仓库命令对 `backend/src/main` 扫描 500 个生产文件的 privacy gate 通过。model-disabled packaged JAR SHA-256 `397b1dbe1edfc17cc69e7614a799264d8949db8eb0a344982bff93ef7261a328` 的 IN_MEMORY API/日志隐私 smoke 通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED）。
+- 本批没有修改 Frontend 或扩展公开 API。Frontend Agent 仍需处理 A2-59，并执行 active/expired clarification 的 choice 渲染、提交后只读、facet resolve 正文和 pointer revision Browser 门；UI 文案、布局与交互设计由 Frontend 责任区决定。真实 Provider 固定样本与 Browser 原路径未取得，A2-60—A2-62 不删除。
 
 ### 3.4 本轮审计证据边界
 
@@ -1006,7 +1015,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
 | Provider 授权与 schema | A2-33—A2-35、A2-79—A2-88、A2-113 | 启动错配负例、协议 Profile、按批准目录独立 Provider 矩阵 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
-| 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference、Discussion clarification |
+| 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |
 | Frontend lifecycle | A2-69—A2-78 | reservation/cancel 窗口、首页 snapshot、合法 UUID、expiry、所有会话 clear |
 | 行为与证据真实性 | A2-89—A2-101、A2-111—A2-115 | scenario 参数化执行、Browser body/trace、跨 JVM、只报告观测字段 |

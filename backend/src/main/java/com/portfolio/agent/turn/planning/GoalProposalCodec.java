@@ -18,12 +18,14 @@ public final class GoalProposalCodec {
     public static final String SCHEMA_VERSION = "goal.proposal.v5";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
+    private final ConversationalMessageValidator conversationalValidator;
 
     public GoalProposalCodec() {
         JsonFactory factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .build();
         this.mapper = new ObjectMapper(factory);
+        this.conversationalValidator = new ConversationalMessageValidator();
     }
 
     public GoalInterpretationResult decode(String json, GoalInterpretationInput input) {
@@ -35,7 +37,7 @@ public final class GoalProposalCodec {
         String kind = requireText(root, "kind", 64);
         return switch (kind) {
             case "SEMANTIC_ROUTE" -> decodeSemanticRoute(root, input);
-            case "CONVERSATIONAL" -> decodeConversational(root);
+            case "CONVERSATIONAL" -> decodeConversational(root, input);
             default -> throw new IllegalArgumentException("unsupported goal interpretation kind");
         };
     }
@@ -410,9 +412,14 @@ public final class GoalProposalCodec {
                 unresolved, askedFields, List.copyOf(remainingFields), depth);
     }
 
-    private GoalInterpretationResult decodeConversational(JsonNode root) {
+    private GoalInterpretationResult decodeConversational(
+            JsonNode root, GoalInterpretationInput input) {
         assertFields(root, Set.of("kind", "message"), Set.of("kind", "message"), "root");
-        return GoalInterpretationResult.conversational(requireText(root, "message", 400));
+        return GoalInterpretationResult.conversational(
+                conversationalValidator.validate(
+                        requireText(root, "message",
+                                ConversationalMessageValidator.MAX_CHARACTERS),
+                        input.getUserText()));
     }
 
     private UserGoalProposal.InputAnchor decodeAnchor(
