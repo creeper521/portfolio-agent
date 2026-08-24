@@ -72,6 +72,8 @@ public final class AgentTurnLifecycleService {
     private final RequestFingerprintFactory fingerprintFactory;
     private final ConversationSessionResolver sessionResolver;
     private final ExecutorService stateExecutor;
+    private final PersistenceSafeReplayPolicy replayPolicy =
+            new PersistenceSafeReplayPolicy();
     private final ActiveTurnRegistry activeTurns = new ActiveTurnRegistry();
     private final Clock clock;
     private final Duration leaseDuration;
@@ -225,7 +227,7 @@ public final class AgentTurnLifecycleService {
         }
         Future<TurnExecutionStore.SettlementResult> settlement =
                 stateExecutor.submit(() -> store.completeWithSession(
-                        requestId, fingerprint, execution.settledTurn(),
+                        requestId, fingerprint, execution.replayTurn(),
                         execution.contexts(), execution.challenges(),
                         sessionToCreate, sessionAccess, clock.instant(),
                         turnDeadline, execution.discussionMutation(),
@@ -402,9 +404,15 @@ public final class AgentTurnLifecycleService {
         }
         ResolvedGoalSet resolved = input.resolved();
         Execution execution = switch (resolved.getKind()) {
-            case CONVERSATIONAL -> simple(new PublicAgentTurn.Conversational(
-                    command.getRequestId(), resolved.getMessage().orElseThrow(), List.of()));
-            case BOUNDARY, INVALID_INPUT -> simple(new PublicAgentTurn.Boundary(
+            case CONVERSATIONAL -> {
+                PublicAgentTurn turn = new PublicAgentTurn.Conversational(
+                        command.getRequestId(), resolved.getMessage().orElseThrow(), List.of());
+                yield switch (resolved.getMessageSource()) {
+                    case SERVER_FIXED -> serverFixed(turn);
+                    case PROVIDER_DERIVED, NONE -> providerBody(turn);
+                };
+            }
+            case BOUNDARY, INVALID_INPUT -> serverFixed(new PublicAgentTurn.Boundary(
                     command.getRequestId(), resolved.getKind() == ResolvedGoalSet.Kind.INVALID_INPUT
                     ? "PUBLIC_SUBJECT_INVALID" : "OUT_OF_SCOPE",
                     resolved.getMessage().orElseThrow(),
@@ -412,7 +420,7 @@ public final class AgentTurnLifecycleService {
                             ? List.of(new SuggestedAction(
                             "ask-new-question", "重新提问", "请重新描述你的问题", null))
                             : List.of()));
-            case CAPABILITY_UNAVAILABLE -> simple(new PublicAgentTurn.CapabilityUnavailable(
+            case CAPABILITY_UNAVAILABLE -> serverFixed(new PublicAgentTurn.CapabilityUnavailable(
                     command.getRequestId(), input.capabilityCode() != null
                     ? input.capabilityCode()
                     : command instanceof AgentTurnCommand.Ask
@@ -487,7 +495,7 @@ public final class AgentTurnLifecycleService {
                     input, deadline.minus(settlementReserve));
         } catch (GoalInterpretationUnavailableException
                  | IllegalArgumentException unavailable) {
-            return simple(new PublicAgentTurn.CapabilityUnavailable(
+            return serverFixed(new PublicAgentTurn.CapabilityUnavailable(
                     command.getRequestId(),
                     "SEMANTIC_ROUTING_UNAVAILABLE",
                     "当前暂时无法可靠理解这条自由文本请求。",
@@ -495,7 +503,7 @@ public final class AgentTurnLifecycleService {
         }
         if (interpretation.getKind()
                 == GoalInterpretationResult.Kind.CONVERSATIONAL) {
-            return simple(new PublicAgentTurn.Conversational(
+            return providerBody(new PublicAgentTurn.Conversational(
                     command.getRequestId(),
                     interpretation.getMessage().orElseThrow(),
                     List.of()));
@@ -637,7 +645,7 @@ public final class AgentTurnLifecycleService {
                 "需要确认要讨论的推荐项目。",
                 definition.challenge(), List.of());
         return new Execution(
-                turn, turn, List.of(), List.of(record),
+                turn, turn, turn, List.of(), List.of(record),
                 DiscussionStateMutation.none());
     }
 
@@ -729,14 +737,14 @@ public final class AgentTurnLifecycleService {
                  | IllegalArgumentException unavailable) {
             return withMutation(
                     discussionInterpretationUnavailable(
-                            command.getRequestId(), text, pointer),
+                            command.getRequestId(), pointer),
                     DiscussionStateMutation.guard(
                             pointer.getContextHandle()));
         }
         if (interpretation.getKind()
                 == GoalInterpretationResult.Kind.CONVERSATIONAL) {
             return withMutation(
-                    simple(new PublicAgentTurn.Conversational(
+                    providerBody(new PublicAgentTurn.Conversational(
                             command.getRequestId(),
                             interpretation.getMessage().orElseThrow(),
                             List.of())),
@@ -794,12 +802,12 @@ public final class AgentTurnLifecycleService {
             }
             case NEEDS_CLARIFICATION -> withMutation(
                     discussionInterpretationUnavailable(
-                            command.getRequestId(), text, pointer),
+                            command.getRequestId(), pointer),
                     DiscussionStateMutation.guard(
                             pointer.getContextHandle()));
             case STANDARD_GOAL, ENTER_RECOMMENDED_RESULT ->
                     discussionInterpretationUnavailable(
-                            command.getRequestId(), text, pointer);
+                            command.getRequestId(), pointer);
         };
     }
 
@@ -847,6 +855,7 @@ public final class AgentTurnLifecycleService {
         return new Execution(
                 execution.readOnlyTurn(),
                 execution.settledTurn(),
+                execution.replayTurn(),
                 execution.contexts(),
                 execution.challenges(),
                 mutation);
@@ -857,7 +866,7 @@ public final class AgentTurnLifecycleService {
             ClarificationSettlementMutation mutation) {
         if (mutation.isNone()) return execution;
         return new Execution(
-                execution.readOnlyTurn(), execution.settledTurn(),
+                execution.readOnlyTurn(), execution.settledTurn(), execution.replayTurn(),
                 execution.contexts(), execution.challenges(),
                 execution.discussionMutation(), mutation);
     }
@@ -974,6 +983,7 @@ public final class AgentTurnLifecycleService {
         return new Execution(
                 overview.readOnlyTurn(),
                 overview.settledTurn(),
+                overview.replayTurn(),
                 List.copyOf(contexts),
                 overview.challenges(),
                 DiscussionStateMutation.replace(
@@ -1001,7 +1011,7 @@ public final class AgentTurnLifecycleService {
                 "已结束当前项目讨论，你可以开始新的话题。",
                 List.of());
         return new Execution(
-                turn, turn, List.of(), List.of(),
+                turn, turn, turn, List.of(), List.of(),
                 DiscussionStateMutation.clear(expected));
     }
 
@@ -1010,24 +1020,19 @@ public final class AgentTurnLifecycleService {
                 requestId, code,
                 "当前项目讨论状态不可用，请重新进入项目。",
                 false, List.of());
-        return simple(turn);
+        return serverFixed(turn);
     }
 
     private Execution discussionInterpretationUnavailable(
-            UUID requestId, String text,
-            ActiveDiscussionPointer pointer) {
+            UUID requestId, ActiveDiscussionPointer pointer) {
         PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
                 requestId, "DISCUSSION_INTERPRETATION_UNAVAILABLE",
                 "当前无法可靠理解这条项目讨论请求。",
-                true, List.of(
-                new SuggestedAction(
-                        "discussion-retry", "重试刚才的问题",
-                        text, null),
-                new SuggestedAction(
+                true, List.of(new SuggestedAction(
                         "discussion-exit", "结束讨论",
                         null, ContinuationReference.exitContext(
                         pointer.getContextHandle()))));
-        return simple(turn);
+        return serverFixed(turn);
     }
 
     private Set<String> publicProjectIds(RuntimeAnswerContent content) {
@@ -1042,14 +1047,14 @@ public final class AgentTurnLifecycleService {
             PlanCompilationResult compilation,
             TurnDeadline executionDeadline) {
         if (compilation.getKind() == PlanCompilationResult.Kind.CLARIFICATION_REQUIRED) {
-            return simple(new PublicAgentTurn.Boundary(
+            return serverFixed(new PublicAgentTurn.Boundary(
                     command.getRequestId(), "PLAN_SUBJECT_UNRESOLVED",
                     "当前目标无法安全绑定到公开主体，请重新提问。",
                     List.of(new SuggestedAction(
                             "ask-new-question", "重新提问", "请重新描述你的问题", null))));
         }
         if (compilation.getKind() != PlanCompilationResult.Kind.COMPILED) {
-            return simple(new PublicAgentTurn.Boundary(
+            return serverFixed(new PublicAgentTurn.Boundary(
                     command.getRequestId(), "PLAN_REJECTED",
                     "当前请求无法形成安全的执行计划。", List.of()));
         }
@@ -1070,8 +1075,9 @@ public final class AgentTurnLifecycleService {
         PublicAgentTurn readOnly = projector.project(command.getRequestId(), plan, outcome);
         PublicAgentTurn settled = projector.project(
                 command.getRequestId(), plan, outcome, continuations);
+        PublicAgentTurn replay = replayPolicy.forPlan(settled, plan);
         return new Execution(
-                readOnly, settled,
+                readOnly, settled, replay,
                 mutations.stream().map(ContextMutationPlanner.Mutation::context).toList(),
                 List.of(), DiscussionStateMutation.none());
     }
@@ -1083,7 +1089,7 @@ public final class AgentTurnLifecycleService {
         GoalResolutionContext context = resolutionContext(content);
         if (proposal.getField() == ClarificationProposal.Field.SUBJECT
                 && context.getPublicSubjects().isEmpty()) {
-            return simple(new PublicAgentTurn.CapabilityUnavailable(
+            return serverFixed(new PublicAgentTurn.CapabilityUnavailable(
                     requestId, "PUBLIC_SUBJECT_CATALOG_UNAVAILABLE",
                     "当前公开主体目录不可用，请稍后重试。", true, List.of()));
         }
@@ -1097,7 +1103,7 @@ public final class AgentTurnLifecycleService {
         PublicAgentTurn turn = new PublicAgentTurn.Clarification(
                 requestId, "需要补充目标后才能继续。", challenge, List.of());
         return new Execution(
-                turn, turn, List.of(), List.of(record),
+                turn, turn, turn, List.of(), List.of(record),
                 DiscussionStateMutation.none());
     }
 
@@ -1202,10 +1208,16 @@ public final class AgentTurnLifecycleService {
                 challenge, Map.of(fieldId, Map.copyOf(bindings)), Map.of());
     }
 
-    private Execution simple(PublicAgentTurn turn) {
+    private Execution serverFixed(PublicAgentTurn turn) {
         return new Execution(
-                turn, turn, List.of(), List.of(),
+                turn, turn, turn, List.of(), List.of(),
                 DiscussionStateMutation.none());
+    }
+
+    private Execution providerBody(PublicAgentTurn turn) {
+        return new Execution(
+                turn, turn, replayPolicy.forProviderBody(turn),
+                List.of(), List.of(), DiscussionStateMutation.none());
     }
 
     private ResolvedInput resolveInput(
@@ -1333,6 +1345,7 @@ public final class AgentTurnLifecycleService {
 
     private record Execution(
             PublicAgentTurn readOnlyTurn, PublicAgentTurn settledTurn,
+            PublicAgentTurn replayTurn,
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges,
             DiscussionStateMutation discussionMutation,
@@ -1340,10 +1353,11 @@ public final class AgentTurnLifecycleService {
         private Execution(
                 PublicAgentTurn readOnlyTurn,
                 PublicAgentTurn settledTurn,
+                PublicAgentTurn replayTurn,
                 List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
                 List<ClarificationStore.Record> challenges,
                 DiscussionStateMutation discussionMutation) {
-            this(readOnlyTurn, settledTurn, contexts, challenges,
+            this(readOnlyTurn, settledTurn, replayTurn, contexts, challenges,
                     discussionMutation,
                     ClarificationSettlementMutation.none());
         }

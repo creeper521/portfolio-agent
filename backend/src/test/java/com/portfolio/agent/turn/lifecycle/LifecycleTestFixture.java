@@ -32,20 +32,47 @@ final class LifecycleTestFixture {
     }
 
     static AgentTurnLifecycleService service(
+            AgentStateStore store, GoalResolver resolver) {
+        return service(store, resolver,
+                new RequestFingerprintFactory(new byte[32]), sessionResolver(),
+                Clock.fixed(NOW, ZoneOffset.UTC), mock(SemanticPlanCompiler.class),
+                mock(SemanticTurnEngine.class));
+    }
+
+    static AgentTurnLifecycleService service(
+            AgentStateStore store, ResolvedGoalSet resolved,
+            SemanticPlanCompiler compiler, SemanticTurnEngine engine) {
+        GoalResolver resolver = mock(GoalResolver.class);
+        when(resolver.resolve(any(), any(), any())).thenReturn(resolved);
+        return service(store, resolver,
+                new RequestFingerprintFactory(new byte[32]), sessionResolver(),
+                Clock.fixed(NOW, ZoneOffset.UTC), compiler, engine);
+    }
+
+    static AgentTurnLifecycleService service(
             AgentStateStore store, ResolvedGoalSet resolved,
             RequestFingerprintFactory fingerprints,
             ConversationSessionResolver sessions, Clock clock) {
+        GoalResolver resolver = mock(GoalResolver.class);
+        when(resolver.resolve(any(), any(), any())).thenReturn(resolved);
+        return service(store, resolver, fingerprints, sessions, clock,
+                mock(SemanticPlanCompiler.class), mock(SemanticTurnEngine.class));
+    }
+
+    private static AgentTurnLifecycleService service(
+            AgentStateStore store, GoalResolver resolver,
+            RequestFingerprintFactory fingerprints,
+            ConversationSessionResolver sessions, Clock clock,
+            SemanticPlanCompiler compiler, SemanticTurnEngine engine) {
         PortfolioKnowledgeGateway knowledge = mock(PortfolioKnowledgeGateway.class);
         RuntimeAnswerContent content = mock(RuntimeAnswerContent.class);
         when(content.getProjects()).thenReturn(java.util.List.of());
         when(content.getCases()).thenReturn(java.util.List.of());
         when(content.getContentVersion()).thenReturn("public-1");
         when(knowledge.getContent()).thenReturn(content);
-        GoalResolver resolver = mock(GoalResolver.class);
-        when(resolver.resolve(any(), any(), any())).thenReturn(resolved);
         return new AgentTurnLifecycleService(
-                knowledge, resolver, mock(SemanticPlanCompiler.class),
-                mock(SemanticTurnEngine.class), new PublicAgentTurnProjector(),
+                knowledge, resolver, compiler,
+                engine, new PublicAgentTurnProjector(),
                 new ContextMutationPlanner(() -> "context_handle_123"), store,
                 fingerprints, sessions,
                 java.util.concurrent.ForkJoinPool.commonPool(),

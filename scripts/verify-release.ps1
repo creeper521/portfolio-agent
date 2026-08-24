@@ -49,6 +49,12 @@ try {
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $documentationChecker
     Assert-ExitCode 'Current documentation facts check'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\persistence-safe-replay-docs-check.test.ps1')
+    Assert-ExitCode 'Persistence-safe replay documentation checker tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\persistence-safe-replay-docs-check.ps1')
+    Assert-ExitCode 'Persistence-safe replay documentation check'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\public-api-surface-check.test.ps1')
@@ -85,6 +91,17 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\privacy-check.test.ps1')
     Assert-ExitCode 'Privacy checker tests'
+    if (-not $SkipDockerCheck) {
+        & docker info --format '{{.ServerVersion}}'
+        Assert-ExitCode 'Runtime privacy Docker readiness'
+        & $maven -f backend/pom.xml `
+            '-Dtest=AgentStatePayloadCodecTest#decodedCompleteSettlementDoesNotContainVisitorOrProviderSentinel,JdbcAgentStateStoreIntegrationTest#postgresCompleteSettlementPlaintextExcludesVisitorAndProviderSentinel' `
+            test
+        Assert-ExitCode 'Complete settlement runtime privacy tests'
+    }
+    else {
+        Write-Warning 'Complete settlement PostgreSQL privacy test was explicitly skipped.'
+    }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\assert-live-public-turn-response.test.ps1')
     Assert-ExitCode 'Final PublicAgentTurn Live Provider checker tests'

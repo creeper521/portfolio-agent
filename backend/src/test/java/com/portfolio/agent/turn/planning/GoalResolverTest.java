@@ -211,6 +211,8 @@ class GoalResolverTest {
 
         assertThat(modelCalls).hasValue(1);
         assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.CONVERSATIONAL);
+        assertThat(result.getMessageSource())
+                .isEqualTo(ResolvedGoalSet.MessageSource.PROVIDER_DERIVED);
         assertThat(result.getGoalProposal()).isEmpty();
     }
 

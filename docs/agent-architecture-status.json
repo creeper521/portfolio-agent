@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "portfolio-agent",
-  "updatedAt": "2026-08-21",
+  "updatedAt": "2026-08-24",
   "overallStatus": "IN_PROGRESS",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
@@ -37,7 +37,7 @@
     {
       "id": "PRIVACY_BOUNDARY",
       "status": "PASS",
-      "evidence": "Public-data, state persistence and provider diagnostics retain the approved privacy boundary."
+      "evidence": "Fresh 2026-08-24 runtime evidence: AgentStatePayloadCodecTest decrypts and scans the complete settlement sentinel across publicTurn, contexts and challenges; JdbcAgentStateStoreIntegrationTest executes the PostgreSQL complete settlement sentinel path with zero skips and replays REPLAY_BODY_NOT_RETAINED. AgentTurnLifecycleReplayTest proves Provider-derived Conversational and General bodies are live-only and same-request replay does not execute the Provider/plan again. Overall status remains IN_PROGRESS for unrelated open Agent 2.0 gates."
     }
   ],
   "activeAuthorities": {

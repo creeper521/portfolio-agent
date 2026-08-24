@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.projection;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.portfolio.agent.turn.continuation.ClarificationChallenge;
@@ -81,10 +83,14 @@ public abstract sealed class PublicAgentTurn permits
                 boolean retryable, List<SuggestedAction> suggestedActions) {
             this(requestId, code, message, retryable, null, suggestedActions);
         }
+        @JsonCreator
         public CapabilityUnavailable(
-                UUID requestId, String code, String message,
-                boolean retryable, Long retryAfterSeconds,
-                List<SuggestedAction> suggestedActions) {
+                @JsonProperty("requestId") UUID requestId,
+                @JsonProperty("code") String code,
+                @JsonProperty("message") String message,
+                @JsonProperty("retryable") boolean retryable,
+                @JsonProperty("retryAfterSeconds") Long retryAfterSeconds,
+                @JsonProperty("suggestedActions") List<SuggestedAction> suggestedActions) {
             super(requestId, code, message, suggestedActions);
             this.retryable = retryable;
             if (retryAfterSeconds != null

@@ -11,7 +11,7 @@ Exact runtime release versions and counts are owned only by the packaged manifes
 
 Agent 2.0 is the only runtime authority: Command → Goal → Plan → Execution → PublicAgentTurn → Settlement. The four unversioned `/api/agent` resources are the only public Agent HTTP surface. The old `answer` package may contain transitional dependencies while the approved Replacement Slices execute, but it is not a second runtime authority and must not receive new behavior.
 
-Standard local development and production use PostgreSQL Agent State. `IN_MEMORY` is limited to fast tests and targeted diagnosis; `DISABLED` is explicit read-only portfolio mode. The State boundary permits only encrypted, short-lived typed context, challenge state, request receipts, and final public replay. It must not persist visitor questions, ConversationWindow, Prompt, raw model output, internal diagnostics, private data, or raw Evidence.
+Standard local development and production use PostgreSQL Agent State. `IN_MEMORY` is limited to fast tests and targeted diagnosis; `DISABLED` is explicit read-only portfolio mode. The State boundary permits only encrypted, short-lived typed context, challenge state, request receipts, and persistence-safe public replay. Deterministic Portfolio replay may retain its opaque ContextHandle; Provider-derived General or Conversational bodies must be replaced by the fixed `REPLAY_BODY_NOT_RETAINED` terminal before settlement. State must not persist visitor questions, ConversationWindow, Prompt, raw model output, internal diagnostics, private data, or raw Evidence.
 
 Optional model operations and local public retrieval remain disabled unless explicitly configured. The fixed DeepSeek/GLM adapters and local BGE path are admitted only under their fail-closed privacy and configuration gates. Public PostgreSQL projection and private governance import remain separate, explicitly operated capabilities.
 
@@ -81,7 +81,7 @@ Read these before changing current behavior:
 - Public browsing APIs are read-only. Agent mutation resources are limited to creating/cancelling a Turn and clearing the current anonymous conversation.
 - Only `publicStatus = APPROVED` Evidence may be returned.
 - Do not log or persist visitor questions.
-- PostgreSQL may retain only the approved encrypted typed State and fixed 30-minute public replay; Clarification challenges use the approved shorter TTL.
+- PostgreSQL may retain only the approved encrypted typed State and fixed 30-minute persistence-safe replay; deterministic Portfolio replay keeps usable opaque continuation handles, while Provider-derived bodies are never retained. Clarification challenges use the approved shorter TTL.
 - A browser may store one short-lived ResumeToken in current-tab `sessionStorage`. It must not persist questions, answers, history, Context, challenges, request history, or Evidence.
 - Tokens and Handles must not enter URLs or browser history. Homepage-to-Agent handoff remains random, memory-only, one-time, and short-lived.
 - Do not expose stack traces, paths, internal hosts, source addresses, credentials, or raw Evidence.

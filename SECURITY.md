@@ -11,12 +11,12 @@
 
 标准本地环境和生产环境使用独立 PostgreSQL Agent State。它只保存完成恢复所需的最小短期状态：
 
-- request claim、fingerprint 与最终公开 `PublicAgentTurn` replay；
+- request claim、fingerprint 与 persistence-safe `PublicAgentTurn` replay；
 - Conversation 与 ResumeToken 的单向绑定；
 - typed Continuation Context；
 - typed Clarification Challenge 与消费状态。
 
-不得保存访客原始问题、完整 `ConversationWindow`、Prompt、模型原始响应、私有 Evidence、原始来源地址或浏览器聊天记录。Clarification 的自由文本只在当前请求内归一化；持久化层只接收闭合、强类型结果。
+不得保存访客原始问题、完整 `ConversationWindow`、Prompt、模型原始响应、私有 Evidence、原始来源地址或浏览器聊天记录。Clarification 的自由文本只在当前请求内归一化；持久化层只接收闭合、强类型结果。确定性 Portfolio Turn 可以精确保存并重放其公开文本、typed Context 与不透明 ContextHandle；Provider 派生的 General/Conversational 正文只在首次响应返回，settlement 必须改存固定 `CAPABILITY_UNAVAILABLE/REPLAY_BODY_NOT_RETAINED` 终局，文案为“该回答未被保留，请重新提问。”。加密不改变这条不持久化边界。
 
 Challenge 使用 5 分钟 absolute TTL；Conversation、Continuation Context、已完成 replay 和终局记录统一使用 30 分钟 absolute TTL。读取、刷新、重放或 Token 轮换都不得延长原始过期时间。旧加密密钥的保留窗口必须覆盖 30 分钟 TTL 与清理延迟。
 

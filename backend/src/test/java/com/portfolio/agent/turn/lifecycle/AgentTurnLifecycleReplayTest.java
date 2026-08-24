@@ -11,6 +11,104 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AgentTurnLifecycleReplayTest {
+    @Test void generalAnswerBodyIsLiveOnlyAndReplayDoesNotExecutePlanAgain() {
+        String sentinel = "provider-general-body-sentinel";
+        com.portfolio.agent.turn.planning.UserGoalProposal.InputAnchor anchor =
+                new com.portfolio.agent.turn.planning.UserGoalProposal.InputAnchor(
+                        "visitor-general-sentinel", 0);
+        com.portfolio.agent.turn.planning.UserGoalProposal.ProposedGoal goal =
+                new com.portfolio.agent.turn.planning.UserGoalProposal.ProposedGoal(
+                        "general", com.portfolio.agent.turn.planning.GoalKind.GENERAL_EXPLANATION,
+                        anchor, List.of(),
+                        java.util.Set.of(com.portfolio.agent.turn.planning.GoalRequestedOutput.EXPLANATION),
+                        com.portfolio.agent.turn.planning.GoalKnowledgeRequirement
+                                .STABLE_GENERAL_EXPLANATION,
+                        new com.portfolio.agent.turn.planning.UserGoalProposal
+                                .GeneralExplanationParameters(
+                                anchor,
+                                com.portfolio.agent.turn.planning.UserGoalProposal.Depth.STANDARD));
+        com.portfolio.agent.turn.planning.SemanticPlanCompiler compiler =
+                new com.portfolio.agent.turn.planning.SemanticPlanCompiler(
+                        new com.portfolio.agent.turn.planning.SemanticPlanValidator());
+        com.portfolio.agent.turn.execution.SemanticTurnEngine engine =
+                org.mockito.Mockito.mock(
+                        com.portfolio.agent.turn.execution.SemanticTurnEngine.class);
+        org.mockito.Mockito.when(engine.execute(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(generalOutcome(sentinel));
+        InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore();
+        AgentTurnLifecycleService service = LifecycleTestFixture.service(
+                store,
+                com.portfolio.agent.turn.planning.ResolvedGoalSet.goals(
+                        new com.portfolio.agent.turn.planning.UserGoalProposal(List.of(goal))),
+                compiler, engine);
+        UUID requestId = UUID.randomUUID();
+        AgentTurnCommand command = new AgentTurnCommand.Ask(
+                requestId, new AgentTurnCommand.FreeText("visitor-general-sentinel"),
+                null, null);
+
+        AgentTurnLifecycleService.Result first = service.execute(null, command);
+        AgentTurnLifecycleService.Result replay = service.execute(null, command);
+
+        PublicAgentTurn.Answer answer = (PublicAgentTurn.Answer) first.turn();
+        com.portfolio.agent.turn.projection.PublicPresentation.Sectioned presentation =
+                (com.portfolio.agent.turn.projection.PublicPresentation.Sectioned)
+                        answer.getAnswer().getGoalResults().getFirst().getPresentation();
+        assertThat(presentation.getSections().getFirst().getContent()).isEqualTo(sentinel);
+        assertThat(answer.getAnswer().getGoalResults().getFirst().getLabel())
+                .isEqualTo("通用概念说明");
+        assertThat(replay.turn()).isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
+        assertThat(((PublicAgentTurn.CapabilityUnavailable) replay.turn()).getCode())
+                .isEqualTo("REPLAY_BODY_NOT_RETAINED");
+        org.mockito.Mockito.verify(engine, org.mockito.Mockito.times(1)).execute(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test void providerBodyIsReturnedOnceButSameRequestReplaysBodyNotRetainedTerminal() {
+        InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore();
+        UUID requestId = UUID.randomUUID();
+        String providerBody = "provider-body-访客隐私问题-sentinel-原文";
+        java.util.concurrent.atomic.AtomicInteger providerCalls =
+                new java.util.concurrent.atomic.AtomicInteger();
+        AgentTurnCommand command = new AgentTurnCommand.Ask(
+                requestId,
+                new AgentTurnCommand.FreeText("访客隐私问题-sentinel-原文"),
+                null, null);
+        com.portfolio.agent.turn.planning.GoalResolver resolver =
+                new com.portfolio.agent.turn.planning.GoalResolver(
+                        (input, deadline) -> {
+                            providerCalls.incrementAndGet();
+                            return com.portfolio.agent.turn.planning.GoalInterpretationResult
+                                    .conversational(providerBody);
+                        },
+                        ignored -> {
+                            throw new AssertionError("reviewed goals are not used for free text");
+                        },
+                        new com.portfolio.agent.turn.planning.GoalInterpretationInputFactory(),
+                        new com.portfolio.agent.turn.planning.SafeConversationalFastPath(),
+                        new com.portfolio.agent.turn.planning.SemanticRouteValidator(),
+                        new com.portfolio.agent.turn.planning.GoalBoundaryPolicy());
+        AgentTurnLifecycleService service = LifecycleTestFixture.service(store, resolver);
+
+        AgentTurnLifecycleService.Result first = service.execute(null, command);
+        AgentTurnLifecycleService.Result replay = service.execute(null, command);
+
+        assertThat(first.status()).isEqualTo(AgentTurnLifecycleService.Status.COMPLETED);
+        assertThat(((PublicAgentTurn.Conversational) first.turn()).getMessage())
+                .isEqualTo(providerBody);
+        assertThat(replay.status()).isEqualTo(AgentTurnLifecycleService.Status.REPLAY);
+        PublicAgentTurn.CapabilityUnavailable unavailable =
+                (PublicAgentTurn.CapabilityUnavailable) replay.turn();
+        assertThat(unavailable.getCode()).isEqualTo("REPLAY_BODY_NOT_RETAINED");
+        assertThat(unavailable.getMessage()).isEqualTo("该回答未被保留，请重新提问。");
+        assertThat(unavailable.isRetryable()).isFalse();
+        assertThat(unavailable.getSuggestedActions()).isEmpty();
+        assertThat(unavailable.getMessage()).doesNotContain("sentinel", "访客隐私问题");
+        assertThat(providerCalls).hasValue(1);
+    }
+
     @Test void completedRequestReturnsTheExactStoredPublicSnapshot() {
         InMemoryTurnExecutionStore store = new InMemoryTurnExecutionStore();
         UUID requestId = UUID.randomUUID();
@@ -135,5 +233,34 @@ class AgentTurnLifecycleReplayTest {
         @Override public java.time.Instant instant() { return current; }
         @Override public java.time.ZoneId getZone() { return java.time.ZoneOffset.UTC; }
         @Override public java.time.Clock withZone(java.time.ZoneId zone) { return this; }
+    }
+
+    private static com.portfolio.agent.turn.execution.SemanticTurnOutcome generalOutcome(
+            String body) {
+        com.portfolio.agent.turn.capability.general.GeneralSemanticResult result =
+                new com.portfolio.agent.turn.capability.general.GeneralSemanticResult(
+                        "主题", List.of(new com.portfolio.agent.turn.capability.general
+                        .GeneralSemanticResult.Statement(
+                        com.portfolio.agent.turn.capability.general.GeneralSemanticResult.Role.DEFINITION,
+                        body, null, null)), List.of(), "public-1");
+        com.portfolio.agent.turn.capability.general.GeneralPresentation presentation =
+                new com.portfolio.agent.turn.capability.general.GeneralPresentation(
+                        "主题", List.of(new com.portfolio.agent.turn.capability.general
+                        .GeneralPresentation.Section(
+                        com.portfolio.agent.turn.execution.AnswerSectionType.BACKGROUND,
+                        "说明", body)));
+        com.portfolio.agent.turn.execution.TaskArtifact artifact =
+                new com.portfolio.agent.turn.execution.TaskArtifact(
+                        result, presentation,
+                        com.portfolio.agent.turn.execution.TaskProvenance.none());
+        return new com.portfolio.agent.turn.execution.SemanticTurnOutcome(
+                List.of(new com.portfolio.agent.turn.execution.TaskOutcome(
+                        "task-goal-1",
+                        new com.portfolio.agent.turn.execution.TaskOutcome.Produced(
+                                artifact,
+                                com.portfolio.agent.turn.execution.TaskOutcome.Fulfillment.FULL))),
+                List.of(new com.portfolio.agent.turn.execution.GoalCoverage(
+                        "goal-1",
+                        com.portfolio.agent.turn.execution.GoalCoverage.Coverage.FULL)));
     }
 }

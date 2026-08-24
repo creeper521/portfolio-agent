@@ -76,6 +76,20 @@ try {
     Assert-True ($waivedInvariantResult.Output -match 'cannot be waived') `
         'hard invariant failure must explain the waiver prohibition'
 
+    $unsupportedPrivacyPass = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
+    $privacyInvariant = @($unsupportedPrivacyPass.hardInvariants | Where-Object {
+        $_.id -eq 'PRIVACY_BOUNDARY'
+    })[0]
+    $privacyInvariant.status = 'PASS'
+    $privacyInvariant.evidence = 'Static privacy scan passed.'
+    $unsupportedPrivacyResult = Invoke-Validator `
+        (Write-Fixture 'unsupported-privacy-pass.json' $unsupportedPrivacyPass)
+    Assert-True ($unsupportedPrivacyResult.ExitCode -ne 0) `
+        'privacy PASS without complete settlement evidence must fail'
+    Assert-True ($unsupportedPrivacyResult.Output -match `
+        'PRIVACY_BOUNDARY PASS requires fresh') `
+        'privacy PASS failure must identify the missing runtime evidence'
+
     $incompleteDeferred = Get-Content -LiteralPath $canonical -Raw | ConvertFrom-Json
     $incompleteDeferred.overallStatus = 'VERIFICATION_IN_PROGRESS'
     $template = Get-Content -LiteralPath (Join-Path $root `
@@ -87,7 +101,7 @@ try {
     Assert-True ($incompleteResult.ExitCode -ne 0) `
         'deferred item without a next command must fail'
 
-    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=6'
+    Write-Output 'AGENT_ARCHITECTURE_STATUS_TESTS_OK tests=7'
 } finally {
     Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -35,7 +35,7 @@ public final class SemanticPlanCompiler {
             String goalId = "goal-" + (index + 1);
             String fulfillmentTaskId = "task-" + goalId;
             goals.add(new UserGoal(
-                    goalId, proposed.getInputAnchor().getText(), proposed.getGoalKind(),
+                    goalId, safeGoalLabel(proposed.getGoalKind()), proposed.getGoalKind(),
                     proposed.getSubjectCandidates(), proposed.getRequestedOutputs(), fulfillmentTaskId));
             if (proposed.getGoalKind() == GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO) {
                 compileCrossDomain(proposed, fulfillmentTaskId, tasks, dependencies);
@@ -120,6 +120,17 @@ public final class SemanticPlanCompiler {
             case GENERAL_COMPARISON -> SemanticTask.Type.GENERAL_COMPARISON;
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO ->
                     SemanticTask.Type.CROSS_DOMAIN_SYNTHESIS;
+        };
+    }
+
+    private String safeGoalLabel(GoalKind kind) {
+        return switch (kind) {
+            case PORTFOLIO_FACT -> "作品集事实";
+            case PORTFOLIO_COMPARE -> "项目比较";
+            case PORTFOLIO_RECOMMEND -> "项目推荐";
+            case GENERAL_EXPLANATION -> "通用概念说明";
+            case GENERAL_COMPARISON -> "通用概念比较";
+            case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> "概念与项目关联";
         };
     }
 }

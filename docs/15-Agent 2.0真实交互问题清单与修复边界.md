@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-21 全仓库只读审计新增 A2-30—A2-115；其中 replay 隐私边界与 Provider 授权一致性为 P0，A2-22—A2-29 仍待原 Exit Gate，架构状态保持 IN_PROGRESS
+> **当前状态：** 2026-08-24 第一批 replay 隐私代码与 Backend/PostgreSQL/packaged Browser 专属门已落地；A2-30、A2-31、A2-32、A2-36、A2-98、A2-99、A2-110 在“真实 Provider × PostgreSQL × packaged JAR × Browser × JVM 重启恢复”总门前保持 IN_PROGRESS，下一批仍为 Provider 授权一致性 A2-33—A2-35
 
 ## 1. 文档目的
 
@@ -126,13 +126,13 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 
 | ID | 严重度 | 待做项目 | 现状 | 预期 | 主要责任区 |
 |---|---|---|---|---|---|
-| A2-30 | P0 | PublicTurn replay 含访客派生文本 | Goal label 和部分 action 可携带输入片段并进入加密 settlement | PostgreSQL replay 不含访客问题或其片段 | Projection / State / Privacy |
-| A2-31 | P0 | Provider 文本缺少持久化安全证明 | 尚未复现具体回显，但 General、Conversational 等正文没有防复述的持久化证明 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
-| A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 完整 PublicTurn replay 无法保证不含访客派生文本 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
+| A2-30 | P0 | PublicTurn replay 含访客派生文本 | 已固定 Goal label 并移除原文 retry action；Backend/PostgreSQL sentinel 门通过，待最终总门 | PostgreSQL replay 不含访客问题或其片段 | Projection / State / Privacy |
+| A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
+| A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | operation providerRef 只验非空，Transport 使用全局 Provider | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
 | A2-34 | P0 | Operation schemaVersion 不控制 Codec | 任意非空版本可通过启动，运行时 Codec 固定 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | 可用性由配置字符串和全局 Provider 状态拼接 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
-| A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本仍将隐私硬边界记为 PASS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
+| A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
 | A2-38 | P1 | Portfolio 回答只是 Claim 列表 | Claim statement 被逐条直接投影 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
 | A2-39 | P1 | Portfolio Fact 缺少 depth | 项目简要与详细没有 typed 差异 | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
@@ -194,8 +194,8 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-95 | P1 | live gate 输出硬编码 goalKind | 输出包含未观测字段 | 只报告真实采集的 closed 字段 | Live Gate Evidence |
 | A2-96 | P1 | 缺少跨 JVM PostgreSQL 恢复 | page reload 代替进程重启 | 同一浏览器会话跨真实后端重启恢复 | PostgreSQL / Packaged Browser |
 | A2-97 | P1 | General 单测自造正确句数 | 测试不证明错误句数会被拒绝 | 增加语言、句数、深度负例 | General Tests |
-| A2-98 | P1 | privacy check 看不到运行时数据流 | 静态扫描无法发现 settlement taint | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
-| A2-99 | P1 | State 隐私测试扫描错对象 | 只扫描 resume template | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
+| A2-98 | P1 | privacy check 看不到运行时数据流 | 已补 Lifecycle → PostgreSQL → 解密完整 settlement sentinel 门，待最终总门 | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
+| A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
 | A2-100 | P1 | 不同验证层被合并为 PASS | 状态正确被外推成语义正确 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
 | A2-101 | P2 | 测试数量高估产品覆盖 | 总数掩盖用户场景未执行 | 以用户场景和风险门报告覆盖 | Verification Governance |
 | A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | 脚本设置 `portfolio.model-expression.*`，真实属性前缀已是 `portfolio.conversational-model` | 删除全部退役键和脚本引用 | Configuration Cleanup |
@@ -206,7 +206,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-107 | P2 | Operation readiness 名称过时 | 仍宣称 deterministic fallback | 枚举和文档反映当前真实语义 | Model Policy Cleanup |
 | A2-108 | P2 | 零消费者生产类型残留 | 旧 Selection/Presentation/Question 类型只剩定义 | 证明无入口后删除 | Dead Code / Architecture |
 | A2-109 | P2 | 严格 JSON 不拒绝 trailing token | 可能接受首个 JSON 后的额外 token | 启用 FAIL_ON_TRAILING_TOKENS 并补负例 | Goal/General Codec |
-| A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | 文档禁止问题持久化，账本证据仍声称通过 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
+| A2-110 | P0 | Privacy hard invariant 文案与代码冲突 | AGENTS、SECURITY、docs/08、本文与机器状态已统一 persistence-safe 分类，待最终总门 | 状态和证据与生产行为一致 | Architecture Status / Privacy |
 | A2-111 | P1 | Evidence hard invariant 被污染 | 存在硬编码字段和非执行场景 | 未观测事实不得进入 PASS 证据 | Architecture Status / Verification |
 | A2-112 | P1 | Discussion Plan 完成表述过强 | 实施计划头部标记“已完成”，但 Browser 内容层未断言 facet/depth/完整性 | 分开记录 State Complete 与 Semantic Quality Incomplete | Plan / Current Status |
 | A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in registry 硬编码 schema 支持，真实 Provider 仍有合同失败 | 分开 Configured、Transport、Schema、Quality 状态 | Provider Registry / Documentation |
@@ -238,9 +238,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 ##### A2-31：Provider 文本缺少持久化安全证明
 
 - **用户/治理现象：** 模型可见访客输入，接受后的自由正文可能复述输入并进入 replay。
-- **已确认事实：** General、Conversational 和部分 Clarification 文本来自 Provider，当前没有 taint/sanitization 判定。
+- **已确认事实：** General 与非快速路径 Conversational 正文来自 Provider。`ClarificationProposal.prompt` 虽由 Provider 输出解码并校验长度，但 `getPrompt()` 在生产代码中零消费者；公开 Challenge prompt/message 由 Lifecycle 固定文案和 typed choices 生成，因此 Clarification 不属于本项的 Provider 正文持久化入口。
 - **待验证推断：** 尚未保存一条实际复述样本，不能把“可能复述”写成已经发生。
-- **修复边界：** 持久化政策按固定公开文本、审核 Claim、visitor-derived text、provider-derived text 分类；未知来源默认不持久化。
+- **修复边界：** 持久化政策按固定公开文本、审核 Claim、visitor-derived text、provider-derived text 分类；未知来源默认不持久化。生产机制只依赖显式来源分类与默认拒绝，关键词/sentinel 检测只属于测试。
 - **专属测试缺口：** 缺少固定 Provider fixture 主动复述 sentinel 的负例。
 - **专属 Exit Gate：** fixture 输出包含 sentinel 时，公开响应与持久化策略按批准设计处理，PostgreSQL 明文扫描结果符合零原文边界。
 
@@ -249,7 +249,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - **用户/治理现象：** 同 requestId 要求精确重放，但完整模型正文无法证明不含 visitor-derived text。
 - **已确认事实：** 当前 replay 权威保存完整 PublicTurn；Portfolio 确定性文本与 Provider 自由文本共用同一 SettlementPayload。
 - **根因：** replay 没有区分可安全重放的确定性投影与不可证明安全的自由正文。
-- **修复边界：** 冻结 sanitized replay、typed terminal replay 或明确不可重放正文的闭合语义；不建设第二结果缓存。
+- **修复边界：** 确定性 Portfolio Turn 继续精确 replay，并保留公开 continuation action 中的 opaque ContextHandle；Provider 派生的 General/Conversational 正文不持久化，改存 `CAPABILITY_UNAVAILABLE/REPLAY_BODY_NOT_RETAINED`，固定文案“该回答未被保留，请重新提问。”，不建设第二结果缓存。
 - **专属测试缺口：** 缺少不同 PublicTurn variant 的 replay 安全矩阵。
 - **专属 Exit Gate：** ANSWER、CONVERSATIONAL、CLARIFICATION、BOUNDARY、CAPABILITY_UNAVAILABLE 均有首次响应/同 requestId replay/数据库明文三向断言。
 
@@ -305,7 +305,19 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 3. **现有行为修复：** A2-53—A2-78 应在不新增第二状态权威的前提下修复；Audience、subjectHint、constraints 必须明确选择“实现”或“删除宣称”。
 4. **产品能力升级：** A2-37—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
 5. **Provider 收敛：** A2-79—A2-88 与配置化模型目录共用一次目标架构；P0 过渡期只增加 fail-closed 一致性校验，不提前建设第二套路由。
-6. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
+6. **隐私实现机制：** sentinel 只用于验收，不得成为生产清洗或判定机制；生产代码必须使用闭合来源分类，未知或 Provider 派生正文默认拒绝持久化。
+
+#### 3.3.1 第一批 P0 当前证据（仍为 IN_PROGRESS）
+
+- `SemanticPlanCompilerTest`：访客 sentinel 不再进入 Goal label；`AgentTurnLifecycleContinuationTest`：Discussion 失败 action 不再携带原始 inputText。
+- `AgentTurnLifecycleReplayTest`：Provider 派生 Conversational 与 General 首次响应保留正文，同 requestId replay 固定为 `REPLAY_BODY_NOT_RETAINED`，Provider/Plan 执行次数保持 1。
+- `PersistenceSafeReplayPolicyTest`：只有纯 Portfolio Task 可精确 replay；General、Comparison、Cross-domain 默认拒绝正文持久化；Portfolio continuation handle 原样保留。
+- `AgentStatePayloadCodecTest`：五种 PublicTurn variant 可回读；完整解密 settlement 同时扫描 `publicTurn + contexts + challenges`，visitor/provider sentinel 为零。
+- `JdbcAgentStateStoreIntegrationTest#postgresCompleteSettlementPlaintextExcludesVisitorAndProviderSentinel`：2026-08-24 使用 Testcontainers PostgreSQL 16.14 实际执行，`1 tests / 0 failures / 0 errors / 0 skipped`；解密完整 settlement 无 sentinel，同 requestId 回读固定终局。
+- `contracts/agent-turn/scenarios/lifecycle-state.json` 的 `EXACT_PUBLIC_TURN` 场景是确定性 Portfolio ANSWER，按上述分类保留，不做全局替换。Provider 正文场景才应期待固定终局。
+- Backend 全量于 2026-08-24 实际执行：`870 tests / 0 failures / 0 errors / 4 skipped`；整体状态仍需等待本批 packaged/Browser 与后续全仓门，不据此提前 COMPLETE。
+- clean packaged JAR 的 DEFAULT/IN_MEMORY Browser lane 于 2026-08-24 实际执行，桌面/移动合计 `8 passed / 8 lane-specific skipped`，覆盖五 variant 消费、同 requestId timeout replay、typed continuation 与隐私 smoke；该 lane 明确关闭 Provider，因此不替代最终“真实 Provider × PostgreSQL × JVM 重启”总门。
+7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
 
 ### 3.4 本轮审计证据边界
 
@@ -673,7 +685,7 @@ Goal timeout：12 秒
 
 ### 7.5 A2-14：已完成结果无法自动回收
 
-后端在前端断开后仍可能完成 requestId，并写入幂等 replay 快照。当前前端超时后：
+后端在前端断开后仍可能完成 requestId，并写入幂等 replay 快照。冻结修订后，确定性 Portfolio Turn 可取回原终局；Provider 派生的 General/Conversational 正文不保存，同 requestId 只能取回 `REPLAY_BODY_NOT_RETAINED`，用户必须重新提问。当前前端超时后：
 
 - 不显示超时；
 - 不保留重试入口；
@@ -681,7 +693,7 @@ Goal timeout：12 秒
 - 不查询该 requestId 是否已完成；
 - 用户再次输入会产生新的 requestId。
 
-因此形成“后端已有答案、用户界面永久丢失”的状态。修复必须复用现有 requestId/Replay 权威，不能新增第二套结果查询状态机。
+因此原行为形成“后端已有答案、用户界面永久丢失”的状态。修复必须复用现有 requestId/Replay 权威，不能新增第二套结果查询状态机；隐私边界优先于 Provider 正文恢复，不得用进程内暂存或加密正文建立第二结果权威。
 
 ### 7.6 A2-15：重新打开页面后的“正常”不是旧结果恢复
 
@@ -836,7 +848,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 1. **已冻结**：pending 时允许切换/新建会话；旧请求后台继续执行，结果与取消入口都归属原会话，不自动取消；每个会话最多一个 pending，同一标签页合计最多两个（与后端来源级最大并发 2 对齐），超出时其他会话仍可浏览但输入区提示“已有两个请求正在处理”并暂停一切新轮次提交；
 2. **已冻结**：澄清答案在页面内存消息中展示公开安全摘要——CHOICE 显示选项标签，TEXT 显示原文；
-3. **已冻结**：client timeout 后采用同 requestId 显式重试（复用现有 replay 权威，不自动轮询、不新建结果查询状态机）；超时不取消服务端 Active Turn，以重放回收最终结果（A2-11 的行为边界）；
+3. **已冻结（2026-08-24 修订）**：client timeout 后采用同 requestId 显式重试（复用现有 replay 权威，不自动轮询、不新建结果查询状态机）；超时不取消服务端 Active Turn。确定性 Portfolio Turn 重放原终局；Provider 派生的 General/Conversational 正文不持久化，重放固定返回 `CAPABILITY_UNAVAILABLE/REPLAY_BODY_NOT_RETAINED` 与“该回答未被保留，请重新提问。”，Provider 调用数不得增加；
 4. **已冻结**：同一 absolute timeline 上，Goal/General/Portfolio/DB 单次上限为 8/10/4/3 秒，18 秒后不再启动新 Task，服务端 Turn 20 秒、前端等待 25 秒、网关至少 30 秒、lease 35 秒；子操作使用 `min(自身上限, Turn 剩余时间)`，不得独立延长 Turn；
 5. **已冻结**：当前 Turn 非 ANSWER 时来源栏显示“最近回答来源”并整体弱化，不隐藏；
 6. **已冻结**：澄清卡脱困入口只消费已发布 QuestionPreset 或后端 `suggestedActions`，前端叶子组件不自造业务问题（2026-08-19 确认第 6 项后由硬编码入口修订为预设驱动）。
@@ -853,6 +865,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - 响应头已返回但响应体不结束时，Provider 调用仍在 deadline 内终止；
 - user cancel 能传播到仍在进行的 Goal Provider 调用；
 - timeout/cancel 后只允许一次终局结算；
+- timeout 后同 requestId 重试 Provider 正文 Turn，必须得到 `REPLAY_BODY_NOT_RETAINED` 且 Provider 调用数仍为 1；
 - Maven 全量与 Testcontainers PostgreSQL 通过；独立 PostgreSQL migration/verify 与 packaged Browser E2E 进一步覆盖真实本地数据库路径。
 
 ### 12.2 Frontend
@@ -898,7 +911,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 关闭本轮新增条目必须同时满足：
 
-1. **隐私：** 对完整 settlement 解密后的 `publicTurn + contexts + challenges` 扫描固定 sentinel；visitor-derived text 为零，Provider 派生文本的持久化政策有确定性实现和正反例。
+1. **隐私：** 对完整 settlement 解密后的 `publicTurn + contexts + challenges` 扫描固定 sentinel；visitor-derived text 为零，Provider 派生文本的持久化政策有确定性实现和正反例。sentinel 只属于测试，生产只使用显式来源分类与未知来源默认拒绝。
 2. **Provider 授权：** operation provider/schema 与真实 Transport/Codec 在启动期精确一致；错配配置必须失败关闭，公开 availability 不得误报。
 3. **语义消费：** AudienceRole、subjectHint、constraints、depth、dimension 等每个保留字段都有生产消费者、反向测试和用户可见差异；不实施的字段、配置和文案同期删除。
 4. **回答质量：** Recommendation、Comparison、Cross-domain 和 General depth 分别有确定性行为门；Portfolio 详细回答只在证据满足时 COMPLETE，否则显式 PARTIAL。
@@ -913,7 +926,13 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 | Exit Gate | 对应条目 | 专属关闭证据 |
 |---|---|---|
-| 隐私与安全 replay | A2-30—A2-32、A2-36、A2-98—A2-99、A2-110 | 完整 settlement sentinel、variant replay 矩阵、机器状态负例 |
+| Goal/action 原文入口 | A2-30 | Goal label sentinel、Discussion action inputText 负例、PostgreSQL 完整 settlement 解密扫描 |
+| Provider 正文入口 | A2-31 | General 与非快速 Conversational 固定复述 fixture；首次响应有正文、持久化无正文 |
+| 安全 replay 合同 | A2-32 | 五 variant 首次/replay/明文矩阵；timeout 同 requestId 固定终局；Provider 调用数 1；Portfolio handle 精确保留 |
+| Privacy 机器状态 | A2-36 | `PRIVACY_BOUNDARY=PASS` 引用新鲜 Codec/PostgreSQL complete-settlement 门；缺证据负例失败 |
+| 运行时隐私门 | A2-98 | Lifecycle → State → PostgreSQL → 解密 settlement 的 sentinel 数据流测试，不以静态扫描代替 |
+| Codec 扫描对象 | A2-99 | 解密后递归扫描 publicTurn、contexts、challenges 的完整 plaintext，五 variant 可回读 |
+| Privacy 规则同源 | A2-110 | AGENTS、SECURITY、docs/08、docs/15、机器状态与 Codec 测试使用同一允许/禁止分类 |
 | Provider 授权与 schema | A2-33—A2-35、A2-79—A2-88、A2-113 | 启动错配负例、协议 Profile、按批准目录独立 Provider 矩阵 |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference、Discussion clarification |

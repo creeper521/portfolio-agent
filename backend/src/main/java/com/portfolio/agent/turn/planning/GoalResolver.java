@@ -74,7 +74,7 @@ public final class GoalResolver {
             return switch (result.getKind()) {
                 case SEMANTIC_ROUTE -> resolveRoute(
                         result.getRouteProposal().orElseThrow());
-                case CONVERSATIONAL -> ResolvedGoalSet.conversational(
+                case CONVERSATIONAL -> ResolvedGoalSet.providerConversational(
                         result.getMessage().orElseThrow());
             };
         } catch (GoalInterpretationUnavailableException

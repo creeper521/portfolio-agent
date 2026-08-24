@@ -21,6 +21,8 @@ class SafeConversationalFastPathTest {
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().getKind())
                 .isEqualTo(ResolvedGoalSet.Kind.CONVERSATIONAL);
+        assertThat(result.orElseThrow().getMessageSource())
+                .isEqualTo(ResolvedGoalSet.MessageSource.SERVER_FIXED);
     }
 
     @Test

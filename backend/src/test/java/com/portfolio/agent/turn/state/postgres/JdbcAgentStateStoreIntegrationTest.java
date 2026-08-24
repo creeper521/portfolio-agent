@@ -45,6 +45,7 @@ class JdbcAgentStateStoreIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("pgvector/pgvector:0.8.5-pg16-bookworm");
     private JdbcAgentStateStore store;
+    private AgentStatePayloadCodec codec;
     private JdbcTemplate jdbc;
     private DriverManagerDataSource dataSource;
     private final Instant now = Instant.parse("2026-08-18T00:00:00Z");
@@ -65,15 +66,16 @@ class JdbcAgentStateStoreIntegrationTest {
         dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         jdbc = new JdbcTemplate(dataSource);
+        codec = new AgentStatePayloadCodec(
+                JsonMapper.builder().addModule(new ParameterNamesModule())
+                        .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                        .serializationInclusion(
+                                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                        .build(),
+                "state-key-1", new byte[32]);
         store = new JdbcAgentStateStore(
                 jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
-                new AgentStatePayloadCodec(
-                        JsonMapper.builder().addModule(new ParameterNamesModule())
-                                .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                                .serializationInclusion(
-                                        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                                .build(),
-                        "state-key-1", new byte[32]),
+                codec,
                 "agent_context", Duration.ofMinutes(30), Duration.ofMinutes(5),
                 "token-key-1", Set.of("token-key-1"),
                 "test-current", Set.of("test-current", "test-previous-0", "v1", "v2"),
@@ -306,6 +308,71 @@ class JdbcAgentStateStoreIntegrationTest {
                 byte[].class, requestId);
         assertThat(new String(ciphertext, java.nio.charset.StandardCharsets.UTF_8))
                 .doesNotContain("不可明文保存的最终公开文本");
+    }
+
+    @Test void postgresCompleteSettlementPlaintextExcludesVisitorAndProviderSentinel()
+            throws Exception {
+        UUID requestId = UUID.randomUUID();
+        String conversationId = UUID.randomUUID().toString();
+        byte[] fingerprint = new byte[32];
+        String sentinel = "visitor-and-provider-sentinel-original";
+        claim(store, requestId, conversationId, fingerprint, now,
+                Duration.ofSeconds(10), deadline(Duration.ofSeconds(5)));
+        PublicAgentTurn live = new PublicAgentTurn.Conversational(
+                requestId, sentinel, List.of());
+        PublicAgentTurn persisted =
+                new com.portfolio.agent.turn.lifecycle.PersistenceSafeReplayPolicy()
+                        .forProviderBody(live);
+        ContinuationContext context =
+                new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
+                        "context_handle_privacy_1", conversationId, "public-1",
+                        now.plus(Duration.ofMinutes(10)), "project-a", Set.of("project-a"),
+                        now, null);
+        ClarificationChallenge challenge = new ClarificationChallenge(
+                "clarification-privacy-1", "请选择数量", List.of(
+                new ClarificationChallenge.SingleChoiceField(
+                        "field-size", "数量", true, List.of(
+                        new ClarificationChallenge.Choice(
+                                "choice-size-2", "2 个项目")))), List.of());
+        ClarificationStore.Record record = new ClarificationStore.Record(
+                conversationId, testSessions.get(requestId).tokenHash(), "public-1",
+                challenge,
+                java.util.Map.of("field-size", java.util.Map.of(
+                        "choice-size-2", "size:2")), java.util.Map.of(),
+                BlockedGoalTemplate.recommendation(
+                        null, Set.of(), ClarificationProposal.Field.REQUESTED_SIZE));
+        assertThat(complete(
+                store, requestId, fingerprint, persisted,
+                List.of(context), List.of(record), null,
+                now.plusSeconds(1), deadline(Duration.ofSeconds(5)))).isTrue();
+
+        String keyId = jdbc.queryForObject(
+                "SELECT settlement_key_id FROM agent_context.agent_turn_execution"
+                        + " WHERE request_id=?", String.class, requestId);
+        byte[] nonce = jdbc.queryForObject(
+                "SELECT settlement_nonce FROM agent_context.agent_turn_execution"
+                        + " WHERE request_id=?", byte[].class, requestId);
+        byte[] ciphertext = jdbc.queryForObject(
+                "SELECT settlement_ciphertext FROM agent_context.agent_turn_execution"
+                        + " WHERE request_id=?", byte[].class, requestId);
+        AgentStatePayloadCodec.SettlementPayload decoded = codec.decode(
+                requestId, conversationId,
+                new AgentStatePayloadCodec.Envelope(keyId, nonce, ciphertext));
+        String completePlaintext = JsonMapper.builder()
+                .addModule(new ParameterNamesModule())
+                .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                .build().writeValueAsString(decoded);
+
+        assertThat(completePlaintext).doesNotContain(sentinel);
+        assertThat(decoded.publicTurn())
+                .isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
+        assertThat(decoded.contexts()).hasSize(1);
+        assertThat(decoded.challenges()).hasSize(1);
+        TurnExecutionStore.ClaimResult replay = claim(
+                store, requestId, conversationId, fingerprint, now.plusSeconds(2),
+                Duration.ofSeconds(10), deadline(Duration.ofSeconds(5)));
+        assertThat(((PublicAgentTurn.CapabilityUnavailable) replay.replay()).getCode())
+                .isEqualTo("REPLAY_BODY_NOT_RETAINED");
     }
 
     @Test void completedRequestReplaysAcrossOneFingerprintKeyRotation() {

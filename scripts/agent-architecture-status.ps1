@@ -73,6 +73,23 @@ foreach ($invariant in @($status.hardInvariants)) {
     Require-Text $invariant.evidence "hardInvariants.$($invariant.id).evidence"
 }
 
+$privacyInvariant = @($status.hardInvariants | Where-Object {
+    $_.id -eq 'PRIVACY_BOUNDARY'
+}) | Select-Object -First 1
+if ($null -ne $privacyInvariant -and $privacyInvariant.status -eq 'PASS') {
+    $privacyEvidence = [string]$privacyInvariant.evidence
+    foreach ($requiredPrivacyEvidence in @(
+        'AgentStatePayloadCodecTest',
+        'JdbcAgentStateStoreIntegrationTest',
+        'complete settlement sentinel'
+    )) {
+        if ($privacyEvidence -notmatch [regex]::Escape($requiredPrivacyEvidence)) {
+            Add-ValidationError `
+                "PRIVACY_BOUNDARY PASS requires fresh $requiredPrivacyEvidence evidence"
+        }
+    }
+}
+
 $requiredAuthorities = @(
     'httpCommand', 'userIntent', 'executionPlan', 'executionEngine',
     'publicProjection', 'publicContract', 'turnLifecycle', 'turnState',

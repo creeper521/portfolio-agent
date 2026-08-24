@@ -27,6 +27,29 @@ class SemanticPlanCompilerTest {
     }
 
     @Test
+    void compiledGoalLabelsUseClosedServerVocabularyInsteadOfInputAnchors() {
+        UserGoalProposal.InputAnchor sentinel = new UserGoalProposal.InputAnchor(
+                "访客隐私问题-sentinel-原文", 0);
+        UserGoalProposal.ProposedGoal proposal = new UserGoalProposal.ProposedGoal(
+                "general", GoalKind.GENERAL_EXPLANATION, sentinel, List.of(),
+                Set.of(GoalRequestedOutput.EXPLANATION),
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION,
+                new UserGoalProposal.GeneralExplanationParameters(
+                        sentinel, UserGoalProposal.Depth.STANDARD));
+
+        SemanticTurnPlan plan = compiler.compile(
+                        new UserGoalProposal(List.of(proposal)),
+                        "2026-08-05.1", context())
+                .getPlan().orElseThrow().getPlan();
+
+        assertThat(plan.getUserGoals()).extracting(UserGoal::getLabel)
+                .containsExactly("通用概念说明");
+        assertThat(plan.getUserGoals()).extracting(UserGoal::getLabel)
+                .allSatisfy(label -> assertThat(label)
+                        .doesNotContain("sentinel", "访客隐私问题"));
+    }
+
+    @Test
     void compilesCrossDomainGoalAsExactlyOneGeneralAndPortfolioFanIn() {
         UserGoalProposal proposal = new UserGoalProposal(List.of(crossDomain()));
 

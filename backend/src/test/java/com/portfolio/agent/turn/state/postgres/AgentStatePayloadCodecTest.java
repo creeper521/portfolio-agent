@@ -74,7 +74,7 @@ class AgentStatePayloadCodecTest {
         assertThat(current.supportsKey("payload-retired")).isFalse();
     }
 
-    @Test void encryptedTypedBlockedGoalDoesNotPersistVisitorQuestionOrConversationWindow() throws Exception {
+    @Test void decodedCompleteSettlementDoesNotContainVisitorOrProviderSentinel() throws Exception {
         AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
                 JsonMapper.builder().addModule(new ParameterNamesModule())
                         .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).build(),
@@ -93,23 +93,36 @@ class AgentStatePayloadCodecTest {
                         "choice_size_2", "size:2")), java.util.Map.of(),
                 BlockedGoalTemplate.recommendation(
                         null, java.util.Set.of(), ClarificationProposal.Field.REQUESTED_SIZE));
+        ContinuationContext context = new com.portfolio.agent.turn.continuation.ProjectDiscussionContext(
+                "context_handle_123", "conversation-1", "public-1",
+                java.time.Instant.parse("2026-08-18T00:05:00Z"),
+                "project-a", java.util.Set.of("project-a"),
+                java.time.Instant.parse("2026-08-18T00:00:00Z"), null);
+        PublicAgentTurn liveProviderTurn = new PublicAgentTurn.Conversational(
+                requestId, visitorQuestion + " " + conversationWindow, List.of());
+        PublicAgentTurn persistenceSafeTurn =
+                new com.portfolio.agent.turn.lifecycle.PersistenceSafeReplayPolicy()
+                        .forProviderBody(liveProviderTurn);
         AgentStatePayloadCodec.SettlementPayload payload = new AgentStatePayloadCodec.SettlementPayload(
-                new PublicAgentTurn.Clarification(requestId, "需要公开主体", challenge, List.of()),
-                List.of(), List.of(record));
+                persistenceSafeTurn, List.of(context), List.of(record));
 
         AgentStatePayloadCodec.Envelope envelope = codec.encode(
                 requestId, "conversation-1", payload);
         String ciphertextProbe = new String(
                 envelope.ciphertext(), java.nio.charset.StandardCharsets.UTF_8);
-        String typedPlaintextProbe = JsonMapper.builder()
+        com.fasterxml.jackson.databind.ObjectMapper probeMapper = JsonMapper.builder()
                 .addModule(new ParameterNamesModule())
-                .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).build()
-                .writeValueAsString(record.resumeTemplate());
+                .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).build();
+        AgentStatePayloadCodec.SettlementPayload decoded = codec.decode(
+                requestId, "conversation-1", envelope);
+        String completePlaintextProbe = probeMapper.writeValueAsString(decoded);
 
         assertThat(ciphertextProbe).doesNotContain(visitorQuestion, conversationWindow);
-        assertThat(typedPlaintextProbe).doesNotContain(visitorQuestion, conversationWindow);
-        assertThat(codec.decode(requestId, "conversation-1", envelope).challenges())
-                .hasSize(1);
+        assertThat(completePlaintextProbe).doesNotContain(visitorQuestion, conversationWindow);
+        assertThat(decoded.publicTurn())
+                .isInstanceOf(PublicAgentTurn.CapabilityUnavailable.class);
+        assertThat(decoded.contexts()).hasSize(1);
+        assertThat(decoded.challenges()).hasSize(1);
     }
 
     @Test void codecMapperRejectsMissingBlockedGoalCreatorFields() throws Exception {
@@ -181,8 +194,23 @@ class AgentStatePayloadCodecTest {
         assertRoundTrip(codec, requestId,
                 new PublicAgentTurn.Answer(requestId, withLocal));
         assertRoundTrip(codec, requestId,
+                new PublicAgentTurn.Conversational(
+                        requestId, "固定公开会话文本", List.of()));
+        assertRoundTrip(codec, requestId,
+                new PublicAgentTurn.Clarification(
+                        requestId, "固定澄清文本",
+                        new ClarificationChallenge(
+                                "clarification_variant_1", "请选择", List.of(
+                                new ClarificationChallenge.TextField(
+                                        "field_variant", "补充", true, 100)), List.of()),
+                        List.of()));
+        assertRoundTrip(codec, requestId,
                 new PublicAgentTurn.Boundary(
                         requestId, "BOUNDARY", "边界", List.of(action)));
+        assertRoundTrip(codec, requestId,
+                new PublicAgentTurn.CapabilityUnavailable(
+                        requestId, "FIXED_UNAVAILABLE", "固定不可用终局",
+                        false, List.of()));
     }
 
     private void assertRoundTrip(

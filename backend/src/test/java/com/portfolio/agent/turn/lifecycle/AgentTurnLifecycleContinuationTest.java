@@ -35,7 +35,7 @@ class AgentTurnLifecycleContinuationTest {
                 .resolve(any(), any(), any());
     }
 
-    @Test void interpretationFailureOffersNewRequestRetryAndTypedExit() {
+    @Test void interpretationFailureDoesNotPersistOriginalTextInSuggestedAction() {
         ActiveFixture fixture = activeFixture(
                 com.portfolio.agent.turn.planning.GoalInterpretationResult
                         .conversational("unused"));
@@ -57,10 +57,10 @@ class AgentTurnLifecycleContinuationTest {
         assertThat(unavailable.getSuggestedActions())
                 .extracting(com.portfolio.agent.turn.projection
                         .SuggestedAction::getActionId)
-                .containsExactly("discussion-retry", "discussion-exit");
+                .containsExactly("discussion-exit");
         assertThat(unavailable.getSuggestedActions().getFirst().getInputText())
-                .isEqualTo("继续说明验证方式");
-        assertThat(unavailable.getSuggestedActions().getLast()
+                .isNull();
+        assertThat(unavailable.getSuggestedActions().getFirst()
                 .getContinuation().getOperation())
                 .isEqualTo(com.portfolio.agent.turn.continuation
                         .ContinuationReference.Operation.EXIT_CONTEXT);
