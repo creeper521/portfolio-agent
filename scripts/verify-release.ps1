@@ -2,6 +2,8 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipDockerCheck,
     [switch]$RequireLiveProvider,
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$LiveModelRef = 'glm-4-7-flash',
     [string]$BundleDirectory = ''
 )
 
@@ -232,7 +234,7 @@ try {
         (Join-Path $root 'scripts\run-jar-e2e.ps1')
     )
     if ($RequireLiveProvider) {
-        $jarE2eArguments += '-RequireLiveProvider'
+        $jarE2eArguments += @('-RequireLiveProvider', '-LiveModelRef', $LiveModelRef)
     }
     & powershell.exe @jarE2eArguments
     Assert-ExitCode 'Packaged JAR Playwright integration tests'
@@ -245,7 +247,8 @@ try {
     if ($RequireLiveProvider) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File (Join-Path $root 'scripts\run-jar-e2e.ps1') `
-            -Lane PROJECT_DISCUSSION -RequireLiveProvider
+            -Lane PROJECT_DISCUSSION -RequireLiveProvider `
+            -LiveModelRef $LiveModelRef
         Assert-ExitCode 'Packaged project discussion Provider integration tests'
     }
 

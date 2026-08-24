@@ -46,7 +46,10 @@ try {
         $fakeJava,
         "@echo off`r`necho %* > `"$javaArguments`"`r`n" +
             "echo %* | findstr /C:`"-jar`" >nul`r`n" +
-            "if errorlevel 1 exit /b %FAKE_JAVA_EXIT%`r`n" +
+            "if not errorlevel 1 goto server`r`n" +
+            "if `"%FAKE_JAVA_EXIT%`"==`"`" exit /b 0`r`n" +
+            "exit /b %FAKE_JAVA_EXIT%`r`n" +
+            ":server`r`n" +
             "powershell -NoProfile -ExecutionPolicy Bypass -File `"$fakeJavaServer`"`r`n" +
             "exit /b 0`r`n",
         [System.Text.UTF8Encoding]::new($false))
@@ -85,8 +88,10 @@ Start-Sleep -Seconds 120
     Assert-True ($captured -match 'offline') `
         'offline runner must invoke the offline command.'
     $runnerSource = Get-Content -LiteralPath $runner -Raw
-    Assert-True ($runnerSource -match 'portfolio\.conversational-model\.enabled=false') `
-        'offline backend must disable the current model authority.'
+    Assert-True ($runnerSource -match 'portfolio\.model-runtime\.enabled=false') `
+        'offline backend must disable the configured model runtime.'
+    Assert-True ($runnerSource -notmatch 'portfolio\.conversational-model|provider-ref') `
+        'offline backend must not retain the retired single-provider authority.'
     Assert-True ($runnerSource -notmatch ('portfolio\.model-' + 'expression')) `
         'offline backend must not set the retired model property prefix.'
 

@@ -8,6 +8,8 @@ function Assert-True([bool]$Condition, [string]$Message) {
 
 Assert-True ($text -match '\[switch\]\$AuthorizeRealProvider') `
     'Live project discussion gate requires explicit authorization.'
+Assert-True ($text -match 'modelSelection\s*=') `
+    'Every live project discussion Turn must carry the selected model.'
 Assert-True ($text -match "FromBase64String") `
     'Fixed synthetic inputs must be encoded in the script.'
 Assert-True ($text -notmatch 'Write-(Output|Host).*Body') `

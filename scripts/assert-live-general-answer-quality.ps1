@@ -3,6 +3,11 @@ param(
     [string]$BackendBaseUrl,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedContentVersion,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$ModelRef,
+    [Parameter(Mandatory = $true)]
+    [string]$SelectionVersion,
     [ValidateRange(1, 10)]
     [int]$TrialsPerDepth = 3,
     [ValidateRange(1, 300)]
@@ -50,27 +55,27 @@ function Test-ApprovedFlag([string]$Value) {
 }
 
 function Assert-ApprovedEnvironment {
-    foreach ($name in @(
-        'PORTFOLIO_MODEL_ENABLED',
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
-    )) {
+    foreach ($name in @('PORTFOLIO_MODEL_RUNTIME_ENABLED')) {
         if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $name))) {
             Stop-Quality 'GENERAL_QUALITY_CONFIG_INVALID'
         }
     }
-    $provider = Get-ProcessEnvironmentValue 'PORTFOLIO_MODEL_PROVIDER'
-    $selectedKey = switch ($provider) {
-        'DEEPSEEK_V4_FLASH' {
-            Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+    $modelEnvironment = switch ($ModelRef) {
+        'glm-4-7-flash' {
+            @('PORTFOLIO_GLM_ENABLED', 'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+                'PORTFOLIO_GLM_API_KEY')
         }
-        'GLM_4_7' {
-            Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_GLM_API_KEY'
+        'qwen-3-7-flash' {
+            @('PORTFOLIO_QWEN_ENABLED', 'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
+                'PORTFOLIO_QWEN_API_KEY')
         }
         default { Stop-Quality 'GENERAL_QUALITY_CONFIG_INVALID' }
     }
-    if ([string]::IsNullOrWhiteSpace($selectedKey)) {
+    if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $modelEnvironment[0])) -or
+            -not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $modelEnvironment[1])) -or
+            [string]::IsNullOrWhiteSpace(
+                (Get-ProcessEnvironmentValue $modelEnvironment[2])) -or
+            [string]::IsNullOrWhiteSpace($SelectionVersion)) {
         Stop-Quality 'GENERAL_QUALITY_CONFIG_INVALID'
     }
 }
@@ -138,6 +143,11 @@ function Read-FixtureResponse([string]$ScenarioId, [int]$Trial) {
 function Invoke-LiveResponse([string]$InputText) {
     $body = @{
         requestId = [guid]::NewGuid()
+        modelSelection = @{
+            kind = 'MODEL'
+            modelRef = $ModelRef
+            selectionVersion = $SelectionVersion
+        }
         command = @{
             kind = 'ASK'
             input = @{ kind = 'FREE_TEXT'; text = $InputText }

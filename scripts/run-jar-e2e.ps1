@@ -15,6 +15,8 @@ param(
     [string]$CurrentPayloadKey = $env:PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY,
     [string]$ContextMode = $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE,
     [switch]$RequireLiveProvider,
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$LiveModelRef = 'glm-4-7-flash',
     [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY', 'JVM_RESTART')]
     [string]$Lane = 'DEFAULT',
     [switch]$SkipPlaywright,
@@ -260,10 +262,17 @@ $environment = @{
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID'
     PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY'
-    PORTFOLIO_MODEL_PROVIDER = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_PROVIDER'
-    PORTFOLIO_AGENT_DEEPSEEK_API_KEY = Get-EnvironmentSnapshot `
-        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
-    PORTFOLIO_AGENT_GLM_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_AGENT_GLM_API_KEY'
+    PORTFOLIO_MODEL_RUNTIME_ENABLED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED'
+    PORTFOLIO_GLM_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_GLM_ENABLED'
+    PORTFOLIO_GLM_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_GLM_API_KEY'
+    PORTFOLIO_GLM_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED'
+    PORTFOLIO_QWEN_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_ENABLED'
+    PORTFOLIO_QWEN_ENDPOINT = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_ENDPOINT'
+    PORTFOLIO_QWEN_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_API_KEY'
+    PORTFOLIO_QWEN_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
 }
 
 function Assert-EarlyRunnerEnvironmentRestored {
@@ -276,9 +285,14 @@ function Assert-EarlyRunnerEnvironmentRestored {
         'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
-        'PORTFOLIO_MODEL_PROVIDER',
-        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-        'PORTFOLIO_AGENT_GLM_API_KEY',
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+        'PORTFOLIO_GLM_ENABLED',
+        'PORTFOLIO_GLM_API_KEY',
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+        'PORTFOLIO_QWEN_ENABLED',
+        'PORTFOLIO_QWEN_ENDPOINT',
+        'PORTFOLIO_QWEN_API_KEY',
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     )) {
         Assert-EnvironmentRestored -Name $name -Snapshot ($environment[$name])
@@ -315,12 +329,41 @@ foreach ($entry in @{
     Set-Item -LiteralPath "Env:$($entry.Key)" -Value ([string]$entry.Value)
 }
 
+$deterministicModelDisabled = $Lane -notin @(
+    'LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL'
+)
+if ($deterministicModelDisabled) {
+    # A deterministic packaged smoke must not inherit Provider activation or
+    # credentials. Spring binds the configured catalog before the runtime
+    # disabled gate is evaluated, so malformed inherited boolean values can
+    # otherwise prevent an explicitly Provider-disabled JAR from starting.
+    foreach ($name in @(
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+        'PORTFOLIO_GLM_ENABLED',
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+        'PORTFOLIO_QWEN_ENABLED',
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
+    )) {
+        Set-Item -LiteralPath "Env:$name" -Value 'false'
+    }
+    foreach ($name in @(
+        'PORTFOLIO_GLM_API_KEY',
+        'PORTFOLIO_QWEN_ENDPOINT',
+        'PORTFOLIO_QWEN_API_KEY'
+    )) {
+        Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+    }
+}
+
 $bodyStallAuthorizationValue = 'body-stall-fixture-key'
 if ($Lane -eq 'BODY_STALL') {
     # BODY_STALL 只允许固定的假凭据进入本地 fixture，先清除可能继承的真实 key。
-    $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
-    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = $bodyStallAuthorizationValue
-    Remove-Item -LiteralPath 'Env:PORTFOLIO_AGENT_GLM_API_KEY' -ErrorAction SilentlyContinue
+    $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'true'
+    $env:PORTFOLIO_GLM_ENABLED = 'true'
+    $env:PORTFOLIO_GLM_DATA_POLICY_APPROVED = 'true'
+    $env:PORTFOLIO_GLM_API_KEY = $bodyStallAuthorizationValue
+    $env:PORTFOLIO_QWEN_ENABLED = 'false'
+    Remove-Item -LiteralPath 'Env:PORTFOLIO_QWEN_API_KEY' -ErrorAction SilentlyContinue
 }
 
 $bodyStallFixtureRoot = $null
@@ -361,9 +404,14 @@ function Complete-BodyStallEarlyFailure {
             'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
             'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
             'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
-            'PORTFOLIO_MODEL_PROVIDER',
-            'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-            'PORTFOLIO_AGENT_GLM_API_KEY',
+            'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+            'PORTFOLIO_GLM_ENABLED',
+            'PORTFOLIO_GLM_API_KEY',
+            'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+            'PORTFOLIO_QWEN_ENABLED',
+            'PORTFOLIO_QWEN_ENDPOINT',
+            'PORTFOLIO_QWEN_API_KEY',
+            'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
             'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
         )) {
             $snapshot = $environment[$name]
@@ -404,7 +452,7 @@ if ($Lane -eq 'BODY_STALL') {
             '-keyalg', 'RSA', '-keysize', '2048', '-validity', '1',
             '-storetype', 'PKCS12', '-keystore', $certificatePath,
             '-storepass', $certificatePassword, '-keypass', $certificatePassword,
-            '-dname', 'CN=api.deepseek.com', '-ext', 'SAN=dns:api.deepseek.com'
+            '-dname', 'CN=open.bigmodel.cn', '-ext', 'SAN=dns:open.bigmodel.cn'
         ) 'BODY_STALL certificate generation failed.'
         Invoke-FixtureKeytool $keytool @(
             '-exportcert', '-noprompt', '-alias', 'body-stall-provider',
@@ -417,7 +465,7 @@ if ($Lane -eq 'BODY_STALL') {
             '-keystore', $trustStorePath, '-storepass', $certificatePassword
         ) 'BODY_STALL truststore generation failed.'
         [IO.File]::WriteAllText(
-            $hostsPath, "127.0.0.1 api.deepseek.com`n", [Text.UTF8Encoding]::new($false))
+            $hostsPath, "127.0.0.1 open.bigmodel.cn`n", [Text.UTF8Encoding]::new($false))
 
         $fixtureScript = Join-Path $root `
             'scripts\test-fixtures\start-provider-body-stall-https.ps1'
@@ -483,20 +531,13 @@ $applicationArguments = @(
     '--portfolio.agent-runtime.max-active-turns=1000'
 )
 if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
-    $applicationArguments += '--portfolio.conversational-model.enabled=false'
-    $applicationArguments += '--portfolio.conversational-agent.enabled=false'
+    $applicationArguments += '--portfolio.model-runtime.enabled=false'
 }
 if ($Lane -in @('LIVE', 'PROJECT_DISCUSSION')) {
-    $selectedProvider = [string]$env:PORTFOLIO_MODEL_PROVIDER
-    if ($selectedProvider -notin @('DEEPSEEK_V4_FLASH', 'GLM_4_7')) {
-        throw 'Live Provider lane requires an approved PORTFOLIO_MODEL_PROVIDER.'
-    }
     $applicationArguments += @(
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
-        "--portfolio.model-operations.turn-interpretation.provider-ref=$selectedProvider",
         '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
         '--portfolio.model-operations.general-knowledge.mode=ENABLED',
-        "--portfolio.model-operations.general-knowledge.provider-ref=$selectedProvider",
         '--portfolio.model-operations.general-knowledge.schema-version=general.draft.v2'
     )
 }
@@ -505,14 +546,11 @@ if ($Lane -eq 'PROJECT_DISCUSSION_EXPIRY') {
 }
 if ($Lane -eq 'BODY_STALL') {
     $applicationArguments += @(
-        '--portfolio.conversational-model.enabled=true',
-        '--portfolio.conversational-model.external-data-policy-approved=true',
-        '--portfolio.conversational-model.provider=DEEPSEEK_V4_FLASH',
-        "--portfolio.conversational-model.deepseek-api-key=$bodyStallAuthorizationValue",
-        '--portfolio.conversational-agent.enabled=true',
-        '--portfolio.conversational-agent.visitor-data-policy-approved=true',
+        '--portfolio.model-runtime.enabled=true',
+        '--portfolio.model-runtime.models.glm-4-7-flash.enabled=true',
+        '--portfolio.model-runtime.models.glm-4-7-flash.data-policy-approved=true',
+        "--portfolio.model-runtime.models.glm-4-7-flash.api-key=$bodyStallAuthorizationValue",
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
-        '--portfolio.model-operations.turn-interpretation.provider-ref=DEEPSEEK_V4_FLASH',
         '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
         '--portfolio.model-operations.general-knowledge.mode=DISABLED'
     )
@@ -628,6 +666,30 @@ try {
         throw 'Packaged application did not become ready.'
     }
 
+    $turnModelSelection = @{ kind = 'NONE' }
+    if ($Lane -in @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
+        $requestedModelRef = if ($Lane -eq 'BODY_STALL') {
+            'glm-4-7-flash'
+        } else {
+            $LiveModelRef
+        }
+        $selectedCatalogEntry = @(
+            $publicContent.agentAvailability.selectableModels |
+                Where-Object { [string]$_.modelRef -ceq $requestedModelRef } |
+                Select-Object -First 1
+        ) | Select-Object -First 1
+        if ($null -eq $selectedCatalogEntry -or
+                [string]::IsNullOrWhiteSpace(
+                    [string]$selectedCatalogEntry.selectionVersion)) {
+            throw "Selected live model is unavailable in the public catalog: $requestedModelRef."
+        }
+        $turnModelSelection = @{
+            kind = 'MODEL'
+            modelRef = $requestedModelRef
+            selectionVersion = [string]$selectedCatalogEntry.selectionVersion
+        }
+    }
+
     Write-Output ("Runtime identity: pid={0} port={1} contentVersion={2}" -f `
             $process.Id, $Port, [string]$publicContent.contentVersion)
     Write-Output "Packaged application process $($process.Id) owns port $Port; readiness returned validated public-content JSON."
@@ -738,6 +800,7 @@ try {
     $caseAgentRequestId = [guid]::NewGuid().ToString()
     $caseAgentRequest = @{
         requestId = $caseAgentRequestId
+        modelSelection = $turnModelSelection
         command = @{
             kind = 'ASK'
             input = @{
@@ -905,6 +968,7 @@ try {
         function Invoke-AgentClosureRequest([string]$Question) {
             $body = @{
                 requestId = [guid]::NewGuid().ToString()
+                modelSelection = $turnModelSelection
                 command = @{
                     kind = 'ASK'
                     input = @{ kind = 'FREE_TEXT'; text = $Question }
@@ -971,6 +1035,7 @@ try {
     elseif ($Lane -eq 'CONTENT_ONLY') {
         $disabledRequest = @{
             requestId = [guid]::NewGuid().ToString()
+            modelSelection = @{ kind = 'NONE' }
             command = @{ kind = 'ASK'; input = @{ kind = 'FREE_TEXT'; text = 'hello' } }
             conversationWindow = @()
         } | ConvertTo-Json -Depth 6 -Compress
@@ -1010,6 +1075,7 @@ try {
                 -File (Join-Path $root 'scripts\provider-probe\invoke-live-provider-probe.ps1') `
                 -BackendBaseUrl $baseUrl `
                 -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                -ModelRef $LiveModelRef `
                 -Scenario $scenario `
                 -TimeoutSeconds $ReadinessTimeoutSeconds `
                 -FailOnDegraded 2>&1 | Out-String).Trim()
@@ -1038,6 +1104,8 @@ try {
                 -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
                 -BackendBaseUrl $baseUrl `
                 -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                -ModelRef $LiveModelRef `
+                -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
                 -TimeoutSeconds $ReadinessTimeoutSeconds `
                 -InterTrialDelayMilliseconds 10000 `
                 -Baseline 2>&1 | Out-String).Trim()
@@ -1060,6 +1128,8 @@ try {
             -File (Join-Path $root 'scripts\assert-live-project-discussion-context.ps1') `
             -BackendBaseUrl $baseUrl `
             -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+            -ModelRef $LiveModelRef `
+            -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
             -TimeoutSeconds $ReadinessTimeoutSeconds `
             -AuthorizeRealProvider 2>&1 | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or
@@ -1125,12 +1195,19 @@ finally {
             $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID
         Restore-EnvironmentVariable 'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY' `
             $environment.PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY
-        Restore-EnvironmentVariable 'PORTFOLIO_MODEL_PROVIDER' `
-            $environment.PORTFOLIO_MODEL_PROVIDER
-        Restore-EnvironmentVariable 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' `
-            $environment.PORTFOLIO_AGENT_DEEPSEEK_API_KEY
-        Restore-EnvironmentVariable 'PORTFOLIO_AGENT_GLM_API_KEY' `
-            $environment.PORTFOLIO_AGENT_GLM_API_KEY
+        foreach ($modelEnvironmentName in @(
+            'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+            'PORTFOLIO_GLM_ENABLED',
+            'PORTFOLIO_GLM_API_KEY',
+            'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+            'PORTFOLIO_QWEN_ENABLED',
+            'PORTFOLIO_QWEN_ENDPOINT',
+            'PORTFOLIO_QWEN_API_KEY',
+            'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
+        )) {
+            Restore-EnvironmentVariable $modelEnvironmentName `
+                $environment[$modelEnvironmentName]
+        }
         Restore-EnvironmentVariable 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
@@ -1161,11 +1238,19 @@ finally {
             $environment.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY
         Assert-EnvironmentRestored 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
-        Assert-EnvironmentRestored 'PORTFOLIO_MODEL_PROVIDER' $environment.PORTFOLIO_MODEL_PROVIDER
-        Assert-EnvironmentRestored 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' `
-            $environment.PORTFOLIO_AGENT_DEEPSEEK_API_KEY
-        Assert-EnvironmentRestored 'PORTFOLIO_AGENT_GLM_API_KEY' `
-            $environment.PORTFOLIO_AGENT_GLM_API_KEY
+        foreach ($modelEnvironmentName in @(
+            'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+            'PORTFOLIO_GLM_ENABLED',
+            'PORTFOLIO_GLM_API_KEY',
+            'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+            'PORTFOLIO_QWEN_ENABLED',
+            'PORTFOLIO_QWEN_ENDPOINT',
+            'PORTFOLIO_QWEN_API_KEY',
+            'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
+        )) {
+            Assert-EnvironmentRestored $modelEnvironmentName `
+                $environment[$modelEnvironmentName]
+        }
         Write-Output 'Playwright environment restored.'
     }
     finally {

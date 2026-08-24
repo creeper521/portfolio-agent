@@ -62,8 +62,10 @@ try {
     Assert-True ($captured -notmatch 'authorize-real-provider') `
         'validate must not carry the real provider flag.'
     $runnerSource = Get-Content -LiteralPath $runner -Raw
-    Assert-True ($runnerSource -match 'portfolio\.conversational-model\.enabled=false') `
-        'offline eval must disable the current model authority.'
+    Assert-True ($runnerSource -match 'portfolio\.model-runtime\.enabled=false') `
+        'offline eval must disable the configured model runtime.'
+    Assert-True ($runnerSource -notmatch 'portfolio\.conversational-model|provider-ref') `
+        'offline eval must not retain the retired single-provider authority.'
     Assert-True ($runnerSource -notmatch ('portfolio\.model-' + 'expression')) `
         'offline eval must not set the retired model property prefix.'
 

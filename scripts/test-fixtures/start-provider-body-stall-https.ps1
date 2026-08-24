@@ -19,7 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$providerHost = 'api.deepseek.com'
+$providerHost = 'open.bigmodel.cn'
 $providerPort = 443
 $providerPath = '/chat/completions'
 

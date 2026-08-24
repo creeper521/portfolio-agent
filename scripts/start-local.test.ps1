@@ -151,21 +151,20 @@ function Invoke-Orchestration(
     }
 }
 
-function Valid-Lines([string]$Provider = 'DEEPSEEK_V4_FLASH') {
-    $keyLine = if ($Provider -eq 'GLM_4_7') {
-        "PORTFOLIO_AGENT_GLM_API_KEY=$keySentinel"
-    }
-    else {
-        "PORTFOLIO_AGENT_DEEPSEEK_API_KEY=$keySentinel"
+function Valid-Lines([string]$ModelRef = 'glm-4-7-flash') {
+    $modelLines = if ($ModelRef -eq 'qwen-3-7-flash') {
+        @('PORTFOLIO_QWEN_ENABLED=true',
+            'PORTFOLIO_QWEN_DATA_POLICY_APPROVED=true',
+            'PORTFOLIO_QWEN_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+            "PORTFOLIO_QWEN_API_KEY=$keySentinel")
+    } else {
+        @('PORTFOLIO_GLM_ENABLED=true',
+            'PORTFOLIO_GLM_DATA_POLICY_APPROVED=true',
+            "PORTFOLIO_GLM_API_KEY=$keySentinel")
     }
     return @(
-        'PORTFOLIO_MODEL_ENABLED=true',
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED=true',
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED=true',
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED=true',
-        "PORTFOLIO_MODEL_PROVIDER=$Provider",
-        $keyLine
-    )
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED=true'
+    ) + $modelLines
 }
 
 function Assert-SafeFailure(
@@ -183,15 +182,15 @@ function Assert-SafeFailure(
 try {
     [System.IO.Directory]::CreateDirectory($fixtureRoot) | Out-Null
 
-    foreach ($provider in @('DEEPSEEK_V4_FLASH', 'GLM_4_7')) {
-        $valid = Join-Path $fixtureRoot "$provider.env"
-        Write-Secrets $valid (Valid-Lines $provider)
+    foreach ($modelRef in @('glm-4-7-flash', 'qwen-3-7-flash')) {
+        $valid = Join-Path $fixtureRoot "$modelRef.env"
+        Write-Secrets $valid (Valid-Lines $modelRef)
         $result = Invoke-Launcher $valid
         Assert-True ($result.ExitCode -eq 0) `
-            "Valid $provider secrets must pass. Output: $($result.Output)"
+            "Valid $modelRef secrets must pass. Output: $($result.Output)"
         Assert-True ($result.Output -match
-                [regex]::Escape("LOCAL_CONFIG_VALID provider=$provider checks=6")) `
-            "Valid $provider output did not report six checks."
+                [regex]::Escape("LOCAL_CONFIG_VALID models=$modelRef catalog=CONFIGURED")) `
+            "Valid $modelRef output did not report the configured catalog."
         Assert-True ($result.Output -notmatch [regex]::Escape($keySentinel)) `
             "Valid $provider output leaked the key."
     }
@@ -397,22 +396,31 @@ exit 0
 
     $missingFlag = Join-Path $fixtureRoot 'missing-flag.env'
     Write-Secrets $missingFlag @(
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED=true',
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED=true',
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED=true',
-        'PORTFOLIO_MODEL_PROVIDER=DEEPSEEK_V4_FLASH',
-        "PORTFOLIO_AGENT_DEEPSEEK_API_KEY=$keySentinel"
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED=true',
+        'PORTFOLIO_GLM_ENABLED=true',
+        "PORTFOLIO_GLM_API_KEY=$keySentinel"
     )
     Assert-SafeFailure (Invoke-Launcher $missingFlag) `
-        'LOCAL_CONFIG_REQUIRED_FLAG_MISSING:PORTFOLIO_MODEL_ENABLED' `
+        'LOCAL_CONFIG_REQUIRED_FLAG_MISSING:PORTFOLIO_MODEL_RUNTIME_ENABLED' `
         'missing required flag'
+
+    $qwenMissingEndpoint = Join-Path $fixtureRoot 'qwen-missing-endpoint.env'
+    Write-Secrets $qwenMissingEndpoint @(
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED=true',
+        'PORTFOLIO_QWEN_ENABLED=true',
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED=true',
+        "PORTFOLIO_QWEN_API_KEY=$keySentinel"
+    )
+    Assert-SafeFailure (Invoke-Launcher $qwenMissingEndpoint) `
+        'LOCAL_CONFIG_MODEL_ENDPOINT_INVALID:PORTFOLIO_QWEN_ENDPOINT' `
+        'enabled Qwen without an HTTPS endpoint'
 
     foreach ($fixture in @(
         @{
             Name = 'duplicate'
             Lines = @(
-                'PORTFOLIO_MODEL_ENABLED=true',
-                'PORTFOLIO_MODEL_ENABLED=true'
+                'PORTFOLIO_MODEL_RUNTIME_ENABLED=true',
+                'PORTFOLIO_MODEL_RUNTIME_ENABLED=true'
             )
             Code = 'LOCAL_CONFIG_FIELD_INVALID'
         },
@@ -423,7 +431,7 @@ exit 0
         },
         @{
             Name = 'expression'
-            Lines = @('PORTFOLIO_MODEL_ENABLED=$(Get-ChildItem)')
+            Lines = @('PORTFOLIO_MODEL_RUNTIME_ENABLED=$(Get-ChildItem)')
             Code = 'LOCAL_CONFIG_VALUE_INVALID'
         },
         @{
@@ -466,7 +474,7 @@ exit 0
             'BACKEND_MODEL' $backendPort $frontendPort
         Assert-True ($modelResult.ExitCode -eq 0) `
             "MODEL fixture must pass. Output: $($modelResult.Output)"
-        Assert-True ($modelResult.Output -match 'AI_CONNECTED provider=DEEPSEEK_V4_FLASH') `
+        Assert-True ($modelResult.Output -match 'AI_CONNECTED catalog=CONFIGURED') `
             'MODEL fixture did not report AI_CONNECTED.'
         Assert-True ($modelResult.Output -notmatch 'PROBE_ROUTE_BYPASSED') `
             'start-local sent a product-scoped request instead of the Provider canary.'
@@ -557,10 +565,8 @@ exit 0
         'Unified launcher must expose explicit General AI opt-in.'
     foreach ($generalAiSetting in @(
         'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE',
-        'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF',
         'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION',
         'PORTFOLIO_MODEL_OP_GENERAL_MODE',
-        'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
         'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION'
     )) {
         Assert-True ($launcherText -match [regex]::Escape($generalAiSetting)) `
@@ -570,12 +576,8 @@ exit 0
         'Goal Interpretation must declare the production Codec schema.'
     Assert-True ($launcherText -match [regex]::Escape("'general.draft.v2'")) `
         'General Knowledge must declare the production Codec schema.'
-    Assert-True ($launcherText -match `
-            '(?s)PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF.{0,120}selectedProvider') `
-        'Goal Interpretation providerRef must use the selected Transport Provider.'
-    Assert-True ($launcherText -match `
-            'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF.*selectedProvider') `
-        'General Knowledge providerRef must use the selected Transport Provider.'
+    Assert-True ($launcherText -notmatch 'PROVIDER_REF|provider-ref') `
+        'Operation configuration must not retain the retired Provider selection.'
     Assert-True ($launcherText -notmatch 'conversational-default') `
         'Unified launcher must not use the ambiguous Provider alias.'
     Assert-True ($launcherText -notmatch `

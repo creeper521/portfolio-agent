@@ -2,12 +2,11 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $PSScriptRoot 'run-agent-behavior-audit.ps1'
 $runnerSource = Get-Content -LiteralPath $runner -Raw
-if ($runnerSource -notmatch "test:e2e:behavior") {
-    throw 'Behavior runner must invoke the dedicated behavior Playwright script.'
+if ($runnerSource -notmatch "test:e2e") {
+    throw 'Behavior runner must invoke the current Playwright suite.'
 }
-if ($runnerSource -notmatch "--project=api-l0" -or
-        $runnerSource -notmatch "--project=runtime") {
-    throw 'Behavior runner must select explicit L0 and runtime Playwright projects.'
+if ($runnerSource -match 'test:e2e:behavior|--project=api-l0|--project=runtime') {
+    throw 'Behavior runner must not reference removed Playwright assets.'
 }
 foreach ($retiredSetting in @(
         'P3_REAL_API',
@@ -20,11 +19,20 @@ foreach ($retiredSetting in @(
 }
 foreach ($turnInterpretationSetting in @(
         'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE',
-        'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF',
         'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION'
     )) {
     if ($runnerSource -notmatch [regex]::Escape($turnInterpretationSetting)) {
         throw "Behavior runner must configure current setting $turnInterpretationSetting."
+    }
+}
+foreach ($retiredModelAuthority in @(
+        'PORTFOLIO_MODEL_PROVIDER',
+        'PORTFOLIO_MODEL_ENABLED',
+        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
+        'PROVIDER_REF'
+    )) {
+    if ($runnerSource -match [regex]::Escape($retiredModelAuthority)) {
+        throw "Behavior runner must not retain $retiredModelAuthority."
     }
 }
 
@@ -35,6 +43,9 @@ if ($fakeServerSource -match '/api/v2(?:/answers)?') {
 }
 if ($fakeServerSource -notmatch [regex]::Escape('/api/agent/turns')) {
     throw 'Local fake server must preserve the final /api/agent/turns branch.'
+}
+if ($fakeServerSource -notmatch [regex]::Escape('/api/portfolio')) {
+    throw 'Local fake server must expose the unversioned portfolio snapshot.'
 }
 
 function Assert-Throws([scriptblock]$Action, [string]$Message) {

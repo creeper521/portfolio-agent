@@ -112,7 +112,7 @@ try {
             }
             elseif ($path -eq '/api/portfolio') {
                 Write-Response $stream 200 'application/json; charset=utf-8' `
-                    '{"contentVersion":"test-v1"}'
+                    '{"contentVersion":"test-v1","agentAvailability":{"status":"AVAILABLE","freeTextSemanticRouting":"AVAILABLE","modelCatalogVersion":"fixture-v1","selectableModels":[{"modelRef":"glm-4-7-flash","selectionVersion":"glm-4-7-flash-v1","displayName":"GLM-4.7-Flash"}],"defaultModelSelection":{"kind":"MODEL","modelRef":"glm-4-7-flash","selectionVersion":"glm-4-7-flash-v1"}}}'
             }
             elseif ($path -eq '/api/agent/turns') {
                 if ($Mode -eq 'BACKEND_MODEL') {
@@ -135,6 +135,12 @@ try {
                             kind = 'CONVERSATIONAL'
                             message = 'hello'
                             conversation = @{ conversationId = 'conversation-fixture' }
+                            modelExecution = @{
+                                selectionKind = 'MODEL'
+                                requestedModelRef = 'glm-4-7-flash'
+                                selectionVersion = 'glm-4-7-flash-v1'
+                                participation = 'GOAL_INTERPRETATION_ONLY'
+                            }
                         }
                     }
                     else {
@@ -142,6 +148,12 @@ try {
                             requestId = $requestId
                             kind = 'ANSWER'
                             conversation = @{ conversationId = 'conversation-fixture' }
+                            modelExecution = @{
+                                selectionKind = 'MODEL'
+                                requestedModelRef = 'glm-4-7-flash'
+                                selectionVersion = 'glm-4-7-flash-v1'
+                                participation = 'GOAL_AND_ANSWER'
+                            }
                             answer = @{
                                 resolution = 'COMPLETE'
                                 contentReleaseId = 'test-v1'

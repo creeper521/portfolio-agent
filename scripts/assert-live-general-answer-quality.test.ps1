@@ -4,12 +4,10 @@ $checker = Join-Path $PSScriptRoot 'assert-live-general-answer-quality.ps1'
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('general-answer-quality-' + [guid]::NewGuid().ToString('N'))
 $environmentNames = @(
-    'PORTFOLIO_MODEL_ENABLED',
-    'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-    'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_MODEL_PROVIDER',
-    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+    'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+    'PORTFOLIO_GLM_ENABLED',
+    'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+    'PORTFOLIO_GLM_API_KEY'
 )
 
 function ConvertFrom-CodePoints([int[]]$Values) {
@@ -70,6 +68,8 @@ function Invoke-Checker([switch]$Baseline) {
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $checker,
         '-BackendBaseUrl', 'http://fixture.invalid',
         '-ExpectedContentVersion', 'test-v1',
+        '-ModelRef', 'glm-4-7-flash',
+        '-SelectionVersion', 'glm-4-7-flash-v1',
         '-TrialsPerDepth', '1',
         '-FixtureDirectory', $fixtureRoot
     )
@@ -92,13 +92,15 @@ foreach ($name in $environmentNames) {
 
 try {
     New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
-    foreach ($name in $environmentNames[0..3]) {
+    foreach ($name in @(
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+        'PORTFOLIO_GLM_ENABLED',
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED'
+    )) {
         [Environment]::SetEnvironmentVariable($name, 'true', 'Process')
     }
     [Environment]::SetEnvironmentVariable(
-        'PORTFOLIO_MODEL_PROVIDER', 'DEEPSEEK_V4_FLASH', 'Process')
-    [Environment]::SetEnvironmentVariable(
-        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY', 'fixture-key', 'Process')
+        'PORTFOLIO_GLM_API_KEY', 'fixture-key', 'Process')
 
     Write-Fixture 'CONCISE' (Answer @(
         (Section $conceptTitle $zhSentence),

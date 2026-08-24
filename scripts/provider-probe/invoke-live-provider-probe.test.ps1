@@ -7,13 +7,10 @@ $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio-provider-probe-' + [guid]::NewGuid().ToString('N'))
 $keySentinel = 'probe-key-sentinel-' + [guid]::NewGuid().ToString('N')
 $environmentNames = @(
-    'PORTFOLIO_MODEL_ENABLED',
-    'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-    'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_MODEL_PROVIDER',
-    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-    'PORTFOLIO_AGENT_GLM_API_KEY'
+    'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+    'PORTFOLIO_GLM_ENABLED',
+    'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+    'PORTFOLIO_GLM_API_KEY'
 )
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -64,13 +61,10 @@ function Restore-EnvironmentVariable([string]$Name, [hashtable]$Snapshot) {
 }
 
 function Set-ApprovedEnvironment {
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_MODEL_ENABLED' 'true'
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_MODEL_DATA_POLICY_APPROVED' 'true'
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED' 'true'
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED' 'true'
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_MODEL_PROVIDER' 'DEEPSEEK_V4_FLASH'
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' $keySentinel
-    Set-ProcessEnvironmentVariable 'PORTFOLIO_AGENT_GLM_API_KEY' $keySentinel
+    Set-ProcessEnvironmentVariable 'PORTFOLIO_MODEL_RUNTIME_ENABLED' 'true'
+    Set-ProcessEnvironmentVariable 'PORTFOLIO_GLM_ENABLED' 'true'
+    Set-ProcessEnvironmentVariable 'PORTFOLIO_GLM_DATA_POLICY_APPROVED' 'true'
+    Set-ProcessEnvironmentVariable 'PORTFOLIO_GLM_API_KEY' $keySentinel
 }
 
 function Test-PortOpen([int]$Port) {

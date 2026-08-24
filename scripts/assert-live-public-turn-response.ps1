@@ -3,6 +3,9 @@ param(
     [string]$ResponsePath,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedContentVersion,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$ExpectedModelRef,
     [ValidateSet('ANSWER', 'CONVERSATIONAL')]
     [string]$ExpectedKind = 'ANSWER'
 )
@@ -36,24 +39,23 @@ function Test-ApprovedFlag([string]$Value) {
 }
 
 try {
-    foreach ($approvalName in @(
-        'PORTFOLIO_MODEL_ENABLED',
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
-    )) {
+    foreach ($approvalName in @('PORTFOLIO_MODEL_RUNTIME_ENABLED')) {
         if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $approvalName))) {
             Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID'
         }
     }
 
-    $provider = Get-ProcessEnvironmentValue 'PORTFOLIO_MODEL_PROVIDER'
-    $selectedKey = switch ($provider) {
-        'DEEPSEEK_V4_FLASH' { Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' }
-        'GLM_4_7' { Get-ProcessEnvironmentValue 'PORTFOLIO_AGENT_GLM_API_KEY' }
+    $modelEnvironment = switch ($ExpectedModelRef) {
+        'glm-4-7-flash' { @('PORTFOLIO_GLM_ENABLED',
+                'PORTFOLIO_GLM_DATA_POLICY_APPROVED', 'PORTFOLIO_GLM_API_KEY') }
+        'qwen-3-7-flash' { @('PORTFOLIO_QWEN_ENABLED',
+                'PORTFOLIO_QWEN_DATA_POLICY_APPROVED', 'PORTFOLIO_QWEN_API_KEY') }
         default { Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID' }
     }
-    if ([string]::IsNullOrWhiteSpace($selectedKey)) {
+    if (-not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $modelEnvironment[0])) -or
+            -not (Test-ApprovedFlag (Get-ProcessEnvironmentValue $modelEnvironment[1])) -or
+            [string]::IsNullOrWhiteSpace(
+                (Get-ProcessEnvironmentValue $modelEnvironment[2]))) {
         Stop-Assertion 'LIVE_PROVIDER_CONFIG_INVALID'
     }
     if (-not (Test-Path -LiteralPath $ResponsePath -PathType Leaf)) {
@@ -75,7 +77,9 @@ try {
     if ([string]::IsNullOrWhiteSpace([string]$response.requestId) -or
             [string]::IsNullOrWhiteSpace([string]$response.conversation.conversationId) -or
             $null -ne $response.agentTurn -or $null -ne $response.blocks -or
-            $null -ne $response.degraded) {
+            $null -ne $response.degraded -or
+            [string]$response.modelExecution.selectionKind -cne 'MODEL' -or
+            [string]$response.modelExecution.requestedModelRef -cne $ExpectedModelRef) {
         Stop-Assertion 'LIVE_PROVIDER_PUBLIC_TURN_INVALID'
     }
 
@@ -102,7 +106,7 @@ try {
     }
 
     Write-Output ("Live Provider PublicAgentTurn passed: provider={0}; kind={1}; contentVersion={2}; goals={3}." -f `
-            $provider, $ExpectedKind, $ExpectedContentVersion, $goalCount)
+            $ExpectedModelRef, $ExpectedKind, $ExpectedContentVersion, $goalCount)
 }
 catch {
     $code = [string]$_.Exception.Message

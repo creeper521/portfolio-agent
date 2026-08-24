@@ -50,10 +50,7 @@ try {
     try {
         $serverProcess = Start-Process -FilePath $JavaExecutable `
             -ArgumentList @('-jar', $jar, "--server.port=$port",
-                '--portfolio.conversational-model.enabled=false',
-                '--portfolio.conversational-agent.enabled=false',
-                '--portfolio.conversational-model.external-data-policy-approved=false',
-                '--portfolio.conversational-agent.visitor-data-policy-approved=false',
+                '--portfolio.model-runtime.enabled=false',
                 '--portfolio.retrieval.profile=KEYWORD_ONLY') `
             -PassThru -WindowStyle Hidden
         $deadline = (Get-Date).AddSeconds(90)

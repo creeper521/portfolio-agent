@@ -3,6 +3,11 @@ param(
     [string]$BackendBaseUrl,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedContentVersion,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$ModelRef,
+    [Parameter(Mandatory = $true)]
+    [string]$SelectionVersion,
     [ValidateRange(1, 120)]
     [int]$TimeoutSeconds = 30,
     [switch]$AuthorizeRealProvider
@@ -28,6 +33,11 @@ function Latency-Bucket([TimeSpan]$Elapsed) {
 function Invoke-Turn([hashtable]$Command, [string]$Token) {
     $payload = @{
         requestId = [guid]::NewGuid().ToString()
+        modelSelection = @{
+            kind = 'MODEL'
+            modelRef = $ModelRef
+            selectionVersion = $SelectionVersion
+        }
         command = $Command
         conversationWindow = @()
     } | ConvertTo-Json -Depth 12 -Compress

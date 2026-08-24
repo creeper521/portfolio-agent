@@ -64,15 +64,17 @@ $environment = @{
     PLAYWRIGHT_REAL_API = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_API'
     PLAYWRIGHT_BASE_URL = Get-EnvironmentSnapshot 'PLAYWRIGHT_BASE_URL'
     PLAYWRIGHT_REAL_RETRIEVAL = Get-EnvironmentSnapshot 'PLAYWRIGHT_REAL_RETRIEVAL'
-    PORTFOLIO_MODEL_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_ENABLED'
-    PORTFOLIO_MODEL_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED'
-    PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = Get-EnvironmentSnapshot `
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED'
-    PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
-    PORTFOLIO_AGENT_DEEPSEEK_API_KEY = Get-EnvironmentSnapshot `
-        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+    PORTFOLIO_MODEL_RUNTIME_ENABLED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED'
+    PORTFOLIO_GLM_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_GLM_ENABLED'
+    PORTFOLIO_GLM_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_GLM_API_KEY'
+    PORTFOLIO_GLM_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED'
+    PORTFOLIO_QWEN_ENABLED = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_ENABLED'
+    PORTFOLIO_QWEN_ENDPOINT = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_ENDPOINT'
+    PORTFOLIO_QWEN_API_KEY = Get-EnvironmentSnapshot 'PORTFOLIO_QWEN_API_KEY'
+    PORTFOLIO_QWEN_DATA_POLICY_APPROVED = Get-EnvironmentSnapshot `
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
     PORTFOLIO_MODEL_TIMEOUT = Get-EnvironmentSnapshot 'PORTFOLIO_MODEL_TIMEOUT'
 }
 
@@ -105,6 +107,7 @@ try {
         'NpmExecutable',
         'Port',
         'RequireLiveProvider',
+        'LiveModelRef',
         'Lane',
         'SkipPlaywright'
     )) {
@@ -189,9 +192,14 @@ try {
         'PORTFOLIO_CONTEXT_CURRENT_TOKEN_KEY',
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY_ID',
         'PORTFOLIO_CONTEXT_CURRENT_PAYLOAD_KEY',
-        'PORTFOLIO_MODEL_PROVIDER',
-        'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-        'PORTFOLIO_AGENT_GLM_API_KEY',
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+        'PORTFOLIO_GLM_ENABLED',
+        'PORTFOLIO_GLM_API_KEY',
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+        'PORTFOLIO_QWEN_ENABLED',
+        'PORTFOLIO_QWEN_ENDPOINT',
+        'PORTFOLIO_QWEN_API_KEY',
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     )) {
         if ($runnerSource -notmatch (
@@ -223,9 +231,14 @@ try {
     if (-not (Test-Path -LiteralPath $realKeytool -PathType Leaf)) {
         throw 'BODY_STALL early-failure tests require keytool beside java.exe.'
     }
-    $env:PORTFOLIO_MODEL_PROVIDER = 'DEEPSEEK_V4_FLASH'
-    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'original-deepseek-sentinel'
-    $env:PORTFOLIO_AGENT_GLM_API_KEY = 'original-glm-sentinel'
+    $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'original-runtime-sentinel'
+    $env:PORTFOLIO_GLM_ENABLED = 'original-glm-enabled-sentinel'
+    $env:PORTFOLIO_GLM_API_KEY = 'original-glm-key-sentinel'
+    $env:PORTFOLIO_GLM_DATA_POLICY_APPROVED = 'original-glm-policy-sentinel'
+    $env:PORTFOLIO_QWEN_ENABLED = 'original-qwen-enabled-sentinel'
+    $env:PORTFOLIO_QWEN_ENDPOINT = 'original-qwen-endpoint-sentinel'
+    $env:PORTFOLIO_QWEN_API_KEY = 'original-qwen-key-sentinel'
+    $env:PORTFOLIO_QWEN_DATA_POLICY_APPROVED = 'original-qwen-policy-sentinel'
 
     $previousEarlyFailurePreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -301,10 +314,7 @@ try {
         throw "Expected capture-only Java wrapper to stop before readiness. Output: $normalCaptureOutput"
     }
     $normalJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
-    foreach ($disabledArgument in @(
-        '--portfolio.conversational-model.enabled=false',
-        '--portfolio.conversational-agent.enabled=false'
-    )) {
+    foreach ($disabledArgument in @('--portfolio.model-runtime.enabled=false')) {
         $matchCount = ([regex]::Matches(
             $normalJavaArguments,
             '(?<!\S)' + [regex]::Escape($disabledArgument) + '(?!\S)'
@@ -360,10 +370,7 @@ try {
         throw "Expected capture-only Java wrapper to stop before readiness. Output: $liveCaptureOutput"
     }
     $liveJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
-    foreach ($disabledArgument in @(
-        '--portfolio.conversational-model.enabled=false',
-        '--portfolio.conversational-agent.enabled=false'
-    )) {
+    foreach ($disabledArgument in @('--portfolio.model-runtime.enabled=false')) {
     if ($liveJavaArguments -match [regex]::Escape($disabledArgument)) {
             throw "Live Provider mode unexpectedly passed '$disabledArgument'."
         }
@@ -399,11 +406,10 @@ try {
     $env:PLAYWRIGHT_REAL_API = 'original-real'
     $env:PLAYWRIGHT_BASE_URL = 'original-base'
     $env:PLAYWRIGHT_REAL_RETRIEVAL = 'original-retrieval'
-    $env:PORTFOLIO_MODEL_ENABLED = 'true'
-    $env:PORTFOLIO_MODEL_DATA_POLICY_APPROVED = 'true'
-    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
-    $env:PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED = 'true'
-    $env:PORTFOLIO_AGENT_DEEPSEEK_API_KEY = 'provider-key-must-not-leak'
+    $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'true'
+    $env:PORTFOLIO_GLM_ENABLED = 'true'
+    $env:PORTFOLIO_GLM_DATA_POLICY_APPROVED = 'true'
+    $env:PORTFOLIO_GLM_API_KEY = 'provider-key-must-not-leak'
     $env:PORTFOLIO_MODEL_TIMEOUT = '1ms'
     $env:PORTFOLIO_CONVERSATION_CONTEXT_MODE = 'IN_MEMORY'
 
@@ -603,16 +609,19 @@ finally {
     Restore-EnvironmentVariable 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
     Restore-EnvironmentVariable 'PLAYWRIGHT_REAL_RETRIEVAL' `
         $environment.PLAYWRIGHT_REAL_RETRIEVAL
-    Restore-EnvironmentVariable 'PORTFOLIO_MODEL_ENABLED' `
-        $environment.PORTFOLIO_MODEL_ENABLED
-    Restore-EnvironmentVariable 'PORTFOLIO_MODEL_DATA_POLICY_APPROVED' `
-        $environment.PORTFOLIO_MODEL_DATA_POLICY_APPROVED
-    Restore-EnvironmentVariable 'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED' `
-        $environment.PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED
-    Restore-EnvironmentVariable 'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED' `
-        $environment.PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED
-    Restore-EnvironmentVariable 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' `
-        $environment.PORTFOLIO_AGENT_DEEPSEEK_API_KEY
+    foreach ($modelEnvironmentName in @(
+        'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+        'PORTFOLIO_GLM_ENABLED',
+        'PORTFOLIO_GLM_API_KEY',
+        'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+        'PORTFOLIO_QWEN_ENABLED',
+        'PORTFOLIO_QWEN_ENDPOINT',
+        'PORTFOLIO_QWEN_API_KEY',
+        'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'
+    )) {
+        Restore-EnvironmentVariable $modelEnvironmentName `
+            $environment[$modelEnvironmentName]
+    }
     Restore-EnvironmentVariable 'PORTFOLIO_MODEL_TIMEOUT' `
         $environment.PORTFOLIO_MODEL_TIMEOUT
 

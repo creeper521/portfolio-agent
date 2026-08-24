@@ -2,6 +2,8 @@ param(
     [ValidateSet('L0', 'L1', 'L2', 'L3', 'L4')]
     [string[]]$Lane = @('L0', 'L1', 'L2', 'L3'),
     [switch]$RequireLiveProvider,
+    [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$LiveModelRef = 'glm-4-7-flash',
     [string]$JarPath = '',
     [string]$ProviderSecretFile = '',
     [ValidateSet('IN_MEMORY', 'POSTGRESQL')]
@@ -72,19 +74,21 @@ if (($Lane | Where-Object { $_ -in @('L0', 'L3') }).Count -gt 0) {
 }
 
 $environmentNames = @(
-    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-    'PORTFOLIO_MODEL_PROVIDER',
-    'PORTFOLIO_MODEL_ENABLED',
-    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
+    'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+    'PORTFOLIO_GLM_ENABLED',
+    'PORTFOLIO_GLM_API_KEY',
+    'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+    'PORTFOLIO_QWEN_ENABLED',
+    'PORTFOLIO_QWEN_ENDPOINT',
+    'PORTFOLIO_QWEN_API_KEY',
+    'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
     'PLAYWRIGHT_EXTERNAL_SERVER',
     'PLAYWRIGHT_REAL_API',
     'PLAYWRIGHT_BASE_URL',
     'PLAYWRIGHT_REAL_RETRIEVAL',
     'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE',
-    'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF',
     'PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION',
     'PORTFOLIO_MODEL_OP_GENERAL_MODE',
-    'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF',
     'PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION',
     'PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT'
 )
@@ -97,8 +101,17 @@ if ($Lane -contains 'L4') {
         }
         $providerEnvironmentNames += $Matches[1]
     }
-    if ('PORTFOLIO_AGENT_DEEPSEEK_API_KEY' -notin $providerEnvironmentNames) {
-        throw 'L4 provider secret file does not define the approved Provider API key variable.'
+    $requiredModelEnvironment = @('PORTFOLIO_MODEL_RUNTIME_ENABLED') + $(if ($LiveModelRef -eq 'glm-4-7-flash') {
+        @('PORTFOLIO_GLM_ENABLED', 'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+            'PORTFOLIO_GLM_API_KEY')
+    } else {
+        @('PORTFOLIO_QWEN_ENABLED', 'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
+            'PORTFOLIO_QWEN_API_KEY')
+    })
+    foreach ($requiredName in $requiredModelEnvironment) {
+        if ($requiredName -notin $providerEnvironmentNames) {
+            throw "L4 provider secret file does not define $requiredName."
+        }
     }
     $environmentNames = @($environmentNames + $providerEnvironmentNames | Select-Object -Unique)
 }
@@ -112,15 +125,13 @@ try {
         $exitCode = 0
         try {
             if ($currentLane -eq 'L0') {
-                $env:PORTFOLIO_MODEL_ENABLED = 'false'
-                $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'false'
                 & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
                     '-Dtest=AgentTurnScenarioManifestTest,AgentTurnClosedContractIntegrationTest' test
                 $exitCode = $LASTEXITCODE
                 if ($exitCode -ne 0) { throw "L0 test process exited with $exitCode." }
             } elseif ($currentLane -eq 'L3') {
-                $env:PORTFOLIO_MODEL_ENABLED = 'false'
-                $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'false'
                 & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
                     '-Dtest=GoalProposalCodecTest,GeneralDraftCodecAdversarialTest,OpenAiCompatibleStructuredModelTransportDeadlineTest' test
                 $exitCode = $LASTEXITCODE
@@ -137,27 +148,17 @@ try {
                         $null = $line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$'
                         Set-Item -LiteralPath "Env:$($Matches[1])" -Value $Matches[2].Trim()
                     }
-                    $env:PORTFOLIO_MODEL_ENABLED = 'false'
-                    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
-                    $declaredProvider = if ([string]::IsNullOrWhiteSpace(
-                            $env:PORTFOLIO_MODEL_PROVIDER)) {
-                        'DEEPSEEK_V4_FLASH'
-                    } else {
-                        $env:PORTFOLIO_MODEL_PROVIDER.Trim()
-                    }
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = $declaredProvider
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v5'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = $declaredProvider
                     $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v2'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
                         -Port $Port -ContextMode $ContextMode -RequireLiveProvider `
+                        -LiveModelRef $LiveModelRef `
                         -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
                 } else {
-                    $env:PORTFOLIO_MODEL_ENABLED = 'false'
-                    $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
+                    $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'false'
                     $laneContextMode = if ($currentLane -eq 'L2') {
                         'POSTGRESQL'
                     } else {

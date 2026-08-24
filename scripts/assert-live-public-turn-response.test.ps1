@@ -4,10 +4,8 @@ $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('assert-live-public-turn-' + [guid]::NewGuid().ToString('N'))
 $responsePath = Join-Path $fixtureRoot 'response.json'
 $names = @(
-    'PORTFOLIO_MODEL_ENABLED', 'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-    'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED', 'PORTFOLIO_MODEL_PROVIDER',
-    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
+    'PORTFOLIO_MODEL_RUNTIME_ENABLED', 'PORTFOLIO_GLM_ENABLED',
+    'PORTFOLIO_GLM_DATA_POLICY_APPROVED', 'PORTFOLIO_GLM_API_KEY'
 )
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -20,6 +18,7 @@ function Invoke-Checker([string]$Kind = 'ANSWER') {
     try {
         $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker `
             -ResponsePath $responsePath -ExpectedContentVersion 'test-v1' `
+            -ExpectedModelRef 'glm-4-7-flash' `
             -ExpectedKind $Kind 2>&1 | Out-String)
         return @{ ExitCode = $LASTEXITCODE; Output = $output }
     }
@@ -34,16 +33,22 @@ foreach ($name in $names) {
 }
 try {
     New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
-    foreach ($name in $names[0..3]) {
+    foreach ($name in $names) {
+        if ($name -eq 'PORTFOLIO_GLM_API_KEY') { continue }
         [Environment]::SetEnvironmentVariable($name, 'true', 'Process')
     }
-    [Environment]::SetEnvironmentVariable('PORTFOLIO_MODEL_PROVIDER', 'DEEPSEEK_V4_FLASH', 'Process')
-    [Environment]::SetEnvironmentVariable('PORTFOLIO_AGENT_DEEPSEEK_API_KEY', 'fixture-key', 'Process')
+    [Environment]::SetEnvironmentVariable('PORTFOLIO_GLM_API_KEY', 'fixture-key', 'Process')
 
     $fixture = @{
         requestId = [guid]::NewGuid().ToString()
         kind = 'ANSWER'
         conversation = @{ conversationId = 'conversation-fixture' }
+        modelExecution = @{
+            selectionKind = 'MODEL'
+            requestedModelRef = 'glm-4-7-flash'
+            selectionVersion = 'glm-4-7-flash-v1'
+            participation = 'GOAL_AND_ANSWER'
+        }
         answer = @{
             resolution = 'COMPLETE'
             contentReleaseId = 'test-v1'
@@ -67,6 +72,12 @@ try {
         kind = 'CONVERSATIONAL'
         message = 'hello'
         conversation = @{ conversationId = 'conversation-fixture' }
+        modelExecution = @{
+            selectionKind = 'MODEL'
+            requestedModelRef = 'glm-4-7-flash'
+            selectionVersion = 'glm-4-7-flash-v1'
+            participation = 'GOAL_INTERPRETATION_ONLY'
+        }
     }
     [IO.File]::WriteAllText($responsePath, ($social | ConvertTo-Json -Depth 4 -Compress))
     $result = Invoke-Checker 'CONVERSATIONAL'

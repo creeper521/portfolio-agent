@@ -25,23 +25,22 @@ $ErrorActionPreference = 'Stop'
 $script:repositoryRoot = Split-Path -Parent $PSScriptRoot
 $script:processReaders = @{}
 $script:allowedNames = @(
-    'PORTFOLIO_MODEL_ENABLED',
-    'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-    'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED',
-    'PORTFOLIO_MODEL_PROVIDER',
-    'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-    'PORTFOLIO_AGENT_GLM_API_KEY',
-    'PORTFOLIO_MODEL_MAX_TOKENS',
+    'PORTFOLIO_MODEL_RUNTIME_ENABLED',
+    'PORTFOLIO_GLM_ENABLED',
+    'PORTFOLIO_GLM_API_KEY',
+    'PORTFOLIO_GLM_DATA_POLICY_APPROVED',
+    'PORTFOLIO_QWEN_ENABLED',
+    'PORTFOLIO_QWEN_ENDPOINT',
+    'PORTFOLIO_QWEN_API_KEY',
+    'PORTFOLIO_QWEN_DATA_POLICY_APPROVED',
+    'PORTFOLIO_MODEL_MAX_OUTPUT_TOKENS',
     'PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS',
     'PORTFOLIO_CONVERSATION_MAX_INPUT_TOKENS'
 )
 $script:generalAiEnvironment = @{
     PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
-    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = ''
     PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v5'
     PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
-    PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = ''
     PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v2'
 }
 $script:contextEnvironmentNames = @(
@@ -122,25 +121,40 @@ function Assert-TrueFlag([hashtable]$Values, [string]$Name) {
 }
 
 function Assert-LocalConfiguration([hashtable]$Values) {
-    foreach ($name in @(
-        'PORTFOLIO_MODEL_ENABLED',
-        'PORTFOLIO_MODEL_DATA_POLICY_APPROVED',
-        'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
-        'PORTFOLIO_VISITOR_MODEL_DATA_POLICY_APPROVED'
-    )) {
+    foreach ($name in @('PORTFOLIO_MODEL_RUNTIME_ENABLED')) {
         Assert-TrueFlag $Values $name
     }
 
-    $provider = [string]$Values.PORTFOLIO_MODEL_PROVIDER
-    $keyName = switch ($provider) {
-        'DEEPSEEK_V4_FLASH' { 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY' }
-        'GLM_4_7' { 'PORTFOLIO_AGENT_GLM_API_KEY' }
-        default { Stop-WithCode 'LOCAL_CONFIG_PROVIDER_INVALID' }
+    $readyModels = @()
+    foreach ($model in @(
+        @{ Ref = 'glm-4-7-flash'; Enabled = 'PORTFOLIO_GLM_ENABLED';
+            Policy = 'PORTFOLIO_GLM_DATA_POLICY_APPROVED'; Key = 'PORTFOLIO_GLM_API_KEY';
+            Endpoint = $null },
+        @{ Ref = 'qwen-3-7-flash'; Enabled = 'PORTFOLIO_QWEN_ENABLED';
+            Policy = 'PORTFOLIO_QWEN_DATA_POLICY_APPROVED'; Key = 'PORTFOLIO_QWEN_API_KEY';
+            Endpoint = 'PORTFOLIO_QWEN_ENDPOINT' }
+    )) {
+        if (-not $Values.ContainsKey($model.Enabled) -or
+                -not [string]::Equals([string]$Values[$model.Enabled], 'true',
+                    [StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        Assert-TrueFlag $Values $model.Policy
+        if (-not $Values.ContainsKey($model.Key) -or
+                [string]::IsNullOrWhiteSpace([string]$Values[$model.Key])) {
+            Stop-WithCode "LOCAL_CONFIG_MODEL_KEY_MISSING:$($model.Key)"
+        }
+        if ($null -ne $model.Endpoint -and
+                (-not $Values.ContainsKey($model.Endpoint) -or
+                [string]$Values[$model.Endpoint] -notmatch '^https://')) {
+            Stop-WithCode "LOCAL_CONFIG_MODEL_ENDPOINT_INVALID:$($model.Endpoint)"
+        }
+        $readyModels += $model.Ref
     }
-    if (-not $Values.ContainsKey($keyName) -or
-            [string]::IsNullOrWhiteSpace([string]$Values[$keyName])) {
-        Stop-WithCode "LOCAL_CONFIG_PROVIDER_KEY_MISSING:$keyName"
+    if ($readyModels.Count -eq 0) {
+        Stop-WithCode 'LOCAL_CONFIG_MODEL_CATALOG_EMPTY'
     }
+    return @($readyModels)
 }
 
 function Resolve-PostgresEnvironmentFile {
@@ -288,17 +302,13 @@ function Resolve-RuntimeSettings {
             Stop-WithCode 'LOCAL_MODEL_SECRETS_REQUIRED'
         }
         $modelSettings = Read-LocalSecrets $SecretsFile
-        Assert-LocalConfiguration $modelSettings
+        [void](Assert-LocalConfiguration $modelSettings)
         foreach ($entry in $modelSettings.GetEnumerator()) {
             $settings[$entry.Key] = $entry.Value
         }
         foreach ($entry in $script:generalAiEnvironment.GetEnumerator()) {
             $settings[$entry.Key] = $entry.Value
         }
-        $selectedProvider = [string]$modelSettings.PORTFOLIO_MODEL_PROVIDER
-        $settings['PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF'] =
-                $selectedProvider
-        $settings['PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF'] = $selectedProvider
     }
     return $settings
 }
@@ -621,10 +631,11 @@ try {
     Assert-PortAvailable $BackendPort
     Assert-PortAvailable $FrontendPort
     if ($EnableGeneralAi) {
+        $configuredModels = Assert-LocalConfiguration $settings
         Write-Output (
-            'LOCAL_CONFIG_VALID provider=' +
-            [string]$settings.PORTFOLIO_MODEL_PROVIDER +
-            ' checks=6'
+            'LOCAL_CONFIG_VALID models=' +
+            (@($configuredModels) -join ',') +
+            ' catalog=CONFIGURED'
         )
     }
     $modelMode = if ($EnableGeneralAi) { 'ENABLED' } else { 'DISABLED' }
@@ -759,8 +770,7 @@ try {
                 $settings
             if ($probeStatus -eq 'CONNECTED') {
                 Write-Output (
-                    'AI_CONNECTED provider=' +
-                    [string]$settings.PORTFOLIO_MODEL_PROVIDER +
+                    'AI_CONNECTED catalog=CONFIGURED' +
                     " backend=$backendBaseUrl frontend=$frontendBaseUrl"
                 )
             }

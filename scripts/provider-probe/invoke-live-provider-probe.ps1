@@ -3,6 +3,8 @@ param(
     [string]$BackendBaseUrl,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedContentVersion,
+    [ValidateSet('', 'glm-4-7-flash', 'qwen-3-7-flash')]
+    [string]$ModelRef = '',
     [ValidateSet('GENERAL', 'SOCIAL')]
     [string]$Scenario = 'GENERAL',
     [ValidateRange(1, 300)]
@@ -22,15 +24,39 @@ $question = if ($Scenario -eq 'SOCIAL') {
             '6Kej6YeK5LiA5LiLIFJlZGlzIOeahOaMgeS5heWMluacuuWItg=='))
 }
 $expectedKind = if ($Scenario -eq 'SOCIAL') { 'CONVERSATIONAL' } else { 'ANSWER' }
-$requestBody = @{
-    requestId = [guid]::NewGuid()
-    command = @{
-        kind = 'ASK'
-        input = @{ kind = 'FREE_TEXT'; text = $question }
+function Resolve-ModelSelection {
+    try {
+        $portfolio = Invoke-RestMethod -UseBasicParsing `
+            -Uri "$BackendBaseUrl/api/portfolio" `
+            -Method Get `
+            -TimeoutSec $TimeoutSeconds
     }
-    surfaceContext = @{ audienceRole = 'INTERVIEWER'; requestSource = 'AGENT_PAGE' }
-    conversationWindow = @()
-} | ConvertTo-Json -Depth 6 -Compress
+    catch {
+        Exit-Degraded 'PROVIDER_UNAVAILABLE'
+    }
+    $selection = if ([string]::IsNullOrWhiteSpace($ModelRef)) {
+        $portfolio.agentAvailability.defaultModelSelection
+    }
+    else {
+        @($portfolio.agentAvailability.selectableModels | Where-Object {
+            [string]$_.modelRef -ceq $ModelRef
+        } | Select-Object -First 1)
+    }
+    if ($selection -is [array]) {
+        $selection = $selection | Select-Object -First 1
+    }
+    if ($null -eq $selection -or
+            [string]$selection.kind -cne 'MODEL' -or
+            [string]::IsNullOrWhiteSpace([string]$selection.modelRef) -or
+            [string]::IsNullOrWhiteSpace([string]$selection.selectionVersion)) {
+        Exit-Degraded 'PROVIDER_RESPONSE_INVALID'
+    }
+    return @{
+        kind = 'MODEL'
+        modelRef = [string]$selection.modelRef
+        selectionVersion = [string]$selection.selectionVersion
+    }
+}
 
 function Resolve-ProbeCategory(
     [object]$Response,
@@ -53,6 +79,17 @@ function Exit-Degraded([string]$Category) {
 $responsePath = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio-provider-probe-' + [guid]::NewGuid().ToString('N') + '.json')
 try {
+    $modelSelection = Resolve-ModelSelection
+    $requestBody = @{
+        requestId = [guid]::NewGuid()
+        modelSelection = $modelSelection
+        command = @{
+            kind = 'ASK'
+            input = @{ kind = 'FREE_TEXT'; text = $question }
+        }
+        surfaceContext = @{ audienceRole = 'INTERVIEWER'; requestSource = 'AGENT_PAGE' }
+        conversationWindow = @()
+    } | ConvertTo-Json -Depth 6 -Compress
     try {
         $http = Invoke-WebRequest -UseBasicParsing `
             -Uri "$BackendBaseUrl/api/agent/turns" `
@@ -78,6 +115,7 @@ try {
             -File $checker `
             -ResponsePath $responsePath `
             -ExpectedContentVersion $ExpectedContentVersion `
+            -ExpectedModelRef ([string]$modelSelection.modelRef) `
             -ExpectedKind $expectedKind 2>&1 | Out-String).Trim()
         $assertionExitCode = $LASTEXITCODE
     }
