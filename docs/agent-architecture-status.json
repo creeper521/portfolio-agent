@@ -32,7 +32,7 @@
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
       "status": "FAILED",
-      "evidence": "As of 2026-08-24, deterministic and privacy gates have fresh evidence. A packaged PostgreSQL API gate crossed two real JVM processes and recovered the Conversation plus exact Portfolio replay, but contracts/agent-turn/scenarios are not executed by a production runtime harness, Browser checks do not yet prove all body semantics or preserve one browser session across the restart, and the approved Provider quality matrix remains incomplete. Test totals and HTTP success are not completion evidence."
+      "evidence": "As of 2026-08-24, deterministic and privacy gates have fresh evidence. A packaged PostgreSQL API gate crossed two real JVM processes and recovered the Conversation plus exact Portfolio replay. All 35 contracts/agent-turn/scenarios now issue their command through the production HTTP entry, but only 4 public expectations match with Provider disabled, 6 cases still lack required setup execution, and none of the hard-error expectations has an observable trace. Browser checks also do not yet prove all body semantics or preserve one browser session across the restart, and the approved Provider quality matrix remains incomplete. Test totals and HTTP success are not completion evidence."
     },
     {
       "id": "PRIVACY_BOUNDARY",

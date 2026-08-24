@@ -187,7 +187,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-88 | P1 | Provider 样本量不足 | 单次或少量通过被外推为稳定 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
 | A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
-| A2-91 | P1 | 30 多条 scenario 不执行 | 只校验 JSON 结构和数量 | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
+| A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
 | A2-92 | P1 | Browser happy path 内容断言不足 | 状态/UI有覆盖但不拒绝错误终局 | 解析 body 并断言 kind、resolution、coverage | Browser E2E |
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
 | A2-94 | P1 | Browser 不检查回答完整性 | 空或单句内容可能通过 | 检查 section、证据、数量和非空门 | Browser Quality Gate |
@@ -197,7 +197,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-98 | P1 | privacy check 看不到运行时数据流 | 已补 Lifecycle → PostgreSQL → 解密完整 settlement sentinel 门，待最终总门 | 解密完整 settlement 扫描 sentinel | Privacy Gate / State Test |
 | A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
 | A2-100 | P1 | 不同验证层被合并为 PASS | release 汇总已拆分 deterministic、scenario runtime、Browser contract/body、PostgreSQL/JVM restart、Provider Quality；未执行层不再被总 PASS 覆盖 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
-| A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总已显式报告 scenario runtime 与风险门未执行；35 条场景仍未进入生产入口运行 | 以用户场景和风险门报告覆盖 | Verification Governance |
+| A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总与 scenario runner 已按 35 个用户 case 报告 matched/setup/hard-error coverage；当前 scenario runtime 明确为 FAILED | 以用户场景和风险门报告覆盖 | Verification Governance |
 | A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | 脚本设置 `portfolio.model-expression.*`，真实属性前缀已是 `portfolio.conversational-model` | 删除全部退役键和脚本引用 | Configuration Cleanup |
 | A2-103 | P2 | Portfolio expression timeout 无执行消费者 | `agent-runtime.portfolio-expression-timeout` 可绑定且参与配置校验，但没有模型表达调用读取 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
 | A2-104 | P2 | Portfolio expression 编译器未接线 | 生产不可调用 | 实现并接入或物理删除 | Portfolio Expression |
@@ -337,7 +337,10 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - `agent-architecture-status.test.ps1` 已执行通过：`EVIDENCE_BEFORE_COMPLETION=PASS` 若缺少 deterministic、scenario runtime、Browser body、PostgreSQL JVM restart、Provider Quality 五类新鲜标记即失败。当前机器账本据真实缺口记为 `FAILED`，不以测试总数或 HTTP 成功恢复 PASS。
 - `run-agent-behavior-audit-assets.test.ps1` 已执行通过：实际确认 `test:e2e`、默认 Playwright spec 与 L0/L3 Java 资产存在；runner 不再引用 `test:e2e:behavior`、`api-l0`、`runtime` project 或已删除的 `AgentBehaviorAdversarialProviderIntegrationTest`。L0/L3 已实跑，分别为 6 tests 与 14 tests、零失败；输出范围明确为 `CONTRACT_MANIFEST_ONLY` 和 `PROVIDER_CODEC_ADVERSARIAL`，不冒充用户场景运行时。
 - 本批后端 clean package 已实跑：874 tests、0 failures、0 errors、4 skipped，Testcontainers 使用 PostgreSQL 16.14。该结果仍不替代 scenario runtime、Browser body、JVM restart 或 Provider Quality。
-- `run-packaged-jvm-restart-api-gate.ps1` 已对提交 `0e5f78b` 的 packaged JAR 实跑：临时 PostgreSQL 16 容器、同一数据库/密钥、两个真实 Java 进程；第二个 JVM 以原 resume token 恢复同一 Conversation，并对同 requestId 返回精确 Portfolio PublicTurn。输出明确为 `browser=NOT_RUN`，因此 A2-96 仍不关闭。
+- `run-packaged-jvm-restart-api-gate.ps1` 已对 SHA-256 `cfca74e0cb5048c61c64db58a6ca789ca1106bea3cb9369a5afe082dd24740a0` 的 packaged JAR 实跑：临时 PostgreSQL 16 容器、同一数据库/密钥、两个真实 Java 进程；第二个 JVM 以原 resume token 恢复同一 Conversation，并对同 requestId 返回精确 Portfolio PublicTurn。输出明确为 `browser=NOT_RUN`，因此 A2-96 仍不关闭。
+- `run-agent-scenario-runtime.ps1` 已对同一 SHA-256 的 packaged JAR、生产 `/api/agent/turns`、模型关闭且限流提升到 1000 的基线实跑：35/35 command 均实际发出，公开 expected 匹配 4，失败 31；29 条无需额外 setup，6 条的 lifecycle/provider/settlement setup 未执行；35 条 hardError expectation 均无可观测通道。runner 默认只报告，`-RequireComplete` 对任何失败或缺口非零退出；这项证据证明清单已进入运行时，也证明 A2-91 尚未关闭。
+- packaged runner 曾把当前 workspace HEAD 打印成 JAR commit，但 JAR manifest 未嵌入 commit，二者无法建立制品绑定；该字段已改为 `Workspace commit (not JAR identity)`，制品身份只使用实际 SHA-256 与 mtime。未在构建阶段嵌入并验证 commit 前，任何证据不得声称 JAR 对应当前 HEAD。
+- 同一 JAR 的 DEFAULT/IN_MEMORY packaged lane 已在场景审计接线后实跑：scenario runner 先执行 35 条生产 HTTP command，随后 Playwright 桌面/移动共 `8 passed / 8 lane-specific skipped`；Browser 结果继续只算 contract/lifecycle 层，不覆盖 scenario 的 `FAILED` 或 Browser body 的 `IN_PROGRESS`。
 - 本组没有修改 Frontend 代码。A2-89 的空 behavior 目录/失效 Playwright 配置、A2-92—A2-94 的 Browser 内容门属于 Frontend Agent 交接；后端 scenario runtime 与跨 JVM runner 继续在本批后续实现。
 
 ### 3.4 本轮审计证据边界

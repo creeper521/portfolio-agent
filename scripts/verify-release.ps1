@@ -97,6 +97,10 @@ try {
     Assert-ExitCode 'Packaged JVM restart API gate tests'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\run-agent-scenario-runtime.test.ps1')
+    Assert-ExitCode 'Agent scenario runtime reporter tests'
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\verify-static-bundle.test.ps1')
     Assert-ExitCode 'Static bundle checker tests'
 
@@ -259,7 +263,7 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\write-agent-verification-summary.ps1') `
         -Deterministic PASS `
-        -ScenarioRuntime NOT_RUN `
+        -ScenarioRuntime FAILED `
         -BrowserContract PASS `
         -BrowserBody IN_PROGRESS `
         -PostgreSqlState $postgreSqlState `

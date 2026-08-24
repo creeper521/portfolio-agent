@@ -69,18 +69,19 @@ if ($jar.Contains('"')) {
 }
 $jarSha256 = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash.ToLowerInvariant()
 $jarBuiltAtUtc = (Get-Item -LiteralPath $jar).LastWriteTimeUtc.ToString('O')
-$commitSha = if (Test-Path -LiteralPath (Join-Path $root '.git')) {
+$workspaceCommitSha = if (Test-Path -LiteralPath (Join-Path $root '.git')) {
     (& git -C $root rev-parse HEAD 2>$null | Out-String).Trim()
 }
 else {
     '0000000000000000000000000000000000000000'
 }
-if ($commitSha -notmatch '^[a-f0-9]{40}$' -or $jarSha256 -notmatch '^[a-f0-9]{64}$') {
+if ($workspaceCommitSha -notmatch '^[a-f0-9]{40}$' -or
+        $jarSha256 -notmatch '^[a-f0-9]{64}$') {
     throw 'Packaged build identity is invalid.'
 }
-Write-Output "Build identity: commit=$commitSha"
 Write-Output "JAR SHA-256: $jarSha256"
 Write-Output "JAR builtAt UTC: $jarBuiltAtUtc"
+Write-Output "Workspace commit (not JAR identity): $workspaceCommitSha"
 
 function Get-EnvironmentSnapshot([string]$Name) {
     $item = Get-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
@@ -727,6 +728,37 @@ try {
         throw 'Packaged Case Agent response leaked the visitor-content sentinel.'
     }
     Write-Output 'Packaged final Agent resource smoke passed.'
+
+    if ($Lane -in @('DEFAULT', 'JVM_RESTART')) {
+        $scenarioJson = & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File (Join-Path $root 'scripts\run-agent-scenario-runtime.ps1') `
+            -BackendBaseUrl $baseUrl `
+            -TimeoutSeconds $ReadinessTimeoutSeconds
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Agent scenario runtime reporter failed to produce evidence.'
+        }
+        try {
+            $scenarioReport = ($scenarioJson -join [Environment]::NewLine) |
+                ConvertFrom-Json
+        }
+        catch {
+            throw 'Agent scenario runtime reporter returned invalid JSON.'
+        }
+        if ([int]$scenarioReport.total -ne 35 -or
+                @($scenarioReport.results).Count -ne 35) {
+            throw 'Agent scenario runtime reporter did not execute every registered case.'
+        }
+        $scenarioSummaryFormat = `
+            'AGENT_SCENARIO_RUNTIME_BASELINE overall={0}; total={1}; ' +
+            'pass={2}; inProgress={3}; failed={4}; executionMode={5}'
+        Write-Output ($scenarioSummaryFormat -f `
+            [string]$scenarioReport.overall,
+            [int]$scenarioReport.total,
+            [int]$scenarioReport.passed,
+            [int]$scenarioReport.inProgress,
+            [int]$scenarioReport.failed,
+            [string]$scenarioReport.executionMode)
+    }
 
     if ($Lane -eq 'JVM_RESTART') {
         if ($ContextMode -ne 'POSTGRESQL') {

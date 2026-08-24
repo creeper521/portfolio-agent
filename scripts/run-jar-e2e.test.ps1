@@ -159,6 +159,15 @@ try {
             throw "Packaged JVM_RESTART lane is missing '$restartEvidence'."
         }
     }
+    foreach ($scenarioEvidence in @(
+        'run-agent-scenario-runtime.ps1',
+        'AGENT_SCENARIO_RUNTIME_BASELINE',
+        'did not execute every registered case'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($scenarioEvidence)) {
+            throw "Packaged default lane is missing scenario evidence '$scenarioEvidence'."
+        }
+    }
     foreach ($bodyStallEvidence in @(
         'start-provider-body-stall-https.ps1',
         'jdk.net.hosts.file',
@@ -305,13 +314,16 @@ try {
         }
     }
     foreach ($requiredEvidence in @(
-        'Build identity: commit=',
         'JAR SHA-256: ',
+        'Workspace commit (not JAR identity): ',
         'Agent backend closure smoke passed.'
     )) {
         if ($runnerSource -notmatch [regex]::Escape($requiredEvidence)) {
             throw "Packaged runner is missing evidence '$requiredEvidence'."
         }
+    }
+    if ($runnerSource -match 'Build identity: commit=') {
+        throw 'Packaged runner must not present workspace HEAD as JAR identity.'
     }
     foreach ($admissionArgument in @(
         '--portfolio.agent-runtime.requests-per-minute=1000',
