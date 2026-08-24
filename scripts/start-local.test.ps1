@@ -589,8 +589,9 @@ exit 0
         'Unified launcher must never manage the PostgreSQL lifecycle.'
 
     $modelExampleText = Get-Content -LiteralPath $modelExample -Raw
+    $retiredModelExpressionKey = 'PORTFOLIO_MODEL_' + 'EXPRESSION'
     Assert-True ($modelExampleText -notmatch `
-            'PORTFOLIO_MODEL_EXPRESSION|PORTFOLIO_MODEL_TIMEOUT|PORTFOLIO_MODEL_OP_ROUTING') `
+            "$retiredModelExpressionKey|PORTFOLIO_MODEL_TIMEOUT|PORTFOLIO_MODEL_OP_ROUTING") `
         'The current model example must not advertise retired aliases.'
     Assert-True ($modelExampleText -match `
             'PORTFOLIO_GOAL_INTERPRETATION_MAX_OUTPUT_TOKENS') `

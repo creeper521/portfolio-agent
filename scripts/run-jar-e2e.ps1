@@ -482,7 +482,7 @@ $applicationArguments = @(
     '--portfolio.agent-runtime.max-active-turns=1000'
 )
 if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
-    $applicationArguments += '--portfolio.model-expression.enabled=false'
+    $applicationArguments += '--portfolio.conversational-model.enabled=false'
     $applicationArguments += '--portfolio.conversational-agent.enabled=false'
 }
 if ($Lane -eq 'PROJECT_DISCUSSION_EXPIRY') {

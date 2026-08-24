@@ -73,8 +73,8 @@ if (($Lane | Where-Object { $_ -in @('L0', 'L3') }).Count -gt 0) {
 
 $environmentNames = @(
     'PORTFOLIO_AGENT_DEEPSEEK_API_KEY',
-    'PORTFOLIO_AGENT_MODEL_PROVIDER',
-    'PORTFOLIO_MODEL_EXPRESSION_ENABLED',
+    'PORTFOLIO_MODEL_PROVIDER',
+    'PORTFOLIO_MODEL_ENABLED',
     'PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED',
     'PLAYWRIGHT_EXTERNAL_SERVER',
     'PLAYWRIGHT_REAL_API',
@@ -105,8 +105,6 @@ if ($Lane -contains 'L4') {
 $environment = @{}
 foreach ($name in $environmentNames) { $environment[$name] = Get-EnvSnapshot $name }
 $results = [System.Collections.Generic.List[object]]::new()
-$secretName = 'PORTFOLIO_AGENT_DEEPSEEK_API_KEY'
-
 try {
     foreach ($currentLane in $Lane) {
         $startedAt = Get-Date
@@ -114,14 +112,14 @@ try {
         $exitCode = 0
         try {
             if ($currentLane -eq 'L0') {
-                $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                $env:PORTFOLIO_MODEL_ENABLED = 'false'
                 $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
                 & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
                     '-Dtest=AgentTurnScenarioManifestTest,AgentTurnClosedContractIntegrationTest' test
                 $exitCode = $LASTEXITCODE
                 if ($exitCode -ne 0) { throw "L0 test process exited with $exitCode." }
             } elseif ($currentLane -eq 'L3') {
-                $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                $env:PORTFOLIO_MODEL_ENABLED = 'false'
                 $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
                 & $MavenExecutable -f (Join-Path $root 'backend\pom.xml') `
                     '-Dtest=GoalProposalCodecTest,GeneralDraftCodecAdversarialTest,OpenAiCompatibleStructuredModelTransportDeadlineTest' test
@@ -139,7 +137,7 @@ try {
                         $null = $line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$'
                         Set-Item -LiteralPath "Env:$($Matches[1])" -Value $Matches[2].Trim()
                     }
-                    $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                    $env:PORTFOLIO_MODEL_ENABLED = 'false'
                     $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
                     $declaredProvider = if ([string]::IsNullOrWhiteSpace(
                             $env:PORTFOLIO_MODEL_PROVIDER)) {
@@ -158,7 +156,7 @@ try {
                         -Port $Port -ContextMode $ContextMode -RequireLiveProvider `
                         -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
                 } else {
-                    $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
+                    $env:PORTFOLIO_MODEL_ENABLED = 'false'
                     $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'false'
                     $laneContextMode = if ($currentLane -eq 'L2') {
                         'POSTGRESQL'
@@ -194,7 +192,6 @@ try {
     }
 } finally {
     foreach ($name in $environmentNames) { Restore-Env $name $environment[$name] }
-    Remove-Variable -Name secret -ErrorAction SilentlyContinue
 }
 
 $results | ConvertTo-Json -Depth 4 -Compress

@@ -197,7 +197,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-99 | P1 | State 隐私测试扫描错对象 | Codec 测试已扫描解密后的 publicTurn、contexts、challenges 完整明文，待最终总门 | 扫描 publicTurn、contexts、challenges 和完整明文 | State Codec Tests |
 | A2-100 | P1 | 不同验证层被合并为 PASS | release 汇总已拆分 deterministic、scenario runtime、Browser contract/body、PostgreSQL/JVM restart、Provider Quality；未执行层不再被总 PASS 覆盖 | 分开报告确定性、Browser、PostgreSQL、Provider Quality | Release Reporting |
 | A2-101 | P2 | 测试数量高估产品覆盖 | 分层汇总与 scenario runner 已按 35 个用户 case 报告 matched/setup/hard-error coverage；当前 scenario runtime 明确为 FAILED | 以用户场景和风险门报告覆盖 | Verification Governance |
-| A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | 脚本设置 `portfolio.model-expression.*`，真实属性前缀已是 `portfolio.conversational-model` | 删除全部退役键和脚本引用 | Configuration Cleanup |
+| A2-102 | P2 | legacy model-expression 配置仍被脚本使用 | Eval、packaged JAR 与 behavior runner 已统一使用当前 `conversational-model`/`PORTFOLIO_MODEL_ENABLED`；生产脚本零残留门通过 | 删除全部退役键和脚本引用 | Configuration Cleanup |
 | A2-103 | P2 | Portfolio expression timeout 无执行消费者 | 幽灵 expression 能力选择删除，预算字段、环境键和预算关系已同步移除；待最终配置总门 | 随表达器实现接入实际 operation，或删除该预算 | Runtime Configuration |
 | A2-104 | P2 | Portfolio expression 编译器未接线 | 零生产入口的 Port/Compiler、可选执行分支及孤立测试已物理删除；待最终清理总门 | 实现并接入或物理删除 | Portfolio Expression |
 | A2-105 | P2 | Conversation history 配置无消费者 | `max-history-rounds/recent-raw-rounds/max-input-tokens` 及零消费者属性已删除；待最终配置总门 | 实现唯一消费方或删除 | Conversation Configuration |
@@ -978,6 +978,12 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **GLM 独立运行：** 使用同一 JAR 在独立 JVM/端口启动；仓库外 Secret 文件声明了 GLM key 变量但值为空，生产 readiness 失败关闭，social probe 报 `PROVIDER_RESPONSE_INVALID`，quality gate 报 `GENERAL_QUALITY_CONFIG_INVALID`，没有发送真实 GLM 请求。该结果只证明配置阻塞被诚实报告，不构成 GLM Transport/schema/quality 证据。
 - **状态：** A2-82 获得真实失败类别分布；A2-80/81/87/88 仍为 `IN_PROGRESS`。DeepSeek 成功率为 0、GLM 未获可用凭据时，禁止把矩阵或整体标为 PASS。
 - **本批验证证据：** `assert-live-general-answer-quality.test.ps1`、`run-jar-e2e.test.ps1`、`run-agent-behavior-audit-assets.test.ps1` 通过；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过。真实矩阵使用本批最终 Backend 源码生成且已通过 920 tests、0 failures、0 errors、4 skipped 的同一 packaged JAR；本批只修改验证脚本与文档，JAR SHA-256 保持 `765377d375b78b961eb1f918727d2700ec85fa06778f891652a6f3d41eb1a370`。
+
+### 10.14 退役模型配置键清理（2026-08-24）
+
+- **A2-102：** `run-eval.ps1`、`run-eval-offline.ps1` 与 `run-jar-e2e.ps1` 不再写入无消费者的 `portfolio.model-expression.*`，统一改为 `portfolio.conversational-model.*`。`run-agent-behavior-audit.ps1` 不再写入 `PORTFOLIO_MODEL_EXPRESSION_ENABLED` 或错误的 `PORTFOLIO_AGENT_MODEL_PROVIDER`，统一消费 `PORTFOLIO_MODEL_ENABLED` 与 `PORTFOLIO_MODEL_PROVIDER`。
+- 新 `current-model-config-surface.test.ps1` 扫描所有非测试 PowerShell 资产，禁止退役 property/env 前缀，并要求四个 runner 显式使用当前权威；仓库 `scripts + backend/src/main + backend/src/test` 对退役字面量零命中。Eval、offline Eval、packaged JAR、start-local、privacy 与 behavior assets 专属测试通过。
+- 原 `run-agent-behavior-audit.test.ps1` 仍要求不存在的 Frontend `test:e2e:behavior`/Playwright projects，与已通过的 `run-agent-behavior-audit-assets.test.ps1`（要求现存 `test:e2e` 且禁止这些死亡资产）互相冲突；该文件已有 Frontend Agent 工作区修改，本批不覆盖、不暂存。此冲突继续归 A2-89/A2-90 前端验收资产清理，不否定 A2-102 的配置零残留证据，也不得被隐藏为全 runner PASS。
 
 ## 11. 修复前需要冻结的选择
 

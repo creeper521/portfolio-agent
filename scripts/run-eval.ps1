@@ -36,9 +36,9 @@ try {
     $realProvider = $CliArgs -contains '--authorize-real-provider'
     if (-not $realProvider) {
         $arguments += @(
-            '-Dportfolio.model-expression.enabled=false',
+            '-Dportfolio.conversational-model.enabled=false',
             '-Dportfolio.conversational-agent.enabled=false',
-            '-Dportfolio.model-expression.external-data-policy-approved=false',
+            '-Dportfolio.conversational-model.external-data-policy-approved=false',
             '-Dportfolio.conversational-agent.visitor-data-policy-approved=false')
     }
     $arguments += @(

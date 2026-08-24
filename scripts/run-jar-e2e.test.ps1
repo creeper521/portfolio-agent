@@ -302,7 +302,7 @@ try {
     }
     $normalJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
     foreach ($disabledArgument in @(
-        '--portfolio.model-expression.enabled=false',
+        '--portfolio.conversational-model.enabled=false',
         '--portfolio.conversational-agent.enabled=false'
     )) {
         $matchCount = ([regex]::Matches(
@@ -361,7 +361,7 @@ try {
     }
     $liveJavaArguments = Get-Content -LiteralPath $javaArgumentCapture -Raw
     foreach ($disabledArgument in @(
-        '--portfolio.model-expression.enabled=false',
+        '--portfolio.conversational-model.enabled=false',
         '--portfolio.conversational-agent.enabled=false'
     )) {
     if ($liveJavaArguments -match [regex]::Escape($disabledArgument)) {

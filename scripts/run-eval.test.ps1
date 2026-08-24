@@ -61,6 +61,11 @@ try {
         'runner must launch the packaged jar.'
     Assert-True ($captured -notmatch 'authorize-real-provider') `
         'validate must not carry the real provider flag.'
+    $runnerSource = Get-Content -LiteralPath $runner -Raw
+    Assert-True ($runnerSource -match 'portfolio\.conversational-model\.enabled=false') `
+        'offline eval must disable the current model authority.'
+    Assert-True ($runnerSource -notmatch ('portfolio\.model-' + 'expression')) `
+        'offline eval must not set the retired model property prefix.'
 
     $failResult = Invoke-Runner @(
         'validate', '--manifest', $manifest, '--policy', $policy,

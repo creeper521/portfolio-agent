@@ -84,6 +84,11 @@ Start-Sleep -Seconds 120
         'offline runner must not carry the real provider flag.'
     Assert-True ($captured -match 'offline') `
         'offline runner must invoke the offline command.'
+    $runnerSource = Get-Content -LiteralPath $runner -Raw
+    Assert-True ($runnerSource -match 'portfolio\.conversational-model\.enabled=false') `
+        'offline backend must disable the current model authority.'
+    Assert-True ($runnerSource -notmatch ('portfolio\.model-' + 'expression')) `
+        'offline backend must not set the retired model property prefix.'
 
     Start-Sleep -Seconds 1
     $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |

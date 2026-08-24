@@ -708,7 +708,7 @@ $($case.Value)
         throw 'Expected Registry/Descriptor metadata logs to remain allowed.'
     }
 
-    $propertiesRoot = Join-Path $fixtureRoot 'model-expression-properties'
+    $propertiesRoot = Join-Path $fixtureRoot 'conversational-model-properties'
     $propertiesPath = Join-Path $propertiesRoot 'ModelExpressionProperties.java'
     New-Item -ItemType Directory -Force -Path $propertiesRoot | Out-Null
     Set-Content -LiteralPath $propertiesPath -Value @'
