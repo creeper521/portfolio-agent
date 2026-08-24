@@ -178,7 +178,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-80 | P1 | Provider 兼容停留在配置声明 | Registry 声明不能证明真实模型满足 schema | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
 | A2-81 | P1 | Goal timeout 对慢 Provider 偏紧 | 已观察到 Provider 超过 8 秒 | 基于真实 P95 冻结跨端预算 | Timeout Policy / Provider |
 | A2-82 | P2 | Provider HTTP 错误分类太粗 | 401/403、429、5xx 与其他拒绝已分为稳定 code；本地真实 HTTP fixture 通过，待 Provider 运行分布 | 分开统计稳定失败类别 | Transport Diagnostics |
-| A2-83 | P2 | JSON/schema 失败分类不准 | Transport JSON 与 envelope 已分层并进入安全 diagnostics；operation schema/semantic 分层仍未闭合 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
+| A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
 | A2-85 | P1 | 无同 Provider schema repair 决策 | 小字段偏差导致整轮失败 | 批准后允许一次无状态、有界修复或明确保持禁止 | Provider Reliability / Product Decision |
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 当前失败后只能重新提问 | 默认不自动重发，用户明确切换后新 Turn | Provider Selection / Privacy |
@@ -926,7 +926,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 - **A2-79：** DeepSeek 与 GLM 不再由 Transport 内的一份固定模板隐式共享协议；两者拥有独立、带版本的 `ModelProviderProtocolProfile`。按 2026-08-24 官方协议，两家当前批准字段都包含 `response_format={type:json_object}`、`thinking={type:disabled}` 与 `stream=false`，因此 Profile 当前可生成相同字段，但任何后续变化必须各自修改并通过各自 payload 门，不能扩散到另一 Provider。本批没有引入多模型路由。
 - **A2-82：** 非 2xx 已稳定区分为 `AUTHENTICATION_REJECTED`（401/403）、`RATE_LIMITED`（429）、`PROVIDER_UNAVAILABLE`（5xx）和 `PROVIDER_REJECTED`（其他 4xx）；诊断只保留 closed code/layer 和耗时桶，不记录 Provider response body。
-- **A2-83：** HTTP/连接失败属于 `TRANSPORT`，非法 JSON 属于 `JSON`，Chat Completions 外层形状错误属于 `ENVELOPE`。operation codec 的 schema 与 semantic 失败仍共用 `IllegalArgumentException` 路径，本批没有伪造已完成的四层闭环，因此 A2-83 保持 `IN_PROGRESS`。
+- **A2-83：** HTTP/连接失败属于 `TRANSPORT`，非法 JSON 属于 `JSON`，Chat Completions 外层形状错误属于 `ENVELOPE`。后续批次已补齐 operation 边界：Goal/General Codec 拒绝记为 `SCHEMA/OUTPUT_SCHEMA_REJECTED`，General Validator 与 Goal typed scope 拒绝记为 `SEMANTIC/OUTPUT_SEMANTIC_REJECTED`。Provider call 成功与 output reject 分为两个事件，不把结构闭合作为回答成功。
 - **A2-84：** `BodyHandlers.ofString()` 已替换为读取期有界 subscriber，UTF-8 响应体超过 256 KiB 即取消订阅并返回 `RESPONSE_TOO_LARGE`；原 absolute deadline 仍覆盖等待响应头和完整响应体，body-stall 与线程中断取消回归继续通过。
 - **专属门：** `OpenAiCompatibleStructuredModelTransportProtocolTest` 覆盖两个 Provider 的完整字段集合、六类 HTTP fixture、JSON/envelope diagnostics、response body sentinel 不进入 diagnostics，以及 256 KiB + 1 拒绝；`OpenAiCompatibleStructuredModelTransportDeadlineTest` 覆盖 body stall 与中断取消。本地门只证明 Transport 行为，不替代 A2-80/81/87/88 的真实 Provider schema、P95、独立矩阵和样本量。
 - **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 916 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 501 个生产文件通过；最终 packaged JAR SHA-256 为 `7bba720235e76e44e1403aae04c7331a574db4c05c2208d10c31fe9e43b6a67d`。本批未运行真实 Provider 或 Browser，因此整体和相关条目继续保持 `IN_PROGRESS`。
@@ -948,6 +948,14 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **专属门：** `PortfolioPresentationComposerTest` 证明同 section 两条事实只形成一个叙述块且保留两个来源；`CrossDomainTaskExecutorTest` 证明 mechanism、IMPLEMENTATION 对应关系与 caveat 均出现在公开 presentation，并拒绝旧固定关系句。Provenance 与 support isolation 回归继续通过。
 - **范围：** 本批没有模型表达调用、公开 DTO 或 Frontend 改动。确定性测试不能证明真实 Provider 生成的概念机制质量或 Browser 正文可读性，A2-38/A2-50 和整体继续保持 `IN_PROGRESS`。
 - **本批验证证据：** 2026-08-24 后端 `clean package -DskipFrontend=true` 为 917 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 496 个生产文件通过；packaged JAR SHA-256 为 `1331454b9d479b26945dcddc5ebc04f82f4c958535c57e7ae028864b9c63433b`。未运行真实 Provider 或 Browser。
+
+### 10.10 Provider output diagnostics 分层（2026-08-24）
+
+- `provider.call.completed` 只说明 HTTP/envelope transport 成功，不再吞并后续回答合同结论；Codec 或 Validator 拒绝另发 `provider.output.rejected`。
+- Goal/General Codec 的 JSON 后操作 schema 拒绝固定为 `SCHEMA/OUTPUT_SCHEMA_REJECTED`；General 内容/请求一致性 Validator 与 Goal `SemanticRouteValidator` 的 typed scope 拒绝固定为 `SEMANTIC/OUTPUT_SEMANTIC_REJECTED`。Transport 自身的 `TRANSPORT/JSON/ENVELOPE` 层保持不变。
+- 新 diagnostics 只允许 `provider.operation`、`failure.layer`、`failure.code` 三个 closed 字段；不记录异常类型/消息、Provider body、Prompt、访客输入或模型正文，且 publisher 失败不改变业务行为。
+- `GeneralModelOutputDiagnosticsTest` 分别驱动 schema/semantic 拒绝；`GoalInterpretationAdapterTest` 与 `GoalResolverTest` 分别驱动 Goal schema 与 typed semantic 拒绝，并用 Provider body/访客 sentinel 证明事件无原文。真实 Provider 的各层发生率仍需 A2-80/87/88 矩阵取得，A2-83 和整体保持 `IN_PROGRESS`。
+- **本批验证证据：** 2026-08-24 最终源码的后端 `clean package -DskipFrontend=true` 为 920 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 497 个生产文件通过；最终 packaged JAR SHA-256 为 `faf356244c75974f46fd2c2fb2fe2d7f6b61728503ab651f61ccccf589894e89`。实现初稿把 diagnostics helper 放入 execution 包时被现有模块依赖门拒绝，移至 `common.observability` 后最终 architecture 门通过；未放宽架构规则。本批未运行真实 Provider 或 Browser，故不形成发生率或终端可用性结论。
 
 ## 11. 修复前需要冻结的选择
 

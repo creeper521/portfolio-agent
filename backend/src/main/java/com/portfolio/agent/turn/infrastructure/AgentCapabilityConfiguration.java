@@ -173,14 +173,16 @@ public class AgentCapabilityConfiguration {
             AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
             SystemPromptCatalog prompts,
-            AgentRuntimeReadiness readiness) {
+            AgentRuntimeReadiness readiness,
+            DiagnosticEventPublisher diagnostics) {
         if (!readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION)) {
             return (input, deadline) -> { throw new GoalInterpretationUnavailableException(); };
         }
         return new GoalInterpretationAdapter(
                 transport, objectMapper, new GoalProposalCodec(),
                 prompts.goalInterpretation(),
-                properties.getMaxOutputTokens(), runtimeProperties.getGoalInterpretationTimeout());
+                properties.getMaxOutputTokens(), runtimeProperties.getGoalInterpretationTimeout(),
+                new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }
 
     @Bean
@@ -206,11 +208,13 @@ public class AgentCapabilityConfiguration {
     @Bean
     GeneralTaskExecutor generalTaskExecutor(
             ObjectMapper objectMapper,
-            GeneralKnowledgeModelPort modelPort) {
+            GeneralKnowledgeModelPort modelPort,
+            DiagnosticEventPublisher diagnostics) {
         return new GeneralTaskExecutor(
                 new GeneralKnowledgeGenerator(
                         modelPort, new GeneralDraftCodec(objectMapper),
-                        new GeneralDraftValidator()),
+                        new GeneralDraftValidator(),
+                        new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics)),
                 new GeneralPresentationComposer());
     }
 
@@ -233,12 +237,14 @@ public class AgentCapabilityConfiguration {
     @Bean
     GoalResolver goalResolver(
             PortfolioKnowledgeGateway knowledgeGateway,
-            GoalInterpretationPort goalInterpretationPort) {
+            GoalInterpretationPort goalInterpretationPort,
+            DiagnosticEventPublisher diagnostics) {
         return new GoalResolver(
                 goalInterpretationPort, new PortfolioReviewedGoalSource(knowledgeGateway),
                 new GoalInterpretationInputFactory(),
                 new SafeConversationalFastPath(), new SemanticRouteValidator(),
-                new GoalBoundaryPolicy());
+                new GoalBoundaryPolicy(),
+                new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }
 
     @Bean SemanticPlanCompiler semanticPlanCompiler() {

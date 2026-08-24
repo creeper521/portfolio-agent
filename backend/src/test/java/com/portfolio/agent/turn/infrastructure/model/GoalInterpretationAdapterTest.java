@@ -8,17 +8,42 @@ import com.portfolio.agent.turn.planning.GoalInterpretationResult;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 import com.portfolio.agent.turn.planning.GoalSubjectReference;
+import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoalInterpretationAdapterTest {
+    @Test void reportsGoalCodecRejectionAsSchemaWithoutProviderBody() {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        String providerBody = "{\"privateProviderBody\":\"sentinel\"}";
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                request -> new StructuredModelResponse(providerBody),
+                new ObjectMapper(), new GoalProposalCodec(), "system", 100,
+                Duration.ofSeconds(2), new ModelOutputDiagnostics(events::add));
+
+        assertThatThrownBy(() -> adapter.interpret(input(),
+                com.portfolio.agent.turn.execution.TurnDeadline.after(
+                        Duration.ofSeconds(3), Clock.systemUTC())))
+                .isInstanceOf(com.portfolio.agent.turn.planning
+                        .GoalInterpretationUnavailableException.class);
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getFields().get("provider.operation"))
+                    .isEqualTo("GOAL_INTERPRETATION");
+            assertThat(event.getFields().get("failure.layer")).isEqualTo("SCHEMA");
+            assertThat(event.toString()).doesNotContain(providerBody, "sentinel");
+        });
+    }
+
     @Test void sendsOnlyGoalLevelAuthorityAndDecodesStrictProposal() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
         String systemPrompt = "goal-system-prompt";

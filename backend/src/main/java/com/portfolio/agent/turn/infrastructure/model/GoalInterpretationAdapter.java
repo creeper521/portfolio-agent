@@ -5,6 +5,7 @@ import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
 import com.portfolio.agent.turn.planning.GoalInterpretationPort;
 import com.portfolio.agent.turn.planning.GoalInterpretationResult;
@@ -22,24 +23,43 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
     private final String systemPrompt;
     private final int maxTokens;
     private final Duration timeout;
+    private final ModelOutputDiagnostics outputDiagnostics;
     public GoalInterpretationAdapter(
             StructuredModelTransport transport, ObjectMapper mapper,
             GoalProposalCodec codec, String systemPrompt,
             int maxTokens, Duration timeout) {
+        this(transport, mapper, codec, systemPrompt, maxTokens, timeout,
+                ModelOutputDiagnostics.none());
+    }
+    public GoalInterpretationAdapter(
+            StructuredModelTransport transport, ObjectMapper mapper,
+            GoalProposalCodec codec, String systemPrompt,
+            int maxTokens, Duration timeout,
+            ModelOutputDiagnostics outputDiagnostics) {
         this.transport = transport; this.mapper = mapper; this.codec = codec;
         if (systemPrompt == null || systemPrompt.isBlank()) {
             throw new IllegalArgumentException("systemPrompt is required");
         }
         this.systemPrompt = systemPrompt;
         this.maxTokens = maxTokens; this.timeout = timeout;
+        this.outputDiagnostics = java.util.Objects.requireNonNull(
+                outputDiagnostics, "outputDiagnostics");
     }
     @Override public GoalInterpretationResult interpret(
             GoalInterpretationInput input, TurnDeadline deadline) {
+        String json;
         try {
-            return codec.decode(transport.execute(new StructuredModelRequest(
+            json = transport.execute(new StructuredModelRequest(
                     "GOAL_INTERPRETATION", systemPrompt, prompt(input), maxTokens, 0.0d,
-                    deadline.cappedAt(timeout))).json(), input);
-        } catch (StructuredModelFailure | IllegalArgumentException failure) {
+                    deadline.cappedAt(timeout))).json();
+        } catch (StructuredModelFailure failure) {
+            throw new GoalInterpretationUnavailableException(failure);
+        }
+        try {
+            return codec.decode(json, input);
+        } catch (IllegalArgumentException failure) {
+            outputDiagnostics.rejected(
+                    "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SCHEMA);
             throw new GoalInterpretationUnavailableException(failure);
         }
     }

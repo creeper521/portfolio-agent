@@ -5,6 +5,8 @@ import com.portfolio.agent.turn.lifecycle.ConversationWindow;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
+import com.portfolio.agent.common.observability.DiagnosticEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,10 +14,36 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GoalResolverTest {
+
+    @Test
+    void reportsTypedScopeRejectionAsSemanticWithoutVisitorOrProposalText() {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        UserGoalProposal proposal = recommendationProposal(2, Set.of());
+        GoalResolver resolver = new GoalResolver(
+                (input, deadline) -> GoalInterpretationResult.semanticRoute(
+                        SemanticRouteProposal.standardGoal(proposal)),
+                command -> proposal, new GoalInterpretationInputFactory(),
+                new SafeConversationalFastPath(), new SemanticRouteValidator(),
+                new GoalBoundaryPolicy(), new ModelOutputDiagnostics(events::add));
+        GoalResolutionContext generalOnly = new GoalResolutionContext(
+                context().getPublicSubjects(), Set.of(GoalKind.GENERAL_EXPLANATION));
+
+        ResolvedGoalSet result = resolver.resolve(
+                freeText("访客原文 sentinel"), generalOnly, deadline());
+
+        assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.CAPABILITY_UNAVAILABLE);
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getFields().get("failure.layer")).isEqualTo("SEMANTIC");
+            assertThat(event.getFields().get("failure.code"))
+                    .isEqualTo("OUTPUT_SEMANTIC_REJECTED");
+            assertThat(event.toString()).doesNotContain("访客原文", "sentinel");
+        });
+    }
 
     @Test
     void freeTextCallsOnlyGoalInterpretationPortOnce() {

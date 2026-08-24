@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.planning;
 
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 import java.util.Objects;
@@ -12,6 +13,7 @@ public final class GoalResolver {
     private final SafeConversationalFastPath conversationalFastPath;
     private final SemanticRouteValidator routeValidator;
     private final GoalBoundaryPolicy boundaryPolicy;
+    private final ModelOutputDiagnostics outputDiagnostics;
 
     public GoalResolver(
             GoalInterpretationPort interpretationPort,
@@ -20,6 +22,19 @@ public final class GoalResolver {
             SafeConversationalFastPath conversationalFastPath,
             SemanticRouteValidator routeValidator,
             GoalBoundaryPolicy boundaryPolicy) {
+        this(interpretationPort, reviewedGoalSource, inputFactory,
+                conversationalFastPath, routeValidator, boundaryPolicy,
+                ModelOutputDiagnostics.none());
+    }
+
+    public GoalResolver(
+            GoalInterpretationPort interpretationPort,
+            ReviewedGoalSource reviewedGoalSource,
+            GoalInterpretationInputFactory inputFactory,
+            SafeConversationalFastPath conversationalFastPath,
+            SemanticRouteValidator routeValidator,
+            GoalBoundaryPolicy boundaryPolicy,
+            ModelOutputDiagnostics outputDiagnostics) {
         this.interpretationPort = Objects.requireNonNull(
                 interpretationPort, "interpretationPort");
         this.reviewedGoalSource = Objects.requireNonNull(
@@ -32,6 +47,8 @@ public final class GoalResolver {
                 routeValidator, "routeValidator");
         this.boundaryPolicy = Objects.requireNonNull(
                 boundaryPolicy, "boundaryPolicy");
+        this.outputDiagnostics = Objects.requireNonNull(
+                outputDiagnostics, "outputDiagnostics");
     }
 
     public ResolvedGoalSet resolve(
@@ -109,9 +126,15 @@ public final class GoalResolver {
                 == GoalInterpretationResult.Kind.CONVERSATIONAL) {
             return result;
         }
-        return GoalInterpretationResult.semanticRoute(
-                routeValidator.validate(
-                        result.getRouteProposal().orElseThrow(), input));
+        try {
+            return GoalInterpretationResult.semanticRoute(
+                    routeValidator.validate(
+                            result.getRouteProposal().orElseThrow(), input));
+        } catch (IllegalArgumentException failure) {
+            outputDiagnostics.rejected(
+                    "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SEMANTIC);
+            throw failure;
+        }
     }
 
     private ResolvedGoalSet resolveRoute(SemanticRouteProposal proposal) {
