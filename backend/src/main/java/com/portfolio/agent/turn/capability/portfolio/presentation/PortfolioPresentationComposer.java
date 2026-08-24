@@ -6,7 +6,9 @@ import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public final class PortfolioPresentationComposer {
@@ -22,21 +24,42 @@ public final class PortfolioPresentationComposer {
         List<PortfolioPresentation.Section> sections = new ArrayList<>();
         int characters = 0;
         int maximumSections = maximumSections(result);
+        Map<AnswerSectionType, List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit>>
+                grouped = new LinkedHashMap<>();
         for (com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit unit
                 : result.getUnits()) {
+            grouped.computeIfAbsent(section(unit.getClaim().getCategory()), ignored ->
+                    new ArrayList<>()).add(unit);
+        }
+        for (Map.Entry<AnswerSectionType,
+                List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit>>
+                entry : grouped.entrySet()) {
             if (sections.size() >= maximumSections) break;
-            String content = content(result, unit);
+            String content = sectionContent(result, entry.getKey(), entry.getValue());
             int next = characters + content.length();
             if (next > policy.getMaximumCharacters()) break;
             sections.add(new PortfolioPresentation.Section(
-                    section(unit.getClaim().getCategory()), label(unit.getClaim().getCategory()),
-                    content, List.of(source(unit.getSourceReference()))));
+                    entry.getKey(), label(entry.getKey()), content,
+                    entry.getValue().stream().map(unit -> source(unit.getSourceReference()))
+                            .distinct().toList()));
             characters = next;
         }
         if (sections.isEmpty()) {
             throw new IllegalArgumentException("supported semantic result exceeds presentation bounds");
         }
         return new PortfolioPresentation("回答", sections);
+    }
+
+    private String sectionContent(
+            PortfolioSemanticResult result,
+            AnswerSectionType sectionType,
+            List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit> units) {
+        List<String> statements = units.stream().map(unit -> content(result, unit)).toList();
+        if (statements.size() == 1) {
+            return statements.getFirst();
+        }
+        return label(sectionType) + "方面，公开证据共同表明："
+                + String.join("；\n", statements);
     }
 
     private PortfolioPresentation comparison(
@@ -140,8 +163,8 @@ public final class PortfolioPresentationComposer {
             default -> AnswerSectionType.SOLUTION;
         };
     }
-    private String label(AnswerClaimCategory category) {
-        return switch (section(category)) {
+    private String label(AnswerSectionType sectionType) {
+        return switch (sectionType) {
             case BACKGROUND -> "背景";
             case RESPONSIBILITY -> "职责";
             case VERIFICATION -> "验证";

@@ -17,5 +17,14 @@ class CrossDomainTaskExecutorTest {
                 (CrossDomainSemanticResult) execution.getArtifact().getSemanticResult();
         assertThat(result.getGeneralStatements()).hasSize(2);
         assertThat(result.getPortfolioStatements()).hasSize(1);
+        CrossDomainPresentation presentation =
+                (CrossDomainPresentation) execution.getArtifact().getPresentation();
+        assertThat(presentation.getSections().get(0).content())
+                .contains("适用边界：机制取决于运行环境。");
+        assertThat(presentation.getSections().get(2).content())
+                .contains(
+                        "“并发控制”的机制是：有界调度限制竞争。",
+                        "实现事实展示该机制的落地方式：任务引擎使用有界并发调度。")
+                .doesNotContain("上述项目事实具体说明了");
     }
 }

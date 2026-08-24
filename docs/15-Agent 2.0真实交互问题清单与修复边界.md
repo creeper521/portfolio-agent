@@ -134,7 +134,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 零实现端口、编译器、可选构造分支与幽灵预算已物理删除；待最终清理总门 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
-| A2-38 | P1 | Portfolio 回答只是 Claim 列表 | Claim statement 被逐条直接投影 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
+| A2-38 | P1 | Portfolio 回答只是 Claim 列表 | 同一 Answer section 的事实已合成为服务端叙述块并聚合全部公开来源；depth/intent 确定性门通过，待 Browser 正文门 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
 | A2-39 | P1 | Portfolio Fact 缺少 depth | typed Goal、澄清恢复与 cross-domain 子任务已携带 depth；deterministic/package 门通过，待真实 Provider/Browser | Portfolio Goal 携带并消费闭合 depth | Goal / Portfolio Capability |
 | A2-40 | P1 | Portfolio depth 可能成为装饰字段 | depth 已控制检索 profile/候选上限、coverage、区块数与详细内容；待真实 Provider/Browser 差异矩阵 | depth 同时控制检索、覆盖、区块和完成判定 | Goal / Retrieval / Presentation |
 | A2-41 | P1 | requestedOutputs 与 facets 双权威 | typed parameters 已成为下游权威，outputs 只作精确一致性校验并由参数重新派生；待真实 Provider 合同门 | 保留一个 AnswerIntent 权威，其他值由后端派生 | Goal Contract / Validator |
@@ -145,7 +145,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-47 | P1 | Portfolio Comparison 未形成比较 | 后端按请求 dimension 生成对齐 section，每节按主体聚合 Claim 与来源；待 Browser 正文与真实 Provider 总门 | 按 dimension 对齐差异、取舍和缺口 | Comparison / Presentation |
 | A2-48 | P1 | 未知 comparison dimension 被当成验证 | Codec 与 Invocation 两层已拒绝未知值；待真实 Provider/Browser 比较门 | 未知值必须拒绝或澄清 | Comparison / Validator |
 | A2-49 | P1 | Portfolio dimension 不是闭合集合 | Goal 已改为后端枚举，检索/coverage 只接收五种维度；待真实 Provider/Browser | 使用后端枚举并逐项验证 | Goal Contract / Comparison |
-| A2-50 | P1 | Cross-domain 只是三段拼接 | 通用段、Claim 段和固定关系句组成结果 | 真实解释概念与项目事实的对应关系 | Synthesis / Presentation |
+| A2-50 | P1 | Cross-domain 只是三段拼接 | 关系段已由 General mechanism 与闭合 Claim category 逐项映射，General caveat 公开为适用边界；待真实 Provider/Browser 语义门 | 真实解释概念与项目事实的对应关系 | Synthesis / Presentation |
 | A2-51 | P1 | Cross-domain depth 固定 STANDARD | depth 已同时传播到 General 与 Portfolio supporting task；待真实 Provider/Browser 综合门 | depth 贯穿 General、Portfolio 和综合结果 | Planning / Synthesis |
 | A2-52 | P1 | 证据不足时详细回答仍可能显得完整 | 详细 overview 缺任一闭合 profile 即 PARTIAL；待真实 Provider/Browser 缺口文案门 | depth 不达标时返回 PARTIAL 和安全缺口 | Coverage / Presentation |
 | A2-53 | P1 | AudienceRole 不影响回答 | 闭合 Audience 已进入所有 task：General Provider 接收角色，Portfolio 在同一证据范围内按角色调整 facet 优先级；待真实 Provider/Browser typed 差异矩阵 | 闭合 role-to-output 策略被生产消费，并由 typed 差异矩阵断言 | Surface Context / Goal / Presentation |
@@ -940,6 +940,14 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **A2-108：** 全生产源码逐类引用核实后，`PortfolioSelectionResult`、`SectionedTaskPresentation`、`QuestionStatus` 只有定义自身，无 Spring/Jackson/反射注册，也无生产消费者，已物理删除；活跃的 Selection、Presentation 与 Question 类型不做名称驱动清理。
 - **A2-109：** Goal 与 General 两个 Provider 输出 Codec 都启用 `FAIL_ON_TRAILING_TOKENS`，并以合法首个对象后追加第二个 `{}` 的负例证明失败关闭。
 - **本批验证证据：** 2026-08-24 后端 `clean package -DskipFrontend=true` 为 916 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 496 个生产文件通过；删除符号与配置键在 `backend/src/main + backend/src/test` 为零引用；packaged JAR SHA-256 为 `619dced1bee3a3834c2bc77aa22dcabe4ee6da4bf07e05cab63c1669d0306f20`。本批未运行 Frontend、Browser 或真实 Provider，整体保持 `IN_PROGRESS`。
+
+### 10.9 Portfolio 与 Cross-domain 表达收敛（2026-08-24）
+
+- **A2-38：** Portfolio Fact 不再按每个 Claim 机械生成一张 section。同一 `AnswerSectionType` 的事实按公开证据顺序合并为一个叙述块，section 同时聚合所有实际使用的 `publicSourceKeys`；CONCISE/STANDARD/DETAILED 的 section 上限和 detail 消费保持由后端 depth 控制。单一事实仍原样投影，避免服务端连接词制造额外事实。
+- **A2-50：** Cross-domain 保持一个 General 与一个 Portfolio typed 结果的严格 fan-in，但关系段不再使用固定“上述事实说明应用”句。后端选取 General `MECHANISM`，再按每条公开 Claim 的闭合 category 映射为背景条件、职责、方案选择、实现、验证、结果或边界关系；关系句只组合已验证 statement，不引入新事实。General caveat 同时进入“适用边界”，不再在综合回答中静默丢失。
+- **专属门：** `PortfolioPresentationComposerTest` 证明同 section 两条事实只形成一个叙述块且保留两个来源；`CrossDomainTaskExecutorTest` 证明 mechanism、IMPLEMENTATION 对应关系与 caveat 均出现在公开 presentation，并拒绝旧固定关系句。Provenance 与 support isolation 回归继续通过。
+- **范围：** 本批没有模型表达调用、公开 DTO 或 Frontend 改动。确定性测试不能证明真实 Provider 生成的概念机制质量或 Browser 正文可读性，A2-38/A2-50 和整体继续保持 `IN_PROGRESS`。
+- **本批验证证据：** 2026-08-24 后端 `clean package -DskipFrontend=true` 为 917 tests、0 failures、0 errors、4 skipped；code-quality、architecture、documentation 通过，privacy 扫描 496 个生产文件通过；packaged JAR SHA-256 为 `1331454b9d479b26945dcddc5ebc04f82f4c958535c57e7ae028864b9c63433b`。未运行真实 Provider 或 Browser。
 
 ## 11. 修复前需要冻结的选择
 

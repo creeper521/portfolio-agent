@@ -49,7 +49,8 @@ public final class CrossDomainTaskExecutor implements SemanticTaskExecutor {
         List<CrossDomainSemanticResult.GroundedPortfolioStatement> selectedPortfolio =
                 portfolio.getUnits().stream().map(value ->
                         new CrossDomainSemanticResult.GroundedPortfolioStatement(
-                                value.getSubjectId(), value.getClaim().getStatement(),
+                                value.getSubjectId(), value.getClaim().getCategory(),
+                                value.getClaim().getStatement(),
                                 value.getSourceReference())).toList();
         if (selectedGeneral.isEmpty() || selectedPortfolio.isEmpty()) {
             throw new TaskTerminalException(TaskTerminalException.Kind.NO_RESULT, TaskTerminalReason.NO_SUPPORTED_RESULT);

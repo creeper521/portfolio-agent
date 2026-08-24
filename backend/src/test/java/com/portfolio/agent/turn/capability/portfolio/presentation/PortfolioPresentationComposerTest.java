@@ -74,6 +74,29 @@ class PortfolioPresentationComposerTest {
     }
 
     @Test
+    void factsForTheSameAnswerSectionBecomeOneEvidenceBoundNarrativeBlock() {
+        PortfolioPresentation presentation = new PortfolioPresentationComposer(
+                PresentationPolicy.defaults()).compose(new PortfolioSemanticResult.Fact(
+                PortfolioSemanticResult.Coverage.FULL,
+                com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope
+                        .allPublished("public-1"),
+                List.of(
+                        unit("1", AnswerClaimCategory.IMPLEMENTATION),
+                        unit("2", AnswerClaimCategory.TECHNICAL_DECISION)),
+                List.of(), UserGoalProposal.Depth.STANDARD));
+
+        assertThat(presentation.getSections()).singleElement().satisfies(section -> {
+            assertThat(section.getSectionType().name()).isEqualTo("SOLUTION");
+            assertThat(section.getContent())
+                    .startsWith("方案方面，公开证据共同表明：")
+                    .contains("陈述1", "陈述2");
+            assertThat(section.getSources()).extracting(
+                    PublicSourceReferenceValue::getReferenceKey)
+                    .containsExactly("E-1", "E-2");
+        });
+    }
+
+    @Test
     void comparisonAlignsEverySubjectInsideDimensionSections() {
         ValidatedEvidenceUnit first = titledUnit(
                 "project-a", "项目甲", "a", AnswerClaimCategory.IMPLEMENTATION);

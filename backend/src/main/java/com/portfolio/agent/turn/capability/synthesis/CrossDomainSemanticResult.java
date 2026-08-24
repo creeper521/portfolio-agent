@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.capability.synthesis;
 
 import com.portfolio.agent.turn.capability.general.GeneralSemanticResult;
+import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.execution.TaskSemanticResult;
 
@@ -36,13 +37,15 @@ public final class CrossDomainSemanticResult implements TaskSemanticResult {
     public List<String> getCaveats() { return caveats; }
 
     public record GroundedPortfolioStatement(
-            String subjectId, String text, PublicSourceReferenceValue sourceReference) {
+            String subjectId, AnswerClaimCategory category, String text,
+            PublicSourceReferenceValue sourceReference) {
         public GroundedPortfolioStatement {
             if (subjectId == null || subjectId.isBlank() || text == null || text.isBlank()) {
                 throw new IllegalArgumentException("grounded statement is invalid");
             }
             subjectId = subjectId.trim();
             text = text.trim();
+            Objects.requireNonNull(category, "category");
             Objects.requireNonNull(sourceReference, "sourceReference");
         }
     }
