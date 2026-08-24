@@ -3,6 +3,8 @@ package com.portfolio.agent.turn.planning;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import com.portfolio.agent.turn.lifecycle.ConversationWindow;
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -40,6 +42,34 @@ class GoalResolverTest {
         assertThat(modelCalls).hasValue(1);
         assertThat(reviewedCalls).hasValue(0);
         assertThat(receivedDeadline).hasValue(deadline);
+    }
+
+    @Test
+    void authenticatedServerSemanticStateReachesInterpretationAsTypedAuthority() {
+        AtomicReference<GoalInterpretationInput> received = new AtomicReference<>();
+        UserGoalProposal proposal = generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
+        GoalResolver resolver = resolver((input, deadline) -> {
+            received.set(input);
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(proposal));
+        }, command -> proposal);
+        ConversationSemanticState state = new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit")),
+                Set.of(GoalRequestedOutput.SOLUTION),
+                Set.of(UserGoalProposal.Facet.SOLUTION),
+                UserGoalProposal.Depth.STANDARD, Set.of(), null, Set.of(),
+                List.of(new ConversationSemanticState.SectionReference(
+                        "section-goal-1-1", AnswerSectionType.SOLUTION)))),
+                java.time.Instant.parse("2026-08-24T05:00:00Z"));
+
+        resolver.resolve(freeText("解释幂等"), context(), deadline(), state);
+
+        assertThat(received.get().getRecentSemanticState()).isSameAs(state);
+        assertThat(received.get().getRecentMessages()).isEmpty();
     }
 
     @Test

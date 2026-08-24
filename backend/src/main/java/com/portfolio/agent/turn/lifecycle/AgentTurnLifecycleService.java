@@ -10,6 +10,8 @@ import com.portfolio.agent.turn.continuation.ClarificationSettlementMutation;
 import com.portfolio.agent.turn.continuation.ContextMutationPlanner;
 import com.portfolio.agent.turn.continuation.ConversationSessionResolver;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
+import com.portfolio.agent.turn.continuation.ConversationSemanticStateProjector;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ContinuationReference;
 import com.portfolio.agent.turn.continuation.ActiveDiscussionPointer;
@@ -62,6 +64,8 @@ import java.util.stream.Collectors;
 
 /** Claim -> resolve -> plan -> execute -> project -> single settlement lifecycle. */
 public final class AgentTurnLifecycleService {
+    private final ConversationSemanticStateProjector semanticStateProjector =
+            new ConversationSemanticStateProjector();
     private final PortfolioKnowledgeGateway knowledgeGateway;
     private final GoalResolver goalResolver;
     private final SemanticPlanCompiler planCompiler;
@@ -226,12 +230,20 @@ public final class AgentTurnLifecycleService {
             return settlementFailed(execution, sessionAuthority);
         }
         Future<TurnExecutionStore.SettlementResult> settlement =
-                stateExecutor.submit(() -> store.completeWithSession(
+                stateExecutor.submit(() -> execution.semanticState() == null
+                        ? store.completeWithSession(
                         requestId, fingerprint, execution.replayTurn(),
                         execution.contexts(), execution.challenges(),
                         sessionToCreate, sessionAccess, clock.instant(),
                         turnDeadline, execution.discussionMutation(),
-                        execution.clarificationMutation()));
+                        execution.clarificationMutation())
+                        : store.completeWithSession(
+                        requestId, fingerprint, execution.replayTurn(),
+                        execution.contexts(), execution.challenges(),
+                        sessionToCreate, sessionAccess, clock.instant(),
+                        turnDeadline, execution.discussionMutation(),
+                        execution.clarificationMutation(),
+                        execution.semanticState()));
         try {
             TurnExecutionStore.SettlementResult completed =
                     settlement.get(remainingMillis, TimeUnit.MILLISECONDS);
@@ -389,7 +401,8 @@ public final class AgentTurnLifecycleService {
             if (referenced != null) return referenced;
         }
         ResolvedInput input = resolveInput(
-                conversationId, resumeTokenHash, command, content,
+                conversationId, resumeTokenHash, sessionAuthority,
+                command, content,
                 turnDeadline);
         if (input.discussionSelection() != null) {
             DiscussionSelectionResolution selection = input.discussionSelection();
@@ -1082,10 +1095,13 @@ public final class AgentTurnLifecycleService {
         PublicAgentTurn settled = projector.project(
                 command.getRequestId(), plan, outcome, continuations);
         PublicAgentTurn replay = replayPolicy.forPlan(settled, plan);
+        ConversationSemanticState semanticState = semanticStateProjector.project(
+                plan, settled, clock.instant());
         return new Execution(
                 readOnly, settled, replay,
                 mutations.stream().map(ContextMutationPlanner.Mutation::context).toList(),
-                List.of(), DiscussionStateMutation.none());
+                List.of(), DiscussionStateMutation.none(),
+                ClarificationSettlementMutation.none(), semanticState);
     }
 
     private Execution clarification(
@@ -1228,6 +1244,7 @@ public final class AgentTurnLifecycleService {
 
     private ResolvedInput resolveInput(
             String conversationId, byte[] tokenHash,
+            ConversationSessionStore.Session sessionAuthority,
             AgentTurnCommand command, RuntimeAnswerContent content,
             TurnDeadline deadline) {
         if (command instanceof AgentTurnCommand.ResolveClarification clarification) {
@@ -1323,10 +1340,15 @@ public final class AgentTurnLifecycleService {
             return new ResolvedInput(
                     ResolvedGoalSet.goals(resolution.proposal()), mutation);
         }
-        return new ResolvedInput(
-                goalResolver.resolve(
-                        command, resolutionContext(content),
-                        deadline.minus(settlementReserve)));
+        ConversationSemanticState semanticState = sessionAuthority == null
+                ? null : sessionAuthority.semanticState();
+        return new ResolvedInput(semanticState == null
+                ? goalResolver.resolve(
+                command, resolutionContext(content),
+                deadline.minus(settlementReserve))
+                : goalResolver.resolve(
+                command, resolutionContext(content),
+                deadline.minus(settlementReserve), semanticState));
     }
 
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {
@@ -1376,7 +1398,19 @@ public final class AgentTurnLifecycleService {
             List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
             List<ClarificationStore.Record> challenges,
             DiscussionStateMutation discussionMutation,
-            ClarificationSettlementMutation clarificationMutation) {
+            ClarificationSettlementMutation clarificationMutation,
+            ConversationSemanticState semanticState) {
+        private Execution(
+                PublicAgentTurn readOnlyTurn,
+                PublicAgentTurn settledTurn,
+                PublicAgentTurn replayTurn,
+                List<com.portfolio.agent.turn.continuation.ContinuationContext> contexts,
+                List<ClarificationStore.Record> challenges,
+                DiscussionStateMutation discussionMutation,
+                ClarificationSettlementMutation clarificationMutation) {
+            this(readOnlyTurn, settledTurn, replayTurn, contexts, challenges,
+                    discussionMutation, clarificationMutation, null);
+        }
         private Execution(
                 PublicAgentTurn readOnlyTurn,
                 PublicAgentTurn settledTurn,
@@ -1386,7 +1420,7 @@ public final class AgentTurnLifecycleService {
                 DiscussionStateMutation discussionMutation) {
             this(readOnlyTurn, settledTurn, replayTurn, contexts, challenges,
                     discussionMutation,
-                    ClarificationSettlementMutation.none());
+                    ClarificationSettlementMutation.none(), null);
         }
     }
     private record ResolvedInput(

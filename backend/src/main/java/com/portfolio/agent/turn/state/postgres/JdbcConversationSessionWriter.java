@@ -46,6 +46,14 @@ final class JdbcConversationSessionWriter {
                         + " THEN NULL ELSE existing.active_discussion_project_id END,"
                         + " active_discussion_expires_at=CASE WHEN " + replacement()
                         + " THEN NULL ELSE existing.active_discussion_expires_at END,"
+                        + " semantic_state_key_id=CASE WHEN " + replacement()
+                        + " THEN NULL ELSE existing.semantic_state_key_id END,"
+                        + " semantic_state_nonce=CASE WHEN " + replacement()
+                        + " THEN NULL ELSE existing.semantic_state_nonce END,"
+                        + " semantic_state_ciphertext=CASE WHEN " + replacement()
+                        + " THEN NULL ELSE existing.semantic_state_ciphertext END,"
+                        + " semantic_state_updated_at=CASE WHEN " + replacement()
+                        + " THEN NULL ELSE existing.semantic_state_updated_at END,"
                         + " revision=CASE WHEN " + replacement()
                         + " THEN existing.revision+1 ELSE existing.revision END,"
                         + " revoked_at=CASE WHEN " + replacement()

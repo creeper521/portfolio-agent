@@ -5,6 +5,7 @@ import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
 import com.portfolio.agent.turn.continuation.DiscussionStateMutation;
 import com.portfolio.agent.turn.continuation.ClarificationSettlementMutation;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 
@@ -78,6 +79,26 @@ public interface TurnExecutionStore {
                 contexts, challenges, sessionToCreate, sessionAccess,
                 completedAt, deadline, discussionMutation,
                 clarificationMutation), null);
+    }
+    default SettlementResult completeWithSession(
+            UUID requestId, byte[] requestFingerprint,
+            PublicAgentTurn publicSnapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            TurnDeadline deadline,
+            DiscussionStateMutation discussionMutation,
+            ClarificationSettlementMutation clarificationMutation,
+            ConversationSemanticState semanticState) {
+        if (semanticState == null) {
+            return completeWithSession(
+                    requestId, requestFingerprint, publicSnapshot, contexts,
+                    challenges, sessionToCreate, sessionAccess, completedAt,
+                    deadline, discussionMutation, clarificationMutation);
+        }
+        throw new UnsupportedOperationException(
+                "semantic state settlement is unavailable");
     }
     boolean cancel(UUID requestId, String conversationId, Instant cancelledAt);
     Optional<TurnExecutionRecord> find(UUID requestId);

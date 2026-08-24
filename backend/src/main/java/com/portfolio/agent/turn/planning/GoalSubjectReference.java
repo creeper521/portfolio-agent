@@ -44,7 +44,7 @@ public final class GoalSubjectReference {
     }
 
     public enum Kind { PROJECT, CASE, RESULT }
-    public enum Basis { EXPLICIT_INPUT, SURFACE_HINT, CONTINUATION }
+    public enum Basis { EXPLICIT_INPUT, SURFACE_HINT, CONTINUATION, RECENT_TURN }
 
     @Override
     public boolean equals(Object other) {

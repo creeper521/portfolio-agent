@@ -130,7 +130,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
 | A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v4`/`general.draft.v2` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v5`/`general.draft.v2` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
 | A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
@@ -151,9 +151,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-53 | P1 | AudienceRole 不影响回答 | 闭合 Audience 已进入所有 task：General Provider 接收角色，Portfolio 在同一证据范围内按角色调整 facet 优先级；待真实 Provider/Browser typed 差异矩阵 | 闭合 role-to-output 策略被生产消费，并由 typed 差异矩阵断言 | Surface Context / Goal / Presentation |
 | A2-54 | P1 | Page subjectHint 不参与模型理解 | subjectHint 经公开目录解析为 `defaultSubject` 并进入 Goal Interpretation；无效 hint 仍失败关闭，待真实 Provider/Browser | 当前页面主体成为可信默认或锁定主体 | Surface Context / Goal Interpretation |
 | A2-55 | P1 | 页面省略表达不能稳定绑定主体 | STANDARD 单主体 Portfolio/跨域目标省略 subject 时由后端绑定 `SURFACE_HINT`；显式其他公开主体可覆盖默认，待真实 Browser 省略表达门 | 页面内指代直接绑定 typed subject | Goal Resolution / Frontend Handoff |
-| A2-56 | P1 | 多轮只携带薄 Assistant 摘要 | 下一轮主要看到 Goal label | 保存短期、脱敏的 typed turn summary | Conversation Window / Typed State |
-| A2-57 | P1 | 无法可靠理解“进一步展开” | 上一轮 facet/depth 不在状态中 | 上一成功 Goal 的安全语义可被引用 | Multi-turn Goal State |
-| A2-58 | P1 | 无法引用上一回答区块 | 没有安全的结构化 section reference | 后续可引用公开回答的 typed section | Public Presentation / Multi-turn |
+| A2-56 | P1 | 多轮只携带薄 Assistant 摘要 | V7 已原子保存上一成功 Portfolio Goal 的短期、无正文 typed summary；PostgreSQL AES-GCM 与重启回读门通过，待真实 Provider/Browser | 保存短期、脱敏的 typed turn summary | Conversation Window / Typed State |
+| A2-57 | P1 | 无法可靠理解“进一步展开” | Goal v5 要求 Provider 显式返回匹配 `recentReference.goalId`，后端才注入 `RECENT_TURN`；facet/depth 已进入可信状态，待真实 Provider | 上一成功 Goal 的安全语义可被引用 | Multi-turn Goal State |
+| A2-58 | P1 | 无法引用上一回答区块 | V7 保存公开 `sectionId/sectionKind`，Goal v5 的 section 引用必须精确属于所引用 Goal；待 Browser 正文门 | 后续可引用公开回答的 typed section | Public Presentation / Multi-turn |
 | A2-59 | P1 | 旧 Recommendation hint 长时间滞留 | 后续不相关话题仍可能附带旧 Context | 新话题或非推荐结果后停止附带 | Frontend Context Routing |
 | A2-60 | P1 | Discussion NEEDS_CLARIFICATION 未履约 | 模型不确定被投影成解释不可用 | 产生限定澄清且 pointer 不变 | Discussion / Clarification |
 | A2-61 | P1 | Discussion 澄清缺少闭合选择 | 用户只能重试或退出 | 后端提供合法 facet、输出或候选选择 | Discussion / Public Contract |
@@ -321,7 +321,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 #### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
 
 - `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
-- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v4`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v2` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。Goal v4 包含 depth、闭合 comparison/constraint 与可信页面/受众输入；General v2 包含闭合 aspects 和 typed caveat，不能沿用旧版本名义。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v5`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v2` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。Goal v5 在 v4 的 depth、闭合 comparison/constraint 与可信页面/受众输入上增加显式 typed `recentReference`；General v2 包含闭合 aspects 和 typed caveat，不能沿用旧版本名义。
 - `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
 - `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
 - Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
@@ -378,6 +378,17 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - `GeneralDraftValidatorTest`、`GeneralDraftCodecAdversarialTest`、`GeneralKnowledgeGeneratorTest`、`GeneralTaskExecutorTest`、`OpenAiCompatibleGeneralKnowledgeAdapterTest` 与 `AgentRuntimeReadinessTest` 的正反例通过；Backend clean package 于 2026-08-24 实际执行：`895 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14。
 - 全仓 `privacy-check` 扫描 916 个文件通过，`start-local.test.ps1`、`run-jar-e2e.test.ps1` 与当前权威文档检查通过。model-disabled packaged JAR SHA-256 `500813176cfb553073c3b927a59fc10682c5685235e66b0b245af6794a469c1a` 的 API/隐私 smoke 已通过；35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），未取得真实 Provider 正文或 Browser 证据，A2-63—A2-68 不移除。
 - 本批未修改 Frontend，公开渲染合同未变化；真实正文的语言、深度、Comparison coverage 与 caveat 相关性 Browser 验收仍交由 Frontend Agent 执行，UI/交互设计不在本批范围。
+
+#### 3.3.8 Typed 多轮语义状态后端证据（仍为 IN_PROGRESS）
+
+- Session V7 新增 `semantic_state_key_id/nonce/ciphertext/updated_at` 四列并以 all-or-nothing constraint 失败关闭；状态与成功终局在同一 settlement 事务中原子替换。Memory 与 PostgreSQL 使用同一 `ConversationSemanticState`，数据库 payload 由独立 AAD 的 AES-GCM envelope 保护，密钥覆盖与 previous-key 检查包含该 payload。
+- 状态只投影成功 Portfolio Fact/Compare/Recommend 的闭合 GoalKind、公开 subject ID、requested outputs、facet/depth、comparison dimension、requested size、闭合 constraints 与公开 `sectionId/sectionKind`；不保存 Goal label、访客 anchor/topic/concept、client conversationWindow、section title/content、Provider 正文、Prompt、Token 或 handle。General 与跨域 concept 不伪装为可恢复语义。
+- Goal JSON 合同升级为 `goal.proposal.v5`。Provider 必须在明确引用上一回答时返回精确 `recentReference.goalId` 与可选 `sectionId`；Codec 校验二者属于 V7 typed state，Validator 仅在显式引用成功后注入 `RECENT_TURN`。仅有旧状态或 Provider 漏 subject 不会静默绑定上一主题；Provider 输出 `SURFACE_HINT`、`CONTINUATION`、`RECENT_TURN` 或无 anchor 的 subject 均失败关闭，这些 basis 只允许后端注入。
+- `ConversationSemanticStateProjectorTest` 以 visitor/provider sentinel 证明投影 JSON 不含原文、模型标题或正文；`GoalProposalCodecTest`、`SemanticRouteValidatorTest`、`GoalInterpretationInputFactoryTest`、`GoalResolverTest` 证明显式 Goal/section 引用、遗漏不误绑、来源权威与 client messages 分离；`AgentStatePayloadCodecTest` 证明独立 AAD 回读及跨 Conversation 拒绝。
+- `JdbcAgentStateStoreIntegrationTest#typedSemanticStateIsAtomicallyEncryptedAndSurvivesStoreRestart` 使用 Testcontainers PostgreSQL 16.14，证明 typed state 与终局同事务写入、数据库明文不含状态 token，并由新建 JDBC store 实例解密恢复；`ConversationSemanticStateMigrationTest` 证明 V7 没有原文列。Backend clean package 于 2026-08-24 实际执行：`905 tests / 0 failures / 0 errors / 4 skipped`。
+- `postgres-local.test.ps1`、`start-local.test.ps1` 与当前权威 `run-agent-behavior-audit-assets.test.ps1` 已通过。旧 `run-agent-behavior-audit.test.ps1` 在当前 HEAD 与资产门互相矛盾：它要求已删除的 `test:e2e:behavior/api-l0/runtime`；当前工作树另有 Frontend Agent 修改，故本批不覆盖或暂存该文件，也不把该僵尸测试记为通过。
+- 全仓 `privacy-check` 扫描 918 个文件通过；model-disabled packaged JAR SHA-256 `524ba7550bd3a603afd5c1572c66b2f01e819ef44f05c292243fc39e3859cb5f` 的 IN_MEMORY API/隐私 smoke 通过。35 条 runtime 场景仍为 `FAILED`（0 PASS、4 IN_PROGRESS、31 FAILED），该结果不冒充真实语义成功。
+- 本批没有修改 Frontend 或公开 API。真实 Provider 是否稳定产生正确 `recentReference`、Browser 是否能以“进一步展开/第 N 个区块”得到正确正文，仍由 Frontend Agent 的 UI/交互与 Browser 语义门验收；A2-56—A2-58 和整体 Agent 2.0 保持 `IN_PROGRESS`。
 
 ### 3.4 本轮审计证据边界
 

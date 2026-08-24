@@ -527,7 +527,10 @@ SELECT CASE
             AND column_name IN (
                 'active_discussion_handle',
                 'active_discussion_project_id',
-                'active_discussion_expires_at', 'revision')) = 4
+                'active_discussion_expires_at', 'revision',
+                'semantic_state_key_id', 'semantic_state_nonce',
+                'semantic_state_ciphertext',
+                'semantic_state_updated_at')) = 8
     THEN 1 ELSE 0 END;
 "@ -Capture
     if (@($result | Where-Object { $_ -eq '1' }).Count -eq 0) {

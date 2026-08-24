@@ -228,6 +228,31 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 List.of(tokenHash), completedAt, deadline).orElse(null));
     }
 
+    @Override public synchronized SettlementResult completeWithSession(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation,
+            com.portfolio.agent.turn.continuation.ConversationSemanticState semanticState) {
+        SettlementResult settled = completeWithSession(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation, clarificationMutation);
+        if (!settled.completed() || semanticState == null) return settled;
+        byte[] tokenHash = sessionAccess.tokenHash() != null
+                ? sessionAccess.tokenHash() : sessionToCreate.tokenHash();
+        if (!sessionStore.replaceSemanticState(
+                sessionAccess.conversationId(), tokenHash, semanticState, completedAt)) {
+            throw new IllegalStateException("semantic state settlement failed");
+        }
+        return new SettlementResult(true, sessionStore.find(
+                List.of(tokenHash), completedAt, deadline).orElse(null));
+    }
+
     @Override public synchronized boolean cancel(
             UUID requestId, String conversationId, Instant cancelledAt) {
         AtomicBoolean cancelled = new AtomicBoolean();

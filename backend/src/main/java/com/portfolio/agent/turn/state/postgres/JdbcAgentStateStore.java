@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.state.postgres;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
 import com.portfolio.agent.turn.continuation.ConversationSessionStore;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionRecord;
 import com.portfolio.agent.turn.lifecycle.TurnExecutionStore;
 import com.portfolio.agent.turn.lifecycle.AgentStateStore;
@@ -217,7 +218,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return settleWithSession(
                 requestId, fingerprint, snapshot, contexts, challenges,
                 sessionToCreate, sessionAccess, completedAt, deadline,
-                discussionMutation, clarificationMutation).completed();
+                discussionMutation, clarificationMutation, null).completed();
     }
 
     @Override public SettlementResult completeWithSession(
@@ -232,7 +233,23 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return settleWithSession(
                 requestId, fingerprint, snapshot, contexts, challenges,
                 sessionToCreate, sessionAccess, completedAt, deadline,
-                discussionMutation, clarificationMutation);
+                discussionMutation, clarificationMutation, null);
+    }
+
+    @Override public SettlementResult completeWithSession(
+            UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
+            List<ContinuationContext> contexts,
+            List<ClarificationStore.Record> challenges,
+            ConversationSessionStore.Session sessionToCreate,
+            SessionAccess sessionAccess, Instant completedAt,
+            com.portfolio.agent.turn.execution.TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation,
+            ConversationSemanticState semanticState) {
+        return settleWithSession(
+                requestId, fingerprint, snapshot, contexts, challenges,
+                sessionToCreate, sessionAccess, completedAt, deadline,
+                discussionMutation, clarificationMutation, semanticState);
     }
 
     private SettlementResult settleWithSession(
@@ -243,7 +260,8 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             SessionAccess sessionAccess, Instant completedAt,
             com.portfolio.agent.turn.execution.TurnDeadline deadline,
             com.portfolio.agent.turn.continuation.DiscussionStateMutation discussionMutation,
-            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation) {
+            com.portfolio.agent.turn.continuation.ClarificationSettlementMutation clarificationMutation,
+            ConversationSemanticState semanticState) {
         requireDatabaseTime(deadline);
         SettlementResult result = transactions.execute(status -> {
             applyDatabaseTimeout(deadline);
@@ -275,6 +293,24 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                     row.conversationId(), discussionMutation, deadline)) {
                 status.setRollbackOnly();
                 return new SettlementResult(false, null);
+            }
+            if (semanticState != null) {
+                AgentStatePayloadCodec.Envelope semanticEnvelope =
+                        codec.encodeSemanticState(
+                                row.conversationId().toString(), semanticState);
+                applyDatabaseTimeout(deadline);
+                if (jdbc.update("UPDATE " + sessionTable
+                                + " SET semantic_state_key_id=?,"
+                                + " semantic_state_nonce=?,"
+                                + " semantic_state_ciphertext=?,"
+                                + " semantic_state_updated_at=?"
+                                + " WHERE conversation_id=?",
+                        semanticEnvelope.keyId(), semanticEnvelope.nonce(),
+                        semanticEnvelope.ciphertext(), time(semanticState.updatedAt()),
+                        row.conversationId()) != 1) {
+                    status.setRollbackOnly();
+                    return new SettlementResult(false, null);
+                }
             }
             for (ContinuationContext context : contexts) {
                 AgentStatePayloadCodec.Envelope contextEnvelope = codec.encodeContext(
@@ -653,6 +689,10 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                     sessionTable, "token_key_id", supportedTokenKeyIds, counts.remaining());
             counts.unsupportedKeys += unsupportedSessions;
             counts.consume(unsupportedSessions);
+            int unsupportedSemanticStates = clearUnsupportedSemanticStates(
+                    codec.supportedKeyIds(), counts.remaining());
+            counts.unsupportedKeys += unsupportedSemanticStates;
+            counts.consume(unsupportedSemanticStates);
             return counts.result();
         });
     }
@@ -680,6 +720,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             payloadKeyIds.addAll(jdbc.queryForList(
                     "SELECT DISTINCT payload_key_id FROM " + clarificationTable
                             + " WHERE expires_at>?", String.class, time(now)));
+            payloadKeyIds.addAll(jdbc.queryForList(
+                    "SELECT DISTINCT semantic_state_key_id FROM " + sessionTable
+                            + " WHERE absolute_expires_at>?"
+                            + " AND semantic_state_key_id IS NOT NULL",
+                    String.class, time(now)));
             java.util.LinkedHashSet<String> tokenKeyIds = new java.util.LinkedHashSet<>(
                     jdbc.queryForList("SELECT DISTINCT token_key_id FROM " + sessionTable
                                     + " WHERE absolute_expires_at>?",
@@ -699,6 +744,23 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         if (limit < 1) return 0;
         String condition = unsupportedCondition("t." + keyColumn, supportedKeys);
         return deleteBatch(targetTable, condition, limit, supportedKeys.toArray());
+    }
+
+    private int clearUnsupportedSemanticStates(
+            Set<String> supportedKeys, int limit) {
+        if (limit < 1) return 0;
+        Object[] arguments = java.util.Arrays.copyOf(
+                supportedKeys.toArray(), supportedKeys.size() + 1);
+        arguments[supportedKeys.size()] = limit;
+        return jdbc.update("WITH doomed AS (SELECT t.ctid FROM " + sessionTable
+                        + " t WHERE " + unsupportedCondition(
+                        "t.semantic_state_key_id", supportedKeys)
+                        + " LIMIT ?) UPDATE " + sessionTable + " t SET"
+                        + " semantic_state_key_id=NULL, semantic_state_nonce=NULL,"
+                        + " semantic_state_ciphertext=NULL,"
+                        + " semantic_state_updated_at=NULL FROM doomed"
+                        + " WHERE t.ctid=doomed.ctid",
+                arguments);
     }
 
     private int deleteChildrenOfUnsupportedExecution(
@@ -872,7 +934,9 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                             + " absolute_expires_at, revoked_at,"
                             + " active_discussion_handle,"
                             + " active_discussion_project_id,"
-                            + " active_discussion_expires_at, revision FROM "
+                            + " active_discussion_expires_at, revision,"
+                            + " semantic_state_key_id, semantic_state_nonce,"
+                            + " semantic_state_ciphertext FROM "
                             + sessionTable + " WHERE conversation_id=?"
                             + (lock ? " FOR UPDATE" : ""),
                     (result, index) -> {
@@ -887,6 +951,14 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                                         result.getString("active_discussion_handle"),
                                         result.getString("active_discussion_project_id"),
                                         discussionExpiry.toInstant());
+                        String semanticKeyId = result.getString(
+                                "semantic_state_key_id");
+                        AgentStatePayloadCodec.Envelope semanticEnvelope =
+                                semanticKeyId == null ? null
+                                        : new AgentStatePayloadCodec.Envelope(
+                                        semanticKeyId,
+                                        result.getBytes("semantic_state_nonce"),
+                                        result.getBytes("semantic_state_ciphertext"));
                         return new SessionRow(
                                 result.getBytes("resume_token_hash"),
                                 result.getString("token_key_id"),
@@ -895,7 +967,8 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                                         .toInstant(),
                                 result.getObject("absolute_expires_at", OffsetDateTime.class).toInstant(),
                                 revoked == null ? null : revoked.toInstant(),
-                                pointer, result.getLong("revision"));
+                                pointer, result.getLong("revision"),
+                                semanticEnvelope);
                     }, UUID.fromString(conversationId)));
         } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
     }
@@ -922,7 +995,9 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return new ConversationSessionStore.Session(
                 conversationId, row.tokenHash(), row.createdAt(),
                 row.absoluteExpiresAt(), row.activeDiscussionPointer(),
-                row.discussionRevision());
+                row.discussionRevision(), row.semanticStateEnvelope() == null
+                ? null : codec.decodeSemanticState(
+                conversationId, row.semanticStateEnvelope()));
     }
     private OffsetDateTime time(Instant value) { return value.atOffset(ZoneOffset.UTC); }
     private Instant earlier(Instant first, Instant second) {
@@ -957,7 +1032,8 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             Instant createdAt, Instant absoluteExpiresAt,
             Instant revokedAt,
             com.portfolio.agent.turn.continuation.ActiveDiscussionPointer activeDiscussionPointer,
-            long discussionRevision) { }
+            long discussionRevision,
+            AgentStatePayloadCodec.Envelope semanticStateEnvelope) { }
     private record ReplayChallengeRow(
             String clarificationId, UUID sourceRequestId, String contentReleaseId,
             AgentStatePayloadCodec.Envelope envelope) { }

@@ -94,7 +94,7 @@ class ConversationContextDatabaseConfigurationTest {
         AgentStateStore agentStateStore = configuration.jdbcAgentStateStore(
                 jdbc, transactions, codec, state, database, runtime);
         ConversationSessionStore sessionStore = configuration.jdbcConversationSessionStore(
-                jdbc, transactions, state, database, runtime);
+                jdbc, transactions, state, database, runtime, codec);
 
         assertThat(agentStateStore).isNotNull();
         assertThat(sessionStore).isNotNull();

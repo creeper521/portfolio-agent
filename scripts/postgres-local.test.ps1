@@ -490,8 +490,9 @@ exit 0
         'Command routing must include the read-only Agent State readiness check.'
     Assert-True ($source -match 'reserved_by_request_id' -and
             $source -match 'reservation_expires_at' -and
-            $source -match 'active_discussion_handle') `
-        'check-context must verify V4/V5/V6 state columns, not only legacy tables.'
+            $source -match 'active_discussion_handle' -and
+            $source -match 'semantic_state_ciphertext') `
+        'check-context must verify V4/V5/V6/V7 state columns, not only legacy tables.'
     Assert-True ($source -match "'import-public'") `
         'Command routing must include import-public.'
     Assert-True ($source -match "'activate-public'") `

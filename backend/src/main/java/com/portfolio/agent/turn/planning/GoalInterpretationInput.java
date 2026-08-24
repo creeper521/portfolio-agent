@@ -1,5 +1,7 @@
 package com.portfolio.agent.turn.planning;
 
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -18,6 +20,7 @@ public final class GoalInterpretationInput {
     private final Set<String> allowedRecommendationConstraints;
     private final PublicSubjectDescriptor defaultSubject;
     private final SemanticTaskParameters.AudienceProfile audienceProfile;
+    private final ConversationSemanticState recentSemanticState;
 
     public GoalInterpretationInput(
             String userText,
@@ -76,6 +79,26 @@ public final class GoalInterpretationInput {
             Set<String> allowedRecommendationConstraints,
             PublicSubjectDescriptor defaultSubject,
             SemanticTaskParameters.AudienceProfile audienceProfile) {
+        this(userText, recentMessages, publicSubjects, allowedGoalKinds,
+                interpretationMode, discussionState, lockedSubject,
+                routeCandidates, allowedRoutes, allowedRecommendationConstraints,
+                defaultSubject, audienceProfile, null);
+    }
+
+    public GoalInterpretationInput(
+            String userText,
+            List<String> recentMessages,
+            List<PublicSubjectDescriptor> publicSubjects,
+            Set<GoalKind> allowedGoalKinds,
+            InterpretationMode interpretationMode,
+            DiscussionState discussionState,
+            PublicSubjectDescriptor lockedSubject,
+            List<RouteCandidate> routeCandidates,
+            Set<SemanticRouteProposal.Route> allowedRoutes,
+            Set<String> allowedRecommendationConstraints,
+            PublicSubjectDescriptor defaultSubject,
+            SemanticTaskParameters.AudienceProfile audienceProfile,
+            ConversationSemanticState recentSemanticState) {
         if (userText == null || userText.isBlank() || userText.length() > 2000) {
             throw new IllegalArgumentException("userText is required and bounded");
         }
@@ -99,6 +122,7 @@ public final class GoalInterpretationInput {
                 allowedRecommendationConstraints, "allowedRecommendationConstraints"));
         this.defaultSubject = defaultSubject;
         this.audienceProfile = Objects.requireNonNull(audienceProfile, "audienceProfile");
+        this.recentSemanticState = recentSemanticState;
         if (this.allowedRecommendationConstraints.stream().anyMatch(value ->
                 value == null || !value.matches(
                         "(?:CAREER_TRACK|CAPABILITY)_[A-Z0-9_]{1,64}"))) {
@@ -143,6 +167,55 @@ public final class GoalInterpretationInput {
     public PublicSubjectDescriptor getDefaultSubject() { return defaultSubject; }
     public SemanticTaskParameters.AudienceProfile getAudienceProfile() {
         return audienceProfile;
+    }
+    public ConversationSemanticState getRecentSemanticState() {
+        return recentSemanticState;
+    }
+    public PublicSubjectDescriptor recentPortfolioSubject() {
+        if (recentSemanticState == null) return null;
+        List<ConversationSemanticState.GoalSummary> safeGoals = recentSemanticState.goals().stream()
+                .filter(ConversationSemanticState.GoalSummary::isPortfolioContinuationSafe)
+                .toList();
+        if (safeGoals.size() != 1) return null;
+        return recentPortfolioSubject(safeGoals.getFirst().goalId(), null);
+    }
+    public PublicSubjectDescriptor recentPortfolioSubject(
+            String goalId, String sectionId) {
+        if (recentSemanticState == null) return null;
+        ConversationSemanticState.GoalSummary goal = recentSemanticState.goals().stream()
+                .filter(candidate -> candidate.goalId().equals(goalId)
+                        && candidate.isPortfolioContinuationSafe())
+                .findFirst().orElse(null);
+        if (goal == null || goal.subjects().size() != 1
+                || sectionId != null && goal.sections().stream().noneMatch(
+                section -> section.sectionId().equals(sectionId))) {
+            return null;
+        }
+        ConversationSemanticState.Subject recent = goal.subjects().getFirst();
+        return publicSubjects.stream().filter(subject ->
+                subject.getKind() == recent.kind()
+                        && subject.getReference().equals(recent.reference()))
+                .findFirst().orElse(null);
+    }
+    public UserGoalProposal.Facet recentSectionFacet(
+            String goalId, String sectionId) {
+        if (recentSemanticState == null || sectionId == null) return null;
+        return recentSemanticState.goals().stream()
+                .filter(goal -> goal.goalId().equals(goalId)
+                        && goal.isPortfolioContinuationSafe())
+                .flatMap(goal -> goal.sections().stream())
+                .filter(section -> section.sectionId().equals(sectionId))
+                .findFirst()
+                .map(section -> switch (section.sectionKind()) {
+                    case BACKGROUND -> UserGoalProposal.Facet.BACKGROUND;
+                    case RESPONSIBILITY -> UserGoalProposal.Facet.RESPONSIBILITY;
+                    case SOLUTION -> UserGoalProposal.Facet.SOLUTION;
+                    case VERIFICATION -> UserGoalProposal.Facet.VERIFICATION;
+                    case STATUS -> UserGoalProposal.Facet.STATUS;
+                    case BOUNDARY, GENERAL_PRINCIPLE, PORTFOLIO_EXAMPLE,
+                            RELATION, REJECTED -> null;
+                })
+                .orElse(null);
     }
     public void requireAllowedRecommendationConstraints(Set<String> values) {
         if (!allowedRecommendationConstraints.containsAll(values)) {

@@ -976,6 +976,65 @@ class JdbcAgentStateStoreIntegrationTest {
                 Boolean.class, UUID.fromString(conversationId))).isTrue();
     }
 
+    @Test void typedSemanticStateIsAtomicallyEncryptedAndSurvivesStoreRestart() {
+        String conversationId = UUID.randomUUID().toString();
+        UUID requestId = UUID.randomUUID();
+        byte[] fingerprint = new byte[32];
+        com.portfolio.agent.turn.continuation.ConversationSessionStore.Session session =
+                testSession(requestId, conversationId, now);
+        TurnExecutionStore.SessionAccess access =
+                TurnExecutionStore.SessionAccess.tentative(session);
+        assertThat(store.claim(
+                requestId, conversationId,
+                RequestFingerprintSet.single(fingerprint), access, now,
+                Duration.ofSeconds(35), deadline(Duration.ofSeconds(5))).status())
+                .isEqualTo(TurnExecutionStore.ClaimResult.Status.CLAIMED);
+        com.portfolio.agent.turn.continuation.ConversationSemanticState semanticState =
+                new com.portfolio.agent.turn.continuation.ConversationSemanticState(
+                "public-1", List.of(new com.portfolio.agent.turn.continuation
+                .ConversationSemanticState.GoalSummary(
+                "goal-1", com.portfolio.agent.turn.planning.GoalKind.PORTFOLIO_FACT,
+                List.of(new com.portfolio.agent.turn.continuation
+                        .ConversationSemanticState.Subject(
+                        com.portfolio.agent.turn.planning.GoalSubjectReference.Kind.PROJECT,
+                        "project-a")),
+                Set.of(com.portfolio.agent.turn.planning.GoalRequestedOutput.SOLUTION),
+                Set.of(com.portfolio.agent.turn.planning.UserGoalProposal.Facet.SOLUTION),
+                com.portfolio.agent.turn.planning.UserGoalProposal.Depth.DETAILED,
+                Set.of(), null, Set.of(), List.of(new com.portfolio.agent.turn.continuation
+                .ConversationSemanticState.SectionReference(
+                "section-goal-1-1",
+                com.portfolio.agent.turn.execution.AnswerSectionType.SOLUTION)))),
+                now.plusSeconds(1));
+
+        TurnExecutionStore.SettlementResult settled = store.completeWithSession(
+                requestId, fingerprint,
+                new PublicAgentTurn.Conversational(requestId, "公开终局", List.of()),
+                List.of(), List.of(), session, access, now.plusSeconds(1),
+                deadline(Duration.ofSeconds(5)),
+                com.portfolio.agent.turn.continuation.DiscussionStateMutation.none(),
+                com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.none(),
+                semanticState);
+
+        assertThat(settled.completed()).isTrue();
+        assertThat(settled.sessionSnapshot().semanticState()).isEqualTo(semanticState);
+        byte[] ciphertext = jdbc.queryForObject(
+                "SELECT semantic_state_ciphertext FROM"
+                        + " agent_context.conversation_session WHERE conversation_id=?",
+                byte[].class, UUID.fromString(conversationId));
+        assertThat(new String(ciphertext, java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("project-a", "goal-1", "SOLUTION");
+        JdbcConversationSessionStore restarted = new JdbcConversationSessionStore(
+                jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+                "agent_context", "token-key-1", Set.of("token-key-1"),
+                Duration.ofSeconds(3), Clock.fixed(now, ZoneOffset.UTC), codec);
+        assertThat(findSession(restarted, session.tokenHash(), now.plusSeconds(2)))
+                .get().extracting(
+                        com.portfolio.agent.turn.continuation
+                                .ConversationSessionStore.Session::semanticState)
+                .isEqualTo(semanticState);
+    }
+
     private JdbcConversationSessionStore sessions() {
         return new JdbcConversationSessionStore(
                 jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource)),

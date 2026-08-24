@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 
 import javax.crypto.Cipher;
@@ -77,6 +78,19 @@ public final class AgentStatePayloadCodec {
         return decodeValue(
                 requestId, conversationId, "context:" + contextHandle,
                 envelope, ContinuationContext.class);
+    }
+    public Envelope encodeSemanticState(
+            String conversationId, ConversationSemanticState state) {
+        return encodeValue(
+                UUID.fromString(conversationId), conversationId,
+                "conversation-semantic-state", state);
+    }
+    public ConversationSemanticState decodeSemanticState(
+            String conversationId, Envelope envelope) {
+        return decodeValue(
+                UUID.fromString(conversationId), conversationId,
+                "conversation-semantic-state", envelope,
+                ConversationSemanticState.class);
     }
     public Envelope encodeChallenge(
             UUID requestId, String conversationId, ClarificationStore.Record challenge) {

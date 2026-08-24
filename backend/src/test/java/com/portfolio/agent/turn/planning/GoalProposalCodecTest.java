@@ -1,7 +1,9 @@
 package com.portfolio.agent.turn.planning;
 
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -30,6 +32,63 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void decodesOnlyAnExactTypedRecentGoalReference() {
+        String validProposal = """
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "recentReference":{"goalId":"goal-1","sectionId":null},
+                  "goal":{
+                    "goalKey":"expand-recent",
+                    "goalKind":"PORTFOLIO_FACT",
+                    "inputAnchor":{"text":"进一步展开","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["SOLUTION"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{"kind":"PORTFOLIO_FACT","facets":["SOLUTION"],
+                      "depth":"DETAILED"}
+                  },
+                  "clarification":null
+                }
+                """;
+        GoalInterpretationResult result = codec.decode(validProposal, recentStateInput());
+
+        assertThat(result.getRouteProposal().orElseThrow().getRecentReference())
+                .contains(new SemanticRouteProposal.RecentSemanticReference(
+                        "goal-1", null));
+        assertThatThrownBy(() -> codec.decode(
+                validProposal
+                        .replace("\"sectionId\":null",
+                                "\"sectionId\":\"section-goal-1-1\"")
+                        .replace("SOLUTION", "STATUS"),
+                recentStateInput()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not match requested facet");
+        assertThatThrownBy(() -> codec.decode("""
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"STANDARD_GOAL",
+                  "candidateKey":null,
+                  "recentReference":{"goalId":"invented-goal","sectionId":null},
+                  "goal":{
+                    "goalKey":"expand-recent",
+                    "goalKind":"PORTFOLIO_FACT",
+                    "inputAnchor":{"text":"进一步展开","start":0},
+                    "subjectCandidates":[],
+                    "requestedOutputs":["SOLUTION"],
+                    "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",
+                    "parameters":{"kind":"PORTFOLIO_FACT","facets":["SOLUTION"],
+                      "depth":"DETAILED"}
+                  },
+                  "clarification":null
+                }
+                """, recentStateInput()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside typed recent state");
+    }
+
+    @Test
     void decodesAndPreservesAllGeneralExplanationDepths() {
         for (UserGoalProposal.Depth expected :
                 UserGoalProposal.Depth.values()) {
@@ -38,6 +97,7 @@ class GoalProposalCodecTest {
                       "kind":"SEMANTIC_ROUTE",
                       "route":"STANDARD_GOAL",
                       "candidateKey":null,
+                      "recentReference":null,
                       "goal":{
                         "goalKey":"general-goal",
                         "goalKind":"GENERAL_EXPLANATION",
@@ -87,6 +147,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"recommend-projects",
                     "goalKind":"PORTFOLIO_RECOMMEND",
@@ -123,6 +184,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"NEEDS_CLARIFICATION",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":null,
                   "clarification":{
                     "field":"SUBJECT",
@@ -165,6 +227,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"ENTER_RECOMMENDED_RESULT",
                   "candidateKey":"C1",
+                  "recentReference":null,
                   "goal":null,
                   "clarification":null
                 }
@@ -177,6 +240,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"ENTER_RECOMMENDED_RESULT",
                   "candidateKey":"C1",
+                  "recentReference":null,
                   "goal":null,
                   "clarification":null,
                   "contextHandle":"secret-handle"
@@ -193,6 +257,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"NEEDS_CLARIFICATION",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":null,
                   "clarification":null
                 }
@@ -215,6 +280,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"CONTINUE_CURRENT_PROJECT",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"discussion-goal",
                     "goalKind":"PORTFOLIO_FACT",
@@ -266,6 +332,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"general-goal",
                     "goalKind":"GENERAL_EXPLANATION",
@@ -287,12 +354,32 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void rejectsProviderOwnedSubjectBasisAndRequiresAnExplicitAnchor() {
+        for (String backendBasis : List.of("SURFACE_HINT", "CONTINUATION", "RECENT_TURN")) {
+            assertThatThrownBy(() -> codec.decode(
+                    standardPortfolioRoute("sql-audit")
+                            .replace("EXPLICIT_INPUT", backendBasis),
+                    input("介绍 SQL 审计项目")))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("non-public subject");
+        }
+        assertThatThrownBy(() -> codec.decode(
+                standardPortfolioRoute("sql-audit")
+                        .replace("\"anchor\":{\"text\":\"SQL 审计项目\",\"start\":3}",
+                                "\"anchor\":null"),
+                input("介绍 SQL 审计项目")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("anchor");
+    }
+
+    @Test
     void normalizesWrongStartOnlyWhenAnchorTextIsUnique() {
         GoalInterpretationResult result = codec.decode("""
                 {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"general-goal",
                     "goalKind":"GENERAL_EXPLANATION",
@@ -322,6 +409,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"general-goal",
                     "goalKind":"GENERAL_EXPLANATION",
@@ -369,6 +457,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"portfolio-overview",
                     "goalKind":"PORTFOLIO_FACT",
@@ -398,6 +487,7 @@ class GoalProposalCodecTest {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
                   "candidateKey":null,
+                  "recentReference":null,
                   "goal":{
                     "goalKey":"portfolio-comparison",
                     "goalKind":"PORTFOLIO_COMPARE",
@@ -437,6 +527,32 @@ class GoalProposalCodecTest {
                         new GoalInterpretationInput.PublicSubjectDescriptor(
                                 GoalSubjectReference.Kind.PROJECT, "agent", "Agent 项目")),
                 Set.of(GoalKind.values()));
+    }
+
+    private GoalInterpretationInput recentStateInput() {
+        GoalInterpretationInput.PublicSubjectDescriptor subject =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit", "SQL 审计项目");
+        ConversationSemanticState state = new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit")),
+                Set.of(GoalRequestedOutput.SOLUTION),
+                Set.of(UserGoalProposal.Facet.SOLUTION),
+                UserGoalProposal.Depth.STANDARD, Set.of(), null, Set.of(),
+                List.of(new ConversationSemanticState.SectionReference(
+                        "section-goal-1-1",
+                        com.portfolio.agent.turn.execution.AnswerSectionType.SOLUTION)))),
+                Instant.parse("2026-08-24T05:00:00Z"));
+        return new GoalInterpretationInput(
+                "进一步展开", List.of(), List.of(subject),
+                Set.of(GoalKind.PORTFOLIO_FACT),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE, null, List.of(),
+                Set.of(SemanticRouteProposal.Route.STANDARD_GOAL), Set.of(), null,
+                SemanticTaskParameters.AudienceProfile.GUEST, state);
     }
 
     private GoalInterpretationInput recommendationInput() {

@@ -38,6 +38,15 @@ public final class GoalResolver {
             AgentTurnCommand command,
             GoalResolutionContext context,
             TurnDeadline deadline) {
+        return resolve(command, context, deadline, null);
+    }
+
+    public ResolvedGoalSet resolve(
+            AgentTurnCommand command,
+            GoalResolutionContext context,
+            TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.ConversationSemanticState
+                    recentSemanticState) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(deadline, "deadline");
@@ -48,7 +57,7 @@ public final class GoalResolver {
         }
         if (command instanceof AgentTurnCommand.Ask ask
                 && ask.getInput() instanceof AgentTurnCommand.FreeText) {
-            return resolveFreeText(ask, context, deadline);
+            return resolveFreeText(ask, context, deadline, recentSemanticState);
         }
         try {
             return boundaryPolicy.apply(reviewedGoalSource.resolve(command));
@@ -61,13 +70,16 @@ public final class GoalResolver {
     private ResolvedGoalSet resolveFreeText(
             AgentTurnCommand.Ask command,
             GoalResolutionContext context,
-            TurnDeadline deadline) {
+            TurnDeadline deadline,
+            com.portfolio.agent.turn.continuation.ConversationSemanticState
+                    recentSemanticState) {
         java.util.Optional<ResolvedGoalSet> conversational =
                 conversationalFastPath.tryResolve(command);
         if (conversational.isPresent()) {
             return conversational.orElseThrow();
         }
-        GoalInterpretationInput input = inputFactory.create(command, context);
+        GoalInterpretationInput input = inputFactory.create(
+                command, context, recentSemanticState);
         try {
             GoalInterpretationResult result =
                     interpretTyped(input, deadline);

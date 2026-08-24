@@ -34,12 +34,12 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
                 : replacement ? new Session(
                 session.conversationId(), session.tokenHash(),
                 session.createdAt(), session.expiresAt(), null,
-                existing.discussionRevision() + 1)
+                existing.discussionRevision() + 1, null)
                 : new Session(
                 session.conversationId(), session.tokenHash(),
                 existing.createdAt(), existing.expiresAt(),
                 existing.activeDiscussion().orElse(null),
-                existing.discussionRevision());
+                existing.discussionRevision(), existing.semanticState());
         sessions.entrySet().removeIf(value ->
                 value.getValue().conversationId().equals(session.conversationId()));
         if (replacement) revokedConversations.remove(session.conversationId());
@@ -99,8 +99,24 @@ public final class InMemoryConversationSessionStore implements ConversationSessi
                         + (mutation.getKind()
                         == DiscussionStateMutation.Kind.REPLACE
                         || mutation.getKind()
-                        == DiscussionStateMutation.Kind.CLEAR ? 1 : 0));
+                        == DiscussionStateMutation.Kind.CLEAR ? 1 : 0),
+                currentSession.semanticState());
         sessions.put(entry.getKey(), updated);
+        return true;
+    }
+    public synchronized boolean replaceSemanticState(
+            String conversationId, byte[] tokenHash,
+            ConversationSemanticState semanticState, Instant now) {
+        if (!authorize(conversationId, tokenHash, now)) return false;
+        java.util.Map.Entry<String, Session> entry = sessions.entrySet().stream()
+                .filter(value -> value.getValue().conversationId().equals(conversationId))
+                .findFirst().orElse(null);
+        if (entry == null) return false;
+        Session current = entry.getValue();
+        sessions.put(entry.getKey(), new Session(
+                current.conversationId(), current.tokenHash(), current.createdAt(),
+                current.expiresAt(), current.activeDiscussion().orElse(null),
+                current.discussionRevision(), semanticState));
         return true;
     }
     public synchronized int cleanup(Instant now, int limit) {

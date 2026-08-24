@@ -9,6 +9,14 @@ public final class GoalInterpretationInputFactory {
     public GoalInterpretationInput create(
             AgentTurnCommand.Ask command,
             GoalResolutionContext context) {
+        return create(command, context, null);
+    }
+
+    public GoalInterpretationInput create(
+            AgentTurnCommand.Ask command,
+            GoalResolutionContext context,
+            com.portfolio.agent.turn.continuation.ConversationSemanticState
+                    recentSemanticState) {
         if (!(command.getInput() instanceof AgentTurnCommand.FreeText freeText)) {
             throw new IllegalArgumentException("only free text uses goal interpretation");
         }
@@ -27,7 +35,8 @@ public final class GoalInterpretationInputFactory {
                 context.resolveHint(command.getSurfaceContext().getSubjectHint()),
                 command.getSurfaceContext().getAudienceRole()
                         .map(value -> SemanticTaskParameters.AudienceProfile.valueOf(
-                                value.name()))
-                        .orElse(SemanticTaskParameters.AudienceProfile.GUEST));
+                        value.name()))
+                        .orElse(SemanticTaskParameters.AudienceProfile.GUEST),
+                recentSemanticState);
     }
 }

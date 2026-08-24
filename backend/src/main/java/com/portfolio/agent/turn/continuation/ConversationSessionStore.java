@@ -14,18 +14,27 @@ public interface ConversationSessionStore {
             String conversationId, byte[] tokenHash,
             Instant createdAt, Instant expiresAt,
             ActiveDiscussionPointer activeDiscussionPointer,
-            long discussionRevision) {
+            long discussionRevision,
+            ConversationSemanticState semanticState) {
         public Session(
                 String conversationId, byte[] tokenHash,
                 Instant createdAt, Instant expiresAt) {
-            this(conversationId, tokenHash, createdAt, expiresAt, null, 0);
+            this(conversationId, tokenHash, createdAt, expiresAt, null, 0, null);
         }
         public Session(
                 String conversationId, byte[] tokenHash,
                 Instant createdAt, Instant expiresAt,
                 ActiveDiscussionPointer activeDiscussionPointer) {
             this(conversationId, tokenHash, createdAt, expiresAt,
-                    activeDiscussionPointer, 0);
+                    activeDiscussionPointer, 0, null);
+        }
+        public Session(
+                String conversationId, byte[] tokenHash,
+                Instant createdAt, Instant expiresAt,
+                ActiveDiscussionPointer activeDiscussionPointer,
+                long discussionRevision) {
+            this(conversationId, tokenHash, createdAt, expiresAt,
+                    activeDiscussionPointer, discussionRevision, null);
         }
         public Session {
             conversationId = ContinuationContext.text(conversationId, "conversationId");
@@ -39,6 +48,9 @@ public interface ConversationSessionStore {
         @Override public byte[] tokenHash() { return tokenHash.clone(); }
         public Optional<ActiveDiscussionPointer> activeDiscussion() {
             return Optional.ofNullable(activeDiscussionPointer);
+        }
+        public Optional<ConversationSemanticState> semanticStateOptional() {
+            return Optional.ofNullable(semanticState);
         }
     }
 }

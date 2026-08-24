@@ -29,6 +29,7 @@ class GoalInterpretationAdapterTest {
                       "kind":"SEMANTIC_ROUTE",
                       "route":"STANDARD_GOAL",
                       "candidateKey":null,
+                      "recentReference":null,
                       "goal":{
                         "goalKey":"general-goal",
                         "goalKind":"GENERAL_EXPLANATION",
@@ -56,7 +57,8 @@ class GoalInterpretationAdapterTest {
                         "allowedRoutes", "routeCandidates",
                         "allowedGoalKinds", "publicSubjects",
                         "allowedRecommendationConstraints", "CAPABILITY_SQL",
-                        "defaultSubject", "audienceProfile")
+                        "defaultSubject", "audienceProfile",
+                        "recentSemanticState")
                 .doesNotContain("taskType", "dependencies");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isZero();

@@ -22,12 +22,67 @@ public final class SemanticRouteValidator {
         });
         SemanticRouteProposal validated = switch (proposal.getRoute()) {
             case CONTINUE_CURRENT_PROJECT -> lockDiscussionGoal(proposal, input);
-            case STANDARD_GOAL -> bindDefaultSubject(proposal, input);
+            case STANDARD_GOAL -> bindDefaultSubject(
+                    bindRecentSubject(proposal, input), input);
             default -> proposal;
         };
         validated.getGoalProposal().ifPresent(goalProposal ->
                 validateGoals(goalProposal, input));
         return validated;
+    }
+
+    private SemanticRouteProposal bindRecentSubject(
+            SemanticRouteProposal proposal,
+            GoalInterpretationInput input) {
+        if (input.getDefaultSubject() != null
+                || input.getInterpretationMode()
+                != GoalInterpretationInput.InterpretationMode.STANDARD
+                || proposal.getGoalProposal().isEmpty()) {
+            return proposal;
+        }
+        SemanticRouteProposal.RecentSemanticReference reference =
+                proposal.getRecentReference().orElse(null);
+        if (reference == null) return proposal;
+        GoalInterpretationInput.PublicSubjectDescriptor recent =
+                input.recentPortfolioSubject(reference.goalId(), reference.sectionId());
+        if (recent == null) {
+            throw new IllegalArgumentException(
+                    "recent semantic reference is outside typed state");
+        }
+        UserGoalProposal source = proposal.getGoalProposal().orElseThrow();
+        if (source.getGoals().size() != 1) {
+            throw new IllegalArgumentException(
+                    "recent semantic reference requires exactly one goal");
+        }
+        UserGoalProposal.ProposedGoal sourceGoal = source.getGoals().getFirst();
+        if (!sourceGoal.getSubjectCandidates().isEmpty()
+                || sourceGoal.getGoalKind() != GoalKind.PORTFOLIO_FACT
+                && sourceGoal.getGoalKind()
+                != GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO) {
+            throw new IllegalArgumentException(
+                    "recent semantic reference cannot override proposed subject");
+        }
+        java.util.List<UserGoalProposal.ProposedGoal> goals = source.getGoals().stream()
+                .map(goal -> bindRecentSubject(goal, recent)).toList();
+        return SemanticRouteProposal.standardGoal(new UserGoalProposal(goals), reference);
+    }
+
+    private UserGoalProposal.ProposedGoal bindRecentSubject(
+            UserGoalProposal.ProposedGoal goal,
+            GoalInterpretationInput.PublicSubjectDescriptor recent) {
+        if (!goal.getSubjectCandidates().isEmpty()
+                || goal.getGoalKind() != GoalKind.PORTFOLIO_FACT
+                && goal.getGoalKind()
+                != GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO) {
+            return goal;
+        }
+        return new UserGoalProposal.ProposedGoal(
+                goal.getGoalKey(), goal.getGoalKind(), goal.getInputAnchor(),
+                java.util.List.of(new GoalSubjectReference(
+                        recent.getKind(), recent.getReference(),
+                        GoalSubjectReference.Basis.RECENT_TURN, null)),
+                goal.getRequestedOutputs(), goal.getKnowledgeRequirement(),
+                goal.getParameters());
     }
 
     private SemanticRouteProposal bindDefaultSubject(
@@ -38,7 +93,8 @@ public final class SemanticRouteValidator {
         if (input.getInterpretationMode()
                 != GoalInterpretationInput.InterpretationMode.STANDARD
                 || defaultSubject == null
-                || proposal.getGoalProposal().isEmpty()) {
+                || proposal.getGoalProposal().isEmpty()
+                || proposal.getRecentReference().isPresent()) {
             return proposal;
         }
         UserGoalProposal source = proposal.getGoalProposal().orElseThrow();

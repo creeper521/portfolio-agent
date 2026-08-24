@@ -5,6 +5,12 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import com.portfolio.agent.turn.continuation.ClarificationChallenge;
 import com.portfolio.agent.turn.continuation.ClarificationStore;
 import com.portfolio.agent.turn.continuation.ContinuationContext;
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
+import com.portfolio.agent.turn.planning.GoalKind;
+import com.portfolio.agent.turn.planning.GoalRequestedOutput;
+import com.portfolio.agent.turn.planning.GoalSubjectReference;
+import com.portfolio.agent.turn.planning.UserGoalProposal;
 import com.portfolio.agent.turn.projection.PublicAgentTurn;
 import com.portfolio.agent.turn.planning.BlockedGoalTemplate;
 import com.portfolio.agent.turn.planning.ClarificationProposal;
@@ -18,6 +24,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AgentStatePayloadCodecTest {
+    @Test void typedConversationSemanticStateRoundTripsWithoutText() {
+        AgentStatePayloadCodec codec = new AgentStatePayloadCodec(
+                JsonMapper.builder().addModule(new ParameterNamesModule())
+                        .addModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                        .build(), "state-key-1", new byte[32]);
+        String conversationId = UUID.randomUUID().toString();
+        ConversationSemanticState state = new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "project-1")),
+                java.util.Set.of(GoalRequestedOutput.SOLUTION),
+                java.util.Set.of(UserGoalProposal.Facet.SOLUTION),
+                UserGoalProposal.Depth.DETAILED, java.util.Set.of(), null,
+                java.util.Set.of(), List.of(
+                new ConversationSemanticState.SectionReference(
+                        "section-goal-1-1", AnswerSectionType.SOLUTION)))),
+                java.time.Instant.parse("2026-08-24T05:00:00Z"));
+
+        AgentStatePayloadCodec.Envelope envelope = codec.encodeSemanticState(
+                conversationId, state);
+        ConversationSemanticState decoded = codec.decodeSemanticState(
+                conversationId, envelope);
+
+        assertThat(decoded).isEqualTo(state);
+        assertThatThrownBy(() -> codec.decodeSemanticState(
+                UUID.randomUUID().toString(), envelope))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("integrity");
+    }
+
     @Test void productionNonNullMapperStillPersistsNullableBlockedGoalFields() {
         com.fasterxml.jackson.databind.ObjectMapper productionMapper = JsonMapper.builder()
                 .addModule(new ParameterNamesModule())

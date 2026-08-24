@@ -1,7 +1,10 @@
 package com.portfolio.agent.turn.planning;
 
+import com.portfolio.agent.turn.continuation.ConversationSemanticState;
+import com.portfolio.agent.turn.execution.AnswerSectionType;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -111,6 +114,93 @@ class SemanticRouteValidatorTest {
         assertThat(bound.getReference()).isEqualTo("sql-audit");
         assertThat(bound.getBasis()).isEqualTo(GoalSubjectReference.Basis.SURFACE_HINT);
         assertThat(bound.getAnchor()).isEmpty();
+    }
+
+    @Test
+    void explicitPreviousTurnReferenceReceivesOnlyTheTypedRecentSubject() {
+        GoalInterpretationInput.PublicSubjectDescriptor subject =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit", "SQL 审计项目");
+        ConversationSemanticState state = new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit")),
+                Set.of(GoalRequestedOutput.SOLUTION),
+                Set.of(UserGoalProposal.Facet.SOLUTION),
+                UserGoalProposal.Depth.STANDARD, Set.of(), null, Set.of(),
+                List.of(new ConversationSemanticState.SectionReference(
+                        "section-goal-1-1", AnswerSectionType.SOLUTION)))),
+                Instant.parse("2026-08-24T05:00:00Z"));
+        GoalInterpretationInput input = new GoalInterpretationInput(
+                "进一步展开", List.of(), List.of(subject),
+                Set.of(GoalKind.PORTFOLIO_FACT),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null, List.of(), Set.of(SemanticRouteProposal.Route.STANDARD_GOAL),
+                Set.of(), null, SemanticTaskParameters.AudienceProfile.GUEST, state);
+        UserGoalProposal.InputAnchor anchor =
+                new UserGoalProposal.InputAnchor("进一步展开", 0);
+        UserGoalProposal unbound = new UserGoalProposal(List.of(
+                new UserGoalProposal.ProposedGoal(
+                        "recent-project", GoalKind.PORTFOLIO_FACT, anchor, List.of(),
+                        Set.of(GoalRequestedOutput.SOLUTION),
+                        GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(UserGoalProposal.Facet.SOLUTION),
+                                UserGoalProposal.Depth.DETAILED))));
+
+        GoalSubjectReference bound = validator.validate(
+                        SemanticRouteProposal.standardGoal(unbound,
+                                new SemanticRouteProposal.RecentSemanticReference(
+                                        "goal-1", "section-goal-1-1")), input)
+                .getGoalProposal().orElseThrow().getGoals().getFirst()
+                .getSubjectCandidates().getFirst();
+
+        assertThat(bound.getReference()).isEqualTo("sql-audit");
+        assertThat(bound.getBasis()).isEqualTo(GoalSubjectReference.Basis.RECENT_TURN);
+        assertThat(bound.getAnchor()).isEmpty();
+    }
+
+    @Test
+    void omittedSubjectWithoutExplicitRecentReferenceIsNotSilentlyBound() {
+        GoalInterpretationInput.PublicSubjectDescriptor subject =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit", "SQL 审计项目");
+        ConversationSemanticState state = new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit")),
+                Set.of(GoalRequestedOutput.OVERVIEW),
+                Set.of(UserGoalProposal.Facet.OVERVIEW),
+                UserGoalProposal.Depth.STANDARD, Set.of(), null, Set.of(), List.of())),
+                Instant.parse("2026-08-24T05:00:00Z"));
+        GoalInterpretationInput input = new GoalInterpretationInput(
+                "介绍一个新主题", List.of(), List.of(subject),
+                Set.of(GoalKind.PORTFOLIO_FACT),
+                GoalInterpretationInput.InterpretationMode.STANDARD,
+                GoalInterpretationInput.DiscussionState.NONE,
+                null, List.of(), Set.of(SemanticRouteProposal.Route.STANDARD_GOAL),
+                Set.of(), null, SemanticTaskParameters.AudienceProfile.GUEST, state);
+        UserGoalProposal.InputAnchor anchor =
+                new UserGoalProposal.InputAnchor("介绍一个新主题", 0);
+        UserGoalProposal unbound = new UserGoalProposal(List.of(
+                new UserGoalProposal.ProposedGoal(
+                        "new-topic", GoalKind.PORTFOLIO_FACT, anchor, List.of(),
+                        Set.of(GoalRequestedOutput.OVERVIEW),
+                        GoalKnowledgeRequirement.PUBLIC_PORTFOLIO_EVIDENCE,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(UserGoalProposal.Facet.OVERVIEW),
+                                UserGoalProposal.Depth.STANDARD))));
+
+        SemanticRouteProposal validated = validator.validate(
+                SemanticRouteProposal.standardGoal(unbound), input);
+
+        assertThat(validated.getGoalProposal().orElseThrow().getGoals().getFirst()
+                .getSubjectCandidates()).isEmpty();
     }
 
     private GoalInterpretationInput input(Set<SemanticRouteProposal.Route> routes) {

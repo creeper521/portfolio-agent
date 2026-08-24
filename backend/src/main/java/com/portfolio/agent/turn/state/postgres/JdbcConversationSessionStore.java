@@ -23,6 +23,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
     private final Clock clock;
     private final Duration databaseOperationTimeout;
     private final JdbcConversationSessionWriter writer;
+    private final AgentStatePayloadCodec payloadCodec;
     public JdbcConversationSessionStore(
             JdbcTemplate jdbc, TransactionTemplate transactions,
             String schema, String tokenKeyId) {
@@ -38,12 +39,20 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
             String schema, String tokenKeyId, Set<String> supportedTokenKeyIds,
             Clock clock) {
         this(jdbc, transactions, schema, tokenKeyId, supportedTokenKeyIds,
-                Duration.ofSeconds(3), clock);
+                Duration.ofSeconds(3), clock, null);
     }
     public JdbcConversationSessionStore(
             JdbcTemplate jdbc, TransactionTemplate transactions,
             String schema, String tokenKeyId, Set<String> supportedTokenKeyIds,
             Duration databaseOperationTimeout, Clock clock) {
+        this(jdbc, transactions, schema, tokenKeyId, supportedTokenKeyIds,
+                databaseOperationTimeout, clock, null);
+    }
+    public JdbcConversationSessionStore(
+            JdbcTemplate jdbc, TransactionTemplate transactions,
+            String schema, String tokenKeyId, Set<String> supportedTokenKeyIds,
+            Duration databaseOperationTimeout, Clock clock,
+            AgentStatePayloadCodec payloadCodec) {
         this.jdbc = jdbc; this.transactions = transactions;
         if (schema == null || !schema.matches("[a-z_][a-z0-9_]{0,62}")) {
             throw new IllegalArgumentException("schema is invalid");
@@ -65,6 +74,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
             throw new IllegalArgumentException("databaseOperationTimeout is invalid");
         }
         this.databaseOperationTimeout = databaseOperationTimeout;
+        this.payloadCodec = payloadCodec;
     }
     @Override public Optional<Session> find(
             java.util.List<byte[]> tokenHashes, Instant now,
@@ -76,7 +86,9 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                     "SELECT conversation_id, resume_token_hash, created_at,"
                             + " absolute_expires_at, active_discussion_handle,"
                             + " active_discussion_project_id,"
-                            + " active_discussion_expires_at, revision FROM " + table
+                            + " active_discussion_expires_at, revision,"
+                            + " semantic_state_key_id, semantic_state_nonce,"
+                            + " semantic_state_ciphertext FROM " + table
                             + " WHERE resume_token_hash IN (" + placeholders(tokenHashes.size())
                             + ") AND revoked_at IS NULL"
                             + " AND absolute_expires_at>? AND token_key_id IN ("
@@ -93,6 +105,23 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                                         result.getString(
                                                 "active_discussion_project_id"),
                                         discussionExpiry.toInstant());
+                        String semanticKeyId = result.getString(
+                                "semantic_state_key_id");
+                        com.portfolio.agent.turn.continuation.ConversationSemanticState
+                                semanticState = null;
+                        if (semanticKeyId != null) {
+                            if (payloadCodec == null) {
+                                throw new IllegalStateException(
+                                        "semantic state codec is unavailable");
+                            }
+                            semanticState = payloadCodec.decodeSemanticState(
+                                    result.getObject("conversation_id", UUID.class)
+                                            .toString(),
+                                    new AgentStatePayloadCodec.Envelope(
+                                            semanticKeyId,
+                                            result.getBytes("semantic_state_nonce"),
+                                            result.getBytes("semantic_state_ciphertext")));
+                        }
                         return new Session(
                                 result.getObject(
                                         "conversation_id", UUID.class)
@@ -105,7 +134,7 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                                         "absolute_expires_at",
                                         OffsetDateTime.class).toInstant(),
                                 pointer,
-                                result.getLong("revision"));
+                                result.getLong("revision"), semanticState);
                     },
                         findParameters(tokenHashes, time(now), supportedTokenKeyIds)));
             } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }

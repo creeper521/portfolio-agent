@@ -48,6 +48,7 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             Map<String, Object> projection = new LinkedHashMap<>();
             projection.put("currentInput", input.getUserText());
             projection.put("recentConversation", input.getRecentMessages());
+            projection.put("recentSemanticState", input.getRecentSemanticState());
             projection.put("interpretationMode", input.getInterpretationMode());
             projection.put("discussionState", input.getDiscussionState());
             projection.put("allowedGoalKinds", input.getAllowedGoalKinds());

@@ -15,7 +15,7 @@ import java.util.Set;
 
 public final class GoalProposalCodec {
 
-    public static final String SCHEMA_VERSION = "goal.proposal.v4";
+    public static final String SCHEMA_VERSION = "goal.proposal.v5";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
 
@@ -43,7 +43,8 @@ public final class GoalProposalCodec {
     private GoalInterpretationResult decodeSemanticRoute(
             JsonNode root, GoalInterpretationInput input) {
         Set<String> fields = Set.of(
-                "kind", "route", "candidateKey", "goal", "clarification");
+                "kind", "route", "candidateKey", "goal", "clarification",
+                "recentReference");
         assertFields(root, fields, fields, "root");
         SemanticRouteProposal.Route route = enumValue(
                 SemanticRouteProposal.Route.class,
@@ -51,6 +52,7 @@ public final class GoalProposalCodec {
         JsonNode candidateNode = root.get("candidateKey");
         JsonNode goalNode = root.get("goal");
         JsonNode clarificationNode = root.get("clarification");
+        JsonNode recentReferenceNode = root.get("recentReference");
         SemanticRouteProposal proposal = switch (route) {
             case STANDARD_GOAL -> {
                 requireNull(candidateNode, "root.candidateKey");
@@ -59,17 +61,24 @@ public final class GoalProposalCodec {
                     throw new IllegalArgumentException(
                             "root.goal is required for STANDARD_GOAL");
                 }
-                yield SemanticRouteProposal.standardGoal(
-                        new UserGoalProposal(List.of(
-                                decodeGoal(goalNode, input, "root.goal"))));
+                UserGoalProposal goal = new UserGoalProposal(List.of(
+                        decodeGoal(goalNode, input, "root.goal")));
+                SemanticRouteProposal.RecentSemanticReference recentReference =
+                        decodeRecentReference(recentReferenceNode, input);
+                validateRecentSectionFacet(recentReference, goal, input);
+                yield recentReference == null
+                        ? SemanticRouteProposal.standardGoal(goal)
+                        : SemanticRouteProposal.standardGoal(goal, recentReference);
             }
             case ENTER_RECOMMENDED_RESULT -> {
+                requireNull(recentReferenceNode, "root.recentReference");
                 requireNull(goalNode, "root.goal");
                 requireNull(clarificationNode, "root.clarification");
                 yield SemanticRouteProposal.enterRecommendedResult(
                         requireText(root, "candidateKey", 2));
             }
             case NEEDS_CLARIFICATION -> {
+                requireNull(recentReferenceNode, "root.recentReference");
                 requireNull(candidateNode, "root.candidateKey");
                 requireNull(goalNode, "root.goal");
                 if ((clarificationNode == null || clarificationNode.isNull())
@@ -85,6 +94,7 @@ public final class GoalProposalCodec {
                         decodeClarificationValue(clarificationNode, input));
             }
             case CONTINUE_CURRENT_PROJECT -> {
+                requireNull(recentReferenceNode, "root.recentReference");
                 requireDiscussion(input);
                 requireNull(candidateNode, "root.candidateKey");
                 requireNull(clarificationNode, "root.clarification");
@@ -98,6 +108,7 @@ public final class GoalProposalCodec {
                                 decodeGoal(goalNode, input, "root.goal"))));
             }
             case SWITCH_PROJECT -> {
+                requireNull(recentReferenceNode, "root.recentReference");
                 requireDiscussion(input);
                 requireNull(goalNode, "root.goal");
                 requireNull(clarificationNode, "root.clarification");
@@ -105,6 +116,7 @@ public final class GoalProposalCodec {
                         route, requireText(root, "candidateKey", 2), null);
             }
             case START_NEW_TOPIC, REENTER_PROJECT -> {
+                requireNull(recentReferenceNode, "root.recentReference");
                 requireDiscussion(input);
                 requireNull(candidateNode, "root.candidateKey");
                 requireNull(goalNode, "root.goal");
@@ -113,6 +125,41 @@ public final class GoalProposalCodec {
             }
         };
         return GoalInterpretationResult.semanticRoute(proposal);
+    }
+
+    private SemanticRouteProposal.RecentSemanticReference decodeRecentReference(
+            JsonNode node, GoalInterpretationInput input) {
+        if (node == null || node.isNull()) return null;
+        requireObject(node, "root.recentReference");
+        assertFields(node, Set.of("goalId", "sectionId"),
+                Set.of("goalId", "sectionId"), "root.recentReference");
+        String goalId = requireText(node, "goalId", 96);
+        JsonNode sectionNode = node.get("sectionId");
+        String sectionId = sectionNode.isNull()
+                ? null : requireText(node, "sectionId", 96);
+        SemanticRouteProposal.RecentSemanticReference reference =
+                new SemanticRouteProposal.RecentSemanticReference(goalId, sectionId);
+        if (input.recentPortfolioSubject(goalId, sectionId) == null) {
+            throw new IllegalArgumentException(
+                    "root.recentReference is outside typed recent state");
+        }
+        return reference;
+    }
+
+    private void validateRecentSectionFacet(
+            SemanticRouteProposal.RecentSemanticReference reference,
+            UserGoalProposal proposal,
+            GoalInterpretationInput input) {
+        if (reference == null || reference.sectionId() == null) return;
+        UserGoalProposal.ProposedGoal goal = proposal.getGoals().getFirst();
+        UserGoalProposal.Facet referencedFacet = input.recentSectionFacet(
+                reference.goalId(), reference.sectionId());
+        if (!(goal.getParameters() instanceof UserGoalProposal.PortfolioFactParameters fact)
+                || referencedFacet == null
+                || !fact.getFacets().equals(Set.of(referencedFacet))) {
+            throw new IllegalArgumentException(
+                    "root.recentReference section does not match requested facet");
+        }
     }
 
     private void requireNull(JsonNode node, String path) {
@@ -176,8 +223,10 @@ public final class GoalProposalCodec {
             UserGoalProposal.InputAnchor anchor = node.has("anchor")
                     ? decodeAnchor(node.get("anchor"), input.getUserText(), itemPath + ".anchor")
                     : null;
-            if (kind != GoalSubjectReference.Kind.RESULT
-                    && !input.containsPublicSubject(kind, reference)) {
+            if (kind == GoalSubjectReference.Kind.RESULT
+                    || basis != GoalSubjectReference.Basis.EXPLICIT_INPUT
+                    || anchor == null
+                    || !input.containsPublicSubject(kind, reference)) {
                 throw new IllegalArgumentException(itemPath + " references a non-public subject");
             }
             String identity = kind.name() + ':' + reference;

@@ -144,14 +144,16 @@ public class ConversationContextDatabaseConfiguration {
             @Qualifier("conversationContextTransactionTemplate") TransactionTemplate transactions,
             ConversationContextProperties properties,
             ConversationContextDatabaseProperties database,
-            com.portfolio.agent.turn.infrastructure.AgentRuntimeProperties runtimeProperties) {
+            com.portfolio.agent.turn.infrastructure.AgentRuntimeProperties runtimeProperties,
+            AgentStatePayloadCodec codec) {
         return new JdbcConversationSessionStore(
                 jdbc, transactions, database.getSchema(),
                 required(properties.getCrypto().getCurrentTokenKeyId(), "token key id"),
                 supportedIds(
                         properties.getCrypto().getCurrentTokenKeyId(),
                         properties.getCrypto().getPreviousTokenKeyId()),
-                runtimeProperties.getDatabaseOperationTimeout(), java.time.Clock.systemUTC());
+                runtimeProperties.getDatabaseOperationTimeout(),
+                java.time.Clock.systemUTC(), codec);
     }
 
     @Bean
