@@ -38,11 +38,11 @@ $script:allowedNames = @(
 )
 $script:generalAiEnvironment = @{
     PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
-    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = 'conversational-default'
-    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal-proposal-v1'
+    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = ''
+    PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v1'
     PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
-    PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
-    PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
+    PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = ''
+    PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v1'
 }
 $script:contextEnvironmentNames = @(
     'PORTFOLIO_CONVERSATION_CONTEXT_MODE',
@@ -295,6 +295,10 @@ function Resolve-RuntimeSettings {
         foreach ($entry in $script:generalAiEnvironment.GetEnumerator()) {
             $settings[$entry.Key] = $entry.Value
         }
+        $selectedProvider = [string]$modelSettings.PORTFOLIO_MODEL_PROVIDER
+        $settings['PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF'] =
+                $selectedProvider
+        $settings['PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF'] = $selectedProvider
     }
     return $settings
 }

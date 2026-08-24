@@ -143,12 +143,18 @@ try {
                     }
                     $env:PORTFOLIO_MODEL_EXPRESSION_ENABLED = 'false'
                     $env:PORTFOLIO_CONVERSATIONAL_AGENT_ENABLED = 'true'
+                    $declaredProvider = if ([string]::IsNullOrWhiteSpace(
+                            $env:PORTFOLIO_MODEL_PROVIDER)) {
+                        'DEEPSEEK_V4_FLASH'
+                    } else {
+                        $env:PORTFOLIO_MODEL_PROVIDER.Trim()
+                    }
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = 'conversational-default'
-                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal-proposal-v1'
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF = $declaredProvider
+                    $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v1'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = 'conversational-default'
-                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general-material-v1'
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF = $declaredProvider
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v1'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
                         -Port $Port -ContextMode $ContextMode -RequireLiveProvider `

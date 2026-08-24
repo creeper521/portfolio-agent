@@ -6,8 +6,18 @@ import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
 import com.portfolio.agent.portfolio.service.result.PublicContent;
 import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
+import com.portfolio.agent.infrastructure.model.policy.OperationMode;
+import com.portfolio.agent.infrastructure.model.provider.ModelProviderKind;
+import com.portfolio.agent.turn.planning.GoalProposalCodec;
+import com.portfolio.agent.turn.infrastructure.AgentRuntimeReadiness;
+import com.portfolio.agent.turn.state.configuration.ConversationContextProperties;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -28,8 +38,9 @@ class PortfolioControllerAvailabilityTest {
                 .thenReturn(response);
 
         new PortfolioController(
-                service, mapper, "DISABLED", "ENABLED",
-                new ConversationProviderAccess(true))
+                service, mapper, readiness(
+                        ConversationContextProperties.Mode.DISABLED,
+                        OperationMode.ENABLED, true))
                 .getPortfolioSnapshot();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
@@ -56,8 +67,9 @@ class PortfolioControllerAvailabilityTest {
                 .thenReturn(response);
 
         new PortfolioController(
-                service, mapper, "POSTGRESQL", "ENABLED",
-                new ConversationProviderAccess(true))
+                service, mapper, readiness(
+                        ConversationContextProperties.Mode.POSTGRESQL,
+                        OperationMode.ENABLED, true))
                 .getPortfolioSnapshot();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
@@ -84,8 +96,9 @@ class PortfolioControllerAvailabilityTest {
                 .thenReturn(response);
 
         new PortfolioController(
-                service, mapper, "POSTGRESQL", "DISABLED",
-                new ConversationProviderAccess(true))
+                service, mapper, readiness(
+                        ConversationContextProperties.Mode.POSTGRESQL,
+                        OperationMode.DISABLED, true))
                 .getPortfolioSnapshot();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
@@ -113,8 +126,9 @@ class PortfolioControllerAvailabilityTest {
                 .thenReturn(response);
 
         new PortfolioController(
-                service, mapper, "POSTGRESQL", "ENABLED",
-                new ConversationProviderAccess(false))
+                service, mapper, readiness(
+                        ConversationContextProperties.Mode.POSTGRESQL,
+                        OperationMode.ENABLED, false))
                 .getPortfolioSnapshot();
 
         ArgumentCaptor<AgentAvailabilityResponse> availability =
@@ -127,5 +141,23 @@ class PortfolioControllerAvailabilityTest {
         assertThat(availability.getValue().getFreeTextSemanticRouting())
                 .isEqualTo(
                         AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
+    }
+
+    private AgentRuntimeReadiness readiness(
+            ConversationContextProperties.Mode contextMode,
+            OperationMode operationMode,
+            boolean providerAllowed) {
+        ModelOperationPolicy turnPolicy = operationMode == OperationMode.ENABLED
+                ? new ModelOperationPolicy(
+                ModelOperation.TURN_INTERPRETATION, operationMode,
+                ModelProviderKind.DEEPSEEK_V4_FLASH.name(),
+                GoalProposalCodec.SCHEMA_VERSION)
+                : new ModelOperationPolicy(
+                ModelOperation.TURN_INTERPRETATION, operationMode, null, null);
+        return new AgentRuntimeReadiness(
+                contextMode, new ConversationProviderAccess(providerAllowed),
+                new ModelOperationPolicyRegistry(Map.of(
+                        ModelOperation.TURN_INTERPRETATION, turnPolicy)),
+                ModelProviderKind.DEEPSEEK_V4_FLASH);
     }
 }

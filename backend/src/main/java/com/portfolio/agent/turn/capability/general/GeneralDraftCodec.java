@@ -10,6 +10,7 @@ import java.util.Set;
 
 /** Strict decoder for untrusted provider output. Unknown or shape-mismatched fields fail closed. */
 public final class GeneralDraftCodec {
+    public static final String SCHEMA_VERSION = "general.draft.v1";
     private static final Set<String> ROOT_FIELDS = Set.of("topic", "statements", "caveats");
     private static final Set<String> STATEMENT_FIELDS = Set.of("role", "text", "subject", "dimension");
     private final ObjectMapper objectMapper;

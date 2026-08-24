@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-24 第一批 replay 隐私代码与 Backend/PostgreSQL/packaged Browser 专属门已落地；A2-30、A2-31、A2-32、A2-36、A2-98、A2-99、A2-110 在“真实 Provider × PostgreSQL × packaged JAR × Browser × JVM 重启恢复”总门前保持 IN_PROGRESS，下一批仍为 Provider 授权一致性 A2-33—A2-35
+> **当前状态：** 2026-08-24 replay 隐私与 Provider 启动期授权两批代码及专项门已落地；A2-30—A2-36、A2-98、A2-99、A2-110 在“真实 Provider × PostgreSQL × packaged JAR × Browser × JVM 重启恢复”总门前保持 IN_PROGRESS
 
 ## 1. 文档目的
 
@@ -129,9 +129,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-30 | P0 | PublicTurn replay 含访客派生文本 | 已固定 Goal label 并移除原文 retry action；Backend/PostgreSQL sentinel 门通过，待最终总门 | PostgreSQL replay 不含访客问题或其片段 | Projection / State / Privacy |
 | A2-31 | P0 | Provider 文本缺少持久化安全证明 | General 与非快速路径 Conversational 正文已改为 live-only；固定复述 fixture 与完整 settlement 门通过，待最终总门 | 完整 settlement sentinel 门证明只有安全 typed 或公开文本可持久化 | Model Output / Replay / Privacy |
 | A2-32 | P0 | 精确 replay 与禁止保存原文冲突 | 已冻结 Portfolio 精确 replay 与 Provider 正文固定终局；Memory/PostgreSQL 通过，待最终总门 | 冻结安全 replay 语义并明确不可重放正文的终局 | Lifecycle / Public Contract / State |
-| A2-33 | P0 | Operation Provider 声明不控制实际调用 | operation providerRef 只验非空，Transport 使用全局 Provider | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
-| A2-34 | P0 | Operation schemaVersion 不控制 Codec | 任意非空版本可通过启动，运行时 Codec 固定 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
-| A2-35 | P1 | Agent availability 可能误报 | 可用性由配置字符串和全局 Provider 状态拼接 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
+| A2-33 | P0 | Operation Provider 声明不控制实际调用 | ENABLED Operation 已与唯一 Transport Provider 做启动期精确等式校验；错配 ApplicationContext 门通过，待真实 Provider 总门 | 声明 Provider 与真实数据接收方不一致时启动失败 | Model Policy / Provider Authority |
+| A2-34 | P0 | Operation schemaVersion 不控制 Codec | `goal.proposal.v1`/`general.draft.v1` 已由生产 Codec 持有并做启动期精确校验；错配门通过，待总门 | 配置版本必须与唯一生产 Codec 精确一致 | Model Policy / Codec |
+| A2-35 | P1 | Agent availability 可能误报 | Goal/General wiring 与 Portfolio availability 已统一消费冻结 `AgentRuntimeReadiness`；矩阵与 packaged 回归通过，待真实 Provider 总门 | 只投影经过统一启动校验的 readiness | Portfolio API / Readiness |
 | A2-36 | P0 | Privacy 架构账本状态失真 | 机器账本已改为只凭新鲜 complete-settlement 证据记 PASS，checker 负例已补；整体仍 IN_PROGRESS | 原始路径和完整 settlement 隐私门通过后才恢复 PASS | Architecture Status / Governance |
 | A2-37 | P1 | Portfolio 表达端口零实现 | 只有端口、编译器和可选构造器，无实现和生产接线 | 明确实现受约束表达器或删除幽灵能力 | Portfolio Presentation / Model |
 | A2-38 | P1 | Portfolio 回答只是 Claim 列表 | Claim statement 被逐条直接投影 | section 类型匹配 AnswerIntent、每段有来源且满足闭合 depth 区块门 | Portfolio Presentation |
@@ -306,6 +306,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 4. **产品能力升级：** A2-37—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
 5. **Provider 收敛：** A2-79—A2-88 与配置化模型目录共用一次目标架构；P0 过渡期只增加 fail-closed 一致性校验，不提前建设第二套路由。
 6. **隐私实现机制：** sentinel 只用于验收，不得成为生产清洗或判定机制；生产代码必须使用闭合来源分类，未知或 Provider 派生正文默认拒绝持久化。
+7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
 
 #### 3.3.1 第一批 P0 当前证据（仍为 IN_PROGRESS）
 
@@ -317,7 +318,16 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - `contracts/agent-turn/scenarios/lifecycle-state.json` 的 `EXACT_PUBLIC_TURN` 场景是确定性 Portfolio ANSWER，按上述分类保留，不做全局替换。Provider 正文场景才应期待固定终局。
 - Backend 全量于 2026-08-24 实际执行：`870 tests / 0 failures / 0 errors / 4 skipped`；整体状态仍需等待本批 packaged/Browser 与后续全仓门，不据此提前 COMPLETE。
 - clean packaged JAR 的 DEFAULT/IN_MEMORY Browser lane 于 2026-08-24 实际执行，桌面/移动合计 `8 passed / 8 lane-specific skipped`，覆盖五 variant 消费、同 requestId timeout replay、typed continuation 与隐私 smoke；该 lane 明确关闭 Provider，因此不替代最终“真实 Provider × PostgreSQL × JVM 重启”总门。
-7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
+
+#### 3.3.2 第二批 Provider 授权当前证据（仍为 IN_PROGRESS）
+
+- `AgentRuntimeReadinessTest`：ENABLED Operation 的 Provider 错配会使 Spring ApplicationContext 启动失败；Provider/schema 正确矩阵通过，错误 schema 被拒绝。
+- `GoalProposalCodec.SCHEMA_VERSION=goal.proposal.v1`、`GeneralDraftCodec.SCHEMA_VERSION=general.draft.v1` 是当前唯一生产 Codec 版本；不接受兼容别名或旧版本。
+- `AgentCapabilityConfigurationTest`：Goal/General 模型端口只消费统一 readiness；`PortfolioControllerAvailabilityTest`：状态模式、Operation mode、Provider 数据策略组合只经同一 readiness 投影公开 availability。
+- `start-local.test.ps1` 与 `run-agent-behavior-audit.test.ps1` 已实际通过；启动脚本把 Operation `providerRef` 绑定到实际选择的 `PORTFOLIO_MODEL_PROVIDER`，不再使用 `conversational-default`。
+- Backend clean package 于 2026-08-24 实际执行：`874 tests / 0 failures / 0 errors / 4 skipped`，包含 Testcontainers PostgreSQL 16.14；新 packaged JAR 分别以 Provider 错配和 schema 错配启动，两次均在 ApplicationContext 完成前非零退出并报告对应 authority mismatch。
+- 同一新 packaged JAR 的 DEFAULT/IN_MEMORY Browser 回归实际执行：桌面/移动 `8 passed / 8 lane-specific skipped`，公开 Portfolio availability 与既有 PublicAgentTurn 消费链未回归；Provider 明确关闭，因此不冒充真实接收方证据。
+- 本批不增加 Provider 路由、兼容 reader 或第二 readiness；真实 Provider 接收方及其 packaged Browser 行为仍须后续总门证明，因此 A2-33—A2-35 不关闭。
 
 ### 3.4 本轮审计证据边界
 

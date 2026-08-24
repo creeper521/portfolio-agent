@@ -6,11 +6,11 @@ import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.JsonPublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.BundledPublicPortfolioRepositoryConfiguration;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
-import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
 import com.portfolio.agent.portfolio.controller.PortfolioController;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
+import com.portfolio.agent.turn.infrastructure.AgentRuntimeReadiness;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import javax.sql.DataSource;
@@ -142,8 +142,8 @@ class PublicPortfolioDatabaseConfigurationTest {
         }
 
         @Bean
-        ConversationProviderAccess conversationProviderAccess() {
-            return new ConversationProviderAccess(false);
+        AgentRuntimeReadiness agentRuntimeReadiness() {
+            return mock(AgentRuntimeReadiness.class);
         }
 
         @Bean

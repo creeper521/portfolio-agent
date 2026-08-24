@@ -566,6 +566,18 @@ exit 0
         Assert-True ($launcherText -match [regex]::Escape($generalAiSetting)) `
             "General AI opt-in must configure $generalAiSetting."
     }
+    Assert-True ($launcherText -match [regex]::Escape("'goal.proposal.v1'")) `
+        'Goal Interpretation must declare the production Codec schema.'
+    Assert-True ($launcherText -match [regex]::Escape("'general.draft.v1'")) `
+        'General Knowledge must declare the production Codec schema.'
+    Assert-True ($launcherText -match `
+            '(?s)PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_PROVIDER_REF.{0,120}selectedProvider') `
+        'Goal Interpretation providerRef must use the selected Transport Provider.'
+    Assert-True ($launcherText -match `
+            'PORTFOLIO_MODEL_OP_GENERAL_PROVIDER_REF.*selectedProvider') `
+        'General Knowledge providerRef must use the selected Transport Provider.'
+    Assert-True ($launcherText -notmatch 'conversational-default') `
+        'Unified launcher must not use the ambiguous Provider alias.'
     Assert-True ($launcherText -notmatch `
             'PORTFOLIO_MODEL_OP_ROUTING|PORTFOLIO_SEMANTIC_CLASSIFIER') `
         'Unified launcher must not write retired routing/classifier keys.'

@@ -10,9 +10,7 @@ import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAcces
 import com.portfolio.agent.infrastructure.model.policy.ModelPolicy;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.PortfolioKnowledgeGateway;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
-import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
-import com.portfolio.agent.infrastructure.model.policy.OperationMode;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.ApplicationStartupDiagnostics;
 import com.portfolio.agent.common.observability.AnonymousSourceHasher;
@@ -142,6 +140,18 @@ public class AgentCapabilityConfiguration {
     }
 
     @Bean
+    AgentRuntimeReadiness agentRuntimeReadiness(
+            com.portfolio.agent.turn.state.configuration.ConversationContextProperties
+                    contextProperties,
+            ConversationProviderAccess providerAccess,
+            ModelOperationPolicyRegistry operationPolicies,
+            ModelPolicy modelPolicy) {
+        return new AgentRuntimeReadiness(
+                contextProperties.getMode(), providerAccess,
+                operationPolicies, modelPolicy.getProvider());
+    }
+
+    @Bean
     StructuredModelTransport structuredModelTransport(
             ObjectMapper mapper, ModelExpressionProperties modelProperties,
             ModelProviderRegistrySnapshot registry,
@@ -163,10 +173,8 @@ public class AgentCapabilityConfiguration {
             AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
             SystemPromptCatalog prompts,
-            ConversationProviderAccess providerAccess,
-            ModelOperationPolicyRegistry operationPolicies) {
-        if (!providerAccess.isAllowed()
-                || operationPolicies.get(ModelOperation.TURN_INTERPRETATION).getMode() != OperationMode.ENABLED) {
+            AgentRuntimeReadiness readiness) {
+        if (!readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION)) {
             return (input, deadline) -> { throw new GoalInterpretationUnavailableException(); };
         }
         return new GoalInterpretationAdapter(
@@ -182,11 +190,8 @@ public class AgentCapabilityConfiguration {
             AgentRuntimeProperties runtimeProperties,
             StructuredModelTransport transport,
             SystemPromptCatalog prompts,
-            ConversationProviderAccess providerAccess,
-            ModelOperationPolicyRegistry operationPolicies) {
-        if (!providerAccess.isAllowed()
-                || operationPolicies.get(ModelOperation.GENERAL_KNOWLEDGE).getMode()
-                != OperationMode.ENABLED) {
+            AgentRuntimeReadiness readiness) {
+        if (!readiness.isOperationAvailable(ModelOperation.GENERAL_KNOWLEDGE)) {
             return request -> {
                 throw new GeneralKnowledgeUnavailableException(
                         "general capability is unavailable");

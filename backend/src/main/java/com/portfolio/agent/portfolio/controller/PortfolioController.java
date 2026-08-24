@@ -1,11 +1,11 @@
 package com.portfolio.agent.portfolio.controller;
 
-import com.portfolio.agent.infrastructure.model.policy.ConversationProviderAccess;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.portfolio.dto.response.AgentAvailabilityResponse;
 import com.portfolio.agent.portfolio.dto.response.PortfolioSnapshotResponse;
 import com.portfolio.agent.portfolio.mapper.PortfolioResponseMapper;
 import com.portfolio.agent.portfolio.service.PortfolioService;
-import org.springframework.beans.factory.annotation.Value;
+import com.portfolio.agent.turn.infrastructure.AgentRuntimeReadiness;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,18 +23,14 @@ public final class PortfolioController {
     public PortfolioController(
             PortfolioService portfolioService,
             PortfolioResponseMapper responseMapper,
-            @Value("${portfolio.conversation-context.mode:DISABLED}") String contextMode,
-            @Value("${portfolio.model-operations.turn-interpretation.mode:DISABLED}")
-            String turnInterpretationMode,
-            ConversationProviderAccess providerAccess
+            AgentRuntimeReadiness readiness
     ) {
         this.portfolioService = portfolioService;
         this.responseMapper = responseMapper;
-        this.agentAvailability = "DISABLED".equalsIgnoreCase(contextMode)
+        this.agentAvailability = !readiness.isAgentAvailable()
                 ? AgentAvailabilityResponse.unavailable()
                 : AgentAvailabilityResponse.available(
-                        "ENABLED".equalsIgnoreCase(turnInterpretationMode)
-                                && providerAccess.isAllowed()
+                        readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION)
                                 ? AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE
                                 : AgentAvailabilityResponse.FreeTextSemanticRouting.DISABLED);
     }

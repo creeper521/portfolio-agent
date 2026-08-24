@@ -30,7 +30,7 @@ Token 与 payload 使用不同的 32 字节密钥加密，密钥不得相同；�
 
 ## 模型与检索
 
-模型能力默认关闭。只有在数据策略已审批、Provider 配置完整且操作显式启用时，才可发送本轮允许的最小载荷。模型不得接收凭据、Cookie、Header、内部标识、私有资料或持久化会话；没有自动跨 Provider 重发。
+模型能力默认关闭。只有在数据策略已审批、Provider 配置完整且操作显式启用时，才可发送本轮允许的最小载荷。每个已启用 Operation 声明的 `providerRef` 必须精确等于唯一 Transport 的 `ModelProviderKind`，`schemaVersion` 必须精确等于对应生产 Codec 的常量；任一错配都必须在应用启动期失败关闭。模型端口和公开 availability 只能消费同一个冻结 readiness，不得各自推测配置。模型不得接收凭据、Cookie、Header、内部标识、私有资料或持久化会话；没有自动跨 Provider 重发。
 
 公开检索使用审核后的 Bundle 或其公开数据库投影。本地向量、查询词项、候选、分数与检索上下文不得进入日志或外部 Provider。模型表达不能扩大项目状态、个人贡献或生产效果声明，校验失败时丢弃草稿并安全降级。
 
