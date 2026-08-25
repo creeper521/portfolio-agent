@@ -47,6 +47,20 @@ function mountWorkspace(props: Record<string, unknown> = {}) {
   })
 }
 
+/** 三个 describe 共用的 mock/存储重置，保证调用计数与返回值不跨测试累积。 */
+function resetWorkspaceTestState() {
+  localStorage.clear()
+  sessionStorage.clear()
+  for (const mock of Object.values(apiMocks)) mock.mockReset()
+  apiMocks.fetchCurrentConversation.mockResolvedValue({ ok: false, invalid: false })
+  apiMocks.cancelAgentTurn.mockResolvedValue('CANCELLED')
+  apiMocks.clearConversation.mockResolvedValue('CLEARED')
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+  )
+}
+
 async function submitFreeText(wrapper: ReturnType<typeof mountWorkspace>, text: string) {
   await flushPromises()
   await wrapper.get('[data-testid="question-input"]').setValue(text)
@@ -67,18 +81,19 @@ function lastSubmitInput(): {
   return call[0] as ReturnType<typeof lastSubmitInput>
 }
 
+function surfaceOfLastSubmit(): {
+  audienceRole: string
+  requestSource: string
+  subjectHint?: { kind: string; slug: string }
+} {
+  const call = apiMocks.submitAgentTurn.mock.calls.at(-1)
+  if (call === undefined) throw new Error('submitAgentTurn 未被调用')
+  return (call[0] as { surfaceContext: ReturnType<typeof surfaceOfLastSubmit> }).surfaceContext
+}
+
 describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
   beforeEach(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-    for (const mock of Object.values(apiMocks)) mock.mockReset()
-    apiMocks.fetchCurrentConversation.mockResolvedValue({ ok: false, invalid: false })
-    apiMocks.cancelAgentTurn.mockResolvedValue('CANCELLED')
-    apiMocks.clearConversation.mockResolvedValue('CLEARED')
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-    )
+    resetWorkspaceTestState()
   })
 
   afterEach(() => {
@@ -1179,6 +1194,10 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
 })
 
 describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () => {
+  beforeEach(() => {
+    resetWorkspaceTestState()
+  })
+
   interface RoleSwitchSeam {
     switchAudienceRole: (role: string) => boolean
     sessions: {
@@ -1189,16 +1208,6 @@ describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () =
   /** script-setup 组件不通过公共代理暴露内部绑定，经实例 setupState 访问状态接缝。 */
   function roleSeam(wrapper: ReturnType<typeof mountWorkspace>): RoleSwitchSeam {
     return (wrapper.vm.$ as unknown as { setupState: RoleSwitchSeam }).setupState
-  }
-
-  function surfaceOfLastSubmit(): {
-    audienceRole: string
-    requestSource: string
-    subjectHint?: { kind: string; slug: string }
-  } {
-    const call = apiMocks.submitAgentTurn.mock.calls.at(-1)
-    if (call === undefined) throw new Error('submitAgentTurn 未被调用')
-    return (call[0] as { surfaceContext: ReturnType<typeof surfaceOfLastSubmit> }).surfaceContext
   }
 
   function rolePreset(id: string, audiences: string[], placements: string[]) {
@@ -1300,6 +1309,11 @@ describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () =
     // 切换不取消旧请求；新会话视图无 pending、无消息。
     expect(apiMocks.cancelAgentTurn).not.toHaveBeenCalled()
     expect(wrapper.find('[data-testid="conversation-pending"]').exists()).toBe(false)
+    // 旧会话行显示「生成中」并带 pending 标记，角色短标签仍为原角色。
+    const pendingRow = wrapper.get('[data-session-pending]')
+    expect(pendingRow.attributes('data-session-id')).toBeDefined()
+    expect(pendingRow.text()).toContain('生成中')
+    expect(pendingRow.text()).toContain('面试官')
 
     resolveA(submitOk(goldenTurn('conversational.json'), {
       conversationId: 'conversation-a',
@@ -1316,6 +1330,8 @@ describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () =
     await flushPromises()
     expect(wrapper.find('[data-message-role="AGENT"]').exists()).toBe(true)
     expect(sessionStorage.getItem(RESUME_STORAGE_KEY)).toBe('token-a')
+    // 旧请求终局后「生成中」标记消失。
+    expect(wrapper.find('[data-session-pending]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -1341,5 +1357,171 @@ describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () =
     await submitFreeText(seeded, '首页带来的问题')
     expect(surfaceOfLastSubmit().audienceRole).toBe('MENTOR')
     seeded.unmount()
+  })
+})
+
+describe('AgentWorkspace（角色入口与切换浮层，audience-role UI 设计）', () => {
+  beforeEach(() => {
+    resetWorkspaceTestState()
+  })
+
+  it('角色行显示当前视角；浮层恰三个动作项且不含当前角色，可访问名完整', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    expect(wrapper.get('.workspace-composer__role-name').text()).toBe('技术面试官')
+    const trigger = wrapper.get('[data-testid="role-switch-trigger"]')
+    expect(trigger.attributes('aria-haspopup')).toBe('dialog')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+
+    await trigger.trigger('click')
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    const popover = wrapper.get('[data-testid="role-switch-popover"]')
+    expect(popover.attributes('role')).toBe('dialog')
+    expect(popover.attributes('aria-label')).toBe('切换会话视角')
+    expect(wrapper.get('[data-testid="role-current"]').attributes('aria-current')).toBe('true')
+    expect(wrapper.get('[data-testid="role-current"]').text()).toContain('技术面试官')
+
+    const options = wrapper.findAll('[data-testid="role-option"]')
+    expect(options.map((option) => option.attributes('data-role'))).toEqual(['MENTOR', 'HR', 'GUEST'])
+    expect(options[0]?.attributes('aria-label')).toBe('以未来导师视角开启新会话')
+    expect(options[1]?.attributes('aria-label')).toBe('以HR / 招聘者视角开启新会话')
+    for (const tag of wrapper.findAll('.workspace-composer__role-new-tag')) {
+      expect(tag.attributes('aria-hidden')).toBe('true')
+    }
+    // 宣布区常驻 DOM（role=status），初始为空文本。
+    expect(wrapper.get('[data-testid="role-switch-status"]').attributes('role')).toBe('status')
+    wrapper.unmount()
+  })
+
+  it('点击动作项经接缝切换：浮层关闭、新会话激活、宣布并聚焦输入框', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValue(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="role-switch-trigger"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="HR"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="role-switch-popover"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="role-switch-trigger"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('.workspace-composer__role-name').text()).toBe('HR / 招聘者')
+    expect(wrapper.get('[data-testid="role-switch-status"]').text())
+      .toBe('已切换到HR / 招聘者视角，开始新会话')
+    expect(document.activeElement)
+      .toBe(wrapper.get('[data-testid="question-input"]').element)
+
+    await submitFreeText(wrapper, '以 HR 视角继续提问')
+    expect(surfaceOfLastSubmit().audienceRole).toBe('HR')
+    wrapper.unmount()
+  })
+
+  it('切换失败：浮层保持打开、alert 行提示重试、活跃会话不变', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="role-switch-trigger"]').trigger('click')
+    await flushPromises()
+    const randomUuid = vi.spyOn(crypto, 'randomUUID')
+      .mockImplementationOnce(() => {
+        throw new Error('createSession failed')
+      })
+    await wrapper.get('[data-role="MENTOR"]').trigger('click')
+    await flushPromises()
+    randomUuid.mockRestore()
+
+    expect(wrapper.find('[data-testid="role-switch-popover"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="role-switch-error"]').attributes('role')).toBe('alert')
+    expect(wrapper.get('[data-testid="role-switch-error"]').text()).toBe('未能开启新会话，请稍后重试。')
+    expect(wrapper.get('.workspace-composer__role-name').text()).toBe('技术面试官')
+    expect(wrapper.get('[data-testid="role-switch-status"]').text()).toBe('')
+    wrapper.unmount()
+  })
+
+  it('浮层提示行随草稿与 pending 增减', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="question-input"]').setValue('未发送草稿')
+    await wrapper.get('[data-testid="role-switch-trigger"]').trigger('click')
+    await flushPromises()
+    let hints = wrapper.get('[data-testid="role-menu-hints"]').text()
+    expect(hints).toContain('切换视角会开启新会话')
+    expect(hints).toContain('当前会话有未发送草稿，草稿将保留在原会话。')
+    expect(hints).not.toContain('仍在生成')
+
+    apiMocks.submitAgentTurn.mockImplementationOnce(() => new Promise(() => {}))
+    await submitFreeText(wrapper, '生成中的问题')
+    hints = wrapper.get('[data-testid="role-menu-hints"]').text()
+    expect(hints).toContain('当前会话的回答仍在生成，结果只写回原会话。')
+    expect(hints).not.toContain('未发送草稿')
+    wrapper.unmount()
+  })
+
+  it('键盘：打开聚焦首个动作项，方向键循环，Esc 关闭并还焦触发钮', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+    const trigger = wrapper.get('[data-testid="role-switch-trigger"]')
+
+    await trigger.trigger('click')
+    await flushPromises()
+    expect(document.activeElement?.getAttribute('data-role')).toBe('MENTOR')
+
+    await wrapper.get('[data-role="MENTOR"]').trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement?.getAttribute('data-role')).toBe('HR')
+    await wrapper.get('[data-role="HR"]').trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement?.getAttribute('data-role')).toBe('MENTOR')
+
+    await wrapper.get('[data-role="MENTOR"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="role-switch-popover"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
+  it('Tab 焦点离开浮层即关闭；外点关闭', async () => {
+    const wrapper = mountWorkspace()
+    await flushPromises()
+    const trigger = wrapper.get('[data-testid="role-switch-trigger"]')
+
+    await trigger.trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="role-switch-popover"]')
+      .trigger('focusout', { relatedTarget: document.body })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="role-switch-popover"]').exists()).toBe(false)
+
+    await trigger.trigger('click')
+    await flushPromises()
+    document.body.click()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="role-switch-popover"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('标签页 pending 已满两路：触发钮仍可点，切换成功且不取消旧请求', async () => {
+    apiMocks.submitAgentTurn.mockImplementation(() => new Promise(() => {}))
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await submitFreeText(wrapper, '请求 A')
+    await wrapper.get('.session-rail__new').trigger('click')
+    await flushPromises()
+    await submitFreeText(wrapper, '请求 B')
+    expect(apiMocks.submitAgentTurn).toHaveBeenCalledTimes(2)
+
+    const trigger = wrapper.get('[data-testid="role-switch-trigger"]')
+    expect(trigger.attributes('disabled')).toBeUndefined()
+    await trigger.trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="GUEST"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.workspace-composer__role-name').text()).toBe('普通访客')
+    expect(apiMocks.cancelAgentTurn).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 })

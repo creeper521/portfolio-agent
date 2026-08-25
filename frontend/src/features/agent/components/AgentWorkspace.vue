@@ -42,6 +42,7 @@ import type {
   SuggestedAction,
 } from '../model/publicAgentTurn'
 import { projectTurnFailure, type TurnFailureCategory } from '../model/turnFailureProjection'
+import { audienceRolePresentations, presentationOf } from '../model/audienceRolePresentation'
 import AnswerSourcesPanel from './AnswerSourcesPanel.vue'
 import ConversationThread from './ConversationThread.vue'
 import ModelSelector from './ModelSelector.vue'
@@ -196,6 +197,8 @@ function deletePendingGeneration(
 
 const activeSession = computed<AgentSession | null>(() => sessions.activeSession.value)
 const activePending = computed(() => pendingTurns.value.get(activeSession.value?.id ?? '') ?? null)
+/** 存在 pending Turn 的会话 id 列表：供会话行显示「· 生成中」（audience-role UI 设计 §4.2）。 */
+const pendingSessionIds = computed(() => [...pendingTurns.value.keys()])
 const activeFailure = computed(() => failures.value.get(activeSession.value?.id ?? '') ?? null)
 /** 当前会话无 pending 但标签页 pending 已满：禁止发起任何新轮次，仅提示（§11.1）。 */
 const tabPendingFull = computed(
@@ -1262,6 +1265,136 @@ function attachClearNotice(text: string | null): void {
   clearNotice.value = { text, sessionId }
 }
 
+// ── 会话视角行与切换浮层（audience-role UI 设计 §2/§3/§9）──
+// 触发钮没有任何禁用态：角色是会话身份而非本轮设置，pending/失败/澄清中
+// 都允许切换（上级设计 §7.1）。切换只经 switchAudienceRole 接缝，绝不原位
+// 改写 session.role，也不取消旧 pending（D-AR-9）。
+const roleMenuOpen = ref(false)
+const roleMenuError = ref('')
+const roleSwitchStatus = ref('')
+const roleSwitchTrigger = ref<HTMLButtonElement | null>(null)
+
+const activeRolePresentation = computed(() =>
+  activeSession.value === null ? null : presentationOf(activeSession.value.role),
+)
+/** 浮层动作项 = 除当前角色外的三个角色（当前角色渲染为非动作行，D-AR-3）。 */
+const roleMenuOptions = computed(() =>
+  audienceRolePresentations.filter((item) => item.role !== activeSession.value?.role),
+)
+/** 提示行只读既有状态（草稿/pending），不新增状态通道（UI 设计 §3.2）。 */
+const roleMenuHints = computed(() => {
+  const hints = ['切换视角会开启新会话；当前会话自动保留在列表。同视角重新开始请用「新对话」。']
+  const session = activeSession.value
+  if (session !== null && (session.draft?.trim().length ?? 0) > 0) {
+    hints.push('当前会话有未发送草稿，草稿将保留在原会话。')
+  }
+  if (activePending.value !== null) {
+    hints.push('当前会话的回答仍在生成，结果只写回原会话。')
+  }
+  return hints
+})
+
+function toggleRoleMenu(): void {
+  roleMenuOpen.value = !roleMenuOpen.value
+  if (roleMenuOpen.value) {
+    roleMenuError.value = ''
+    // 与 ModelSelector 相同的打开即聚焦手感（D-MS-1）：当前行不聚焦。
+    queueMicrotask(() => {
+      document.querySelector<HTMLElement>('[data-testid="role-option"]')?.focus()
+    })
+  }
+}
+
+function closeRoleMenu(returnFocus = true): void {
+  roleMenuOpen.value = false
+  if (returnFocus) {
+    roleSwitchTrigger.value?.focus()
+  }
+}
+
+/** 方向键在动作按钮间循环、Enter/Space 确认、Esc 关闭还焦（UI 设计 §3.4）。 */
+function onRoleOptionKeydown(event: KeyboardEvent, role: AudienceRole): void {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const options = [...document.querySelectorAll<HTMLElement>('[data-testid="role-option"]')]
+    if (options.length === 0) return
+    const index = options.findIndex((element) => element.dataset.role === role)
+    if (index < 0) return
+    const next = event.key === 'ArrowDown'
+      ? (index + 1) % options.length
+      : (index - 1 + options.length) % options.length
+    options[next]?.focus()
+    return
+  }
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    handleRoleSwitch(role)
+    return
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeRoleMenu()
+  }
+}
+
+function onRolePopoverKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeRoleMenu()
+  }
+}
+
+/** Tab/Shift+Tab 焦点离开触发钮+浮层容器即关闭（UI 设计 §3.4，非模态无陷阱）。 */
+function onRoleSwitchFocusout(event: FocusEvent): void {
+  if (!roleMenuOpen.value) return
+  const next = event.relatedTarget as Node | null
+  if (
+    next !== null
+    && roleSwitchTrigger.value
+      ?.closest('.workspace-composer__role-switch')
+      ?.contains(next) === true
+  ) {
+    return
+  }
+  roleMenuOpen.value = false
+}
+
+/** document 点击外关闭：点击死区时还焦触发钮；点击其他可交互元素让焦点自然落位。 */
+function onDocumentClickCloseRoleMenu(event: MouseEvent): void {
+  if (!roleMenuOpen.value) return
+  const target = event.target as HTMLElement | null
+  if (target === null) return
+  if (
+    roleSwitchTrigger.value
+      ?.closest('.workspace-composer__role-switch')
+      ?.contains(target) === true
+  ) {
+    return
+  }
+  const interactive = target.closest('button, a, input, textarea, select, [tabindex]')
+  closeRoleMenu(interactive === null)
+}
+
+/**
+ * UI 设计 §9.1：一次用户动作恰好一次接缝调用；createSession 异常按失败处理
+ * （上级设计 §15）。失败时浮层保持打开并提示，成功时宣布并聚焦输入框。
+ */
+function handleRoleSwitch(target: AudienceRole): void {
+  let ok = false
+  try {
+    ok = switchAudienceRole(target)
+  } catch {
+    ok = false
+  }
+  if (!ok) {
+    roleMenuError.value = '未能开启新会话，请稍后重试。'
+    return
+  }
+  roleMenuOpen.value = false
+  roleSwitchStatus.value = `已切换到${presentationOf(target).label}视角，开始新会话`
+  void focusComposer()
+}
+
 // 两个抽屉互斥：打开一个立即收起另一个，避免窄屏双层遮挡。
 function toggleSessions(): void {
   sessionDrawerOpen.value = !sessionDrawerOpen.value
@@ -1309,6 +1442,7 @@ watchEffect(() => {
  * 种子/初始参数预填问题草稿或精确重放首页轮次。
  */
 onMounted(async () => {
+  document.addEventListener('click', onDocumentClickCloseRoleMenu)
   discussionClockTimer = setInterval(() => {
     discussionClock.value = Date.now()
   }, 30_000)
@@ -1392,6 +1526,7 @@ onMounted(async () => {
 /** 卸载清理：置 disposed 阻断异步回调、停时钟、abort 全部 pending、断开宽度观测。 */
 onBeforeUnmount(() => {
   disposed = true
+  document.removeEventListener('click', onDocumentClickCloseRoleMenu)
   if (discussionClockTimer !== null) clearInterval(discussionClockTimer)
   for (const pending of pendingTurns.value.values()) {
     pending.controller.abort()
@@ -1420,6 +1555,7 @@ onBeforeUnmount(() => {
     <LocalSessionRail
       :sessions="sessions.historySessions.value"
       :active-id="sessions.activeSessionId.value"
+      :pending-ids="pendingSessionIds"
       :inert="sessionsIsDrawer && !sessionDrawerOpen ? true : undefined"
       :aria-hidden="sessionsIsDrawer ? String(!sessionDrawerOpen) : undefined"
       @create="createSession"
@@ -1510,8 +1646,79 @@ onBeforeUnmount(() => {
           @click="retryFailure"
         >重试</button>
       </div>
-      <!-- 输入区：标签页 pending 上限提示 -> 活跃讨论摘要 -> 建议 chip -> 输入表单 -> 隐私提示 -->
+      <!-- 输入区：会话视角行 -> 标签页 pending 上限提示 -> 活跃讨论摘要 -> 建议 chip -> 输入表单 -> 隐私提示 -->
       <div class="workspace-composer">
+        <!-- 会话视角身份行（布局 A，UI 设计 §2）：eyebrow + serif 角色名 + 截断描述 + 切换触发钮 -->
+        <div class="workspace-composer__role-row">
+          <p class="workspace-composer__role-eyebrow">AUDIENCE·会话视角</p>
+          <span class="workspace-composer__role-name">{{ activeRolePresentation?.label ?? '' }}</span>
+          <span class="workspace-composer__role-desc">{{ activeRolePresentation?.description ?? '' }}</span>
+          <div class="workspace-composer__role-switch" @focusout="onRoleSwitchFocusout">
+            <button
+              ref="roleSwitchTrigger"
+              type="button"
+              class="workspace-composer__role-trigger"
+              data-testid="role-switch-trigger"
+              aria-haspopup="dialog"
+              :aria-expanded="roleMenuOpen ? 'true' : 'false'"
+              aria-controls="role-switch-popover"
+              @click="toggleRoleMenu"
+            >切换视角 <span class="workspace-composer__role-caret" aria-hidden="true">▾</span></button>
+            <div
+              v-if="roleMenuOpen"
+              id="role-switch-popover"
+              class="workspace-composer__role-popover"
+              role="dialog"
+              aria-label="切换会话视角"
+              data-testid="role-switch-popover"
+              @keydown="onRolePopoverKeydown"
+            >
+              <p class="workspace-composer__role-hints" role="note" data-testid="role-menu-hints">
+                <span
+                  v-for="hint in roleMenuHints"
+                  :key="hint"
+                  class="workspace-composer__role-hint"
+                >{{ hint }}</span>
+              </p>
+              <div
+                v-if="activeRolePresentation !== null"
+                class="workspace-composer__role-current"
+                aria-current="true"
+                data-testid="role-current"
+              >
+                <span class="workspace-composer__role-badge">当前</span>
+                <span class="workspace-composer__role-current-text">
+                  <b>{{ activeRolePresentation.label }}</b>
+                  <small>{{ activeRolePresentation.description }}</small>
+                </span>
+              </div>
+              <button
+                v-for="option in roleMenuOptions"
+                :key="option.role"
+                type="button"
+                class="workspace-composer__role-option"
+                data-testid="role-option"
+                :data-role="option.role"
+                :aria-label="`以${option.label}视角开启新会话`"
+                @click="handleRoleSwitch(option.role)"
+                @keydown="onRoleOptionKeydown($event, option.role)"
+              >
+                <span class="workspace-composer__role-option-text">
+                  <b>{{ option.label }}</b>
+                  <small>{{ option.description }}</small>
+                </span>
+                <span class="workspace-composer__role-new-tag" aria-hidden="true">新会话 ›</span>
+              </button>
+              <p
+                v-if="roleMenuError !== ''"
+                class="workspace-composer__role-error"
+                role="alert"
+                data-testid="role-switch-error"
+              >{{ roleMenuError }}</p>
+            </div>
+          </div>
+        </div>
+        <p class="workspace-composer__sr-status" role="status" data-testid="role-switch-status">{{ roleSwitchStatus }}</p>
         <p
           v-if="tabPendingFull"
           class="workspace-composer__tab-limit"
@@ -1728,9 +1935,176 @@ onBeforeUnmount(() => {
 }
 
 .workspace-composer {
+  position: relative;
   border-top: 1px solid var(--workspace-rule);
   padding: 10px clamp(14px, 2.4vw, 26px) 8px;
   background: var(--workspace-thread-bg);
+}
+.workspace-composer__role-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0 0 10px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--workspace-rule);
+}
+.workspace-composer__role-eyebrow {
+  flex: none;
+  margin: 0;
+  color: var(--workspace-text-faint);
+  font: 10px/1.6 var(--mono);
+  letter-spacing: 0.14em;
+}
+.workspace-composer__role-name {
+  flex: none;
+  color: var(--workspace-text);
+  font: 600 15px/1.3 var(--serif);
+  white-space: nowrap;
+}
+.workspace-composer__role-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--workspace-text-secondary);
+  font: 10.5px/1.5 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-composer__role-switch {
+  position: relative;
+  flex: none;
+}
+.workspace-composer__role-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 999px;
+  background: var(--paper-hi);
+  color: var(--workspace-text);
+  font: 11px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+.workspace-composer__role-trigger:hover {
+  border-color: var(--workspace-accent);
+}
+.workspace-composer__role-trigger:focus-visible {
+  outline: 2px solid var(--workspace-accent);
+  outline-offset: 2px;
+}
+.workspace-composer__role-caret {
+  color: var(--workspace-text-faint);
+}
+.workspace-composer__role-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: min(420px, calc(100vw - 48px));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--workspace-rule);
+  border-radius: var(--agent-radius-md, 12px);
+  background: var(--paper-hi);
+  box-shadow: 0 18px 44px rgba(32, 28, 23, 0.28);
+}
+.workspace-composer__role-hints {
+  margin: 0 0 4px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px dashed var(--workspace-rule);
+}
+.workspace-composer__role-hint {
+  display: block;
+  color: var(--workspace-text-secondary);
+  font: 10px/1.7 var(--mono);
+}
+.workspace-composer__role-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+}
+.workspace-composer__role-badge {
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--workspace-accent) 40%, var(--workspace-rule));
+  border-radius: 999px;
+  color: var(--workspace-accent);
+  font: 9px/1.5 var(--mono);
+  letter-spacing: 0.1em;
+}
+.workspace-composer__role-current-text {
+  min-width: 0;
+}
+.workspace-composer__role-current-text b {
+  color: var(--workspace-text);
+  font: 600 13px/1.4 var(--sans);
+}
+.workspace-composer__role-current-text small {
+  display: block;
+  margin-top: 2px;
+  color: var(--workspace-text-faint);
+  font: 10px/1.5 var(--mono);
+}
+.workspace-composer__role-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: var(--agent-radius-sm, 8px);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-composer__role-option:hover,
+.workspace-composer__role-option:focus-visible {
+  background: color-mix(in srgb, var(--workspace-accent) 6%, var(--paper-hi));
+  outline: none;
+}
+.workspace-composer__role-option-text {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-composer__role-option-text b {
+  color: var(--workspace-text);
+  font: 600 13px/1.4 var(--sans);
+}
+.workspace-composer__role-option-text small {
+  display: block;
+  margin-top: 2px;
+  color: var(--workspace-text-faint);
+  font: 10px/1.5 var(--mono);
+}
+.workspace-composer__role-new-tag {
+  flex: none;
+  color: var(--workspace-text-faint);
+  font: 9px/1.5 var(--mono);
+  letter-spacing: 0.1em;
+}
+.workspace-composer__role-error {
+  margin: 4px 10px 6px;
+  color: var(--red, var(--workspace-accent));
+  font: 10.5px/1.6 var(--mono);
+}
+.workspace-composer__sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .workspace-composer__top {
   display: flex;
@@ -1862,6 +2236,18 @@ onBeforeUnmount(() => {
     transition: transform 220ms ease;
   }
   .sessions-open :deep(.session-rail) { transform: translateX(0); }
+}
+
+/* 窄屏（<720px）角色行折叠为两行：首行 eyebrow + 触发钮，次行角色名 + 截断描述（UI 设计 §7）。 */
+@media (max-width: 719.98px) {
+  .workspace-composer__role-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .workspace-composer__role-eyebrow { order: 1; margin-right: auto; }
+  .workspace-composer__role-switch { order: 2; margin-left: auto; }
+  .workspace-composer__role-name { order: 3; }
+  .workspace-composer__role-desc { order: 4; flex-basis: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

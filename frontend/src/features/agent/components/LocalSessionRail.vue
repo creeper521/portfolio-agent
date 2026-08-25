@@ -2,6 +2,7 @@
 import { nextTick, ref } from 'vue'
 
 import type { AgentSession } from '../model/sessionTypes'
+import { presentationOf } from '../model/audienceRolePresentation'
 
 // 本地会话侧栏：列出当前标签页内存中的全部会话，提供新建、切换、
 // 重命名、删除与"清空本地会话"（带二次确认）入口。会话数据由父组件
@@ -9,11 +10,19 @@ import type { AgentSession } from '../model/sessionTypes'
 // 不感知存储细节），所有变更意图以事件上抛：create / select / rename /
 // remove / clear。本地状态均为纯 UI 状态：哪个会话菜单展开、哪个会话
 // 处于重命名编辑态、重命名草稿、清空确认框开关。
+// 角色识别（audience-role UI 设计 §4）：每行以 mono 短标签标注创建角色，
+// pending 行追加「· 生成中」、无消息但非空草稿的行追加「· 草稿」；
+// 渲染纯展示，不改变任何既有事件。
 
-defineProps<{
-  sessions: AgentSession[]
-  activeId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    sessions: AgentSession[]
+    activeId: string
+    /** 存在 pending Turn 的 sessionId 列表（Workspace 由 pendingTurns 投影）。 */
+    pendingIds?: readonly string[]
+  }>(),
+  { pendingIds: () => [] },
+)
 
 const emit = defineEmits<{
   create: []
@@ -22,6 +31,25 @@ const emit = defineEmits<{
   remove: [id: string]
   clear: []
 }>()
+
+function isSessionPending(session: AgentSession): boolean {
+  return props.pendingIds.includes(session.id)
+}
+
+/** 草稿后缀只用于无 USER 消息的纯草稿会话：有消息的会话以标题可识别（UI 设计 §4.1）。 */
+function isDraftOnlySession(session: AgentSession): boolean {
+  return !session.messages.some((message) => message.role === 'USER')
+    && (session.draft?.trim().length ?? 0) > 0
+}
+
+/** 行按钮可访问名：角色视角与状态并入，既有「（问题：…）」后缀拼接在标题之后。 */
+function sessionAriaLabel(session: AgentSession): string {
+  const state = isSessionPending(session)
+    ? '，回答生成中'
+    : isDraftOnlySession(session) ? '，含草稿' : ''
+  const detail = session.titleDetail ? `（问题：${session.titleDetail}）` : ''
+  return `会话（${presentationOf(session.role).shortLabel}视角${state}）：${session.title}${detail}`
+}
 
 const menuId = ref('')
 const editingId = ref('')
@@ -81,6 +109,8 @@ function confirmClear() {
       <article
         v-for="session in sessions"
         :key="session.id"
+        :data-session-id="session.id"
+        :data-session-pending="isSessionPending(session) ? 'true' : undefined"
         :class="{
           active: session.id === activeId,
           'menu-open': menuId === session.id,
@@ -104,13 +134,24 @@ function confirmClear() {
           class="session-select"
           type="button"
           :title="session.titleDetail ?? session.title"
-          :aria-label="session.titleDetail
-            ? `会话：${session.title}（问题：${session.titleDetail}）`
-            : `会话：${session.title}`"
+          :aria-label="sessionAriaLabel(session)"
+          :data-session-role="session.role"
           :aria-current="session.id === activeId ? 'true' : undefined"
           @click="emit('select', session.id)"
         >
-          {{ session.title }}
+          <span class="session-select__line">
+            <span class="session-role-tag" aria-hidden="true">
+              {{ presentationOf(session.role).shortLabel }}
+            </span>
+            <span class="session-select__title">{{ session.title }}</span>
+          </span>
+          <span
+            v-if="isSessionPending(session) || isDraftOnlySession(session)"
+            class="session-select__meta"
+          >
+            <span v-if="isSessionPending(session)" class="session-select__pending">· 生成中</span>
+            <span v-else>· 草稿</span>
+          </span>
         </button>
 
         <button
@@ -228,14 +269,52 @@ article.menu-open {
 }
 
 .session-select {
+  display: flex;
   min-width: 0;
-  padding: 0 8px 0 18px;
+  min-height: 48px;
+  padding: 6px 8px 6px 18px;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
   overflow: hidden;
   font-size: 13px;
-  line-height: 48px;
   text-align: left;
+}
+
+.session-select__line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-role-tag {
+  flex: none;
+  min-width: 38px;
+  padding: 1px 6px;
+  border: 1px solid var(--workspace-rule, var(--rule));
+  border-radius: 999px;
+  background: var(--paper-hi, #fff);
+  color: var(--workspace-text-secondary, var(--muted));
+  font: 9px/1.5 var(--mono);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.session-select__title {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-select__meta {
+  font: 9.5px/1.4 var(--mono);
+  color: var(--faint);
+}
+
+.session-select__pending {
+  color: var(--red);
 }
 
 .session-menu-trigger {

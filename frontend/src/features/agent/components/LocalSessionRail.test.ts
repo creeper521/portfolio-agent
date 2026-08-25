@@ -25,8 +25,65 @@ describe('LocalSessionRail', () => {
 
     expect(wrapper.text()).not.toContain('当前页面会话')
     expect(wrapper.text()).not.toContain('INTERVIEWER')
-    expect(wrapper.get('.session-select').text()).toBe('SQL 审计项目的取舍')
+    expect(wrapper.get('.session-select').text()).toContain('SQL 审计项目的取舍')
     expect(wrapper.get('.session-select').attributes('aria-current')).toBe('true')
+  })
+
+  it('标出创建角色短标签，并把角色并入行按钮可访问名（audience-role UI 设计 §4）', () => {
+    const wrapper = mount(LocalSessionRail, {
+      props: {
+        sessions: [
+          { ...sessions[0]!, titleDetail: '介绍 SQL 审计项目' },
+          { ...sessions[0]!, id: 'session-2', title: '如何复盘这个项目', role: 'MENTOR' },
+        ],
+        activeId: 'session-1',
+      },
+    })
+
+    const first = wrapper.get('[data-session-role="INTERVIEWER"]')
+    expect(first.text()).toContain('面试官')
+    expect(first.find('.session-role-tag').attributes('aria-hidden')).toBe('true')
+    expect(first.attributes('aria-label'))
+      .toBe('会话（面试官视角）：SQL 审计项目的取舍（问题：介绍 SQL 审计项目）')
+
+    const second = wrapper.get('[data-session-role="MENTOR"]')
+    expect(second.text()).toContain('导师')
+    expect(second.attributes('aria-label')).toBe('会话（导师视角）：如何复盘这个项目')
+    // 无 pending/草稿时不渲染状态后缀。
+    expect(wrapper.find('[data-session-pending]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('生成中')
+    expect(wrapper.text()).not.toContain('草稿')
+  })
+
+  it('pending 行标记「生成中」，无消息但非空草稿的行标记「草稿」', () => {
+    const wrapper = mount(LocalSessionRail, {
+      props: {
+        sessions: [
+          sessions[0]!,
+          {
+            ...sessions[0]!,
+            id: 'session-2',
+            title: '用一分钟介绍这段实习',
+            role: 'HR',
+            draft: '  未发送的草稿 ',
+            messages: [],
+          },
+        ],
+        activeId: 'session-1',
+        pendingIds: ['session-1'],
+      },
+    })
+
+    const pendingRow = wrapper.get('[data-session-pending]')
+    expect(pendingRow.attributes('data-session-id')).toBe('session-1')
+    expect(pendingRow.text()).toContain('生成中')
+    expect(wrapper.get('[data-session-role="INTERVIEWER"]').attributes('aria-label'))
+      .toBe('会话（面试官视角，回答生成中）：SQL 审计项目的取舍')
+
+    const draftRow = wrapper.get('[data-session-role="HR"]')
+    expect(draftRow.text()).toContain('草稿')
+    expect(draftRow.attributes('aria-label'))
+      .toBe('会话（HR视角，含草稿）：用一分钟介绍这段实习')
   })
 
   it('renames and removes through the row menu', async () => {
