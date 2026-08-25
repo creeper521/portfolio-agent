@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四角色会话切换 · 交互原型</title>
+<!--
+  设计假设（对齐 2026-08-25-audience-role-switching-frontend-ui-design.md D-AR-1..9）：
+  1. 布局 A：角色行是 composer 首行（eyebrow + serif 角色名 + 截断描述 + 切换胶囊钮），
+     向上弹浮层；布局 D（常显四按钮）仅作被否决对照。
+  2. 浮层 = 非模态 dialog：当前角色为 aria-current 非动作行，其余三角色为
+     「以 X 视角开启新会话」动作按钮；提示行随草稿/pending 动态计算。
+  3. 切换 = switchAudienceRole(target)：同角色 no-op；不同角色 createSession({role})；
+     绝不原地改 session.role。无确认框；成功后 aria-live 宣布 + 焦点回输入框。
+  4. 空会话（无消息无草稿）在下次创建时被清理；草稿/pending/失败全留在旧会话；
+     旧 pending 结果只写回旧会话（rail 徽标「生成中」消失）。
+  5. 触发钮永远可点（角色是会话身份，非本轮设置）；首页 pending 时角色按钮真实 disabled。
+  视觉 token 全部取自 frontend/src/app/styles/tokens.css，四角色同款墨色标签，无角色配色。
+-->
+<style>
+:root {
+  --paper: #f4eee4; --paper-hi: #fbf7ef; --paper-low: #e9dfd0;
+  --agent-stage: #1e1b17; --agent-shell-paper: #f3eadb; --agent-rail-paper: #f0e9de;
+  --agent-thread-paper: #f5e8d1; --agent-evidence-paper: #f8f3ea;
+  --agent-hairline: rgba(104, 84, 60, 0.22); --ink: #201c17; --ink-2: #34302a;
+  --muted: #746b5e; --faint: #9c9182; --rule: #cdbfa9;
+  --red: #7a2e2a; --red-hi: #b65d53;
+  --serif: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+  --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --radius-sm: 8px; --radius-md: 12px; --radius-shell: 20px;
+  --ease: cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--agent-stage); color: var(--ink); font-family: var(--sans); min-height: 100vh; padding: 30px 18px 56px; }
+.eyebrow { font: 10.5px var(--mono); letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── 演示控制台 ── */
+.demo-console { max-width: 1240px; margin: 0 auto 16px; }
+.demo-console h1 { font: 600 25px/1.2 var(--serif); color: #e8ddce; letter-spacing: -0.02em; margin: 6px 0 13px; }
+.demo-console .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.demo-console .row > span { font: 11px var(--mono); color: #9c9182; margin-right: 6px; }
+.pill { border: 1px solid rgba(232,221,206,.28); background: transparent; color: #cfc4b2; font: 11px var(--mono); padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: 160ms var(--ease); }
+.pill:hover { border-color: #d27d74; color: #fff; }
+.pill.active { background: #d27d74; border-color: #d27d74; color: #1e1b17; }
+
+/* ── 工作台外壳（复刻 AgentWorkspace 三栏）── */
+.shell { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 216px minmax(0,1fr) 232px; gap: 14px; background: var(--agent-shell-paper); border-radius: var(--radius-shell); padding: 14px; box-shadow: 0 28px 72px rgba(0,0,0,.42); position: relative; }
+
+/* 会话轨 */
+.rail { background: var(--agent-rail-paper); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 560px; overflow-y: auto; }
+.rail-new { min-height: 40px; border: 1px solid var(--ink); border-radius: var(--radius-sm); background: var(--ink); color: var(--paper-hi); font: 12.5px var(--mono); letter-spacing: .08em; cursor: pointer; }
+.rail-new:hover { background: #34302a; }
+.session { display: grid; grid-template-columns: minmax(0,1fr) 26px; min-height: 46px; border-radius: var(--radius-sm); position: relative; }
+.session.active { background: var(--paper-hi); box-shadow: inset 2px 0 var(--red); }
+.session-select { min-width: 0; padding: 8px 4px 8px 10px; border: 0; background: transparent; text-align: left; cursor: pointer; display: block; }
+.session-select:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
+.session-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.session-title b { font: 600 12.5px/1.4 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-tag { flex: none; font: 9px var(--mono); letter-spacing: .08em; color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 6px; background: var(--paper-hi); }
+.session-meta { font: 9.5px var(--mono); color: var(--faint); margin-top: 3px; }
+.session-meta .pending-flag { color: var(--red); }
+.rail footer { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--rule); }
+.rail footer p { font: 10px/1.6 var(--mono); color: var(--faint); }
+
+/* 中列 */
+.center { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.thread { background: var(--agent-thread-paper); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); padding: 16px; min-height: 330px; max-height: 430px; display: flex; flex-direction: column; gap: 13px; overflow-y: auto; }
+.thread-empty { margin: auto; text-align: center; color: var(--faint); }
+.thread-empty .eyebrow { margin-bottom: 8px; }
+.thread-empty p { font: 15px/1.8 var(--serif); color: var(--muted); }
+.msg .who { font: 10px var(--mono); letter-spacing: .12em; color: var(--faint); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.msg.user .bubble { background: var(--paper-hi); border: 1px solid var(--agent-hairline); border-radius: var(--radius-sm); padding: 9px 12px; font: 13.5px/1.7 var(--sans); }
+.msg.agent .bubble { border-left: 2px solid var(--rule); padding: 2px 0 2px 13px; font: 13.5px/1.8 var(--serif); color: var(--ink-2); }
+.msg.agent .eyebrow-line { font: 10px var(--mono); letter-spacing: .12em; color: var(--red); margin-bottom: 6px; }
+.pending-card { border: 1px dashed var(--rule); border-radius: var(--radius-sm); padding: 11px 13px; background: color-mix(in srgb, var(--paper-hi) 60%, transparent); }
+.pending-card .q { font: 13.5px/1.7 var(--sans); margin-bottom: 7px; }
+.pending-card .status { font: 11px var(--mono); color: var(--muted); }
+.pending-card .status .dots::after { content: ''; animation: dots 1.2s steps(4) infinite; }
+@keyframes dots { 0%{content:''} 25%{content:'·'} 50%{content:'· ·'} 75%{content:'· · ·'} }
+.pending-card button { margin-top: 8px; font: 10.5px var(--mono); padding: 4px 10px; border: 1px solid var(--rule); background: transparent; color: var(--muted); border-radius: 6px; cursor: pointer; }
+
+/* composer */
+.composer { background: var(--agent-rail-paper); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); padding: 12px 14px; }
+
+/* ── 角色行（布局 A 核心）── */
+.role-row { display: flex; align-items: center; gap: 10px; padding: 8px 2px 10px; border-bottom: 1px solid var(--agent-hairline); margin-bottom: 10px; min-height: 44px; }
+.role-row .role-id { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.role-row .role-name { font: 600 15px/1.3 var(--serif); color: var(--ink); white-space: nowrap; }
+.role-row .role-desc { min-width: 0; flex: 1; font: 10.5px/1.5 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-switch { position: relative; flex: none; }
+.role-switch > button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; font: 11px var(--mono); letter-spacing: .04em; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-hi); padding: 6px 14px; cursor: pointer; transition: 160ms var(--ease); }
+.role-switch > button:hover { border-color: var(--red); }
+.role-switch > button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.role-switch > button .caret { color: var(--faint); }
+.role-popover { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40; width: min(420px, calc(100vw - 48px)); background: var(--paper-hi); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); box-shadow: 0 18px 44px rgba(32,28,23,.28); padding: 8px; opacity: 0; transform: translateY(4px); pointer-events: none; transition: 160ms var(--ease); }
+.role-popover.open { opacity: 1; transform: none; pointer-events: auto; }
+.role-popover .hint-line { font: 10px/1.7 var(--mono); color: var(--muted); padding: 6px 10px 8px; border-bottom: 1px dashed var(--rule); margin-bottom: 4px; }
+.role-popover .hint-line em { font-style: normal; color: var(--ink-2); }
+.role-current { display: flex; align-items: center; gap: 10px; padding: 10px 11px; }
+.role-current .cur-badge { flex: none; font: 9px var(--mono); letter-spacing: .1em; color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 40%, var(--rule)); border-radius: 999px; padding: 1px 7px; }
+.role-current b { font: 600 13px/1.4 var(--sans); }
+.role-current small { display: block; margin-top: 2px; font: 10px/1.5 var(--mono); color: var(--faint); }
+.role-opt { display: flex; width: 100%; align-items: center; gap: 10px; min-height: 52px; padding: 8px 11px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; cursor: pointer; }
+.role-opt:hover, .role-opt:focus-visible { background: color-mix(in srgb, var(--red) 6%, var(--paper-hi)); outline: none; }
+.role-opt .opt-text { flex: 1; min-width: 0; }
+.role-opt b { font: 600 13px/1.4 var(--sans); }
+.role-opt small { display: block; margin-top: 2px; font: 10px/1.5 var(--mono); color: var(--faint); }
+.role-opt .new-tag { flex: none; font: 9px var(--mono); letter-spacing: .1em; color: var(--faint); }
+.role-error { display: none; margin: 4px 10px 6px; font: 10.5px/1.6 var(--mono); color: var(--red); }
+.role-error.show { display: block; }
+
+/* 布局 D（被否决对照）：常显四按钮 */
+.layout-d .role-row { display: none; }
+.role-segment { display: none; gap: 6px; flex-wrap: wrap; padding: 6px 0 10px; border-bottom: 1px solid var(--agent-hairline); margin-bottom: 10px; }
+.layout-d .role-segment { display: flex; }
+.role-segment button { min-height: 36px; padding: 6px 13px; font: 12px var(--sans); border: 1px solid var(--rule); border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.role-segment button.cur { background: var(--ink); color: var(--paper-hi); border-color: var(--ink); }
+.role-segment button:not(.cur):hover { border-color: var(--red); color: var(--red); }
+
+.composer-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+.model-pill { display: inline-flex; align-items: center; gap: 7px; font: 11px var(--mono); border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-hi); padding: 6px 12px; color: var(--ink-2); }
+.model-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+.suggestion { font: 11px var(--mono); padding: 5px 10px; border: 1px solid var(--rule); border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; }
+.suggestion:hover { border-color: var(--red); color: var(--red); }
+.composer form { display: flex; gap: 10px; align-items: flex-end; }
+.composer textarea { flex: 1; min-height: 56px; max-height: 120px; resize: none; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--paper-hi); padding: 10px 12px; font: 13.5px/1.7 var(--sans); color: var(--ink); }
+.composer textarea:focus { outline: 2px solid color-mix(in srgb, var(--red) 36%, transparent); outline-offset: 1px; }
+.send { min-height: 44px; font: 12px var(--mono); letter-spacing: .08em; padding: 10px 18px; border-radius: var(--radius-sm); border: 0; background: var(--ink); color: var(--paper-hi); cursor: pointer; }
+.send:disabled { opacity: .45; cursor: not-allowed; }
+.composer .privacy { margin: 7px 0 0; font: 10px var(--mono); color: var(--faint); }
+
+/* 来源面板 */
+.sources { background: var(--agent-evidence-paper); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); padding: 14px 12px; min-height: 560px; }
+.sources h5 { font: 600 12px var(--serif); margin: 8px 0 6px; }
+.sources .src { border-top: 1px solid var(--rule); padding: 7px 0; }
+.sources .src b { font: 12px var(--sans); display: block; }
+.sources .src small { font: 10px var(--mono); color: var(--faint); }
+.sources .note { margin-top: 12px; font: 11px/1.8 var(--mono); color: var(--muted); }
+
+/* ── 首页变体 ── */
+.home-panel { display: none; background: var(--agent-thread-paper); border: 1px solid var(--agent-hairline); border-radius: var(--radius-md); padding: 22px 20px; }
+.center.mode-home .thread, .center.mode-home .composer { display: none; }
+.center.mode-home .home-panel { display: block; }
+.home-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 18px; margin-top: 12px; }
+.home-roles { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
+.home-roles button { min-height: 78px; padding: 14px 13px; text-align: left; border: 0; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: transparent; font: 14px var(--sans); cursor: pointer; color: var(--ink); }
+.home-roles button:nth-child(2n) { border-right: 0; }
+.home-roles button:nth-child(n+3) { border-bottom: 0; }
+.home-roles button small { display: block; margin-bottom: 7px; font: 11px var(--mono); letter-spacing: .1em; color: var(--ink-2); }
+.home-roles button.on { background: var(--ink); color: var(--paper); }
+.home-roles button.on small { color: #d27d74; }
+.home-roles button:disabled { cursor: wait; opacity: .55; }
+.home-desc { margin-top: 12px; font: 12.5px/1.7 var(--sans); color: var(--ink-2); }
+.home-qs button { display: block; width: 100%; padding: 12px 4px; text-align: left; border: 0; border-bottom: 1px solid var(--rule); background: transparent; font: 13.5px var(--sans); color: var(--ink); cursor: pointer; }
+.home-qs button:disabled { opacity: .55; cursor: wait; }
+.home-status { margin-top: 14px; font: 11px/1.7 var(--mono); color: var(--muted); }
+
+/* ── 移动端 ── */
+.shell.mobile { width: 392px; grid-template-columns: minmax(0,1fr); margin: 0 auto; }
+.shell.mobile .sources, .shell.mobile .pane-resizer-note { display: none; }
+.shell.mobile .rail { position: absolute; z-index: 70; inset: 0 auto 0 0; width: min(86%, 320px); min-height: 0; transform: translateX(-102%); transition: transform 220ms var(--ease); border-radius: var(--radius-md); }
+.shell.mobile.rail-open .rail { transform: translateX(0); box-shadow: 0 0 0 200vmax rgba(32,28,23,.4); }
+.shell.mobile .mobile-tools { display: flex; gap: 8px; }
+.shell.mobile .thread { min-height: 300px; max-height: 340px; }
+.mobile-tools { display: none; }
+.shell.mobile .role-row { flex-wrap: wrap; }
+.shell.mobile .role-row .role-id { flex-basis: 100%; order: 2; }
+.shell.mobile .role-row .role-switch { order: 1; margin-left: auto; }
+.shell.mobile .role-row .role-desc { display: none; }
+
+/* 设计注解 */
+.design-notes { max-width: 1240px; margin: 20px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.design-notes .card { background: rgba(243,234,219,.06); border: 1px solid rgba(232,221,206,.16); border-radius: var(--radius-md); padding: 14px 16px; }
+.design-notes h6 { font: 600 13px var(--sans); color: #d8ccb8; margin-bottom: 8px; }
+.design-notes li { font: 12px/1.8 var(--sans); color: #b3a793; margin-left: 16px; }
+.design-notes code { font: 11px var(--mono); color: #d27d74; }
+
+@media (prefers-reduced-motion: reduce) { .role-popover, .shell.mobile .rail { transition: none; } }
+</style>
+</head>
+<body>
+
+<p class="sr-only" role="status" id="liveStatus" aria-live="polite"></p>
+
+<div class="demo-console">
+  <p class="eyebrow" style="color:#9c9182">INTERACTION PROTOTYPE · 四角色会话切换 · D-AR-1..9</p>
+  <h1>角色切换 · 交互原型</h1>
+  <div class="row">
+    <span>布局</span>
+    <button class="pill active" data-layout="a" onclick="setLayout('a')">A · composer 首行（推荐）</button>
+    <button class="pill" data-layout="d" onclick="setLayout('d')">D · 常显四钮（已否决对照）</button>
+    <button class="pill" data-viewport="m" onclick="toggleMobile()">手机 392px</button>
+  </div>
+  <div class="row">
+    <span>场景</span>
+    <button class="pill" onclick="scenario('reset')">0 重置</button>
+    <button class="pill" onclick="scenario('switch')">1 切换角色→新会话</button>
+    <button class="pill" onclick="scenario('draft')">2 草稿留在旧会话</button>
+    <button class="pill" onclick="scenario('pending')">3 pending 隔离</button>
+    <button class="pill" onclick="scenario('chain')">4 连续试选清理</button>
+    <button class="pill" onclick="scenario('home')">5 首页 pending 锁定</button>
+  </div>
+</div>
+
+<div class="shell" id="shell">
+  <!-- 会话轨 -->
+  <aside class="rail" aria-label="会话">
+    <button class="rail-new" type="button" onclick="newSession()">＋ 新对话</button>
+    <div id="sessionList" style="display:flex;flex-direction:column;gap:6px"></div>
+    <footer><p>当前对话未保存，刷新后记录会消失。</p></footer>
+  </aside>
+
+  <!-- 中列 -->
+  <div class="center" id="center">
+    <div class="mobile-tools" style="padding:0 2px 2px">
+      <button class="suggestion" onclick="shell().classList.toggle('rail-open')">☰ 会话</button>
+    </div>
+
+    <div class="thread" id="thread" aria-label="对话区"></div>
+
+    <!-- 首页轻对话变体 -->
+    <div class="home-panel" id="homePanel">
+      <p class="eyebrow">02 · LIGHT CONVERSATION · 首页预览</p>
+      <div class="home-grid">
+        <section>
+          <p class="eyebrow" style="margin-bottom:10px">SELECT YOUR ROLE</p>
+          <div class="home-roles" id="homeRoles" aria-label="选择访客身份"></div>
+          <p class="home-desc" id="homeDesc"></p>
+        </section>
+        <section class="home-qs">
+          <p class="eyebrow" style="margin-bottom:6px">SUGGESTED QUESTIONS</p>
+          <div id="homeQs"></div>
+          <p class="home-status" id="homeStatus">选择角色后提问；pending 期间角色锁定。</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="composer">
+      <!-- 角色行（布局 A）-->
+      <div class="role-row">
+        <div class="role-id">
+          <span class="eyebrow">会话视角</span>
+          <span class="role-name" id="roleName">技术面试官</span>
+          <span class="role-desc" id="roleDesc"></span>
+        </div>
+        <div class="role-switch">
+          <button type="button" id="roleTrigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="rolePopover"
+                  data-testid="role-switch-trigger" onclick="togglePopover(event)">
+            切换视角 <span class="caret" aria-hidden="true">▾</span>
+          </button>
+          <div class="role-popover" id="rolePopover" role="dialog" aria-label="切换会话视角" data-testid="role-switch-popover">
+            <p class="hint-line" id="popHint" role="note"></p>
+            <div id="popBody"></div>
+            <p class="role-error" id="roleError" role="alert" data-testid="role-switch-error">未能开启新会话，请稍后重试。</p>
+          </div>
+        </div>
+      </div>
+      <!-- 布局 D 对照：常显四钮 -->
+      <div class="role-segment" id="roleSegment" aria-label="会话视角（对照布局 D）"></div>
+
+      <div class="composer-top">
+        <span class="model-pill"><span class="dot"></span>GLM-4.7-Flash</span>
+        <button class="suggestion" type="button" onclick="quickAsk()">推荐两个公开项目</button>
+      </div>
+      <form onsubmit.prevent="">
+        <textarea id="input" aria-label="输入你的问题" placeholder="问问公开项目、案例或工程取舍…"
+          @keydown.enter.prevent="submitQuestion()"></textarea>
+        <button class="send" id="sendBtn" type="button" onclick="submitQuestion()">发送 ↵</button>
+      </form>
+      <p class="privacy">当前对话未保存 · 角色切换会开启新会话，不修改当前会话</p>
+    </div>
+  </div>
+
+  <!-- 来源面板 -->
+  <aside class="sources">
+    <p class="eyebrow">回答来源</p>
+    <h5>当前回答来源</h5>
+    <div class="src"><b>SQL 审计工具 · 实现说明</b><small>VERIFIED_PUBLIC_EVIDENCE</small></div>
+    <div class="src"><b>周末登录 ABTest · 验证记录</b><small>VERIFIED_PUBLIC_EVIDENCE</small></div>
+    <p class="note">四角色使用同一授权证据池；角色只改变呈现顺序与措辞，不改变来源范围。</p>
+  </aside>
+</div>
+
+<div class="design-notes">
+  <div class="card">
+    <h6>已冻结语义（demo 严格模拟）</h6>
+    <ul>
+      <li>切换 = <code>switchAudienceRole(target)</code> 建新会话；同角色 no-op（浮层内无可点同角色项）</li>
+      <li>新会话只继承 Project/Case 上下文；消息、草稿、模型、Conversation、ResumeToken、pending、错误全部留在旧会话</li>
+      <li>无消息且无草稿的空会话在下次创建时被清理（连续试选不堆积）</li>
+      <li>旧 pending 结果只写回旧会话；rail 行「生成中」徽标随后消失</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h6>键盘与 ARIA</h6>
+    <ul>
+      <li>触发钮 <code>aria-haspopup="dialog"</code>；浮层内方向键循环、Esc 关闭并还焦、外点关闭</li>
+      <li>动作项可访问名 =「以 X 视角开启新会话」；当前角色为 <code>aria-current</code> 非动作行</li>
+      <li>切换成功由常驻 <code>role="status"</code> 宣布（本页顶部 sr-only 区）；失败 <code>role="alert"</code></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h6>审查要点</h6>
+    <ul>
+      <li>布局 A vs D：D 演示溢出与误触（每个按钮都是建会话级动作）</li>
+      <li>场景 3：切走后旧会话生成中→完成，切回可见结果</li>
+      <li>首页场景：pending 期间角色按钮真实 disabled，答案按提交时角色渲染</li>
+      <li>手机模式：角色行两行折叠、会话轨抽屉、触达高度 ≥44px</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* ── 角色展示映射（设计 §8，与首页文案一致但独立维护）── */
+const ROLES = [
+  { id: 'INTERVIEWER', short: '面试官', label: '技术面试官', desc: '侧重技术方案、取舍和实现细节，每个结论标注状态与证据', qs: ['介绍 SQL 审计工具的完整迭代', '查询为什么需要设计成异步？'] },
+  { id: 'MENTOR', short: '导师', label: '未来导师', desc: '侧重工作过程、复盘质量和能力如何在连续迭代中形成', qs: ['你如何复盘这个项目？', '如果重做一次会改变什么？'] },
+  { id: 'HR', short: 'HR', label: 'HR / 招聘者', desc: '侧重经历概况、职责范围、交付状态和贡献边界', qs: ['用一分钟介绍这段实习经历', '完成了哪些核心工程产出？'] },
+  { id: 'GUEST', short: '访客', label: '普通访客', desc: '用更通俗的语言解释项目做了什么，同时保留事实边界', qs: ['这份作品集应该从哪里开始看？', 'SQL 审计工具解决了什么问题？'] },
+];
+const roleOf = (id) => ROLES.find((r) => r.id === id);
+let sid = 0;
+const state = { sessions: [], activeId: '', pending: new Set(), nextId: () => 's' + (++sid) };
+const shell = () => document.getElementById('shell');
+const $ = (id) => document.getElementById(id);
+
+/* ── 会话状态机（模拟 useLocalSessions + switchAudienceRole）── */
+function activeSession() { return state.sessions.find((s) => s.id === state.activeId) || null; }
+
+function createSession(role, opts = {}) {
+  // 空会话清理：无消息且无草稿的旧会话丢弃（上级 §6.3.7）
+  state.sessions = state.sessions.filter((s) => s.messages.length > 0 || (s.draft || '').trim().length > 0);
+  const s = { id: state.nextId(), role, title: opts.title || '新的工程追问', messages: [...(opts.messages || [])], draft: opts.draft || '' };
+  state.sessions.unshift(s);
+  state.activeId = s.id;
+  return s;
+}
+
+/** 唯一动作入口（设计 §9）：绝不原地改 role */
+function switchAudienceRole(target) {
+  const cur = activeSession();
+  if (!cur || cur.role === target) return false;
+  createSession(target, { title: '新的工程追问' });
+  return true;
+}
+
+function newSession() {
+  const cur = activeSession();
+  createSession(cur ? cur.role : 'INTERVIEWER');
+  renderAll(); focusComposer();
+}
+
+function selectSession(id) {
+  state.activeId = id;
+  shell().classList.remove('rail-open');
+  renderAll();
+}
+
+/* ── 渲染 ── */
+function renderRail() {
+  const list = $('sessionList');
+  list.innerHTML = '';
+  // 模拟 historySessions：有消息或非空草稿
+  const shown = state.sessions.filter((s) => s.messages.length > 0 || (s.draft || '').trim().length > 0 || s.id === state.activeId);
+  if (!shown.length) { list.innerHTML = '<p style="font:11px var(--mono);color:var(--faint);padding:8px 4px">还没有会话。</p>'; return; }
+  for (const s of shown) {
+    const r = roleOf(s.role);
+    const pend = state.pending.has(s.id);
+    const hasDraft = (s.draft || '').trim().length > 0;
+    const art = document.createElement('div');
+    art.className = 'session' + (s.id === state.activeId ? ' active' : '');
+    const metaBits = [];
+    if (pend) metaBits.push('<span class="pending-flag">· 生成中</span>');
+    if (hasDraft && !pend) metaBits.push('· 草稿');
+    if (!metaBits.length && s.messages.length) metaBits.push(s.messages.filter(m => m.role==='user').length + ' 轮');
+    art.innerHTML = `
+      <button class="session-select" data-session-role="${s.role}"
+        aria-label="会话（${r.short}视角${pend ? '，回答生成中' : ''}${hasDraft && !pend ? '，含草稿' : ''}）：${s.title}"
+        onclick="selectSession('${s.id}')">
+        <span class="session-title"><span class="role-tag" aria-hidden="true">${r.short}</span><b>${s.title}</b></span>
+        <span class="session-meta">${metaBits.join(' ') || '&nbsp;'}</span>
+      </button>`;
+    list.appendChild(art);
+  }
+}
+
+function renderThread() {
+  const s = activeSession();
+  const t = $('thread');
+  t.innerHTML = '';
+  if (!s) return;
+  if (!s.messages.length) {
+    const r = roleOf(s.role);
+    t.innerHTML = `<div class="thread-empty"><p class="eyebrow">${r.label} · 新会话</p><p>以${r.label}的视角开始提问。</p></div>`;
+    return;
+  }
+  for (const m of s.messages) t.appendChild(renderMsg(m));
+  t.scrollTop = t.scrollHeight;
+}
+
+function renderMsg(m) {
+  const el = document.createElement('div');
+  if (m.kind === 'pending') {
+    el.className = 'pending-card'; el.id = 'pend-' + m.id;
+    el.innerHTML = `<div class="q"></div><div class="status"><span class="dots">正在生成回答</span></div><button type="button" onclick="cancelPending('${m.id}')">取消回答</button>`;
+    el.querySelector('.q').textContent = m.text;
+    return el;
+  }
+  el.className = 'msg ' + (m.role === 'user' ? 'user' : 'agent');
+  el.innerHTML = m.role === 'user'
+    ? `<div class="who"><span>YOU</span></div><div class="bubble"></div>`
+    : `<div class="who"><span>AGENT</span><span>${roleOf(m.role).short.toUpperCase()}</span></div><div class="bubble"><div class="eyebrow-line">${m.eyebrow || ''}</div><div class="body"></div></div>`;
+  (el.querySelector('.bubble .body') || el.querySelector('.bubble')).textContent = m.text;
+  return el;
+}
+
+function renderRoleRow() {
+  const s = activeSession(); if (!s) return;
+  const r = roleOf(s.role);
+  $('roleName').textContent = r.label;
+  $('roleDesc').textContent = r.desc;
+  // 浮层提示行（设计 §3.2）
+  const hints = ['切换视角会开启<em>新会话</em>；当前会话自动保留在列表。同视角重新开始请用「新对话」。'];
+  if ((s.draft || '').trim()) hints.push('当前会话有未发送草稿，草稿将保留在原会话。');
+  if (state.pending.has(s.id)) hints.push('当前会话的回答仍在生成，结果只写回原会话。');
+  $('popHint').innerHTML = hints.join('<br>');
+  // 浮层主体：当前角色非动作行 + 其余三角色动作按钮
+  const body = [`<div class="role-current" aria-current="true" data-testid="role-current">
+      <span class="cur-badge">当前</span>
+      <span style="min-width:0"><b>${r.label}</b><small>${r.desc}</small></span>
+    </div>`];
+  for (const o of ROLES.filter((x) => x.id !== s.role)) {
+    body.push(`<button class="role-opt" type="button" data-testid="role-option" data-role="${o.id}"
+      aria-label="以${o.label}视角开启新会话"
+      onclick="handleRoleSwitch('${o.id}')">
+      <span class="opt-text"><b>${o.label}</b><small>${o.desc}</small></span>
+      <span class="new-tag" aria-hidden="true">新会话 ›</span>
+    </button>`);
+  }
+  $('popBody').innerHTML = body.join('');
+  // 布局 D 对照
+  $('roleSegment').innerHTML = ROLES.map((o) =>
+    `<button type="button" class="${o.id === s.role ? 'cur' : ''}" onclick="handleRoleSwitch('${o.id}')" ${o.id === s.role ? 'disabled' : ''}>${o.label}</button>`).join('');
+}
+
+function renderAll() { renderRail(); renderThread(); renderRoleRow(); }
+
+/* ── 角色切换交互（设计 §3.4 / §5 / §9）── */
+let popReturnFocus = false;
+function togglePopover(e) {
+  e && e.stopPropagation();
+  const pop = $('rolePopover');
+  const willOpen = !pop.classList.contains('open');
+  pop.classList.toggle('open', willOpen);
+  $('roleTrigger').setAttribute('aria-expanded', willOpen);
+  if (willOpen) {
+    $('roleError').classList.remove('show');
+    queueMicrotask(() => pop.querySelector('.role-opt')?.focus());
+  }
+}
+function closePopover(returnFocus = true) {
+  $('rolePopover').classList.remove('open');
+  $('roleTrigger').setAttribute('aria-expanded', 'false');
+  if (returnFocus) $('roleTrigger').focus();
+}
+function handleRoleSwitch(target) {
+  let ok = false;
+  try { ok = switchAudienceRole(target); } catch { ok = false; }
+  if (!ok) { $('roleError').classList.add('show'); return; }   // 失败：浮层保持打开 + alert
+  closePopover(false);
+  $('liveStatus').textContent = `已切换到${roleOf(target).label}视角，开始新会话`;
+  renderAll();
+  focusComposer();
+}
+function focusComposer() { $('input').focus(); }
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.role-switch')) closePopover(false);
+});
+$('rolePopover').addEventListener('keydown', (e) => {
+  const opts = [...$('rolePopover').querySelectorAll('.role-opt')];
+  if (e.key === 'Escape') { e.preventDefault(); closePopover(); }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const i = opts.indexOf(document.activeElement);
+    const n = e.key === 'ArrowDown' ? (i + 1) % opts.length : (i - 1 + opts.length) % opts.length;
+    opts[n]?.focus();
+  }
+});
+$('input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuestion(); } });
+
+/* ── 提问 / pending（结果只写回发起会话）── */
+let reqN = 0;
+function submitQuestion() {
+  const s = activeSession(); if (!s || state.pending.has(s.id)) return;
+  const text = $('input').value.trim() || roleOf(s.role).qs[0];
+  $('input').value = ''; s.draft = '';
+  const sid_ = s.id, role = s.role, mid = 'm' + (++reqN);
+  s.messages.push({ kind: 'pending', id: mid, text });
+  state.pending.add(sid_);
+  renderAll();
+  setTimeout(() => {
+    const target = state.sessions.find((x) => x.id === sid_);
+    state.pending.delete(sid_);
+    if (!target) { renderAll(); return; }               // 会话已删：丢弃写回
+    target.messages = target.messages.filter((m) => m.id !== mid);
+    target.messages.push({ role: 'user', text });
+    target.messages.push({ role: 'agent', role: role, eyebrow: roleOf(role).label + ' 视角 · 演示回答', text: roleOf(role).demo });
+    renderAll();
+  }, 3200);
+}
+function quickAsk() { $('input').value = roleOf(activeSession().role).qs[0]; submitQuestion(); }
+function cancelPending(mid) {
+  const s = activeSession();
+  s.messages = s.messages.filter((m) => m.id !== mid);
+  state.pending.delete(s.id);
+  renderAll();
+}
+
+/* demo 回答文案（按角色差异化措辞，事实相同） */
+ROLES[0].demo = 'SQL 审计工具的实现采用分层管线：采集 → 规则引擎 → 报告聚合；异步查询通过队列削峰，验证记录可在来源面板核对。';
+ROLES[1].demo = '这个项目的关键复盘在规则引擎的迭代：第一版同步阻塞，暴露瓶颈后改为异步队列；错误处理与回归验证是过程中最大的收获。';
+ROLES[2].demo = '这段实习的核心产出是 SQL 审计工具与 ABTest 平台两项，均为已交付状态；职责以服务端开发为主，独立完成规则引擎模块。';
+ROLES[3].demo = '这个工具解决的问题是：让数据库的操作留下可查的记录。它自动收集 SQL、按规则检查风险并生成报告，目前已在线上使用。';
+
+/* ── 首页变体 ── */
+const home = { role: 'INTERVIEWER', pending: false, answerRole: null };
+function renderHome() {
+  $('homeRoles').innerHTML = ROLES.map((r) =>
+    `<button type="button" class="${r.id === home.role ? 'on' : ''}" data-role="${r.id}" aria-pressed="${r.id === home.role}" ${home.pending ? 'disabled' : ''} onclick="homePick('${r.id}')"><small>${r.short.toUpperCase()}</small>${r.label}</button>`).join('');
+  $('homeDesc').textContent = roleOf(home.role).desc;
+  $('homeQs').innerHTML = ROLES.find((r) => r.id === (home.pending ? home.answerRole : home.role)).qs
+    .map((q) => `<button type="button" ${home.pending ? 'disabled' : ''} onclick="homeAsk()"><b style="font:11px var(--mono);color:var(--ink-2);margin-right:8px">Q</b>${q}</button>`).join('');
+  $('homeStatus').textContent = home.pending
+    ? `正在核对公开事实…（以提交时角色「${roleOf(home.answerRole).label}」锁定，角色按钮已禁用）`
+    : (home.answerRole ? `上一轮回答以「${roleOf(home.answerRole).label}」快照渲染 · 进入 Agent 将沿用该角色` : '选择角色后提问；pending 期间角色锁定。');
+}
+function homePick(id) { if (home.pending) return; home.role = id; renderHome(); }
+function homeAsk() {
+  home.pending = true; home.answerRole = home.role; renderHome();
+  setTimeout(() => { home.pending = false; renderHome(); }, 2600);
+}
+
+/* ── 场景驱动 ── */
+function scenario(name) {
+  shell().classList.remove('mode-home');
+  $('center').classList.remove('mode-home');
+  if (name === 'home') { $('center').classList.add('mode-home'); renderHome(); return; }
+  if (name === 'reset') {
+    sid = 0; state.sessions = []; state.pending.clear();
+    const a = createSession('INTERVIEWER', { title: 'SQL 审计工具的完整迭代', messages: [
+      { role: 'user', text: '介绍 SQL 审计工具的完整迭代。' },
+      { role: 'agent', role: 'INTERVIEWER', eyebrow: '技术面试官视角 · 演示回答', text: ROLES[0].demo },
+    ]});
+    renderAll();
+    return;
+  }
+  if (name === 'switch') { scenario('reset'); setTimeout(() => handleRoleSwitch('MENTOR'), 250); return; }
+  if (name === 'draft') {
+    scenario('reset');
+    setTimeout(() => { $('input').value = '查询为什么需要设计成异步？'; activeSession().draft = $('input').value; renderRail(); }, 200);
+    setTimeout(() => handleRoleSwitch('HR'), 700);
+    return;
+  }
+  if (name === 'pending') {
+    scenario('reset');
+    setTimeout(() => { submitQuestion(); }, 200);                       // 旧会话进入 pending
+    setTimeout(() => handleRoleSwitch('GUEST'), 900);                   // pending 中切走
+    return;
+  }
+  if (name === 'chain') {
+    scenario('reset');
+    setTimeout(() => handleRoleSwitch('MENTOR'), 250);
+    setTimeout(() => handleRoleSwitch('HR'), 700);
+    setTimeout(() => handleRoleSwitch('GUEST'), 1150);                  // 中间空会话被清理
+    return;
+  }
+}
+function setLayout(which) {
+  document.querySelectorAll('.pill[data-layout]').forEach((b) => b.classList.toggle('active', b.dataset.layout === which));
+  shell().classList.toggle('layout-d', which === 'd');
+  closePopover(false);
+}
+function toggleMobile() {
+  const m = shell().classList.toggle('mobile');
+  document.querySelector('[data-viewport]').classList.toggle('active', m);
+}
+
+/* URL 参数：?layout=a|d&s=switch|draft|pending|chain|home&mobile=1 */
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('layout') === 'd') setLayout('d');
+  if (p.get('mobile') === '1') toggleMobile();
+  scenario(p.get('s') || 'reset');
+})();
+// textarea 草稿绑定（切换会话草稿不串线）
+$('input').addEventListener('input', () => { const s = activeSession(); if (s) { s.draft = $('input').value; } });
+const _selectSession = selectSession;
+selectSession = (id) => { _selectSession(id); $('input').value = activeSession()?.draft || ''; };
+const _renderAll = renderAll;
+renderAll = () => { _renderAll(); $('input').value = activeSession()?.draft || ''; const pend = activeSession() && state.pending.has(activeSession().id); $('sendBtn').disabled = !!pend; };
+renderAll();
+</script>
+</body>
+</html>
