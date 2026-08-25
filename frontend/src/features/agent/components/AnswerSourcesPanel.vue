@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { PublicSourceReference } from '../model/publicAgentTurn'
 
-// 工作台第三栏：展示最近 ANSWER 的唯一 SourceCatalog 公开来源。
-// 与 Answer 内 SourceDrawer 共享同一数据权威；这里只做列表呈现与站内跳转。
-// A2-06：heading 由 Workspace 按当前轮次语义给定（当前回答/最近回答），stale 时弱化。
-// B7：被当前会话正文引用的来源提供"定位"入口，跳到回答内引用它的 section。
+// 工作台第三栏：展示最近一次 ANSWER 的唯一 SourceCatalog 公开来源。
+// 与 Answer 正文内 SourceDrawer 共享同一数据权威；这里只做列表呈现、
+// 站内跳转与"定位"回跳。heading 由 Workspace 按当前轮次语义给定
+// （当前回答/最近回答），当前轮次不再是 ANSWER 时以 stale 弱化整栏
+// 视觉，避免被误读为支持当前澄清/失败轮次（A2-06）；被当前会话正文
+// 引用的来源提供"定位"入口，跳到回答内引用它的 section（B7）。
+// 数据全部来自 props，无本地状态；点击"定位"emit locate(sourceKey)。
 
 defineProps<{
   sources: readonly PublicSourceReference[]

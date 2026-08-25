@@ -2,8 +2,10 @@
 import type { BoundaryTurn, SuggestedAction } from '../model/publicAgentTurn'
 import SuggestedActionRow from './SuggestedActionRow.vue'
 
-// D-38.15：BOUNDARY 返回原因与可恢复动作；code 为后端冻结稳定公共码，
-// 前端不翻译内部 reason，只原样展示稳定码供诊断对照。
+// BOUNDARY（能力边界）轮次视图：只读展示后端给出的边界原因 message、
+// 冻结稳定公共码 code 与可选的恢复动作。code 原样展示、不翻译内部
+// reason，供诊断对照（D-38.15）。自身不持有本地状态，仅把用户选择的
+// 建议动作转发给父组件（select-action）。
 
 defineProps<{
   turn: BoundaryTurn

@@ -3,9 +3,12 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import type { PublicSourceReference } from '../model/publicAgentTurn'
 
-// D-41.7 / 前端交接 §9：Answer 级"查看全部来源"抽屉。
-// 可访问性：role=dialog + aria-modal、Esc 关闭、Tab 焦点陷阱、关闭后焦点返回触发元素；
-// ContentReleaseId 只出现在来源详情，不占正文 header（D-41.8）。
+// Answer 级"查看全部来源"抽屉：右侧滑出面板，列出该 Answer 唯一
+// sourceCatalog 的全部公开来源与内容版本号。开合由父组件经 props.open
+// 控制，关闭时 emit close；数据全部来自 props，本地只保存焦点管理所需
+// 的引用。可访问性约定：role=dialog + aria-modal、Esc 关闭、Tab 键焦点
+// 陷阱、关闭后焦点返回触发元素（D-41.7）；contentReleaseId 只出现在
+// 抽屉底部详情区，不占正文 header（D-41.8）。
 
 const props = defineProps<{
   open: boolean
@@ -18,10 +21,12 @@ const emit = defineEmits<{
 }>()
 
 const dialogRef = ref<HTMLElement | null>(null)
+// 打开抽屉前的焦点元素；关闭后把焦点归还给它，避免键盘用户丢失位置。
 let returnFocusTarget: HTMLElement | null = null
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled])'
 
+/** 收集抽屉内当前可聚焦元素（链接与未禁用按钮），供焦点陷阱循环。 */
 function focusables(): readonly HTMLElement[] {
   if (dialogRef.value === null) return []
   return [...dialogRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
@@ -31,6 +36,11 @@ function requestClose(): void {
   emit('close')
 }
 
+/**
+ * Tab 焦点陷阱：Shift+Tab 在首元素处跳到末元素，Tab 在末元素处跳回首
+ * 元素；焦点意外落在对话框外时拉回首元素。无任何可聚焦元素时聚焦
+ * 对话框容器本身，保证键盘不会逃逸到遮罩之下的正文。
+ */
 async function trapTab(event: KeyboardEvent): Promise<void> {
   const list = focusables()
   if (list.length === 0) {
@@ -58,6 +68,8 @@ async function trapTab(event: KeyboardEvent): Promise<void> {
   }
 }
 
+// 开合焦点管理：打开时记录触发元素并把焦点移入抽屉（优先首个可聚焦
+// 元素）；关闭时归还焦点给触发元素（用户焦点已移到 body 时不强抢）。
 watch(
   () => props.open,
   async (open) => {
@@ -80,6 +92,7 @@ watch(
   { immediate: true },
 )
 
+// 组件在打开状态下被卸载时放弃归还焦点，避免聚焦已移除的节点。
 onBeforeUnmount(() => {
   returnFocusTarget = null
 })

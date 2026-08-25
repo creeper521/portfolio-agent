@@ -7,14 +7,18 @@ import type {
 } from '../model/publicAgentTurn'
 import { SECTION_KIND_LABELS, SUPPORT_KIND_LABELS } from '../model/publicAgentTurnLabels'
 
-// D-41.6-8：Section 按后端顺序渲染；来源通过 publicSourceKeys 从唯一
-// sourceCatalog 解析为公开编号+标题；无 publicSourceKey 的 Section 不显示内部引用。
+// SECTIONED 展示视图：按后端给定顺序逐段渲染 Goal 的分节正文，每节附
+// 节类型徽标、pre-line 正文与支持说明。来源引用通过 publicSourceKeys 从
+// Answer 级唯一 sourceCatalog 解析为"公开编号 · 标题"的站内链接；
+// 没有 publicSourceKey 的 Section 只显示支持类型，不显示任何内部引用（D-41.6-8）。
+// 纯只读组件：props 进、模板出，无本地状态、无 emit。
 
 const props = defineProps<{
   presentation: SectionedPresentation
   sourceCatalog: PublicSourceCatalog
 }>()
 
+/** 把 Section 的 publicSourceKeys 解析为 sourceCatalog 中的来源条目；catalog 中查不到的 key 静默忽略。 */
 function sourcesOf(section: PublicSection): readonly PublicSourceReference[] {
   return section.support.publicSourceKeys
     .map((key) => props.sourceCatalog.sources.find((source) => source.key === key))

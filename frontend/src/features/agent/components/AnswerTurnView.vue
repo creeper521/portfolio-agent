@@ -9,9 +9,13 @@ import GoalResultView from './GoalResultView.vue'
 import SourceDrawer from './SourceDrawer.vue'
 import SuggestedActionRow from './SuggestedActionRow.vue'
 
-// D-41：Goal-first 唯一正文。多 Goal 按后端顺序分组；PARTIAL 顶部最多一条
-// "已完成 N/M 个目标"简报，具体缺口挂对应 Goal；NO_RESULT 不生成空正文；
-// local clarification 贴在首个受影响 Goal 下；Answer 底部提供"查看全部来源"抽屉。
+// ANSWER 轮次的正文视图：渲染 answer.goalResults 的 Goal-first 分组结果。
+// 数据全部来自 props（AnswerTurn），本地状态仅"来源抽屉开关"一处；
+// 向父组件转发 select-action 与 submit-clarification 两种用户动作。
+// 排版约定：多 Goal 按后端给定顺序分组；resolution 为 PARTIAL 时顶部
+// 最多一条"已完成 N/M 个目标"进度简报，具体缺口挂在对应 Goal 下说明；
+// NO_RESULT 不生成空正文；局部澄清（localClarification）贴在首个受影响
+// Goal 下；Answer 底部提供"查看全部来源"抽屉入口（D-41）。
 
 const props = defineProps<{
   turn: AnswerTurn
@@ -28,12 +32,14 @@ const answer = computed(() => props.turn.answer)
 const fullGoalCount = computed(
   () => answer.value.goalResults.filter((goal) => goal.coverage === 'FULL').length,
 )
+// 只有 PARTIAL 才展示顶部进度简报，COMPLETE/NO_RESULT 不需要冗余行。
 const showProgress = computed(() => answer.value.resolution === 'PARTIAL')
 
 const localClarification = computed(() => answer.value.localClarification)
 const firstAffectedGoalId = computed(() => localClarification.value?.affectedGoalIds[0])
 
-// D-41.5：影响多个 Goals 时说明"补充后将继续 N 个目标"（未受影响目标数）。
+// 局部澄清影响多个 Goal 时，提示"补充后其余 N 个目标将继续执行"，
+// N 为未受影响的目标数；全部受影响时返回空串不展示（D-41.5）。
 const continuedGoalNotice = computed(() => {
   const local = localClarification.value
   if (local === undefined) return ''
@@ -43,6 +49,7 @@ const continuedGoalNotice = computed(() => {
   return unaffected.length > 0 ? `补充后其余 ${unaffected.length} 个目标将继续执行` : ''
 })
 
+// Answer 内唯一的本地 UI 状态：来源抽屉的打开/关闭。
 const sourceDrawerOpen = ref(false)
 
 function forwardAction(action: SuggestedAction): void {
@@ -66,6 +73,7 @@ function forwardClarification(payload: ClarificationSubmissionPayload): void {
       :source-catalog="answer.sourceCatalog"
       @select-action="forwardAction"
     >
+      <!-- 局部澄清卡片只挂在首个受影响 Goal 下，避免多 Goal 时重复渲染表单 -->
       <template #appendix>
         <template v-if="localClarification !== undefined && goal.goalId === firstAffectedGoalId">
           <ClarificationChallengeForm

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+// 分栏拖拽分隔条：可访问的分栏宽度调整控件（role=separator，支持键盘）。
+// 宽度数值（value/min/max）完全由父组件持有，本组件不存宽度状态：
+// 拖拽过程 emit preview(value) 实时预览，松手 emit commit 由父组件提交；
+// 方向键 emit adjust(delta)、Home/双击 emit reset。direction=1/-1 表示
+// "指针右移时数值增大/减小"的轴向映射，使左右两根分隔条可复用同一逻辑。
+
 const props = defineProps<{
   label: string
   value: number
@@ -14,6 +20,11 @@ const emit = defineEmits<{
   reset: []
 }>()
 
+/**
+ * 指针拖拽：按下时捕获指针（capture）并记录起点，移动中按方向系数把
+ * 位移换算成新数值 emit preview；抬起或取消时解绑监听并 emit commit。
+ * min/max 钳制由父组件在 preview 处理中完成。
+ */
 function onPointerDown(event: PointerEvent) {
   const target = event.currentTarget as HTMLElement
   const startX = event.clientX
@@ -38,6 +49,8 @@ function onPointerDown(event: PointerEvent) {
   target.addEventListener('pointercancel', up)
 }
 
+// 键盘调整：方向键按步长 emit adjust（Shift 加大步长），Home 重置；
+// 增量符号按 direction 翻转，保证左右两根分隔条的键位直觉一致。
 function onKeydown(event: KeyboardEvent) {
   const step = event.shiftKey ? 48 : 16
   if (event.key === 'Home') {

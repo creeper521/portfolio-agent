@@ -10,8 +10,11 @@ import type {
 } from '../model/publicAgentTurn'
 import { SUPPORT_KIND_LABELS } from '../model/publicAgentTurnLabels'
 
-// D-41.9：推荐嵌入所属 Goal，卡片顺序、reasons、route 与缺口说明均以后端为权威；
-// 数量缺口只说明一次；窄屏单列；resultItemId 不进入可见文本。
+// RECOMMENDATION 展示视图：在所属 Goal 内渲染推荐结果卡片网格。
+// 卡片顺序、reasons、站内 route 与数量缺口说明均以后端为权威，前端不
+// 重排不重写；数量缺口只在顶部说明一次，不在每张卡片重复；窄屏降级为
+// 单列；resultItemId 仅作 v-for key，不进入可见文本（D-41.9）。
+// 数据来自 props；无本地状态；卡片"进入讨论"按钮 emit select-action。
 
 const props = defineProps<{
   presentation: RecommendationPresentation
@@ -22,10 +25,12 @@ const emit = defineEmits<{
   'select-action': [action: SuggestedAction]
 }>()
 
+// 实际推荐数少于请求数时才渲染顶部缺口说明块。
 const countIncomplete = computed(
   () => props.presentation.actualSize < props.presentation.requestedSize,
 )
 
+/** 把推荐项的 publicSourceKeys 解析为 sourceCatalog 中的来源条目；catalog 中查不到的 key 静默忽略。 */
 function sourcesOf(item: RecommendationItem): readonly PublicSourceReference[] {
   return item.support.publicSourceKeys
     .map((key) => props.sourceCatalog.sources.find((source) => source.key === key))
@@ -73,6 +78,7 @@ function sourcesOf(item: RecommendationItem): readonly PublicSourceReference[] {
         >{{ item.discussionAction.label }}</button>
       </li>
     </ul>
+    <!-- 支撑性分节由父组件经插槽注入，本组件只提供占位容器 -->
     <div v-if="presentation.supportingSections.length > 0" class="recommendation-presentation__supporting">
       <slot name="supporting" />
     </div>
@@ -152,7 +158,7 @@ function sourcesOf(item: RecommendationItem): readonly PublicSourceReference[] {
   color: var(--workspace-text, var(--ink));
   cursor: pointer;
 }
-/* D-41.17：推荐窄屏单列 */
+/* 窄屏（≤640px）时推荐卡片降级为单列（D-41.17） */
 @media (max-width: 640px) {
   .recommendation-presentation__items { grid-template-columns: 1fr; }
 }

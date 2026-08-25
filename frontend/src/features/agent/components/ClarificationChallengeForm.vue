@@ -7,11 +7,15 @@ import type {
   ClarificationSubmissionPayload,
 } from '../model/publicAgentTurn'
 
-// D-38.14 / 前端交接 §4-5：澄清挑战使用 opaque clarificationId/fieldId/choiceId，
-// 前端不接触 promptCode、subject binding 或内部 Task；SINGLE_CHOICE 用原生
-// radio group（fieldset/legend），TEXT 用 bounded textarea。提交事件只携带
-// clarificationId + 闭合答案，由上层在未来 API 接线时转为 RESOLVE_CLARIFICATION。
-// A2-18：CONSUMED/SUPERSEDED 状态只保留只读摘要，不再提供提交入口。
+// 澄清挑战表单：渲染 SINGLE_CHOICE（原生 radio group，fieldset/legend 分组）
+// 与 TEXT（带长度上限的 textarea）两类字段，并在本地收集答案、组装提交载荷。
+// 挑战全程使用 opaque clarificationId/fieldId/choiceId，前端不接触 promptCode、
+// subject binding 或内部 Task；提交事件只携带 clarificationId + 闭合答案，
+// 由上层转换为 RESOLVE_CLARIFICATION（D-38.14）。
+// 卡片状态机：state 为 CONSUMED（已提交、答案已并入后续回复）或 SUPERSEDED
+// （已被后续轮次取代）时只渲染只读摘要，不再提供提交入口（A2-18）。
+// 本地状态仅两个答案收集 Record（单选选择、文本草稿），随组件生命周期
+// 存在，不做任何持久化。
 
 export type ClarificationCardState = 'ACTIVE' | 'CONSUMED' | 'SUPERSEDED'
 
@@ -31,6 +35,7 @@ const TEXT_FALLBACK_LIMIT = 2000
 const selectedChoiceIds = ref<Record<string, string>>({})
 const textValues = ref<Record<string, string>>({})
 
+// 所有字段均作答才允许提交；TEXT 以 trim 后非空为准。
 const answered = computed(() =>
   props.challenge.fields.every((field) => {
     if (field.kind === 'SINGLE_CHOICE') {
@@ -40,6 +45,7 @@ const answered = computed(() =>
   }),
 )
 
+// 未显式传入状态时按 ACTIVE 处理。
 const cardState = computed<ClarificationCardState>(() => props.state ?? 'ACTIVE')
 
 const readonlyNote = computed(() =>
@@ -48,14 +54,17 @@ const readonlyNote = computed(() =>
     : '此澄清已被后续轮次取代，仅作记录，不可再提交。',
 )
 
+// 三重禁用条件：外部 disabled（会话有 pending）、非 ACTIVE 状态、未答完。
 const submitDisabled = computed(
   () => Boolean(props.disabled) || cardState.value !== 'ACTIVE' || !answered.value,
 )
 
+// 后端未给 limit 时使用兜底上限，保证 TEXT 输入始终有界。
 function textLimitOf(field: { limit?: number }): number {
   return field.limit === undefined ? TEXT_FALLBACK_LIMIT : field.limit
 }
 
+/** 组装闭合答案并上抛提交载荷；入口处再校验一次禁用条件，防止模板外误调用。 */
 function submit(): void {
   if (submitDisabled.value) return
   const answers: ClarificationFieldAnswer[] = props.challenge.fields.map((field) => {

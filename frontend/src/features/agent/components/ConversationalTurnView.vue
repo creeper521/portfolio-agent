@@ -2,7 +2,9 @@
 import type { ConversationalTurn, SuggestedAction } from '../model/publicAgentTurn'
 import SuggestedActionRow from './SuggestedActionRow.vue'
 
-// D-38.15：CONVERSATIONAL 只保留 message 与 suggestedActions，不携带 answer/goal/source。
+// CONVERSATIONAL 轮次视图：最简轮次形态，只渲染纯文本 message
+// （pre-line 保留换行）与可选建议动作。该 kind 按公开合同不携带
+// answer/goal/source 等结构化正文；自身无状态，仅转发 select-action（D-38.15）。
 
 defineProps<{
   turn: ConversationalTurn

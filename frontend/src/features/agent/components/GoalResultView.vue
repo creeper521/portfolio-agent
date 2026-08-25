@@ -4,8 +4,12 @@ import { GOAL_COVERAGE_LABELS } from '../model/publicAgentTurnLabels'
 import RecommendationPresentationView from './RecommendationPresentationView.vue'
 import SectionedPresentationView from './SectionedPresentationView.vue'
 
-// D-41：信息层级固定为 Goal 正文 -> Notice -> 来源与支持（在 Presentation 内）；
-// FULL 不显示覆盖标签；非 FULL 用文字表达，不只靠颜色；Supporting Task 不在此出现。
+// 单个 Goal 的结果区块：标题 -> 覆盖状态 -> Notice 列表 -> Presentation
+// （SECTIONED / RECOMMENDATION 二选一）。信息层级固定：来源与支持说明由
+// Presentation 内部渲染，此层不重复；FULL 目标不显示覆盖标签，非 FULL 用
+// 文字表达覆盖状态而非只靠颜色；Supporting Task 不在此层出现（D-41）。
+// 数据来自 props（goal + Answer 级唯一 sourceCatalog），自身无状态、
+// 不主动 emit；appendix 插槽供父组件挂局部澄清卡等附加内容。
 
 defineProps<{
   goal: AnswerGoalResult

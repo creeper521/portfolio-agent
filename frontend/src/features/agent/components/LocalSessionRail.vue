@@ -3,6 +3,13 @@ import { nextTick, ref } from 'vue'
 
 import type { AgentSession } from '../model/sessionTypes'
 
+// 本地会话侧栏：列出当前标签页内存中的全部会话，提供新建、切换、
+// 重命名、删除与"清空本地会话"（带二次确认）入口。会话数据由父组件
+// 传入（会话仅存在于页面内存与活跃会话的 sessionStorage 槽位，本组件
+// 不感知存储细节），所有变更意图以事件上抛：create / select / rename /
+// remove / clear。本地状态均为纯 UI 状态：哪个会话菜单展开、哪个会话
+// 处于重命名编辑态、重命名草稿、清空确认框开关。
+
 defineProps<{
   sessions: AgentSession[]
   activeId: string
@@ -20,10 +27,12 @@ const menuId = ref('')
 const editingId = ref('')
 const draftTitle = ref('')
 const clearConfirmationOpen = ref(false)
+// 输入框在 v-for 内，ref 可能被收集为数组，这里统一取第一个。
 const renameInput = ref<HTMLInputElement | HTMLInputElement[] | null>(null)
 const clearTrigger = ref<HTMLButtonElement | null>(null)
 const clearCancelButton = ref<HTMLButtonElement | null>(null)
 
+/** 进入重命名态：带入原标题作草稿，等 DOM 更新后聚焦输入框并全选，便于直接覆盖输入。 */
 async function beginRename(session: AgentSession) {
   editingId.value = session.id
   draftTitle.value = session.title
@@ -33,12 +42,14 @@ async function beginRename(session: AgentSession) {
   input?.select()
 }
 
+// 提交重命名：空标题（trim 后）不上抛，直接退出编辑态。
 function confirmRename() {
   const title = draftTitle.value.trim()
   if (editingId.value && title) emit('rename', editingId.value, title)
   editingId.value = ''
 }
 
+/** 打开清空确认框：焦点移到"取消"，避免误按回车直接清空全部会话。 */
 async function beginClear() {
   clearConfirmationOpen.value = true
   menuId.value = ''
@@ -46,6 +57,7 @@ async function beginClear() {
   clearCancelButton.value?.focus()
 }
 
+/** 取消清空：关框后把焦点还给触发按钮，保持键盘操作连续。 */
 async function cancelClear() {
   clearConfirmationOpen.value = false
   await nextTick()
@@ -64,6 +76,7 @@ function confirmClear() {
       <span aria-hidden="true">＋</span>新对话
     </button>
 
+    <!-- 会话列表条目：标题按钮 + "···"管理菜单；重命名时切换为内联输入框 -->
     <div class="session-list">
       <article
         v-for="session in sessions"
@@ -117,6 +130,7 @@ function confirmClear() {
       <p v-if="!sessions.length" class="session-empty">还没有会话。</p>
     </div>
 
+    <!-- 底部：隐私提示与清空入口；清空走 role=alertdialog 二次确认 -->
     <footer>
       <p>当前对话未保存，刷新后记录会消失</p>
       <button

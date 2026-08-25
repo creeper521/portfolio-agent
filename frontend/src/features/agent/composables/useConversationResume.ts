@@ -1,20 +1,26 @@
 import { ref } from 'vue'
 
-// 会话级 ResumeToken 唯一 sessionStorage 槽位（前端交接 §3 / D-46）。
+// 会话级 ResumeToken 在浏览器中的唯一 sessionStorage 槽位（composable 状态层）。
 //
 // 存储模型：
 //   运行期内存：每个 AgentSession 绑定自己的 ResumeToken（见 useLocalSessions）。
 //   sessionStorage：只保存当前活跃 AgentSession 的 ResumeToken，用于刷新恢复。
 //
-// 因此多本地会话不共享一个服务端 conversation；切换会话时槽位被替换；新建会话时清空；
-// 刷新后最多恢复刷新前活跃的一个会话；关闭页签后不保证恢复。
+// 因此多个本地会话不共享同一个服务端 conversation；切换会话时槽位被整体替换；
+// 新建会话时清空；刷新后最多恢复刷新前活跃的那一个会话；关闭页签后不保证恢复。
 //
-// 安全边界：ResumeToken 只通过 Authorization: Bearer Header 携带（D-46），绝不进入
-// URL/body/Cookie/日志/埋点/错误上报。槽位只保存不透明 Token 字符串，绝不保存问题、答案、
-// Context payload、Evidence 或 ContentVersion。禁止 localStorage/IndexedDB/Cookie 降级。
+// 安全边界：ResumeToken 只通过 Authorization: Bearer 请求头携带，绝不进入
+// URL、请求体、Cookie、日志、埋点或错误上报。槽位只保存不透明 Token 字符串，
+// 绝不保存问题、答案、Context payload、Evidence 或 ContentVersion；
+// 禁止降级到 localStorage/IndexedDB/Cookie。（前端交接 §3 / D-46）
 
 const RESUME_TOKEN_STORAGE_KEY = 'portfolio.agent.resume-token.v1'
 
+/**
+ * 当前标签页 ResumeToken 槽位的读写接口（composable）。
+ * 所有操作都不抛异常：sessionStorage 不可用或写入失败时置 resumeUnavailable
+ * 非阻断标志，当前页签的内存对话仍可继续，只是失去刷新恢复能力。
+ */
 export function useConversationResume() {
   // sessionStorage 不可用或写入失败时，当前页签内存对话仍可运行，
   // 但无法刷新恢复——以非阻断状态提示用户。

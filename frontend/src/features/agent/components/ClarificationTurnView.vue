@@ -5,10 +5,14 @@ import type { ClarificationCardState } from './ClarificationChallengeForm.vue'
 import ClarificationChallengeForm from './ClarificationChallengeForm.vue'
 import SuggestedActionRow from './SuggestedActionRow.vue'
 
-// D-38.13：Critical Clarification 是独立 Turn，无 answer/source/task/execution；
-// 提交事件只携带 clarificationId + 闭合答案，由上层转为 RESOLVE_CLARIFICATION。
-// 后端未提供 suggestedActions 时，以已发布 QuestionPreset 作为脱困入口；
-// 叶子组件不自造业务问题，只渲染上层传入的已发布预设（§11 确认第 6 项）。
+// CLARIFICATION（关键澄清）轮次视图：独立 Turn 形态，按公开合同不携带
+// answer/source/task/execution 结构。主体是澄清挑战表单，外加可选的后端
+// 建议动作。提交事件只携带 opaque clarificationId + 闭合答案，由上层
+// 转换为 RESOLVE_CLARIFICATION 请求（D-38.13）。
+// 脱困兜底：后端未提供 suggestedActions 且挑战仍 ACTIVE 时，展示上层
+// 传入的已发布 QuestionPreset 作为换方向提问入口；本组件不自造业务
+// 问题，只渲染传入预设（§11 确认第 6 项）。
+// 自身无状态；emit submit-clarification / select-action / ask 三种用户动作。
 
 export interface ClarificationFallbackPreset {
   readonly text: string
@@ -43,6 +47,7 @@ const emit = defineEmits<{
       :actions="turn.suggestedActions"
       @select="emit('select-action', $event)"
     />
+    <!-- 脱困兜底：无后端建议动作且挑战仍 ACTIVE 时，展示已发布预设供换方向提问 -->
     <div
       v-else-if="
         (clarificationState === undefined || clarificationState === 'ACTIVE')

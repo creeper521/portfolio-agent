@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { SuggestedAction } from '../model/publicAgentTurn'
 
-// D-41.10 / 前端交接 §6：SuggestedAction 是后端业务动作唯一权威；
-// 前端只转发 actionId/inputText/continuation，不按 label、位置重建协议。
+// 建议动作按钮行：把后端下发的 SuggestedAction 列表渲染为一排可点按钮。
+// 后端是业务动作的唯一权威，前端只原样转发 actionId/inputText/
+// continuation 完整对象，绝不按按钮文案或出现位置重建动作协议（D-41.10）。
+// 自身无状态；点击时把整个 action emit 给父组件。
 
 defineProps<{
   actions: readonly SuggestedAction[]
