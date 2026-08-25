@@ -6,6 +6,13 @@ import com.portfolio.agent.portfolio.domain.ProjectProfile;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 单个项目的公开详情聚合。
+ *
+ * <p>由 PortfolioService 组装：项目档案本体、过滤后的证据（仅 APPROVED 且不公开原始内容）、
+ * 建议问题文本、项目案例总数（caseCount）与按 featuredCaseIds 顺序组装的精选案例。
+ * 列表字段在构造时做防御性拷贝，实例不可变。
+ */
 public final class ProjectDetails {
 
     private final ProjectProfile project;

@@ -6,6 +6,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.util.Objects;
 
+/**
+ * 证据记录：可被公开引用的最小凭证单元。
+ *
+ * <p>仅记录证据的公开元数据：id/code 对外标识、类型、覆盖时间段、来源数量与已审校的
+ * summary；凭证的 rawContent 不在快照中，永远不会进入运行时输出。
+ *
+ * <p>publicStatus=APPROVED 是进入对外响应的唯一合法取值（公开快照内不允许出现
+ * PENDING/REJECTED）；rawContentPublic 必须为 false，表示只公开摘要、不公开原始内容。
+ * sourceCount 必须为正数。
+ */
 public final class EvidenceRecord {
 
     private final String id;

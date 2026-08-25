@@ -10,7 +10,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
-/** Immutable, non-secret execution metadata for one configured model entry. */
+/**
+ * 单个已配置模型的不可变、非秘密执行元数据：第二重 Provider 准入通过后
+ * 由 {@code ConfiguredModelCatalog} 生成的目录描述符。
+ *
+ * <p>构造期完成全部校验并冻结指纹：selectionVersion 必须是长度不超过 128
+ * 的受控字符格式；endpoint 必须是不含 userInfo/query/fragment 的 HTTPS URI；
+ * 能力集非空且不含 null；输出预算必须为正且不超过上下文预算。
+ * 指纹（{@link #getDescriptorFingerprint()}）由全部执行相关字段派生，
+ * 任何字段变化都会得到不同指纹，用于快照一致性比对。
+ */
 public final class ModelProviderDescriptor {
 
     private static final Pattern SELECTION_VERSION_FORMAT =
@@ -28,6 +37,12 @@ public final class ModelProviderDescriptor {
     private final int outputBudget;
     private final String descriptorFingerprint;
 
+    /**
+     * 全参构造：校验并冻结全部字段与指纹。
+     *
+     * @throws IllegalArgumentException 任一字段非法（版本格式、文本为空、
+     *         endpoint 非 HTTPS、能力集为空、预算越界）时抛出
+     */
     public ModelProviderDescriptor(
             ModelRef modelRef,
             String selectionVersion,
@@ -73,12 +88,14 @@ public final class ModelProviderDescriptor {
     public int getMaxOutputTokens() { return outputBudget; }
     public String getDescriptorFingerprint() { return descriptorFingerprint; }
 
+    /** 投影出免秘密的公开目录条目（不含 endpoint 与模型名）。 */
     public ModelCatalogEntry publicEntry() {
         return new ModelCatalogEntry(
                 modelRef.value(), displayName, displayOrder,
                 selectionVersion, capabilities);
     }
 
+    /** 校验非空、非空白文本并去除首尾空白。 */
     private static String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " is required");
@@ -86,6 +103,10 @@ public final class ModelProviderDescriptor {
         return value.strip();
     }
 
+    /**
+     * 校验 endpoint 是"干净"的 HTTPS URI（拒绝 userInfo、query、fragment），
+     * 防止描述符夹带凭证或旁路参数。
+     */
     private static URI requireHttpsEndpoint(URI value) {
         if (value == null
                 || value.getScheme() == null
@@ -100,6 +121,7 @@ public final class ModelProviderDescriptor {
         return value;
     }
 
+    /** 校验 selectionVersion：非空、长度不超过 128 且符合受控字符格式。 */
     private static String requireSelectionVersion(String value) {
         if (value == null
                 || value.length() > 128
@@ -109,6 +131,7 @@ public final class ModelProviderDescriptor {
         return value;
     }
 
+    /** 校验能力集非空且不含 null，并返回防御性拷贝。 */
     private static Set<ModelCapability> copyCapabilities(Set<ModelCapability> values) {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("capabilities must not be empty");
@@ -121,6 +144,7 @@ public final class ModelProviderDescriptor {
         return Set.copyOf(values);
     }
 
+    /** 生成能力集的规范字符串：按枚举名排序后以逗号连接，保证指纹输入稳定。 */
     public static String canonicalCapabilities(Set<ModelCapability> values) {
         return values.stream()
                 .map(Enum::name)
@@ -128,6 +152,12 @@ public final class ModelProviderDescriptor {
                 .collect(Collectors.joining(","));
     }
 
+    /**
+     * 对若干字符串计算 SHA-256 指纹：每段先写入 4 字节长度前缀再写内容，
+     * 长度前缀防止不同分段方式拼出相同输入（如 "ab"+"c" 与 "a"+"bc"）。
+     *
+     * @throws IllegalStateException 平台缺少 SHA-256（理论上不可能）
+     */
     public static String fingerprint(String... values) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

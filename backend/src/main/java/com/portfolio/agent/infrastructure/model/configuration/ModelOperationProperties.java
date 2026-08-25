@@ -10,12 +10,26 @@ import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 
-/** Independent operation configuration; no operation inherits another operation's approval. */
+/**
+ * 模型 Operation 独立配置：每个 Operation 各自持有模式、schema 版本、
+ * 输出预算与超时。
+ *
+ * <p>三重准入的第三重（Operation 精确 schema/输出预算/超时）由此承载：
+ * 任一 Operation 的批准与其他 Operation 完全独立，没有继承、没有默认开启；
+ * 未显式配置的 Operation 保持 DISABLED。缺省值仅提供预算与超时建议，
+ * mode 与 schemaVersion 仍需显式配置。
+ */
 @ConfigurationProperties(prefix = "portfolio.model-operations")
 public final class ModelOperationProperties {
     private Settings turnInterpretation = new Settings(1600, Duration.ofSeconds(8));
     private Settings generalKnowledge = new Settings(1200, Duration.ofSeconds(10));
 
+    /**
+     * 把配置折算为 Operation 策略注册表。
+     *
+     * @return 覆盖全部 {@link ModelOperation} 的策略注册表，
+     *         未显式启用的 Operation 以 DISABLED 策略进入注册表
+     */
     public ModelOperationPolicyRegistry toRegistry() {
         Map<ModelOperation, ModelOperationPolicy> policies = new EnumMap<>(ModelOperation.class);
         policies.put(ModelOperation.TURN_INTERPRETATION, turnInterpretation.policy(ModelOperation.TURN_INTERPRETATION));
@@ -28,6 +42,7 @@ public final class ModelOperationProperties {
     public Settings getGeneralKnowledge() { return generalKnowledge; }
     public void setGeneralKnowledge(Settings value) { generalKnowledge = value; }
 
+    /** 单个 Operation 的配置载体：模式、schema 版本、输出 token 预算与超时。 */
     public static final class Settings {
         private OperationMode mode = OperationMode.DISABLED;
         private String schemaVersion;

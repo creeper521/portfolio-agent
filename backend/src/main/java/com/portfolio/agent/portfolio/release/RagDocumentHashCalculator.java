@@ -12,11 +12,26 @@ import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.List;
 
+/**
+ * RAG 文档内容哈希的计算工具。
+ *
+ * <p>把文档的全部内容字段（chunkId、contentVersion、slug 列表、claimIds、文本、
+ * topics、有效期）按固定顺序以长度前缀编码写入字节流，再计算 SHA-256，
+ * 前缀长度编码可消除字段边界歧义，保证哈希对相同内容稳定、对不同内容区分。
+ * 不可实例化。
+ */
 public final class RagDocumentHashCalculator {
 
     private RagDocumentHashCalculator() {
     }
 
+    /**
+     * 计算文档的规范化内容哈希。
+     *
+     * @param document 待哈希的 RAG 文档
+     * @return 形如 {@code sha256:<hex>} 的哈希字符串
+     * @throws IllegalStateException SHA-256 不可用或编码失败（理论上不应发生）
+     */
     public static String contentHash(RagDocument document) {
         try {
             ByteArrayOutputStream output = new ByteArrayOutputStream();

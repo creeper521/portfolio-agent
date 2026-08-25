@@ -4,6 +4,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
+/**
+ * 发布包条目计数：manifest 中记录的各领域对象数量。
+ *
+ * <p>加载发布包时用 {@link #matches(PortfolioSnapshot)} 将计数与快照实际集合大小
+ * 逐一核对，防止清单与内容不一致。cases 使用包装类型 Integer 以兼容尚未包含
+ * 案例计数的旧版 manifest（缺失时按 0 处理，负数则拒绝）。
+ */
 public final class BundleCounts {
     private final int projects;
     private final int cases;
@@ -39,6 +46,9 @@ public final class BundleCounts {
     public int getClaimEvidenceLinks() { return claimEvidenceLinks; }
     public int getTimelineEvents() { return timelineEvents; }
     public int getQuestionPresets() { return questionPresets; }
+    /**
+     * 核对计数是否与快照中各集合的实际大小完全一致（全部相等才返回 true）。
+     */
     public boolean matches(PortfolioSnapshot value) {
         return projects == value.getProjects().size() && cases == value.getCases().size()
                 && claims == value.getClaims().size()

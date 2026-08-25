@@ -4,6 +4,15 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.OffsetDateTime;
 
+/**
+ * 发布清单：公开发布包 manifest 文件的结构，描述包内内容的版本、审批与完整性信息。
+ *
+ * <p>关键字段：schemaVersion/contentVersion/publishedAt/builtAt 标识内容与构建版本；
+ * minimumApplicationVersion 是可安全读取该包的最低应用版本；factsFile/presentationFile/
+ * checksumsFile 指向包内文件；approvalId/approvalDigest 记录治理审批；candidatePayloadHash
+ * 与 ledgerHash 锁定候选载荷与审批台账；presetContractSetHash 锁定 ACTIVE 预设契约集；
+ * counts 记录各领域对象条数（加载时与快照实际条数核对）；retrieval 描述随包检索产物。
+ */
 public final class ReleaseManifest {
     private final String schemaVersion;
     private final String contentVersion;
@@ -46,6 +55,10 @@ public final class ReleaseManifest {
         this.checksumsFile = checksumsFile; this.counts = counts;
         this.retrieval = retrieval;
     }
+    /**
+     * 兼容构造器：省略 ledgerHash 与 presetContractSetHash（均置 null），
+     * 供旧版 manifest（尚未引入这两个哈希字段）反序列化或构造时使用。
+     */
     public ReleaseManifest(String schemaVersion,
             String contentVersion,
             OffsetDateTime publishedAt,

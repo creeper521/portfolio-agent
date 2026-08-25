@@ -1,5 +1,11 @@
 package com.portfolio.agent.common.exception;
 
+/**
+ * 通用错误码枚举：覆盖与具体业务无关的公共失败场景（参数校验、资源不存在、方法/媒体类型不支持、内部错误），
+ * 供 {@link ApplicationException} 与全局异常处理器映射为对外响应。
+ *
+ * <p>defaultMessage 均为面向访客的安全文案，INTERNAL_ERROR 刻意不区分具体故障原因，避免泄漏内部细节。</p>
+ */
 public enum CommonErrorCode implements ErrorCode {
 
     VALIDATION_ERROR("VALIDATION_ERROR", "请求参数不符合要求", 400),

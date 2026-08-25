@@ -5,6 +5,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
+/**
+ * 档主公开资料：作品集所有者允许对外展示的身份信息。
+ *
+ * <p>仅包含公开审校过的字段（姓名、角色、简介、GitHub、联系邮箱、简历链接）；
+ * 私人知识库中的任何信息不得进入此对象。快照校验要求 role 与 summary 必填。
+ */
 public final class OwnerProfile {
 
     private final String name;

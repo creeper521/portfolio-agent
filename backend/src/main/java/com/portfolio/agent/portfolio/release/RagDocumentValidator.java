@@ -16,12 +16,33 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+/**
+ * RAG 文档发布前校验器：确保文档与快照一致且不引入提示注入或不可见字符风险。
+ *
+ * <p>校验维度：chunkId 与内容哈希唯一、contentVersion 与快照一致、主体归属唯一
+ * （项目与案例 slug 恰有其一）、claimIds/topics 非空、文本非空且在有效期内、
+ * 文本不含外部 URL、注入标记或 FORMAT/CONTROL 不可见字符、声明确实归属文档所指主体。
+ *
+ * <p>失败行为：任一规则不满足立即抛出 {@link InvalidPortfolioSnapshotException}，
+ * 携带可定位问题的消息。
+ */
 public final class RagDocumentValidator {
 
+    /** 检出外部链接（http/https/www.），防止文档诱导访问站外内容。 */
     private static final Pattern EXTERNAL_URL = Pattern.compile("(?i)(https?://|www\\.)");
+
+    /** 检出常见提示注入与模板替换标记，防止检索内容被当作指令执行。 */
     private static final Pattern INSTRUCTION_MARKER = Pattern.compile(
             "(?i)(ignore previous|system prompt|tool[_ ]?call|\\{\\{|\\$\\{)");
 
+    /**
+     * 校验一批 RAG 文档相对快照与当前日期的合法性。
+     *
+     * @param snapshot    作品集快照，用于反查项目/案例/声明的存在性与归属
+     * @param documents   待校验的 RAG 文档列表
+     * @param currentDate 校验基准日期，文档 validFrom/validUntil 须覆盖该日
+     * @throws InvalidPortfolioSnapshotException 任一参数为 null 或任一文档违反上述规则
+     */
     public void validate(
             PortfolioSnapshot snapshot,
             List<RagDocument> documents,
@@ -101,6 +122,10 @@ public final class RagDocumentValidator {
         }
     }
 
+    /**
+     * 判断文本是否含不安全内容：外部 URL、注入标记，或任一 FORMAT/CONTROL 类不可见字符
+     * （按 codePoint 逐点检查以覆盖代理对字符）。
+     */
     private boolean containsUnsafeText(String text) {
         if (EXTERNAL_URL.matcher(text).find() || INSTRUCTION_MARKER.matcher(text).find()) {
             return true;

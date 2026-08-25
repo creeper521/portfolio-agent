@@ -6,6 +6,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 项目档案：公开快照中单个项目的完整叙事与分类载体。
+ *
+ * <p>项目通过 id/code/slug 三种标识对外（slug 需匹配 {@code [a-z0-9-]{1,64}}），并通过
+ * featuredCaseIds（精选案例，最多 6 个且必须属于本项目）、claimIds（引用以本项目为 subject 的
+ * {@link Claim}）、evidenceIds、timelineEventIds 关联快照内其他领域对象。
+ *
+ * <p>status 与 contributionType 是对外口径的权威字段：PROTOTYPE、协作类等不得被表述为
+ * 独立交付成果。careerTrack、projectNature、displayTier 缺省时分别回退为
+ * UNCLASSIFIED、UNCLASSIFIED、PRIMARY。
+ *
+ * <p>显式不可变类：集合字段在构造时做防御性复制，保证实例可安全共享。
+ */
 public final class ProjectProfile {
 
     private final String id;
@@ -236,6 +249,10 @@ public final class ProjectProfile {
                 '}';
     }
 
+    /**
+     * 兼容构造器：省略分类字段与 featuredCaseIds，分类按缺省值回退、精选案例为空。
+     * 供旧调用方与旧数据结构过渡使用，新代码应使用带全量字段的 Jackson 构造器。
+     */
     public ProjectProfile(
             String id,
             String code,

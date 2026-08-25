@@ -7,6 +7,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 预设问题：由治理侧预先定义、可与访客问题匹配的公开问题模板。
+ *
+ * <p>text 为标准问法，aliases 为等价问法（匹配前会做归一化）；audiences 声明目标受众
+ * （如 GUEST/HR/INTERVIEWER/MENTOR）；projectIds/caseIds 是展示关联；placements 声明
+ * 展示位置（HOME/PROJECT/AGENT）；deterministicEntry 表示答案为确定性回放，公开快照
+ * 要求所有预设问题都必须为 true。
+ *
+ * <p>契约字段：contractStatus 描述预设生命周期（DRAFT→ACTIVE，可 SUSPENDED/RETIRED，
+ * 缺省 DRAFT）；contractSubjectId 指定契约主体（必须是展示关联中的某个项目或案例）；
+ * requiredClaimIds/supportingClaimIds 分别是回答该问题时必须命中与可补充的 Claim
+ * （两类不得重叠）；evidenceRequirement 约束必答 Claim 需要的 APPROVED 证据数量与
+ * 公开性。仅 ACTIVE 预设对外输出并参与 {@link PresetContractSetHash} 契约集哈希。
+ */
 public final class QuestionDefinition {
 
     private final String id;
@@ -65,6 +79,10 @@ public final class QuestionDefinition {
         this.contractStatus = contractStatus == null ? PresetContractStatus.DRAFT : contractStatus;
     }
 
+    /**
+     * 兼容构造器：省略契约字段，契约状态回退为 DRAFT、Claim 引用为空列表、
+     * 证据要求回退为"每条必答 Claim 至少 1 条公开 APPROVED 证据"。
+     */
     public QuestionDefinition(
             String id,
             String text,
@@ -125,9 +143,16 @@ public final class QuestionDefinition {
 
     public PresetContractStatus getContractStatus() { return contractStatus; }
 
+    /**
+     * 判断该预设是否处于 ACTIVE 契约状态（只有 ACTIVE 预设对外可见、可参与契约集哈希）。
+     */
     @JsonIgnore
     public boolean isActiveContract() { return contractStatus == PresetContractStatus.ACTIVE; }
 
+    /**
+     * 计算该预设的契约版本号：仅 ACTIVE 状态返回非空值，否则返回 null。
+     * 版本号由 {@link PresetContractVersion#calculate} 基于契约相关字段派生。
+     */
     @JsonIgnore
     public String getContractVersion() {
         if (contractStatus != PresetContractStatus.ACTIVE) {

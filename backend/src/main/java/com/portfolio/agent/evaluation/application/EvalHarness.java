@@ -37,6 +37,18 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 评估流水线的应用层编排器：一次 {@link #run} 调用按顺序走完
+ * 执行规划（{@link EvalRunPlanner}）→ 执行（{@link EvalExecutionEngine}）→
+ * 评分（{@link EvalGrader}）→ 指标聚合（{@link EvalMetricAggregator}）→
+ * baseline 对比（{@link EvalBaselineComparator}）→ 质量门（gate）生成 →
+ * verdict 判定（{@link EvalVerdictPolicy}），最终产出不可变的 {@link EvalRunReport}。
+ * 数据集与配置由调用方（CLI）提前装载完毕，本类不再做 IO。
+ *
+ * <p>关键不变量：整条流水线 fail-closed——空运行、缺失或零分母的指标不允许静默
+ * PASS；PROVIDER 模式若没有产生任何 PROVIDER 层观测，无论授权状态如何都判
+ * {@link EvalVerdict#INCOMPLETE}，而不是 PASS。</p>
+ */
 public final class EvalHarness {
 
     private final EvalExecutionEngine engine;
@@ -64,6 +76,18 @@ public final class EvalHarness {
         this.planner = new EvalRunPlanner();
     }
 
+    /**
+     * 执行一次完整评估运行并产出报告。
+     *
+     * <p>流程：用例按 id 排序保证确定性 → 规划受影响用例 → 执行引擎产生观测 →
+     * 逐观测评分 → 聚合指标（并叠加 policy 回归上限伪指标）→ 可选 baseline 对比 →
+     * 生成质量门 → 判定 {@link EvalVerdict}。副作用取决于注入的执行器：离线模式为
+     * 纯内存计算，PROVIDER 模式可能触发外部模型调用。</p>
+     *
+     * @param suite 已装载的评估数据集；其 cases 为 {@code null} 时抛 {@link EvalRunException}
+     * @param config 已通过构造校验的运行配置
+     * @return 含指标、对比、质量门、逐观测评分与 verdict 的完整运行报告
+     */
     public EvalRunReport run(EvalSuite suite, EvalRunConfig config) {
         Objects.requireNonNull(suite, "suite");
         Objects.requireNonNull(config, "config");
@@ -113,6 +137,10 @@ public final class EvalHarness {
                 config.getProviderAuthorization());
     }
 
+    /**
+     * 将每条观测回联到所属用例并交给 {@link EvalGrader} 评分；
+     * 找不到对应用例的观测直接跳过（不计分），评分结果按观测顺序保持稳定。
+     */
     private List<EvalGrade> gradeAll(
             List<EvalCase> cases,
             List<EvalObservation> observations) {
@@ -130,6 +158,10 @@ public final class EvalHarness {
         return List.copyOf(grades);
     }
 
+    /**
+     * 统计数据集 expectedSubjects 覆盖到的去重公开主体数（以 type:slug 为去重键），
+     * 作为 coverage 指标的分子来源；expectedSubjects 为 null 的用例不参与统计。
+     */
     private int coveredPublicSubjects(List<EvalCase> cases) {
         Set<String> covered = new HashSet<>();
         for (EvalCase evalCase : cases) {
@@ -143,6 +175,11 @@ public final class EvalHarness {
         return covered.size();
     }
 
+    /**
+     * 将配置中以 type → slug 集合表示的变更主体表转换为 {@link EvalSubjectRef} 集合，
+     * 供规划器判定哪些用例受本次内容变更影响；type 字符串必须是合法的
+     * ClaimSubjectType 名称，否则抛 {@link IllegalArgumentException}。
+     */
     private Set<EvalSubjectRef> changedSubjects(EvalRunConfig config) {
         Set<EvalSubjectRef> subjects = new HashSet<>();
         for (Map.Entry<String, Set<String>> entry : config.getChangedSubjects().entrySet()) {
@@ -156,6 +193,10 @@ public final class EvalHarness {
         return subjects;
     }
 
+    /**
+     * 在聚合指标之上追加两条 policy 回归上限伪指标（优先级指标与全局指标允许的
+     * baseline 回退上限），使后续 baseline 对比与报告能直接引用统一的指标命名空间。
+     */
     private EvalMetrics withPolicyLimits(EvalMetrics metrics, EvalRunConfig config) {
         Map<String, EvalMetrics.MetricValue> values = new LinkedHashMap<>(metrics.getAll());
         values.put("policy.priorityRegressionLimit", new EvalMetrics.MetricValue(
@@ -165,6 +206,10 @@ public final class EvalHarness {
         return new EvalMetrics(values);
     }
 
+    /**
+     * 与配置中的 baseline 比较；未配置 baseline 时返回 notComparable 的占位结果
+     * 而不是抛错，由报告层如实呈现"不可比"。
+     */
     private EvalComparison compare(
             EvalRunConfig config,
             EvalMetrics metrics,
@@ -180,6 +225,18 @@ public final class EvalHarness {
                 config.getIdentity(), metrics, config.getBaseline().get(), caseIds);
     }
 
+    /**
+     * 依据运行模式生成 BLOCKING 质量门，全部参与 verdict 判定。
+     *
+     * <p>零观测时按模式 fail-closed：VALIDATE 只验数据集自身（非空、引用完整、
+     * id 唯一、smoke coverage 达标）；PROVIDER 返回空门列表（由 {@link #run}
+     * 直接判 INCOMPLETE）；其余离线模式要求至少执行过一条用例。</p>
+     *
+     * <p>有观测时按 policy 阈值挂 hardError、smoke coverage（仅当数据集含
+     * BUNDLE_GENERATED 生成的 smoke 用例，纯手写数据集无此契约）、routing、
+     * retrieval、safety、API 契约门；PROVIDER 模式追加 trial 通过率、错误率与
+     * p95 延迟门。</p>
+     */
     private List<EvalGateResult> generateGates(
             EvalMetrics metrics,
             EvalRunConfig config,
@@ -383,6 +440,11 @@ public final class EvalHarness {
                 passed ? EvalReasonCode.PASS : EvalReasonCode.GATE_NOT_MET);
     }
 
+    /**
+     * 向门列表追加一个阈值门：指标缺失或分母为 0 的门直接跳过
+     * （hardError.count 例外，它没有分母语义且必须始终参与判定），
+     * 避免空数据集把本应失败的门误判为通过。
+     */
     private void addGate(
             List<EvalGateResult> gates,
             EvalMetrics metrics,

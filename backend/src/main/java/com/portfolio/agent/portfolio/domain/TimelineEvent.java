@@ -6,6 +6,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 时间线条目：实习期间一个按时间展示的事件，按问题—行动—影响三段叙事。
+ *
+ * <p>dateLabel 是面向展示的时间标签（自由文本，不参与排序解析）；projectIds/caseIds
+ * 必须至少关联一个项目或案例；claimIds/evidenceIds 引用相关断言与证据，且被引用证据
+ * 必须为 APPROVED。显式不可变类，集合字段构造时做防御性复制。
+ */
 public final class TimelineEvent {
 
     private final String id;

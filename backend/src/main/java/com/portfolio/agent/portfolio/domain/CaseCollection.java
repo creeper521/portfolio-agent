@@ -5,6 +5,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
+/**
+ * 案例合集：把若干 {@link CaseStudy} 按主题聚合的展示分组。
+ *
+ * <p>slug 是对外 URL 标识（需匹配 {@code [a-z0-9-]{1,64}}）；displayOrder 控制合集
+ * 在页面上的排序（非负，值越小越靠前）。与项目/案例的 slug 命名空间互斥。
+ */
 public final class CaseCollection {
 
     private final String id;

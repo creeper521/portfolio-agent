@@ -14,6 +14,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 作品集公开内容的聚合结果。
+ *
+ * <p>由 PortfolioService 一次性组装：包含内容版本、运行时快照哈希、发布时间、所有者、
+ * 合集、项目/案例详情、声明与声明-证据关联、已过滤证据（仅 APPROVED 且不公开原始内容）、
+ * 时间线与预设问题。另含三个反向索引：projectSlugsByEvidenceId、caseSlugsByEvidenceId、
+ * claimIdsByEvidenceId，分别用于从证据反查其被哪些项目/案例引用、支撑哪些声明。
+ *
+ * <p>不变量：构造时对所有集合与 Map 的值做防御性拷贝，实例创建后不可变。
+ */
 public final class PublicContent {
 
     private final String contentVersion;
@@ -184,6 +194,9 @@ public final class PublicContent {
                 '}';
     }
 
+    /**
+     * 兼容构造：省略合集列表（以空列表填充）的简化重载，语义与全参构造一致。
+     */
     public PublicContent(
             String contentVersion,
             String runtimeBundleHash,

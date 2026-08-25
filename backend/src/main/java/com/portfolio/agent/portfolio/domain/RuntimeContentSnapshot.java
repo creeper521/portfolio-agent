@@ -6,6 +6,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 运行时内容快照：加载进内存、供浏览与 Agent 运行时使用的公开快照视图。
+ *
+ * <p>在已审校的 {@link PortfolioSnapshot} 基础上补充三组运行时信息：runtimeBundleHash
+ * （发布包完整性指纹）、loadedAt（本次加载时间）以及可选的
+ * {@link RuntimeRetrievalContent}（本地公开检索内容，未配置检索时为空）。
+ *
+ * <p>approvedEvidence 字段直接来自快照的 evidence 集合——公开快照经校验后全部为
+ * APPROVED，因此两个名字同源：getEvidence()/getApprovedEvidence() 与
+ * getQuestions()/getQuestionPresets() 是同一集合的兼容别名。显式不可变类，
+ * 所有集合在构造时做防御性复制。
+ */
 public final class RuntimeContentSnapshot {
 
     private final String schemaVersion;

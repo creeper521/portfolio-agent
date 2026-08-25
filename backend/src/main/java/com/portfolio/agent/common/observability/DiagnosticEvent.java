@@ -11,6 +11,20 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 
+/**
+ * 结构化诊断事件：整个可观测性体系的事件载体，通过事件名白名单与逐事件字段白名单
+ * 双重校验，保证只有预先批准的有限字段集合能进入日志。
+ *
+ * <p>关键不变量（信息不泄漏边界）：
+ * 事件名必须命中 {@link #APPROVED_FIELDS_BY_EVENT} 的封闭集合；字段键除命中白名单外，
+ * 还会被禁止词根检查（question、message、answer、prompt、payload、header、body、
+ * credential、authorization、cookie、rawip 及独立 ip 词元）拦截，防止访客问题、
+ * 报文内容或来源地址借道诊断日志泄漏；字段值只允许标量（字符串、布尔、数字、枚举名），
+ * 拒绝集合与数组。事件构建完成后字段 Map 只读，实例可安全共享。</p>
+ *
+ * <p>失败行为：builder 或 field 阶段任一校验不通过立即抛出 IllegalArgumentException（fail-fast），
+ * 让越界字段在开发与测试期即暴露，而不是带病进入日志。</p>
+ */
 public final class DiagnosticEvent {
 
     private static final int SCHEMA_VERSION = 1;
@@ -19,6 +33,7 @@ public final class DiagnosticEvent {
     private static final Pattern CAMEL_CASE_BOUNDARY_PATTERN = Pattern.compile(
             "(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])");
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
+    // 答案链路少量含 question/answer 词根的字段经单独批准后放行，其余一律被禁止词根拦截。
     private static final Set<String> APPROVED_ANSWER_FIELD_KEYS = Set.of(
             "answer.resolution",
             "answer.source",
@@ -27,6 +42,7 @@ public final class DiagnosticEvent {
             "answer.requests_per_minute",
             "answer.max_concurrent",
             "question.kind");
+    // 禁止词根：任何字段键（去分隔符后）包含这些词根即视为可能携带访客内容或敏感信息，直接拒绝。
     private static final Set<String> FORBIDDEN_FIELD_TOKEN_ROOTS = Set.of(
             "question",
             "message",
@@ -62,6 +78,7 @@ public final class DiagnosticEvent {
             "suggestion.count",
             "content.version",
             "recovery.count");
+    // 封闭的事件-字段白名单：每个事件名只允许发布此处登记的字段键，新增字段必须先在此登记。
     private static final Map<String, Set<String>> APPROVED_FIELDS_BY_EVENT =
             Map.ofEntries(
                     Map.entry("application.started", fields(
@@ -231,6 +248,14 @@ public final class DiagnosticEvent {
         this.fields = Collections.unmodifiableMap(new LinkedHashMap<>(fields));
     }
 
+    /**
+     * 为指定事件名与级别创建事件 Builder。
+     *
+     * @param name  事件名，须匹配小写点分命名格式且在事件白名单内
+     * @param level 事件级别，不允许为 null
+     * @return 可继续追加字段的 Builder
+     * @throws IllegalArgumentException 当事件名为 null、格式非法或不在白名单时抛出
+     */
     public static Builder builder(String name, DiagnosticLevel level) {
         validateEventName(name);
         if (!APPROVED_FIELDS_BY_EVENT.containsKey(name)) {
@@ -256,6 +281,13 @@ public final class DiagnosticEvent {
         return fields;
     }
 
+    /**
+     * 在输出前再次校验并遍历全部字段（包内可见，供日志发布器逐字段输出）。
+     *
+     * <p>重复执行字段键校验形成纵深防御：即使字段在构建后被外部注入，也会在输出前被拦截。</p>
+     *
+     * @param consumer 接收已批准字段键值的消费者，不允许为 null
+     */
     void forEachApprovedField(BiConsumer<String, Object> consumer) {
         BiConsumer<String, Object> requiredConsumer = Objects.requireNonNull(
                 consumer, "consumer must not be null");
@@ -265,12 +297,27 @@ public final class DiagnosticEvent {
         });
     }
 
+    /**
+     * 校验事件名非空且符合小写点分命名格式（如 http.request.completed）。
+     */
     private static void validateEventName(String name) {
         if (name == null || !EVENT_NAME_PATTERN.matcher(name).matches()) {
             throw new IllegalArgumentException("invalid diagnostic event name: " + name);
         }
     }
 
+    /**
+     * 字段键清洗算法：综合禁止词根检查与逐事件白名单，判定字段键能否发布。
+     *
+     * <p>流程：单独批准的答案链路字段直接走白名单校验；其余键依次检查非空、
+     * 不含控制字符、去分隔符归一化后不含禁止词根（question/prompt/credential 等）、
+     * 不含 rawip 变体、按 camelCase 与分隔符切分后不含独立 ip 词元，
+     * 全部通过后才要求命中该事件的字段白名单。</p>
+     *
+     * @param eventName 已在白名单内的事件名
+     * @param key       待校验的字段键
+     * @throws IllegalArgumentException 当键为空白、含控制字符、命中任一禁止词根或不在该事件白名单时抛出
+     */
     private static void validateFieldKey(String eventName, String key) {
         if (key != null && APPROVED_ANSWER_FIELD_KEYS.contains(key)) {
             validateApprovedEventField(eventName, key);
@@ -303,6 +350,11 @@ public final class DiagnosticEvent {
         validateApprovedEventField(eventName, key);
     }
 
+    /**
+     * 校验字段键确实登记在该事件的批准字段集合中。
+     *
+     * @throws IllegalArgumentException 当事件不在白名单或字段未获该事件批准时抛出
+     */
     private static void validateApprovedEventField(String eventName, String key) {
         Set<String> approvedFields = APPROVED_FIELDS_BY_EVENT.get(eventName);
         if (approvedFields == null) {
@@ -315,10 +367,16 @@ public final class DiagnosticEvent {
         }
     }
 
+    /**
+     * 由可变参数构造字段键集合（白名单登记的便捷写法）。
+     */
     private static Set<String> fields(String... values) {
         return Set.of(values);
     }
 
+    /**
+     * 合并基础字段集合与追加字段为一个新的不可变集合（保持首次出现顺序，仅用于白名单登记）。
+     */
     private static Set<String> union(Set<String> base, String... additional) {
         LinkedHashMap<String, Boolean> values = new LinkedHashMap<>();
         for (String value : base) {
@@ -330,6 +388,12 @@ public final class DiagnosticEvent {
         return Set.copyOf(values.keySet());
     }
 
+    /**
+     * 值白名单校验：只放行非 null 的标量（枚举转为常量名，字符串/布尔/整数与浮点/大小数字面量直接放行），
+     * 拒绝集合、数组与 Map，防止结构化内容整体混入日志。
+     *
+     * @throws IllegalArgumentException 当值为 null、非标量类型或不允许的类型时抛出
+     */
     private static Object approvedScalarValue(Object value) {
         if (value == null) {
             throw new IllegalArgumentException("diagnostic field value must not be null");
@@ -347,6 +411,9 @@ public final class DiagnosticEvent {
                 + value.getClass().getName());
     }
 
+    /**
+     * 判断值是否属于批准的数值类型（含 BigInteger/BigDecimal 等大小数类型）。
+     */
     private static boolean isApprovedNumber(Object value) {
         return value instanceof Byte
                 || value instanceof Short
@@ -358,6 +425,9 @@ public final class DiagnosticEvent {
                 || value instanceof BigDecimal;
     }
 
+    /**
+     * 事件构建器：逐字段追加并即时校验（键白名单 + 标量值校验），build 时冻结为不可变事件。
+     */
     public static final class Builder {
 
         private final String name;
@@ -369,12 +439,23 @@ public final class DiagnosticEvent {
             this.level = level;
         }
 
+        /**
+         * 追加一个字段并即时完成键与值校验。
+         *
+         * @param key   已获该事件批准的字段键
+         * @param value 非 null 的标量值，枚举自动转为常量名
+         * @return 当前 Builder，支持链式调用
+         * @throws IllegalArgumentException 当键或值未通过白名单校验时抛出
+         */
         public Builder field(String key, Object value) {
             validateFieldKey(name, key);
             fields.put(key, approvedScalarValue(value));
             return this;
         }
 
+        /**
+         * 冻结当前字段并构建不可变事件；同键后写覆盖先写，构建后字段集合只读。
+         */
         public DiagnosticEvent build() {
             return new DiagnosticEvent(name, level, fields);
         }

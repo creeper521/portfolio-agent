@@ -5,10 +5,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Closed startup configuration for the selectable model catalog. */
+/**
+ * model-runtime 启动配置：可选模型目录的封闭总开关与逐模型设置。
+ *
+ * <p>这是三重准入第一重的配置入口：{@code enabled} 未显式开启时，
+ * {@link ConfiguredModelCatalog} 会产出空目录，一切模型能力保持关闭。
+ * 每个模型的 enabled/selectable/credential(data-policy) 字段构成第二重
+ * Provider 准入；协议相关字段（结构化输出、thinking、streaming）只接受
+ * 封闭取值，由目录构建期强制校验。
+ */
 @ConfigurationProperties(prefix = "portfolio.model-runtime")
 public final class ModelRuntimeProperties {
 
+    /** model-runtime 总开关，缺省关闭（fail-closed）。 */
     private boolean enabled;
     private String defaultModelRef = "";
     private Map<String, ModelSettings> models = new LinkedHashMap<>();
@@ -37,6 +46,11 @@ public final class ModelRuntimeProperties {
         models = value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
     }
 
+    /**
+     * 单个模型的启动设置：准入四要素（enabled/selectable/apiKey/
+     * dataPolicyApproved）加展示、版本、协议与 token 上限。
+     * 协议字段（structuredOutput/thinkingMode/streaming）仅接受封闭取值。
+     */
     public static final class ModelSettings {
         private boolean enabled;
         private boolean selectable = true;

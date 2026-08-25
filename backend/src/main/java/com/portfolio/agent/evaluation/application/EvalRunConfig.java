@@ -14,6 +14,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * 单次评估运行（{@link EvalHarness#run}）的不可变配置：运行模式
+ * （{@link EvalRunMode}）、运行身份、阈值策略（{@link EvalPolicy}）、
+ * 变更主体表、可选 baseline、Provider 授权与离线前置 verdict。
+ *
+ * <p>关键不变量：构造时对 changedSubjects 做防御性拷贝并整体只读，随后校验
+ * 组合约束——PROVIDER 模式必须携带已 PASS 的离线前置 verdict 且至少具备
+ * mock 级授权；非 PROVIDER 模式禁止携带真实 Provider 授权。违反约束在构造期
+ * 抛出 {@link IllegalArgumentException}，保证进入流水线的配置天然合法。</p>
+ */
 public final class EvalRunConfig {
 
     private final EvalRunMode mode;
@@ -51,6 +61,10 @@ public final class EvalRunConfig {
         validate();
     }
 
+    /**
+     * 校验模式、授权与前置 verdict 的组合约束，是本配置类唯一的不变量来源；
+     * 不满足时构造即失败，避免带病配置流入评估流水线。
+     */
     private void validate() {
         if (mode == EvalRunMode.PROVIDER) {
             if (offlinePrerequisiteVerdict.isEmpty()) {

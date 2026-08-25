@@ -6,6 +6,17 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 案例研究：项目中一个可独立展示的工作切片，按问题—行动—验证—结果叙事。
+ *
+ * <p>type 区分案例性质（功能开发 / 评估 / 事件处置）；projectId 指向所属
+ * {@link ProjectProfile}（可为 null 表示独立案例，非 null 时必须存在）；
+ * collectionIds 归属展示用 {@link CaseCollection}；claimIds 引用的 {@link Claim}
+ * 必须以本案例为 subject；questionPresetIds 引用可在案例页展示的预设问题。
+ *
+ * <p>limitations 必填，用于公开呈现案例的边界与未解决事项。显式不可变类，
+ * 集合字段构造时做防御性复制。
+ */
 public final class CaseStudy {
 
     private final String id;
@@ -154,6 +165,9 @@ public final class CaseStudy {
                 '}';
     }
 
+    /**
+     * 兼容构造器：省略 collectionIds，合集归属回退为空列表。
+     */
     public CaseStudy(
             String id,
             String code,

@@ -3,6 +3,16 @@ package com.portfolio.agent.portfolio.domain;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * 检索清单：描述随发布包构建的本地公开检索产物的口径与指纹。
+ *
+ * <p>前三个版本字段锁定检索策略口径（strategyVersion/normalizationVersion/
+ * retrievalPolicyVersion）；embeddingModelId 与 embeddingArtifactSha256 标识生成向量的
+ * 模型及其产物指纹；dimension/documentMaxTokens/vectorNormalization/similarity 描述
+ * 向量空间与相似度计算方式；chunkCount/chunkSetHash 锁定切块集合；
+ * keywordIndexFormatVersion/vectorIndexFormatVersion 标识两个索引文件的格式版本。
+ * 加载检索内容时会用这些字段校验产物与内容的一致性。
+ */
 public final class RetrievalManifest {
 
     private final String strategyVersion;

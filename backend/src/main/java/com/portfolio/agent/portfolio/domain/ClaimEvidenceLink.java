@@ -5,6 +5,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
+/**
+ * 断言—证据关联：把一条 {@link Claim} 与一条 {@link EvidenceRecord} 以明确的支撑方式绑定。
+ *
+ * <p>supportType 声明证据对断言的支撑强度（DIRECT 直接证明 / CORROBORATING 佐证 /
+ * CONTEXTUAL 背景参考）；scope 说明该支撑适用的具体方面；reviewStatus 必须为
+ * APPROVED 才能进入公开快照。成果类（DELIVERED 等）断言至少需要一条 APPROVED 的
+ * DIRECT 关联。
+ */
 public final class ClaimEvidenceLink {
 
     private final String id;

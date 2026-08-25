@@ -11,12 +11,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+/**
+ * RAG 文档关键词倒排索引的构建器。
+ *
+ * <p>对每篇文档用 {@link RetrievalTextNormalizer} 分词并统计词频，同时汇总
+ * 文档频率（documentFrequencies）与平均文档长度，产出 BM25 检索所需的
+ * {@link KeywordIndexFile}。文档按 chunkId 排序、词表用 TreeMap，
+ * 保证同一输入的索引字节完全确定。
+ */
 public final class KeywordIndexBuilder {
 
+    /** 关键词索引文件格式的版本标识，随文件一同持久化用于兼容性校验。 */
     public static final String FORMAT_VERSION = "keyword-index-v1";
 
     private final RetrievalTextNormalizer normalizer = new RetrievalTextNormalizer();
 
+    /**
+     * 为文档集合构建关键词索引。
+     *
+     * @param documents 已排序或任意顺序的 RAG 文档，内部会按 chunkId 重排
+     * @return 含文档数、平均长度、每文档词频与全局文档频率的索引文件对象
+     */
     public KeywordIndexFile build(List<RagDocument> documents) {
         List<RagDocument> ordered = documents.stream()
                 .sorted(java.util.Comparator.comparing(RagDocument::getChunkId))

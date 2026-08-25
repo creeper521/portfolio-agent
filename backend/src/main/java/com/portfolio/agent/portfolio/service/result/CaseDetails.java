@@ -6,6 +6,13 @@ import com.portfolio.agent.portfolio.domain.EvidenceRecord;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 单个案例的公开详情聚合。
+ *
+ * <p>由 PortfolioService 组装：案例本体、过滤后的证据（仅 APPROVED 且不公开原始内容）、
+ * 建议问题文本、所属项目 slug（独立案例为 null）与所属合集 slug 列表。
+ * 列表字段在构造时做防御性拷贝，实例不可变。
+ */
 public final class CaseDetails {
 
     private final CaseStudy caseStudy;

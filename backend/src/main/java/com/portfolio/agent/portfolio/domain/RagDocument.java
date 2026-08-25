@@ -6,6 +6,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * 检索文档：公开快照内容切块后的检索单元（chunk）。
+ *
+ * <p>text 是由已审校公开内容生成的检索文本；projectSlugs/caseSlugs 记录切块回链的
+ * 展示对象；claimIds 记录来源断言；validFrom/validUntil 描述内容有效期（如实习时间段）；
+ * contentHash 锁定文本内容，用于构建与加载两侧的一致性校验。兼容构造器省略
+ * caseSlugs（回退为空列表），供旧检索产物过渡。
+ */
 public final class RagDocument {
 
     private final String chunkId;

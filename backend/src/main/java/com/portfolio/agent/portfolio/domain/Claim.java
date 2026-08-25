@@ -7,6 +7,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 断言：对档案主人某方面能力的单条可验证陈述，是回答问题时的最小口径单元。
+ *
+ * <p>subjectType+subjectId 定位断言主体（OWNER 本人 / PROJECT / CASE / INTERNSHIP
+ * 实习整体）；statement 为一句话陈述，detail 为展开说明。三个口径字段必须相互自洽：
+ * achievementStatus 声明落地程度；verificationBasis 声明验证依据（快照校验器会强制
+ * basis 与 verificationStatus 一致，例如 EVIDENCE_SUPPORTED 才允许 VERIFIED）；
+ * contributionType 声明贡献性质，防止协作/观察类内容被表述为独立交付。
+ *
+ * <p>materiality 区分关键（KEY）与支撑（SUPPORTING）断言；topics/audiencePriorities
+ * 供检索与受众排序使用。显式不可变类，集合与映射构造时做防御性复制。
+ */
 public final class Claim {
 
     private final String id;

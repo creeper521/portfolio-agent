@@ -8,6 +8,17 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 作品集内容快照：公开发布包 facts 文件反序列化后的顶级载体。
+ *
+ * <p>由 schemaVersion/contentVersion/publishedAt/owner 加八类领域集合组成：项目、案例、
+ * 案例合集、断言、断言—证据关联、预设问题、证据与时间线。加载后必须先通过
+ * {@code PortfolioSnapshotValidator} 校验才能进入运行时。questions 字段同时接受旧字段名
+ * "questions" 与新字段名 "questionPresets"（{@code @JsonAlias}），timeline 同理兼容
+ * "timeline"/"timelineEvents"，以兼容历史发布包。
+ *
+ * <p>显式不可变类，所有集合在构造时做防御性复制。
+ */
 public final class PortfolioSnapshot {
 
     private final String schemaVersion;
@@ -100,6 +111,10 @@ public final class PortfolioSnapshot {
         return timeline;
     }
 
+    /**
+     * 以指定发布时间生成内容不变的副本：发布流程写入 publishedAt 时使用，
+     * 避免修改已加载的不可变实例。
+     */
     public PortfolioSnapshot withPublishedAt(OffsetDateTime value) {
         return new PortfolioSnapshot(
                 schemaVersion,
@@ -163,6 +178,9 @@ public final class PortfolioSnapshot {
                 '}';
     }
 
+    /**
+     * 兼容构造器：省略案例合集（collections 回退为空列表），供旧调用方过渡使用。
+     */
     public PortfolioSnapshot(
             String schemaVersion,
             String contentVersion,

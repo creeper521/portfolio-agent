@@ -5,6 +5,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
+/**
+ * 预设问题的证据要求：约束回答该问题时每条必答 Claim 需要的公开证据规模。
+ *
+ * <p>minimumApprovedEvidencePerRequiredClaim 是每条 requiredClaim 至少要有的
+ * APPROVED 证据条数，构造时强制不小于 1；publicOnly 表示只允许引用公开
+ * （APPROVED 且 rawContentPublic=false）证据，公开快照中 ACTIVE 预设必须为 true。
+ */
 public final class QuestionEvidenceRequirement {
 
     private final int minimumApprovedEvidencePerRequiredClaim;
