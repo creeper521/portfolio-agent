@@ -126,6 +126,8 @@ The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
         'docs/superpowers/specs/2026-08-21-configured-user-selectable-model-catalog-design.md'
     $modelCatalogPlan = `
         'docs/superpowers/plans/2026-08-21-configured-user-selectable-model-catalog.md'
+    $modelSelectionFrontendSpec = `
+        'docs/superpowers/specs/2026-08-24-agent-model-selection-frontend-ui-design.md'
     Write-Utf8File (Join-Path $Path $activeSpec) @"
 # Approved design fixture
 <!-- DOCUMENT_STATUS: APPROVED -->
@@ -197,6 +199,10 @@ See [active plan](../plans/2026-08-21-configured-user-selectable-model-catalog.m
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
 See [approved spec](../specs/2026-08-21-configured-user-selectable-model-catalog-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $modelSelectionFrontendSpec) @"
+# Approved model selection frontend design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
 "@
     Add-Content -LiteralPath (Join-Path $Path 'docs/superpowers/specs/example.md') `
         -Encoding UTF8 -Value `
