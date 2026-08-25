@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 
+import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import type {
   AgentMessage,
   AgentRouteSeed,
@@ -28,6 +29,12 @@ function makeId(prefix: string) {
   return `${prefix}-${random}`
 }
 
+/** 有保留价值的会话：有 USER 消息或非空草稿（行为基础 Task 4；上级设计 §6.3.6/§6.3.7）。 */
+function isMeaningfulSession(session: AgentSession): boolean {
+  return session.messages.some((message) => message.role === 'USER')
+    || (session.draft?.trim().length ?? 0) > 0
+}
+
 /**
  * 本地会话集合的响应式状态与操作（composable）。
  * 会话与消息仅存页面内存；服务端会话凭证（conversationId/ResumeToken）
@@ -41,13 +48,9 @@ export function useLocalSessions() {
   const activeSession = computed(
     () => sessions.value.find((session) => session.id === activeSessionId.value) ?? null,
   )
-  const historySessions = computed(() =>
-    sessions.value.filter(
-      (session) => session.messages.some((message) => message.role === 'USER'),
-    ),
-  )
+  const historySessions = computed(() => sessions.value.filter(isMeaningfulSession))
 
-  /** 新建空白会话并置为活跃；没有用户消息的旧会话同时被丢弃（不算历史）。 */
+  /** 新建空白会话并置为活跃；没有用户消息且无草稿的旧会话同时被丢弃（不算历史）。 */
   function createSession(seed: SessionSeed = {}) {
     const createdAt = Date.now()
     const session: AgentSession = {
@@ -63,9 +66,7 @@ export function useLocalSessions() {
       notices: [],
       discussionRevision: 0,
     }
-    const retainedSessions = sessions.value.filter(
-      (item) => item.messages.some((message) => message.role === 'USER'),
-    )
+    const retainedSessions = sessions.value.filter(isMeaningfulSession)
     for (const item of sessions.value) {
       if (!retainedSessions.includes(item)) {
         manuallyRenamedSessionIds.delete(item.id)
@@ -74,6 +75,20 @@ export function useLocalSessions() {
     sessions.value = [session, ...retainedSessions]
     activeSessionId.value = session.id
     return session
+  }
+
+  /**
+   * 切换会话视角（行为基础 Task 4）：不同角色 = 创建并激活一个只继承公开
+   * 上下文的新会话；当前无会话或目标角色与当前会话相同时为 no-op（返回 null）。
+   * 绝不原位修改任何会话的 role（上级设计 §6.3/§6.4）。
+   */
+  function switchAudienceRole(
+    targetRole: AudienceRole,
+    projectSlug: string | null,
+  ): AgentSession | null {
+    const current = activeSession.value
+    if (current === null || current.role === targetRole) return null
+    return createSession({ role: targetRole, projectSlug })
   }
 
   /** 切换活跃会话；sessionId 不存在时不做任何事。 */
@@ -339,6 +354,7 @@ export function useLocalSessions() {
     activeSession,
     historySessions,
     createSession,
+    switchAudienceRole,
     selectSession,
     setSessionModelSelection,
     appendSessionNotice,

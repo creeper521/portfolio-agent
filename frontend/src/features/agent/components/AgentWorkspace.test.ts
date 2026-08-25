@@ -1177,3 +1177,169 @@ describe('AgentWorkspace（PublicAgentTurn 生命周期）', () => {
     wrapper.unmount()
   })
 })
+
+describe('AgentWorkspace（四角色会话切换，行为基础 Task 4）', () => {
+  interface RoleSwitchSeam {
+    switchAudienceRole: (role: string) => boolean
+    sessions: {
+      sessions: { value: { modelSelection?: unknown }[] }
+    }
+  }
+
+  /** script-setup 组件不通过公共代理暴露内部绑定，经实例 setupState 访问状态接缝。 */
+  function roleSeam(wrapper: ReturnType<typeof mountWorkspace>): RoleSwitchSeam {
+    return (wrapper.vm.$ as unknown as { setupState: RoleSwitchSeam }).setupState
+  }
+
+  function surfaceOfLastSubmit(): {
+    audienceRole: string
+    requestSource: string
+    subjectHint?: { kind: string; slug: string }
+  } {
+    const call = apiMocks.submitAgentTurn.mock.calls.at(-1)
+    if (call === undefined) throw new Error('submitAgentTurn 未被调用')
+    return (call[0] as { surfaceContext: ReturnType<typeof surfaceOfLastSubmit> }).surfaceContext
+  }
+
+  function rolePreset(id: string, audiences: string[], placements: string[]) {
+    return {
+      id,
+      projectSlug: 'sql-audit',
+      caseSlugs: [],
+      text: `问题 ${id}`,
+      audiences,
+      placements,
+      contractVersion: 'pcv1-role-test',
+      availability: 'ACTIVE',
+    }
+  }
+
+  it('不同角色切换创建全新会话：只继承项目上下文，草稿与消息留在旧会话', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValue(submitOk(goldenTurn('conversational.json'), null))
+    const wrapper = mountWorkspace({ initialProject: 'sql-audit' })
+    await flushPromises()
+    const seam = roleSeam(wrapper)
+
+    await wrapper.get('[data-testid="question-input"]').setValue('未发送草稿')
+    expect(seam.switchAudienceRole('HR')).toBe(true)
+    await flushPromises()
+
+    // 新会话：草稿为空、无消息，模型选择回目录默认（undefined）。
+    expect((wrapper.get('[data-testid="question-input"]').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.find('[data-message-role="USER"]').exists()).toBe(false)
+    expect(roleSeam(wrapper).sessions.sessions.value[0]?.modelSelection).toBeUndefined()
+
+    // 新会话提交携带 HR 角色与继承的项目上下文（subjectHint）。
+    await submitFreeText(wrapper, '以 HR 视角提问')
+    expect(surfaceOfLastSubmit()).toMatchObject({
+      audienceRole: 'HR',
+      requestSource: 'AGENT_PAGE',
+      subjectHint: { kind: 'PROJECT', slug: 'sql-audit' },
+    })
+
+    // 旧会话保留在列表中，草稿原样留在旧会话（不复制到新会话）。
+    const rows = wrapper.findAll('.session-select')
+    expect(rows.length).toBe(2)
+    await rows[1]!.trigger('click')
+    await flushPromises()
+    expect((wrapper.get('[data-testid="question-input"]').element as HTMLTextAreaElement).value).toBe('未发送草稿')
+    wrapper.unmount()
+  })
+
+  it('fallback 预设要求 AGENT placement 且匹配会话角色：快照顺序、最多 3 条、不跨角色补足', async () => {
+    const portfolio = {
+      ...previewPublicContent,
+      questionPresets: [
+        rolePreset('p-int-1', ['INTERVIEWER'], ['AGENT']),
+        rolePreset('p-int-2', ['INTERVIEWER'], ['AGENT']),
+        rolePreset('p-int-3', ['INTERVIEWER'], ['AGENT']),
+        rolePreset('p-int-4', ['INTERVIEWER'], ['AGENT']),
+        rolePreset('p-hr-1', ['HR'], ['AGENT']),
+        rolePreset('p-int-home', ['INTERVIEWER'], ['HOME']),
+      ],
+    }
+    const wrapper = mountWorkspace({ portfolio })
+    await flushPromises()
+    expect(wrapper.findAll('.workspace-composer__suggestion').map((chip) => chip.text()))
+      .toEqual(['问题 p-int-1', '问题 p-int-2', '问题 p-int-3'])
+    wrapper.unmount()
+
+    // GUEST 无匹配预设：不足 3 条不用其他角色补足，chips 整体不渲染。
+    const guest = mountWorkspace({ portfolio, initialRole: 'GUEST' })
+    await flushPromises()
+    expect(guest.findAll('.workspace-composer__suggestion')).toHaveLength(0)
+    guest.unmount()
+  })
+
+  it('Case suggestedQuestions 保持优先且角色中立', async () => {
+    const caseSlug = 'multilingual-image-preservation'
+    const target = previewPublicContent.cases.find((item) => item.slug === caseSlug)
+    expect(target?.suggestedQuestions.length).toBeGreaterThan(0)
+    const wrapper = mountWorkspace({ initialCase: caseSlug, initialRole: 'HR' })
+    await flushPromises()
+    expect(wrapper.findAll('.workspace-composer__suggestion').map((chip) => chip.text()))
+      .toEqual(target?.suggestedQuestions.slice(0, 3))
+    wrapper.unmount()
+  })
+
+  it('pending 旧会话切换角色：不取消旧请求，结果与 ResumeToken 只写回旧会话', async () => {
+    let resolveA!: (value: unknown) => void
+    apiMocks.submitAgentTurn.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveA = resolve }),
+    )
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="question-input"]').setValue('请求 A')
+    await wrapper.get('[data-testid="submit-question"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="conversation-pending"]').text()).toContain('请求 A')
+
+    expect(roleSeam(wrapper).switchAudienceRole('HR')).toBe(true)
+    await flushPromises()
+    // 切换不取消旧请求；新会话视图无 pending、无消息。
+    expect(apiMocks.cancelAgentTurn).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="conversation-pending"]').exists()).toBe(false)
+
+    resolveA(submitOk(goldenTurn('conversational.json'), {
+      conversationId: 'conversation-a',
+      resumeToken: 'token-a',
+    }))
+    await flushPromises()
+
+    // HR 会话仍活跃：晚到结果不写入当前视图；唯一 sessionStorage 槽位为空。
+    expect(wrapper.find('[data-message-role="AGENT"]').exists()).toBe(false)
+    expect(sessionStorage.getItem(RESUME_STORAGE_KEY)).toBeNull()
+
+    // 选回旧会话：结果消息与 token 都在，槽位镜像该 token（不新增存储键）。
+    await wrapper.get('.session-select').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-message-role="AGENT"]').exists()).toBe(true)
+    expect(sessionStorage.getItem(RESUME_STORAGE_KEY)).toBe('token-a')
+    wrapper.unmount()
+  })
+
+  it('直接进入默认 INTERVIEWER；首页种子会话使用冻结的种子角色', async () => {
+    apiMocks.submitAgentTurn.mockResolvedValue(submitOk(goldenTurn('conversational.json'), null))
+    const direct = mountWorkspace()
+    await flushPromises()
+    await submitFreeText(direct, '直接进入的问题')
+    expect(surfaceOfLastSubmit().audienceRole).toBe('INTERVIEWER')
+    direct.unmount()
+
+    apiMocks.submitAgentTurn.mockClear()
+    const seeded = mountWorkspace({
+      initialSeed: {
+        role: 'MENTOR',
+        question: '首页带来的问题',
+        projectSlug: null,
+        source: 'HOME',
+      },
+    })
+    await flushPromises()
+    expect((seeded.get('[data-testid="question-input"]').element as HTMLTextAreaElement).value).toBe('首页带来的问题')
+    await submitFreeText(seeded, '首页带来的问题')
+    expect(surfaceOfLastSubmit().audienceRole).toBe('MENTOR')
+    seeded.unmount()
+  })
+})

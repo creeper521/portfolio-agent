@@ -180,6 +180,65 @@ describe('useLocalSessions', () => {
     expect(activeSession.value?.messages).toHaveLength(0)
   })
 
+  it('有 USER 消息或非空草稿的会话在新建时保留；纯空白草稿会话被清理（行为基础 Task 4）', () => {
+    const { sessions, historySessions, createSession, appendMessage, selectSession, activeSession } =
+      useLocalSessions()
+    const withMessage = createSession()
+    appendMessage(withMessage.id, { role: 'USER', content: '介绍 SQL 审计项目' })
+
+    const withDraft = createSession()
+    sessions.value.find((item) => item.id === withDraft.id)!.draft = '未发送草稿'
+
+    const withBlankDraft = createSession()
+    sessions.value.find((item) => item.id === withBlankDraft.id)!.draft = '   '
+
+    // 再次创建：有消息与有非空草稿的会话保留，空白草稿会话被清理。
+    createSession()
+    const ids = sessions.value.map((item) => item.id)
+    expect(ids).toContain(withMessage.id)
+    expect(ids).toContain(withDraft.id)
+    expect(ids).not.toContain(withBlankDraft.id)
+
+    // 纯草稿会话进入历史列表且可重新选中（上级设计 §6.3.6）。
+    expect(historySessions.value.map((item) => item.id)).toContain(withDraft.id)
+    selectSession(withDraft.id)
+    expect(activeSession.value?.id).toBe(withDraft.id)
+    expect(activeSession.value?.draft).toBe('未发送草稿')
+  })
+
+  it('switchAudienceRole：不同角色新建会话并只继承上下文；同角色与无会话为 no-op（行为基础 Task 4）', () => {
+    const { sessions, activeSession, createSession, appendMessage, switchAudienceRole } =
+      useLocalSessions()
+    // 初始无会话：不允许切换。
+    expect(switchAudienceRole('HR', null)).toBeNull()
+
+    const first = createSession({ role: 'INTERVIEWER', projectSlug: 'sql-audit' })
+    appendMessage(first.id, { role: 'USER', content: '介绍项目' })
+    sessions.value.find((item) => item.id === first.id)!.draft = '未发送草稿'
+
+    // 同角色选择不创建会话、不改变状态。
+    expect(switchAudienceRole('INTERVIEWER', 'sql-audit')).toBeNull()
+    expect(activeSession.value?.id).toBe(first.id)
+
+    const created = switchAudienceRole('HR', 'sql-audit')
+    expect(created).not.toBeNull()
+    expect(created?.role).toBe('HR')
+    expect(created?.projectSlug).toBe('sql-audit')
+    expect(created?.messages).toEqual([])
+    expect(created?.draft).toBeUndefined()
+    expect(created?.modelSelection).toBeUndefined()
+    expect(created?.conversationId).toBeUndefined()
+    expect(created?.resumeToken).toBeUndefined()
+    expect(created?.notices).toEqual([])
+    expect(activeSession.value?.id).toBe(created?.id)
+
+    // 旧会话完整保留：角色、消息与草稿均留在原会话（上级设计 §6.3）。
+    const old = sessions.value.find((item) => item.id === first.id)
+    expect(old?.role).toBe('INTERVIEWER')
+    expect(old?.messages).toHaveLength(1)
+    expect(old?.draft).toBe('未发送草稿')
+  })
+
   it('markClarificationConsumed 标记 CRITICAL 与 ANSWER 内嵌挑战，未知 id 无操作（A2-18）', () => {
     const { activeSession, createSession, appendMessage, markClarificationConsumed } =
       useLocalSessions()

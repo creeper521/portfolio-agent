@@ -385,13 +385,14 @@ const activeProject = computed(() => {
     ?? props.portfolio.projects[0]
 })
 
-/** 建议问题：当前 Case 的建议问题优先（FREE_TEXT），其次 AGENT 预设（ASK/PRESET）。 */
+/** 建议问题：当前 Case 的建议问题优先（FREE_TEXT），其次匹配会话角色的 AGENT 预设（ASK/PRESET）。 */
 const suggestionChips = computed<readonly SuggestionChip[]>(() => {
   if (activeCase.value !== undefined && activeCase.value.suggestedQuestions.length > 0) {
     return activeCase.value.suggestedQuestions.slice(0, 3).map((text) => ({ text }))
   }
+  const role = activeSession.value?.role ?? props.initialRole
   return props.portfolio.questionPresets
-    .filter((preset) => preset.placements.includes('AGENT'))
+    .filter((preset) => preset.placements.includes('AGENT') && preset.audiences.includes(role))
     .slice(0, 3)
     .map((preset) => ({ text: preset.text, presetId: preset.id }))
 })
@@ -1196,6 +1197,23 @@ function createSession(): void {
     projectSlug: props.initialProject || null,
   })
   resume.clearActiveToken()
+}
+
+/**
+ * 切换会话视角（行为基础 Task 4）：不同角色 = 创建并激活一个只继承当前公开
+ * Project/Case 上下文的新会话；同角色或无活跃会话为 no-op。成功创建后清空
+ * 活跃 ResumeToken 槽位；不取消旧 pending、绝不原位改写当前会话的 role。
+ */
+function switchAudienceRole(targetRole: AudienceRole): boolean {
+  const current = sessions.activeSession.value
+  if (current === null) return false
+  const projectSlug = activeCase.value?.projectSlug
+    ?? current.projectSlug
+    ?? (props.initialProject || null)
+  const created = sessions.switchAudienceRole(targetRole, projectSlug)
+  if (created === null) return false
+  resume.clearActiveToken()
+  return sessions.activeSessionId.value === created.id
 }
 
 /**
