@@ -14,12 +14,29 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 语义结果工厂：依据 SemanticTask 类型把已验证 Evidence 束组装为对应的 PortfolioSemanticResult。
+ *
+ * <p>事实与对比直接委托 {@link PortfolioSupportEvaluator} 评估支撑并映射为相应子类；
+ * 推荐按约束匹配数、证据多样性与主体标识的固定次序排序并截断到 requestedSize，
+ * 未满足的约束与规模缺口显式记入结果（PARTIAL）。非作品集任务类型抛出
+ * IllegalArgumentException，不产生半成品结果。
+ */
 public final class PortfolioSemanticResultFactory {
     private final PortfolioSupportEvaluator evaluator;
     public PortfolioSemanticResultFactory(PortfolioSupportEvaluator evaluator) {
         this.evaluator = java.util.Objects.requireNonNull(evaluator, "evaluator");
     }
 
+    /**
+     * 按任务类型创建语义结果。
+     *
+     * @param task       规划阶段产出的语义任务
+     * @param invocation 当前 Evidence 调用上下文
+     * @param bundle     已通过晋级校验的 Evidence 束
+     * @return 对应形态的语义结果；支撑为空时返回 empty（由上层判定任务失败）
+     * @throws IllegalArgumentException 任务类型不属于作品集事实/对比/推荐时
+     */
     public Optional<PortfolioSemanticResult> create(
             SemanticTask task,
             PortfolioEvidenceInvocation invocation,
@@ -53,6 +70,10 @@ public final class PortfolioSemanticResultFactory {
                 : Optional.empty();
     }
 
+    /**
+     * 组装推荐结果：按主体聚合证据、排序截断到 requestedSize，并汇总未满足约束。
+     * 集齐规模且无未满足约束才记 FULL，否则 PARTIAL 并以 REQUESTED_SIZE 声明规模缺口。
+     */
     private Optional<PortfolioSemanticResult> recommendation(
             PortfolioEvidenceInvocation invocation, ValidatedEvidenceBundle bundle) {
         if (bundle.getUnits().isEmpty()) return Optional.empty();
@@ -61,6 +82,7 @@ public final class PortfolioSemanticResultFactory {
         Map<String, List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit>>
                 bySubject = bundle.getUnits().stream().collect(Collectors.groupingBy(
                 value -> value.getSubjectId(), java.util.LinkedHashMap::new, Collectors.toList()));
+        // 固定排序：先约束命中数降序，再证据类别多样性降序，最后按主体标识保证确定性
         List<RankedSubject> ranked = bySubject.entrySet().stream()
                 .map(entry -> rank(entry.getKey(), entry.getValue(), constraints))
                 .sorted(Comparator.comparingInt(RankedSubject::matchedConstraintCount).reversed()
@@ -86,6 +108,11 @@ public final class PortfolioSemanticResultFactory {
                 List.copyOf(unsatisfied)));
     }
 
+    /**
+     * 对单个主体打标：以首个单元代表主体判定约束满足情况，并按证据类别
+     * （实现/验证/结果）与约束前缀（CAREER_TRACK_/CAPABILITY_）推导推荐理由码，
+     * 无任何匹配理由时兜底为 VERIFIED_PUBLIC_EVIDENCE。
+     */
     private RankedSubject rank(
             String subjectId,
             List<com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit> units,
@@ -131,6 +158,7 @@ public final class PortfolioSemanticResultFactory {
                 List.copyOf(unsatisfied), List.copyOf(reasons));
     }
 
+    /** 约束前缀匹配：CAREER_TRACK_ 前缀比职业赛道，CAPABILITY_ 前缀查能力码集合，其余恒不匹配。 */
     private boolean matches(
             com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit unit,
             String constraint) {
@@ -144,6 +172,7 @@ public final class PortfolioSemanticResultFactory {
         return false;
     }
 
+    /** 推荐排序的中间载体（record）：主体标识、约束命中数、证据多样性分、未满足约束与理由码。 */
     private record RankedSubject(
             String subjectId, int matchedConstraintCount, int evidenceScore,
             List<String> unsatisfiedConstraints,

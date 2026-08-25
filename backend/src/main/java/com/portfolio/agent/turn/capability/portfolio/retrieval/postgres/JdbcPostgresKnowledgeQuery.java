@@ -21,11 +21,21 @@ import java.util.Objects;
 import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** PostgreSQL 公开检索查询；输入只接受最终 Turn 调用与检索策略。 */
+/**
+ * PostgreSQL 公开检索查询；输入只接受最终 Turn 调用与检索策略。
+ *
+ * <p>两条检索路径：EXACT 主体范围走精确标识查询（段落按 facet/维度类别过滤并截断到 50），
+ * 其余走混合候选检索；带推荐约束且首轮命中不足或候选不满足约束时，再发起一次放宽
+ * （无赛道/能力过滤）的补充检索并按主体合并。检索文本由固定受控词表与约束前缀拼装，
+ * 访问者原文不进入 SQL（隐私边界）。
+ */
 public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery {
 
+    /** 固定受众角色，标识查询来自检索管线而非访问者输入。 */
     private static final String FIXED_AUDIENCE_ROLE = "PORTFOLIO_RETRIEVAL";
+    /** 受控检索词基串：检索词表固定，避免把访问者自由文本下发到 SQL。 */
     private static final String CONTROLLED_QUERY = "portfolio-profile-v1";
+    /** 混合路径的候选主体数上限。 */
     private static final int MAX_SUBJECTS = 50;
 
     private final PostgresSelectionQuery selectionQuery;
@@ -50,6 +60,14 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
         this.passageQuery = Objects.requireNonNull(passageQuery, "passageQuery");
     }
 
+    /**
+     * 执行一次公开知识检索：锁定活跃发布后按主体范围选择精确或混合路径，
+     * 返回候选结果与命中的事实段落。
+     *
+     * @param invocation 当前 Evidence 调用（主体范围、推荐约束与规模）
+     * @param request    检索请求（策略：KEYWORD 或 HYBRID）
+     * @return 候选与段落的组合结果
+     */
     @Override
     public PostgresKnowledgeQueryResult retrieve(
             PortfolioEvidenceInvocation invocation,
@@ -94,6 +112,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 passageQuery.findPassages(release.getReleaseId(), subjectIds));
     }
 
+    /** 构造受控检索词：固定基串 + 排序后的约束前缀；无约束时仅基串。 */
     private String controlledQuery(PortfolioEvidenceInvocation invocation) {
         if (invocation.getRecommendationConstraints().isEmpty()) {
             return CONTROLLED_QUERY;
@@ -102,6 +121,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 invocation.getRecommendationConstraints().stream().sorted().toList());
     }
 
+    /** 判断候选是否满足全部推荐约束（职业赛道相等且能力码全包含）；无约束维度恒通过。 */
     private boolean matchesAll(
             SelectionCandidate candidate, PortfolioEvidenceInvocation invocation) {
         return (invocation.getRecommendationCareerTrack() == null
@@ -110,6 +130,10 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 invocation.getRecommendationCapabilityCodes());
     }
 
+    /**
+     * EXACT 范围专用路径：按获准主体标识精确查询候选，段落再按调用 facet/维度
+     * 对应的 claim 类别过滤并截断；范围主体为空时返回空结果。
+     */
     private PostgresKnowledgeQueryResult retrieveExact(
             ActiveRelease release,
             PortfolioEvidenceInvocation invocation,
@@ -139,6 +163,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 passages);
     }
 
+    /** 精确查询行转候选：targetFit 固定 1.0（精确命中即满分），冲突惩罚为 0。 */
     private SelectionCandidate exactCandidate(PostgresSelectionRow row) {
         return new SelectionCandidate(
                 row.getSubjectId(), row.getSubjectKind(), row.getTitle(), row.getSummary(),
@@ -146,6 +171,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 row.getEvidenceReferences(), 1.0d, row.getEvidenceQuality(), 0.0d);
     }
 
+    /** 把调用的 facet 与对比维度映射为 claim 类别集合；未知维度抛出异常（fail-closed）。 */
     private List<AnswerClaimCategory> categories(PortfolioEvidenceInvocation invocation) {
         LinkedHashSet<AnswerClaimCategory> categories = new LinkedHashSet<>();
         invocation.getFacets().forEach(facet -> categories.addAll(switch (facet) {

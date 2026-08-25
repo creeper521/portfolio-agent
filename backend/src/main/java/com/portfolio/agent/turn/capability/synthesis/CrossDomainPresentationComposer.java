@@ -6,7 +6,14 @@ import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import java.util.LinkedHashMap;
 import java.util.List;
 
+/**
+ * 跨域综合展示组装器：把 {@link CrossDomainSemanticResult} 组装为固定三段的
+ * {@link CrossDomainPresentation}——通用原理（通用陈述拼接，caveats 非空时
+ * 追加"适用边界"）、项目实例（项目陈述拼接并附公开来源）、概念与实例的关系
+ * （模板化生成的验证段）。来源引用按 referenceKey 去重后只挂在后两段上。
+ */
 public final class CrossDomainPresentationComposer {
+    /** 组装固定三段展示：概念锚作为标题，来源列表挂在项目实例与关系两段。 */
     public CrossDomainPresentation compose(CrossDomainSemanticResult result) {
         String general = result.getGeneralStatements().stream()
                 .map(value -> value.getText()).collect(java.util.stream.Collectors.joining("\n"));
@@ -31,6 +38,11 @@ public final class CrossDomainPresentationComposer {
                                 sources)));
     }
 
+    /**
+     * 生成"概念与实例的关系"验证段：优先取 MECHANISM 陈述作机制句（缺失时
+     * 退回首条陈述），再按主张类别给每条项目陈述配固定关系标签，串成
+     * "机制 → 项目证据逐条对应"的一段文本。句末标点先剥离再统一收尾。
+     */
     private String relation(CrossDomainSemanticResult result) {
         String mechanism = result.getGeneralStatements().stream()
                 .filter(value -> value.getRole()
@@ -52,10 +64,12 @@ public final class CrossDomainPresentationComposer {
         return relationship.append("。").toString();
     }
 
+    /** 剥离句末的中文/英文终止标点，便于模板统一补句号。 */
     private String trimSentenceEnd(String value) {
         return value.replaceFirst("[。！？；]+$", "");
     }
 
+    /** 主张类别到关系措辞的封闭映射：每类证据以固定句式说明它如何支撑机制。 */
     private String relationLabel(
             com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory category) {
         return switch (category) {
@@ -70,6 +84,7 @@ public final class CrossDomainPresentationComposer {
         };
     }
 
+    /** 汇总项目陈述的公开来源并按 referenceKey 去重，保持首次出现顺序。 */
     private List<PublicSourceReferenceValue> sources(CrossDomainSemanticResult result) {
         LinkedHashMap<String, PublicSourceReferenceValue> values = new LinkedHashMap<>();
         for (CrossDomainSemanticResult.GroundedPortfolioStatement statement

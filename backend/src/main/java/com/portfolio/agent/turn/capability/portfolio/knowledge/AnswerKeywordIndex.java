@@ -5,6 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 回答检索的关键词索引统计（不可变值对象），供 BM25 类关键词评分使用。
+ *
+ * <p>包含文档（分块）数量、平均文档长度、每个文档的词频表，
+ * 以及词项到出现文档数（document frequency）的映射。
+ */
 public final class AnswerKeywordIndex {
 
     private final int documentCount;
@@ -30,6 +36,7 @@ public final class AnswerKeywordIndex {
     public List<DocumentEntry> getDocuments() { return documents; }
     public Map<String, Integer> getDocumentFrequencies() { return documentFrequencies; }
 
+    /** 单个文档（分块）的关键词统计：分块 ID、文档长度与词频表。 */
     public static final class DocumentEntry {
         private final String chunkId;
         private final int documentLength;

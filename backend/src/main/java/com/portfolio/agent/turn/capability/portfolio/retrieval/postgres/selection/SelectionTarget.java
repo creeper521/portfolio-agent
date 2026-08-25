@@ -5,6 +5,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 候选选择目标（不可变值对象，可 JSON 反序列化）：描述一次选择面向的受众与规模。
+ *
+ * <p>requestedSize 限制在 1..5（选择规模上限）；audienceRole 必填，
+ * careerTrack 与 goal 可空（空白归一化为 null）。
+ */
 public final class SelectionTarget {
 
     private final String careerTrack;

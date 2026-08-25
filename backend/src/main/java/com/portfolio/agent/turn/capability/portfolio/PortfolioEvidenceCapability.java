@@ -15,7 +15,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Owns exactly one primary attempt, at most one classified fallback, and one promotion. */
+/**
+ * 作品集 Evidence 能力的执行编排器：一次主检索、至多一次分类降级、一次证据晋级。
+ *
+ * <p>在 Turn 的 Execution 阶段被 {@link PortfolioTaskExecutor} 调用：先按 Invocation
+ * 的主 backend/strategy 发起检索；仅当失败被 {@link RetrievalFallbackPolicy} 判定
+ * 可降级且未超过截止时间时，才再发起至多一次 fallback 检索；成功的候选集必须经
+ * {@link EvidencePromotionValidator} 晋级为已验证 Evidence。任何一步失败都以
+ * {@link PortfolioCapabilityException} 终止，由上层映射为 Task 终止，从不放行
+ * 未验证内容（fail-closed）。
+ */
 public final class PortfolioEvidenceCapability {
     private final Map<CorpusBackend, PortfolioRetrieverPort> retrievers;
     private final RetrievalFallbackPolicy fallbackPolicy;
@@ -32,6 +41,19 @@ public final class PortfolioEvidenceCapability {
         this.promotionValidator = Objects.requireNonNull(promotionValidator, "promotionValidator");
     }
 
+    /**
+     * 执行一次 Evidence 检索，返回晋级后的已验证 Evidence 捆绑包。
+     *
+     * <p>流程：检查截止时间 → 主检索 → 成功即晋级返回；失败时询问降级策略，
+     * 仅在允许降级且未超时时执行一次 fallback 检索并晋级。
+     *
+     * @param invocation 已通过不变量校验的检索调用参数
+     * @param deadline   本次 Turn 的截止时间，进入方法与降级前各检查一次
+     * @return 晋级成功的 {@link ValidatedEvidenceBundle}
+     * @throws PortfolioCapabilityException 截止时间已过期、backend 未配置、
+     *         失败不允许降级，或主检索与 fallback 检索均失败时抛出，
+     *         异常携带分类后的 {@link RetrievalAttemptFailure}
+     */
     public ValidatedEvidenceBundle execute(
             PortfolioEvidenceInvocation invocation, TurnDeadline deadline) {
         if (deadline.isExpired()) throw new PortfolioCapabilityException(
@@ -52,6 +74,7 @@ public final class PortfolioEvidenceCapability {
         return promote(second, invocation);
     }
 
+    /** 单次检索尝试：backend 未注册时归类为连接不可用，而非抛出异常。 */
     private RetrievalAttemptResult attempt(
             PortfolioEvidenceInvocation invocation,
             RetrievalRequest request,
@@ -65,12 +88,14 @@ public final class PortfolioEvidenceCapability {
                 retriever.retrieve(invocation, request, deadline), "retrieval result");
     }
 
+    /** 将成功尝试的候选集按调用的 contentReleaseId 晋级为已验证 Evidence。 */
     private ValidatedEvidenceBundle promote(
             RetrievalAttemptResult result, PortfolioEvidenceInvocation invocation) {
         return promotionValidator.promote(
                 result.getCandidateSet().orElseThrow(), invocation.getContentReleaseId());
     }
 
+    /** 能力执行失败的终止异常，携带分类后的失败原因，供上层映射为 Task 终止理由。 */
     public static final class PortfolioCapabilityException extends RuntimeException {
         private final RetrievalAttemptFailure failure;
         public PortfolioCapabilityException(RetrievalAttemptFailure failure) {

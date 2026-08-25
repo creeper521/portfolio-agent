@@ -7,6 +7,12 @@ import com.portfolio.agent.turn.execution.TaskPresentation;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 作品集任务的呈现结果（不可变值对象）：标题加有序的公开回答段落，实现 {@link TaskPresentation}。
+ *
+ * <p>不变量：标题与段落均不可为空；每个段落必须有类型、标题、正文和至少一条
+ * 公开来源引用（sources 为空即拒绝），保证呈现层不出现无出处的结论。
+ */
 public final class PortfolioPresentation implements TaskPresentation {
     private final String title;
     private final List<Section> sections;
@@ -19,6 +25,7 @@ public final class PortfolioPresentation implements TaskPresentation {
     public String getTitle() { return title; }
     public List<Section> getSections() { return sections; }
 
+    /** 呈现中的单个段落：类型、标题、正文与公开来源引用；构造时强制来源非空。 */
     public static final class Section {
         private final AnswerSectionType sectionType;
         private final String title;

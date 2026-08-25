@@ -1,5 +1,11 @@
 package com.portfolio.agent.turn.execution;
 
+/**
+ * 任务终态原因的封闭词汇，不可跨类别复用：NO_SUPPORTED_RESULT 能力无支持结果、
+ * INPUT_REJECTED 输入被拒绝、CAPABILITY_UNAVAILABLE 无注册 Executor、
+ * DEPENDENCY_UNAVAILABLE 依赖数据不可用、EXECUTION_FAILED 执行失败、
+ * TURN_CANCELLED 整轮取消、TURN_DEADLINE_EXCEEDED 整轮超时、NOT_SCHEDULED 未被调度。
+ */
 public enum TaskTerminalReason {
     NO_SUPPORTED_RESULT,
     INPUT_REJECTED,

@@ -2,6 +2,12 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 
 import java.util.List;
 
+/**
+ * 回答检索单个分块（不可变值对象）。
+ *
+ * <p>记录分块 ID、关联的项目/案例 slug、claim ID、topics、文本及文本长度；
+ * 部分构造器不携带文本（text 为 null），仅保留长度等统计信息供评分使用。
+ */
 public final class AnswerRetrievalChunk {
 
     private final String chunkId;

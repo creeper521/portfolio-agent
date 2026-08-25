@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selecti
 
 import java.util.Objects;
 
+/** 当前生效的公开内容发布（不可变值对象）：检索必须锁定在该 releaseId 对应的快照上。 */
 public final class ActiveRelease {
 
     private final String releaseId;

@@ -3,6 +3,13 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 预设问题的回答层投影（不可变值对象）。
+ *
+ * <p>携带规范问法、别名与建议答案文本，以及预设契约信息：契约版本、必需/支撑
+ * claim 列表、每个必需 claim 的最少 APPROVED Evidence 数（构造期强制至少为 1）、
+ * 契约是否激活及契约主体 ID；早期便捷构造器以 legacy 标识兜底。
+ */
 public final class AnswerQuestion {
 
     private final String id;

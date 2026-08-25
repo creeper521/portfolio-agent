@@ -86,6 +86,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         validatePartialShape();
     }
 
+    /** 构造推荐目标的澄清模板：待澄清字段为 REQUESTED_SIZE，深度 1、无后续字段。 */
     public static BlockedGoalTemplate recommendation(
             Integer requestedSize,
             Set<String> constraints,
@@ -131,6 +132,14 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
                 unresolvedField, askedFields, remainingFields, depth);
     }
 
+    /**
+     * 用澄清答案推进或完成被阻塞目标。
+     *
+     * <p>答案与当前待澄清字段不符、类型未知或合并后形状仍不完整时返回
+     * NO_INFORMATION；还有后续待澄清字段时返回 NEXT_CLARIFICATION（深度 +1）；
+     * 全部字段满足后用服务端固定语义锚点重建 {@link UserGoalProposal} 并返回
+     * RESOLVED。任何重建失败都收敛为 NO_INFORMATION，不向上抛出。</p>
+     */
     public Resolution resolve(ResolutionValue value) {
         if (value == null || value.field() != unresolvedField) {
             return Resolution.noInformation();
@@ -173,6 +182,12 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         }
     }
 
+    /**
+     * 把已补全的模板重建为类型化目标提案。
+     *
+     * <p>InputAnchor 使用固定文案"已澄清的公开目标"而非访客原文；主体引用
+     * 以 CONTINUATION 依据绑定；不支持的目标类别抛出异常（由 resolve 捕获）。</p>
+     */
     private UserGoalProposal toProposal(
             List<Subject> resolvedSubjects,
             Set<GoalRequestedOutput> resolvedOutputs,
@@ -204,6 +219,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         return new UserGoalProposal(List.of(goal));
     }
 
+    /** 按目标类别校验持久化形状：待澄清字段允许缺失，其余字段必须满足最小形状。 */
     private void validatePartialShape() {
         validateUnresolvedField();
         switch (goalKind) {
@@ -239,10 +255,12 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         }
     }
 
+    /** 字段当前是否待澄清（当前未解析或在后续字段清单中）。 */
     private boolean isPending(ClarificationProposal.Field field) {
         return unresolvedField == field || remainingFields.contains(field);
     }
 
+    /** 校验当前与后续待澄清字段都确实缺失，且为该目标类别所允许。 */
     private void validateUnresolvedField() {
         List<ClarificationProposal.Field> missingFields = new java.util.ArrayList<>();
         missingFields.add(unresolvedField);
@@ -255,6 +273,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         }
     }
 
+    /** 作品集事实/比较只允许澄清 SUBJECT；推荐只允许澄清 REQUESTED_SIZE。 */
     private void validateAllowedField(ClarificationProposal.Field field) {
         boolean allowed = switch (goalKind) {
             case PORTFOLIO_FACT, PORTFOLIO_COMPARE ->
@@ -266,6 +285,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         if (!allowed) throw new IllegalArgumentException("unresolved field does not match goal kind");
     }
 
+    /** 判断某字段当前是否确实缺失（比较目标仅剩一个主体也视为仍缺主体）。 */
     private boolean fieldIsMissing(ClarificationProposal.Field field) {
         return switch (field) {
             case SUBJECT -> subjects.isEmpty()
@@ -277,6 +297,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
+    /** 由目标类别与侧面派生期望的请求输出集合，用于一致性校验。 */
     private Set<GoalRequestedOutput> outputsDerivedFromParameters(
             GoalKind kind, Set<UserGoalProposal.Facet> goalFacets) {
         return switch (kind) {
@@ -289,6 +310,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
+    /** 判断补全后的字段是否满足该目标类别的完整形状。 */
     private boolean completeShape(
             List<Subject> resolvedSubjects,
             Set<GoalRequestedOutput> resolvedOutputs,
@@ -305,6 +327,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
+    /** 按 kind:reference 去重合并已有与新增主体，保持原有顺序。 */
     private List<Subject> mergeSubjects(List<Subject> existing, List<Subject> additions) {
         java.util.LinkedHashMap<String, Subject> merged = new java.util.LinkedHashMap<>();
         existing.forEach(value -> merged.put(value.kind().name() + ':' + value.reference(), value));
@@ -312,6 +335,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         return List.copyOf(merged.values());
     }
 
+    /** 复制并校验闭合命名集合（大写字母与下划线，1..64 字符）。 */
     private static Set<String> closedNames(Set<String> values, String name, boolean allowEmpty) {
         Set<String> copied = Set.copyOf(values == null ? Set.of() : values);
         if (!allowEmpty && copied.isEmpty()) throw new IllegalArgumentException(name + " is required");
@@ -335,6 +359,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
     public List<ClarificationProposal.Field> getRemainingFields() { return remainingFields; }
     public int getDepth() { return depth; }
 
+    /** 恢复目标提案时使用的固定闭合目标键（按目标类别选择）。 */
     private String goalKey(GoalKind kind) {
         return switch (kind) {
             case PORTFOLIO_FACT -> "clarified-portfolio-fact";
@@ -344,6 +369,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
+    /** 恢复目标提案时使用的固定知识需求（公开作品集证据）。 */
     private GoalKnowledgeRequirement knowledgeRequirement(GoalKind kind) {
         return switch (kind) {
             case PORTFOLIO_FACT, PORTFOLIO_COMPARE, PORTFOLIO_RECOMMEND ->
@@ -352,6 +378,7 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         };
     }
 
+    /** 被阻塞目标中可持久化的公开主体（类别 + 稳定引用，不带原文锚点）。 */
     public record Subject(GoalSubjectReference.Kind kind, String reference) {
         @JsonCreator
         public Subject(
@@ -365,15 +392,18 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         }
     }
 
+    /** 澄清答案值的封闭接口：每种实现对应一个待澄清字段。 */
     public interface ResolutionValue {
         ClarificationProposal.Field field();
     }
+    /** SUBJECT 字段的答案：补充的公开主体集合。 */
     public record SubjectValue(List<Subject> subjects) implements ResolutionValue {
         public SubjectValue { subjects = List.copyOf(subjects); }
         @Override public ClarificationProposal.Field field() {
             return ClarificationProposal.Field.SUBJECT;
         }
     }
+    /** REQUESTED_SIZE 字段的答案：推荐数量（1..5）。 */
     public record RequestedSizeValue(int requestedSize) implements ResolutionValue {
         public RequestedSizeValue {
             if (requestedSize < 1 || requestedSize > 5) {
@@ -384,12 +414,14 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
             return ClarificationProposal.Field.REQUESTED_SIZE;
         }
     }
+    /** OUTPUT 字段的答案：请求输出集合。 */
     public record OutputValue(Set<GoalRequestedOutput> outputs) implements ResolutionValue {
         public OutputValue { outputs = Set.copyOf(outputs); }
         @Override public ClarificationProposal.Field field() {
             return ClarificationProposal.Field.OUTPUT;
         }
     }
+    /** CONSTRAINT 字段的答案：闭合约束集合。 */
     public record ConstraintValue(Set<String> constraints) implements ResolutionValue {
         public ConstraintValue { constraints = closedNames(constraints, "constraints", false); }
         @Override public ClarificationProposal.Field field() {
@@ -397,6 +429,10 @@ public final class BlockedGoalTemplate implements ClarificationRecoveryTemplate 
         }
     }
 
+    /**
+     * 澄清推进结果：RESOLVED 携带重建的目标提案；NEXT_CLARIFICATION 携带
+     * 下一轮模板；NO_INFORMATION 表示答案无法推进（上层以固定文案兜底）。
+     */
     public record Resolution(
             Kind kind, UserGoalProposal proposal, BlockedGoalTemplate continuation) {
         public Resolution { Objects.requireNonNull(kind, "kind"); }

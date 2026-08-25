@@ -14,13 +14,23 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 目标提案编解码器：把模型 JSON 输出严格解码为类型化解释结果。
+ *
+ * <p>采用严格 Jackson 配置（禁止重复键、禁止尾随令牌）与逐字段白名单
+ * 校验；所有主体、约束、路由都必须落在 {@link GoalInterpretationInput}
+ * 给定的封闭范围内，锚点必须能对上访客原文。任何越界输出都抛出
+ * IllegalArgumentException，由上层按模型失败或 fail-closed 路径处理。</p>
+ */
 public final class GoalProposalCodec {
 
+    /** 输出 schema 版本标识，随提示词契约演进。 */
     public static final String SCHEMA_VERSION = "goal.proposal.v5";
     private static final int MAX_OUTPUT_CHARACTERS = 20000;
     private final ObjectMapper mapper;
     private final ConversationalMessageValidator conversationalValidator;
 
+    /** 构造编解码器：启用重复键检测与尾随令牌拒绝的严格 Jackson 配置。 */
     public GoalProposalCodec() {
         JsonFactory factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -30,6 +40,12 @@ public final class GoalProposalCodec {
         this.conversationalValidator = new ConversationalMessageValidator();
     }
 
+    /**
+     * 解码模型输出的目标提案 JSON。
+     *
+     * @throws IllegalArgumentException JSON 为空或超长（超过 20000 字符）、
+     *         格式非法、kind 不支持或任何字段校验失败
+     */
     public GoalInterpretationResult decode(String json, GoalInterpretationInput input) {
         if (json == null || json.isBlank() || json.length() > MAX_OUTPUT_CHARACTERS) {
             throw new IllegalArgumentException("goal proposal output must be non-empty and bounded");
@@ -44,6 +60,7 @@ public final class GoalProposalCodec {
         };
     }
 
+    /** 按路由分支解码语义路由提案：每条路由只允许各自的字段组合，越界字段直接拒绝。 */
     private GoalInterpretationResult decodeSemanticRoute(
             JsonNode root, GoalInterpretationInput input) {
         Set<String> fields = Set.of(
@@ -131,6 +148,7 @@ public final class GoalProposalCodec {
         return GoalInterpretationResult.semanticRoute(proposal);
     }
 
+    /** 解码最近语义引用，并校验其确实存在于 typed 最近语义状态中。 */
     private SemanticRouteProposal.RecentSemanticReference decodeRecentReference(
             JsonNode node, GoalInterpretationInput input) {
         if (node == null || node.isNull()) return null;
@@ -150,6 +168,7 @@ public final class GoalProposalCodec {
         return reference;
     }
 
+    /** 校验引用的小节与请求的 PORTFOLIO_FACT 侧面一致，防止跨小节续接。 */
     private void validateRecentSectionFacet(
             SemanticRouteProposal.RecentSemanticReference reference,
             UserGoalProposal proposal,
@@ -166,12 +185,14 @@ public final class GoalProposalCodec {
         }
     }
 
+    /** 断言 JSON 节点不存在或为 null。 */
     private void requireNull(JsonNode node, String path) {
         if (node != null && !node.isNull()) {
             throw new IllegalArgumentException(path + " must be null");
         }
     }
 
+    /** 解码单个提案目标：字段白名单 + 目标类别/主体/参数的封闭校验。 */
     private UserGoalProposal.ProposedGoal decodeGoal(
             JsonNode node, GoalInterpretationInput input, String path) {
         requireObject(node, path);
@@ -203,6 +224,12 @@ public final class GoalProposalCodec {
                 subjects, outputs, knowledge, parameters);
     }
 
+    /**
+     * 解码主体候选列表。
+     *
+     * <p>仅接受 EXPLICIT_INPUT 依据、带锚点且在公开目录内的非 RESULT 主体，
+     * 并拒绝重复主体。</p>
+     */
     private List<GoalSubjectReference> decodeSubjects(
             JsonNode array,
             GoalInterpretationInput input,
@@ -242,6 +269,7 @@ public final class GoalProposalCodec {
         return List.copyOf(subjects);
     }
 
+    /** 按 goalKind 分支解码类型化目标参数；参数 kind 必须与 goalKind 一致。 */
     private UserGoalProposal.GoalParameters decodeParameters(
             JsonNode node,
             GoalKind goalKind,
@@ -315,6 +343,7 @@ public final class GoalProposalCodec {
         };
     }
 
+    /** 解码澄清值：字段不允许为 GOAL（原始目标级澄清不可持久化）。 */
     private ClarificationProposal decodeClarificationValue(
             JsonNode node, GoalInterpretationInput input) {
         requireObject(node, "clarification");
@@ -334,6 +363,7 @@ public final class GoalProposalCodec {
                 blockedGoal);
     }
 
+    /** 解码被阻塞目标模板并逐字段做封闭校验；Provider 侧澄清深度必须为 1。 */
     private BlockedGoalTemplate decodeBlockedGoal(
             JsonNode node,
             GoalInterpretationInput input,
@@ -414,6 +444,7 @@ public final class GoalProposalCodec {
                 unresolved, askedFields, List.copyOf(remainingFields), depth);
     }
 
+    /** 解码纯对话结果，文案必须通过 {@link ConversationalMessageValidator}。 */
     private GoalInterpretationResult decodeConversational(
             JsonNode root, GoalInterpretationInput input) {
         assertFields(root, Set.of("kind", "message"), Set.of("kind", "message"), "root");
@@ -424,6 +455,10 @@ public final class GoalProposalCodec {
                         input.getUserText()));
     }
 
+    /**
+     * 解码输入锚点：声明的 start 与原文不匹配时，仅当该文本在原文中
+     * 唯一出现才容错修正位置，否则拒绝。
+     */
     private UserGoalProposal.InputAnchor decodeAnchor(
             JsonNode node, String input, String path) {
         requireObject(node, path);
@@ -444,6 +479,7 @@ public final class GoalProposalCodec {
         }
     }
 
+    /** 断言解释输入处于 DISCUSSION 模式（讨论类路由的前置条件）。 */
     private void requireDiscussion(GoalInterpretationInput input) {
         if (input.getInterpretationMode()
                 != GoalInterpretationInput.InterpretationMode.DISCUSSION) {
@@ -452,6 +488,12 @@ public final class GoalProposalCodec {
         }
     }
 
+    /**
+     * 解码闭合命名集合：仅接受符合 {@code [A-Z_]{1,64}} 的非重复名称。
+     *
+     * <p>与 {@link #decodeEnumSet} 不同，这里只约束命名形态，具体取值是否
+     * 在允许范围内由调用方（如推荐约束白名单）进一步校验。</p>
+     */
     private Set<String> decodeClosedNames(JsonNode array, String path, boolean allowEmpty) {
         Set<String> values = new LinkedHashSet<>();
         for (int index = 0; index < array.size(); index++) {
@@ -466,6 +508,7 @@ public final class GoalProposalCodec {
         return Set.copyOf(values);
     }
 
+    /** 解码枚举集合为不可变 Set，拒绝重复值；allowEmpty 为 false 时空集合也拒绝。 */
     private <E extends Enum<E>> Set<E> decodeEnumSet(
             JsonNode array, Class<E> type, String path, boolean allowEmpty) {
         Set<E> values = new LinkedHashSet<>();
@@ -481,6 +524,7 @@ public final class GoalProposalCodec {
         return Set.copyOf(values);
     }
 
+    /** 按名称解析枚举值，缺失或不支持的名称统一转为 IllegalArgumentException。 */
     private <E extends Enum<E>> E enumValue(Class<E> type, String value, String path) {
         if (value == null) throw new IllegalArgumentException(path + " is required");
         try {
@@ -490,6 +534,7 @@ public final class GoalProposalCodec {
         }
     }
 
+    /** 用严格 mapper 读取 JSON 树；解析失败统一转为 IllegalArgumentException。 */
     private JsonNode readStrict(String json) {
         try {
             return mapper.readTree(json);
@@ -498,6 +543,7 @@ public final class GoalProposalCodec {
         }
     }
 
+    /** 字段白名单闸门：出现未知字段或缺失必填字段即拒绝整个节点。 */
     private void assertFields(
             JsonNode node, Set<String> allowed, Set<String> required, String path) {
         Iterator<String> names = node.fieldNames();
@@ -514,12 +560,14 @@ public final class GoalProposalCodec {
         }
     }
 
+    /** 断言 JSON 节点存在且为对象。 */
     private void requireObject(JsonNode node, String path) {
         if (node == null || !node.isObject()) {
             throw new IllegalArgumentException(path + " must be an object");
         }
     }
 
+    /** 取出指定字段并断言其为数组。 */
     private JsonNode requireArray(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || !value.isArray()) {
@@ -528,6 +576,7 @@ public final class GoalProposalCodec {
         return value;
     }
 
+    /** 取出指定字段并断言其为非空、长度不超过 maximum 的文本。 */
     private String requireText(JsonNode node, String field, int maximum) {
         JsonNode value = node.get(field);
         if (value == null || !value.isTextual()
@@ -537,6 +586,7 @@ public final class GoalProposalCodec {
         return value.asText();
     }
 
+    /** 取出指定字段并断言其为整数。 */
     private int requireInt(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || !value.isIntegralNumber()) {
@@ -545,6 +595,7 @@ public final class GoalProposalCodec {
         return value.intValue();
     }
 
+    /** 取出可空的整数字段：字段必须存在，值可为 JSON null 或整数。 */
     private Integer nullableInt(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null) throw new IllegalArgumentException(field + " is required");

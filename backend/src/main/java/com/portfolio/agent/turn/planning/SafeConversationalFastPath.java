@@ -13,6 +13,12 @@ public final class SafeConversationalFastPath {
     private static final Set<String> THANKS =
             Set.of("谢谢", "多谢", "感谢");
 
+    /**
+     * 尝试以固定话术应答问候/致谢等社交输入。
+     *
+     * @return 命中时返回固定 CONVERSATIONAL 终态；否则 Optional.empty()
+     *         交回语义解释路径
+     */
     public Optional<ResolvedGoalSet> tryResolve(
             AgentTurnCommand.Ask command) {
         if (!(command.getInput() instanceof AgentTurnCommand.FreeText freeText)) {
@@ -30,6 +36,7 @@ public final class SafeConversationalFastPath {
         return Optional.empty();
     }
 
+    /** 小写化并剔除空白与常见中英文标点，得到可精确匹配的规范形式。 */
     private String normalize(String value) {
         StringBuilder normalized = new StringBuilder();
         value.toLowerCase(Locale.ROOT).codePoints()

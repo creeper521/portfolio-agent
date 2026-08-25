@@ -7,8 +7,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 语义计划校验器：计划进入 Execution 阶段前的不变量闸门。
+ *
+ * <p>校验目标/任务数量与 ID 唯一性、履行任务存在性、依赖边合法性与
+ * 无环性（Kahn 拓扑排序），以及跨域综合任务的扇入形状。全部通过才
+ * 包装为 {@link ValidatedSemanticTurnPlan}。</p>
+ */
 public final class SemanticPlanValidator {
 
+    /**
+     * 校验计划并包装为已验证类型。
+     *
+     * @throws IllegalArgumentException 任一不变量不满足：目标/任务数量越界、
+     *         重复 ID、履行任务缺失、依赖悬空或重复、依赖成环、
+     *         跨域综合任务扇入形状错误
+     */
     public ValidatedSemanticTurnPlan validate(SemanticTurnPlan plan) {
         if (plan.getUserGoals().isEmpty() || plan.getUserGoals().size() > 6) {
             throw new IllegalArgumentException("plan must contain one to six goals");
@@ -54,6 +68,7 @@ public final class SemanticPlanValidator {
         return new ValidatedSemanticTurnPlan(plan);
     }
 
+    /** Kahn 拓扑排序检查无环：访问任务数不足总数即存在环。 */
     private void assertAcyclic(
             Set<String> taskIds,
             Map<String, Integer> inbound,
@@ -75,6 +90,7 @@ public final class SemanticPlanValidator {
         }
     }
 
+    /** 跨域综合任务必须恰好依赖一个 GENERAL_EXPLANATION 与一个 PORTFOLIO_FACT 输入。 */
     private void assertCrossDomainFanIn(SemanticTurnPlan plan) {
         for (SemanticTask task : plan.getTasks()) {
             if (task.getType() != SemanticTask.Type.CROSS_DOMAIN_SYNTHESIS) continue;

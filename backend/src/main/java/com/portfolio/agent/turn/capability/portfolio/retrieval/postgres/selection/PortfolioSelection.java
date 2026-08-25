@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selecti
 import java.util.List;
 import java.util.Objects;
 
+/** 候选选择结果（不可变值对象）：状态、入选候选、整体评分与产生该结果的策略版本。 */
 public final class PortfolioSelection {
 
     private final PortfolioSelectionStatus status;

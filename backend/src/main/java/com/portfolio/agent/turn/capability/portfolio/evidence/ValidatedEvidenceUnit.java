@@ -6,6 +6,13 @@ import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 单条已验证 Evidence 单元（不可变值对象）。
+ *
+ * <p>由晋级器从候选装配：所属主体（subjectId、subjectTitle、careerTrack、
+ * capabilityCodes）、被支撑的 claim 断言投影，以及可对外公开的来源引用。
+ * 便捷构造器用 subjectId 兜底标题，且不带职业轨道与能力编码。
+ */
 public final class ValidatedEvidenceUnit {
     private final String subjectId;
     private final AnswerClaimProjection claim;

@@ -3,6 +3,16 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 运行时回答知识内容（不可变值对象）：一次公开快照在回答层的完整投影。
+ *
+ * <p>包含内容版本与运行时包哈希、项目与案例知识、可选的本地检索语料、
+ * 公开时间线，以及能力开关。派生构造器的能力规则：任一主体带预设问题即启用
+ * presetAnswers，带 claim 即启用稳定引用类能力（readOnlyTools 与
+ * multiTurnReferences），检索语料存在才启用 groundedQuestions，
+ * modelExpression 固定为 false；显式传入 {@link RuntimeCapabilities}
+ * 的构造器则完全由调用方决定。多个便捷构造器用于省略案例/时间线的兼容场景。
+ */
 public final class RuntimeAnswerContent {
 
     private final String contentVersion;
@@ -48,6 +58,7 @@ public final class RuntimeAnswerContent {
             AnswerRetrievalCorpus retrievalCorpus,
             List<AnswerTimelineEvent> timeline
     ) {
+        // 能力开关按内容是否存在派生：有预设问题才有 presetAnswers，有 claim 才有稳定引用
         boolean presetAnswers = java.util.stream.Stream.concat(projects.stream(), cases.stream())
                 .anyMatch(project -> !project.getQuestions().isEmpty());
         boolean stableReferences = java.util.stream.Stream.concat(projects.stream(), cases.stream())

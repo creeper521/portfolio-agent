@@ -7,7 +7,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Typed and bounded input for the General knowledge provider. */
+/**
+ * Typed and bounded input for the General knowledge provider.
+ *
+ * <p>通用知识能力的类型化有界请求，不可变：只携带主题/主体/维度、深度、受众、
+ * 期望内容版本与共享的 TurnDeadline，不包含会话历史或任何私有数据。
+ * 构造时做互斥形状校验——EXPLANATION 只能有 topic（无 subjects/dimensions）；
+ * COMPARISON 只能有 2..5 个 subjects 加非空 dimensions（无 topic，深度固定
+ * STANDARD）。文本字段限长 256，dimension 必须是封闭命名风格（大写与下划线）。
+ */
 public final class GeneralKnowledgeRequest {
     private final Kind kind;
     private final String topic;
@@ -69,7 +77,9 @@ public final class GeneralKnowledgeRequest {
     public String getExpectedContentVersion() { return expectedContentVersion; }
     public TurnDeadline getDeadline() { return deadline; }
 
+    /** 请求类别：EXPLANATION 单主题讲解；COMPARISON 多主体按维度对比。 */
     public enum Kind { EXPLANATION, COMPARISON }
+    /** 受众画像：面试官、导师、HR、访客，影响生成口径。 */
     public enum Audience { INTERVIEWER, MENTOR, HR, GUEST }
 
     private static String requireText(String value, String name) {

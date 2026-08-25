@@ -3,6 +3,13 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * claim 在回答层的投影（不可变值对象）。
+ *
+ * <p>由知识适配器从快照 claim 装配，携带断言文本与全部治理维度（类别、成果状态、
+ * 贡献类型、验证依据、验证状态、重要性）以及 topics 与直接支撑 Evidence 的 ID 列表；
+ * 便捷构造器用于省略 topics 或仅提供最小字段的场景。
+ */
 public final class AnswerClaimProjection {
     private final String id;
     private final AnswerClaimCategory category;

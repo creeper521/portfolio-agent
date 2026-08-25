@@ -4,6 +4,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 用户目标提案：Goal 解析产出的 1..6 条已校验目标集合。
+ *
+ * <p>既是 {@link GoalInterpretationPort} 的模型提案类型，也是
+ * {@link SemanticPlanCompiler} 的编译输入。全部字段为封闭枚举、受限字符串
+ * 或带 {@link InputAnchor} 的原文锚点；构造时即校验目标键唯一性、类型化参数
+ * 与 goalKind 的一致性、requestedOutputs 与参数的派生关系。</p>
+ */
 public final class UserGoalProposal {
 
     private final List<ProposedGoal> goals;
@@ -23,6 +31,13 @@ public final class UserGoalProposal {
         return goals;
     }
 
+    /**
+     * 单条提案目标。
+     *
+     * <p>goalKey 必须是局部闭合键（小写字母数字开头，总长 2..64）；
+     * parameters 必须与 goalKind 匹配；requestedOutputs 强制等于类型化参数
+     * 的派生结果，防止模型随意声明输出形状。</p>
+     */
     public static final class ProposedGoal {
         private final String goalKey;
         private final GoalKind goalKind;
@@ -72,10 +87,12 @@ public final class UserGoalProposal {
         public GoalParameters getParameters() { return parameters; }
     }
 
+    /** 目标参数封闭接口：每个实现对应一种 GoalKind 并携带其类型化参数。 */
     public interface GoalParameters {
         GoalKind getGoalKind();
     }
 
+    /** PORTFOLIO_FACT 参数：查询的作品集侧面集合（非空）与内容深度。 */
     public static final class PortfolioFactParameters implements GoalParameters {
         private final Set<Facet> facets;
         private final Depth depth;
@@ -93,6 +110,7 @@ public final class UserGoalProposal {
         public Depth getDepth() { return depth; }
     }
 
+    /** PORTFOLIO_COMPARE 参数：比较维度集合（非空）。 */
     public static final class PortfolioCompareParameters implements GoalParameters {
         private final Set<PortfolioComparisonDimension> dimensions;
 
@@ -107,6 +125,7 @@ public final class UserGoalProposal {
         public Set<PortfolioComparisonDimension> getDimensions() { return dimensions; }
     }
 
+    /** PORTFOLIO_RECOMMEND 参数：推荐数量（1..5）与闭合约束（最多一条职业方向）。 */
     public static final class PortfolioRecommendationParameters implements GoalParameters {
         private final int requestedSize;
         private final Set<String> constraints;
@@ -134,6 +153,7 @@ public final class UserGoalProposal {
         public Set<String> getConstraints() { return constraints; }
     }
 
+    /** GENERAL_EXPLANATION 参数：主题锚点与解释深度。 */
     public static final class GeneralExplanationParameters implements GoalParameters {
         private final InputAnchor topicAnchor;
         private final Depth depth;
@@ -148,6 +168,7 @@ public final class UserGoalProposal {
         public Depth getDepth() { return depth; }
     }
 
+    /** GENERAL_COMPARISON 参数：2..5 个比较对象锚点与非空闭合比较维度名。 */
     public static final class GeneralComparisonParameters implements GoalParameters {
         private final List<InputAnchor> subjectAnchors;
         private final Set<String> dimensions;
@@ -165,6 +186,7 @@ public final class UserGoalProposal {
         public Set<String> getDimensions() { return dimensions; }
     }
 
+    /** APPLY_GENERAL_CONCEPT_TO_PORTFOLIO 参数：概念锚点、关联的作品集侧面与深度。 */
     public static final class ApplyConceptParameters implements GoalParameters {
         private final InputAnchor conceptAnchor;
         private final Facet portfolioFacet;
@@ -183,6 +205,12 @@ public final class UserGoalProposal {
         public Depth getDepth() { return depth; }
     }
 
+    /**
+     * 输入锚点：指向访客原文某个片段的 (text, start) 定位。
+     *
+     * <p>必须与原文精确匹配（{@link #requireMatches}），用于防止模型编造
+     * 不存在的原文引用。值相等性同时比较文本与起始位置。</p>
+     */
     public static final class InputAnchor {
         private final String text;
         private final int start;
@@ -216,12 +244,16 @@ public final class UserGoalProposal {
         public int hashCode() { return Objects.hash(text, start); }
     }
 
+    /** 作品集查询侧面：概览/背景/职责/方案/验证/状态。 */
     public enum Facet { OVERVIEW, BACKGROUND, RESPONSIBILITY, SOLUTION, VERIFICATION, STATUS }
+    /** 内容深度：简明/标准/详细。 */
     public enum Depth { CONCISE, STANDARD, DETAILED }
+    /** 作品集比较维度：架构/实现/结果/风险/验证。 */
     public enum PortfolioComparisonDimension {
         ARCHITECTURE, IMPLEMENTATION, OUTCOME, RISKS, VERIFICATION
     }
 
+    /** 按类型化参数派生请求输出：PORTFOLIO_FACT 由侧面派生，其余目标为单一固定输出。 */
     private static Set<GoalRequestedOutput> requestedOutputs(GoalParameters parameters) {
         if (parameters instanceof PortfolioFactParameters fact) {
             return fact.getFacets().stream()
@@ -239,12 +271,14 @@ public final class UserGoalProposal {
         };
     }
 
+    /** 复制并校验闭合命名集合（大写字母与下划线，1..64 字符），不允许为空。 */
     private static Set<String> copyNames(Set<String> values, String name) {
         Set<String> copied = copyNamesAllowEmpty(values, name);
         if (copied.isEmpty()) throw new IllegalArgumentException(name + " must not be empty");
         return copied;
     }
 
+    /** 复制并校验闭合命名集合，允许为空。 */
     private static Set<String> copyNamesAllowEmpty(Set<String> values, String name) {
         Set<String> copied = Set.copyOf(Objects.requireNonNull(values, name));
         for (String value : copied) {

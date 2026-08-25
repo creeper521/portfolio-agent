@@ -4,6 +4,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 目标解析上下文：本轮解析允许引用的公开主体与目标类别范围。
+ *
+ * <p>由公开快照投影构建，供解释输入工厂、语义路由校验与计划编译共同
+ * 使用；allowedRecommendationConstraints 界定推荐约束的公开目录。</p>
+ */
 public final class GoalResolutionContext {
     private final List<GoalInterpretationInput.PublicSubjectDescriptor> publicSubjects;
     private final Set<GoalKind> allowedGoalKinds;
@@ -37,10 +43,16 @@ public final class GoalResolutionContext {
         return allowedRecommendationConstraints;
     }
 
+    /** 判断主体提示是否指向某个公开主体；提示为 null 视为匹配。 */
     public boolean matchesHint(com.portfolio.agent.turn.lifecycle.AgentTurnCommand.SubjectHint hint) {
         return hint == null || resolveHint(hint) != null;
     }
 
+    /**
+     * 把主体提示解析为公开主体描述符。
+     *
+     * <p>按主体类别与已审核别名精确匹配公开目录；无匹配返回 null。</p>
+     */
     public GoalInterpretationInput.PublicSubjectDescriptor resolveHint(
             com.portfolio.agent.turn.lifecycle.AgentTurnCommand.SubjectHint hint) {
         if (hint == null) return null;

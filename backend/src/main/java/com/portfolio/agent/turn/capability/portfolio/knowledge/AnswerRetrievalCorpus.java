@@ -5,6 +5,13 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 本地回答检索语料（不可变值对象）。
+ *
+ * <p>包含 BM25 关键词索引、按 chunkId 索引的向量与分块，以及嵌入模型标识、
+ * 嵌入工件 SHA-256 与向量维度；向量在构造与复制时均做数组防御性拷贝，
+ * 防止调用方修改内部状态。
+ */
 public final class AnswerRetrievalCorpus {
 
     private final AnswerKeywordIndex keywordIndex;
@@ -45,6 +52,7 @@ public final class AnswerRetrievalCorpus {
 
     public AnswerKeywordIndex getKeywordIndex() { return keywordIndex; }
 
+    /** 返回向量的深拷贝（逐向量复制数组），调用方可安全修改副本而不影响内部状态。 */
     public Map<String, float[]> copyVectors() {
         Map<String, float[]> copies = new LinkedHashMap<>();
         for (Map.Entry<String, float[]> entry : vectors.entrySet()) {

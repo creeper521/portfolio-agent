@@ -6,7 +6,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Set;
 
-/** Typed recovery authority for an ambiguous request inside project discussion. */
+/**
+ * Typed recovery authority for an ambiguous request inside project discussion.
+ *
+ * <p>讨论澄清模板：项目讨论内请求含义不明时的恢复凭据。携带讨论上下文
+ * 句柄、项目 ID、允许继续的侧面集合与是否允许重入；选择动作必须落在
+ * 这些闭合许可内才能恢复。</p>
+ */
 public final class DiscussionClarificationTemplate
         implements ClarificationRecoveryTemplate {
     private final String contextHandle;
@@ -37,6 +43,7 @@ public final class DiscussionClarificationTemplate
     public String getProjectId() { return projectId; }
     public Set<UserGoalProposal.Facet> getAllowedFacets() { return allowedFacets; }
     public boolean isReenterAllowed() { return reenterAllowed; }
+    /** 判断是否允许继续指定侧面的讨论。 */
     public boolean allowsFacet(UserGoalProposal.Facet facet) {
         return allowedFacets.contains(facet);
     }

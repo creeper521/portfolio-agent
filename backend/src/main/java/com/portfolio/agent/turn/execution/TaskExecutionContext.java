@@ -6,6 +6,12 @@ import com.portfolio.agent.turn.planning.SemanticTask;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 单个任务的执行上下文，不可变：Engine 为一次任务执行打包的全部输入——
+ * 任务本体、上游语义结果、内容发布 ID、共享的 TurnDeadline 与 CancellationSignal、
+ * 模型表达授权、预设请求标记，以及 Claim 后冻结的无凭证模型执行快照。
+ * Capability 只经由该上下文接触 Turn 级资源，无法自行延长预算或绕过取消。
+ */
 public final class TaskExecutionContext {
     private final SemanticTask task;
     private final List<TaskSemanticResult> dependencyResults;

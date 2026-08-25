@@ -9,6 +9,19 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 一次作品集 Evidence 检索的不可变调用参数（value object）。
+ *
+ * <p>由 {@link PortfolioInvocationFactory} 从 SemanticTask 装配，完整描述：任务类型、
+ * 获准主体范围、检索切面（facets）或对比维度（dimensions）、回答深度、推荐数量与约束、
+ * 内容发布 ID，以及主/fallback 检索的 backend 与 strategy 组合。
+ *
+ * <p>关键不变量（构造期校验，违反即抛 IllegalArgumentException）：
+ * requestedSize 仅对 PORTFOLIO_RECOMMEND 有效且限定 1..5，其余任务必须为 0 且不带
+ * 推荐约束；推荐约束必须是 CAREER_TRACK_ 或 CAPABILITY_ 前缀的受控编码；对比维度
+ * 必须是受支持的枚举名；facets 与 dimensions 至少有一项；contentReleaseId 必须与
+ * 主体范围一致；fallback 的 backend 与 strategy 必须成对出现或同时为空。
+ */
 public final class PortfolioEvidenceInvocation {
     private final SemanticTask.Type taskType;
     private final AuthorizedSubjectScope subjectScope;
@@ -108,18 +121,21 @@ public final class PortfolioEvidenceInvocation {
     public UserGoalProposal.Depth getDepth() { return depth; }
     public int getRequestedSize() { return requestedSize; }
     public Set<String> getRecommendationConstraints() { return recommendationConstraints; }
+    /** 从推荐约束中提取首个职业轨道（剥去 CAREER_TRACK_ 前缀），不存在时返回 null。 */
     public String getRecommendationCareerTrack() {
         return recommendationConstraints.stream()
                 .filter(value -> value.startsWith("CAREER_TRACK_"))
                 .map(value -> value.substring("CAREER_TRACK_".length()))
                 .findFirst().orElse(null);
     }
+    /** 提取全部能力编码约束（剥去 CAPABILITY_ 前缀），返回不可修改集合。 */
     public Set<String> getRecommendationCapabilityCodes() {
         return recommendationConstraints.stream()
                 .filter(value -> value.startsWith("CAPABILITY_"))
                 .map(value -> value.substring("CAPABILITY_".length()))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
+    /** 按回答深度返回每个主体最多保留的 Evidence 单元数（截断上限：简洁 2 / 标准 6 / 详细 12）。 */
     public int getMaximumEvidenceUnitsPerSubject() {
         return switch (depth) {
             case CONCISE -> 2;
@@ -133,6 +149,7 @@ public final class PortfolioEvidenceInvocation {
     public CorpusBackend getFallbackBackend() { return fallbackBackend; }
     public SearchStrategy getFallbackStrategy() { return fallbackStrategy; }
 
+    /** 检索切面：决定 Evidence 取材的内容侧面（背景、职责、实现、技术决策、验证、结果、局限、推荐）。 */
     public enum FacetProfile {
         BACKGROUND, RESPONSIBILITY, IMPLEMENTATION, TECHNICAL_DECISION,
         VERIFICATION, OUTCOME, LIMITATION, RECOMMENDATION

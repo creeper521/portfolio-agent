@@ -16,6 +16,14 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * 事实段落查询的 JDBC 实现：从公开 PostgreSQL 投影装配"主体-claim-APPROVED Evidence"段落行。
+ *
+ * <p>SQL 固定三条隐私/质量边界：claim 必须为 VERIFIED、Evidence 必须为 public_status
+ * ='APPROVED'、仅取 DIRECT 支撑链接；claim 的陈述/明细等投影字段任一为空即整行剔除，
+ * 保证产出的 {@link PostgresKnowledgePassageRow} 始终完整可引用。结果按传入主体顺序
+ * 与 claim 稳定标识排序，保证同输入同输出。
+ */
 public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQuery {
 
     private static final String FACT_PASSAGE_SQL = """
@@ -70,6 +78,13 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
     }
 
+    /**
+     * 查询指定发布下若干主体的全部事实段落。
+     *
+     * @param releaseId  内容发布 UUID 字符串，锁定检索快照
+     * @param subjectIds 主体稳定标识列表；为空直接返回空列表，不发起 SQL
+     * @return 按主体输入顺序与 claim 标识排序的段落列表
+     */
     @Override
     public List<PostgresKnowledgePassageRow> findPassages(
             String releaseId,
@@ -88,6 +103,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                 subjectArray);
     }
 
+    /** 逐行装配：把 claim 列与按 stable_id 聚合的 Evidence 数组列合成段落行。 */
     private List<PostgresKnowledgePassageRow> mapRows(ResultSet resultSet) throws SQLException {
         java.util.ArrayList<PostgresKnowledgePassageRow> rows = new java.util.ArrayList<>();
         while (resultSet.next()) {
@@ -112,6 +128,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
         return List.copyOf(rows);
     }
 
+    /** 把 claim 各列转换为枚举化的 AnswerClaimProjection；直证列表来自聚合的 evidence_ids。 */
     private AnswerClaimProjection claimProjection(
             ResultSet resultSet,
             List<String> evidenceIds) throws SQLException {
@@ -133,6 +150,11 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                 evidenceIds);
     }
 
+    /**
+     * 把五组同序聚合列（id/编码/标签/类型/状态）逐位组装为 Evidence 引用列表。
+     *
+     * @throws IllegalStateException 任一组长度不一致（投影列错位，数据完整性故障）时
+     */
     private List<com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.EvidenceReference> evidenceReferences(
             String claimId,
             List<String> evidenceIds,
@@ -156,6 +178,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
         return List.copyOf(references);
     }
 
+    /** 读取 SQL 数组列为字符串列表；NULL 数组返回空列表。 */
     private List<String> readStrings(Array array) throws SQLException {
         if (array == null) {
             return List.of();
@@ -169,6 +192,7 @@ public final class JdbcPostgresFactPassageQuery implements PostgresFactPassageQu
                 .toList();
     }
 
+    /** 把标识列表编为 PostgreSQL 数组字面量，转义反斜杠与双引号防止注入。 */
     private String arrayLiteral(List<String> values) {
         return values.stream()
                 .map(value -> "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")

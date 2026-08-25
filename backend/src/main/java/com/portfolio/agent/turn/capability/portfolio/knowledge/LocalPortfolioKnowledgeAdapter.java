@@ -20,6 +20,15 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * 知识网关的本地快照适配器：把审定公开快照投影为回答知识 RuntimeAnswerContent。
+ *
+ * <p>从 {@link PublicPortfolioRepository} 读取运行时内容快照，逐项目/逐案例装配
+ * {@link AnswerKnowledge}，并转换公开时间线与本地检索语料。隐私边界：Evidence
+ * 只保留 publicStatus=APPROVED 且 rawContentPublic=false 的元数据投影（不携带
+ * 原始内容）；claim 只关联 DIRECT 且审核通过的 Evidence 链接；时间线事件必须
+ * 全部引用快照内存在且归属一致的实体，否则整条丢弃（fail-closed）。
+ */
 public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway {
 
     private final PublicPortfolioRepository repository;
@@ -28,6 +37,11 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         this.repository = repository;
     }
 
+    /**
+     * 读取当前快照并装配完整的回答知识内容。
+     *
+     * @return 与快照同 contentVersion、同 runtimeBundleHash 的 RuntimeAnswerContent
+     */
     @Override
     public RuntimeAnswerContent getContent() {
         RuntimeContentSnapshot snapshot = repository.getSnapshot();
@@ -47,6 +61,14 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         );
     }
 
+    /**
+     * 把单个案例装配为 AnswerKnowledge。
+     *
+     * <p>只保留归属该案例的激活预设问题、APPROVED 且非原始公开的 Evidence 元数据，
+     * 以及案例 claim 投影；每个 claim 的直接证据取自 DIRECT+APPROVED 链接。
+     * 字段映射上：problem 作背景、summary 复用作方案概述、limitations 拼接进 handoff，
+     * 案例不带职业轨道（careerTrack 为 null）。
+     */
     private AnswerKnowledge toCaseKnowledge(
             RuntimeContentSnapshot snapshot,
             CaseStudy value
@@ -117,6 +139,13 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 claims);
     }
 
+    /**
+     * 把快照时间线投影为公开时间线事件，逐条做引用完整性校验，不满足即整条丢弃。
+     *
+     * <p>校验包括：事件只能关联项目或案例其中一类；引用的项目/案例必须都存在；
+     * 引用的 claim 必须归属事件列出的主体；引用的 Evidence 必须全部为
+     * APPROVED 且 rawContentPublic=false，并且至少被事件引用的一个主体实际持有。
+     */
     private List<AnswerTimelineEvent> toTimeline(RuntimeContentSnapshot snapshot) {
         Map<String, ProjectProfile> projectsById = snapshot.getProjects().stream()
                 .collect(Collectors.toUnmodifiableMap(
@@ -134,6 +163,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .map(EvidenceRecord::getId)
                 .collect(Collectors.toUnmodifiableSet());
         return snapshot.getTimeline().stream()
+                // 事件必须二选一：要么只关联项目、要么只关联案例，不允许混合或两者皆空
                 .filter(event -> event.getProjectIds().isEmpty()
                         != event.getCaseIds().isEmpty())
                 .filter(event -> projectsById.keySet().containsAll(event.getProjectIds()))
@@ -173,6 +203,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 .toList();
     }
 
+    /** 把快照的本地检索内容（关键词索引、向量、分块）转换为不可变的回答检索语料。 */
     private AnswerRetrievalCorpus toRetrievalCorpus(RuntimeRetrievalContent source) {
         List<AnswerKeywordIndex.DocumentEntry> keywordDocuments = source.getKeywordIndex()
                 .getDocuments().stream()
@@ -198,6 +229,13 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 source.getManifest().getDimension());
     }
 
+    /**
+     * 把单个项目装配为 AnswerKnowledge。
+     *
+     * <p>只保留归属该项目的激活预设问题、APPROVED 且非原始公开的 Evidence 元数据，
+     * 以及项目 claim 投影；每个 claim 的直接证据取自 DIRECT+APPROVED 链接，
+     * 能力编码由已验证 claim 的 topics 汇总得出。
+     */
     private AnswerKnowledge toKnowledge(RuntimeContentSnapshot snapshot, ProjectProfile value) {
         Set<String> evidenceIds = Set.copyOf(value.getEvidenceIds());
 
@@ -269,6 +307,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         );
     }
 
+    /** 汇总主体能力编码：仅取 VERIFIED claim 的 topics，归一化为大写并去重。 */
     private Set<String> capabilityCodes(List<AnswerClaimProjection> claims) {
         Set<String> capabilityCodes = new LinkedHashSet<>();
         claims.stream()
@@ -285,6 +324,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /** 判断预设问题是否属于该主体：仅当契约激活且契约主体 ID 匹配。 */
     private boolean belongsToExecutionSubject(
             QuestionDefinition question,
             String subjectId
@@ -293,6 +333,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
                 && subjectId.equals(question.getContractSubjectId());
     }
 
+    /** 把预设问题定义转换为回答层问题；契约未激活时 contractVersion 置空。 */
     private AnswerQuestion toQuestion(QuestionDefinition question) {
         return new AnswerQuestion(
                 question.getId(),
@@ -315,6 +356,7 @@ public class LocalPortfolioKnowledgeAdapter implements PortfolioKnowledgeGateway
         );
     }
 
+    /** 把 Evidence 记录投影为公开元数据；rawContentPublic 固定为 false，不暴露原始内容。 */
     private AnswerEvidence toEvidence(EvidenceRecord evidence) {
         return new AnswerEvidence(
                 evidence.getId(),

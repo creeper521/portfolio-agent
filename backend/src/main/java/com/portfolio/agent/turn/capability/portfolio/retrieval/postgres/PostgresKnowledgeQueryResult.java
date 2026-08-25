@@ -4,6 +4,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selectio
 import java.util.List;
 import java.util.Objects;
 
+/** 知识检索结果（不可变值对象）：候选选择结果与命中的公开知识段落列表。 */
 public final class PostgresKnowledgeQueryResult {
 
     private final CandidateRetrievalResult candidates;

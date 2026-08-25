@@ -4,6 +4,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 单个主体（项目或案例）的回答知识（不可变值对象）。
+ *
+ * <p>聚合主体叙事字段（背景、职责、方案、关键决策、验证、结果、交接）、状态与
+ * 职业轨道、能力编码，以及预设问题、Evidence 元数据和 claim 投影。多个便捷构造器
+ * 用于省略 stableId/careerTrack/capabilityCodes/claims 等字段的兼容场景。
+ */
 public final class AnswerKnowledge {
 
     private final AnswerSubjectType subjectType;

@@ -6,6 +6,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selectio
 import java.util.List;
 import java.util.Objects;
 
+/** 知识段落行（不可变值对象）：公开投影中一条事实段落及其关联 claim 与 Evidence 引用；引用为空即拒绝。 */
 public final class PostgresKnowledgePassageRow {
 
     private final String subjectId;

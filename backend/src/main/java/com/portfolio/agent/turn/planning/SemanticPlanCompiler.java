@@ -5,6 +5,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 语义计划编译器：把 {@link UserGoalProposal} 编译为通过校验的 {@link SemanticTurnPlan}。
+ *
+ * <p>位于 Goal → Plan 阶段。先逐目标检查公开主体覆盖与目标形状，再生成
+ * UserGoal、SemanticTask 与 TaskDependency（跨域目标展开为"通用解释 +
+ * 作品集事实 + 跨域综合"三任务 DAG），最后交 {@link SemanticPlanValidator}
+ * 校验不变量。公开主体缺失返回 CLARIFICATION_REQUIRED；形状或计划不变量
+ * 不满足返回 REJECTED，均不抛出异常。</p>
+ */
 public final class SemanticPlanCompiler {
     private final SemanticPlanValidator validator;
 
@@ -12,6 +21,7 @@ public final class SemanticPlanCompiler {
         this.validator = Objects.requireNonNull(validator, "validator");
     }
 
+    /** 编译便捷入口：未指定受众画像时按访客（GUEST）编译。 */
     public PlanCompilationResult compile(
             UserGoalProposal proposal,
             String contentReleaseId,
@@ -20,6 +30,16 @@ public final class SemanticPlanCompiler {
                 SemanticTaskParameters.AudienceProfile.GUEST);
     }
 
+    /**
+     * 把目标提案编译为语义计划。
+     *
+     * <p>目标 ID 与任务 ID 按提案顺序确定性生成（goal-N / task-goal-N）；
+     * 编译产物经 {@link SemanticPlanValidator} 校验后包装返回。</p>
+     *
+     * @param contentReleaseId 计划锁定的内容发布 ID
+     * @param audienceProfile 本轮 Turn 的受众画像
+     * @return 编译成功、需要澄清（存在非公开主体）或被拒绝（形状/不变量不满足）
+     */
     public PlanCompilationResult compile(
             UserGoalProposal proposal,
             String contentReleaseId,
@@ -68,6 +88,13 @@ public final class SemanticPlanCompiler {
         }
     }
 
+    /**
+     * 编译跨域目标（概念关联到项目）为三任务 DAG。
+     *
+     * <p>把 ApplyConceptParameters 拆成"通用概念解释"与"作品集单侧面事实"
+     * 两个前置任务，再加一个 CROSS_DOMAIN_SYNTHESIS 汇总任务；两条依赖边
+     * 指向汇总任务。</p>
+     */
     private void compileCrossDomain(
             UserGoalProposal.ProposedGoal proposed,
             String fulfillmentTaskId,
@@ -100,6 +127,12 @@ public final class SemanticPlanCompiler {
         dependencies.add(new TaskDependency(portfolioTaskId, fulfillmentTaskId));
     }
 
+    /**
+     * 判断目标的全部主体是否都在公开主体目录中。
+     *
+     * <p>RESULT 类别的主体是推荐结果项形式的间接引用，不在此校验，
+     * 由续接路径单独保证其合法性。</p>
+     */
     private boolean subjectsArePublic(
             UserGoalProposal.ProposedGoal goal,
             GoalResolutionContext context) {
@@ -113,6 +146,7 @@ public final class SemanticPlanCompiler {
         return true;
     }
 
+    /** 按目标类别校验主体数量形状：事实/关联单主体，比较 2..5，推荐与通用类无主体。 */
     private boolean shapeIsSupported(UserGoalProposal.ProposedGoal goal) {
         int subjects = goal.getSubjectCandidates().size();
         return switch (goal.getGoalKind()) {
@@ -125,6 +159,7 @@ public final class SemanticPlanCompiler {
         };
     }
 
+    /** 目标类别到任务类型的固定映射（跨域目标由 compileCrossDomain 单独展开）。 */
     private SemanticTask.Type taskType(GoalKind kind) {
         return switch (kind) {
             case PORTFOLIO_FACT -> SemanticTask.Type.PORTFOLIO_FACT;
@@ -137,6 +172,7 @@ public final class SemanticPlanCompiler {
         };
     }
 
+    /** 服务端固定的目标展示标签，不依赖模型输出。 */
     private String safeGoalLabel(GoalKind kind) {
         return switch (kind) {
             case PORTFOLIO_FACT -> "作品集事实";

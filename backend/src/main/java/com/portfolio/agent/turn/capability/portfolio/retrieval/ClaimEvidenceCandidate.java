@@ -6,7 +6,14 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjec
 
 import java.util.Objects;
 
-/** Atomic candidate: a verified claim and its complete approved evidence descriptor. */
+/**
+ * Atomic candidate: a verified claim and its complete approved evidence descriptor.
+ *
+ * <p>原子候选（不可变值对象）：一条已验证 claim 与其完整的已批准 Evidence 描述符。
+ * 构造期不变量：claim 投影完整且验证状态为 VERIFIED、Evidence 的 publicStatus 必须为
+ * APPROVED、claim 的直证列表必须包含该 Evidence（claim 与 Evidence 关联完整），
+ * 任一不满足抛出 IllegalArgumentException。toString 只输出布尔标记，不泄露内容。
+ */
 public final class ClaimEvidenceCandidate {
 
     private final String subjectId;

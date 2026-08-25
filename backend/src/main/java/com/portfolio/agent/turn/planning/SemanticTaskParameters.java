@@ -3,6 +3,9 @@ package com.portfolio.agent.turn.planning;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 语义任务参数：任务执行所需的源目标类别、类型化参数、主体引用与受众画像。
+ */
 public final class SemanticTaskParameters {
     private final GoalKind sourceGoalKind;
     private final UserGoalProposal.GoalParameters parameters;
@@ -32,5 +35,6 @@ public final class SemanticTaskParameters {
     public List<GoalSubjectReference> getSubjects() { return subjects; }
     public AudienceProfile getAudienceProfile() { return audienceProfile; }
 
+    /** 受众画像：面试官/导师/HR/访客，控制表达的语气与侧重。 */
     public enum AudienceProfile { INTERVIEWER, MENTOR, HR, GUEST }
 }

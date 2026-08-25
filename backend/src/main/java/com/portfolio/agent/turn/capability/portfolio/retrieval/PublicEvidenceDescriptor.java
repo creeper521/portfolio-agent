@@ -3,9 +3,16 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval;
 import java.time.LocalDate;
 import java.util.Objects;
 
-/** Public, non-sensitive evidence metadata crossing the capability boundary. */
+/**
+ * Public, non-sensitive evidence metadata crossing the capability boundary.
+ *
+ * <p>公开 Evidence 描述符（不可变值对象）：跨能力边界传递的非敏感 Evidence 元数据。
+ * 隐私不变量：subjectRoute 与 evidenceRoute 必须是站内相对路由（以 / 开头，禁止协议、
+ * 反斜杠、路径穿越与换行），构造期即校验；toString 只输出 sourceType，不泄露其余字段。
+ */
 public final class PublicEvidenceDescriptor {
 
+    /** 公开 Evidence 的来源类型：收藏集、文档、截图、代码、测试结果。 */
     public enum SourceType {
         COLLECTION,
         DOCUMENT,
@@ -80,6 +87,7 @@ public final class PublicEvidenceDescriptor {
         return "PublicEvidenceDescriptor{sourceType=" + sourceType + '}';
     }
 
+    /** 校验并归一化站内相对路由：拦截协议头、反斜杠、路径穿越与换行等越界形态。 */
     private static String publicRoute(String value, String name) {
         String normalized = requireText(value, name);
         if (!normalized.startsWith("/") || normalized.startsWith("//")

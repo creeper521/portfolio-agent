@@ -6,7 +6,25 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 通用能力草稿的语义校验器：在 {@link GeneralDraftCodec} 结构解码通过后，
+ * 再按请求意图校验草稿的语义正确性（主题一致、角色结构、覆盖矩阵、中文句式），
+ * 通过则升格为 {@link GeneralSemanticResult}。
+ *
+ * <p>fail-closed：任何语义偏差都以封闭的
+ * {@link GeneralDraftValidationException.Reason} 拒绝，异常文本不携带
+ * Provider 原始输出。校验规则按请求 Kind 分叉——EXPLANATION 要求
+ * "定义 + 机制"两条陈述、深度决定句数区间与 Aspect 覆盖集；COMPARISON 要求
+ * 全部陈述为对比角色、subject×dimension 配对精确覆盖且不重复、不携带 aspects。
+ */
 public final class GeneralDraftValidator {
+    /**
+     * 校验草稿并升格为语义结果：先核对主题（EXPLANATION 用 topic，
+     * COMPARISON 用 "A vs B" 拼接），再按 Kind 走对应的质量/覆盖校验，
+     * 最后校验 caveats 去重与句式。
+     *
+     * @throws GeneralDraftValidationException 任一语义规则不满足；Reason 标识具体类别
+     */
     public GeneralSemanticResult validate(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
         if (!expectedTopic(request).equals(draft.topic())) {
@@ -41,6 +59,11 @@ public final class GeneralDraftValidator {
                 request.getExpectedContentVersion());
     }
 
+    /**
+     * EXPLANATION 质量校验：按深度（CONCISE/STANDARD/DETAILED）约束每条陈述的
+     * 中文句数区间；要求首条陈述标注 DEFINITION、次条标注 MECHANISM，且全部
+     * Aspect 的并集精确等于该深度期望的覆盖集（多一分少一分都拒绝）。
+     */
     private void validateExplanationQuality(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
         int minimum = switch (request.getDepth()) {
@@ -77,6 +100,11 @@ public final class GeneralDraftValidator {
         }
     }
 
+    /**
+     * COMPARISON 覆盖校验：所有陈述必须为对比角色，subject×dimension 配对
+     * 以 "\u0000" 拼接为键去重并与请求期望集合精确比对——配对重复、缺失、
+     * 多余或数量不符均拒绝，保证对比矩阵既无空洞也无私货。
+     */
     private void validateComparisonCoverage(
             GeneralKnowledgeRequest request, List<GeneralSemanticResult.Statement> statements) {
         if (statements.stream().anyMatch(value -> value.getRole() != GeneralSemanticResult.Role.COMPARISON)) {
@@ -103,6 +131,7 @@ public final class GeneralDraftValidator {
         }
     }
 
+    /** caveats 校验：每条 1..2 句中文，正文归一化后与类别均不得重复。 */
     private void validateCaveats(List<GeneralDraftCodec.CaveatDraft> caveats) {
         Set<String> texts = new HashSet<>();
         Set<GeneralDraftCodec.CaveatKind> kinds = EnumSet.noneOf(
@@ -116,6 +145,11 @@ public final class GeneralDraftValidator {
         }
     }
 
+    /**
+     * 中文句式校验：必须以"。"结尾且不含其他句末标点（. ! ? ！ ？ ； ;），
+     * 按"。"切分后句数落在 [minimum, maximum]，且每句至少含一个汉字
+     * （防止非中文内容混入）。任一条件不满足即以对应 Reason 拒绝。
+     */
     private void validateChineseSentences(
             String text, int minimum, int maximum, String name) {
         if (!text.endsWith("。") || text.matches(".*[.!?！？；;].*")) {
@@ -131,15 +165,18 @@ public final class GeneralDraftValidator {
         }
     }
 
+    /** 统一拒绝出口：所有校验失败都转换为带封闭 Reason 的校验异常。 */
     private void reject(GeneralDraftValidationException.Reason reason, String message) {
         throw new GeneralDraftValidationException(reason, message);
     }
 
+    /** 期望主题：EXPLANATION 用请求 topic；COMPARISON 用 "A vs B" 形式拼接主题列表。 */
     private String expectedTopic(GeneralKnowledgeRequest request) {
         return request.getKind() == GeneralKnowledgeRequest.Kind.EXPLANATION
                 ? request.getTopic() : String.join(" vs ", request.getSubjects());
     }
 
+    /** 文本归一化：去首尾空白、转小写、连续空白折叠为单空格，用于重复检测。 */
     static String normalize(String value) {
         return value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }

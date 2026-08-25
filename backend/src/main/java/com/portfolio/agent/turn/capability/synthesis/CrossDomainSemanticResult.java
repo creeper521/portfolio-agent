@@ -8,6 +8,11 @@ import com.portfolio.agent.turn.execution.TaskSemanticResult;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 跨域综合能力的语义结果，不可变 {@link TaskSemanticResult}：以计划锚定的概念
+ * 为轴，汇聚一侧的通用知识陈述（来自 GENERAL 域）与另一侧的落地项目陈述
+ * （来自 PORTFOLIO 域），两侧输入都非空才有效。构造时全部校验并冻结为不可变列表。
+ */
 public final class CrossDomainSemanticResult implements TaskSemanticResult {
     private final String conceptAnchor;
     private final List<GeneralSemanticResult.Statement> generalStatements;
@@ -36,6 +41,7 @@ public final class CrossDomainSemanticResult implements TaskSemanticResult {
     public List<GroundedPortfolioStatement> getPortfolioStatements() { return portfolioStatements; }
     public List<String> getCaveats() { return caveats; }
 
+    /** 有据可依的项目陈述：主体 ID + 主张类别 + 陈述文本 + 必填的公开来源引用。 */
     public record GroundedPortfolioStatement(
             String subjectId, AnswerClaimCategory category, String text,
             PublicSourceReferenceValue sourceReference) {

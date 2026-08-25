@@ -3,6 +3,12 @@ package com.portfolio.agent.turn.planning;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 目标解释结果：语义路由提案或纯对话回复，二选一。
+ *
+ * <p>语义路由在返回前必须已通过 {@link SemanticRouteValidator} 校验；
+ * 对话文案必填且不超过 400 字符。</p>
+ */
 public final class GoalInterpretationResult {
     private final Kind kind;
     private final SemanticRouteProposal routeProposal;
@@ -42,6 +48,7 @@ public final class GoalInterpretationResult {
         return Optional.ofNullable(message);
     }
 
+    /** 结果类别：SEMANTIC_ROUTE 语义路由；CONVERSATIONAL 纯对话文案。 */
     public enum Kind {
         SEMANTIC_ROUTE,
         CONVERSATIONAL

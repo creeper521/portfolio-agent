@@ -2,6 +2,12 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selecti
 
 import java.util.Objects;
 
+/**
+ * Evidence 引用（不可变值对象）：claim 与一条公开 Evidence 的关联描述。
+ *
+ * <p>便捷构造器默认 publicStatus=APPROVED、类型 DOCUMENT；运行时仅允许
+ * {@link #isApproved()} 为 true 的引用进入公开回答（隐私边界）。
+ */
 public final class EvidenceReference {
 
     private final String claimId;

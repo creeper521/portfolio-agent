@@ -9,7 +9,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-/** Strict decoder for untrusted provider output. Unknown or shape-mismatched fields fail closed. */
+/**
+ * Strict decoder for untrusted provider output. Unknown or shape-mismatched fields fail closed.
+ *
+ * <p>通用能力草稿的严格解码器：把不可信的 Provider 原始输出解析为结构化 {@link Draft}。
+ * fail-closed 语义——出现未知字段、形状不符、长度超限（文本 ≤4000、caveat 文本 ≤1000）、
+ * 数量超限（statements 1..20、caveats ≤10、aspects ≤10 且不重复）、尾随 token 等任何
+ * 偏差都抛 {@link IllegalArgumentException}，绝不静默容忍或猜测修复。
+ */
 public final class GeneralDraftCodec {
     public static final String SCHEMA_VERSION = "general.draft.v2";
     private static final Set<String> ROOT_FIELDS = Set.of("topic", "statements", "caveats");
@@ -23,6 +30,13 @@ public final class GeneralDraftCodec {
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     }
 
+    /**
+     * 解码 Provider 原始输出为 {@link Draft}：逐层校验字段白名单、必填/可选文本、
+     * 枚举与数量约束，任一违规立即失败。
+     *
+     * @param raw Provider 返回的原始 JSON 文本
+     * @throws IllegalArgumentException 任何结构、白名单、长度或数量校验不通过
+     */
     public Draft decode(String raw) {
         try {
             JsonNode root = objectMapper.readTree(raw);
@@ -64,6 +78,7 @@ public final class GeneralDraftCodec {
         }
     }
 
+    /** 要求 JSON 节点为对象且字段名全部在白名单内；出现未知字段即拒绝（fail-closed）。 */
     private void requireObject(JsonNode node, Set<String> allowed, String name) {
         if (node == null || !node.isObject()) throw new IllegalArgumentException(name + " must be an object");
         Iterator<String> names = node.fieldNames();
@@ -78,6 +93,7 @@ public final class GeneralDraftCodec {
         return value;
     }
 
+    /** 可选文本：缺失或 null 返回 null；存在则必须非空白且 ≤4000 字符，否则拒绝。 */
     private String optionalText(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) return null;
@@ -87,6 +103,7 @@ public final class GeneralDraftCodec {
         return value.textValue().trim();
     }
 
+    /** 枚举集合：必须为数组、≤10 项、值均为合法枚举且不重复（重复视为无效输入）。 */
     private <E extends Enum<E>> Set<E> enumSet(
             JsonNode node, String field, Class<E> type) {
         JsonNode values = node.get(field);
@@ -102,6 +119,7 @@ public final class GeneralDraftCodec {
         return Set.copyOf(decoded);
     }
 
+    /** 解码成功的完整草稿：主题 + 陈述列表 + 限定说明列表，列表不可变。 */
     public record Draft(
             String topic, List<StatementDraft> statements, List<CaveatDraft> caveats) {
         public Draft {
@@ -109,13 +127,17 @@ public final class GeneralDraftCodec {
             caveats = List.copyOf(caveats);
         }
     }
+    /** 单条知识陈述草稿：角色、正文、可选主题/维度标注与覆盖侧面集合。 */
     public record StatementDraft(
             GeneralSemanticResult.Role role, String text, String subject, String dimension,
             Set<Aspect> aspects) { }
+    /** 单条限定说明草稿：限定类别与正文（长度已在解码时约束 ≤1000）。 */
     public record CaveatDraft(CaveatKind kind, String text) { }
+    /** 陈述覆盖的知识侧面：定义、机制、典型用法、适用边界、权衡、常见误解、边界条件。 */
     public enum Aspect {
         DEFINITION, MECHANISM, TYPICAL_USAGE, APPLICABILITY_BOUNDARY,
         TRADE_OFF, COMMON_MISCONCEPTION, BOUNDARY_CONDITION
     }
+    /** 限定说明类别：适用边界、风险、例外情形。 */
     public enum CaveatKind { APPLICABILITY_BOUNDARY, RISK, EXCEPTION }
 }

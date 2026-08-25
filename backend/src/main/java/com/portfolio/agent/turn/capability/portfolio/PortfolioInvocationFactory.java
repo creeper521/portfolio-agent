@@ -9,6 +9,13 @@ import com.portfolio.agent.turn.planning.UserGoalProposal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 从 SemanticTask 装配 {@link PortfolioEvidenceInvocation} 的工厂。
+ *
+ * <p>只接受 PORTFOLIO 域且未超过截止时间的任务；按 Goal 参数类型（事实/对比/推荐）
+ * 推导主体范围与检索切面或维度，再按受众画像重排切面优先级，并固定
+ * “PostgreSQL 主检索失败时降级到 BUNDLE 快照”的 fallback 组合。
+ */
 public final class PortfolioInvocationFactory {
     private final CorpusBackend primaryBackend;
 
@@ -16,6 +23,18 @@ public final class PortfolioInvocationFactory {
         this.primaryBackend = java.util.Objects.requireNonNull(primaryBackend, "primaryBackend");
     }
 
+    /**
+     * 将 PORTFOLIO 域的 SemanticTask 转换为一次 Evidence 检索调用。
+     *
+     * <p>事实参数按深度把用户切面展开为检索切面并限定到显式主体；对比参数转为
+     * 排序后的维度列表；推荐参数在无显式主体时放宽为全部已发布主体并带上推荐
+     * 切面。检索策略随范围推导：EXACT 用精确策略，ALL_PUBLISHED 用混合策略。
+     *
+     * @param context 当前任务的执行上下文（含任务、截止时间与内容发布 ID）
+     * @return 通过全部不变量校验的调用对象
+     * @throws IllegalArgumentException 任务不属于 PORTFOLIO 域、截止时间已过期
+     *         或 Goal 参数类型不受支持时抛出
+     */
     public PortfolioEvidenceInvocation create(TaskExecutionContext context) {
         SemanticTask task = context.getTask();
         if (task.getSourceDomain() != SemanticTask.SourceDomain.PORTFOLIO) {
@@ -53,6 +72,7 @@ public final class PortfolioInvocationFactory {
         }
         SearchStrategy strategy = scope.getMode() == AuthorizedSubjectScope.Mode.EXACT
                 ? SearchStrategy.EXACT : SearchStrategy.HYBRID;
+        // PostgreSQL 为主时固定降级到 BUNDLE 快照；混合策略降级时退化为纯关键词检索
         CorpusBackend fallbackBackend = primaryBackend == CorpusBackend.POSTGRESQL
                 ? CorpusBackend.BUNDLE : null;
         SearchStrategy fallbackStrategy = primaryBackend == CorpusBackend.POSTGRESQL
@@ -67,6 +87,12 @@ public final class PortfolioInvocationFactory {
                 fallbackBackend, fallbackStrategy);
     }
 
+    /**
+     * 按受众画像重排切面顺序，让最符合该受众关注点的切面排在前面。
+     *
+     * <p>面试官优先看实现与技术决策，导师优先看技术决策与局限，HR 优先看职责与结果；
+     * 访客不重排，切面少于 2 个时重排无意义，直接原样返回。
+     */
     private List<PortfolioEvidenceInvocation.FacetProfile> prioritize(
             List<PortfolioEvidenceInvocation.FacetProfile> facets,
             com.portfolio.agent.turn.planning.SemanticTaskParameters.AudienceProfile audience) {
@@ -105,6 +131,7 @@ public final class PortfolioInvocationFactory {
                 .toList();
     }
 
+    /** Goal 层用户切面到检索切面的映射：OVERVIEW 按深度展开，SOLUTION 拆为实现+技术决策，STATUS 拆为结果+局限。 */
     private List<PortfolioEvidenceInvocation.FacetProfile> facets(
             UserGoalProposal.Facet facet, UserGoalProposal.Depth depth) {
         return switch (facet) {
@@ -121,6 +148,7 @@ public final class PortfolioInvocationFactory {
         };
     }
 
+    /** OVERVIEW 切面按深度展开：越深入覆盖越多侧面（简洁仅背景+结果，详细再补技术决策与局限）。 */
     private List<PortfolioEvidenceInvocation.FacetProfile> overview(
             UserGoalProposal.Depth depth) {
         return switch (depth) {

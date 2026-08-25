@@ -3,6 +3,12 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 公开时间线事件（不可变值对象）。
+ *
+ * <p>按“问题—行动—影响”结构描述一个节点，并引用关联的项目/案例 slug、
+ * claim 与 Evidence ID；引用完整性由知识适配器在装配时校验，不合格的事件不会出现。
+ */
 public final class AnswerTimelineEvent {
 
     private final String id;

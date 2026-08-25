@@ -3,6 +3,13 @@ package com.portfolio.agent.turn.capability.portfolio.knowledge;
 import java.time.LocalDate;
 import java.util.Objects;
 
+/**
+ * 公开 Evidence 在回答层的元数据投影（不可变值对象）。
+ *
+ * <p>只携带编码、标题、类型、时间区间、来源数、摘要与 publicStatus 等公开元数据，
+ * 不包含 Evidence 原始内容；rawContentPublic 标记原始内容是否公开，
+ * 本地快照适配器固定投影为 false。
+ */
 public final class AnswerEvidence {
 
     private final String id;

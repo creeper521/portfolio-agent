@@ -4,7 +4,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Public subject metadata plus its atomic claim/evidence candidates. */
+/**
+ * Public subject metadata plus its atomic claim/evidence candidates.
+ *
+ * <p>检索候选主体（不可变值对象）：一个公开主体的元数据与其原子 claim/Evidence 候选。
+ * 不变量：每个候选的 subjectId 必须等于本主体标识、候选 Evidence 的 contentVersion
+ * 必须与本主体一致（禁止跨版本混合），违反即抛出 IllegalArgumentException。
+ * toString 刻意只输出计数，不泄露主体内容。
+ */
 public final class CandidateSubject {
 
     private final String subjectId;

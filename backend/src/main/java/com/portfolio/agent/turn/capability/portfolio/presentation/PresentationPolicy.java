@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio.presentation;
 
+/** 呈现预算策略（不可变值对象）：限制公开回答的段落数与字符数，防止超出发布契约的输出体量。 */
 public final class PresentationPolicy {
     private final int maximumSections;
     private final int maximumCharacters;

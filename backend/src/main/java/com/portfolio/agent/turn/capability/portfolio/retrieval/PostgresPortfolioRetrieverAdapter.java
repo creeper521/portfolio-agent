@@ -17,7 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** PostgreSQL 查询结果到最终候选模型的唯一适配器。 */
+/**
+ * PostgreSQL 查询结果到最终候选模型的唯一适配器。
+ *
+ * <p>关键不变量：执行前后检查 TurnDeadline（超时归类 CANCELLED）、候选发布版本必须与
+ * invocation 的 contentReleaseId 一致（否则 INTEGRITY_FAILURE），仅保留带 APPROVED
+ * Evidence 引用且有知识段落的主体；异常经 {@link PostgresRetrievalFailureClassifier}
+ * 分类后以失败结果返回，不向上抛出。
+ */
 public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetrieverPort {
 
     private final PostgresKnowledgeQuery knowledgeQuery;
@@ -26,6 +33,15 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
         this.knowledgeQuery = Objects.requireNonNull(knowledgeQuery, "knowledgeQuery");
     }
 
+    /**
+     * 执行一次 PostgreSQL 检索并装配候选集。
+     *
+     * @param invocation 当前 Evidence 调用（含获准范围与单主体证据上限）
+     * @param request    检索请求
+     * @param deadline   Turn 截止时间；进入前或查询后已过期均返回 CANCELLED 失败
+     * @return 成功携带候选集；发布版本不一致返回 INTEGRITY_FAILURE，
+     *         其余异常按分类器归入对应失败
+     */
     @Override
     public RetrievalAttemptResult retrieve(
             PortfolioEvidenceInvocation invocation,
@@ -53,6 +69,7 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
         }
     }
 
+    /** 装配候选集：只保留存在 APPROVED 引用且命中知识段落的主体，再按主体转换。 */
     private PortfolioCandidateSet candidateSet(
             PortfolioEvidenceInvocation invocation,
             PostgresKnowledgeQueryResult result) {
@@ -76,6 +93,10 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
                 subjects);
     }
 
+    /**
+     * 把单个主体的段落×引用展开为原子候选：跳过未批准或 claimId+evidenceId 重复的组合，
+     * 并在达到单主体证据上限后停止；Evidence 路由使用公开查询端点，有效期设为长期上限。
+     */
     private CandidateSubject toSubject(
             String contentVersion,
             SelectionCandidate subject,

@@ -15,8 +15,18 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * 候选选择查询的 JDBC 实现：面向公开 PostgreSQL 投影的三条只读 SQL
+ * （活跃发布、全文检索、向量检索、精确标识查询）。
+ *
+ * <p>隐私/质量边界（全部 SQL 共用）：Evidence 必须 public_status='APPROVED'、
+ * claim 必须 verification_status='VERIFIED'，且所有查询都锁定单一 release_id，
+ * 禁止跨快照混合。检索词以参数化 tsquery 下发，数组/向量字面量在拼装前统一转义，
+ * 防止注入。结果排序确定性：评分降序 + display_order + 稳定标识。
+ */
 public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery {
 
+    /** 查询唯一单例 active_release 指向且状态为 VERIFIED/PUBLISHED 的内容发布。 */
     private static final String ACTIVE_RELEASE_SQL = """
             SELECT CAST(r.release_id AS text), r.release_version
             FROM active_release a
@@ -25,6 +35,12 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
               AND r.status IN ('VERIFIED', 'PUBLISHED')
             """;
 
+    /**
+     * 全文检索 SQL：eligible CTE 先按职业赛道/能力码过滤并要求存在已验证 claim + APPROVED
+     * Evidence（无证据的主体不可入选），ranked CTE 取 ts_rank_cd 最大值排序，
+     * 外层按主体聚合能力码并展开 claim×evidence 明细行。案例在归属项目缺职业赛道时，
+     * 若自身能力码命中请求则按"中立案例"放行。
+     */
     private static final String FTS_SQL = """
             WITH eligible AS (
                 SELECT ps.release_id,
@@ -139,6 +155,11 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             ORDER BY r.rank_score DESC, r.display_order, ps.stable_id, c.stable_id, e.stable_id
             """;
 
+    /**
+     * 向量检索 SQL：eligible 过滤与全文版完全一致，ranked CTE 按 retrieval_document
+     * 的 pgvector 余弦距离（&lt;=&gt;）取每个主体的最小距离排序；无 embedding 的主体被
+     * INNER JOIN 自然排除。外层明细展开与全文版相同。
+     */
     private static final String VECTOR_SQL = """
             WITH eligible AS (
                 SELECT ps.release_id,
@@ -243,6 +264,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             ORDER BY r.distance, r.display_order, ps.stable_id, c.stable_id, e.stable_id
             """;
 
+    /** 精确标识查询 SQL：按传入主体列表直接取行（仅 DIRECT 支撑链接），保持输入顺序。 */
     private static final String EXACT_IDS_SQL = """
             SELECT ps.stable_id,
                    ps.subject_kind,
@@ -296,6 +318,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /** 查询当前生效的公开内容发布；无结果或多行时由 Spring 抛出数据访问异常。 */
     @Override
     public ActiveRelease activeRelease() {
         return jdbcTemplate.queryForObject(
@@ -305,6 +328,15 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                         resultSet.getString(2)));
     }
 
+    /**
+     * 全文检索候选主体。参数按占位符出现顺序绑定：releaseId、careerTrack（两处）、
+     * 能力码数组字面量（四处）、检索词、limit、releaseId（外层）。
+     *
+     * @param releaseId 内容发布 UUID 字符串
+     * @param target    选择目标（职业赛道/能力码/目标文本转为 tsquery）
+     * @param limit     主体数上限
+     * @return 按文本相关性排序的主体行（含 claim×evidence 明细）
+     */
     @Override
     public List<PostgresSelectionRow> searchFts(
             String releaseId,
@@ -327,6 +359,12 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 releaseId);
     }
 
+    /**
+     * 向量相似度检索候选主体；参数绑定顺序与 {@link #searchFts} 一致，
+     * 仅在 limit 前多一个向量字面量。
+     *
+     * @param embedding 查询向量
+     */
     @Override
     public List<PostgresSelectionRow> searchVector(
             String releaseId,
@@ -349,6 +387,10 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 releaseId);
     }
 
+    /**
+     * 按主体标识精确查询；subjectIds 为空直接返回空列表，不发起 SQL。
+     * 结果按输入主体顺序排列。
+     */
     @Override
     public List<PostgresSelectionRow> findByIds(
             String releaseId,
@@ -371,6 +413,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 subjectArray);
     }
 
+    /** 行装配：SQL 按主体×claim×evidence 展开多行，这里按主体合并并把 Evidence 引用累积去重。 */
     private List<PostgresSelectionRow> mapRows(ResultSet resultSet) throws SQLException {
         Map<String, MutableRow> rows = new LinkedHashMap<>();
         while (resultSet.next()) {
@@ -396,6 +439,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
         return rows.values().stream().map(MutableRow::toRow).toList();
     }
 
+    /** 读取 SQL 数组列为能力码集合；NULL 数组返回空集合。 */
     private Set<String> readCapabilities(Array array) throws SQLException {
         if (array == null) {
             return Set.of();
@@ -410,6 +454,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** 构造全文检索的 tsquery：目标文本与能力码（下划线转空格）提取词元后以 OR 连接。 */
     private String queryText(SelectionTarget target) {
         java.util.LinkedHashSet<String> terms = new java.util.LinkedHashSet<>();
         addSearchTerms(terms, target.getGoal());
@@ -419,6 +464,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
         return String.join(" | ", terms);
     }
 
+    /** 提取小写字母/数字词元加入词集；文本为 null 时忽略。 */
     private void addSearchTerms(Set<String> terms, String text) {
         if (text == null) {
             return;
@@ -431,6 +477,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
         }
     }
 
+    /** 能力码集合编为排序后的 PostgreSQL 数组字面量并转义；空集合返回 null 表示不过滤。 */
     private String capabilityArrayLiteral(SelectionTarget target) {
         if (target.getCapabilityCodes().isEmpty()) {
             return null;
@@ -441,6 +488,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 .collect(Collectors.joining(",", "{", "}"));
     }
 
+    /** 把查询向量编为 pgvector 字面量 [v1,v2,...]。 */
     private String vectorLiteral(float[] embedding) {
         StringBuilder builder = new StringBuilder("[");
         for (int index = 0; index < embedding.length; index++) {
@@ -452,12 +500,14 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
         return builder.append(']').toString();
     }
 
+    /** 标识列表编为 PostgreSQL 数组字面量，转义反斜杠与双引号防止注入。 */
     private String arrayLiteral(List<String> values) {
         return values.stream()
                 .map(value -> "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
                 .collect(Collectors.joining(",", "{", "}"));
     }
 
+    /** 行装配中间载体：主体元数据加按 claimId+evidenceId 去重的引用表，toRow 时固定质量分 1.0。 */
     private static final class MutableRow {
 
         private final String subjectId;

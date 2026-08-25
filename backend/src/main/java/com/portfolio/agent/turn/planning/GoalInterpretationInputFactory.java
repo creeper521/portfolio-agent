@@ -4,6 +4,9 @@ import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 import java.util.List;
 
+/**
+ * 目标解释输入工厂：从 Ask 命令与解析上下文组装 {@link GoalInterpretationInput}。
+ */
 public final class GoalInterpretationInputFactory {
 
     public GoalInterpretationInput create(
@@ -12,6 +15,16 @@ public final class GoalInterpretationInputFactory {
         return create(command, context, null);
     }
 
+    /**
+     * 组装标准模式的解释输入。
+     *
+     * <p>会话窗口消息折叠为 "ROLE:text" 摘要；主体提示解析为默认主体；
+     * 受众角色映射为 AudienceProfile，缺省 GUEST；仅允许 STANDARD_GOAL 与
+     * NEEDS_CLARIFICATION 两条路由。</p>
+     *
+     * @param recentSemanticState 会话最近语义状态，可为 null
+     * @throws IllegalArgumentException 命令输入不是自由文本
+     */
     public GoalInterpretationInput create(
             AgentTurnCommand.Ask command,
             GoalResolutionContext context,

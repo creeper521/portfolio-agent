@@ -9,6 +9,16 @@ import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
 import java.util.Objects;
 
+/**
+ * 用户目标解析器：把原始 Turn 输入解释为结构化的 {@link ResolvedGoalSet}。
+ *
+ * <p>位于 Command → Goal 阶段。自由文本依次经过 {@link SafeConversationalFastPath}
+ * （无语义社交快捷路径）与 {@link GoalInterpretationPort}（模型或 fail-closed
+ * 模板路径），语义路由再经 {@link SemanticRouteValidator} 校验与
+ * {@link GoalBoundaryPolicy} 边界裁决；预设提问则直接由 {@link ReviewedGoalSource}
+ * 从已审核快照解析。任何解释失败都收敛为 CAPABILITY_UNAVAILABLE 固定文案，
+ * 绝不让未解析的目标进入 Plan 阶段。</p>
+ */
 public final class GoalResolver {
     private final GoalInterpretationPort interpretationPort;
     private final ReviewedGoalSource reviewedGoalSource;
@@ -18,6 +28,7 @@ public final class GoalResolver {
     private final GoalBoundaryPolicy boundaryPolicy;
     private final ModelOutputDiagnostics outputDiagnostics;
 
+    /** 便捷构造器：未提供模型输出诊断时的默认无诊断实例。 */
     public GoalResolver(
             GoalInterpretationPort interpretationPort,
             ReviewedGoalSource reviewedGoalSource,
@@ -81,6 +92,17 @@ public final class GoalResolver {
         return resolve(command, context, deadline, modelExecution, null);
     }
 
+    /**
+     * 解析本轮命令为结构化目标集合。
+     *
+     * <p>先校验 Surface Context 的主体提示是否指向公开主体，不匹配直接返回
+     * INVALID_INPUT；Ask+FreeText 走自由文本解析，其余命令交给已审核目标源。
+     * 任何不可恢复的解释失败都收敛为 CAPABILITY_UNAVAILABLE，不向调用方抛出。</p>
+     *
+     * @param modelExecution Claim 后冻结的模型执行快照；语义结果被采纳时
+     *                      标记 GOAL_INTERPRETATION 阶段
+     * @param recentSemanticState 会话最近一次成功 Turn 的语义状态，可为 null
+     */
     public ResolvedGoalSet resolve(
             AgentTurnCommand command,
             GoalResolutionContext context,
@@ -110,6 +132,12 @@ public final class GoalResolver {
         }
     }
 
+    /**
+     * 解析自由文本 Ask：社交快捷路径 → 类型化解释 → 语义路由分派。
+     *
+     * <p>解释不可用或语义校验失败时按剩余预算返回 CAPABILITY_UNAVAILABLE：
+     * 超时与一般失败使用不同固定文案，均不暴露内部细节。</p>
+     */
     private ResolvedGoalSet resolveFreeText(
             AgentTurnCommand.Ask command,
             GoalResolutionContext context,
@@ -144,6 +172,16 @@ public final class GoalResolver {
         }
     }
 
+    /**
+     * 执行类型化目标解释并校验语义路由。
+     *
+     * <p>CONVERSATIONAL 结果直接采纳；SEMANTIC_ROUTE 结果先经
+     * {@link SemanticRouteValidator} 做绑定与封闭校验。成功后在该
+     * {@code modelExecution} 上标记 GOAL_INTERPRETATION 阶段被采纳。</p>
+     *
+     * @throws SelectedModelFailureException 模型执行产出的路由未通过语义校验
+     * @throws IllegalArgumentException 非模型路径产出的路由未通过语义校验
+     */
     public GoalInterpretationResult interpretTyped(
             GoalInterpretationInput input,
             TurnDeadline deadline,
@@ -182,6 +220,14 @@ public final class GoalResolver {
         return interpretTyped(input, deadline, ResolvedModelExecution.none());
     }
 
+    /**
+     * 把语义路由提案分派为最终目标集合。
+     *
+     * <p>STANDARD_GOAL 再过一次 {@link GoalBoundaryPolicy} 边界裁决；
+     * NEEDS_CLARIFICATION 产出澄清终态；讨论类路由（进入推荐结果、继续/
+     * 切换/重入项目、开新话题）在标准解析路径缺少 typed 项目上下文，
+     * 统一收敛为能力不可用。</p>
+     */
     private ResolvedGoalSet resolveRoute(SemanticRouteProposal proposal) {
         return switch (proposal.getRoute()) {
             case STANDARD_GOAL -> boundaryPolicy.apply(

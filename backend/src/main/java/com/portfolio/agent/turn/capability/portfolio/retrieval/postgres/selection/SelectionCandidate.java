@@ -4,6 +4,12 @@ import java.util.Objects;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 入选候选（不可变值对象）：通过选择评分后的主体及其评分分量。
+ *
+ * <p>不变量：targetFit 与 evidenceQuality 限制在 [0,1]，conflictPenalty 非负；
+ * 便捷构造器按主体类型推导默认路由（PROJECT→/projects/、CASE→/cases/）。
+ */
 public final class SelectionCandidate {
 
     private final String subjectId;

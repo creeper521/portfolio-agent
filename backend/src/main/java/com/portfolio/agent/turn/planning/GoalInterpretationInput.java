@@ -6,6 +6,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 目标解释输入：交给解释端口（模型或 fail-closed 模板路径）的封闭输入载体。
+ *
+ * <p>包含访客文本、最近会话消息摘要、公开主体目录、允许的目标类别与路由，
+ * 以及讨论模式、锁定主体、路由候选和最近语义状态等会话延续信号。构造时
+ * 校验各集合的封闭性与模式一致性，保证解释端口看到的输入永远在公开范围内。</p>
+ */
 public final class GoalInterpretationInput {
 
     private final String userText;
@@ -171,6 +178,12 @@ public final class GoalInterpretationInput {
     public ConversationSemanticState getRecentSemanticState() {
         return recentSemanticState;
     }
+    /**
+     * 从最近语义状态推断唯一的可续接作品集主体。
+     *
+     * <p>仅当最近状态中恰好存在一个"作品集续接安全"的目标时，返回该目标
+     * 对应的公开主体描述符；否则返回 null（供无显式引用时的兜底绑定）。</p>
+     */
     public PublicSubjectDescriptor recentPortfolioSubject() {
         if (recentSemanticState == null) return null;
         List<ConversationSemanticState.GoalSummary> safeGoals = recentSemanticState.goals().stream()
@@ -179,6 +192,12 @@ public final class GoalInterpretationInput {
         if (safeGoals.size() != 1) return null;
         return recentPortfolioSubject(safeGoals.getFirst().goalId(), null);
     }
+    /**
+     * 按 goalId（可选 sectionId）在最近语义状态中查找可续接的作品集主体。
+     *
+     * <p>目标必须作品集续接安全且恰好关联一个主体；指定 sectionId 时还必须
+     * 存在该小节。查得的结果再与公开主体目录比对，不在目录内返回 null。</p>
+     */
     public PublicSubjectDescriptor recentPortfolioSubject(
             String goalId, String sectionId) {
         if (recentSemanticState == null) return null;
@@ -197,6 +216,12 @@ public final class GoalInterpretationInput {
                         && subject.getReference().equals(recent.reference()))
                 .findFirst().orElse(null);
     }
+    /**
+     * 把最近语义状态中的小节映射为作品集查询侧面。
+     *
+     * <p>用于校验 recentReference 指定的小节与请求侧面一致；无最近状态、
+     * 未指定小节、小节不存在或其类型不对应任何侧面时返回 null。</p>
+     */
     public UserGoalProposal.Facet recentSectionFacet(
             String goalId, String sectionId) {
         if (recentSemanticState == null || sectionId == null) return null;
@@ -217,6 +242,11 @@ public final class GoalInterpretationInput {
                 })
                 .orElse(null);
     }
+    /**
+     * 校验推荐约束全部落在公开目录内。
+     *
+     * @throws IllegalArgumentException 存在目录之外的约束
+     */
     public void requireAllowedRecommendationConstraints(Set<String> values) {
         if (!allowedRecommendationConstraints.containsAll(values)) {
             throw new IllegalArgumentException(
@@ -224,6 +254,7 @@ public final class GoalInterpretationInput {
         }
     }
 
+    /** 判断指定类别与引用的公开主体是否在目录内。 */
     public boolean containsPublicSubject(
             GoalSubjectReference.Kind kind, String reference) {
         return publicSubjects.stream().anyMatch(subject ->
@@ -231,6 +262,12 @@ public final class GoalInterpretationInput {
                         && subject.getReference().equals(reference));
     }
 
+    /**
+     * 公开主体描述符：公开目录中的一个项目或案例条目。
+     *
+     * <p>reviewedAliases 为已审核别名集合（默认含 reference 与 label），
+     * 供主体提示匹配与澄清文本匹配使用。</p>
+     */
     public static final class PublicSubjectDescriptor {
         private final GoalSubjectReference.Kind kind;
         private final String reference;
@@ -258,12 +295,14 @@ public final class GoalInterpretationInput {
         public String getReference() { return reference; }
         public String getLabel() { return label; }
         public Set<String> getReviewedAliases() { return reviewedAliases; }
+        /** 精确匹配已审核别名（大小写敏感）；值为 null 时恒不匹配。 */
         public boolean matchesAlias(String value) {
             return value != null
                     && reviewedAliases.stream().anyMatch(value::equals);
         }
     }
 
+    /** 路由候选：讨论模式下模型可选择的公开主体候选，candidateKey 形如 C1..C5。 */
     public static final class RouteCandidate {
         private final String candidateKey;
         private final GoalSubjectReference.Kind kind;
@@ -295,9 +334,12 @@ public final class GoalInterpretationInput {
         public Set<String> getReviewedAliases() { return reviewedAliases; }
     }
 
+    /** 解释模式：标准模式或项目讨论模式（须与 DiscussionState 匹配）。 */
     public enum InterpretationMode { STANDARD, DISCUSSION }
+    /** 讨论状态：无讨论、活跃讨论、已过期讨论。 */
     public enum DiscussionState { NONE, ACTIVE, EXPIRED }
 
+    /** 校验文本必填且不超过上限。 */
     private static String requireText(
             String value, String name, int maximum) {
         if (value == null || value.isBlank() || value.length() > maximum) {

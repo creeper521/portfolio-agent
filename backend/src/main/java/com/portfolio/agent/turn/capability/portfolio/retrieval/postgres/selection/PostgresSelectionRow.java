@@ -4,6 +4,12 @@ import java.util.Objects;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 候选选择行（不可变值对象）：公开投影中一个主体的可检索元数据。
+ *
+ * <p>便捷构造器按主体类型推导公开路由前缀（PROJECT→/projects/、CASE→/cases/），
+ * 供缺少显式元数据的降级/测试路径使用。
+ */
 public final class PostgresSelectionRow {
 
     private final String subjectId;

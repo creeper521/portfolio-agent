@@ -2,7 +2,15 @@ package com.portfolio.agent.turn.execution;
 
 import java.util.Objects;
 
-/** Stable public citation data carried across the Portfolio presentation boundary. */
+/**
+ * Stable public citation data carried across the Portfolio presentation boundary.
+ *
+ * <p>跨 Portfolio 展示边界携带的稳定公开引用数据，不可变：一个公开来源的
+ * 引用键、展示标签、发布版本与两条公开相对路由（主题页 / 证据页）。
+ * 关键不变量：路由必须是站内相对路径——以 "/" 开头、禁止协议前缀（"//"、":"）、
+ * 反斜杠、".." 与换行，构造时即校验并拒绝，防止任何外部或私有地址进入公开引用。
+ * {@code equals} 比较全部字段，{@code hashCode} 只基于身份性字段（不含 label 与版本）。
+ */
 public final class PublicSourceReferenceValue {
     private final String referenceKey;
     private final String label;

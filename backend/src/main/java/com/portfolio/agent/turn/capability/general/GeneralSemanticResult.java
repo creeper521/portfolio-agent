@@ -5,6 +5,11 @@ import com.portfolio.agent.turn.execution.TaskSemanticResult;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 通用能力的语义结果，不可变 {@link TaskSemanticResult}：通过
+ * {@link GeneralDraftValidator} 校验后的最终产出——主题、陈述列表、caveat 列表
+ * 与绑定的内容版本。这是可跨依赖边传递的类型化数据，不是渲染文本。
+ */
 public final class GeneralSemanticResult implements TaskSemanticResult {
     private final String topic;
     private final List<Statement> statements;
@@ -27,6 +32,10 @@ public final class GeneralSemanticResult implements TaskSemanticResult {
     public List<String> getCaveats() { return caveats; }
     public String getContentVersion() { return contentVersion; }
 
+    /**
+     * 单条陈述，不可变：角色 + 正文，COMPARISON 角色还必须携带 subject 与
+     * dimension，非对比角色则禁止携带这两个字段（构造时互斥校验）。
+     */
     public static final class Statement {
         private final Role role;
         private final String text;
@@ -52,6 +61,7 @@ public final class GeneralSemanticResult implements TaskSemanticResult {
         public String getDimension() { return dimension; }
     }
 
+    /** 陈述角色：DEFINITION 定义、MECHANISM 机制、COMPARISON 对比单元格。 */
     public enum Role { DEFINITION, MECHANISM, COMPARISON }
 
     private static String requireText(String value, String name) {

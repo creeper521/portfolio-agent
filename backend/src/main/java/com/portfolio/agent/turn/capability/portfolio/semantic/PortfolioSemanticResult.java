@@ -9,6 +9,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 作品集语义结果（密封类层次）：Evidence 能力产出的已验证支撑集合，供呈现层组装公开回答。
+ *
+ * <p>公共不变量：units 非空（语义结论必须有支撑）；coverage 为 FULL 时不得携带 omissions。
+ * 三个子类分别对应事实陈述、多维对比与推荐三种回答形态；所有 Evidence 单元均已通过
+ * 晋级校验（仅 APPROVED 且在有效期内），并绑定获准的 AuthorizedSubjectScope。
+ */
 public abstract sealed class PortfolioSemanticResult implements TaskSemanticResult
         permits PortfolioSemanticResult.Fact,
         PortfolioSemanticResult.Comparison,
@@ -35,8 +42,10 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
     public AuthorizedSubjectScope getAuthorizedSubjectScope() { return authorizedSubjectScope; }
     public List<ValidatedEvidenceUnit> getUnits() { return units; }
     public List<String> getOmissions() { return omissions; }
+    /** 覆盖度：FULL 为所有目标都有支撑，PARTIAL 表示存在已声明的遗漏。 */
     public enum Coverage { FULL, PARTIAL }
 
+    /** 事实型语义结果：围绕一个主体的验证事实，depth 表示回答详略层级。 */
     public static final class Fact extends PortfolioSemanticResult {
         private final UserGoalProposal.Depth depth;
         public Fact(Coverage coverage, AuthorizedSubjectScope authorizedSubjectScope,
@@ -52,6 +61,7 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
         }
         public UserGoalProposal.Depth getDepth() { return depth; }
     }
+    /** 对比型语义结果：按维度对多个主体的验证内容对比；dimensions 不可为空。 */
     public static final class Comparison extends PortfolioSemanticResult {
         private final List<UserGoalProposal.PortfolioComparisonDimension> dimensions;
         public Comparison(Coverage coverage, AuthorizedSubjectScope authorizedSubjectScope,
@@ -72,6 +82,7 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
             return dimensions;
         }
     }
+    /** 推荐型语义结果：不超过 requestedSize 的去重主体推荐及理由；FULL 时不得有未满足约束。 */
     public static final class Recommendation extends PortfolioSemanticResult {
         private final int requestedSize;
         private final List<String> selectedSubjectIds;
@@ -113,6 +124,7 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
         public List<RecommendationItem> getItems() { return items; }
         public List<String> getUnsatisfiedConstraints() { return unsatisfiedConstraints; }
 
+        /** 推荐条目（record）：入选主体与至少一个推荐理由码。 */
         public record RecommendationItem(
                 String subjectId, List<RecommendationReasonCode> reasonCodes) {
             public RecommendationItem {
@@ -124,6 +136,7 @@ public abstract sealed class PortfolioSemanticResult implements TaskSemanticResu
             }
         }
 
+        /** 推荐理由码：匹配类（职业赛道/能力）与验证类（实现/验证/结果/公开证据）。 */
         public enum RecommendationReasonCode {
             CAREER_TRACK_MATCH,
             CAPABILITY_MATCH,

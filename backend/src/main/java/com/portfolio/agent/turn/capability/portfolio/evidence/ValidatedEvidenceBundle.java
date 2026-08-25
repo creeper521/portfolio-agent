@@ -5,6 +5,12 @@ import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 晋级通过的已验证 Evidence 捆绑包（不可变值对象）。
+ *
+ * <p>由 {@link EvidencePromotionValidator} 整批产出，包含获准主体范围、内容发布 ID
+ * 与去重后的 Evidence 单元列表；构造期要求发布 ID 与主体范围一致。
+ */
 public final class ValidatedEvidenceBundle {
     private final AuthorizedSubjectScope scope;
     private final String contentReleaseId;

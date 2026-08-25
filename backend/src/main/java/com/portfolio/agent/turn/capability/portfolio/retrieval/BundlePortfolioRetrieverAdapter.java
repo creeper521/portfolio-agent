@@ -26,7 +26,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 从随包公开内容直接生成最终候选模型，不经过旧 Answer 检索协议。 */
+/**
+ * 从随包公开内容直接生成最终候选模型，不经过旧 Answer 检索协议。
+ *
+ * <p>随包（BUNDLE）检索路径：以 {@link PortfolioKnowledgeGateway} 的公开快照为唯一数据源，
+ * 快照版本与 invocation 的 contentReleaseId 不一致即 INTEGRITY_FAILURE；无检索语料时
+ * 返回空候选集（合法结果）。检索词由固定受控中文词表与约束拼装，访问者原文不参与。
+ * 关键词打分为 BM25 变体，向量打分为余弦相似度，两者经 RRF 融合；
+ * 仅 VERIFIED claim + APPROVED 且不公开原始内容的 Evidence 可进入候选。
+ */
 public final class BundlePortfolioRetrieverAdapter implements PortfolioRetrieverPort {
 
     private final PortfolioKnowledgeGateway knowledgeGateway;
@@ -42,6 +50,15 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         this.hybridEnabled = hybridEnabled;
     }
 
+    /**
+     * 执行一次随包检索：校验快照版本与截止时间后装配候选集。
+     *
+     * @param invocation 当前 Evidence 调用
+     * @param request    检索请求（策略：EXACT/KEYWORD/HYBRID）
+     * @param deadline   Turn 截止时间；进入前或装配后过期返回 CANCELLED
+     * @return 成功携带候选集；版本不一致返回 INTEGRITY_FAILURE，
+     *         装配中的非法参数/状态异常也归为 INTEGRITY_FAILURE
+     */
     @Override
     public RetrievalAttemptResult retrieve(
             PortfolioEvidenceInvocation invocation,
@@ -73,6 +90,10 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         }
     }
 
+    /**
+     * 装配候选集：先按检索命中的最优 chunk 排名对主体排序，再逐主体展开候选，
+     * 超出截止时间即停止；仅收录获准范围内且产出非空候选的主体。
+     */
     private PortfolioCandidateSet candidateSet(
             PortfolioEvidenceInvocation invocation,
             SearchStrategy strategy,
@@ -113,6 +134,11 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 content.getContentVersion(), invocation.getSubjectScope(), subjects);
     }
 
+    /**
+     * 展开单主体的原子候选：claim 需 VERIFIED、类别命中且出现在可检索 chunk 中，
+     * Evidence 需 APPROVED 且非公开原始内容；claimId+evidenceId 去重，
+     * 达到单主体上限即停止。
+     */
     private List<ClaimEvidenceCandidate> candidates(
             String contentVersion,
             AnswerKnowledge subject,
@@ -159,6 +185,11 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         return List.copyOf(candidates);
     }
 
+    /**
+     * 计算 chunk 排名：EXACT 按标识稳定排序；KEYWORD 仅关键词打分；
+     * HYBRID 融合关键词与向量排名（向量不可用时退化为关键词）。
+     * 参与排名的 chunk 必须属于获准主体、文本非空且关联至少一条合格 claim。
+     */
     private List<String> rankedChunkIds(
             PortfolioEvidenceInvocation invocation,
             SearchStrategy strategy,
@@ -196,6 +227,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         return appendUnranked(fuse(keyword, vector), eligibleChunks);
     }
 
+    /** 关键词打分：BM25 变体（k1=1.2、b=0.75、词频饱和上限 2.2），仅累加词表命中的贡献。 */
     private List<String> keywordRanking(
             AnswerRetrievalCorpus corpus,
             Set<String> eligibleChunks,
@@ -216,6 +248,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 double inverseDocumentFrequency = Math.log(
                         1.0d + (index.getDocumentCount() - documentFrequency + 0.5d)
                                 / (documentFrequency + 0.5d));
+                // 长度归一：相对平均长度的文档按 b=0.75 部分饱和，避免长文档天然占优
                 double lengthRatio = index.getAverageDocumentLength() == 0.0d
                         ? 0.0d
                         : document.getDocumentLength() / index.getAverageDocumentLength();
@@ -229,6 +262,10 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         return sorted(scores);
     }
 
+    /**
+     * 向量打分：查询向量与 chunk 向量的余弦相似度（未归一化内积），按分值排序。
+     * 维度不一致或嵌入失败返回空列表，由调用方退化为关键词排名。
+     */
     private List<String> vectorRanking(
             AnswerRetrievalCorpus corpus,
             Set<String> eligibleChunks,
@@ -256,6 +293,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         }
     }
 
+    /** RRF 融合关键词与向量排名，总分降序、chunkId 稳定排序。 */
     private List<String> fuse(List<String> keyword, List<String> vector) {
         Map<String, Double> scores = new LinkedHashMap<>();
         addRanks(scores, keyword);
@@ -267,18 +305,21 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 .toList();
     }
 
+    /** 按排名累加 RRF 贡献 1/(61+排名)，常数 61 对应 K=60 的 1 起始排名。 */
     private void addRanks(Map<String, Double> scores, List<String> values) {
         for (int index = 0; index < values.size(); index++) {
             scores.merge(values.get(index), 1.0d / (61.0d + index), Double::sum);
         }
     }
 
+    /** 把未参与打分的合格 chunk 按标识稳定顺序追加到已排名列表之后，保证不遗漏。 */
     private List<String> appendUnranked(List<String> ranked, Set<String> eligible) {
         LinkedHashSet<String> all = new LinkedHashSet<>(ranked);
         eligible.stream().sorted().forEach(all::add);
         return List.copyOf(all);
     }
 
+    /** 分值降序、chunkId 稳定排序后取标识序列。 */
     private List<String> sorted(List<ChunkScore> scores) {
         return scores.stream()
                 .sorted(java.util.Comparator.comparingDouble(ChunkScore::score).reversed()
@@ -287,6 +328,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 .toList();
     }
 
+    /** 主体排名 = 其名下 chunk 的最佳（最小）排名；无命中 chunk 时排最后。 */
     private int subjectRank(
             AnswerKnowledge subject,
             AnswerRetrievalCorpus corpus,
@@ -299,6 +341,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 .orElse(Integer.MAX_VALUE);
     }
 
+    /** 构造检索词：facet 映射到固定中文受控词表，再并入维度与约束小写形式；不含访问者原文。 */
     private List<String> queryTerms(PortfolioEvidenceInvocation invocation) {
         LinkedHashSet<String> terms = new LinkedHashSet<>();
         invocation.getFacets().forEach(facet -> terms.addAll(switch (facet) {
@@ -320,9 +363,11 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
         return List.copyOf(terms);
     }
 
+    /** 打分中间载体（record）：chunk 标识与其累计分值。 */
     private record ChunkScore(String chunkId, double score) {
     }
 
+    /** Evidence 投影为公开描述符：路由指向公开查询端点，有效期设为长期上限。 */
     private PublicEvidenceDescriptor descriptor(
             String contentVersion, String subjectRoute, AnswerEvidence evidence) {
         return new PublicEvidenceDescriptor(
@@ -333,6 +378,7 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 LocalDate.of(9999, 12, 31));
     }
 
+    /** 主体是否在获准范围内：ALL_PUBLISHED 放行全部，EXACT 按稳定标识匹配。 */
     private boolean authorized(AuthorizedSubjectScope scope, AnswerKnowledge subject) {
         if (scope.getMode() == AuthorizedSubjectScope.Mode.ALL_PUBLISHED) {
             return true;
@@ -341,21 +387,25 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 reference.getReference().equals(subject.getStableId()));
     }
 
+    /** chunk 是否归属该主体：按主体类型匹配案例 slug 或项目 slug。 */
     private boolean belongsToSubject(AnswerRetrievalChunk chunk, AnswerKnowledge subject) {
         return subject.getSubjectType() == AnswerSubjectType.CASE
                 ? chunk.getCaseSlugs().contains(subject.getSlug())
                 : chunk.getProjectSlugs().contains(subject.getSlug());
     }
 
+    /** 主体的公开路由：案例 /cases/、项目 /projects/ 加 slug。 */
     private String route(AnswerKnowledge subject) {
         return (subject.getSubjectType() == AnswerSubjectType.CASE
                 ? "/cases/" : "/projects/") + subject.getSlug();
     }
 
+    /** 只允许 APPROVED 且不公开原始内容的 Evidence 进入候选（隐私边界）。 */
     private boolean isApprovedPublicEvidence(AnswerEvidence evidence) {
         return "APPROVED".equals(evidence.getPublicStatus()) && !evidence.isRawContentPublic();
     }
 
+    /** 把调用的 facet 与对比维度映射为 claim 类别集合；未知维度抛出异常（fail-closed）。 */
     private List<AnswerClaimCategory> categories(PortfolioEvidenceInvocation invocation) {
         LinkedHashSet<AnswerClaimCategory> categories = new LinkedHashSet<>();
         invocation.getFacets().forEach(facet -> categories.addAll(switch (facet) {
