@@ -136,11 +136,12 @@ test('model unavailable terminal offers reask with another model', async ({ page
   expect(staleBody.kind).toBe('CAPABILITY_UNAVAILABLE')
   expect(staleBody.code).toBe('MODEL_SELECTION_STALE')
 
-  // 双动作卡（§2.6）：标题、说明与两条语义区分说明齐备。
+  // 双动作卡（§2.6/D-MS-7）：标题、说明与两条语义区分说明齐备；
+  // settled 终局的两个动作都是新请求，不提供同 requestId 重放入口。
   await expect(page.getByTestId('model-failure-title')).toBeVisible()
   await expect(page.getByTestId('model-failure-title'))
     .toContainText('暂时无法完成这次回答')
-  await expect(page.getByTestId('model-retry-same-request')).toContainText('重试本次请求')
+  await expect(page.getByTestId('model-retry-same-model')).toContainText('重新提问')
   await expect(page.getByTestId('model-switch-reask')).toContainText('重新提问')
 
   // 换模型重问：新 requestId + 目录默认模型选择，通知携带新请求标识（§4）。

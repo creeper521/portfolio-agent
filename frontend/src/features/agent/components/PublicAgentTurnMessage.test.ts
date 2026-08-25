@@ -34,20 +34,24 @@ describe('PublicAgentTurnMessage', () => {
     }
   })
 
-  it('五个模型不可用终局之一且提供 modelRecovery 时渲染双动作并上抛两个事件（UI spec §2.6）', async () => {
+  it('五个模型不可用终局之一且提供 modelRecovery 时渲染双动作并上抛两个事件（UI spec §2.6/D-MS-7）', async () => {
     const wrapper = mount(PublicAgentTurnMessage, {
       props: {
         turn: parseGoldenFixture('selected-model-temporarily-unavailable.json'),
-        modelRecovery: { failedModelName: 'Qwen3.7-Flash', otherModelName: 'GLM-4.7-Flash' },
+        modelRecovery: {
+          failedModelName: 'Qwen3.7-Flash',
+          sameModelRetryable: true,
+          otherModelName: 'GLM-4.7-Flash',
+        },
       },
       global: { stubs: { RouterLink: ROUTER_LINK_STUB } },
     })
     expect(wrapper.get('[data-testid="model-failure-title"]').text())
       .toBe('Qwen3.7-Flash 暂时无法完成这次回答')
-    expect(wrapper.text()).toContain('重试本次请求 = 同一请求标识重放，可能直接找回已完成的结果')
+    expect(wrapper.text()).toContain('同一模型重新提问 = 发送一条新请求（新标识）；失败请求的结果不会被复用')
     expect(wrapper.text()).toContain('换模型重新提问 = 发送一条新请求（新标识），由另一模型重新生成回答')
-    await wrapper.get('[data-testid="model-retry-same-request"]').trigger('click')
-    expect(wrapper.emitted('retry-same-request')?.[0]).toEqual([
+    await wrapper.get('[data-testid="model-retry-same-model"]').trigger('click')
+    expect(wrapper.emitted('retry-same-model')?.[0]).toEqual([
       '10000000-0000-4000-8000-00000000000b',
     ])
     await wrapper.get('[data-testid="model-switch-reask"]').trigger('click')
@@ -57,9 +61,26 @@ describe('PublicAgentTurnMessage', () => {
     wrapper.unmount()
   })
 
+  it('同模型重问不可用（模型已不在目录）时不渲染主动作，仅保留换模型入口', () => {
+    const wrapper = mount(PublicAgentTurnMessage, {
+      props: {
+        turn: parseGoldenFixture('selected-model-unavailable.json'),
+        modelRecovery: {
+          failedModelName: 'Qwen3.7-Flash',
+          sameModelRetryable: false,
+          otherModelName: 'GLM-4.7-Flash',
+        },
+      },
+      global: { stubs: { RouterLink: ROUTER_LINK_STUB } },
+    })
+    expect(wrapper.find('[data-testid="model-retry-same-model"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="model-switch-reask"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('非模型终局不出现换模型入口（capability-unavailable 默认单动作路径不变）', () => {
     const wrapper = mountTurn('capability-unavailable.json')
-    expect(wrapper.find('[data-testid="model-retry-same-request"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="model-retry-same-model"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="model-switch-reask"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="turn-message"]').exists()).toBe(true)
     wrapper.unmount()

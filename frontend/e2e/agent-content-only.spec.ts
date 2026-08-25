@@ -13,6 +13,8 @@ test('DISABLED 部署仍可浏览公开内容，但不显示 Agent 提交入口'
   const direct = await request.post('/api/agent/turns', {
     data: {
       requestId: crypto.randomUUID(),
+      // DISABLED 部署目录为空：显式 NONE 是唯一闭合选择（A7）；503 状态失败语义不变。
+      modelSelection: { kind: 'NONE' },
       command: { kind: 'ASK', input: { kind: 'FREE_TEXT', text: '你好' } },
       conversationWindow: [],
     },

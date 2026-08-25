@@ -34,8 +34,11 @@ test('final API supports preset, replay, Bearer continuation and clear', async (
   expect(preset).toBeTruthy()
 
   const requestId = crypto.randomUUID()
+  // 直连合同冒烟走确定性 PRESET 路径：显式 NONE（A7 冻结合同），
+  // 不依赖 Provider；走真实前端的用例已覆盖目录默认选择的行为。
   const firstPayload = {
     requestId,
+    modelSelection: { kind: 'NONE' },
     command: {
       kind: 'ASK',
       input: { kind: 'PRESET', presetId: preset.id, presetRevision: preset.contractVersion },
@@ -62,6 +65,7 @@ test('final API supports preset, replay, Bearer continuation and clear', async (
     headers: { Authorization: `Bearer ${token}` },
     data: {
       requestId: crypto.randomUUID(),
+      modelSelection: { kind: 'NONE' },
       command: {
         kind: 'ASK',
         input: {

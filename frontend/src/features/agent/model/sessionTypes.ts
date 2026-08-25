@@ -26,7 +26,7 @@ export interface AgentMessage {
 export interface AgentThreadNotice {
   id: string
   createdAt: number
-  kind: 'MODEL_SWITCHED' | 'MODEL_REASK' | 'MODEL_STALE_FALLBACK'
+  kind: 'MODEL_SWITCHED' | 'MODEL_REASK' | 'MODEL_RETRY' | 'MODEL_STALE_FALLBACK'
   title: string
   detail?: string
 }

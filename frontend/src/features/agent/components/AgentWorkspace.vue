@@ -784,18 +784,29 @@ function modelTagOf(turn: PublicAgentTurn): string | null {
 /** 模型不可用终局的双动作上下文（§2.6）：按消息 turn 判定，仅最新失败上下文提供。 */
 function modelRecoveryOf(
   turn: PublicAgentTurn,
-): { failedModelName: string; otherModelName?: string } | undefined {
+): {
+  failedModelName: string
+  sameModelRetryable: boolean
+  otherModelName?: string
+} | undefined {
   if (!isModelUnavailableTerminal(turn)) return undefined
   const context = modelFailureContexts.value.get(turn.requestId)
   if (context === undefined) return undefined
-  const failedName = context.failedModelRef === null
+  const failedRef = context.failedModelRef
+    ?? (context.submission.modelSelection.kind === 'MODEL'
+      ? context.submission.modelSelection.modelRef
+      : null)
+  const failedName = failedRef === null
     ? displayNameOfSelection(modelCatalog.value, context.submission.modelSelection)
     : modelCatalog.value.selectableModels.find(
-        (model) => model.modelRef === context.failedModelRef,
-      )?.displayName ?? context.failedModelRef
-  const other = otherSelectableModelOf(context.failedModelRef)
+        (model) => model.modelRef === failedRef,
+      )?.displayName ?? failedRef
+  const other = otherSelectableModelOf(failedRef)
   return {
     failedModelName: failedName ?? '所选模型',
+    // 同模型重问的前提：该 modelRef 仍在当前目录（可取最新 selectionVersion）。
+    sameModelRetryable: failedRef !== null
+      && modelCatalog.value.selectableModels.some((model) => model.modelRef === failedRef),
     ...(other === undefined ? {} : { otherModelName: other.name }),
   }
 }
@@ -814,18 +825,46 @@ function handleModelSelected(selection: ModelSelection): void {
   })
 }
 
-/** 双动作一（§2.6）：同 requestId 重试，原样复用提交快照（含原 ModelSelection）。 */
+/** 双动作一（§2.6/D-MS-7）：用同一模型重新提问——新 requestId、新快照，
+ * 携带当前目录中该 modelRef 的最新 selectionVersion（stale 后版本前进）；
+ * 绝不复用旧快照（settled 终局的同 requestId 只会回放原失败）。 */
 function retryModelTurn(requestId: string): void {
   const context = modelFailureContexts.value.get(requestId)
   if (context === undefined || tabPendingFull.value) return
-  if (pendingTurns.value.has(context.sessionId)) return
-  failures.value = mapDelete(failures.value, context.sessionId)
-  void runTurn(
-    context.sessionId,
-    context.submission.requestId,
-    context.submission.command,
-    { submission: context.submission },
+  const sessionId = context.sessionId
+  const failedRef = context.failedModelRef
+    ?? (context.submission.modelSelection.kind === 'MODEL'
+      ? context.submission.modelSelection.modelRef
+      : null)
+  if (failedRef === null) return
+  const entry = modelCatalog.value.selectableModels.find(
+    (model) => model.modelRef === failedRef,
   )
+  if (entry === undefined) return
+  const session = sessions.sessions.value.find((item) => item.id === sessionId)
+  if (session === undefined || pendingTurns.value.has(sessionId)) return
+  const selection: ModelSelection = {
+    kind: 'MODEL',
+    modelRef: entry.modelRef,
+    selectionVersion: entry.selectionVersion,
+  }
+  const newId = newRequestId()
+  sessions.appendSessionNotice(sessionId, {
+    kind: 'MODEL_RETRY',
+    title: `已用 ${entry.displayName} 重新发起这次提问`,
+    detail: `新请求标识 ${newId.slice(0, 8)} · 不复用原请求的任何结果`,
+  })
+  failures.value = mapDelete(failures.value, sessionId)
+  const window = conversationWindowOf(session)
+  const messageId = sessions.appendMessage(sessionId, {
+    role: 'USER',
+    content: userContentOfCommand(context.submission.command),
+  })
+  void runTurn(sessionId, newId, context.submission.command, {
+    modelSelection: selection,
+    conversationWindow: window,
+    ...(messageId === null ? {} : { userMessageId: messageId }),
+  })
 }
 
 /**
@@ -849,12 +888,15 @@ function reaskWithModel(requestId: string): void {
     detail: `新请求标识 ${newId.slice(0, 8)} · 不复用原请求的任何结果`,
   })
   failures.value = mapDelete(failures.value, sessionId)
+  // conversationWindow 只携带本轮之前的会话历史；本轮输入在 command 内。
+  const window = conversationWindowOf(session)
   const messageId = sessions.appendMessage(sessionId, {
     role: 'USER',
     content: userContentOfCommand(submission.command),
   })
   void runTurn(sessionId, newId, submission.command, {
     modelSelection: other.selection,
+    conversationWindow: window,
     ...(messageId === null ? {} : { userMessageId: messageId }),
   })
 }
@@ -1424,7 +1466,7 @@ onBeforeUnmount(() => {
         @select-action="handleSelectAction"
         @submit-clarification="handleClarification"
         @ask="handleFallbackAsk"
-        @retry-same-request="retryModelTurn"
+        @retry-same-model="retryModelTurn"
         @switch-model-reask="reaskWithModel"
       />
       <!-- 最近一次失败投影：可重试失败提供"重试"（幂等复用原 requestId） -->

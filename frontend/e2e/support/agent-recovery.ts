@@ -157,6 +157,29 @@ export async function firstPublicPreset(request: APIRequestContext): Promise<Pub
   return preset
 }
 
+export type E2eModelSelection =
+  | { readonly kind: 'NONE' }
+  | { readonly kind: 'MODEL'; readonly modelRef: string; readonly selectionVersion: string }
+
+/**
+ * 目录默认模型选择（A7 冻结合同）：自由文本语义路径的直连 POST 必须显式携带，
+ * 与生产前端行为一致；投影缺失/损坏时回退显式 NONE，不猜测默认。
+ */
+export async function defaultModelSelection(request: APIRequestContext): Promise<E2eModelSelection> {
+  const contentResponse = await request.get('/api/portfolio')
+  expect(contentResponse.ok()).toBeTruthy()
+  const content = await contentResponse.json() as {
+    agentAvailability?: {
+      defaultModelSelection?: { kind?: string; modelRef?: string; selectionVersion?: string }
+    }
+  }
+  const selection = content.agentAvailability?.defaultModelSelection
+  if (selection?.kind === 'MODEL' && selection.modelRef !== undefined && selection.selectionVersion !== undefined) {
+    return { kind: 'MODEL', modelRef: selection.modelRef, selectionVersion: selection.selectionVersion }
+  }
+  return { kind: 'NONE' }
+}
+
 export async function postPresetTurn(
   request: APIRequestContext,
   preset: PublicPreset,
@@ -166,6 +189,9 @@ export async function postPresetTurn(
     ...(authorization === undefined ? {} : { headers: { Authorization: `Bearer ${authorization}` } }),
     data: {
       requestId: crypto.randomUUID(),
+      // 确定性 PRESET 探针显式 NONE（A7）：限流探测不依赖 Provider，
+      // 保持探针耗时与结果稳定。
+      modelSelection: { kind: 'NONE' },
       command: {
         kind: 'ASK',
         input: { kind: 'PRESET', presetId: preset.id, presetRevision: preset.contractVersion },

@@ -143,7 +143,7 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     wrapper.unmount()
   })
 
-  it('模型不可用终局出现双动作；重试复用同 requestId 与原快照（含原选择）（§2.6/§5.1）', async () => {
+  it('模型不可用终局出现双动作；同模型重问产生新 requestId 与当前目录版本（§2.6/D-MS-7）', async () => {
     apiMocks.submitAgentTurn
       .mockResolvedValueOnce(
         submitOk(
@@ -165,18 +165,24 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     expect(first.modelSelection).toEqual(QWEN_SELECTION)
     expect(wrapper.get('[data-testid="model-failure-title"]').text())
       .toBe('Qwen3.7-Flash 暂时无法完成这次回答')
-    expect(wrapper.text()).toContain('本轮请求已安全结束。你可以用同一请求重试，或换一个模型重新提问。')
-    expect(wrapper.get('[data-testid="model-retry-same-request"]').text()).toBe('重试本次请求')
+    expect(wrapper.text()).toContain('本轮请求已安全结束。你可以用同一模型重新提问，或换一个模型重新提问。')
+    expect(wrapper.get('[data-testid="model-retry-same-model"]').text())
+      .toBe('用 Qwen3.7-Flash 重新提问')
     expect(wrapper.get('[data-testid="model-switch-reask"]').text())
       .toBe('换 GLM-4.7-Flash 重新提问')
 
-    await wrapper.get('[data-testid="model-retry-same-request"]').trigger('click')
+    // settled 终局的同 requestId 只会回放原失败：主动作必须是新请求（D-MS-7）。
+    await wrapper.get('[data-testid="model-retry-same-model"]').trigger('click')
     await flushPromises()
     const retry = lastSubmitInput()
-    expect(retry.requestId).toBe(first.requestId)
-    expect(retry.modelSelection).toEqual(first.modelSelection)
+    expect(retry.requestId).not.toBe(first.requestId)
+    expect(retry.modelSelection).toEqual(QWEN_SELECTION)
     expect(retry.command).toEqual(first.command)
-    expect(retry.conversationWindow).toEqual(first.conversationWindow)
+    const retryNotice = wrapper.get('[data-notice-kind="MODEL_RETRY"]')
+    expect(retryNotice.text()).toContain('已用 Qwen3.7-Flash 重新发起这次提问')
+    expect(retryNotice.text())
+      .toContain(`新请求标识 ${retry.requestId.slice(0, 8)} · 不复用原请求的任何结果`)
+    expect(wrapper.findAll('[data-message-role="USER"]')).toHaveLength(2)
     wrapper.unmount()
   })
 
@@ -210,6 +216,39 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     expect(notice.text()).toContain(`新请求标识 ${reask.requestId.slice(0, 8)} · 不复用原请求的任何结果`)
     // 新请求是全新 USER 轮次：同问题再次落账。
     expect(wrapper.findAll('[data-message-role="USER"]')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('stale 终局的同模型重问携带刷新后的 selectionVersion（§2.6/D-MS-7 动作一）', async () => {
+    apiMocks.submitAgentTurn
+      .mockResolvedValueOnce(
+        submitOk(
+          goldenTurn('model-selection-stale.json'),
+          { conversationId: 'c1', resumeToken: 't1' },
+        ),
+      )
+      .mockResolvedValueOnce(
+        submitOk(goldenTurn('answer-complete.json'), { conversationId: 'c1' }),
+      )
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    // stale fixture 的投影是 glm + 过期 v0；目录当前版本是 v1。
+    await submitFreeText(wrapper, '介绍 SQL 审计项目')
+    const failed = lastSubmitInput()
+    expect(failed.modelSelection).toEqual(GLM_SELECTION)
+    expect(wrapper.get('[data-testid="model-retry-same-model"]').text())
+      .toBe('用 GLM-4.7-Flash 重新提问')
+
+    await wrapper.get('[data-testid="model-retry-same-model"]').trigger('click')
+    await flushPromises()
+    const retried = lastSubmitInput()
+    expect(retried.requestId).not.toBe(failed.requestId)
+    expect(retried.modelSelection).toEqual({
+      kind: 'MODEL',
+      modelRef: 'glm-4-7-flash',
+      selectionVersion: 'glm-4-7-flash-v1',
+    })
     wrapper.unmount()
   })
 

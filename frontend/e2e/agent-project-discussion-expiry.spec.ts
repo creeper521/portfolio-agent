@@ -39,6 +39,8 @@ test('short discussion TTL exposes EXPIRED actions while model-disabled determin
   const first = await request.post(TURNS, {
     data: {
       requestId: crypto.randomUUID(),
+      // 确定性 PRESET 与 REENTER 直连路径显式 NONE（A7），不依赖 Provider。
+      modelSelection: { kind: 'NONE' },
       command: {
         kind: 'ASK',
         input: {
@@ -65,6 +67,7 @@ test('short discussion TTL exposes EXPIRED actions while model-disabled determin
     },
     data: {
       requestId: crypto.randomUUID(),
+      modelSelection: { kind: 'NONE' },
       command: {
         kind: 'CONTINUE',
         operation: 'REENTER_SUBJECT',

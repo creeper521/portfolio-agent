@@ -10,22 +10,24 @@ import SuggestedActionRow from './SuggestedActionRow.vue'
 // REPLAY_BODY_NOT_RETAINED 特殊分支：Provider 正文按隐私设计未持久化的
 // 固定终局，属于正常回放形态而非能力故障；指引固定为"重新提问"，
 // 禁止套用故障眉题或"调整提问方式"等措辞（A2-32）。
-// 模型不可用双动作分支（UI spec §2.6/D-MS-5）：仅 A7 五个 settled 模型终局
-// 出现「同 requestId 重试」与「换模型重新提问」并列双动作，语义严格区分；
-// 其余失败类别沿用单动作文案，不出现换模型入口。
+// 模型不可用双动作分支（UI spec §2.6/D-MS-5/D-MS-7）：仅 A7 五个 settled 模型终局
+// 出现「同模型重新提问」与「换模型重新提问」并列双动作；两个动作都是新 requestId
+// 新快照（settled 终局的同 requestId 只会回放原失败——设计 §16.2/docs/15 A2-86），
+// 区别只在模型；其余失败类别沿用单动作文案，不出现换模型入口。
 
 const props = defineProps<{
   turn: CapabilityUnavailableTurn
-  /** 五个模型不可用终局时由 Workspace 提供：失败模型名与可选的另一模型名。 */
+  /** 五个模型不可用终局时由 Workspace 提供：失败模型名、同模型重问可用性与可选的另一模型名。 */
   modelRecovery?: {
     failedModelName: string
+    sameModelRetryable: boolean
     otherModelName?: string
   }
 }>()
 
 const emit = defineEmits<{
   'select-action': [action: SuggestedAction]
-  'retry-same-request': [requestId: string]
+  'retry-same-model': [requestId: string]
   'switch-model-reask': [requestId: string]
 }>()
 
@@ -46,16 +48,21 @@ const modelUnavailable = computed(() => props.modelRecovery !== undefined)
         {{ modelRecovery.failedModelName }} 暂时无法完成这次回答
       </p>
       <p class="capability-unavailable-turn__model-note">
-        本轮请求已安全结束。你可以用同一请求重试，或换一个模型重新提问。
+        本轮请求已安全结束。你可以用同一模型重新提问，或换一个模型重新提问。
       </p>
       <p class="capability-unavailable-turn__code" data-testid="turn-code">{{ turn.code }}</p>
+      <p
+        v-if="turn.retryAfterSeconds !== undefined"
+        class="capability-unavailable-turn__model-note"
+      >约 {{ turn.retryAfterSeconds }} 秒后可重新提交</p>
       <div class="capability-unavailable-turn__actions">
         <button
+          v-if="modelRecovery.sameModelRetryable"
           type="button"
           class="capability-unavailable-turn__retry-primary"
-          data-testid="model-retry-same-request"
-          @click="emit('retry-same-request', turn.requestId)"
-        >重试本次请求</button>
+          data-testid="model-retry-same-model"
+          @click="emit('retry-same-model', turn.requestId)"
+        >用 {{ modelRecovery.failedModelName }} 重新提问</button>
         <button
           v-if="modelRecovery.otherModelName !== undefined"
           type="button"
@@ -64,7 +71,7 @@ const modelUnavailable = computed(() => props.modelRecovery !== undefined)
           @click="emit('switch-model-reask', turn.requestId)"
         >换 {{ modelRecovery.otherModelName }} 重新提问</button>
         <span class="capability-unavailable-turn__action-hints">
-          重试本次请求 = 同一请求标识重放，可能直接找回已完成的结果<br />
+          同一模型重新提问 = 发送一条新请求（新标识）；失败请求的结果不会被复用<br />
           换模型重新提问 = 发送一条新请求（新标识），由另一模型重新生成回答
         </span>
       </div>

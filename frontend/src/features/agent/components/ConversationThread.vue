@@ -31,8 +31,10 @@ const props = defineProps<{
   notices?: readonly AgentThreadNotice[]
   /** 回答模型标识（UI spec §2.5）：由会话层按 modelExecution 投影提供，前端不推断。 */
   modelTagOf?: (turn: PublicAgentTurn) => string | null
-  /** 五个模型不可用终局的双动作上下文（UI spec §2.6），按消息判定提供。 */
-  modelRecoveryOf?: (turn: PublicAgentTurn) => { failedModelName: string; otherModelName?: string } | undefined
+  /** 五个模型不可用终局的双动作上下文（UI spec §2.6/D-MS-7），按消息判定提供。 */
+  modelRecoveryOf?: (turn: PublicAgentTurn) =>
+    | { failedModelName: string; sameModelRetryable: boolean; otherModelName?: string }
+    | undefined
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +42,7 @@ const emit = defineEmits<{
   'select-action': [action: SuggestedAction]
   'submit-clarification': [payload: ClarificationSubmissionPayload]
   ask: [entry: ClarificationFallbackPreset]
-  'retry-same-request': [requestId: string]
+  'retry-same-model': [requestId: string]
   'switch-model-reask': [requestId: string]
 }>()
 
@@ -231,7 +233,7 @@ function clarificationStateOf(message: AgentMessage): ClarificationCardState | u
                 @select-action="emit('select-action', $event)"
                 @submit-clarification="emit('submit-clarification', $event)"
                 @ask="emit('ask', $event)"
-                @retry-same-request="emit('retry-same-request', $event)"
+                @retry-same-model="emit('retry-same-model', $event)"
                 @switch-model-reask="emit('switch-model-reask', $event)"
               />
             </template>

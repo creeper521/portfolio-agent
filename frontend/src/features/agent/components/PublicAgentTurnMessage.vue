@@ -24,15 +24,15 @@ defineProps<{
   interactionDisabled?: boolean
   clarificationState?: ClarificationCardState
   fallbackPresets?: readonly ClarificationFallbackPreset[]
-  /** 五个模型不可用终局的双动作上下文（UI spec §2.6），由会话层判定提供。 */
-  modelRecovery?: { failedModelName: string; otherModelName?: string }
+  /** 五个模型不可用终局的双动作上下文（UI spec §2.6/D-MS-7），由会话层判定提供。 */
+  modelRecovery?: { failedModelName: string; sameModelRetryable: boolean; otherModelName?: string }
 }>()
 
 const emit = defineEmits<{
   'select-action': [action: SuggestedAction]
   'submit-clarification': [payload: ClarificationSubmissionPayload]
   ask: [entry: ClarificationFallbackPreset]
-  'retry-same-request': [requestId: string]
+  'retry-same-model': [requestId: string]
   'switch-model-reask': [requestId: string]
 }>()
 </script>
@@ -72,7 +72,7 @@ const emit = defineEmits<{
       :turn="turn"
       :model-recovery="modelRecovery"
       @select-action="emit('select-action', $event)"
-      @retry-same-request="emit('retry-same-request', $event)"
+      @retry-same-model="emit('retry-same-model', $event)"
       @switch-model-reask="emit('switch-model-reask', $event)"
     />
   </article>
