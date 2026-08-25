@@ -42,7 +42,6 @@ export default defineConfig({
     baseURL,
     trace: projectDiscussionLane || projectDiscussionExpiryLane ? 'off' : 'retain-on-failure',
   },
-  testIgnore: ['**/behavior/**/*.test.ts', '**/behavior/**/*.spec.ts'],
   projects: modelSelectionLane
     ? [
       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

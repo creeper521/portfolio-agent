@@ -41,6 +41,12 @@ foreach ($relativePath in $javaTests) {
 }
 Assert-True ($playwright -match [regex]::Escape('agent-final-contract\.spec\.ts')) `
     'Playwright default lane must discover the final contract spec.'
+Assert-True ($playwright -notmatch '\*\*/behavior/\*\*') `
+    'Playwright config must not keep the retired behavior testIgnore.'
+Assert-True (-not (Test-Path -LiteralPath (Join-Path $root 'frontend\vitest.behavior.config.ts') -PathType Leaf)) `
+    'Retired behavior vitest config must stay deleted.'
+Assert-True (-not (Test-Path -LiteralPath (Join-Path $root 'frontend\e2e\behavior'))) `
+    'Retired empty behavior spec directory must stay deleted.'
 
 $runnerCommand = Get-Command $runnerPath
 Assert-True ($runnerCommand.Parameters['ContextMode'].Attributes.ValidValues -contains `

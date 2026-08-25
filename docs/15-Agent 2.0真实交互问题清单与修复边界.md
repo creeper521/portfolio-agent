@@ -184,8 +184,6 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 每个 Turn 已冻结一个显式 ModelSelection；任一失败均不自动跨 Provider 重发，用户换模型必须使用新 requestId；前端交互不在本轮 | 用户明确切换只能创建新 Turn；不得自动 fallback | Provider Selection / Privacy |
 | A2-87 | P1 | Provider 矩阵不独立 | runner 与配置面已迁移为 GLM/Qwen 独立选择和报告；两家新目标的真实同构矩阵均未执行 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
 | A2-88 | P1 | Provider 样本量不足 | 当前只有离线协议、错误映射和执行一致性证据；GLM/Qwen 尚无新目录下可比较的真实成功率、语义率、P50/P95 与超时率 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
-| A2-89 | P1 | 旧 L0—L4 runner 已死亡 | 后端 runner 已重建到现存 Maven、packaged Browser 与 live canary 资产，并为各 lane 标注证据范围；空 behavior 目录与失效 testIgnore 待 Frontend Agent 清理 | 删除或重建 runner，并清理空 behavior 目录与失效 testIgnore | Behavior Audit Infrastructure |
-| A2-90 | P1 | runner 自测可假绿 | 新 asset test 实际读取 package scripts、Playwright discovery 与 Java 文件路径；原 dirty runner test 待 Frontend Agent 同步 | 验证所有被引用资产真实存在且可发现 | Script Meta-tests |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
 | A2-92 | P1 | Browser happy path 内容断言不足 | 状态/UI有覆盖但不拒绝错误终局 | 解析 body 并断言 kind、resolution、coverage | Browser E2E |
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
@@ -300,7 +298,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 ### 3.3 A2-30—A2-115 修复边界
 
 1. **P0 隐私止血：** 在任何新语义能力之前关闭 A2-30—A2-36、A2-110；不得用“已加密”替代“不持久化”，不得为了精确 replay 放宽已冻结隐私边界。
-2. **验收真实性：** A2-89—A2-101、A2-111—A2-115 必须先恢复真实可执行证据；场景清单、脚本源码字符串和 HTTP 200 不能作为产品通过证据。
+2. **验收真实性：** A2-91—A2-101、A2-111—A2-115 必须先恢复真实可执行证据；场景清单、脚本源码字符串和 HTTP 200 不能作为产品通过证据。
 3. **现有行为修复：** A2-53—A2-78 应在不新增第二状态权威的前提下修复；Audience、subjectHint、constraints 必须明确选择“实现”或“删除宣称”。
 4. **产品能力升级：** A2-37—A2-41、A2-43—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
 5. **Provider 收敛：** A2-79—A2-88 使用已批准的配置化 GLM/Qwen 目录作为唯一目标架构；旧单 Provider/global/visitor 权威不得作为兼容层恢复，真实矩阵必须按显式 ModelSelection 独立执行。
@@ -984,6 +982,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **A2-102：** `run-eval.ps1`、`run-eval-offline.ps1` 与 `run-jar-e2e.ps1` 不再写入无消费者的 `portfolio.model-expression.*`，统一改为 `portfolio.conversational-model.*`。`run-agent-behavior-audit.ps1` 不再写入 `PORTFOLIO_MODEL_EXPRESSION_ENABLED` 或错误的 `PORTFOLIO_AGENT_MODEL_PROVIDER`，统一消费 `PORTFOLIO_MODEL_ENABLED` 与 `PORTFOLIO_MODEL_PROVIDER`。
 - 新 `current-model-config-surface.test.ps1` 扫描所有非测试 PowerShell 资产，禁止退役 property/env 前缀，并要求四个 runner 显式使用当前权威；仓库 `scripts + backend/src/main + backend/src/test` 对退役字面量零命中。Eval、offline Eval、packaged JAR、start-local、privacy 与 behavior assets 专属测试通过。
 - 原 `run-agent-behavior-audit.test.ps1` 仍要求不存在的 Frontend `test:e2e:behavior`/Playwright projects，与已通过的 `run-agent-behavior-audit-assets.test.ps1`（要求现存 `test:e2e` 且禁止这些死亡资产）互相冲突；该文件已有 Frontend Agent 工作区修改，本批不覆盖、不暂存。此冲突继续归 A2-89/A2-90 前端验收资产清理，不否定 A2-102 的配置零残留证据，也不得被隐藏为全 runner PASS。
+- （2026-08-24 闭环）Frontend 工作区的旧 runner 测试已同步为禁止死亡资产并真实通过；空 behavior 目录、`vitest.behavior.config.ts` 与 Playwright `**/behavior/**` testIgnore 已删除，assets 元测试新增"退役资产保持删除"守卫。A2-89/A2-90 关闭，完成行为记入演进日志当日条目。
 
 ### 10.15 真实 Provider 诊断与 GLM 基线校正（2026-08-24）
 
@@ -1110,7 +1109,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |
 | Frontend lifecycle | A2-69—A2-78 | reservation/cancel 窗口、首页 snapshot、合法 UUID、expiry、所有会话 clear |
-| 行为与证据真实性 | A2-89—A2-101、A2-111—A2-115 | scenario 参数化执行、Browser body/trace、跨 JVM、只报告观测字段 |
+| 行为与证据真实性 | A2-91—A2-101、A2-111—A2-115 | scenario 参数化执行、Browser body/trace、跨 JVM、只报告观测字段 |
 | 后端退役结构清理 | A2-103—A2-105、A2-107—A2-109 | expression/config/type 零引用；readiness closed enum；Goal/General trailing-token 负例 |
 | 脚本与前端配置清理 | A2-102、A2-106 | 退役脚本键零引用；Frontend Agent 冻结 suggested question 唯一权威与 Browser 门 |
 
