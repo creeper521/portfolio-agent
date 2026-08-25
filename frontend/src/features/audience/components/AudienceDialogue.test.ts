@@ -213,6 +213,44 @@ describe('AudienceDialogue', () => {
     expect(submitAgentTurnMock.mock.calls[1]?.[0]).toEqual(firstCall)
     expect((submitAgentTurnMock.mock.calls[1]?.[0] as { command: { input: { kind: string } } }).command.input.kind).toBe('PRESET')
   })
+
+  it('pending 期间角色按钮真实禁用；答案与 handoff 使用提交时冻结的角色快照（行为基础 Task 5）', async () => {
+    handoffRecorder.mockClear()
+    let resolveAnswer!: (value: ReturnType<typeof submitSuccess>) => void
+    submitAgentTurnMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAnswer = resolve
+      }),
+    )
+    const wrapper = mountDialogue()
+
+    await wrapper.get('[data-role="MENTOR"]').trigger('click')
+    await wrapper.get('[data-custom-question]').setValue('以导师视角提问')
+    await wrapper.get('[data-question-form]').trigger('submit')
+
+    // pending：四个角色按钮均带真实 disabled 属性，尝试点击 HR 不改变选择。
+    const roleButtons = wrapper.findAll('.role-grid button')
+    expect(roleButtons).toHaveLength(4)
+    for (const button of roleButtons) {
+      expect(button.attributes('disabled')).toBeDefined()
+    }
+    await wrapper.get('[data-role="HR"]').trigger('click')
+    expect(wrapper.get('[data-current-role]').attributes('data-current-role')).toBe('MENTOR')
+
+    resolveAnswer(submitSuccess())
+    await flushPromises()
+
+    // 答案面板与 handoff 一律使用提交时冻结的角色快照，不读响应式选择值。
+    expect(wrapper.get('[data-light-answer] aside b').text()).toBe('MENTOR')
+    expect(handoffRecorder).toHaveBeenCalledTimes(1)
+    const seed = handoffRecorder.mock.calls[0]?.[0] as {
+      role: string
+      replay?: { surfaceContext?: { audienceRole?: string } }
+    }
+    expect(seed.role).toBe('MENTOR')
+    expect(seed.replay?.surfaceContext?.audienceRole).toBe('MENTOR')
+    wrapper.unmount()
+  })
 })
 
 describe('AudienceDialogue（模型目录默认选择，UI spec §2.7/§8.3）', () => {

@@ -12,6 +12,8 @@ export interface AudienceProfile {
 
 /** 首页轻对话状态：直接持有闭合 PublicAgentTurn 与幂等重放输入（交给 Agent 页继续会话）。 */
 export interface HomeAnswerState {
+  /** 提交时冻结的会话角色快照：答案渲染与 handoff 一律读它，不读响应式选择值（行为基础 Task 5）。 */
+  role: AudienceRole
   round: number
   question: string
   turn: PublicAgentTurn

@@ -5,6 +5,7 @@ import { submitAgentTurn } from '../../agent/api/agentTurnApi'
 import type { AgentTurnCommand, SurfaceContext } from '../../agent/api/agentTurnApi'
 import { newRequestId } from '../../agent/api/requestId'
 import { displayNameOfSelection, type ModelSelection } from '../../agent/model/modelSelection'
+import type { AudienceRole } from '../../public-content/model/publicContentTypes'
 import type { PublicPortfolio } from '../../public-content/model/publicContentTypes'
 import { audienceProfiles } from '../data/audienceProfiles'
 import type { AudienceProfile, HomeAnswerState } from '../model/audienceTypes'
@@ -15,11 +16,16 @@ import LightAnswerPanel from './LightAnswerPanel.vue'
 // A2-72/73：失败重试冻结完整提交快照（requestId/命令/surface 原样复用），
 // 不生成新 requestId、不把 Preset 退化成 FREE_TEXT。
 
+/** 首页提交的表面上下文必带角色：共享 SurfaceContext 的 audienceRole 可选，这里用收窄类型固化不变量。 */
+interface HomeSubmissionSurface extends SurfaceContext {
+  readonly audienceRole: AudienceRole
+}
+
 /** A2-71：每次提问都是独立单轮，round 只计数已回答次数，不表达多轮会话。 */
 interface FailedSubmission {
   readonly requestId: string
   readonly command: AgentTurnCommand
-  readonly surfaceContext: SurfaceContext
+  readonly surfaceContext: HomeSubmissionSurface
   readonly question: string
   /** A7：首页轮次使用目录默认选择，失败重试快照原样携带（UI spec §5.1）。 */
   readonly modelSelection: ModelSelection
@@ -64,6 +70,8 @@ const supportedQuestions = computed(() =>
 )
 
 function chooseRole(profile: AudienceProfile) {
+  // pending 期间角色是提交身份的一部分：必须真实不可操作，防止竞态（上级设计 §7.2）。
+  if (pending.value) return
   selectedRole.value = profile
   answer.value = null
   customQuestion.value = ''
@@ -81,7 +89,7 @@ async function ask(question: string, questionPresetId?: string) {
     : props.portfolio.questionPresets.find((item) => item.id === questionPresetId)
   // 首页无选择路径：默认 NONE 且目录非空时，不自动发起自由文本 Turn（设计 §8）。
   if (preset === undefined && customQuestionBlocked.value) return
-  const surfaceContext: SurfaceContext = {
+  const surfaceContext: HomeSubmissionSurface = {
     subjectHint: { kind: 'PROJECT', slug: project.slug },
     audienceRole: selectedRole.value.id,
     requestSource: 'HOME',
@@ -107,13 +115,13 @@ async function retryFailedSubmission() {
   )
 }
 
-async function executeSubmission(
-  requestId: string,
-  command: AgentTurnCommand,
-  surfaceContext: SurfaceContext,
-  question: string,
-  modelSelection: ModelSelection,
-) {
+  async function executeSubmission(
+    requestId: string,
+    command: AgentTurnCommand,
+    surfaceContext: HomeSubmissionSurface,
+    question: string,
+    modelSelection: ModelSelection,
+  ) {
   const project = primaryProject.value
   if (project === null || pending.value) return
   pending.value = true
@@ -132,6 +140,7 @@ async function executeSubmission(
     }
     round.value = Math.min(round.value + 1, 3)
     answer.value = {
+      role: surfaceContext.audienceRole,
       round: round.value,
       question,
       turn: result.turn,
@@ -179,6 +188,7 @@ function focusCustomQuestion() {
             :class="{ 'role-button--active': profile.id === selectedRole.id }"
             :data-role="profile.id"
             :aria-pressed="profile.id === selectedRole.id"
+            :disabled="pending"
             @click="chooseRole(profile)"
           >
             <small>{{ profile.code }}</small>
@@ -230,7 +240,7 @@ function focusCustomQuestion() {
 
       <LightAnswerPanel
         v-if="answer"
-        :role="selectedRole.id"
+        :role="answer.role"
         :answer="answer"
         :default-model-name="defaultModelName"
         @follow-up="focusCustomQuestion"
