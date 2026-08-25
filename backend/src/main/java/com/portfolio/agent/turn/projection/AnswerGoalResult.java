@@ -5,8 +5,16 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 单个 Goal 的公众投影结果：覆盖度、呈现与提示。
+ *
+ * <p>终态形状是强不变量——FULL 必须有呈现且无缺口提示；PARTIAL 必须有呈现且带
+ * 缺口提示；NONE 必须无呈现且带提示（CONTINUATION_UNAVAILABLE 之外的提示都算
+ * 缺口提示）。不可变，构造期校验。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class AnswerGoalResult {
+    /** 不计入缺口提示的例外 code（续跑不可用属于提示而非覆盖缺口）。 */
     private static final String NON_GAP_NOTICE = "CONTINUATION_UNAVAILABLE";
     private final String goalId;
     private final String label;
@@ -42,5 +50,6 @@ public final class AnswerGoalResult {
     public Coverage getCoverage() { return coverage; }
     public PublicPresentation getPresentation() { return presentation; }
     public List<GoalNotice> getNotices() { return notices; }
+    /** 目标覆盖度：完整 / 部分（带缺口提示）/ 无结果（仅提示）。 */
     public enum Coverage { FULL, PARTIAL, NONE }
 }

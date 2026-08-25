@@ -12,12 +12,20 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 四条无版本 Agent HTTP 资源中的会话资源：GET/DELETE
+ * /api/agent/conversations/current。
+ *
+ * <p>两个端点都强制要求 ResumeToken 凭证（缺失即 401），响应用于匿名会话的
+ * 状态展示与主动清空；均为只读或一次性清除，不产生新的 Turn。</p>
+ */
 @RestController
 @RequestMapping("/api/agent/conversations/current")
 public final class AgentConversationController {
     private final AgentTurnLifecycleService lifecycle;
     public AgentConversationController(AgentTurnLifecycleService lifecycle) { this.lifecycle = lifecycle; }
 
+    /** 查询当前会话摘要：会话 ID、讨论修订号与活跃讨论（无有效凭证时 401）。 */
     @GetMapping
     public ResponseEntity<?> current(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
@@ -32,6 +40,7 @@ public final class AgentConversationController {
                         status.discussion()));
     }
 
+    /** 清空当前匿名会话：成功 204；凭证无效或会话已不存在返回 401。 */
     @DeleteMapping
     public ResponseEntity<?> clear(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
@@ -39,6 +48,7 @@ public final class AgentConversationController {
         if (!bearer.valid() || !lifecycle.clearConversation(bearer.token())) return unauthorized();
         return ResponseEntity.noContent().header(HttpHeaders.CACHE_CONTROL, "no-store").build();
     }
+    /** 统一 401 响应；错误体不携带 requestId。 */
     private ResponseEntity<AgentApiErrorResponse> unauthorized() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")

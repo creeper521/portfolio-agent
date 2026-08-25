@@ -4,8 +4,17 @@ import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 
-/** Projects only the immutable selection and atomically observed adopted stages. */
+/**
+ * 模型执行投影工厂：从冻结的执行快照只读地推导公众投影。
+ *
+ * <p>只投影不可变的选择信息与原子观测到的被采纳阶段，不读取也不暴露任何
+ * 模型输入输出内容。</p>
+ */
 public final class ModelExecutionProjectionFactory {
+    /**
+     * 投影一次已解析的模型执行：按 GOAL_INTERPRETATION/ANSWER_GENERATION 两个
+     * 阶段的采纳与尝试标记推导 {@code Participation}，NONE 快照直接投影为 NONE。
+     */
     public ModelExecutionProjection project(ResolvedModelExecution execution) {
         ResolvedModelExecution required = java.util.Objects.requireNonNull(
                 execution, "execution");
@@ -38,6 +47,7 @@ public final class ModelExecutionProjectionFactory {
                 snapshot.getSelectionVersion().orElseThrow(), participation);
     }
 
+    /** 只投影命令里的模型选择（未执行情形，Participation 恒为 NONE）。 */
     public ModelExecutionProjection selectionOnly(
             AgentTurnCommand.ModelSelection selection) {
         AgentTurnCommand.ModelSelection required = java.util.Objects.requireNonNull(

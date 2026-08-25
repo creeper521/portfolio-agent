@@ -24,6 +24,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+/**
+ * 四条无版本 Agent HTTP 资源中的 Turn 资源：POST /api/agent/turns 创建轮次、
+ * DELETE /api/agent/turns/{requestId} 取消轮次。
+ *
+ * <p>创建路径按 匿名来源准入 → 全局 Active Turn 容量 → 生命周期服务 的顺序获取
+ * 租约（try-with-resources 保证释放），并把生命周期状态映射为固定的错误合同
+ * （RATE_LIMITED、AGENT_STATE_UNAVAILABLE、TURN_IN_PROGRESS 等）。所有响应都带
+ * no-store；Retry-After 只在可重试错误上出现。</p>
+ */
 @RestController
 @RequestMapping("/api/agent/turns")
 public final class AgentTurnController {
@@ -49,6 +58,15 @@ public final class AgentTurnController {
         this.activeTurnCapacity = activeTurnCapacity;
     }
 
+    /**
+     * 创建（或幂等重放/冲突拒绝）一个 Turn。
+     *
+     * <p>凭证格式非法直接 401；来源用进程内 HMAC 哈希后做准入，两道租约在整个
+     * 生命周期调用期间持有。COMPLETED/REPLAY 返回 200 + Turn；其余终态映射为
+     * 对应 4xx/5xx 错误合同。</p>
+     *
+     * @throws AgentAdmissionRejectedException 由准入闸抛出并映射为 429 RATE_LIMITED
+     */
     @PostMapping
     public ResponseEntity<?> create(
             @Valid @RequestBody AgentTurnRequest request,
@@ -105,6 +123,7 @@ public final class AgentTurnController {
         }
     }
 
+    /** 取消一个 Turn：按生命周期取消结果映射 204/409/404/401/503。 */
     @DeleteMapping("/{requestId}")
     public ResponseEntity<?> cancel(
             @PathVariable UUID requestId,
@@ -130,6 +149,7 @@ public final class AgentTurnController {
         };
     }
 
+    /** 统一错误响应构造：no-store，可选 Retry-After 头。 */
     private ResponseEntity<AgentApiErrorResponse> error(
             HttpStatus status, UUID requestId, String code, String message,
             boolean retryable, Long retryAfter) {
@@ -140,6 +160,11 @@ public final class AgentTurnController {
                 requestId, code, message, retryable, retryAfter));
     }
 
+    /**
+     * 解析 Authorization 头中的 Bearer 凭证：只接受单个非空 token。
+     *
+     * @param required 为 true 时缺失凭证也算无效（会话资源必须携带凭证）
+     */
     static Bearer bearer(String authorization, boolean required) {
         if (authorization == null || authorization.isBlank()) {
             return required ? new Bearer(false, null) : new Bearer(true, null);
@@ -150,5 +175,6 @@ public final class AgentTurnController {
         String token = authorization.substring(7).trim();
         return token.isEmpty() || token.contains(" ") ? new Bearer(false, null) : new Bearer(true, token);
     }
+    /** 凭证解析结果：格式是否可接受与去空白后的 token 字面值。 */
     record Bearer(boolean valid, String token) { }
 }

@@ -8,6 +8,13 @@ import com.portfolio.agent.turn.projection.PublicAgentTurn;
 
 import java.util.Objects;
 
+/**
+ * POST /api/agent/turns 成功时的响应合同：平铺的 PublicAgentTurn
+ * （{@code @JsonUnwrapped} 展开各 Turn 子类型字段）+ 可选的一次性会话元数据。
+ *
+ * <p>会话元数据仅在本次请求提交或重放了会话时出现，resumeToken 是一次性签发的
+ * 短时凭证，由前端存入当前标签页 sessionStorage。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class PublicAgentTurnResponse {
     @JsonUnwrapped
@@ -31,6 +38,7 @@ public final class PublicAgentTurnResponse {
     public PublicAgentTurn getTurn() { return turn; }
     public ConversationMetadata getConversation() { return conversation; }
 
+    /** 会话元数据：会话 ID、一次性 ResumeToken、讨论修订号与活跃讨论投影。 */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ConversationMetadata(
             String conversationId, String resumeToken,

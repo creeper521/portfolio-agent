@@ -7,6 +7,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 结构化回答的公众载荷：整体结论、逐 Goal 结果、全局来源目录与来源构成。
+ *
+ * <p>构造期执行三组不变量校验——resolution 与各 Goal 覆盖度一致、所有呈现引用的
+ * 来源键都能在目录中找到、局部澄清（localClarification）必须引用存在的 Goal。
+ * 不可变。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class PublicAnswer {
     private final Resolution resolution;
@@ -48,8 +55,10 @@ public final class PublicAnswer {
     public List<PublicSupport.Kind> getSourceComposition() { return sourceComposition; }
     public List<SuggestedAction> getSuggestedActions() { return suggestedActions; }
     public ClarificationChallenge getLocalClarification() { return localClarification; }
+    /** 回答整体结论：全部完成 / 部分完成 / 无结果。 */
     public enum Resolution { COMPLETE, PARTIAL, NO_RESULT }
 
+    /** 校验 resolution 与逐 Goal 覆盖度的组合一致性。 */
     private void validateResolution() {
         long produced = goalResults.stream().filter(value ->
                 value.getCoverage() != AnswerGoalResult.Coverage.NONE).count();
@@ -62,6 +71,7 @@ public final class PublicAnswer {
         }
     }
 
+    /** 校验所有呈现引用的来源键都存在于全局来源目录（防悬空引用）。 */
     private void validateSources() {
         Set<String> catalogKeys = sourceCatalog.getSources().stream()
                 .map(PublicSourceCatalog.Source::getKey).collect(java.util.stream.Collectors.toSet());
@@ -83,6 +93,7 @@ public final class PublicAnswer {
         }
     }
 
+    /** 校验局部澄清：必须携带受影响 Goal，且这些 Goal 都在本回答内。 */
     private void validateClarification() {
         if (localClarification == null) return;
         if (localClarification.getAffectedGoalIds().isEmpty()) {

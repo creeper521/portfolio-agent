@@ -14,6 +14,7 @@ public final class AgentStateKeyCoverageReadiness implements InitializingBean {
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
     }
 
+    /** 启动门槛：初始化即断言未过期数据不依赖任何缺失密钥，失败则拒绝启动。 */
     @Override public void afterPropertiesSet() {
         store.assertKeyCoverage(clock.instant());
     }

@@ -14,12 +14,20 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/** Deterministic enter/switch/reenter authority; no language interpretation. */
+/**
+ * Deterministic enter/switch/reenter authority; no language interpretation.
+ *
+ * <p>项目讨论协调器：确定性地执行进入/切换/重入项目讨论。不做任何语言
+ * 解释，只消费已解析的句柄、结果项与公开项目集合；每次迁移签发新的
+ * ProjectDiscussionContext 与 ActiveDiscussionPointer，并附带固定形状的
+ * 概览目标提案。</p>
+ */
 public final class ProjectDiscussionCoordinator {
     private final Supplier<String> handleIssuer;
     private final Clock clock;
     private final Duration ttl;
 
+    /** 构造协调器；讨论 TTL 必须为正且不超过 30 分钟。 */
     public ProjectDiscussionCoordinator(
             Supplier<String> handleIssuer, Clock clock, Duration ttl) {
         this.handleIssuer = Objects.requireNonNull(
@@ -33,6 +41,15 @@ public final class ProjectDiscussionCoordinator {
         this.ttl = ttl;
     }
 
+    /**
+     * 从推荐结果项进入项目讨论。
+     *
+     * <p>以推荐的全部结果项作为讨论内可切换候选，校验候选仍在当前公开
+     * 发布中，并记录来源推荐句柄。</p>
+     *
+     * @throws IllegalArgumentException 推荐范围与会话不符、结果项不在推荐内，
+     *         或候选项目不在当前公开发布中
+     */
     public Transition enter(
             String conversationId,
             String contentReleaseId,
@@ -65,6 +82,11 @@ public final class ProjectDiscussionCoordinator {
                 sessionExpiresAt);
     }
 
+    /**
+     * 重入某个公开项目的讨论（无来源推荐，切换候选仅自身）。
+     *
+     * @throws IllegalArgumentException 项目不在当前公开发布中
+     */
     public Transition reenter(
             String conversationId,
             String contentReleaseId,
@@ -78,6 +100,15 @@ public final class ProjectDiscussionCoordinator {
                 projectId, Set.of(projectId), null, sessionExpiresAt);
     }
 
+    /**
+     * 在当前讨论范围内切换到另一候选项目。
+     *
+     * <p>目标项目必须属于原讨论签发的切换候选集合，且全部候选仍须在当前
+     * 公开发布中可用；来源推荐句柄与候选集合沿用原讨论。</p>
+     *
+     * @throws IllegalArgumentException 目标不在讨论候选范围内，
+     *         或候选项目已不在当前公开发布中
+     */
     public Transition switchProject(
             ProjectDiscussionContext current,
             String projectId,
@@ -99,6 +130,11 @@ public final class ProjectDiscussionCoordinator {
                 sessionExpiresAt);
     }
 
+    /**
+     * 执行一次讨论迁移：签发新 ContextHandle，过期时间取讨论 TTL 与会话
+     * 上界的较早者，产出配套的 {@link ProjectDiscussionContext}、
+     * {@link ActiveDiscussionPointer} 与固定形状的概览目标提案。
+     */
     private Transition transition(
             String conversationId,
             String contentReleaseId,
@@ -127,6 +163,7 @@ public final class ProjectDiscussionCoordinator {
         return new Transition(context, pointer, overview(projectId));
     }
 
+    /** 构造进入讨论时的固定概览提案：单一 PORTFOLIO_FACT 目标覆盖五个公开侧面。 */
     private UserGoalProposal overview(String projectId) {
         UserGoalProposal.InputAnchor anchor =
                 new UserGoalProposal.InputAnchor("项目概览", 0);
@@ -157,6 +194,12 @@ public final class ProjectDiscussionCoordinator {
                                 UserGoalProposal.Depth.STANDARD))));
     }
 
+    /**
+     * 构造澄清后的单侧面事实提案：以 CONTINUATION 依据锁定该项目，
+     * 请求输出由给定 facet 映射到同名的 {@link GoalRequestedOutput}。
+     *
+     * @throws IllegalArgumentException facet 为 null
+     */
     public UserGoalProposal fact(
             String projectId, UserGoalProposal.Facet facet) {
         Objects.requireNonNull(facet, "facet");
@@ -178,6 +221,7 @@ public final class ProjectDiscussionCoordinator {
                                 Set.of(facet), UserGoalProposal.Depth.STANDARD))));
     }
 
+    /** fail-closed 校验：所有必需项目必须仍在当前公开发布中，否则拒绝迁移。 */
     private void requireCurrentPublicProjects(
             Set<String> required, Set<String> currentPublicProjectIds) {
         if (!currentPublicProjectIds.containsAll(required)) {
@@ -190,6 +234,7 @@ public final class ProjectDiscussionCoordinator {
         return left.isBefore(right) ? left : right;
     }
 
+    /** 讨论迁移结果：新讨论上下文、活跃讨论指针与进入时的概览目标提案。 */
     public record Transition(
             ProjectDiscussionContext context,
             ActiveDiscussionPointer pointer,

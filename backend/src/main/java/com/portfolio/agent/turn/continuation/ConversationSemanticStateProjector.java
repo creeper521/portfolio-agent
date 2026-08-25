@@ -13,9 +13,21 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
-/** Projects only backend-owned enums and public identifiers; no generated text survives. */
+/**
+ * Projects only backend-owned enums and public identifiers; no generated text survives.
+ *
+ * <p>会话语义状态投影器：从已产出的公开 Turn 与计划投影出
+ * {@link ConversationSemanticState}。只保留枚举与公开 ID，
+ * 任何生成文本都不会进入状态。</p>
+ */
 public final class ConversationSemanticStateProjector {
 
+    /**
+     * 投影本轮计划与公开 Turn 为语义状态。
+     *
+     * @return 非 Answer Turn、无有效覆盖目标或无可续接安全目标时返回 null
+     *         （表示本轮不持久化语义状态）
+     */
     public ConversationSemanticState project(
             SemanticTurnPlan plan, PublicAgentTurn turn, Instant updatedAt) {
         if (!(turn instanceof PublicAgentTurn.Answer answer)) return null;
@@ -29,6 +41,7 @@ public final class ConversationSemanticStateProjector {
                 plan.getContentReleaseId(), goals, updatedAt);
     }
 
+    /** 从计划中的目标与任务参数构建目标摘要（剔除 RESULT 类别主体）。 */
     private ConversationSemanticState.GoalSummary goal(
             SemanticTurnPlan plan, AnswerGoalResult result) {
         UserGoal goal = plan.getUserGoals().stream()
@@ -64,6 +77,7 @@ public final class ConversationSemanticStateProjector {
                 requestedSize, constraints, sections(result.getPresentation()));
     }
 
+    /** 从分节或推荐展示中抽取小节引用列表。 */
     private List<ConversationSemanticState.SectionReference> sections(
             PublicPresentation presentation) {
         if (presentation instanceof PublicPresentation.Sectioned sectioned) {
@@ -76,6 +90,7 @@ public final class ConversationSemanticStateProjector {
         return List.of();
     }
 
+    /** 把公开小节转换为小节引用。 */
     private ConversationSemanticState.SectionReference section(PublicSection section) {
         return new ConversationSemanticState.SectionReference(
                 section.getSectionId(), section.getSectionKind());

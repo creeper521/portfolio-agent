@@ -24,8 +24,16 @@ import java.util.Objects;
 import java.util.UUID;
 import com.portfolio.agent.turn.continuation.ContinuationReference;
 
-/** Projects only ordered fulfillment Goals. Supporting Tasks never become public content. */
+/**
+ * 公众投影器：SemanticTurnPlan + SemanticTurnOutcome → PublicAgentTurn.Answer。
+ *
+ * <p>只投影有序履约 Goal；支撑 Task 永不成为公众内容。负责把四类呈现
+ * （Portfolio 分节 / 通用知识 / 跨域综合 / 推荐）统一翻译为 PublicPresentation，
+ * 并汇总全局来源目录与来源构成。违规组合（FULL 带缺口、推荐缺支撑等）在投影期
+ * 即抛出 IllegalArgumentException，保证只有自洽的回答能进入结算。</p>
+ */
 public final class PublicAgentTurnProjector {
+    /** 投影入口（无续跑句柄、无模型执行投影）。 */
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome) {
         return project(
@@ -33,12 +41,14 @@ public final class PublicAgentTurnProjector {
                 ModelExecutionProjection.none());
     }
 
+    /** 投影入口（带模型执行投影、无续跑句柄）。 */
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             ModelExecutionProjection modelExecution) {
         return project(requestId, plan, outcome, Map.of(), modelExecution);
     }
 
+    /** 投影入口（带 goalId → 续跑 ContextHandle 映射、无模型执行投影）。 */
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             Map<String, String> continuationsByGoal) {
@@ -47,6 +57,12 @@ public final class PublicAgentTurnProjector {
                 ModelExecutionProjection.none());
     }
 
+    /**
+     * 完整投影入口：逐 Goal 投影并校验（缺履约 Task 或覆盖记录直接抛错），
+     * 汇总全局来源目录与来源构成，最后组装 {@code PublicAnswer}。
+     *
+     * @param continuationsByGoal goalId 到结算句柄的映射，用于推荐项的"与我讨论"动作
+     */
     public PublicAgentTurn.Answer project(
             UUID requestId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             Map<String, String> continuationsByGoal,
@@ -76,6 +92,10 @@ public final class PublicAgentTurnProjector {
         return new PublicAgentTurn.Answer(requestId, modelExecution, answer);
     }
 
+    /**
+     * 单 Goal 投影：NONE 覆盖产出一个提示性结果；FULL/PARTIAL 必须有履约产物，
+     * PARTIAL 额外携带缺口提示。呈现引用的来源同时汇入全局来源目录。
+     */
     private AnswerGoalResult projectGoal(
             UserGoal goal, TaskOutcome outcome, GoalCoverage.Coverage coverage,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources,
@@ -103,6 +123,11 @@ public final class PublicAgentTurnProjector {
                 presentation, notices);
     }
 
+    /**
+     * 按产物类型选择呈现翻译：推荐语义结果走推荐呈现；其余按
+     * Portfolio/General/CrossDomain 三种呈现逐节翻译（跨域呈现按节序固定
+     * 支撑类别：通用原理 / 作品集例证 / 关联）。无匹配呈现类型即抛错。
+     */
     private PublicPresentation presentation(
             UserGoal goal, TaskArtifact artifact,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources,
@@ -157,6 +182,11 @@ public final class PublicAgentTurnProjector {
         throw new IllegalArgumentException("fulfillment artifact has no supported public presentation");
     }
 
+    /**
+     * 推荐呈现翻译：每个推荐项必须至少有一条已验证 Evidence 支撑（否则抛错），
+     * 逐项生成稳定 resultItemId、"与我讨论"续跑动作与中文化推荐理由；
+     * PARTIAL 覆盖时必须给出未满足原因。
+     */
     private PublicPresentation.Recommendation recommendation(
             UserGoal goal, PortfolioSemanticResult.Recommendation result,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources,
@@ -213,6 +243,7 @@ public final class PublicAgentTurnProjector {
         };
     }
 
+    /** PARTIAL 覆盖的缺口提示：优先透出语义结果的具体缺失描述。 */
     private List<GoalNotice> gapNotices(TaskArtifact artifact) {
         if (artifact.getSemanticResult() instanceof PortfolioSemanticResult value
                 && !value.getOmissions().isEmpty()) {
@@ -222,6 +253,7 @@ public final class PublicAgentTurnProjector {
         return List.of(new GoalNotice("COVERAGE_INCOMPLETE", "当前结果仅覆盖了部分目标。"));
     }
 
+    /** 把 Task 终止原因映射为固定的公众提示（GoalNotice）。 */
     private GoalNotice notice(TaskOutcome outcome) {
         TaskTerminalReason reason = outcome.getTerminal() instanceof TaskOutcome.ReasonTerminal value
                 ? value.getReason() : TaskTerminalReason.NO_SUPPORTED_RESULT;
@@ -238,6 +270,7 @@ public final class PublicAgentTurnProjector {
         };
     }
 
+    /** 全部 FULL → COMPLETE，全部 NONE → NO_RESULT，否则 PARTIAL。 */
     private PublicAnswer.Resolution resolution(List<AnswerGoalResult> goals) {
         if (goals.stream().allMatch(value -> value.getCoverage() == AnswerGoalResult.Coverage.FULL)) {
             return PublicAnswer.Resolution.COMPLETE;
@@ -248,6 +281,7 @@ public final class PublicAgentTurnProjector {
         return PublicAnswer.Resolution.PARTIAL;
     }
 
+    /** 汇总各呈现引用的支撑类别，形成回答级来源构成。 */
     private void collectComposition(
             PublicPresentation presentation, LinkedHashSet<PublicSupport.Kind> composition) {
         if (presentation instanceof PublicPresentation.Sectioned sectioned) {
@@ -271,6 +305,7 @@ public final class PublicAgentTurnProjector {
         return "section-" + goal.getGoalId() + "-" + (index + 1);
     }
 
+    /** 以 referenceKey 去重地登记公开来源（首次出现即固定展示信息）。 */
     private void addSources(
             List<PublicSourceReferenceValue> values,
             LinkedHashMap<String, PublicSourceCatalog.Source> sources) {
@@ -290,6 +325,7 @@ public final class PublicAgentTurnProjector {
         return values.stream().map(PublicSourceReferenceValue::getReferenceKey).distinct().toList();
     }
 
+    /** Task 结果索引：重复 taskId 视为管线不变量破坏，立即抛错。 */
     private Map<String, TaskOutcome> indexTasks(SemanticTurnOutcome outcome) {
         LinkedHashMap<String, TaskOutcome> values = new LinkedHashMap<>();
         outcome.getTaskOutcomes().forEach(value -> {
@@ -299,6 +335,7 @@ public final class PublicAgentTurnProjector {
         });
         return values;
     }
+    /** Goal 覆盖索引：重复 goalId 视为管线不变量破坏，立即抛错。 */
     private Map<String, GoalCoverage.Coverage> indexCoverage(SemanticTurnOutcome outcome) {
         LinkedHashMap<String, GoalCoverage.Coverage> values = new LinkedHashMap<>();
         outcome.getGoalCoverage().forEach(value -> {
@@ -308,6 +345,7 @@ public final class PublicAgentTurnProjector {
         });
         return values;
     }
+    /** 取出必需的索引项；缺失说明管线产物不完整，直接抛错（fail-closed）。 */
     private <K, V> V required(Map<K, V> values, K key, String name) {
         V value = values.get(key);
         if (value == null) throw new IllegalArgumentException(name + " is missing");

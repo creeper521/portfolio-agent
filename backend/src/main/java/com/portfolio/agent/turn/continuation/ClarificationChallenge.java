@@ -7,6 +7,13 @@ import java.util.List;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+/**
+ * 澄清挑战：面向访客的澄清表单（澄清 State 的公开侧表示）。
+ *
+ * <p>由澄清 ID、提问文案与恰好一组表单字段（单选或文本）组成；
+ * affectedGoalIds 记录澄清影响的目标。内部答案绑定存放在
+ * {@link ClarificationStore.Record}，本类型不携带任何内部绑定。</p>
+ */
 public final class ClarificationChallenge {
     private final String clarificationId;
     private final String prompt;
@@ -35,6 +42,7 @@ public final class ClarificationChallenge {
             @JsonSubTypes.Type(value = SingleChoiceField.class, name = "SINGLE_CHOICE"),
             @JsonSubTypes.Type(value = TextField.class, name = "TEXT")
     })
+    /** 澄清字段封闭接口：单选或文本，Jackson 以 kind 判别子类型。 */
     public sealed interface Field permits SingleChoiceField, TextField {
         Kind getKind();
         String getFieldId();
@@ -43,6 +51,7 @@ public final class ClarificationChallenge {
         enum Kind { SINGLE_CHOICE, TEXT }
     }
 
+    /** 单选字段：固定选项集合（非空）。 */
     public static final class SingleChoiceField implements Field {
         private final String fieldId;
         private final String label;
@@ -62,6 +71,7 @@ public final class ClarificationChallenge {
         public List<Choice> getChoices() { return choices; }
     }
 
+    /** 文本字段：长度上限 1..2000。 */
     public static final class TextField implements Field {
         private final String fieldId;
         private final String label;
@@ -81,6 +91,7 @@ public final class ClarificationChallenge {
         public int getLimit() { return limit; }
     }
 
+    /** 单选项：选项 ID 与展示标签。 */
     public record Choice(String choiceId, String label) {
         public Choice {
             choiceId = text(choiceId, "choiceId");

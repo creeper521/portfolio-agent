@@ -62,6 +62,14 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * Agent 能力的唯一生产装配：模型运行时、准入组件、生命周期服务与三种任务执行器。
+ *
+ * <p>装配次序体现三道 fail-closed 启动权威——model-runtime、各操作策略的
+ * schema 门禁（经 AgentRuntimeReadiness）与会话上下文模式；Goal 解析与通用知识
+ * 端口在对应操作不可用时装配为始终抛出不可用异常的闭门实现，而不是省略装配。
+ * 密钥缺失时用随机临时密钥（仅限本地进程内 IN_MEMORY 语义）。</p>
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
         ModelOperationProperties.class,
@@ -69,11 +77,13 @@ import java.util.concurrent.Executors;
         com.portfolio.agent.turn.state.configuration.ConversationContextProperties.class
 })
 public class AgentCapabilityConfiguration {
+    /** 系统提示词目录（固定文案资源）。 */
     @Bean
     SystemPromptCatalog systemPromptCatalog() {
         return new SystemPromptCatalog();
     }
 
+    /** 启动诊断事件：记录模型运行时开关、目录规模、检索档位与限流参数等固定计数。 */
     @Bean
     ApplicationStartupDiagnostics applicationStartupDiagnostics(
             DiagnosticEventPublisher diagnosticEventPublisher,
@@ -93,22 +103,26 @@ public class AgentCapabilityConfiguration {
                 runtimeProperties.getMaxConcurrentPerSource());
     }
 
+    /** State 执行线程池：虚拟线程 per-task，容器关闭时关闭。 */
     @Bean(destroyMethod = "close")
     ExecutorService conversationRequestExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }
 
+    /** 客户端地址解析器：仅在配置信任的代理链下采纳转发头。 */
     @Bean
     ClientAddressResolver clientAddressResolver(AgentRuntimeProperties properties) {
         return new ClientAddressResolver(
                 properties.isTrustProxy(), properties.getTrustedProxies());
     }
 
+    /** 匿名来源哈希器：进程级密钥把地址转换为不可逆哈希。 */
     @Bean
     AnonymousSourceHasher anonymousSourceHasher() {
         return new AnonymousSourceHasher();
     }
 
+    /** 来源级准入闸（RPM + 并发 + 来源容量）。 */
     @Bean
     AgentRequestAdmissionGate agentRequestAdmissionGate(AgentRuntimeProperties properties) {
         return new AgentRequestAdmissionGate(
@@ -118,16 +132,19 @@ public class AgentCapabilityConfiguration {
                 properties.getMaxTrackedSources());
     }
 
+    /** 全局 Active Turn 容量边界。 */
     @Bean
     ActiveTurnCapacity activeTurnCapacity(AgentRuntimeProperties properties) {
         return new ActiveTurnCapacity(properties.getMaxActiveTurns());
     }
 
+    /** 模型操作策略注册表（每个操作的 schema/输出预算/超时权威）。 */
     @Bean
     ModelOperationPolicyRegistry modelOperationPolicyRegistry(ModelOperationProperties properties) {
         return properties.toRegistry();
     }
 
+    /** 运行时就绪度：会话模式 × 操作策略的启动期判定。 */
     @Bean
     AgentRuntimeReadiness agentRuntimeReadiness(
             com.portfolio.agent.turn.state.configuration.ConversationContextProperties
@@ -137,6 +154,7 @@ public class AgentCapabilityConfiguration {
                 contextProperties.getMode(), operationPolicies);
     }
 
+    /** OpenAI 兼容结构化传输：连接与请求超时取各操作策略中的最大超时。 */
     @Bean
     StructuredModelTransport structuredModelTransport(
             ObjectMapper mapper,
@@ -150,6 +168,7 @@ public class AgentCapabilityConfiguration {
                 mapper, transportTimeout, diagnostics);
     }
 
+    /** 模型执行解析器：目录快照 + 配置绑定，Claim 后冻结无隐式回退。 */
     @Bean
     ModelExecutionResolver modelExecutionResolver(
             ModelCatalogSnapshot catalog,
@@ -158,6 +177,10 @@ public class AgentCapabilityConfiguration {
                 catalog, configuredCatalog::getRequiredBinding);
     }
 
+    /**
+     * Goal 解析端口：操作不可用时装配为闭门实现（恒抛不可用异常），
+     * 可用时装配为带 schema codec、输出预算与超时的适配器。
+     */
     @Bean
     GoalInterpretationPort goalInterpretationPort(
             ObjectMapper objectMapper,
@@ -180,6 +203,7 @@ public class AgentCapabilityConfiguration {
                 new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }
 
+    /** 通用知识模型端口：同样按就绪度在闭门实现与适配器之间二选一。 */
     @Bean
     GeneralKnowledgeModelPort generalKnowledgeModelPort(
             ObjectMapper objectMapper,
@@ -200,6 +224,7 @@ public class AgentCapabilityConfiguration {
                 operation.getMaxOutputTokens(), operation.getTimeout());
     }
 
+    /** 通用知识任务执行器：生成器（codec + 校验）+ 呈现组合器。 */
     @Bean
     GeneralTaskExecutor generalTaskExecutor(
             ObjectMapper objectMapper,
@@ -213,11 +238,13 @@ public class AgentCapabilityConfiguration {
                 new GeneralPresentationComposer());
     }
 
+    /** 跨域综合任务执行器。 */
     @Bean
     CrossDomainTaskExecutor crossDomainTaskExecutor() {
         return new CrossDomainTaskExecutor(new CrossDomainPresentationComposer());
     }
 
+    /** 语义执行引擎：三种任务执行器 + State 线程池 + 并发上限。 */
     @Bean
     SemanticTurnEngine semanticTurnEngine(
             com.portfolio.agent.turn.capability.portfolio.PortfolioTaskExecutor portfolioTaskExecutor,
@@ -229,6 +256,7 @@ public class AgentCapabilityConfiguration {
                 conversationRequestExecutor, 4);
     }
 
+    /** Goal 解析器：解释端口 + 已审阅主体来源 + 边界策略 + 模型输出诊断。 */
     @Bean
     GoalResolver goalResolver(
             PortfolioKnowledgeGateway knowledgeGateway,
@@ -242,10 +270,12 @@ public class AgentCapabilityConfiguration {
                 new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }
 
+    /** 语义计划编译器（含计划校验器）。 */
     @Bean SemanticPlanCompiler semanticPlanCompiler() {
         return new SemanticPlanCompiler(new SemanticPlanValidator());
     }
 
+    /** IN_MEMORY 模式下的进程内 Agent State（快速测试与定向诊断）。 */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode", havingValue = "IN_MEMORY")
@@ -260,6 +290,7 @@ public class AgentCapabilityConfiguration {
                 properties.getAbsoluteTtl(), sessionStore, clock);
     }
 
+    /** DISABLED 模式（默认）下的 fail-closed State：所有操作抛不可用异常。 */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode",
@@ -268,6 +299,7 @@ public class AgentCapabilityConfiguration {
         return new com.portfolio.agent.turn.state.UnavailableTurnExecutionStore();
     }
 
+    /** IN_MEMORY 模式下的进程内会话存储。 */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode",
@@ -276,6 +308,7 @@ public class AgentCapabilityConfiguration {
         return new InMemoryConversationSessionStore();
     }
 
+    /** DISABLED 模式下的会话存储：占位实现（State 不可用时不会被触达）。 */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
             prefix = "portfolio.conversation-context", name = "mode",
@@ -331,12 +364,14 @@ public class AgentCapabilityConfiguration {
                 properties.getDiscussionTtl(), modelExecutionResolver);
     }
 
+    /** 生成 32 字节随机密钥（未配置显式密钥时的临时进程内密钥）。 */
     private byte[] randomSecret() {
         byte[] value = new byte[32];
         new java.security.SecureRandom().nextBytes(value);
         return value;
     }
 
+    /** 取各操作策略中的最大超时作为传输层连接/请求超时。 */
     private Duration maximumTransportTimeout(
             ModelOperationPolicyRegistry operationPolicies) {
         Duration maximum = Duration.ofSeconds(1);
@@ -349,6 +384,7 @@ public class AgentCapabilityConfiguration {
         return maximum;
     }
 
+    /** 解码配置密钥；缺失或空白时生成随机临时密钥；长度不足 32 字节即启动失败。 */
     private byte[] decodeOrRandom(String encoded) {
         if (encoded == null || encoded.isBlank()) return randomSecret();
         try {
@@ -360,6 +396,7 @@ public class AgentCapabilityConfiguration {
         }
     }
 
+    /** 解码必填的配置密钥（previous 密钥路径）：缺失即启动失败，不回退随机值。 */
     private byte[] decodeConfigured(String encoded) {
         if (encoded == null || encoded.isBlank()) {
             throw new IllegalStateException("Agent token key is required");

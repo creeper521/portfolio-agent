@@ -7,13 +7,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Credential-free, settled projection of the model selection and adopted participation. */
+/**
+ * 模型执行的免凭证公众投影：只暴露选择快照与被采纳的参与阶段。
+ *
+ * <p>不含任何 Provider 凭证、请求内容或原始输出；NONE 选择不得携带模型字段或
+ * 参与记录。作为 PublicAgentTurn 的固定组成被序列化与持久化。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class ModelExecutionProjection {
     private static final Pattern MODEL_REF =
             Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?");
 
+    /** 选择类别：显式 MODEL 或显式 NONE。 */
     public enum SelectionKind { MODEL, NONE }
+    /** 被采纳的模型参与阶段：无 / 仅目标解析 / 仅回答生成 / 两者 / 尝试但失败。 */
     public enum Participation {
         NONE,
         GOAL_INTERPRETATION_ONLY,
@@ -59,11 +66,13 @@ public final class ModelExecutionProjection {
         this.selectionVersion = selectionVersion;
     }
 
+    /** NONE 投影单例。 */
     public static ModelExecutionProjection none() {
         return new ModelExecutionProjection(
                 SelectionKind.NONE, null, null, Participation.NONE);
     }
 
+    /** MODEL 投影工厂：模型引用、选择版本与参与阶段。 */
     public static ModelExecutionProjection model(
             String requestedModelRef,
             String selectionVersion,

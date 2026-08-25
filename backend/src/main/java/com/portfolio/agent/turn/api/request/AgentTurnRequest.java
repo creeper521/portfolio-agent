@@ -15,6 +15,14 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * POST /api/agent/turns 的请求合同（Jackson 反序列化目标）。
+ *
+ * <p>字段级 Bean Validation + 未知字段拒绝（fail-closed：多出的字段直接抛错） +
+ * 跨字段形状校验（窗口交替、CONTINUE 操作形状、referenceContextHandle 搭配），
+ * 由 {@link AgentTurnRequestMapper} 翻译为闭合的 {@code AgentTurnCommand}。
+ * toString 不输出任何访客文本，只保留标识符与计数。</p>
+ */
 public final class AgentTurnRequest {
 
     @NotNull(message = "requestId is required")
@@ -72,11 +80,13 @@ public final class AgentTurnRequest {
         return conversationWindow;
     }
 
+    /** fail-closed：任何未知字段都让反序列化立即失败，防止合同外输入被静默吞掉。 */
     @JsonAnySetter
     public void rejectUnknownField(String name, Object value) {
         throw new IllegalArgumentException("unknown request field: " + name);
     }
 
+    /** 跨字段校验：会话窗口必须从 USER 开始严格 USER/ASSISTANT 交替。 */
     @AssertTrue(message = "conversationWindow must alternate USER and ASSISTANT")
     public boolean isConversationWindowOrderValid() {
         for (int index = 0; index < conversationWindow.size(); index++) {
@@ -95,6 +105,7 @@ public final class AgentTurnRequest {
             @JsonSubTypes.Type(value = ResolveClarificationCommandRequest.class,
                     name = "RESOLVE_CLARIFICATION")
     })
+    /** 命令多态标记：按 kind 判别为 ASK / CONTINUE / RESOLVE_CLARIFICATION。 */
     public interface CommandRequest {
     }
 
@@ -103,9 +114,11 @@ public final class AgentTurnRequest {
             @JsonSubTypes.Type(value = ModelModelSelectionRequest.class, name = "MODEL"),
             @JsonSubTypes.Type(value = NoneModelSelectionRequest.class, name = "NONE")
     })
+    /** 模型选择多态标记：按 kind 判别为 MODEL / NONE。 */
     public interface ModelSelectionRequest {
     }
 
+    /** 显式 MODEL 选择：modelRef 与 selectionVersion 均受格式与长度约束。 */
     public static final class ModelModelSelectionRequest implements ModelSelectionRequest {
         @NotBlank(message = "modelRef is required")
         @Size(max = 64, message = "modelRef must not exceed 64 characters")
@@ -141,6 +154,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 显式 NONE 选择：不允许携带任何模型字段。 */
     public static final class NoneModelSelectionRequest implements ModelSelectionRequest {
         @JsonCreator
         public NoneModelSelectionRequest() {
@@ -152,6 +166,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** ASK 命令请求；referenceContextHandle 只能与 FREE_TEXT 输入搭配。 */
     public static final class AskCommandRequest implements CommandRequest {
         @Valid
         @NotNull(message = "ask input is required")
@@ -178,6 +193,7 @@ public final class AgentTurnRequest {
             return referenceContextHandle;
         }
 
+        /** 跨字段校验：referenceContextHandle 只在 FREE_TEXT 输入时允许出现。 */
         @AssertTrue(message =
                 "referenceContextHandle is allowed only for FREE_TEXT")
         public boolean isReferenceContextShapeValid() {
@@ -191,9 +207,11 @@ public final class AgentTurnRequest {
             @JsonSubTypes.Type(value = FreeTextInputRequest.class, name = "FREE_TEXT"),
             @JsonSubTypes.Type(value = PresetInputRequest.class, name = "PRESET")
     })
+    /** Ask 输入多态标记：按 kind 判别为 FREE_TEXT / PRESET。 */
     public interface AskInputRequest {
     }
 
+    /** 自由文本输入（≤2000 字符）。 */
     public static final class FreeTextInputRequest implements AskInputRequest {
         @NotBlank(message = "text is required")
         @Size(max = 2000, message = "text must not exceed 2000 characters")
@@ -209,6 +227,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 预设输入：presetId + 固定格式的 presetRevision。 */
     public static final class PresetInputRequest implements AskInputRequest {
         @NotBlank(message = "presetId is required")
         @Pattern(regexp = "[a-z0-9-]{1,100}", message = "presetId format is invalid")
@@ -235,6 +254,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** CONTINUE 命令请求；字段组合必须匹配所选操作（见 {@link #isOperationShapeValid}）。 */
     public static final class ContinueCommandRequest implements CommandRequest {
         @NotNull(message = "continue operation is required")
         private final ContinueOperation operation;
@@ -285,6 +305,7 @@ public final class AgentTurnRequest {
             return subject;
         }
 
+        /** 跨字段校验：每种 CONTINUE 操作允许携带的字段组合（与服务端命令形状一致）。 */
         @AssertTrue(message = "continue operation fields do not match")
         public boolean isOperationShapeValid() {
             if (operation == null) return false;
@@ -303,6 +324,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** REENTER_SUBJECT 的主体引用请求。 */
     public static final class ContinueSubjectRequest {
         @NotNull(message = "continue subject kind is required")
         private final ContinueSubjectKind kind;
@@ -324,6 +346,7 @@ public final class AgentTurnRequest {
         public String getReference() { return reference; }
     }
 
+    /** RESOLVE_CLARIFICATION 命令请求：澄清 ID 与答案。 */
     public static final class ResolveClarificationCommandRequest implements CommandRequest {
         @NotBlank(message = "clarificationId is required")
         @Pattern(regexp = "[A-Za-z0-9_-]{8,256}", message = "clarificationId format is invalid")
@@ -355,9 +378,11 @@ public final class AgentTurnRequest {
             @JsonSubTypes.Type(value = ChoiceAnswerRequest.class, name = "CHOICE"),
             @JsonSubTypes.Type(value = TextAnswerRequest.class, name = "TEXT")
     })
+    /** 澄清答案多态标记：按 kind 判别为 CHOICE / TEXT。 */
     public interface ClarificationAnswerRequest {
     }
 
+    /** 单选澄清答案。 */
     public static final class ChoiceAnswerRequest implements ClarificationAnswerRequest {
         @NotBlank(message = "choiceId is required")
         @Pattern(regexp = "[A-Za-z0-9_-]{8,256}", message = "choiceId format is invalid")
@@ -373,6 +398,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 文本澄清答案（≤2000 字符）。 */
     public static final class TextAnswerRequest implements ClarificationAnswerRequest {
         @NotBlank(message = "text is required")
         @Size(max = 2000, message = "text must not exceed 2000 characters")
@@ -388,6 +414,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 页面上下文请求（主体提示/受众/来源），整体可缺省。 */
     public static final class SurfaceContextRequest {
         @Valid
         private final SubjectHintRequest subjectHint;
@@ -417,6 +444,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 页面主体提示请求：类别 + 公开 slug。 */
     public static final class SubjectHintRequest {
         @NotNull(message = "subject hint kind is required")
         private final SubjectHintKind kind;
@@ -442,6 +470,7 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 单条会话窗口消息请求（角色 + 内容，内容 ≤4000 字符）。 */
     public static final class MessageRequest {
         @NotNull(message = "message role is required")
         private final MessageRole role;
@@ -467,13 +496,19 @@ public final class AgentTurnRequest {
         }
     }
 
+    /** 会话消息角色。 */
     public enum MessageRole { USER, ASSISTANT }
+    /** 主体提示类别。 */
     public enum SubjectHintKind { PROJECT, CASE }
+    /** 续跑操作类别。 */
     public enum ContinueOperation {
         ENTER_RESULT, ROUTE_IN_CONTEXT, EXIT_CONTEXT, REENTER_SUBJECT
     }
+    /** 续跑主体类别。 */
     public enum ContinueSubjectKind { PROJECT }
+    /** 提问受众角色。 */
     public enum AudienceRole { INTERVIEWER, MENTOR, HR, GUEST }
+    /** 请求来源页面。 */
     public enum RequestSource { HOME, PROJECT, CASE, AGENT_PAGE }
 
     @Override

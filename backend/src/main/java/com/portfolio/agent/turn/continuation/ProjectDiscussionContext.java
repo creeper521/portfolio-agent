@@ -4,7 +4,14 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
 
-/** Encrypted short-lived typed authority for one locked public project. */
+/**
+ * Encrypted short-lived typed authority for one locked public project.
+ *
+ * <p>项目讨论上下文：锁定单个公开项目的短生命周期授权。
+ * switchCandidateProjectIds 界定讨论内可切换的项目范围（必须包含锁定
+ * 项目，1..5 个）；sourceRecommendationHandle 记录来源推荐上下文，
+ * 直接重入时为 null。</p>
+ */
 public final class ProjectDiscussionContext extends ContinuationContext {
     private final String projectId;
     private final Set<String> switchCandidateProjectIds;

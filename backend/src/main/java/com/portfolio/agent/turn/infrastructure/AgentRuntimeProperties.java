@@ -7,6 +7,13 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+/**
+ * Agent 运行时限流与预算配置（portfolio.agent-runtime 前缀）。
+ *
+ * <p>限流维度：来源 RPM/并发、全局 Active Turn 上限、来源追踪容量；时间预算：
+ * Turn 超时、结算预留、认领租期与数据库操作超时。所有数值 setter 都做正数校验，
+ * 时间预算关系在 {@link #validateBudgetRelation} 与初始化时 fail-closed 校验。</p>
+ */
 @ConfigurationProperties(prefix = "portfolio.agent-runtime")
 public final class AgentRuntimeProperties implements InitializingBean {
     private int requestsPerMinute = 10;
@@ -84,6 +91,11 @@ public final class AgentRuntimeProperties implements InitializingBean {
         databaseOperationTimeout = positive(value, "databaseOperationTimeout");
     }
 
+    /**
+     * 校验时间预算关系（fail-closed）：结算预留短于 Turn 超时；认领租期严格大于
+     * 超时+预留+数据库恢复预算；数据库操作超时短于执行窗口。违反任何一条都让
+     * 应用启动失败，而不是带着可能丢结算的配置运行。
+     */
     public void validateBudgetRelation() {
         if (settlementReserve.compareTo(turnTimeout) >= 0) {
             throw new IllegalStateException("settlement reserve must be shorter than turn timeout");
@@ -100,6 +112,7 @@ public final class AgentRuntimeProperties implements InitializingBean {
         }
     }
 
+    /** 初始化即校验预算关系（实现 InitializingBean 的 fail-closed 入口）。 */
     @Override
     public void afterPropertiesSet() {
         validateBudgetRelation();

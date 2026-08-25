@@ -9,7 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/** Keyed fingerprint of the canonical closed command; raw user text is never persisted. */
+/**
+ * 请求指纹工厂：对闭合 Command 的规范字节串做 HMAC-SHA256 键控指纹。
+ *
+ * <p>指纹用于幂等 Claim 与冲突检测，替代持久化原始用户文本——访客问题只进入
+ * HMAC 输入，从不落库。支持密钥轮换：当前密钥签名写入，历史密钥一并生成候选，
+ * 与 {@link RequestFingerprintSet} 配套在轮换窗口内接受旧指纹。</p>
+ */
 public final class RequestFingerprintFactory {
     private final List<Key> keys;
     public RequestFingerprintFactory(byte[] secret) {
@@ -29,10 +35,16 @@ public final class RequestFingerprintFactory {
         keys = List.copyOf(configured);
     }
 
+    /** 用当前密钥计算单条指纹（测试便捷入口；生产路径使用 {@link #fingerprints}）。 */
     public byte[] fingerprint(AgentTurnCommand command) {
         return fingerprint(command, keys.getFirst().secret());
     }
 
+    /**
+     * 用当前密钥签名，并为全部历史密钥各生成一份候选指纹。
+     *
+     * @return 当前指纹位于首位、候选覆盖所有密钥世代的指纹集
+     */
     public RequestFingerprintSet fingerprints(AgentTurnCommand command) {
         List<RequestFingerprintSet.Candidate> values = keys.stream()
                 .map(key -> new RequestFingerprintSet.Candidate(
@@ -64,6 +76,7 @@ public final class RequestFingerprintFactory {
         return java.util.Map.copyOf(indexed);
     }
 
+    /** 一个指纹密钥世代；secret 防御性复制，读取时同样返回副本。 */
     private record Key(String keyId, byte[] secret) {
         private Key {
             if (keyId == null || keyId.isBlank()) {
@@ -74,6 +87,11 @@ public final class RequestFingerprintFactory {
         @Override public byte[] secret() { return secret.clone(); }
     }
 
+    /**
+     * 把闭合 Command 序列化为规范字节串：每个字段以 UTF-8 长度前缀写入，分支用
+     * 大写判别标记区分。字段顺序与判别标记是指纹兼容契约的一部分，任何调整都会
+     * 使已存储指纹失效（表现为既有请求被判定为 CONFLICT）。
+     */
     private byte[] canonical(AgentTurnCommand command) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
@@ -130,6 +148,7 @@ public final class RequestFingerprintFactory {
         return bytes.toByteArray();
     }
 
+    /** 长度前缀写入单个字符串字段，避免相邻字段拼接产生歧义编码。 */
     private void value(DataOutputStream output, String value) throws Exception {
         byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
         output.writeInt(encoded.length);

@@ -8,9 +8,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 请求合同到闭合命令的翻译器：AgentTurnRequest → AgentTurnCommand。
+ *
+ * <p>纯结构映射（同名枚举按 name 对译），不做任何业务决策；命令构造器的严格校验
+ * 在此自然生效，非法组合直接以 IllegalArgumentException 拒绝。</p>
+ */
 @Component
 public final class AgentTurnRequestMapper {
 
+    /**
+     * 把已通过校验的请求映射为闭合命令。
+     *
+     * @throws IllegalArgumentException 命令/选择/答案类型不在已知判别集合内
+     */
     public AgentTurnCommand toCommand(AgentTurnRequest request) {
         Objects.requireNonNull(request, "request");
         AgentTurnCommand.ModelSelection modelSelection = mapModelSelection(

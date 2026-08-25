@@ -27,7 +27,14 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 
-/** One production Agent State DataSource and transaction boundary. */
+/**
+ * POSTGRESQL 模式的 Agent State 数据源与事务边界装配。
+ *
+ * <p>提供独立的 Hikari 连接池（容量对齐 Active Turn 预算）、Flyway 迁移、
+ * JdbcTemplate 与事务模板，并装配加密 codec、JDBC State/会话存储、定时清理与
+ * 密钥覆盖就绪门。连接池与网络超时全部对齐 databaseOperationTimeout，防止单条
+ * 语句占用超出 Turn 预算的时间。</p>
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(
@@ -36,6 +43,7 @@ import java.util.Set;
         ConversationContextProperties.class, ConversationContextDatabaseProperties.class,
         com.portfolio.agent.turn.infrastructure.AgentRuntimeProperties.class})
 public class ConversationContextDatabaseConfiguration {
+    /** Agent State 专用 Hikari 连接池（独立于业务只读数据源）。 */
     @Bean(name = "conversationContextDataSource", destroyMethod = "close")
     DataSource dataSource(
             ConversationContextDatabaseProperties properties,
@@ -66,6 +74,7 @@ public class ConversationContextDatabaseConfiguration {
         return config;
     }
 
+    /** State schema 的 Flyway 迁移（独立历史表），在 JdbcTemplate 装配前执行。 */
     @Bean(name = "conversationContextFlyway")
     Flyway flyway(
             @Qualifier("conversationContextDataSource") DataSource dataSource,
@@ -77,6 +86,7 @@ public class ConversationContextDatabaseConfiguration {
         return flyway;
     }
 
+    /** State 专用 JdbcTemplate（依赖 Flyway 先完成迁移）。 */
     @Bean(name = "conversationContextJdbcTemplate")
     JdbcTemplate jdbc(
             @Qualifier("conversationContextDataSource") DataSource dataSource,
@@ -84,18 +94,24 @@ public class ConversationContextDatabaseConfiguration {
         return new JdbcTemplate(dataSource);
     }
 
+    /** State 专用事务管理器与模板（单一事务边界）。 */
     @Bean(name = "conversationContextTransactionManager")
     PlatformTransactionManager transactionManager(
             @Qualifier("conversationContextDataSource") DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
     }
 
+    /** 编程式事务模板（State 存储的所有事务都经此执行）。 */
     @Bean(name = "conversationContextTransactionTemplate")
     TransactionTemplate transactions(
             @Qualifier("conversationContextTransactionManager") PlatformTransactionManager manager) {
         return new TransactionTemplate(manager);
     }
 
+    /**
+     * 载荷加密 codec 装配：校验 TTL 配置、解码载荷/令牌密钥并强制两族密钥不同
+     * （fail-closed：base64 非法或长度非 32 字节即启动失败）。
+     */
     @Bean
     AgentStatePayloadCodec agentStatePayloadCodec(
             ObjectMapper mapper, ConversationContextProperties properties) {
@@ -115,6 +131,7 @@ public class ConversationContextDatabaseConfiguration {
                 currentPayloadKey, previousKeys);
     }
 
+    /** JDBC Agent State 权威存储（令牌与指纹密钥同源、支持轮换窗口）。 */
     @Bean
     JdbcAgentStateStore jdbcAgentStateStore(
             @Qualifier("conversationContextJdbcTemplate") JdbcTemplate jdbc,
@@ -138,6 +155,7 @@ public class ConversationContextDatabaseConfiguration {
         return store;
     }
 
+    /** 会话存储（注入 codec 以解密行内语义状态）。 */
     @Bean
     ConversationSessionStore jdbcConversationSessionStore(
             @Qualifier("conversationContextJdbcTemplate") JdbcTemplate jdbc,
@@ -156,17 +174,20 @@ public class ConversationContextDatabaseConfiguration {
                 java.time.Clock.systemUTC(), codec);
     }
 
+    /** 定时清理任务。 */
     @Bean
     AgentStateCleanupJob agentStateCleanupJob(JdbcAgentStateStore store) {
         return new AgentStateCleanupJob(store);
     }
 
+    /** 启动期密钥覆盖就绪门（初始化即断言，失败拒绝启动）。 */
     @Bean
     AgentStateKeyCoverageReadiness agentStateKeyCoverageReadiness(
             JdbcAgentStateStore store) {
         return new AgentStateKeyCoverageReadiness(store, java.time.Clock.systemUTC());
     }
 
+    /** 解码 base64 密钥；长度必须恰为 32 字节（AES-256），否则启动失败。 */
     private static byte[] decode(String value, String name) {
         try {
             byte[] decoded = Base64.getDecoder().decode(required(value, name));
@@ -176,17 +197,20 @@ public class ConversationContextDatabaseConfiguration {
             throw new IllegalStateException(name + " must be base64", failure);
         }
     }
+    /** 必填配置项读取：缺失即启动失败。 */
     private static String required(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalStateException(name + " is required");
         return value.trim();
     }
 
+    /** 可选的 previous 密钥：keyId 与值必须成对出现，缺省返回空映射。 */
     private static Map<String, byte[]> optionalKey(
             String keyId, String encoded, String name) {
         if (keyId == null || keyId.isBlank()) return Map.of();
         return Map.of(required(keyId, name + " id"), decode(encoded, name));
     }
 
+    /** 当前 + previous 密钥 id 的受支持集合（轮换窗口）。 */
     private static Set<String> supportedIds(String current, String previous) {
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
         ids.add(required(current, "token key id"));

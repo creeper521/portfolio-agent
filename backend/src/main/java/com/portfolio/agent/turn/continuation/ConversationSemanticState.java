@@ -11,7 +11,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Bounded text-free semantic memory for the last successfully produced turn. */
+/**
+ * Bounded text-free semantic memory for the last successfully produced turn.
+ *
+ * <p>会话语义状态：最近一次成功 Turn 的有界、无文本语义记忆。只保留
+ * 闭合枚举、公开主体引用与小节引用，不保留任何生成文本或访客原文。</p>
+ */
 public record ConversationSemanticState(
         String contentReleaseId,
         List<GoalSummary> goals,
@@ -28,6 +33,12 @@ public record ConversationSemanticState(
         }
     }
 
+    /**
+     * 单个目标的语义摘要：类别、主体、请求输出、类型化参数与小节引用。
+     *
+     * <p>数量约束：主体至多 5 个且不重复，小节至多 12 个且 ID 唯一，
+     * 推荐数量 1..5，约束必须是闭合前缀命名。</p>
+     */
     public record GoalSummary(
             String goalId,
             GoalKind goalKind,
@@ -63,6 +74,10 @@ public record ConversationSemanticState(
             }
         }
 
+        /**
+         * 判断该目标是否可安全用于作品集续接：作品集类目标必须已有主体，
+         * 通用解释/比较/概念关联类目标不可续接。
+         */
         @com.fasterxml.jackson.annotation.JsonIgnore
         public boolean isPortfolioContinuationSafe() {
             return switch (goalKind) {
@@ -74,6 +89,7 @@ public record ConversationSemanticState(
         }
     }
 
+    /** 持久化主体：类别与公开引用；RESULT 类别不可持久化。 */
     public record Subject(GoalSubjectReference.Kind kind, String reference) {
         public Subject {
             kind = Objects.requireNonNull(kind, "kind");
@@ -84,6 +100,7 @@ public record ConversationSemanticState(
         }
     }
 
+    /** 小节引用：小节 ID 与公开小节类型；REJECTED 小节不可持久化。 */
     public record SectionReference(String sectionId, AnswerSectionType sectionKind) {
         public SectionReference {
             sectionId = id(sectionId, "sectionId");

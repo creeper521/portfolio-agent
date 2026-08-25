@@ -3,6 +3,12 @@ package com.portfolio.agent.turn.projection;
 import com.portfolio.agent.turn.execution.AnswerSectionType;
 import java.util.Objects;
 
+/**
+ * 公众回答的单个分节：稳定 sectionId、类型、标题、内容与支撑声明。
+ *
+ * <p>REJECTED 类型的节不允许出现在公众回答中（构造期拒绝）；sectionId 遵循
+ * 公开 slug 字符集。</p>
+ */
 public final class PublicSection {
     private final String sectionId;
     private final AnswerSectionType sectionKind;

@@ -15,6 +15,13 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 通用知识生成的模型端口适配器（OpenAI 兼容结构化协议）。
+ *
+ * <p>把 GeneralKnowledgeRequest 投影为受限 JSON 输入，经结构化传输调用所选模型并
+ * 返回 JSON 草稿文本；能力闸门、截止时间封顶与失败映射与 Goal 解析适配器一致。
+ * 采样温度固定为 0.2（贴近确定的说明文风）。</p>
+ */
 public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKnowledgeModelPort {
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
@@ -31,6 +38,12 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
         this.systemPrompt = systemPrompt;
         this.maxTokens = maxTokens; this.timeout = timeout;
     }
+    /**
+     * 执行一次通用知识生成调用，返回模型输出的 JSON 草稿文本。
+     *
+     * @throws SelectedModelFailureException 所选模型不支持该能力、被限流或传输失败
+     * @throws GeneralKnowledgeUnavailableException 能力未启用或输入投影失败
+     */
     @Override public String generate(
             GeneralKnowledgeRequest request,
             ResolvedModelExecution modelExecution) {

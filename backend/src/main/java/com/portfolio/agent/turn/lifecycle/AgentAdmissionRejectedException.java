@@ -30,9 +30,13 @@ public final class AgentAdmissionRejectedException extends RuntimeException {
         return retryAfterSeconds;
     }
 
+    /** 触发拒绝的具体资源维度；仅用于内部诊断与精确的 Retry-After 计算。 */
     public enum RejectionReason {
+        /** 固定窗口内该来源的 RPM 已耗尽。 */
         SOURCE_RPM_LIMIT,
+        /** 该来源并发中的请求数已达上限。 */
         SOURCE_CONCURRENCY_LIMIT,
+        /** 单实例全局 Active Turn 许可已耗尽。 */
         GLOBAL_ACTIVE_TURN_LIMIT
     }
 }

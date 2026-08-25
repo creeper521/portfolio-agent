@@ -8,6 +8,12 @@ import com.portfolio.agent.turn.projection.SuggestedAction;
 
 import java.time.Instant;
 
+/**
+ * GET /api/agent/conversations/current 的响应合同：当前匿名会话摘要。
+ *
+ * <p>由生命周期层的 DiscussionSummary 投影而来，把讨论状态翻译成前端可直接渲染的
+ * 建议动作（继续追问/结束讨论/重新进入/开始新话题）与续跑引用。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class ConversationSummaryResponse {
     private final String conversationId;
@@ -33,6 +39,10 @@ public final class ConversationSummaryResponse {
         return activeDiscussion;
     }
 
+    /**
+     * 活跃讨论投影：状态、主体、过期时间，以及按 ACTIVE/EXPIRED 二选一的动作集
+     * （活跃时提供"结束讨论"，过期时提供"重新进入"与"开始新话题"）。
+     */
     public static final class ActiveDiscussion {
         private final ActiveDiscussionPointer.Status status;
         private final Subject subject;
@@ -88,6 +98,7 @@ public final class ConversationSummaryResponse {
         }
     }
 
+    /** 讨论主体：类别、引用 ID、展示名与站内路由。 */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static final class Subject {
         private final String kind;

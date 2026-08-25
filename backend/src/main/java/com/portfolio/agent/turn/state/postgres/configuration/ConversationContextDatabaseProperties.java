@@ -2,6 +2,12 @@ package com.portfolio.agent.turn.state.postgres.configuration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Agent State 专用数据库连接配置（portfolio.database.context 前缀）。
+ *
+ * <p>凭据只经环境变量注入，不进入仓库；schema 固定为 agent_context（专用隔离
+ * schema），validate 在数据源创建前强制校验。</p>
+ */
 @ConfigurationProperties(prefix = "portfolio.database.context")
 public class ConversationContextDatabaseProperties {
     private String url;
@@ -18,6 +24,10 @@ public class ConversationContextDatabaseProperties {
     public String getSchema() { return schema; }
     public void setSchema(String schema) { this.schema = schema; }
 
+    /**
+     * fail-closed 校验：URL/用户名/密码必填（缺失即启动失败），
+     * schema 必须固定为 agent_context。
+     */
     public void validate() {
         require(url, "PORTFOLIO_CONTEXT_DATABASE_URL");
         require(username, "PORTFOLIO_CONTEXT_DATABASE_USERNAME");

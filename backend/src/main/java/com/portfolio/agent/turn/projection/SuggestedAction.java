@@ -3,6 +3,12 @@ package com.portfolio.agent.turn.projection;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.portfolio.agent.turn.continuation.ContinuationReference;
 
+/**
+ * 建议动作：前端可渲染的下一步操作（预填输入或续跑引用）。
+ *
+ * <p>actionId 与 label 必填；inputText 与 {@link ContinuationReference}
+ * 按动作语义二选一或都缺省。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class SuggestedAction {
     private final String actionId;

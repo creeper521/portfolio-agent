@@ -19,13 +19,25 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/** Builds state mutations from fulfillment SemanticResults and authorized bindings only. */
+/**
+ * Builds state mutations from fulfillment SemanticResults and authorized bindings only.
+ *
+ * <p>上下文变更规划器：Settlement 前根据履行任务产出的推荐结果规划要写入
+ * State 的 ContinuationContext。只使用后端拥有的授权主体范围与闭合约束，
+ * 不读取 Provider 生成文本。</p>
+ */
 public final class ContextMutationPlanner {
     private final Supplier<String> handleIssuer;
     public ContextMutationPlanner(Supplier<String> handleIssuer) {
         this.handleIssuer = Objects.requireNonNull(handleIssuer, "handleIssuer");
     }
 
+    /**
+     * 为计划中每个产出推荐结果的目标规划一个上下文变更。
+     *
+     * <p>仅处理履行任务产出 PortfolioSemanticResult.Recommendation 的目标，
+     * 其余目标不产生可续接上下文。</p>
+     */
     public List<Mutation> plan(
             String conversationId, SemanticTurnPlan plan, SemanticTurnOutcome outcome,
             Instant expiresAt) {
@@ -46,6 +58,7 @@ public final class ContextMutationPlanner {
         return List.copyOf(mutations);
     }
 
+    /** 由推荐结果构建 RECOMMENDATION 上下文：签发新句柄、抽取授权范围、约束与结果项。 */
     private ContinuationContext context(
             String conversationId, String release, Instant expiresAt,
             UserGoal goal, SemanticTask task,
@@ -70,6 +83,7 @@ public final class ContextMutationPlanner {
                 recommendation.getRequestedSize(), items);
     }
 
+    /** 抽取任务的推荐约束；非推荐任务返回空集合。 */
     private Set<String> constraints(SemanticTask task) {
         if (task.getParameters().getParameters()
                 instanceof UserGoalProposal.PortfolioRecommendationParameters value) {
@@ -78,6 +92,7 @@ public final class ContextMutationPlanner {
         return Set.of();
     }
 
+    /** 单条变更：目标 ID 与为该目标新建的续接上下文。 */
     public record Mutation(String goalId, ContinuationContext context) {
         public Mutation {
             goalId = ContinuationContext.text(goalId, "goalId");

@@ -4,6 +4,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 回答级公开来源目录：全部呈现共享的去重来源列表。
+ *
+ * <p>目录键全局唯一（构造期校验）；Source.route 只接受站内相对路由，
+ * 拒绝协议、反斜杠、上跳与换行，防止公众响应被注入外部或越权链接。</p>
+ */
 public final class PublicSourceCatalog {
     private final List<Source> sources;
 
@@ -15,6 +21,7 @@ public final class PublicSourceCatalog {
     }
     public List<Source> getSources() { return sources; }
 
+    /** 目录中的单个公开来源：键、代码、展示名、类型与站内路由。 */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static final class Source {
         private final String key;
@@ -40,6 +47,7 @@ public final class PublicSourceCatalog {
             if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
             return value.trim();
         }
+        /** 校验站内相对路由：必须以单个 / 开头，且不含协议、盘符、上跳与换行。 */
         private static String route(String value) {
             String route = text(value, "route");
             if (!route.startsWith("/") || route.startsWith("//") || route.contains(":")

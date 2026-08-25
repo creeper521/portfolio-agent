@@ -5,6 +5,12 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Goal 呈现的公众密封接口：分节呈现或推荐呈现两种形态。
+ *
+ * <p>由投影器从内部呈现类型（Portfolio/General/CrossDomain/Recommendation）
+ * 翻译而来；所有文本必须非空，推荐数量与原因的组合受构造期不变量约束。</p>
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
         property = "kind", visible = false)
 @JsonSubTypes({
@@ -14,8 +20,10 @@ import java.util.Objects;
 public sealed interface PublicPresentation
         permits PublicPresentation.Sectioned, PublicPresentation.Recommendation {
     Kind getKind();
+    /** 呈现类别判别值。 */
     enum Kind { SECTIONED, RECOMMENDATION }
 
+    /** 分节呈现：有序非空的 PublicSection 列表。 */
     final class Sectioned implements PublicPresentation {
         private final List<PublicSection> sections;
         public Sectioned(List<PublicSection> sections) {
@@ -26,6 +34,10 @@ public sealed interface PublicPresentation
         public List<PublicSection> getSections() { return sections; }
     }
 
+    /**
+     * 推荐呈现：请求/实际数量（1–5 且实际不超过请求）、逐项推荐与支撑节。
+     * 数量不足时必须给出 incompleteReasons；数量恰好时不得报告数量缺口。
+     */
     final class Recommendation implements PublicPresentation {
         private final int requestedSize;
         private final int actualSize;
@@ -67,6 +79,7 @@ public sealed interface PublicPresentation
         public List<String> getIncompleteReasons() { return incompleteReasons; }
         public List<PublicSection> getSupportingSections() { return supportingSections; }
 
+        /** 单个推荐项：稳定 resultItemId、汇总文案、路由、理由、支撑与讨论动作。 */
         public static final class Item {
             private final String resultItemId;
             private final String label;

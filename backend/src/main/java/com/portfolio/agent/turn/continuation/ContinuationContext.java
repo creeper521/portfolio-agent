@@ -15,6 +15,12 @@ import java.util.Set;
         @JsonSubTypes.Type(value = ProjectDiscussionContext.class,
                 name = "PROJECT_DISCUSSION")
 })
+/**
+ * 续接上下文：State 中短生命周期的加密 typed 会话上下文基类。
+ *
+ * <p>由上下文句柄、会话 ID、内容发布 ID 与过期时间构成；两个子类为
+ * 推荐上下文与项目讨论上下文。Jackson 以 kind 判别子类型。</p>
+ */
 public abstract sealed class ContinuationContext permits
         ContinuationContext.Recommendation,
         ProjectDiscussionContext {
@@ -36,11 +42,19 @@ public abstract sealed class ContinuationContext permits
     public String getContentReleaseId() { return contentReleaseId; }
     public Instant getExpiresAt() { return expiresAt; }
     public abstract Kind getKind();
+    /** 上下文类别：推荐结果上下文或项目讨论上下文。 */
     public enum Kind {
         RECOMMENDATION,
         PROJECT_DISCUSSION
     }
 
+    /**
+     * 推荐上下文：一次推荐结果的续接凭据。
+     *
+     * <p>allPublishedAuthorized 为 true 表示授权范围为全部公开主体（不再
+     * 枚举主体 ID）；selectedResults 为推荐产生的结果项集合，非全量授权时
+     * 每个结果项的主体必须落在授权主体集合内。</p>
+     */
     public static final class Recommendation extends ContinuationContext {
         private final boolean allPublishedAuthorized;
         private final Set<String> authorizedSubjectIds;
@@ -87,6 +101,7 @@ public abstract sealed class ContinuationContext permits
 
     }
 
+    /** 推荐结果项：结果项 ID 与其指向的公开主体 ID。 */
     public record ResultItem(String resultItemId, String subjectId) {
         public ResultItem {
             resultItemId = text(resultItemId, "resultItemId");

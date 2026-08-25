@@ -4,6 +4,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * 闭合的 Agent Turn 命令：管线全部阶段的唯一输入载体。
+ *
+ * <p>三种具体命令——Ask（提问）、Continue（续跑操作）、ResolveClarification（回答澄清
+ * challenge）。所有外部输入在构造期完成严格校验（不透明 Handle 的字符集、文本长度、
+ * 枚举形状），后续阶段可以信任其形状。命令是隐私边界对象：toString 只输出 requestId、
+ * 模型选择与消息计数，访客文本只进入指纹 HMAC 与模型输入，从不持久化。</p>
+ */
 public abstract class AgentTurnCommand {
 
     private final UUID requestId;
@@ -40,6 +48,10 @@ public abstract class AgentTurnCommand {
         return conversationWindow;
     }
 
+    /**
+     * 提问命令。referenceContextHandle 只允许与 FREE_TEXT 输入搭配，
+     * 用于把自由文本路由到既有推荐上下文。
+     */
     public static final class Ask extends AgentTurnCommand {
         private final AskInput input;
         private final String referenceContextHandle;
@@ -81,9 +93,11 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** Ask 输入的多态标记接口。 */
     public interface AskInput {
     }
 
+    /** 自由文本输入；文本必填且不超过 2000 字符。 */
     public static final class FreeText implements AskInput {
         private final String text;
 
@@ -96,6 +110,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 预设问题输入；presetRevision 形如 {@code pcv1-<hash>}，锁定预设内容版本。 */
     public static final class Preset implements AskInput {
         private final String presetId;
         private final String presetRevision;
@@ -116,6 +131,10 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /**
+     * 续跑命令。每种操作对携带字段有严格形状约束（见 {@link #operationShapeValid}），
+     * contextHandle 等不透明 Handle 必须满足服务端 Handle 字符集。
+     */
     public static final class Continue extends AgentTurnCommand {
         private final ContinueOperation operation;
         private final String contextHandle;
@@ -168,6 +187,11 @@ public abstract class AgentTurnCommand {
             return Optional.ofNullable(subject);
         }
 
+        /**
+         * 操作形状状态机：ENTER_RESULT 要 handle+resultItemId，ROUTE_IN_CONTEXT 要
+         * handle+text，EXIT_CONTEXT 只要 handle，REENTER_SUBJECT 只要 subject。
+         * 违反组合的字段在构造期即拒绝。
+         */
         private boolean operationShapeValid() {
             return switch (operation) {
                 case ENTER_RESULT -> contextHandle != null
@@ -182,6 +206,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 续跑主体引用：当前只支持 PROJECT 一种主体类别。 */
     public static final class ContinueSubject {
         private final ContinueSubjectKind kind;
         private final String reference;
@@ -197,6 +222,7 @@ public abstract class AgentTurnCommand {
         public String getReference() { return reference; }
     }
 
+    /** 回答澄清 challenge 的命令；clarificationId 是服务端签发的不透明 Handle。 */
     public static final class ResolveClarification extends AgentTurnCommand {
         private final String clarificationId;
         private final ClarificationAnswer answer;
@@ -222,9 +248,11 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 澄清答案的多态标记接口。 */
     public interface ClarificationAnswer {
     }
 
+    /** 单选答案；choiceId 由 challenge 定义预先枚举。 */
     public static final class ChoiceAnswer implements ClarificationAnswer {
         private final String choiceId;
 
@@ -237,6 +265,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 文本答案；受与自由提问相同的长度上界约束。 */
     public static final class TextAnswer implements ClarificationAnswer {
         private final String text;
 
@@ -249,6 +278,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 前端页面上下文提示（主体、受众、入口），全部可缺省。 */
     public static final class SurfaceContext {
         private final SubjectHint subjectHint;
         private final AudienceRole audienceRole;
@@ -263,6 +293,7 @@ public abstract class AgentTurnCommand {
             this.requestSource = requestSource;
         }
 
+        /** 无主体提示时的空上下文工厂。 */
         public static SurfaceContext empty() {
             return new SurfaceContext(null, null, null);
         }
@@ -280,6 +311,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 页面主体提示：类别 + slug，slug 必须符合公开 slug 字符集。 */
     public static final class SubjectHint {
         private final SubjectHintKind kind;
         private final String slug;
@@ -298,22 +330,30 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 主体提示类别。 */
     public enum SubjectHintKind {
         PROJECT,
         CASE
     }
 
+    /** 续跑操作类别；决定 Continue 携带字段的合法组合。 */
     public enum ContinueOperation {
+        /** 进入推荐结果详情并开启项目讨论。 */
         ENTER_RESULT,
+        /** 在当前讨论上下文内追问。 */
         ROUTE_IN_CONTEXT,
+        /** 退出当前讨论上下文。 */
         EXIT_CONTEXT,
+        /** 重新进入一个此前讨论过的主体。 */
         REENTER_SUBJECT
     }
 
+    /** 续跑主体类别。 */
     public enum ContinueSubjectKind {
         PROJECT
     }
 
+    /** 提问受众角色，用于裁剪回答的呈现风格。 */
     public enum AudienceRole {
         INTERVIEWER,
         MENTOR,
@@ -321,6 +361,7 @@ public abstract class AgentTurnCommand {
         GUEST
     }
 
+    /** 请求来源页面，用于来源统计与提示消歧。 */
     public enum RequestSource {
         HOME,
         PROJECT,
@@ -328,11 +369,17 @@ public abstract class AgentTurnCommand {
         AGENT_PAGE
     }
 
+    /** 模型选择类别：显式选择模型或显式无模型。 */
     public enum ModelSelectionKind {
         MODEL,
         NONE
     }
 
+    /**
+     * 模型选择：每个 Turn 必须显式 MODEL(modelRef + selectionVersion) 或 NONE，
+     * 不允许隐式回退。MODEL 时两个字段都必须符合严格格式；NONE 时不得携带任何
+     * 模型字段。不可变且按值相等。
+     */
     public static final class ModelSelection {
         private final ModelSelectionKind kind;
         private final String modelRef;
@@ -360,11 +407,13 @@ public abstract class AgentTurnCommand {
             }
         }
 
+        /** 显式选择一个模型（modelRef + selectionVersion 快照）。 */
         public static ModelSelection model(String modelRef, String selectionVersion) {
             return new ModelSelection(
                     ModelSelectionKind.MODEL, modelRef, selectionVersion);
         }
 
+        /** 显式无模型执行（纯确定性 Portfolio 路径）。 */
         public static ModelSelection none() {
             return new ModelSelection(ModelSelectionKind.NONE, null, null);
         }
@@ -408,6 +457,7 @@ public abstract class AgentTurnCommand {
         }
     }
 
+    /** 校验服务端签发的不透明 Handle 格式（字母数字下划线连字符，8–256 位）。 */
     private static String requireOpaque(String value, String name) {
         return requirePattern(value, name, "[A-Za-z0-9_-]{8,256}");
     }

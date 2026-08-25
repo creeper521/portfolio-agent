@@ -4,6 +4,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
+/**
+ * 会话上下文（Agent State）模式与留存配置（portfolio.conversation-context 前缀）。
+ *
+ * <p>三种模式：DISABLED（只读作品集）、IN_MEMORY（快速测试）、POSTGRESQL（标准
+ * 生产）。TTL 体系——绝对/空闲留存、澄清 TTL（更短）、讨论 TTL（≤30 分钟）与
+ * 密钥轮换保留期，关系约束在 {@link #validate()} 中 fail-closed 校验。</p>
+ */
 @ConfigurationProperties(prefix = "portfolio.conversation-context")
 public class ConversationContextProperties {
     private Mode mode = Mode.DISABLED;
@@ -34,6 +41,14 @@ public class ConversationContextProperties {
     public void setCleanupBatchSize(int cleanupBatchSize) { this.cleanupBatchSize = cleanupBatchSize; }
     public Crypto getCrypto() { return crypto; }
 
+    /**
+     * fail-closed 校验留存与密钥配置：空闲 TTL 必须等于绝对 TTL；澄清/讨论 TTL
+     * 为正且不超过绝对 TTL（讨论另受 30 分钟硬上限约束）；密钥轮换保留期必须
+     * 覆盖绝对 TTL + 清理间隔；POSTGRESQL 模式下令牌密钥与载荷密钥必须分离，
+     * 且 current/previous 密钥 id 不得重复。
+     *
+     * @throws IllegalStateException 任一约束被违反
+     */
     public void validate() {
         if (idleTtl.isNegative() || idleTtl.isZero()
                 || absoluteTtl.isNegative() || absoluteTtl.isZero()
@@ -58,6 +73,7 @@ public class ConversationContextProperties {
         rejectReusedId(crypto.currentPayloadKeyId, crypto.previousPayloadKeyId, "payload");
     }
 
+    /** 拒绝同一密钥世代复用 id（current 与 previous 相同会使轮换判定失效）。 */
     private void rejectReusedId(String current, String previous, String name) {
         if (current != null && previous != null
                 && !current.isBlank() && current.trim().equals(previous.trim())) {
@@ -65,6 +81,7 @@ public class ConversationContextProperties {
         }
     }
 
+    /** 令牌与载荷两族密钥的轮换配置：current 必填于使用处，previous 必须成对出现。 */
     public static class Crypto {
         private String currentTokenKeyId;
         private String currentTokenKey;
@@ -92,6 +109,7 @@ public class ConversationContextProperties {
         public String getPreviousPayloadKey() { return previousPayloadKey; }
         public void setPreviousPayloadKey(String value) { previousPayloadKey = value; }
 
+        /** previous 密钥的 id 与值必须同时出现或同时缺失。 */
         private void validatePairs() {
             requirePair(previousTokenKeyId, previousTokenKey, "previous token key");
             requirePair(previousPayloadKeyId, previousPayloadKey, "previous payload key");
@@ -102,5 +120,6 @@ public class ConversationContextProperties {
             }
         }
     }
+    /** State 模式：DISABLED 只读 / IN_MEMORY 快速测试 / POSTGRESQL 标准生产。 */
     public enum Mode { DISABLED, IN_MEMORY, POSTGRESQL }
 }

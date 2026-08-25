@@ -69,7 +69,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-/** Claim -> resolve -> plan -> execute -> project -> single settlement lifecycle. */
+/**
+ * Agent 轮次生命周期编排服务：Command → Goal → Plan → Execution → PublicAgentTurn
+ * → Settlement 的唯一运行时权威。
+ *
+ * <p>串行编排 会话解析 → 幂等 Claim（含重放）→ 模型选择解析 → 目标解析 → 计划编译 →
+ * 语义执行 → 公众投影 → 单次原子结算，并持有活跃轮次取消注册表与 State 执行线程。
+ * 任何阶段失败都收敛为终止态 PublicAgentTurn 或 STORE_UNAVAILABLE，不留半完成状态；
+ * State 读写全部经由 stateExecutor 并受 TurnDeadline 与 settlementReserve 约束。</p>
+ */
 public final class AgentTurnLifecycleService {
     private final ConversationSemanticStateProjector semanticStateProjector =
             new ConversationSemanticStateProjector();
@@ -157,6 +165,15 @@ public final class AgentTurnLifecycleService {
                         }));
     }
 
+    /**
+     * 执行一个 Turn：解析会话凭证后在租期内完成 Claim → 执行 → 结算。
+     *
+     * <p>匿名首次请求会签发试探性会话，仅在结算成功（或重放）时才提交会话并回传
+     * ResumeToken 与讨论摘要；UNAUTHORIZED、凭据无效等情形不回传任何会话信息。</p>
+     *
+     * @param bearerToken ResumeToken 凭证字面值，可为 null（匿名）
+     * @return 含状态、Turn、会话元数据的 {@link Result}；不抛出业务异常
+     */
     public Result execute(String bearerToken, AgentTurnCommand command) {
         Instant turnStartedAt = clock.instant();
         TurnDeadline turnDeadline = new TurnDeadline(
@@ -191,6 +208,12 @@ public final class AgentTurnLifecycleService {
         return result;
     }
 
+    /**
+     * Claim 之后的主执行路径：在 stateExecutor 上限时执行 Claim，按结果分流
+     * （重放/进行中/冲突/取消/认领），认领成功时注册取消动作并执行语义管线，
+     * 最后统一结算。State 超时、中断或异常一律收敛为 STORE_UNAVAILABLE，
+     * 模型解析与执行失败收敛为可结算的 CapabilityUnavailable Turn。
+     */
     private Result executeResolved(
             String conversationId, byte[] resumeTokenHash,
             ConversationSessionStore.Session sessionToCreate,
@@ -284,6 +307,11 @@ public final class AgentTurnLifecycleService {
         }
     }
 
+    /**
+     * 单次原子结算：把执行结果（快照、上下文、challenge、会话、讨论/澄清/语义状态
+     * 变更）交给 Store 的 completeWithSession，剩余预算不足或 Store 失败时标记
+     * settlementFailed 并降级为只读返回。结算成功才返回 COMPLETED。
+     */
     private Result settle(
             UUID requestId, byte[] fingerprint,
             Execution execution, ConversationSessionStore.Session sessionToCreate,
@@ -347,6 +375,12 @@ public final class AgentTurnLifecycleService {
                 session.discussionRevision());
     }
 
+    /**
+     * 按凭证取消一个 Turn：先触发进程内取消信号，再在 State 层做 CLAIMED →
+     * CANCELLED 迁移，并按已存记录的终态返回相应取消结果。
+     *
+     * @return 取消是否生效，或 ALREADY_COMPLETED / NOT_FOUND / UNAUTHORIZED / STORE_UNAVAILABLE
+     */
     public CancelStatus cancel(String bearerToken, UUID requestId) {
         TurnDeadline deadline = new TurnDeadline(
                 clock.instant().plus(turnTimeout), clock);
@@ -369,6 +403,7 @@ public final class AgentTurnLifecycleService {
         }
     }
 
+    /** 查询当前凭证对应的匿名会话状态：会话 ID、讨论修订号与活跃讨论摘要。 */
     public ConversationStatus currentConversation(String bearerToken) {
         TurnDeadline deadline = new TurnDeadline(
                 clock.instant().plus(turnTimeout), clock);
@@ -404,6 +439,7 @@ public final class AgentTurnLifecycleService {
                 pointer.getContextHandle());
     }
 
+    /** 清空当前匿名会话（吊销凭证并删除会话状态）；仅对存活会话返回 true。 */
     public boolean clearConversation(String bearerToken) {
         TurnDeadline deadline = new TurnDeadline(
                 clock.instant().plus(turnTimeout), clock);
@@ -414,6 +450,12 @@ public final class AgentTurnLifecycleService {
                 session.conversationId(), session.tokenHash(), clock.instant());
     }
 
+    /**
+     * 已认领 Turn 的语义分发：先处理讨论续跑（进入/重进/退出/上下文内追问），
+     * 再处理携带 referenceContextHandle 的推荐上下文路由，最后走通用输入解析
+     * （澄清回答预留、目标解析）并按 Goal 结果类别分发执行。
+     * 全部路径最终产出一个可结算的 {@link Execution}。
+     */
     private Execution executeClaimed(
             String conversationId, byte[] resumeTokenHash,
             ConversationSessionStore.Session sessionAuthority,
@@ -533,6 +575,12 @@ public final class AgentTurnLifecycleService {
                 execution, input.clarificationMutation());
     }
 
+    /**
+     * 携带 referenceContextHandle 的自由文本路由：加载推荐 ContinuationContext，
+     * 用候选项目构造受限 Goal 解析输入，按解析出的 Route 分发——标准目标、直接
+     * 进入推荐结果或发起推荐选择澄清。上下文缺失、过期或内容版本不匹配时返回
+     * null 交回通用路径。
+     */
     private Execution routeRecommendationReference(
             String conversationId,
             byte[] tokenHash,
@@ -633,6 +681,7 @@ public final class AgentTurnLifecycleService {
         };
     }
 
+    /** 解析候选键到项目后经讨论协调器进入该项目结果，并执行讨论状态迁移。 */
     private Execution enterRecommendationCandidate(
             String conversationId,
             ConversationSessionStore.Session session,
@@ -662,6 +711,7 @@ public final class AgentTurnLifecycleService {
                 null, transition, modelExecution);
     }
 
+    /** 把推荐结果映射为受限路由候选（只保留仍存在于公开内容中的项目）。 */
     private List<GoalInterpretationInput.RouteCandidate>
             recommendationRouteCandidates(
             ContinuationContext.Recommendation recommendation,
@@ -691,6 +741,7 @@ public final class AgentTurnLifecycleService {
         return List.copyOf(candidates);
     }
 
+    /** 构造"选择要讨论的推荐项目"澄清：选项绑定到 result-item，供后续typed选择。 */
     private Execution recommendationSelectionClarification(
             String conversationId,
             byte[] tokenHash,
@@ -745,6 +796,12 @@ public final class AgentTurnLifecycleService {
                 DiscussionStateMutation.none());
     }
 
+    /**
+     * 项目讨论内的路由：以会话活跃讨论指针为锁，按指针状态（ACTIVE/EXPIRED）给
+     * 模型不同的受限路由集合，解析后分发——继续当前项目、开新话题、切换项目、
+     * 重进项目或发起讨论方向澄清。解析不可用时返回带 guard 变更的降级 Turn，
+     * 防止过期指针被意外清除。
+     */
     private Execution routeDiscussion(
             String conversationId,
             ConversationSessionStore.Session session,
@@ -910,6 +967,11 @@ public final class AgentTurnLifecycleService {
         };
     }
 
+    /**
+     * 构造讨论方向澄清 challenge：ACTIVE 指针提供项目方面（facet）选项，
+     * EXPIRED 指针只提供"重新进入项目"选项。challenge 携带 guard 变更，
+     * 保证澄清期间讨论指针不被其他路径清除。
+     */
     private Execution discussionClarification(
             String conversationId,
             byte[] tokenHash,
@@ -984,6 +1046,7 @@ public final class AgentTurnLifecycleService {
         };
     }
 
+    /** 执行已预留的讨论澄清答案：facet 继续走目标执行并 guard 指针，reenter 走重进迁移。 */
     private Execution executeDiscussionClarification(
             String conversationId,
             ConversationSessionStore.Session session,
@@ -1047,6 +1110,7 @@ public final class AgentTurnLifecycleService {
                 template.getContextHandle(), transition, modelExecution);
     }
 
+    /** 把讨论上下文的候选项目映射为受限路由候选（按键排序，过滤已下架项目）。 */
     private List<GoalInterpretationInput.RouteCandidate> routeCandidates(
             ProjectDiscussionContext context,
             RuntimeAnswerContent content) {
@@ -1073,6 +1137,11 @@ public final class AgentTurnLifecycleService {
         return List.copyOf(candidates);
     }
 
+    /**
+     * 候选键 → 项目 ID 的受限映射。
+     *
+     * @throws IllegalArgumentException 候选键不在本次受限候选集内（模型越权）
+     */
     private String candidateProjectId(
             String candidateKey,
             List<GoalInterpretationInput.RouteCandidate> candidates) {
@@ -1123,6 +1192,7 @@ public final class AgentTurnLifecycleService {
                 execution.semanticState());
     }
 
+    /** ENTER_RESULT：按 contextHandle 加载推荐上下文并进入指定结果的项目讨论。 */
     private Execution enterDiscussion(
             String conversationId,
             ConversationSessionStore.Session session,
@@ -1168,6 +1238,7 @@ public final class AgentTurnLifecycleService {
                 transition, modelExecution);
     }
 
+    /** REENTER_SUBJECT：在无活跃讨论时按主体引用重新进入项目讨论。 */
     private Execution reenterDiscussion(
             String conversationId,
             ConversationSessionStore.Session session,
@@ -1210,6 +1281,11 @@ public final class AgentTurnLifecycleService {
                 transition, modelExecution);
     }
 
+    /**
+     * 执行一次讨论状态迁移：先按迁移携带的概览目标走正常目标执行，成功（产出
+     * Answer）后把新的讨论上下文并入 ContinuationContext，并把讨论指针变更设为
+     * REPLACE（带期望世代，结算时做乐观并发校验）。
+     */
     private Execution executeDiscussionTransition(
             AgentTurnCommand command,
             CancellationSignal cancellation,
@@ -1247,6 +1323,7 @@ public final class AgentTurnLifecycleService {
                 overview.semanticState());
     }
 
+    /** EXIT_CONTEXT 命令入口：校验 handle 世代匹配后清除讨论指针。 */
     private Execution exitDiscussion(
             ConversationSessionStore.Session session,
             AgentTurnCommand.Continue command) {
@@ -1261,6 +1338,7 @@ public final class AgentTurnLifecycleService {
         return exitDiscussion(command.getRequestId(), expected);
     }
 
+    /** 产出"已结束讨论"的会话式 Turn，并携带清除期望世代的讨论状态变更。 */
     private Execution exitDiscussion(
             UUID requestId, String expected) {
         PublicAgentTurn turn = new PublicAgentTurn.Conversational(
@@ -1272,6 +1350,7 @@ public final class AgentTurnLifecycleService {
                 DiscussionStateMutation.clear(expected));
     }
 
+    /** 统一的讨论不可用降级 Turn（不可重试，提示重新进入项目）。 */
     private Execution discussionUnavailable(UUID requestId, String code) {
         PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
                 requestId, code,
@@ -1280,6 +1359,7 @@ public final class AgentTurnLifecycleService {
         return serverFixed(turn);
     }
 
+    /** 讨论请求解析不可用的降级 Turn（可重试，附带"结束讨论"建议动作）。 */
     private Execution discussionInterpretationUnavailable(
             UUID requestId, ActiveDiscussionPointer pointer) {
         PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
@@ -1298,6 +1378,11 @@ public final class AgentTurnLifecycleService {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /**
+     * GOALS 主路径：编译计划 → 引擎执行 → 变更规划（ContextMutationPlanner 产出
+     * 续跑上下文与 TTL）→ 三份投影（只读/结算/持久化安全重放）→ 会话语义状态投影。
+     * 计划被拒或无法绑定公开主体时返回 Boundary 终态。
+     */
     private Execution goals(
             String conversationId, byte[] resumeTokenHash, AgentTurnCommand command,
             CancellationSignal cancellation, RuntimeAnswerContent content,
@@ -1344,6 +1429,7 @@ public final class AgentTurnLifecycleService {
                 ClarificationSettlementMutation.none(), semanticState);
     }
 
+    /** CLARIFICATION 路径：按未闭合目标字段构造 challenge 记录与澄清 Turn。 */
     private Execution clarification(
             String conversationId, byte[] tokenHash, UUID requestId,
             RuntimeAnswerContent content, ClarificationProposal proposal) {
@@ -1369,6 +1455,11 @@ public final class AgentTurnLifecycleService {
                 DiscussionStateMutation.none());
     }
 
+    /**
+     * 按未闭合字段生成澄清 challenge：REQUESTED_SIZE 给 1–5 数量选项，SUBJECT 给
+     * 公开主体目录选项（上限 20），OUTPUT 按目标类别给期望产出选项，其余回退为
+     * 文本补全。选项与文本分别绑定到结结构化 binding，供 resolve 时安全恢复目标。
+     */
     private ChallengeDefinition challengeDefinition(
             String clarificationId,
             BlockedGoalTemplate blockedGoal,
@@ -1455,6 +1546,7 @@ public final class AgentTurnLifecycleService {
                         bindingKey, 400)));
     }
 
+    /** 单选 challenge 工厂：单一 SingleChoiceField + choiceId 到 binding 的映射。 */
     private ChallengeDefinition choiceChallenge(
             String clarificationId,
             String prompt,
@@ -1470,12 +1562,14 @@ public final class AgentTurnLifecycleService {
                 challenge, Map.of(fieldId, Map.copyOf(bindings)), Map.of());
     }
 
+    /** 服务端固定文案 Turn 的 Execution 工厂：三份投影一致、无上下文与变更。 */
     private Execution serverFixed(PublicAgentTurn turn) {
         return new Execution(
                 turn, turn, turn, List.of(), List.of(),
                 DiscussionStateMutation.none());
     }
 
+    /** 模型选择解析失败的降级 Turn（不可重试，区分版本过期与不可用）。 */
     private Execution modelSelectionUnavailable(
             UUID requestId,
             ModelExecutionResolutionException.Code code) {
@@ -1491,6 +1585,7 @@ public final class AgentTurnLifecycleService {
                 requestId, publicCode, message, false, List.of()));
     }
 
+    /** 所选模型执行失败的降级 Turn：按失败类别映射固定文案与可重试语义。 */
     private Execution selectedModelUnavailable(
             UUID requestId,
             SelectedModelFailureException failure) {
@@ -1511,12 +1606,19 @@ public final class AgentTurnLifecycleService {
                 failure.isRetryable(), retryAfterSeconds, List.of()));
     }
 
+    /** Provider 派生回答体的 Execution 工厂：实时与结算保留原文，重放体替换为固定终端。 */
     private Execution providerBody(PublicAgentTurn turn) {
         return new Execution(
                 turn, turn, replayPolicy.forProviderBody(turn),
                 List.of(), List.of(), DiscussionStateMutation.none());
     }
 
+    /**
+     * 输入解析：ResolveClarification 在 stateExecutor 上限时预留 challenge 并按
+     * 预留结果分类（IN_PROGRESS/不可用/成功），成功后按 resume 模板恢复为
+     * typed 讨论选择、typed 讨论澄清或闭合目标（可继续下一轮澄清）；普通命令
+     * 则按会话语义状态调用 GoalResolver。
+     */
     private ResolvedInput resolveInput(
             String conversationId, byte[] tokenHash,
             ConversationSessionStore.Session sessionAuthority,
@@ -1662,6 +1764,7 @@ public final class AgentTurnLifecycleService {
                 semanticState));
     }
 
+    /** 由公开内容快照构造目标解析上下文：公开主体描述符与推荐约束白名单。 */
     private GoalResolutionContext resolutionContext(RuntimeAnswerContent content) {
         List<GoalInterpretationInput.PublicSubjectDescriptor> subjects = new ArrayList<>();
         addSubjects(subjects, content.getProjects(), GoalSubjectReference.Kind.PROJECT);
@@ -1703,6 +1806,10 @@ public final class AgentTurnLifecycleService {
         return value;
     }
 
+    /**
+     * 一次执行的完整结算载荷：三份公众投影（只读返回、结算写入、持久化安全重放）、
+     * 续跑上下文、challenge 记录与三类结算变更（讨论/澄清/语义状态）。
+     */
     private record Execution(
             PublicAgentTurn readOnlyTurn, PublicAgentTurn settledTurn,
             PublicAgentTurn replayTurn,
@@ -1734,6 +1841,7 @@ public final class AgentTurnLifecycleService {
                     ClarificationSettlementMutation.none(), null);
         }
     }
+    /** 输入解析结果：目标集合，或 typed 讨论（选择/澄清）解析与澄清消费变更。 */
     private record ResolvedInput(
             ResolvedGoalSet resolved,
             DiscussionSelectionResolution discussionSelection,
@@ -1758,16 +1866,23 @@ public final class AgentTurnLifecycleService {
                     capabilityCode, retryAfterSeconds);
         }
     }
+    /** 澄清恢复出的推荐结果选择：进入哪个上下文的哪个 resultItem。 */
     private record DiscussionSelectionResolution(
             String contextHandle, String resultItemId) { }
+    /** 澄清恢复出的讨论方向：继续某个 facet 或重新进入项目。 */
     private record DiscussionClarificationResolution(
             DiscussionClarificationTemplate template,
             UserGoalProposal.Facet facet,
             boolean reenter) { }
+    /** 一个澄清 challenge 及其选项/文本 binding 的完整定义。 */
     private record ChallengeDefinition(
             ClarificationChallenge challenge,
             Map<String, Map<String, String>> choiceBindings,
             Map<String, ClarificationStore.TextBinding> textBindings) { }
+    /**
+     * Turn 执行的对外结果：状态、Turn（状态为 COMPLETED/REPLAY 时非空）、
+     * 建议等待秒数、结算是否失败降级，以及可选的会话元数据。
+     */
     public record Result(Status status, PublicAgentTurn turn, long retryAfterSeconds,
                          boolean settlementFailed,
                          ConversationMetadata conversation,
@@ -1779,6 +1894,7 @@ public final class AgentTurnLifecycleService {
             this(status, turn, retryAfterSeconds,
                     settlementFailed, conversation, null);
         }
+        /** 无 Turn 的纯状态结果工厂。 */
         static Result state(Status status, long retryAfter) {
             return new Result(
                     status, null, retryAfter, false, null, null);
@@ -1789,6 +1905,7 @@ public final class AgentTurnLifecycleService {
                     value, sessionProjection);
         }
     }
+    /** 会话元数据：会话 ID、一次性签发的 ResumeToken、讨论修订号与摘要。 */
     public record ConversationMetadata(
             String conversationId, String resumeToken,
             long discussionRevision,
@@ -1798,6 +1915,7 @@ public final class AgentTurnLifecycleService {
             this(conversationId, resumeToken, 0, null);
         }
     }
+    /** 当前会话查询结果：是否认证、会话 ID、讨论修订号与活跃讨论摘要。 */
     public record ConversationStatus(
             boolean authenticated,
             String conversationId,
@@ -1813,9 +1931,11 @@ public final class AgentTurnLifecycleService {
             this(authenticated, conversationId, 0, discussion);
         }
     }
+    /** 会话投影：活跃讨论指针与讨论修订号。 */
     public record SessionProjection(
             ActiveDiscussionPointer pointer,
             long revision) { }
+    /** 对外讨论摘要：状态、项目、标题、路由、过期时间与上下文 Handle。 */
     public record DiscussionSummary(
             ActiveDiscussionPointer.Status status,
             String projectId,
@@ -1823,9 +1943,11 @@ public final class AgentTurnLifecycleService {
             String route,
             Instant expiresAt,
             String contextHandle) { }
+    /** Turn 对控制器的七种终态；IN_PROGRESS/CONFLICT/UNAUTHORIZED 携带重试或拒绝语义。 */
     public enum Status {
         COMPLETED, REPLAY, IN_PROGRESS, CONFLICT, CANCELLED, STORE_UNAVAILABLE, UNAUTHORIZED
     }
+    /** 取消请求的五种结果。 */
     public enum CancelStatus {
         CANCELLED, ALREADY_COMPLETED, NOT_FOUND, UNAUTHORIZED, STORE_UNAVAILABLE
     }

@@ -13,6 +13,13 @@ import java.util.Set;
 /** 将一次性澄清答案收敛为闭合值；访客原文不会进入返回对象。 */
 public final class ClarificationAnswerNormalizer {
 
+    /**
+     * 把澄清答案归一化为闭合的 ResolutionValue。
+     *
+     * <p>优先采用 Store 内部绑定键携带的闭合值；文本答案仅在能唯一映射到
+     * 公开主体、闭合枚举或固定别名时接受，否则返回 Optional.empty()，
+     * 由上层以固定文案兜底。</p>
+     */
     public Optional<BlockedGoalTemplate.ResolutionValue> normalize(
             BlockedGoalTemplate template,
             ClarificationStore.ResolvedAnswer answer,
@@ -34,6 +41,7 @@ public final class ClarificationAnswerNormalizer {
         };
     }
 
+    /** 解析推荐数量：支持中文数字与阿拉伯数字 1..5，其余拒绝。 */
     private Optional<Integer> requestedSize(String binding, String text) {
         String candidate = valueAfter(binding, "size:").orElse(text);
         if (candidate == null) return Optional.empty();
@@ -49,6 +57,7 @@ public final class ClarificationAnswerNormalizer {
         return value < 1 ? Optional.empty() : Optional.of(value);
     }
 
+    /** 解析公开主体：绑定键优先，否则按已审核别名在公开目录中唯一匹配。 */
     private Optional<BlockedGoalTemplate.Subject> subject(
             String binding,
             String text,
@@ -73,6 +82,7 @@ public final class ClarificationAnswerNormalizer {
                 : Optional.empty();
     }
 
+    /** 解析请求输出枚举名（大小写不敏感）。 */
     private Optional<GoalRequestedOutput> output(String binding, String text) {
         String value = valueAfter(binding, "output:").orElse(text);
         if (value == null) return Optional.empty();
@@ -84,6 +94,7 @@ public final class ClarificationAnswerNormalizer {
         }
     }
 
+    /** 解析约束：接受闭合命名或固定别名（PostgreSQL/后端/前端）。 */
     private Optional<String> constraint(String binding, String text) {
         Optional<String> bound = valueAfter(binding, "constraint:");
         if (bound.isPresent() && !bound.orElseThrow().equals("text")) {
@@ -102,11 +113,13 @@ public final class ClarificationAnswerNormalizer {
         };
     }
 
+    /** 取绑定键前缀之后的值；前缀不匹配返回 Optional.empty()。 */
     private Optional<String> valueAfter(String binding, String prefix) {
         return binding != null && binding.startsWith(prefix)
                 ? Optional.of(binding.substring(prefix.length())) : Optional.empty();
     }
 
+    /** 校验闭合命名格式（大写字母与下划线）。 */
     private boolean closedName(String value) {
         return value.matches("[A-Z_]{1,64}");
     }

@@ -13,6 +13,10 @@ public final class AgentStateCleanupJob {
         this.store = java.util.Objects.requireNonNull(store, "store");
     }
 
+    /**
+     * 定时清理入口：委托 State 的批量清理并输出固定类别计数日志；
+     * 只在有行被清理时才记录，避免刷屏。
+     */
     @Scheduled(fixedDelayString = "${portfolio.conversation-context.cleanup-interval:15m}")
     public void cleanup() {
         JdbcAgentStateStore.CleanupResult result = store.cleanup();

@@ -11,6 +11,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * 面向公众的 Turn 终态投影：管线五种终态的 sealed 根类型。
+ *
+ * <p>Answer（结构化回答）、Clarification（澄清 challenge）、Conversational（会话式
+ * 短句）、Boundary（边界拒绝）、CapabilityUnavailable（能力暂不可用）。同一 Turn 在
+ * 生命周期内存在三份实例（只读返回、结算写入、持久化安全重放），但每份自身不可变。
+ * 该类型同时是 HTTP 响应与 State 回放体的序列化合同（kind 判别）。</p>
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,
         property = "kind", visible = false)
@@ -37,6 +45,11 @@ public abstract sealed class PublicAgentTurn permits
     public UUID getRequestId() { return requestId; }
     public ModelExecutionProjection getModelExecution() { return modelExecution; }
     public abstract Kind getKind();
+
+    /**
+     * 返回携带指定模型执行投影的等价 Turn（逐子类型重建，自身不可变故需复制）。
+     * 用于在结算前把 Claim 后冻结的执行快照投影统一附加到三份 Turn 上。
+     */
     public final PublicAgentTurn withModelExecution(
             ModelExecutionProjection projection) {
         Objects.requireNonNull(projection, "projection");
@@ -64,8 +77,10 @@ public abstract sealed class PublicAgentTurn permits
                 value.isRetryable(), value.getRetryAfterSeconds(),
                 value.getSuggestedActions());
     }
+    /** Turn 终态类别判别值（序列化为 kind 字段）。 */
     public enum Kind { ANSWER, CLARIFICATION, CONVERSATIONAL, BOUNDARY, CAPABILITY_UNAVAILABLE }
 
+    /** 结构化回答终态：完整 PublicAnswer 载荷。 */
     public static final class Answer extends PublicAgentTurn {
         private final PublicAnswer answer;
         public Answer(UUID requestId, PublicAnswer answer) {
@@ -83,6 +98,7 @@ public abstract sealed class PublicAgentTurn permits
         public PublicAnswer getAnswer() { return answer; }
     }
 
+    /** 澄清终态：携带 challenge（关键澄清不得携带 affectedGoalIds）与建议动作。 */
     public static final class Clarification extends PublicAgentTurn {
         private final String message;
         private final ClarificationChallenge clarification;
@@ -113,6 +129,7 @@ public abstract sealed class PublicAgentTurn permits
         public List<SuggestedAction> getSuggestedActions() { return suggestedActions; }
     }
 
+    /** 会话式终态：单条固定短句 + 建议动作。 */
     public static final class Conversational extends MessageTurn {
         public Conversational(UUID requestId, String message, List<SuggestedAction> suggestedActions) {
             this(requestId, ModelExecutionProjection.none(), message, suggestedActions);
@@ -127,6 +144,7 @@ public abstract sealed class PublicAgentTurn permits
         }
         @Override public Kind getKind() { return Kind.CONVERSATIONAL; }
     }
+    /** 边界终态：稳定 code 的越界/非法输入拒绝。 */
     public static final class Boundary extends CodedMessageTurn {
         public Boundary(UUID requestId, String code, String message, List<SuggestedAction> suggestedActions) {
             this(requestId, ModelExecutionProjection.none(), code, message, suggestedActions);
@@ -142,6 +160,7 @@ public abstract sealed class PublicAgentTurn permits
         }
         @Override public Kind getKind() { return Kind.BOUNDARY; }
     }
+    /** 能力不可用终态：稳定 code + 可重试语义（retryAfterSeconds 限定 1–300 秒）。 */
     public static final class CapabilityUnavailable extends CodedMessageTurn {
         private final boolean retryable;
         private final Long retryAfterSeconds;
@@ -188,6 +207,7 @@ public abstract sealed class PublicAgentTurn permits
         public Long getRetryAfterSeconds() { return retryAfterSeconds; }
     }
 
+    /** 带单条 message 与建议动作的中间密封层。 */
     public abstract static sealed class MessageTurn extends PublicAgentTurn
             permits Conversational, CodedMessageTurn {
         private final String message;
@@ -202,6 +222,7 @@ public abstract sealed class PublicAgentTurn permits
         public String getMessage() { return message; }
         public List<SuggestedAction> getSuggestedActions() { return suggestedActions; }
     }
+    /** 带稳定 code 的消息 Turn 密封层（Boundary / CapabilityUnavailable）。 */
     public abstract static sealed class CodedMessageTurn extends MessageTurn
             permits Boundary, CapabilityUnavailable {
         private final String code;

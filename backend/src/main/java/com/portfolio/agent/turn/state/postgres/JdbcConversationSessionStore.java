@@ -14,6 +14,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * PostgreSQL 会话存储（conversation_session 表）：按 ResumeToken 哈希读取与
+ * upsert 匿名会话行。
+ *
+ * <p>find 支持多哈希（当前 + previous 密钥世代）命中且只接受未吊销、未绝对过期、
+ * 密钥仍在支持集内的行；可选注入 {@link AgentStatePayloadCodec} 解密行内语义
+ * 状态密文。所有语句在事务内执行并设置局部 statement_timeout（与 TurnDeadline
+ * 取小），防止会话操作挤占 Turn 预算。</p>
+ */
 public final class JdbcConversationSessionStore implements ConversationSessionStore {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
@@ -76,6 +85,12 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
         this.databaseOperationTimeout = databaseOperationTimeout;
         this.payloadCodec = payloadCodec;
     }
+    /**
+     * 按一组可接受的令牌哈希查找会话：命中行必须未吊销、未绝对过期且密钥受支持；
+     * 行内存在语义状态密文时用注入的 codec 解密（codec 缺失即抛错，fail-closed）。
+     *
+     * @return 命中的会话（含活跃讨论指针与语义状态）；无命中返回 empty
+     */
     @Override public Optional<Session> find(
             java.util.List<byte[]> tokenHashes, Instant now,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
@@ -140,12 +155,14 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
             } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
         });
     }
+    /** 在事务内 upsert 会话行（换代条件见 JdbcConversationSessionWriter）。 */
     @Override public void save(Session session) {
         transactions.executeWithoutResult(status -> {
             applyDatabaseTimeout();
             writer.upsert(session);
         });
     }
+    /** 测试辅助：按会话 ID 直接吊销会话行。 */
     void revokeForTest(String conversationId) {
         transactions.executeWithoutResult(status -> {
             applyDatabaseTimeout();
@@ -154,9 +171,12 @@ public final class JdbcConversationSessionStore implements ConversationSessionSt
                     time(clock.instant()), UUID.fromString(conversationId));
         });
     }
+    /** 设置局部 statement_timeout（固定预算版，用于无 deadline 的写路径）。 */
     private void applyDatabaseTimeout() {
         jdbc.execute("SET LOCAL statement_timeout = " + databaseOperationTimeout.toMillis());
     }
+
+    /** 设置局部 statement_timeout：取数据库预算与 Turn 剩余时间的较小者，已过期即抛错。 */
     private void applyDatabaseTimeout(
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
         long timeoutMillis = Math.min(

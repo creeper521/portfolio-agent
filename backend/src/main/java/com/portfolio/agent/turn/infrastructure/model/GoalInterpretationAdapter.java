@@ -19,6 +19,14 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Goal 解析的模型端口适配器：把 GoalInterpretationInput 投影为受限 JSON 提示，
+ * 经结构化传输调用所选模型，并按 GoalProposalCodec 的严格 schema 解码结果。
+ *
+ * <p>能力闸门在调用前置检查：所选模型不支持 TURN_INTERPRETATION 时，MODEL 选择
+ * 抛 SelectedModelFailureException、NONE 选择抛不可用异常；超时以 TurnDeadline 与
+ * 操作超时的较小者封顶。schema 解码失败按"模型返回无法安全采用"处理并上报诊断。</p>
+ */
 public final class GoalInterpretationAdapter implements GoalInterpretationPort {
     private final StructuredModelTransport transport;
     private final ObjectMapper mapper;
@@ -48,6 +56,16 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
         this.outputDiagnostics = java.util.Objects.requireNonNull(
                 outputDiagnostics, "outputDiagnostics");
     }
+    /**
+     * 执行一次目标解析调用。
+     *
+     * <p>先做能力与截止时间前置检查，标记尝试阶段后调用传输；传输失败与 schema
+     * 解码失败分别映射为所选模型失败异常（携带稳定失败类别），其余输入投影异常
+     * 映射为不可用异常。</p>
+     *
+     * @throws SelectedModelFailureException 所选模型不可用、被限流或返回无法安全采用的结果
+     * @throws GoalInterpretationUnavailableException 输入投影失败或模型能力整体不可用
+     */
     @Override public GoalInterpretationResult interpret(
             GoalInterpretationInput input, TurnDeadline deadline,
             ResolvedModelExecution modelExecution) {
@@ -83,6 +101,10 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             throw SelectedModelFailureException.invalidResponse(failure);
         }
     }
+    /**
+     * 把解析输入投影为受限 JSON：只包含允许的目标类别、路由、候选与已审阅主体
+     * 描述，不包含任何自由指令；schema 字段锁定为 semantic-route-proposal-v1。
+     */
     private String prompt(GoalInterpretationInput input) {
         try {
             Map<String, Object> projection = new LinkedHashMap<>();

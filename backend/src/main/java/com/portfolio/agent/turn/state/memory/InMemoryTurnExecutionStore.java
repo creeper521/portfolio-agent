@@ -21,7 +21,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.portfolio.agent.turn.lifecycle.RequestFingerprintSet;
 import com.portfolio.agent.turn.continuation.InMemoryConversationSessionStore;
 
-/** Local/test implementation with the same single terminal gate as the JDBC store. */
+/**
+ * 进程内 Agent State（IN_MEMORY 模式）：与 JDBC 存储相同的单一终态闸门。
+ *
+ * <p>仅用于快速测试与定向诊断，不跨进程、重启即失。终态迁移、重放与澄清预留
+ * 语义与 PostgreSQL 实现保持一致，保证生命周期服务在两种模式下行为等价。</p>
+ */
 public final class InMemoryTurnExecutionStore implements AgentStateStore {
     private final ConcurrentHashMap<UUID, TurnExecutionRecord> records = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, Instant> absoluteExpiries = new ConcurrentHashMap<>();
@@ -56,6 +61,12 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
     }
 
+    /**
+     * 认领或重放一个 Turn：会话校验失败返回 CANCELLED；绝对过期记录视同不存在；
+     * 已完成且指纹匹配的请求重放快照（试探性会话触发 challenge 重绑与新会话落库）；
+     * 租约未过期返回 IN_PROGRESS，租约过期允许重新认领；指纹或会话不匹配返回
+     * CONFLICT。
+     */
     @Override public synchronized ClaimResult claim(
             UUID requestId, String conversationId, RequestFingerprintSet fingerprints,
             SessionAccess sessionAccess, Instant now, Duration leaseDuration,
@@ -157,6 +168,12 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 com.portfolio.agent.turn.continuation.ClarificationSettlementMutation.none());
     }
 
+    /**
+     * 单一终态闸门：仅当记录仍处于 CLAIMED、指纹恒定时间相等且未绝对过期时才
+     * 提交；提交在同一临界区内完成 会话落库 → 讨论变更 → challenge 写入 →
+     * 澄清预留消费 → 终态迁移，任一步失败即整体不提交（预留丢失则抛错，因属
+     * 并发异常状态）。
+     */
     @Override public synchronized boolean complete(
             UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
@@ -207,6 +224,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         return true;
     }
 
+    /** 基础 complete 的会话回读包装：提交成功后返回结算后会话快照。 */
     @Override public synchronized SettlementResult completeWithSession(
             UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
@@ -228,6 +246,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 List.of(tokenHash), completedAt, deadline).orElse(null));
     }
 
+    /** 带语义状态的结算：提交成功后原子替换会话语义状态并回读会话。 */
     @Override public synchronized SettlementResult completeWithSession(
             UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
@@ -253,6 +272,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 List.of(tokenHash), completedAt, deadline).orElse(null));
     }
 
+    /** 取消仍处于 CLAIMED 的 Turn，并释放其持有的澄清预留。 */
     @Override public synchronized boolean cancel(
             UUID requestId, String conversationId, Instant cancelledAt) {
         AtomicBoolean cancelled = new AtomicBoolean();
@@ -269,12 +289,14 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         return cancelled.get();
     }
 
+    /** 按绝对过期时间读取未过期记录。 */
     @Override public Optional<TurnExecutionRecord> find(UUID requestId) {
         TurnExecutionRecord record = records.get(requestId);
         Instant expiresAt = absoluteExpiries.get(requestId);
         return record == null || expiresAt == null || !clock.instant().isBefore(expiresAt)
                 ? Optional.empty() : Optional.of(record);
     }
+    /** 凭证吊销会话并清除其全部记录与 challenge。 */
     @Override public synchronized boolean clearConversation(
             String conversationId, byte[] tokenHash, Instant clearedAt) {
         if (!sessionStore.revokeIfMatches(conversationId, tokenHash, clearedAt)) return false;
@@ -284,6 +306,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         clarificationStore.clear(conversationId);
         return true;
     }
+    /** 在已完成记录的上下文中按 Handle 查找未过期 ContinuationContext。 */
     @Override public Optional<ContinuationContext> findContext(
             String conversationId, String contextHandle, Instant now,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
@@ -296,6 +319,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 .filter(value -> value.getContextHandle().equals(contextHandle))
                 .filter(value -> now.isBefore(value.getExpiresAt())).findFirst();
     }
+    /** 澄清预留：deadline 内委托 ClarificationStore 的原子预留。 */
     @Override public synchronized ClarificationStore.ReserveResult reserveClarification(
             String clarificationId, String conversationId, byte[] resumeTokenHash,
             String currentContentReleaseId,
@@ -309,6 +333,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 requestId, reservationExpiresAt);
     }
 
+    /** 批量清理绝对过期的执行、challenge 与会话（总预算 limit）。 */
     public CleanupResult cleanup(Instant now, int limit) {
         if (limit < 1) return new CleanupResult(0, 0, 0);
         int executions = 0;
@@ -325,10 +350,12 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         return new CleanupResult(executions, challenges, sessions);
     }
 
+    /** 清理计数：执行、challenge、会话三类删除量。 */
     public record CleanupResult(int executions, int challenges, int sessions) {
         public int total() { return executions + challenges + sessions; }
     }
 
+    /** Claim 期会话校验：试探性会话走 authorizeTentative，已认证会话走哈希匹配。 */
     private boolean authorizeSession(
             String conversationId, SessionAccess access, Instant now) {
         if (!conversationId.equals(access.conversationId())) return false;
@@ -338,6 +365,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
         return sessionStore.authorize(conversationId, access.tokenHash(), now);
     }
 
+    /** 结算期会话校验：试探性会话必须同时提交待建会话；已认证会话不得另建会话。 */
     private boolean authorizeSettlementSession(
             SessionAccess access, ConversationSessionStore.Session sessionToCreate,
             Instant now) {
@@ -350,6 +378,7 @@ public final class InMemoryTurnExecutionStore implements AgentStateStore {
                 && sessionStore.authorize(access.conversationId(), access.tokenHash(), now);
     }
 
+    /** 把 challenge 记录的 ResumeToken 哈希替换为新会话的哈希（重放时换绑）。 */
     private ClarificationStore.Record rebind(
             ClarificationStore.Record current, byte[] tokenHash) {
         return new ClarificationStore.Record(

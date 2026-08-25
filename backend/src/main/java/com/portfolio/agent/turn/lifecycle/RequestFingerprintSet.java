@@ -8,6 +8,10 @@ import java.util.Objects;
 /** 当前写入指纹及一个轮换窗口内可接受的旧指纹。 */
 public record RequestFingerprintSet(
         String currentKeyId, byte[] current, List<Candidate> candidates) {
+    /**
+     * 紧凑构造器：复制并校验指纹，把当前指纹并入候选集并对 candidates 按 keyId 去重，
+     * 保证 {@link #matches(byte[])} 覆盖当前密钥与全部旧密钥各一份。
+     */
     public RequestFingerprintSet {
         if (currentKeyId == null || currentKeyId.isBlank()) {
             throw new IllegalArgumentException("current fingerprint key id is required");
@@ -25,14 +29,21 @@ public record RequestFingerprintSet(
         candidates = List.copyOf(copied);
     }
 
+    /** 测试便捷构造器：previousFingerprints 按序号自动生成 keyId。 */
     public RequestFingerprintSet(byte[] current, List<byte[]> previousFingerprints) {
         this("test-current", current, indexed(previousFingerprints));
     }
 
+    /** 测试便捷工厂：只包含当前指纹、无轮换候选。 */
     public static RequestFingerprintSet single(byte[] fingerprint) {
         return new RequestFingerprintSet("test-current", fingerprint, List.of());
     }
 
+    /**
+     * 判断已存储指纹是否命中当前或任一轮换候选。
+     *
+     * <p>使用 {@link MessageDigest#isEqual} 做恒定时间比较，避免指纹内容通过比较耗时泄露。</p>
+     */
     public boolean matches(byte[] stored) {
         return stored != null && candidates.stream()
                 .anyMatch(candidate -> MessageDigest.isEqual(candidate.fingerprint(), stored));
@@ -60,6 +71,7 @@ public record RequestFingerprintSet(
         return copied;
     }
 
+    /** 一个密钥世代（keyId）对应的请求指纹副本。 */
     public record Candidate(String keyId, byte[] fingerprint) {
         public Candidate {
             if (keyId == null || keyId.isBlank()) {

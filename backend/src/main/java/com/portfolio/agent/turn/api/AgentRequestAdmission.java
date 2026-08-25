@@ -16,6 +16,7 @@ public final class AgentRequestAdmission implements AutoCloseable {
         this.release = Objects.requireNonNull(release, "release must not be null");
     }
 
+    /** 幂等释放：只执行一次来源并发计数回调，重复 close 是空操作。 */
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {

@@ -29,6 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration(proxyBeanMethods = false)
 public class PortfolioCapabilityConfiguration {
 
+    /** 主知识网关：公开数据库投影可用时读库，否则读打包快照。 */
     @Bean
     @Primary
     PortfolioKnowledgeGateway portfolioKnowledgeGateway(
@@ -36,6 +37,7 @@ public class PortfolioCapabilityConfiguration {
         return new LocalPortfolioKnowledgeAdapter(repository);
     }
 
+    /** 数据库模式下的打包快照知识网关（供 Bundle 检索回退使用）。 */
     @Bean(name = "bundledPortfolioKnowledgeGateway")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -46,6 +48,7 @@ public class PortfolioCapabilityConfiguration {
         return new LocalPortfolioKnowledgeAdapter(repository);
     }
 
+    /** 快照模式（默认）的检索 Port：基于打包快照 + 可选本地向量混合检索。 */
     @Bean("bundlePortfolioRetrieverPort")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -61,6 +64,7 @@ public class PortfolioCapabilityConfiguration {
                 knowledgeGateway, embeddingPort, hybridEnabled(retrievalProfile));
     }
 
+    /** 数据库模式的 PostgreSQL 检索 Port：公开投影 + pgvector 查询。 */
     @Bean("postgresPortfolioRetrieverPort")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -73,6 +77,7 @@ public class PortfolioCapabilityConfiguration {
                 new JdbcPostgresKnowledgeQuery(jdbcTemplate, embeddingPort));
     }
 
+    /** 数据库模式下仍注册的 Bundle 检索 Port（同一 bean 名，作为回退语料）。 */
     @Bean("bundlePortfolioRetrieverPort")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -88,6 +93,7 @@ public class PortfolioCapabilityConfiguration {
                 knowledgeGateway, embeddingPort, hybridEnabled(retrievalProfile));
     }
 
+    /** 快照模式的 Evidence 能力：仅 Bundle 后端 + 回退策略 + 晋升校验器。 */
     @Bean("portfolioEvidenceCapability")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -102,6 +108,7 @@ public class PortfolioCapabilityConfiguration {
                 new EvidencePromotionValidator(java.time.Clock.systemUTC()));
     }
 
+    /** 数据库模式的 Evidence 能力：PostgreSQL 主后端 + Bundle 回退后端。 */
     @Bean("portfolioEvidenceCapability")
     @ConditionalOnProperty(
             prefix = "portfolio.database.public",
@@ -118,6 +125,7 @@ public class PortfolioCapabilityConfiguration {
                 new EvidencePromotionValidator(java.time.Clock.systemUTC()));
     }
 
+    /** Portfolio 任务执行器：按数据库开关选择默认语料后端并组装执行链。 */
     @Bean
     PortfolioTaskExecutor portfolioTaskExecutor(
             @Qualifier("portfolioEvidenceCapability") PortfolioEvidenceCapability capability,

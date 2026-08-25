@@ -26,7 +26,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/** PostgreSQL claim/terminal/replay authority; settlement is one encrypted row update. */
+/**
+ * PostgreSQL Agent State 权威：Claim/终态/重放的原子迁移与加密读写。
+ *
+ * <p>结算是一个事务内的单行加密更新：会话校验 → 行级锁复核（CLAIMED + 指纹）→
+ * 澄清消费 → 结算密文 → 会话/讨论/语义状态 → 上下文与 challenge 行 → 终态迁移，
+ * 任一步失败整体回滚。所有载荷经 {@link AgentStatePayloadCodec} 认证加密；每条
+ * 语句都设置局部 statement_timeout 并与 TurnDeadline 取小。只保存加密短生命周期
+ * typed state 与 persistence-safe 回放体，从不保存访客问题或原始模型输出。</p>
+ */
 public final class JdbcAgentStateStore implements AgentStateStore {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
@@ -112,6 +120,12 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
     }
 
+    /**
+     * 认领或重放一个 Turn（事务 + 行级锁）：绝对过期行先删除；无行则插入 CLAIMED
+     * 并获得租期；已完成且指纹在轮换窗口内匹配的请求解密结算密文返回 REPLAY
+     * （试探会话触发活跃 challenge 换绑与会话轮换）；租约未过期返回 IN_PROGRESS；
+     * 租约过期重新认领；会话或指纹不匹配返回 CONFLICT/CANCELLED。
+     */
     @Override public ClaimResult claim(
             UUID requestId, String conversationId, RequestFingerprintSet fingerprints,
             SessionAccess sessionAccess, Instant now, Duration leaseDuration,
@@ -252,6 +266,12 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 discussionMutation, clarificationMutation, semanticState);
     }
 
+    /**
+     * 结算核心（单一事务）：会话校验 → 行级锁复核（CLAIMED + 指纹恒定时间相等 +
+     * 未绝对过期）→ 澄清预留消费校验 → 各载荷加密写入（结算密文、会话、讨论
+     * 变更、语义状态、上下文行、challenge 行）→ 单行终态迁移。任一步失败
+     * setRollbackOnly 并返回未完成结果。
+     */
     private SettlementResult settleWithSession(
             UUID requestId, byte[] fingerprint, PublicAgentTurn snapshot,
             List<ContinuationContext> contexts,
@@ -349,6 +369,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return result == null ? new SettlementResult(false, null) : result;
     }
 
+    /**
+     * 应用讨论状态变更（乐观并发）：FOR UPDATE 读取当前讨论 handle，必须与变更
+     * 携带的期望世代一致（GUARD 只校验不改写；CLEAR 置空并递增修订；REPLACE
+     * 写入新指针并递增修订）。
+     */
     private boolean applyDiscussionMutation(
             UUID conversationId,
             com.portfolio.agent.turn.continuation.DiscussionStateMutation mutation,
@@ -389,6 +414,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         };
     }
 
+    /** 设置局部 statement_timeout：数据库预算与 Turn 剩余时间取小。 */
     private void applyDatabaseTimeout(
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
         long timeoutMillis = Math.min(
@@ -396,10 +422,12 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         jdbc.execute("SET LOCAL statement_timeout = " + timeoutMillis);
     }
 
+    /** 无 deadline 写路径的固定预算超时设置。 */
     private void applyStandaloneDatabaseTimeout() {
         jdbc.execute("SET LOCAL statement_timeout = " + databaseOperationTimeout.toMillis());
     }
 
+    /** 插入一行新的 CLAIMED 记录（当前指纹 + 租期 + 绝对过期）。 */
     private void insertClaim(
             UUID requestId, String conversationId, byte[] fingerprint,
             Instant now, Duration leaseDuration,
@@ -413,6 +441,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 time(now.plus(leaseDuration)), time(now), time(now), time(now.plus(absoluteTtl)));
     }
 
+    /**
+     * 重放时的会话轮换：把该会话全部存活 challenge（上限 32，超出抛错）的
+     * ResumeToken 哈希换绑到新试探会话，同步改写各源结算密文中的 challenge 副本，
+     * 最后原子替换会话行的令牌哈希。任一步失败抛错回滚，避免新旧凭证同时可用。
+     */
     private void rotateReplaySession(
             String conversationId,
             ConversationSessionStore.Session tentativeSession,
@@ -493,6 +526,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         }
     }
 
+    /** 把 challenge 副本的令牌哈希替换为新哈希（会话轮换时重加密）。 */
     private ClarificationStore.Record rebind(
             ClarificationStore.Record current, byte[] tokenHash) {
         return new ClarificationStore.Record(
@@ -501,6 +535,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 current.resumeTemplate());
     }
 
+    /**
+     * 断言 Turn 仍有剩余时间。
+     *
+     * @throws IllegalStateException deadline 已过期
+     */
     private long requireDatabaseTime(
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
         long remainingMillis = deadline.remainingMillis();
@@ -510,6 +549,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return remainingMillis;
     }
 
+    /**
+     * Claim 期会话校验：试探性会话在无既有会话时放行（首次匿名请求），在旧行
+     * 绝对过期且哈希不同（换代）时也放行；已认证会话必须命中未吊销、未过期、
+     * 密钥受支持且哈希恒定时间相等的行。
+     */
     private boolean authorizeClaimSession(
             String conversationId, SessionAccess access, Instant now) {
         if (!conversationId.equals(access.conversationId())) return false;
@@ -526,6 +570,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return liveSession(row, access.tokenHash(), now);
     }
 
+    /** 结算期会话校验：与 Claim 期同规则，但试探性会话必须同时提交待建会话。 */
     private boolean authorizeSettlementSession(
             SessionAccess access, ConversationSessionStore.Session sessionToCreate,
             Instant now) {
@@ -542,6 +587,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return sessionToCreate == null && liveSession(row, access.tokenHash(), now);
     }
 
+    /** 存活会话判定：未吊销、未绝对过期、密钥受支持且令牌哈希恒定时间相等。 */
     private boolean liveSession(SessionRow row, byte[] tokenHash, Instant now) {
         return row != null && row.revokedAt() == null
                 && now.isBefore(row.absoluteExpiresAt())
@@ -549,6 +595,10 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 && MessageDigest.isEqual(row.tokenHash(), tokenHash);
     }
 
+    /**
+     * 取消 Turn（事务）：仅 CLAIMED 可迁移为 CANCELLED；绝对过期行直接删除并
+     * 返回未取消；取消成功时释放该请求持有的澄清预留。
+     */
     @Override public boolean cancel(UUID requestId, String conversationId, Instant cancelledAt) {
         return Boolean.TRUE.equals(transactions.execute(status -> {
             applyStandaloneDatabaseTimeout();
@@ -574,6 +624,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         }));
     }
 
+    /** 按 requestId 读取未过期记录；COMPLETED 行解密结算密文重建完整记录。 */
     @Override public Optional<TurnExecutionRecord> find(UUID requestId) {
         return transactions.execute(status -> {
             applyStandaloneDatabaseTimeout();
@@ -592,6 +643,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
+    /** 凭存活会话凭证吊销会话并删除该会话全部 Turn 行（匿名清空）。 */
     @Override public boolean clearConversation(
             String conversationId, byte[] tokenHash, Instant clearedAt) {
         return Boolean.TRUE.equals(transactions.execute(status -> {
@@ -697,10 +749,16 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
+    /** 按当前时间执行一轮批量清理。 */
     public CleanupResult cleanup() {
         return cleanup(clock.instant());
     }
 
+    /**
+     * 密钥覆盖硬门：断言全部未过期数据的密钥（指纹/载荷/令牌）仍在支持集内。
+     *
+     * @throws IllegalStateException 存在未过期数据依赖已下线密钥（fail-closed 启动失败）
+     */
     public void assertKeyCoverage(Instant now) {
         java.util.Objects.requireNonNull(now, "now");
         transactions.executeWithoutResult(status -> {
@@ -738,6 +796,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
+    /** 删除密钥 id 不在支持集内的行（密钥下线后的强制清理）。 */
     private int deleteUnsupported(
             String targetTable, String keyColumn,
             Set<String> supportedKeys, int limit) {
@@ -746,6 +805,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return deleteBatch(targetTable, condition, limit, supportedKeys.toArray());
     }
 
+    /** 把语义状态密钥不受支持的会话行的语义状态列置空（行本身保留）。 */
     private int clearUnsupportedSemanticStates(
             Set<String> supportedKeys, int limit) {
         if (limit < 1) return 0;
@@ -763,6 +823,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 arguments);
     }
 
+    /** 删除其源执行结算密钥不受支持的子行（上下文/challenge）。 */
     private int deleteChildrenOfUnsupportedExecution(
             String childTable, Set<String> supportedKeys, int limit) {
         if (limit < 1) return 0;
@@ -772,12 +833,14 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         return deleteBatch(childTable, condition, limit, supportedKeys.toArray());
     }
 
+    /** 生成 "表达式非空且不在支持集内" 的 SQL 条件片段。 */
     private String unsupportedCondition(String expression, Set<String> supportedKeys) {
         return expression + " IS NOT NULL AND " + expression + " NOT IN ("
                 + String.join(",", java.util.Collections.nCopies(
                 supportedKeys.size(), "?")) + ")";
     }
 
+    /** 有界批量删除：ctid 子查询限定 LIMIT，避免大表上无界 DELETE。 */
     private int deleteBatch(
             String targetTable, String condition, int limit, Object... parameters) {
         if (limit < 1) return 0;
@@ -789,6 +852,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 arguments);
     }
 
+    /** 按 conversationId + contextHandle 解密读取未过期 ContinuationContext。 */
     @Override public Optional<ContinuationContext> findContext(
             String conversationId, String contextHandle, Instant now,
             com.portfolio.agent.turn.execution.TurnDeadline deadline) {
@@ -808,6 +872,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
+    /**
+     * 澄清预留（FOR UPDATE 行锁）：按 不存在/已消费/过期/凭证不符/内容版本过期/
+     * 他请求预留中 分类返回；校验通过时在内存 validator 上复验答案后写入预留
+     * 标记（条件更新丢失行锁即抛错）。
+     */
     @Override public ClarificationStore.ReserveResult reserveClarification(
             String clarificationId, String conversationId, byte[] tokenHash,
             String currentReleaseId, ClarificationStore.ClarificationAnswer answer,
@@ -869,6 +938,11 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         });
     }
 
+    /**
+     * 结算时消费澄清预留：行锁下复核 未消费 + 本请求持有预留 + 预留未过期，
+     * 解密后经内存 validator 复验答案，最后条件更新为已消费；任一条件不满足
+     * 返回 false 使整个结算回滚。
+     */
     private boolean applyClarificationSettlement(
             UUID requestId, String conversationId,
             com.portfolio.agent.turn.continuation.ClarificationSettlementMutation mutation,
@@ -917,6 +991,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 mutation.clarificationId(), requestId) == 1;
     }
 
+    /** 读取 Turn 执行行（可选 FOR UPDATE 行锁）。 */
     private Optional<Row> select(UUID requestId, boolean lock) {
         try {
             return Optional.ofNullable(jdbc.queryForObject(
@@ -927,6 +1002,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                     (result, index) -> row(result), requestId));
         } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
     }
+    /** 读取会话行（含讨论指针与语义状态密文，可选 FOR UPDATE 行锁）。 */
     private Optional<SessionRow> selectSession(String conversationId, boolean lock) {
         try {
             return Optional.ofNullable(jdbc.queryForObject(
@@ -972,6 +1048,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                     }, UUID.fromString(conversationId)));
         } catch (EmptyResultDataAccessException missing) { return Optional.empty(); }
     }
+    /** 执行行 → Row 的 ResultSet 映射。 */
     private Row row(ResultSet result) throws SQLException {
         OffsetDateTime terminal = result.getObject("terminal_at", OffsetDateTime.class);
         return new Row(
@@ -985,11 +1062,13 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 result.getBytes("settlement_ciphertext"), terminal == null ? null : terminal.toInstant(),
                 result.getObject("absolute_expires_at", OffsetDateTime.class).toInstant());
     }
+    /** 解密执行行的结算密文。 */
     private AgentStatePayloadCodec.SettlementPayload payload(Row row) {
         return codec.decode(row.requestId(), row.conversationId().toString(),
                 new AgentStatePayloadCodec.Envelope(
                         row.keyId(), row.nonce(), row.ciphertext()));
     }
+    /** 会话行 → 对外 Session 快照（含语义状态解密）。 */
     private ConversationSessionStore.Session sessionSnapshot(
             String conversationId, SessionRow row) {
         return new ConversationSessionStore.Session(
@@ -1003,6 +1082,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
     private Instant earlier(Instant first, Instant second) {
         return first.isBefore(second) ? first : second;
     }
+    /** challenge 行的 ResultSet 映射（含预留状态与密文信封）。 */
     private ChallengeRow challengeRow(ResultSet result) throws SQLException {
         OffsetDateTime reservationExpiry = result.getObject(
                 "reservation_expires_at", OffsetDateTime.class);
@@ -1017,16 +1097,19 @@ public final class JdbcAgentStateStore implements AgentStateStore {
                 result.getString("payload_key_id"), result.getBytes("payload_nonce"),
                 result.getBytes("payload_ciphertext")));
     }
+    /** Turn 执行行的内部快照（含结算密文信封）。 */
     private record Row(
             UUID requestId, UUID conversationId, byte[] fingerprint,
             String fingerprintKeyId, TurnExecutionRecord.Status status, Instant leaseExpiresAt,
             String keyId, byte[] nonce, byte[] ciphertext, Instant terminalAt,
             Instant absoluteExpiresAt) { }
+    /** challenge 行的内部快照（含预留归属与密文信封）。 */
     private record ChallengeRow(
             UUID sourceRequestId, byte[] tokenHash, String contentReleaseId,
             Instant expiresAt, boolean consumed,
             UUID reservedByRequestId, Instant reservationExpiresAt,
             AgentStatePayloadCodec.Envelope envelope) { }
+    /** 会话行的内部快照（含讨论指针与语义状态密文信封）。 */
     private record SessionRow(
             byte[] tokenHash, String tokenKeyId,
             Instant createdAt, Instant absoluteExpiresAt,
@@ -1034,10 +1117,12 @@ public final class JdbcAgentStateStore implements AgentStateStore {
             com.portfolio.agent.turn.continuation.ActiveDiscussionPointer activeDiscussionPointer,
             long discussionRevision,
             AgentStatePayloadCodec.Envelope semanticStateEnvelope) { }
+    /** 会话轮换期间待换绑的 challenge 行（限 32 条）。 */
     private record ReplayChallengeRow(
             String clarificationId, UUID sourceRequestId, String contentReleaseId,
             AgentStatePayloadCodec.Envelope envelope) { }
 
+    /** 一轮清理的固定类别计数（不含任何会话或密钥标识）。 */
     public record CleanupResult(
             int expiredExecutions, int expiredContexts, int expiredChallenges,
             int expiredSessions, int revokedSessions, int orphanRows,
@@ -1048,6 +1133,7 @@ public final class JdbcAgentStateStore implements AgentStateStore {
         }
     }
 
+    /** 清理批次预算累加器：七类计数共享一个全局 limit。 */
     private static final class CleanupAccumulator {
         private int remaining;
         private int expiredExecutions;
