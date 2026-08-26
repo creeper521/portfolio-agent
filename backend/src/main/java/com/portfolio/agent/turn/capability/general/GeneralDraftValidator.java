@@ -61,20 +61,30 @@ public final class GeneralDraftValidator {
 
     /**
      * EXPLANATION 质量校验：按深度（CONCISE/STANDARD/DETAILED）约束每条陈述的
-     * 中文句数区间；要求首条陈述标注 DEFINITION、次条标注 MECHANISM，且全部
+     * 中文总句数区间；要求首条陈述标注 DEFINITION、次条标注 MECHANISM，且全部
      * Aspect 的并集精确等于该深度期望的覆盖集（多一分少一分都拒绝）。
      */
     private void validateExplanationQuality(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
         int minimum = switch (request.getDepth()) {
-            case CONCISE -> 1;
-            case STANDARD -> 2;
-            case DETAILED -> 4;
+            case CONCISE -> 2;
+            case STANDARD -> 4;
+            case DETAILED -> 8;
         };
-        int maximum = request.getDepth() == com.portfolio.agent.turn.planning
-                .UserGoalProposal.Depth.STANDARD ? 3 : minimum;
-        draft.statements().forEach(statement -> validateChineseSentences(
-                statement.text(), minimum, maximum, "explanation text"));
+        int maximum = switch (request.getDepth()) {
+            case CONCISE -> 2;
+            case STANDARD -> 6;
+            case DETAILED -> 12;
+        };
+        int sentenceCount = draft.statements().stream()
+                .mapToInt(statement -> countChineseSentences(
+                        statement.text(), "explanation text"))
+                .sum();
+        if (sentenceCount < minimum || sentenceCount > maximum) {
+            reject(GeneralDraftValidationException.Reason
+                            .LANGUAGE_OR_SENTENCE_COUNT_INVALID,
+                    "explanation text has invalid language or sentence count");
+        }
         if (!draft.statements().get(0).aspects().contains(GeneralDraftCodec.Aspect.DEFINITION)
                 || !draft.statements().get(1).aspects().contains(
                 GeneralDraftCodec.Aspect.MECHANISM)) {
@@ -146,23 +156,33 @@ public final class GeneralDraftValidator {
     }
 
     /**
-     * 中文句式校验：必须以"。"结尾且不含其他句末标点（. ! ? ！ ？ ； ;），
+     * 中文句式校验：必须以"。"结尾且不含其他句末标点（. ! ? ！ ？），
+     * 中英文分号作为句内分句符保留，
      * 按"。"切分后句数落在 [minimum, maximum]，且每句至少含一个汉字
      * （防止非中文内容混入）。任一条件不满足即以对应 Reason 拒绝。
      */
     private void validateChineseSentences(
             String text, int minimum, int maximum, String name) {
-        if (!text.endsWith("。") || text.matches(".*[.!?！？；;].*")) {
+        int sentenceCount = countChineseSentences(text, name);
+        if (sentenceCount < minimum || sentenceCount > maximum) {
+            reject(GeneralDraftValidationException.Reason.LANGUAGE_OR_SENTENCE_COUNT_INVALID,
+                    name + " has invalid language or sentence count");
+        }
+    }
+
+    private int countChineseSentences(String text, String name) {
+        if (!text.endsWith("。") || text.matches(".*[.!?！？].*")) {
             reject(GeneralDraftValidationException.Reason.SENTENCE_BOUNDARY_INVALID,
                     name + " has invalid sentence boundaries");
         }
         List<String> sentences = java.util.Arrays.stream(text.split("。", -1))
                 .filter(value -> !value.isBlank()).toList();
-        if (sentences.size() < minimum || sentences.size() > maximum
+        if (sentences.isEmpty()
                 || sentences.stream().anyMatch(value -> !value.matches(".*[\\p{IsHan}].*"))) {
             reject(GeneralDraftValidationException.Reason.LANGUAGE_OR_SENTENCE_COUNT_INVALID,
                     name + " has invalid language or sentence count");
         }
+        return sentences.size();
     }
 
     /** 统一拒绝出口：所有校验失败都转换为带封闭 Reason 的校验异常。 */

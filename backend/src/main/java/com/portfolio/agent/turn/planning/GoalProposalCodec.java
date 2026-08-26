@@ -51,12 +51,22 @@ public final class GoalProposalCodec {
             throw new IllegalArgumentException("goal proposal output must be non-empty and bounded");
         }
         JsonNode root = readStrict(json);
+        return decode(root, input);
+    }
+
+    /**
+     * 从已经过严格 parser 与 canonical schema 校验的同一棵 JSON tree 构造领域结果。
+     * 该入口不再次序列化或解析 Provider 输出。
+     */
+    public GoalInterpretationResult decode(JsonNode root, GoalInterpretationInput input) {
         requireObject(root, "root");
         String kind = requireText(root, "kind", 64);
         return switch (kind) {
             case "SEMANTIC_ROUTE" -> decodeSemanticRoute(root, input);
             case "CONVERSATIONAL" -> decodeConversational(root, input);
-            default -> throw new IllegalArgumentException("unsupported goal interpretation kind");
+            default -> throw new GoalProposalDecodeException(
+                    GoalProposalDecodeException.Reason.UNSUPPORTED_ROOT_KIND,
+                    "unsupported goal interpretation kind");
         };
     }
 
@@ -347,6 +357,8 @@ public final class GoalProposalCodec {
     private ClarificationProposal decodeClarificationValue(
             JsonNode node, GoalInterpretationInput input) {
         requireObject(node, "clarification");
+        JsonNode blockedGoalNode = node.get("blockedGoal");
+        requireBlockedGoalObject(blockedGoalNode);
         assertFields(node, Set.of("field", "prompt", "blockedGoal"),
                 Set.of("field", "prompt", "blockedGoal"), "clarification");
         ClarificationProposal.Field field = enumValue(
@@ -356,7 +368,7 @@ public final class GoalProposalCodec {
             throw new IllegalArgumentException("raw goal clarification is not persistable");
         }
         BlockedGoalTemplate blockedGoal = decodeBlockedGoal(
-                node.get("blockedGoal"), input, field);
+                blockedGoalNode, input, field);
         return new ClarificationProposal(
                 field,
                 requireText(node, "prompt", 400),
@@ -368,7 +380,7 @@ public final class GoalProposalCodec {
             JsonNode node,
             GoalInterpretationInput input,
             ClarificationProposal.Field field) {
-        requireObject(node, "clarification.blockedGoal");
+        requireBlockedGoalObject(node);
         Set<String> fields = Set.of(
                 "goalKind", "subjects", "requestedOutputs", "facets", "dimensions",
                 "requestedSize", "constraints", "portfolioDepth",
@@ -444,6 +456,16 @@ public final class GoalProposalCodec {
                 unresolved, askedFields, List.copyOf(remainingFields), depth);
     }
 
+    /** 标准澄清只能携带完整对象；缺失、null 与非对象共享一个闭集原因。 */
+    private void requireBlockedGoalObject(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            throw new GoalProposalDecodeException(
+                    GoalProposalDecodeException.Reason
+                            .CLARIFICATION_BLOCKED_GOAL_REQUIRED,
+                    "clarification.blockedGoal must be an object");
+        }
+    }
+
     /** 解码纯对话结果，文案必须通过 {@link ConversationalMessageValidator}。 */
     private GoalInterpretationResult decodeConversational(
             JsonNode root, GoalInterpretationInput input) {
@@ -455,10 +477,7 @@ public final class GoalProposalCodec {
                         input.getUserText()));
     }
 
-    /**
-     * 解码输入锚点：声明的 start 与原文不匹配时，仅当该文本在原文中
-     * 唯一出现才容错修正位置，否则拒绝。
-     */
+    /** 解码输入锚点；文本或位置不精确匹配时直接拒绝，不修复 Provider 输出。 */
     private UserGoalProposal.InputAnchor decodeAnchor(
             JsonNode node, String input, String path) {
         requireObject(node, path);
@@ -467,16 +486,8 @@ public final class GoalProposalCodec {
         int claimedStart = requireInt(node, "start");
         UserGoalProposal.InputAnchor claimed =
                 new UserGoalProposal.InputAnchor(text, claimedStart);
-        try {
-            claimed.requireMatches(input);
-            return claimed;
-        } catch (IllegalArgumentException mismatch) {
-            int uniqueStart = input.indexOf(text);
-            if (uniqueStart < 0 || input.indexOf(text, uniqueStart + 1) >= 0) {
-                throw mismatch;
-            }
-            return new UserGoalProposal.InputAnchor(text, uniqueStart);
-        }
+        claimed.requireMatches(input);
+        return claimed;
     }
 
     /** 断言解释输入处于 DISCUSSION 模式（讨论类路由的前置条件）。 */

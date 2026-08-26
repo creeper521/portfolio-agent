@@ -37,6 +37,16 @@ public final class ResolvedModelExecution {
             throw new IllegalArgumentException(
                     "model execution snapshot and binding must identify the same model");
         }
+        if (binding != null && !snapshot.getDescriptorFingerprint().orElseThrow()
+                .equals(binding.getDescriptorFingerprint())) {
+            throw new IllegalArgumentException(
+                    "model execution snapshot and binding descriptor must agree");
+        }
+        if (binding != null && !bindingFingerprints(snapshot.getOperationBindings())
+                .equals(bindingFingerprints(binding.getOperationBindings()))) {
+            throw new IllegalArgumentException(
+                    "model execution snapshot and binding operations must agree");
+        }
     }
 
     /** 构造显式不使用模型的执行：NONE 快照且无绑定。 */
@@ -111,5 +121,19 @@ public final class ResolvedModelExecution {
     public enum Stage {
         GOAL_INTERPRETATION,
         ANSWER_GENERATION
+    }
+
+    private static java.util.Map<
+            com.portfolio.agent.infrastructure.model.policy.ModelOperation, String>
+            bindingFingerprints(java.util.Map<
+                    com.portfolio.agent.infrastructure.model.policy.ModelOperation,
+                    com.portfolio.agent.infrastructure.model.structured.OperationBinding> values) {
+        java.util.EnumMap<
+                com.portfolio.agent.infrastructure.model.policy.ModelOperation, String> result =
+                new java.util.EnumMap<>(
+                        com.portfolio.agent.infrastructure.model.policy.ModelOperation.class);
+        values.forEach((operation, operationBinding) -> result.put(
+                operation, operationBinding.getBindingFingerprint()));
+        return java.util.Map.copyOf(result);
     }
 }

@@ -19,14 +19,16 @@ class SystemPromptCatalogTest {
 
         assertThat(catalog.goalInterpretation())
                 .contains(
-                        "SEMANTIC_ROUTE", "STANDARD_GOAL",
+                        "Goal Draft", "STANDARD_GOAL",
                         "interpretationMode", "allowedRoutes",
-                        "Simplified Chinese", "Depth selection",
-                        "Calculate every anchor start",
-                        "untrusted content")
+                        "Simplified Chinese", "depth is CONCISE",
+                        "server derives them deterministically",
+                        "untrusted visitor content",
+                        "provider-enforced Goal Draft")
                 .doesNotContain(
                         "{\"kind\":\"GOALS\"",
-                        "{\"kind\":\"CLARIFICATION\"")
+                        "{\"kind\":\"CLARIFICATION\"",
+                        "routeCandidates and schema")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
         assertThat(catalog.generalKnowledge())
                 .contains(
@@ -35,6 +37,13 @@ class SystemPromptCatalogTest {
                         "DEFINITION statement's aspects must contain",
                         "MECHANISM statement's aspects must contain",
                         "only sentence terminator", "untrusted content")
+                .doesNotStartWith(" ").doesNotEndWith(" ");
+        assertThat(catalog.generalProviderDraft())
+                .contains(
+                        "provider-enforced General", "Provider Draft contract",
+                        "definition", "mechanism",
+                        "comparisonSentences", "caveats is mandatory",
+                        "will deterministically bind")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
     }
 

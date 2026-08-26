@@ -289,10 +289,10 @@ const discussionExpirySyncTarget = computed(() => {
   if (session === null || discussion === undefined) return null
   if (discussion.status !== 'ACTIVE') return null
   if (Date.parse(discussion.expiresAt) - discussionClock.value > 0) return null
-  const token = sessions.getSessionResumeToken(session.id)
-  if (token === undefined) return null
+  const resumeToken = sessions.getSessionResumeToken(session.id)
+  if (resumeToken === undefined) return null
   const key = `${session.id}:${session.discussionRevision}:${discussion.expiresAt}`
-  return { sessionId: session.id, token, key }
+  return { sessionId: session.id, resumeToken, key }
 })
 
 watch(discussionExpirySyncTarget, (target) => {
@@ -300,11 +300,11 @@ watch(discussionExpirySyncTarget, (target) => {
   discussionExpirySyncInFlight.add(target.key)
   void (async () => {
     try {
-      const current = await fetchCurrentConversation(target.token)
+      const current = await fetchCurrentConversation(target.resumeToken)
       if (disposed || !current.ok) return
       sessions.adoptResumedConversation(target.sessionId, {
         conversationId: current.conversationId,
-        resumeToken: target.token,
+        resumeToken: target.resumeToken,
         discussionRevision: current.discussionRevision,
         ...(current.activeDiscussion === undefined
           ? {}
@@ -621,15 +621,16 @@ async function runTurn(
 ): Promise<void> {
   const session = sessions.sessions.value.find((item) => item.id === sessionId)
   if (session === undefined) return
+  const effectiveResumeToken = overrides.resumeToken ?? session.resumeToken
   const submission: TurnSubmissionSnapshot = overrides.submission ?? {
     requestId,
     modelSelection: overrides.modelSelection ?? effectiveSelectionOf(session),
     command,
     surfaceContext: overrides.surfaceContext ?? surfaceContextOf(session),
     conversationWindow: overrides.conversationWindow ?? conversationWindowOf(session),
-    ...((overrides.resumeToken ?? session.resumeToken) === undefined
+    ...(effectiveResumeToken === undefined
       ? {}
-      : { resumeToken: overrides.resumeToken ?? session.resumeToken }),
+      : { resumeToken: effectiveResumeToken }),
     displayQuestion: overrides.displayQuestion ?? displayQuestionOf(command),
     ...(overrides.userMessageId === undefined
       ? {}

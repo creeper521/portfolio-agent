@@ -4,8 +4,8 @@ import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
 import com.portfolio.agent.infrastructure.model.policy.OperationMode;
-import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
-import com.portfolio.agent.turn.planning.GoalProposalCodec;
+import com.portfolio.agent.infrastructure.model.structured.StructuredContractRef;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
 import com.portfolio.agent.turn.state.configuration.ConversationContextProperties;
 
 import java.util.EnumMap;
@@ -25,15 +25,17 @@ public final class AgentRuntimeReadiness {
 
     public AgentRuntimeReadiness(
             ConversationContextProperties.Mode contextMode,
-            ModelOperationPolicyRegistry policies) {
+            ModelOperationPolicyRegistry policies,
+            StructuredOutputContractRegistry contracts) {
         Objects.requireNonNull(contextMode, "contextMode");
         Objects.requireNonNull(policies, "policies");
+        Objects.requireNonNull(contracts, "contracts");
         agentAvailable = contextMode != ConversationContextProperties.Mode.DISABLED;
         EnumMap<ModelOperation, Boolean> availability =
                 new EnumMap<>(ModelOperation.class);
         for (ModelOperation operation : ModelOperation.values()) {
             ModelOperationPolicy policy = policies.get(operation);
-            validateEnabledAuthority(policy);
+            validateEnabledAuthority(policy, contracts);
             availability.put(operation,
                     agentAvailable
                             && policy.getMode() == OperationMode.ENABLED);
@@ -49,20 +51,18 @@ public final class AgentRuntimeReadiness {
         return operationAvailability.get(Objects.requireNonNull(operation, "operation"));
     }
 
-    /** fail-closed 门禁：ENABLED 操作的 schema 版本与生产 codec 不一致即启动失败。 */
-    private void validateEnabledAuthority(ModelOperationPolicy policy) {
+    /** fail-closed 门禁：ENABLED 操作必须能由 canonical contract registry 精确解析。 */
+    private void validateEnabledAuthority(
+            ModelOperationPolicy policy,
+            StructuredOutputContractRegistry contracts) {
         if (policy.getMode() != OperationMode.ENABLED) return;
-        if (!expectedSchema(policy.getOperation()).equals(policy.getSchemaVersion())) {
+        try {
+            contracts.resolve(new StructuredContractRef(
+                    policy.getOperation(), policy.getSchemaVersion()));
+        } catch (IllegalArgumentException failure) {
             throw new IllegalStateException(
-                    "enabled model operation schema does not match production codec: "
-                            + policy.getOperation());
+                    "enabled model operation contract is not approved: "
+                            + policy.getOperation(), failure);
         }
-    }
-
-    private String expectedSchema(ModelOperation operation) {
-        return switch (operation) {
-            case TURN_INTERPRETATION -> GoalProposalCodec.SCHEMA_VERSION;
-            case GENERAL_KNOWLEDGE -> GeneralDraftCodec.SCHEMA_VERSION;
-        };
     }
 }

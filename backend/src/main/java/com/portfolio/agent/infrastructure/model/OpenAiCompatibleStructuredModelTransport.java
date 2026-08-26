@@ -2,10 +2,18 @@ package com.portfolio.agent.infrastructure.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticEventPublisher;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContract;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputStrategy;
+import com.portfolio.agent.infrastructure.model.structured.TokenFieldPolicy;
 
 import java.io.ByteArrayOutputStream;
 import java.net.http.HttpClient;
@@ -56,15 +64,18 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     static final int DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS = 30;
     private final HttpClient client;
     private final ObjectMapper mapper;
+    private final ObjectMapper strictEnvelopeMapper;
     private final Duration operationTimeout;
     private final DiagnosticEventPublisher diagnostics;
     private final Function<ModelTransportBinding, URI> endpointResolver;
+    private final StructuredOutputContractRegistry contracts;
 
     /** 公开构造：endpoint 直接取绑定中的 URI；测试构造可注入自定义 endpoint 解析器。 */
     public OpenAiCompatibleStructuredModelTransport(
             HttpClient client, ObjectMapper mapper,
-            Duration operationTimeout, DiagnosticEventPublisher diagnostics) {
-        this(client, mapper, operationTimeout, diagnostics,
+            Duration operationTimeout, DiagnosticEventPublisher diagnostics,
+            StructuredOutputContractRegistry contracts) {
+        this(client, mapper, operationTimeout, diagnostics, contracts,
                 ModelTransportBinding::getEndpoint);
     }
 
@@ -78,14 +89,19 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             HttpClient client, ObjectMapper mapper,
             Duration operationTimeout,
             DiagnosticEventPublisher diagnostics,
+            StructuredOutputContractRegistry contracts,
             Function<ModelTransportBinding, URI> endpointResolver) {
         this.client = java.util.Objects.requireNonNull(client, "client");
         this.mapper = java.util.Objects.requireNonNull(mapper, "mapper");
+        this.strictEnvelopeMapper = new ObjectMapper(JsonFactory.builder()
+                .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                .build()).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         this.operationTimeout = java.util.Objects.requireNonNull(
                 operationTimeout, "operationTimeout");
         this.diagnostics = java.util.Objects.requireNonNull(diagnostics, "diagnostics");
         this.endpointResolver = java.util.Objects.requireNonNull(
                 endpointResolver, "endpointResolver");
+        this.contracts = java.util.Objects.requireNonNull(contracts, "contracts");
     }
 
     /**
@@ -171,7 +187,7 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             }
             JsonNode root;
             try {
-                root = mapper.readTree(response.body());
+                root = strictEnvelopeMapper.readTree(response.body());
             } catch (Exception invalidJson) {
                 throw new StructuredModelFailure(
                         StructuredModelFailure.Code.RESPONSE_JSON_INVALID, invalidJson);
@@ -179,24 +195,25 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.size() != 1) {
                 throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID);
+                        StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID,
+                        StructuredModelFailure.Reason.CHOICES_CARDINALITY);
             }
-            JsonNode content = choices.get(0).path("message").get("content");
-            if (content == null || !content.isTextual() || content.textValue().isBlank()) {
-                throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID);
-            }
-            StructuredModelResponse result = new StructuredModelResponse(content.textValue());
-            publish(request.operation(), true, null, startedAt);
+            OperationBinding operationBinding = resolvedBinding
+                    .getRequiredOperationBinding(request.operation());
+            StructuredModelResponse result = new StructuredModelResponse(
+                    extract(choices.get(0), operationBinding));
+            publish(request.operation(), true, null, null, startedAt);
             return result;
         } catch (StructuredModelFailure failure) {
-            publish(request.operation(), false, failure.getCode().name(), startedAt);
+            publish(request.operation(), false, failure.getCode().name(),
+                    failure.getReason(), startedAt);
             throw failure;
         }
         catch (Exception failure) {
             // 兜底：任何未归类的异常都收敛为封闭的 TRANSPORT_UNAVAILABLE，不外泄细节。
             publish(request.operation(), false,
-                    StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(), startedAt);
+                    StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(),
+                    null, startedAt);
             throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);
         }
     }
@@ -205,12 +222,15 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
      * 发布一次 Provider 调用的诊断事件（操作名、结果、失败码、耗时桶）。
      * 诊断发布失败被静默吞掉：诊断永远不得改变模型调用行为。
      */
-    private void publish(String operation, boolean success, String failureCode, long startedAt) {
+    private void publish(
+            com.portfolio.agent.infrastructure.model.policy.ModelOperation operation,
+            boolean success, String failureCode,
+            StructuredModelFailure.Reason failureReason, long startedAt) {
         try {
             DiagnosticEvent.Builder event = DiagnosticEvent.builder(
                             success ? "provider.call.completed" : "provider.call.failed",
                             success ? DiagnosticLevel.INFO : DiagnosticLevel.WARN)
-                    .field("provider.operation", operation)
+                    .field("provider.operation", operation.name())
                     .field("event.outcome", success ? "SUCCESS" : "FAILURE")
                     .field("duration.bucket", durationBucket(startedAt))
                     .field("response.present", success);
@@ -218,6 +238,9 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
             if (failureCode != null) {
                 event.field("failure.layer",
                         StructuredModelFailure.Code.valueOf(failureCode).getLayer());
+            }
+            if (failureReason != null) {
+                event.field("failure.reason", failureReason.name());
             }
             diagnostics.publish(event.build());
         } catch (RuntimeException ignored) {
@@ -247,10 +270,103 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                 Map.of("role", "system", "content", request.systemPrompt()),
                 Map.of("role", "user", "content", request.userPrompt())));
         binding.getProtocolProfile().applyStructuredOutputFields(payload);
-        payload.put("max_tokens", Math.min(
-                request.maxOutputTokens(), binding.getMaxOutputTokens()));
+        OperationBinding operationBinding = binding.getRequiredOperationBinding(
+                request.operation());
+        StructuredOutputContract contract = contracts.resolve(
+                operationBinding.getProviderContractRef());
+        applyStrategy(payload, operationBinding, contract);
+        if (operationBinding.getTokenFieldPolicy() == TokenFieldPolicy.MAX_TOKENS) {
+            payload.put("max_tokens", Math.min(
+                    request.maxOutputTokens(), binding.getMaxOutputTokens()));
+        }
         payload.put("temperature", request.temperature());
         return mapper.writeValueAsString(payload);
+    }
+
+    private void applyStrategy(
+            Map<String, Object> payload,
+            OperationBinding binding,
+            StructuredOutputContract contract) {
+        if (binding.getStrategy() == StructuredOutputStrategy.NATIVE_JSON_SCHEMA) {
+            payload.put("response_format", Map.of(
+                    "type", "json_schema",
+                    "json_schema", Map.of(
+                            "name", contract.outputName(),
+                            "strict", true,
+                            "schema", contract.canonicalSchema())));
+            return;
+        }
+        Map<String, Object> function = Map.of(
+                "name", binding.outputToolName(),
+                "description", "Return the final typed output.",
+                "parameters", contract.canonicalSchema());
+        payload.put("tools", List.of(Map.of(
+                "type", "function", "function", function)));
+        payload.put("tool_choice", Map.of(
+                "type", "function",
+                "function", Map.of("name", binding.outputToolName())));
+        payload.put("parallel_tool_calls", false);
+    }
+
+    private String extract(JsonNode choice, OperationBinding binding) {
+        JsonNode finishReason = choice.get("finish_reason");
+        if (finishReason == null || !finishReason.isTextual()
+                || !binding.acceptsFinishReason(finishReason.textValue())) {
+            throw envelopeFailure(StructuredModelFailure.Reason.FINISH_REASON);
+        }
+        JsonNode message = choice.get("message");
+        if (message == null || !message.isObject()) {
+            throw envelopeFailure(StructuredModelFailure.Reason.MESSAGE_SHAPE);
+        }
+        JsonNode refusal = message.get("refusal");
+        if (refusal != null && !refusal.isNull()) {
+            throw envelopeFailure(StructuredModelFailure.Reason.REFUSAL);
+        }
+        if (binding.getStrategy() == StructuredOutputStrategy.NATIVE_JSON_SCHEMA) {
+            JsonNode toolCalls = message.get("tool_calls");
+            if (toolCalls != null && !toolCalls.isNull()) {
+                throw envelopeFailure(
+                        StructuredModelFailure.Reason.UNEXPECTED_TOOL_CARRIER);
+            }
+            JsonNode content = message.get("content");
+            if (content == null || !content.isTextual()
+                    || content.textValue().isBlank()) {
+                throw envelopeFailure(StructuredModelFailure.Reason.CONTENT_MISSING);
+            }
+            return content.textValue();
+        }
+        JsonNode content = message.get("content");
+        if (content != null && !content.isNull()
+                && (!content.isTextual() || !content.textValue().isBlank())) {
+            throw envelopeFailure(
+                    StructuredModelFailure.Reason.UNEXPECTED_TOOL_CARRIER);
+        }
+        JsonNode toolCalls = message.get("tool_calls");
+        if (toolCalls == null || !toolCalls.isArray() || toolCalls.size() != 1) {
+            throw envelopeFailure(
+                    StructuredModelFailure.Reason.TOOL_CALL_CARDINALITY);
+        }
+        JsonNode toolCall = toolCalls.get(0);
+        if (!"function".equals(toolCall.path("type").asText())) {
+            throw envelopeFailure(StructuredModelFailure.Reason.TOOL_CALL_TYPE);
+        }
+        JsonNode function = toolCall.get("function");
+        if (function == null || !function.isObject()
+                || !binding.outputToolName().equals(function.path("name").asText())) {
+            throw envelopeFailure(StructuredModelFailure.Reason.TOOL_FUNCTION);
+        }
+        JsonNode arguments = function.get("arguments");
+        if (arguments == null || !arguments.isTextual()
+                || arguments.textValue().isBlank()) {
+            throw envelopeFailure(StructuredModelFailure.Reason.TOOL_ARGUMENTS);
+        }
+        return arguments.textValue();
+    }
+
+    private StructuredModelFailure envelopeFailure(
+            StructuredModelFailure.Reason reason) {
+        return new StructuredModelFailure(
+                StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID, reason);
     }
 
     /** 把非 2xx 状态码映射为封闭失败码（鉴权/计费/限流/Provider 不可用/拒绝）。 */

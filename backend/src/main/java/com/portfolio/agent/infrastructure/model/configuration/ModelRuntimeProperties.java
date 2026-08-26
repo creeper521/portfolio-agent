@@ -11,8 +11,7 @@ import java.util.Map;
  * <p>这是三重准入第一重的配置入口：{@code enabled} 未显式开启时，
  * {@link ConfiguredModelCatalog} 会产出空目录，一切模型能力保持关闭。
  * 每个模型的 enabled/selectable/credential(data-policy) 字段构成第二重
- * Provider 准入；协议相关字段（结构化输出、thinking、streaming）只接受
- * 封闭取值，由目录构建期强制校验。
+ * Provider 准入；协议组合只能通过代码批准的 executionProfile 选择。
  */
 @ConfigurationProperties(prefix = "portfolio.model-runtime")
 public final class ModelRuntimeProperties {
@@ -48,8 +47,7 @@ public final class ModelRuntimeProperties {
 
     /**
      * 单个模型的启动设置：准入四要素（enabled/selectable/apiKey/
-     * dataPolicyApproved）加展示、版本、协议与 token 上限。
-     * 协议字段（structuredOutput/thinkingMode/streaming）仅接受封闭取值。
+     * dataPolicyApproved）加展示、版本、执行画像与 token 上限。
      */
     public static final class ModelSettings {
         private boolean enabled;
@@ -60,11 +58,8 @@ public final class ModelRuntimeProperties {
         private String endpoint = "";
         private String model = "";
         private String apiKey = "";
-        private String protocolProfile = "";
+        private String executionProfile = "";
         private boolean dataPolicyApproved;
-        private String structuredOutput = "JSON_OBJECT";
-        private String thinkingMode = "DISABLED";
-        private boolean streaming;
         private int maxContextTokens;
         private int maxOutputTokens;
 
@@ -84,16 +79,10 @@ public final class ModelRuntimeProperties {
         public void setModel(String value) { model = value; }
         public String getApiKey() { return apiKey; }
         public void setApiKey(String value) { apiKey = value; }
-        public String getProtocolProfile() { return protocolProfile; }
-        public void setProtocolProfile(String value) { protocolProfile = value; }
+        public String getExecutionProfile() { return executionProfile; }
+        public void setExecutionProfile(String value) { executionProfile = value; }
         public boolean isDataPolicyApproved() { return dataPolicyApproved; }
         public void setDataPolicyApproved(boolean value) { dataPolicyApproved = value; }
-        public String getStructuredOutput() { return structuredOutput; }
-        public void setStructuredOutput(String value) { structuredOutput = value; }
-        public String getThinkingMode() { return thinkingMode; }
-        public void setThinkingMode(String value) { thinkingMode = value; }
-        public boolean isStreaming() { return streaming; }
-        public void setStreaming(boolean value) { streaming = value; }
         public int getMaxContextTokens() { return maxContextTokens; }
         public void setMaxContextTokens(int value) { maxContextTokens = value; }
         public int getMaxOutputTokens() { return maxOutputTokens; }

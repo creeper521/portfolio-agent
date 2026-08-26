@@ -247,6 +247,8 @@ class PortfolioControllerAvailabilityTest {
         return new AgentRuntimeReadiness(
                 contextMode,
                 new ModelOperationPolicyRegistry(Map.of(
-                        ModelOperation.TURN_INTERPRETATION, turnPolicy)));
+                        ModelOperation.TURN_INTERPRETATION, turnPolicy)),
+                com.portfolio.agent.infrastructure.model.structured
+                        .StructuredModelTestFixtures.contracts());
     }
 }

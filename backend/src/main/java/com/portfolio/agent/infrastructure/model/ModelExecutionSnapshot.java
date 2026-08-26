@@ -7,6 +7,9 @@ import com.portfolio.agent.infrastructure.model.provider.ModelRef;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
 
 /**
  * 单个 Turn 内所有模型阶段共享的、请求时的模型执行快照。
@@ -30,6 +33,7 @@ public final class ModelExecutionSnapshot {
     private final Set<ModelCapability> capabilities;
     private final int maxContextTokens;
     private final int maxOutputTokens;
+    private final Map<ModelOperation, OperationBinding> operationBindings;
 
     private ModelExecutionSnapshot() {
         kind = Kind.NONE;
@@ -40,6 +44,7 @@ public final class ModelExecutionSnapshot {
         capabilities = Set.of();
         maxContextTokens = 0;
         maxOutputTokens = 0;
+        operationBindings = Map.of();
     }
 
     private ModelExecutionSnapshot(ModelProviderDescriptor descriptor) {
@@ -53,6 +58,7 @@ public final class ModelExecutionSnapshot {
         capabilities = Set.copyOf(required.getCapabilities());
         maxContextTokens = required.getMaxContextTokens();
         maxOutputTokens = required.getMaxOutputTokens();
+        operationBindings = Map.copyOf(required.getOperationBindings());
     }
 
     /** 返回共享的 NONE 单例快照。 */
@@ -101,6 +107,19 @@ public final class ModelExecutionSnapshot {
 
     public int getMaxOutputTokens() {
         return maxOutputTokens;
+    }
+
+    public Map<ModelOperation, OperationBinding> getOperationBindings() {
+        return operationBindings;
+    }
+
+    public OperationBinding getRequiredOperationBinding(ModelOperation operation) {
+        OperationBinding binding = operationBindings.get(
+                java.util.Objects.requireNonNull(operation, "operation"));
+        if (binding == null) {
+            throw new IllegalArgumentException("model operation binding is not available");
+        }
+        return binding;
     }
 
     /** 判断快照是否声明了指定能力；NONE 快照恒为 false。 */

@@ -407,7 +407,7 @@ describe('parsePublicAgentTurn：modelExecution 公开投影（A7）', () => {
     expect(answer.modelExecution).toEqual({
       selectionKind: 'MODEL',
       requestedModelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v1',
+      selectionVersion: 'glm-4-7-flash-v4',
       participation: 'GOAL_AND_ANSWER',
     })
     const unavailable = parseFixture('capability-unavailable.json')
@@ -422,7 +422,7 @@ describe('parsePublicAgentTurn：modelExecution 公开投影（A7）', () => {
     expect(attempted.modelExecution).toEqual({
       selectionKind: 'MODEL',
       requestedModelRef: 'qwen-3-7-flash',
-      selectionVersion: 'qwen-3-7-flash-v1',
+      selectionVersion: 'qwen-3-7-flash-v6',
       participation: 'ATTEMPTED_UNAVAILABLE',
     })
   })

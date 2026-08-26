@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:model-contract:goal.provider-draft.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision"],
+  "properties": {
+    "decision": {"enum": [
+      "CONVERSATIONAL", "STANDARD_GOAL", "ENTER_RECOMMENDED_RESULT",
+      "CONTINUE_CURRENT_PROJECT", "START_NEW_TOPIC", "SWITCH_PROJECT",
+      "REENTER_PROJECT", "NEEDS_CLARIFICATION"
+    ]},
+    "message": {"type": "string", "minLength": 1, "maxLength": 400},
+    "candidateKey": {"type": "string", "pattern": "^C[1-5]$"},
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText"],
+      "properties": {
+        "goalKind": {"enum": [
+          "PORTFOLIO_FACT", "PORTFOLIO_COMPARE", "PORTFOLIO_RECOMMEND",
+          "GENERAL_EXPLANATION", "GENERAL_COMPARISON",
+          "APPLY_GENERAL_CONCEPT_TO_PORTFOLIO"
+        ]},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjects": {"type": "array", "maxItems": 5, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "reference", "inputText"],
+          "properties": {
+            "kind": {"enum": ["PROJECT", "CASE"]},
+            "reference": {"type": "string", "minLength": 1, "maxLength": 128},
+            "inputText": {"type": "string", "minLength": 1, "maxLength": 256}
+          }
+        }},
+        "facets": {"type": "array", "maxItems": 6, "uniqueItems": true,
+          "items": {"enum": [
+            "OVERVIEW", "BACKGROUND", "RESPONSIBILITY",
+            "SOLUTION", "VERIFICATION", "STATUS"
+          ]}},
+        "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]},
+        "dimensions": {"type": "array", "maxItems": 10, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 96}},
+        "requestedSize": {"type": "integer", "minimum": 1, "maximum": 5},
+        "constraints": {"type": "array", "maxItems": 10, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 96}},
+        "topicText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjectTexts": {"type": "array", "minItems": 2, "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+        "conceptText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "portfolioFacet": {"enum": [
+          "OVERVIEW", "BACKGROUND", "RESPONSIBILITY",
+          "SOLUTION", "VERIFICATION", "STATUS"
+        ]}
+      }
+    },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "prompt", "goal"],
+      "properties": {
+        "field": {"enum": ["SUBJECT", "REQUESTED_SIZE"]},
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 400},
+        "goal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["goalKind", "inputText"],
+          "properties": {
+            "goalKind": {"enum": [
+              "PORTFOLIO_FACT", "PORTFOLIO_COMPARE", "PORTFOLIO_RECOMMEND"
+            ]},
+            "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+            "subjects": {"type": "array", "maxItems": 5, "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["kind", "reference", "inputText"],
+              "properties": {
+                "kind": {"enum": ["PROJECT", "CASE"]},
+                "reference": {"type": "string", "minLength": 1, "maxLength": 128},
+                "inputText": {"type": "string", "minLength": 1, "maxLength": 256}
+              }
+            }},
+            "facets": {"type": "array", "maxItems": 6, "uniqueItems": true,
+              "items": {"enum": [
+                "OVERVIEW", "BACKGROUND", "RESPONSIBILITY",
+                "SOLUTION", "VERIFICATION", "STATUS"
+              ]}},
+            "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]},
+            "dimensions": {"type": "array", "maxItems": 10, "uniqueItems": true,
+              "items": {"enum": [
+                "ARCHITECTURE", "IMPLEMENTATION", "OUTCOME", "RISKS", "VERIFICATION"
+              ]}},
+            "requestedSize": {"type": "integer", "minimum": 1, "maximum": 5},
+            "constraints": {"type": "array", "maxItems": 10, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1, "maxLength": 96}}
+          }
+        }
+      }
+    },
+    "recentReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalId"],
+      "properties": {
+        "goalId": {"type": "string", "minLength": 1, "maxLength": 96},
+        "sectionId": {"type": "string", "minLength": 1, "maxLength": 96}
+      }
+    }
+  }
+}

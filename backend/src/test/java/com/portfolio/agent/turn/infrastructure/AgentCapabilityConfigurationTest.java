@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.infrastructure.model.SystemPromptCatalog;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
@@ -12,6 +13,7 @@ import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeModelPort;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeUnavailableException;
 import com.portfolio.agent.turn.infrastructure.model.OpenAiCompatibleGeneralKnowledgeAdapter;
+import com.portfolio.agent.turn.planning.UnresolvedIntentPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -36,10 +38,16 @@ class AgentCapabilityConfigurationTest {
         assertThat(catalog.generalKnowledge()).isNotBlank();
     }
 
+    @Test void unresolvedIntentPolicyIsWiredAsItsOwnDeterministicBean() {
+        assertThat(configuration.unresolvedIntentPolicy())
+                .isInstanceOf(UnresolvedIntentPolicy.class);
+    }
+
     @Test void disabledProviderIsProjectedAsUnavailableTypedPort() {
         GeneralKnowledgeModelPort port = configuration.generalKnowledgeModelPort(
-                new ObjectMapper(), operationPolicies(), transport, prompts,
-                readiness(false));
+                new ObjectMapper(), operationPolicies(),
+                StructuredModelTestFixtures.gateway(transport), prompts,
+                readiness(false), event -> { });
 
         assertThatThrownBy(() -> port.generate(
                 null, ResolvedModelExecution.none()))
@@ -48,8 +56,9 @@ class AgentCapabilityConfigurationTest {
 
     @Test void enabledProviderBuildsTheRealGeneralAdapter() {
         GeneralKnowledgeModelPort port = configuration.generalKnowledgeModelPort(
-                new ObjectMapper(), operationPolicies(), transport, prompts,
-                readiness(true));
+                new ObjectMapper(), operationPolicies(),
+                StructuredModelTestFixtures.gateway(transport), prompts,
+                readiness(true), event -> { });
 
         assertThat(port).isInstanceOf(OpenAiCompatibleGeneralKnowledgeAdapter.class);
     }

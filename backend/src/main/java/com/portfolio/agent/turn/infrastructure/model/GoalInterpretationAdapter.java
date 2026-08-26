@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
-import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputGateway;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputValidationException;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
 import com.portfolio.agent.turn.execution.TurnDeadline;
@@ -14,6 +16,7 @@ import com.portfolio.agent.turn.planning.GoalInterpretationPort;
 import com.portfolio.agent.turn.planning.GoalInterpretationResult;
 import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
+import com.portfolio.agent.turn.planning.GoalProposalDecodeException;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -28,7 +31,7 @@ import java.util.Map;
  * 操作超时的较小者封顶。schema 解码失败按"模型返回无法安全采用"处理并上报诊断。</p>
  */
 public final class GoalInterpretationAdapter implements GoalInterpretationPort {
-    private final StructuredModelTransport transport;
+    private final StructuredOutputGateway gateway;
     private final ObjectMapper mapper;
     private final GoalProposalCodec codec;
     private final String systemPrompt;
@@ -36,18 +39,19 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
     private final Duration timeout;
     private final ModelOutputDiagnostics outputDiagnostics;
     public GoalInterpretationAdapter(
-            StructuredModelTransport transport, ObjectMapper mapper,
+            StructuredOutputGateway gateway, ObjectMapper mapper,
             GoalProposalCodec codec, String systemPrompt,
             int maxTokens, Duration timeout) {
-        this(transport, mapper, codec, systemPrompt, maxTokens, timeout,
+        this(gateway, mapper, codec, systemPrompt, maxTokens, timeout,
                 ModelOutputDiagnostics.none());
     }
     public GoalInterpretationAdapter(
-            StructuredModelTransport transport, ObjectMapper mapper,
+            StructuredOutputGateway gateway, ObjectMapper mapper,
             GoalProposalCodec codec, String systemPrompt,
             int maxTokens, Duration timeout,
             ModelOutputDiagnostics outputDiagnostics) {
-        this.transport = transport; this.mapper = mapper; this.codec = codec;
+        this.gateway = java.util.Objects.requireNonNull(gateway, "gateway");
+        this.mapper = mapper; this.codec = codec;
         if (systemPrompt == null || systemPrompt.isBlank()) {
             throw new IllegalArgumentException("systemPrompt is required");
         }
@@ -78,7 +82,9 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             throw new GoalInterpretationUnavailableException();
         }
         StructuredModelRequest request = new StructuredModelRequest(
-                "GOAL_INTERPRETATION", systemPrompt, prompt(input), maxTokens, 0.0d,
+                com.portfolio.agent.infrastructure.model.policy.ModelOperation
+                        .TURN_INTERPRETATION,
+                systemPrompt, prompt(input), maxTokens, 0.0d,
                 deadline.cappedAt(timeout));
         if (request.deadline().isExpired()) {
             throw SelectedModelFailureException
@@ -86,24 +92,49 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
         }
         modelExecution.markAttempted(
                 ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
-        String json;
+        StructurallyValidatedOutput output;
         try {
-            json = transport.execute(
-                    modelExecution.getRequiredBinding(), request).json();
+            output = gateway.execute(
+                    modelExecution.getRequiredBinding(), request,
+                    new GoalProviderDraftCompiler(input));
         } catch (StructuredModelFailure failure) {
             throw SelectedModelFailureException.from(failure);
+        } catch (StructuredOutputValidationException failure) {
+            outputDiagnostics.rejected(
+                    "GOAL_INTERPRETATION", diagnosticLayer(failure),
+                    failure.getDiagnosticReason());
+            throw SelectedModelFailureException.invalidResponse(failure);
         }
         try {
-            return codec.decode(json, input);
+            return codec.decode(output.jsonTree(), input);
+        } catch (GoalProposalDecodeException failure) {
+            outputDiagnostics.rejected(
+                    "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SCHEMA,
+                    failure.getReason().name());
+            throw SelectedModelFailureException.invalidResponse(failure);
         } catch (IllegalArgumentException failure) {
             outputDiagnostics.rejected(
                     "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SCHEMA);
             throw SelectedModelFailureException.invalidResponse(failure);
         }
     }
+
+    private ModelOutputDiagnostics.Layer diagnosticLayer(
+            StructuredOutputValidationException failure) {
+        return switch (failure.getStage()) {
+            case PROVIDER_DRAFT_SCHEMA ->
+                    ModelOutputDiagnostics.Layer.PROVIDER_DRAFT_SCHEMA;
+            case DETERMINISTIC_COMPILER ->
+                    ModelOutputDiagnostics.Layer.DETERMINISTIC_COMPILER;
+            case CANONICAL_SCHEMA ->
+                    ModelOutputDiagnostics.Layer.CANONICAL_SCHEMA;
+            case UNCLASSIFIED_SCHEMA -> ModelOutputDiagnostics.Layer.SCHEMA;
+        };
+    }
     /**
      * 把解析输入投影为受限 JSON：只包含允许的目标类别、路由、候选与已审阅主体
-     * 描述，不包含任何自由指令；schema 字段锁定为 semantic-route-proposal-v1。
+     * 描述，不包含任何由 Adapter 重复声明的 schema 版本；结构合同只从
+     * 本 Turn 冻结的 OperationBinding 解析。
      */
     private String prompt(GoalInterpretationInput input) {
         try {
@@ -138,7 +169,6 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
                         value.put("reviewedAliases", candidate.getReviewedAliases());
                         return value;
                     }).toList());
-            projection.put("schema", "semantic-route-proposal-v1");
             return mapper.writeValueAsString(projection);
         } catch (Exception failure) {
             throw new GoalInterpretationUnavailableException(failure);

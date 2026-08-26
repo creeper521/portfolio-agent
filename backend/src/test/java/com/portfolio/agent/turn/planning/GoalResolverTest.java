@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.planning;
 
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import com.portfolio.agent.turn.lifecycle.ConversationWindow;
 import com.portfolio.agent.turn.execution.TurnDeadline;
@@ -16,10 +18,134 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.ArrayList;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GoalResolverTest {
+
+    @Test
+    void modelWithoutGeneralBindingCannotProposeGeneralOrCrossDomainGoals() {
+        AtomicReference<GoalInterpretationInput> captured = new AtomicReference<>();
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
+            captured.set(input);
+            return GoalInterpretationResult.conversational("需要作品集范围内的问题");
+        }, command -> generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
+        com.portfolio.agent.infrastructure.model.structured.OperationBinding turnBinding =
+                StructuredModelTestFixtures.nativeBindings().get(
+                        ModelOperation.TURN_INTERPRETATION);
+
+        resolver.resolve(
+                freeText("推荐两个项目"), context(), deadline(),
+                StructuredModelTestFixtures.resolvedModel(Map.of(
+                        ModelOperation.TURN_INTERPRETATION, turnBinding)));
+
+        assertThat(captured.get().getAllowedGoalKinds()).containsExactlyInAnyOrder(
+                GoalKind.PORTFOLIO_FACT,
+                GoalKind.PORTFOLIO_COMPARE,
+                GoalKind.PORTFOLIO_RECOMMEND);
+    }
+
+    @Test
+    void lowInformationInputIsServerFixedWithoutProviderAttempt() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
+            modelCalls.incrementAndGet();
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
+            throw new AssertionError("closed low-information input must not call provider");
+        }, command -> generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
+        ResolvedModelExecution execution = ResolvedModelExecution.none();
+
+        ResolvedGoalSet result = resolver.resolve(
+                freeText("1 ..."), context(), deadline(), execution);
+
+        assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.CONVERSATIONAL);
+        assertThat(result.getMessageSource())
+                .isEqualTo(ResolvedGoalSet.MessageSource.SERVER_FIXED);
+        assertThat(modelCalls).hasValue(0);
+        assertThat(execution.wasAttempted(
+                ResolvedModelExecution.Stage.GOAL_INTERPRETATION)).isFalse();
+        assertThat(execution.wasAdopted(
+                ResolvedModelExecution.Stage.GOAL_INTERPRETATION)).isFalse();
+    }
+
+    @Test
+    void lowInformationTurnDoesNotBlockFollowingIndependentRecommendation() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        AtomicReference<GoalInterpretationInput> received = new AtomicReference<>();
+        UserGoalProposal recommendation = recommendationProposal(2, Set.of());
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
+            modelCalls.incrementAndGet();
+            received.set(input);
+            return GoalInterpretationResult.semanticRoute(
+                    SemanticRouteProposal.standardGoal(recommendation));
+        }, command -> generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
+
+        ResolvedGoalSet first = resolver.resolve(
+                freeText("1"), context(), deadline(), ResolvedModelExecution.none());
+        ConversationWindow recentConversation = new ConversationWindow(List.of(
+                new ConversationWindow.Message(ConversationWindow.Role.USER, "1"),
+                new ConversationWindow.Message(ConversationWindow.Role.ASSISTANT,
+                        first.getMessage().orElseThrow())));
+        AgentTurnCommand secondCommand = new AgentTurnCommand.Ask(
+                UUID.randomUUID(), AgentTurnCommand.ModelSelection.none(),
+                new AgentTurnCommand.FreeText("给我推荐两个项目"),
+                AgentTurnCommand.SurfaceContext.empty(), recentConversation);
+
+        ResolvedGoalSet second = resolver.resolve(
+                secondCommand, context(), deadline(), ResolvedModelExecution.none());
+
+        assertThat(first.getKind()).isEqualTo(ResolvedGoalSet.Kind.CONVERSATIONAL);
+        assertThat(modelCalls).hasValue(1);
+        assertThat(received.get().getRecentSemanticState()).isNull();
+        assertThat(received.get().getRecentMessages()).hasSize(2);
+        UserGoalProposal.PortfolioRecommendationParameters parameters =
+                (UserGoalProposal.PortfolioRecommendationParameters) second
+                        .getGoalProposal().orElseThrow().getGoals()
+                        .getFirst().getParameters();
+        assertThat(parameters.getRequestedSize()).isEqualTo(2);
+    }
+
+    @Test
+    void typedRecentStateKeepsNumericReferenceOnTheInterpreterPath() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
+            modelCalls.incrementAndGet();
+            assertThat(input.getRecentSemanticState()).isNotNull();
+            return GoalInterpretationResult.conversational("展开第一部分");
+        }, command -> generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
+        ConversationSemanticState state = recentSemanticState();
+
+        ResolvedGoalSet result = resolver.resolve(
+                freeText("1"), context(), deadline(), state);
+
+        assertThat(modelCalls).hasValue(1);
+        assertThat(result.getMessageSource())
+                .isEqualTo(ResolvedGoalSet.MessageSource.PROVIDER_DERIVED);
+    }
+
+    @Test
+    void greetingFastPathRemainsAheadOfInputAndUnresolvedIntentPolicies() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        GoalResolver resolver = resolver((input, deadline, modelExecution) -> {
+            modelCalls.incrementAndGet();
+            throw new AssertionError("greeting must stay on the social fast path");
+        }, command -> generalProposal(
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION));
+
+        ResolvedGoalSet result = resolver.resolve(
+                freeText("你好！"), context(), deadline());
+
+        assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.CONVERSATIONAL);
+        assertThat(result.getMessage().orElseThrow())
+                .contains("你好，我可以介绍、比较或推荐公开项目");
+        assertThat(modelCalls).hasValue(0);
+    }
 
     @Test
     void reportsTypedScopeRejectionAsSemanticWithoutVisitorOrProposalText() {
@@ -299,8 +425,23 @@ class GoalResolverTest {
             GoalInterpretationPort port, ReviewedGoalSource reviewedGoalSource) {
         return new GoalResolver(
                 port, reviewedGoalSource, new GoalInterpretationInputFactory(),
-                new SafeConversationalFastPath(), new SemanticRouteValidator(),
+                new SafeConversationalFastPath(), new UnresolvedIntentPolicy(),
+                new SemanticRouteValidator(),
                 new GoalBoundaryPolicy());
+    }
+
+    private ConversationSemanticState recentSemanticState() {
+        return new ConversationSemanticState(
+                "public-1", List.of(new ConversationSemanticState.GoalSummary(
+                "goal-1", GoalKind.PORTFOLIO_FACT,
+                List.of(new ConversationSemanticState.Subject(
+                        GoalSubjectReference.Kind.PROJECT, "sql-audit")),
+                Set.of(GoalRequestedOutput.SOLUTION),
+                Set.of(UserGoalProposal.Facet.SOLUTION),
+                UserGoalProposal.Depth.STANDARD, Set.of(), null, Set.of(),
+                List.of(new ConversationSemanticState.SectionReference(
+                        "section-goal-1-1", AnswerSectionType.SOLUTION)))),
+                java.time.Instant.parse("2026-08-24T05:00:00Z"));
     }
 
     private GoalResolutionContext context() {

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:model-contract:goal.proposal.v5",
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "start"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 256},
+        "start": {"type": "integer", "minimum": 0}
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "basis", "anchor"],
+      "properties": {
+        "kind": {"enum": ["PROJECT", "CASE"]},
+        "reference": {"type": "string", "minLength": 1, "maxLength": 128},
+        "basis": {"const": "EXPLICIT_INPUT"},
+        "anchor": {"$ref": "#/$defs/anchor"}
+      }
+    },
+    "parameters": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "facets", "depth"],
+          "properties": {
+            "kind": {"const": "PORTFOLIO_FACT"},
+            "facets": {"type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true, "items": {"enum": ["OVERVIEW", "BACKGROUND", "RESPONSIBILITY", "SOLUTION", "VERIFICATION", "STATUS"]}},
+            "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "dimensions"],
+          "properties": {
+            "kind": {"const": "PORTFOLIO_COMPARE"},
+            "dimensions": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["ARCHITECTURE", "IMPLEMENTATION", "OUTCOME", "RISKS", "VERIFICATION"]}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "requestedSize", "constraints"],
+          "properties": {
+            "kind": {"const": "PORTFOLIO_RECOMMEND"},
+            "requestedSize": {"type": "integer", "minimum": 1, "maximum": 5},
+            "constraints": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 96}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "topicAnchor", "depth"],
+          "properties": {
+            "kind": {"const": "GENERAL_EXPLANATION"},
+            "topicAnchor": {"$ref": "#/$defs/anchor"},
+            "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "subjectAnchors", "dimensions"],
+          "properties": {
+            "kind": {"const": "GENERAL_COMPARISON"},
+            "subjectAnchors": {"type": "array", "minItems": 2, "maxItems": 5, "items": {"$ref": "#/$defs/anchor"}},
+            "dimensions": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 96}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "conceptAnchor", "portfolioFacet", "depth"],
+          "properties": {
+            "kind": {"const": "APPLY_GENERAL_CONCEPT_TO_PORTFOLIO"},
+            "conceptAnchor": {"$ref": "#/$defs/anchor"},
+            "portfolioFacet": {"enum": ["OVERVIEW", "BACKGROUND", "RESPONSIBILITY", "SOLUTION", "VERIFICATION", "STATUS"]},
+            "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]}
+          }
+        }
+      ]
+    },
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKey", "goalKind", "inputAnchor", "subjectCandidates", "requestedOutputs", "knowledgeRequirement", "parameters"],
+      "properties": {
+        "goalKey": {"type": "string", "minLength": 1, "maxLength": 64},
+        "goalKind": {"enum": ["PORTFOLIO_FACT", "PORTFOLIO_COMPARE", "PORTFOLIO_RECOMMEND", "GENERAL_EXPLANATION", "GENERAL_COMPARISON", "APPLY_GENERAL_CONCEPT_TO_PORTFOLIO"]},
+        "inputAnchor": {"$ref": "#/$defs/anchor"},
+        "subjectCandidates": {"type": "array", "maxItems": 5, "items": {"$ref": "#/$defs/subject"}},
+        "requestedOutputs": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"enum": ["OVERVIEW", "BACKGROUND", "RESPONSIBILITY", "SOLUTION", "VERIFICATION", "STATUS", "COMPARISON", "RECOMMENDATION", "EXPLANATION", "RELATION"]}},
+        "knowledgeRequirement": {"enum": ["PUBLIC_PORTFOLIO_EVIDENCE", "STABLE_GENERAL_EXPLANATION", "CURRENT_EXTERNAL_INFORMATION", "HIGH_RISK_ADVICE"]},
+        "parameters": {"$ref": "#/$defs/parameters"}
+      }
+    },
+    "recentReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["goalId", "sectionId"],
+      "properties": {
+        "goalId": {"type": "string", "minLength": 1, "maxLength": 96},
+        "sectionId": {"type": ["string", "null"], "minLength": 1, "maxLength": 96}
+      }
+    },
+    "blockedGoal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["goalKind", "subjects", "requestedOutputs", "facets", "dimensions", "requestedSize", "constraints", "portfolioDepth", "unresolvedField", "askedFields", "remainingFields", "depth"],
+      "properties": {
+        "goalKind": {"enum": ["PORTFOLIO_FACT", "PORTFOLIO_COMPARE", "PORTFOLIO_RECOMMEND", "GENERAL_EXPLANATION", "GENERAL_COMPARISON", "APPLY_GENERAL_CONCEPT_TO_PORTFOLIO"]},
+        "subjects": {"type": "array", "maxItems": 5, "items": {"type": "object", "additionalProperties": false, "required": ["kind", "reference"], "properties": {"kind": {"enum": ["PROJECT", "CASE"]}, "reference": {"type": "string", "minLength": 1, "maxLength": 128}}}},
+        "requestedOutputs": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"enum": ["OVERVIEW", "BACKGROUND", "RESPONSIBILITY", "SOLUTION", "VERIFICATION", "STATUS", "COMPARISON", "RECOMMENDATION", "EXPLANATION", "RELATION"]}},
+        "facets": {"type": "array", "maxItems": 6, "uniqueItems": true, "items": {"enum": ["OVERVIEW", "BACKGROUND", "RESPONSIBILITY", "SOLUTION", "VERIFICATION", "STATUS"]}},
+        "dimensions": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 96}},
+        "requestedSize": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "constraints": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 96}},
+        "portfolioDepth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]},
+        "unresolvedField": {"enum": ["SUBJECT", "OUTPUT", "REQUESTED_SIZE", "CONSTRAINT"]},
+        "askedFields": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["SUBJECT", "GOAL", "OUTPUT", "REQUESTED_SIZE", "CONSTRAINT"]}},
+        "remainingFields": {"type": "array", "maxItems": 5, "uniqueItems": true, "items": {"enum": ["SUBJECT", "GOAL", "OUTPUT", "REQUESTED_SIZE", "CONSTRAINT"]}},
+        "depth": {"const": 1}
+      }
+    },
+    "clarification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field", "prompt", "blockedGoal"],
+      "properties": {
+        "field": {"enum": ["SUBJECT", "OUTPUT", "REQUESTED_SIZE", "CONSTRAINT"]},
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 400},
+        "blockedGoal": {"$ref": "#/$defs/blockedGoal"}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": {"const": "CONVERSATIONAL"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 400}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "route", "candidateKey", "goal", "clarification", "recentReference"],
+      "properties": {
+        "kind": {"const": "SEMANTIC_ROUTE"},
+        "route": {"enum": ["STANDARD_GOAL", "ENTER_RECOMMENDED_RESULT", "CONTINUE_CURRENT_PROJECT", "START_NEW_TOPIC", "SWITCH_PROJECT", "REENTER_PROJECT", "NEEDS_CLARIFICATION"]},
+        "candidateKey": {"type": ["string", "null"], "minLength": 1, "maxLength": 2},
+        "goal": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/goal"}]},
+        "clarification": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/clarification"}]},
+        "recentReference": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/recentReference"}]}
+      }
+    }
+  ]
+}

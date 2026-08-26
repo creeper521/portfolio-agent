@@ -65,13 +65,13 @@ function lastSubmitInput(): {
 const GLM_SELECTION = {
   kind: 'MODEL',
   modelRef: 'glm-4-7-flash',
-  selectionVersion: 'glm-4-7-flash-v1',
+  selectionVersion: 'glm-4-7-flash-v4',
 }
 
 const QWEN_SELECTION = {
   kind: 'MODEL',
   modelRef: 'qwen-3-7-flash',
-  selectionVersion: 'qwen-3-7-flash-v1',
+  selectionVersion: 'qwen-3-7-flash-v6',
 }
 
 describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI spec §8.2）', () => {
@@ -233,7 +233,7 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     const wrapper = mountWorkspace()
     await flushPromises()
 
-    // stale fixture 的投影是 glm + 过期 v0；目录当前版本是 v1。
+    // stale fixture 的投影是 glm + 过期 v0；目录当前版本是 v4。
     await submitFreeText(wrapper, '介绍 SQL 审计项目')
     const failed = lastSubmitInput()
     expect(failed.modelSelection).toEqual(GLM_SELECTION)
@@ -247,7 +247,7 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     expect(retried.modelSelection).toEqual({
       kind: 'MODEL',
       modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v1',
+      selectionVersion: 'glm-4-7-flash-v4',
     })
     wrapper.unmount()
   })
@@ -295,6 +295,48 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
     await wrapper.get('[data-testid="submit-question"]').trigger('submit')
     await flushPromises()
     expect(lastSubmitInput().modelSelection).toEqual(GLM_SELECTION)
+    wrapper.unmount()
+  })
+
+  it('同 modelRef 的 selectionVersion 滚动：pending 冻结旧版本，终局后按 stale 规则回退', async () => {
+    let resolveFirst: (value: unknown) => void = () => {}
+    apiMocks.submitAgentTurn.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFirst = resolve
+      }),
+    )
+    const wrapper = mountWorkspace()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="model-selector-trigger"]').trigger('click')
+    await wrapper.findAll('[data-testid="model-selector-option"]')[1]!.trigger('click')
+    await submitFreeText(wrapper, '冻结 Qwen v6 的问题')
+    expect(lastSubmitInput().modelSelection).toEqual(QWEN_SELECTION)
+
+    const catalogWithQwenV7 = {
+      ...previewPublicContent,
+      agentAvailability: {
+        ...previewPublicContent.agentAvailability,
+        selectableModels: previewPublicContent.agentAvailability.selectableModels.map(
+          (model) => model.modelRef === 'qwen-3-7-flash'
+            ? { ...model, selectionVersion: 'qwen-3-7-flash-v7' }
+            : model,
+        ),
+      },
+    }
+    await wrapper.setProps({ portfolio: catalogWithQwenV7 })
+    await flushPromises()
+    expect(wrapper.find('[data-notice-kind="MODEL_STALE_FALLBACK"]').exists()).toBe(false)
+    expect(lastSubmitInput().modelSelection).toEqual(QWEN_SELECTION)
+
+    resolveFirst({
+      ok: true,
+      turn: goldenTurn('conversational.json'),
+      conversation: { conversationId: 'c1', discussionRevision: 0 },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-notice-kind="MODEL_STALE_FALLBACK"]').text())
+      .toContain('已回到目录默认 GLM-4.7-Flash')
     wrapper.unmount()
   })
 

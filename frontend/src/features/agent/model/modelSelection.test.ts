@@ -25,7 +25,7 @@ describe('ModelSelection（Turn 请求闭合联合）', () => {
     expect(parseModelSelection(glm.modelSelection)).toEqual({
       kind: 'MODEL',
       modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v1',
+      selectionVersion: 'glm-4-7-flash-v4',
     })
     const qwen = requestFixture('turn-request-qwen.json')
     const parsedQwen = parseModelSelection(qwen.modelSelection)
@@ -63,11 +63,11 @@ describe('ModelCatalogProjection（/api/portfolio 目录投影）', () => {
     const catalog = parseModelCatalogProjection(loadPortfolioModelCatalogFixture())
     expect(catalog).not.toBeNull()
     if (catalog === null) return
-    expect(catalog.modelCatalogVersion).toBe('catalog-public-v1')
+    expect(catalog.modelCatalogVersion).toBe('catalog-public-v4')
     expect(catalog.defaultModelSelection).toEqual({
       kind: 'MODEL',
       modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v1',
+      selectionVersion: 'glm-4-7-flash-v4',
     })
     expect(catalog.selectableModels.map((model) => model.displayName)).toEqual([
       'GLM-4.7-Flash',
@@ -89,6 +89,14 @@ describe('ModelCatalogProjection（/api/portfolio 目录投影）', () => {
     expect(parseModelCatalogProjection({
       ...base,
       defaultModelSelection: { kind: 'MODEL', modelRef: 'not-in-catalog', selectionVersion: 'v1' },
+    })).toBeNull()
+    expect(parseModelCatalogProjection({
+      ...base,
+      defaultModelSelection: {
+        kind: 'MODEL',
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'stale-selection-version',
+      },
     })).toBeNull()
     expect(parseModelCatalogProjection({
       ...base,
@@ -118,10 +126,15 @@ describe('ModelCatalogProjection（/api/portfolio 目录投影）', () => {
     ).toBe('gone-model')
     expect(displayNameOfSelection(catalog, { kind: 'NONE' })).toBeNull()
     expect(catalogEntryOfSelection(catalog, catalog.defaultModelSelection)?.selectionVersion)
-      .toBe('glm-4-7-flash-v1')
+      .toBe('glm-4-7-flash-v4')
     expect(
       catalogEntryOfSelection(catalog, { kind: 'MODEL', modelRef: 'gone-model', selectionVersion: 'v1' }),
     ).toBeNull()
+    expect(catalogEntryOfSelection(catalog, {
+      kind: 'MODEL',
+      modelRef: 'glm-4-7-flash',
+      selectionVersion: 'stale-selection-version',
+    })).toBeNull()
     expect(catalogEntryOfSelection(catalog, { kind: 'NONE' })).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.planning;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.turn.continuation.ConversationSemanticState;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,19 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void rejectsUnsupportedRootKindWithClosedReason() {
+        GoalProposalDecodeException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> codec.decode(
+                                "{\"kind\":\"PORTFOLIO_RECOMMEND\"}",
+                                input("推荐两个项目")),
+                        GoalProposalDecodeException.class);
+
+        assertThat(failure.getReason()).isEqualTo(
+                GoalProposalDecodeException.Reason.UNSUPPORTED_ROOT_KIND);
+    }
+
+    @Test
     void decodesAClosedStandardSemanticRoute() {
         GoalInterpretationResult result = codec.decode(standardPortfolioRoute(
                 "sql-audit"), input("介绍 SQL 审计项目"));
@@ -38,6 +52,16 @@ class GoalProposalCodecTest {
                 .singleElement()
                 .extracting(UserGoalProposal.ProposedGoal::getGoalKind)
                 .isEqualTo(GoalKind.PORTFOLIO_FACT);
+    }
+
+    @Test
+    void decodesAnAlreadyValidatedTreeWithoutReparsingProviderText() throws Exception {
+        GoalInterpretationResult result = codec.decode(
+                new ObjectMapper().readTree(standardPortfolioRoute("sql-audit")),
+                input("介绍 SQL 审计项目"));
+
+        assertThat(result.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.SEMANTIC_ROUTE);
     }
 
     @Test
@@ -230,6 +254,37 @@ class GoalProposalCodecTest {
     }
 
     @Test
+    void rejectsMissingNullAndNonObjectBlockedGoalWithClosedReason() {
+        for (String blockedGoalField : List.of(
+                "",
+                ",\"blockedGoal\":null",
+                ",\"blockedGoal\":[]")) {
+            String proposal = """
+                    {
+                      "kind":"SEMANTIC_ROUTE",
+                      "route":"NEEDS_CLARIFICATION",
+                      "candidateKey":null,
+                      "recentReference":null,
+                      "goal":null,
+                      "clarification":{
+                        "field":"SUBJECT",
+                        "prompt":"请选择要了解的公开项目"%s
+                      }
+                    }
+                    """.formatted(blockedGoalField);
+
+            GoalProposalDecodeException failure =
+                    org.assertj.core.api.Assertions.catchThrowableOfType(
+                            () -> codec.decode(
+                                    proposal, input("这个项目怎么样")),
+                            GoalProposalDecodeException.class);
+            assertThat(failure.getReason()).isEqualTo(
+                    GoalProposalDecodeException.Reason
+                            .CLARIFICATION_BLOCKED_GOAL_REQUIRED);
+        }
+    }
+
+    @Test
     void rejectsConversationalMessagesOutsideRuntimeLanguageAndReplayBoundary() {
         assertThatThrownBy(() -> codec.decode("""
                 {"kind":"CONVERSATIONAL","message":"This is a complete English response."}
@@ -320,6 +375,25 @@ class GoalProposalCodecTest {
                 proposal, input("这个项目怎么样")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("clarification is required");
+    }
+
+    @Test
+    void discussionClarificationUsesBackendOwnedTypedChallenge() {
+        GoalInterpretationResult result = codec.decode("""
+                {
+                  "kind":"SEMANTIC_ROUTE",
+                  "route":"NEEDS_CLARIFICATION",
+                  "candidateKey":null,
+                  "recentReference":null,
+                  "goal":null,
+                  "clarification":null
+                }
+                """, discussionInput());
+
+        assertThat(result.getRouteProposal().orElseThrow().getRoute())
+                .isEqualTo(SemanticRouteProposal.Route.NEEDS_CLARIFICATION);
+        assertThat(result.getRouteProposal().orElseThrow().getClarification())
+                .isEmpty();
     }
 
     @Test
@@ -422,8 +496,8 @@ class GoalProposalCodecTest {
     }
 
     @Test
-    void normalizesWrongStartOnlyWhenAnchorTextIsUnique() {
-        GoalInterpretationResult result = codec.decode("""
+    void rejectsEveryWrongAnchorStartWithoutRepair() {
+        assertThatThrownBy(() -> codec.decode("""
                 {
                   "kind":"SEMANTIC_ROUTE",
                   "route":"STANDARD_GOAL",
@@ -444,14 +518,9 @@ class GoalProposalCodecTest {
                   },
                   "clarification":null
                 }
-                """, input("解释 Redis 的持久化机制"));
-
-        UserGoalProposal.ProposedGoal goal = result.getRouteProposal()
-                .orElseThrow().getGoalProposal().orElseThrow()
-                .getGoals().getFirst();
-        assertThat(goal.getInputAnchor().getStart()).isZero();
-        assertThat(((UserGoalProposal.GeneralExplanationParameters)
-                goal.getParameters()).getTopicAnchor().getStart()).isEqualTo(3);
+                """, input("解释 Redis 的持久化机制")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("anchor");
 
         assertThatThrownBy(() -> codec.decode("""
                 {
@@ -545,7 +614,7 @@ class GoalProposalCodecTest {
                       {"kind":"PROJECT","reference":"sql-audit","basis":"EXPLICIT_INPUT",
                        "anchor":{"text":"SQL 审计项目","start":3}},
                       {"kind":"PROJECT","reference":"agent","basis":"EXPLICIT_INPUT",
-                       "anchor":{"text":"Agent 项目","start":12}}
+                       "anchor":{"text":"Agent 项目","start":13}}
                     ],
                     "requestedOutputs":["COMPARISON"],
                     "knowledgeRequirement":"PUBLIC_PORTFOLIO_EVIDENCE",

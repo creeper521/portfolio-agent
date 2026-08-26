@@ -36,8 +36,12 @@ const currentDisplayName = computed(() =>
 )
 const defaultSelection = computed(() => props.catalog.defaultModelSelection)
 
-function isSelected(modelRef: string): boolean {
-  return props.selection.kind === 'MODEL' && props.selection.modelRef === modelRef
+function isSelected(modelRef: string, selectionVersion: string): boolean {
+  return sameModelSelection(props.selection, {
+    kind: 'MODEL',
+    modelRef,
+    selectionVersion,
+  })
 }
 
 function optionId(modelRef: string): string {
@@ -184,7 +188,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
         :data-model-ref="model.modelRef"
         role="option"
         tabindex="-1"
-        :aria-selected="isSelected(model.modelRef) ? 'true' : 'false'"
+        :aria-selected="isSelected(model.modelRef, model.selectionVersion) ? 'true' : 'false'"
         @click="pick(model.modelRef)"
         @keydown="onOptionKeydown($event, model.modelRef)"
       >

@@ -79,7 +79,7 @@ class RequestFingerprintFactoryTest {
                         "qwen-3-7-flash", "qwen-3-7-flash-v1"));
         AgentTurnCommand.Ask newerGlm = ask(
                 requestId, AgentTurnCommand.ModelSelection.model(
-                        "glm-4-7-flash", "glm-4-7-flash-v2"));
+                        "glm-4-7-flash", "glm-4-7-flash-v3"));
         AgentTurnCommand.Ask none = ask(
                 requestId, AgentTurnCommand.ModelSelection.none());
 

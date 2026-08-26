@@ -8,6 +8,12 @@ import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.infrastructure.model.provider.ModelRef;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
+import com.portfolio.agent.infrastructure.model.policy.OperationReadiness;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -28,17 +34,14 @@ import java.util.Set;
  *   <li>每个模型必须通过 enabled、data-policy 批准与凭证存在性三道门槛，
  *       才会生成内部描述符与传输绑定；只有再满足 selectable 的模型才会
  *       进入公开目录快照；</li>
- *   <li>协议参数必须是封闭取值（结构化输出 JSON_OBJECT、thinking 禁用、
- *       非 streaming），endpoint 必须是合法 URI，否则启动直接失败。</li>
+ *   <li>协议参数来自代码批准的 execution profile，endpoint 必须是合法 URI，
+ *       否则启动直接失败。</li>
  * </ul>
  *
  * <p>构造完成后目录即冻结：快照版本指纹由默认选择与全部公开条目的
  * 关键字段派生，后续配置变化不会影响已构建实例。
  */
 public final class ConfiguredModelCatalog {
-    private static final Set<ModelCapability> CAPABILITIES = Set.of(
-            ModelCapability.TURN_INTERPRETATION,
-            ModelCapability.GENERAL_KNOWLEDGE);
 
     private final ModelCatalogSnapshot snapshot;
     private final Map<ModelRef, ModelProviderDescriptor> internalDescriptors;
@@ -55,8 +58,13 @@ public final class ConfiguredModelCatalog {
      * @throws IllegalArgumentException 默认 modelRef 未配置、模型设置非法
      *         （协议参数不封闭、endpoint 非法、必填文本缺失等）时启动失败
      */
-    public ConfiguredModelCatalog(ModelRuntimeProperties properties) {
+    public ConfiguredModelCatalog(
+            ModelRuntimeProperties properties,
+            ModelOperationPolicyRegistry operationPolicies,
+            StructuredOutputContractRegistry contracts) {
         Objects.requireNonNull(properties, "properties");
+        Objects.requireNonNull(operationPolicies, "operationPolicies");
+        Objects.requireNonNull(contracts, "contracts");
         if (!properties.isEnabled()) {
             snapshot = ModelCatalogSnapshot.empty();
             internalDescriptors = Map.of();
@@ -80,15 +88,18 @@ public final class ConfiguredModelCatalog {
             if (!settings.isEnabled()) {
                 continue;
             }
-            ModelProviderDescriptor descriptor = descriptor(ref, settings);
+            ModelProviderDescriptor descriptor = descriptor(
+                    ref, settings, operationPolicies, contracts);
             if (!settings.isDataPolicyApproved()
                     || isBlank(settings.getApiKey())) {
                 continue;
             }
             ModelTransportBinding binding = new ModelTransportBinding(
-                    ref, descriptor.getEndpoint(), descriptor.getModelName(),
+                    ref, descriptor.getDescriptorFingerprint(),
+                    descriptor.getEndpoint(), descriptor.getModelName(),
                     descriptor.getProtocolProfile(), settings.getApiKey(),
-                    descriptor.getMaxOutputTokens());
+                    descriptor.getMaxOutputTokens(),
+                    descriptor.getOperationBindings());
             internalByRef.put(ref, descriptor);
             bindingByRef.put(ref, binding);
             if (settings.isSelectable()) {
@@ -170,21 +181,30 @@ public final class ConfiguredModelCatalog {
     }
 
     /**
-     * 把单个模型设置转换为描述符，并强制封闭协议取值：
-     * structured output 必须为 JSON_OBJECT、thinking 必须禁用、streaming
-     * 必须关闭、endpoint 必须是可解析的非空 URI。任一不满足即抛出
+     * 把单个模型设置转换为描述符，并强制使用代码批准的封闭执行画像。
+     * endpoint 必须是可解析的非空 URI。任一不满足即抛出
      * IllegalArgumentException，阻止未批准的协议形态进入运行期。
      */
     private ModelProviderDescriptor descriptor(
-            ModelRef ref, ModelRuntimeProperties.ModelSettings settings) {
-        requireExact(settings.getStructuredOutput(), "JSON_OBJECT", "structured output");
-        requireExact(settings.getThinkingMode(), "DISABLED", "thinking mode");
-        if (settings.isStreaming()) {
-            throw new IllegalArgumentException("streaming must be disabled");
+            ModelRef ref,
+            ModelRuntimeProperties.ModelSettings settings,
+            ModelOperationPolicyRegistry operationPolicies,
+            StructuredOutputContractRegistry contracts) {
+        ApprovedModelExecutionProfile executionProfile =
+                ApprovedModelExecutionProfile.resolve(
+                        requireText(settings.getExecutionProfile(), "executionProfile"),
+                        contracts);
+        ModelProviderProtocolProfile profile = executionProfile.getProtocolProfile();
+        executionProfile.requireMatches(
+                requireText(settings.getSelectionVersion(), "selectionVersion"),
+                requireText(settings.getModel(), "model"), profile);
+        Map<ModelOperation, OperationBinding> bindings = approvedBindings(
+                executionProfile, operationPolicies, contracts);
+        if (settings.isSelectable()
+                && !bindings.containsKey(ModelOperation.TURN_INTERPRETATION)) {
+            throw new IllegalArgumentException(
+                    "selectable model requires turn interpretation binding");
         }
-        ModelProviderProtocolProfile profile =
-                ModelProviderProtocolProfile.fromConfiguredName(
-                        settings.getProtocolProfile());
         URI endpoint;
         try {
             endpoint = URI.create(requireText(settings.getEndpoint(), "endpoint"));
@@ -200,9 +220,38 @@ public final class ConfiguredModelCatalog {
                 endpoint,
                 requireText(settings.getModel(), "model"),
                 profile,
-                CAPABILITIES,
+                bindings,
                 settings.getMaxContextTokens(),
                 settings.getMaxOutputTokens());
+    }
+
+    private Map<ModelOperation, OperationBinding> approvedBindings(
+            ApprovedModelExecutionProfile executionProfile,
+            ModelOperationPolicyRegistry operationPolicies,
+            StructuredOutputContractRegistry contracts) {
+        java.util.EnumMap<ModelOperation, OperationBinding> result =
+                new java.util.EnumMap<>(ModelOperation.class);
+        for (Map.Entry<ModelOperation, OperationBinding> entry
+                : executionProfile.getOperationBindings().entrySet()) {
+            ModelOperationPolicy policy = operationPolicies.get(entry.getKey());
+            if (policy.readiness() != OperationReadiness.AVAILABLE_WITH_PROVIDER) {
+                continue;
+            }
+            OperationBinding binding = entry.getValue();
+            if (!binding.getApplicationContractRef().schemaVersion()
+                    .equals(policy.getSchemaVersion())) {
+                throw new IllegalArgumentException(
+                        "operation policy and execution profile contract must agree");
+            }
+            contracts.resolve(binding.getProviderContractRef());
+            contracts.resolve(binding.getApplicationContractRef());
+            result.put(entry.getKey(), binding);
+        }
+        if (result.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "enabled model has no approved operation binding");
+        }
+        return Map.copyOf(result);
     }
 
     /**
@@ -234,12 +283,6 @@ public final class ConfiguredModelCatalog {
             throw new IllegalArgumentException(name + " is required");
         }
         return value.strip();
-    }
-
-    private void requireExact(String value, String expected, String name) {
-        if (!expected.equals(value)) {
-            throw new IllegalArgumentException(name + " must be " + expected);
-        }
     }
 
     private boolean isBlank(String value) {

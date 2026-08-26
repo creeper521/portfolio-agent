@@ -1,11 +1,11 @@
 package com.portfolio.agent.infrastructure.model.provider;
 
 import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.net.URI;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,14 +40,14 @@ class ModelProviderDescriptorTest {
                 ModelRef.of("glm"), "v1", "GLM", 10,
                 URI.create("http://example.test/chat"), "glm",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 10))
+                StructuredModelTestFixtures.nativeBindings(), 100, 10))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("HTTPS");
         assertThatThrownBy(() -> new ModelProviderDescriptor(
                 ModelRef.of("glm"), "v1", "GLM", 10,
                 URI.create("https://example.test/chat"), "glm",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 101))
+                StructuredModelTestFixtures.nativeBindings(), 100, 101))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxOutputTokens");
     }
@@ -62,14 +62,15 @@ class ModelProviderDescriptorTest {
                 ModelRef.of("glm"), "v1", "GLM", 10,
                 endpointWithQuery, "glm",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION), 100, 10))
+                StructuredModelTestFixtures.nativeBindings(), 100, 10))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageNotContaining(queryCredential)
                 .hasMessageNotContaining("api_key");
         assertThatThrownBy(() -> new ModelTransportBinding(
-                ModelRef.of("glm"), endpointWithQuery, "glm",
+                ModelRef.of("glm"), "0".repeat(64), endpointWithQuery, "glm",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                "header-secret", 10))
+                "header-secret", 10,
+                StructuredModelTestFixtures.nativeBindings()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageNotContaining(queryCredential)
                 .hasMessageNotContaining("api_key");
@@ -100,8 +101,7 @@ class ModelProviderDescriptorTest {
                 ModelRef.of(ref), "glm-v1", "GLM", 10,
                 URI.create("https://example.test/chat"), "glm-4.7-flash",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION,
-                        ModelCapability.GENERAL_KNOWLEDGE),
+                StructuredModelTestFixtures.nativeBindings(),
                 200_000, 8_000);
     }
 

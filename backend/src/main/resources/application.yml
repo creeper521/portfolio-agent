@@ -27,15 +27,12 @@ portfolio:
         selectable: true
         display-name: GLM-4.7-Flash
         display-order: 10
-        selection-version: glm-4-7-flash-v1
+        selection-version: glm-4-7-flash-v4
         endpoint: https://open.bigmodel.cn/api/paas/v4/chat/completions
         model: glm-4.7-flash
         api-key: ${PORTFOLIO_GLM_API_KEY:}
-        protocol-profile: ZHIPU_CHAT_COMPLETIONS
+        execution-profile: GLM_4_7_FLASH_STRUCTURED_V4
         data-policy-approved: ${PORTFOLIO_GLM_DATA_POLICY_APPROVED:false}
-        structured-output: JSON_OBJECT
-        thinking-mode: DISABLED
-        streaming: false
         max-context-tokens: 200000
         max-output-tokens: 128000
       qwen-3-7-flash:
@@ -43,15 +40,12 @@ portfolio:
         selectable: true
         display-name: Qwen3.7-Flash
         display-order: 20
-        selection-version: qwen-3-7-flash-v1
+        selection-version: qwen-3-7-flash-v6
         endpoint: ${PORTFOLIO_QWEN_ENDPOINT:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
         model: qwen3.7-flash
         api-key: ${PORTFOLIO_QWEN_API_KEY:}
-        protocol-profile: DASHSCOPE_CHAT_COMPLETIONS
+        execution-profile: QWEN_3_7_FLASH_STRUCTURED_V6
         data-policy-approved: ${PORTFOLIO_QWEN_DATA_POLICY_APPROVED:false}
-        structured-output: JSON_OBJECT
-        thinking-mode: DISABLED
-        streaming: false
         max-context-tokens: 1000000
         max-output-tokens: 128000
   model-operations:

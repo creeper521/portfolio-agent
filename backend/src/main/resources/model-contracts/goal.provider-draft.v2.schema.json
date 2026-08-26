@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:model-contract:goal.provider-draft.v2",
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "inputText"],
+      "properties": {
+        "kind": {"enum": ["PROJECT", "CASE"]},
+        "reference": {"type": "string", "minLength": 1, "maxLength": 128},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "subjects": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/subject"}
+    },
+    "facets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {"enum": [
+        "OVERVIEW", "BACKGROUND", "RESPONSIBILITY",
+        "SOLUTION", "VERIFICATION", "STATUS"
+      ]}
+    },
+    "depth": {
+      "enum": ["CONCISE", "STANDARD", "DETAILED"]
+    },
+    "portfolioDimensions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"enum": [
+        "ARCHITECTURE", "IMPLEMENTATION", "OUTCOME", "RISKS", "VERIFICATION"
+      ]}
+    },
+    "generalDimensions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[A-Z_]{1,64}$"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 96}
+    },
+    "portfolioFactGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "facets", "depth"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_FACT"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjects": {"$ref": "#/$defs/subjects"},
+        "facets": {"$ref": "#/$defs/facets"},
+        "depth": {"$ref": "#/$defs/depth"}
+      }
+    },
+    "portfolioCompareGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "subjects", "dimensions"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_COMPARE"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjects": {
+          "allOf": [
+            {"$ref": "#/$defs/subjects"},
+            {"minItems": 2}
+          ]
+        },
+        "dimensions": {"$ref": "#/$defs/portfolioDimensions"}
+      }
+    },
+    "portfolioRecommendGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "requestedSize", "constraints"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_RECOMMEND"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "requestedSize": {"type": "integer", "minimum": 1, "maximum": 5},
+        "constraints": {"$ref": "#/$defs/constraints"}
+      }
+    },
+    "generalExplanationGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "topicText", "depth"],
+      "properties": {
+        "goalKind": {"const": "GENERAL_EXPLANATION"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "topicText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "depth": {"$ref": "#/$defs/depth"}
+      }
+    },
+    "generalComparisonGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "subjectTexts", "dimensions"],
+      "properties": {
+        "goalKind": {"const": "GENERAL_COMPARISON"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjectTexts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 256}
+        },
+        "dimensions": {"$ref": "#/$defs/generalDimensions"}
+      }
+    },
+    "applyGeneralConceptGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goalKind", "inputText", "conceptText", "portfolioFacet", "depth"
+      ],
+      "properties": {
+        "goalKind": {"const": "APPLY_GENERAL_CONCEPT_TO_PORTFOLIO"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjects": {"$ref": "#/$defs/subjects"},
+        "conceptText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "portfolioFacet": {"enum": [
+          "OVERVIEW", "BACKGROUND", "RESPONSIBILITY",
+          "SOLUTION", "VERIFICATION", "STATUS"
+        ]},
+        "depth": {"$ref": "#/$defs/depth"}
+      }
+    },
+    "completeGoal": {
+      "oneOf": [
+        {"$ref": "#/$defs/portfolioFactGoal"},
+        {"$ref": "#/$defs/portfolioCompareGoal"},
+        {"$ref": "#/$defs/portfolioRecommendGoal"},
+        {"$ref": "#/$defs/generalExplanationGoal"},
+        {"$ref": "#/$defs/generalComparisonGoal"},
+        {"$ref": "#/$defs/applyGeneralConceptGoal"}
+      ]
+    },
+    "factSubjectClarificationGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "facets", "depth"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_FACT"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "facets": {"$ref": "#/$defs/facets"},
+        "depth": {"$ref": "#/$defs/depth"}
+      }
+    },
+    "compareSubjectClarificationGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "dimensions"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_COMPARE"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "subjects": {
+          "allOf": [
+            {"$ref": "#/$defs/subjects"},
+            {"minItems": 1, "maxItems": 1}
+          ]
+        },
+        "dimensions": {"$ref": "#/$defs/portfolioDimensions"}
+      }
+    },
+    "recommendSizeClarificationGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalKind", "inputText", "constraints"],
+      "properties": {
+        "goalKind": {"const": "PORTFOLIO_RECOMMEND"},
+        "inputText": {"type": "string", "minLength": 1, "maxLength": 256},
+        "constraints": {"$ref": "#/$defs/constraints"}
+      }
+    },
+    "clarification": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "prompt", "goal"],
+          "properties": {
+            "field": {"const": "SUBJECT"},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 400},
+            "goal": {"$ref": "#/$defs/factSubjectClarificationGoal"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "prompt", "goal"],
+          "properties": {
+            "field": {"const": "SUBJECT"},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 400},
+            "goal": {"$ref": "#/$defs/compareSubjectClarificationGoal"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "prompt", "goal"],
+          "properties": {
+            "field": {"const": "REQUESTED_SIZE"},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 400},
+            "goal": {"$ref": "#/$defs/recommendSizeClarificationGoal"}
+          }
+        }
+      ]
+    },
+    "recentReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalId"],
+      "properties": {
+        "goalId": {"type": "string", "minLength": 1, "maxLength": 96},
+        "sectionId": {"type": "string", "minLength": 1, "maxLength": 96}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "message"],
+      "properties": {
+        "decision": {"const": "CONVERSATIONAL"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 400}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "goal"],
+      "properties": {
+        "decision": {"const": "STANDARD_GOAL"},
+        "goal": {"$ref": "#/$defs/completeGoal"},
+        "recentReference": {"$ref": "#/$defs/recentReference"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "goal"],
+      "properties": {
+        "decision": {"const": "CONTINUE_CURRENT_PROJECT"},
+        "goal": {"$ref": "#/$defs/completeGoal"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "candidateKey"],
+      "properties": {
+        "decision": {"const": "ENTER_RECOMMENDED_RESULT"},
+        "candidateKey": {"type": "string", "pattern": "^C[1-5]$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "candidateKey"],
+      "properties": {
+        "decision": {"const": "SWITCH_PROJECT"},
+        "candidateKey": {"type": "string", "pattern": "^C[1-5]$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision"],
+      "properties": {
+        "decision": {"const": "START_NEW_TOPIC"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision"],
+      "properties": {
+        "decision": {"const": "REENTER_PROJECT"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision"],
+      "properties": {
+        "decision": {"const": "NEEDS_CLARIFICATION"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "clarification"],
+      "properties": {
+        "decision": {"const": "NEEDS_CLARIFICATION"},
+        "clarification": {"$ref": "#/$defs/clarification"}
+      }
+    }
+  ]
+}

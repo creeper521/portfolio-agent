@@ -25,14 +25,14 @@ class PortfolioModelCatalogGoldenFixtureTest {
     @Test
     void backendSerializerMatchesTheCredentialFreeCatalogFixture() throws Exception {
         ModelCatalogSnapshot catalog = mock(ModelCatalogSnapshot.class);
-        when(catalog.getSnapshotVersion()).thenReturn("catalog-public-v1");
+        when(catalog.getSnapshotVersion()).thenReturn("catalog-public-v4");
         when(catalog.getEntries()).thenReturn(List.of(
                 entry("glm-4-7-flash", "GLM-4.7-Flash", 10),
                 entry("qwen-3-7-flash", "Qwen3.7-Flash", 20)));
         when(catalog.getDefaultModelSelection()).thenReturn(
                 new ModelCatalogDefaultSelection(
                         ModelCatalogDefaultSelection.Kind.MODEL,
-                        "glm-4-7-flash", "glm-4-7-flash-v1"));
+                        "glm-4-7-flash", "glm-4-7-flash-v4"));
         AgentAvailabilityResponse availability = AgentAvailabilityResponse.available(
                 AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE, catalog);
         JsonNode fixture = mapper.readTree(repositoryRoot().resolve(
@@ -48,7 +48,9 @@ class PortfolioModelCatalogGoldenFixtureTest {
     private ModelCatalogEntry entry(
             String modelRef, String displayName, int displayOrder) {
         return new ModelCatalogEntry(
-                modelRef, displayName, displayOrder, modelRef + "-v1",
+                modelRef, displayName, displayOrder,
+                "qwen-3-7-flash".equals(modelRef)
+                        ? "qwen-3-7-flash-v6" : modelRef + "-v4",
                 Set.of(ModelCapability.TURN_INTERPRETATION,
                         ModelCapability.GENERAL_KNOWLEDGE));
     }

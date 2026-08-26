@@ -6,7 +6,7 @@ import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
-import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.infrastructure.model.provider.ModelCatalogDefaultSelection;
 import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -194,9 +193,11 @@ class AgentTurnLifecycleSelectedModelFailureTest {
                 "catalog-v1", List.of(descriptor),
                 ModelCatalogDefaultSelection.model(descriptor));
         ModelTransportBinding binding = new ModelTransportBinding(
-                descriptor.getModelRef(), descriptor.getEndpoint(),
+                descriptor.getModelRef(), descriptor.getDescriptorFingerprint(),
+                descriptor.getEndpoint(),
                 descriptor.getModelName(), descriptor.getProtocolProfile(),
-                "test-credential", descriptor.getMaxOutputTokens());
+                "test-credential", descriptor.getMaxOutputTokens(),
+                StructuredModelTestFixtures.nativeBindings());
         return new ModelExecutionResolver(catalog, modelRef -> {
             bindingLookups.incrementAndGet();
             if (!modelRef.equals(descriptor.getModelRef())) {
@@ -213,8 +214,7 @@ class AgentTurnLifecycleSelectedModelFailureTest {
                 URI.create("https://provider.example/v1/chat/completions"),
                 "glm-4.7-flash",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION,
-                        ModelCapability.GENERAL_KNOWLEDGE),
+                StructuredModelTestFixtures.nativeBindings(),
                 100_000, 8_000);
     }
 }

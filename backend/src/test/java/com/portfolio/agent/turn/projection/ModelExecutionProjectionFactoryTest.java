@@ -3,14 +3,13 @@ package com.portfolio.agent.turn.projection;
 import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
 import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
-import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.infrastructure.model.provider.ModelRef;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,14 +59,15 @@ class ModelExecutionProjectionFactoryTest {
                 URI.create("https://provider.example/v1/chat/completions"),
                 "glm-4.7-flash",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                Set.of(ModelCapability.TURN_INTERPRETATION,
-                        ModelCapability.GENERAL_KNOWLEDGE),
+                StructuredModelTestFixtures.nativeBindings(),
                 100_000, 8_000);
         return ResolvedModelExecution.model(
                 ModelExecutionSnapshot.model(descriptor),
                 new ModelTransportBinding(
-                        descriptor.getModelRef(), descriptor.getEndpoint(),
+                        descriptor.getModelRef(), descriptor.getDescriptorFingerprint(),
+                        descriptor.getEndpoint(),
                         descriptor.getModelName(), descriptor.getProtocolProfile(),
-                        "test-credential", descriptor.getMaxOutputTokens()));
+                        "test-credential", descriptor.getMaxOutputTokens(),
+                        StructuredModelTestFixtures.nativeBindings()));
     }
 }

@@ -7,6 +7,7 @@ import com.portfolio.agent.infrastructure.model.policy.OperationMode;
 import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 import com.portfolio.agent.turn.state.configuration.ConversationContextProperties;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -28,9 +29,9 @@ class AgentRuntimeReadinessTest {
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
-                            .hasRootCauseMessage(
-                                    "enabled model operation schema does not match "
-                                            + "production codec: TURN_INTERPRETATION");
+                            .hasStackTraceContaining(
+                                    "enabled model operation contract is not approved: "
+                                            + "TURN_INTERPRETATION");
                 });
     }
 
@@ -42,7 +43,7 @@ class AgentRuntimeReadinessTest {
         assertThatThrownBy(() -> readiness(policies))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("TURN_INTERPRETATION")
-                .hasMessageContaining("schema");
+                .hasMessageContaining("contract");
     }
 
     @Test
@@ -63,7 +64,8 @@ class AgentRuntimeReadinessTest {
         AgentRuntimeReadiness readiness = new AgentRuntimeReadiness(
                 ConversationContextProperties.Mode.DISABLED,
                 policies(GoalProposalCodec.SCHEMA_VERSION,
-                        GeneralDraftCodec.SCHEMA_VERSION));
+                        GeneralDraftCodec.SCHEMA_VERSION),
+                StructuredModelTestFixtures.contracts());
 
         assertThat(readiness.isAgentAvailable()).isFalse();
         assertThat(readiness.isOperationAvailable(ModelOperation.TURN_INTERPRETATION))
@@ -75,7 +77,7 @@ class AgentRuntimeReadinessTest {
     private AgentRuntimeReadiness readiness(ModelOperationPolicyRegistry policies) {
         return new AgentRuntimeReadiness(
                 ConversationContextProperties.Mode.POSTGRESQL,
-                policies);
+                policies, StructuredModelTestFixtures.contracts());
     }
 
     private ModelOperationPolicyRegistry policies(

@@ -93,7 +93,9 @@ export function parseModelCatalogProjection(value: unknown): ModelCatalogProject
   }
   if (
     defaultModelSelection.kind === 'MODEL'
-    && !seenRefs.has(defaultModelSelection.modelRef)
+    && !selectableModels.some((model) =>
+      model.modelRef === defaultModelSelection.modelRef
+      && model.selectionVersion === defaultModelSelection.selectionVersion)
   ) return null
   return { modelCatalogVersion: record.modelCatalogVersion, defaultModelSelection, selectableModels }
 }
@@ -121,7 +123,9 @@ export function catalogEntryOfSelection(
   selection: ModelSelection,
 ): SelectableModelReference | null {
   if (selection.kind === 'NONE') return null
-  return catalog.selectableModels.find((model) => model.modelRef === selection.modelRef) ?? null
+  return catalog.selectableModels.find((model) =>
+    model.modelRef === selection.modelRef
+    && model.selectionVersion === selection.selectionVersion) ?? null
 }
 
 /**

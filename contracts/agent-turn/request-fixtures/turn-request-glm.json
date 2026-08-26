@@ -3,7 +3,7 @@
   "modelSelection": {
     "kind": "MODEL",
     "modelRef": "glm-4-7-flash",
-    "selectionVersion": "glm-4-7-flash-v1"
+    "selectionVersion": "glm-4-7-flash-v4"
   },
   "command": {
     "kind": "ASK",

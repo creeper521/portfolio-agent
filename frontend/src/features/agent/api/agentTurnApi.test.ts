@@ -17,7 +17,7 @@ import {
 const MODEL_SELECTION_GLM = {
   kind: 'MODEL',
   modelRef: 'glm-4-7-flash',
-  selectionVersion: 'glm-4-7-flash-v1',
+  selectionVersion: 'glm-4-7-flash-v4',
 } as const
 
 function goldenTurn(fileName: string): Record<string, unknown> {
@@ -126,7 +126,7 @@ describe('submitAgentTurn', () => {
       modelSelection: {
         kind: 'MODEL',
         modelRef: 'glm-4-7-flash',
-        selectionVersion: 'glm-4-7-flash-v1',
+        selectionVersion: 'glm-4-7-flash-v4',
       },
       command: glmRequest.command,
       conversationWindow: [],

@@ -11,12 +11,20 @@ package com.portfolio.agent.infrastructure.model;
 public final class StructuredModelFailure extends RuntimeException {
     private final Code code;
     private final Integer retryAfterSeconds;
-    public StructuredModelFailure(Code code) { this(code, null, null); }
+    private final Reason reason;
+    public StructuredModelFailure(Code code) { this(code, null, null, null); }
     public StructuredModelFailure(Code code, Throwable cause) {
-        this(code, null, cause);
+        this(code, null, null, cause);
+    }
+    public StructuredModelFailure(Code code, Reason reason) {
+        this(code, null, reason, null);
     }
     public StructuredModelFailure(
             Code code, Integer retryAfterSeconds, Throwable cause) {
+        this(code, retryAfterSeconds, null, cause);
+    }
+    public StructuredModelFailure(
+            Code code, Integer retryAfterSeconds, Reason reason, Throwable cause) {
         super(java.util.Objects.requireNonNull(code, "code").name(), cause);
         if (retryAfterSeconds != null
                 && (retryAfterSeconds < 1 || retryAfterSeconds > 300)) {
@@ -28,9 +36,27 @@ public final class StructuredModelFailure extends RuntimeException {
         }
         this.code = code;
         this.retryAfterSeconds = retryAfterSeconds;
+        this.reason = reason;
     }
     public Code getCode() { return code; }
     public Integer getRetryAfterSeconds() { return retryAfterSeconds; }
+    public Reason getReason() { return reason; }
+
+    /**
+     * 不含 Provider 内容的低基数原因，只用于服务端诊断；不得进入公开响应。
+     */
+    public enum Reason {
+        CHOICES_CARDINALITY,
+        FINISH_REASON,
+        MESSAGE_SHAPE,
+        REFUSAL,
+        UNEXPECTED_TOOL_CARRIER,
+        CONTENT_MISSING,
+        TOOL_CALL_CARDINALITY,
+        TOOL_CALL_TYPE,
+        TOOL_FUNCTION,
+        TOOL_ARGUMENTS
+    }
     /**
      * 封闭失败码，每个码标注所属失败层（getLayer）：
      * TRANSPORT 为网络/HTTP 层，JSON 为响应体解析层，

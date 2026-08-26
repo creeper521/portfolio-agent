@@ -275,7 +275,7 @@ describe('AudienceDialogue（模型目录默认选择，UI spec §2.7/§8.3）',
     expect(request.modelSelection).toEqual({
       kind: 'MODEL',
       modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v1',
+      selectionVersion: 'glm-4-7-flash-v4',
     })
     const badge = wrapper.get('[data-testid="light-answer-model"]')
     expect(badge.text()).toContain('由 GLM-4.7-Flash · 目录默认 生成')

@@ -9,6 +9,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
+import java.util.Map;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
 
 /**
  * 单个已配置模型的不可变、非秘密执行元数据：第二重 Provider 准入通过后
@@ -36,6 +39,7 @@ public final class ModelProviderDescriptor {
     private final int contextWindowBudget;
     private final int outputBudget;
     private final String descriptorFingerprint;
+    private final Map<ModelOperation, OperationBinding> operationBindings;
 
     /**
      * 全参构造：校验并冻结全部字段与指纹。
@@ -51,7 +55,7 @@ public final class ModelProviderDescriptor {
             URI endpoint,
             String modelName,
             ModelProviderProtocolProfile protocolProfile,
-            Set<ModelCapability> capabilities,
+            Map<ModelOperation, OperationBinding> operationBindings,
             int maxContextTokens,
             int maxOutputTokens) {
         this.modelRef = Objects.requireNonNull(modelRef, "modelRef");
@@ -61,7 +65,8 @@ public final class ModelProviderDescriptor {
         this.endpoint = requireHttpsEndpoint(endpoint);
         this.modelName = requireText(modelName, "modelName");
         this.protocolProfile = Objects.requireNonNull(protocolProfile, "protocolProfile");
-        this.capabilities = copyCapabilities(capabilities);
+        this.operationBindings = copyBindings(operationBindings);
+        this.capabilities = capabilities(this.operationBindings);
         if (maxContextTokens < 1) {
             throw new IllegalArgumentException("maxContextTokens must be positive");
         }
@@ -73,6 +78,7 @@ public final class ModelProviderDescriptor {
         descriptorFingerprint = fingerprint(
                 modelRef.value(), selectionVersion, endpoint.toASCIIString(), modelName,
                 protocolProfile.name(), canonicalCapabilities(capabilities),
+                canonicalBindings(this.operationBindings),
                 Integer.toString(maxContextTokens), Integer.toString(maxOutputTokens));
     }
 
@@ -87,6 +93,9 @@ public final class ModelProviderDescriptor {
     public int getMaxContextTokens() { return contextWindowBudget; }
     public int getMaxOutputTokens() { return outputBudget; }
     public String getDescriptorFingerprint() { return descriptorFingerprint; }
+    public Map<ModelOperation, OperationBinding> getOperationBindings() {
+        return operationBindings;
+    }
 
     /** 投影出免秘密的公开目录条目（不含 endpoint 与模型名）。 */
     public ModelCatalogEntry publicEntry() {
@@ -142,6 +151,42 @@ public final class ModelProviderDescriptor {
             }
         }
         return Set.copyOf(values);
+    }
+
+    private static Map<ModelOperation, OperationBinding> copyBindings(
+            Map<ModelOperation, OperationBinding> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("operationBindings must not be empty");
+        }
+        for (Map.Entry<ModelOperation, OperationBinding> entry : values.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null
+                    || entry.getKey() != entry.getValue().getOperation()) {
+                throw new IllegalArgumentException("operationBindings are invalid");
+            }
+        }
+        return Map.copyOf(values);
+    }
+
+    private static Set<ModelCapability> capabilities(
+            Map<ModelOperation, OperationBinding> bindings) {
+        java.util.EnumSet<ModelCapability> result =
+                java.util.EnumSet.noneOf(ModelCapability.class);
+        if (bindings.containsKey(ModelOperation.TURN_INTERPRETATION)) {
+            result.add(ModelCapability.TURN_INTERPRETATION);
+        }
+        if (bindings.containsKey(ModelOperation.GENERAL_KNOWLEDGE)) {
+            result.add(ModelCapability.GENERAL_KNOWLEDGE);
+        }
+        return copyCapabilities(result);
+    }
+
+    private static String canonicalBindings(
+            Map<ModelOperation, OperationBinding> bindings) {
+        return bindings.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey().name() + ':'
+                        + entry.getValue().getBindingFingerprint())
+                .collect(Collectors.joining(","));
     }
 
     /** 生成能力集的规范字符串：按枚举名排序后以逗号连接，保证指纹输入稳定。 */

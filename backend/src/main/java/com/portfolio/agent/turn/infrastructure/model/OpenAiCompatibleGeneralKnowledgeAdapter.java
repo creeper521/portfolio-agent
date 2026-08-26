@@ -4,9 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
-import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputGateway;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputCompiler;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputValidationException;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
+import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeModelPort;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeRequest;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeUnavailableException;
@@ -23,20 +28,46 @@ import java.util.Map;
  * 采样温度固定为 0.2（贴近确定的说明文风）。</p>
  */
 public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKnowledgeModelPort {
-    private final StructuredModelTransport transport;
+    private final StructuredOutputGateway gateway;
     private final ObjectMapper mapper;
     private final String systemPrompt;
+    private final String providerDraftSystemPrompt;
     private final int maxTokens;
     private final Duration timeout;
+    private final ModelOutputDiagnostics outputDiagnostics;
     public OpenAiCompatibleGeneralKnowledgeAdapter(
-            StructuredModelTransport transport, ObjectMapper mapper,
+            StructuredOutputGateway gateway, ObjectMapper mapper,
             String systemPrompt, int maxTokens, Duration timeout) {
-        this.transport = transport; this.mapper = mapper;
+        this(gateway, mapper, systemPrompt, maxTokens, timeout,
+                systemPrompt, ModelOutputDiagnostics.none());
+    }
+    public OpenAiCompatibleGeneralKnowledgeAdapter(
+            StructuredOutputGateway gateway, ObjectMapper mapper,
+            String systemPrompt, int maxTokens, Duration timeout,
+            ModelOutputDiagnostics outputDiagnostics) {
+        this(gateway, mapper, systemPrompt, maxTokens, timeout,
+                systemPrompt, outputDiagnostics);
+    }
+    public OpenAiCompatibleGeneralKnowledgeAdapter(
+            StructuredOutputGateway gateway, ObjectMapper mapper,
+            String systemPrompt, int maxTokens, Duration timeout,
+            String providerDraftSystemPrompt,
+            ModelOutputDiagnostics outputDiagnostics) {
+        this.gateway = java.util.Objects.requireNonNull(gateway, "gateway");
+        this.mapper = mapper;
         if (systemPrompt == null || systemPrompt.isBlank()) {
             throw new IllegalArgumentException("systemPrompt is required");
         }
+        if (providerDraftSystemPrompt == null
+                || providerDraftSystemPrompt.isBlank()) {
+            throw new IllegalArgumentException(
+                    "providerDraftSystemPrompt is required");
+        }
         this.systemPrompt = systemPrompt;
+        this.providerDraftSystemPrompt = providerDraftSystemPrompt;
         this.maxTokens = maxTokens; this.timeout = timeout;
+        this.outputDiagnostics = java.util.Objects.requireNonNull(
+                outputDiagnostics, "outputDiagnostics");
     }
     /**
      * 执行一次通用知识生成调用，返回模型输出的 JSON 草稿文本。
@@ -44,7 +75,7 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
      * @throws SelectedModelFailureException 所选模型不支持该能力、被限流或传输失败
      * @throws GeneralKnowledgeUnavailableException 能力未启用或输入投影失败
      */
-    @Override public String generate(
+    @Override public StructurallyValidatedOutput generate(
             GeneralKnowledgeRequest request,
             ResolvedModelExecution modelExecution) {
         if (!modelExecution.getSnapshot().supports(
@@ -59,11 +90,26 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
         try {
             Map<String, Object> input = new LinkedHashMap<>();
             input.put("kind", request.getKind()); input.put("topic", request.getTopic());
-            input.put("subjects", request.getSubjects()); input.put("dimensions", request.getDimensions());
+            input.put("subjects", request.getSubjects());
+            input.put("dimensions", request.getDimensions().stream().sorted().toList());
             input.put("depth", request.getDepth()); input.put("audience", request.getAudience());
             input.put("expectedContentVersion", request.getExpectedContentVersion());
+            OperationBinding binding = modelExecution.getRequiredBinding()
+                    .getRequiredOperationBinding(
+                            com.portfolio.agent.infrastructure.model.policy
+                                    .ModelOperation.GENERAL_KNOWLEDGE);
+            String selectedSystemPrompt = switch (
+                    binding.getOutputCompilerProfileVersion()) {
+                case OperationBinding.IDENTITY_OUTPUT_COMPILER_VERSION -> systemPrompt;
+                case OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION ->
+                        providerDraftSystemPrompt;
+                default -> throw new IllegalArgumentException(
+                        "general output compiler profile is not approved");
+            };
             StructuredModelRequest modelRequest = new StructuredModelRequest(
-                    "GENERAL_KNOWLEDGE", systemPrompt, mapper.writeValueAsString(input),
+                    com.portfolio.agent.infrastructure.model.policy.ModelOperation
+                            .GENERAL_KNOWLEDGE,
+                    selectedSystemPrompt, mapper.writeValueAsString(input),
                     maxTokens, 0.2d, request.getDeadline().cappedAt(timeout));
             if (modelRequest.deadline().isExpired()) {
                 throw SelectedModelFailureException
@@ -71,14 +117,41 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
             }
             modelExecution.markAttempted(
                     ResolvedModelExecution.Stage.ANSWER_GENERATION);
-            return transport.execute(
-                    modelExecution.getRequiredBinding(), modelRequest).json();
+            StructuredOutputCompiler compiler = switch (
+                    binding.getOutputCompilerProfileVersion()) {
+                case OperationBinding.IDENTITY_OUTPUT_COMPILER_VERSION ->
+                        StructuredOutputCompiler.identity();
+                case OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION ->
+                        new GeneralProviderDraftCompiler(request);
+                default -> throw new IllegalArgumentException(
+                        "general output compiler profile is not approved");
+            };
+            return gateway.execute(
+                    modelExecution.getRequiredBinding(), modelRequest, compiler);
         } catch (StructuredModelFailure failure) {
             throw SelectedModelFailureException.from(failure);
+        } catch (StructuredOutputValidationException failure) {
+            outputDiagnostics.rejected(
+                    "GENERAL_KNOWLEDGE", diagnosticLayer(failure),
+                    failure.getDiagnosticReason());
+            throw SelectedModelFailureException.invalidResponse(failure);
         } catch (SelectedModelFailureException failure) {
             throw failure;
         } catch (Exception failure) {
             throw new GeneralKnowledgeUnavailableException("general request projection failed", failure);
         }
+    }
+
+    private ModelOutputDiagnostics.Layer diagnosticLayer(
+            StructuredOutputValidationException failure) {
+        return switch (failure.getStage()) {
+            case PROVIDER_DRAFT_SCHEMA ->
+                    ModelOutputDiagnostics.Layer.PROVIDER_DRAFT_SCHEMA;
+            case DETERMINISTIC_COMPILER ->
+                    ModelOutputDiagnostics.Layer.DETERMINISTIC_COMPILER;
+            case CANONICAL_SCHEMA ->
+                    ModelOutputDiagnostics.Layer.CANONICAL_SCHEMA;
+            case UNCLASSIFIED_SCHEMA -> ModelOutputDiagnostics.Layer.SCHEMA;
+        };
     }
 }

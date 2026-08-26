@@ -40,6 +40,17 @@ public final class GeneralDraftCodec {
     public Draft decode(String raw) {
         try {
             JsonNode root = objectMapper.readTree(raw);
+            return decode(root);
+        } catch (RuntimeException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("general draft is invalid", exception);
+        }
+    }
+
+    /** 从 canonical schema 已验证的同一棵 JSON tree 构造领域草稿，不再次解析原文。 */
+    public Draft decode(JsonNode root) {
+        try {
             requireObject(root, ROOT_FIELDS, "root");
             String topic = requiredText(root, "topic");
             JsonNode statementsNode = root.get("statements");
@@ -73,8 +84,6 @@ public final class GeneralDraftCodec {
             return new Draft(topic, statements, caveats);
         } catch (RuntimeException exception) {
             throw exception;
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("general draft is invalid", exception);
         }
     }
 

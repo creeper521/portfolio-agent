@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.capability.general;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -24,7 +25,8 @@ class GeneralModelOutputDiagnosticsTest {
     private void assertLayer(String output, String layer, String code) {
         List<DiagnosticEvent> events = new ArrayList<>();
         GeneralKnowledgeGenerator generator = new GeneralKnowledgeGenerator(
-                (request, modelExecution) -> output,
+                (request, modelExecution) ->
+                        StructuredModelTestFixtures.uncheckedGeneral(output),
                 new GeneralDraftCodec(new ObjectMapper()),
                 new GeneralDraftValidator(),
                 new ModelOutputDiagnostics(events::add));

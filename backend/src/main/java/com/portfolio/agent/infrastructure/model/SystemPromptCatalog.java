@@ -20,9 +20,12 @@ public final class SystemPromptCatalog {
             "prompts/goal-interpretation-system.txt";
     static final String GENERAL_KNOWLEDGE_PATH =
             "prompts/general-knowledge-system.txt";
+    static final String GENERAL_PROVIDER_DRAFT_PATH =
+            "prompts/general-provider-draft-system.txt";
 
     private final String goalInterpretation;
     private final String generalKnowledge;
+    private final String generalProviderDraft;
 
     public SystemPromptCatalog() {
         this(SystemPromptCatalog.class.getClassLoader());
@@ -33,6 +36,7 @@ public final class SystemPromptCatalog {
         ClassLoader requiredLoader = Objects.requireNonNull(classLoader, "classLoader");
         goalInterpretation = load(requiredLoader, GOAL_INTERPRETATION_PATH);
         generalKnowledge = load(requiredLoader, GENERAL_KNOWLEDGE_PATH);
+        generalProviderDraft = load(requiredLoader, GENERAL_PROVIDER_DRAFT_PATH);
     }
 
     public String goalInterpretation() {
@@ -41,6 +45,10 @@ public final class SystemPromptCatalog {
 
     public String generalKnowledge() {
         return generalKnowledge;
+    }
+
+    public String generalProviderDraft() {
+        return generalProviderDraft;
     }
 
     /**

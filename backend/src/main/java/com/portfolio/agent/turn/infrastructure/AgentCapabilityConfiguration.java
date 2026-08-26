@@ -46,6 +46,7 @@ import com.portfolio.agent.turn.planning.GoalInterpretationUnavailableException;
 import com.portfolio.agent.turn.planning.GoalProposalCodec;
 import com.portfolio.agent.turn.planning.GoalResolver;
 import com.portfolio.agent.turn.planning.SafeConversationalFastPath;
+import com.portfolio.agent.turn.planning.UnresolvedIntentPolicy;
 import com.portfolio.agent.turn.planning.SemanticRouteValidator;
 import com.portfolio.agent.turn.planning.PortfolioReviewedGoalSource;
 import com.portfolio.agent.turn.planning.SemanticPlanCompiler;
@@ -149,9 +150,11 @@ public class AgentCapabilityConfiguration {
     AgentRuntimeReadiness agentRuntimeReadiness(
             com.portfolio.agent.turn.state.configuration.ConversationContextProperties
                     contextProperties,
-            ModelOperationPolicyRegistry operationPolicies) {
+            ModelOperationPolicyRegistry operationPolicies,
+            com.portfolio.agent.infrastructure.model.structured
+                    .StructuredOutputContractRegistry contracts) {
         return new AgentRuntimeReadiness(
-                contextProperties.getMode(), operationPolicies);
+                contextProperties.getMode(), operationPolicies, contracts);
     }
 
     /** OpenAI 兼容结构化传输：连接与请求超时取各操作策略中的最大超时。 */
@@ -159,13 +162,25 @@ public class AgentCapabilityConfiguration {
     StructuredModelTransport structuredModelTransport(
             ObjectMapper mapper,
             ModelOperationPolicyRegistry operationPolicies,
-            DiagnosticEventPublisher diagnostics) {
+            DiagnosticEventPublisher diagnostics,
+            com.portfolio.agent.infrastructure.model.structured
+                    .StructuredOutputContractRegistry contracts) {
         Duration transportTimeout = maximumTransportTimeout(operationPolicies);
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newBuilder()
                         .connectTimeout(transportTimeout)
                         .build(),
-                mapper, transportTimeout, diagnostics);
+                mapper, transportTimeout, diagnostics, contracts);
+    }
+
+    @Bean
+    com.portfolio.agent.infrastructure.model.structured.StructuredOutputGateway
+            structuredOutputGateway(
+                    StructuredModelTransport transport,
+                    com.portfolio.agent.infrastructure.model.structured
+                            .StructuredOutputContractRegistry contracts) {
+        return new com.portfolio.agent.infrastructure.model.structured
+                .StructuredOutputGateway(transport, contracts);
     }
 
     /** 模型执行解析器：目录快照 + 配置绑定，Claim 后冻结无隐式回退。 */
@@ -185,7 +200,8 @@ public class AgentCapabilityConfiguration {
     GoalInterpretationPort goalInterpretationPort(
             ObjectMapper objectMapper,
             ModelOperationPolicyRegistry operationPolicies,
-            StructuredModelTransport transport,
+            com.portfolio.agent.infrastructure.model.structured
+                    .StructuredOutputGateway gateway,
             SystemPromptCatalog prompts,
             AgentRuntimeReadiness readiness,
             DiagnosticEventPublisher diagnostics) {
@@ -197,7 +213,7 @@ public class AgentCapabilityConfiguration {
         ModelOperationPolicy operation = operationPolicies.get(
                 ModelOperation.TURN_INTERPRETATION);
         return new GoalInterpretationAdapter(
-                transport, objectMapper, new GoalProposalCodec(),
+                gateway, objectMapper, new GoalProposalCodec(),
                 prompts.goalInterpretation(),
                 operation.getMaxOutputTokens(), operation.getTimeout(),
                 new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
@@ -208,9 +224,11 @@ public class AgentCapabilityConfiguration {
     GeneralKnowledgeModelPort generalKnowledgeModelPort(
             ObjectMapper objectMapper,
             ModelOperationPolicyRegistry operationPolicies,
-            StructuredModelTransport transport,
+            com.portfolio.agent.infrastructure.model.structured
+                    .StructuredOutputGateway gateway,
             SystemPromptCatalog prompts,
-            AgentRuntimeReadiness readiness) {
+            AgentRuntimeReadiness readiness,
+            DiagnosticEventPublisher diagnostics) {
         if (!readiness.isOperationAvailable(ModelOperation.GENERAL_KNOWLEDGE)) {
             return (request, modelExecution) -> {
                 throw new GeneralKnowledgeUnavailableException(
@@ -220,8 +238,11 @@ public class AgentCapabilityConfiguration {
         ModelOperationPolicy operation = operationPolicies.get(
                 ModelOperation.GENERAL_KNOWLEDGE);
         return new OpenAiCompatibleGeneralKnowledgeAdapter(
-                transport, objectMapper, prompts.generalKnowledge(),
-                operation.getMaxOutputTokens(), operation.getTimeout());
+                gateway, objectMapper, prompts.generalKnowledge(),
+                operation.getMaxOutputTokens(), operation.getTimeout(),
+                prompts.generalProviderDraft(),
+                new com.portfolio.agent.common.observability
+                        .ModelOutputDiagnostics(diagnostics));
     }
 
     /** 通用知识任务执行器：生成器（codec + 校验）+ 呈现组合器。 */
@@ -256,16 +277,24 @@ public class AgentCapabilityConfiguration {
                 conversationRequestExecutor, 4);
     }
 
+    /** 零目标低信息策略：独立于问候 fast path 的封闭确定性规则。 */
+    @Bean
+    UnresolvedIntentPolicy unresolvedIntentPolicy() {
+        return new UnresolvedIntentPolicy();
+    }
+
     /** Goal 解析器：解释端口 + 已审阅主体来源 + 边界策略 + 模型输出诊断。 */
     @Bean
     GoalResolver goalResolver(
             PortfolioKnowledgeGateway knowledgeGateway,
             GoalInterpretationPort goalInterpretationPort,
+            UnresolvedIntentPolicy unresolvedIntentPolicy,
             DiagnosticEventPublisher diagnostics) {
         return new GoalResolver(
                 goalInterpretationPort, new PortfolioReviewedGoalSource(knowledgeGateway),
                 new GoalInterpretationInputFactory(),
-                new SafeConversationalFastPath(), new SemanticRouteValidator(),
+                new SafeConversationalFastPath(), unresolvedIntentPolicy,
+                new SemanticRouteValidator(),
                 new GoalBoundaryPolicy(),
                 new com.portfolio.agent.common.observability.ModelOutputDiagnostics(diagnostics));
     }

@@ -84,6 +84,32 @@ class GeneralDraftValidatorTest {
                 .hasMessageContaining("language");
     }
 
+    @Test void standardAcceptsTheApprovedTotalBucketWithoutPerRoleSymmetry() {
+        String unevenButComplete = """
+                {"topic":"并发控制","statements":[
+                  {"role":"DEFINITION","text":"并发控制协调共享资源访问。","aspects":["DEFINITION","TYPICAL_USAGE"]},
+                  {"role":"MECHANISM","text":"它通过排序约束竞争。它常用于并发写入。适用范围取决于一致性要求。","aspects":["MECHANISM","APPLICABILITY_BOUNDARY"]}
+                ],"caveats":[]}
+                """;
+
+        assertThat(validator.validate(
+                explanation(UserGoalProposal.Depth.STANDARD),
+                codec.decode(unevenButComplete)).getStatements()).hasSize(2);
+    }
+
+    @Test void detailedAcceptsEightToTwelveChineseSentencesInTotal() {
+        String unevenButComplete = """
+                {"topic":"并发控制","statements":[
+                  {"role":"DEFINITION","text":"并发控制协调共享资源访问。它用于多任务共同读写数据。常见误区是并行越多越快。","aspects":["DEFINITION","TYPICAL_USAGE","COMMON_MISCONCEPTION"]},
+                  {"role":"MECHANISM","text":"它通过排序约束竞争。它也可以通过隔离保护状态。协调过程会产生性能取舍。适用范围取决于一致性要求。边界条件包括故障恢复能力。","aspects":["MECHANISM","TRADE_OFF","APPLICABILITY_BOUNDARY","BOUNDARY_CONDITION"]}
+                ],"caveats":[]}
+                """;
+
+        assertThat(validator.validate(
+                explanation(UserGoalProposal.Depth.DETAILED),
+                codec.decode(unevenButComplete)).getStatements()).hasSize(2);
+    }
+
     @Test void detailedRequiresEveryApprovedSemanticAspect() {
         String missingTradeOff = """
                 {"topic":"并发控制","statements":[

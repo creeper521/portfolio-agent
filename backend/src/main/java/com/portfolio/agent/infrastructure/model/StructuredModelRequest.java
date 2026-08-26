@@ -1,6 +1,7 @@
 package com.portfolio.agent.infrastructure.model;
 
 import com.portfolio.agent.turn.execution.TurnDeadline;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 
 import java.util.Objects;
 
@@ -13,10 +14,10 @@ import java.util.Objects;
  * 保证进入传输层的请求都已满足 Operation 预算约束。
  */
 public record StructuredModelRequest(
-        String operation, String systemPrompt, String userPrompt,
+        ModelOperation operation, String systemPrompt, String userPrompt,
         int maxOutputTokens, double temperature, TurnDeadline deadline) {
     public StructuredModelRequest {
-        operation = text(operation, "operation");
+        Objects.requireNonNull(operation, "operation");
         systemPrompt = text(systemPrompt, "systemPrompt");
         userPrompt = text(userPrompt, "userPrompt");
         if (maxOutputTokens < 1 || maxOutputTokens > 8000

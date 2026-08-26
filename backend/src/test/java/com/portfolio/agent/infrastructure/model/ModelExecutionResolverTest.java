@@ -1,6 +1,6 @@
 package com.portfolio.agent.infrastructure.model;
 
-import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.infrastructure.model.provider.ModelCatalogDefaultSelection;
 import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderDescriptor;
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -107,21 +106,39 @@ class ModelExecutionResolverTest {
                 .isEqualTo(ModelExecutionResolutionException.Code.MODEL_SELECTION_STALE);
     }
 
+    @Test
+    void snapshotAndServerBindingMustShareTheExactDescriptorFingerprint() {
+        ModelProviderDescriptor descriptor = descriptor(
+                "glm-4-7-flash", "glm-current-v2",
+                ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS);
+        ModelTransportBinding mismatched = new ModelTransportBinding(
+                descriptor.getModelRef(), "0".repeat(64), descriptor.getEndpoint(),
+                descriptor.getModelName(), descriptor.getProtocolProfile(),
+                "credential-sentinel", descriptor.getMaxOutputTokens(),
+                StructuredModelTestFixtures.nativeBindings());
+
+        assertThatThrownBy(() -> ResolvedModelExecution.model(
+                ModelExecutionSnapshot.model(descriptor), mismatched))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("descriptor");
+    }
+
     private ModelProviderDescriptor descriptor(
             String ref, String version, ModelProviderProtocolProfile profile) {
         return new ModelProviderDescriptor(
                 ModelRef.of(ref), version, ref, 10,
                 URI.create("https://provider.example/v1/chat/completions"),
                 ref, profile,
-                Set.of(ModelCapability.TURN_INTERPRETATION,
-                        ModelCapability.GENERAL_KNOWLEDGE),
+                StructuredModelTestFixtures.nativeBindings(),
                 100_000, 8_000);
     }
 
     private ModelTransportBinding binding(ModelProviderDescriptor descriptor) {
         return new ModelTransportBinding(
-                descriptor.getModelRef(), descriptor.getEndpoint(),
+                descriptor.getModelRef(), descriptor.getDescriptorFingerprint(),
+                descriptor.getEndpoint(),
                 descriptor.getModelName(), descriptor.getProtocolProfile(),
-                "credential-sentinel", descriptor.getMaxOutputTokens());
+                "credential-sentinel", descriptor.getMaxOutputTokens(),
+                StructuredModelTestFixtures.nativeBindings());
     }
 }

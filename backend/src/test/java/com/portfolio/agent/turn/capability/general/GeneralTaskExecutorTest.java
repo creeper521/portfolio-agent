@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.capability.general;
 
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
 import com.portfolio.agent.turn.execution.TaskExecutionResult;
@@ -27,7 +28,8 @@ class GeneralTaskExecutorTest {
                 GeneralTestFixtures.generator((request, modelExecution) -> {
                     captured.set(request);
                     capturedExecution.set(modelExecution);
-                    return GeneralTestFixtures.VALID_EXPLANATION;
+                    return StructuredModelTestFixtures.validatedGeneral(
+                            GeneralTestFixtures.VALID_EXPLANATION);
                 }),
                 new GeneralPresentationComposer());
         TaskExecutionContext context = mock(TaskExecutionContext.class);

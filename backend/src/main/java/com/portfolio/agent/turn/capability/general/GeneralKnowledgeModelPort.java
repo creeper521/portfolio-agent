@@ -1,6 +1,7 @@
 package com.portfolio.agent.turn.capability.general;
 
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 
 /**
  * Dedicated model seam. It accepts no conversation, route, evidence, or rendered text.
@@ -10,7 +11,7 @@ import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
  * 已渲染文本，隔离模型层与 Turn 其余状态。
  */
 public interface GeneralKnowledgeModelPort {
-    String generate(
+    StructurallyValidatedOutput generate(
             GeneralKnowledgeRequest request,
             ResolvedModelExecution modelExecution)
             throws GeneralKnowledgeUnavailableException;

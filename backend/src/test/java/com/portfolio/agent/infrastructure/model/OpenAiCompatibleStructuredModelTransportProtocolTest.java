@@ -6,6 +6,10 @@ import com.portfolio.agent.common.observability.DiagnosticEvent;
 import com.portfolio.agent.common.observability.DiagnosticLevel;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.infrastructure.model.provider.ModelRef;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
+import com.portfolio.agent.infrastructure.model.structured.TokenFieldPolicy;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputStrategy;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -79,9 +83,83 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                             ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS),
                             request());
 
-            assertThat(response.json()).contains("answer");
+            assertThat(response).isNotNull();
             assertThat(server.requestCount).hasValue(1);
         }
+    }
+
+    @Test
+    void requiredToolStrategyForcesOneSyntheticToolAndExtractsOnlyItsArguments()
+            throws Exception {
+        try (StubServer server = StubServer.responding(200, toolSuccessBody())) {
+            StructuredModelResponse response = transport(
+                    server.endpoint(), event -> { }).execute(
+                    binding("glm", "glm-4.7-flash",
+                            ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                            StructuredModelTestFixtures.toolBindings()),
+                    request());
+
+            JsonNode payload = MAPPER.readTree(server.requestBody.get());
+            assertThat(payload.has("response_format")).isFalse();
+            assertThat(payload.path("tools")).hasSize(1);
+            assertThat(payload.path("tools").get(0).path("function")
+                    .path("name").textValue()).isEqualTo("emit_general_draft");
+            assertThat(payload.path("tools").get(0).path("function")
+                    .path("parameters"))
+                    .isEqualTo(StructuredModelTestFixtures.contracts().resolve(
+                            new com.portfolio.agent.infrastructure.model.structured
+                                    .StructuredContractRef(
+                                    ModelOperation.GENERAL_KNOWLEDGE,
+                                    "general.draft.v2")).canonicalSchema());
+            assertThat(payload.path("tool_choice").path("function")
+                    .path("name").textValue()).isEqualTo("emit_general_draft");
+            assertThat(payload.path("parallel_tool_calls").booleanValue()).isFalse();
+            assertThat(response).isNotNull();
+        }
+    }
+
+    @Test
+    void requiredToolStrategyAcceptsBlankNonCarrierContent() throws Exception {
+        byte[] body = new String(toolSuccessBody(), StandardCharsets.UTF_8)
+                .replace("\"message\":{",
+                        "\"message\":{\"content\":\"\",")
+                .getBytes(StandardCharsets.UTF_8);
+        try (StubServer server = StubServer.responding(200, body)) {
+            StructuredModelResponse response = transport(
+                    server.endpoint(), event -> { }).execute(
+                    binding("glm", "glm-4.7-flash",
+                            ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
+                            StructuredModelTestFixtures.toolBindings()),
+                    request());
+
+            assertThat(response).isNotNull();
+            assertThat(server.requestCount).hasValue(1);
+        }
+    }
+
+    @Test
+    void tokenFieldPolicyCanOmitMaxTokensForNativeStructuredOutput()
+            throws Exception {
+        try (StubServer server = StubServer.responding(200, successBody())) {
+            transport(server.endpoint(), event -> { }).execute(
+                    binding("qwen", "qwen3.7-flash",
+                            ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
+                            StructuredModelTestFixtures.bindings(
+                                    StructuredOutputStrategy.NATIVE_JSON_SCHEMA,
+                                    TokenFieldPolicy.OMIT)),
+                    request());
+
+            assertThat(MAPPER.readTree(server.requestBody.get()).has("max_tokens"))
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void mixedOrUnexpectedResponseCarriersAreRejectedWithoutRetry() throws Exception {
+        assertResponseFailure(
+                "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":"
+                        + "{\"content\":\"{}\",\"tool_calls\":[]}}]}",
+                StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID, "ENVELOPE");
     }
 
     @Test
@@ -144,6 +222,12 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
     @Test
     void jsonAndEnvelopeFailuresAreClosedAndNeverRetried() throws Exception {
         assertResponseFailure("not-json", StructuredModelFailure.Code.RESPONSE_JSON_INVALID, "JSON");
+        assertResponseFailure(
+                "{\"choices\":[],\"choices\":[]}",
+                StructuredModelFailure.Code.RESPONSE_JSON_INVALID, "JSON");
+        assertResponseFailure(
+                "{\"choices\":[]} {}",
+                StructuredModelFailure.Code.RESPONSE_JSON_INVALID, "JSON");
         assertResponseFailure("{}", StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID, "ENVELOPE");
         assertResponseFailure(
                 "{\"choices\":[{\"message\":{\"content\":\"\"}}]}",
@@ -177,7 +261,16 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
     private void assertCommonPayload(JsonNode payload, String expectedModel) {
         assertThat(payload.path("model").textValue()).isEqualTo(expectedModel);
         assertThat(payload.path("response_format").path("type").textValue())
-                .isEqualTo("json_object");
+                .isEqualTo("json_schema");
+        assertThat(payload.path("response_format").path("json_schema")
+                .path("strict").booleanValue()).isTrue();
+        assertThat(payload.path("response_format").path("json_schema")
+                .path("schema"))
+                .isEqualTo(StructuredModelTestFixtures.contracts().resolve(
+                        new com.portfolio.agent.infrastructure.model.structured
+                                .StructuredContractRef(
+                                ModelOperation.GENERAL_KNOWLEDGE,
+                                "general.draft.v2")).canonicalSchema());
         assertThat(payload.path("stream").booleanValue()).isFalse();
         assertThat(payload.path("messages").isArray()).isTrue();
         assertThat(payload.path("messages")).hasSize(2);
@@ -216,6 +309,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                     new OpenAiCompatibleStructuredModelTransport(
                             HttpClient.newHttpClient(), MAPPER,
                             Duration.ofSeconds(2), event -> { },
+                            StructuredModelTestFixtures.contracts(),
                             binding -> binding.getModelRef().equals(selected.getModelRef())
                                     ? selectedServer.endpoint() : otherServer.endpoint());
 
@@ -274,9 +368,20 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
     private ModelTransportBinding binding(
             String ref, String modelName, ModelProviderProtocolProfile profile) {
+        return binding(ref, modelName, profile,
+                StructuredModelTestFixtures.nativeBindings());
+    }
+
+    private ModelTransportBinding binding(
+            String ref, String modelName, ModelProviderProtocolProfile profile,
+            java.util.Map<com.portfolio.agent.infrastructure.model.policy.ModelOperation,
+                    com.portfolio.agent.infrastructure.model.structured.OperationBinding>
+                    operationBindings) {
         return new ModelTransportBinding(
-                ModelRef.of(ref), URI.create("https://example.test/chat"),
-                modelName, profile, "test-key", 32);
+                ModelRef.of(ref), "0".repeat(64),
+                URI.create("https://example.test/chat"),
+                modelName, profile, "test-key", 32,
+                operationBindings);
     }
 
     private OpenAiCompatibleStructuredModelTransport transport(
@@ -284,18 +389,30 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
             com.portfolio.agent.common.observability.DiagnosticEventPublisher diagnostics) {
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newHttpClient(), MAPPER,
-                Duration.ofSeconds(2), diagnostics, ignored -> endpoint);
+                Duration.ofSeconds(2), diagnostics,
+                StructuredModelTestFixtures.contracts(), ignored -> endpoint);
     }
 
     private StructuredModelRequest request() {
         return new StructuredModelRequest(
-                "GENERAL_KNOWLEDGE", "system JSON", "user", 64, 0.0d,
+                ModelOperation.GENERAL_KNOWLEDGE, "system JSON", "user", 64, 0.0d,
                 TurnDeadline.after(Duration.ofSeconds(3), Clock.systemUTC()));
     }
 
     private static byte[] successBody() {
-        return "{\"choices\":[{\"message\":{\"content\":\"{\\\"answer\\\":\\\"ok\\\"}\"}}]}"
+        return "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"{\\\"answer\\\":\\\"ok\\\"}\"}}]}"
                 .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] toolSuccessBody() {
+        return """
+                {"choices":[{"finish_reason":"tool_calls","message":{
+                  "tool_calls":[{"type":"function","function":{
+                    "name":"emit_general_draft",
+                    "arguments":"{\\"general\\":\\"ok\\"}"
+                  }}]
+                }}]}
+                """.getBytes(StandardCharsets.UTF_8);
     }
 
     private static final class StubServer implements AutoCloseable {

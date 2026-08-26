@@ -79,6 +79,21 @@ describe('ModelSelector（布局 A：发送区内联）', () => {
     wrapper.unmount()
   })
 
+  it('同 modelRef 但 selectionVersion 过期时不把目录新条目标记为已选', async () => {
+    const wrapper = mountSelector({
+      selection: {
+        kind: 'MODEL',
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'glm-4-7-flash-stale',
+      },
+    })
+    await wrapper.get('[data-testid="model-selector-trigger"]').trigger('click')
+    const options = wrapper.findAll('[data-testid="model-selector-option"]')
+    expect(options[0]?.attributes('aria-selected')).toBe('false')
+    expect(options[1]?.attributes('aria-selected')).toBe('false')
+    wrapper.unmount()
+  })
+
   it('点击其他条目：emit select（含 selectionVersion）并关闭浮层；点击当前条目只关闭', async () => {
     const wrapper = mountSelector({})
     await wrapper.get('[data-testid="model-selector-trigger"]').trigger('click')

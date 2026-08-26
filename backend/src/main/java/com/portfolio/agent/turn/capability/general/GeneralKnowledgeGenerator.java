@@ -67,10 +67,12 @@ public final class GeneralKnowledgeGenerator {
             throw new GeneralKnowledgeUnavailableException("general capability is unavailable");
         }
         try {
-            String output = modelPort.generate(request, modelExecution);
+            com.portfolio.agent.infrastructure.model.structured
+                    .StructurallyValidatedOutput output =
+                    modelPort.generate(request, modelExecution);
             GeneralDraftCodec.Draft draft;
             try {
-                draft = codec.decode(output);
+                draft = codec.decode(output.jsonTree());
             } catch (RuntimeException exception) {
                 outputDiagnostics.rejected(
                         "GENERAL_KNOWLEDGE", ModelOutputDiagnostics.Layer.SCHEMA);

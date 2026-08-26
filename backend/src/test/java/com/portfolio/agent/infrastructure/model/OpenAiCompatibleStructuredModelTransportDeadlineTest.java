@@ -3,6 +3,8 @@ package com.portfolio.agent.infrastructure.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.provider.ModelProviderProtocolProfile;
 import com.portfolio.agent.infrastructure.model.provider.ModelRef;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -79,20 +81,22 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
             URI endpoint, Duration operationTimeout) {
         return new OpenAiCompatibleStructuredModelTransport(
                 HttpClient.newHttpClient(), new ObjectMapper(),
-                operationTimeout, event -> { }, ignored -> endpoint);
+                operationTimeout, event -> { },
+                StructuredModelTestFixtures.contracts(), ignored -> endpoint);
     }
 
     private ModelTransportBinding binding() {
         return new ModelTransportBinding(
-                ModelRef.of("glm"), URI.create("https://example.test/chat"),
+                ModelRef.of("glm"), "0".repeat(64),
+                URI.create("https://example.test/chat"),
                 "glm-4.7-flash",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                "test-key", 32);
+                "test-key", 32, StructuredModelTestFixtures.nativeBindings());
     }
 
     private StructuredModelRequest request(Duration timeout) {
         return new StructuredModelRequest(
-                "GENERAL_KNOWLEDGE", "system", "user", 32, 0.0d,
+                ModelOperation.GENERAL_KNOWLEDGE, "system", "user", 32, 0.0d,
                 TurnDeadline.after(timeout, Clock.systemUTC()));
     }
 

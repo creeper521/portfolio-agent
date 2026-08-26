@@ -2,6 +2,8 @@ package com.portfolio.agent.turn.planning;
 
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
+import com.portfolio.agent.infrastructure.model.provider.ModelCapability;
+import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.common.observability.ModelOutputDiagnostics;
@@ -13,8 +15,9 @@ import java.util.Objects;
  * 用户目标解析器：把原始 Turn 输入解释为结构化的 {@link ResolvedGoalSet}。
  *
  * <p>位于 Command → Goal 阶段。自由文本依次经过 {@link SafeConversationalFastPath}
- * （无语义社交快捷路径）与 {@link GoalInterpretationPort}（模型或 fail-closed
- * 模板路径），语义路由再经 {@link SemanticRouteValidator} 校验与
+ * （无语义社交快捷路径）、{@link UnresolvedIntentPolicy}（确定性零目标出口）
+ * 与 {@link GoalInterpretationPort}（模型或 fail-closed 模板路径），语义路由再经
+ * {@link SemanticRouteValidator} 校验与
  * {@link GoalBoundaryPolicy} 边界裁决；预设提问则直接由 {@link ReviewedGoalSource}
  * 从已审核快照解析。任何解释失败都收敛为 CAPABILITY_UNAVAILABLE 固定文案，
  * 绝不让未解析的目标进入 Plan 阶段。</p>
@@ -24,6 +27,7 @@ public final class GoalResolver {
     private final ReviewedGoalSource reviewedGoalSource;
     private final GoalInterpretationInputFactory inputFactory;
     private final SafeConversationalFastPath conversationalFastPath;
+    private final UnresolvedIntentPolicy unresolvedIntentPolicy;
     private final SemanticRouteValidator routeValidator;
     private final GoalBoundaryPolicy boundaryPolicy;
     private final ModelOutputDiagnostics outputDiagnostics;
@@ -37,8 +41,23 @@ public final class GoalResolver {
             SemanticRouteValidator routeValidator,
             GoalBoundaryPolicy boundaryPolicy) {
         this(interpretationPort, reviewedGoalSource, inputFactory,
-                conversationalFastPath, routeValidator, boundaryPolicy,
+                conversationalFastPath, new UnresolvedIntentPolicy(),
+                routeValidator, boundaryPolicy,
                 ModelOutputDiagnostics.none());
+    }
+
+    /** 便捷构造器：显式注入低信息策略，使用默认无诊断实例。 */
+    public GoalResolver(
+            GoalInterpretationPort interpretationPort,
+            ReviewedGoalSource reviewedGoalSource,
+            GoalInterpretationInputFactory inputFactory,
+            SafeConversationalFastPath conversationalFastPath,
+            UnresolvedIntentPolicy unresolvedIntentPolicy,
+            SemanticRouteValidator routeValidator,
+            GoalBoundaryPolicy boundaryPolicy) {
+        this(interpretationPort, reviewedGoalSource, inputFactory,
+                conversationalFastPath, unresolvedIntentPolicy,
+                routeValidator, boundaryPolicy, ModelOutputDiagnostics.none());
     }
 
     public GoalResolver(
@@ -46,6 +65,20 @@ public final class GoalResolver {
             ReviewedGoalSource reviewedGoalSource,
             GoalInterpretationInputFactory inputFactory,
             SafeConversationalFastPath conversationalFastPath,
+            SemanticRouteValidator routeValidator,
+            GoalBoundaryPolicy boundaryPolicy,
+            ModelOutputDiagnostics outputDiagnostics) {
+        this(interpretationPort, reviewedGoalSource, inputFactory,
+                conversationalFastPath, new UnresolvedIntentPolicy(),
+                routeValidator, boundaryPolicy, outputDiagnostics);
+    }
+
+    public GoalResolver(
+            GoalInterpretationPort interpretationPort,
+            ReviewedGoalSource reviewedGoalSource,
+            GoalInterpretationInputFactory inputFactory,
+            SafeConversationalFastPath conversationalFastPath,
+            UnresolvedIntentPolicy unresolvedIntentPolicy,
             SemanticRouteValidator routeValidator,
             GoalBoundaryPolicy boundaryPolicy,
             ModelOutputDiagnostics outputDiagnostics) {
@@ -57,6 +90,8 @@ public final class GoalResolver {
                 inputFactory, "inputFactory");
         this.conversationalFastPath = Objects.requireNonNull(
                 conversationalFastPath, "conversationalFastPath");
+        this.unresolvedIntentPolicy = Objects.requireNonNull(
+                unresolvedIntentPolicy, "unresolvedIntentPolicy");
         this.routeValidator = Objects.requireNonNull(
                 routeValidator, "routeValidator");
         this.boundaryPolicy = Objects.requireNonNull(
@@ -133,7 +168,7 @@ public final class GoalResolver {
     }
 
     /**
-     * 解析自由文本 Ask：社交快捷路径 → 类型化解释 → 语义路由分派。
+     * 解析自由文本 Ask：社交快捷路径 → 确定性零目标策略 → 类型化解释 → 语义路由分派。
      *
      * <p>解释不可用或语义校验失败时按剩余预算返回 CAPABILITY_UNAVAILABLE：
      * 超时与一般失败使用不同固定文案，均不暴露内部细节。</p>
@@ -151,7 +186,13 @@ public final class GoalResolver {
             return conversational.orElseThrow();
         }
         GoalInterpretationInput input = inputFactory.create(
-                command, context, recentSemanticState);
+                command, executableContext(context, modelExecution),
+                recentSemanticState);
+        java.util.Optional<ResolvedGoalSet> unresolved =
+                unresolvedIntentPolicy.tryResolve(input);
+        if (unresolved.isPresent()) {
+            return unresolved.orElseThrow();
+        }
         try {
             GoalInterpretationResult result =
                     interpretTyped(input, deadline, modelExecution);
@@ -170,6 +211,25 @@ public final class GoalResolver {
             return ResolvedGoalSet.capabilityUnavailable(
                     "当前暂时无法可靠理解这条自由文本请求。");
         }
+    }
+
+    private GoalResolutionContext executableContext(
+            GoalResolutionContext context,
+            ResolvedModelExecution modelExecution) {
+        if (modelExecution.getSnapshot().getKind() != ModelExecutionSnapshot.Kind.MODEL
+                || modelExecution.getSnapshot().supports(
+                        ModelCapability.GENERAL_KNOWLEDGE)) {
+            return context;
+        }
+        java.util.EnumSet<GoalKind> allowed = context.getAllowedGoalKinds().isEmpty()
+                ? java.util.EnumSet.noneOf(GoalKind.class)
+                : java.util.EnumSet.copyOf(context.getAllowedGoalKinds());
+        allowed.remove(GoalKind.GENERAL_EXPLANATION);
+        allowed.remove(GoalKind.GENERAL_COMPARISON);
+        allowed.remove(GoalKind.APPLY_GENERAL_CONCEPT_TO_PORTFOLIO);
+        return new GoalResolutionContext(
+                context.getPublicSubjects(), allowed,
+                context.getAllowedRecommendationConstraints());
     }
 
     /**

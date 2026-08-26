@@ -7,8 +7,8 @@ import java.util.Map;
  *
  * <p>仅两个经过批准的封闭画像（GLM/Zhipu 与 Qwen/DashScope 的
  * chat-completions 变体），未列出的协议一律拒绝，杜绝开放式协议扩展。
- * 每个画像负责把自己的结构化输出字段（response_format、stream、
- * 各自的 thinking 关闭参数）注入请求负载。
+ * 每个画像只负责冻结传输级字段（stream 与各自的 thinking 关闭参数）；
+ * 结构化输出载体由 {@code OperationBinding} 的 strategy 编译，不能在此重复决定。
  */
 public enum ModelProviderProtocolProfile {
     /** 智谱 GLM chat-completions 画像：以 {@code thinking.type=disabled} 关闭思考。 */
@@ -38,7 +38,7 @@ public enum ModelProviderProtocolProfile {
         return version;
     }
 
-    /** 把本画像的结构化输出字段注入请求负载（公共字段 + 画像私有字段）。 */
+    /** 把本画像的传输级字段注入请求负载（公共字段 + 画像私有字段）。 */
     public abstract void applyStructuredOutputFields(Map<String, Object> payload);
 
     /**
@@ -59,9 +59,8 @@ public enum ModelProviderProtocolProfile {
         };
     }
 
-    /** 所有画像共用的公共字段：强制 JSON object 响应格式与非流式传输。 */
+    /** 所有画像共用的公共字段：仅冻结非流式传输；结构策略由 OperationBinding 编译。 */
     private static void common(Map<String, Object> payload) {
-        payload.put("response_format", Map.of("type", "json_object"));
         payload.put("stream", false);
     }
 

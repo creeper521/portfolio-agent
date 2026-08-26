@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
+import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -15,7 +16,8 @@ class GeneralKnowledgeGeneratorTest {
         AtomicInteger calls = new AtomicInteger();
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator((request, modelExecution) -> {
             calls.incrementAndGet();
-            return GeneralTestFixtures.VALID_EXPLANATION;
+            return StructuredModelTestFixtures.validatedGeneral(
+                    GeneralTestFixtures.VALID_EXPLANATION);
         });
         assertThat(generator.generate(GeneralTestFixtures.explanation()).getTopic()).isEqualTo("并发控制");
         assertThat(calls).hasValue(1);
@@ -25,7 +27,7 @@ class GeneralKnowledgeGeneratorTest {
         AtomicInteger calls = new AtomicInteger();
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator((request, modelExecution) -> {
             calls.incrementAndGet();
-            return "{}";
+            return StructuredModelTestFixtures.uncheckedGeneral("{}");
         });
         assertThatThrownBy(() -> generator.generate(GeneralTestFixtures.explanation()))
                 .isInstanceOf(GeneralKnowledgeUnavailableException.class);
@@ -34,7 +36,8 @@ class GeneralKnowledgeGeneratorTest {
 
     @Test void invalidSelectedModelDraftKeepsTheSelectedModelFailureCode() {
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator(
-                (request, modelExecution) -> "{}");
+                (request, modelExecution) ->
+                        StructuredModelTestFixtures.uncheckedGeneral("{}"));
         ResolvedModelExecution modelExecution =
                 org.mockito.Mockito.mock(ResolvedModelExecution.class);
         ModelExecutionSnapshot snapshot =

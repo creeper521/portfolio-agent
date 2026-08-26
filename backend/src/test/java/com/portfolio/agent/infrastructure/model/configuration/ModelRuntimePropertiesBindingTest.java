@@ -18,12 +18,12 @@ class ModelRuntimePropertiesBindingTest {
         values.put("portfolio.model-runtime.default-model-ref", "glm-4-7-flash");
         values.put("portfolio.model-runtime.models.glm-4-7-flash.enabled", "true");
         values.put("portfolio.model-runtime.models.glm-4-7-flash.selection-version", "glm-v1");
-        values.put("portfolio.model-runtime.models.glm-4-7-flash.protocol-profile",
-                "ZHIPU_CHAT_COMPLETIONS");
+        values.put("portfolio.model-runtime.models.glm-4-7-flash.execution-profile",
+                "GLM_4_7_FLASH_STRUCTURED_V4");
         values.put("portfolio.model-runtime.models.qwen-3-7-flash.enabled", "true");
         values.put("portfolio.model-runtime.models.qwen-3-7-flash.selection-version", "qwen-v1");
-        values.put("portfolio.model-runtime.models.qwen-3-7-flash.protocol-profile",
-                "DASHSCOPE_CHAT_COMPLETIONS");
+        values.put("portfolio.model-runtime.models.qwen-3-7-flash.execution-profile",
+                "QWEN_3_7_FLASH_STRUCTURED_V6");
 
         ModelRuntimeProperties properties = new Binder(
                 new MapConfigurationPropertySource(values))
@@ -34,9 +34,9 @@ class ModelRuntimePropertiesBindingTest {
         assertThat(properties.getDefaultModelRef()).isEqualTo("glm-4-7-flash");
         assertThat(properties.getModels()).containsOnlyKeys(
                 "glm-4-7-flash", "qwen-3-7-flash");
-        assertThat(properties.getModels().get("glm-4-7-flash").getProtocolProfile())
-                .isEqualTo("ZHIPU_CHAT_COMPLETIONS");
-        assertThat(properties.getModels().get("qwen-3-7-flash").getProtocolProfile())
-                .isEqualTo("DASHSCOPE_CHAT_COMPLETIONS");
+        assertThat(properties.getModels().get("glm-4-7-flash").getExecutionProfile())
+                .isEqualTo("GLM_4_7_FLASH_STRUCTURED_V4");
+        assertThat(properties.getModels().get("qwen-3-7-flash").getExecutionProfile())
+                .isEqualTo("QWEN_3_7_FLASH_STRUCTURED_V6");
     }
 }

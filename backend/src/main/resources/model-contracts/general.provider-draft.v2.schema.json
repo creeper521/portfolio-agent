@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:model-contract:general.provider-draft.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "caveats"],
+  "properties": {
+    "kind": {"enum": ["EXPLANATION", "COMPARISON"]},
+    "depth": {"enum": ["CONCISE", "STANDARD", "DETAILED"]},
+    "definitionSentences": {"$ref": "#/$defs/explanationSentences"},
+    "mechanismSentences": {"$ref": "#/$defs/explanationSentences"},
+    "comparisonSentences": {"$ref": "#/$defs/comparisonSequence"},
+    "caveats": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/caveat"}
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {"kind": {"const": "EXPLANATION"}},
+      "required": ["depth", "definitionSentences", "mechanismSentences"],
+      "not": {"required": ["comparisonSentences"]},
+      "oneOf": [
+        {
+          "properties": {
+            "depth": {"const": "CONCISE"},
+            "definitionSentences": {"$ref": "#/$defs/conciseSentences"},
+            "mechanismSentences": {"$ref": "#/$defs/conciseSentences"}
+          }
+        },
+        {
+          "properties": {
+            "depth": {"const": "STANDARD"},
+            "definitionSentences": {"$ref": "#/$defs/standardSentences"},
+            "mechanismSentences": {"$ref": "#/$defs/standardSentences"}
+          }
+        },
+        {
+          "properties": {
+            "depth": {"const": "DETAILED"},
+            "definitionSentences": {"$ref": "#/$defs/detailedSentences"},
+            "mechanismSentences": {"$ref": "#/$defs/detailedSentences"}
+          }
+        }
+      ]
+    },
+    {
+      "properties": {"kind": {"const": "COMPARISON"}},
+      "required": ["comparisonSentences"],
+      "not": {
+        "anyOf": [
+          {"required": ["depth"]},
+          {"required": ["definitionSentences"]},
+          {"required": ["mechanismSentences"]}
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "explanationSentences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/sentence"}
+    },
+    "conciseSentences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "standardSentences": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "detailedSentences": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "caveat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sentences"],
+      "properties": {
+        "kind": {"enum": ["APPLICABILITY_BOUNDARY", "RISK", "EXCEPTION"]},
+        "sentences": {"$ref": "#/$defs/caveatSequence"}
+      }
+    },
+    "sentence": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^[^。.!?！？；;]+(?:。[”’」』）》】]*)?$"
+    },
+    "comparisonSequence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000,
+        "pattern": "^[^.!?！？]+$"
+      }
+    },
+    "caveatSequence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/sentence"}
+    }
+  }
+}
