@@ -273,7 +273,7 @@ Clarification State 不保存完整 `UserGoalProposal`，避免 `inputAnchor` �
 - 未归一化的长文本；
 - raw Evidence、内部 Task/Plan 或私有 ID。
 
-本设计显式取代 docs/15 A2-02 中“恢复原始输入锚点”的字面要求。澄清恢复的是同一 Goal 的 typed identity、主体、requested size、requested outputs 与约束，不恢复或持久化原始问题片段。docs/15 的缺陷描述应同步改为“恢复 Goal 语义身份”，不得据旧措辞保存完整或部分访客原文。
+本设计显式取代历史缺陷 ID A2-02（已从动态账本移除）中“恢复原始输入锚点”的字面要求。澄清恢复的是同一 Goal 的 typed identity、主体、requested size、requested outputs 与约束，不恢复或持久化原始问题片段。不得据旧措辞保存完整或部分访客原文。
 
 ### 7.3 Resolve 流程
 

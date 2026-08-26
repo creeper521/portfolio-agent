@@ -139,7 +139,7 @@ publicSubjects and schema.
 - 语言规则为固定简体中文，不做输入语言判定（`GeneralKnowledgeRequest` 无语言信息，COMPARISON topic 为 null，混合主题无法判定）；COMPARISON 正文同样适用。
 - 语言规则的作用域严格限定为模型生成的自然语言字段；topic/subject/dimension 回显、锚点、ID、枚举名一律照抄（与既有 schema 规则一致，不产生冲突）。
 - depth 由 Goal 链按 §4 决策 4 的确定性映射选择，General 链按 §4 决策 5 的句数范围执行；"恰好一条同角色 + DEFINITION→MECHANISM 顺序"由 §5.3 的 validator 变更确定性强制，不依赖模型自觉。
-- CONVERSATIONAL 寒暄不引入篇幅规则，保持自然简短（A2-16 已冻结的问候行为不受影响）。
+- CONVERSATIONAL 寒暄不引入篇幅规则，保持自然简短（历史缺陷 ID A2-16（已从动态账本移除）所冻结的问候行为不受影响）。
 - `audience` 字段维持传入但不解释。
 
 ### 5.3 变更与不变项
