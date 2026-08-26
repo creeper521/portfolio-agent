@@ -48,9 +48,9 @@
 | A2-15 | P1 | NEXT | OPEN | 事实：页面重新进入只恢复会话身份与状态，不证明旧 requestId 终局被取回；快速新调用可掩盖原请求丢失。 | 复用现有 replay 权威，区分恢复与新执行；依赖恢复链和 Provider LIVE。 | Browser 记录同一 requestId、调用次数与终局；重新进入不得以新 requestId 冒充恢复。 |
 | A2-20 | P1 | NEXT | OPEN | 事实：运行时已有中文结构门，自动 Provider 样本取得局部正例；Browser 正文语言语义尚无闭环。 | 保持简体中文正文约束和技术标识例外，不增加重试或正文日志。 | 获授权 Provider 固定样本与 Browser 正文逐项通过中文、结构和隐私门。 |
 | A2-21 | P1 | NEXT | OPEN | 事实：depth 已进入 typed Goal 和 General 句数结构，但真实页面的用途、边界、权衡与误区差异未验收。 | 由同一 depth 权威控制结构与篇幅；依赖 General 质量和 Browser 正文门。 | 三档输入在生产入口形成可断言的结构、篇幅和语义差异，Browser 无降档。 |
-| A2-22 | P1 | NOW | OPEN | 事实：失败恢复设计要求同 requestId 重试冻结完整提交身份，当前联合发布门仍未给出完整证据。 | 重试原样复用 command、surface、preset/model selection 与 fingerprint；不得重建请求。 | 单元与 Browser 断言重试快照逐字段一致、无 fingerprint 冲突、无额外 Provider 调用。 |
-| A2-23 | P1 | NOW | OPEN | 事实：Clarification reservation 与 terminal settlement 的原子消费仍需原失败路径联合验收。 | 消费只能随 terminal transaction 成功；依赖 TurnExecutionStore settlement。 | settlement 失败、取消、竞争和重试矩阵证明 reservation 可恢复且只消费一次。 |
-| A2-24 | P1 | NOW | OPEN | 事实：单候选 `NEEDS_CLARIFICATION` 的语义路由与 Discussion 转换仍需生产入口证明。 | 保持单一 Semantic Routing/Lifecycle 权威，不用前端推测状态。 | 单候选路径返回限定澄清，解析后恢复原 Goal；不得被强制改造成 Discussion。 |
+| A2-22 | P1 | NOW | OPEN | 事实：`AgentWorkspace.vue` 的 `TurnSubmissionSnapshot` 已冻结 requestId、modelSelection、command、surfaceContext、conversationWindow、resumeToken 与 displayQuestion，`retryFailure()` 把同一 submission 原样交回 `runTurn()`；待验证：原失败 Browser 路径尚无逐字段网络证据。 | 重试原样复用 command、surface、preset/model selection 与 fingerprint；不得重建请求。 | 先在原失败路径捕获首次/重试请求并逐字段比较；再由单元与 Browser 断言无 fingerprint 冲突、无额外 Provider 调用。 |
+| A2-23 | P1 | NOW | OPEN | 事实：`AgentTurnLifecycleService` 先调用 `reserveClarification()`，再把 `ClarificationSettlementMutation.consume` 交给 terminal settlement；Memory/PostgreSQL store 已校验 reservation owner，并有回滚、竞争与过期回收测试；待验证：真实 RESOLVE、取消和结算交错的外层原路径尚未闭合。 | 消费只能随 terminal transaction 成功；依赖 TurnExecutionStore settlement。 | 先重放真实 RESOLVE 的取消/结算失败原路径；再以 Memory/PostgreSQL 竞争、重试和回收矩阵证明 reservation 可恢复且只消费一次。 |
+| A2-24 | P1 | NOW | OPEN | 事实：`AgentTurnLifecycleService` 已把 `ENTER_RECOMMENDED_RESULT` 路由到直接进入、把 `NEEDS_CLARIFICATION` 路由到 `recommendationSelectionClarification`；`AgentTurnLifecycleContinuationTest#singleCandidateStillClarifiesWhenTheModelIsUncertain` 覆盖单候选；待验证：真实 Provider/Browser 原路径仍无发布证据。 | 保持单一 Semantic Routing/Lifecycle 权威，不用前端推测状态。 | 先在真实单候选原路径确认限定澄清而非直接进入；解析后恢复原 Goal，明确 ENTER 仍可直接进入。 |
 | A2-25 | P2 | NOW | OPEN | 事实：PostgreSQL Session replacement 与 expired discussion pointer 的 parity 仍在联合门中开放。 | replacement 必须在同一事务清理旧 pointer；依赖状态 schema 与 store 合同。 | PostgreSQL replacement、重启、过期和并发测试均无残留 pointer。 |
 | A2-26 | P1 | NOW | OPEN | 事实：ENTER discussion 的 TTL 可能被来源 Recommendation 的较短过期时间裁剪。 | Discussion TTL 由自身权威计算，来源只提供合法 continuation identity。 | 受控时钟证明 ENTER 后获得完整 discussion TTL，来源过期不提前截断。 |
 | A2-27 | P2 | NOW | OPEN | 事实：Frontend pending 清理存在跨 generation 清除新请求状态的风险路径。 | 清理必须同时匹配 sessionId、requestId 与 generation。 | 迟到 settle/cancel/retry 交错测试证明旧 finally 不清除新 pending。 |
@@ -113,7 +113,7 @@
 | A2-85 | P1 | NEXT | OPEN | 事实：schema/semantic 拒绝已冻结为单次调用失败，不 repair、不重试。 | 未来改变需独立隐私、成本、deadline 与质量批准。 | Goal/General schema、semantic、HTTP、JSON、envelope 失败均断言调用数严格为一。 |
 | A2-86 | P1 | NEXT | OPEN | 事实：同 Turn 已冻结单一显式 ModelSelection；自动跨 Provider 重发被禁止，Frontend 切换体验仍未闭合。 | 用户换模型只能新 requestId；普通 replay 保留原选择。 | 失败不触达第二 Provider；手动切换创建新 Turn，旧 requestId replay 不改模型。 |
 | A2-87 | P1 | LATER | OPEN | 事实：Qwen Comparison 被上游 Goal Draft v1 阻断；Qwen/GLM 完整独立矩阵均未完成。 | 依赖 A2-80 的批准决策与各自可用性；不得用一家结果代替另一家。 | runner 对每家独立执行、独立失败、独立报告，任何 `NOT_READY` 不算 PASS。 |
-| A2-88 | P1 | LATER | OPEN | 事实：现有局部样本不足以形成两家 General/Comparison 稳定性结论。 | 依赖独立矩阵可达；不以一次通过或混合样本聚合。 | 每家报告成功终局率、语义正确率、schema 拒绝率、超时率及 P50/P95。 |
+| A2-88 | P1 | LATER | OPEN | 事实：Qwen Comparison 在到达 General 前被 Goal Draft v1 阻断；Qwen 与 GLM 的完整独立 General/Comparison 矩阵都尚未完成，现有局部样本不足以形成任一家稳定性结论。 | 依赖 A2-80 的上游可达性与两家独立矩阵；不以一次通过或混合样本聚合。 | 上游解除阻断后，每家独立报告成功终局率、语义正确率、schema 拒绝率、超时率及 P50/P95。 |
 | A2-91 | P1 | NOW | OPEN | 事实：scenario command 已接入生产 HTTP runner，但 expected、setup 和 hard-error trace 仍有失败/缺口。 | 每个场景必须执行真实 setup、command 和可观测断言。 | 全部 manifest 场景逐项运行并匹配 expected；缺 setup/trace 直接失败。 |
 | A2-92 | P1 | NOW | OPEN | 事实：Browser happy path 偏重状态/UI，未稳定拒绝错误 PublicTurn 终局。 | 解析公开 body 并断言 kind、resolution、coverage。 | 每条 happy path 既断言 UI 也断言网络 body，错误 variant 必须使 spec 失败。 |
 | A2-93 | P1 | NOW | OPEN | 事实：公开响应不暴露可安全断言的 facet/depth trace，Browser 无法证明语义消费。 | 只增加测试可见、脱敏且闭合的 trace；不得进入公开生产合同。 | packaged 测试 lane 能断言 facet/depth/subject，生产 lane 无 trace 泄漏。 |
@@ -133,7 +133,7 @@
 | A2-107 | P2 | LATER | OPEN | 事实：Operation readiness 已收敛为闭合真实枚举；文档和外层投影总门仍需统一。 | readiness 只说明配置可用，不宣称 schema/quality 已验证。 | 枚举零旧名，公开投影和文档不把 configured 推导成质量 PASS。 |
 | A2-108 | P2 | LATER | OPEN | 事实：已识别的零消费者类型已删除；缺少持续的 record/dead-code 纪律。 | 只在证明无生产入口、序列化或反射注册后物理删除。 | 零引用扫描、架构依赖测试和 packaged 启动共同证明删除安全。 |
 | A2-109 | P2 | LATER | OPEN | 事实：Goal/General Codec 已启用 trailing-token 拒绝；双合同 Parser/Compiler 全链仍需一致门。 | 所有结构策略使用严格 Parser，不允许 Adapter 旁路。 | 合法对象后追加 token、重复键和多对象在 Provider Draft 与 canonical 层均失败。 |
-| A2-110 | P0 | NOW | OPEN | 事实：治理文档与 Codec 测试已采用 persistence-safe 分类；本次账本替换及活动文档同步尚未完成。 | AGENTS、SECURITY、当前状态、机器状态和测试使用同一允许/禁止分类。 | 文档正反例与运行时 fixture 同时验证三条 replay 安全标记，任一漂移失败。 |
+| A2-110 | P0 | NOW | OPEN | 事实：当前 `pwsh` persistence-safe replay checker 已对五个目标文档通过，机器状态的 `PRIVACY_BOUNDARY` 也引用完整 settlement 扫描与固定不可重放终局；剩余缺口是 Windows PowerShell 5.1 canonical checker/test 仍因 UTF-8 误解码失败。 | AGENTS、SECURITY、当前状态、机器状态和测试使用同一允许/禁止分类；依赖 GATE-01 关闭跨 shell 文档门。 | Windows PowerShell 5.1 与 PowerShell 7 的文档正反例、运行时 fixture 同时验证三条 replay 安全标记，任一漂移失败。 |
 | A2-111 | P1 | NOW | OPEN | 事实：`verify-release.ps1` 未传 `-RequireComplete`，所以含 `FAILED`/`NOT_RUN` 的汇总仍可随命令退出 0；机器证据不能据此宣称 PASS。 | EVIDENCE hard invariant 只接受五类新鲜具体 gate，不接受汇总命令成功。 | 负例让任一层缺失时 release 与 architecture checker 均失败；机器状态不得升级。 |
 | A2-112 | P1 | NOW | OPEN | 事实：Discussion 计划已区分 State/Lifecycle 与 Semantic Quality，但活动文档仍需防止完成表述回流。 | 计划状态按责任层拆分，语义/Browser 未通过不得写 Complete。 | documentation checker 对活动计划的过强完成词有负例，当前状态与账本一致。 |
 | A2-113 | P1 | NOW | OPEN | 事实：Configured catalog 已收窄为配置与安全选择元数据；真实 Transport/Schema/Quality 仍由外部门证明。 | 接口不得从 configured 推导 verified。 | Catalog API/测试无 `supports` 或质量强声明；真实层报告独立存在。 |
@@ -170,13 +170,13 @@
 
 | ID | 严重度 | 执行序 | 状态 | 当前证据 | 修复边界/依赖 | 专属验证 / Exit Gate |
 |---|---|---|---|---|---|---|
-| DOC-01 | P1 | NOW | OPEN | 事实：`docs/08` 仍需与开放账本、当前模型目录、恢复层级和真实证据口径同步。 | 只写当前实现与新鲜证据，不复制实施流水。 | documentation checker 与人工 diff 证明状态、权威、恢复层级和开放边界一致。 |
-| DOC-02 | P2 | NOW | OPEN | 事实：项目演进日志存在以测试总量作为成果口径的漂移风险。 | 演进日志记录行为、边界与治理裁决，不记录测试总量、制品哈希或提交元数据。 | 扫描禁止测试计数/哈希模式；本次治理记录只保留责任摘要和账本链接。 |
-| DOC-03 | P1 | NOW | OPEN | 事实：`docs/00` 与 documentation checker 注册的活动文档集合可能不一致。 | 状态索引与 checker 共用明确活动集合；CURRENT_AUTHORITY/APPROVED/ACTIVE 语义一致。 | 双向检查发现索引缺项、checker 缺项、路径失效或状态冲突并非零退出。 |
-| DOC-04 | P0 | NOW | OPEN | 事实：`SECURITY.md` 仍可能保留退役 Provider/global authority 叙事并与当前 ModelSelection/binding 冲突。 | 安全文档只描述当前目录、显式选择、单 Provider、无 retry/fallback 与 persistence-safe replay。 | 退役权威词扫描零命中；安全 token 与代码/机器状态正反例一致。 |
-| DOC-05 | P1 | NOW | OPEN | 事实：机器状态的 PASS 可能在对应证据陈旧或发布层缺失后继续存在。 | 每个 hard invariant 绑定新鲜、具体、风险匹配的证据；整体保持 `IN_PROGRESS`。 | checker 对缺失/陈旧/不匹配证据失败，当前状态文件不含无法复核的完成声明。 |
-| DOC-06 | P2 | NEXT | OPEN | 事实：token policy 在配置、binding、文档和 Provider 字段之间存在命名漂移风险。 | 一个闭合 `TokenFieldPolicy` 名称贯穿代码和文档，Provider 字段由策略派生。 | 全仓命名/退役别名扫描和两家 payload fixture 通过。 |
-| DOC-07 | P1 | NOW | OPEN | 事实：活动 specs/plans 仍可能把已从开放账本删除的引用写成当前入口。 | 活动文档中的旧引用必须删除、映射到当前开放项或明确标为历史语义；非活动材料不改写。 | 扫描全部活动 specs/plans，命中均可分类；CURRENT_AUTHORITY 文件无死引用。 |
+| DOC-01 | P1 | NOW | OPEN | 待验证：当前未发现 `docs/08` 与本账本的确定冲突；批准计划仍要求逐项核对当前模型目录、四层恢复状态和各验证层证据口径，现有 documentation checker 不证明语义完全一致。 | 只写当前实现与新鲜证据，不复制实施流水。 | 先对 `docs/08` 与 A2/ARCH/GATE 开放边界做逐项 diff；再由 documentation checker 证明状态、权威和恢复层级一致。 |
+| DOC-02 | P2 | NOW | OPEN | 事实：`docs/11` 的当前 Provider 双合同演进条目仍记录 Backend/Frontend 测试总量与构建结果，与文件头“详细测试记录由 Git/报告承担”的纪律不一致。 | 演进日志记录行为、边界与治理裁决，不记录测试总量、制品哈希或提交元数据。 | 先扫描并分类测试计数、哈希与提交元数据；治理条目只保留行为摘要、责任边界和账本链接。 |
+| DOC-03 | P1 | NOW | OPEN | 事实：documentation checker 已注册 audience-role switching UI 设计及 frontend UI 实施计划为活动文档，而 `docs/00` 的当前活动设计清单未列出这两个入口，活动集合并非双向同源。 | 状态索引与 checker 共用明确活动集合；CURRENT_AUTHORITY/APPROVED/ACTIVE 语义一致。 | 先双向比较 `docs/00` 链接与 checker allowlist；任一缺项、路径失效或状态冲突必须非零退出。 |
+| DOC-04 | P0 | NOW | OPEN | 待验证：本轮针对 `SECURITY.md` 的退役 Provider/global/provider-ref 词扫描未确认旧权威残留；批准计划仍要求核对其 ModelSelection、单 Provider、无 retry/fallback 与 persistence-safe replay 语义。 | 安全文档只描述当前目录、显式选择、单 Provider、无 retry/fallback 与 persistence-safe replay。 | 先对 SECURITY 与当前 ModelSelection/OperationBinding 做语义 diff 和退役权威扫描；再以安全 token 与代码/机器状态正反例确认一致。 |
+| DOC-05 | P1 | NOW | OPEN | 事实：`docs/agent-architecture-status.json` 的 `updatedAt` 仍为 2026-08-24，部分 hard-invariant evidence 也固定在该日，而当前开放账本已更新；现有 checker 通过未证明证据新鲜度随账本变化重算。 | 每个 hard invariant 绑定新鲜、具体、风险匹配的证据；整体保持 `IN_PROGRESS`。 | 先以陈旧日期/缺证据负例证明 checker 会失败；再刷新并逐项复核 hard invariant，整体不得提前升级。 |
+| DOC-06 | P2 | NEXT | OPEN | 事实：生产类型使用闭合 `TokenFieldPolicy`，活动设计/计划及当前架构条目同时使用 `token field policy` 与 `token policy` 等名称，尚无文档门证明这些称谓只指向同一枚举。 | 一个闭合 `TokenFieldPolicy` 名称贯穿代码和文档，Provider 字段由策略派生。 | 先扫描并分类所有命名与退役别名；再由两家 payload fixture 证明 Provider 字段只从 `TokenFieldPolicy` 派生。 |
+| DOC-07 | P1 | NOW | OPEN | 待验证：当前删除 ID 扫描只命中明确的治理计划或“历史缺陷 ID”标注，尚未确认未分类死引用；活动 specs/plans 的历史引用语义仍缺自动化持续门。 | 活动文档中的旧引用必须删除、映射到当前开放项或明确标为历史语义；非活动材料不改写。 | 先扫描全部活动 specs/plans 并要求每个命中可分类；随后保证 CURRENT_AUTHORITY 文件无死引用、未标历史引用使检查失败。 |
 
 ## 9. 固定执行批次
 
