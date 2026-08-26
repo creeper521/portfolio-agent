@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $checker = Join-Path $PSScriptRoot 'persistence-safe-replay-docs-check.ps1'
 $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
