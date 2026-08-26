@@ -29,7 +29,7 @@ foreach ($requirement in $requirements) {
         $violations.Add("missing:$($requirement.Path)")
         continue
     }
-    $content = Get-Content -LiteralPath $path -Raw
+    $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
     foreach ($requiredMarker in $requirement.Tokens) {
         if (-not $content.Contains($requiredMarker)) {
             $violations.Add("missing-marker:$($requirement.Path):$requiredMarker")

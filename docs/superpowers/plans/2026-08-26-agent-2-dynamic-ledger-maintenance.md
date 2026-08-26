@@ -22,7 +22,7 @@
 
 ---
 
-### Task 1: 修复 replay 文档门的 Windows PowerShell 5.1 编码
+### Task 1: 修复 replay 文档门的跨 PowerShell 解码与负例捕获
 
 **Files:**
 - Modify: `scripts/persistence-safe-replay-docs-check.ps1:1`
@@ -30,7 +30,7 @@
 
 **Interfaces:**
 - Consumes: `verify-release.ps1` 通过 `powershell.exe -NoProfile -File` 调用脚本。
-- Produces: 两个带 UTF-8 BOM、在 Windows PowerShell 5.1 与 PowerShell 7 均可解析的脚本；检查语义与 token 不变。
+- Produces: checker 在 Windows PowerShell 5.1 与 PowerShell 7 显式按 UTF-8 读取目标文档；test 在两个宿主中分别执行独立正反例并捕获预期 stderr；检查语义与 token 不变。
 
 - [ ] **Step 1: 记录修复前 canonical 失败证据**
 
@@ -41,33 +41,24 @@ C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionP
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\persistence-safe-replay-docs-check.ps1
 ```
 
-Expected: 两条命令均因无 BOM UTF-8 中文字面量产生 ParserError。
+Expected: direct checker 退出 1，因为 Windows PowerShell 5.1 用默认 ANSI code page 误解码无 BOM UTF-8 目标文档；wrapper test 退出 1，因为它硬编码 `pwsh.exe`，且 Windows PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 下把预期负例的 child stderr 提升为未捕获 `NativeCommandError`。
 
-- [ ] **Step 2: 只给两个脚本添加 UTF-8 BOM**
+- [ ] **Step 2: 修复目标文档解码和双宿主测试隔离**
 
-文件首字节必须为：
+checker 使用 `Get-Content -Encoding UTF8` 读取所有目标文档。test 显式调用 Windows PowerShell 5.1 与 `pwsh.exe`，每个宿主使用独立干净 fixture，分别执行一个正例和一个删除 `REPLAY_BODY_NOT_RETAINED` 的负例；通过独立进程捕获 stdout、stderr 和 exit code，预期负例不能被 wrapper 提升为未捕获错误。两个脚本继续保留 UTF-8 BOM，保证 Windows PowerShell 5.1 可解析脚本自身的中文文字；BOM 不再被视为目标文档解码的充分条件。
 
-```text
-EF BB BF
-```
-
-除 BOM 外脚本内容不得变化。
-
-- [ ] **Step 3: 验证 BOM 与 canonical 调用**
+- [ ] **Step 3: 验证两个宿主的 canonical 调用**
 
 Run:
 
 ```powershell
-$files = @('scripts\persistence-safe-replay-docs-check.ps1', 'scripts\persistence-safe-replay-docs-check.test.ps1')
-foreach ($file in $files) {
-  $bytes = [IO.File]::ReadAllBytes((Resolve-Path $file))
-  if (($bytes[0..2] -join ',') -ne '239,187,191') { throw "missing UTF-8 BOM: $file" }
-}
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\persistence-safe-replay-docs-check.test.ps1
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\persistence-safe-replay-docs-check.ps1
+pwsh.exe -NoProfile -File scripts\persistence-safe-replay-docs-check.test.ps1
+pwsh.exe -NoProfile -File scripts\persistence-safe-replay-docs-check.ps1
 ```
 
-Expected: `PERSISTENCE_SAFE_REPLAY_DOCS_TESTS_OK tests=2` 与 `PERSISTENCE_SAFE_REPLAY_DOCS_OK files=5`。
+Expected: 两次 test 均明确报告 `WindowsPowerShell5.1`、`PowerShell7` 的 `positive` 与 `missing-token` 场景，并输出 `PERSISTENCE_SAFE_REPLAY_DOCS_TESTS_OK hosts=2 scenarios=4`；两次 direct checker 均输出 `PERSISTENCE_SAFE_REPLAY_DOCS_OK files=5`。
 
 - [ ] **Step 4: 提交编码修复**
 
