@@ -59,14 +59,14 @@ Read these before changing current behavior:
 - Content changes must follow `docs/05-公开发布包契约.md` and `docs/06-公开内容发布运行手册.md`.
 - Current documents use `CURRENT_AUTHORITY`; approved in-flight design and plan use their active markers; historical material must identify itself formally.
 
-### Agent 2.0 dynamic bug ledger
+### Agent 2.0 dynamic work ledger
 
-- `docs/15-Agent 2.0真实交互问题清单与修复边界.md` is the single ledger for open Agent 2.0 bugs.
-- Add a reproducible production-path, API, packaged-JAR, browser, database, or real-Provider bug as soon as its evidence is understood.
-- Keep facts separate from hypotheses; update an entry when new evidence changes cause, severity, scope, or required Exit Gate.
-- Remove a bug only after the production fix, targeted regressions, affected suites/builds, risk-appropriate integration gates, and the original user-visible path all pass.
-- When removing a bug, remove its overview row, detailed section, dedicated test-gap text, and dedicated Exit Gate. Record important completed behavior in docs/11; do not create an archive inside docs/15.
-- Bug IDs increase monotonically and are never reused.
+- `docs/15-Agent 2.0真实交互问题清单与修复边界.md` is the single ledger for open production defects and approved Agent development, verification, architecture, and documentation-governance work.
+- Formal ID namespaces are limited to `A2`, `ARCH`, `GATE`, and `DOC`: `A2` is for production defects; `ARCH`, `GATE`, and `DOC` are for approved non-product work.
+- Each namespace maintains an explicit, append-only, never-reused watermark. Raise the applicable watermark before assigning its next ID.
+- `P0`–`P3` express impact only; `NOW` / `NEXT` / `LATER` are the sole execution order.
+- Each entry must separate facts from inferences and include current evidence, repair boundary, dependencies, a dedicated test or verification gap, and an executable Exit Gate.
+- When an item closes, remove it from the overview, body, dedicated test or verification gap, and Exit Gate. Record important completed behavior only as a summary in docs/11; do not create an archive inside docs/15.
 
 ## Technology
 
