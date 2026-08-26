@@ -23,6 +23,61 @@ function Assert-DoesNotMatch([string]$pattern, [string]$message) {
     if ($skill -match $pattern) { throw $message }
 }
 
+function Assert-ExactHeadingAcrossLineEndings(
+    [string]$pattern,
+    [string]$heading,
+    [string]$message
+) {
+    foreach ($lineEnding in @("`n", "`r`n")) {
+        $fixture = "before${lineEnding}${heading}${lineEnding}after"
+        if ($fixture -notmatch $pattern) {
+            throw "$message for $([BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes($lineEnding)))"
+        }
+
+        $trailingSpaceFixture = "before${lineEnding}${heading} ${lineEnding}after"
+        if ($trailingSpaceFixture -match $pattern) {
+            throw "$message must reject a heading with trailing spaces"
+        }
+    }
+}
+
+function Assert-PolicyPatternAcrossLineEndings([string]$pattern, [string]$message) {
+    foreach ($lineEnding in @("`n", "`r`n")) {
+        $fixture = "policy:${lineEnding}  allow_implicit_invocation: true${lineEnding}next: value"
+        if ($fixture -notmatch $pattern) {
+            throw "$message for $([BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes($lineEnding)))"
+        }
+
+        $trailingSpaceFixture = `
+            "policy:${lineEnding}  allow_implicit_invocation: true ${lineEnding}next: value"
+        if ($trailingSpaceFixture -match $pattern) {
+            throw "$message must reject a policy value with trailing spaces"
+        }
+    }
+}
+
+$bootstrapHeadingPattern = '(?im)^## Bootstrap\r?$'
+$architectureReviewHeadingPattern = '(?im)^## Architecture Review\r?$'
+$guardianDriftHeadingPattern = '(?im)^## Handle Guardian Drift\r?$'
+$metadataPolicyPattern = '(?m)^policy:\r?\n\s+allow_implicit_invocation: true\r?$'
+$agentsBootstrapHeadingPattern = '(?im)^### Default Agent architecture guardian bootstrap\r?$'
+$paradigmBootstrapHeadingPattern = '(?im)^### 默认轻量 Bootstrap\r?$'
+
+Assert-ExactHeadingAcrossLineEndings $bootstrapHeadingPattern '## Bootstrap' `
+    'Bootstrap heading pattern must support LF and CRLF'
+Assert-ExactHeadingAcrossLineEndings $architectureReviewHeadingPattern '## Architecture Review' `
+    'Architecture Review heading pattern must support LF and CRLF'
+Assert-ExactHeadingAcrossLineEndings $guardianDriftHeadingPattern '## Handle Guardian Drift' `
+    'Guardian Drift heading pattern must support LF and CRLF'
+Assert-PolicyPatternAcrossLineEndings $metadataPolicyPattern `
+    'implicit invocation policy pattern must support LF and CRLF'
+Assert-ExactHeadingAcrossLineEndings $agentsBootstrapHeadingPattern `
+    '### Default Agent architecture guardian bootstrap' `
+    'AGENTS Bootstrap heading pattern must support LF and CRLF'
+Assert-ExactHeadingAcrossLineEndings $paradigmBootstrapHeadingPattern `
+    '### 默认轻量 Bootstrap' `
+    'paradigm Bootstrap heading pattern must support LF and CRLF'
+
 $frontmatterMatch = [regex]::Match($skill, '(?s)^---\r?\n(?<body>.*?)\r?\n---')
 if (-not $frontmatterMatch.Success) { throw 'SKILL.md frontmatter is missing' }
 $frontmatterKeys = @([regex]::Matches(
@@ -37,7 +92,7 @@ Assert-Matches '(?m)^description: Use when ' `
     'description must start with Use when'
 Assert-Matches '(?m)^description: Use when starting every conversation in this Portfolio Agent repository' `
     'skill must default to every conversation in this project'
-Assert-Matches '(?im)^## Bootstrap$' `
+Assert-Matches $bootstrapHeadingPattern `
     'skill must define a lightweight Bootstrap before loading architecture context'
 Assert-Matches 'NOT_APPLICABLE' `
     'bootstrap must support an immediate non-architecture exit'
@@ -47,7 +102,7 @@ Assert-Matches 'Level 1 and Level 2.*continue.*without waiting' `
     'ordinary changes must continue without repeated confirmation'
 Assert-Matches 'approved Level 3.*continue' `
     'approved architecture replacement must continue without repeated approval'
-Assert-Matches '(?im)^## Architecture Review$' `
+Assert-Matches $architectureReviewHeadingPattern `
     'skill must define an Architecture Review mode'
 Assert-Matches 'Protect constraints, not incumbent implementations\.' `
     'skill must protect constraints rather than the current implementation'
@@ -61,7 +116,7 @@ Assert-DoesNotMatch 'does not reopen an approved architecture' `
     'skill must not freeze an approved architecture'
 Assert-DoesNotMatch 'stop only the conflicting expansion' `
     'skill must not block evidence-driven review with the old stop rule'
-Assert-Matches '(?im)^## Handle Guardian Drift$' `
+Assert-Matches $guardianDriftHeadingPattern `
     'skill must define a lightweight drift escape hatch'
 Assert-Matches 'newer code, passing tests, or an approved design' `
     'skill must recognize newer repository evidence over a stale rule'
@@ -72,10 +127,10 @@ Assert-Matches 'Do not create a separate drift ledger or lifecycle state machine
 Assert-Matches 'Do not weaken privacy boundaries' `
     'skill drift handling must preserve privacy boundaries'
 
-if ($metadata -notmatch '(?m)^policy:\r?\n\s+allow_implicit_invocation: true$') {
+if ($metadata -notmatch $metadataPolicyPattern) {
     throw 'openai.yaml must explicitly allow implicit invocation'
 }
-if ($agents -notmatch '(?im)^### Default Agent architecture guardian bootstrap$') {
+if ($agents -notmatch $agentsBootstrapHeadingPattern) {
     throw 'AGENTS.md must require the project-level default bootstrap'
 }
 if ($agents -notmatch 'NOT_APPLICABLE.*continue immediately') {
@@ -84,7 +139,7 @@ if ($agents -notmatch 'NOT_APPLICABLE.*continue immediately') {
 if ($agents -notmatch 'GUARDIAN_DRIFT.*deferredItems') {
     throw 'AGENTS.md must route stale Guardian rules through the existing ledger'
 }
-if ($paradigm -notmatch '(?im)^### 默认轻量 Bootstrap$' -or
+if ($paradigm -notmatch $paradigmBootstrapHeadingPattern -or
         $paradigm -notmatch 'NOT_APPLICABLE.*立即继续') {
     throw 'the architecture paradigm must document the default lightweight bootstrap'
 }
