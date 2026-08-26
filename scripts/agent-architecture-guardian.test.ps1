@@ -53,13 +53,26 @@ function Assert-PolicyPatternAcrossLineEndings([string]$pattern, [string]$messag
         if ($trailingSpaceFixture -match $pattern) {
             throw "$message must reject a policy value with trailing spaces"
         }
+
+        $topLevelSiblingFixture = `
+            "policy:${lineEnding}allow_implicit_invocation: true${lineEnding}next: value"
+        if ($topLevelSiblingFixture -match $pattern) {
+            throw "$message must reject a top-level sibling policy value"
+        }
+
+        $blankLineSiblingFixture = `
+            "policy:${lineEnding}${lineEnding}allow_implicit_invocation: true${lineEnding}next: value"
+        if ($blankLineSiblingFixture -match $pattern) {
+            throw "$message must reject a top-level sibling after a blank line"
+        }
     }
 }
 
 $bootstrapHeadingPattern = '(?im)^## Bootstrap\r?$'
 $architectureReviewHeadingPattern = '(?im)^## Architecture Review\r?$'
 $guardianDriftHeadingPattern = '(?im)^## Handle Guardian Drift\r?$'
-$metadataPolicyPattern = '(?m)^policy:\r?\n\s+allow_implicit_invocation: true\r?$'
+$metadataPolicyPattern = `
+    '(?m)^policy:\r?\n[^\S\r\n]+allow_implicit_invocation: true\r?$'
 $agentsBootstrapHeadingPattern = '(?im)^### Default Agent architecture guardian bootstrap\r?$'
 $paradigmBootstrapHeadingPattern = '(?im)^### 默认轻量 Bootstrap\r?$'
 
