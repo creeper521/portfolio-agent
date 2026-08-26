@@ -148,6 +148,16 @@ try {
                         $null = $line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$'
                         Set-Item -LiteralPath "Env:$($Matches[1])" -Value $Matches[2].Trim()
                     }
+                    if ($LiveModelRef -eq 'glm-4-7-flash') {
+                        $env:PORTFOLIO_QWEN_ENABLED = 'false'
+                        Remove-Item -LiteralPath 'Env:PORTFOLIO_QWEN_API_KEY' `
+                            -ErrorAction SilentlyContinue
+                    }
+                    else {
+                        $env:PORTFOLIO_GLM_ENABLED = 'false'
+                        Remove-Item -LiteralPath 'Env:PORTFOLIO_GLM_API_KEY' `
+                            -ErrorAction SilentlyContinue
+                    }
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v5'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'

@@ -25,6 +25,16 @@ foreach ($turnInterpretationSetting in @(
         throw "Behavior runner must configure current setting $turnInterpretationSetting."
     }
 }
+foreach ($independentProviderBoundary in @(
+        "PORTFOLIO_QWEN_ENABLED = 'false'",
+        "Env:PORTFOLIO_QWEN_API_KEY",
+        "PORTFOLIO_GLM_ENABLED = 'false'",
+        "Env:PORTFOLIO_GLM_API_KEY"
+)) {
+    if ($runnerSource -notmatch [regex]::Escape($independentProviderBoundary)) {
+        throw "Behavior runner must isolate Provider matrix boundary $independentProviderBoundary."
+    }
+}
 foreach ($retiredModelAuthority in @(
         'PORTFOLIO_MODEL_PROVIDER',
         'PORTFOLIO_MODEL_ENABLED',

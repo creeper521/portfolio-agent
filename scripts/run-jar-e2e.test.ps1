@@ -378,6 +378,14 @@ try {
 
     $runnerSource = Get-Content -LiteralPath $runner -Raw
     foreach ($liveQualityContract in @(
+        'assert-live-goal-draft-matrix.ps1',
+        'GOAL_DRAFT_MATRIX_RESULT status=PASS',
+        'GOAL_DRAFT_PROVIDER_CALL_COUNT',
+        '$goalMatrixLogStart ''TURN_INTERPRETATION''',
+        'Get-LiveProviderCallCount',
+        '$goalMatrixLogStart',
+        '$goalProviderCallCount -ne 10',
+        '-AuthorizeRealProvider',
         'assert-live-general-answer-quality.ps1',
         'GENERAL_QUALITY_RESULT status=PASS',
         '-Baseline',

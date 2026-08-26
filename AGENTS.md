@@ -89,6 +89,23 @@ Read these before changing current behavior:
 
 ## Verification commands
 
+### Real Provider completion gate
+
+- Before completing any development task, explicitly classify the real Provider gate as `REQUIRED` or `NOT_APPLICABLE`; silence or an unexecuted gate is not a pass.
+- Classify the gate as `REQUIRED` when a change can affect Agent behavior, prompts, configured models or protocol profiles, Goal interpretation, General Knowledge, answer composition, project Discussion, model selection, Provider-facing state/API contracts, or their frontend recovery paths.
+- For `REQUIRED` work, run the real Provider gate after deterministic verification and before claiming completion. Use the approved configured model independently; shared catalog/transport changes require both GLM and Qwen when both credentials are available. The canonical entry is:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-agent-behavior-audit.ps1 `
+  -Lane L4 -RequireLiveProvider -LiveModelRef <glm-4-7-flash|qwen-3-7-flash> `
+  -ProviderSecretFile <outside-repository-secret-file>
+```
+
+- Changes to project recommendation, clarification, or Discussion behavior must additionally run the packaged `PROJECT_DISCUSSION` real-Provider lane through `scripts/run-jar-e2e.ps1`.
+- Real Provider execution always requires explicit external-call authorization and an outside-repository secret file. Never commit, print, log, or copy credentials, visitor text, prompts, or raw model output into repository evidence.
+- Missing authorization or credentials, Provider outage/rate limiting, timeout, schema rejection, semantic rejection, or an incomplete quality matrix is not `PASS`. Report the exact gate as `BLOCKED`, `WAIVED`, or `IN_PROGRESS` as appropriate, and do not claim the affected Agent/AI capability is complete.
+- Pure documentation, styling, or other changes proven not to affect Agent/AI behavior may be classified `NOT_APPLICABLE`; record the concrete reason in the completion report.
+
 ```powershell
 mvn.cmd -f backend/pom.xml test
 npm.cmd --prefix frontend test -- --run

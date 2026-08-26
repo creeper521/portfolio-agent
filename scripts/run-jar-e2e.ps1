@@ -192,6 +192,37 @@ function Assert-PackagedLogBoundary(
     Write-Output 'Packaged structured stdout privacy smoke passed.'
 }
 
+function Get-LiveProviderCallCount(
+    [string]$Path,
+    [int]$StartLine,
+    [string]$Operation
+) {
+    $lines = @(Get-Content -LiteralPath $Path -Encoding UTF8)
+    if ($StartLine -lt 0 -or $StartLine -gt $lines.Count) {
+        throw 'Live Provider call-count boundary is invalid.'
+    }
+    $count = 0
+    foreach ($line in @($lines | Select-Object -Skip $StartLine)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $entry = $line | ConvertFrom-Json }
+        catch { continue }
+        $eventName = [string]$entry.'event.name'
+        if ([string]::IsNullOrWhiteSpace($eventName) -and $null -ne $entry.event) {
+            $eventName = [string]$entry.event.name
+        }
+        $providerOperation = [string]$entry.'provider.operation'
+        if ([string]::IsNullOrWhiteSpace($providerOperation) -and
+                $null -ne $entry.provider) {
+            $providerOperation = [string]$entry.provider.operation
+        }
+        if ($eventName -in @('provider.call.completed', 'provider.call.failed') -and
+                $providerOperation -ceq $Operation) {
+            $count++
+        }
+    }
+    return $count
+}
+
 function Write-LiveProviderDiagnosticSummary([string]$Path) {
     function Read-ClosedField([object]$Entry, [string]$Literal, [string]$Group, [string]$Name) {
         $value = [string]$Entry.$Literal
@@ -1096,6 +1127,36 @@ try {
         }
         Write-Output ("Packaged social public-turn probe completed; latency=" + `
                 ($latencyBuckets -join ','))
+        $goalMatrixOutput = ''
+        $goalMatrixLogStart = @(Get-Content -LiteralPath $stdoutPath `
+            -Encoding UTF8).Count
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $goalMatrixOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                -File (Join-Path $root 'scripts\assert-live-goal-draft-matrix.ps1') `
+                -BackendBaseUrl $baseUrl `
+                -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                -ModelRef $LiveModelRef `
+                -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
+                -TimeoutSeconds $ReadinessTimeoutSeconds `
+                -InterTrialDelayMilliseconds 10000 `
+                -AuthorizeRealProvider 2>&1 | Out-String).Trim()
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        Write-Output $goalMatrixOutput
+        $goalProviderCallCount = Get-LiveProviderCallCount `
+            $stdoutPath $goalMatrixLogStart 'TURN_INTERPRETATION'
+        Write-Output ("GOAL_DRAFT_PROVIDER_CALL_COUNT actual=" +
+            $goalProviderCallCount + ' expected=10')
+        if ($goalMatrixOutput -notmatch '(?m)^GOAL_DRAFT_MATRIX_RESULT status=PASS ') {
+            $liveFailures.Add('GOAL_DRAFT_MATRIX=FAIL')
+        }
+        if ($goalProviderCallCount -ne 10) {
+            $liveFailures.Add('GOAL_DRAFT_PROVIDER_CALL_COUNT=FAIL')
+        }
         $qualityOutput = ''
         $previousErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
