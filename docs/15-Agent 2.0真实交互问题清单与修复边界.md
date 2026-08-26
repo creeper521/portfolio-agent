@@ -6,7 +6,7 @@
 > **验证环境：** 最终 packaged JAR、Frontend closed PublicAgentTurn 消费链、`IN_MEMORY`/PostgreSQL 会话状态、本机 Chromium 与确定性 Provider fixture
 > **文档性质：** Agent 2.0 真实交互验证账本；当前未关闭项以问题总览状态为准
 > **维护原则：** 发现并确认 Bug 后添加；完成修复与对应 Exit Gate 后删除；已解决历史转记演进日志，不在本文累积
-> **当前状态：** 2026-08-24 配置化 GLM/Qwen 模型目录、Turn 显式选择、五种 settled 模型错误与 `modelExecution` 已完成后端离线实现和 Maven 全量验证；旧 global/visitor Provider 门、DeepSeek 与单 Provider 权威已退出生产路径。真实 GLM canary 已到达智谱但被 HTTP 429 / 业务码 1305 平台过载拒绝，尚无成功终局；Qwen 调用配置等待用户提供。本轮不包含前端，整体保持 IN_PROGRESS
+> **当前状态：** 2026-08-26 Provider Draft → canonical 确定性编译层已进入生产链。Qwen 当前为 `qwen-3-7-flash-v6`，General 绑定 `general.provider-draft.v2 -> general.draft.v2`；GLM 保持 `glm-4-7-flash-v4`。历史 Qwen v4 Goal 核心矩阵直接推荐 5/5、`1 -> 明确推荐` 5/5，低信息首轮 5/5 为 `modelExecution=NONE`；GLM v4 同构矩阵 5/10 成功、5/10 限流。Qwen v6 General 最新最小样本中 CONCISE、STANDARD、DETAILED、CONVERSATIONAL 各 1/1 成功；Comparison 两次均在到达 General 前被 Goal v1 Draft Schema 缺字段拒绝。两家均没有自动 repair、同请求重试或跨模型降级。生产源码、前端产物与最终 JAR 隐私门已通过；闭集诊断不记录 Provider 原始输出。Provider 全能力仍为 `IN_PROGRESS/BLOCKED`。
 
 ## 1. 文档目的
 
@@ -120,7 +120,7 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 
 只有 A2-22—A2-29 的针对性、全量、PostgreSQL、packaged Browser、隐私与获授权 Provider 门全部通过后，才可删除对应条目并恢复架构 COMPLETE。
 
-### 3.2 A2-30—A2-115 全仓库审计待做项
+### 3.2 A2-30—A2-117 全仓库审计待做项
 
 下表是 2026-08-21 对生产 Java、Frontend、共享合同、State Migration、PowerShell 门禁和当前文档进行只读审计后确认的待做队列。`现状` 与 `预期` 是关闭该项必须跨越的最小差距；表中不记录访客原文、模型正文、Prompt、Token 或 handle。
 
@@ -175,15 +175,15 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-77 | P2 | 过期恢复依赖页面 reload | E2E 通过重载才显示恢复按钮 | 不刷新也能进入合法恢复路径 | Browser UX / Conversation GET |
 | A2-78 | P1 | HTTP 200 被误当成功回答 | CAPABILITY_UNAVAILABLE 也被传输层视为成功 | Happy path 明确要求预期 PublicTurn kind | Frontend / Browser Assertions |
 | A2-79 | P1 | Provider 共用固定请求格式 | GLM/Qwen 已分别使用闭合 `ZHIPU_CHAT_COMPLETIONS` / `DASHSCOPE_CHAT_COMPLETIONS` Profile，并离线断言各自完整请求字段；待两家真实 schema canary | 每个 Provider 使用独立协议 Profile | Model Transport |
-| A2-80 | P1 | Provider 兼容停留在配置声明 | 配置化目录、两种 Binding/Profile 与显式 modelRef 路由已完成离线门；GLM-4.7-Flash 真实 canary 已到达智谱并得到 HTTP 429 / 业务码 1305，证明路由可达但没有成功 schema/semantic 样本；Qwen3.7-Flash 配置待用户提供 | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
-| A2-81 | P1 | Operation timeout 缺少新目录真实基线 | GLM canary 一次快速返回 1305、后续应用调用贴近 8 秒 Goal deadline 结算为暂时不可用，仍无成功调用 P50/P95；Qwen3.7-Flash 未配置 | 基于两家真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
+| A2-80 | P1 | Provider 兼容停留在配置声明 | Goal Draft 已有两家同构真实矩阵；Qwen v6 General 解释型最小样本通过，Comparison 仍被上游 Goal v1 阻断；GLM 仍受限流影响 | 每个 Provider 有真实 schema 与语义 canary | Provider Verification |
+| A2-81 | P1 | Operation timeout 缺少新目录真实基线 | GLM 已有 paced 运行但 STANDARD/DETAILED/COMPARISON 未稳定；Qwen 已配置并可调用，但当前截图与 IDE 断点样本不构成受控 P50/P95，仍无可冻结的两家成功调用基线 | 基于两家真实成功调用 P95 冻结跨端预算 | Timeout Policy / Provider |
 | A2-82 | P2 | Provider HTTP 错误分类太粗 | 402 已独立为 `TRANSPORT/BILLING_REJECTED`，401/403、429、5xx 与其他 4xx 保持分层；Provider body 不进入诊断 | 分开统计稳定失败类别 | Transport Diagnostics |
 | A2-83 | P2 | JSON/schema 失败分类不准 | Transport/JSON/envelope/operation schema/typed semantic 已使用 closed layer/code 分层；sentinel 安全门通过，待真实 Provider 分布门 | Transport、JSON、schema、semantic 分层 | Model Diagnostics |
 | A2-84 | P2 | Provider response 无硬字节上限 | 自定义 BodySubscriber 已在读取期强制 256 KiB 上限且保留 absolute deadline；待真实 Provider 总门 | 客户端限制响应体字节数 | Model Transport / Resource Bound |
 | A2-85 | P1 | 无同 Provider schema repair 决策 | 已冻结为 schema/semantic 拒绝即本轮失败，不 repair、不重试；显式选择下的单调用门通过 | 明确保持禁止；未来改变需独立隐私与质量审批 | Provider Reliability / Product Decision |
 | A2-86 | P1 | 跨 Provider fallback 边界未产品化 | 每个 Turn 已冻结一个显式 ModelSelection；任一失败均不自动跨 Provider 重发，用户换模型必须使用新 requestId；前端交互不在本轮 | 用户明确切换只能创建新 Turn；不得自动 fallback | Provider Selection / Privacy |
-| A2-87 | P1 | Provider 矩阵不独立 | runner 与配置面已迁移为 GLM/Qwen 独立选择和报告；两家新目标的真实同构矩阵均未执行 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
-| A2-88 | P1 | Provider 样本量不足 | 当前只有离线协议、错误映射和执行一致性证据；GLM/Qwen 尚无新目录下可比较的真实成功率、语义率、P50/P95 与超时率 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
+| A2-87 | P1 | Provider 矩阵不独立 | runner 与配置面已迁移为 GLM/Qwen 独立选择和报告；已执行同构 Goal 解释批次，Qwen 在 Schema 层全拒绝，GLM 在可用性/时限层全失败，均不达到矩阵通过条件 | 每个批准 Provider 独立执行和报告 | Provider Matrix |
+| A2-88 | P1 | Provider 样本量不足 | Qwen/GLM v4 Goal 各有 10 个同构样本与独立结果；General 质量仍失败，且尚未形成完整跨批次 P50/P95 稳定性结论 | 报告成功率、语义率、P50/P95 和超时率 | Provider Quality Metrics |
 | A2-91 | P1 | 30 多条 scenario 不执行 | 35 条 command 已接入 production HTTP runner 并逐条比较公开 expected；模型关闭基线仅 4 条匹配，6 条缺 setup，35 条 hardError 均无可观测 trace | 参数化执行 command 并比较 expected | Contract Scenarios / Test Runtime |
 | A2-92 | P1 | Browser happy path 内容断言不足 | 状态/UI有覆盖但不拒绝错误终局 | 解析 body 并断言 kind、resolution、coverage | Browser E2E |
 | A2-93 | P1 | Browser 无法断言 facet/depth | 公开响应不暴露安全语义 trace | 使用仅测试可见的脱敏 trace | Semantic Trace / E2E |
@@ -209,16 +209,19 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 | A2-113 | P1 | Provider registry 支持元数据强于真实证据 | built-in Registry 已由 `ConfiguredModelCatalog` 物理替换；Catalog 只表达配置、公开选择和安全执行元数据，不推导真实 Transport、Schema 或 Quality | Configured 不得推导 Transport、Schema 或 Quality | Model Catalog / Documentation |
 | A2-114 | P2 | 恢复能力表述混淆 | docs/08 与分层汇总已拆分页面刷新、PostgreSQL、跨 JVM API、同浏览器跨 JVM；前三类有独立状态，最后一类为 NOT_RUN | 三种恢复分别留证 | Recovery Documentation |
 | A2-115 | P1 | 字段存在被误判为功能完成 | 参数、接口、配置出现即被计入能力 | 生产消费、用户可见、负例和全链门全部成立才算完成 | Definition of Done |
+| A2-116 | P1 | 低信息输入触发 Goal schema 拒绝 | 窄确定性出口、严格 blockedGoal、closed reason 与安全日志已完成本地和模型关闭 packaged/browser 门；待原始 Qwen 两轮路径 | 零目标低信息走窄确定性出口；合法澄清继续严格；原始两轮 Qwen 路径通过 | Goal Interpretation Robustness |
+| A2-117 | P1 | Provider 结构化输出能力与应用 canonical 合同耦合过重 | Goal 与 Qwen v6 General 双合同编译层已实现；Qwen 解释型 General 有真实成功样本，Comparison 上游 Goal 与 GLM 限流仍阻塞 | 保留双合同/Compiler/canonical/semantic fail-closed；General 质量与发布门通过；无 repair/retry/runtime fallback | Provider Protocol / Structured Output |
 
 #### 3.2.1 证据等级映射
 
 | 证据等级 | 对应条目 | 说明 |
 |---|---|---|
-| 已复现 + 源码确认 | A2-81 | 已有真实 Provider 超时运行证据，源码预算能解释现象 |
+| 已复现 + 源码确认 | A2-81 | 已有真实 Provider timeout 样本，源码预算解释对应现象 |
 | 待验证（P0 预防性） | A2-31 | Provider 正文复述输入尚无具体回显样本，必须由完整 settlement sentinel 门确认或排除 |
 | 待验证 | A2-62 | 开放社交回复的语言与复述风险需要真实 Provider 固定样本 |
-| 生产修复已落地、待外层验收 | A2-39—A2-41、A2-48、A2-49、A2-51、A2-52 | deterministic 与 packaged Portfolio 路径已通过；真实 Provider 的 depth/dimension 选择和 Browser 正文差异尚未取得，继续留账 |
+| 生产修复已落地、待外层验收 | A2-39—A2-41、A2-48、A2-49、A2-51、A2-52、A2-116 | 对应 deterministic 与模型关闭 packaged/browser 路径已通过；A2-116 仍缺原始 Qwen 两轮路径，其余条目仍缺真实 Provider 的 depth/dimension 选择和 Browser 正文差异，继续留账 |
 | 已冻结（产品决策） | A2-85、A2-86 | 保持无 schema repair、无 Provider retry、无跨 Provider 自动重发；未来改变必须重新审批 |
+| 生产修复已落地、真实矩阵失败 | A2-117 | v3 代码已冻结 strategy/compiler/extractor/fingerprint；Qwen required-tool 协议层通过、canonical v5 Schema 层 10/10 拒绝；GLM 当批限流/超时，不得用另一 Provider 的结果代替 |
 | 源码确认 | A2-30、A2-32—A2-38、A2-43—A2-47、A2-50、A2-53—A2-61、A2-63—A2-80、A2-82—A2-84、A2-87—A2-115 | 生产调用链、配置消费、前端状态或测试/文档入口可直接证明现状 |
 
 #### 3.2.2 P0 详细条目
@@ -295,7 +298,27 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 - **专属测试缺口：** documentation checker 没有检查 replay 允许项与禁止项的闭合说明。
 - **专属 Exit Gate：** AGENTS、SECURITY、docs/08、docs/15、State Codec 测试和机器账本使用同一持久化分类，文档正反例通过。
 
-### 3.3 A2-30—A2-115 修复边界
+#### 3.2.3 A2-116 真实低信息 Goal schema 拒绝
+
+- **用户现象：** 修复前选择 Qwen3.7-Flash 输入裸 `1` 时，本轮显示 `SELECTED_MODEL_INVALID_RESPONSE`；历史样本中同一链路直接输入“给我推荐两个项目”曾成功。
+- **已确认事实：** 修复前 Qwen 返回 `SEMANTIC_ROUTE/NEEDS_CLARIFICATION` 且 `clarification.blockedGoal=null`，被 `GoalProposalCodec` 在 SCHEMA 层拒绝。修复后的新鲜真实门中，裸 `1` 已由服务端固定出口处理，公开 `modelExecution.participation=NONE`；但同会话后续明确推荐、独立直接推荐对照及额外重复样本都以 `SCHEMA/UNSUPPORTED_ROOT_KIND` 被拒绝。该 reason 已正式类型化且只进入安全诊断字段。GLM 同构首轮同样为零调用，第二轮被 Provider 限流，未进入 schema 校验。
+- **已否定的归因：** recentConversation 污染可能是修复前的影响因素，但当前直接推荐对照也稳定失败，因此不能再把历史污染视为唯一或主要剩余根因。
+- **修复边界：** 增加仅覆盖无 recentSemanticState、无 routeCandidates、无 typed action 的空白/数字/标点 code point 并集策略；复用 server-fixed `CONVERSATIONAL`；修正 prompt 的零目标出口；不放宽 blockedGoal，不增加新 root kind、关键词引用闸门、repair/retry/fallback 或 v6。
+- **专属测试缺口：** 本地联合回归、Qwen v4 直接/同会话两轮 5+5 矩阵均已补齐；仍需按条目治理决定是否以该证据关闭 A2-116，并保留 typed recent state/合法澄清的发布回归。
+- **当前进展：** 低信息确定性策略保持不变，Provider Draft v4 使 Qwen 原始同会话第二轮 5/5 成功，直接对照 5/5 成功；首轮 5/5 `modelExecution=NONE`。GLM 同构首轮同样零参与，第二轮 3/5 成功、2/5 由 Provider 限流结算。没有历史污染型 Schema 拒绝残留证据，也没有自动重试或跨模型降级。
+- **专属 Exit Gate：** 低信息首轮 Provider 调用为 0；有 typed recent state 时不拦截；合法澄清和 recentReference 不回退；Qwen 原始两轮浏览器/packaged 路径在获授权后通过；schema/semantic closed diagnostics 可见且无原文；Maven、privacy、documentation 门通过。
+
+#### 3.2.4 A2-117 Provider 结构化输出协议能力缺口
+
+- **用户现象：** 低信息入口修复后，Qwen 对同会话后续明确推荐与独立直接推荐仍可能返回 `SELECTED_MODEL_INVALID_RESPONSE`；闭集诊断为 `SCHEMA/UNSUPPORTED_ROOT_KIND`，同时 Provider HTTP 调用已完成。
+- **源码确认：** `ConfiguredModelCatalog` 只接受 `structured-output=JSON_OBJECT` 并给所有模型硬编码同一业务能力全集；`ModelProviderProtocolProfile.common()` 对 Qwen/GLM 都发送 `response_format.type=json_object`；`StructuredModelRequest` 没有 contract/schema；Transport 只消费唯一 choice 的 `message.content`。因此当前协议只能约束 JSON 语法，不能把模型限制到 `goal.proposal.v5` root/字段结构。
+- **新鲜真实证据：** v4 已将 Provider 合同收窄为 `goal.provider-draft.v1`，服务端确定性编译到 `goal.proposal.v5`。Qwen 直接 5/5、两轮第二轮 5/5 均形成 recommendation size=2 的合法终局；GLM exact 10-call 门证明无隐藏 retry/repair，5/10 成功、5/10 为 Transport `RATE_LIMITED`。两家样本均未显示“直接构造完整 canonical v5”时的系统性 Schema 拒绝。
+- **当前推断：** Goal Provider Draft 编译层已实质关闭 Qwen 核心推荐路径的 canonical Goal 构造负担问题；Qwen v6 的 General Provider Draft v2 又关闭了已观测的解释型 canonical 缺字段问题。当前真实 Comparison 请求尚未进入 General，而是在上游 Goal v1 Draft Schema 被拒绝；GLM 的主要外部阻塞仍是限流。解释型最小样本成功不能替代 Comparison、重复矩阵和两家独立稳定性数据。
+- **修复边界：** v4 保留显式 ModelSelection、单 Turn 单模型、新 requestId、无 repair/retry/cross-provider fallback 与 fail-closed，并保持 canonical v5 不变。Provider/Application 双合同与 compiler profile 必须由 frozen binding 原子拥有；任何 Draft Schema、Compiler 或 canonical Schema 失败均终止当前 Turn。
+- **专属测试缺口：** Canonical Schema 与现有 Operation Policy/Codec 的 wire-shape/启停/语义分层；严格重复键/尾随 token Parser；native schema/tool 两种生产策略与 JSON Object 隔离对照 fixture；按 model + operation 的 frozen binding 及 Snapshot/服务端 fingerprint 强一致；finish reason/content/tool arguments envelope；token field policy；缺 General binding 时 allowedGoalKinds 收缩；Qwen/GLM 并发切换不串线；两家独立真实矩阵。
+- **专属 Exit Gate：** Provider 请求与本地结构校验使用同一 source contract fingerprint；可选模型能力由代码批准的 OperationBinding 派生，selectable 必有 Goal binding，General GoalKind 与 General binding 一致；旧 JSON Object 单策略、自由组合协议配置与固定 capability 全集零生产引用；Qwen 原始失败路径在批准策略下通过；GLM 未证明的能力不公开；无运行时策略 fallback；全量、privacy、architecture、documentation、packaged/browser 与获授权 Provider 门通过。
+
+### 3.3 A2-30—A2-117 修复边界
 
 1. **P0 隐私止血：** 在任何新语义能力之前关闭 A2-30—A2-36、A2-110；不得用“已加密”替代“不持久化”，不得为了精确 replay 放宽已冻结隐私边界。
 2. **验收真实性：** A2-91—A2-101、A2-111—A2-115 必须先恢复真实可执行证据；场景清单、脚本源码字符串和 HTTP 200 不能作为产品通过证据。
@@ -303,7 +326,9 @@ Bug 删除后不在本文保留“已完成”“已修复”章节。重要行�
 4. **产品能力升级：** A2-37—A2-41、A2-43—A2-52、A2-63—A2-68 属于 AnswerIntent、Portfolio 表达和 General 质量的同一产品分叉；未经批准不得并行创建多个模型权威。
 5. **Provider 收敛：** A2-79—A2-88 使用已批准的配置化 GLM/Qwen 目录作为唯一目标架构；旧单 Provider/global/visitor 权威不得作为兼容层恢复，真实矩阵必须按显式 ModelSelection 独立执行。
 6. **隐私实现机制：** sentinel 只用于验收，不得成为生产清洗或判定机制；生产代码必须使用闭合来源分类，未知或 Provider 派生正文默认拒绝持久化。
-7. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
+7. **低信息 Goal 鲁棒性：** A2-116 只允许增加无 typed recent state 的窄确定性出口和 prompt/diagnostics 小修；不得恢复旧 Router、放宽 Codec、增加模型自诊 root kind 或提前启动 v6。
+8. **清理：** A2-102—A2-109 只有在零生产消费者和对应替代门成立后删除，不保留兼容键或幽灵接口。
+9. **Provider 结构化输出：** A2-117 必须保留当前模型选择与失败边界，只替换 Provider 协议能力、Canonical Contract 与按 Operation 冻结策略；不得以 runtime strategy fallback、自动 repair 或跨 Provider 重发换取表面成功率。
 
 #### 3.3.1 第一批 P0 当前证据（仍为 IN_PROGRESS）
 
@@ -1005,7 +1030,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 - **公开与失败合同：** `/api/portfolio` 只公开安全目录版本、默认选择和可选条目；每个 `PublicAgentTurn` 原子携带 `modelExecution`。`MODEL_SELECTION_STALE`、`SELECTED_MODEL_UNAVAILABLE`、`SELECTED_MODEL_TEMPORARILY_UNAVAILABLE`、`SELECTED_MODEL_RATE_LIMITED`、`SELECTED_MODEL_INVALID_RESPONSE` 均形成可回放的 HTTP 200 settled `CAPABILITY_UNAVAILABLE`；结构、认证、指纹冲突与入口限流继续使用非 settled HTTP 错误。
 - **离线证据：** 后端 Slice A 已完成离线实现，Backend clean package 的 Surefire 结果为 `963 tests / 0 failures / 0 errors / 4 skipped`；生产源码 privacy check 通过，架构 checker 明确报告 `overall=IN_PROGRESS` 且无 deferred item，Eval、offline Eval 与 packaged-JAR 三个生产 runner 自测均通过。该证据覆盖目录、协议、显式选择、单 Turn 单模型、五错误码、Settlement/replay、`modelExecution` 与新配置脚本面，不替代真实 Provider 或前端合同消费。
 - **真实 GLM canary：** 使用仓库外 Secret 启动 `glm-4-7-flash` 配置化目录，公开 Catalog 正确投影所选模型，真实请求进入 Provider 后结算为 `SELECTED_MODEL_RATE_LIMITED`。固定无用户数据直连 canary 返回 HTTP 429、业务码 1305“该模型当前访问量过大”，对应智谱平台服务过载而非余额不足；后续一次应用调用在 Goal 的 8 秒预算附近结算为 `SELECTED_MODEL_TEMPORARILY_UNAVAILABLE`。这些证据证明真实路由与错误映射，不构成成功 schema/semantic 或质量 PASS。
-- **仍开放：** GLM-4.7-Flash 与 Qwen3.7-Flash 的真实同构矩阵均未完成，Qwen 调用配置等待用户提供；A2-80/81/87/88 与 Slice A A9 外部门保持 `IN_PROGRESS`。本轮不处理前端模型选择 UI、会话偏好、pending 锁定或换模型交互，也不据后端离线结果关闭前端条目。当前全仓 documentation gate 仍被本轮范围外的前端 UI 设计文档状态标记阻塞，不得记为通过。
+- **仍开放：** v4 Goal Provider Draft 已使 Qwen Goal 核心矩阵 10/10 通过；GLM 同构矩阵精确调用 10 次，其中 5 次成功、5 次 Provider 限流。Qwen v6 General 的三个解释 depth 与 Conversational 最新最小样本均成功，但 Comparison 两次在上游 Goal v1 Draft Schema 失败，尚无 General Comparison 端到端证据。生产源码、前端产物与最终 JAR 隐私门均已通过，且字面量 `resumeToken` 负例继续被阻断。A2-80/81/87/88/A2-117 与 Slice A A9 外部门保持 `IN_PROGRESS/BLOCKED`，不得据局部样本或另一 Provider 的结果关闭全部能力门。
 
 ## 11. 修复前需要冻结的选择
 
@@ -1074,7 +1099,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 验收只输出 requestId 是否一致、PublicAgentTurn kind/resolution、Goal 数量、Provider operation、耗时桶、cancel/replay 终局，不输出问题、回答或原始模型内容。
 
-### 12.5 A2-30—A2-115 全量审计 Exit Gate
+### 12.5 A2-30—A2-117 全量审计 Exit Gate
 
 关闭本轮新增条目必须同时满足：
 
@@ -1087,7 +1112,7 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 7. **Browser/PostgreSQL：** 一条真实浏览器场景覆盖推荐、进入、SOLUTION DETAILED、VERIFICATION 指代、刷新、跨 JVM 重启、切换和退出；全程无错误终局和隐私残留。
 8. **Provider Matrix：** 每个批准 Provider 独立报告成功终局率、subject/facet/depth 正确率、schema 拒绝率、超时率和 P50/P95；一次通过不构成稳定结论。
 9. **清理与文档：** 旧配置、死类型、幽灵端口和过强完成文案删除；`docs/08`、`docs/11` 和架构机器账本只记录新鲜证据。
-10. **完成状态：** A2-30—A2-115 逐项满足原始失败路径、目标回归、受影响全量门和风险对应的集成门后才删除；不得整批凭单层测试关闭。
+10. **完成状态：** A2-30—A2-117 逐项满足原始失败路径、目标回归、受影响全量门和风险对应的集成门后才删除；不得整批凭单层测试关闭。
 
 #### 12.5.1 条目到专属门映射
 
@@ -1105,6 +1130,8 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 | Provider 调用决策 | A2-85—A2-86 | Goal/General schema 拒绝调用数 1；HTTP/JSON/envelope 失败请求数 1 且 payload model 始终为本 Turn 显式选择；无 repair、retry 或自动 fallback |
 | Provider Catalog 证据语义 | A2-113 | Catalog 仅暴露配置与安全选择事实；接口不得声明 schema verified/quality verified；真实层由独立执行证据报告 |
 | Provider 真实质量 | A2-80—A2-81、A2-87—A2-88 | 每家真实 schema/semantic canary、P50/P95、成功率与超时率；一次通过不构成稳定结论 |
+| Goal 低信息鲁棒性 | A2-116 | 低信息首轮 Provider 调用 0；recent typed state 不被劫持；合法澄清不回退；Qwen 原始两轮用户路径、closed diagnostics 与隐私门通过 |
+| Provider 结构化输出协议 | A2-117 | Canonical Contract 为 wire-shape 权威并接入现有 Operation Policy；代码批准 Execution Profile；按 model + operation 冻结 strategy/token/compiler/extractor 与 fingerprint；General GoalKind 随 binding 收缩；Qwen/GLM 独立 canary；旧 JSON Object 生产零引用；无 runtime fallback |
 | Portfolio AnswerIntent 与表达 | A2-37—A2-41、A2-43—A2-52 | outputs/facets 单权威、constraints/dimension 消费、typed reason、depth/coverage 门 |
 | 页面上下文与多轮语义 | A2-53—A2-62 | audience/subject typed 差异矩阵、turn summary、section reference；A2-60/61 还需 Provider→限定澄清→facet resolve→pointer 不变的 Browser 原路径；A2-62 需真实 Provider 中英文、长度与复述固定样本 |
 | General 运行时质量 | A2-63—A2-68、A2-97 | 语言、句数、深度、exact comparison pair 正反例和真实 Provider 抽样 |
@@ -1127,6 +1154,6 @@ ClarificationStore 测试证明了短 TTL、一次消费与 binding 校验，但
 
 Agent 2.0 的单一 Command → Goal → Plan → Execution → Projection → State 生产链仍然成立，幂等、取消、原子结算、公开证据和 typed discussion pointer 仍有真实基础设施价值；本轮审计不要求恢复旧 Router、兼容协议或第二状态权威。
 
-但当前产品不能再用“合同闭合”代替“能力完成”。A2-30—A2-115 证明多个输入字段、配置、UI 宣称和场景清单没有进入真实执行或没有被对应质量门验证，同时 settlement replay 与 Provider 配置权威触及隐私硬边界。当前项目更准确的定位是：**安全状态内核较成熟、公开证据投影较可靠，但语义消费、回答表达、多轮理解和验收真实性仍处于系统性补完阶段。**
+但当前产品不能再用“合同闭合”代替“能力完成”。A2-30—A2-117 证明多个输入字段、配置、UI 宣称和场景清单没有进入真实执行或没有被对应质量门验证，同时 settlement replay、Provider 配置权威与结构化输出协议触及隐私和可靠性硬边界。当前项目更准确的定位是：**安全状态内核较成熟、公开证据投影较可靠，但语义消费、回答表达、多轮理解和验收真实性仍处于系统性补完阶段。**
 
 修复顺序固定为：P0 隐私与 Provider 授权止血 → 证据和行为门真实性 → 现有 Discussion/Frontend 行为 → AnswerIntent 与 Portfolio/General 产品能力 → 已批准目录的真实 GLM/Qwen 稳定性矩阵 → 清理与联合门。配置化目录的后端离线实现已经完成，但真实 Provider、前端和外层发布门尚未全部通过，整体状态继续保持 `IN_PROGRESS`。

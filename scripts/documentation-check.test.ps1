@@ -132,6 +132,18 @@ The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
         'docs/superpowers/specs/2026-08-25-audience-role-session-switching-design.md'
     $audienceRolePlan = `
         'docs/superpowers/plans/2026-08-25-audience-role-behavior-foundation.md'
+    $lowInformationGoalSpec = `
+        'docs/superpowers/specs/2026-08-25-low-information-goal-interpretation-stabilization-design.md'
+    $lowInformationGoalPlan = `
+        'docs/superpowers/plans/2026-08-25-low-information-goal-interpretation-stabilization.md'
+    $audienceRoleFrontendSpec = `
+        'docs/superpowers/specs/2026-08-25-audience-role-switching-frontend-ui-design.md'
+    $audienceRoleFrontendPlan = `
+        'docs/superpowers/plans/2026-08-25-audience-role-frontend-ui-implementation.md'
+    $providerStructuredOutputSpec = `
+        'docs/superpowers/specs/2026-08-25-provider-structured-output-capability-and-model-switching-design.md'
+    $providerStructuredOutputPlan = `
+        'docs/superpowers/plans/2026-08-25-provider-structured-output-capability-and-model-switching.md'
     Write-Utf8File (Join-Path $Path $activeSpec) @"
 # Approved design fixture
 <!-- DOCUMENT_STATUS: APPROVED -->
@@ -217,6 +229,34 @@ See [approved spec](../specs/2026-08-21-configured-user-selectable-model-catalog
 <!-- DOCUMENT_STATUS: ACTIVE -->
 
 See [approved spec](../specs/2026-08-25-audience-role-session-switching-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $lowInformationGoalSpec) @"
+# Approved low information goal design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+
+See [active plan](../plans/2026-08-25-low-information-goal-interpretation-stabilization.md).
+"@
+    Write-Utf8File (Join-Path $Path $lowInformationGoalPlan) @"
+# Active low information goal plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+
+See [approved spec](../specs/2026-08-25-low-information-goal-interpretation-stabilization-design.md).
+"@
+    Write-Utf8File (Join-Path $Path $audienceRoleFrontendSpec) @"
+# Approved audience role frontend design fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+"@
+    Write-Utf8File (Join-Path $Path $audienceRoleFrontendPlan) @"
+# Active audience role frontend implementation plan fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
+"@
+    Write-Utf8File (Join-Path $Path $providerStructuredOutputSpec) @"
+# Approved provider structured output capability fixture
+<!-- DOCUMENT_STATUS: APPROVED -->
+"@
+    Write-Utf8File (Join-Path $Path $providerStructuredOutputPlan) @"
+# Active provider structured output implementation fixture
+<!-- DOCUMENT_STATUS: ACTIVE -->
 "@
     Add-Content -LiteralPath (Join-Path $Path 'docs/superpowers/specs/example.md') `
         -Encoding UTF8 -Value `

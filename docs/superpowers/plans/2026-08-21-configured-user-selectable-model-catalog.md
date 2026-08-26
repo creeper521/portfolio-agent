@@ -12,8 +12,8 @@
 - Backend A1—A6 与 A8 已完成离线实现：配置化 GLM/Qwen Catalog、两个闭合 Profile、根级 MODEL/NONE 选择与指纹、Claim 后执行快照、单 Turn 单模型、五种 settled 模型错误、安全公开 Catalog 和 `PublicAgentTurn.modelExecution` 已进入唯一生产链。
 - 旧 global Provider、visitor access、built-in Registry、DeepSeek、`conversational-model`、旧 env 与 Operation `provider-ref` 已退出生产路径；当前只保留 model-runtime、每 Provider credential/data-policy 和每 Operation 三层准入。
 - Backend clean package、生产源码 privacy、architecture checker，以及 Eval、offline Eval、packaged-JAR runner 自测已完成；architecture 状态仍诚实保持 `IN_PROGRESS`。这些结果只关闭后端 Slice A 的离线实现与对应离线门，不代表 A9 外部门或 Slice A 整体完成。
-- 真实 GLM-4.7-Flash/Qwen3.7-Flash 矩阵均未执行，Qwen 调用配置等待用户提供；未运行不得记为 PASS。
-- A7 前端目录消费、会话内选择、pending 锁定和换模型交互不在本轮后端范围；Slice B 也未在本轮启动。当前 documentation gate 仍只被范围外的前端 UI 设计文档状态标记阻塞；整体状态继续为 `IN_PROGRESS`。
+- GLM-4.7-Flash 与 Qwen3.7-Flash 均已有少量真实样本：GLM 呈现成功与限流/timeout 混合结果；Qwen 有历史直接推荐成功样本，但 2026-08-25 新鲜的直接推荐与低信息后续推荐均以 `SCHEMA/UNSUPPORTED_ROOT_KIND` 被拒绝。两家可比较的完整矩阵仍未执行，不得记为 PASS。
+- A7 前端目录消费、会话内选择、pending 锁定和换模型交互不在本轮后端范围；Slice B 也未在本轮启动。当前 documentation gate 已通过文档定位检查，但真实 Provider、前端与外层发布门仍未完成；整体状态继续为 `IN_PROGRESS`。
 
 ## 0. 开始前固定边界
 
