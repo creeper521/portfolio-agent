@@ -167,7 +167,8 @@ public final class DiagnosticEvent {
                             "duration.bucket",
                             "response.present",
                             "failure.code",
-                            "failure.layer")),
+                            "failure.layer",
+                            "failure.reason")),
                     Map.entry("provider.output.rejected", fields(
                             "provider.operation",
                             "failure.code",

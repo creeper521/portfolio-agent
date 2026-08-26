@@ -432,8 +432,11 @@ function Add-ArchivePrivacyFindings(
     )
     $archiveCredentialAssignmentRegex =
             '(?im)(?<![A-Z0-9$])' +
+            '(?!(?:[A-Z0-9_$]+\.)?resumeToken["'']?\s*[:=]\s*' +
+            '(?:void\s+0|[A-Z_$][A-Z0-9_$]*(?:\.[A-Z_$][A-Z0-9_$]*)*)' +
+            '(?=\s*(?:[,;})\]]|\r?$)))' +
             '(?:password|passwd|secret|api[-_]?key|' +
-            '(?:(?:access|auth|bearer|provider|client|refresh)[-_]?)?token)' +
+            '(?:(?:access|auth|bearer|provider|client|refresh|resume)[-_]?)?token)' +
             '["'']?\s*[:=]\s*' +
             '(?!["'']?\$\{)(?!["'']?<)(?!["'']?\{[0-9]+\})' +
             '(?![\{\[])' +

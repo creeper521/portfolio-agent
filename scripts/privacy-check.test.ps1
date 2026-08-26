@@ -752,6 +752,9 @@ portfolio:
     Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'token-model.json') `
         -Value '{"token":{"kind":"model"}}' `
         -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'session-state.js') `
+        -Value 'v.resumeToken=O;v.resumeToken=R.resumeToken;v.resumeToken=void 0;' `
+        -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $safeArchiveRoot 'portfolio-label.json') `
         -Value '{"portfolio":"public","database":{"governance":"documentation-only"}}' `
         -Encoding UTF8
@@ -785,6 +788,7 @@ portfolio:
         @{ Name = 'json-governance-database'; Entry = 'config/settings.json'; Value = '{"governance":{"database":{"url":"jdbc:postgresql://localhost/private"}}}'; Rule = 'artifact-governance-config' },
         @{ Name = 'governance-env'; Entry = 'config/runtime.env'; Value = 'PORTFOLIO_GOVERNANCE_DATABASE_URL=jdbc:postgresql://localhost/private'; Rule = 'artifact-governance-config' },
         @{ Name = 'javascript-api-key'; Entry = 'static/runtime.js'; Value = 'const apiKey = "real-value";'; Rule = 'artifact-credential' },
+        @{ Name = 'javascript-resume-token-literal'; Entry = 'static/session.js'; Value = 'state.resumeToken="real-value";'; Rule = 'artifact-credential' },
         @{ Name = 'html-api-key'; Entry = 'static/runtime.html'; Value = '<meta data-api-key="real-value">'; Rule = 'artifact-credential' },
         @{ Name = 'application-privacy-md'; Entry = 'Privacy.md'; Value = '# Application privacy notes'; Rule = 'artifact-private-markdown' },
         @{ Name = 'license-path'; Entry = 'META-INF/LICENSE.md'; Value = 'source: C:\Users\owner\notes'; Rule = 'artifact-local-absolute-path' },

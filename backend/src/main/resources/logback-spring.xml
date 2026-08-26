@@ -5,7 +5,11 @@
     <springProperty scope="context" name="LOCAL_LOG_DIRECTORY"
                     source="portfolio.log-directory" defaultValue=""/>
 
+    <property name="SAFE_PLAIN_CONSOLE_LOG_PATTERN"
+              value="%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd'T'HH:mm:ss.SSSXXX}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m %replace(%kvp){'&quot;', ''}%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
     <springProfile name="local-file-logging">
+        <property name="CONSOLE_LOG_PATTERN" value="${SAFE_PLAIN_CONSOLE_LOG_PATTERN}"/>
         <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
         <appender name="BACKEND_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOCAL_LOG_DIRECTORY}/current/backend-info.log</file>
@@ -19,7 +23,7 @@
                 <level>DEBUG</level>
             </filter>
             <encoder>
-                <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] %-5level %logger{48} - %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] %-5level %logger{48} - %msg %replace(%kvp){'&quot;', ''}%n</pattern>
                 <charset>UTF-8</charset>
             </encoder>
             <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
@@ -37,7 +41,7 @@
                 <level>ERROR</level>
             </filter>
             <encoder>
-                <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] %-5level %logger{48} - %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] %-5level %logger{48} - %msg %replace(%kvp){'&quot;', ''}%n</pattern>
                 <charset>UTF-8</charset>
             </encoder>
             <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
@@ -64,6 +68,7 @@
     </springProfile>
 
     <springProfile name="!prod &amp; !local-file-logging">
+        <property name="CONSOLE_LOG_PATTERN" value="${SAFE_PLAIN_CONSOLE_LOG_PATTERN}"/>
         <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
