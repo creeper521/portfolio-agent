@@ -1,3 +1,8 @@
+/**
+ * 案例摘要的公开响应载体。
+ *
+ * <p>用于项目详情页的案例列表，不含叙述细节与证据。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;

@@ -1,3 +1,9 @@
+/**
+ * 案例详情的公开响应载体。
+ *
+ * <p>包含案例的完整叙述（问题/行动/决策/验证/成果/局限）与关联证据，
+ * 枚举值保留原始类型（CaseType、AchievementStatus 等）。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;

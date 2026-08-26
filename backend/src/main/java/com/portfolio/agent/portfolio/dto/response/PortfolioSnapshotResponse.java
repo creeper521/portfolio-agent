@@ -1,3 +1,9 @@
+/**
+ * 作品集快照的顶级公开响应：GET /api/portfolio 的完整返回体。
+ *
+ * <p>聚合所有子响应（项目、案例、证据、声明、时间线、预设问题），
+ * 并附带 Agent 可用性与模型目录快照。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import java.time.OffsetDateTime;

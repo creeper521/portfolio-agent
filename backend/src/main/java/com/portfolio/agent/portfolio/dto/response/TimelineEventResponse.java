@@ -1,3 +1,8 @@
+/**
+ * 时间线事件的公开响应载体。
+ *
+ * <p>包含日期标签、问题/行动/影响简述，以及关联的项目/案例/证据 slug 索引。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.TimelineEvent;

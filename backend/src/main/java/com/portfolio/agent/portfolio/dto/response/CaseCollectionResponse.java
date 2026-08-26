@@ -1,3 +1,9 @@
+/**
+ * 案例集合的公开响应载体。
+ *
+ * <p>包含 slug、标题、摘要与展示排序，由 PortfolioResponseMapper
+ * 从领域 CaseCollection 映射，用于 GET /api/portfolio 的一级分组展示。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.CaseCollection;

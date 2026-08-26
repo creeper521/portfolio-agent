@@ -1,3 +1,9 @@
+/**
+ * 证据的公开响应载体。
+ *
+ * <p>仅公开摘要（summary），rawContent 从不进入响应；
+ * 包含关联的 projectSlugs 与 claimIds 反向索引。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.EvidenceRecord;

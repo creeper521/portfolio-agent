@@ -1,3 +1,9 @@
+/**
+ * 预设问题的公开响应载体。
+ *
+ * <p>包含问题文本、适用受众、展示位置（HOME/PROJECT/AGENT）
+ * 与合同版本/可用性状态。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;

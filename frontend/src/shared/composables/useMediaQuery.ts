@@ -1,3 +1,4 @@
+// 响应式媒体查询 composable：监听 CSS media query 变化并返回响应式 boolean ref。
 import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 
 export function useMediaQuery(query: string): Ref<boolean> {

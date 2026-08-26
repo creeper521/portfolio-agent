@@ -1,3 +1,9 @@
+/**
+ * 声明的公开响应载体。
+ *
+ * <p>枚举值序列化为字符串（achievementStatus、contributionType 等），
+ * 由 PortfolioResponseMapper 从领域 Claim 映射。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.Claim;

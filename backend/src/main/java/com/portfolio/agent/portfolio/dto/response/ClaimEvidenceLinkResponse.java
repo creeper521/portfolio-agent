@@ -1,3 +1,8 @@
+/**
+ * 声明-证据关联的公开响应载体。
+ *
+ * <p>从领域 ClaimEvidenceLink 映射，暴露关联 id、supportType 与 scope。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.ClaimEvidenceLink;

@@ -1,3 +1,9 @@
+/**
+ * 项目详情的公开响应载体。
+ *
+ * <p>包含项目完整叙述、技术栈、关键决策、验证方式、成果与交接，
+ * 以及关联的精选案例摘要与已审核证据。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.ContributionType;

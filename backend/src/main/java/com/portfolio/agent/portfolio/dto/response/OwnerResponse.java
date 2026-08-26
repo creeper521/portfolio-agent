@@ -1,3 +1,8 @@
+/**
+ * 所有者基本信息的公开响应载体。
+ *
+ * <p>包含姓名、角色、简介与外部链接，从领域 OwnerProfile 映射。
+ */
 package com.portfolio.agent.portfolio.dto.response;
 
 import com.portfolio.agent.portfolio.domain.OwnerProfile;
