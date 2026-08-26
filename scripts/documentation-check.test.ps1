@@ -21,6 +21,37 @@ function Write-Utf8File([string]$Path, [string]$Content) {
         [System.Text.UTF8Encoding]::new($false))
 }
 
+function Get-RegisteredActiveWorkArtifactStatuses {
+    $tokens = $null
+    $parseErrors = $null
+    $checkerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $checker,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-True ($parseErrors.Count -eq 0) `
+        "PowerShell syntax errors in $checker`: $($parseErrors.Message -join '; ')"
+
+    $assignments = @($checkerAst.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $node.Left.VariablePath.UserPath -eq 'activeWorkArtifactStatuses'
+            }, $true))
+    Assert-True ($assignments.Count -eq 1) `
+        'documentation checker must define activeWorkArtifactStatuses exactly once'
+
+    $statuses = & ([scriptblock]::Create($assignments[0].Right.Extent.Text))
+    Assert-True ($statuses.Count -gt 0) `
+        'documentation checker must register at least one active work artifact'
+    foreach ($entry in $statuses.GetEnumerator()) {
+        Assert-True ($entry.Key -match '^docs/superpowers/(?:specs|plans)/[^/]+\.md$') `
+            "invalid active work artifact path in checker: $($entry.Key)"
+        Assert-True ($entry.Value -in @('APPROVED', 'ACTIVE')) `
+            "invalid active work artifact status in checker: $($entry.Value)"
+    }
+    return $statuses
+}
+
 function Initialize-Fixture([string]$Path) {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
 
@@ -102,6 +133,15 @@ questionPresets=19
 The former endpoint was ``POST /api/v2/answers`` and used stp-v2.
 "@
     }
+
+    $activeWorkArtifactStatuses = Get-RegisteredActiveWorkArtifactStatuses
+    foreach ($entry in $activeWorkArtifactStatuses.GetEnumerator()) {
+        Write-Utf8File (Join-Path $Path $entry.Key) @"
+# Active work artifact fixture
+<!-- DOCUMENT_STATUS: $($entry.Value) -->
+"@
+    }
+
     $activeSpec = `
         'docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md'
     $activePlan = `
