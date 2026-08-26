@@ -10,6 +10,8 @@
 
 **Tech Stack:** Markdown、PowerShell 5.1/7、Git、仓库 documentation/privacy/architecture checkers。
 
+**实施状态（2026-08-26）：** `PARTIAL`。Task 1、3、4、5 及 Task 2 的章程、演进记录和冲突扫描已经完成；Task 2 Step 2 的 legacy namespace 裁决仍保持未完成，因为批准计划对 A2-100、A2-110、A2-111 等保留身份的要求与批准设计中的 MERGE/RECLASSIFY 语言存在冲突，必须取得用户明确裁决。本计划继续保持 `ACTIVE`，不得把该遗留裁决表述为已完成。
+
 ## Global Constraints
 
 - 不修改生产 Java、TypeScript、公开合同、模型 Prompt、OperationBinding 或 Provider 配置。
@@ -32,7 +34,7 @@
 - Consumes: `verify-release.ps1` 通过 `powershell.exe -NoProfile -File` 调用脚本。
 - Produces: checker 在 Windows PowerShell 5.1 与 PowerShell 7 显式按 UTF-8 读取目标文档；test 在两个宿主中分别执行独立正反例并捕获预期 stderr；检查语义与 token 不变。
 
-- [ ] **Step 1: 记录修复前 canonical 失败证据**
+- [x] **Step 1: 记录修复前 canonical 失败证据**
 
 Run:
 
@@ -43,11 +45,11 @@ C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionP
 
 Expected: direct checker 退出 1，因为 Windows PowerShell 5.1 用默认 ANSI code page 误解码无 BOM UTF-8 目标文档；wrapper test 退出 1，因为它硬编码 `pwsh.exe`，且 Windows PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 下把预期负例的 child stderr 提升为未捕获 `NativeCommandError`。
 
-- [ ] **Step 2: 修复目标文档解码和双宿主测试隔离**
+- [x] **Step 2: 修复目标文档解码和双宿主测试隔离**
 
 checker 使用 `Get-Content -Encoding UTF8` 读取所有目标文档。test 显式调用 Windows PowerShell 5.1 与 `pwsh.exe`，每个宿主使用独立干净 fixture，分别执行一个正例和一个删除 `REPLAY_BODY_NOT_RETAINED` 的负例；通过独立进程捕获 stdout、stderr 和 exit code，预期负例不能被 wrapper 提升为未捕获错误。两个脚本继续保留 UTF-8 BOM，保证 Windows PowerShell 5.1 可解析脚本自身的中文文字；BOM 不再被视为目标文档解码的充分条件。
 
-- [ ] **Step 3: 验证两个宿主的 canonical 调用**
+- [x] **Step 3: 验证两个宿主的 canonical 调用**
 
 Run:
 
@@ -60,7 +62,7 @@ pwsh.exe -NoProfile -File scripts\persistence-safe-replay-docs-check.ps1
 
 Expected: 两次 test 均明确报告 `WindowsPowerShell5.1`、`PowerShell7` 的 `positive` 与 `missing-token` 场景，并输出 `PERSISTENCE_SAFE_REPLAY_DOCS_TESTS_OK hosts=2 scenarios=4`；两次 direct checker 均输出 `PERSISTENCE_SAFE_REPLAY_DOCS_OK files=5`。
 
-- [ ] **Step 4: 提交编码修复**
+- [x] **Step 4: 提交编码修复**
 
 ```powershell
 git add scripts/persistence-safe-replay-docs-check.ps1 scripts/persistence-safe-replay-docs-check.test.ps1
@@ -77,7 +79,7 @@ git commit -m "fix(gate): 修复回放文档门脚本编码"
 - Consumes: 批准设计 §2、§3、§7、§8；当前 docs/15 总览状态。
 - Produces: 四命名空间章程、删除裁决记录和新账本可消费的 ID 集合。
 
-- [ ] **Step 1: 更新 AGENTS.md 章程**
+- [x] **Step 1: 更新 AGENTS.md 章程**
 
 动态账本章节必须明确：
 
@@ -114,11 +116,11 @@ GATE-01（replay 目标文档跨 shell 解码与负例 stderr 捕获；Task 1 �
 DOC-01—DOC-07
 ```
 
-- [ ] **Step 3: 在 docs/11 写精简裁决记录**
+- [x] **Step 3: 在 docs/11 写精简裁决记录**
 
 记录必须包含：删除 ID 集合、关闭依据类别（生产修复与原风险门已有证据）、保留原 ID 原则、新增四类水位和新账本链接；不得写测试数量、哈希或提交元数据。
 
-- [ ] **Step 4: 验证章程无旧 bug-only 冲突**
+- [x] **Step 4: 验证章程无旧 bug-only 冲突**
 
 Run:
 
@@ -137,7 +139,7 @@ Expected: 零命中；新四命名空间、水位线、执行序和 Exit Gate �
 - Consumes: Task 2 的 ID 集合与批准设计。
 - Produces: `CURRENT_AUTHORITY` 的开放工作账本。
 
-- [ ] **Step 1: 替换文档信息架构**
+- [x] **Step 1: 替换文档信息架构**
 
 最终固定章节：
 
@@ -154,7 +156,7 @@ Expected: 零命中；新四命名空间、水位线、执行序和 Exit Gate �
 10. 全局 Exit Gates
 ```
 
-- [ ] **Step 2: 写入水位与安全标记**
+- [x] **Step 2: 写入水位与安全标记**
 
 ```text
 A2 已用至 A2-120
@@ -165,7 +167,7 @@ DOC 已用至 DOC-07
 
 正文必须原样包含三个 replay 标记，并说明 Provider 派生正文 replay 为 `REPLAY_BODY_NOT_RETAINED`；关键词/sentinel 检测只属于测试；Portfolio continuation handle 原样保留。
 
-- [ ] **Step 3: 精简继承 A2**
+- [x] **Step 3: 精简继承 A2**
 
 保留 A2-15、A2-20—A2-41、A2-43—A2-88、A2-91—A2-117；删除 Task 2 指定的 19 个已关闭 ID。可以按共同根因分组展示，但每个保留 ID 必须可检索，并拥有严重度、执行序、状态、现状证据、独立目标、修复边界/依赖和专属验证/Exit Gate。
 
@@ -180,13 +182,13 @@ A2-119：Goal 合法 subjects×dimensions 可超过 General 20 项上限；扁�
 A2-120：PLAYWRIGHT_MODEL_SELECTION 未由 packaged runner 设置，且双模型前置可导致 spec skip。
 ```
 
-- [ ] **Step 4: 写入 ARCH/DOC 开放项**
+- [x] **Step 4: 写入 ARCH/DOC 开放项**
 
 `ARCH-01—ARCH-10` 依次覆盖 Gateway ownership、OperationBinding 精确合同对、Runtime Readiness、诊断 pointer/closed reason、Lifecycle 拆分、Workspace 拆分、TurnExecutionStore settlement command、死代码/record 纪律、token/cost canary、Schema/Prompt/Codec wire-shape 单权威。
 
 `DOC-01—DOC-07` 依次覆盖 docs/08 当前口径、docs/11 测试计数、docs/00 与 checker 活动文档一致性、SECURITY 旧 Provider 权威、机器状态新鲜度、token policy 命名、活动 specs/plans 的历史 A2 引用语义。
 
-- [ ] **Step 5: 验证正文只含开放事项**
+- [x] **Step 5: 验证正文只含开放事项**
 
 Run:
 
@@ -209,15 +211,15 @@ Expected: 零命中。
 - Consumes: Task 2 删除的 19 个 ID。
 - Produces: 当前权威与活动文档不把已删除 ID 当成当前账本入口。
 
-- [ ] **Step 1: 清理 docs/08**
+- [x] **Step 1: 清理 docs/08**
 
 删除旧测试数量和 Qwen v3 历史并列口径；对已关闭清理项只描述当前生产事实，不再引用不存在的 A2 行。
 
-- [ ] **Step 2: 标注活动设计中的历史引用**
+- [x] **Step 2: 标注活动设计中的历史引用**
 
 仅对实际命中的已删除 A2-02、A2-16 增加“历史缺陷 ID，已从动态账本移除”语义；A2-86 未删除，保持当前开放引用，不加历史标签。
 
-- [ ] **Step 3: 执行全活动文档扫描**
+- [x] **Step 3: 执行全活动文档扫描**
 
 Run:
 
@@ -237,7 +239,7 @@ Expected: 命中只能位于明确标注为历史引用的活动设计/计划；
 - Consumes: 新账本、同步章程、活动引用和 replay 门。
 - Produces: 可复核的治理提交，不改变生产行为。
 
-- [ ] **Step 1: 验证 ID 与必填字段**
+- [x] **Step 1: 验证 ID 与必填字段**
 
 ```powershell
 $ledgerPath = 'docs\15-Agent 2.0真实交互问题清单与修复边界.md'
@@ -255,7 +257,7 @@ foreach ($closed in @('A2-01', 'A2-16', 'A2-89')) {
 
 Expected: 无输出、退出码 0。
 
-- [ ] **Step 2: 运行专项与治理门**
+- [x] **Step 2: 运行专项与治理门**
 
 ```powershell
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\persistence-safe-replay-docs-check.test.ps1
@@ -268,7 +270,7 @@ git diff --check
 
 Expected: replay tests/checker、documentation、architecture、privacy 均成功；架构状态仍诚实报告 `overall=IN_PROGRESS`。
 
-- [ ] **Step 3: 检查变更范围**
+- [x] **Step 3: 检查变更范围**
 
 ```powershell
 git status --short
@@ -278,7 +280,7 @@ git diff -- AGENTS.md docs/08-当前实现状态.md docs/11-项目演进日志.m
 
 Expected: 只有本计划列出的治理文件变化，无生产代码、Prompt、合同或配置变化。
 
-- [ ] **Step 4: 提交账本重构**
+- [x] **Step 4: 提交账本重构**
 
 ```powershell
 git add -- AGENTS.md docs/00-文档状态索引.md docs/08-当前实现状态.md docs/11-项目演进日志.md "docs/15-Agent 2.0真实交互问题清单与修复边界.md" docs/superpowers/specs/2026-08-19-agent-stabilization-and-repository-governance-design.md docs/superpowers/specs/2026-08-20-general-answer-language-and-depth-prompt-design.md docs/superpowers/specs/2026-08-24-agent-model-selection-frontend-ui-design.md docs/superpowers/specs/2026-08-26-agent-2-dynamic-ledger-maintenance-design.md scripts/persistence-safe-replay-docs-check.ps1 scripts/persistence-safe-replay-docs-check.test.ps1
