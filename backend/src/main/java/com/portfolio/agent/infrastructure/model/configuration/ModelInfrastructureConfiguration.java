@@ -1,6 +1,5 @@
 package com.portfolio.agent.infrastructure.model.configuration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicyRegistry;
 import com.portfolio.agent.infrastructure.model.provider.ModelCatalogSnapshot;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
@@ -20,11 +19,10 @@ import org.springframework.context.annotation.Configuration;
 })
 public class ModelInfrastructureConfiguration {
 
-    /** 构建配置驱动的模型目录（含内部描述符与服务端传输绑定）。 */
+    /** 构建闭集结构化输出契约注册表（schema parse-once 与指纹冻结）。 */
     @Bean
-    StructuredOutputContractRegistry structuredOutputContractRegistry(
-            ObjectMapper objectMapper) {
-        return StructuredOutputContractRegistry.standard(objectMapper);
+    StructuredOutputContractRegistry structuredOutputContractRegistry() {
+        return StructuredOutputContractRegistry.standard();
     }
 
     @Bean

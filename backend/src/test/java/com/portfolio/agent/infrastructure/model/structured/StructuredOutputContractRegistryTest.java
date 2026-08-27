@@ -1,6 +1,5 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -12,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class StructuredOutputContractRegistryTest {
 
     private final StructuredOutputContractRegistry registry =
-            StructuredOutputContractRegistry.standard(new ObjectMapper());
+            StructuredOutputContractRegistry.standard();
 
     @Test
     void resolvesClosedOperationContractAndProducesStableFingerprint() {

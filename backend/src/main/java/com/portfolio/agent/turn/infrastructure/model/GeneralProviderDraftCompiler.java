@@ -74,25 +74,24 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
         if (!request.getDepth().name().equals(depth)) {
             throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
         }
-        int minimum = switch (request.getDepth()) {
+        // 上游 provider 契约已把每数组句数钉为精确值；此处同一常量既作下限也作
+        // 上限，保证任何绕过 Schema 的直连路径得到同样的确定性拒绝。
+        int requiredSentences = switch (request.getDepth()) {
             case CONCISE -> 1;
             case STANDARD -> 2;
             case DETAILED -> 4;
-        };
-        int maximum = switch (request.getDepth()) {
-            case CONCISE -> 1;
-            case STANDARD -> 3;
-            case DETAILED -> 6;
         };
         ObjectNode canonical = root(request.getTopic());
         ArrayNode statements = canonical.putArray("statements");
         statements.add(statement(
                 "DEFINITION",
-                sentenceText(draft, "definitionSentences", minimum, maximum, 4000),
+                sentenceText(draft, "definitionSentences",
+                        requiredSentences, requiredSentences, 4000),
                 definitionAspects()));
         statements.add(statement(
                 "MECHANISM",
-                sentenceText(draft, "mechanismSentences", minimum, maximum, 4000),
+                sentenceText(draft, "mechanismSentences",
+                        requiredSentences, requiredSentences, 4000),
                 mechanismAspects()));
         canonical.set("caveats", caveats(draft));
         return canonical;

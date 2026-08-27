@@ -25,7 +25,7 @@ import java.util.Map;
 public final class StructuredModelTestFixtures {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final StructuredOutputContractRegistry CONTRACTS =
-            StructuredOutputContractRegistry.standard(MAPPER);
+            StructuredOutputContractRegistry.standard();
 
     private StructuredModelTestFixtures() { }
 

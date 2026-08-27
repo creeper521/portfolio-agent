@@ -53,7 +53,7 @@ public final class StructuredOutputContractRegistry {
         this.contracts = Map.copyOf(contracts);
     }
 
-    public static StructuredOutputContractRegistry standard(ObjectMapper ignored) {
+    public static StructuredOutputContractRegistry standard() {
         JsonFactory factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .build();

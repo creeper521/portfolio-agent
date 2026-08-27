@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GeneralProviderDraftCompilerTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final StructuredOutputContractRegistry registry =
-            StructuredOutputContractRegistry.standard(mapper);
+            StructuredOutputContractRegistry.standard();
     private final GeneralDraftCodec codec = new GeneralDraftCodec(mapper);
     private final GeneralDraftValidator validator = new GeneralDraftValidator();
 
