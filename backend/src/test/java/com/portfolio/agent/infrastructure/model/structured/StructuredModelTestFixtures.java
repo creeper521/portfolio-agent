@@ -68,7 +68,7 @@ public final class StructuredModelTestFixtures {
                 TokenFieldPolicy.OMIT));
         result.put(ModelOperation.GENERAL_KNOWLEDGE, dualBinding(
                 ModelOperation.GENERAL_KNOWLEDGE,
-                "general.provider-draft.v2", "general.draft.v2",
+                "general.provider-draft.v3", "general.draft.v2",
                 OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 StructuredOutputStrategy.REQUIRED_TOOL_CALL,
                 TokenFieldPolicy.OMIT));

@@ -45,12 +45,12 @@ class ApprovedModelExecutionProfileTest {
         OperationBinding general = profile.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE);
         assertThat(general.getProviderContractRef().schemaVersion())
-                .isEqualTo("general.provider-draft.v2");
+                .isEqualTo("general.provider-draft.v3");
         assertThat(general.getApplicationContractRef().schemaVersion())
                 .isEqualTo("general.draft.v2");
         assertThat(general.getOutputCompilerProfileVersion())
                 .isEqualTo(OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION);
-        assertThat(general.outputToolName()).isEqualTo("emit_general_provider_draft");
+        assertThat(general.outputToolName()).isEqualTo("emit_general_provider_draft_v3");
     }
 
     @Test

@@ -70,10 +70,14 @@ class GeneralProviderDraftCompilerTest {
                         {
                           "kind":"COMPARISON",
                           "comparisonSentences":[
-                            "Redis 通过单线程事件循环处理命令",
-                            "Redis 以丰富数据结构换取更多内存开销",
-                            "Memcached 采用多线程处理简单键值访问",
-                            "Memcached 以较少能力换取更简单的内存模型"
+                            {"text":"Memcached 采用多线程处理简单键值访问",
+                             "dimension":"MECHANISM","subjectIndex":2},
+                            {"text":"Redis 以丰富数据结构换取更多内存开销",
+                             "dimension":"TRADE_OFF","subjectIndex":1},
+                            {"text":"Memcached 以较少能力换取更简单的内存模型",
+                             "dimension":"TRADE_OFF","subjectIndex":2},
+                            {"text":"Redis 通过单线程事件循环处理命令",
+                             "dimension":"MECHANISM","subjectIndex":1}
                           ],
                           "caveats":[]
                         }
@@ -82,14 +86,24 @@ class GeneralProviderDraftCompilerTest {
         assertThat(canonical.path("topic").textValue())
                 .isEqualTo("Redis vs Memcached");
         assertThat(canonical.path("statements")).hasSize(4);
-        assertThat(canonical.path("statements").get(0).path("subject").textValue())
-                .isEqualTo("Redis");
-        assertThat(canonical.path("statements").get(2).path("subject").textValue())
-                .isEqualTo("Memcached");
+        record Pair(String subject, String dimension) {}
+        java.util.List<Pair> declared = new java.util.ArrayList<>();
         canonical.path("statements").forEach(statement -> {
             assertThat(statement.path("role").textValue()).isEqualTo("COMPARISON");
             assertThat(statement.path("aspects")).isEmpty();
+            declared.add(new Pair(
+                    statement.path("subject").textValue(),
+                    statement.path("dimension").textValue()));
         });
+        assertThat(declared).containsExactly(
+                new Pair("Redis", "MECHANISM"),
+                new Pair("Redis", "TRADE_OFF"),
+                new Pair("Memcached", "MECHANISM"),
+                new Pair("Memcached", "TRADE_OFF"));
+        assertThat(canonical.path("statements").get(0).path("text").textValue())
+                .isEqualTo("Redis 通过单线程事件循环处理命令。");
+        assertThat(canonical.path("statements").get(1).path("text").textValue())
+                .isEqualTo("Redis 以丰富数据结构换取更多内存开销。");
         assertCanonicalAndSemantic(request, canonical);
     }
 
@@ -102,8 +116,10 @@ class GeneralProviderDraftCompilerTest {
                 mapper.readTree("""
                 {"kind":"COMPARISON",
                  "comparisonSentences":[
-                   "Redis 使用事件循环；命令按序执行",
-                   "Memcached 使用多线程；操作模型更简单"
+                   {"text":"Memcached 使用多线程；操作模型更简单",
+                    "dimension":"MECHANISM","subjectIndex":2},
+                   {"text":"Redis 使用事件循环；命令按序执行",
+                    "dimension":"MECHANISM","subjectIndex":1}
                  ],"caveats":[]}
                 """));
 
@@ -283,12 +299,53 @@ class GeneralProviderDraftCompilerTest {
                 comparison(List.of("A", "B"), Set.of("MECHANISM")));
 
         assertRejected(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":["只有一条"],"caveats":[]}
+                {"kind":"COMPARISON","comparisonSentences":[
+                  {"text":"只有一条","dimension":"MECHANISM","subjectIndex":1}
+                ],"caveats":[]}
                 """, StructuredOutputValidationException.Reason.DRAFT_REQUIRED_FIELD_MISSING);
         assertRejected(compiler, """
-                {"kind":"COMPARISON",
-                 "comparisonSentences":["第一条","第二条","多余一条"],"caveats":[]}
+                {"kind":"COMPARISON","comparisonSentences":[
+                  {"text":"第一条","dimension":"MECHANISM","subjectIndex":1},
+                  {"text":"第二条","dimension":"MECHANISM","subjectIndex":2},
+                  {"text":"多余一条","dimension":"MECHANISM","subjectIndex":1}
+                ],"caveats":[]}
                 """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+    }
+
+    @Test
+    void rejectsDuplicatePairEvenWhenCountsMatchTrustedRequest()
+            throws Exception {
+        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
+                comparison(List.of("A", "B"), Set.of("MECHANISM")));
+
+        assertRejected(compiler, """
+                {"kind":"COMPARISON","comparisonSentences":[
+                  {"text":"第一次声明","dimension":"MECHANISM","subjectIndex":1},
+                  {"text":"重复同对","dimension":"MECHANISM","subjectIndex":1}
+                ],"caveats":[]}
+                """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+    }
+
+    @Test
+    void rejectsDeclaredPairIdentityOutsideTrustedRequest()
+            throws Exception {
+        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
+                comparison(List.of("A", "B"), Set.of("MECHANISM")));
+
+        assertRejectedWithDiagnostic(compiler, """
+                {"kind":"COMPARISON","comparisonSentences":[
+                  {"text":"主体甲正文","dimension":"MECHANISM","subjectIndex":1},
+                  {"text":"未知维度正文","dimension":"MEMORY_MODEL","subjectIndex":2}
+                ],"caveats":[]}
+                """, StructuredOutputValidationException.Reason.DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_DIMENSION");
+        assertRejectedWithDiagnostic(compiler, """
+                {"kind":"COMPARISON","comparisonSentences":[
+                  {"text":"越界序号正文","dimension":"MECHANISM","subjectIndex":3},
+                  {"text":"正常正文","dimension":"MECHANISM","subjectIndex":1}
+                ],"caveats":[]}
+                """, StructuredOutputValidationException.Reason.DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SUBJECT_INDEX");
     }
 
     private void assertCanonicalAndSemantic(
@@ -307,7 +364,7 @@ class GeneralProviderDraftCompilerTest {
         return registry.validate(
                 new StructuredContractRef(
                         ModelOperation.GENERAL_KNOWLEDGE,
-                        "general.provider-draft.v2"),
+                        "general.provider-draft.v3"),
                 raw).jsonTree();
     }
 

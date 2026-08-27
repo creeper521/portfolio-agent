@@ -43,6 +43,7 @@ class SystemPromptCatalogTest {
                         "provider-enforced General", "Provider Draft contract",
                         "definition", "mechanism",
                         "comparisonSentences", "caveats is mandatory",
+                        "subjectIndex", "declared pair",
                         "will deterministically bind")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
     }
