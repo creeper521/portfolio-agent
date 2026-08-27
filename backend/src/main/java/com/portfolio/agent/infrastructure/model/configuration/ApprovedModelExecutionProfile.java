@@ -81,7 +81,7 @@ public final class ApprovedModelExecutionProfile {
         bindings.put(ModelOperation.TURN_INTERPRETATION, binding(
                 contracts,
                 ModelOperation.TURN_INTERPRETATION,
-                "goal.provider-draft.v1", "goal.proposal.v5",
+                "goal.provider-draft.v2", "goal.proposal.v5",
                 OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 strategy, tokenFieldPolicy, responseExtractorProfileVersion));
         bindings.put(ModelOperation.GENERAL_KNOWLEDGE, binding(
@@ -109,7 +109,7 @@ public final class ApprovedModelExecutionProfile {
         bindings.put(ModelOperation.TURN_INTERPRETATION, binding(
                 contracts,
                 ModelOperation.TURN_INTERPRETATION,
-                "goal.provider-draft.v1", "goal.proposal.v5",
+                "goal.provider-draft.v2", "goal.proposal.v5",
                 OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 strategy, tokenFieldPolicy, responseExtractorProfileVersion));
         bindings.put(ModelOperation.GENERAL_KNOWLEDGE, binding(

@@ -42,7 +42,7 @@ public final class StructuredOutputContractRegistry {
             "sectionId", "decision", "inputText", "subjectTexts", "conceptText",
             "topicText", "topic", "statements", "caveats", "role", "subject",
             "dimension", "aspects", "definitionSentences",
-            "mechanismSentences", "comparisonSentences", "sentences");
+            "mechanismSentences", "comparisonSentences", "sentences", "prompt");
     private final ObjectMapper strictMapper;
     private final Map<StructuredContractRef, StructuredOutputContract> contracts;
 
@@ -68,6 +68,12 @@ public final class StructuredOutputContractRegistry {
                         "goal.provider-draft.v1"),
                 "goal_provider_draft",
                 "model-contracts/goal.provider-draft.v1.schema.json");
+        addApprovedContract(contracts, strictMapper, schemaRegistry,
+                new StructuredContractRef(
+                        ModelOperation.TURN_INTERPRETATION,
+                        "goal.provider-draft.v2"),
+                "goal_provider_draft_v2",
+                "model-contracts/goal.provider-draft.v2.schema.json");
         addApprovedContract(contracts, strictMapper, schemaRegistry,
                 new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION, "goal.proposal.v5"),
