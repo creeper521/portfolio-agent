@@ -144,6 +144,10 @@ try {
     if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
         throw 'Packaged runner must call the shared Live Provider probe.'
     }
+    if ($runnerSource -notmatch 'PLAYWRIGHT_MODEL_SELECTION' -or
+            $runnerSource -notmatch 'MODEL_SELECTION_CATALOG=NOT_READY') {
+        throw 'Live lane must enable the model-selection spec and fail closed when fewer than two selectable models exist.'
+    }
     if ($runnerSource -match '/api/v2|stp-v[123]') {
         throw 'Packaged runner must not reference retired versioned Agent contracts.'
     }

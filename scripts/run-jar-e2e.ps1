@@ -279,6 +279,8 @@ $environment = @{
         'PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY'
     PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL = Get-EnvironmentSnapshot `
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
+    PLAYWRIGHT_MODEL_SELECTION = Get-EnvironmentSnapshot `
+        'PLAYWRIGHT_MODEL_SELECTION'
     PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONTEXT_DATABASE_URL'
     PORTFOLIO_CONTEXT_DATABASE_USERNAME = Get-EnvironmentSnapshot `
@@ -1127,6 +1129,13 @@ try {
         }
         Write-Output ("Packaged social public-turn probe completed; latency=" + `
                 ($latencyBuckets -join ','))
+        $selectableModelCount = @(
+            $publicContent.agentAvailability.selectableModels).Count
+        Write-Output ("MODEL_SELECTION_CATALOG selectableModels=" +
+            $selectableModelCount)
+        if ($selectableModelCount -lt 2) {
+            $liveFailures.Add('MODEL_SELECTION_CATALOG=NOT_READY')
+        }
         $goalMatrixOutput = ''
         $goalMatrixLogStart = @(Get-Content -LiteralPath $stdoutPath `
             -Encoding UTF8).Count
@@ -1218,6 +1227,11 @@ try {
         }
         $env:PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY = if (
                 $Lane -eq 'PROJECT_DISCUSSION_EXPIRY') { '1' } else { '0' }
+        $env:PLAYWRIGHT_MODEL_SELECTION = if ($Lane -eq 'LIVE') {
+            '1'
+        } else {
+            '0'
+        }
         if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
             $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
         }
@@ -1284,6 +1298,8 @@ finally {
             $environment.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY
         Restore-EnvironmentVariable 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
+        Restore-EnvironmentVariable 'PLAYWRIGHT_MODEL_SELECTION' `
+            $environment.PLAYWRIGHT_MODEL_SELECTION
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
@@ -1299,6 +1315,8 @@ finally {
             $environment.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY
         Assert-EnvironmentRestored 'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL' `
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
+        Assert-EnvironmentRestored 'PLAYWRIGHT_MODEL_SELECTION' `
+            $environment.PLAYWRIGHT_MODEL_SELECTION
         foreach ($modelEnvironmentName in @(
             'PORTFOLIO_MODEL_RUNTIME_ENABLED',
             'PORTFOLIO_GLM_ENABLED',
