@@ -64,8 +64,9 @@ foreach ($hostLane in $hosts) {
             (New-Object Text.UTF8Encoding($false)))
 
         $drifted = Invoke-Checker $hostLane.Executable $temporaryRoot
+        $normalizedDriftOutput = $drifted.Output -replace '\s', ''
         if ($drifted.ExitCode -eq 0 -or
-                $drifted.Output -notmatch [regex]::Escape('REPLAY_BODY_NOT_RETAINED')) {
+                $normalizedDriftOutput -notmatch [regex]::Escape('REPLAY_BODY_NOT_RETAINED')) {
             throw "$($hostLane.Name) replay documentation drift must fail with the missing contract token: $($drifted.Output)"
         }
         Write-Output "PERSISTENCE_SAFE_REPLAY_DOCS_TEST host=$($hostLane.Name) scenario=missing-token exit=$($drifted.ExitCode)"
