@@ -28,16 +28,21 @@ class StructuredOutputContractRegistryTest {
 
     @Test
     void resolvesProviderDraftAndCanonicalContractsForTheSameOperation() {
-        StructuredOutputContract provider = registry.resolve(
+        StructuredOutputContract legacyProvider = registry.resolve(
                 new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION,
                         "goal.provider-draft.v1"));
+        StructuredOutputContract provider = registry.resolve(
+                new StructuredContractRef(
+                        ModelOperation.TURN_INTERPRETATION,
+                        "goal.provider-draft.v2"));
         StructuredOutputContract canonical = registry.resolve(
                 new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION,
                         "goal.proposal.v5"));
 
-        assertThat(provider.outputName()).isEqualTo("goal_provider_draft");
+        assertThat(legacyProvider.outputName()).isEqualTo("goal_provider_draft");
+        assertThat(provider.outputName()).isEqualTo("goal_provider_draft_v2");
         assertThat(provider.contractFingerprint())
                 .isNotEqualTo(canonical.contractFingerprint());
     }

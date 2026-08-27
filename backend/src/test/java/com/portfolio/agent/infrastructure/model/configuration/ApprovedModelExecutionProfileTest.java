@@ -34,12 +34,12 @@ class ApprovedModelExecutionProfileTest {
         OperationBinding goal = profile.getOperationBindings()
                 .get(ModelOperation.TURN_INTERPRETATION);
         assertThat(goal.getProviderContractRef().schemaVersion())
-                .isEqualTo("goal.provider-draft.v1");
+                .isEqualTo("goal.provider-draft.v2");
         assertThat(goal.getApplicationContractRef().schemaVersion())
                 .isEqualTo("goal.proposal.v5");
         assertThat(goal.getOutputCompilerProfileVersion())
                 .isEqualTo(OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION);
-        assertThat(goal.outputToolName()).isEqualTo("emit_goal_provider_draft");
+        assertThat(goal.outputToolName()).isEqualTo("emit_goal_provider_draft_v2");
         assertThat(goal.getProviderContractFingerprint())
                 .isNotEqualTo(goal.getApplicationContractFingerprint());
         OperationBinding general = profile.getOperationBindings()
@@ -68,6 +68,11 @@ class ApprovedModelExecutionProfileTest {
         assertThat(profile.getOperationBindings().values())
                 .extracting(OperationBinding::getStrategy)
                 .containsOnly(StructuredOutputStrategy.REQUIRED_TOOL_CALL);
+        OperationBinding goal = profile.getOperationBindings()
+                .get(ModelOperation.TURN_INTERPRETATION);
+        assertThat(goal.getProviderContractRef().schemaVersion())
+                .isEqualTo("goal.provider-draft.v2");
+        assertThat(goal.outputToolName()).isEqualTo("emit_goal_provider_draft_v2");
         OperationBinding general = profile.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE);
         assertThat(general.getProviderContractRef().schemaVersion())

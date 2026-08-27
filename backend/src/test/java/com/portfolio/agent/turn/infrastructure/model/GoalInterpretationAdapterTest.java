@@ -161,7 +161,7 @@ class GoalInterpretationAdapterTest {
         assertThat(calls).as("closed rejection must not trigger repair").hasValue(1);
     }
 
-    @Test void reportsDeterministicCompilerRejectionWithoutRepairOrRetry() {
+    @Test void reportsProviderDraftSchemaRejectionWithoutRepairOrRetry() {
         List<DiagnosticEvent> events = new ArrayList<>();
         AtomicInteger calls = new AtomicInteger();
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
@@ -193,11 +193,54 @@ class GoalInterpretationAdapterTest {
                 SelectedModelFailureException.Code.SELECTED_MODEL_INVALID_RESPONSE);
         assertThat(events).singleElement().satisfies(event -> {
             assertThat(event.getFields().get("failure.layer"))
+                    .isEqualTo("PROVIDER_DRAFT_SCHEMA");
+            assertThat(event.getFields().get("failure.code"))
+                    .isEqualTo("OUTPUT_SCHEMA_REJECTED");
+            assertThat(event.getFields().get("failure.reason"))
+                    .isEqualTo("FIELD_VALUE_INVALID");
+        });
+        assertThat(calls).as("schema rejection must not trigger repair")
+                .hasValue(1);
+    }
+
+    @Test void reportsDeterministicCompilerRejectionWithoutRepairOrRetry() {
+        List<DiagnosticEvent> events = new ArrayList<>();
+        AtomicInteger calls = new AtomicInteger();
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                StructuredModelTestFixtures.gateway((binding, request) -> {
+                    calls.incrementAndGet();
+                    return new StructuredModelResponse("""
+                            {
+                              "decision":"STANDARD_GOAL",
+                              "goal":{
+                                "goalKind":"PORTFOLIO_RECOMMEND",
+                                "inputText":"解释幂等",
+                                "requestedSize":3,
+                                "constraints":["CAPABILITY_FRONTEND"]
+                              }
+                            }
+                            """);
+                }),
+                new ObjectMapper(), new GoalProposalCodec(), "system", 100,
+                Duration.ofSeconds(2), new ModelOutputDiagnostics(events::add));
+
+        SelectedModelFailureException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> adapter.interpret(input(),
+                                com.portfolio.agent.turn.execution.TurnDeadline.after(
+                                        Duration.ofSeconds(3), Clock.systemUTC()),
+                                ModelExecutionSnapshotFixture.model()),
+                        SelectedModelFailureException.class);
+
+        assertThat(failure.getCode()).isEqualTo(
+                SelectedModelFailureException.Code.SELECTED_MODEL_INVALID_RESPONSE);
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.getFields().get("failure.layer"))
                     .isEqualTo("DETERMINISTIC_COMPILER");
             assertThat(event.getFields().get("failure.code"))
                     .isEqualTo("OUTPUT_COMPILER_REJECTED");
             assertThat(event.getFields().get("failure.reason"))
-                    .isEqualTo("DRAFT_REQUIRED_FIELD_MISSING");
+                    .isEqualTo("DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE");
         });
         assertThat(calls).as("compiler rejection must not trigger repair")
                 .hasValue(1);

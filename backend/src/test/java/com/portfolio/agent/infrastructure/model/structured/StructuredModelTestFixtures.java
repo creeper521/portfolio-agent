@@ -46,7 +46,7 @@ public final class StructuredModelTestFixtures {
                 new EnumMap<>(ModelOperation.class);
         result.put(ModelOperation.TURN_INTERPRETATION, dualBinding(
                 ModelOperation.TURN_INTERPRETATION,
-                "goal.provider-draft.v1", "goal.proposal.v5",
+                "goal.provider-draft.v2", "goal.proposal.v5",
                 OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 StructuredOutputStrategy.NATIVE_JSON_SCHEMA,
                 TokenFieldPolicy.MAX_TOKENS));
@@ -62,7 +62,7 @@ public final class StructuredModelTestFixtures {
                 new EnumMap<>(ModelOperation.class);
         result.put(ModelOperation.TURN_INTERPRETATION, dualBinding(
                 ModelOperation.TURN_INTERPRETATION,
-                "goal.provider-draft.v1", "goal.proposal.v5",
+                "goal.provider-draft.v2", "goal.proposal.v5",
                 OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 StructuredOutputStrategy.REQUIRED_TOOL_CALL,
                 TokenFieldPolicy.OMIT));
