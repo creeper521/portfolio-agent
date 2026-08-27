@@ -87,7 +87,7 @@ public final class ApprovedModelExecutionProfile {
         bindings.put(ModelOperation.GENERAL_KNOWLEDGE, binding(
                 contracts,
                 ModelOperation.GENERAL_KNOWLEDGE,
-                "general.provider-draft.v2", "general.draft.v2",
+                "general.provider-draft.v3", "general.draft.v2",
                 OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 strategy, tokenFieldPolicy, responseExtractorProfileVersion));
         return new ApprovedModelExecutionProfile(

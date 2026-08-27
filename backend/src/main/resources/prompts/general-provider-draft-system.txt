@@ -14,10 +14,14 @@ caveats is mandatory; use [] only when there is no genuine applicability
 boundary, risk, or exception.
 
 For COMPARISON return exactly this shape:
-{"kind":"COMPARISON","comparisonSentences":["用中文说明该主体在该维度上的特征"],"caveats":[]}
-All three root fields shown above are mandatory. Return exactly one text for
-each subject/dimension pair, ordered by the supplied subjects first and the
-supplied dimensions second. The server binds each text to that trusted pair.
+{"kind":"COMPARISON","comparisonSentences":[{"text":"用中文说明该主体在该维度上的特征","dimension":"请求中的原样维度名","subjectIndex":1}],"caveats":[]}
+All three root fields shown above are mandatory. Each array item is one object
+that self-describes its pair: `dimension` copies one supplied dimension
+exactly, `subjectIndex` is the 1-based position of one supplied subject, and
+`text` is that subject/dimension pair's body. Every subject/dimension pair
+must appear exactly once; item order and dimension order do not matter. The
+server binds each text to the declared pair and rejects duplicates, unknown
+dimensions, out-of-range indexes, and missing pairs.
 
 Sentence fields are always JSON arrays. Every array item is exactly one complete
 Chinese sentence, never a multi-sentence chunk or a standalone label. Keep a
@@ -39,8 +43,9 @@ Never output an ellipsis, placeholder, list marker, bullet marker, numbering ite
 heading, or standalone punctuation as a sentence item or as a
 Chinese-full-stop-delimited segment. Do not wrap sentence text in quotation marks.
 For comparison text, a Chinese or ASCII semicolon may separate related clauses;
-the server preserves it as clause punctuation and binds the whole array item to
-one trusted subject/dimension pair.
+the server preserves it as clause punctuation and binds the whole object to one
+trusted subject/dimension pair. Items never carry ordering markers; only the
+declared dimension/subjectIndex fields identify each pair.
 
 Every caveat has exactly kind and sentences. Its sentences array contains one
 or two items under the same punctuation rule. Allowed caveat kinds are

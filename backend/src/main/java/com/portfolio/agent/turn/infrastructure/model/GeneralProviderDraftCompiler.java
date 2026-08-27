@@ -10,7 +10,9 @@ import com.portfolio.agent.turn.capability.general.GeneralKnowledgeRequest;
 
 import java.util.Iterator;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -29,6 +31,8 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
     private static final Set<String> CAVEAT_FIELDS = Set.of("kind", "sentences");
     private static final Set<String> CAVEAT_KINDS = Set.of(
             "APPLICABILITY_BOUNDARY", "RISK", "EXCEPTION");
+    private static final Set<String> COMPARISON_ITEM_FIELDS = Set.of(
+            "text", "dimension", "subjectIndex");
 
     private final GeneralKnowledgeRequest request;
 
@@ -96,29 +100,48 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
 
     private JsonNode comparison(JsonNode draft) {
         requireExact(draft, Set.of("kind", "comparisonSentences", "caveats"));
-        List<String> texts = comparisonTexts(draft, "comparisonSentences");
-        int expected = Math.multiplyExact(
-                request.getSubjects().size(), orderedDimensions().size());
+        JsonNode values = array(draft, "comparisonSentences");
+        List<String> subjects = request.getSubjects();
+        List<String> dimensions = orderedDimensions();
+        int expected = Math.multiplyExact(subjects.size(), dimensions.size());
         if (expected == 0 || expected > 20) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE);
         }
-        if (texts.size() < expected) {
+        if (values.size() < expected) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_REQUIRED_FIELD_MISSING);
         }
-        if (texts.size() > expected) {
+        if (values.size() > expected) {
             throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+        }
+        Map<String, String> claims = new HashMap<>();
+        for (JsonNode value : values) {
+            requireObject(value);
+            requireOnly(value, COMPARISON_ITEM_FIELDS);
+            String text = rawComparisonText(value.get("text"));
+            String dimension = declaredDimension(value.get("dimension"), dimensions);
+            int subjectIndex = boundedInteger(
+                    value.get("subjectIndex"), 1, subjects.size());
+            String pairKey = subjectIndex + "\u0000" + dimension;
+            if (claims.putIfAbsent(pairKey, text) != null) {
+                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+            }
         }
         ObjectNode canonical = root(String.join(" vs ", request.getSubjects()));
         ArrayNode statements = canonical.putArray("statements");
-        int index = 0;
-        for (String subject : request.getSubjects()) {
-            for (String dimension : orderedDimensions()) {
+        for (int subjectIndex = 1; subjectIndex <= subjects.size();
+                subjectIndex++) {
+            String subject = subjects.get(subjectIndex - 1);
+            for (String dimension : dimensions) {
+                String text = claims.get(subjectIndex + "\u0000" + dimension);
+                if (text == null) {
+                    throw fail(StructuredOutputValidationException.Reason
+                            .DRAFT_REQUIRED_FIELD_MISSING);
+                }
                 ObjectNode statement = JSON.objectNode();
                 statement.put("role", "COMPARISON");
-                statement.put("text", canonicalComparisonText(
-                        texts.get(index++), 4000));
+                statement.put("text", canonicalComparisonText(text, 4000));
                 statement.put("subject", subject);
                 statement.put("dimension", dimension);
                 statement.putArray("aspects");
@@ -127,6 +150,43 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
         }
         canonical.set("caveats", caveats(draft));
         return canonical;
+    }
+
+    private String rawComparisonText(JsonNode value) {
+        if (value == null || !value.isTextual()) {
+            throw fail(StructuredOutputValidationException.Reason
+                            .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                    "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SEQUENCE_ITEM_TYPE");
+        }
+        String text = value.textValue().trim();
+        if (text.isBlank() || text.length() > 4000
+                || text.matches(".*[.!?！？].*")
+                || !text.matches(".*\\p{IsHan}.*")) {
+            throw fail(StructuredOutputValidationException.Reason
+                            .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                    "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SENTENCE");
+        }
+        return text;
+    }
+
+    private String declaredDimension(JsonNode value, List<String> dimensions) {
+        if (value == null || !value.isTextual()
+                || !dimensions.contains(value.textValue())) {
+            throw fail(StructuredOutputValidationException.Reason
+                            .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                    "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_DIMENSION");
+        }
+        return value.textValue();
+    }
+
+    private int boundedInteger(JsonNode value, int minimum, int maximum) {
+        if (value == null || !value.isIntegralNumber()
+                || value.intValue() < minimum || value.intValue() > maximum) {
+            throw fail(StructuredOutputValidationException.Reason
+                            .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
+                    "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SUBJECT_INDEX");
+        }
+        return value.intValue();
     }
 
     private java.util.List<String> orderedDimensions() {
@@ -208,28 +268,6 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
         StringBuilder result = new StringBuilder();
         appendSentence(result, values.get(index), maximumCharacters);
         return result.toString();
-    }
-
-    private List<String> comparisonTexts(JsonNode node, String field) {
-        JsonNode values = array(node, field);
-        List<String> texts = new ArrayList<>(values.size());
-        for (JsonNode value : values) {
-            if (!value.isTextual()) {
-                throw fail(StructuredOutputValidationException.Reason
-                                .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                        "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SEQUENCE_ITEM_TYPE");
-            }
-            String text = value.textValue().trim();
-            if (text.isBlank() || text.length() > 4000
-                    || text.matches(".*[.!?！？].*")
-                    || !text.matches(".*\\p{IsHan}.*")) {
-                throw fail(StructuredOutputValidationException.Reason
-                                .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                        "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SENTENCE");
-            }
-            texts.add(text);
-        }
-        return List.copyOf(texts);
     }
 
     private String canonicalComparisonText(String raw, int maximumCharacters) {
