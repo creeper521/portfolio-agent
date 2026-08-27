@@ -1,6 +1,6 @@
 # Agent 2.0 动态缺陷与开发账本重构实施计划
 
-<!-- DOCUMENT_STATUS: ACTIVE -->
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Markdown、PowerShell 5.1/7、Git、仓库 documentation/privacy/architecture checkers。
 
-**实施状态（2026-08-27）：** `PARTIAL`。Task 1、3、4、5 已完成，Task 2 的 strict namespace 裁决和第一批迁移也已完成：36 个 legacy 非产品 A2 已逐项迁入 GATE/ARCH/DOC，活动引用同步且不同 Exit Gate 未合并。本计划继续保持 `ACTIVE`；把本设计/计划历史化并完成下一批新鲜验证后，才可关闭治理批次。
+**实施状态（2026-08-27）：** `COMPLETE`。第一批已将 36 个 legacy 非产品 A2 逐项迁入 GATE/ARCH/DOC、同步活动引用且保持不同 Exit Gate 不合并；第二批已补齐治理事件，并将已完成的设计与计划从活动注册表移除后历史化。本计划的 20 个步骤全部关闭；收尾提交的全量治理门结果由提交验证记录承担，不构成新的开放计划项。
 
 ## Global Constraints
 

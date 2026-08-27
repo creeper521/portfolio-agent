@@ -1,9 +1,9 @@
 # Agent 2.0 动态缺陷与开发账本重构设计
 
-<!-- DOCUMENT_STATUS: APPROVED -->
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > 日期：2026-08-26  
-> 状态：用户已批准  
+> 状态：已完成并历史化
 > 目标文件：`docs/15-Agent 2.0真实交互问题清单与修复边界.md`
 
 ## 1. 目标
