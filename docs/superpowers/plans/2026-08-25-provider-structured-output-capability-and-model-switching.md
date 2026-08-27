@@ -5,7 +5,7 @@
 > 日期：2026-08-25
 > 状态：ACTIVE；按已批准 Level 3 Replacement Slice 执行
 > 对应设计：`docs/superpowers/specs/2026-08-25-provider-structured-output-capability-and-model-switching-design.md`
-> 对应事项：A2-87、A2-88、A2-116、A2-117
+> 对应事项：GATE-22、GATE-23、A2-116、A2-117
 > 实施原则：TDD、单生产权威、无自动 repair/retry/fallback、两家 Provider 独立报告
 > 外部调用：用户已明确授权 Qwen/GLM 真实校验；只允许读取 `C:\secrets\portfolio-agent-model.env`，不得输出凭据、Prompt 或模型原始响应
 
@@ -180,7 +180,7 @@
 - [x] 本地 Backend 全量为 `1032 tests / 0 failures / 0 errors / 43 skipped`；Frontend 为 `56 files / 557 tests`，type-check 与 build 通过；
 - [x] 新增两家独立 Goal Draft 真实矩阵：每家 5 次直接推荐 + 5 次同 conversation 的低信息两轮序列，响应必须精确回显 v4 selection，且聚合日志必须证明恰好 10 次 Goal Provider 调用；
 - [x] frontend-inclusive packaged-JAR、L0/L1/L3、桌面/移动 Browser、code-quality、architecture、documentation、生产源码隐私与两家独立真实 Provider 矩阵已执行；
-- [x] v4 阶段证据已记录：Qwen Goal 直接 5/5 + 两轮 5/5，GLM exact 10-call 门通过但 5/10 限流；当时的 Qwen General 缺字段样本由后续 8.0.2 的 v6 增量继续处理。计划仍因 Provider 全能力证据不足保持 `ACTIVE`，A2-87/88/117 不关闭。
+- [x] v4 阶段证据已记录：Qwen Goal 直接 5/5 + 两轮 5/5，GLM exact 10-call 门通过但 5/10 限流；当时的 Qwen General 缺字段样本由后续 8.0.2 的 v6 增量继续处理。计划仍因 Provider 全能力证据不足保持 `ACTIVE`，GATE-22/GATE-23/A2-117 不关闭。
 
 ### 8.0.2 2026-08-26 Qwen v6 General 增量检查点
 
@@ -227,7 +227,7 @@
 ## 9. 文档与完成纪律
 
 - [ ] docs/08 记录真实生产 profile、能力和限制；
-- [ ] docs/15 更新 A2-87/88/116/117 的证据状态，不越过 Exit Gate；
+- [ ] docs/15 更新 GATE-22/GATE-23/A2-116/A2-117 的证据状态，不越过 Exit Gate；
 - [ ] docs/11 只在授权范围内完成且证据新鲜时写入；
 - [ ] docs/00、checker、机器状态与配置说明一致；
 - [ ] 本计划的提交范围不包含与本批次无关文件；

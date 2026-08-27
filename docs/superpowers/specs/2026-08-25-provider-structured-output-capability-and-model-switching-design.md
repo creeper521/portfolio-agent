@@ -6,7 +6,7 @@
 > 状态：用户已批准；按独立 Level 3 实施计划执行
 > 分级：`ARCHITECTURE_REVIEW`；批准后按 Level 3 Replacement Slice 实施
 > 直接证据：Qwen3.7-Flash 已完成 HTTP 调用，但 Goal Interpretation 返回被拒绝为 `SCHEMA/UNSUPPORTED_ROOT_KIND`
-> 关联事项：A2-87、A2-88、A2-116、A2-117
+> 关联事项：GATE-22、GATE-23、A2-116、A2-117
 > 关联权威：`docs/16-Agent单权威持续收敛范式.md`、`docs/superpowers/specs/2026-08-21-configured-user-selectable-model-catalog-design.md`、`docs/superpowers/specs/2026-08-25-low-information-goal-interpretation-stabilization-design.md`
 > 自审修订：已对照当前 `ModelOperationPolicy/AgentRuntimeReadiness`、Catalog/Binding/Snapshot、Goal/General Codec 以及 Gala/Hermes/OpenCode 源码完成第二轮架构自审；本版已删除可配置生产降级等级、独立 carrier 开关与请求侧 contractRef 三处冗余权威
 
@@ -222,7 +222,7 @@ GLM-4.7-Flash 的直连智谱 endpoint 在本文阶段尚未取得同等强度�
 - 不增加自动 retry、repair、fallback、负载均衡或双模型并行；
 - 不改变前端模型切换交互与本地会话偏好语义；
 - 不把真实 Provider 的暂时限流当作代码修复；
-- 不以本设计关闭 A2-87/A2-88/A2-116。
+- 不以本设计关闭 GATE-22/GATE-23/A2-116。
 
 ## 7. 开源参考项目的采纳边界
 

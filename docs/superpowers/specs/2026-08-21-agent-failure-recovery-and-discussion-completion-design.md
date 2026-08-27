@@ -54,7 +54,7 @@ pending、failure 与异步回调的删除或覆盖必须同时匹配 sessionId 
 
 `DISCUSSION_INTERPRETATION_UNAVAILABLE` 是已结算的 PublicTurn 终局；对同 requestId 的重放必须返回原终局，不得重新调用 Provider。因此其 backend-owned 恢复动作冻结为：以原输入创建**新 requestId** 的重试 action，以及携带 `EXIT_CONTEXT` continuation 的退出 action。这保持幂等终局不变，也不将 Provider 重试隐藏在 replay 内。
 
-## 7. A2-29：验证门
+## 7. GATE-02：验证门
 
 - `RequireLiveProvider` 运行真实 General Quality canary；Baseline 仍只采集，不增加 Provider 重试，不改变批准句数桶。
 - General Quality canary 是真实通用回答的唯一权威门；旧 GENERAL one-shot probe 不再重复拦截。失败时可输出语言、结构、句数桶、终局与延迟的聚合指标，但不得输出问题或模型正文。
@@ -69,4 +69,4 @@ pending、failure 与异步回调的删除或覆盖必须同时匹配 sessionId 
 
 ## 9. 完成条件
 
-A2-22—A2-29 的原始失败路径、Memory/PostgreSQL parity、全量 Backend/Frontend、privacy/documentation/architecture、Testcontainers、packaged Browser 和获授权 Provider 门全部通过后，才删除动态账本条目并恢复 architecture `COMPLETE`。
+A2-22—A2-28 的原始失败路径与 GATE-02 的分层发布证据链，以及 Memory/PostgreSQL parity、全量 Backend/Frontend、privacy/documentation/architecture、Testcontainers、packaged Browser 和获授权 Provider 门全部通过后，才删除对应动态账本条目并恢复 architecture `COMPLETE`。

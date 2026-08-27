@@ -6,11 +6,11 @@
 
 **Goal:** 把 `docs/15-Agent 2.0真实交互问题清单与修复边界.md` 重写为只维护当前开放事项、具备稳定水位线和可执行 Exit Gate 的唯一账本。
 
-**Architecture:** 先修复 Windows PowerShell 5.1 下不可运行的 replay 文档门，再按批准设计完成 ID 裁决、AGENTS 章程同步和主账本替换。现有开放 A2 保留原 ID，新生产缺陷从 A2-118 起，非产品工作只进入 ARCH/GATE/DOC；历史正文只从 Git 与 docs/11 追溯。
+**Architecture:** 先修复 Windows PowerShell 5.1 下不可运行的 replay 文档门，再按批准设计完成 ID 裁决、AGENTS 章程同步和主账本替换。生产行为缺陷保留 A2；用户已批准把 legacy 验证、架构和文档事项严格迁入 GATE/ARCH/DOC，不合并不同 Exit Gate；历史正文只从 Git 与 docs/11 追溯。
 
 **Tech Stack:** Markdown、PowerShell 5.1/7、Git、仓库 documentation/privacy/architecture checkers。
 
-**实施状态（2026-08-26）：** `PARTIAL`。Task 1、3、4、5 及 Task 2 的章程、演进记录和冲突扫描已经完成；Task 2 Step 2 的 legacy namespace 裁决仍保持未完成，因为批准计划对 A2-100、A2-110、A2-111 等保留身份的要求与批准设计中的 MERGE/RECLASSIFY 语言存在冲突，必须取得用户明确裁决。本计划继续保持 `ACTIVE`，不得把该遗留裁决表述为已完成。
+**实施状态（2026-08-27）：** `PARTIAL`。Task 1、3、4、5 已完成，Task 2 的 strict namespace 裁决和第一批迁移也已完成：36 个 legacy 非产品 A2 已逐项迁入 GATE/ARCH/DOC，活动引用同步且不同 Exit Gate 未合并。本计划继续保持 `ACTIVE`；把本设计/计划历史化并完成下一批新鲜验证后，才可关闭治理批次。
 
 ## Global Constraints
 
@@ -92,7 +92,7 @@ P0-P3 表达影响；NOW/NEXT/LATER 表达唯一执行序。
 关闭后删除总览与正文，重要行为在 docs/11 留摘要，不在 docs/15 建档案。
 ```
 
-- [ ] **Step 2: 固定旧 A2 裁决**
+- [x] **Step 2: 固定旧 A2 裁决并执行严格迁移**
 
 本批明确删除且不进入新账本的 19 个已关闭 ID：
 
@@ -100,21 +100,28 @@ P0-P3 表达影响；NOW/NEXT/LATER 表达唯一执行序。
 A2-01—A2-14、A2-16—A2-18、A2-89、A2-90
 ```
 
-保留所有其他当前可见开放 A2。新生产缺陷分配：
+保留的生产 A2 集合固定为：
 
 ```text
-A2-118 冷恢复瞬时失败会清除唯一 ResumeToken
-A2-119 General Comparison 容量与 pair 位置绑定不闭合
-A2-120 packaged Browser 模型切换门不可达
+A2-15、A2-20—A2-28、A2-30—A2-33、A2-35、A2-38—A2-41、
+A2-43—A2-77、A2-80、A2-82、A2-84—A2-86、A2-116—A2-119
 ```
 
-非产品水位及初始工作：
+用户批准的 36 项严格映射如下；全部为 `RECLASSIFY`，不同 Exit Gate 不 `MERGE`：
 
 ```text
-ARCH-01—ARCH-10
-GATE-01（replay 目标文档跨 shell 解码与负例 stderr 捕获；Task 1 完成后从开放正文删除，水位保留）
-DOC-01—DOC-07
+GATE-02←A2-29；GATE-03—GATE-13←A2-91—A2-101；GATE-14←A2-106；
+GATE-15←A2-110；GATE-16←A2-111；GATE-17←A2-114；GATE-18←A2-115；
+GATE-19←A2-120；GATE-20←A2-78；GATE-21←A2-81；GATE-22←A2-87；GATE-23←A2-88。
+
+ARCH-11←A2-37；ARCH-12—ARCH-15←A2-102—A2-105；
+ARCH-16—ARCH-18←A2-107—A2-109；ARCH-19←A2-113；
+ARCH-20←A2-34；ARCH-21←A2-79；ARCH-22←A2-83。
+
+DOC-08←A2-36；DOC-09←A2-112。
 ```
+
+迁移后正式开放行总数为 116：`A2=63`、`ARCH=22`、`GATE=22`、`DOC=9`。水位为 `A2-120`、`ARCH-22`、`GATE-23`、`DOC-09`；已关闭的 `GATE-01` 只占水位，不回到正文。
 
 - [x] **Step 3: 在 docs/11 写精简裁决记录**
 
@@ -160,33 +167,35 @@ Expected: 零命中；新四命名空间、水位线、执行序和 Exit Gate �
 
 ```text
 A2 已用至 A2-120
-ARCH 已用至 ARCH-10
-GATE 已用至 GATE-01
-DOC 已用至 DOC-07
+ARCH 已用至 ARCH-22
+GATE 已用至 GATE-23
+DOC 已用至 DOC-09
 ```
 
 正文必须原样包含三个 replay 标记，并说明 Provider 派生正文 replay 为 `REPLAY_BODY_NOT_RETAINED`；关键词/sentinel 检测只属于测试；Portfolio continuation handle 原样保留。
 
 - [x] **Step 3: 精简继承 A2**
 
-保留 A2-15、A2-20—A2-41、A2-43—A2-88、A2-91—A2-117；删除 Task 2 指定的 19 个已关闭 ID。可以按共同根因分组展示，但每个保留 ID 必须可检索，并拥有严重度、执行序、状态、现状证据、独立目标、修复边界/依赖和专属验证/Exit Gate。
+保留 Task 2 固定的 63 个生产 A2；把 36 个非产品 legacy A2 按精确映射迁入 ARCH/GATE/DOC；删除 Task 2 指定的 19 个已关闭 ID。每个保留或迁移后的 ID 必须可检索，并拥有严重度、执行序、状态、现状证据、独立目标、修复边界/依赖和专属验证/Exit Gate。
 
 高优先级条目必须明确：
 
 ```text
 A2-44：满数量+约束缺口在 Recommendation 构造阶段触发不变量异常，且前端隐藏 unsatisfiedConstraints。
-A2-80/A2-87/A2-88/A2-117：Qwen Comparison 被 Goal Draft v1 阻断，Qwen/GLM 完整矩阵仍未关闭。
-A2-100/A2-111：Release runner 在 FAILED/NOT_RUN 时可 exit 0，证据门不能据此宣称 PASS。
+A2-80/GATE-22/GATE-23/A2-117：Qwen Comparison 被 Goal Draft v1 阻断，Qwen/GLM 完整矩阵仍未关闭。
+GATE-12/GATE-16：Release runner 在 FAILED/NOT_RUN 时可 exit 0，证据门不能据此宣称 PASS。
 A2-118：网络/5xx恢复失败后 ensureSession 创建无 token 会话，watchEffect 清除唯一槽位。
 A2-119：Goal 合法 subjects×dimensions 可超过 General 20 项上限；扁平数组按位置绑定 pair。
-A2-120：PLAYWRIGHT_MODEL_SELECTION 未由 packaged runner 设置，且双模型前置可导致 spec skip。
+GATE-19：PLAYWRIGHT_MODEL_SELECTION 未由 packaged runner 设置，且双模型前置可导致 spec skip。
 ```
 
 - [x] **Step 4: 写入 ARCH/DOC 开放项**
 
-`ARCH-01—ARCH-10` 依次覆盖 Gateway ownership、OperationBinding 精确合同对、Runtime Readiness、诊断 pointer/closed reason、Lifecycle 拆分、Workspace 拆分、TurnExecutionStore settlement command、死代码/record 纪律、token/cost canary、Schema/Prompt/Codec wire-shape 单权威。
+`ARCH-01—ARCH-22` 覆盖原有十项架构工作及 strict migration 的十二项架构责任；迁移项只换 ID 与位置，不改变严重度、执行序、证据、目标、边界或 Exit Gate。
 
-`DOC-01—DOC-07` 依次覆盖 docs/08 当前口径、docs/11 测试计数、docs/00 与 checker 活动文档一致性、SECURITY 旧 Provider 权威、机器状态新鲜度、token policy 命名、活动 specs/plans 的历史 A2 引用语义。
+`GATE-02—GATE-23` 覆盖迁移后的二十二项验证责任；`GATE-01` 已关闭，仅保留水位。
+
+`DOC-01—DOC-09` 覆盖原有七项文档治理工作及 strict migration 的两项文档责任。
 
 - [x] **Step 5: 验证正文只含开放事项**
 
@@ -247,8 +256,18 @@ $ledger = Get-Content -LiteralPath $ledgerPath -Raw
 $ids = Select-String -Path $ledgerPath -Pattern '^\|\s*((?:A2|ARCH|GATE|DOC)-\d+)\s*\|' | ForEach-Object { $_.Matches[0].Groups[1].Value }
 $duplicates = $ids | Group-Object | Where-Object Count -gt 1
 if ($duplicates) { throw "duplicate ledger ids: $($duplicates.Name -join ',')" }
-foreach ($marker in @('A2 已用至 A2-120', 'ARCH 已用至 ARCH-10', 'GATE 已用至 GATE-01', 'DOC 已用至 DOC-07')) {
+foreach ($marker in @('A2 已用至 A2-120', 'ARCH 已用至 ARCH-22', 'GATE 已用至 GATE-23', 'DOC 已用至 DOC-09')) {
   if (-not $ledger.Contains($marker)) { throw "missing watermark: $marker" }
+}
+$expected = @{ A2 = 63; ARCH = 22; GATE = 22; DOC = 9 }
+foreach ($namespace in $expected.Keys) {
+  $actual = @($ids | Where-Object { $_ -like "$namespace-*" }).Count
+  if ($actual -ne $expected[$namespace]) { throw "unexpected $namespace count: $actual" }
+}
+if ($ids.Count -ne 116) { throw "unexpected ledger row count: $($ids.Count)" }
+$reclassified = @('A2-29','A2-34','A2-36','A2-37','A2-78','A2-79','A2-81','A2-83','A2-87','A2-88','A2-91','A2-92','A2-93','A2-94','A2-95','A2-96','A2-97','A2-98','A2-99','A2-100','A2-101','A2-102','A2-103','A2-104','A2-105','A2-106','A2-107','A2-108','A2-109','A2-110','A2-111','A2-112','A2-113','A2-114','A2-115','A2-120')
+foreach ($oldId in $reclassified) {
+  if (Select-String -LiteralPath $ledgerPath -Pattern "^\|\s*$([regex]::Escape($oldId))\s*\|") { throw "reclassified id remains formal: $oldId" }
 }
 foreach ($closed in @('A2-01', 'A2-16', 'A2-89')) {
   if ($ledger -match "(?<![0-9])$closed(?![0-9])") { throw "closed id remains: $closed" }

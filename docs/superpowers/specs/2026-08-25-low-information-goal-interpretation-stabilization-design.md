@@ -31,8 +31,8 @@
 
 1. 本文已以 `DRAFT` 身份加入 `scripts/documentation-check.ps1` 的 active work artifact 清单，评审期间不再被误判为 historical 文档；
 2. `docs/15-Agent 2.0真实交互问题清单与修复边界.md` 已登记 A2-116，并将事实与待验证假设分开记录；
-3. A2-80/A2-81 中“Qwen 未配置/等待用户配置”的过期事实已刷新：Qwen 已接通并取得直接推荐成功样本，但尚无受控 P50/P95 和完整质量矩阵；
-4. A2-87/A2-88 继续保持 `IN_PROGRESS`，只补充已有少量真实样本、尚未形成可比较矩阵的事实；
+3. A2-80/GATE-21 中“Qwen 未配置/等待用户配置”的过期事实已刷新：Qwen 已接通并取得直接推荐成功样本，但尚无受控 P50/P95 和完整质量矩阵；
+4. GATE-22/GATE-23 继续保持 `IN_PROGRESS`，只补充已有少量真实样本、尚未形成可比较矩阵的事实；
 5. `docs/08-当前实现状态.md` 和现有 configured model catalog plan 中已经过期的 Qwen 配置描述已同步修正。
 
 用户批准本文后，再执行以下权威切换：
@@ -135,7 +135,7 @@
 - 不自动猜测或补齐 goal、route、subject、recommendation size；
 - 不启动 `goal.proposal.v6`；
 - 不修改 Provider 重试、超时、限流或跨模型策略；
-- 不关闭 A2-87/A2-88，也不宣称 Agent 2.0 整体完成。
+- 不关闭 GATE-22/GATE-23，也不宣称 Agent 2.0 整体完成。
 
 ## 6. 变更等级与边界
 
@@ -364,7 +364,7 @@ Spring Boot 3.5.3 对应的 Logback 版本支持 `%kvp`，但仍必须以启动�
 
 ## 10. 真实 Provider conformance
 
-该实现会改变 Goal Interpretation 和 prompt 行为，因此真实 Provider gate 分类固定为 `REQUIRED`。本批次不新建第二套矩阵，直接将以下样本加入现有 A2-87/A2-88 Goal Interpretation lane：
+该实现会改变 Goal Interpretation 和 prompt 行为，因此真实 Provider gate 分类固定为 `REQUIRED`。本批次不新建第二套矩阵，直接将以下样本加入现有 GATE-22/GATE-23 Goal Interpretation lane：
 
 - `1`；
 - `?`；
@@ -429,7 +429,7 @@ Spring Boot 3.5.3 对应的 Logback 版本支持 `%kvp`，但仍必须以启动�
 实现批次只有在以下条件全部满足时才能声明本问题关闭：
 
 - [ ] A2-116 已在实现前登记，事实、假设、修复范围和专属门完整；
-- [ ] A2-80/A2-81 与 docs/08/现有 plan 中的 Qwen 配置事实已刷新；
+- [ ] A2-80/GATE-21 与 docs/08/现有 plan 中的 Qwen 配置事实已刷新；
 - [ ] `1` 单轮不调用 Provider，返回固定引导；
 - [ ] `1?`、`12。。` 等混合低信息输入命中同一闭集；
 - [ ] `recentSemanticState != null + 1` 不被确定性策略拦截；
@@ -449,7 +449,7 @@ Spring Boot 3.5.3 对应的 Logback 版本支持 `%kvp`，但仍必须以启动�
 - [ ] 真实 Provider gate 记为 `REQUIRED`，Qwen 原始两轮用户路径通过；未获外部调用授权时保持 `BLOCKED/IN_PROGRESS`；
 - [ ] 原始浏览器/packaged 用户可见路径通过，不能只用 Codec 单测替代；
 - [ ] docs/08 已记录最终行为；重要修复完成后 docs/11 已记录演进结果；
-- [ ] A2-87/A2-88 只记录新增证据，不被本批次越权关闭；
+- [ ] GATE-22/GATE-23 只记录新增证据，不被本批次越权关闭；
 - [ ] A2-116 只在生产修复、目标回归、受影响全量门和原始用户路径全部通过后关闭；
 - [ ] 本批次提交范围不包含与本批次无关的文件；允许工作区同时存在其他已识别、未被本批次改写的用户在途修改。
 
@@ -460,7 +460,7 @@ Spring Boot 3.5.3 对应的 Logback 版本支持 `%kvp`，但仍必须以启动�
 1. 低信息谓词已改为 Java 空白/数字/标点 code point 并集，并以 `recentSemanticState == null` 为硬前提；
 2. `SafeConversationalFastPath → input factory → UnresolvedIntentPolicy → interpretTyped` 顺序已冻结；
 3. 继续复用现有 `CONVERSATIONAL`，不增加 `UNRESOLVED_INTENT`；
-4. v6 继续作为 A2-87/A2-88 数据触发的 Level 3 备选；
+4. v6 继续作为 GATE-22/GATE-23 数据触发的 Level 3 备选；
 5. DRAFT/APPROVED 文档门、A2-116、过期 Provider 事实与完成后 docs/08/docs/11 义务已分阶段列明；
 6. Qwen 原始两轮路径被明确列为 `REQUIRED` 的真实 Provider Exit Gate。
 

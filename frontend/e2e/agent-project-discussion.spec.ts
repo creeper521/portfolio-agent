@@ -3,7 +3,7 @@ import { defaultModelSelection } from './support/agent-recovery'
 
 const TURNS = '/api/agent/turns'
 
-// A2-78/92/94：happy path 不得只断言 HTTP 200。每条真实 Provider 轮次都解析
+// GATE-20/GATE-04/GATE-06：happy path 不得只断言 HTTP 200。每条真实 Provider 轮次都解析
 // PublicAgentTurn 终局，拒绝 CAPABILITY_UNAVAILABLE/BOUNDARY 混入成功路径，
 // 并对回答内容做最低完整性检查（推荐项数量、非 NONE 覆盖、非空 section）。
 
