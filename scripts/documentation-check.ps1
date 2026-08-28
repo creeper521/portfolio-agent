@@ -67,6 +67,7 @@ $activeWorkArtifactStatuses = [ordered]@{
     'docs/superpowers/specs/2026-08-27-goal-v2-promotion-and-comparison-pair-identity-design.md' = 'APPROVED'
     'docs/superpowers/plans/2026-08-27-goal-v2-promotion-and-comparison-pair-identity.md' = 'ACTIVE'
     'docs/superpowers/specs/2026-08-28-qwen-standard-explanation-functional-recovery-design.md' = 'APPROVED'
+    'docs/superpowers/plans/2026-08-28-qwen-general-explanation-functional-recovery.md' = 'ACTIVE'
 }
 $activeWorkArtifactFiles = @($activeWorkArtifactStatuses.Keys)
 
