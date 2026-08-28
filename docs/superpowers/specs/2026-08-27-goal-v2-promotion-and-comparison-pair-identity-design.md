@@ -19,18 +19,29 @@ canonical 公开合同不变：`goal.proposal.v5`、`general.draft.v2`、全部 
 
 | 概念 | 提升前权威 | 提升后权威 | 说明 |
 |---|---|---|---|
-| Goal provider wire-shape | `goal.provider-draft.v1.schema.json` | `goal.provider-draft.v2.schema.json` | 两家 Provider 同步切换；v1 资源保留于 jar 但生产绑定移除 |
+| Goal provider wire-shape | `goal.provider-draft.v1.schema.json` | `goal.provider-draft.v2.schema.json` | 两家 Provider 同步切换；v1 资源保留于 jar 但生产绑定移除；仅根级 object carrier 有一次性严格解码边界 |
 | General provider wire-shape | `general.provider-draft.v2.schema.json` | `general.provider-draft.v3.schema.json`（新增） | 仅 Qwen 双合同路径；GLM General 保持 identity 直通 `general.draft.v2` 不变 |
 | Comparison 归属语义 | 编译器按 subject 序 × 排序维度位置赋值 | draft 逐句携带 `{dimension, subjectIndex}`，编译器双射校验后落 canonical | canonical statement shape 不变 |
 | 容量守卫 | 无（schema 允许 5×10=50 组合越过 General 20 上限） | Goal 解析后、Provider 调用前的确定性边界裁决 | 见 §5 |
 
-保持不动：selectionVersion（glm-4-7-flash-v4 / qwen-3-7-flash-v7 之外的版本不再新设）、protocol profile、token field policy、operation 预算、公开目录结构。契约指纹变化经既有 `descriptorFingerprint → ModelTransportBinding → catalogVersion` 自动传导至前端失效旧选择，无需人肉 bump。
+保持不动：selectionVersion（glm-4-7-flash-v4 / qwen-3-7-flash-v6 之外的版本不再新设）、protocol profile、token field policy、operation 预算、公开目录结构。`descriptorFingerprint` 覆盖全部 Operation binding fingerprint，`ConfiguredModelCatalog` 将该 descriptor fingerprint 明确纳入 `catalogVersion` 派生；因此合同或 Compiler binding 变化即使不改变公开 JSON shape，也会使旧目录快照失效，无需人肉 bump。
 
 ### 2.1 已审阅并接受的取舍
 
 - Goal v1 与 v2 的差异是 provider 友好形状（decision+扁平语义字段），canonical 仍由同一 `GoalProviderDraftCompiler` 家族机械派生；切换只改变 wire 解析与锚点来源（v2 要求 provider 提供 `inputText` 子串，锚点 start 由服务端计算，与现状一致）。
 - GLM 同步切 v2 使两家共享一份 Goal 草稿契约；GLM 此前产出的 v1 形状由真实矩阵重新验证（允许 BLOCKED 如实入账）。
 - `comparisonSentences` 升级为对象数组属于 provider 契约破坏性演进，因此按仓库纪律采用新版本号 v3 注册，不原地改 v2。
+
+### 2.2 Transport carrier 解码边界
+
+required-tool 只承担只读 response carrier，不执行任何工具。部分 Provider 会把 Schema 中的 object 作为 tool arguments 内的 JSON 字符串返回；为兼容该 wire 差异，Compiler 只允许 Goal Draft 根级 `goal`、`recentReference`、`clarification` 三个字段在值为字符串时解码一次：
+
+1. 使用开启 duplicate-key detection 与 trailing-token failure 的严格 JSON reader；重复键、合法 JSON 后尾随 token、不可解析文本全部拒绝；
+2. 解码结果必须是 JSON object，数组、标量与 `null` 均拒绝；其他字符串字段不递归解析，也不进行第二次解码；
+3. 当前 route 未选择的根级 sibling 若显式为 `null`，仅视同缺省；被选择分支的必填字段、精确字段集合与领域语义仍按原规则失败关闭；
+4. 该边界只消除 Transport carrier 表达差异，不补字段、不猜语义、不改写值，不触发 repair Prompt、同请求 retry、runtime fallback 或跨模型重发。
+
+上述行为属于确定性 Compiler 边界，不改变 `goal.provider-draft.v2`、`goal.proposal.v5` 或公开 PublicTurn shape。
 
 ## 3. Replacement Manifest
 
@@ -40,6 +51,8 @@ canonical 公开合同不变：`goal.proposal.v5`、`general.draft.v2`、全部 
 - `StructuredOutputContractRegistry.standard()`：注册 `(TURN_INTERPRETATION, "goal.provider-draft.v2")`；
 - `ApprovedModelExecutionProfile`：Qwen/GLM 的 TURN_INTERPRETATION binding 参数 `"goal.provider-draft.v1"` → `"goal.provider-draft.v2"`；
 - `StructuredOutputContractRegistry.SAFE_SCHEMA_FIELDS`：增补 v2 引入的新字段名（`decision`、`inputText`、`topicText`、`subjectTexts`、`conceptText` 等，按最终 diff 补全）；
+- `GoalProviderDraftCompiler`：只对根级 `goal/recentReference/clarification` 增加 §2.2 的严格一次性 object carrier 解码；未选择 sibling 的显式 `null` 视同缺省，其他 branch/semantic 规则不放宽；
+- `ConfiguredModelCatalog.snapshotVersion()`：把 descriptor fingerprint 纳入 `catalogVersion`，确保 Operation contract/compiler fingerprint 变化向目录快照传播；
 - 测试：`ApprovedModelExecutionProfileTest`、`ConfiguredModelCatalogTest`、`ModelProviderDescriptorTest` 期望同步；`GoalProviderDraftV2SchemaTest` 样本升级为编译器金样输入的正反例；`GoalInterpretationAdapterTest` 增加 v2→proposal.v5 全链正例与至少一个错标负例；`UnresolvedIntentPolicyTest` 回归不受影响。
 
 删除：

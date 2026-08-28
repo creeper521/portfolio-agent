@@ -16,15 +16,15 @@
 
 ## 任务清单
 
-1. **[ ] 注册 Goal v2 契约**（registry + SAFE_SCHEMA_FIELDS 增补）。验证：`mvn.cmd -f backend/pom.xml test "-Dtest=StructuredOutputContractRegistryTest"`。
-2. **[ ] Profile 切换绑定**：Qwen/GLM TURN_INTERPRETATION → `goal.provider-draft.v2`。验证：`ApprovedModelExecutionProfileTest`、`ConfiguredModelCatalogTest`、`ModelProviderDescriptorTest`、新增"Profile 不含 goal.provider-draft.v1 字面量"断言。
-3. **[ ] Adapter 全链正反例**：v2 金样输入经 `GoalInterpretationAdapter` 得到 proposal.v5 正例；`UNSUPPORTED_ROOT_KIND`/澄清 blockedGoal 缺失负例诊断串不回归。验证：`GoalInterpreterationAdapterTest`、`GoalProposalCodecTest`、`UnresolvedIntentPolicyTest`。
-4. **[ ] Goal 容量对齐**：GENERAL_COMPARISON pairs>20 → `BOUNDARY` 固定终局，无模型调用。验证：新单测矩阵（19/20/21 组合）+ `AgentTurnLifecycleService` 层终局类型断言。
-5. **[ ] general.provider-draft.v3 契约与注册**：对象化 comparisonSequence.items；`OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION=v3`。验证：schema 正反例单测 + `StructuredOutputGatewayTest`。
-6. **[ ] 编译器双射配对**：认领制归属；乱序达标成功样例 + 重复/错标/越界 subjectIndex/缺漏四类负例；EXPLANATION 不受影响。验证：`GeneralProviderDraftCompilerTest` 全量翻新 + `OpenAiCompatibleGeneralKnowledgeAdapterTest`、`StructuredModelTestFixtures` 同步。
-7. **[ ] Prompt 重写 + 公开合同零改动证明**：删除排序指令段、改为逐句标注要求。验证：`git diff --stat -- contracts frontend/src/features/agent/model frontend/e2e` 为空。
-8. **[ ] 确定性全门**：后端 `mvn.cmd -f backend/pom.xml test`；前端 `npm.cmd --prefix frontend test -- --run && npm.cmd --prefix frontend run check && npm.cmd --prefix frontend run build`；四专项门 documentation/architecture/code-quality/privacy；`git diff --check`。
-9. **[ ] 打包 JAR 并跑免 Provider 验收**（联动独立浏览器/负例批次）：JVM_RESTART API 门 Browser 化前置准备、GATE-19 runner env 元测试。
+1. **[x] 注册 Goal v2 契约**（registry + SAFE_SCHEMA_FIELDS 增补）。验证：`mvn.cmd -f backend/pom.xml test "-Dtest=StructuredOutputContractRegistryTest"`。
+2. **[x] Profile 切换绑定**：Qwen/GLM TURN_INTERPRETATION → `goal.provider-draft.v2`。验证：`ApprovedModelExecutionProfileTest`、`ConfiguredModelCatalogTest`、`ModelProviderDescriptorTest`、新增"Profile 不含 goal.provider-draft.v1 字面量"断言。
+3. **[x] Adapter 全链正反例**：v2 金样输入经 `GoalInterpretationAdapter` 得到 proposal.v5 正例；`UNSUPPORTED_ROOT_KIND`/澄清 blockedGoal 缺失负例诊断串不回归，并覆盖根级 object carrier 严格一次性解码。验证：`GoalInterpretationAdapterTest`、`GoalProviderDraftCompilerTest`、`GoalProposalCodecTest`、`UnresolvedIntentPolicyTest`。
+4. **[x] Goal 容量对齐**：GENERAL_COMPARISON pairs>20 → `BOUNDARY` 固定终局，无模型调用。验证：新单测矩阵（19/20/21 组合）+ `AgentTurnLifecycleService` 层终局类型断言。
+5. **[x] general.provider-draft.v3 契约与注册**：对象化 comparisonSequence.items；`OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION=v3`。验证：schema 正反例单测 + `StructuredOutputGatewayTest`。
+6. **[x] 编译器双射配对**：认领制归属；乱序达标成功样例 + 重复/错标/越界 subjectIndex/缺漏四类负例；EXPLANATION 不受影响。验证：`GeneralProviderDraftCompilerTest` 全量翻新 + `OpenAiCompatibleGeneralKnowledgeAdapterTest`、`StructuredModelTestFixtures` 同步。
+7. **[x] Prompt 重写 + 公开合同零改动证明**：删除排序指令段、改为逐句标注要求，并明确未选根级 sibling 不输出 `null`。验证：canonical/public contract shape 零改动；相关 Prompt 与合同守卫保持一致。
+8. **[x] 确定性全门**：后端 `mvn.cmd -f backend/pom.xml test`；前端 `npm.cmd --prefix frontend test -- --run && npm.cmd --prefix frontend run check && npm.cmd --prefix frontend run build`；四专项门 documentation/architecture/code-quality/privacy；`git diff --check`。
+9. **[x] 打包 JAR 并跑免 Provider 验收**（联动独立浏览器/负例批次）：JVM_RESTART API 门 Browser 化前置准备、GATE-19 runner env 元测试。
 10. **[ ] 真实矩阵与统计**（Qwen 优先，Comparison 就绪后执行）：每家 L4 + PROJECT_DISCUSSION + COMPARISON 固定样本两轮采样；`report-provider-quality.ps1` 输出 per-op 拒绝率与 P50/P95 JSON。
 11. **[ ] 入账**：docs/08 表述更新为当前绑定事实；docs/15 按 Exit Gate 满足情况删行/改写；docs/11 行为摘要；机器状态保持 IN_PROGRESS；historicalize 本计划。
 
