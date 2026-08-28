@@ -134,6 +134,14 @@ class GeneralProviderDraftDualReplayTest {
     }
 
     @Test
+    void legacySnapshotHashIsStableAcrossCheckoutLineEndings() throws Exception {
+        byte[] lf = "first\nsecond\n".getBytes(StandardCharsets.UTF_8);
+        byte[] crlf = "first\r\nsecond\r\n".getBytes(StandardCharsets.UTF_8);
+
+        assertThat(gitBlobSha1(crlf)).isEqualTo(gitBlobSha1(lf));
+    }
+
+    @Test
     void legacyGoldenBehaviorMatrixFreezesCompilerCodecValidatorAndPunctuation()
             throws Exception {
         for (Map.Entry<UserGoalProposal.Depth, Integer> entry : Map.of(
@@ -559,15 +567,22 @@ class GeneralProviderDraftDualReplayTest {
     }
 
     private String gitBlobSha1(byte[] bytes) throws Exception {
+        byte[] gitTextBytes = normalizeGitText(bytes);
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        digest.update(("blob " + bytes.length + "\0")
+        digest.update(("blob " + gitTextBytes.length + "\0")
                 .getBytes(StandardCharsets.UTF_8));
-        return hex(digest.digest(bytes));
+        return hex(digest.digest(gitTextBytes));
     }
 
     private String sha256(Path path) throws Exception {
         return hex(MessageDigest.getInstance("SHA-256")
-                .digest(Files.readAllBytes(path)));
+                .digest(normalizeGitText(Files.readAllBytes(path))));
+    }
+
+    private byte[] normalizeGitText(byte[] bytes) {
+        return new String(bytes, StandardCharsets.UTF_8)
+                .replace("\r\n", "\n")
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private String hex(byte[] bytes) {
