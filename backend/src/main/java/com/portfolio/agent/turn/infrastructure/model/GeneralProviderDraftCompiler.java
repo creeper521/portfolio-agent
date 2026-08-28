@@ -6,15 +6,19 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputCompiler;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputValidationException;
+import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
+import com.portfolio.agent.turn.capability.general.GeneralDraftRules;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeRequest;
 
-import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
 
 /**
  * 把 Provider 仅负责撰写的 General Draft 确定性编译为 general.draft.v2。
@@ -29,10 +33,43 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
             "kind", "depth", "definitionSentences", "mechanismSentences",
             "comparisonSentences", "caveats");
     private static final Set<String> CAVEAT_FIELDS = Set.of("kind", "sentences");
-    private static final Set<String> CAVEAT_KINDS = Set.of(
-            "APPLICABILITY_BOUNDARY", "RISK", "EXCEPTION");
+    private static final Set<String> CAVEAT_KINDS =
+            java.util.Arrays.stream(GeneralDraftCodec.CaveatKind.values())
+                    .map(Enum::name)
+                    .collect(Collectors.toUnmodifiableSet());
     private static final Set<String> COMPARISON_ITEM_FIELDS = Set.of(
             "text", "dimension", "subjectIndex");
+    private static final List<IntPredicate> QUOTE_MARK_CLASSIFIERS = List.of(
+            codePoint -> Character.getType(codePoint)
+                    == Character.INITIAL_QUOTE_PUNCTUATION,
+            codePoint -> Character.getType(codePoint)
+                    == Character.FINAL_QUOTE_PUNCTUATION,
+            codePoint -> "'\"“”‘’「」『』".indexOf(codePoint) >= 0);
+    private static final List<IntPredicate>
+            PUNCTUATION_OR_SYMBOL_CLASSIFIERS = List.of(
+                    Character::isWhitespace,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.CONNECTOR_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.DASH_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.START_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.END_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.INITIAL_QUOTE_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.FINAL_QUOTE_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.OTHER_PUNCTUATION,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.MATH_SYMBOL,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.CURRENCY_SYMBOL,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.MODIFIER_SYMBOL,
+                    codePoint -> Character.getType(codePoint)
+                            == Character.OTHER_SYMBOL);
 
     private final GeneralKnowledgeRequest request;
 
@@ -74,25 +111,21 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
         if (!request.getDepth().name().equals(depth)) {
             throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
         }
-        // 上游 provider 契约已把每数组句数钉为精确值；此处同一常量既作下限也作
-        // 上限，保证任何绕过 Schema 的直连路径得到同样的确定性拒绝。
-        int requiredSentences = switch (request.getDepth()) {
-            case CONCISE -> 1;
-            case STANDARD -> 2;
-            case DETAILED -> 4;
-        };
-        ObjectNode canonical = root(request.getTopic());
+        GeneralDraftRules.ExplanationRule rule = GeneralDraftRules.explanation(
+                request.getDepth());
+        int requiredSentences = rule.providerSentencesPerRole();
+        ObjectNode canonical = root(GeneralDraftRules.topic(request));
         ArrayNode statements = canonical.putArray("statements");
         statements.add(statement(
                 "DEFINITION",
                 sentenceText(draft, "definitionSentences",
                         requiredSentences, requiredSentences, 4000),
-                definitionAspects()));
+                rule.definitionAspects()));
         statements.add(statement(
                 "MECHANISM",
                 sentenceText(draft, "mechanismSentences",
                         requiredSentences, requiredSentences, 4000),
-                mechanismAspects()));
+                rule.mechanismAspects()));
         canonical.set("caveats", caveats(draft));
         return canonical;
     }
@@ -127,7 +160,7 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
                 throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
             }
         }
-        ObjectNode canonical = root(String.join(" vs ", request.getSubjects()));
+        ObjectNode canonical = root(GeneralDraftRules.topic(request));
         ArrayNode statements = canonical.putArray("statements");
         for (int subjectIndex = 1; subjectIndex <= subjects.size();
                 subjectIndex++) {
@@ -198,32 +231,15 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
         return root;
     }
 
-    private ObjectNode statement(String role, String text, List<String> aspects) {
+    private ObjectNode statement(
+            String role, String text,
+            List<GeneralDraftCodec.Aspect> aspects) {
         ObjectNode statement = JSON.objectNode();
         statement.put("role", role);
         statement.put("text", text);
         ArrayNode aspectValues = statement.putArray("aspects");
-        aspects.forEach(aspectValues::add);
+        aspects.forEach(value -> aspectValues.add(value.name()));
         return statement;
-    }
-
-    private List<String> definitionAspects() {
-        return switch (request.getDepth()) {
-            case CONCISE -> List.of("DEFINITION");
-            case STANDARD -> List.of("DEFINITION", "TYPICAL_USAGE");
-            case DETAILED -> List.of(
-                    "DEFINITION", "TYPICAL_USAGE", "COMMON_MISCONCEPTION");
-        };
-    }
-
-    private List<String> mechanismAspects() {
-        return switch (request.getDepth()) {
-            case CONCISE -> List.of("MECHANISM");
-            case STANDARD -> List.of("MECHANISM", "APPLICABILITY_BOUNDARY");
-            case DETAILED -> List.of(
-                    "MECHANISM", "APPLICABILITY_BOUNDARY", "TRADE_OFF",
-                    "BOUNDARY_CONDITION");
-        };
     }
 
     private ArrayNode caveats(JsonNode draft) {
@@ -468,26 +484,16 @@ public final class GeneralProviderDraftCompiler implements StructuredOutputCompi
     }
 
     private boolean isQuoteMark(int codePoint) {
-        int type = Character.getType(codePoint);
-        return type == Character.INITIAL_QUOTE_PUNCTUATION
-                || type == Character.FINAL_QUOTE_PUNCTUATION
-                || "'\"“”‘’「」『』".indexOf(codePoint) >= 0;
+        return classifiedBy(codePoint, QUOTE_MARK_CLASSIFIERS);
     }
 
     private boolean isPunctuationOrSymbol(int codePoint) {
-        int type = Character.getType(codePoint);
-        return Character.isWhitespace(codePoint)
-                || type == Character.CONNECTOR_PUNCTUATION
-                || type == Character.DASH_PUNCTUATION
-                || type == Character.START_PUNCTUATION
-                || type == Character.END_PUNCTUATION
-                || type == Character.INITIAL_QUOTE_PUNCTUATION
-                || type == Character.FINAL_QUOTE_PUNCTUATION
-                || type == Character.OTHER_PUNCTUATION
-                || type == Character.MATH_SYMBOL
-                || type == Character.CURRENCY_SYMBOL
-                || type == Character.MODIFIER_SYMBOL
-                || type == Character.OTHER_SYMBOL;
+        return classifiedBy(codePoint, PUNCTUATION_OR_SYMBOL_CLASSIFIERS);
+    }
+
+    private boolean classifiedBy(
+            int codePoint, List<IntPredicate> classifiers) {
+        return classifiers.stream().anyMatch(value -> value.test(codePoint));
     }
 
     private void appendSentence(

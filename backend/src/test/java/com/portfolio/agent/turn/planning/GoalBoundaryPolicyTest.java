@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.planning;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoalBoundaryPolicyTest {
 
@@ -26,7 +27,20 @@ class GoalBoundaryPolicyTest {
     }
 
     @Test
-    void generalComparisonWithinCapacityProceeds() {
+    void generalComparisonNearestReachableBelowCapacityProceeds() {
+        assertThat(policy.apply(comparisonProposal(2, 9)).getKind())
+                .isEqualTo(ResolvedGoalSet.Kind.GOALS);
+    }
+
+    @Test
+    void nineteenPairsCannotBeRepresentedByAValidGeneralComparisonGoal() {
+        assertThatThrownBy(() -> comparisonProposal(1, 19))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("general comparison requires two to five subjects");
+    }
+
+    @Test
+    void generalComparisonAtCapacityProceeds() {
         assertThat(policy.apply(comparisonProposal(4, 5)).getKind())
                 .isEqualTo(ResolvedGoalSet.Kind.GOALS);
     }

@@ -27,7 +27,7 @@ public final class GeneralDraftValidator {
      */
     public GeneralSemanticResult validate(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
-        if (!expectedTopic(request).equals(draft.topic())) {
+        if (!GeneralDraftRules.topic(request).equals(draft.topic())) {
             reject(GeneralDraftValidationException.Reason.TOPIC_MISMATCH,
                     "draft topic does not match request");
         }
@@ -66,45 +66,28 @@ public final class GeneralDraftValidator {
      */
     private void validateExplanationQuality(
             GeneralKnowledgeRequest request, GeneralDraftCodec.Draft draft) {
-        int minimum = switch (request.getDepth()) {
-            case CONCISE -> 2;
-            case STANDARD -> 4;
-            case DETAILED -> 8;
-        };
-        int maximum = switch (request.getDepth()) {
-            case CONCISE -> 2;
-            case STANDARD -> 6;
-            case DETAILED -> 12;
-        };
+        GeneralDraftRules.ExplanationRule rule = GeneralDraftRules.explanation(
+                request.getDepth());
         int sentenceCount = draft.statements().stream()
                 .mapToInt(statement -> countChineseSentences(
                         statement.text(), "explanation text"))
                 .sum();
-        if (sentenceCount < minimum || sentenceCount > maximum) {
+        if (sentenceCount < rule.minimumCanonicalSentences()
+                || sentenceCount > rule.maximumCanonicalSentences()) {
             reject(GeneralDraftValidationException.Reason
                             .LANGUAGE_OR_SENTENCE_COUNT_INVALID,
                     "explanation text has invalid language or sentence count");
         }
-        if (!draft.statements().get(0).aspects().contains(GeneralDraftCodec.Aspect.DEFINITION)
+        if (!draft.statements().get(0).aspects().contains(
+                rule.definitionAspects().getFirst())
                 || !draft.statements().get(1).aspects().contains(
-                GeneralDraftCodec.Aspect.MECHANISM)) {
+                rule.mechanismAspects().getFirst())) {
             reject(GeneralDraftValidationException.Reason.EXPLANATION_ROLE_ASPECTS_INVALID,
                     "explanation role aspects are invalid");
         }
         Set<GeneralDraftCodec.Aspect> actual = EnumSet.noneOf(GeneralDraftCodec.Aspect.class);
         draft.statements().forEach(statement -> actual.addAll(statement.aspects()));
-        Set<GeneralDraftCodec.Aspect> expected = switch (request.getDepth()) {
-            case CONCISE -> EnumSet.of(
-                    GeneralDraftCodec.Aspect.DEFINITION,
-                    GeneralDraftCodec.Aspect.MECHANISM);
-            case STANDARD -> EnumSet.of(
-                    GeneralDraftCodec.Aspect.DEFINITION,
-                    GeneralDraftCodec.Aspect.MECHANISM,
-                    GeneralDraftCodec.Aspect.TYPICAL_USAGE,
-                    GeneralDraftCodec.Aspect.APPLICABILITY_BOUNDARY);
-            case DETAILED -> EnumSet.allOf(GeneralDraftCodec.Aspect.class);
-        };
-        if (!actual.equals(expected)) {
+        if (!actual.equals(rule.coverage())) {
             reject(GeneralDraftValidationException.Reason.EXPLANATION_COVERAGE_INVALID,
                     "explanation semantic coverage is invalid");
         }
@@ -188,12 +171,6 @@ public final class GeneralDraftValidator {
     /** 统一拒绝出口：所有校验失败都转换为带封闭 Reason 的校验异常。 */
     private void reject(GeneralDraftValidationException.Reason reason, String message) {
         throw new GeneralDraftValidationException(reason, message);
-    }
-
-    /** 期望主题：EXPLANATION 用请求 topic；COMPARISON 用 "A vs B" 形式拼接主题列表。 */
-    private String expectedTopic(GeneralKnowledgeRequest request) {
-        return request.getKind() == GeneralKnowledgeRequest.Kind.EXPLANATION
-                ? request.getTopic() : String.join(" vs ", request.getSubjects());
     }
 
     /** 文本归一化：去首尾空白、转小写、连续空白折叠为单空格，用于重复检测。 */
