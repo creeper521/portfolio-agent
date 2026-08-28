@@ -1,16 +1,58 @@
 package com.portfolio.agent.infrastructure.model.provider;
 
 import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
 import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ModelProviderDescriptorTest {
+
+    @Test
+    void bindingFingerprintsFlowIntoDescriptorAndTransportIdentity() {
+        Map<ModelOperation, OperationBinding> promotedBindings =
+                StructuredModelTestFixtures.qwenV6ToolBindings();
+        ModelProviderDescriptor promoted = descriptor(
+                "qwen-3-7-flash", promotedBindings);
+        ModelProviderDescriptor priorBindingShape = descriptor(
+                "qwen-3-7-flash",
+                StructuredModelTestFixtures.v4NativeBindings());
+        ModelTransportBinding transport = new ModelTransportBinding(
+                promoted.getModelRef(), promoted.getDescriptorFingerprint(),
+                promoted.getEndpoint(), promoted.getModelName(),
+                promoted.getProtocolProfile(), "test-secret",
+                promoted.getMaxOutputTokens(), promoted.getOperationBindings());
+
+        assertThat(promoted.getDescriptorFingerprint())
+                .isNotEqualTo(priorBindingShape.getDescriptorFingerprint());
+        assertThat(transport.getDescriptorFingerprint())
+                .isEqualTo(promoted.getDescriptorFingerprint());
+        assertThat(transport.getOperationBindings().keySet())
+                .containsExactlyInAnyOrderElementsOf(promotedBindings.keySet());
+        promotedBindings.forEach((operation, expected) -> assertThat(
+                transport.getRequiredOperationBinding(operation)
+                        .getBindingFingerprint())
+                .isEqualTo(expected.getBindingFingerprint()));
+        assertThat(promoted.getOperationBindings()
+                .get(ModelOperation.TURN_INTERPRETATION)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("goal.provider-draft.v2");
+        assertThat(promoted.getOperationBindings()
+                .get(ModelOperation.GENERAL_KNOWLEDGE)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("general.provider-draft.v3");
+        assertThat(promoted.getOperationBindings().values())
+                .extracting(binding -> binding.getProviderContractRef()
+                        .schemaVersion())
+                .doesNotContain("goal.provider-draft.v1");
+    }
 
     @Test
     void usesAValidatedModelRefAndContainsOnlyNonSecretExecutionMetadata() {
@@ -97,11 +139,16 @@ class ModelProviderDescriptorTest {
     }
 
     private ModelProviderDescriptor descriptor(String ref) {
+        return descriptor(ref, StructuredModelTestFixtures.nativeBindings());
+    }
+
+    private ModelProviderDescriptor descriptor(
+            String ref, Map<ModelOperation, OperationBinding> bindings) {
         return new ModelProviderDescriptor(
                 ModelRef.of(ref), "glm-v1", "GLM", 10,
                 URI.create("https://example.test/chat"), "glm-4.7-flash",
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
-                StructuredModelTestFixtures.nativeBindings(),
+                bindings,
                 200_000, 8_000);
     }
 

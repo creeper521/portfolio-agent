@@ -256,7 +256,9 @@ public final class ConfiguredModelCatalog {
 
     /**
      * 由默认选择形态与全部公开条目的关键字段（modelRef、显示名、排序、
-     * 版本、能力指纹）派生目录快照版本指纹，任何公开可见变化都会改变指纹。
+     * 版本、能力集）与服务端 descriptor 指纹派生目录快照版本指纹。
+     * descriptor 指纹覆盖全部 operation binding 指纹，因此合同或编译绑定变化
+     * 即使不改变公开 JSON shape，也会使旧选择版本失效。
      */
     private String snapshotVersion(
             List<ModelProviderDescriptor> descriptors,
@@ -274,6 +276,7 @@ public final class ConfiguredModelCatalog {
             values.add(entry.selectionVersion());
             values.add(ModelProviderDescriptor.canonicalCapabilities(
                     entry.capabilities()));
+            values.add(descriptor.getDescriptorFingerprint());
         }
         return ModelProviderDescriptor.fingerprint(values.toArray(String[]::new));
     }

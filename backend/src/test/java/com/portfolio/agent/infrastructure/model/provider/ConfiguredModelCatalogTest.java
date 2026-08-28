@@ -3,6 +3,7 @@ package com.portfolio.agent.infrastructure.model.provider;
 import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
 import com.portfolio.agent.infrastructure.model.configuration.ConfiguredModelCatalog;
 import com.portfolio.agent.infrastructure.model.configuration.ModelRuntimeProperties;
+import com.portfolio.agent.infrastructure.model.structured.OperationBinding;
 import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
@@ -13,6 +14,8 @@ import com.portfolio.agent.turn.lifecycle.AgentTurnCommand;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.net.URI;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.time.Duration;
@@ -53,6 +56,37 @@ class ConfiguredModelCatalogTest {
         assertThat(catalog.getRequiredBinding(ModelRef.of("qwen-3-7-flash")))
                 .extracting(ModelTransportBinding::getProtocolProfile)
                 .isEqualTo(ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS);
+
+        for (String value : java.util.List.of(
+                "glm-4-7-flash", "qwen-3-7-flash")) {
+            ModelRef modelRef = ModelRef.of(value);
+            ModelProviderDescriptor descriptor =
+                    snapshot.getRequiredDescriptor(modelRef);
+            ModelTransportBinding binding = catalog.getRequiredBinding(modelRef);
+            assertThat(binding.getDescriptorFingerprint())
+                    .isEqualTo(descriptor.getDescriptorFingerprint());
+            assertThat(binding.getOperationBindings().keySet())
+                    .containsExactlyInAnyOrderElementsOf(
+                            descriptor.getOperationBindings().keySet());
+            descriptor.getOperationBindings().forEach(
+                    (operation, expected) -> assertThat(
+                            binding.getRequiredOperationBinding(operation)
+                                    .getBindingFingerprint())
+                            .isEqualTo(expected.getBindingFingerprint()));
+            assertThat(descriptor.getOperationBindings()
+                    .get(ModelOperation.TURN_INTERPRETATION)
+                    .getProviderContractRef().schemaVersion())
+                    .isEqualTo("goal.provider-draft.v2");
+            assertThat(descriptor.getOperationBindings().values())
+                    .extracting(operation -> operation.getProviderContractRef()
+                            .schemaVersion())
+                    .doesNotContain("goal.provider-draft.v1");
+        }
+        assertThat(snapshot.getRequiredDescriptor(
+                ModelRef.of("qwen-3-7-flash"))
+                .getOperationBindings().get(ModelOperation.GENERAL_KNOWLEDGE)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("general.provider-draft.v3");
 
         assertThat(snapshot.toString()).doesNotContain("glm-secret", "qwen-secret");
         assertThat(ModelCatalogSnapshot.class.getDeclaredFields())
@@ -144,6 +178,40 @@ class ConfiguredModelCatalogTest {
                 .getDescriptorFingerprint())
                 .isEqualTo(firstSnapshot.getRequiredDescriptor(ModelRef.of("glm"))
                         .getDescriptorFingerprint());
+    }
+
+    @Test
+    void operationBindingFingerprintChangeInvalidatesSnapshotVersion()
+            throws Exception {
+        ModelProviderDescriptor prior = descriptor(
+                StructuredModelTestFixtures.v4NativeBindings());
+        ModelProviderDescriptor promoted = descriptor(
+                StructuredModelTestFixtures.qwenV6ToolBindings());
+        assertThat(promoted.publicEntry()).isEqualTo(prior.publicEntry());
+        assertThat(promoted.getDescriptorFingerprint())
+                .isNotEqualTo(prior.getDescriptorFingerprint());
+
+        ModelRuntimeProperties properties = runtime(
+                true, "qwen-3-7-flash", Map.of("qwen-3-7-flash", model(
+                        "Qwen", 10, "qwen-3-7-flash-v6",
+                        "https://example.test/chat", "qwen3.7-flash",
+                        "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
+        ConfiguredModelCatalog catalog =
+                StructuredModelTestFixtures.catalog(properties);
+        java.lang.reflect.Method snapshotVersion =
+                ConfiguredModelCatalog.class.getDeclaredMethod(
+                        "snapshotVersion", List.class,
+                        ModelCatalogDefaultSelection.class);
+        snapshotVersion.setAccessible(true);
+
+        String priorVersion = (String) snapshotVersion.invoke(
+                catalog, List.of(prior),
+                ModelCatalogDefaultSelection.model(prior));
+        String promotedVersion = (String) snapshotVersion.invoke(
+                catalog, List.of(promoted),
+                ModelCatalogDefaultSelection.model(promoted));
+
+        assertThat(promotedVersion).isNotEqualTo(priorVersion);
     }
 
     @Test
@@ -268,6 +336,15 @@ class ConfiguredModelCatalogTest {
         settings.setMaxContextTokens(200_000);
         settings.setMaxOutputTokens(8_000);
         return settings;
+    }
+
+    private ModelProviderDescriptor descriptor(
+            Map<ModelOperation, OperationBinding> bindings) {
+        return new ModelProviderDescriptor(
+                ModelRef.of("qwen"), "qwen-v1", "Qwen", 10,
+                URI.create("https://example.test/chat"), "qwen3.7-flash",
+                ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
+                bindings, 200_000, 8_000);
     }
 
     private ModelOperationPolicyRegistry policies(
