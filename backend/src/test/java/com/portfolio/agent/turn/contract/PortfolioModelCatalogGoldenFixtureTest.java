@@ -42,7 +42,9 @@ class PortfolioModelCatalogGoldenFixtureTest {
         assertThat(serialized).isEqualTo(fixture);
         assertThat(fixture.toString()).doesNotContain(
                 "endpoint", "apiKey", "credential", "protocolProfile",
-                "descriptorFingerprint", "maxOutputTokens");
+                "descriptorFingerprint", "maxOutputTokens",
+                "qwen-3-7-flash-v7");
+        assertThat(fixture.toString()).contains("qwen-3-7-flash-v6");
     }
 
     private ModelCatalogEntry entry(

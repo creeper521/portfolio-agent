@@ -3,6 +3,9 @@ package com.portfolio.agent.turn.infrastructure.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelResponse;
+import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.ProviderAttemptContext;
+import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
@@ -246,22 +249,39 @@ class GoalInterpretationAdapterTest {
 
     @Test void sendsOnlyGoalLevelAuthorityAndDecodesStrictProposal() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
+        AtomicReference<ProviderAttemptContext> attempt = new AtomicReference<>();
         String systemPrompt = "goal-system-prompt";
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
-                StructuredModelTestFixtures.gateway((binding, request) -> {
-            captured.set(request);
-            return new StructuredModelResponse("""
-                    {
-                      "decision":"STANDARD_GOAL",
-                      "goal":{
-                        "goalKind":"GENERAL_EXPLANATION",
-                        "topicText":"幂等",
-                        "depth":"STANDARD"
-                      }
+                StructuredModelTestFixtures.gateway(
+                        new StructuredModelTransport() {
+                    @Override
+                    public StructuredModelResponse execute(
+                            ModelTransportBinding binding,
+                            StructuredModelRequest request) {
+                        throw new AssertionError(
+                                "Goal must use the single-attempt context seam");
                     }
-                    """);
-        }), new ObjectMapper(), new GoalProposalCodec(), systemPrompt, 1200,
-                Duration.ofSeconds(2));
+
+                    @Override
+                    public StructuredModelResponse execute(
+                            ModelTransportBinding binding,
+                            StructuredModelRequest request,
+                            ProviderAttemptContext context) {
+                        captured.set(request);
+                        attempt.set(context);
+                        return new StructuredModelResponse("""
+                                {
+                                  "decision":"STANDARD_GOAL",
+                                  "goal":{
+                                    "goalKind":"GENERAL_EXPLANATION",
+                                    "topicText":"幂等",
+                                    "depth":"STANDARD"
+                                  }
+                                }
+                                """);
+                    }
+                }), new ObjectMapper(), new GoalProposalCodec(), systemPrompt,
+                1200, Duration.ofSeconds(2));
 
         GoalInterpretationResult result = adapter.interpret(
                 input(), com.portfolio.agent.turn.execution.TurnDeadline.after(
@@ -282,6 +302,9 @@ class GoalInterpretationAdapterTest {
                 .doesNotContain("taskType", "dependencies");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isZero();
+        assertThat(attempt.get().attemptIndex()).isEqualTo(1);
+        assertThat(attempt.get().attemptCount()).isEqualTo(1);
+        assertThat(attempt.get().attemptTimeoutCap()).isEmpty();
     }
 
     @Test void decodesStrictProviderObjectCarrierThroughTheFullGateway() {

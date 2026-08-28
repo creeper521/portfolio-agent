@@ -1,17 +1,59 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.lang.reflect.Modifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructuredOutputContractRegistryTest {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Test
+    void contractRefProjectsAStableOperationIdWithoutLeakingPolicyType() {
+        StructuredContractRef ref = new StructuredContractRef(
+                ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v3");
+
+        assertThat(ref.operationId()).isEqualTo("GENERAL_KNOWLEDGE");
+    }
+
+    @Test
+    void onlyTheStructuredPackageCanConstructValidatedOutputCapabilities() {
+        assertThat(StructurallyValidatedOutput.class.isRecord()).isFalse();
+        assertThat(Modifier.isFinal(
+                StructurallyValidatedOutput.class.getModifiers())).isTrue();
+        assertThat(StructurallyValidatedOutput.class.getDeclaredConstructors())
+                .allSatisfy(constructor -> assertThat(
+                        Modifier.isPublic(constructor.getModifiers())).isFalse());
+    }
+
     private final StructuredOutputContractRegistry registry =
             StructuredOutputContractRegistry.standard();
+
+    @Test
+    void resolvesGeneralV4ProviderAndV3CanonicalContracts() {
+        StructuredOutputContract provider = registry.resolve(
+                new StructuredContractRef(ModelOperation.GENERAL_KNOWLEDGE,
+                        "general.provider-draft.v4"));
+        StructuredOutputContract canonical = registry.resolve(
+                new StructuredContractRef(ModelOperation.GENERAL_KNOWLEDGE,
+                        "general.draft.v3"));
+
+        assertThat(provider.canonicalSchema().path("$id").textValue())
+                .isEqualTo("urn:portfolio-agent:model-contract:general.provider-draft.v4");
+        assertThat(canonical.canonicalSchema().path("$id").textValue())
+                .isEqualTo("urn:portfolio-agent:model-contract:general.draft.v3");
+        assertThat(provider.contractFingerprint())
+                .isNotEqualTo(canonical.contractFingerprint());
+    }
 
     @Test
     void resolvesClosedOperationContractAndProducesStableFingerprint() {
@@ -324,6 +366,77 @@ class StructuredOutputContractRegistryTest {
     }
 
     @Test
+    void rejectsExcessiveJsonDepthBeforeTheOpenV4SchemaCanAdmitIt() throws Exception {
+        StructuredContractRef ref = new StructuredContractRef(
+                ModelOperation.GENERAL_KNOWLEDGE, "general.provider-draft.v4");
+        ObjectNode root = MAPPER.createObjectNode()
+                .put("definition", "定义")
+                .put("mechanism", "机制");
+        ObjectNode cursor = root.putObject("caveats");
+        for (int index = 0; index < 16; index++) {
+            cursor = cursor.putObject("nested");
+        }
+
+        assertResourceLimit(() -> registry.validate(ref, root.toString()),
+                "OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
+        assertResourceLimit(() -> registry.validateTree(ref, root),
+                "OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
+    }
+
+    @Test
+    void acceptsDepthSixteenAndRejectsDepthSeventeenAtBothRegistryEntrypoints() {
+        StructuredContractRef ref = new StructuredContractRef(
+                ModelOperation.GENERAL_KNOWLEDGE, "general.provider-draft.v4");
+        ObjectNode depthSixteen = nestedV4Draft(14);
+        ObjectNode depthSeventeen = nestedV4Draft(15);
+
+        assertThat(registry.validate(ref, depthSixteen.toString()).jsonTree())
+                .isEqualTo(depthSixteen);
+        assertThat(registry.validateTree(ref, depthSixteen).jsonTree())
+                .isEqualTo(depthSixteen);
+        assertResourceLimit(() -> registry.validate(
+                        ref, depthSeventeen.toString()),
+                "OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
+        assertResourceLimit(() -> registry.validateTree(ref, depthSeventeen),
+                "OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
+    }
+
+    @Test
+    void rejectsExcessiveTotalArrayElementsBeforeInvalidV4CaveatsCanDegrade() {
+        StructuredContractRef ref = new StructuredContractRef(
+                ModelOperation.GENERAL_KNOWLEDGE, "general.provider-draft.v4");
+        ObjectNode root = MAPPER.createObjectNode()
+                .put("definition", "定义")
+                .put("mechanism", "机制");
+        ArrayNode caveats = root.putArray("caveats");
+        for (int index = 0; index < 65; index++) {
+            caveats.add("invalid optional value");
+        }
+
+        assertResourceLimit(() -> registry.validate(ref, root.toString()),
+                "OUTPUT_TOO_LARGE_RESOURCE_ARRAY_ELEMENTS");
+        assertResourceLimit(() -> registry.validateTree(ref, root),
+                "OUTPUT_TOO_LARGE_RESOURCE_ARRAY_ELEMENTS");
+    }
+
+    @Test
+    void acceptsSixtyFourAndRejectsSixtyFiveTotalArrayElementsAtBothEntrypoints() {
+        StructuredContractRef ref = new StructuredContractRef(
+                ModelOperation.GENERAL_KNOWLEDGE, "general.provider-draft.v4");
+        ObjectNode sixtyFour = arrayV4Draft(64);
+        ObjectNode sixtyFive = arrayV4Draft(65);
+
+        assertThat(registry.validate(ref, sixtyFour.toString()).jsonTree())
+                .isEqualTo(sixtyFour);
+        assertThat(registry.validateTree(ref, sixtyFour).jsonTree())
+                .isEqualTo(sixtyFour);
+        assertResourceLimit(() -> registry.validate(ref, sixtyFive.toString()),
+                "OUTPUT_TOO_LARGE_RESOURCE_ARRAY_ELEMENTS");
+        assertResourceLimit(() -> registry.validateTree(ref, sixtyFive),
+                "OUTPUT_TOO_LARGE_RESOURCE_ARRAY_ELEMENTS");
+    }
+
+    @Test
     void typeFailureDiagnosticNamesOnlyAWhitelistedSchemaField() {
         StructuredOutputValidationException failure = org.assertj.core.api.Assertions
                 .catchThrowableOfType(() -> registry.validate(
@@ -348,5 +461,41 @@ class StructuredOutputContractRegistryTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("structured output contract is not approved")
                 .hasMessageNotContaining("unknown.secret.value");
+    }
+
+    private void assertResourceLimit(
+            org.assertj.core.api.ThrowableAssert.ThrowingCallable invocation,
+            String diagnosticReason) {
+        assertThatThrownBy(invocation)
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .satisfies(failure -> {
+                    StructuredOutputValidationException typed =
+                            (StructuredOutputValidationException) failure;
+                    assertThat(typed.getReason()).isEqualTo(
+                            StructuredOutputValidationException.Reason.OUTPUT_TOO_LARGE);
+                    assertThat(typed.getDiagnosticReason()).isEqualTo(diagnosticReason);
+                });
+    }
+
+    private ObjectNode nestedV4Draft(int nestedObjectCount) {
+        ObjectNode root = MAPPER.createObjectNode()
+                .put("definition", "定义")
+                .put("mechanism", "机制");
+        ObjectNode cursor = root.putObject("caveats");
+        for (int index = 0; index < nestedObjectCount; index++) {
+            cursor = cursor.putObject("nested");
+        }
+        return root;
+    }
+
+    private ObjectNode arrayV4Draft(int size) {
+        ObjectNode root = MAPPER.createObjectNode()
+                .put("definition", "定义")
+                .put("mechanism", "机制");
+        ArrayNode caveats = root.putArray("caveats");
+        for (int index = 0; index < size; index++) {
+            caveats.add("optional");
+        }
+        return root;
     }
 }

@@ -3,6 +3,7 @@ package com.portfolio.agent.turn.capability.general;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -10,15 +11,17 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Strict decoder for untrusted provider output. Unknown or shape-mismatched fields fail closed.
+ * General canonical carrier 的严格领域解码器。
  *
- * <p>通用能力草稿的严格解码器：把不可信的 Provider 原始输出解析为结构化 {@link Draft}。
- * fail-closed 语义——出现未知字段、形状不符、长度超限（文本 ≤4000、caveat 文本 ≤1000）、
- * 数量超限（statements 1..20、caveats ≤10、aspects ≤10 且不重复）、尾随 token 等任何
- * 偏差都抛 {@link IllegalArgumentException}，绝不静默容忍或猜测修复。
+ * <p>生产入口只接受 Registry 已验证并签发的 {@link StructurallyValidatedOutput}；
+ * raw string/tree overload 仅保留为同包测试 seam。Codec 不解析 Provider Draft，也不执行
+ * normalization 或 repair，而是把 canonical v2/v3 的已验证树机械投影为 {@link Draft}。
+ * 字段、枚举、长度或数量若与领域对象不一致，继续 fail-closed。
  */
 public final class GeneralDraftCodec {
-    public static final String SCHEMA_VERSION = "general.draft.v2";
+    public static final String SCHEMA_VERSION = "general.draft.v3";
+    private static final Set<String> ACCEPTED_SCHEMA_VERSIONS = Set.of(
+            "general.draft.v2", SCHEMA_VERSION);
     private static final Set<String> ROOT_FIELDS = Set.of("topic", "statements", "caveats");
     private static final Set<String> STATEMENT_FIELDS = Set.of(
             "role", "text", "subject", "dimension", "aspects");
@@ -31,16 +34,16 @@ public final class GeneralDraftCodec {
     }
 
     /**
-     * 解码 Provider 原始输出为 {@link Draft}：逐层校验字段白名单、必填/可选文本、
+     * 测试 seam：解码 JSON 为 {@link Draft}，逐层校验字段白名单、必填/可选文本、
      * 枚举与数量约束，任一违规立即失败。
      *
-     * @param raw Provider 返回的原始 JSON 文本
+     * @param raw 测试输入 JSON 文本
      * @throws IllegalArgumentException 任何结构、白名单、长度或数量校验不通过
      */
-    public Draft decode(String raw) {
+    Draft decode(String raw) {
         try {
             JsonNode root = objectMapper.readTree(raw);
-            return decode(root);
+            return decode(root, SCHEMA_VERSION);
         } catch (RuntimeException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -48,8 +51,28 @@ public final class GeneralDraftCodec {
         }
     }
 
+    /**
+     * 只解码 Gateway 已按 General canonical v2/v3 验证的同一棵树；
+     * contract identity 不是正文能够伪造的字段。
+     */
+    public Draft decode(StructurallyValidatedOutput output) {
+        StructurallyValidatedOutput required = java.util.Objects.requireNonNull(
+                output, "output");
+        if (!"GENERAL_KNOWLEDGE".equals(
+                required.contractRef().operationId())
+                || !ACCEPTED_SCHEMA_VERSIONS.contains(
+                        required.contractRef().schemaVersion())) {
+            throw new IllegalArgumentException("general draft contract is invalid");
+        }
+        return decode(required.jsonTree(), required.contractRef().schemaVersion());
+    }
+
     /** 从 canonical schema 已验证的同一棵 JSON tree 构造领域草稿，不再次解析原文。 */
-    public Draft decode(JsonNode root) {
+    Draft decode(JsonNode root) {
+        return decode(root, SCHEMA_VERSION);
+    }
+
+    private Draft decode(JsonNode root, String schemaVersion) {
         try {
             requireObject(root, ROOT_FIELDS, "root");
             String topic = requiredText(root, "topic");
@@ -81,7 +104,7 @@ public final class GeneralDraftCodec {
                         CaveatKind.valueOf(requiredText(node, "kind")),
                         text));
             }
-            return new Draft(topic, statements, caveats);
+            return new Draft(topic, statements, caveats, schemaVersion);
         } catch (RuntimeException exception) {
             throw exception;
         }
@@ -130,10 +153,14 @@ public final class GeneralDraftCodec {
 
     /** 解码成功的完整草稿：主题 + 陈述列表 + 限定说明列表，列表不可变。 */
     public record Draft(
-            String topic, List<StatementDraft> statements, List<CaveatDraft> caveats) {
+            String topic, List<StatementDraft> statements, List<CaveatDraft> caveats,
+            String schemaVersion) {
         public Draft {
             statements = List.copyOf(statements);
             caveats = List.copyOf(caveats);
+            if (!ACCEPTED_SCHEMA_VERSIONS.contains(schemaVersion)) {
+                throw new IllegalArgumentException("general draft schema version is invalid");
+            }
         }
     }
     /** 单条知识陈述草稿：角色、正文、可选主题/维度标注与覆盖侧面集合。 */

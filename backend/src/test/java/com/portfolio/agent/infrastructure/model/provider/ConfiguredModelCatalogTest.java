@@ -27,38 +27,38 @@ class ConfiguredModelCatalogTest {
 
     @Test
     void buildsAnOrderedSafeSnapshotAndClosedBindingsFromConfiguration() {
-        ModelRuntimeProperties properties = runtime(true, "glm-4-7-flash",
+        ModelRuntimeProperties.ModelSettings blockedGlm = model(
+                "GLM-4.7-Flash", 10, "glm-4-7-flash-v4",
+                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "glm-secret");
+        blockedGlm.setEnabled(false);
+        blockedGlm.setSelectable(false);
+        ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of(
                         "qwen-3-7-flash", model(
-                                "Qwen3.7-Flash", 20, "qwen-3-7-flash-v6",
+                                "Qwen3.7-Flash", 20, "qwen-3-7-flash-v7",
                                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "qwen-secret"),
-                        "glm-4-7-flash", model(
-                                "GLM-4.7-Flash", 10, "glm-4-7-flash-v4",
-                                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "glm-secret")));
+                        "glm-4-7-flash", blockedGlm));
 
         ConfiguredModelCatalog catalog = StructuredModelTestFixtures.catalog(properties);
         ModelCatalogSnapshot snapshot = catalog.snapshot();
 
         assertThat(snapshot.getEntries())
                 .extracting(ModelCatalogEntry::modelRef)
-                .containsExactly("glm-4-7-flash", "qwen-3-7-flash");
+                .containsExactly("qwen-3-7-flash");
         assertThat(snapshot.getDefaultModelSelection().kind())
                 .isEqualTo(ModelCatalogDefaultSelection.Kind.MODEL);
         assertThat(snapshot.getDefaultModelSelection().modelRef())
-                .isEqualTo("glm-4-7-flash");
+                .isEqualTo("qwen-3-7-flash");
         assertThat(snapshot.getDefaultModelSelection().selectionVersion())
-                .isEqualTo("glm-4-7-flash-v4");
+                .isEqualTo("qwen-3-7-flash-v7");
         assertThat(snapshot.getSnapshotVersion()).matches("[0-9a-f]{64}");
-        assertThat(snapshot.getRequiredDescriptor(ModelRef.of("glm-4-7-flash"))
-                .getModelName()).isEqualTo("glm-4.7-flash");
         assertThat(catalog.getRequiredBinding(ModelRef.of("qwen-3-7-flash")))
                 .extracting(ModelTransportBinding::getProtocolProfile)
                 .isEqualTo(ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS);
 
-        for (String value : java.util.List.of(
-                "glm-4-7-flash", "qwen-3-7-flash")) {
+        for (String value : java.util.List.of("qwen-3-7-flash")) {
             ModelRef modelRef = ModelRef.of(value);
             ModelProviderDescriptor descriptor =
                     snapshot.getRequiredDescriptor(modelRef);
@@ -86,7 +86,12 @@ class ConfiguredModelCatalogTest {
                 ModelRef.of("qwen-3-7-flash"))
                 .getOperationBindings().get(ModelOperation.GENERAL_KNOWLEDGE)
                 .getProviderContractRef().schemaVersion())
-                .isEqualTo("general.provider-draft.v3");
+                .isEqualTo("general.provider-draft.v4");
+        assertThat(snapshot.getRequiredDescriptor(
+                ModelRef.of("qwen-3-7-flash"))
+                .getOperationBindings().get(ModelOperation.GENERAL_KNOWLEDGE)
+                .getApplicationContractRef().schemaVersion())
+                .isEqualTo("general.draft.v3");
 
         assertThat(snapshot.toString()).doesNotContain("glm-secret", "qwen-secret");
         assertThat(ModelCatalogSnapshot.class.getDeclaredFields())
@@ -100,8 +105,8 @@ class ConfiguredModelCatalogTest {
         assertThat(ModelTransportBinding.class.getDeclaredMethods())
                 .extracting(java.lang.reflect.Method::getName)
                 .doesNotContain("toString", "getApiKey", "getCredential");
-        assertThat(catalog.getRequiredBinding(ModelRef.of("glm-4-7-flash")).toString())
-                .doesNotContain("glm-secret");
+        assertThat(snapshot.getEntries()).extracting(ModelCatalogEntry::modelRef)
+                .doesNotContain("glm-4-7-flash");
     }
 
     @Test
@@ -126,7 +131,7 @@ class ConfiguredModelCatalogTest {
                 Map.of(
                         "glm-4-7-flash", unavailable,
                         "qwen-3-7-flash", model(
-                                "Qwen", 20, "qwen-3-7-flash-v6",
+                                "Qwen", 20, "qwen-3-7-flash-v7",
                                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "qwen-secret")));
 
@@ -141,20 +146,20 @@ class ConfiguredModelCatalogTest {
     @Test
     void rejectsInvalidEnabledEntriesAndUnknownDefaultsFailClosed() {
         assertInvalid("INVALID_REF", model(
-                "GLM", 10, "glm-4-7-flash-v4",
-                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret"), "model ref");
-        assertInvalid("glm", model(
-                "GLM", 10, "glm-4-7-flash-v4", "http://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret"), "HTTPS");
-        assertInvalid("glm", model(
-                "GLM", 10, "glm-4-7-flash-v4", "https://example.test/chat",
-                "glm-4.7-flash", "UNKNOWN_PROFILE", "secret"), "execution profile");
+                "Qwen", 10, "qwen-3-7-flash-v7",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "model ref");
+        assertInvalid("qwen", model(
+                "Qwen", 10, "qwen-3-7-flash-v7", "http://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "HTTPS");
+        assertInvalid("qwen", model(
+                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "qwen3.7-flash", "UNKNOWN_PROFILE", "secret"), "execution profile");
 
         ModelRuntimeProperties properties = runtime(true, "missing",
-                Map.of("glm", model(
-                        "GLM", 10, "glm-4-7-flash-v4", "https://example.test/chat",
-                        "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret")));
+                Map.of("qwen-3-7-flash", model(
+                        "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                        "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
         assertThatThrownBy(() -> StructuredModelTestFixtures.catalog(properties))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("default model ref");
@@ -162,21 +167,23 @@ class ConfiguredModelCatalogTest {
 
     @Test
     void secretRotationDoesNotChangePublicOrDescriptorVersions() {
-        ModelRuntimeProperties first = runtime(true, "glm", Map.of("glm", model(
-                "GLM", 10, "glm-4-7-flash-v4", "https://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "first-secret")));
-        ModelRuntimeProperties rotated = runtime(true, "glm", Map.of("glm", model(
-                "GLM", 10, "glm-4-7-flash-v4", "https://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "rotated-secret")));
+        ModelRuntimeProperties first = runtime(true, "qwen-3-7-flash",
+                Map.of("qwen-3-7-flash", model(
+                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "first-secret")));
+        ModelRuntimeProperties rotated = runtime(true, "qwen-3-7-flash",
+                Map.of("qwen-3-7-flash", model(
+                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "rotated-secret")));
 
         ModelCatalogSnapshot firstSnapshot = StructuredModelTestFixtures.catalog(first).snapshot();
         ModelCatalogSnapshot rotatedSnapshot = StructuredModelTestFixtures.catalog(rotated).snapshot();
 
         assertThat(rotatedSnapshot.getSnapshotVersion())
                 .isEqualTo(firstSnapshot.getSnapshotVersion());
-        assertThat(rotatedSnapshot.getRequiredDescriptor(ModelRef.of("glm"))
+        assertThat(rotatedSnapshot.getRequiredDescriptor(ModelRef.of("qwen-3-7-flash"))
                 .getDescriptorFingerprint())
-                .isEqualTo(firstSnapshot.getRequiredDescriptor(ModelRef.of("glm"))
+                .isEqualTo(firstSnapshot.getRequiredDescriptor(ModelRef.of("qwen-3-7-flash"))
                         .getDescriptorFingerprint());
     }
 
@@ -186,14 +193,14 @@ class ConfiguredModelCatalogTest {
         ModelProviderDescriptor prior = descriptor(
                 StructuredModelTestFixtures.v4NativeBindings());
         ModelProviderDescriptor promoted = descriptor(
-                StructuredModelTestFixtures.qwenV6ToolBindings());
+                StructuredModelTestFixtures.qwenV7ToolBindings());
         assertThat(promoted.publicEntry()).isEqualTo(prior.publicEntry());
         assertThat(promoted.getDescriptorFingerprint())
                 .isNotEqualTo(prior.getDescriptorFingerprint());
 
         ModelRuntimeProperties properties = runtime(
                 true, "qwen-3-7-flash", Map.of("qwen-3-7-flash", model(
-                        "Qwen", 10, "qwen-3-7-flash-v6",
+                        "Qwen", 10, "qwen-3-7-flash-v7",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
         ConfiguredModelCatalog catalog =
@@ -216,11 +223,11 @@ class ConfiguredModelCatalogTest {
 
     @Test
     void everyPublicCatalogSelectionRoundTripsIntoTheTurnContract() {
-        ModelRuntimeProperties properties = runtime(true, "glm-4-7-flash",
-                Map.of("glm-4-7-flash", model(
-                        "GLM", 10, "glm-4-7-flash-v4",
-                        "https://example.test/chat", "glm-4.7-flash",
-                        "ZHIPU_CHAT_COMPLETIONS", "secret")));
+        ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
+                Map.of("qwen-3-7-flash", model(
+                        "Qwen", 10, "qwen-3-7-flash-v7",
+                        "https://example.test/chat", "qwen3.7-flash",
+                        "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
         ModelCatalogEntry entry = StructuredModelTestFixtures.catalog(properties)
                 .snapshot().getEntries().getFirst();
@@ -237,22 +244,22 @@ class ConfiguredModelCatalogTest {
     @Test
     void configuredSelectionIdentityUsesExactlyTheClosedTurnShape() {
         assertInvalid("double--dash", model(
-                "GLM", 10, "glm-4-7-flash-v4", "https://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret"), "model ref");
-        assertInvalid("glm", model(
-                "GLM", 10, ".leading", "https://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret"), "selectionVersion");
-        assertInvalid("glm", model(
-                "GLM", 10, "x".repeat(129), "https://example.test/chat",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "secret"), "selectionVersion");
+                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "model ref");
+        assertInvalid("qwen", model(
+                "Qwen", 10, ".leading", "https://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "selectionVersion");
+        assertInvalid("qwen", model(
+                "Qwen", 10, "x".repeat(129), "https://example.test/chat",
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "selectionVersion");
     }
 
     @Test
     void rejectsEndpointQueryCredentialsWithoutReflectingThem() {
-        ModelRuntimeProperties properties = runtime(true, "glm", Map.of("glm", model(
-                "GLM", 10, "glm-4-7-flash-v4",
+        ModelRuntimeProperties properties = runtime(true, "qwen", Map.of("qwen", model(
+                "Qwen", 10, "qwen-3-7-flash-v7",
                 "https://example.test/chat?api_key=query-secret",
-                "glm-4.7-flash", "ZHIPU_CHAT_COMPLETIONS", "header-secret")));
+                "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "header-secret")));
 
         assertThatThrownBy(() -> StructuredModelTestFixtures.catalog(properties))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -265,7 +272,7 @@ class ConfiguredModelCatalogTest {
     void disabledGeneralOperationShrinksThePublicCapabilitySet() {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 20, "qwen-3-7-flash-v6",
+                        "Qwen", 20, "qwen-3-7-flash-v7",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
@@ -285,7 +292,7 @@ class ConfiguredModelCatalogTest {
     void selectableModelWithoutTurnInterpretationBindingFailsAtStartup() {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 20, "qwen-3-7-flash-v6",
+                        "Qwen", 20, "qwen-3-7-flash-v7",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
@@ -329,7 +336,7 @@ class ConfiguredModelCatalogTest {
         settings.setApiKey(apiKey);
         settings.setDataPolicyApproved(true);
         settings.setExecutionProfile(switch (profile) {
-            case "DASHSCOPE_CHAT_COMPLETIONS" -> "QWEN_3_7_FLASH_STRUCTURED_V6";
+            case "DASHSCOPE_CHAT_COMPLETIONS" -> "QWEN_3_7_FLASH_STRUCTURED_V7";
             case "ZHIPU_CHAT_COMPLETIONS" -> "GLM_4_7_FLASH_STRUCTURED_V4";
             default -> "UNKNOWN_EXECUTION_PROFILE";
         });
@@ -357,6 +364,6 @@ class ConfiguredModelCatalogTest {
                 ModelOperation.GENERAL_KNOWLEDGE,
                 new ModelOperationPolicy(
                         ModelOperation.GENERAL_KNOWLEDGE, generalMode,
-                        "general.draft.v2", 1200, Duration.ofSeconds(10))));
+                        "general.draft.v3", 1200, Duration.ofSeconds(10))));
     }
 }

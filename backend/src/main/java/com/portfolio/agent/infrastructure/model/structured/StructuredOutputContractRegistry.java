@@ -1,7 +1,9 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.exc.StreamConstraintsException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +19,7 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -30,6 +33,8 @@ import java.util.Map;
  */
 public final class StructuredOutputContractRegistry {
     private static final int MAX_PAYLOAD_CHARACTERS = 20000;
+    private static final int MAX_NESTING_DEPTH = 16;
+    private static final int MAX_TOTAL_ARRAY_ELEMENTS = 64;
     private static final List<String> SAFE_SCHEMA_FIELDS = List.of(
             "kind", "route", "candidateKey", "goal", "clarification",
             "recentReference", "message", "goalKey", "goalKind", "inputAnchor",
@@ -56,6 +61,9 @@ public final class StructuredOutputContractRegistry {
     public static StructuredOutputContractRegistry standard() {
         JsonFactory factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                .streamReadConstraints(StreamReadConstraints.builder()
+                        .maxNestingDepth(MAX_NESTING_DEPTH)
+                        .build())
                 .build();
         ObjectMapper strictMapper = new ObjectMapper(factory)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
@@ -93,8 +101,18 @@ public final class StructuredOutputContractRegistry {
                 "model-contracts/general.provider-draft.v3.schema.json");
         addApprovedContract(contracts, strictMapper, schemaRegistry,
                 new StructuredContractRef(
+                        ModelOperation.GENERAL_KNOWLEDGE,
+                        "general.provider-draft.v4"),
+                "general_provider_draft_v4",
+                "model-contracts/general.provider-draft.v4.schema.json");
+        addApprovedContract(contracts, strictMapper, schemaRegistry,
+                new StructuredContractRef(
                         ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v2"),
                 "general_draft", "model-contracts/general.draft.v2.schema.json");
+        addApprovedContract(contracts, strictMapper, schemaRegistry,
+                new StructuredContractRef(
+                        ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v3"),
+                "general_draft_v3", "model-contracts/general.draft.v3.schema.json");
         return new StructuredOutputContractRegistry(strictMapper, contracts);
     }
 
@@ -130,6 +148,8 @@ public final class StructuredOutputContractRegistry {
         JsonNode tree;
         try {
             tree = strictMapper.readTree(payload);
+        } catch (StreamConstraintsException excessiveNesting) {
+            throw resourceLimit("OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
         } catch (Exception invalid) {
             throw new StructuredOutputValidationException(
                     StructuredOutputValidationException.Reason.INVALID_JSON);
@@ -148,13 +168,14 @@ public final class StructuredOutputContractRegistry {
             throw new StructuredOutputValidationException(
                     StructuredOutputValidationException.Reason.INVALID_JSON);
         }
-        return validateTree(contract, tree.deepCopy(),
+        return validateTree(contract, tree,
                 StructuredOutputSchemaFailureClassifier.generic());
     }
 
     private StructurallyValidatedOutput validateTree(
             StructuredOutputContract contract, JsonNode tree,
             StructuredOutputSchemaFailureClassifier failureClassifier) {
+        enforceResourceLimits(tree);
         List<Error> errors = contract.validator().validate(tree);
         if (!errors.isEmpty()) {
             StructuredOutputValidationException.Reason reason = classify(errors);
@@ -170,6 +191,39 @@ public final class StructuredOutputContractRegistry {
         return new StructurallyValidatedOutput(
                 contract.ref(), contract.contractFingerprint(), tree);
     }
+
+    /** Schema 之前的固定资源护栏；开放字段也不能绕过深度与数组总量上限。 */
+    private static void enforceResourceLimits(JsonNode root) {
+        ArrayDeque<NodeAtDepth> pending = new ArrayDeque<>();
+        pending.addLast(new NodeAtDepth(root, 1));
+        int totalArrayElements = 0;
+        while (!pending.isEmpty()) {
+            NodeAtDepth current = pending.removeFirst();
+            if (current.depth() > MAX_NESTING_DEPTH) {
+                throw resourceLimit("OUTPUT_TOO_LARGE_RESOURCE_NESTING_DEPTH");
+            }
+            JsonNode node = current.node();
+            if (node.isArray()) {
+                if (node.size() > MAX_TOTAL_ARRAY_ELEMENTS - totalArrayElements) {
+                    throw resourceLimit("OUTPUT_TOO_LARGE_RESOURCE_ARRAY_ELEMENTS");
+                }
+                totalArrayElements += node.size();
+            }
+            if (node.isContainerNode()) {
+                node.elements().forEachRemaining(child -> pending.addLast(
+                        new NodeAtDepth(child, current.depth() + 1)));
+            }
+        }
+    }
+
+    private static StructuredOutputValidationException resourceLimit(
+            String diagnosticReason) {
+        return new StructuredOutputValidationException(
+                StructuredOutputValidationException.Reason.OUTPUT_TOO_LARGE,
+                diagnosticReason);
+    }
+
+    private record NodeAtDepth(JsonNode node, int depth) { }
 
     private static StructuredOutputValidationException.Reason classify(
             List<Error> errors) {

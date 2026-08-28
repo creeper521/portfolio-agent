@@ -1,7 +1,5 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperationPolicy;
@@ -23,7 +21,6 @@ import java.util.Map;
 
 /** 结构化模型测试夹具；不进入生产 JAR。 */
 public final class StructuredModelTestFixtures {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final StructuredOutputContractRegistry CONTRACTS =
             StructuredOutputContractRegistry.standard();
 
@@ -57,7 +54,7 @@ public final class StructuredModelTestFixtures {
         return Map.copyOf(result);
     }
 
-    public static Map<ModelOperation, OperationBinding> qwenV6ToolBindings() {
+    public static Map<ModelOperation, OperationBinding> qwenV7ToolBindings() {
         EnumMap<ModelOperation, OperationBinding> result =
                 new EnumMap<>(ModelOperation.class);
         result.put(ModelOperation.TURN_INTERPRETATION, dualBinding(
@@ -68,7 +65,7 @@ public final class StructuredModelTestFixtures {
                 TokenFieldPolicy.OMIT));
         result.put(ModelOperation.GENERAL_KNOWLEDGE, dualBinding(
                 ModelOperation.GENERAL_KNOWLEDGE,
-                "general.provider-draft.v3", "general.draft.v2",
+                "general.provider-draft.v4", "general.draft.v3",
                 OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 StructuredOutputStrategy.REQUIRED_TOOL_CALL,
                 TokenFieldPolicy.OMIT));
@@ -103,7 +100,7 @@ public final class StructuredModelTestFixtures {
                 ModelOperation.GENERAL_KNOWLEDGE,
                 new ModelOperationPolicy(
                         ModelOperation.GENERAL_KNOWLEDGE,
-                        OperationMode.ENABLED, "general.draft.v2",
+                        OperationMode.ENABLED, "general.draft.v3",
                         1600, Duration.ofSeconds(10))));
     }
 
@@ -129,19 +126,7 @@ public final class StructuredModelTestFixtures {
 
     public static StructurallyValidatedOutput validatedGeneral(String raw) {
         return CONTRACTS.validate(new StructuredContractRef(
-                ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v2"), raw);
-    }
-
-    public static StructurallyValidatedOutput uncheckedGeneral(String raw) {
-        try {
-            StructuredContractRef ref = new StructuredContractRef(
-                    ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v2");
-            JsonNode tree = MAPPER.readTree(raw);
-            return new StructurallyValidatedOutput(
-                    ref, CONTRACTS.resolve(ref).contractFingerprint(), tree);
-        } catch (Exception failure) {
-            throw new IllegalArgumentException("invalid test fixture", failure);
-        }
+                ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v3"), raw);
     }
 
     private static OperationBinding binding(

@@ -6,402 +6,227 @@ import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.infrastructure.model.structured.StructuredContractRef;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputValidationException;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 import com.portfolio.agent.turn.capability.general.GeneralDraftCodec;
 import com.portfolio.agent.turn.capability.general.GeneralDraftValidator;
 import com.portfolio.agent.turn.capability.general.GeneralKnowledgeRequest;
-import com.portfolio.agent.turn.capability.general.GeneralSemanticResult;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.util.List;
-import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GeneralProviderDraftCompilerTest {
+    private static final StructuredContractRef PROVIDER_CONTRACT =
+            new StructuredContractRef(ModelOperation.GENERAL_KNOWLEDGE,
+                    "general.provider-draft.v4");
+    private static final StructuredContractRef CANONICAL_CONTRACT =
+            new StructuredContractRef(ModelOperation.GENERAL_KNOWLEDGE,
+                    "general.draft.v3");
     private final ObjectMapper mapper = new ObjectMapper();
     private final StructuredOutputContractRegistry registry =
             StructuredOutputContractRegistry.standard();
     private final GeneralDraftCodec codec = new GeneralDraftCodec(mapper);
     private final GeneralDraftValidator validator = new GeneralDraftValidator();
 
-    @Test
-    void explanationInjectsTrustedTopicAndRolesAndPassesCanonicalBoundaries()
-            throws Exception {
-        GeneralKnowledgeRequest request = explanation();
-        JsonNode canonical = new GeneralProviderDraftCompiler(request).compile(
-                providerDraft("""
-                        {
-                          "kind":"EXPLANATION",
-                          "depth":"STANDARD",
-                          "definitionSentences":[
-                            "并发控制协调同时发生的工作。",
-                            "它常用于共享资源访问"
-                          ],
-                          "mechanismSentences":[
-                            "它通过有界调度与状态隔离控制竞争",
-                            "具体机制需要服从运行环境的边界"
-                          ],
-                          "caveats":[{
-                            "kind":"RISK","sentences":["错误的锁策略可能降低吞吐量"]
-                          }]
-                        }
-                        """));
+    @ParameterizedTest
+    @MethodSource("validDepthCases")
+    void compilesEveryDepthIntoExactlyTwoTrustedStatements(
+            UserGoalProposal.Depth depth, String definition, String mechanism,
+            int expectedSentences) {
+        GeneralKnowledgeRequest request = explanation(depth);
+
+        JsonNode canonical = compile(request, """
+                {"definition":%s,"mechanism":%s,"caveats":[]}
+                """.formatted(definition, mechanism));
 
         assertThat(canonical.path("topic").textValue()).isEqualTo("并发控制");
+        assertThat(canonical.path("statements")).hasSize(2);
         assertThat(canonical.path("statements").get(0).path("role").textValue())
                 .isEqualTo("DEFINITION");
+        assertThat(canonical.path("statements").get(0).path("aspects"))
+                .extracting(JsonNode::textValue).containsExactly("DEFINITION");
         assertThat(canonical.path("statements").get(1).path("role").textValue())
                 .isEqualTo("MECHANISM");
-        assertCanonicalAndSemantic(request, canonical);
-    }
-
-    @Test
-    void comparisonInjectsTrustedCartesianPairsAndEmptyAspects()
-            throws Exception {
-        GeneralKnowledgeRequest request = comparison(
-                List.of("Redis", "Memcached"), Set.of("MECHANISM", "TRADE_OFF"));
-        JsonNode canonical = new GeneralProviderDraftCompiler(request).compile(
-                providerDraft("""
-                        {
-                          "kind":"COMPARISON",
-                          "comparisonSentences":[
-                            {"text":"Memcached 采用多线程处理简单键值访问",
-                             "dimension":"MECHANISM","subjectIndex":2},
-                            {"text":"Redis 以丰富数据结构换取更多内存开销",
-                             "dimension":"TRADE_OFF","subjectIndex":1},
-                            {"text":"Memcached 以较少能力换取更简单的内存模型",
-                             "dimension":"TRADE_OFF","subjectIndex":2},
-                            {"text":"Redis 通过单线程事件循环处理命令",
-                             "dimension":"MECHANISM","subjectIndex":1}
-                          ],
-                          "caveats":[]
-                        }
-                        """));
-
-        assertThat(canonical.path("topic").textValue())
-                .isEqualTo("Redis vs Memcached");
-        assertThat(canonical.path("statements")).hasSize(4);
-        record Pair(String subject, String dimension) {}
-        java.util.List<Pair> declared = new java.util.ArrayList<>();
+        assertThat(canonical.path("statements").get(1).path("aspects"))
+                .extracting(JsonNode::textValue).containsExactly("MECHANISM");
         canonical.path("statements").forEach(statement -> {
-            assertThat(statement.path("role").textValue()).isEqualTo("COMPARISON");
-            assertThat(statement.path("aspects")).isEmpty();
-            declared.add(new Pair(
-                    statement.path("subject").textValue(),
-                    statement.path("dimension").textValue()));
+            assertThat(statement.path("subject").isNull()).isTrue();
+            assertThat(statement.path("dimension").isNull()).isTrue();
         });
-        assertThat(declared).containsExactly(
-                new Pair("Redis", "MECHANISM"),
-                new Pair("Redis", "TRADE_OFF"),
-                new Pair("Memcached", "MECHANISM"),
-                new Pair("Memcached", "TRADE_OFF"));
+        assertThat(countNaturalSentences(canonical)).isEqualTo(expectedSentences);
+        assertCanonicalAndSemantic(request, canonical);
+    }
+
+    @Test
+    void normalizesTextInTheFrozenOrderAndJoinsOnlyWithinEachRole() {
+        GeneralKnowledgeRequest request = explanation(UserGoalProposal.Depth.STANDARD);
+
+        JsonNode canonical = compile(request, """
+                {"definition":["  Café\\t是一种名称  ","它\\n用于说明归一化！”"],
+                 "mechanism":["第一步解析输入；保留分号","第二步输出结果"],
+                 "topic":"模型不能覆盖可信主题","unknown":{"value":"不进入结果"}}
+                """);
+
         assertThat(canonical.path("statements").get(0).path("text").textValue())
-                .isEqualTo("Redis 通过单线程事件循环处理命令。");
+                .isEqualTo("Café 是一种名称。 它 用于说明归一化。”");
         assertThat(canonical.path("statements").get(1).path("text").textValue())
-                .isEqualTo("Redis 以丰富数据结构换取更多内存开销。");
+                .isEqualTo("第一步解析输入；保留分号。 第二步输出结果。");
+        assertThat(canonical.path("topic").textValue()).isEqualTo("并发控制");
+        assertThat(canonical.toString()).doesNotContain("模型不能覆盖", "unknown");
         assertCanonicalAndSemantic(request, canonical);
     }
 
-    @Test
-    void comparisonKeepsOneProviderItemPerTrustedPairAndAllowsSemicolonClauses()
-            throws Exception {
-        GeneralKnowledgeRequest request = comparison(
-                List.of("Redis", "Memcached"), Set.of("MECHANISM"));
-        JsonNode canonical = new GeneralProviderDraftCompiler(request).compile(
-                mapper.readTree("""
-                {"kind":"COMPARISON",
-                 "comparisonSentences":[
-                   {"text":"Memcached 使用多线程；操作模型更简单",
-                    "dimension":"MECHANISM","subjectIndex":2},
-                   {"text":"Redis 使用事件循环；命令按序执行",
-                    "dimension":"MECHANISM","subjectIndex":1}
-                 ],"caveats":[]}
-                """));
+    @ParameterizedTest
+    @MethodSource("normalizationCases")
+    void textNormalizationIsIdempotent(String raw, String expected) {
+        String once = GeneralProviderDraftCompiler.normalizeText(raw);
 
-        assertThat(canonical.path("statements")).hasSize(2);
-        assertThat(canonical.path("statements").get(0).path("text").textValue())
-                .isEqualTo("Redis 使用事件循环；命令按序执行。");
-        assertCanonicalAndSemantic(request, canonical);
+        assertThat(once).isEqualTo(expected);
+        assertThat(GeneralProviderDraftCompiler.normalizeText(once)).isEqualTo(once);
     }
 
     @Test
-    void legacyScalarExplanationSequenceCompilesWithoutChangingContent()
-            throws Exception {
-        GeneralKnowledgeRequest explanation = explanation();
-        JsonNode explanationCanonical = new GeneralProviderDraftCompiler(
-                explanation).compile(mapper.readTree("""
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":"并发控制协调同时发生的工作。它常用于共享资源访问。",
-                 "mechanismSentences":"它通过状态隔离控制竞争。具体机制服从运行环境边界。",
-                 "caveats":[]}
-                """));
-        assertThat(explanationCanonical.path("statements").get(0)
-                .path("text").textValue()).isEqualTo(
-                "并发控制协调同时发生的工作。它常用于共享资源访问。");
-        assertCanonicalAndSemantic(explanation, explanationCanonical);
+    void missingNullOrMalformedCaveatsBecomeAnEmptyCanonicalArray() {
+        for (String suffix : new String[] {
+                "", ",\"caveats\":null", ",\"caveats\":42",
+                ",\"caveats\":[{\"kind\":\"RISK\",\"sentences\":\"合法说明\"},42]",
+                ",\"caveats\":[{\"kind\":\"UNKNOWN\",\"sentences\":\"说明\"}]"}) {
+            JsonNode canonical = compile(explanation(UserGoalProposal.Depth.CONCISE),
+                    "{\"definition\":\"定义\",\"mechanism\":\"机制\"" + suffix + "}");
+
+            assertThat(canonical.path("caveats")).isEmpty();
+            assertCanonicalAndSemantic(
+                    explanation(UserGoalProposal.Depth.CONCISE), canonical);
+        }
     }
 
     @Test
-    void arraySentenceChunksAreFlattenedWithoutGeneratingOrDroppingContent()
-            throws Exception {
-        GeneralKnowledgeRequest request = explanation();
-        JsonNode canonical = new GeneralProviderDraftCompiler(request).compile(
-                mapper.readTree("""
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["并发控制协调工作。它用于共享资源访问。"],
-                 "mechanismSentences":["状态隔离控制竞争。具体机制服从环境边界。"],
-                 "caveats":[]}
-                """));
+    void validCaveatsAreNormalizedWithoutPartialSalvage() {
+        JsonNode canonical = compile(explanation(UserGoalProposal.Depth.CONCISE), """
+                {"definition":"定义","mechanism":"机制",
+                 "caveats":[{"kind":"RISK","sentences":[" 风险一 ","风险二？”"]}]}
+                """);
 
-        assertThat(canonical.path("statements").get(0).path("text").textValue())
-                .isEqualTo("并发控制协调工作。它用于共享资源访问。");
-        assertCanonicalAndSemantic(request, canonical);
+        assertThat(canonical.path("caveats")).hasSize(1);
+        assertThat(canonical.path("caveats").get(0).path("text").textValue())
+                .isEqualTo("风险一。 风险二。”");
+        assertCanonicalAndSemantic(explanation(UserGoalProposal.Depth.CONCISE), canonical);
     }
 
     @Test
-    void leadingTechnicalLabelIsBoundToItsChineseSentenceDeterministically()
-            throws Exception {
-        GeneralKnowledgeRequest request = explanation();
-        JsonNode canonical = new GeneralProviderDraftCompiler(request).compile(
-                mapper.readTree("""
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":[
-                   "JSON Web Token（JWT）","它是一种令牌","它用于传递声明"
-                 ],
-                 "mechanismSentences":["签名保护声明完整性。服务端校验签名和期限。"],
-                 "caveats":[]}
-                """));
+    void compilerRequiresChineseToDominateLatinLettersButAllowsTechnicalTerms() {
+        assertThatThrownBy(() -> compile(
+                explanation(UserGoalProposal.Depth.CONCISE),
+                "{\"definition\":\"中This is mostly English\",\"mechanism\":\"机制\"}"))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_LANGUAGE");
 
-        assertThat(canonical.path("statements").get(0).path("text").textValue())
-                .isEqualTo(
-                        "JSON Web Token（JWT）：它是一种令牌。它用于传递声明。");
-        assertCanonicalAndSemantic(request, canonical);
+        JsonNode canonical = compile(explanation(UserGoalProposal.Depth.CONCISE),
+                "{\"definition\":\"JWT令牌用于鉴权\","
+                        + "\"mechanism\":\"TLS协议保护传输\"}");
+        assertCanonicalAndSemantic(explanation(UserGoalProposal.Depth.CONCISE), canonical);
     }
 
-    @Test
-    void rejectsNonChineseSegmentsOutsideTheSingleLeadingLabelPosition()
-            throws Exception {
-        assertRejectedWithDiagnostic(new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["这是定义。JSON Web Token。"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason
-                .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_TECHNICAL_LABEL_TRAILING");
-
-        assertRejectedWithDiagnostic(
-                new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["this is an english sentence","这是定义"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason
-                        .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_TECHNICAL_LABEL_CASE");
-
-        assertRejectedWithDiagnostic(
-                new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["1。这里是定义。这里是用途。"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason
-                        .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_PRESENTATION_NUMBER_MARKER");
-
-        assertRejectedWithDiagnostic(
-                new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["…","这里是定义","这里是用途"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason
-                        .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_PLACEHOLDER_ELLIPSIS");
-
-        assertRejectedWithDiagnostic(
-                new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["**。这里是定义。这里是用途。"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason
-                        .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_PRESENTATION_MARKDOWN_MARKER");
-
-        JsonNode quotedCanonical = new GeneralProviderDraftCompiler(
-                explanation()).compile(mapper.readTree("""
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["这里是定义。这里是用途。”"],
-                 "mechanismSentences":["这是机制。这是边界。"],"caveats":[]}
-                """));
-        assertThat(quotedCanonical.path("statements").get(0)
-                .path("text").textValue())
-                .isEqualTo("这里是定义。这里是用途”。");
-        assertCanonicalAndSemantic(explanation(), quotedCanonical);
-    }
-
-    @Test
-    void rejectsMissingCaveatsOrSentenceArraysInsteadOfDefaultingThem()
-            throws Exception {
+    @ParameterizedTest
+    @MethodSource("invalidCoreCases")
+    void rejectsInvalidCoreInsteadOfRepairingOrClipping(
+            UserGoalProposal.Depth depth, String providerDraft) throws Exception {
         GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
-                explanation());
+                explanation(depth));
 
-        assertRejected(compiler, """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["定义内容","典型用途"],
-                 "mechanismSentences":["运行机制","适用边界"]}
-                """, StructuredOutputValidationException.Reason.DRAFT_REQUIRED_FIELD_MISSING);
-        assertRejected(compiler, """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "mechanismSentences":["运行机制","适用边界"],
-                 "caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_REQUIRED_FIELD_MISSING);
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree(providerDraft)))
+                .isInstanceOf(StructuredOutputValidationException.class);
     }
 
     @Test
-    void rejectsMixedBranchesAndKindMismatchInsteadOfRepairingThem() throws Exception {
-        assertRejected(new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["定义内容","典型用途"],
-                 "mechanismSentences":["运行机制","适用边界"],
-                 "comparisonSentences":["不应存在"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
-        assertRejected(new GeneralProviderDraftCompiler(explanation()), """
-                {"kind":"COMPARISON","comparisonSentences":["错误分支"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID);
+    void comparisonRequestsCannotEnterTheExplanationCompiler() throws Exception {
+        GeneralKnowledgeRequest comparison = GeneralKnowledgeRequest.comparison(
+                java.util.List.of("Redis", "Memcached"), java.util.Set.of("MECHANISM"),
+                GeneralKnowledgeRequest.Audience.GUEST, "public-1", deadline());
+
+        assertThatThrownBy(() -> new GeneralProviderDraftCompiler(comparison).compile(
+                mapper.readTree("{\"definition\":\"定义\",\"mechanism\":\"机制\"}")))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("reason")
+                .isEqualTo(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID);
     }
 
-    @Test
-    void rejectsDepthEchoOrSentenceCountThatDisagreesWithTrustedRequest()
-            throws Exception {
-        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
-                explanation());
-
-        assertRejected(compiler, """
-                {"kind":"EXPLANATION","depth":"CONCISE",
-                 "definitionSentences":["定义内容"],
-                 "mechanismSentences":["运行机制"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
-        assertRejectedWithDiagnostic(compiler, """
-                {"kind":"EXPLANATION","depth":"STANDARD",
-                 "definitionSentences":["定义内容"],
-                 "mechanismSentences":["运行机制"],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SENTENCE_COUNT");
-    }
-
-    @Test
-    void rejectsComparisonTextCountThatDoesNotMatchTrustedRequest()
-            throws Exception {
-        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
-                comparison(List.of("A", "B"), Set.of("MECHANISM")));
-
-        assertRejected(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":[
-                  {"text":"只有一条","dimension":"MECHANISM","subjectIndex":1}
-                ],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_REQUIRED_FIELD_MISSING);
-        assertRejected(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":[
-                  {"text":"第一条","dimension":"MECHANISM","subjectIndex":1},
-                  {"text":"第二条","dimension":"MECHANISM","subjectIndex":2},
-                  {"text":"多余一条","dimension":"MECHANISM","subjectIndex":1}
-                ],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
-    }
-
-    @Test
-    void rejectsDuplicatePairEvenWhenCountsMatchTrustedRequest()
-            throws Exception {
-        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
-                comparison(List.of("A", "B"), Set.of("MECHANISM")));
-
-        assertRejected(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":[
-                  {"text":"第一次声明","dimension":"MECHANISM","subjectIndex":1},
-                  {"text":"重复同对","dimension":"MECHANISM","subjectIndex":1}
-                ],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
-    }
-
-    @Test
-    void rejectsDeclaredPairIdentityOutsideTrustedRequest()
-            throws Exception {
-        GeneralProviderDraftCompiler compiler = new GeneralProviderDraftCompiler(
-                comparison(List.of("A", "B"), Set.of("MECHANISM")));
-
-        assertRejectedWithDiagnostic(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":[
-                  {"text":"主体甲正文","dimension":"MECHANISM","subjectIndex":1},
-                  {"text":"未知维度正文","dimension":"MEMORY_MODEL","subjectIndex":2}
-                ],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_DIMENSION");
-        assertRejectedWithDiagnostic(compiler, """
-                {"kind":"COMPARISON","comparisonSentences":[
-                  {"text":"越界序号正文","dimension":"MECHANISM","subjectIndex":3},
-                  {"text":"正常正文","dimension":"MECHANISM","subjectIndex":1}
-                ],"caveats":[]}
-                """, StructuredOutputValidationException.Reason.DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE,
-                "DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE_SUBJECT_INDEX");
+    private JsonNode compile(GeneralKnowledgeRequest request, String raw) {
+        StructurallyValidatedOutput admitted = registry.validate(PROVIDER_CONTRACT, raw);
+        return new GeneralProviderDraftCompiler(request).compile(admitted.jsonTree());
     }
 
     private void assertCanonicalAndSemantic(
             GeneralKnowledgeRequest request, JsonNode canonical) {
-        JsonNode validated = registry.validateTree(
-                new StructuredContractRef(
-                        ModelOperation.GENERAL_KNOWLEDGE, "general.draft.v2"),
-                canonical).jsonTree();
-        GeneralSemanticResult result = validator.validate(
-                request, codec.decode(validated));
-        assertThat(result.getContentVersion())
-                .isEqualTo(request.getExpectedContentVersion());
+        StructurallyValidatedOutput validated = registry.validateTree(
+                CANONICAL_CONTRACT, canonical);
+        assertThat(validator.validate(request, codec.decode(validated)).getStatements())
+                .hasSize(2);
     }
 
-    private JsonNode providerDraft(String raw) {
-        return registry.validate(
-                new StructuredContractRef(
-                        ModelOperation.GENERAL_KNOWLEDGE,
-                        "general.provider-draft.v3"),
-                raw).jsonTree();
+    private int countNaturalSentences(JsonNode canonical) {
+        int count = 0;
+        for (JsonNode statement : canonical.path("statements")) {
+            String text = statement.path("text").textValue();
+            count += (int) text.codePoints()
+                    .filter(value -> "。！？!?".indexOf(value) >= 0)
+                    .count();
+        }
+        return count;
     }
 
-    private void assertRejected(
-            GeneralProviderDraftCompiler compiler, String draft,
-            StructuredOutputValidationException.Reason reason) throws Exception {
-        assertThatThrownBy(() -> compiler.compile(mapper.readTree(draft)))
-                .isInstanceOf(StructuredOutputValidationException.class)
-                .extracting("reason")
-                .isEqualTo(reason);
+    private static Stream<Arguments> validDepthCases() {
+        return Stream.of(
+                Arguments.of(UserGoalProposal.Depth.CONCISE,
+                        "\"并发控制协调共享资源访问\"",
+                        "\"它通过排序或隔离约束竞争\"", 2),
+                Arguments.of(UserGoalProposal.Depth.STANDARD,
+                        "[\"并发控制协调共享资源访问\",\"它减少竞争条件\"]",
+                        "[\"它通过排序约束竞争\",\"隔离机制保护状态\"]", 4),
+                Arguments.of(UserGoalProposal.Depth.DETAILED,
+                        "[\"定义一\",\"定义二\",\"定义三\",\"定义四\"]",
+                        "[\"机制一\",\"机制二\",\"机制三\",\"机制四\"]", 8));
     }
 
-    private void assertRejectedWithDiagnostic(
-            GeneralProviderDraftCompiler compiler, String draft,
-            StructuredOutputValidationException.Reason reason,
-            String diagnosticReason) throws Exception {
-        assertThatThrownBy(() -> compiler.compile(mapper.readTree(draft)))
-                .isInstanceOf(StructuredOutputValidationException.class)
-                .satisfies(failure -> {
-                    StructuredOutputValidationException validation =
-                            (StructuredOutputValidationException) failure;
-                    assertThat(validation.getReason()).isEqualTo(reason);
-                    assertThat(validation.getDiagnosticReason())
-                            .isEqualTo(diagnosticReason);
-                });
+    private static Stream<Arguments> normalizationCases() {
+        return Stream.of(
+                Arguments.of("  定义  ", "定义。"),
+                Arguments.of("机制！", "机制。"),
+                Arguments.of("机制？”", "机制。”"),
+                Arguments.of("A\u030A\t术语", "Å 术语。"),
+                Arguments.of("\u00a0\u3000定义\u2003机制\u00a0", "定义 机制。"),
+                Arguments.of("保留；分号：括号（值）", "保留；分号：括号（值。）"));
     }
 
-    private GeneralKnowledgeRequest explanation() {
+    private static Stream<Arguments> invalidCoreCases() {
+        return Stream.of(
+                Arguments.of(UserGoalProposal.Depth.CONCISE,
+                        "{\"definition\":\"   \",\"mechanism\":\"机制\"}"),
+                Arguments.of(UserGoalProposal.Depth.CONCISE,
+                        "{\"definition\":42,\"mechanism\":\"机制\"}"),
+                Arguments.of(UserGoalProposal.Depth.CONCISE,
+                        "{\"definition\":[\"定义\",42],\"mechanism\":\"机制\"}"),
+                Arguments.of(UserGoalProposal.Depth.CONCISE,
+                        "{\"definition\":\"定义一。定义二\",\"mechanism\":\"机制\"}"),
+                Arguments.of(UserGoalProposal.Depth.STANDARD,
+                        "{\"definition\":\"定义一。定义二。定义三。定义四\",\"mechanism\":\"机制\"}"),
+                Arguments.of(UserGoalProposal.Depth.DETAILED,
+                        "{\"definition\":\"定义一。定义二。定义三。\",\"mechanism\":\"机制一。机制二。机制三。机制四。\"}"));
+    }
+
+    private GeneralKnowledgeRequest explanation(UserGoalProposal.Depth depth) {
         return GeneralKnowledgeRequest.explanation(
-                "并发控制", UserGoalProposal.Depth.STANDARD,
-                GeneralKnowledgeRequest.Audience.GUEST, "public-1", deadline());
-    }
-
-    private GeneralKnowledgeRequest comparison(
-            List<String> subjects, Set<String> dimensions) {
-        return GeneralKnowledgeRequest.comparison(
-                subjects, dimensions, GeneralKnowledgeRequest.Audience.GUEST,
+                "并发控制", depth, GeneralKnowledgeRequest.Audience.GUEST,
                 "public-1", deadline());
     }
 

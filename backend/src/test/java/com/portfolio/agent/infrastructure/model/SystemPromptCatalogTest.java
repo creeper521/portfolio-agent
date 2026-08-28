@@ -42,9 +42,10 @@ class SystemPromptCatalogTest {
                 .contains(
                         "provider-enforced General", "Provider Draft contract",
                         "definition", "mechanism",
-                        "comparisonSentences", "caveats is mandatory",
-                        "subjectIndex", "declared pair",
-                        "will deterministically bind")
+                        "CONCISE", "STANDARD", "DETAILED",
+                        "string or string array", "caveats",
+                        "server derives all structural fields")
+                .doesNotContain("comparisonSentences", "subjectIndex")
                 .doesNotStartWith(" ").doesNotEndWith(" ");
     }
 

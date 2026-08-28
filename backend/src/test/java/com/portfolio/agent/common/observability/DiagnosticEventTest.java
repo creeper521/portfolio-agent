@@ -16,6 +16,79 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DiagnosticEventTest {
 
     @Test
+    void permitsOnlyClosedRetrySchedulingMetadata() {
+        DiagnosticEvent event = DiagnosticEvent.builder(
+                        "provider.call.retry_scheduled", DiagnosticLevel.INFO)
+                .field("attempt.index", 2)
+                .field("attempt.count", 2)
+                .field("failure.code", "PROVIDER_UNAVAILABLE")
+                .field("wait.bucket", "NO_WAIT")
+                .build();
+
+        assertThat(event.getFields()).containsOnlyKeys(
+                "attempt.index", "attempt.count", "failure.code", "wait.bucket");
+        assertThatIllegalArgumentException().isThrownBy(() -> DiagnosticEvent.builder(
+                        "provider.call.retry_scheduled", DiagnosticLevel.INFO)
+                .field("provider.attempt_id", "private-uuid"));
+        assertThatIllegalArgumentException().isThrownBy(() -> DiagnosticEvent.builder(
+                        "provider.call.retry_scheduled", DiagnosticLevel.INFO)
+                .field("provider.operation", "GENERAL_KNOWLEDGE"));
+    }
+
+    @Test
+    void permitsOnlyLowCardinalityAttemptAndUsageMetadataOnProviderCalls() {
+        DiagnosticEvent event = DiagnosticEvent.builder(
+                        "provider.call.completed", DiagnosticLevel.INFO)
+                .field("provider.operation", "GENERAL_KNOWLEDGE")
+                .field("event.outcome", "SUCCESS")
+                .field("duration.bucket", "LT_100_MS")
+                .field("response.present", true)
+                .field("attempt.index", 2)
+                .field("attempt.count", 2)
+                .field("duplicate.billing.risk", true)
+                .field("usage.present", true)
+                .field("usage.input_tokens.bucket", "FROM_1_TO_255")
+                .field("usage.output_tokens.bucket", "FROM_256_TO_1023")
+                .field("usage.total_tokens.bucket", "FROM_1024_TO_4095")
+                .build();
+
+        assertThat(event.getFields()).containsOnlyKeys(
+                "provider.operation", "event.outcome", "duration.bucket",
+                "response.present", "attempt.index", "attempt.count",
+                "duplicate.billing.risk", "usage.present",
+                "usage.input_tokens.bucket", "usage.output_tokens.bucket",
+                "usage.total_tokens.bucket");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                DiagnosticEvent.builder(
+                                "provider.call.completed", DiagnosticLevel.INFO)
+                        .field("provider.attempt_id", "private-uuid"));
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                DiagnosticEvent.builder(
+                                "provider.call.completed", DiagnosticLevel.INFO)
+                        .field("usage.cost", "private-cost"));
+    }
+
+    @Test
+    void permitsOnlyClosedGeneralAdmissionMetadata() {
+        DiagnosticEvent event = DiagnosticEvent.builder(
+                        "provider.output.admitted", DiagnosticLevel.INFO)
+                .field("provider.operation", "GENERAL_KNOWLEDGE")
+                .field("admission.level", "NORMALIZED")
+                .field("normalization.rule", "UNKNOWN_FIELD_COUNT")
+                .field("normalization.count", 2)
+                .build();
+
+        assertThat(event.getFields())
+                .containsEntry("admission.level", "NORMALIZED")
+                .containsEntry("normalization.rule", "UNKNOWN_FIELD_COUNT")
+                .containsEntry("normalization.count", 2)
+                .doesNotContainKeys("unknown.field", "unknown.value");
+        assertThatIllegalArgumentException().isThrownBy(() -> DiagnosticEvent.builder(
+                        "provider.output.admitted", DiagnosticLevel.INFO)
+                .field("unknown.field", "private-provider-key"));
+    }
+
+    @Test
     void rejectsForbiddenFieldNames() {
         assertThatThrownBy(() -> DiagnosticEvent.builder(
                 "http.request.failed", DiagnosticLevel.ERROR)

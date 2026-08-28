@@ -5,6 +5,9 @@ import com.portfolio.agent.infrastructure.model.ModelExecutionSnapshot;
 import com.portfolio.agent.infrastructure.model.ResolvedModelExecution;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
+import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
+import com.portfolio.agent.infrastructure.model.structured.StructuredContractRef;
+import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -12,6 +15,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GeneralKnowledgeGeneratorTest {
+    @Test
+    void rejectsAValidatedTreeCarriedUnderTheWrongOperationContract() {
+        StructuredContractRef wrongRef = new StructuredContractRef(
+                ModelOperation.TURN_INTERPRETATION, "goal.proposal.v5");
+        StructurallyValidatedOutput wrongContract =
+                StructuredModelTestFixtures.contracts().validate(
+                        wrongRef,
+                        "{\"kind\":\"CONVERSATIONAL\","
+                                + "\"message\":\"请说明目标\"}");
+        GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator(
+                (request, modelExecution) -> wrongContract);
+
+        assertThatThrownBy(() -> generator.generate(GeneralTestFixtures.explanation()))
+                .isInstanceOf(GeneralKnowledgeUnavailableException.class);
+    }
+
     @Test void callsProviderExactlyOnceAndReturnsStrictResult() {
         AtomicInteger calls = new AtomicInteger();
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator((request, modelExecution) -> {
@@ -27,7 +46,8 @@ class GeneralKnowledgeGeneratorTest {
         AtomicInteger calls = new AtomicInteger();
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator((request, modelExecution) -> {
             calls.incrementAndGet();
-            return StructuredModelTestFixtures.uncheckedGeneral("{}");
+            return StructuredModelTestFixtures.validatedGeneral(
+                    semanticallyInvalidGeneral());
         });
         assertThatThrownBy(() -> generator.generate(GeneralTestFixtures.explanation()))
                 .isInstanceOf(GeneralKnowledgeUnavailableException.class);
@@ -37,7 +57,8 @@ class GeneralKnowledgeGeneratorTest {
     @Test void invalidSelectedModelDraftKeepsTheSelectedModelFailureCode() {
         GeneralKnowledgeGenerator generator = GeneralTestFixtures.generator(
                 (request, modelExecution) ->
-                        StructuredModelTestFixtures.uncheckedGeneral("{}"));
+                        StructuredModelTestFixtures.validatedGeneral(
+                                semanticallyInvalidGeneral()));
         ResolvedModelExecution modelExecution =
                 org.mockito.Mockito.mock(ResolvedModelExecution.class);
         ModelExecutionSnapshot snapshot =
@@ -53,5 +74,10 @@ class GeneralKnowledgeGeneratorTest {
                         ((SelectedModelFailureException) failure).getCode())
                 .isEqualTo(SelectedModelFailureException.Code
                         .SELECTED_MODEL_INVALID_RESPONSE);
+    }
+
+    private static String semanticallyInvalidGeneral() {
+        return GeneralTestFixtures.VALID_EXPLANATION.replace(
+                "\"topic\":\"并发控制\"", "\"topic\":\"其他主题\"");
     }
 }

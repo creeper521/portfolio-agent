@@ -18,7 +18,7 @@ class ModelProviderDescriptorTest {
     @Test
     void bindingFingerprintsFlowIntoDescriptorAndTransportIdentity() {
         Map<ModelOperation, OperationBinding> promotedBindings =
-                StructuredModelTestFixtures.qwenV6ToolBindings();
+                StructuredModelTestFixtures.qwenV7ToolBindings();
         ModelProviderDescriptor promoted = descriptor(
                 "qwen-3-7-flash", promotedBindings);
         ModelProviderDescriptor priorBindingShape = descriptor(
@@ -47,7 +47,11 @@ class ModelProviderDescriptorTest {
         assertThat(promoted.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE)
                 .getProviderContractRef().schemaVersion())
-                .isEqualTo("general.provider-draft.v3");
+                .isEqualTo("general.provider-draft.v4");
+        assertThat(promoted.getOperationBindings()
+                .get(ModelOperation.GENERAL_KNOWLEDGE)
+                .getApplicationContractRef().schemaVersion())
+                .isEqualTo("general.draft.v3");
         assertThat(promoted.getOperationBindings().values())
                 .extracting(binding -> binding.getProviderContractRef()
                         .schemaVersion())

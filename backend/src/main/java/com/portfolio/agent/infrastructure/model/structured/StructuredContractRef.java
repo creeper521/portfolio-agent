@@ -13,4 +13,9 @@ public record StructuredContractRef(ModelOperation operation, String schemaVersi
         }
         schemaVersion = schemaVersion.strip();
     }
+
+    /** Stable scalar projection for consumers that must not depend on policy enums. */
+    public String operationId() {
+        return operation.name();
+    }
 }

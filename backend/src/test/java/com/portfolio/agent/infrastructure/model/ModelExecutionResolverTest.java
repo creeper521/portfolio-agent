@@ -107,6 +107,42 @@ class ModelExecutionResolverTest {
     }
 
     @Test
+    void publishedQwenV6SelectionIsStaleAgainstTheCurrentQwenV7Descriptor() {
+        ModelProviderDescriptor currentV7 = new ModelProviderDescriptor(
+                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v7",
+                "Qwen3.7-Flash", 20,
+                URI.create("https://provider.example/v1/chat/completions"),
+                "qwen3.7-flash",
+                ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
+                StructuredModelTestFixtures.qwenV7ToolBindings(),
+                100_000, 8_000);
+        AtomicInteger bindingLookups = new AtomicInteger();
+        ModelExecutionResolver resolver = new ModelExecutionResolver(
+                new ModelCatalogSnapshot(
+                        "candidate-v7", List.of(currentV7),
+                        ModelCatalogDefaultSelection.model(currentV7)),
+                modelRef -> {
+                    bindingLookups.incrementAndGet();
+                    return new ModelTransportBinding(
+                            currentV7.getModelRef(),
+                            currentV7.getDescriptorFingerprint(),
+                            currentV7.getEndpoint(), currentV7.getModelName(),
+                            currentV7.getProtocolProfile(), "credential-sentinel",
+                            currentV7.getMaxOutputTokens(),
+                            StructuredModelTestFixtures.qwenV7ToolBindings());
+                });
+
+        assertThatThrownBy(() -> resolver.resolve(
+                AgentTurnCommand.ModelSelection.model(
+                        "qwen-3-7-flash", "qwen-3-7-flash-v6")))
+                .isInstanceOf(ModelExecutionResolutionException.class)
+                .extracting(failure -> ((ModelExecutionResolutionException) failure)
+                        .getCode())
+                .isEqualTo(ModelExecutionResolutionException.Code.MODEL_SELECTION_STALE);
+        assertThat(bindingLookups).hasValue(1);
+    }
+
+    @Test
     void snapshotAndServerBindingMustShareTheExactDescriptorFingerprint() {
         ModelProviderDescriptor descriptor = descriptor(
                 "glm-4-7-flash", "glm-current-v2",

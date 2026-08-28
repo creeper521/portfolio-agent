@@ -18,7 +18,7 @@ import java.util.Objects;
  * tool name、token 字段或 extractor。
  */
 public final class ApprovedModelExecutionProfile {
-    public static final String QWEN_PROFILE = "QWEN_3_7_FLASH_STRUCTURED_V6";
+    public static final String QWEN_PROFILE = "QWEN_3_7_FLASH_STRUCTURED_V7";
     public static final String GLM_PROFILE = "GLM_4_7_FLASH_STRUCTURED_V4";
 
     private final String profileId;
@@ -46,7 +46,7 @@ public final class ApprovedModelExecutionProfile {
         Objects.requireNonNull(contracts, "contracts");
         ApprovedModelExecutionProfile profile = switch (profileId) {
             case QWEN_PROFILE -> qwenProfile(contracts,
-                    QWEN_PROFILE, "qwen-3-7-flash-v6", "qwen3.7-flash",
+                    QWEN_PROFILE, "qwen-3-7-flash-v7", "qwen3.7-flash",
                     ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
                     StructuredOutputStrategy.REQUIRED_TOOL_CALL,
                     TokenFieldPolicy.OMIT,
@@ -87,7 +87,7 @@ public final class ApprovedModelExecutionProfile {
         bindings.put(ModelOperation.GENERAL_KNOWLEDGE, binding(
                 contracts,
                 ModelOperation.GENERAL_KNOWLEDGE,
-                "general.provider-draft.v3", "general.draft.v2",
+                "general.provider-draft.v4", "general.draft.v3",
                 OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 strategy, tokenFieldPolicy, responseExtractorProfileVersion));
         return new ApprovedModelExecutionProfile(

@@ -37,17 +37,17 @@ class ApprovedModelExecutionProfileTest {
         assertThat(qwen.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE)
                 .getProviderContractRef().schemaVersion())
-                .isEqualTo("general.provider-draft.v3");
+                .isEqualTo("general.provider-draft.v4");
     }
 
     @Test
-    void qwenV6FreezesProviderDraftCompilersAndOmittedTokenField() {
+    void qwenV7FreezesProviderDraftCompilersAndOmittedTokenField() {
         ApprovedModelExecutionProfile profile = ApprovedModelExecutionProfile.resolve(
                 ApprovedModelExecutionProfile.QWEN_PROFILE,
                 StructuredModelTestFixtures.contracts());
 
         assertThat(profile.getRequiredSelectionVersion())
-                .isEqualTo("qwen-3-7-flash-v6");
+                .isEqualTo("qwen-3-7-flash-v7");
         assertThat(profile.getExpectedModelIdentity()).isEqualTo("qwen3.7-flash");
         assertThat(profile.getProtocolProfile()).isEqualTo(
                 ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS);
@@ -72,12 +72,12 @@ class ApprovedModelExecutionProfileTest {
         OperationBinding general = profile.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE);
         assertThat(general.getProviderContractRef().schemaVersion())
-                .isEqualTo("general.provider-draft.v3");
+                .isEqualTo("general.provider-draft.v4");
         assertThat(general.getApplicationContractRef().schemaVersion())
-                .isEqualTo("general.draft.v2");
+                .isEqualTo("general.draft.v3");
         assertThat(general.getOutputCompilerProfileVersion())
                 .isEqualTo(OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION);
-        assertThat(general.outputToolName()).isEqualTo("emit_general_provider_draft_v3");
+        assertThat(general.outputToolName()).isEqualTo("emit_general_provider_draft_v4");
     }
 
     @Test

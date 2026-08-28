@@ -25,15 +25,15 @@ class ConfiguredModelCatalogInternalAccessTest {
                 ModelRef.of("canary-model")))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(catalog.getRequiredInternalDescriptor(ModelRef.of("canary-model"))
-                .getModelName()).isEqualTo("glm-4.7-flash");
+                .getModelName()).isEqualTo("qwen3.7-flash");
         assertThat(catalog.getRequiredBinding(ModelRef.of("canary-model"))
-                .getModelName()).isEqualTo("glm-4.7-flash");
+                .getModelName()).isEqualTo("qwen3.7-flash");
 
         ModelExecutionResolver turnResolver = new ModelExecutionResolver(
                 catalog.snapshot(), catalog::getRequiredBinding);
         assertThatThrownBy(() -> turnResolver.resolve(
                 AgentTurnCommand.ModelSelection.model(
-                        "canary-model", "glm-4-7-flash-v4")))
+                        "canary-model", "qwen-3-7-flash-v7")))
                 .isInstanceOf(ModelExecutionResolutionException.class)
                 .extracting(failure -> ((ModelExecutionResolutionException) failure).getCode())
                 .isEqualTo(ModelExecutionResolutionException.Code.SELECTED_MODEL_UNAVAILABLE);
@@ -46,12 +46,12 @@ class ConfiguredModelCatalogInternalAccessTest {
         settings.setSelectable(false);
         settings.setDisplayName("Internal canary");
         settings.setDisplayOrder(10);
-        settings.setSelectionVersion("glm-4-7-flash-v4");
+        settings.setSelectionVersion("qwen-3-7-flash-v7");
         settings.setEndpoint("https://example.test/chat");
-        settings.setModel("glm-4.7-flash");
+        settings.setModel("qwen3.7-flash");
         settings.setApiKey("server-secret");
         settings.setDataPolicyApproved(true);
-        settings.setExecutionProfile("GLM_4_7_FLASH_STRUCTURED_V4");
+        settings.setExecutionProfile("QWEN_3_7_FLASH_STRUCTURED_V7");
         settings.setMaxContextTokens(32_000);
         settings.setMaxOutputTokens(2_000);
 

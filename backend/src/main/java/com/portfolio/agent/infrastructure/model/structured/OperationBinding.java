@@ -19,7 +19,7 @@ public final class OperationBinding {
     public static final String GOAL_DRAFT_OUTPUT_COMPILER_VERSION =
             "goal-provider-draft-to-v5-v1";
     public static final String GENERAL_DRAFT_OUTPUT_COMPILER_VERSION =
-            "general-provider-draft-compiler.v3";
+            "general-provider-draft-compiler.v4";
 
     private final ModelOperation operation;
     private final StructuredContractRef providerContractRef;

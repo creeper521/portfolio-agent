@@ -37,14 +37,15 @@ portfolio:
         max-output-tokens: 128000
       qwen-3-7-flash:
         enabled: ${PORTFOLIO_QWEN_ENABLED:false}
-        selectable: true
+        # Candidate v7 remains non-selectable until F5 publishes a certified catalog.
+        selectable: false
         display-name: Qwen3.7-Flash
         display-order: 20
-        selection-version: qwen-3-7-flash-v6
+        selection-version: qwen-3-7-flash-v7
         endpoint: ${PORTFOLIO_QWEN_ENDPOINT:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
         model: qwen3.7-flash
         api-key: ${PORTFOLIO_QWEN_API_KEY:}
-        execution-profile: QWEN_3_7_FLASH_STRUCTURED_V6
+        execution-profile: QWEN_3_7_FLASH_STRUCTURED_V7
         data-policy-approved: ${PORTFOLIO_QWEN_DATA_POLICY_APPROVED:false}
         max-context-tokens: 1000000
         max-output-tokens: 128000

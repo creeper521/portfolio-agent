@@ -8,10 +8,11 @@ import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import java.util.Objects;
 
 /**
- * One call, one strict decode and one semantic validation. No retry or fallback.
+ * One logical generation, one strict decode and one semantic validation.
  *
- * <p>通用知识生成器：一次模型调用 + 一次严格解码 + 一次语义校验，无重试、无降级、
- * 无隐式 Provider 回退（fail-closed）。解码失败记 SCHEMA 层诊断、语义校验失败记
+ * <p>通用知识生成器：一次逻辑模型生成 + 一次严格解码 + 一次语义校验；端口内部可按
+ * 获批闭集执行同模型 transport retry，但本层不做内容重试、repair 或 Provider 回退。
+ * 解码失败记 SCHEMA 层诊断、语义校验失败记
  * SEMANTIC 层诊断，随后按执行快照类别转换：MODEL 快照抛
  * {@code SelectedModelFailureException}（整轮 Turn 终止），NONE 快照抛
  * {@link GeneralKnowledgeUnavailableException}（通用能力不可用）。
@@ -43,7 +44,7 @@ public final class GeneralKnowledgeGenerator {
     }
 
     /**
-     * 生成通用知识语义结果：模型调用 → 严格解码 → 语义校验，全链路无重试。
+     * 生成通用知识语义结果：逻辑模型生成 → 严格解码 → 语义校验；本层无重试。
      *
      * <p>进入前先检查截止时间：已过期时不发起调用，MODEL 快照抛"尝试前暂不可用"
      * 的模型失败，NONE 快照直接抛通用能力不可用。解码/校验失败按快照类别转换
@@ -72,7 +73,7 @@ public final class GeneralKnowledgeGenerator {
                     modelPort.generate(request, modelExecution);
             GeneralDraftCodec.Draft draft;
             try {
-                draft = codec.decode(output.jsonTree());
+                draft = codec.decode(output);
             } catch (RuntimeException exception) {
                 outputDiagnostics.rejected(
                         "GENERAL_KNOWLEDGE", ModelOutputDiagnostics.Layer.SCHEMA);
