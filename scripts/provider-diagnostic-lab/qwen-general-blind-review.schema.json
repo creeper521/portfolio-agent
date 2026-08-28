@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:schema:qwen-general-blind-review-input.v2",
+  "title": "Qwen General Explanation Opaque Blind Review Input v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewMode", "passes"],
+  "properties": {
+    "schemaVersion": {"const": "qwen-general-blind-review-input.v2"},
+    "reviewMode": {"const": "SINGLE_REVIEWER_BLINDED_SECOND_PASS"},
+    "passes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviewPassId", "reviews"],
+        "properties": {
+          "reviewPassId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "reviews": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 300,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reviewId",
+                "answersQuestion",
+                "definitionAccurateInformative",
+                "mechanismAccurate",
+                "noObviousErrorsOrContradictions",
+                "clearReadable",
+                "depthCriterion",
+                "decision"
+              ],
+              "properties": {
+                "reviewId": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{32}$"
+                },
+                "answersQuestion": {"type": ["boolean", "null"]},
+                "definitionAccurateInformative": {"type": ["boolean", "null"]},
+                "mechanismAccurate": {"type": ["boolean", "null"]},
+                "noObviousErrorsOrContradictions": {"type": ["boolean", "null"]},
+                "clearReadable": {"type": ["boolean", "null"]},
+                "depthCriterion": {"type": ["boolean", "null"]},
+                "decision": {"enum": ["PASS", "FAIL", null]}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

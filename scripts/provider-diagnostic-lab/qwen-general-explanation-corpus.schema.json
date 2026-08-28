@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:schema:qwen-general-explanation-corpus.v1",
+  "title": "Qwen General Explanation Frozen Synthetic Corpus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "cases"],
+  "properties": {
+    "schemaVersion": {
+      "const": "qwen-general-explanation-corpus.v1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["caseId", "category", "topic", "prompts"],
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "pattern": "^[a-z]+(?:-[a-z]+)*-[0-9]{3}$",
+            "maxLength": 48
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "JAVA_SPRING",
+              "DATABASE_TRANSACTION",
+              "REDIS_CACHE",
+              "NETWORK",
+              "DISTRIBUTED_SYSTEM",
+              "FRONTEND",
+              "DEVOPS_CONTAINER",
+              "AI_LLM_AGENT",
+              "ARCHITECTURE_PATTERN",
+              "SECURITY_PERFORMANCE"
+            ]
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "prompts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["CONCISE", "STANDARD", "DETAILED"],
+            "properties": {
+              "CONCISE": {"type": "string", "minLength": 1, "maxLength": 120},
+              "STANDARD": {"type": "string", "minLength": 1, "maxLength": 120},
+              "DETAILED": {"type": "string", "minLength": 1, "maxLength": 120}
+            }
+          }
+        }
+      }
+    }
+  }
+}
