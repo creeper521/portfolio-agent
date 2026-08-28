@@ -2,6 +2,7 @@ package com.portfolio.agent.infrastructure.model;
 
 import com.portfolio.agent.infrastructure.model.structured.StructuredContractRef;
 import com.portfolio.agent.infrastructure.model.structured.StructuredOutputContractRegistry;
+import com.portfolio.agent.infrastructure.model.structured.StructuredOutputSchemaFailureClassifier;
 import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
 
 /**
@@ -21,8 +22,18 @@ public final class StructuredModelResponse {
     public StructurallyValidatedOutput validateWith(
             StructuredOutputContractRegistry contracts,
             StructuredContractRef contractRef) {
+        return validateWith(contracts, contractRef,
+                StructuredOutputSchemaFailureClassifier.generic());
+    }
+
+    public StructurallyValidatedOutput validateWith(
+            StructuredOutputContractRegistry contracts,
+            StructuredContractRef contractRef,
+            StructuredOutputSchemaFailureClassifier failureClassifier) {
         return java.util.Objects.requireNonNull(contracts, "contracts")
                 .validate(java.util.Objects.requireNonNull(contractRef, "contractRef"),
-                        extractedPayload);
+                        extractedPayload,
+                        java.util.Objects.requireNonNull(
+                                failureClassifier, "failureClassifier"));
     }
 }

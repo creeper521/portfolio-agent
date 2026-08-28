@@ -14,7 +14,34 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ApprovedModelExecutionProfileTest {
 
     @Test
-    void qwenV5FreezesProviderDraftCompilersAndOmittedTokenField() {
+    void productionProfilesContainOnlyThePromotedGoalProviderBinding() {
+        ApprovedModelExecutionProfile qwen =
+                ApprovedModelExecutionProfile.resolve(
+                        ApprovedModelExecutionProfile.QWEN_PROFILE,
+                        StructuredModelTestFixtures.contracts());
+        ApprovedModelExecutionProfile glm =
+                ApprovedModelExecutionProfile.resolve(
+                        ApprovedModelExecutionProfile.GLM_PROFILE,
+                        StructuredModelTestFixtures.contracts());
+
+        assertThat(java.util.List.of(qwen, glm)).allSatisfy(profile -> {
+            assertThat(profile.getOperationBindings()
+                    .get(ModelOperation.TURN_INTERPRETATION)
+                    .getProviderContractRef().schemaVersion())
+                    .isEqualTo("goal.provider-draft.v2");
+            assertThat(profile.getOperationBindings().values())
+                    .extracting(binding -> binding.getProviderContractRef()
+                            .schemaVersion())
+                    .doesNotContain("goal.provider-draft.v1");
+        });
+        assertThat(qwen.getOperationBindings()
+                .get(ModelOperation.GENERAL_KNOWLEDGE)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("general.provider-draft.v3");
+    }
+
+    @Test
+    void qwenV6FreezesProviderDraftCompilersAndOmittedTokenField() {
         ApprovedModelExecutionProfile profile = ApprovedModelExecutionProfile.resolve(
                 ApprovedModelExecutionProfile.QWEN_PROFILE,
                 StructuredModelTestFixtures.contracts());

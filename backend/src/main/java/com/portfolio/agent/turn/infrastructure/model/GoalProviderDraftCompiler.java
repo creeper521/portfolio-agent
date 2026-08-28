@@ -1,6 +1,10 @@
 package com.portfolio.agent.turn.infrastructure.model;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -14,6 +18,7 @@ import com.portfolio.agent.turn.planning.SemanticRouteProposal;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
@@ -26,11 +31,16 @@ import java.util.Set;
  */
 public final class GoalProviderDraftCompiler implements StructuredOutputCompiler {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
+    private static final ObjectMapper STRICT_CARRIER_READER =
+            new ObjectMapper(JsonFactory.builder()
+                    .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                    .build())
+                    .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final Set<String> ROOT_FIELDS = Set.of(
             "decision", "message", "candidateKey", "goal",
             "clarification", "recentReference");
     private static final Set<String> GOAL_FIELDS = Set.of(
-            "goalKind", "inputText", "subjects", "facets", "depth",
+            "goalKind", "subjects", "facets", "depth",
             "dimensions", "requestedSize", "constraints", "topicText",
             "subjectTexts", "conceptText", "portfolioFacet");
     private static final Set<String> SUBJECT_FIELDS = Set.of(
@@ -62,7 +72,8 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     @Override
     public JsonNode compile(JsonNode draft) {
         requireObject(draft);
-        requireOnly(draft, ROOT_FIELDS);
+        draft = decodeCarrierFields(draft);
+        requireOnly(draft, ROOT_FIELDS, "_ROOT");
         String decision = text(draft, "decision");
         return switch (decision) {
             case "CONVERSATIONAL" -> conversational(draft);
@@ -78,7 +89,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private JsonNode conversational(JsonNode draft) {
-        requirePresentOnly(draft, Set.of("decision", "message"));
+        requirePresentOnly(draft, Set.of("decision", "message"), "_CONVERSATIONAL");
         ObjectNode root = JSON.objectNode();
         root.put("kind", "CONVERSATIONAL");
         root.put("message", text(draft, "message"));
@@ -89,14 +100,14 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         Set<String> allowed = "STANDARD_GOAL".equals(route)
                 ? Set.of("decision", "goal", "recentReference")
                 : Set.of("decision", "goal");
-        requirePresentOnly(draft, allowed);
+        requirePresentOnly(draft, allowed, "_" + route);
         if (!input.getAllowedRoutes().contains(route(route))) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE);
         }
         ObjectNode root = semanticRoot(route);
         root.set("goal", compileGoal(object(draft, "goal")));
-        if ("STANDARD_GOAL".equals(route) && draft.has("recentReference")) {
+        if ("STANDARD_GOAL".equals(route) && hasField(draft, "recentReference")) {
             root.set("recentReference", compileRecentReference(
                     object(draft, "recentReference")));
         }
@@ -104,7 +115,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private JsonNode candidateRoute(JsonNode draft, String route) {
-        requirePresentOnly(draft, Set.of("decision", "candidateKey"));
+        requirePresentOnly(draft, Set.of("decision", "candidateKey"), "_CANDIDATE");
         if (!input.getAllowedRoutes().contains(route(route))) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE);
@@ -122,7 +133,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private JsonNode emptyRoute(JsonNode draft, String route) {
-        requirePresentOnly(draft, Set.of("decision"));
+        requirePresentOnly(draft, Set.of("decision"), "_EMPTY");
         if (!input.getAllowedRoutes().contains(route(route))) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE);
@@ -131,14 +142,14 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private JsonNode clarificationRoute(JsonNode draft) {
-        requirePresentOnly(draft, Set.of("decision", "clarification"));
+        requirePresentOnly(draft, Set.of("decision", "clarification"), "_CLARIFICATION");
         if (!input.getAllowedRoutes().contains(
                 SemanticRouteProposal.Route.NEEDS_CLARIFICATION)) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_VALUE_OUTSIDE_ALLOWED_SCOPE);
         }
         ObjectNode root = semanticRoot("NEEDS_CLARIFICATION");
-        if (!draft.has("clarification")) {
+        if (!hasField(draft, "clarification")) {
             if (!input.getRouteCandidates().isEmpty()
                     || input.getInterpretationMode()
                     == GoalInterpretationInput.InterpretationMode.DISCUSSION) {
@@ -150,7 +161,8 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         if (!input.getRouteCandidates().isEmpty()
                 || input.getInterpretationMode()
                 == GoalInterpretationInput.InterpretationMode.DISCUSSION) {
-            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                    "DRAFT_FIELD_CONFLICT_CLARIFICATION_WITH_CANDIDATES");
         }
         root.set("clarification", compileClarification(
                 object(draft, "clarification")));
@@ -167,7 +179,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         ObjectNode canonical = JSON.objectNode();
         canonical.put("goalKey", goalKey(kind));
         canonical.put("goalKind", kind.name());
-        canonical.set("inputAnchor", anchor(text(goal, "inputText")));
+        canonical.set("inputAnchor", derivedInputAnchor());
         validateCompleteGoalBranch(goal, kind);
         canonical.set("subjectCandidates", subjects(goal));
         ArrayNode outputs = outputs(goal, kind);
@@ -195,7 +207,8 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
                 || kind == GoalKind.PORTFOLIO_COMPARE) && !"SUBJECT".equals(field)
                 || kind == GoalKind.PORTFOLIO_RECOMMEND
                 && !"REQUESTED_SIZE".equals(field)) {
-            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                    "DRAFT_FIELD_CONFLICT_CLARIFICATION_FIELD_MISMATCH");
         }
         validatePartialGoalBranch(goal, kind, field);
         ObjectNode value = JSON.objectNode();
@@ -212,7 +225,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         blocked.set("requestedOutputs", partialOutputs(goal, kind, field));
         blocked.set("facets", optionalClosedArray(goal, "facets", FACETS));
         blocked.set("dimensions", optionalDimensions(goal, kind));
-        if (goal.has("requestedSize")) {
+        if (hasField(goal, "requestedSize")) {
             blocked.put("requestedSize", integer(goal, "requestedSize", 1, 5));
         } else {
             blocked.putNull("requestedSize");
@@ -231,7 +244,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         requireOnly(node, RECENT_REFERENCE_FIELDS);
         ObjectNode reference = JSON.objectNode();
         reference.put("goalId", text(node, "goalId"));
-        if (node.has("sectionId")) reference.put("sectionId", text(node, "sectionId"));
+        if (hasField(node, "sectionId")) reference.put("sectionId", text(node, "sectionId"));
         else reference.putNull("sectionId");
         return reference;
     }
@@ -252,7 +265,8 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
                 parameters.set("constraints", requiredConstraints(goal));
             }
             case GENERAL_EXPLANATION -> {
-                parameters.set("topicAnchor", anchor(text(goal, "topicText")));
+                parameters.set("topicAnchor",
+                        anchor(text(goal, "topicText"), "TOPIC_TEXT"));
                 parameters.put("depth", closedText(goal, "depth", DEPTHS));
             }
             case GENERAL_COMPARISON -> {
@@ -261,7 +275,8 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
                         goal, "dimensions"));
             }
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> {
-                parameters.set("conceptAnchor", anchor(text(goal, "conceptText")));
+                parameters.set("conceptAnchor",
+                        anchor(text(goal, "conceptText"), "CONCEPT_TEXT"));
                 parameters.put("portfolioFacet", closedText(
                         goal, "portfolioFacet", FACETS));
                 parameters.put("depth", closedText(goal, "depth", DEPTHS));
@@ -275,29 +290,29 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         Set<String> required;
         switch (kind) {
             case PORTFOLIO_FACT -> {
-                allowed = Set.of("goalKind", "inputText", "subjects", "facets", "depth");
-                required = Set.of("goalKind", "inputText", "facets", "depth");
+                allowed = Set.of("goalKind", "subjects", "facets", "depth");
+                required = Set.of("goalKind", "facets", "depth");
             }
             case PORTFOLIO_COMPARE -> {
-                allowed = Set.of("goalKind", "inputText", "subjects", "dimensions");
+                allowed = Set.of("goalKind", "subjects", "dimensions");
                 required = allowed;
             }
             case PORTFOLIO_RECOMMEND -> {
-                allowed = Set.of("goalKind", "inputText", "requestedSize", "constraints");
+                allowed = Set.of("goalKind", "requestedSize", "constraints");
                 required = allowed;
             }
             case GENERAL_EXPLANATION -> {
-                allowed = Set.of("goalKind", "inputText", "topicText", "depth");
+                allowed = Set.of("goalKind", "topicText", "depth");
                 required = allowed;
             }
             case GENERAL_COMPARISON -> {
-                allowed = Set.of("goalKind", "inputText", "subjectTexts", "dimensions");
+                allowed = Set.of("goalKind", "subjectTexts", "dimensions");
                 required = allowed;
             }
             case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> {
-                allowed = Set.of("goalKind", "inputText", "subjects", "conceptText",
+                allowed = Set.of("goalKind", "subjects", "conceptText",
                         "portfolioFacet", "depth");
-                required = Set.of("goalKind", "inputText", "conceptText",
+                required = Set.of("goalKind", "conceptText",
                         "portfolioFacet", "depth");
             }
             default -> throw fail(StructuredOutputValidationException.Reason
@@ -317,16 +332,16 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         Set<String> required;
         switch (kind) {
             case PORTFOLIO_FACT -> {
-                allowed = Set.of("goalKind", "inputText", "subjects", "facets", "depth");
-                required = Set.of("goalKind", "inputText", "facets", "depth");
+                allowed = Set.of("goalKind", "subjects", "facets", "depth");
+                required = Set.of("goalKind", "facets", "depth");
             }
             case PORTFOLIO_COMPARE -> {
-                allowed = Set.of("goalKind", "inputText", "subjects", "dimensions");
-                required = Set.of("goalKind", "inputText", "dimensions");
+                allowed = Set.of("goalKind", "subjects", "dimensions");
+                required = Set.of("goalKind", "dimensions");
             }
             case PORTFOLIO_RECOMMEND -> {
-                allowed = Set.of("goalKind", "inputText", "requestedSize", "constraints");
-                required = Set.of("goalKind", "inputText", "constraints");
+                allowed = Set.of("goalKind", "requestedSize", "constraints");
+                required = Set.of("goalKind", "constraints");
             }
             default -> throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_BRANCH_INVALID);
@@ -342,10 +357,11 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         };
         boolean partialComparisonSubject = kind == GoalKind.PORTFOLIO_COMPARE
                 && "SUBJECT".equals(unresolvedField)
-                && goal.has("subjects")
+                && hasField(goal, "subjects")
                 && array(goal, "subjects").size() == 1;
-        if (goal.has(unresolvedDraftField) && !partialComparisonSubject) {
-            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+        if (hasField(goal, unresolvedDraftField) && !partialComparisonSubject) {
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                    "DRAFT_FIELD_CONFLICT_PARTIAL_UNRESOLVED_ECHO");
         }
     }
 
@@ -365,7 +381,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     private ArrayNode partialOutputs(JsonNode goal, GoalKind kind, String field) {
         if ("OUTPUT".equals(field)) return JSON.arrayNode();
         return switch (kind) {
-            case PORTFOLIO_FACT -> goal.has("facets")
+            case PORTFOLIO_FACT -> hasField(goal, "facets")
                     ? copyArray(goal.get("facets")) : JSON.arrayNode();
             case PORTFOLIO_COMPARE -> JSON.arrayNode().add("COMPARISON");
             case PORTFOLIO_RECOMMEND -> JSON.arrayNode().add("RECOMMENDATION");
@@ -375,10 +391,11 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private ArrayNode subjects(JsonNode goal) {
-        if (!goal.has("subjects")) return JSON.arrayNode();
+        if (!hasField(goal, "subjects")) return JSON.arrayNode();
         JsonNode values = array(goal, "subjects");
         ArrayNode subjects = JSON.arrayNode();
         Set<String> identities = new HashSet<>();
+        int position = 0;
         for (JsonNode subject : values) {
             requireObject(subject);
             requireOnly(subject, SUBJECT_FIELDS);
@@ -402,14 +419,17 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
                                             .DRAFT_SUBJECT_OUTSIDE_PUBLIC_SCOPE));
             if (!identities.add(descriptor.getKind().name() + ':'
                     + descriptor.getReference())) {
-                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                        "DRAFT_FIELD_CONFLICT_DUPLICATE_SUBJECT");
             }
             ObjectNode canonical = JSON.objectNode();
             canonical.put("kind", kind.name());
             canonical.put("reference", reference);
             canonical.put("basis", "EXPLICIT_INPUT");
-            canonical.set("anchor", anchor(inputText));
+            canonical.set("anchor",
+                    anchor(inputText, "SUBJECT_INPUT_TEXT_" + position));
             subjects.add(canonical);
+            position++;
         }
         return subjects;
     }
@@ -433,22 +453,42 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
                     .DRAFT_REQUIRED_FIELD_MISSING);
         }
         ArrayNode anchors = JSON.arrayNode();
-        values.forEach(value -> {
+        for (int index = 0; index < values.size(); index++) {
+            JsonNode value = values.get(index);
             if (!value.isTextual() || value.textValue().isBlank()) {
                 throw fail(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID);
             }
-            anchors.add(anchor(value.textValue()));
-        });
+            anchors.add(anchor(value.textValue(),
+                    "SUBJECT_TEXTS_" + index));
+        }
         return anchors;
     }
 
-    private ObjectNode anchor(String text) {
+    /**
+     * 目标级 inputAnchor 由服务端从受信 currentInput 机械派生（前缀、起点 0、
+     * 上限 256 字符）；Provider 不再回显 goal 级 inputText，消除非精确回显
+     * 导致的整稿拒绝。主体/主题/概念级锚点仍由 Provider 语义选择。
+     */
+    private ObjectNode derivedInputAnchor() {
+        String userText = input.getUserText();
+        ObjectNode anchor = JSON.objectNode();
+        anchor.put("text", userText.substring(0, Math.min(256, userText.length())));
+        anchor.put("start", 0);
+        return anchor;
+    }
+
+    /**
+     * 封闭锚点诊断：后缀只命名白名单来源字段，不回显 Provider 文本。
+     */
+    private ObjectNode anchor(String text, String source) {
         int first = input.getUserText().indexOf(text);
         if (first < 0) {
-            throw fail(StructuredOutputValidationException.Reason.DRAFT_ANCHOR_NOT_FOUND);
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_ANCHOR_NOT_FOUND,
+                    "DRAFT_ANCHOR_NOT_FOUND_" + source);
         }
         if (input.getUserText().indexOf(text, first + 1) >= 0) {
-            throw fail(StructuredOutputValidationException.Reason.DRAFT_ANCHOR_AMBIGUOUS);
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_ANCHOR_AMBIGUOUS,
+                    "DRAFT_ANCHOR_AMBIGUOUS_" + source);
         }
         ObjectNode anchor = JSON.objectNode();
         anchor.put("text", text);
@@ -457,7 +497,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private ArrayNode requiredConstraints(JsonNode goal) {
-        if (!goal.has("constraints")) {
+        if (!hasField(goal, "constraints")) {
             throw fail(StructuredOutputValidationException.Reason
                     .DRAFT_REQUIRED_FIELD_MISSING);
         }
@@ -465,7 +505,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private ArrayNode optionalConstraints(JsonNode goal) {
-        return goal.has("constraints")
+        return hasField(goal, "constraints")
                 ? validateConstraints(array(goal, "constraints")) : JSON.arrayNode();
     }
 
@@ -483,7 +523,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     }
 
     private ArrayNode optionalDimensions(JsonNode goal, GoalKind kind) {
-        if (!goal.has("dimensions")) return JSON.arrayNode();
+        if (!hasField(goal, "dimensions")) return JSON.arrayNode();
         return kind == GoalKind.PORTFOLIO_COMPARE
                 ? closedArray(array(goal, "dimensions"), PORTFOLIO_DIMENSIONS, true)
                 : requiredTextValues(array(goal, "dimensions"), true);
@@ -491,7 +531,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
 
     private ArrayNode optionalClosedArray(
             JsonNode node, String field, Set<String> allowed) {
-        return node.has(field)
+        return hasField(node, field)
                 ? closedArray(array(node, field), allowed, true) : JSON.arrayNode();
     }
 
@@ -611,7 +651,7 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
 
     private String optionalClosedText(
             JsonNode node, String field, Set<String> allowed, String absent) {
-        return node.has(field) ? closedText(node, field, allowed) : absent;
+        return hasField(node, field) ? closedText(node, field, allowed) : absent;
     }
 
     private JsonNode object(JsonNode node, String field) {
@@ -654,11 +694,63 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
         }
     }
 
+    /** 显式 null 字段视同缺省；由 provider 契约的 nullable-tolerant 规则约束。 */
+    private boolean hasField(JsonNode node, String field) {
+        return node.has(field) && !node.get(field).isNull();
+    }
+
+    /**
+     * 确定性信封解码：部分 Provider 会把 object 型字段整体序列化为 JSON 字符串
+     * 载体。此处只做一次严格解析并原位替换，非对象结果与不可解析文本保持
+     * 封闭拒绝；不做任何语义补全或修复。
+     */
+    private JsonNode decodeCarrierFields(JsonNode draft) {
+        boolean mutated = false;
+        ObjectNode mutable = JSON.objectNode();
+        java.util.Iterator<String> names = draft.fieldNames();
+        while (names.hasNext()) {
+            String name = names.next();
+            JsonNode value = draft.get(name);
+            if ((name.equals("goal") || name.equals("recentReference")
+                    || name.equals("clarification")) && value.isTextual()) {
+                try {
+                    JsonNode parsed = STRICT_CARRIER_READER.readTree(
+                            value.textValue());
+                    if (!parsed.isObject()) {
+                        throw fail(StructuredOutputValidationException.Reason
+                                        .DRAFT_BRANCH_INVALID,
+                                "DRAFT_CARRIER_NOT_OBJECT_" + camelToSnake(name));
+                    }
+                    mutable.set(name, parsed);
+                    mutated = true;
+                    continue;
+                } catch (StructuredOutputValidationException failure) {
+                    throw failure;
+                } catch (Exception invalid) {
+                    throw fail(StructuredOutputValidationException.Reason
+                                    .INVALID_JSON,
+                            "DRAFT_CARRIER_UNPARSEABLE_" + camelToSnake(name));
+                }
+            }
+            mutable.set(name, value);
+        }
+        return mutated ? mutable : draft;
+    }
+
     private void requireOnly(JsonNode node, Set<String> allowed) {
+        requireOnly(node, allowed, "");
+    }
+
+    /** 封闭诊断：未列入白名单的键只按白名单归属命名，不回显 Provider 文本。 */
+    private void requireOnly(
+            JsonNode node, Set<String> allowed, String scopeSuffix) {
         Iterator<String> fields = node.fieldNames();
         while (fields.hasNext()) {
-            if (!allowed.contains(fields.next())) {
-                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+            String name = fields.next();
+            if (node.get(name).isNull()) { continue; }
+            if (!allowed.contains(name)) {
+                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                        "DRAFT_FIELD_CONFLICT" + scopeSuffix + "_UNKNOWN_KEY");
             }
         }
     }
@@ -667,20 +759,28 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
             JsonNode node, Set<String> allowed, Set<String> required) {
         requireOnly(node, allowed);
         for (String field : required) {
-            if (!node.has(field)) {
+            if (!hasField(node, field)) {
                 throw fail(StructuredOutputValidationException.Reason
                         .DRAFT_REQUIRED_FIELD_MISSING);
             }
         }
     }
 
-    private void requirePresentOnly(JsonNode node, Set<String> allowed) {
-        requireOnly(node, allowed);
+    private void requirePresentOnly(
+            JsonNode node, Set<String> allowed, String scopeSuffix) {
+        requireOnly(node, ROOT_FIELDS, "_ROOT");
         for (String field : ROOT_FIELDS) {
-            if (!allowed.contains(field) && node.has(field)) {
-                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT);
+            if (!allowed.contains(field) && hasField(node, field)) {
+                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                        "DRAFT_FIELD_CONFLICT" + scopeSuffix
+                                + "_" + camelToSnake(field));
             }
         }
+    }
+
+    private static String camelToSnake(String value) {
+        return value.replaceAll("([a-z])([A-Z])", "$1_$2")
+                .toUpperCase(Locale.ROOT);
     }
 
     private ArrayNode copyArray(JsonNode values) {
@@ -692,5 +792,11 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     private StructuredOutputValidationException fail(
             StructuredOutputValidationException.Reason reason) {
         return new StructuredOutputValidationException(reason, reason.name());
+    }
+
+    private StructuredOutputValidationException fail(
+            StructuredOutputValidationException.Reason reason,
+            String diagnosticReason) {
+        return new StructuredOutputValidationException(reason, diagnosticReason);
     }
 }

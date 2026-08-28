@@ -28,7 +28,6 @@ class GoalProviderDraftCompilerTest {
                   "decision":"STANDARD_GOAL",
                   "goal":{
                     "goalKind":"PORTFOLIO_RECOMMEND",
-                    "inputText":"推荐两个项目",
                     "requestedSize":2,
                     "constraints":[]
                   }
@@ -42,8 +41,8 @@ class GoalProviderDraftCompilerTest {
         assertThat(goal.path("goalKey").textValue())
                 .isEqualTo("portfolio-recommend");
         assertThat(goal.path("inputAnchor").path("text").textValue())
-                .isEqualTo("推荐两个项目");
-        assertThat(goal.path("inputAnchor").path("start").intValue()).isEqualTo(2);
+                .isEqualTo("给我推荐两个项目");
+        assertThat(goal.path("inputAnchor").path("start").intValue()).isZero();
         assertThat(goal.path("requestedOutputs").get(0).textValue())
                 .isEqualTo("RECOMMENDATION");
         assertThat(goal.path("knowledgeRequirement").textValue())
@@ -68,7 +67,6 @@ class GoalProviderDraftCompilerTest {
                     "prompt":"需要推荐几个项目？",
                     "goal":{
                       "goalKind":"PORTFOLIO_RECOMMEND",
-                      "inputText":"推荐一些项目",
                       "constraints":[]
                     }
                   }
@@ -96,8 +94,7 @@ class GoalProviderDraftCompilerTest {
                 {
                   "decision":"STANDARD_GOAL",
                   "goal":{
-                    "goalKind":"PORTFOLIO_RECOMMEND",
-                    "inputText":"推荐两个项目"
+                    "goalKind":"PORTFOLIO_RECOMMEND"
                   }
                 }
                 """)))
@@ -107,32 +104,58 @@ class GoalProviderDraftCompilerTest {
     }
 
     @Test
-    void rejectsAmbiguousOrInventedAnchorWithoutEchoingText() throws Exception {
-        GoalProviderDraftCompiler ambiguous = new GoalProviderDraftCompiler(input(
-                "项目和项目有什么区别"));
-        GoalProviderDraftCompiler invented = new GoalProviderDraftCompiler(input(
-                "给我推荐项目"));
+    void rejectsGoalLevelInputTextEchoAsUnknownKeyWithoutEchoingText()
+            throws Exception {
+        GoalProviderDraftCompiler compiler = new GoalProviderDraftCompiler(input(
+                "给我推荐两个项目"));
 
-        assertThatThrownBy(() -> ambiguous.compile(mapper.readTree("""
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"PORTFOLIO_RECOMMEND","inputText":"项目",
-                  "requestedSize":2
+                  "goalKind":"PORTFOLIO_RECOMMEND",
+                  "inputText":"给我推荐两个项目。",
+                  "requestedSize":2,"constraints":[]
                 }}
                 """)))
                 .isInstanceOf(StructuredOutputValidationException.class)
-                .hasMessageNotContaining("项目")
+                .hasMessageNotContaining("给我推荐两个项目")
                 .extracting("diagnosticReason")
-                .isEqualTo("DRAFT_ANCHOR_AMBIGUOUS");
-        assertThatThrownBy(() -> invented.compile(mapper.readTree("""
+                .isEqualTo("DRAFT_FIELD_CONFLICT_UNKNOWN_KEY");
+    }
+
+    @Test
+    void derivesBoundedWholeInputAnchorForLongInputs() throws Exception {
+        String longText = "详细展开".repeat(100) + "，并解释幂等";
+
+        JsonNode canonical = assertCanonical(longText, """
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"PORTFOLIO_RECOMMEND","inputText":"不存在",
-                  "requestedSize":2
+                  "goalKind":"GENERAL_EXPLANATION",
+                  "topicText":"幂等","depth":"STANDARD"}}
+                """);
+
+        JsonNode anchor = canonical.path("goal").path("inputAnchor");
+        assertThat(anchor.path("text").textValue())
+                .isEqualTo(longText.substring(0, 256));
+        assertThat(anchor.path("start").intValue()).isZero();
+    }
+
+    @Test
+    void reportsClosedSourceLabelWhenSubjectAnchorMissesInput() throws Exception {
+        GoalProviderDraftCompiler compiler = new GoalProviderDraftCompiler(input(
+                "展开讲讲SQL审计项目"));
+
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
+                {"decision":"STANDARD_GOAL","goal":{
+                  "goalKind":"PORTFOLIO_FACT",
+                  "subjects":[{"kind":"PROJECT","reference":"sql-audit",
+                    "inputText":"SQL 审计项目"}],
+                  "facets":["SOLUTION"],
+                  "depth":"STANDARD"
                 }}
                 """)))
                 .isInstanceOf(StructuredOutputValidationException.class)
-                .hasMessageNotContaining("不存在")
+                .hasMessageNotContaining("SQL 审计项目")
                 .extracting("diagnosticReason")
-                .isEqualTo("DRAFT_ANCHOR_NOT_FOUND");
+                .isEqualTo("DRAFT_ANCHOR_NOT_FOUND_SUBJECT_INPUT_TEXT_0");
     }
 
     @Test
@@ -143,7 +166,6 @@ class GoalProviderDraftCompilerTest {
         assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
                 {"decision":"STANDARD_GOAL","goal":{
                   "goalKind":"PORTFOLIO_RECOMMEND",
-                  "inputText":"推荐两个项目",
                   "requestedSize":2,
                   "constraints":[],
                   "facets":["OVERVIEW"]
@@ -151,7 +173,20 @@ class GoalProviderDraftCompilerTest {
                 """)))
                 .isInstanceOf(StructuredOutputValidationException.class)
                 .extracting("diagnosticReason")
-                .isEqualTo("DRAFT_FIELD_CONFLICT");
+                .isEqualTo("DRAFT_FIELD_CONFLICT_UNKNOWN_KEY");
+    }
+
+    @Test
+    void rejectsNonNullSiblingFromAnotherDecisionBranchWithClosedScopeReason()
+            throws Exception {
+        GoalProviderDraftCompiler compiler = new GoalProviderDraftCompiler(input("你好"));
+
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
+                {"decision":"CONVERSATIONAL","message":"你好","candidateKey":"C1"}
+                """)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_FIELD_CONFLICT_CONVERSATIONAL_CANDIDATE_KEY");
     }
 
     @Test
@@ -166,7 +201,6 @@ class GoalProviderDraftCompilerTest {
                   "prompt":"需要推荐几个项目？",
                   "goal":{
                     "goalKind":"PORTFOLIO_RECOMMEND",
-                    "inputText":"推荐一些项目",
                     "requestedSize":2,
                     "constraints":[]
                   }
@@ -174,7 +208,42 @@ class GoalProviderDraftCompilerTest {
                 """)))
                 .isInstanceOf(StructuredOutputValidationException.class)
                 .extracting("diagnosticReason")
-                .isEqualTo("DRAFT_FIELD_CONFLICT");
+                .isEqualTo("DRAFT_FIELD_CONFLICT_PARTIAL_UNRESOLVED_ECHO");
+    }
+
+    @Test
+    void decodesStrictObjectCarrierAndIgnoresNullSiblingFields() throws Exception {
+        GoalProviderDraftCompiler compiler = new GoalProviderDraftCompiler(input(
+                "给我推荐两个项目"));
+
+        JsonNode compiled = compiler.compile(mapper.readTree("""
+                {"decision":"STANDARD_GOAL",
+                 "goal":"{\\\"goalKind\\\":\\\"PORTFOLIO_RECOMMEND\\\",\\\"requestedSize\\\":2,\\\"constraints\\\":[]}",
+                 "candidateKey":null,"clarification":null,"recentReference":null}
+                """));
+
+        assertThat(compiled.path("kind").textValue()).isEqualTo("SEMANTIC_ROUTE");
+        assertThat(compiled.path("goal").path("goalKind").textValue())
+                .isEqualTo("PORTFOLIO_RECOMMEND");
+    }
+
+    @Test
+    void rejectsMalformedOrNonObjectCarrierWithoutSemanticRepair() throws Exception {
+        GoalProviderDraftCompiler compiler = new GoalProviderDraftCompiler(input(
+                "给我推荐两个项目"));
+
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
+                {"decision":"STANDARD_GOAL","goal":"{} trailing"}
+                """)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_CARRIER_UNPARSEABLE_GOAL");
+        assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
+                {"decision":"STANDARD_GOAL","goal":"[]"}
+                """)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_CARRIER_NOT_OBJECT_GOAL");
     }
 
     @Test
@@ -182,7 +251,7 @@ class GoalProviderDraftCompilerTest {
             throws Exception {
         assertCanonical("介绍 SQL 审计项目", """
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"PORTFOLIO_FACT","inputText":"介绍 SQL 审计项目",
+                  "goalKind":"PORTFOLIO_FACT",
                   "subjects":[{"kind":"PROJECT","reference":"sql-audit",
                     "inputText":"SQL 审计项目"}],
                   "facets":["OVERVIEW"],"depth":"STANDARD"}}
@@ -190,7 +259,6 @@ class GoalProviderDraftCompilerTest {
         assertCanonical("比较 SQL 审计项目和 Agent 能力集成 MVP", """
                 {"decision":"STANDARD_GOAL","goal":{
                   "goalKind":"PORTFOLIO_COMPARE",
-                  "inputText":"比较 SQL 审计项目和 Agent 能力集成 MVP",
                   "subjects":[
                     {"kind":"PROJECT","reference":"sql-audit","inputText":"SQL 审计项目"},
                     {"kind":"PROJECT","reference":"agent-capability-mvp",
@@ -199,23 +267,22 @@ class GoalProviderDraftCompilerTest {
                 """);
         assertCanonical("给我推荐两个项目", """
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐两个项目",
+                  "goalKind":"PORTFOLIO_RECOMMEND",
                   "requestedSize":2,"constraints":[]}}
                 """);
         assertCanonical("解释幂等", """
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"GENERAL_EXPLANATION","inputText":"解释幂等",
+                  "goalKind":"GENERAL_EXPLANATION",
                   "topicText":"幂等","depth":"STANDARD"}}
                 """);
         assertCanonical("比较 Redis 和 Memcached", """
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"GENERAL_COMPARISON","inputText":"比较 Redis 和 Memcached",
+                  "goalKind":"GENERAL_COMPARISON",
                   "subjectTexts":["Redis","Memcached"],"dimensions":["MECHANISM"]}}
                 """);
         JsonNode applied = assertCanonical("用幂等分析 SQL 审计项目的验证", """
                 {"decision":"STANDARD_GOAL","goal":{
                   "goalKind":"APPLY_GENERAL_CONCEPT_TO_PORTFOLIO",
-                  "inputText":"用幂等分析 SQL 审计项目的验证",
                   "subjects":[{"kind":"PROJECT","reference":"sql-audit",
                     "inputText":"SQL 审计项目"}],
                   "conceptText":"幂等","portfolioFacet":"VERIFICATION",
@@ -233,7 +300,7 @@ class GoalProviderDraftCompilerTest {
 
         assertThatThrownBy(() -> compiler.compile(mapper.readTree("""
                 {"decision":"STANDARD_GOAL","goal":{
-                  "goalKind":"GENERAL_COMPARISON","inputText":"比较 Redis 和 Memcached",
+                  "goalKind":"GENERAL_COMPARISON",
                   "subjectTexts":["Redis","Memcached"],"dimensions":["机制"]}}
                 """)))
                 .isInstanceOf(StructuredOutputValidationException.class)
@@ -251,7 +318,6 @@ class GoalProviderDraftCompilerTest {
                 {"decision":"NEEDS_CLARIFICATION","clarification":{
                   "field":"SUBJECT","prompt":"还要比较哪个公开项目？","goal":{
                     "goalKind":"PORTFOLIO_COMPARE",
-                    "inputText":"比较 SQL 审计项目和另一个项目",
                     "subjects":[{"kind":"PROJECT","reference":"sql-audit",
                       "inputText":"SQL 审计项目"}],
                     "dimensions":["ARCHITECTURE"]}}}

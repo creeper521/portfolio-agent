@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.infrastructure.model;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
@@ -96,7 +97,8 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
         try {
             output = gateway.execute(
                     modelExecution.getRequiredBinding(), request,
-                    new GoalProviderDraftCompiler(input));
+                    new GoalProviderDraftCompiler(input),
+                    GoalInterpretationAdapter::classifyProviderSchemaFailure);
         } catch (StructuredModelFailure failure) {
             throw SelectedModelFailureException.from(failure);
         } catch (StructuredOutputValidationException failure) {
@@ -130,6 +132,43 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
                     ModelOutputDiagnostics.Layer.CANONICAL_SCHEMA;
             case UNCLASSIFIED_SCHEMA -> ModelOutputDiagnostics.Layer.SCHEMA;
         };
+    }
+
+    private static StructuredOutputValidationException
+            classifyProviderSchemaFailure(
+                    JsonNode tree,
+                    StructuredOutputValidationException genericFailure) {
+        JsonNode kind = tree.get("kind");
+        if (kind != null && (!kind.isTextual()
+                || !("SEMANTIC_ROUTE".equals(kind.textValue())
+                || "CONVERSATIONAL".equals(kind.textValue())))) {
+            return goalSchemaFailure(
+                    StructuredOutputValidationException.Reason
+                            .UNSUPPORTED_ROOT_KIND,
+                    genericFailure);
+        }
+        if ("SEMANTIC_ROUTE".equals(tree.path("kind").asText())
+                && "NEEDS_CLARIFICATION".equals(
+                        tree.path("route").asText())) {
+            JsonNode clarification = tree.get("clarification");
+            if (clarification != null && clarification.isObject()) {
+                JsonNode blockedGoal = clarification.get("blockedGoal");
+                if (blockedGoal == null || !blockedGoal.isObject()) {
+                    return goalSchemaFailure(
+                            StructuredOutputValidationException.Reason
+                                    .CLARIFICATION_BLOCKED_GOAL_REQUIRED,
+                            genericFailure);
+                }
+            }
+        }
+        return genericFailure;
+    }
+
+    private static StructuredOutputValidationException goalSchemaFailure(
+            StructuredOutputValidationException.Reason reason,
+            StructuredOutputValidationException genericFailure) {
+        return new StructuredOutputValidationException(
+                reason, reason.name(), genericFailure.getStage());
     }
     /**
      * 把解析输入投影为受限 JSON：只包含允许的目标类别、路由、候选与已审阅主体

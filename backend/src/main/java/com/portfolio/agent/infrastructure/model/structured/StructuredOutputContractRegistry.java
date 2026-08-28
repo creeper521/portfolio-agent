@@ -108,7 +108,17 @@ public final class StructuredOutputContractRegistry {
     }
 
     public StructurallyValidatedOutput validate(StructuredContractRef ref, String payload) {
+        return validate(ref, payload,
+                StructuredOutputSchemaFailureClassifier.generic());
+    }
+
+    public StructurallyValidatedOutput validate(
+            StructuredContractRef ref, String payload,
+            StructuredOutputSchemaFailureClassifier failureClassifier) {
         StructuredOutputContract contract = resolve(ref);
+        StructuredOutputSchemaFailureClassifier requiredClassifier =
+                java.util.Objects.requireNonNull(
+                        failureClassifier, "failureClassifier");
         if (payload == null || payload.isBlank()) {
             throw new StructuredOutputValidationException(
                     StructuredOutputValidationException.Reason.INVALID_JSON);
@@ -128,7 +138,7 @@ public final class StructuredOutputContractRegistry {
             throw new StructuredOutputValidationException(
                     StructuredOutputValidationException.Reason.INVALID_JSON);
         }
-        return validateTree(contract, tree);
+        return validateTree(contract, tree, requiredClassifier);
     }
 
     public StructurallyValidatedOutput validateTree(
@@ -138,44 +148,31 @@ public final class StructuredOutputContractRegistry {
             throw new StructuredOutputValidationException(
                     StructuredOutputValidationException.Reason.INVALID_JSON);
         }
-        return validateTree(contract, tree.deepCopy());
+        return validateTree(contract, tree.deepCopy(),
+                StructuredOutputSchemaFailureClassifier.generic());
     }
 
     private StructurallyValidatedOutput validateTree(
-            StructuredOutputContract contract, JsonNode tree) {
+            StructuredOutputContract contract, JsonNode tree,
+            StructuredOutputSchemaFailureClassifier failureClassifier) {
         List<Error> errors = contract.validator().validate(tree);
         if (!errors.isEmpty()) {
-            StructuredOutputValidationException.Reason reason = classify(
-                    errors, tree, contract.ref().operation());
-            throw new StructuredOutputValidationException(
-                    reason, diagnosticReason(
-                            reason, deepestErrors(errors), tree));
+            StructuredOutputValidationException.Reason reason = classify(errors);
+            StructuredOutputValidationException genericFailure =
+                    new StructuredOutputValidationException(
+                            reason, diagnosticReason(
+                                    reason, deepestErrors(errors), tree));
+            throw java.util.Objects.requireNonNull(
+                    failureClassifier.classify(
+                            tree.deepCopy(), genericFailure),
+                    "classified schema failure");
         }
         return new StructurallyValidatedOutput(
                 contract.ref(), contract.contractFingerprint(), tree);
     }
 
     private static StructuredOutputValidationException.Reason classify(
-            List<Error> errors, JsonNode tree, ModelOperation operation) {
-        JsonNode kind = tree.get("kind");
-        if (operation == ModelOperation.TURN_INTERPRETATION
-                && kind != null && (!kind.isTextual()
-                || !("SEMANTIC_ROUTE".equals(kind.textValue())
-                || "CONVERSATIONAL".equals(kind.textValue())))) {
-            return StructuredOutputValidationException.Reason.UNSUPPORTED_ROOT_KIND;
-        }
-        if (operation == ModelOperation.TURN_INTERPRETATION
-                && "SEMANTIC_ROUTE".equals(tree.path("kind").asText())
-                && "NEEDS_CLARIFICATION".equals(tree.path("route").asText())) {
-            JsonNode clarification = tree.get("clarification");
-            if (clarification != null && clarification.isObject()) {
-                JsonNode blockedGoal = clarification.get("blockedGoal");
-                if (blockedGoal == null || !blockedGoal.isObject()) {
-                    return StructuredOutputValidationException.Reason
-                            .CLARIFICATION_BLOCKED_GOAL_REQUIRED;
-                }
-            }
-        }
+            List<Error> errors) {
         List<Error> deepestErrors = deepestErrors(errors);
         if (hasKeyword(deepestErrors, "additionalProperties")) {
             return StructuredOutputValidationException.Reason.UNKNOWN_FIELD;

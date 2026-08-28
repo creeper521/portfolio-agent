@@ -29,12 +29,23 @@ public final class StructuredOutputGateway {
             ModelTransportBinding modelBinding,
             StructuredModelRequest request,
             StructuredOutputCompiler compiler) {
+        return execute(modelBinding, request, compiler,
+                StructuredOutputSchemaFailureClassifier.generic());
+    }
+
+    public StructurallyValidatedOutput execute(
+            ModelTransportBinding modelBinding,
+            StructuredModelRequest request,
+            StructuredOutputCompiler compiler,
+            StructuredOutputSchemaFailureClassifier failureClassifier) {
         ModelTransportBinding binding = Objects.requireNonNull(
                 modelBinding, "modelBinding");
         OperationBinding operationBinding = binding.getRequiredOperationBinding(
                 Objects.requireNonNull(request, "request").operation());
         StructuredOutputCompiler requiredCompiler = Objects.requireNonNull(
                 compiler, "compiler");
+        StructuredOutputSchemaFailureClassifier requiredFailureClassifier =
+                Objects.requireNonNull(failureClassifier, "failureClassifier");
         if (!operationBinding.getOutputCompilerProfileVersion().equals(
                 requiredCompiler.profileVersion())) {
             throw new IllegalArgumentException(
@@ -44,7 +55,8 @@ public final class StructuredOutputGateway {
         StructurallyValidatedOutput providerOutput;
         try {
             providerOutput = response.validateWith(
-                    contracts, operationBinding.getProviderContractRef());
+                    contracts, operationBinding.getProviderContractRef(),
+                    requiredFailureClassifier);
         } catch (StructuredOutputValidationException failure) {
             throw failure.atStage(StructuredOutputValidationException.Stage
                     .PROVIDER_DRAFT_SCHEMA);

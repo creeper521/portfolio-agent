@@ -23,12 +23,12 @@ class GoalProviderDraftV2SchemaTest {
     @ValueSource(strings = {
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_FACT","inputText":"介绍项目",
+              "goalKind":"PORTFOLIO_FACT",
               "facets":["OVERVIEW"],"depth":"STANDARD"}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_COMPARE","inputText":"比较两个项目",
+              "goalKind":"PORTFOLIO_COMPARE",
               "subjects":[
                 {"kind":"PROJECT","reference":"alpha","inputText":"项目 alpha"},
                 {"kind":"CASE","reference":"beta","inputText":"案例 beta"}],
@@ -36,23 +36,23 @@ class GoalProviderDraftV2SchemaTest {
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐两个项目",
+              "goalKind":"PORTFOLIO_RECOMMEND",
               "requestedSize":2,"constraints":[]}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"GENERAL_EXPLANATION","inputText":"解释幂等性",
+              "goalKind":"GENERAL_EXPLANATION",
               "topicText":"幂等性","depth":"DETAILED"}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"GENERAL_COMPARISON","inputText":"比较 REST 和 RPC",
+              "goalKind":"GENERAL_COMPARISON",
               "subjectTexts":["REST","RPC"],"dimensions":["ARCHITECTURE"]}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
               "goalKind":"APPLY_GENERAL_CONCEPT_TO_PORTFOLIO",
-              "inputText":"用幂等性分析项目","conceptText":"幂等性",
+              "conceptText":"幂等性",
               "portfolioFacet":"SOLUTION","depth":"STANDARD"}}
             """
     })
@@ -60,18 +60,28 @@ class GoalProviderDraftV2SchemaTest {
         assertThat(validate(payload)).isEmpty();
     }
 
+    @Test
+    void rejectsGoalLevelInputTextEchoBecauseServerDerivesTheAnchor() {
+        assertThat(validate("""
+                {"decision":"STANDARD_GOAL","goal":{
+                  "goalKind":"PORTFOLIO_RECOMMEND",
+                  "inputText":"推荐两个项目",
+                  "requestedSize":2,"constraints":[]}}
+                """)).isNotEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"SUBJECT","prompt":"请指定项目","goal":{
-                "goalKind":"PORTFOLIO_FACT","inputText":"介绍它",
+                "goalKind":"PORTFOLIO_FACT",
                 "facets":["OVERVIEW"],"depth":"STANDARD"}}}
             """,
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"SUBJECT","prompt":"还需要一个项目","goal":{
-                "goalKind":"PORTFOLIO_COMPARE","inputText":"比较这些项目",
+                "goalKind":"PORTFOLIO_COMPARE",
                 "subjects":[
                   {"kind":"PROJECT","reference":"alpha","inputText":"项目 alpha"}],
                 "dimensions":["ARCHITECTURE"]}}}
@@ -79,13 +89,13 @@ class GoalProviderDraftV2SchemaTest {
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"SUBJECT","prompt":"请选择两个项目","goal":{
-                "goalKind":"PORTFOLIO_COMPARE","inputText":"比较项目",
+                "goalKind":"PORTFOLIO_COMPARE",
                 "dimensions":["ARCHITECTURE"]}}}
             """,
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"REQUESTED_SIZE","prompt":"需要几个项目","goal":{
-                "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐项目",
+                "goalKind":"PORTFOLIO_RECOMMEND",
                 "constraints":[]}}}
             """
     })
@@ -103,35 +113,35 @@ class GoalProviderDraftV2SchemaTest {
     @ValueSource(strings = {
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_FACT","inputText":"介绍项目",
+              "goalKind":"PORTFOLIO_FACT",
               "facets":[],"depth":"STANDARD"}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_COMPARE","inputText":"比较项目",
+              "goalKind":"PORTFOLIO_COMPARE",
               "subjects":[
                 {"kind":"PROJECT","reference":"alpha","inputText":"项目 alpha"}],
               "dimensions":["ARCHITECTURE"]}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐项目",
+              "goalKind":"PORTFOLIO_RECOMMEND",
               "requestedSize":2}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"GENERAL_EXPLANATION","inputText":"解释幂等性",
+              "goalKind":"GENERAL_EXPLANATION",
               "topicText":"幂等性"}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"GENERAL_COMPARISON","inputText":"比较 REST 和 RPC",
+              "goalKind":"GENERAL_COMPARISON",
               "subjectTexts":["REST","RPC"],"dimensions":[]}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
               "goalKind":"APPLY_GENERAL_CONCEPT_TO_PORTFOLIO",
-              "inputText":"用幂等性分析项目","conceptText":"幂等性",
+              "conceptText":"幂等性",
               "portfolioFacet":"SOLUTION"}}
             """
     })
@@ -143,17 +153,17 @@ class GoalProviderDraftV2SchemaTest {
     @ValueSource(strings = {
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_FACT","inputText":"介绍项目",
+              "goalKind":"PORTFOLIO_FACT",
               "facets":["OVERVIEW"],"depth":"STANDARD","requestedSize":2}}
             """,
             """
             {"decision":"STANDARD_GOAL","goal":{
-              "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐项目",
+              "goalKind":"PORTFOLIO_RECOMMEND",
               "requestedSize":2,"constraints":[],"subjects":[]}}
             """,
             """
             {"decision":"START_NEW_TOPIC","goal":{
-              "goalKind":"GENERAL_EXPLANATION","inputText":"幂等性",
+              "goalKind":"GENERAL_EXPLANATION",
               "topicText":"幂等性","depth":"STANDARD"}}
             """,
             """
@@ -169,13 +179,13 @@ class GoalProviderDraftV2SchemaTest {
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"OUTPUT","prompt":"需要哪些内容","goal":{
-                "goalKind":"PORTFOLIO_FACT","inputText":"介绍项目",
+                "goalKind":"PORTFOLIO_FACT",
                 "depth":"STANDARD"}}}
             """,
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"SUBJECT","prompt":"请指定项目","goal":{
-                "goalKind":"PORTFOLIO_COMPARE","inputText":"比较项目",
+                "goalKind":"PORTFOLIO_COMPARE",
                 "subjects":[
                   {"kind":"PROJECT","reference":"a","inputText":"项目 a"},
                   {"kind":"PROJECT","reference":"b","inputText":"项目 b"}],
@@ -184,7 +194,7 @@ class GoalProviderDraftV2SchemaTest {
             """
             {"decision":"NEEDS_CLARIFICATION","clarification":{
               "field":"REQUESTED_SIZE","prompt":"需要几个项目","goal":{
-                "goalKind":"PORTFOLIO_RECOMMEND","inputText":"推荐项目",
+                "goalKind":"PORTFOLIO_RECOMMEND",
                 "requestedSize":2,"constraints":[]}}}
             """
     })
@@ -216,5 +226,39 @@ class GoalProviderDraftV2SchemaTest {
         } catch (Exception failure) {
             throw new AssertionError("cannot load or validate v2 schema", failure);
         }
+    }
+
+    @Test
+    void acceptsExplicitNullSiblingsForUnselectedDecisionFields() {
+        assertThat(validate("""
+                {"decision":"STANDARD_GOAL",
+                 "goal":{"goalKind":"PORTFOLIO_RECOMMEND",
+                   "requestedSize":2,"constraints":[]},
+                 "message":null,"candidateKey":null,
+                 "clarification":null,"recentReference":null}
+                """)).isEmpty();
+        assertThat(validate("""
+                {"decision":"CONVERSATIONAL","message":"你好",
+                 "candidateKey":null,"goal":null,
+                 "clarification":null,"recentReference":null}
+                """)).isEmpty();
+        assertThat(validate(
+                "{\"decision\":\"NEEDS_CLARIFICATION\",\"message\":null," +
+                        "\"candidateKey\":null,\"goal\":null," +
+                        "\"clarification\":null,\"recentReference\":null}"))
+                .isEmpty();
+    }
+
+    @Test
+    void stillRejectsRealValuesForFieldsOwnedByAnotherBranch() {
+        assertThat(validate("""
+                {"decision":"CONVERSATIONAL","message":"你好",
+                 "clarification":{"field":"SUBJECT","prompt":"请指定项目",
+                   "goal":{"goalKind":"PORTFOLIO_FACT",
+                     "facets":["OVERVIEW"],"depth":"STANDARD"}}}
+                """)).isNotEmpty();
+        assertThat(validate("""
+                {"decision":"ENTER_RECOMMENDED_RESULT","candidateKey":null}
+                """)).isNotEmpty();
     }
 }

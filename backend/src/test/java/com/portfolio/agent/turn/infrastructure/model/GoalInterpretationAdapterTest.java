@@ -172,7 +172,6 @@ class GoalInterpretationAdapterTest {
                               "decision":"STANDARD_GOAL",
                               "goal":{
                                 "goalKind":"PORTFOLIO_RECOMMEND",
-                                "inputText":"解释幂等",
                                 "constraints":[]
                               }
                             }
@@ -214,7 +213,6 @@ class GoalInterpretationAdapterTest {
                               "decision":"STANDARD_GOAL",
                               "goal":{
                                 "goalKind":"PORTFOLIO_RECOMMEND",
-                                "inputText":"解释幂等",
                                 "requestedSize":3,
                                 "constraints":["CAPABILITY_FRONTEND"]
                               }
@@ -257,7 +255,6 @@ class GoalInterpretationAdapterTest {
                       "decision":"STANDARD_GOAL",
                       "goal":{
                         "goalKind":"GENERAL_EXPLANATION",
-                        "inputText":"解释幂等",
                         "topicText":"幂等",
                         "depth":"STANDARD"
                       }
@@ -285,6 +282,30 @@ class GoalInterpretationAdapterTest {
                 .doesNotContain("taskType", "dependencies");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isZero();
+    }
+
+    @Test void decodesStrictProviderObjectCarrierThroughTheFullGateway() {
+        AtomicInteger calls = new AtomicInteger();
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                StructuredModelTestFixtures.gateway((binding, request) -> {
+                    calls.incrementAndGet();
+                    return new StructuredModelResponse("""
+                            {"decision":"STANDARD_GOAL",
+                             "goal":"{\\\"goalKind\\\":\\\"GENERAL_EXPLANATION\\\",\\\"topicText\\\":\\\"幂等\\\",\\\"depth\\\":\\\"STANDARD\\\"}",
+                             "message":null,"candidateKey":null,
+                             "clarification":null,"recentReference":null}
+                            """);
+                }), new ObjectMapper(), new GoalProposalCodec(), "system", 1200,
+                Duration.ofSeconds(2));
+
+        GoalInterpretationResult result = adapter.interpret(
+                input(), com.portfolio.agent.turn.execution.TurnDeadline.after(
+                        Duration.ofSeconds(3), Clock.systemUTC()),
+                ModelExecutionSnapshotFixture.model());
+
+        assertThat(result.getKind())
+                .isEqualTo(GoalInterpretationResult.Kind.SEMANTIC_ROUTE);
+        assertThat(calls).hasValue(1);
     }
 
     private GoalInterpretationInput input() {

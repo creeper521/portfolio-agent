@@ -28,20 +28,26 @@ candidate. The ordered routeCandidates support explicit one-based references
 such as first/second. Never invent a candidateKey, subject, identifier, goal,
 constraint, or recent reference.
 
-A goal contains semantic source fields only. Always provide goalKind and
-inputText. inputText must be a non-empty exact substring of currentInput and
-must occur exactly once. Do not provide goalKey, numeric anchor positions,
-requestedOutputs, knowledgeRequirement, parameter kind, basis, or canonical
-null fields; the server derives them deterministically.
+Every field you emit must carry a real value. Never output a key whose value
+is null, an empty string, or an empty object; omit such keys entirely instead.
+For example, CONVERSATIONAL emits exactly decision and message, and never adds
+goal, clarification, recentReference, or candidateKey in any form.
+
+A goal contains semantic source fields only; always provide goalKind. Never
+echo currentInput back as an inputText field inside goal; the server derives
+the goal-level input anchor from currentInput itself. Do not provide goalKey,
+numeric anchor positions, requestedOutputs, knowledgeRequirement, parameter
+kind, basis, or canonical null fields; the server derives them deterministically.
 
 Goal-kind fields:
 - PORTFOLIO_FACT: subjects when explicitly named, non-empty facets, and depth.
 - PORTFOLIO_COMPARE: at least two explicit subjects and non-empty dimensions;
   dimensions use only ARCHITECTURE, IMPLEMENTATION, OUTCOME, RISKS,
   VERIFICATION.
-- PORTFOLIO_RECOMMEND: requestedSize from currentInput (1..5) and constraints.
-  constraints may contain only exact allowedRecommendationConstraints; use an
-  empty array when none was explicitly requested.
+- PORTFOLIO_RECOMMEND: requestedSize from a stated count in currentInput
+  (两个→2, 三个→3, up to 5) and constraints. constraints may contain only exact
+  allowedRecommendationConstraints; use an empty array when none was explicitly
+  requested.
 - GENERAL_EXPLANATION: topicText and depth.
 - GENERAL_COMPARISON: at least two unique subjectTexts and non-empty dimensions;
   dimensions are closed uppercase names using only A-Z and underscore, such as
@@ -64,9 +70,11 @@ otherwise STANDARD.
 
 A clarification has exactly field, prompt, and goal. It is permitted only for a
 partial portfolio goal. Its goal uses the same semantic Draft fields; omit the
-single unresolved field. PORTFOLIO_FACT and PORTFOLIO_COMPARE may clarify only
-SUBJECT. PORTFOLIO_RECOMMEND may clarify only REQUESTED_SIZE. Do not clarify
-OUTPUT and do not persist a partial general goal. The server derives the
+single unresolved field everywhere in the draft, including inside any string
+carrier. PORTFOLIO_FACT and PORTFOLIO_COMPARE may clarify only SUBJECT.
+PORTFOLIO_RECOMMEND may clarify only REQUESTED_SIZE, and only when currentInput
+states no count at all; a stated count always resolves requestedSize. Do not
+clarify OUTPUT and do not persist a partial general goal. The server derives the
 canonical blockedGoal, outputs, depth counter, and asked/remaining fields.
 
 An explicit complete independent goal in currentInput always takes priority

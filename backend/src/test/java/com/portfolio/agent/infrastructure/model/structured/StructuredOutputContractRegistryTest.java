@@ -64,6 +64,26 @@ class StructuredOutputContractRegistryTest {
     }
 
     @Test
+    void goalSpecificRootFailuresReceiveOnlyGenericRegistryClassification() {
+        StructuredOutputValidationException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> registry.validate(
+                                new StructuredContractRef(
+                                        ModelOperation.TURN_INTERPRETATION,
+                                        "goal.provider-draft.v2"),
+                                "{\"kind\":\"PORTFOLIO_RECOMMEND\"}"),
+                        StructuredOutputValidationException.class);
+
+        assertThat(failure.getReason()).isNotIn(
+                StructuredOutputValidationException.Reason
+                        .UNSUPPORTED_ROOT_KIND,
+                StructuredOutputValidationException.Reason
+                        .CLARIFICATION_BLOCKED_GOAL_REQUIRED);
+        assertThat(failure.getStage()).isEqualTo(
+                StructuredOutputValidationException.Stage.UNCLASSIFIED_SCHEMA);
+    }
+
+    @Test
     void explanationArrayReportsTheActualSafePunctuationConstraint() {
         assertThatThrownBy(() -> registry.validate(
                 new StructuredContractRef(
