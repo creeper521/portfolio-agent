@@ -92,6 +92,17 @@ final class LifecycleTestFixture {
                 mock(SemanticTurnEngine.class), modelExecutionResolver);
     }
 
+    static AgentTurnLifecycleService service(
+            AgentStateStore store, GoalResolver resolver,
+            SemanticPlanCompiler compiler, SemanticTurnEngine engine,
+            ModelExecutionResolver modelExecutionResolver) {
+        return service(
+                store, resolver,
+                new RequestFingerprintFactory(new byte[32]), sessionResolver(),
+                Clock.fixed(NOW, ZoneOffset.UTC), compiler, engine,
+                modelExecutionResolver);
+    }
+
     private static AgentTurnLifecycleService service(
             AgentStateStore store, GoalResolver resolver,
             RequestFingerprintFactory fingerprints,

@@ -229,7 +229,11 @@ public final class StructuredModelFailure extends RuntimeException {
         TOOL_CALL_CARDINALITY,
         TOOL_CALL_TYPE,
         TOOL_FUNCTION,
-        TOOL_ARGUMENTS
+        TOOL_ARGUMENTS,
+        SECRET_LIKE_CONTENT,
+        MODEL_REQUIRED,
+        MODEL_TYPE,
+        MODEL_MISMATCH
     }
     /**
      * 封闭失败码，每个码标注所属失败层（getLayer）：
@@ -247,6 +251,7 @@ public final class StructuredModelFailure extends RuntimeException {
         RESPONSE_TOO_LARGE("TRANSPORT"),
         RESPONSE_JSON_INVALID("JSON"),
         RESPONSE_ENVELOPE_INVALID("ENVELOPE"),
+        OUTBOUND_SECRET_LIKE_REJECTED("SAFETY"),
         INVALID_RESPONSE("SEMANTIC");
 
         private final String layer;

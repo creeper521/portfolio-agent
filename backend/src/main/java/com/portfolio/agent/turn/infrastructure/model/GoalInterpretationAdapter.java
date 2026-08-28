@@ -64,9 +64,10 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
     /**
      * 执行一次目标解析调用。
      *
-     * <p>先做能力与截止时间前置检查，标记尝试阶段后调用传输；传输失败与 schema
-     * 解码失败分别映射为所选模型失败异常（携带稳定失败类别），其余输入投影异常
-     * 映射为不可用异常。</p>
+     * <p>先做能力与截止时间前置检查，再调用传输；只有传输确实开始或返回结果后
+     * 才标记尝试阶段。调用前安全拒绝保持未尝试。传输失败与 schema 解码失败分别
+     * 映射为所选模型失败异常（携带稳定失败类别），其余输入投影异常映射为不可用
+     * 异常。</p>
      *
      * @throws SelectedModelFailureException 所选模型不可用、被限流或返回无法安全采用的结果
      * @throws GoalInterpretationUnavailableException 输入投影失败或模型能力整体不可用
@@ -91,8 +92,6 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             throw SelectedModelFailureException
                     .temporarilyUnavailableBeforeAttempt();
         }
-        modelExecution.markAttempted(
-                ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
         StructurallyValidatedOutput output;
         try {
             output = gateway.execute(
@@ -100,13 +99,20 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
                     new GoalProviderDraftCompiler(input),
                     GoalInterpretationAdapter::classifyProviderSchemaFailure);
         } catch (StructuredModelFailure failure) {
-            throw SelectedModelFailureException.from(failure);
+            SelectedModelFailureException selected =
+                    SelectedModelFailureException.from(failure);
+            markAttemptedWhenObserved(modelExecution, selected);
+            throw selected;
         } catch (StructuredOutputValidationException failure) {
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
             outputDiagnostics.rejected(
                     "GOAL_INTERPRETATION", diagnosticLayer(failure),
                     failure.getDiagnosticReason());
             throw SelectedModelFailureException.invalidResponse(failure);
         }
+        modelExecution.markAttempted(
+                ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
         try {
             return codec.decode(output.jsonTree(), input);
         } catch (GoalProposalDecodeException failure) {
@@ -118,6 +124,15 @@ public final class GoalInterpretationAdapter implements GoalInterpretationPort {
             outputDiagnostics.rejected(
                     "GOAL_INTERPRETATION", ModelOutputDiagnostics.Layer.SCHEMA);
             throw SelectedModelFailureException.invalidResponse(failure);
+        }
+    }
+
+    private static void markAttemptedWhenObserved(
+            ResolvedModelExecution modelExecution,
+            SelectedModelFailureException failure) {
+        if (failure.isAttempted()) {
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.GOAL_INTERPRETATION);
         }
     }
 

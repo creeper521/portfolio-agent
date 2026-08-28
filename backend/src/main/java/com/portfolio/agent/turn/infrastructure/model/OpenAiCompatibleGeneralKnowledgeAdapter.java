@@ -124,8 +124,6 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
                 throw SelectedModelFailureException
                         .temporarilyUnavailableBeforeAttempt();
             }
-            modelExecution.markAttempted(
-                    ResolvedModelExecution.Stage.ANSWER_GENERATION);
             StructuredOutputCompiler compiler = switch (compilerProfile) {
                 case OperationBinding.IDENTITY_OUTPUT_COMPILER_VERSION ->
                         StructuredOutputCompiler.identity();
@@ -137,15 +135,26 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
             };
             if (OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION.equals(
                     compiler.profileVersion())) {
-                return retryExecutor.execute(
+                StructurallyValidatedOutput output = retryExecutor.execute(
                         modelExecution.getRequiredBinding(),
                         modelRequest, compiler);
+                modelExecution.markAttempted(
+                        ResolvedModelExecution.Stage.ANSWER_GENERATION);
+                return output;
             }
-            return gateway.execute(
+            StructurallyValidatedOutput output = gateway.execute(
                     modelExecution.getRequiredBinding(), modelRequest, compiler);
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.ANSWER_GENERATION);
+            return output;
         } catch (StructuredModelFailure failure) {
-            throw SelectedModelFailureException.from(failure);
+            SelectedModelFailureException selected =
+                    SelectedModelFailureException.from(failure);
+            markAttemptedWhenObserved(modelExecution, selected);
+            throw selected;
         } catch (StructuredOutputValidationException failure) {
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.ANSWER_GENERATION);
             outputDiagnostics.rejected(
                     "GENERAL_KNOWLEDGE", diagnosticLayer(failure),
                     failure.getDiagnosticReason());
@@ -154,6 +163,15 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
             throw failure;
         } catch (Exception failure) {
             throw new GeneralKnowledgeUnavailableException("general request projection failed", failure);
+        }
+    }
+
+    private static void markAttemptedWhenObserved(
+            ResolvedModelExecution modelExecution,
+            SelectedModelFailureException failure) {
+        if (failure.isAttempted()) {
+            modelExecution.markAttempted(
+                    ResolvedModelExecution.Stage.ANSWER_GENERATION);
         }
     }
 

@@ -218,6 +218,7 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                         StructuredModelFailure.Code.RESPONSE_JSON_INVALID,
                         StructuredModelFailure.Reason.MALFORMED_JSON);
             }
+            requireResponseModel(root, resolvedBinding.getModelName());
             providerUsage = providerUsage(root);
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.size() != 1) {
@@ -233,9 +234,12 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                     resolvedAttempt, providerUsage);
             return result;
         } catch (StructuredModelFailure failure) {
-            publish(request.operation(), false, failure.getCode().name(),
-                    failure.getReason(), startedAt, resolvedAttempt,
-                    providerUsage);
+            if (failure.getCode()
+                    != StructuredModelFailure.Code.OUTBOUND_SECRET_LIKE_REJECTED) {
+                publish(request.operation(), false, failure.getCode().name(),
+                        failure.getReason(), startedAt, resolvedAttempt,
+                        providerUsage);
+            }
             throw failure;
         }
         catch (Exception failure) {
@@ -322,7 +326,27 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                     request.maxOutputTokens(), binding.getMaxOutputTokens()));
         }
         payload.put("temperature", request.temperature());
+        OutboundModelSecretBoundary.assertSafe(payload);
         return mapper.writeValueAsString(payload);
+    }
+
+    private void requireResponseModel(JsonNode root, String expectedModel) {
+        JsonNode model = root.get("model");
+        if (model == null) {
+            throw new StructuredModelFailure(
+                    StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID,
+                    StructuredModelFailure.Reason.MODEL_REQUIRED);
+        }
+        if (!model.isTextual()) {
+            throw new StructuredModelFailure(
+                    StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID,
+                    StructuredModelFailure.Reason.MODEL_TYPE);
+        }
+        if (!model.textValue().equals(expectedModel)) {
+            throw new StructuredModelFailure(
+                    StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID,
+                    StructuredModelFailure.Reason.MODEL_MISMATCH);
+        }
     }
 
     private ProviderUsage providerUsage(JsonNode root) {

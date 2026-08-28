@@ -7,6 +7,7 @@ import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
 import com.portfolio.agent.infrastructure.model.ProviderAttemptContext;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
+import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.structured.StructuredModelTestFixtures;
 import com.portfolio.agent.turn.planning.GoalInterpretationInput;
 import com.portfolio.agent.turn.planning.GoalInterpretationResult;
@@ -29,6 +30,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoalInterpretationAdapterTest {
+    @Test void preHttpSafetyRejectionDoesNotMarkGoalAsAttempted() {
+        GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(
+                StructuredModelTestFixtures.gateway((binding, request) -> {
+                    throw new StructuredModelFailure(
+                            StructuredModelFailure.Code
+                                    .OUTBOUND_SECRET_LIKE_REJECTED,
+                            StructuredModelFailure.Reason.SECRET_LIKE_CONTENT);
+                }), new ObjectMapper(), new GoalProposalCodec(), "system", 100,
+                Duration.ofSeconds(2));
+        com.portfolio.agent.infrastructure.model.ResolvedModelExecution execution =
+                ModelExecutionSnapshotFixture.model();
+
+        SelectedModelFailureException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> adapter.interpret(
+                                input(),
+                                com.portfolio.agent.turn.execution.TurnDeadline.after(
+                                        Duration.ofSeconds(3), Clock.systemUTC()),
+                                execution),
+                        SelectedModelFailureException.class);
+
+        assertThat(failure.isAttempted()).isFalse();
+        assertThat(execution.wasAttempted(
+                com.portfolio.agent.infrastructure.model.ResolvedModelExecution.Stage
+                        .GOAL_INTERPRETATION)).isFalse();
+    }
+
     @Test void noneSelectionDoesNotCallGoalProvider() {
         AtomicInteger calls = new AtomicInteger();
         GoalInterpretationAdapter adapter = new GoalInterpretationAdapter(

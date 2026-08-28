@@ -59,6 +59,7 @@ public final class SelectedModelFailureException extends RuntimeException {
             case RESPONSE_TOO_LARGE, RESPONSE_JSON_INVALID,
                  RESPONSE_ENVELOPE_INVALID, INVALID_RESPONSE ->
                     invalidResponse(source);
+            case OUTBOUND_SECRET_LIKE_REJECTED -> unavailable(false, source);
             case AUTHENTICATION_REJECTED, BILLING_REJECTED, PROVIDER_REJECTED ->
                     unavailable(true, source);
         };

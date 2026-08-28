@@ -392,14 +392,14 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
 
     private static byte[] nativeSuccessBody() {
         return """
-                {"choices":[{"finish_reason":"stop","message":
+                {"model":"glm-4.7-flash","choices":[{"finish_reason":"stop","message":
                 {"content":"{}"}}]}
                 """.getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[] qwenDraftSuccessBody() {
         return """
-                {"choices":[{"finish_reason":"tool_calls","message":{
+                {"model":"test-model","choices":[{"finish_reason":"tool_calls","message":{
                 "content":null,"tool_calls":[{"type":"function","function":{
                 "name":"emit_general_provider_draft_v4",
                 "arguments":"{\\"definition\\":\\"定义。\\",\\"mechanism\\":\\"机制。\\",\\"caveats\\":[]}"}}]}}]}

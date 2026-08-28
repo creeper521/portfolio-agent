@@ -28,6 +28,38 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OpenAiCompatibleGeneralKnowledgeAdapterTest {
+    @Test void preHttpSafetyRejectionDoesNotMarkAnswerAsAttempted() {
+        OpenAiCompatibleGeneralKnowledgeAdapter adapter =
+                new OpenAiCompatibleGeneralKnowledgeAdapter(
+                        StructuredModelTestFixtures.gateway((binding, request) -> {
+                            throw new StructuredModelFailure(
+                                    StructuredModelFailure.Code
+                                            .OUTBOUND_SECRET_LIKE_REJECTED,
+                                    StructuredModelFailure.Reason
+                                            .SECRET_LIKE_CONTENT);
+                        }), new ObjectMapper(), "system", 1200,
+                        Duration.ofSeconds(10));
+        com.portfolio.agent.infrastructure.model.ResolvedModelExecution execution =
+                ModelExecutionSnapshotFixture.model();
+
+        SelectedModelFailureException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> adapter.generate(
+                                GeneralKnowledgeRequest.explanation(
+                                        "并发控制", UserGoalProposal.Depth.STANDARD,
+                                        GeneralKnowledgeRequest.Audience.GUEST,
+                                        "public-1", TurnDeadline.after(
+                                                Duration.ofSeconds(12),
+                                                Clock.systemUTC())),
+                                execution),
+                        SelectedModelFailureException.class);
+
+        assertThat(failure.isAttempted()).isFalse();
+        assertThat(execution.wasAttempted(
+                com.portfolio.agent.infrastructure.model.ResolvedModelExecution.Stage
+                        .ANSWER_GENERATION)).isFalse();
+    }
+
     @Test void qwenDraftBindingUsesDraftPromptAndCompilesCanonicalOutput() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
         OpenAiCompatibleGeneralKnowledgeAdapter adapter =
@@ -204,6 +236,46 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
         assertThat(failure.getRetryAfterSeconds()).isEqualTo(41);
         assertThat(failure.isAttempted()).isTrue();
         assertThat(calls).hasValue(1);
+    }
+
+    @Test void responseModelMismatchIsAttemptedAndNeverRetried() {
+        AtomicInteger calls = new AtomicInteger();
+        OpenAiCompatibleGeneralKnowledgeAdapter adapter =
+                new OpenAiCompatibleGeneralKnowledgeAdapter(
+                        StructuredModelTestFixtures.gateway((binding, request) -> {
+                            calls.incrementAndGet();
+                            throw new StructuredModelFailure(
+                                    StructuredModelFailure.Code
+                                            .RESPONSE_ENVELOPE_INVALID,
+                                    StructuredModelFailure.Reason
+                                            .MODEL_MISMATCH);
+                        }), new ObjectMapper(), "system", 1200,
+                        Duration.ofSeconds(10));
+        com.portfolio.agent.infrastructure.model.ResolvedModelExecution execution =
+                ModelExecutionSnapshotFixture.model();
+
+        SelectedModelFailureException failure =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () -> adapter.generate(
+                                GeneralKnowledgeRequest.explanation(
+                                        "并发控制",
+                                        UserGoalProposal.Depth.STANDARD,
+                                        GeneralKnowledgeRequest.Audience.GUEST,
+                                        "public-1", TurnDeadline.after(
+                                                Duration.ofSeconds(12),
+                                                Clock.systemUTC())),
+                                execution),
+                        SelectedModelFailureException.class);
+
+        assertThat(failure.getCode()).isEqualTo(
+                SelectedModelFailureException.Code
+                        .SELECTED_MODEL_INVALID_RESPONSE);
+        assertThat(failure.isAttempted()).isTrue();
+        assertThat(calls).hasValue(1);
+        assertThat(execution.wasAttempted(
+                com.portfolio.agent.infrastructure.model
+                        .ResolvedModelExecution.Stage.ANSWER_GENERATION))
+                .isTrue();
     }
 
     @Test void schemaRejectionKeepsSelectedModelSemanticsAndClosedDiagnostics() {

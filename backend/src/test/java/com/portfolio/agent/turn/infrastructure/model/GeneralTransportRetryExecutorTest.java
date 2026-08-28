@@ -328,6 +328,9 @@ class GeneralTransportRetryExecutorTest {
         assertNoRetry(new StructuredModelFailure(
                 StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID));
         assertNoRetry(new StructuredModelFailure(
+                StructuredModelFailure.Code.OUTBOUND_SECRET_LIKE_REJECTED,
+                StructuredModelFailure.Reason.SECRET_LIKE_CONTENT));
+        assertNoRetry(new StructuredModelFailure(
                 StructuredModelFailure.Code.INVALID_RESPONSE));
 
         Fixture fixture = fixture(Duration.ofSeconds(10), 175);

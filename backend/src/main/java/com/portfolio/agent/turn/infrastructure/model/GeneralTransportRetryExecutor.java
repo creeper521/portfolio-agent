@@ -162,7 +162,7 @@ final class GeneralTransportRetryExecutor {
             case AUTHENTICATION_REJECTED, BILLING_REJECTED,
                     PROVIDER_REJECTED, RESPONSE_TOO_LARGE,
                     RESPONSE_JSON_INVALID, RESPONSE_ENVELOPE_INVALID,
-                    INVALID_RESPONSE -> -1L;
+                    OUTBOUND_SECRET_LIKE_REJECTED, INVALID_RESPONSE -> -1L;
         };
     }
 

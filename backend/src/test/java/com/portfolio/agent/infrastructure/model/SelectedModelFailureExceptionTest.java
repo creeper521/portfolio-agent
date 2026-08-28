@@ -105,6 +105,24 @@ class SelectedModelFailureExceptionTest {
         assertThat(failure.getRetryAfterSeconds()).isNull();
     }
 
+    @Test
+    void secretLikeOutboundRejectionIsClosedAndNotAProviderAttempt() {
+        StructuredModelFailure source = new StructuredModelFailure(
+                StructuredModelFailure.Code.OUTBOUND_SECRET_LIKE_REJECTED,
+                StructuredModelFailure.Reason.SECRET_LIKE_CONTENT);
+
+        SelectedModelFailureException failure =
+                SelectedModelFailureException.from(source);
+
+        assertThat(failure.getCode()).isEqualTo(
+                SelectedModelFailureException.Code.SELECTED_MODEL_UNAVAILABLE);
+        assertThat(failure.isRetryable()).isFalse();
+        assertThat(failure.isAttempted()).isFalse();
+        assertThat(failure.getRetryAfterSeconds()).isNull();
+        assertThat(failure.getMessage())
+                .isEqualTo("selected model operation failed");
+    }
+
     private void assertMapping(
             StructuredModelFailure.Code source,
             SelectedModelFailureException.Code expected,
