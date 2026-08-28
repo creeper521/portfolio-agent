@@ -1,12 +1,13 @@
 # Qwen General Explanation 功能恢复实施计划
 
-<!-- DOCUMENT_STATUS: ACTIVE -->
+<!-- DOCUMENT_STATUS: HISTORICAL -->
 
 > 日期：2026-08-28
 > 分支：`codex/qwen-general-functional-recovery`
 > 批准设计：`docs/superpowers/specs/2026-08-28-qwen-standard-explanation-functional-recovery-design.md`
 > Guardian 授权：`APPROVED_LEVEL_3_REPLACEMENT`
 > 基线提交：`73806f4`；更早的 Goal、目录指纹、General 规则与证据门基线为 `fad7421..740d6fb`
+> 收口状态：2026-08-28 已完成候选实现、离线认证工具与确定性全门；真实 Qwen 300 条采样、生产提升和公开目录切换均未运行，继续记为 `NOT_RUN/NOT_READY`。
 
 ## 1. 交付目标
 
@@ -106,8 +107,12 @@ StructurallyValidatedOutput execute(
 
 修改：
 
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/structured/StructuredContractRef.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/structured/StructurallyValidatedOutput.java`
 - `backend/src/main/java/com/portfolio/agent/infrastructure/model/structured/StructuredOutputContractRegistry.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/structured/StructuredOutputGateway.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/structured/StructuredOutputContractRegistryTest.java`
+- `backend/src/test/java/com/portfolio/agent/infrastructure/model/structured/StructuredOutputGatewayTest.java`
 
 步骤：
 
@@ -120,7 +125,9 @@ StructurallyValidatedOutput execute(
 ```
 
 4. 创建两个 schema 并注册，同时保留 v3/v2 历史资源供离线回放；新 Qwen binding 不得回退旧资源。
-5. 再运行相同命令，预期全部 PASS。
+5. Provider v4 Admission 在 Schema 前先执行 JSON 最大深度 16、数组元素总量 64 的资源门；测试必须精确覆盖 16/17 与 64/65 边界。
+6. `StructurallyValidatedOutput` 收敛为不透明 carrier，外部不能绕过 Registry/Gateway 自建“已验证”对象；Codec 只消费该 carrier。
+7. 再运行相同命令，预期全部 PASS。
 
 ## 5. Task A2：实现 General Draft Admission 深模块
 
@@ -133,7 +140,9 @@ StructurallyValidatedOutput execute(
 - `backend/src/main/java/com/portfolio/agent/turn/capability/general/GeneralDraftCodec.java`
 - `backend/src/main/java/com/portfolio/agent/turn/capability/general/GeneralDraftValidator.java`
 - `backend/src/main/java/com/portfolio/agent/turn/capability/general/GeneralKnowledgeGenerator.java`
+- `backend/src/main/java/com/portfolio/agent/common/observability/DiagnosticEvent.java`
 - `backend/src/main/java/com/portfolio/agent/common/observability/ModelOutputDiagnostics.java`
+- `backend/src/test/java/com/portfolio/agent/common/observability/DiagnosticEventTest.java`
 - `backend/src/test/java/com/portfolio/agent/turn/infrastructure/model/GeneralProviderDraftCompilerTest.java`
 - `backend/src/test/java/com/portfolio/agent/turn/capability/general/GeneralDraftCodecAdversarialTest.java`
 - `backend/src/test/java/com/portfolio/agent/turn/capability/general/GeneralDraftValidatorTest.java`
@@ -149,6 +158,7 @@ StructurallyValidatedOutput execute(
 5. malformed caveats 整组变 `[]`，发布 `DEGRADED` 与闭集 reason；missing/null caveats 也能 COMPLETE。
 6. `GeneralDraftCodec` 新增 `decode(StructurallyValidatedOutput)`，只接受 `GENERAL_KNOWLEDGE` 的 `general.draft.v2|v3`，再解码同一棵已验证 tree；`GeneralKnowledgeGenerator` 必须改用该入口。Qwen v3 由 canonical schema 先保证精确两条；不能把 Codec 变成宽松 Provider parser。
 7. `GeneralDraftValidator` 只检查确定性 topic/role/aspects/自然句数/主要语言；删除 Explanation 的细粒度 coverage 并集要求，Comparison v2 历史校验保留供 GLM/离线回归。
+8. 主要语言规则冻结为 `Han > 0 && Han >= Latin`；v2 与 v3 的 caveat 重复语义保持版本隔离，不能因 v3 放宽而改变历史合同。
 
 验证：
 
@@ -169,14 +179,17 @@ StructurallyValidatedOutput execute(
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/configuration/ApprovedModelExecutionProfileTest.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/provider/ConfiguredModelCatalogTest.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/provider/ModelProviderDescriptorTest.java`
+- `backend/src/test/java/com/portfolio/agent/infrastructure/model/ModelExecutionResolverTest.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/structured/StructuredModelTestFixtures.java`
+- `backend/src/test/java/com/portfolio/agent/turn/infrastructure/AgentCapabilityConfigurationTest.java`
 - `backend/src/test/java/com/portfolio/agent/turn/contract/PortfolioModelCatalogGoldenFixtureTest.java`
+- `backend/src/test/java/com/portfolio/agent/turn/lifecycle/AgentTurnLifecycleBoundaryTest.java`
 
 要求：
 
 - compiler profile 常量改为 `general-provider-draft-compiler.v4`；
 - Qwen profile/selection 改为 `QWEN_3_7_FLASH_STRUCTURED_V7` / `qwen-3-7-flash-v7`，General binding 精确为 provider v4 + application v3 + compiler v4；
-- GLM profile 与 Goal v2 不变；GLM 默认 `selectable:false`，不得用 Qwen 结果冒充 GLM READY；
+- GLM profile、Goal v2 与既有已部署/公开合同基线不变；候选 JAR 只配置硬编码为 `selectable:false` 的 Qwen v7，因此自身不把 Qwen 暴露到公开目录，现网与公开合同 fixture 仍保持 v6。认证前不得部署候选、泄漏 v7 或用 Qwen 结果冒充 GLM READY；
 - Prompt 按 trusted depth 请求 CONCISE 1+1、STANDARD 目标 2+2 且合同允许 1..3、DETAILED 每 role 4..6；只输出 definition/mechanism/optional caveats；temperature 由 Lane B 在 Adapter 冻结为 0.0；
 - catalog/descriptor fingerprint 变化使旧 selection stale。
 
@@ -214,13 +227,21 @@ StructurallyValidatedOutput execute(
 新增：
 
 - `backend/src/main/java/com/portfolio/agent/turn/infrastructure/model/GeneralTransportRetryExecutor.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/ProviderAttemptContext.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/OutboundModelSecretBoundary.java`
 - `backend/src/test/java/com/portfolio/agent/turn/infrastructure/model/GeneralTransportRetryExecutorTest.java`
+- `backend/src/test/java/com/portfolio/agent/infrastructure/model/ProviderAttemptContextTest.java`
 
 修改：
 
 - `backend/src/main/java/com/portfolio/agent/turn/infrastructure/model/OpenAiCompatibleGeneralKnowledgeAdapter.java`
 - `backend/src/main/java/com/portfolio/agent/infrastructure/model/OpenAiCompatibleStructuredModelTransport.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/StructuredModelTransport.java`
 - `backend/src/main/java/com/portfolio/agent/infrastructure/model/StructuredModelFailure.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/SelectedModelFailureException.java`
+- `backend/src/main/java/com/portfolio/agent/infrastructure/model/structured/StructuredOutputGateway.java`
+- `backend/src/main/java/com/portfolio/agent/common/observability/DiagnosticEvent.java`
+- `backend/src/main/java/com/portfolio/agent/common/observability/ModelOutputDiagnostics.java`
 - `backend/src/test/java/com/portfolio/agent/turn/infrastructure/model/OpenAiCompatibleGeneralKnowledgeAdapterTest.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/OpenAiCompatibleStructuredModelTransportProtocolTest.java`
 - `backend/src/test/java/com/portfolio/agent/infrastructure/model/OpenAiCompatibleStructuredModelTransportDeadlineTest.java`
@@ -232,6 +253,8 @@ StructurallyValidatedOutput execute(
 - `StructuredModelFailure` 保留精确 HTTP status 和“Retry-After 缺失/合法/非法”闭集状态，不保留 response body；
 - transport 仍只执行一次 HTTP attempt，不在通用 transport 内循环；
 - `GeneralTransportRetryExecutor` 是唯一循环所有者；每次 attempt 生成不同 UUID，但日志只发 attempt index、count、失败闭集和耗时桶，不发高基数 UUID；
+- 唯一 Transport seam 在 HTTP 与 `provider.call.*` 事件前扫描最终 payload 的文本值：拒绝高置信 secret 赋值、standalone API key 与 PEM 私钥标记，忽略字段名并放行普通 API-key 技术讨论；命中只投影 `SAFETY/SECRET_LIKE_CONTENT` 闭集、HTTP 调用为 0、不可重试且不记录正文；
+- 第一次 Qwen v4 General attempt 仅在剩余预算大于 3250ms 时设置 `remaining - 3000ms - 250ms` 的 attempt cap，为第二次调用保留最小预算；第二次 attempt 取消该 cap，但二者始终共享同一 absolute deadline；Goal、GLM 与非 v4 General 不使用该 cap；
 - Adapter 只对 v4 compiler 使用 executor，`markAttempted(ANSWER_GENERATION)` 仍只表示该阶段参与过，不因第二 attempt 重复改变生命周期；
 - `StructuredModelRequest` 对两次 attempt 语义相同，temperature 冻结为 `0.0d`；
 - sleeper 被中断时恢复 interrupt flag 并立即失败，不继续调用。
@@ -281,18 +304,22 @@ StructurallyValidatedOutput execute(
 
 新增：
 
+- `scripts/provider-diagnostic-lab/raw-root-common.ps1`
 - `scripts/provider-diagnostic-lab/invoke-qwen-general-lab.ps1`
 - `scripts/provider-diagnostic-lab/invoke-qwen-general-lab.test.ps1`
 - `scripts/provider-diagnostic-lab/replay-general-drafts.ps1`
 - `scripts/provider-diagnostic-lab/replay-general-drafts.test.ps1`
 - `backend/src/test/java/com/portfolio/agent/turn/infrastructure/model/GeneralProviderDraftDualReplayTest.java`
+- `backend/src/test/java/com/portfolio/agent/turn/infrastructure/model/LegacyGeneralV3Baseline.java`
+- `backend/src/test/resources/provider-diagnostic-lab/legacy-v3/b5cf941/*.java.snapshot`
 
 硬门：
 
 - 只接受 `-CaseId` 和枚举 depth，不接受 `-Prompt`/任意文本；
-- `-RawArtifactRoot` 必须解析到 repo 根之外，symlink/junction 后仍需校验；
-- TTL 固定 24h，启动先清理到期 artifact；
+- 所有入口复用唯一 raw-root 校验；`-RawArtifactRoot` 必须解析到 repo 根之外，拒绝卷根、用户目录、Desktop/Documents/Temp 宽根、repo 双向包含和 reparse point，并在 ACL、枚举或写入前验证 marker；
+- TTL 精确固定 24h，任何 `24h + epsilon` 配置或已到期 artifact 均失败关闭；启动先清理到期 artifact；
 - `-AuthorizeRealProvider` 与 repo 外 secret file 缺一不可；普通测试不外呼；
+- `captureSource` 由实际 endpoint 内部派生；正式回放、证据准备与报告只接受 `REAL_PROVIDER`，`TEST_LOOPBACK` 只能进入隔离测试，不能形成候选通过结论；
 - stdout/stderr/aggregate 只含 caseId、版本、状态、Rule ID/count、latency/token；raw request/response 只进短期 artifact；
 - unknown field 只计数，不保存 name/value 到 aggregate；
 - dual replay 针对同一 raw response 分别运行 v3 strict chain 与 v4 candidate chain，不形成生产 fallback。
@@ -310,9 +337,17 @@ StructurallyValidatedOutput execute(
 
 - `scripts/provider-diagnostic-lab/report-qwen-general-certification.ps1`
 - `scripts/provider-diagnostic-lab/report-qwen-general-certification.test.ps1`
+- `scripts/provider-diagnostic-lab/new-qwen-general-certification-evidence.ps1`
+- `scripts/provider-diagnostic-lab/certification-evidence-common.ps1`
 - `scripts/provider-diagnostic-lab/qwen-general-blind-review.schema.json`
+- `backend/src/test/java/com/portfolio/agent/infrastructure/model/QwenGeneralCertificationGuardTest.java`
+- `backend/src/test/java/com/portfolio/agent/infrastructure/model/QwenGeneralCertificationGuardSupport.java`
 
 报告按 depth 分别输出 transport、shape、semantic、L3 denominator 和总体 300 条安全 false acceptance；阈值精确为安全/身份/权限 0、缺 core 被接受 0、parse+compile >=98%、L3 >=95%、availability >=95%、P95 不超 deadline、canonical false acceptance 0。任一 depth 失败则总状态 `NOT_READY`。
+
+零容忍门必须来自实际执行当前 production boundary 的 hash-bound guard artifact，且每个门 `cases > 0`；报告重算并校验 manifest、盲审包、unblind map、review input、guard artifact 与 sealed review 的完整证据链。旧 v3 基线同时绑定 `b5cf941` 四个 Git blob snapshot、可执行基线 SHA-256 与 golden behavior matrix，不能由候选实现自我模拟历史行为。
+
+Guard producer 使用 `jdeps -R` 从实际编译产物机械形成 class/resource 闭包，并绑定闭包清单、源码与资源哈希；source-drift 负例只能在带严格 marker 的临时源根执行，不得修改主工作树源码。测试必须断言主工作树 GuardSupport 的内容、哈希与 mtime 全程不变。
 
 盲审字段为五个基础 boolean，加对应 depth boolean 与裁决状态；不包含 raw Prompt/response。单评审者模式必须输出 `reviewLimitation=SINGLE_REVIEWER_BLINDED_SECOND_PASS`，不能伪装双评审。
 
@@ -377,7 +412,7 @@ git diff --check
 
 - A2-85：内容/合同错误仍单次失败；仅 General v4 批准 transport 闭集 retry；
 - A2-117：Goal v2 仍单次；General v4/v3/compiler v4 最多两 attempt；
-- A2-80 不改；
+- A2-80：Comparison 的原 Goal 阻断虽已解除，但本 Slice 明确在 Goal 后、Provider 前返回固定 `OUT_OF_SCOPE`；独立认证前运行时不可达，不能再以“应到达 General”作为当前目标；
 - GATE-19 继续 OPEN；overall 继续 `IN_PROGRESS`；
 - 只写已取得的新鲜测试/候选证据；F2/F4 未真实外呼时明确 `NOT_RUN`，不得写 READY；
 - 本计划只有在实现与离线门完成后才从 ACTIVE 改为 HISTORICAL；真实 300 条认证和生产部署留作受控后续 Slice。
@@ -393,3 +428,11 @@ git diff --check
 - 没有真实 300 条证据时，能力状态保持 `NOT_READY/IN_PROGRESS`。
 
 真实 Provider 认证与生产提升属于后续受控执行：取得明确外呼授权，运行 300 条封存集，三档分别过门后，才可执行 Spec Gate F5 的原子部署和 catalog 更新。
+
+## 16. 离线实施收口记录
+
+- 合同/编译线独立评审结论为 `READY`；资源边界精确覆盖 JSON 深度 16/17 与数组元素 64/65，canonical Codec 只接受不透明的已验证 carrier。
+- Comparison/retry 线独立评审结论为 `READY_WITH_MINOR`，两处诊断/温度 Javadoc 已同步；默认 10 秒 General deadline 的环回测试证明第一次 attempt cap 后仍可发生第二次调用，总耗时不越界。
+- 诊断实验室经三轮独立阻塞复审收紧 raw-root、来源证明、机器 guard、过期判定、历史基线与证据链；最终复审通过后才允许本计划历史化。
+- 新鲜离线证据：Backend `1298 tests / 0 failures / 0 errors / 4 skipped`；100 主题、300 prompts corpus SHA-256 为 `c58844d3b43ee96d9aa009cdd5fc797b0eaea569ed47300270b2e9fd9814b5a7`；机械 producer 闭包为 103 classes / 8 resources；实验室围栏、双回放、认证报告、质量/架构/隐私/文档门与候选 JAR 门均通过。
+- 本记录不包含真实 Provider 成功样本。Qwen v7 仍为不可选择候选，候选 JAR 不公开 Qwen；现网与公开合同 fixture 仍是 v6。`EVIDENCE_BEFORE_COMPLETION`、A2-80/A2-117 与 GATE-19 继续开放。

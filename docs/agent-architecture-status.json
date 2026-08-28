@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "portfolio-agent",
-  "updatedAt": "2026-08-27",
+  "updatedAt": "2026-08-28",
   "overallStatus": "IN_PROGRESS",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
@@ -32,12 +32,12 @@
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
       "status": "FAILED",
-      "evidence": "As of 2026-08-27, deterministic, privacy and Provider-free packaged gates have fresh evidence. The PostgreSQL restart wrapper passed both the API two-JVM gate and the same-BrowserContext two-JVM gate: process identity changed, page reload recovered the exact Conversation state and ResumeToken, and replay returned the exact persisted PublicTurn. The offline PublicTurn negative lane passed 8 rejected variants plus 1 valid control, but remains ASSERTION_ONLY. EVIDENCE_BEFORE_COMPLETION stays FAILED because Qwen external-call approval was denied by security review and no Provider quality matrix or real Provider happy path ran; the independent GATE-19 double-model packaged lane also has not run. Test totals and HTTP success are not completion evidence."
+      "evidence": "As of 2026-08-28, deterministic, privacy and Provider-free packaged gates have fresh evidence. The Qwen v7 General Explanation candidate, bounded same-model transport retry, pre-Provider Comparison boundary and diagnostic laboratory passed offline tests; the fixed corpus contains 100 topics and 300 prompts, but its current certification fixtures are TEST_LOOPBACK and cannot be promoted as formal evidence. EVIDENCE_BEFORE_COMPLETION stays FAILED because no fresh REAL_PROVIDER 300-sample quality matrix or real Provider happy path ran, Qwen v7 remains non-selectable, and the independent GATE-19 double-model packaged lane has not run. Offline guard artifacts, test totals and HTTP success are not completion evidence."
     },
     {
       "id": "PRIVACY_BOUNDARY",
       "status": "PASS",
-      "evidence": "Fresh 2026-08-27 evidence: privacy-check scanned 528 files without a privacy violation. AgentStatePayloadCodecTest decrypts and scans the complete settlement sentinel across publicTurn, contexts and challenges; JdbcAgentStateStoreIntegrationTest executes the PostgreSQL complete settlement sentinel path and replays REPLAY_BODY_NOT_RETAINED. AgentTurnLifecycleReplayTest proves Provider-derived Conversational and General bodies are live-only and same-request replay does not execute the Provider/plan again. Overall status remains IN_PROGRESS for unrelated open Agent 2.0 gates."
+      "evidence": "Fresh 2026-08-28 evidence: production privacy checks passed across 533 main files. AgentStatePayloadCodecTest decrypts and scans the complete settlement sentinel across publicTurn, contexts and challenges; JdbcAgentStateStoreIntegrationTest executes the PostgreSQL complete settlement sentinel path and replays REPLAY_BODY_NOT_RETAINED. The unique model Transport seam rejects high-confidence secret assignments, standalone API keys and PEM private-key markers before HTTP or provider.call events while keeping server credentials only in the Authorization header. The diagnostic laboratory accepts only the fixed synthetic corpus, requires a dedicated marked raw root outside the repository, applies a fixed 24-hour expiry, and excludes TEST_LOOPBACK captures from formal certification. Production diagnostics retain only closed metadata and never Provider raw bodies. Overall status remains IN_PROGRESS because real Provider and Browser gates remain open."
     }
   ],
   "activeAuthorities": {
