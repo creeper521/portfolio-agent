@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -33,6 +34,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
@@ -46,17 +48,18 @@ import java.util.function.Function;
  *
  * <p>关键防护与不变量：
  * <ul>
- *   <li>超时取 Turn 截止时间与 Operation 超时的较小值，任一耗尽都判
- *       DEADLINE_EXCEEDED 并取消未完成的请求；</li>
+ *   <li>超时取 Turn 截止时间、Operation 超时与可选 attempt cap 的较小值，
+ *       任一耗尽都判 DEADLINE_EXCEEDED 并取消未完成的请求；</li>
  *   <li>响应体经限流订阅器（{@link LimitedByteArraySubscriber}）读取，
  *       超过 {@value #MAX_RESPONSE_BYTES} 字节即中止并判 RESPONSE_TOO_LARGE，
  *       避免超大响应耗尽内存；</li>
  *   <li>HTTP 状态码映射为封闭失败码（鉴权、计费、限流、Provider 不可用等），
- *       429 时解析 Retry-After（缺省 {@value #DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS}
- *       秒，并夹取到 1..300 秒）；</li>
+ *       同时保留精确状态码；429 只保留 Retry-After 的缺失/合法/非法闭集，
+ *       合法整数秒夹取到 0..300 秒，不保留原始 header；</li>
  *   <li>响应 JSON 必须是恰好一个 choice 且 content 为非空文本，否则判
  *       RESPONSE_ENVELOPE_INVALID；</li>
- *   <li>每次调用发布仅含操作名、结果与耗时桶的诊断事件，诊断失败不影响模型行为。</li>
+ *   <li>每次调用只发布闭集 operation/outcome/failure、耗时、attempt、潜在重复计费
+ *       与 usage bucket；不发布 attempt UUID、token 原值、请求或响应正文。</li>
  * </ul>
  */
 public final class OpenAiCompatibleStructuredModelTransport implements StructuredModelTransport {
@@ -122,12 +125,28 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     @Override
     public StructuredModelResponse execute(
             ModelTransportBinding binding, StructuredModelRequest request) {
+        return execute(binding, request,
+                ProviderAttemptContext.single(UUID.randomUUID()));
+    }
+
+    @Override
+    public StructuredModelResponse execute(
+            ModelTransportBinding binding,
+            StructuredModelRequest request,
+            ProviderAttemptContext attempt) {
         ModelTransportBinding resolvedBinding = java.util.Objects.requireNonNull(
                 binding, "binding");
+        ProviderAttemptContext resolvedAttempt = java.util.Objects.requireNonNull(
+                attempt, "attempt");
         long startedAt = System.nanoTime();
+        ProviderUsage providerUsage = ProviderUsage.unavailable();
         try {
             TurnDeadline operationDeadline =
                     request.deadline().cappedAt(operationTimeout);
+            if (resolvedAttempt.attemptTimeoutCap().isPresent()) {
+                operationDeadline = operationDeadline.cappedAt(
+                        resolvedAttempt.attemptTimeoutCap().orElseThrow());
+            }
             String requestBody = body(resolvedBinding, request);
             long timeout = operationDeadline.remainingMillis();
             if (timeout < 1) {
@@ -141,57 +160,65 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                     .header("Content-Type", "application/json")
                     .header("Authorization", resolvedBinding.authorizationHeaderValue())
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody)).build();
+            AtomicBoolean responseStarted = new AtomicBoolean();
             CompletableFuture<HttpResponse<byte[]>> future = client.sendAsync(
-                    httpRequest, limitedByteArrayHandler(MAX_RESPONSE_BYTES));
+                    httpRequest, limitedByteArrayHandler(
+                            MAX_RESPONSE_BYTES, responseStarted));
             HttpResponse<byte[]> response;
             try {
                 response = future.get(timeout, TimeUnit.MILLISECONDS);
             } catch (TimeoutException timeoutFailure) {
                 // 等待超时：主动取消底层请求，避免泄漏仍在运行的连接。
                 future.cancel(true);
-                throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.DEADLINE_EXCEEDED,
-                        timeoutFailure);
+                throw StructuredModelFailure.deadline(
+                        timeoutDisposition(responseStarted), timeoutFailure);
             } catch (ExecutionException executionFailure) {
                 // 异步阶段失败：按异常链归类，避免把 HTTP 层异常直接外泄。
                 Throwable cause = executionFailure.getCause();
                 if (containsCause(cause, HttpTimeoutException.class)) {
-                    throw new StructuredModelFailure(
-                            StructuredModelFailure.Code.DEADLINE_EXCEEDED,
-                            cause);
+                    throw StructuredModelFailure.deadline(
+                            timeoutDisposition(responseStarted), cause);
                 }
                 if (containsCause(cause, ResponseTooLargeException.class)) {
                     throw new StructuredModelFailure(
                             StructuredModelFailure.Code.RESPONSE_TOO_LARGE, cause);
                 }
-                throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
-                        cause);
+                if (isConnectionFailure(cause)) {
+                    throw StructuredModelFailure.connection(cause);
+                }
+                throw StructuredModelFailure.transportOther(cause);
             } catch (CancellationException cancelled) {
-                throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
-                        cancelled);
+                throw StructuredModelFailure.cancelled(cancelled);
             } catch (InterruptedException interrupted) {
                 future.cancel(true);
                 Thread.currentThread().interrupt();
-                throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE,
-                        interrupted);
+                throw StructuredModelFailure.interrupted(interrupted);
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 StructuredModelFailure.Code code =
                         classifyHttpStatus(response.statusCode());
-                Integer retryAfterSeconds = code == StructuredModelFailure.Code.RATE_LIMITED
-                        ? retryAfterSeconds(response) : null;
-                throw new StructuredModelFailure(code, retryAfterSeconds, null);
+                if (code == StructuredModelFailure.Code.RATE_LIMITED) {
+                    RetryAfter retryAfter = retryAfter(response);
+                    throw StructuredModelFailure.rateLimited(
+                            response.statusCode(), retryAfter.seconds(),
+                            retryAfter.disposition());
+                }
+                throw StructuredModelFailure.http(code, response.statusCode());
             }
             JsonNode root;
             try {
                 root = strictEnvelopeMapper.readTree(response.body());
             } catch (Exception invalidJson) {
                 throw new StructuredModelFailure(
-                        StructuredModelFailure.Code.RESPONSE_JSON_INVALID, invalidJson);
+                        StructuredModelFailure.Code.RESPONSE_JSON_INVALID,
+                        StructuredModelFailure.Reason.MALFORMED_JSON);
             }
+            if (root == null || root.isMissingNode()) {
+                throw new StructuredModelFailure(
+                        StructuredModelFailure.Code.RESPONSE_JSON_INVALID,
+                        StructuredModelFailure.Reason.MALFORMED_JSON);
+            }
+            providerUsage = providerUsage(root);
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.size() != 1) {
                 throw new StructuredModelFailure(
@@ -202,30 +229,35 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                     .getRequiredOperationBinding(request.operation());
             StructuredModelResponse result = new StructuredModelResponse(
                     extract(choices.get(0), operationBinding));
-            publish(request.operation(), true, null, null, startedAt);
+            publish(request.operation(), true, null, null, startedAt,
+                    resolvedAttempt, providerUsage);
             return result;
         } catch (StructuredModelFailure failure) {
             publish(request.operation(), false, failure.getCode().name(),
-                    failure.getReason(), startedAt);
+                    failure.getReason(), startedAt, resolvedAttempt,
+                    providerUsage);
             throw failure;
         }
         catch (Exception failure) {
             // 兜底：任何未归类的异常都收敛为封闭的 TRANSPORT_UNAVAILABLE，不外泄细节。
             publish(request.operation(), false,
                     StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE.name(),
-                    null, startedAt);
-            throw new StructuredModelFailure(StructuredModelFailure.Code.TRANSPORT_UNAVAILABLE, failure);
+                    null, startedAt, resolvedAttempt, providerUsage);
+            throw StructuredModelFailure.transportOther(failure);
         }
     }
 
     /**
-     * 发布一次 Provider 调用的诊断事件（操作名、结果、失败码、耗时桶）。
+     * 发布一次 Provider 调用的闭集诊断事件：操作、结果/失败、耗时、attempt、
+     * 潜在重复计费与 usage bucket，不含 UUID、token 原值或正文。
      * 诊断发布失败被静默吞掉：诊断永远不得改变模型调用行为。
      */
     private void publish(
             com.portfolio.agent.infrastructure.model.policy.ModelOperation operation,
             boolean success, String failureCode,
-            StructuredModelFailure.Reason failureReason, long startedAt) {
+            StructuredModelFailure.Reason failureReason, long startedAt,
+            ProviderAttemptContext attempt,
+            ProviderUsage usage) {
         try {
             DiagnosticEvent.Builder event = DiagnosticEvent.builder(
                             success ? "provider.call.completed" : "provider.call.failed",
@@ -233,7 +265,17 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
                     .field("provider.operation", operation.name())
                     .field("event.outcome", success ? "SUCCESS" : "FAILURE")
                     .field("duration.bucket", durationBucket(startedAt))
-                    .field("response.present", success);
+                    .field("response.present", success)
+                    .field("attempt.index", attempt.attemptIndex())
+                    .field("attempt.count", attempt.attemptCount())
+                    .field("duplicate.billing.risk",
+                            attempt.duplicateBillingRisk())
+                    .field("usage.present", usage.present());
+            if (usage.present()) {
+                event.field("usage.input_tokens.bucket", usage.inputBucket())
+                        .field("usage.output_tokens.bucket", usage.outputBucket())
+                        .field("usage.total_tokens.bucket", usage.totalBucket());
+            }
             if (failureCode != null) event.field("failure.code", failureCode);
             if (failureCode != null) {
                 event.field("failure.layer",
@@ -281,6 +323,57 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
         }
         payload.put("temperature", request.temperature());
         return mapper.writeValueAsString(payload);
+    }
+
+    private ProviderUsage providerUsage(JsonNode root) {
+        JsonNode usage = root.get("usage");
+        if (usage == null || !usage.isObject()) {
+            return ProviderUsage.unavailable();
+        }
+        Long inputTokens = nonNegativeLong(usage.get("prompt_tokens"));
+        Long outputTokens = nonNegativeLong(usage.get("completion_tokens"));
+        Long totalTokens = nonNegativeLong(usage.get("total_tokens"));
+        if (inputTokens == null || outputTokens == null || totalTokens == null) {
+            return ProviderUsage.unavailable();
+        }
+        return ProviderUsage.available(
+                tokenBucket(inputTokens), tokenBucket(outputTokens),
+                tokenBucket(totalTokens));
+    }
+
+    private Long nonNegativeLong(JsonNode value) {
+        if (value == null || !value.isIntegralNumber()
+                || !value.canConvertToLong()) {
+            return null;
+        }
+        long tokens = value.longValue();
+        return tokens >= 0L ? tokens : null;
+    }
+
+    private String tokenBucket(long tokens) {
+        if (tokens == 0L) return "ZERO";
+        if (tokens <= 255L) return "FROM_1_TO_255";
+        if (tokens <= 1_023L) return "FROM_256_TO_1023";
+        if (tokens <= 4_095L) return "FROM_1024_TO_4095";
+        return "GTE_4096";
+    }
+
+    private record ProviderUsage(
+            boolean present,
+            String inputBucket,
+            String outputBucket,
+            String totalBucket) {
+        private static ProviderUsage unavailable() {
+            return new ProviderUsage(false, null, null, null);
+        }
+
+        private static ProviderUsage available(
+                String inputBucket,
+                String outputBucket,
+                String totalBucket) {
+            return new ProviderUsage(
+                    true, inputBucket, outputBucket, totalBucket);
+        }
     }
 
     private void applyStrategy(
@@ -387,21 +480,38 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
     }
 
     /**
-     * 解析限流响应的 Retry-After（秒）：缺失或非法时用缺省值，
-     * 合法值夹取到 1..300 秒，防止 Provider 返回异常巨大的等待时间。
+     * 解析限流响应的 Retry-After（秒）：缺失、合法整数秒、非法/HTTP-date
+     * 三态分离；合法值夹取到 0..300 秒，且不保留原始 header。
      */
-    private int retryAfterSeconds(HttpResponse<?> response) {
+    private RetryAfter retryAfter(HttpResponse<?> response) {
         String raw = response.headers().firstValue("Retry-After").orElse(null);
         if (raw == null) {
-            return DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS;
+            return new RetryAfter(
+                    null, StructuredModelFailure.RetryAfterDisposition.MISSING);
         }
-        try {
-            long seconds = Long.parseLong(raw.trim());
-            return (int) Math.max(1L, Math.min(300L, seconds));
-        } catch (NumberFormatException invalid) {
-            return DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS;
+        if (raw.isEmpty()) {
+            return new RetryAfter(
+                    null, StructuredModelFailure.RetryAfterDisposition.INVALID);
         }
+        int seconds = 0;
+        for (int index = 0; index < raw.length(); index++) {
+            char value = raw.charAt(index);
+            if (value < '0' || value > '9') {
+                return new RetryAfter(
+                        null,
+                        StructuredModelFailure.RetryAfterDisposition.INVALID);
+            }
+            if (seconds < 300) {
+                seconds = Math.min(300, seconds * 10 + (value - '0'));
+            }
+        }
+        return new RetryAfter(
+                seconds, StructuredModelFailure.RetryAfterDisposition.VALID);
     }
+
+    private record RetryAfter(
+            Integer seconds,
+            StructuredModelFailure.RetryAfterDisposition disposition) { }
 
     /** 沿异常链查找指定类型的成因；自引用成因（cause == self）时终止防死循环。 */
     private boolean containsCause(Throwable failure, Class<? extends Throwable> type) {
@@ -418,9 +528,26 @@ public final class OpenAiCompatibleStructuredModelTransport implements Structure
         return false;
     }
 
+    private boolean isConnectionFailure(Throwable failure) {
+        return containsCause(failure, java.net.ConnectException.class)
+                || containsCause(failure, java.net.SocketException.class)
+                || containsCause(failure, java.net.UnknownHostException.class);
+    }
+
     /** 构造带字节上限的响应体处理器。 */
-    private HttpResponse.BodyHandler<byte[]> limitedByteArrayHandler(int maxBytes) {
-        return responseInfo -> new LimitedByteArraySubscriber(maxBytes);
+    private HttpResponse.BodyHandler<byte[]> limitedByteArrayHandler(
+            int maxBytes, AtomicBoolean responseStarted) {
+        return responseInfo -> {
+            responseStarted.set(true);
+            return new LimitedByteArraySubscriber(maxBytes);
+        };
+    }
+
+    private StructuredModelFailure.TimeoutDisposition timeoutDisposition(
+            AtomicBoolean responseStarted) {
+        return responseStarted.get()
+                ? StructuredModelFailure.TimeoutDisposition.RESPONSE_STARTED
+                : StructuredModelFailure.TimeoutDisposition.NO_RESPONSE;
     }
 
     /**

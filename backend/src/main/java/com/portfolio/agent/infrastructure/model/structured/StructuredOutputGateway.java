@@ -1,11 +1,13 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
 import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.ProviderAttemptContext;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelResponse;
 import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 
 import java.util.Objects;
+import java.util.UUID;
 
 /** Domain Adapter 唯一生产入口：一次传输后对同一 binding 合同严格解析与本地校验。 */
 public final class StructuredOutputGateway {
@@ -38,6 +40,25 @@ public final class StructuredOutputGateway {
             StructuredModelRequest request,
             StructuredOutputCompiler compiler,
             StructuredOutputSchemaFailureClassifier failureClassifier) {
+        return execute(modelBinding, request, compiler, failureClassifier,
+                ProviderAttemptContext.single(UUID.randomUUID()));
+    }
+
+    public StructurallyValidatedOutput execute(
+            ModelTransportBinding modelBinding,
+            StructuredModelRequest request,
+            StructuredOutputCompiler compiler,
+            ProviderAttemptContext attempt) {
+        return execute(modelBinding, request, compiler,
+                StructuredOutputSchemaFailureClassifier.generic(), attempt);
+    }
+
+    public StructurallyValidatedOutput execute(
+            ModelTransportBinding modelBinding,
+            StructuredModelRequest request,
+            StructuredOutputCompiler compiler,
+            StructuredOutputSchemaFailureClassifier failureClassifier,
+            ProviderAttemptContext attempt) {
         ModelTransportBinding binding = Objects.requireNonNull(
                 modelBinding, "modelBinding");
         OperationBinding operationBinding = binding.getRequiredOperationBinding(
@@ -46,12 +67,15 @@ public final class StructuredOutputGateway {
                 compiler, "compiler");
         StructuredOutputSchemaFailureClassifier requiredFailureClassifier =
                 Objects.requireNonNull(failureClassifier, "failureClassifier");
+        ProviderAttemptContext requiredAttempt = Objects.requireNonNull(
+                attempt, "attempt");
         if (!operationBinding.getOutputCompilerProfileVersion().equals(
                 requiredCompiler.profileVersion())) {
             throw new IllegalArgumentException(
                     "output compiler profile does not match operation binding");
         }
-        StructuredModelResponse response = transport.execute(binding, request);
+        StructuredModelResponse response = transport.execute(
+                binding, request, requiredAttempt);
         StructurallyValidatedOutput providerOutput;
         try {
             providerOutput = response.validateWith(

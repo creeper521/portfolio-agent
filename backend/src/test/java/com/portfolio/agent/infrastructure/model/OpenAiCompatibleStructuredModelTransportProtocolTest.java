@@ -23,8 +23,10 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -53,7 +55,86 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
             assertThat(events).singleElement().satisfies(event -> {
                 assertThat(event.getName()).isEqualTo("provider.call.completed");
                 assertThat(event.getLevel()).isEqualTo(DiagnosticLevel.INFO);
+                assertThat(event.getFields())
+                        .containsEntry("attempt.index", 1)
+                        .containsEntry("attempt.count", 1)
+                        .containsEntry("duplicate.billing.risk", false)
+                        .containsEntry("usage.present", false)
+                        .doesNotContainKeys(
+                                "usage.input_tokens.bucket",
+                                "usage.output_tokens.bucket",
+                                "usage.total_tokens.bucket");
             });
+        }
+    }
+
+    @Test
+    void attemptAwareDiagnosticsBucketProviderUsageWithoutLoggingIdentityOrCost()
+            throws Exception {
+        byte[] response = successBodyWithUsage(0, 256, 65_000);
+        UUID privateAttemptId = UUID.fromString(
+                "123e4567-e89b-12d3-a456-426614174000");
+        try (StubServer server = StubServer.responding(200, response)) {
+            List<DiagnosticEvent> events = new ArrayList<>();
+
+            transport(server.endpoint(), events::add).execute(
+                    binding("qwen", "qwen3.7-flash",
+                            ModelProviderProtocolProfile
+                                    .DASHSCOPE_CHAT_COMPLETIONS),
+                    request(),
+                    new ProviderAttemptContext(privateAttemptId, 2, 2, true));
+
+            assertThat(events).singleElement().satisfies(event -> {
+                assertThat(event.getFields())
+                        .containsEntry("attempt.index", 2)
+                        .containsEntry("attempt.count", 2)
+                        .containsEntry("duplicate.billing.risk", true)
+                        .containsEntry("usage.present", true)
+                        .containsEntry("usage.input_tokens.bucket", "ZERO")
+                        .containsEntry(
+                                "usage.output_tokens.bucket",
+                                "FROM_256_TO_1023")
+                        .containsEntry(
+                                "usage.total_tokens.bucket", "GTE_4096");
+                assertThat(event.toString())
+                        .doesNotContain(privateAttemptId.toString(), "cost");
+            });
+        }
+    }
+
+    @Test
+    void malformedOrPartialUsageIsExplicitlyUnavailableWithoutRejectingContent()
+            throws Exception {
+        List<String> usageBodies = List.of(
+                "{\"prompt_tokens\":-1,\"completion_tokens\":2,\"total_tokens\":1}",
+                "{\"prompt_tokens\":1.5,\"completion_tokens\":2,\"total_tokens\":3}",
+                "{\"prompt_tokens\":1,\"completion_tokens\":2}",
+                "\"private-usage-sentinel\"");
+
+        for (String usageBody : usageBodies) {
+            byte[] response = successBodyWithUsage(usageBody);
+            try (StubServer server = StubServer.responding(200, response)) {
+                List<DiagnosticEvent> events = new ArrayList<>();
+
+                StructuredModelResponse result = transport(
+                        server.endpoint(), events::add).execute(
+                        binding("qwen", "qwen3.7-flash",
+                                ModelProviderProtocolProfile
+                                        .DASHSCOPE_CHAT_COMPLETIONS),
+                        request());
+
+                assertThat(result).isNotNull();
+                assertThat(events).singleElement().satisfies(event -> {
+                    assertThat(event.getFields())
+                            .containsEntry("usage.present", false)
+                            .doesNotContainKeys(
+                                    "usage.input_tokens.bucket",
+                                    "usage.output_tokens.bucket",
+                                    "usage.total_tokens.bucket");
+                    assertThat(event.toString()).doesNotContain(
+                            "private-usage-sentinel");
+                });
+            }
         }
     }
 
@@ -193,16 +274,51 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
         assertHttpFailure(402, StructuredModelFailure.Code.BILLING_REJECTED);
         assertHttpFailure(429, StructuredModelFailure.Code.RATE_LIMITED);
         assertHttpFailure(500, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);
+        assertHttpFailure(502, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);
         assertHttpFailure(503, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);
+        assertHttpFailure(504, StructuredModelFailure.Code.PROVIDER_UNAVAILABLE);
         assertHttpFailure(400, StructuredModelFailure.Code.PROVIDER_REJECTED);
     }
 
     @Test
-    void rateLimitRetryAfterIsAlwaysProjectedInsideThePublicBound() throws Exception {
-        assertRateLimitRetryAfter("0", 1);
-        assertRateLimitRetryAfter("17", 17);
-        assertRateLimitRetryAfter("999", 300);
-        assertRateLimitRetryAfter("not-a-number", 30);
+    void rateLimitRetryAfterPreservesMissingValidAndInvalidClosedStates()
+            throws Exception {
+        assertRateLimitRetryAfter(
+                null, null,
+                StructuredModelFailure.RetryAfterDisposition.MISSING);
+        assertRateLimitRetryAfter(
+                "1", 1,
+                StructuredModelFailure.RetryAfterDisposition.VALID);
+        assertRateLimitRetryAfter(
+                "17", 17,
+                StructuredModelFailure.RetryAfterDisposition.VALID);
+        assertRateLimitRetryAfter(
+                "999", 300,
+                StructuredModelFailure.RetryAfterDisposition.VALID);
+        assertRateLimitRetryAfter(
+                "0", 0,
+                StructuredModelFailure.RetryAfterDisposition.VALID);
+        assertRateLimitRetryAfter(
+                "+0", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
+        assertRateLimitRetryAfter(
+                "+1", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
+        assertRateLimitRetryAfter(
+                "-1", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
+        assertRateLimitRetryAfter(
+                "1 0", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
+        assertRateLimitRetryAfter(
+                "9".repeat(1_000), 300,
+                StructuredModelFailure.RetryAfterDisposition.VALID);
+        assertRateLimitRetryAfter(
+                "not-a-number", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
+        assertRateLimitRetryAfter(
+                "Wed, 21 Oct 2015 07:28:00 GMT", null,
+                StructuredModelFailure.RetryAfterDisposition.INVALID);
     }
 
     @Test
@@ -221,6 +337,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
     @Test
     void jsonAndEnvelopeFailuresAreClosedAndNeverRetried() throws Exception {
+        assertResponseFailure("", StructuredModelFailure.Code.RESPONSE_JSON_INVALID, "JSON");
         assertResponseFailure("not-json", StructuredModelFailure.Code.RESPONSE_JSON_INVALID, "JSON");
         assertResponseFailure(
                 "{\"choices\":[],\"choices\":[]}",
@@ -236,6 +353,34 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                 "{\"choices\":[{\"message\":{\"content\":\"a\"}},"
                         + "{\"message\":{\"content\":\"b\"}}]}",
                 StructuredModelFailure.Code.RESPONSE_ENVELOPE_INVALID, "ENVELOPE");
+    }
+
+    @Test
+    void invalidJsonFailureRetainsNoParserOrRawResponseObject()
+            throws Exception {
+        String sentinel = "private-invalid-json-sentinel";
+        try (StubServer server = StubServer.responding(
+                200, ("{" + sentinel).getBytes(StandardCharsets.UTF_8))) {
+            StructuredModelFailure failure = catchThrowableOfType(
+                    () -> transport(server.endpoint(), event -> { }).execute(
+                            binding("glm", "glm-4.7-flash",
+                                    ModelProviderProtocolProfile
+                                            .ZHIPU_CHAT_COMPLETIONS),
+                            request()),
+                    StructuredModelFailure.class);
+
+            assertThat(failure.getCode()).isEqualTo(
+                    StructuredModelFailure.Code.RESPONSE_JSON_INVALID);
+            assertThat(failure.getReason()).isEqualTo(
+                    StructuredModelFailure.Reason.MALFORMED_JSON);
+            assertThat(failure.getCause()).isNull();
+            assertThat(failure.getSuppressed()).isEmpty();
+            assertThat(failure.toString()).doesNotContain(sentinel);
+            for (Field field : StructuredModelFailure.class
+                    .getDeclaredFields()) {
+                assertThat(field.getType()).isNotEqualTo(byte[].class);
+            }
+        }
     }
 
     @Test
@@ -290,12 +435,19 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                     StructuredModelFailure.class);
 
             assertThat(failure.getCode()).isEqualTo(expected);
+            assertThat(failure.getHttpStatus()).isEqualTo(status);
             assertThat(failure).hasMessage(expected.name());
             assertThat(server.requestCount)
                     .as("HTTP rejection must not retry or switch provider").hasValue(1);
             assertThat(MAPPER.readTree(server.requestBody.get()).path("model").textValue())
                     .isEqualTo("qwen3.7-flash");
             assertThat(events.toString()).doesNotContain(sentinel);
+            assertThat(events).singleElement().satisfies(event ->
+                    assertThat(event.getFields())
+                            .containsEntry("attempt.index", 1)
+                            .containsEntry("attempt.count", 1)
+                            .containsEntry("duplicate.billing.risk", false)
+                            .containsEntry("usage.present", false));
         }
     }
 
@@ -328,7 +480,9 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
     }
 
     private void assertRateLimitRetryAfter(
-            String header, int expectedSeconds) throws Exception {
+            String header, Integer expectedSeconds,
+            StructuredModelFailure.RetryAfterDisposition expectedDisposition)
+            throws Exception {
         try (StubServer server = StubServer.responding(
                 429, "provider-body".getBytes(StandardCharsets.UTF_8), header)) {
             StructuredModelFailure failure = catchThrowableOfType(
@@ -340,7 +494,10 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
             assertThat(failure.getCode())
                     .isEqualTo(StructuredModelFailure.Code.RATE_LIMITED);
+            assertThat(failure.getHttpStatus()).isEqualTo(429);
             assertThat(failure.getRetryAfterSeconds()).isEqualTo(expectedSeconds);
+            assertThat(failure.getRetryAfterDisposition())
+                    .isEqualTo(expectedDisposition);
         }
     }
 
@@ -401,6 +558,21 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
 
     private static byte[] successBody() {
         return "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"{\\\"answer\\\":\\\"ok\\\"}\"}}]}"
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] successBodyWithUsage(
+            long promptTokens, long completionTokens, long totalTokens) {
+        return successBodyWithUsage(
+                "{\"prompt_tokens\":" + promptTokens
+                        + ",\"completion_tokens\":" + completionTokens
+                        + ",\"total_tokens\":" + totalTokens + "}");
+    }
+
+    private static byte[] successBodyWithUsage(String usage) {
+        return ("{\"choices\":[{\"finish_reason\":\"stop\",\"message\":"
+                + "{\"content\":\"{\\\"answer\\\":\\\"ok\\\"}\"}}],"
+                + "\"usage\":" + usage + "}")
                 .getBytes(StandardCharsets.UTF_8);
     }
 

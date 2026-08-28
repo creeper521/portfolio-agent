@@ -27,9 +27,19 @@ class GoalBoundaryPolicyTest {
     }
 
     @Test
-    void generalComparisonNearestReachableBelowCapacityProceeds() {
-        assertThat(policy.apply(comparisonProposal(2, 9)).getKind())
-                .isEqualTo(ResolvedGoalSet.Kind.GOALS);
+    void highRiskBoundaryTakesPrecedenceOverComparisonCertificationBoundary() {
+        ResolvedGoalSet result = policy.apply(comparisonProposal(
+                2, 2, GoalKnowledgeRequirement.HIGH_RISK_ADVICE));
+
+        assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.BOUNDARY);
+        assertThat(result.getMessage().orElseThrow())
+                .contains("高风险专业建议")
+                .doesNotContain("暂不支持直接比较");
+    }
+
+    @Test
+    void generalComparisonNearestReachableBelowCapacityUsesFixedBoundary() {
+        assertComparisonBoundary(policy.apply(comparisonProposal(2, 9)));
     }
 
     @Test
@@ -40,18 +50,30 @@ class GoalBoundaryPolicyTest {
     }
 
     @Test
-    void generalComparisonAtCapacityProceeds() {
-        assertThat(policy.apply(comparisonProposal(4, 5)).getKind())
-                .isEqualTo(ResolvedGoalSet.Kind.GOALS);
+    void generalComparisonAtCapacityUsesFixedBoundary() {
+        assertComparisonBoundary(policy.apply(comparisonProposal(4, 5)));
     }
 
     @Test
-    void oversizedGeneralComparisonBecomesBoundaryWithoutModelCall() {
-        ResolvedGoalSet result = policy.apply(comparisonProposal(3, 7));
+    void oversizedGeneralComparisonUsesTheSameFixedBoundary() {
+        assertComparisonBoundary(policy.apply(comparisonProposal(3, 7)));
+    }
+
+    private void assertComparisonBoundary(ResolvedGoalSet result) {
         assertThat(result.getKind()).isEqualTo(ResolvedGoalSet.Kind.BOUNDARY);
+        assertThat(result.getMessage()).contains(
+                "当前暂不支持直接比较；请分别询问这些概念。");
     }
 
     private UserGoalProposal comparisonProposal(int subjects, int dimensions) {
+        return comparisonProposal(
+                subjects, dimensions,
+                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION);
+    }
+
+    private UserGoalProposal comparisonProposal(
+            int subjects, int dimensions,
+            GoalKnowledgeRequirement requirement) {
         java.util.List<UserGoalProposal.InputAnchor> anchors = new java.util.ArrayList<>();
         for (int index = 0; index < subjects; index++) {
             anchors.add(new UserGoalProposal.InputAnchor("主体" + index, 0));
@@ -64,7 +86,7 @@ class GoalBoundaryPolicyTest {
                 "general-comparison", GoalKind.GENERAL_COMPARISON,
                 new UserGoalProposal.InputAnchor("比较", 0), java.util.List.of(),
                 java.util.Set.of(GoalRequestedOutput.COMPARISON),
-                GoalKnowledgeRequirement.STABLE_GENERAL_EXPLANATION,
+                requirement,
                 new UserGoalProposal.GeneralComparisonParameters(anchors, names))));
     }
 }

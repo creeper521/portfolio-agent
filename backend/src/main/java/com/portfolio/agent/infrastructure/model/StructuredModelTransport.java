@@ -19,4 +19,16 @@ public interface StructuredModelTransport {
     StructuredModelResponse execute(
             ModelTransportBinding binding,
             StructuredModelRequest request) throws StructuredModelFailure;
+
+    /**
+     * 对一个显式 attempt 上下文执行单次请求。默认实现保持现有测试/替身的
+     * 函数式接口兼容；生产 transport 覆盖此入口以发布逐 attempt 计量。
+     */
+    default StructuredModelResponse execute(
+            ModelTransportBinding binding,
+            StructuredModelRequest request,
+            ProviderAttemptContext attempt) throws StructuredModelFailure {
+        java.util.Objects.requireNonNull(attempt, "attempt");
+        return execute(binding, request);
+    }
 }

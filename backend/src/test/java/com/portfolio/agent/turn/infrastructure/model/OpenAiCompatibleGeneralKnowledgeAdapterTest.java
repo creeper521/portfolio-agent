@@ -3,6 +3,9 @@ package com.portfolio.agent.turn.infrastructure.model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelResponse;
+import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.ProviderAttemptContext;
+import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.SelectedModelFailureException;
 import com.portfolio.agent.infrastructure.model.StructuredModelFailure;
 import com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput;
@@ -32,10 +35,8 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                         StructuredModelTestFixtures.gateway((binding, request) -> {
                             captured.set(request);
                             return new StructuredModelResponse("""
-                                    {"kind":"EXPLANATION",
-                                     "depth":"CONCISE",
-                                     "definitionSentences":["并发控制是一种协调机制"],
-                                     "mechanismSentences":["它通过控制访问顺序减少冲突"],
+                                    {"definition":"并发控制是一种协调机制。",
+                                     "mechanism":"它通过控制访问顺序减少冲突。",
                                      "caveats":[]}
                                     """);
                         }), new ObjectMapper(), "canonical-prompt", 1200,
@@ -47,11 +48,12 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                 GeneralKnowledgeRequest.Audience.GUEST, "public-1",
                 TurnDeadline.after(Duration.ofSeconds(12), Clock.systemUTC())),
                 StructuredModelTestFixtures.resolvedModel(
-                        StructuredModelTestFixtures.qwenV6ToolBindings()));
+                        StructuredModelTestFixtures.qwenV7ToolBindings()));
 
         assertThat(captured.get().systemPrompt()).isEqualTo("draft-prompt");
+        assertThat(captured.get().temperature()).isZero();
         assertThat(response.contractRef().schemaVersion())
-                .isEqualTo("general.draft.v2");
+                .isEqualTo("general.draft.v3");
         assertThat(response.jsonTree().path("topic").textValue())
                 .isEqualTo("并发控制");
         assertThat(response.jsonTree().path("statements")).hasSize(2);
@@ -80,18 +82,36 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
 
     @Test void sendsInjectedPromptAndPreservesTypedRequestProjection() {
         AtomicReference<StructuredModelRequest> captured = new AtomicReference<>();
+        AtomicReference<ProviderAttemptContext> attempt = new AtomicReference<>();
         String systemPrompt = "general-system-prompt";
         OpenAiCompatibleGeneralKnowledgeAdapter adapter =
                 new OpenAiCompatibleGeneralKnowledgeAdapter(
-                        StructuredModelTestFixtures.gateway((binding, request) -> {
-                    captured.set(request);
-                    return new StructuredModelResponse("""
-                            {"topic":"并发控制","statements":[
-                              {"role":"DEFINITION","text":"定义。","aspects":["DEFINITION"]},
-                              {"role":"MECHANISM","text":"机制。","aspects":["MECHANISM"]}
-                            ],"caveats":[]}
-                            """);
-                }), new ObjectMapper(), systemPrompt, 1200, Duration.ofSeconds(10));
+                        StructuredModelTestFixtures.gateway(
+                                new StructuredModelTransport() {
+                            @Override
+                            public StructuredModelResponse execute(
+                                    ModelTransportBinding binding,
+                                    StructuredModelRequest request) {
+                                throw new AssertionError(
+                                        "GLM must use the single-attempt context seam");
+                            }
+
+                            @Override
+                            public StructuredModelResponse execute(
+                                    ModelTransportBinding binding,
+                                    StructuredModelRequest request,
+                                    ProviderAttemptContext context) {
+                                captured.set(request);
+                                attempt.set(context);
+                                return new StructuredModelResponse("""
+                                        {"topic":"并发控制","statements":[
+                                          {"role":"DEFINITION","text":"定义。","aspects":["DEFINITION"]},
+                                          {"role":"MECHANISM","text":"机制。","aspects":["MECHANISM"]}
+                                        ],"caveats":[]}
+                                        """);
+                            }
+                        }), new ObjectMapper(), systemPrompt, 1200,
+                        Duration.ofSeconds(10));
 
         com.portfolio.agent.infrastructure.model.structured.StructurallyValidatedOutput response =
                 adapter.generate(GeneralKnowledgeRequest.explanation(
@@ -109,12 +129,61 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                         "\"expectedContentVersion\":\"public-1\"");
         assertThat(captured.get().maxOutputTokens()).isEqualTo(1200);
         assertThat(captured.get().temperature()).isEqualTo(0.2d);
+        assertThat(attempt.get().attemptIndex()).isEqualTo(1);
+        assertThat(attempt.get().attemptCount()).isEqualTo(1);
+        assertThat(attempt.get().attemptTimeoutCap()).isEmpty();
     }
 
-    @Test void providerRateLimitKeepsItsClosedSelectedModelSemantics() {
+    @Test
+    void qwenV7GeneralRetriesOneEligibleConnectionFailureWithFrozenRequest() {
+        AtomicInteger calls = new AtomicInteger();
+        List<StructuredModelRequest> requests = new ArrayList<>();
         OpenAiCompatibleGeneralKnowledgeAdapter adapter =
                 new OpenAiCompatibleGeneralKnowledgeAdapter(
                         StructuredModelTestFixtures.gateway((binding, request) -> {
+                            requests.add(request);
+                            if (calls.incrementAndGet() == 1) {
+                                throw StructuredModelFailure.connection(
+                                        new java.net.ConnectException(
+                                                "test connection"));
+                            }
+                            return new StructuredModelResponse("""
+                                    {"definition":"并发控制是一种协调机制。",
+                                     "mechanism":"它通过控制访问顺序减少冲突。",
+                                     "caveats":[]}
+                                    """);
+                        }), new ObjectMapper(), "canonical-prompt", 1200,
+                        Duration.ofSeconds(10), "draft-prompt",
+                        ModelOutputDiagnostics.none());
+        com.portfolio.agent.infrastructure.model.ResolvedModelExecution execution =
+                StructuredModelTestFixtures.resolvedModel(
+                        StructuredModelTestFixtures.qwenV7ToolBindings());
+
+        StructurallyValidatedOutput response = adapter.generate(
+                GeneralKnowledgeRequest.explanation(
+                        "并发控制", UserGoalProposal.Depth.CONCISE,
+                        GeneralKnowledgeRequest.Audience.GUEST, "public-1",
+                        TurnDeadline.after(
+                                Duration.ofSeconds(12), Clock.systemUTC())),
+                execution);
+
+        assertThat(response.contractRef().schemaVersion())
+                .isEqualTo("general.draft.v3");
+        assertThat(calls).hasValue(2);
+        assertThat(requests).hasSize(2);
+        assertThat(requests.get(1)).isSameAs(requests.get(0));
+        assertThat(requests.get(0).temperature()).isZero();
+        assertThat(execution.wasAttempted(
+                com.portfolio.agent.infrastructure.model.ResolvedModelExecution
+                        .Stage.ANSWER_GENERATION)).isTrue();
+    }
+
+    @Test void providerRateLimitKeepsItsClosedSelectedModelSemantics() {
+        AtomicInteger calls = new AtomicInteger();
+        OpenAiCompatibleGeneralKnowledgeAdapter adapter =
+                new OpenAiCompatibleGeneralKnowledgeAdapter(
+                        StructuredModelTestFixtures.gateway((binding, request) -> {
+                    calls.incrementAndGet();
                     throw new StructuredModelFailure(
                             StructuredModelFailure.Code.RATE_LIMITED, 41, null);
                 }), new ObjectMapper(), "system", 1200, Duration.ofSeconds(10));
@@ -134,6 +203,7 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                 SelectedModelFailureException.Code.SELECTED_MODEL_RATE_LIMITED);
         assertThat(failure.getRetryAfterSeconds()).isEqualTo(41);
         assertThat(failure.isAttempted()).isTrue();
+        assertThat(calls).hasValue(1);
     }
 
     @Test void schemaRejectionKeepsSelectedModelSemanticsAndClosedDiagnostics() {
@@ -175,4 +245,5 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                     providerBody, "private-sentinel");
         });
     }
+
 }

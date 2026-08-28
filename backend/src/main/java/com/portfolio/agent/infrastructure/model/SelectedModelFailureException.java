@@ -90,10 +90,11 @@ public final class SelectedModelFailureException extends RuntimeException {
     /** 限流等待秒数：传输层未提供时使用传输层的缺省值。 */
     private static int rateLimitRetryAfterSeconds(
             StructuredModelFailure source) {
-        return source.getRetryAfterSeconds() == null
+        Integer retryAfterSeconds = source.getRetryAfterSeconds();
+        return retryAfterSeconds == null
                 ? OpenAiCompatibleStructuredModelTransport
                         .DEFAULT_RATE_LIMIT_RETRY_AFTER_SECONDS
-                : source.getRetryAfterSeconds();
+                : Math.max(1, retryAfterSeconds);
     }
 
     private static SelectedModelFailureException unavailable(

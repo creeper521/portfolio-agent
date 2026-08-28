@@ -68,6 +68,13 @@ class SelectedModelFailureExceptionTest {
                 SelectedModelFailureException.from(new StructuredModelFailure(
                         StructuredModelFailure.Code.RATE_LIMITED));
         assertThat(defaulted.getRetryAfterSeconds()).isEqualTo(30);
+
+        SelectedModelFailureException immediate =
+                SelectedModelFailureException.from(
+                        StructuredModelFailure.rateLimited(
+                                429, 0,
+                                StructuredModelFailure.RetryAfterDisposition.VALID));
+        assertThat(immediate.getRetryAfterSeconds()).isEqualTo(1);
     }
 
     @Test

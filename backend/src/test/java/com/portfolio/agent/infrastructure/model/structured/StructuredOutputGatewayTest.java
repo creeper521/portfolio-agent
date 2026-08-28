@@ -1,7 +1,10 @@
 package com.portfolio.agent.infrastructure.model.structured;
 
+import com.portfolio.agent.infrastructure.model.ModelTransportBinding;
+import com.portfolio.agent.infrastructure.model.ProviderAttemptContext;
 import com.portfolio.agent.infrastructure.model.StructuredModelRequest;
 import com.portfolio.agent.infrastructure.model.StructuredModelResponse;
+import com.portfolio.agent.infrastructure.model.StructuredModelTransport;
 import com.portfolio.agent.infrastructure.model.policy.ModelOperation;
 import com.portfolio.agent.turn.execution.TurnDeadline;
 import org.junit.jupiter.api.Test;
@@ -10,11 +13,56 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructuredOutputGatewayTest {
+
+    @Test
+    void defaultGatewayPathCreatesASingleAttemptIdentityForTransport() {
+        AtomicReference<ProviderAttemptContext> received =
+                new AtomicReference<>();
+        StructuredModelTransport transport = new StructuredModelTransport() {
+            @Override
+            public StructuredModelResponse execute(
+                    ModelTransportBinding binding,
+                    StructuredModelRequest request) {
+                throw new AssertionError(
+                        "gateway must use the attempt-aware transport seam");
+            }
+
+            @Override
+            public StructuredModelResponse execute(
+                    ModelTransportBinding binding,
+                    StructuredModelRequest request,
+                    ProviderAttemptContext attempt) {
+                received.set(attempt);
+                return new StructuredModelResponse("""
+                        {"topic":"并发控制","statements":[
+                          {"role":"DEFINITION","text":"定义。",
+                           "aspects":["DEFINITION"]}
+                        ],"caveats":[]}
+                        """);
+            }
+        };
+        StructuredOutputGateway gateway =
+                StructuredModelTestFixtures.gateway(transport);
+
+        gateway.execute(
+                StructuredModelTestFixtures.resolvedModel(
+                        StructuredModelTestFixtures.nativeBindings())
+                        .getRequiredBinding(),
+                request(ModelOperation.GENERAL_KNOWLEDGE));
+
+        assertThat(received.get()).isNotNull();
+        assertThat(received.get().attemptIndex()).isEqualTo(1);
+        assertThat(received.get().attemptCount()).isEqualTo(1);
+        assertThat(received.get().duplicateBillingRisk()).isFalse();
+        assertThat(received.get().attemptId()).isNotNull();
+        assertThat(received.get().attemptTimeoutCap()).isEmpty();
+    }
 
     @Test
     void validatesExtractedPayloadAgainstTheContractFrozenByTheBinding() {

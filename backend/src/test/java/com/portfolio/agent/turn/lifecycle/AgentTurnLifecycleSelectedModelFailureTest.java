@@ -47,6 +47,36 @@ class AgentTurnLifecycleSelectedModelFailureTest {
     }
 
     @Test
+    void publishedQwenV6SelectionSettlesStaleBeforeAnyProviderCallAgainstV7() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        AtomicInteger bindingLookups = new AtomicInteger();
+        GoalResolver goalResolver = new GoalResolver(
+                (input, deadline, modelExecution) -> {
+                    providerCalls.incrementAndGet();
+                    throw new AssertionError("stale selection must not call Provider");
+                },
+                ignored -> {
+                    throw new AssertionError("reviewed goals are not used");
+                },
+                new GoalInterpretationInputFactory(),
+                new SafeConversationalFastPath(),
+                new SemanticRouteValidator(), new GoalBoundaryPolicy());
+        ModelExecutionResolver resolver = qwenV7Resolver(bindingLookups);
+        AgentTurnLifecycleService service = LifecycleTestFixture.service(
+                new InMemoryTurnExecutionStore(), goalResolver, resolver);
+
+        AgentTurnLifecycleService.Result result = service.execute(
+                null, command(UUID.randomUUID(),
+                        AgentTurnCommand.ModelSelection.model(
+                                "qwen-3-7-flash", "qwen-3-7-flash-v6")));
+
+        assertUnavailable(result.turn(), "MODEL_SELECTION_STALE", false, null,
+                ModelExecutionProjection.Participation.NONE);
+        assertThat(bindingLookups).hasValue(1);
+        assertThat(providerCalls).hasValue(0);
+    }
+
+    @Test
     void selectedModelFailuresSettleOnceAndOnlyANewRequestExecutesAgain() {
         assertOperationFailure(
                 () -> SelectedModelFailureException.from(
@@ -216,5 +246,30 @@ class AgentTurnLifecycleSelectedModelFailureTest {
                 ModelProviderProtocolProfile.ZHIPU_CHAT_COMPLETIONS,
                 StructuredModelTestFixtures.nativeBindings(),
                 100_000, 8_000);
+    }
+
+    private ModelExecutionResolver qwenV7Resolver(
+            AtomicInteger bindingLookups) {
+        ModelProviderDescriptor descriptor = new ModelProviderDescriptor(
+                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v7",
+                "Qwen3.7-Flash", 20,
+                URI.create("https://provider.example/v1/chat/completions"),
+                "qwen3.7-flash",
+                ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
+                StructuredModelTestFixtures.qwenV7ToolBindings(),
+                100_000, 8_000);
+        ModelCatalogSnapshot catalog = new ModelCatalogSnapshot(
+                "candidate-v7", List.of(descriptor),
+                ModelCatalogDefaultSelection.model(descriptor));
+        ModelTransportBinding binding = new ModelTransportBinding(
+                descriptor.getModelRef(), descriptor.getDescriptorFingerprint(),
+                descriptor.getEndpoint(), descriptor.getModelName(),
+                descriptor.getProtocolProfile(), "test-credential",
+                descriptor.getMaxOutputTokens(),
+                StructuredModelTestFixtures.qwenV7ToolBindings());
+        return new ModelExecutionResolver(catalog, modelRef -> {
+            bindingLookups.incrementAndGet();
+            return binding;
+        });
     }
 }

@@ -25,7 +25,9 @@ import java.util.Map;
  *
  * <p>把 GeneralKnowledgeRequest 投影为受限 JSON 输入，经结构化传输调用所选模型并
  * 返回 JSON 草稿文本；能力闸门、截止时间封顶与失败映射与 Goal 解析适配器一致。
- * 采样温度固定为 0.2（贴近确定的说明文风）。</p>
+ * Qwen v4 的采样温度固定为 0.0；identity/GLM 保留既有 0.2。只有 v4
+ * General Draft binding 进入同模型、共享 deadline 的有界 transport retry，
+ * identity/GLM 路径仍为单次调用。</p>
  */
 public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKnowledgeModelPort {
     private final StructuredOutputGateway gateway;
@@ -35,6 +37,7 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
     private final int maxTokens;
     private final Duration timeout;
     private final ModelOutputDiagnostics outputDiagnostics;
+    private final GeneralTransportRetryExecutor retryExecutor;
     public OpenAiCompatibleGeneralKnowledgeAdapter(
             StructuredOutputGateway gateway, ObjectMapper mapper,
             String systemPrompt, int maxTokens, Duration timeout) {
@@ -68,6 +71,8 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
         this.maxTokens = maxTokens; this.timeout = timeout;
         this.outputDiagnostics = java.util.Objects.requireNonNull(
                 outputDiagnostics, "outputDiagnostics");
+        this.retryExecutor = new GeneralTransportRetryExecutor(
+                gateway, outputDiagnostics);
     }
     /**
      * 执行一次通用知识生成调用，返回模型输出的 JSON 草稿文本。
@@ -98,34 +103,44 @@ public final class OpenAiCompatibleGeneralKnowledgeAdapter implements GeneralKno
                     .getRequiredOperationBinding(
                             com.portfolio.agent.infrastructure.model.policy
                                     .ModelOperation.GENERAL_KNOWLEDGE);
-            String selectedSystemPrompt = switch (
-                    binding.getOutputCompilerProfileVersion()) {
+            String compilerProfile = binding.getOutputCompilerProfileVersion();
+            String selectedSystemPrompt = switch (compilerProfile) {
                 case OperationBinding.IDENTITY_OUTPUT_COMPILER_VERSION -> systemPrompt;
                 case OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION ->
                         providerDraftSystemPrompt;
                 default -> throw new IllegalArgumentException(
                         "general output compiler profile is not approved");
             };
+            double temperature = OperationBinding
+                    .GENERAL_DRAFT_OUTPUT_COMPILER_VERSION
+                    .equals(compilerProfile) ? 0.0d : 0.2d;
             StructuredModelRequest modelRequest = new StructuredModelRequest(
                     com.portfolio.agent.infrastructure.model.policy.ModelOperation
                             .GENERAL_KNOWLEDGE,
                     selectedSystemPrompt, mapper.writeValueAsString(input),
-                    maxTokens, 0.2d, request.getDeadline().cappedAt(timeout));
+                    maxTokens, temperature,
+                    request.getDeadline().cappedAt(timeout));
             if (modelRequest.deadline().isExpired()) {
                 throw SelectedModelFailureException
                         .temporarilyUnavailableBeforeAttempt();
             }
             modelExecution.markAttempted(
                     ResolvedModelExecution.Stage.ANSWER_GENERATION);
-            StructuredOutputCompiler compiler = switch (
-                    binding.getOutputCompilerProfileVersion()) {
+            StructuredOutputCompiler compiler = switch (compilerProfile) {
                 case OperationBinding.IDENTITY_OUTPUT_COMPILER_VERSION ->
                         StructuredOutputCompiler.identity();
                 case OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION ->
-                        new GeneralProviderDraftCompiler(request);
+                        new GeneralProviderDraftCompiler(
+                                request, outputDiagnostics);
                 default -> throw new IllegalArgumentException(
                         "general output compiler profile is not approved");
             };
+            if (OperationBinding.GENERAL_DRAFT_OUTPUT_COMPILER_VERSION.equals(
+                    compiler.profileVersion())) {
+                return retryExecutor.execute(
+                        modelExecution.getRequiredBinding(),
+                        modelRequest, compiler);
+            }
             return gateway.execute(
                     modelExecution.getRequiredBinding(), modelRequest, compiler);
         } catch (StructuredModelFailure failure) {
