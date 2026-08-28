@@ -15,6 +15,8 @@ foreach ($requiredContract in @(
         'sameConversation',
         'Test-ResponseRequestId',
         'uniqueRequestIds=',
+        'TURN_INTERPRETATION,',
+        'LatencySamplesFile',
         'GOAL_DRAFT_MATRIX_AUTHORIZATION_REQUIRED'
 )) {
     if ($source -notmatch [regex]::Escape($requiredContract)) {

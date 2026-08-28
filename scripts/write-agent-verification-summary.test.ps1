@@ -59,6 +59,21 @@ Assert-True ($partialJson.layers.postgreSqlJvmRestartApi -eq 'PASS' -and
         $partialJson.layers.browserJvmRestart -eq 'NOT_RUN') `
     'API and same-browser JVM restart evidence must remain separate.'
 
+$providerNotReady = Invoke-Summary @(
+    '-Deterministic', 'PASS',
+    '-ScenarioRuntime', 'PASS',
+    '-BrowserContract', 'PASS',
+    '-BrowserBody', 'PASS',
+    '-PostgreSqlState', 'PASS',
+    '-PostgreSqlJvmRestartApi', 'PASS',
+    '-BrowserJvmRestart', 'PASS',
+    '-ProviderQuality', 'NOT_READY'
+)
+$providerNotReadyJson = $providerNotReady.Text | ConvertFrom-Json
+Assert-True ($providerNotReadyJson.overall -eq 'IN_PROGRESS' -and
+        $providerNotReadyJson.layers.providerQuality -eq 'NOT_READY') `
+    'a Provider catalog dependency must remain explicitly NOT_READY.'
+
 $requiredPartial = Invoke-Summary @(
     '-Deterministic', 'PASS',
     '-ScenarioRuntime', 'NOT_RUN',

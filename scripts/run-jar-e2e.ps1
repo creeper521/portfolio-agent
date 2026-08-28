@@ -17,11 +17,15 @@ param(
     [switch]$RequireLiveProvider,
     [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
     [string]$LiveModelRef = 'glm-4-7-flash',
-    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY', 'JVM_RESTART')]
+    [ValidateSet('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION', 'PROJECT_DISCUSSION_EXPIRY', 'JVM_RESTART', 'PUBLIC_TURN_NEGATIVE')]
     [string]$Lane = 'DEFAULT',
     [switch]$SkipPlaywright,
     [string]$PlaywrightScript = 'test:e2e',
     [string[]]$PlaywrightArguments = @(),
+    [ValidateRange(1, 4)]
+    [int]$ProviderSamplingRounds = 2,
+    [ValidateRange(0, 60000)]
+    [int]$ProviderInterRoundDelayMilliseconds = 10000,
     [ValidateRange(1, 65535)]
     [int]$Port = 4173,
     [ValidateRange(1, 300)]
@@ -31,13 +35,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $Lane = $Lane.Trim().ToUpperInvariant()
 if ($RequireLiveProvider) {
-    if ($Lane -notin @('DEFAULT', 'LIVE', 'PROJECT_DISCUSSION')) {
-        throw 'RequireLiveProvider cannot be combined with a non-LIVE lane.'
+    if ($Lane -notin @(
+            'DEFAULT', 'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION')) {
+        throw 'RequireLiveProvider cannot be combined with this lane.'
     }
     if ($Lane -eq 'DEFAULT') { $Lane = 'LIVE' }
 }
-if ($Lane -eq 'PROJECT_DISCUSSION' -and -not $RequireLiveProvider) {
-    throw 'PROJECT_DISCUSSION requires explicit RequireLiveProvider authorization.'
+if ($Lane -in @('MODEL_SELECTION', 'PROJECT_DISCUSSION') -and
+        -not $RequireLiveProvider) {
+    throw "$Lane requires explicit RequireLiveProvider authorization."
 }
 $ContextMode = if ([string]::IsNullOrWhiteSpace($ContextMode)) {
     if ($Lane -eq 'CONTENT_ONLY') { 'DISABLED' } else { 'POSTGRESQL' }
@@ -60,6 +66,9 @@ $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) `
     "portfolio-jar-e2e-$logCaptureId.stdout.log"
 $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) `
     "portfolio-jar-e2e-$logCaptureId.stderr.log"
+$providerLatencySamplesPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+    "portfolio-provider-quality-$logCaptureId.csv"
+$providerQualityStatus = if ($Lane -eq 'LIVE') { 'FAILED' } else { 'NOT_RUN' }
 $privacySentinel = 'visitor-content-sentinel-must-not-leak'
 
 if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
@@ -262,6 +271,32 @@ function Write-LiveProviderDiagnosticSummary([string]$Path) {
     }
 }
 
+function Resolve-ProviderQualityStatus(
+    [string]$Path,
+    [string]$CurrentStatus
+) {
+    if ($CurrentStatus -ne 'FAILED') { return $CurrentStatus }
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $entry = $line | ConvertFrom-Json } catch { continue }
+        $eventName = [string]$entry.'event.name'
+        if ([string]::IsNullOrWhiteSpace($eventName) -and
+                $null -ne $entry.event) {
+            $eventName = [string]$entry.event.name
+        }
+        $failureCode = [string]$entry.'failure.code'
+        if ([string]::IsNullOrWhiteSpace($failureCode) -and
+                $null -ne $entry.failure) {
+            $failureCode = [string]$entry.failure.code
+        }
+        if ($eventName -eq 'provider.call.failed' -and
+                $failureCode -eq 'RATE_LIMITED') {
+            return 'BLOCKED'
+        }
+    }
+    return $CurrentStatus
+}
+
 $environment = @{
     PORTFOLIO_CONVERSATION_CONTEXT_MODE = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONVERSATION_CONTEXT_MODE'
@@ -281,6 +316,8 @@ $environment = @{
         'PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL'
     PLAYWRIGHT_MODEL_SELECTION = Get-EnvironmentSnapshot `
         'PLAYWRIGHT_MODEL_SELECTION'
+    PLAYWRIGHT_PUBLIC_TURN_NEGATIVE = Get-EnvironmentSnapshot `
+        'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE'
     PORTFOLIO_CONTEXT_DATABASE_URL = Get-EnvironmentSnapshot `
         'PORTFOLIO_CONTEXT_DATABASE_URL'
     PORTFOLIO_CONTEXT_DATABASE_USERNAME = Get-EnvironmentSnapshot `
@@ -363,7 +400,7 @@ foreach ($entry in @{
 }
 
 $deterministicModelDisabled = $Lane -notin @(
-    'LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL'
+    'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION', 'BODY_STALL'
 )
 if ($deterministicModelDisabled) {
     # A deterministic packaged smoke must not inherit Provider activation or
@@ -563,10 +600,11 @@ $applicationArguments = @(
     '--portfolio.agent-runtime.max-concurrent-per-source=1000',
     '--portfolio.agent-runtime.max-active-turns=1000'
 )
-if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
+if ($Lane -notin @(
+        'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     $applicationArguments += '--portfolio.model-runtime.enabled=false'
 }
-if ($Lane -in @('LIVE', 'PROJECT_DISCUSSION')) {
+if ($Lane -in @('LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION')) {
     $applicationArguments += @(
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
         '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
@@ -616,7 +654,8 @@ catch {
 }
 
 Write-Output "Started packaged application process $($process.Id)."
-if ($Lane -notin @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
+if ($Lane -notin @(
+        'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
     Write-Output 'Provider calls disabled for deterministic smoke.'
 }
 
@@ -700,7 +739,8 @@ try {
     }
 
     $turnModelSelection = @{ kind = 'NONE' }
-    if ($Lane -in @('LIVE', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
+    if ($Lane -in @(
+            'LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION', 'BODY_STALL')) {
         $requestedModelRef = if ($Lane -eq 'BODY_STALL') {
             'glm-4-7-flash'
         } else {
@@ -721,6 +761,18 @@ try {
             modelRef = $requestedModelRef
             selectionVersion = [string]$selectedCatalogEntry.selectionVersion
         }
+    }
+    if ($Lane -eq 'MODEL_SELECTION') {
+        $selectableModelCount = @(
+            $publicContent.agentAvailability.selectableModels).Count
+        if ($selectableModelCount -lt 2) {
+            Write-Output ('GATE-19 lane=MODEL_SELECTION status=NOT_READY ' +
+                'reason=SELECTABLE_MODEL_COUNT_LT_2 count=' +
+                $selectableModelCount)
+            throw 'MODEL_SELECTION_GATE_NOT_READY'
+        }
+        Write-Output ('GATE-19 lane=MODEL_SELECTION status=READY count=' +
+            $selectableModelCount)
     }
 
     Write-Output ("Runtime identity: pid={0} port={1} contentVersion={2}" -f `
@@ -1129,67 +1181,90 @@ try {
         }
         Write-Output ("Packaged social public-turn probe completed; latency=" + `
                 ($latencyBuckets -join ','))
-        $selectableModelCount = @(
-            $publicContent.agentAvailability.selectableModels).Count
-        Write-Output ("MODEL_SELECTION_CATALOG selectableModels=" +
-            $selectableModelCount)
-        if ($selectableModelCount -lt 2) {
-            $liveFailures.Add('MODEL_SELECTION_CATALOG=NOT_READY')
-        }
-        $goalMatrixOutput = ''
-        $goalMatrixLogStart = @(Get-Content -LiteralPath $stdoutPath `
-            -Encoding UTF8).Count
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $goalMatrixOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-                -File (Join-Path $root 'scripts\assert-live-goal-draft-matrix.ps1') `
-                -BackendBaseUrl $baseUrl `
-                -ExpectedContentVersion ([string]$publicContent.contentVersion) `
-                -ModelRef $LiveModelRef `
-                -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
-                -TimeoutSeconds $ReadinessTimeoutSeconds `
-                -InterTrialDelayMilliseconds 10000 `
-                -AuthorizeRealProvider 2>&1 | Out-String).Trim()
-        }
-        finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-        }
-        Write-Output $goalMatrixOutput
-        $goalProviderCallCount = Get-LiveProviderCallCount `
-            $stdoutPath $goalMatrixLogStart 'TURN_INTERPRETATION'
-        Write-Output ("GOAL_DRAFT_PROVIDER_CALL_COUNT actual=" +
-            $goalProviderCallCount + ' expected=10')
-        if ($goalMatrixOutput -notmatch '(?m)^GOAL_DRAFT_MATRIX_RESULT status=PASS ') {
-            $liveFailures.Add('GOAL_DRAFT_MATRIX=FAIL')
-        }
-        if ($goalProviderCallCount -ne 10) {
-            $liveFailures.Add('GOAL_DRAFT_PROVIDER_CALL_COUNT=FAIL')
-        }
-        $qualityOutput = ''
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $qualityOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
-                -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
-                -BackendBaseUrl $baseUrl `
-                -ExpectedContentVersion ([string]$publicContent.contentVersion) `
-                -ModelRef $LiveModelRef `
-                -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
-                -TimeoutSeconds $ReadinessTimeoutSeconds `
-                -InterTrialDelayMilliseconds 10000 `
-                -Baseline 2>&1 | Out-String).Trim()
-        }
-        finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-        }
-        Write-Output $qualityOutput
-        if ($qualityOutput -notmatch '(?m)^GENERAL_QUALITY_RESULT status=PASS$') {
-            $liveFailures.Add('GENERAL_QUALITY=FAIL')
+        Write-Output ('GATE-19 lane=MODEL_SELECTION status=NOT_RUN ' +
+            'reason=INDEPENDENT_DOUBLE_MODEL_CATALOG_LANE')
+        for ($samplingRound = 1;
+                $samplingRound -le $ProviderSamplingRounds;
+                $samplingRound++) {
+            if ($samplingRound -gt 1 -and
+                    $ProviderInterRoundDelayMilliseconds -gt 0) {
+                Start-Sleep -Milliseconds `
+                    $ProviderInterRoundDelayMilliseconds
+            }
+            Write-Output ('PROVIDER_SAMPLING_ROUND round=' + $samplingRound +
+                '/' + $ProviderSamplingRounds + ' status=STARTED')
+            $roundFailureCount = $liveFailures.Count
+            $goalMatrixOutput = ''
+            $goalMatrixLogStart = @(Get-Content -LiteralPath $stdoutPath `
+                -Encoding UTF8).Count
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                $goalMatrixOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                    -File (Join-Path $root 'scripts\assert-live-goal-draft-matrix.ps1') `
+                    -BackendBaseUrl $baseUrl `
+                    -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                    -ModelRef $LiveModelRef `
+                    -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
+                    -TimeoutSeconds $ReadinessTimeoutSeconds `
+                    -InterTrialDelayMilliseconds 10000 `
+                    -LatencySamplesFile $providerLatencySamplesPath `
+                    -AuthorizeRealProvider 2>&1 | Out-String).Trim()
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+            Write-Output $goalMatrixOutput
+            $goalProviderCallCount = Get-LiveProviderCallCount `
+                $stdoutPath $goalMatrixLogStart 'TURN_INTERPRETATION'
+            Write-Output (('GOAL_DRAFT_PROVIDER_CALL_COUNT round={0} ' +
+                'actual={1} expected=10') -f `
+                    $samplingRound, $goalProviderCallCount)
+            if ($goalMatrixOutput -notmatch
+                    '(?m)^GOAL_DRAFT_MATRIX_RESULT status=PASS ') {
+                $liveFailures.Add(
+                    "ROUND_$samplingRound`_GOAL_DRAFT_MATRIX=FAIL")
+            }
+            if ($goalProviderCallCount -ne 10) {
+                $liveFailures.Add(
+                    "ROUND_$samplingRound`_GOAL_PROVIDER_CALL_COUNT=FAIL")
+            }
+            $qualityOutput = ''
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                $qualityOutput = (& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+                    -File (Join-Path $root 'scripts\assert-live-general-answer-quality.ps1') `
+                    -BackendBaseUrl $baseUrl `
+                    -ExpectedContentVersion ([string]$publicContent.contentVersion) `
+                    -ModelRef $LiveModelRef `
+                    -SelectionVersion ([string]$turnModelSelection.selectionVersion) `
+                    -TimeoutSeconds $ReadinessTimeoutSeconds `
+                    -InterTrialDelayMilliseconds 10000 `
+                    -LatencySamplesFile $providerLatencySamplesPath `
+                    -Baseline 2>&1 | Out-String).Trim()
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+            Write-Output $qualityOutput
+            if ($qualityOutput -notmatch
+                    '(?m)^GENERAL_QUALITY_RESULT status=PASS$') {
+                $liveFailures.Add(
+                    "ROUND_$samplingRound`_GENERAL_QUALITY=FAIL")
+            }
+            $roundStatus = if ($liveFailures.Count -eq $roundFailureCount) {
+                'PASS'
+            } else {
+                'FAIL'
+            }
+            Write-Output ('PROVIDER_SAMPLING_ROUND round=' + $samplingRound +
+                '/' + $ProviderSamplingRounds + ' status=' + $roundStatus)
         }
         if ($liveFailures.Count -gt 0) {
             throw ('Live Provider matrix failed: ' + ($liveFailures -join ','))
         }
+        $providerQualityStatus = 'PASS'
         Write-Output 'LIVE_PROVIDER_MATRIX_PASS'
     }
 
@@ -1227,10 +1302,16 @@ try {
         }
         $env:PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY = if (
                 $Lane -eq 'PROJECT_DISCUSSION_EXPIRY') { '1' } else { '0' }
-        $env:PLAYWRIGHT_MODEL_SELECTION = if ($Lane -eq 'LIVE') {
+        $env:PLAYWRIGHT_MODEL_SELECTION = if ($Lane -eq 'MODEL_SELECTION') {
             '1'
         } else {
             '0'
+        }
+        $env:PLAYWRIGHT_PUBLIC_TURN_NEGATIVE = if (
+                $Lane -eq 'PUBLIC_TURN_NEGATIVE') { '1' } else { '0' }
+        if ($Lane -eq 'PUBLIC_TURN_NEGATIVE') {
+            Write-Output ('PUBLIC_TURN_NEGATIVE mode=OFFLINE_INJECTION; ' +
+                'evidence=ASSERTION_ONLY; serverBodyEvidence=NOT_CLAIMED')
         }
         if ($RetrievalProfile -in @('KEYWORD_ONLY', 'HYBRID')) {
             $env:PLAYWRIGHT_REAL_RETRIEVAL = '1'
@@ -1300,6 +1381,8 @@ finally {
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Restore-EnvironmentVariable 'PLAYWRIGHT_MODEL_SELECTION' `
             $environment.PLAYWRIGHT_MODEL_SELECTION
+        Restore-EnvironmentVariable 'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE' `
+            $environment.PLAYWRIGHT_PUBLIC_TURN_NEGATIVE
         Assert-EnvironmentRestored 'PLAYWRIGHT_EXTERNAL_SERVER' $environment.PLAYWRIGHT_EXTERNAL_SERVER
         Assert-EnvironmentRestored 'PLAYWRIGHT_REAL_API' $environment.PLAYWRIGHT_REAL_API
         Assert-EnvironmentRestored 'PLAYWRIGHT_BASE_URL' $environment.PLAYWRIGHT_BASE_URL
@@ -1317,6 +1400,8 @@ finally {
             $environment.PLAYWRIGHT_PROVIDER_STALL_COORDINATION_URL
         Assert-EnvironmentRestored 'PLAYWRIGHT_MODEL_SELECTION' `
             $environment.PLAYWRIGHT_MODEL_SELECTION
+        Assert-EnvironmentRestored 'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE' `
+            $environment.PLAYWRIGHT_PUBLIC_TURN_NEGATIVE
         foreach ($modelEnvironmentName in @(
             'PORTFOLIO_MODEL_RUNTIME_ENABLED',
             'PORTFOLIO_GLM_ENABLED',
@@ -1350,9 +1435,42 @@ finally {
                 -stdoutPath $stdoutPath `
                 -stderrPath $stderrPath `
                 -privacySentinel $privacySentinel
+            if ($Lane -eq 'LIVE' -and
+                    $turnModelSelection.kind -eq 'MODEL') {
+                $providerQualityStatus = Resolve-ProviderQualityStatus `
+                    $stdoutPath $providerQualityStatus
+                $qualityDate = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
+                $qualityOutputDirectory = Join-Path $root `
+                    ("output\provider-quality\" + $qualityDate)
+                $qualityOutputPath = Join-Path $qualityOutputDirectory `
+                    ($LiveModelRef + '.json')
+                $reportArguments = @(
+                    '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                    '-File', (Join-Path $root `
+                        'scripts\report-provider-quality.ps1'),
+                    '-ModelRef', $LiveModelRef,
+                    '-SelectionVersion',
+                        [string]$turnModelSelection.selectionVersion,
+                    '-Status', $providerQualityStatus,
+                    '-StdoutLog', $stdoutPath,
+                    '-OutputPath', $qualityOutputPath
+                )
+                if (Test-Path -LiteralPath $providerLatencySamplesPath `
+                        -PathType Leaf) {
+                    $reportArguments += @(
+                        '-LatencySamplesFile', $providerLatencySamplesPath)
+                }
+                & powershell.exe @reportArguments
+                if ($LASTEXITCODE -ne 0) {
+                    throw 'Provider quality report generation failed.'
+                }
+                Write-Output ('PROVIDER_QUALITY_STATUS status=' +
+                    $providerQualityStatus + ' report=' + $qualityOutputPath)
+            }
         }
         finally {
-            foreach ($logPath in @($stdoutPath, $stderrPath)) {
+            foreach ($logPath in @(
+                    $stdoutPath, $stderrPath, $providerLatencySamplesPath)) {
                 if (Test-Path -LiteralPath $logPath -PathType Leaf) {
                     Remove-Item -LiteralPath $logPath -Force
                 }
@@ -1368,4 +1486,7 @@ finally {
 if ($playwrightExitCode -ne 0) {
     Write-Output "Playwright failed with exit code $playwrightExitCode."
     exit $playwrightExitCode
+}
+if ($Lane -eq 'MODEL_SELECTION') {
+    Write-Output 'GATE-19 lane=MODEL_SELECTION status=PASS'
 }

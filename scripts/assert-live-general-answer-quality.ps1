@@ -14,6 +14,7 @@ param(
     [int]$TimeoutSeconds = 30,
     [ValidateRange(0, 60000)]
     [int]$InterTrialDelayMilliseconds = 10000,
+    [string]$LatencySamplesFile = '',
     [switch]$Baseline,
     [string]$FixtureDirectory
 )
@@ -115,6 +116,8 @@ function Get-Scenarios {
             Input = Decode-Text '5a+55q+UIFJlZGlzIOWSjCBNZW1jYWNoZWQg5Zyo5oyB5LmF5YyW5ZKM57q/56iL5qih5Z6L5LiK55qE5beu5byC'
             ExpectedKind = 'ANSWER'
             ExpectedBucket = 'NONE'
+            Subjects = @('Redis', 'Memcached')
+            Dimensions = @('PERSISTENCE', 'THREAD_MODEL')
             Trials = 1
         }
     )
@@ -260,6 +263,32 @@ function Get-Sections([object]$Response) {
     return @($sections)
 }
 
+function Test-ComparisonPairSections(
+    [object[]]$Sections,
+    [string[]]$Subjects,
+    [string[]]$Dimensions
+) {
+    $expected = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::Ordinal)
+    foreach ($subject in $Subjects) {
+        foreach ($dimension in $Dimensions) {
+            $null = $expected.Add($subject + ' · ' + $dimension)
+        }
+    }
+    $actual = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::Ordinal)
+    foreach ($section in $Sections) {
+        $title = [string]$section.title
+        if (-not $expected.Contains($title)) { continue }
+        if ([string]$section.sectionKind -cne 'SOLUTION' -or
+                [string]::IsNullOrWhiteSpace([string]$section.content) -or
+                -not $actual.Add($title)) {
+            return $false
+        }
+    }
+    return $actual.SetEquals($expected)
+}
+
 function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     try {
@@ -342,7 +371,8 @@ function Measure-Trial([hashtable]$Scenario, [int]$Trial) {
 
     return @{
         Language = $language
-        Structure = $terminal -and $sections.Count -gt 0
+        Structure = $terminal -and (Test-ComparisonPairSections `
+            $sections $Scenario.Subjects $Scenario.Dimensions)
         Bucket = $true; Terminal = $terminal
         Observed = 'NONE'; Latency = $timer.ElapsedMilliseconds
         TimedOut = $false
@@ -373,7 +403,13 @@ try {
                     ($lines.Count -gt 0 -or $trial -gt 1)) {
                 Start-Sleep -Milliseconds $InterTrialDelayMilliseconds
             }
-            $results += Measure-Trial $scenario $trial
+            $result = Measure-Trial $scenario $trial
+            $results += $result
+            if (-not [string]::IsNullOrWhiteSpace($LatencySamplesFile) -and
+                    $scenario.Id -ne 'CONVERSATIONAL') {
+                Add-Content -LiteralPath $LatencySamplesFile -Encoding UTF8 `
+                    -Value ('GENERAL_KNOWLEDGE,' + [long]$result.Latency)
+            }
         }
         $language = @($results | Where-Object { $_.Language }).Count
         $structure = @($results | Where-Object { $_.Structure }).Count

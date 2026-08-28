@@ -23,10 +23,14 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
-function Section([string]$Title, [string]$Content) {
+function Section(
+    [string]$Title,
+    [string]$Content,
+    [string]$SectionKind = 'GENERAL_PRINCIPLE'
+) {
     return @{
         sectionId = 'section-' + [guid]::NewGuid().ToString('N')
-        sectionKind = 'GENERAL_PRINCIPLE'
+        sectionKind = $SectionKind
         title = $Title
         content = $Content
         support = @{ kind = 'GENERAL_KNOWLEDGE'; publicSourceKeys = @() }
@@ -64,6 +68,8 @@ function Write-Fixture([string]$Scenario, [object]$Value) {
 }
 
 function Invoke-Checker([switch]$Baseline) {
+    $latencySamples = Join-Path $fixtureRoot `
+        ('latency-' + [guid]::NewGuid().ToString('N') + '.csv')
     $arguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $checker,
         '-BackendBaseUrl', 'http://fixture.invalid',
@@ -71,14 +77,19 @@ function Invoke-Checker([switch]$Baseline) {
         '-ModelRef', 'glm-4-7-flash',
         '-SelectionVersion', 'glm-4-7-flash-v1',
         '-TrialsPerDepth', '1',
-        '-FixtureDirectory', $fixtureRoot
+        '-FixtureDirectory', $fixtureRoot,
+        '-LatencySamplesFile', $latencySamples
     )
     if ($Baseline) { $arguments += '-Baseline' }
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         $output = (& powershell.exe @arguments 2>&1 | Out-String)
-        return @{ ExitCode = $LASTEXITCODE; Output = $output }
+        return @{
+            ExitCode = $LASTEXITCODE
+            Output = $output
+            LatencySamplesFile = $latencySamples
+        }
     }
     finally {
         $ErrorActionPreference = $previous
@@ -121,9 +132,10 @@ try {
         conversation = @{ conversationId = 'conversation-fixture' }
     }
     Write-Fixture 'COMPARISON' (Answer @(
-        (Section 'Redis-PERSISTENCE' $zhSentence),
-        (Section 'Memcached-THREAD_MODEL' $zhSentence),
-        (Section 'TECHNICAL' 'https://example.com `SELECT * FROM cache;` JWT PostgreSQL')
+        (Section 'Redis · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Redis · THREAD_MODEL' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · THREAD_MODEL' $zhSentence 'SOLUTION')
     ))
 
     $passing = Invoke-Checker
@@ -141,6 +153,42 @@ try {
         'quality report must include timeout rate and latency percentiles.'
     Assert-True ($passing.Output -notmatch 'Redis|Memcached|SELECT|example\.com') `
         'passing output leaked fixture questions or answers.'
+    $latencyLines = @(Get-Content -LiteralPath $passing.LatencySamplesFile)
+    Assert-True ($latencyLines.Count -eq 4) `
+        'quality checker must emit samples only for General Provider trials.'
+    Assert-True (@($latencyLines | Where-Object {
+        $_ -notmatch '^GENERAL_KNOWLEDGE,[0-9]+$'
+    }).Count -eq 0) 'latency samples must contain only operation and milliseconds.'
+
+    Write-Fixture 'COMPARISON' (Answer @(
+        (Section 'Redis · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Redis · THREAD_MODEL' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · PERSISTENCE' $zhSentence 'SOLUTION')
+    ))
+    $missingComparisonPair = Invoke-Checker
+    Assert-True ($missingComparisonPair.ExitCode -eq 1 -and
+            $missingComparisonPair.Output -match
+            'scenario=COMPARISON.*structure=0/1') `
+        'Comparison must fail when one requested subject×dimension pair is absent.'
+
+    Write-Fixture 'COMPARISON' (Answer @(
+        (Section 'Redis · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Redis · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · THREAD_MODEL' $zhSentence 'SOLUTION')
+    ))
+    $duplicateComparisonPair = Invoke-Checker
+    Assert-True ($duplicateComparisonPair.ExitCode -eq 1 -and
+            $duplicateComparisonPair.Output -match
+            'scenario=COMPARISON.*structure=0/1') `
+        'Comparison must fail when a pair is duplicated in place of another pair.'
+
+    Write-Fixture 'COMPARISON' (Answer @(
+        (Section 'Redis · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Redis · THREAD_MODEL' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · PERSISTENCE' $zhSentence 'SOLUTION'),
+        (Section 'Memcached · THREAD_MODEL' $zhSentence 'SOLUTION')
+    ))
 
     Write-Fixture 'CONCISE' (Answer @(
         (Section $conceptTitle ($zhSentence + $zhSentence)),

@@ -12,13 +12,22 @@ const contentOnlyLane = process.env.PLAYWRIGHT_CONTENT_ONLY === '1'
 const depthTwoLane = process.env.PLAYWRIGHT_DEPTH_TWO === '1'
 const projectDiscussionLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION === '1'
 const projectDiscussionExpiryLane = process.env.PLAYWRIGHT_PROJECT_DISCUSSION_EXPIRY === '1'
+// 同一 BrowserContext 跨两个 packaged JVM 的真实恢复门；由 parent runner 通过
+// PLAYWRIGHT_JVM_RESTART_COORDINATION_DIR 执行两文件闭集握手。
+const jvmRestartBrowserLane = process.env.PLAYWRIGHT_JVM_RESTART_BROWSER === '1'
+// 仅验证 Browser 断言的离线 HTTP 200 负例注入；不作为真实服务正文证据。
+const publicTurnNegativeLane = process.env.PLAYWRIGHT_PUBLIC_TURN_NEGATIVE === '1'
 // 模型目录 lane（UI spec §8.5）：由 packaged 运行器以 PLAYWRIGHT_MODEL_SELECTION=1
 // 调用，需要公开目录非空的打包 JAR；目录为空时 spec 自身跳过，不伪造合同。
 const modelSelectionLane = process.env.PLAYWRIGHT_MODEL_SELECTION === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: modelSelectionLane
+  testMatch: jvmRestartBrowserLane
+    ? /agent-jvm-restart-browser\.spec\.ts/
+    : publicTurnNegativeLane
+    ? /agent-public-turn-negative\.spec\.ts/
+    : modelSelectionLane
     ? /agent-model-selection\.spec\.ts/
     : projectDiscussionExpiryLane
     ? /agent-project-discussion-expiry\.spec\.ts/
@@ -42,7 +51,11 @@ export default defineConfig({
     baseURL,
     trace: projectDiscussionLane || projectDiscussionExpiryLane ? 'off' : 'retain-on-failure',
   },
-  projects: modelSelectionLane
+  projects: jvmRestartBrowserLane
+    ? [{ name: 'jvm-restart-browser', use: { ...devices['Desktop Chrome'] } }]
+    : publicTurnNegativeLane
+    ? [{ name: 'public-turn-negative', use: { ...devices['Desktop Chrome'] } }]
+    : modelSelectionLane
     ? [
       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
       { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },

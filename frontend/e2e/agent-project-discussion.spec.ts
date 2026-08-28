@@ -1,27 +1,18 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Response } from '@playwright/test'
 import { defaultModelSelection } from './support/agent-recovery'
+import {
+  expectAnswer as expectAnswerBody,
+  expectNonEmptyAnswer,
+  expectRecommendationItems,
+  type PublicTurnBody as TurnBody,
+} from './support/public-turn-happy-path'
 
 const TURNS = '/api/agent/turns'
 
 // GATE-20/GATE-04/GATE-06：happy path 不得只断言 HTTP 200。每条真实 Provider 轮次都解析
 // PublicAgentTurn 终局，拒绝 CAPABILITY_UNAVAILABLE/BOUNDARY 混入成功路径，
-// 并对回答内容做最低完整性检查（推荐项数量、非 NONE 覆盖、非空 section）。
-
-interface TurnBody {
-  kind: string
-  code?: string
-  answer?: {
-    resolution: string
-    goalResults: Array<{
-      coverage: string
-      presentation?: {
-        kind: string
-        items?: unknown[]
-        sections?: unknown[]
-      }
-    }>
-  }
-}
+// 并对回答内容做最低完整性检查（COMPLETE resolution、推荐项数量、非 NONE 覆盖、
+// 非空 section，以及 sourceCatalog/publicSourceKeys 公开来源闭环）。
 
 async function turnBody(pending: Promise<Response>): Promise<TurnBody> {
   const response = await pending
@@ -31,28 +22,8 @@ async function turnBody(pending: Promise<Response>): Promise<TurnBody> {
 
 async function expectAnswer(pending: Promise<Response>): Promise<TurnBody> {
   const body = await turnBody(pending)
-  expect(
-    body.kind,
-    `期望 ANSWER 终局，实际 ${body.kind}${body.code === undefined ? '' : ':' + body.code}`,
-  ).toBe('ANSWER')
+  expectAnswerBody(body)
   return body
-}
-
-function expectRecommendationItems(body: TurnBody, expected: number): void {
-  const presentation = body.answer?.goalResults
-    .find((goal) => goal.presentation?.kind === 'RECOMMENDATION')?.presentation
-  expect(presentation?.items?.length, '推荐 presentation 项数').toBe(expected)
-}
-
-function expectNonEmptyAnswer(body: TurnBody): void {
-  const goals = body.answer?.goalResults ?? []
-  expect(goals.length, 'goalResults 不得为空').toBeGreaterThan(0)
-  for (const goal of goals) {
-    expect(goal.coverage, '回答 coverage 不得为 NONE').not.toBe('NONE')
-    if (goal.presentation?.kind === 'SECTIONED') {
-      expect(goal.presentation.sections?.length ?? 0, 'SECTIONED 回答必须包含非空 section').toBeGreaterThan(0)
-    }
-  }
 }
 
 async function nextTurn(page: import('@playwright/test').Page) {
@@ -166,8 +137,12 @@ test('card entry, historical switch, locked concept route and direct ASK overrid
       activeDiscussion: { subject: { label: string } }
     }
   }
-  // 受限讨论内续问允许 CLARIFICATION；错误终局（CAPABILITY_UNAVAILABLE 等）必须失败。
-  expect(['ANSWER', 'CLARIFICATION']).toContain(directBody.kind)
+  // 受限讨论内续问允许 CLARIFICATION；ANSWER 仍必须通过同一正文与来源门。
+  if (directBody.kind === 'ANSWER') {
+    expectNonEmptyAnswer(directBody)
+  } else {
+    expect(directBody.kind).toBe('CLARIFICATION')
+  }
   expect(directBody.conversation.activeDiscussion.subject.label)
     .toContain(firstLabel)
 

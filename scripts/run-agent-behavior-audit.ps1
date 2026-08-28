@@ -4,6 +4,10 @@ param(
     [switch]$RequireLiveProvider,
     [ValidateSet('glm-4-7-flash', 'qwen-3-7-flash')]
     [string]$LiveModelRef = 'glm-4-7-flash',
+    [ValidateRange(1, 4)]
+    [int]$ProviderSamplingRounds = 2,
+    [ValidateRange(0, 60000)]
+    [int]$ProviderInterRoundDelayMilliseconds = 10000,
     [string]$JarPath = '',
     [string]$ProviderSecretFile = '',
     [ValidateSet('IN_MEMORY', 'POSTGRESQL')]
@@ -164,8 +168,12 @@ try {
                     $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v2'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
-                        -Port $Port -ContextMode $ContextMode -RequireLiveProvider `
+                        -Port $Port -ContextMode $ContextMode -Lane LIVE `
+                        -RequireLiveProvider `
                         -LiveModelRef $LiveModelRef `
+                        -ProviderSamplingRounds $ProviderSamplingRounds `
+                        -ProviderInterRoundDelayMilliseconds `
+                            $ProviderInterRoundDelayMilliseconds `
                         -PlaywrightScript $playwrightScript -PlaywrightArguments $playwrightArguments
                 } else {
                     $env:PORTFOLIO_MODEL_RUNTIME_ENABLED = 'false'

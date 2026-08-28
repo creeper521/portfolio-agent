@@ -25,6 +25,17 @@ foreach ($turnInterpretationSetting in @(
         throw "Behavior runner must configure current setting $turnInterpretationSetting."
     }
 }
+foreach ($liveSamplingContract in @(
+        '[int]$ProviderSamplingRounds = 2',
+        '[int]$ProviderInterRoundDelayMilliseconds = 10000',
+        '-Lane LIVE',
+        '-ProviderSamplingRounds $ProviderSamplingRounds',
+        '$ProviderInterRoundDelayMilliseconds'
+    )) {
+    if ($runnerSource -notmatch [regex]::Escape($liveSamplingContract)) {
+        throw "Behavior runner must preserve live sampling contract $liveSamplingContract."
+    }
+}
 foreach ($independentProviderBoundary in @(
         "PORTFOLIO_QWEN_ENABLED = 'false'",
         "Env:PORTFOLIO_QWEN_API_KEY",

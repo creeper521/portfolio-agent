@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import {
+  expectAnswer,
+  type PublicTurnBody,
+} from './support/public-turn-happy-path'
 
 const TURNS = '/api/agent/turns'
 
@@ -32,13 +36,6 @@ async function readCatalog(request: import('@playwright/test').APIRequestContext
   return catalog
 }
 
-function expectAnswerKind(body: { kind: string; code?: string }): void {
-  expect(
-    body.kind,
-    `期望 ANSWER 终局，实际 ${body.kind}${body.code === undefined ? '' : ':' + body.code}`,
-  ).toBe('ANSWER')
-}
-
 test('default model answer, in-session switch, then cross-model follow-up', async ({ page, request }) => {
   test.setTimeout(120_000)
   const catalog = await readCatalog(request)
@@ -54,12 +51,10 @@ test('default model answer, in-session switch, then cross-model follow-up', asyn
       && response.request().method() === 'POST')
   await page.getByTestId('question-input').fill('介绍 SQL 审计项目')
   await page.getByTestId('submit-question').click()
-  const firstBody = await (await firstTurn).json() as {
-    kind: string
-    code?: string
+  const firstBody = await (await firstTurn).json() as PublicTurnBody & {
     modelExecution?: { selectionKind: string; requestedModelRef?: string }
   }
-  expectAnswerKind(firstBody)
+  expectAnswer(firstBody)
   expect(firstBody.modelExecution?.selectionKind).toBe('MODEL')
   expect(firstBody.modelExecution?.requestedModelRef).toBe(catalog!.defaultModelSelection.modelRef)
 
@@ -86,12 +81,10 @@ test('default model answer, in-session switch, then cross-model follow-up', asyn
     modelRef: secondEntry.modelRef,
     selectionVersion: secondEntry.selectionVersion,
   })
-  const followUpBody = await followUpResponse.json() as {
-    kind: string
-    code?: string
+  const followUpBody = await followUpResponse.json() as PublicTurnBody & {
     modelExecution?: { requestedModelRef?: string }
   }
-  expectAnswerKind(followUpBody)
+  expectAnswer(followUpBody)
   expect(followUpBody.modelExecution?.requestedModelRef).toBe(secondEntry.modelRef)
 
   // 模型偏好不进入浏览器存储与 URL（隐私边界 §6）。
@@ -158,7 +151,7 @@ test('model unavailable terminal offers reask with another model', async ({ page
   }
   expect(reaskBody.requestId).not.toBe(staleBody.requestId ?? '')
   expect(reaskBody.modelSelection.modelRef).toBe(secondEntry.modelRef)
-  expectAnswerKind(await reaskResponse.json() as { kind: string; code?: string })
+  expectAnswer(await reaskResponse.json() as PublicTurnBody)
   await expect(page.getByTestId('model-notice'))
     .toContainText('不复用原请求的任何结果')
 })

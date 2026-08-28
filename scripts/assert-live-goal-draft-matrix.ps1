@@ -16,6 +16,7 @@ param(
     [int]$TimeoutSeconds = 60,
     [ValidateRange(0, 60000)]
     [int]$InterTrialDelayMilliseconds = 10000,
+    [string]$LatencySamplesFile = '',
     [switch]$AuthorizeRealProvider
 )
 
@@ -69,6 +70,7 @@ function Get-ClosedPublicFailure([object]$Body) {
 }
 
 function Invoke-Turn([string]$InputText, [string]$Token) {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
     $requestId = [guid]::NewGuid().ToString()
     $payload = @{
         requestId = $requestId
@@ -98,9 +100,14 @@ function Invoke-Turn([string]$InputText, [string]$Token) {
             -ContentType 'application/json; charset=utf-8' `
             -Body ([Text.Encoding]::UTF8.GetBytes($payload)) `
             -TimeoutSec $TimeoutSeconds
-        return @{ RequestId = $requestId; Body = $response; Failure = '' }
+        $timer.Stop()
+        return @{
+            RequestId = $requestId; Body = $response; Failure = ''
+            Latency = $timer.ElapsedMilliseconds
+        }
     }
     catch {
+        $timer.Stop()
         $body = $null
         if (-not [string]::IsNullOrWhiteSpace([string]$_.ErrorDetails.Message)) {
             try { $body = $_.ErrorDetails.Message | ConvertFrom-Json }
@@ -112,8 +119,17 @@ function Invoke-Turn([string]$InputText, [string]$Token) {
         else {
             'PUBLIC_' + (Get-ClosedPublicFailure $body)
         }
-        return @{ RequestId = $requestId; Body = $body; Failure = $failure }
+        return @{
+            RequestId = $requestId; Body = $body; Failure = $failure
+            Latency = $timer.ElapsedMilliseconds
+        }
     }
+}
+
+function Write-LatencySample([hashtable]$Result) {
+    if ([string]::IsNullOrWhiteSpace($LatencySamplesFile)) { return }
+    Add-Content -LiteralPath $LatencySamplesFile -Encoding UTF8 `
+        -Value ('TURN_INTERPRETATION,' + [long]$Result.Latency)
 }
 
 function Test-ExecutionIdentity([object]$Body, [string]$Participation) {
@@ -196,6 +212,7 @@ $zeroGoalPassed = 0
 
 for ($trial = 1; $trial -le $DirectTrials; $trial++) {
     $result = Invoke-Turn $recommendText ''
+    Write-LatencySample $result
     $null = $requestIds.Add([string]$result.RequestId)
     if ((Test-ResponseRequestId $result) -and
             (Test-Recommendation $result.Body)) {
@@ -234,6 +251,7 @@ for ($trial = 1; $trial -le $TwoTurnTrials; $trial++) {
     }
     $zeroGoalPassed++
     $second = Invoke-Turn $recommendText $token
+    Write-LatencySample $second
     $null = $requestIds.Add([string]$second.RequestId)
     $sameConversation = $null -ne $second.Body -and
         [string]$second.Body.conversation.conversationId -ceq

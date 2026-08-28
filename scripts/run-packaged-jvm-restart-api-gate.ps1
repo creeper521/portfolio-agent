@@ -1,6 +1,8 @@
 param(
     [string]$JarPath = '',
     [string]$DockerExecutable = 'docker.exe',
+    [string]$JavaExecutable = 'java.exe',
+    [string]$NpmExecutable = 'npm.cmd',
     [ValidateRange(1, 65535)]
     [int]$ApplicationPort = 4173,
     [ValidateRange(1, 120)]
@@ -86,25 +88,63 @@ try {
     finally {
         $random.Dispose()
     }
+    $databaseUrl = "jdbc:postgresql://127.0.0.1:$databasePort/$databaseName"
+    $tokenKeyBase64 = [Convert]::ToBase64String($tokenKey)
+    $payloadKeyBase64 = [Convert]::ToBase64String($payloadKey)
 
-    & (Join-Path $root 'scripts\run-jar-e2e.ps1') `
+    # This keeps run-jar-e2e's JVM_RESTART lane API-only. The dedicated
+    # browser runner below owns the same-BrowserContext restart proof.
+    $apiOutput = @(& (Join-Path $root 'scripts\run-jar-e2e.ps1') `
         -JarPath $jar `
         -Port $ApplicationPort `
         -ContextMode POSTGRESQL `
-        -ContextDatabaseUrl "jdbc:postgresql://127.0.0.1:$databasePort/$databaseName" `
+        -ContextDatabaseUrl $databaseUrl `
         -ContextDatabaseUsername $databaseUser `
         -ContextDatabasePassword $databasePassword `
         -CurrentTokenKeyId 'restart-token-key' `
-        -CurrentTokenKey ([Convert]::ToBase64String($tokenKey)) `
+        -CurrentTokenKey $tokenKeyBase64 `
         -CurrentPayloadKeyId 'restart-payload-key' `
-        -CurrentPayloadKey ([Convert]::ToBase64String($payloadKey)) `
+        -CurrentPayloadKey $payloadKeyBase64 `
         -Lane JVM_RESTART `
         -SkipPlaywright `
-        -ReadinessTimeoutSeconds $ReadinessTimeoutSeconds
-    if ($LASTEXITCODE -ne 0) {
-        throw "Packaged JVM restart API lane failed with exit code $LASTEXITCODE."
+        -ReadinessTimeoutSeconds $ReadinessTimeoutSeconds)
+    $apiExitCode = $LASTEXITCODE
+    if ($apiExitCode -ne 0) {
+        throw "Packaged JVM restart API lane failed with exit code $apiExitCode."
     }
-    Write-Output 'PACKAGED_JVM_RESTART_GATE_PASS state=POSTGRESQL; jvmCount=2; browser=NOT_RUN'
+    if (@($apiOutput | Where-Object {
+                [string]$_ -match '^PACKAGED_JVM_RESTART_API_PASS '
+            }).Count -ne 1) {
+        throw 'Packaged JVM restart API lane did not emit its closed PASS marker.'
+    }
+    $apiOutput | Write-Output
+
+    $browserOutput = @(& (Join-Path $root `
+            'scripts\run-packaged-jvm-restart-browser-gate.ps1') `
+        -JarPath $jar `
+        -ContextDatabaseUrl $databaseUrl `
+        -ContextDatabaseUsername $databaseUser `
+        -ContextDatabasePassword $databasePassword `
+        -CurrentTokenKeyId 'restart-token-key' `
+        -CurrentTokenKey $tokenKeyBase64 `
+        -CurrentPayloadKeyId 'restart-payload-key' `
+        -CurrentPayloadKey $payloadKeyBase64 `
+        -Port $ApplicationPort `
+        -JavaExecutable $JavaExecutable `
+        -NpmExecutable $NpmExecutable `
+        -ReadinessTimeoutSeconds $ReadinessTimeoutSeconds)
+    $browserExitCode = $LASTEXITCODE
+    if ($browserExitCode -ne 0) {
+        throw "Packaged JVM restart browser lane failed with exit code $browserExitCode."
+    }
+    if (@($browserOutput | Where-Object {
+                [string]$_ -match '^PACKAGED_JVM_RESTART_BROWSER_PASS '
+            }).Count -ne 1) {
+        throw 'Packaged JVM restart browser lane did not emit its closed PASS marker.'
+    }
+    $browserOutput | Write-Output
+    Write-Output ('PACKAGED_JVM_RESTART_GATE_PASS state=POSTGRESQL; ' +
+        'api=PASS; browser=PASS; apiJvmCount=2; browserJvmCount=2')
 }
 finally {
     if ($containerStarted -and

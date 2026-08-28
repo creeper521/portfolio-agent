@@ -4,6 +4,8 @@ param(
     [string]$ModelRef,
     [Parameter(Mandatory = $true)]
     [string]$SelectionVersion,
+    [ValidateSet('PASS', 'FAILED', 'BLOCKED', 'NOT_READY', 'IN_PROGRESS')]
+    [string]$Status = 'IN_PROGRESS',
     [Parameter(Mandatory = $true)]
     [string]$StdoutLog,
     [string]$LatencySamplesFile = '',
@@ -11,172 +13,197 @@ param(
     [string]$OutputPath
 )
 
-# GATE-21/GATE-23 聚合口径：只消费结构化诊断的闭集字段（operation、
-# outcome、failure.code、failure.layer、failure.reason、duration.bucket）
-# 与可选的客户端毫秒样本；任何 Prompt、正文或访客文本都不进入本报告。
+# GATE-21/GATE-23 聚合口径：只消费结构化诊断的闭集字段与
+# "operation,milliseconds" 客户端耗时样本。Prompt、正文、访客文本、
+# Provider payload 与凭据都不会进入本报告。
 $ErrorActionPreference = 'Stop'
+$approvedOperations = @('TURN_INTERPRETATION', 'GENERAL_KNOWLEDGE')
 
-$bucketMidpointMs = @{
-    LT_100_MS          = 50
-    FROM_100_TO_499_MS = 300
-    FROM_500_TO_1999_MS = 1250
-    GTE_2000_MS        = 2000
+function Normalize-Operation([string]$Value) {
+    if ($Value -eq 'GOAL_INTERPRETATION') {
+        return 'TURN_INTERPRETATION'
+    }
+    if ($Value -in $approvedOperations) {
+        return $Value
+    }
+    return ''
+}
+
+function Read-ClosedField(
+    [object]$Entry,
+    [string]$Literal,
+    [string]$Group,
+    [string]$Name
+) {
+    $value = [string]$Entry.$Literal
+    if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    $nested = $Entry.$Group
+    if ($null -ne $nested) { return [string]$nested.$Name }
+    return ''
+}
+
+function New-OperationStats {
+    return @{
+        calls                  = 0
+        completed              = 0
+        failureByLayer         = @{}
+        failureByCode          = @{}
+        rejectedByLayer        = @{}
+        rejectedLayerAndReason = @{}
+        durationBucketCounts   = @{}
+        latencySamples         = [System.Collections.Generic.List[long]]::new()
+    }
+}
+
+function Get-OperationStats([hashtable]$Operations, [string]$Operation) {
+    if (-not $Operations.ContainsKey($Operation)) {
+        $Operations[$Operation] = New-OperationStats
+    }
+    return $Operations[$Operation]
+}
+
+function Add-Count([hashtable]$Counts, [string]$Key) {
+    if (-not $Counts.ContainsKey($Key)) { $Counts[$Key] = 0 }
+    $Counts[$Key]++
+}
+
+function Convert-ToSortedHashtable([hashtable]$Source) {
+    $result = [ordered]@{}
+    foreach ($key in ($Source.Keys | Sort-Object)) {
+        $result[$key] = $Source[$key]
+    }
+    return $result
+}
+
+function Get-Percentile(
+    [System.Collections.Generic.List[long]]$Values,
+    [double]$Ratio
+) {
+    if ($Values.Count -eq 0) { return $null }
+    $sorted = @($Values | Sort-Object)
+    $index = [Math]::Min(
+        $sorted.Count - 1,
+        [Math]::Max(0, [int][Math]::Ceiling($Ratio * $sorted.Count) - 1))
+    return [long]$sorted[$index]
+}
+
+if (-not (Test-Path -LiteralPath $StdoutLog -PathType Leaf)) {
+    throw 'Provider quality stdout log is missing.'
 }
 
 $operations = @{}
 foreach ($line in @(Get-Content -LiteralPath $StdoutLog -Encoding UTF8)) {
     if ([string]::IsNullOrWhiteSpace($line)) { continue }
     try { $entry = $line | ConvertFrom-Json } catch { continue }
-    $eventName = [string]$entry.'event.name'
-    if ([string]::IsNullOrWhiteSpace($eventName) -and $null -ne $entry.event) {
-        $eventName = [string]$entry.event.name
-    }
+    $eventName = Read-ClosedField $entry 'event.name' 'event' 'name'
     if ($eventName -notin @(
             'provider.call.completed', 'provider.call.failed',
             'provider.output.rejected')) { continue }
-    $providerOperation = [string]$entry.'provider.operation'
-    if ([string]::IsNullOrWhiteSpace($providerOperation) -and
-            $null -ne $entry.provider) {
-        $providerOperation = [string]$entry.provider.operation
-    }
-    if ($providerOperation -notmatch '^[A-Z_]{1,64}$') { continue }
-    if (-not $operations.ContainsKey($providerOperation)) {
-        $operations[$providerOperation] = @{
-            calls           = 0
-            completed       = 0
-            failedByCode    = @{}
-            rejectedByLayer = @{}
-            rejectedReasons = @{}
-            bucketCounts    = @{}
-        }
-    }
-    $stats = $operations[$providerOperation]
+    $rawOperation = Read-ClosedField `
+        $entry 'provider.operation' 'provider' 'operation'
+    $operation = Normalize-Operation $rawOperation
+    if ([string]::IsNullOrWhiteSpace($operation)) { continue }
+    $stats = Get-OperationStats $operations $operation
+
     if ($eventName -eq 'provider.output.rejected') {
-        $layer = [string]$entry.'failure.layer'
+        $layer = Read-ClosedField $entry 'failure.layer' 'failure' 'layer'
         if ($layer -notmatch '^[A-Z_]{1,64}$') { $layer = 'UNKNOWN_LAYER' }
-        $reason = [string]$entry.'failure.reason'
+        $reason = Read-ClosedField $entry 'failure.reason' 'failure' 'reason'
         if ($reason -notmatch '^[A-Z0-9_]{1,96}$') { $reason = 'UNKNOWN_REASON' }
-        if (-not $stats.rejectedByLayer.ContainsKey($layer)) {
-            $stats.rejectedByLayer[$layer] = 0
-        }
-        $stats.rejectedByLayer[$layer]++
-        if (-not $stats.rejectedReasons.ContainsKey("$layer/$reason")) {
-            $stats.rejectedReasons["$layer/$reason"] = 0
-        }
-        $stats.rejectedReasons["$layer/$reason"]++
+        Add-Count $stats.rejectedByLayer $layer
+        Add-Count $stats.rejectedLayerAndReason "$layer/$reason"
         continue
     }
+
     $stats.calls++
+    $bucket = Read-ClosedField $entry 'duration.bucket' 'duration' 'bucket'
+    if ($bucket -notmatch '^[A-Z0-9_]{1,64}$') { $bucket = 'UNKNOWN_BUCKET' }
+    Add-Count $stats.durationBucketCounts $bucket
     if ($eventName -eq 'provider.call.completed') {
         $stats.completed++
-        $bucket = [string]$entry.'duration.bucket'
-        if ($bucket -notin $bucketMidpointMs.Keys) { $bucket = 'UNKNOWN_BUCKET' }
-        if (-not $stats.bucketCounts.ContainsKey($bucket)) {
-            $stats.bucketCounts[$bucket] = 0
-        }
-        $stats.bucketCounts[$bucket]++
         continue
     }
-    $code = [string]$entry.'failure.code'
+
+    $layer = Read-ClosedField $entry 'failure.layer' 'failure' 'layer'
+    if ($layer -notmatch '^[A-Z_]{1,64}$') { $layer = 'UNKNOWN_LAYER' }
+    $code = Read-ClosedField $entry 'failure.code' 'failure' 'code'
     if ($code -notmatch '^[A-Z0-9_]{1,64}$') { $code = 'UNKNOWN_CODE' }
-    if (-not $stats.failedByCode.ContainsKey($code)) {
-        $stats.failedByCode[$code] = 0
-    }
-    $stats.failedByCode[$code]++
+    Add-Count $stats.failureByLayer $layer
+    Add-Count $stats.failureByCode $code
 }
 
-$latencySamples = [System.Collections.Generic.List[int]]::new()
-if ([string]::IsNullOrWhiteSpace($LatencySamplesFile) -eq $false) {
+if (-not [string]::IsNullOrWhiteSpace($LatencySamplesFile)) {
+    if (-not (Test-Path -LiteralPath $LatencySamplesFile -PathType Leaf)) {
+        throw 'Provider quality latency samples file is missing.'
+    }
     foreach ($line in @(Get-Content -LiteralPath $LatencySamplesFile -Encoding UTF8)) {
-        if ($line -match '^[0-9]{1,7}$') {
-            $latencySamples.Add([int]$line)
-        }
+        if ($line -notmatch '^([A-Z_]{1,64}),([0-9]{1,9})$') { continue }
+        $operation = Normalize-Operation $Matches[1]
+        if ([string]::IsNullOrWhiteSpace($operation)) { continue }
+        $stats = Get-OperationStats $operations $operation
+        $stats.latencySamples.Add([long]$Matches[2])
     }
-}
-$latencySamples.Sort()
-function Get-Percentile([System.Collections.Generic.List[int]]$values, [double]$ratio) {
-    if ($values.Count -eq 0) { return $null }
-    $index = [Math]::Min(
-        $values.Count - 1,
-        [Math]::Max(0, [int][Math]::Ceiling($ratio * $values.Count) - 1))
-    return $values[$index]
-}
-
-function Convert-ToSortedHashtable([hashtable]$source) {
-    $result = [ordered]@{}
-    foreach ($key in ($source.Keys | Sort-Object)) {
-        $result[$key] = $source[$key]
-    }
-    return $result
 }
 
 $reportOperations = [ordered]@{}
-$totalProviderLatencyBuckets = @{}
-foreach ($name in ($operations.Keys | Sort-Object)) {
-    $stats = $operations[$name]
-    $approxWeighted = [long]0
-    $bucketTotal = 0
-    foreach ($bucket in $stats.bucketCounts.Keys) {
-        if ($bucketMidpointMs.ContainsKey($bucket)) {
-            $approxWeighted += [long]$bucketMidpointMs[$bucket] *
-                $stats.bucketCounts[$bucket]
-            $bucketTotal += $stats.bucketCounts[$bucket]
-            if (-not $totalProviderLatencyBuckets.ContainsKey($bucket)) {
-                $totalProviderLatencyBuckets[$bucket] = 0
-            }
-            $totalProviderLatencyBuckets[$bucket] +=
-                $stats.bucketCounts[$bucket]
-        }
-    }
+foreach ($operation in ($operations.Keys | Sort-Object)) {
+    $stats = $operations[$operation]
+    $failed = $stats.calls - $stats.completed
     $rejected = 0
     foreach ($count in $stats.rejectedByLayer.Values) { $rejected += $count }
-    $failed = 0
-    foreach ($count in $stats.failedByCode.Values) { $failed += $count }
-    $reportOperations[$name] = [ordered]@{
-        calls                 = $stats.calls
-        completed             = $stats.completed
-        failed                = $failed
-        failedByCode          = Convert-ToSortedHashtable $stats.failedByCode
-        rejected              = $rejected
-        rejectedByLayer       = Convert-ToSortedHashtable $stats.rejectedByLayer
-        rejectedLayerAndReason = Convert-ToSortedHashtable $stats.rejectedReasons
-        schemaRejectionRate   = if (($stats.completed + $rejected) -gt 0) {
-            [math]::Round(($stats.rejectedByLayer['PROVIDER_DRAFT_SCHEMA'] +
-                $stats.rejectedByLayer['DETERMINISTIC_COMPILER'] +
-                $stats.rejectedByLayer['CANONICAL_SCHEMA'] +
-                $stats.rejectedByLayer['SCHEMA']) /
-                [double]($stats.completed + $rejected), 4)
-        } else { $null }
-        latencyBucketCounts   = Convert-ToSortedHashtable $stats.bucketCounts
-        latencyP50ApproxMs    = if ($bucketTotal -gt 0) {
-            [int][Math]::Round($approxWeighted / [double]$bucketTotal)
-        } else { $null }
-        timeoutRateFromCodes  = if ($stats.calls -gt 0) {
-            $timeoutCount = 0
-            if ($stats.failedByCode.ContainsKey('DEADLINE_EXCEEDED')) {
-                $timeoutCount += $stats.failedByCode['DEADLINE_EXCEEDED']
-            }
-            if ($stats.failedByCode.ContainsKey('TIMEOUT')) {
-                $timeoutCount += $stats.failedByCode['TIMEOUT']
-            }
+    $timeoutCount = 0
+    foreach ($timeoutCode in @('DEADLINE_EXCEEDED', 'TIMEOUT')) {
+        if ($stats.failureByCode.ContainsKey($timeoutCode)) {
+            $timeoutCount += $stats.failureByCode[$timeoutCode]
+        }
+    }
+    $schemaRejected = 0
+    foreach ($schemaLayer in @(
+            'PROVIDER_DRAFT_SCHEMA', 'DETERMINISTIC_COMPILER',
+            'CANONICAL_SCHEMA', 'SCHEMA')) {
+        if ($stats.rejectedByLayer.ContainsKey($schemaLayer)) {
+            $schemaRejected += $stats.rejectedByLayer[$schemaLayer]
+        }
+    }
+    $reportOperations[$operation] = [ordered]@{
+        calls                     = $stats.calls
+        completed                 = $stats.completed
+        failed                    = $failed
+        rejected                  = $rejected
+        rejected_by_layer         = Convert-ToSortedHashtable `
+            $stats.rejectedByLayer
+        failure_by_layer          = Convert-ToSortedHashtable `
+            $stats.failureByLayer
+        failure_by_code           = Convert-ToSortedHashtable `
+            $stats.failureByCode
+        rejected_layer_and_reason = Convert-ToSortedHashtable `
+            $stats.rejectedLayerAndReason
+        duration_bucket_counts    = Convert-ToSortedHashtable `
+            $stats.durationBucketCounts
+        latency_sample_count      = $stats.latencySamples.Count
+        p50_ms                    = Get-Percentile $stats.latencySamples 0.50
+        p95_ms                    = Get-Percentile $stats.latencySamples 0.95
+        timeout_rate              = if ($stats.calls -gt 0) {
             [math]::Round($timeoutCount / [double]$stats.calls, 4)
+        } else { $null }
+        rejection_rate            = if ($stats.completed -gt 0) {
+            [math]::Round(
+                $rejected / [double]$stats.completed, 4)
+        } else { $null }
+        schema_rejection_rate     = if ($stats.completed -gt 0) {
+            [math]::Round(
+                $schemaRejected / [double]$stats.completed, 4)
         } else { $null }
     }
 }
 
 $report = [ordered]@{
-    schemaVersion      = 'provider-quality-report.v1'
-    generatedAtUtc     = (Get-Date).ToUniversalTime().ToString('o')
-    modelRef           = $ModelRef
-    selectionVersion   = $SelectionVersion
-    sourceLogPresent   = (Test-Path -LiteralPath $StdoutLog)
-    operations         = $reportOperations
-    totalLatencyBucketCounts = Convert-ToSortedHashtable $totalProviderLatencyBuckets
-    clientSamples      = [ordered]@{
-        count     = $latencySamples.Count
-        p50Ms     = Get-Percentile $latencySamples 0.5
-        p95Ms     = Get-Percentile $latencySamples 0.95
-    }
+    schemaVersion     = 'provider-quality-report.v2'
+    generatedAtUtc    = (Get-Date).ToUniversalTime().ToString('o')
+    modelRef          = $ModelRef
+    selectionVersion = $SelectionVersion
+    status            = $Status
+    operations        = $reportOperations
 }
 
 $outputDirectory = Split-Path -Parent $OutputPath
@@ -187,11 +214,13 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and
 $report | ConvertTo-Json -Depth 8 | Set-Content `
     -LiteralPath $OutputPath -Encoding UTF8
 
-Write-Output ("PROVIDER_QUALITY_REPORT written=" + $OutputPath)
-foreach ($name in $reportOperations.Keys) {
-    $item = $reportOperations[$name]
-    Write-Output ("PROVIDER_QUALITY_OPERATION operation={0} calls={1} completed={2} failed={3} rejected={4} schemaRejectionRate={5} latencyP50ApproxMs={6} clientP50Ms={7} clientP95Ms={8}" -f `
-            $name, $item.calls, $item.completed, $item.failed, $item.rejected,
-            $item.schemaRejectionRate, $item.latencyP50ApproxMs,
-            $report.clientSamples.p50Ms, $report.clientSamples.p95Ms)
+Write-Output ('PROVIDER_QUALITY_REPORT written=' + $OutputPath)
+foreach ($operation in $reportOperations.Keys) {
+    $item = $reportOperations[$operation]
+    Write-Output (('PROVIDER_QUALITY_OPERATION operation={0} calls={1} ' +
+        'completed={2} failed={3} rejected={4} p50Ms={5} p95Ms={6} ' +
+        'timeoutRate={7} rejectionRate={8}') -f `
+            $operation, $item.calls, $item.completed, $item.failed,
+            $item.rejected, $item.p50_ms, $item.p95_ms,
+            $item.timeout_rate, $item.rejection_rate)
 }

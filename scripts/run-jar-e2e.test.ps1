@@ -3,6 +3,9 @@ $ErrorActionPreference = 'Stop'
 $runner = Join-Path $PSScriptRoot 'run-jar-e2e.ps1'
 $releaseVerifier = Join-Path $PSScriptRoot 'verify-release.ps1'
 $root = Split-Path -Parent $PSScriptRoot
+$playwrightConfig = Join-Path $root 'frontend\playwright.config.ts'
+$publicTurnNegativeSpec = Join-Path $root `
+    'frontend\e2e\agent-public-turn-negative.spec.ts'
 $sourceJar = Join-Path $root 'backend\target\portfolio-agent.jar'
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('portfolio runner with spaces ' + [guid]::NewGuid())
@@ -16,6 +19,10 @@ $latePlaintextRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-plaintext.ps1'
 $lateLeakRunner = Join-Path $fixtureRoot 'run-jar-e2e-late-leak.ps1'
 $port = 43173
 $runnerSource = Get-Content -LiteralPath $runner -Raw -Encoding UTF8
+$playwrightConfigSource = Get-Content -LiteralPath $playwrightConfig `
+    -Raw -Encoding UTF8
+$publicTurnNegativeSpecSource = Get-Content `
+    -LiteralPath $publicTurnNegativeSpec -Raw -Encoding UTF8
 if ($runnerSource -notmatch [regex]::Escape('/api/portfolio')) {
     throw 'Packaged runner must load the unversioned portfolio snapshot.'
 }
@@ -109,6 +116,8 @@ try {
         'RequireLiveProvider',
         'LiveModelRef',
         'Lane',
+        'ProviderSamplingRounds',
+        'ProviderInterRoundDelayMilliseconds',
         'SkipPlaywright'
     )) {
         if (-not $runnerCommand.Parameters.ContainsKey($parameterName)) {
@@ -144,14 +153,88 @@ try {
     if ($runnerSource -notmatch 'provider-probe\\invoke-live-provider-probe\.ps1') {
         throw 'Packaged runner must call the shared Live Provider probe.'
     }
-    if ($runnerSource -notmatch 'PLAYWRIGHT_MODEL_SELECTION' -or
-            $runnerSource -notmatch 'MODEL_SELECTION_CATALOG=NOT_READY') {
-        throw 'Live lane must enable the model-selection spec and fail closed when fewer than two selectable models exist.'
+    if ($runnerSource -notmatch
+            'PLAYWRIGHT_MODEL_SELECTION\s*=\s*if\s*\(\$Lane\s*-eq\s*''MODEL_SELECTION''\)' -or
+            $runnerSource -notmatch
+            'GATE-19 lane=MODEL_SELECTION status=NOT_READY' -or
+            $runnerSource -notmatch
+            'reason=INDEPENDENT_DOUBLE_MODEL_CATALOG_LANE' -or
+            $runnerSource -notmatch
+            "@\('MODEL_SELECTION', 'PROJECT_DISCUSSION'\)") {
+        throw 'Model selection must use an independent double-model lane with an honest NOT_READY state.'
+    }
+    foreach ($samplingContract in @(
+        'ProviderSamplingRounds = 2',
+        'ProviderInterRoundDelayMilliseconds = 10000',
+        'PROVIDER_SAMPLING_ROUND round=',
+        '$samplingRound -gt 1',
+        'Start-Sleep -Milliseconds'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($samplingContract)) {
+            throw "Live Provider sampling is missing '$samplingContract'."
+        }
+    }
+    $negativeLaneContracts = @(
+        'PUBLIC_TURN_NEGATIVE',
+        'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE',
+        'mode=OFFLINE_INJECTION',
+        'evidence=ASSERTION_ONLY',
+        'serverBodyEvidence=NOT_CLAIMED'
+    )
+    foreach ($negativeLaneContract in $negativeLaneContracts) {
+        if (-not $runnerSource.Contains($negativeLaneContract)) {
+            throw ('PublicTurn negative lane is missing: ' +
+                $negativeLaneContract)
+        }
+    }
+    if (-not $runnerSource.Contains(
+            "Restore-EnvironmentVariable 'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE'") -or
+            -not $runnerSource.Contains(
+            "Assert-EnvironmentRestored 'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE'")) {
+        throw 'PublicTurn negative lane must restore and assert its selector environment.'
+    }
+    if (-not $playwrightConfigSource.Contains(
+            'PLAYWRIGHT_PUBLIC_TURN_NEGATIVE') -or
+            -not $playwrightConfigSource.Contains(
+            'agent-public-turn-negative\.spec\.ts')) {
+        throw 'Playwright config must route the PublicTurn negative selector to its isolated spec.'
+    }
+    $negativeSpecContracts = @(
+        'route.fulfill',
+        'OFFLINE_INJECTION',
+        'expectNonEmptyAnswer',
+        'sourceCatalog',
+        'publicSourceKeys'
+    )
+    foreach ($negativeSpecContract in $negativeSpecContracts) {
+        if (-not $publicTurnNegativeSpecSource.Contains(
+                $negativeSpecContract)) {
+            throw ('PublicTurn negative spec is missing: ' +
+                $negativeSpecContract)
+        }
+    }
+    foreach ($providerQualityContract in @(
+        'report-provider-quality.ps1',
+        'output\provider-quality\',
+        'providerLatencySamplesPath',
+        'LatencySamplesFile',
+        'Resolve-ProviderQualityStatus',
+        "return 'BLOCKED'",
+        'PROVIDER_QUALITY_STATUS status='
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($providerQualityContract)) {
+            throw "Live lane is missing Provider quality contract '$providerQualityContract'."
+        }
+    }
+    if ($releaseSource -notmatch 'report-provider-quality\.test\.ps1' -or
+            $releaseSource -notmatch `
+            '\$providerQuality\s*=\s*if\s*\(\$RequireLiveProvider\)\s*\{\s*''PASS''\s*\}') {
+        throw 'Release verification must test the quality reporter and project live PASS into the layer summary.'
     }
     if ($runnerSource -match '/api/v2|stp-v[123]') {
         throw 'Packaged runner must not reference retired versioned Agent contracts.'
     }
-    foreach ($lane in @('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'JVM_RESTART')) {
+    foreach ($lane in @('DEFAULT', 'ADMISSION', 'BODY_STALL', 'DEPTH_TWO', 'CONTENT_ONLY', 'LIVE', 'MODEL_SELECTION', 'JVM_RESTART', 'PUBLIC_TURN_NEGATIVE')) {
         if ($runnerSource -notmatch "(?<![A-Z_])$lane(?![A-Z_])") {
             throw "Packaged runner is missing explicit lane '$lane'."
         }

@@ -127,6 +127,9 @@ try {
         -File (Join-Path $root 'scripts\assert-live-general-answer-quality.test.ps1')
     Assert-ExitCode 'General answer quality checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $root 'scripts\report-provider-quality.test.ps1')
+    Assert-ExitCode 'Provider quality report tests'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\assert-live-project-discussion-context.test.ps1')
     Assert-ExitCode 'Project discussion live checker tests'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
@@ -263,6 +266,7 @@ try {
     }
 
     $postgreSqlState = if ($SkipDockerCheck) { 'NOT_RUN' } else { 'PASS' }
+    $providerQuality = if ($RequireLiveProvider) { 'PASS' } else { 'NOT_RUN' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\write-agent-verification-summary.ps1') `
         -Deterministic PASS `
@@ -272,7 +276,7 @@ try {
         -PostgreSqlState $postgreSqlState `
         -PostgreSqlJvmRestartApi NOT_RUN `
         -BrowserJvmRestart NOT_RUN `
-        -ProviderQuality NOT_RUN
+        -ProviderQuality $providerQuality
     Assert-ExitCode 'Agent verification layer summary'
 }
 finally {

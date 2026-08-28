@@ -13,7 +13,8 @@ param(
     [string]$PostgreSqlJvmRestartApi,
     [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
     [string]$BrowserJvmRestart,
-    [ValidateSet('PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED')]
+    [ValidateSet(
+        'PASS', 'IN_PROGRESS', 'NOT_RUN', 'FAILED', 'BLOCKED', 'NOT_READY')]
     [string]$ProviderQuality,
     [switch]$RequireComplete
 )

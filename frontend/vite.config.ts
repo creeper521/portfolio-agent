@@ -12,7 +12,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     css: true,
-    exclude: [...configDefaults.exclude, 'e2e/**'],
+    // Playwright specs are not Vitest tests; e2e/support/*.test.ts remains
+    // directly executable so Browser body assertions have a deterministic
+    // negative-injection matrix without starting a browser or Provider.
+    exclude: [...configDefaults.exclude, 'e2e/**/*.spec.ts'],
     setupFiles: ['./src/test/setup.ts'],
   },
 })

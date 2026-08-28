@@ -1,4 +1,11 @@
-import { expect, type APIRequestContext, type Page, type Request, type Response } from '@playwright/test'
+import {
+  expect,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+  type Request,
+  type Response,
+} from '@playwright/test'
 
 /**
  * 恢复矩阵 E2E 的共享助手。
@@ -184,7 +191,7 @@ export async function postPresetTurn(
   request: APIRequestContext,
   preset: PublicPreset,
   authorization?: string,
-): Promise<Response> {
+): Promise<APIResponse> {
   return request.post(TURNS_PATH, {
     ...(authorization === undefined ? {} : { headers: { Authorization: `Bearer ${authorization}` } }),
     data: {
