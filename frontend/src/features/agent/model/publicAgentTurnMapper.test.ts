@@ -422,7 +422,7 @@ describe('parsePublicAgentTurn：modelExecution 公开投影（A7）', () => {
     expect(attempted.modelExecution).toEqual({
       selectionKind: 'MODEL',
       requestedModelRef: 'qwen-3-7-flash',
-      selectionVersion: 'qwen-3-7-flash-v6',
+      selectionVersion: 'qwen-3-7-flash-v8',
       participation: 'ATTEMPTED_UNAVAILABLE',
     })
   })

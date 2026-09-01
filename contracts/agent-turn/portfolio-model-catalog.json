@@ -1,11 +1,11 @@
 {
   "status": "AVAILABLE",
   "freeTextSemanticRouting": "AVAILABLE",
-  "modelCatalogVersion": "catalog-public-v4",
+  "modelCatalogVersion": "catalog-public-v6",
   "defaultModelSelection": {
     "kind": "MODEL",
-    "modelRef": "glm-4-7-flash",
-    "selectionVersion": "glm-4-7-flash-v4"
+    "modelRef": "qwen-3-7-flash",
+    "selectionVersion": "qwen-3-7-flash-v8"
   },
   "selectableModels": [
     {
@@ -15,7 +15,7 @@
     },
     {
       "modelRef": "qwen-3-7-flash",
-      "selectionVersion": "qwen-3-7-flash-v6",
+      "selectionVersion": "qwen-3-7-flash-v8",
       "displayName": "Qwen3.7-Flash"
     }
   ]

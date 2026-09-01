@@ -274,11 +274,11 @@ describe('AudienceDialogue（模型目录默认选择，UI spec §2.7/§8.3）',
     }
     expect(request.modelSelection).toEqual({
       kind: 'MODEL',
-      modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v4',
+      modelRef: 'qwen-3-7-flash',
+      selectionVersion: 'qwen-3-7-flash-v8',
     })
     const badge = wrapper.get('[data-testid="light-answer-model"]')
-    expect(badge.text()).toContain('由 GLM-4.7-Flash · 目录默认 生成')
+    expect(badge.text()).toContain('由 Qwen3.7-Flash · 目录默认 生成')
     expect(badge.text()).toContain('首页不提供切换，进入 Agent 页后可选')
     wrapper.unmount()
   })

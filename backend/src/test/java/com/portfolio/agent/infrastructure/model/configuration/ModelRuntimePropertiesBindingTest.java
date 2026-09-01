@@ -14,18 +14,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ModelRuntimePropertiesBindingTest {
 
     @Test
-    void candidateQwenV7CannotBeMadeSelectableFromTheEnvironment() throws Exception {
+    void publishedQwenV8IsSelectableAndCannotBeOverriddenFromTheEnvironment() throws Exception {
         try (InputStream input = getClass().getResourceAsStream("/application.yml")) {
             assertThat(input).isNotNull();
             String configuration = new String(
                     input.readAllBytes(), StandardCharsets.UTF_8);
 
             assertThat(configuration)
-                    .contains("# Candidate v7 remains non-selectable")
+                    .contains("# Qwen v8 is published in the selectable catalog.")
+                    .contains("default-model-ref: qwen-3-7-flash")
                     .doesNotContain("PORTFOLIO_QWEN_SELECTABLE");
             assertThat(configuration).containsPattern(
-                    "(?s)qwen-3-7-flash:\\s+enabled:.*?\\s+selectable: false"
-                            + ".*?selection-version: qwen-3-7-flash-v7");
+                    "(?s)qwen-3-7-flash:\\s+enabled:.*?\\s+selectable: true"
+                            + ".*?selection-version: qwen-3-7-flash-v8");
         }
     }
 
@@ -41,7 +42,7 @@ class ModelRuntimePropertiesBindingTest {
         values.put("portfolio.model-runtime.models.qwen-3-7-flash.enabled", "true");
         values.put("portfolio.model-runtime.models.qwen-3-7-flash.selection-version", "qwen-v1");
         values.put("portfolio.model-runtime.models.qwen-3-7-flash.execution-profile",
-                "QWEN_3_7_FLASH_STRUCTURED_V7");
+                "QWEN_3_7_FLASH_STRUCTURED_V8");
 
         ModelRuntimeProperties properties = new Binder(
                 new MapConfigurationPropertySource(values))
@@ -55,6 +56,6 @@ class ModelRuntimePropertiesBindingTest {
         assertThat(properties.getModels().get("glm-4-7-flash").getExecutionProfile())
                 .isEqualTo("GLM_4_7_FLASH_STRUCTURED_V4");
         assertThat(properties.getModels().get("qwen-3-7-flash").getExecutionProfile())
-                .isEqualTo("QWEN_3_7_FLASH_STRUCTURED_V7");
+                .isEqualTo("QWEN_3_7_FLASH_STRUCTURED_V8");
     }
 }

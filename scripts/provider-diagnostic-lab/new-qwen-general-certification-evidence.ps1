@@ -327,7 +327,7 @@ function Invoke-Prepare {
             corpusVersion = 'qwen-general-explanation-corpus.v1'
             corpusSha256 = Get-EvidenceFileSha256 `
                 $script:EvidenceCorpusPath
-            selectionVersion = 'qwen-3-7-flash-v7'
+            selectionVersion = 'qwen-3-7-flash-v8'
             providerContract = 'general.provider-draft.v4'
             applicationContract = 'general.draft.v3'
             compilerProfile = 'general-provider-draft-compiler.v4'

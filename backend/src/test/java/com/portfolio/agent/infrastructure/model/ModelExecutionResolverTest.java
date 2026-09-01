@@ -109,12 +109,12 @@ class ModelExecutionResolverTest {
     @Test
     void publishedQwenV6SelectionIsStaleAgainstTheCurrentQwenV7Descriptor() {
         ModelProviderDescriptor currentV7 = new ModelProviderDescriptor(
-                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v7",
+                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v8",
                 "Qwen3.7-Flash", 20,
                 URI.create("https://provider.example/v1/chat/completions"),
                 "qwen3.7-flash",
                 ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
-                StructuredModelTestFixtures.qwenV7ToolBindings(),
+                StructuredModelTestFixtures.qwenV8ToolBindings(),
                 100_000, 8_000);
         AtomicInteger bindingLookups = new AtomicInteger();
         ModelExecutionResolver resolver = new ModelExecutionResolver(
@@ -129,7 +129,7 @@ class ModelExecutionResolverTest {
                             currentV7.getEndpoint(), currentV7.getModelName(),
                             currentV7.getProtocolProfile(), "credential-sentinel",
                             currentV7.getMaxOutputTokens(),
-                            StructuredModelTestFixtures.qwenV7ToolBindings());
+                            StructuredModelTestFixtures.qwenV8ToolBindings());
                 });
 
         assertThatThrownBy(() -> resolver.resolve(

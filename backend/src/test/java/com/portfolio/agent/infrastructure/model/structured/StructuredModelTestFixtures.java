@@ -54,12 +54,12 @@ public final class StructuredModelTestFixtures {
         return Map.copyOf(result);
     }
 
-    public static Map<ModelOperation, OperationBinding> qwenV7ToolBindings() {
+    public static Map<ModelOperation, OperationBinding> qwenV8ToolBindings() {
         EnumMap<ModelOperation, OperationBinding> result =
                 new EnumMap<>(ModelOperation.class);
         result.put(ModelOperation.TURN_INTERPRETATION, dualBinding(
                 ModelOperation.TURN_INTERPRETATION,
-                "goal.provider-draft.v2", "goal.proposal.v5",
+                "goal.provider-draft.v3", "goal.proposal.v5",
                 OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION,
                 StructuredOutputStrategy.REQUIRED_TOOL_CALL,
                 TokenFieldPolicy.OMIT));

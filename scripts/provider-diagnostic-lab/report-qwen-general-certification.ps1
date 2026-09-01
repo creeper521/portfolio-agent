@@ -53,7 +53,7 @@ function Assert-ManifestIdentity([object]$Manifest) {
                 'qwen-general-explanation-certification.v1' -or
             $Manifest.corpusVersion -cne `
                 'qwen-general-explanation-corpus.v1' -or
-            $Manifest.selectionVersion -cne 'qwen-3-7-flash-v7' -or
+            $Manifest.selectionVersion -cne 'qwen-3-7-flash-v8' -or
             $Manifest.providerContract -cne 'general.provider-draft.v4' -or
             $Manifest.applicationContract -cne 'general.draft.v3' -or
             $Manifest.compilerProfile -cne `

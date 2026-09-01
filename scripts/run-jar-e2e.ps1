@@ -588,6 +588,11 @@ if ($Lane -eq 'BODY_STALL') {
 
 $quotedJar = '"' + $jar + '"'
 $requestsPerMinute = if ($Lane -eq 'ADMISSION') { 2 } else { 1000 }
+$generalSchemaVersion = if ($LiveModelRef -eq 'qwen-3-7-flash') {
+    'general.draft.v3'
+} else {
+    'general.draft.v2'
+}
 $applicationArguments = @(
     '-jar',
     $quotedJar,
@@ -609,7 +614,7 @@ if ($Lane -in @('LIVE', 'MODEL_SELECTION', 'PROJECT_DISCUSSION')) {
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
         '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
         '--portfolio.model-operations.general-knowledge.mode=ENABLED',
-        '--portfolio.model-operations.general-knowledge.schema-version=general.draft.v2'
+        "--portfolio.model-operations.general-knowledge.schema-version=$generalSchemaVersion"
     )
 }
 if ($Lane -eq 'PROJECT_DISCUSSION_EXPIRY') {

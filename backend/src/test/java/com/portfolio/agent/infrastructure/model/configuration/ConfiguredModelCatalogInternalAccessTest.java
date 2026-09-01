@@ -33,7 +33,7 @@ class ConfiguredModelCatalogInternalAccessTest {
                 catalog.snapshot(), catalog::getRequiredBinding);
         assertThatThrownBy(() -> turnResolver.resolve(
                 AgentTurnCommand.ModelSelection.model(
-                        "canary-model", "qwen-3-7-flash-v7")))
+                        "canary-model", "qwen-3-7-flash-v8")))
                 .isInstanceOf(ModelExecutionResolutionException.class)
                 .extracting(failure -> ((ModelExecutionResolutionException) failure).getCode())
                 .isEqualTo(ModelExecutionResolutionException.Code.SELECTED_MODEL_UNAVAILABLE);
@@ -46,12 +46,12 @@ class ConfiguredModelCatalogInternalAccessTest {
         settings.setSelectable(false);
         settings.setDisplayName("Internal canary");
         settings.setDisplayOrder(10);
-        settings.setSelectionVersion("qwen-3-7-flash-v7");
+        settings.setSelectionVersion("qwen-3-7-flash-v8");
         settings.setEndpoint("https://example.test/chat");
         settings.setModel("qwen3.7-flash");
         settings.setApiKey("server-secret");
         settings.setDataPolicyApproved(true);
-        settings.setExecutionProfile("QWEN_3_7_FLASH_STRUCTURED_V7");
+        settings.setExecutionProfile("QWEN_3_7_FLASH_STRUCTURED_V8");
         settings.setMaxContextTokens(32_000);
         settings.setMaxOutputTokens(2_000);
 

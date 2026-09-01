@@ -118,7 +118,7 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
                                     Clock.systemUTC())),
                     StructuredModelTestFixtures.resolvedModel(
                             StructuredModelTestFixtures
-                                    .qwenV7ToolBindings()));
+                                    .qwenV8ToolBindings()));
             Duration elapsed = Duration.ofNanos(
                     System.nanoTime() - startedAt);
 
@@ -274,7 +274,7 @@ class OpenAiCompatibleStructuredModelTransportDeadlineTest {
                                         Clock.systemUTC())),
                         StructuredModelTestFixtures.resolvedModel(
                                 StructuredModelTestFixtures
-                                        .qwenV7ToolBindings())),
+                                        .qwenV8ToolBindings())),
                 SelectedModelFailureException.class);
 
         assertThat(failure.getCode()).isEqualTo(

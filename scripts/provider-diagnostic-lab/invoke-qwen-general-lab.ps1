@@ -154,7 +154,7 @@ function Read-CaptureMetadata([string]$Directory, [string]$Root) {
                 '^[0-9a-f]{64}$' -or
             $metadata.provider -cne 'QWEN' -or
             $metadata.model -cne 'qwen3.7-flash' -or
-            $metadata.selectionVersion -cne 'qwen-3-7-flash-v7' -or
+            $metadata.selectionVersion -cne 'qwen-3-7-flash-v8' -or
             $metadata.providerContract -cne 'general.provider-draft.v4' -or
             $metadata.compilerProfile -cne `
                 'general-provider-draft-compiler.v4' -or
@@ -331,7 +331,7 @@ function Write-CaptureMetadata(
         operatorIdentitySha256 = $OperatorHash
         provider = 'QWEN'
         model = $providerModel
-        selectionVersion = 'qwen-3-7-flash-v7'
+        selectionVersion = 'qwen-3-7-flash-v8'
         providerContract = 'general.provider-draft.v4'
         compilerProfile = 'general-provider-draft-compiler.v4'
         captureSource = $CaptureSource

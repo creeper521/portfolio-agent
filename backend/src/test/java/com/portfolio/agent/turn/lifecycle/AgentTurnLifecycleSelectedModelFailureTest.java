@@ -181,7 +181,7 @@ class AgentTurnLifecycleSelectedModelFailureTest {
                     store, goalResolver, qwenV7Resolver(new AtomicInteger()));
             AgentTurnCommand command = command(
                     UUID.randomUUID(), AgentTurnCommand.ModelSelection.model(
-                            "qwen-3-7-flash", "qwen-3-7-flash-v7"),
+                            "qwen-3-7-flash", "qwen-3-7-flash-v8"),
                     "解释并检查 api_key=synthetic-integration-secret-12345");
 
             AgentTurnLifecycleService.Result first = service.execute(null, command);
@@ -432,12 +432,12 @@ class AgentTurnLifecycleSelectedModelFailureTest {
     private ModelExecutionResolver qwenV7Resolver(
             AtomicInteger bindingLookups) {
         ModelProviderDescriptor descriptor = new ModelProviderDescriptor(
-                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v7",
+                ModelRef.of("qwen-3-7-flash"), "qwen-3-7-flash-v8",
                 "Qwen3.7-Flash", 20,
                 URI.create("https://provider.example/v1/chat/completions"),
                 "qwen3.7-flash",
                 ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
-                StructuredModelTestFixtures.qwenV7ToolBindings(),
+                StructuredModelTestFixtures.qwenV8ToolBindings(),
                 100_000, 8_000);
         ModelCatalogSnapshot catalog = new ModelCatalogSnapshot(
                 "candidate-v7", List.of(descriptor),
@@ -447,7 +447,7 @@ class AgentTurnLifecycleSelectedModelFailureTest {
                 descriptor.getEndpoint(), descriptor.getModelName(),
                 descriptor.getProtocolProfile(), "test-credential",
                 descriptor.getMaxOutputTokens(),
-                StructuredModelTestFixtures.qwenV7ToolBindings());
+                StructuredModelTestFixtures.qwenV8ToolBindings());
         return new ModelExecutionResolver(catalog, modelRef -> {
             bindingLookups.incrementAndGet();
             return binding;

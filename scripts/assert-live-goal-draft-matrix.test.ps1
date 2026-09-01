@@ -6,7 +6,7 @@ foreach ($requiredContract in @(
         'DirectTrials = 5',
         'TwoTurnTrials = 5',
         'ValidateRange(5, 20)',
-        'qwen-3-7-flash-v6',
+        'qwen-3-7-flash-v8',
         'glm-4-7-flash-v4',
         'GOAL_INTERPRETATION_ONLY',
         "Test-ExecutionIdentity `$first.Body 'NONE'",
@@ -44,7 +44,7 @@ try {
         -BackendBaseUrl 'http://127.0.0.1:1' `
         -ExpectedContentVersion 'fixture-v1' `
         -ModelRef 'qwen-3-7-flash' `
-        -SelectionVersion 'qwen-3-7-flash-v6' 2>&1 | Out-String)
+        -SelectionVersion 'qwen-3-7-flash-v8' 2>&1 | Out-String)
     $exitCode = $LASTEXITCODE
 }
 finally {

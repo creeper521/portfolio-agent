@@ -327,7 +327,7 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                             MAPPER, "system", 1200, Duration.ofSeconds(10));
             ResolvedModelExecution execution =
                     StructuredModelTestFixtures.resolvedModel(
-                            StructuredModelTestFixtures.qwenV7ToolBindings());
+                            StructuredModelTestFixtures.qwenV8ToolBindings());
 
             SelectedModelFailureException failure = catchThrowableOfType(
                     () -> adapter.generate(
@@ -517,6 +517,40 @@ class OpenAiCompatibleStructuredModelTransportProtocolTest {
                     .path("name").textValue()).isEqualTo("emit_general_draft");
             assertThat(payload.path("parallel_tool_calls").booleanValue()).isFalse();
             assertThat(response).isNotNull();
+        }
+    }
+
+    @Test
+    void qwenV8GoalToolSendsOnlyTheProviderFriendlyFixedFlatSchema()
+            throws Exception {
+        byte[] response = """
+                {"model":"qwen3.7-flash","choices":[{"finish_reason":"tool_calls",
+                 "message":{"content":null,"tool_calls":[{"type":"function",
+                 "function":{"name":"emit_goal_provider_draft_v3",
+                 "arguments":"{\\"decision\\":\\"CONVERSATIONAL\\",\\"message\\":\\"ok\\"}"}}]}}]}
+                """.getBytes(StandardCharsets.UTF_8);
+        try (StubServer server = StubServer.responding(200, response)) {
+            StructuredModelResponse result = transport(
+                    server.endpoint(), event -> { }).execute(
+                    binding("qwen", "qwen3.7-flash",
+                            ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS,
+                            StructuredModelTestFixtures.qwenV8ToolBindings()),
+                    request(ModelOperation.TURN_INTERPRETATION,
+                            "system", "recommend two projects"));
+
+            JsonNode payload = MAPPER.readTree(server.requestBody.get());
+            JsonNode function = payload.path("tools").get(0).path("function");
+            JsonNode parameters = function.path("parameters");
+            assertThat(function.path("name").textValue())
+                    .isEqualTo("emit_goal_provider_draft_v3");
+            assertThat(parameters.toString())
+                    .doesNotContain("$defs", "$ref", "\"oneOf\"", "\"allOf\"");
+            assertThat(parameters.path("required")).hasSize(18);
+            assertThat(parameters.path("properties").has("goal")).isFalse();
+            assertThat(parameters.path("properties").path("constraints")
+                    .path("anyOf")).hasSize(3);
+            assertThat(parameters.toString().length()).isLessThan(4_000);
+            assertThat(result).isNotNull();
         }
     }
 

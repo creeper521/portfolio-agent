@@ -200,11 +200,11 @@ export const previewPublicContent: PublicPortfolio = {
     freeTextSemanticRouting: 'AVAILABLE',
     // 与 contracts/agent-turn/portfolio-model-catalog.json 冻结投影同形的预览目录；
     // 生产运行时始终读 /api/portfolio，不复制该静态预览。
-    modelCatalogVersion: 'catalog-public-v4',
+    modelCatalogVersion: 'catalog-public-v6',
     defaultModelSelection: {
       kind: 'MODEL',
-      modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v4',
+      modelRef: 'qwen-3-7-flash',
+      selectionVersion: 'qwen-3-7-flash-v8',
     },
     selectableModels: [
       {
@@ -214,7 +214,7 @@ export const previewPublicContent: PublicPortfolio = {
       },
       {
         modelRef: 'qwen-3-7-flash',
-        selectionVersion: 'qwen-3-7-flash-v6',
+        selectionVersion: 'qwen-3-7-flash-v8',
         displayName: 'Qwen3.7-Flash',
       },
     ],

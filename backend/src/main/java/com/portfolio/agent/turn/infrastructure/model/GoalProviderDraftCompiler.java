@@ -49,6 +49,18 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
             "field", "prompt", "goal");
     private static final Set<String> RECENT_REFERENCE_FIELDS = Set.of(
             "goalId", "sectionId");
+    private static final Set<String> FLAT_FIELDS = Set.of(
+            "decision", "message", "candidateKey", "goalKind", "subjects",
+            "facets", "depth", "dimensions", "requestedSize", "constraints",
+            "topicText", "subjectTexts", "conceptText", "portfolioFacet",
+            "clarificationField", "clarificationPrompt", "recentGoalId",
+            "recentSectionId");
+    private static final Set<String> FLAT_GOAL_FIELDS = Set.of(
+            "goalKind", "subjects", "facets", "depth", "dimensions",
+            "requestedSize", "constraints", "topicText", "subjectTexts",
+            "conceptText", "portfolioFacet");
+    private static final Set<String> FLAT_ARRAY_FIELDS = Set.of(
+            "subjects", "facets", "dimensions", "constraints", "subjectTexts");
     private static final Set<String> PORTFOLIO_DIMENSIONS = Set.of(
             "ARCHITECTURE", "IMPLEMENTATION", "OUTCOME", "RISKS", "VERIFICATION");
     private static final Set<String> FACETS = Set.of(
@@ -72,7 +84,9 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     @Override
     public JsonNode compile(JsonNode draft) {
         requireObject(draft);
-        draft = decodeCarrierFields(draft);
+        draft = isFlatDraft(draft)
+                ? normalizeFlatDraft(draft)
+                : decodeCarrierFields(draft);
         requireOnly(draft, ROOT_FIELDS, "_ROOT");
         String decision = text(draft, "decision");
         return switch (decision) {
@@ -697,6 +711,255 @@ public final class GoalProviderDraftCompiler implements StructuredOutputCompiler
     /** 显式 null 字段视同缺省；由 provider 契约的 nullable-tolerant 规则约束。 */
     private boolean hasField(JsonNode node, String field) {
         return node.has(field) && !node.get(field).isNull();
+    }
+
+    /**
+     * Qwen v8 的 provider wire 使用固定扁平槽位，避免 Provider 对复杂条件
+     * JSON Schema 的不一致实现。所有槽位都必须出现，未选中的槽位必须为 null；
+     * 此方法只按 decision 把非 null 槽位机械投影回既有嵌套 Draft，不推断、
+     * 不补齐任何语义值。投影结果继续经过原有严格分支编译与 canonical 校验。
+     */
+    private JsonNode normalizeFlatDraft(JsonNode draft) {
+        requireExactFlatSlots(draft);
+        String decision = text(draft, "decision");
+        ObjectNode nested = JSON.objectNode();
+        nested.put("decision", decision);
+        switch (decision) {
+            case "CONVERSATIONAL" -> {
+                if (!hasField(draft, "message")) throw missingFlatGoalSlot("message");
+                nested.set("message", draft.get("message"));
+            }
+            case "STANDARD_GOAL" -> {
+                requireCompleteFlatGoalSlots(draft);
+                nested.set("goal", flatGoal(draft));
+                if (hasField(draft, "recentGoalId")) {
+                    nested.set("recentReference", flatRecentReference(draft));
+                } else if (hasField(draft, "recentSectionId")) {
+                    throw flatConflict("recentSectionId");
+                }
+            }
+            case "CONTINUE_CURRENT_PROJECT" -> {
+                requireCompleteFlatGoalSlots(draft);
+                nested.set("goal", flatGoal(draft));
+            }
+            case "ENTER_RECOMMENDED_RESULT", "SWITCH_PROJECT" -> {
+                if (!hasField(draft, "candidateKey")) {
+                    throw missingFlatGoalSlot("candidateKey");
+                }
+                nested.set("candidateKey", draft.get("candidateKey"));
+            }
+            case "START_NEW_TOPIC", "REENTER_PROJECT" -> { }
+            case "NEEDS_CLARIFICATION" -> {
+                boolean decisionOnly = input.getInterpretationMode()
+                        == GoalInterpretationInput.InterpretationMode.DISCUSSION
+                        || !input.getRouteCandidates().isEmpty();
+                if (!decisionOnly) {
+                    if (!hasAnyFlatGoalSlot(draft)
+                            && !hasField(draft, "clarificationField")
+                            && !hasField(draft, "clarificationPrompt")) {
+                        throw missingFlatGoalSlot("clarification");
+                    }
+                    if (!hasField(draft, "clarificationField")) {
+                        throw missingFlatGoalSlot("clarificationField");
+                    }
+                    if (!hasField(draft, "clarificationPrompt")) {
+                        throw missingFlatGoalSlot("clarificationPrompt");
+                    }
+                    nested.set("clarification", flatClarification(draft));
+                }
+            }
+            default -> { }
+        }
+        return nested;
+    }
+
+    private boolean isFlatDraft(JsonNode draft) {
+        return draft.has("goalKind")
+                || draft.has("clarificationField")
+                || draft.has("recentGoalId");
+    }
+
+    private void requireExactFlatSlots(JsonNode draft) {
+        Iterator<String> names = draft.fieldNames();
+        while (names.hasNext()) {
+            if (!FLAT_FIELDS.contains(names.next())) {
+                throw fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                        "DRAFT_FIELD_CONFLICT_FLAT_UNKNOWN_KEY");
+            }
+        }
+        for (String field : FLAT_FIELDS) {
+            if (!draft.has(field)) {
+                throw fail(StructuredOutputValidationException.Reason
+                                .DRAFT_REQUIRED_FIELD_MISSING,
+                        "DRAFT_REQUIRED_FIELD_MISSING_FLAT_SLOT");
+            }
+        }
+    }
+
+    private StructuredOutputValidationException flatConflict(String field) {
+        return fail(StructuredOutputValidationException.Reason.DRAFT_FIELD_CONFLICT,
+                "DRAFT_FIELD_CONFLICT_FLAT_" + camelToSnake(field));
+    }
+
+    private ObjectNode flatGoal(JsonNode draft) {
+        ObjectNode goal = JSON.objectNode();
+        if (!hasField(draft, "goalKind")) return goal;
+        goal.set("goalKind", draft.get("goalKind"));
+        GoalKind kind;
+        try {
+            kind = GoalKind.valueOf(text(goal, "goalKind"));
+        } catch (IllegalArgumentException failure) {
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID,
+                    "DRAFT_BRANCH_INVALID_FLAT_GOAL_KIND");
+        }
+        Set<String> selected = switch (kind) {
+            case PORTFOLIO_FACT -> Set.of("subjects", "facets", "depth");
+            case PORTFOLIO_COMPARE -> Set.of("subjects", "dimensions");
+            case PORTFOLIO_RECOMMEND -> Set.of("requestedSize", "constraints");
+            case GENERAL_EXPLANATION -> Set.of("topicText", "depth");
+            case GENERAL_COMPARISON -> Set.of("subjectTexts", "dimensions");
+            case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> Set.of(
+                    "subjects", "conceptText", "portfolioFacet", "depth");
+        };
+        for (String field : selected) {
+            if (!hasField(draft, field)) continue;
+            if (field.equals("subjects")
+                    && input.getInterpretationMode()
+                    == GoalInterpretationInput.InterpretationMode.DISCUSSION) {
+                continue;
+            }
+            JsonNode value = draft.get(field);
+            if (FLAT_ARRAY_FIELDS.contains(field)) {
+                value = decodeFlatArray(value, field);
+            } else if (field.equals("requestedSize")) {
+                value = decodeFlatInteger(value, field);
+            }
+            goal.set(field, value);
+        }
+        return goal;
+    }
+
+    private void requireCompleteFlatGoalSlots(JsonNode draft) {
+        if (!hasField(draft, "goalKind")) {
+            throw missingFlatGoalSlot("goalKind");
+        }
+        GoalKind kind;
+        try {
+            kind = GoalKind.valueOf(text(draft, "goalKind"));
+        } catch (IllegalArgumentException failure) {
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID,
+                    "DRAFT_BRANCH_INVALID_FLAT_GOAL_KIND");
+        }
+        Set<String> required = switch (kind) {
+            case PORTFOLIO_FACT -> Set.of("facets", "depth");
+            case PORTFOLIO_COMPARE -> Set.of("subjects", "dimensions");
+            case PORTFOLIO_RECOMMEND -> Set.of("requestedSize", "constraints");
+            case GENERAL_EXPLANATION -> Set.of("topicText", "depth");
+            case GENERAL_COMPARISON -> Set.of("subjectTexts", "dimensions");
+            case APPLY_GENERAL_CONCEPT_TO_PORTFOLIO -> Set.of(
+                    "conceptText", "portfolioFacet", "depth");
+        };
+        for (String field : required) {
+            if (!hasField(draft, field)) throw missingFlatGoalSlot(field);
+        }
+        if (kind == GoalKind.PORTFOLIO_COMPARE
+                && decodeFlatArray(draft.get("subjects"), "subjects").size() < 2) {
+            throw missingFlatGoalSlot("subjects");
+        }
+        if (kind == GoalKind.GENERAL_COMPARISON
+                && decodeFlatArray(draft.get("subjectTexts"), "subjectTexts").size() < 2) {
+            throw missingFlatGoalSlot("subjectTexts");
+        }
+        for (String field : switch (kind) {
+            case PORTFOLIO_FACT -> Set.of("facets");
+            case PORTFOLIO_COMPARE, GENERAL_COMPARISON -> Set.of("dimensions");
+            default -> Set.<String>of();
+        }) {
+            if (decodeFlatArray(draft.get(field), field).isEmpty()) {
+                throw missingFlatGoalSlot(field);
+            }
+        }
+    }
+
+    private StructuredOutputValidationException missingFlatGoalSlot(String field) {
+        return fail(StructuredOutputValidationException.Reason
+                        .DRAFT_REQUIRED_FIELD_MISSING,
+                "DRAFT_REQUIRED_FIELD_MISSING_FLAT_" + camelToSnake(field));
+    }
+
+    private ObjectNode flatClarification(JsonNode draft) {
+        ObjectNode clarification = JSON.objectNode();
+        if (hasField(draft, "clarificationField")) {
+            clarification.set("field", draft.get("clarificationField"));
+        }
+        if (hasField(draft, "clarificationPrompt")) {
+            clarification.set("prompt", draft.get("clarificationPrompt"));
+        }
+        clarification.set("goal", flatGoal(draft));
+        return clarification;
+    }
+
+    private ObjectNode flatRecentReference(JsonNode draft) {
+        ObjectNode reference = JSON.objectNode();
+        reference.set("goalId", draft.get("recentGoalId"));
+        if (hasField(draft, "recentSectionId")) {
+            reference.set("sectionId", draft.get("recentSectionId"));
+        }
+        return reference;
+    }
+
+    private boolean hasAnyFlatGoalSlot(JsonNode draft) {
+        return FLAT_GOAL_FIELDS.stream().anyMatch(field -> hasField(draft, field));
+    }
+
+    private JsonNode decodeFlatArray(JsonNode value, String field) {
+        if (value.isArray()) {
+            validateFlatArrayShape(value, field);
+            return value;
+        }
+        if (!value.isTextual()) {
+            throw fail(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID,
+                    "DRAFT_CARRIER_NOT_ARRAY_" + camelToSnake(field));
+        }
+        try {
+            JsonNode parsed = STRICT_CARRIER_READER.readTree(value.textValue());
+            if (!parsed.isArray()) {
+                throw fail(StructuredOutputValidationException.Reason
+                                .DRAFT_BRANCH_INVALID,
+                        "DRAFT_CARRIER_NOT_ARRAY_" + camelToSnake(field));
+            }
+            validateFlatArrayShape(parsed, field);
+            return parsed;
+        } catch (StructuredOutputValidationException failure) {
+            throw failure;
+        } catch (Exception invalid) {
+            throw fail(StructuredOutputValidationException.Reason.INVALID_JSON,
+                    "DRAFT_CARRIER_UNPARSEABLE_" + camelToSnake(field));
+        }
+    }
+
+    private JsonNode decodeFlatInteger(JsonNode value, String field) {
+        if (value.isIntegralNumber()
+                && value.intValue() >= 1 && value.intValue() <= 5) return value;
+        if (value.isTextual() && value.textValue().matches("[1-5]")) {
+            return JSON.numberNode(Integer.parseInt(value.textValue()));
+        }
+        throw fail(StructuredOutputValidationException.Reason.DRAFT_BRANCH_INVALID,
+                "DRAFT_CARRIER_NOT_INTEGER_" + camelToSnake(field));
+    }
+
+    private void validateFlatArrayShape(JsonNode values, String field) {
+        if (!field.equals("constraints")) return;
+        Set<String> unique = new HashSet<>();
+        for (JsonNode value : values) {
+            if (!value.isTextual() || value.textValue().isBlank()
+                    || value.textValue().length() > 96
+                    || !unique.add(value.textValue())) {
+                throw fail(StructuredOutputValidationException.Reason
+                                .DRAFT_BRANCH_INVALID,
+                        "DRAFT_BRANCH_INVALID_FLAT_CONSTRAINTS");
+            }
+        }
     }
 
     /**

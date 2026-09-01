@@ -77,6 +77,10 @@ class StructuredOutputContractRegistryTest {
                 new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION,
                         "goal.provider-draft.v2"));
+        StructuredOutputContract qwenCarrierProvider = registry.resolve(
+                new StructuredContractRef(
+                        ModelOperation.TURN_INTERPRETATION,
+                        "goal.provider-draft.v3"));
         StructuredOutputContract canonical = registry.resolve(
                 new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION,
@@ -84,6 +88,10 @@ class StructuredOutputContractRegistryTest {
 
         assertThat(legacyProvider.outputName()).isEqualTo("goal_provider_draft");
         assertThat(provider.outputName()).isEqualTo("goal_provider_draft_v2");
+        assertThat(qwenCarrierProvider.outputName())
+                .isEqualTo("goal_provider_draft_v3");
+        assertThat(qwenCarrierProvider.contractFingerprint())
+                .isNotEqualTo(provider.contractFingerprint());
         assertThat(provider.contractFingerprint())
                 .isNotEqualTo(canonical.contractFingerprint());
     }

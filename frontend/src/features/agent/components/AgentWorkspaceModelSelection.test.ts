@@ -35,8 +35,20 @@ function submitOk(turn: Record<string, unknown>, conversation: Record<string, un
 }
 
 function mountWorkspace(props: Record<string, unknown> = {}) {
+  const glmDefaultPortfolio = {
+    ...previewPublicContent,
+    agentAvailability: {
+      ...previewPublicContent.agentAvailability,
+      modelCatalogVersion: 'catalog-test-glm-default',
+      defaultModelSelection: {
+        kind: 'MODEL' as const,
+        modelRef: 'glm-4-7-flash',
+        selectionVersion: 'glm-4-7-flash-v4',
+      },
+    },
+  }
   return mount(AgentWorkspace, {
-    props: { portfolio: previewPublicContent, ...props },
+    props: { portfolio: glmDefaultPortfolio, ...props },
     attachTo: document.body,
     global: {
       stubs: { RouterLink: { template: '<a :href="String($attrs.to)"><slot /></a>' } },
@@ -71,7 +83,7 @@ const GLM_SELECTION = {
 const QWEN_SELECTION = {
   kind: 'MODEL',
   modelRef: 'qwen-3-7-flash',
-  selectionVersion: 'qwen-3-7-flash-v6',
+  selectionVersion: 'qwen-3-7-flash-v8',
 }
 
 describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI spec §8.2）', () => {
@@ -271,6 +283,7 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
       ...previewPublicContent,
       agentAvailability: {
         ...previewPublicContent.agentAvailability,
+        defaultModelSelection: { ...GLM_SELECTION, kind: 'MODEL' as const },
         selectableModels: previewPublicContent.agentAvailability.selectableModels.filter(
           (model) => model.modelRef !== 'qwen-3-7-flash',
         ),
@@ -310,21 +323,22 @@ describe('AgentWorkspace（模型目录：会话内选择与恢复动作，UI sp
 
     await wrapper.get('[data-testid="model-selector-trigger"]').trigger('click')
     await wrapper.findAll('[data-testid="model-selector-option"]')[1]!.trigger('click')
-    await submitFreeText(wrapper, '冻结 Qwen v6 的问题')
+    await submitFreeText(wrapper, '冻结 Qwen v8 的问题')
     expect(lastSubmitInput().modelSelection).toEqual(QWEN_SELECTION)
 
-    const catalogWithQwenV7 = {
+    const catalogWithQwenV9 = {
       ...previewPublicContent,
       agentAvailability: {
         ...previewPublicContent.agentAvailability,
+        defaultModelSelection: { ...GLM_SELECTION, kind: 'MODEL' as const },
         selectableModels: previewPublicContent.agentAvailability.selectableModels.map(
           (model) => model.modelRef === 'qwen-3-7-flash'
-            ? { ...model, selectionVersion: 'qwen-3-7-flash-v7' }
+            ? { ...model, selectionVersion: 'qwen-3-7-flash-v9' }
             : model,
         ),
       },
     }
-    await wrapper.setProps({ portfolio: catalogWithQwenV7 })
+    await wrapper.setProps({ portfolio: catalogWithQwenV9 })
     await flushPromises()
     expect(wrapper.find('[data-notice-kind="MODEL_STALE_FALLBACK"]').exists()).toBe(false)
     expect(lastSubmitInput().modelSelection).toEqual(QWEN_SELECTION)

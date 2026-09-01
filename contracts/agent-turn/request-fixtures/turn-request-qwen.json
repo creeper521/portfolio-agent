@@ -3,7 +3,7 @@
   "modelSelection": {
     "kind": "MODEL",
     "modelRef": "qwen-3-7-flash",
-    "selectionVersion": "qwen-3-7-flash-v6"
+    "selectionVersion": "qwen-3-7-flash-v8"
   },
   "command": {
     "kind": "ASK",

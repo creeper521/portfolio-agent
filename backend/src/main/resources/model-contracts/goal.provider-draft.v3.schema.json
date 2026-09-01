@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:portfolio-agent:model-contract:goal.provider-draft.v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "message",
+    "candidateKey",
+    "goalKind",
+    "subjects",
+    "facets",
+    "depth",
+    "dimensions",
+    "requestedSize",
+    "constraints",
+    "topicText",
+    "subjectTexts",
+    "conceptText",
+    "portfolioFacet",
+    "clarificationField",
+    "clarificationPrompt",
+    "recentGoalId",
+    "recentSectionId"
+  ],
+  "properties": {
+    "decision": {
+      "enum": [
+        "CONVERSATIONAL",
+        "STANDARD_GOAL",
+        "CONTINUE_CURRENT_PROJECT",
+        "ENTER_RECOMMENDED_RESULT",
+        "SWITCH_PROJECT",
+        "START_NEW_TOPIC",
+        "REENTER_PROJECT",
+        "NEEDS_CLARIFICATION"
+      ]
+    },
+    "message": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "candidateKey": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "goalKind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "subjects": {
+      "anyOf": [
+        {"type": "array", "items": {"type": "object"}},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "facets": {
+      "anyOf": [
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "depth": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "dimensions": {
+      "anyOf": [
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "requestedSize": {
+      "anyOf": [
+        {"type": "integer"},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "constraints": {
+      "anyOf": [
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "topicText": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "subjectTexts": {
+      "anyOf": [
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "conceptText": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "portfolioFacet": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "clarificationField": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "clarificationPrompt": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "recentGoalId": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "recentSectionId": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+  }
+}

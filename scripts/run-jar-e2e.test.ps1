@@ -489,11 +489,20 @@ try {
     foreach ($operationArgument in @(
         '--portfolio.model-operations.turn-interpretation.mode=ENABLED',
         '--portfolio.model-operations.turn-interpretation.schema-version=goal.proposal.v5',
-        '--portfolio.model-operations.general-knowledge.mode=ENABLED',
-        '--portfolio.model-operations.general-knowledge.schema-version=general.draft.v2'
+        '--portfolio.model-operations.general-knowledge.mode=ENABLED'
     )) {
         if ($runnerSource -notmatch [regex]::Escape($operationArgument)) {
             throw "LIVE lane is missing operation authority '$operationArgument'."
+        }
+    }
+    foreach ($generalSchemaContract in @(
+            '$generalSchemaVersion = if ($LiveModelRef -eq ''qwen-3-7-flash'')',
+            '''general.draft.v3''',
+            '''general.draft.v2''',
+            '"--portfolio.model-operations.general-knowledge.schema-version=$generalSchemaVersion"'
+    )) {
+        if ($runnerSource -notmatch [regex]::Escape($generalSchemaContract)) {
+            throw "LIVE lane must select the General schema by model: $generalSchemaContract."
         }
     }
 

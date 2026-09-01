@@ -63,11 +63,11 @@ describe('ModelCatalogProjection（/api/portfolio 目录投影）', () => {
     const catalog = parseModelCatalogProjection(loadPortfolioModelCatalogFixture())
     expect(catalog).not.toBeNull()
     if (catalog === null) return
-    expect(catalog.modelCatalogVersion).toBe('catalog-public-v4')
+    expect(catalog.modelCatalogVersion).toBe('catalog-public-v6')
     expect(catalog.defaultModelSelection).toEqual({
       kind: 'MODEL',
-      modelRef: 'glm-4-7-flash',
-      selectionVersion: 'glm-4-7-flash-v4',
+      modelRef: 'qwen-3-7-flash',
+      selectionVersion: 'qwen-3-7-flash-v8',
     })
     expect(catalog.selectableModels.map((model) => model.displayName)).toEqual([
       'GLM-4.7-Flash',
@@ -120,13 +120,13 @@ describe('ModelCatalogProjection（/api/portfolio 目录投影）', () => {
 
   it('displayNameOfSelection / catalogEntryOfSelection：目录内反查，目录外回退 modelRef 或 null', () => {
     const catalog = parseModelCatalogProjection(loadPortfolioModelCatalogFixture()) ?? EMPTY_MODEL_CATALOG
-    expect(displayNameOfSelection(catalog, catalog.defaultModelSelection)).toBe('GLM-4.7-Flash')
+    expect(displayNameOfSelection(catalog, catalog.defaultModelSelection)).toBe('Qwen3.7-Flash')
     expect(
       displayNameOfSelection(catalog, { kind: 'MODEL', modelRef: 'gone-model', selectionVersion: 'v1' }),
     ).toBe('gone-model')
     expect(displayNameOfSelection(catalog, { kind: 'NONE' })).toBeNull()
     expect(catalogEntryOfSelection(catalog, catalog.defaultModelSelection)?.selectionVersion)
-      .toBe('glm-4-7-flash-v4')
+      .toBe('qwen-3-7-flash-v8')
     expect(
       catalogEntryOfSelection(catalog, { kind: 'MODEL', modelRef: 'gone-model', selectionVersion: 'v1' }),
     ).toBeNull()

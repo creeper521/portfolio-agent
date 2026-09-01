@@ -115,7 +115,7 @@ class AgentCapabilityConfigurationTest {
                         TurnDeadline.after(
                                 Duration.ofSeconds(12), Clock.systemUTC())),
                 StructuredModelTestFixtures.resolvedModel(
-                        StructuredModelTestFixtures.qwenV7ToolBindings())))
+                        StructuredModelTestFixtures.qwenV8ToolBindings())))
                 .isSameAs(output);
 
         assertThat(requests).hasSize(2);

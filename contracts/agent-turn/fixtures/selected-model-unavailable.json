@@ -3,7 +3,7 @@
   "modelExecution": {
     "selectionKind": "MODEL",
     "requestedModelRef": "qwen-3-7-flash",
-    "selectionVersion": "qwen-3-7-flash-v6",
+    "selectionVersion": "qwen-3-7-flash-v8",
     "participation": "NONE"
   },
   "kind": "CAPABILITY_UNAVAILABLE",

@@ -80,7 +80,7 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                 GeneralKnowledgeRequest.Audience.GUEST, "public-1",
                 TurnDeadline.after(Duration.ofSeconds(12), Clock.systemUTC())),
                 StructuredModelTestFixtures.resolvedModel(
-                        StructuredModelTestFixtures.qwenV7ToolBindings()));
+                        StructuredModelTestFixtures.qwenV8ToolBindings()));
 
         assertThat(captured.get().systemPrompt()).isEqualTo("draft-prompt");
         assertThat(captured.get().temperature()).isZero();
@@ -189,7 +189,7 @@ class OpenAiCompatibleGeneralKnowledgeAdapterTest {
                         ModelOutputDiagnostics.none());
         com.portfolio.agent.infrastructure.model.ResolvedModelExecution execution =
                 StructuredModelTestFixtures.resolvedModel(
-                        StructuredModelTestFixtures.qwenV7ToolBindings());
+                        StructuredModelTestFixtures.qwenV8ToolBindings());
 
         StructurallyValidatedOutput response = adapter.generate(
                 GeneralKnowledgeRequest.explanation(

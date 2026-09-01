@@ -25,14 +25,14 @@ class PortfolioModelCatalogGoldenFixtureTest {
     @Test
     void backendSerializerMatchesTheCredentialFreeCatalogFixture() throws Exception {
         ModelCatalogSnapshot catalog = mock(ModelCatalogSnapshot.class);
-        when(catalog.getSnapshotVersion()).thenReturn("catalog-public-v4");
+        when(catalog.getSnapshotVersion()).thenReturn("catalog-public-v6");
         when(catalog.getEntries()).thenReturn(List.of(
                 entry("glm-4-7-flash", "GLM-4.7-Flash", 10),
                 entry("qwen-3-7-flash", "Qwen3.7-Flash", 20)));
         when(catalog.getDefaultModelSelection()).thenReturn(
                 new ModelCatalogDefaultSelection(
                         ModelCatalogDefaultSelection.Kind.MODEL,
-                        "glm-4-7-flash", "glm-4-7-flash-v4"));
+                        "qwen-3-7-flash", "qwen-3-7-flash-v8"));
         AgentAvailabilityResponse availability = AgentAvailabilityResponse.available(
                 AgentAvailabilityResponse.FreeTextSemanticRouting.AVAILABLE, catalog);
         JsonNode fixture = mapper.readTree(repositoryRoot().resolve(
@@ -44,7 +44,7 @@ class PortfolioModelCatalogGoldenFixtureTest {
                 "endpoint", "apiKey", "credential", "protocolProfile",
                 "descriptorFingerprint", "maxOutputTokens",
                 "qwen-3-7-flash-v7");
-        assertThat(fixture.toString()).contains("qwen-3-7-flash-v6");
+        assertThat(fixture.toString()).contains("qwen-3-7-flash-v8");
     }
 
     private ModelCatalogEntry entry(
@@ -52,7 +52,7 @@ class PortfolioModelCatalogGoldenFixtureTest {
         return new ModelCatalogEntry(
                 modelRef, displayName, displayOrder,
                 "qwen-3-7-flash".equals(modelRef)
-                        ? "qwen-3-7-flash-v6" : modelRef + "-v4",
+                        ? "qwen-3-7-flash-v8" : modelRef + "-v4",
                 Set.of(ModelCapability.TURN_INTERPRETATION,
                         ModelCapability.GENERAL_KNOWLEDGE));
     }

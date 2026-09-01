@@ -328,7 +328,7 @@ class GeneralProviderDraftDualReplayTest {
                         || !"QWEN".equals(closedText(metadata, "provider", 16))
                         || !"qwen3.7-flash".equals(
                                 closedText(metadata, "model", 64))
-                        || !"qwen-3-7-flash-v7".equals(
+                        || !"qwen-3-7-flash-v8".equals(
                                 closedText(metadata, "selectionVersion", 64))
                         || !"general.provider-draft.v4".equals(
                                 closedText(metadata, "providerContract", 64))

@@ -189,7 +189,7 @@ if ([string]::IsNullOrWhiteSpace($BackendBaseUrl) -or
     Stop-Matrix 'GOAL_DRAFT_MATRIX_CONFIG_INVALID'
 }
 $expectedSelectionVersion = if ($ModelRef -eq 'qwen-3-7-flash') {
-    'qwen-3-7-flash-v6'
+    'qwen-3-7-flash-v8'
 }
 else {
     'glm-4-7-flash-v4'

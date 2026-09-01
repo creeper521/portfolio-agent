@@ -331,6 +331,169 @@ class GoalProviderDraftCompilerTest {
                 "比较 SQL 审计项目和另一个项目"));
     }
 
+    @Test
+    void normalizesFixedFlatRecommendationSlotsBeforeCanonicalCompilation()
+            throws Exception {
+        JsonNode canonical = new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree("""
+                        {
+                          "decision":"STANDARD_GOAL",
+                          "message":null,
+                          "candidateKey":null,
+                          "goalKind":"PORTFOLIO_RECOMMEND",
+                          "subjects":"not-json-and-must-be-ignored-for-recommendation",
+                          "facets":null,
+                          "depth":null,
+                          "dimensions":null,
+                          "requestedSize":"2",
+                          "constraints":"[]",
+                          "topicText":null,
+                          "subjectTexts":null,
+                          "conceptText":null,
+                          "portfolioFacet":null,
+                          "clarificationField":null,
+                          "clarificationPrompt":null,
+                          "recentGoalId":null,
+                          "recentSectionId":null
+                        }
+                        """));
+
+        JsonNode goal = canonical.path("goal");
+        assertThat(goal.path("goalKind").textValue())
+                .isEqualTo("PORTFOLIO_RECOMMEND");
+        assertThat(goal.path("parameters").path("requestedSize").intValue())
+                .isEqualTo(2);
+        assertThat(goal.path("parameters").path("constraints")).isEmpty();
+    }
+
+    @Test
+    void normalizesFlatDiscussionArrayCarrierWithoutChangingLockedSubject()
+            throws Exception {
+        GoalInterpretationInput discussion = discussionInput("详细说明技术方案");
+        JsonNode canonical = new GoalProviderDraftCompiler(discussion)
+                .compile(mapper.readTree("""
+                        {
+                          "decision":"CONTINUE_CURRENT_PROJECT",
+                          "message":null,
+                          "candidateKey":null,
+                          "goalKind":"PORTFOLIO_FACT",
+                          "subjects":"not-json-and-must-be-ignored-in-discussion",
+                          "facets":"[\\\"SOLUTION\\\"]",
+                          "depth":"DETAILED",
+                          "dimensions":null,
+                          "requestedSize":null,
+                          "constraints":null,
+                          "topicText":null,
+                          "subjectTexts":null,
+                          "conceptText":null,
+                          "portfolioFacet":null,
+                          "clarificationField":null,
+                          "clarificationPrompt":null,
+                          "recentGoalId":null,
+                          "recentSectionId":null
+                        }
+                        """));
+
+        assertThat(canonical.path("route").textValue())
+                .isEqualTo("CONTINUE_CURRENT_PROJECT");
+        assertThat(canonical.path("goal").path("subjectCandidates")).isEmpty();
+        assertThat(canonical.path("goal").path("parameters").path("facets")
+                .get(0).textValue()).isEqualTo("SOLUTION");
+        assertThat(canonical.path("goal").path("parameters").path("depth")
+                .textValue()).isEqualTo("DETAILED");
+    }
+
+    @Test
+    void normalizesFlatClarificationSlotsIntoTheExistingStrictBranch()
+            throws Exception {
+        JsonNode canonical = new GoalProviderDraftCompiler(input("推荐一些项目"))
+                .compile(mapper.readTree("""
+                        {
+                          "decision":"NEEDS_CLARIFICATION",
+                          "message":null,
+                          "candidateKey":null,
+                          "goalKind":"PORTFOLIO_RECOMMEND",
+                          "subjects":null,
+                          "facets":null,
+                          "depth":null,
+                          "dimensions":null,
+                          "requestedSize":null,
+                          "constraints":"[]",
+                          "topicText":null,
+                          "subjectTexts":null,
+                          "conceptText":null,
+                          "portfolioFacet":null,
+                          "clarificationField":"REQUESTED_SIZE",
+                          "clarificationPrompt":"需要推荐几个项目？",
+                          "recentGoalId":null,
+                          "recentSectionId":null
+                        }
+                        """));
+
+        assertThat(canonical.path("clarification").path("field").textValue())
+                .isEqualTo("REQUESTED_SIZE");
+        assertThat(canonical.path("clarification").path("blockedGoal")
+                .path("goalKind").textValue()).isEqualTo("PORTFOLIO_RECOMMEND");
+    }
+
+    @Test
+    void flatSlotsProjectRedundantSiblingsButRejectSelectedInvalidCarriers()
+            throws Exception {
+        com.fasterxml.jackson.databind.node.ObjectNode missingSlot =
+                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+                        flatRecommendation());
+        missingSlot.remove("recentSectionId");
+        assertThatThrownBy(() -> new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(missingSlot))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_REQUIRED_FIELD_MISSING_FLAT_SLOT");
+
+        String redundantSiblings = flatRecommendation().replace(
+                "\"message\":null", "\"message\":\"不应出现\"");
+        redundantSiblings = redundantSiblings.replace(
+                "\"facets\":null", "\"facets\":\"not-json\"");
+        JsonNode projected = new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree(redundantSiblings));
+        assertThat(projected.path("goal").path("goalKind").textValue())
+                .isEqualTo("PORTFOLIO_RECOMMEND");
+        assertThat(projected.has("message")).isFalse();
+
+        String missingConstraint = flatRecommendation().replace(
+                "\"constraints\":\"[]\"", "\"constraints\":null");
+        assertThatThrownBy(() -> new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree(missingConstraint)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_REQUIRED_FIELD_MISSING_FLAT_CONSTRAINTS");
+
+        String malformed = flatRecommendation()
+                .replace("\"constraints\":\"[]\"",
+                        "\"constraints\":\"[] trailing\"");
+        assertThatThrownBy(() -> new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree(malformed)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_CARRIER_UNPARSEABLE_CONSTRAINTS");
+
+        String invalidSize = flatRecommendation().replace(
+                "\"requestedSize\":\"2\"",
+                "\"requestedSize\":\"two\"");
+        assertThatThrownBy(() -> new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree(invalidSize)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_CARRIER_NOT_INTEGER_REQUESTED_SIZE");
+
+        String outOfRangeSize = flatRecommendation().replace(
+                "\"requestedSize\":\"2\"", "\"requestedSize\":6");
+        assertThatThrownBy(() -> new GoalProviderDraftCompiler(input("推荐 2 个项目"))
+                .compile(mapper.readTree(outOfRangeSize)))
+                .isInstanceOf(StructuredOutputValidationException.class)
+                .extracting("diagnosticReason")
+                .isEqualTo("DRAFT_CARRIER_NOT_INTEGER_REQUESTED_SIZE");
+    }
+
     private JsonNode assertCanonical(String text, String draft) throws Exception {
         GoalInterpretationInput interpretationInput = input(text);
         JsonNode canonical = new GoalProviderDraftCompiler(interpretationInput)
@@ -358,5 +521,46 @@ class GoalProviderDraftCompilerTest {
                         com.portfolio.agent.turn.planning.SemanticRouteProposal.Route
                                 .NEEDS_CLARIFICATION),
                 Set.of("CAPABILITY_SQL"));
+    }
+
+    private GoalInterpretationInput discussionInput(String text) {
+        GoalInterpretationInput.PublicSubjectDescriptor locked =
+                new GoalInterpretationInput.PublicSubjectDescriptor(
+                        GoalSubjectReference.Kind.PROJECT,
+                        "sql-audit", "SQL 审计项目");
+        return new GoalInterpretationInput(
+                text, List.of(), List.of(locked), Set.of(GoalKind.values()),
+                GoalInterpretationInput.InterpretationMode.DISCUSSION,
+                GoalInterpretationInput.DiscussionState.ACTIVE,
+                locked, List.of(), Set.of(
+                com.portfolio.agent.turn.planning.SemanticRouteProposal.Route
+                        .CONTINUE_CURRENT_PROJECT,
+                com.portfolio.agent.turn.planning.SemanticRouteProposal.Route
+                        .NEEDS_CLARIFICATION), Set.of("CAPABILITY_SQL"));
+    }
+
+    private String flatRecommendation() {
+        return """
+                {
+                  "decision":"STANDARD_GOAL",
+                  "message":null,
+                  "candidateKey":null,
+                  "goalKind":"PORTFOLIO_RECOMMEND",
+                  "subjects":null,
+                  "facets":null,
+                  "depth":null,
+                  "dimensions":null,
+                  "requestedSize":"2",
+                  "constraints":"[]",
+                  "topicText":null,
+                  "subjectTexts":null,
+                  "conceptText":null,
+                  "portfolioFacet":null,
+                  "clarificationField":null,
+                  "clarificationPrompt":null,
+                  "recentGoalId":null,
+                  "recentSectionId":null
+                }
+                """;
     }
 }

@@ -85,6 +85,12 @@ public final class StructuredOutputContractRegistry {
                 "model-contracts/goal.provider-draft.v2.schema.json");
         addApprovedContract(contracts, strictMapper, schemaRegistry,
                 new StructuredContractRef(
+                        ModelOperation.TURN_INTERPRETATION,
+                        "goal.provider-draft.v3"),
+                "goal_provider_draft_v3",
+                "model-contracts/goal.provider-draft.v3.schema.json");
+        addApprovedContract(contracts, strictMapper, schemaRegistry,
+                new StructuredContractRef(
                         ModelOperation.TURN_INTERPRETATION, "goal.proposal.v5"),
                 "goal_proposal", "model-contracts/goal.proposal.v5.schema.json");
         addApprovedContract(contracts, strictMapper, schemaRegistry,

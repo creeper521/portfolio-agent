@@ -165,7 +165,12 @@ try {
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_MODE = 'ENABLED'
                     $env:PORTFOLIO_MODEL_OP_TURN_INTERPRETATION_SCHEMA_VERSION = 'goal.proposal.v5'
                     $env:PORTFOLIO_MODEL_OP_GENERAL_MODE = 'ENABLED'
-                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = 'general.draft.v2'
+                    $generalSchemaVersion = if ($LiveModelRef -eq 'qwen-3-7-flash') {
+                        'general.draft.v3'
+                    } else {
+                        'general.draft.v2'
+                    }
+                    $env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = $generalSchemaVersion
                     $env:PORTFOLIO_MODEL_OP_GENERAL_TIMEOUT = '8s'
                     & (Join-Path $root 'scripts\run-jar-e2e.ps1') -JarPath $jar `
                         -Port $Port -ContextMode $ContextMode -Lane LIVE `

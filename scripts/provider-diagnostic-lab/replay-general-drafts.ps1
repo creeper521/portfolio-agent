@@ -152,7 +152,7 @@ function Read-ArtifactMetadata([string]$Artifact, [string]$Root) {
                 '^[0-9a-f]{64}$' -or
             $metadata.provider -cne 'QWEN' -or
             $metadata.model -cne 'qwen3.7-flash' -or
-            $metadata.selectionVersion -cne 'qwen-3-7-flash-v7' -or
+            $metadata.selectionVersion -cne 'qwen-3-7-flash-v8' -or
             $metadata.providerContract -cne 'general.provider-draft.v4' -or
             $metadata.compilerProfile -cne `
                 'general-provider-draft-compiler.v4' -or

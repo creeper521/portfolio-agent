@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ApprovedModelExecutionProfileTest {
 
     @Test
-    void productionProfilesContainOnlyThePromotedGoalProviderBinding() {
+    void productionProfilesUseVersionedProviderSpecificGoalBindings() {
         ApprovedModelExecutionProfile qwen =
                 ApprovedModelExecutionProfile.resolve(
                         ApprovedModelExecutionProfile.QWEN_PROFILE,
@@ -24,16 +24,19 @@ class ApprovedModelExecutionProfileTest {
                         ApprovedModelExecutionProfile.GLM_PROFILE,
                         StructuredModelTestFixtures.contracts());
 
-        assertThat(java.util.List.of(qwen, glm)).allSatisfy(profile -> {
-            assertThat(profile.getOperationBindings()
-                    .get(ModelOperation.TURN_INTERPRETATION)
-                    .getProviderContractRef().schemaVersion())
-                    .isEqualTo("goal.provider-draft.v2");
-            assertThat(profile.getOperationBindings().values())
-                    .extracting(binding -> binding.getProviderContractRef()
-                            .schemaVersion())
-                    .doesNotContain("goal.provider-draft.v1");
-        });
+        assertThat(qwen.getOperationBindings()
+                .get(ModelOperation.TURN_INTERPRETATION)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("goal.provider-draft.v3");
+        assertThat(glm.getOperationBindings()
+                .get(ModelOperation.TURN_INTERPRETATION)
+                .getProviderContractRef().schemaVersion())
+                .isEqualTo("goal.provider-draft.v2");
+        assertThat(java.util.List.of(qwen, glm)).allSatisfy(profile ->
+                assertThat(profile.getOperationBindings().values())
+                        .extracting(binding -> binding.getProviderContractRef()
+                                .schemaVersion())
+                        .doesNotContain("goal.provider-draft.v1"));
         assertThat(qwen.getOperationBindings()
                 .get(ModelOperation.GENERAL_KNOWLEDGE)
                 .getProviderContractRef().schemaVersion())
@@ -41,13 +44,13 @@ class ApprovedModelExecutionProfileTest {
     }
 
     @Test
-    void qwenV7FreezesProviderDraftCompilersAndOmittedTokenField() {
+    void qwenV8FreezesCarrierGoalAndGeneralV3Compilers() {
         ApprovedModelExecutionProfile profile = ApprovedModelExecutionProfile.resolve(
                 ApprovedModelExecutionProfile.QWEN_PROFILE,
                 StructuredModelTestFixtures.contracts());
 
         assertThat(profile.getRequiredSelectionVersion())
-                .isEqualTo("qwen-3-7-flash-v7");
+                .isEqualTo("qwen-3-7-flash-v8");
         assertThat(profile.getExpectedModelIdentity()).isEqualTo("qwen3.7-flash");
         assertThat(profile.getProtocolProfile()).isEqualTo(
                 ModelProviderProtocolProfile.DASHSCOPE_CHAT_COMPLETIONS);
@@ -61,12 +64,12 @@ class ApprovedModelExecutionProfileTest {
         OperationBinding goal = profile.getOperationBindings()
                 .get(ModelOperation.TURN_INTERPRETATION);
         assertThat(goal.getProviderContractRef().schemaVersion())
-                .isEqualTo("goal.provider-draft.v2");
+                .isEqualTo("goal.provider-draft.v3");
         assertThat(goal.getApplicationContractRef().schemaVersion())
                 .isEqualTo("goal.proposal.v5");
         assertThat(goal.getOutputCompilerProfileVersion())
                 .isEqualTo(OperationBinding.GOAL_DRAFT_OUTPUT_COMPILER_VERSION);
-        assertThat(goal.outputToolName()).isEqualTo("emit_goal_provider_draft_v2");
+        assertThat(goal.outputToolName()).isEqualTo("emit_goal_provider_draft_v3");
         assertThat(goal.getProviderContractFingerprint())
                 .isNotEqualTo(goal.getApplicationContractFingerprint());
         OperationBinding general = profile.getOperationBindings()

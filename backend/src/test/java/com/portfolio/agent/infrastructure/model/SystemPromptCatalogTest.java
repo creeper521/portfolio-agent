@@ -24,7 +24,15 @@ class SystemPromptCatalogTest {
                         "Simplified Chinese", "depth is CONCISE",
                         "server derives them deterministically",
                         "untrusted visitor content",
-                        "provider-enforced Goal Draft")
+                        "provider-enforced Goal Draft",
+                        "encode that nested object exactly once as compact JSON text",
+                        "emit every required flat slot",
+                        "use null for each unused flat slot",
+                        "一个→1, 两个→2, 三个→3",
+                        "DISCUSSION mode treats lockedSubject as authoritative",
+                        "return CONTINUE_CURRENT_PROJECT",
+                        "PORTFOLIO_FACT with facet SOLUTION",
+                        "NEEDS_CLARIFICATION with decision only")
                 .doesNotContain(
                         "{\"kind\":\"GOALS\"",
                         "{\"kind\":\"CLARIFICATION\"",

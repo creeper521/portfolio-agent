@@ -36,7 +36,7 @@ class ConfiguredModelCatalogTest {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of(
                         "qwen-3-7-flash", model(
-                                "Qwen3.7-Flash", 20, "qwen-3-7-flash-v7",
+                                "Qwen3.7-Flash", 20, "qwen-3-7-flash-v8",
                                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "qwen-secret"),
                         "glm-4-7-flash", blockedGlm));
@@ -52,7 +52,7 @@ class ConfiguredModelCatalogTest {
         assertThat(snapshot.getDefaultModelSelection().modelRef())
                 .isEqualTo("qwen-3-7-flash");
         assertThat(snapshot.getDefaultModelSelection().selectionVersion())
-                .isEqualTo("qwen-3-7-flash-v7");
+                .isEqualTo("qwen-3-7-flash-v8");
         assertThat(snapshot.getSnapshotVersion()).matches("[0-9a-f]{64}");
         assertThat(catalog.getRequiredBinding(ModelRef.of("qwen-3-7-flash")))
                 .extracting(ModelTransportBinding::getProtocolProfile)
@@ -76,7 +76,7 @@ class ConfiguredModelCatalogTest {
             assertThat(descriptor.getOperationBindings()
                     .get(ModelOperation.TURN_INTERPRETATION)
                     .getProviderContractRef().schemaVersion())
-                    .isEqualTo("goal.provider-draft.v2");
+                    .isEqualTo("goal.provider-draft.v3");
             assertThat(descriptor.getOperationBindings().values())
                     .extracting(operation -> operation.getProviderContractRef()
                             .schemaVersion())
@@ -131,7 +131,7 @@ class ConfiguredModelCatalogTest {
                 Map.of(
                         "glm-4-7-flash", unavailable,
                         "qwen-3-7-flash", model(
-                                "Qwen", 20, "qwen-3-7-flash-v7",
+                                "Qwen", 20, "qwen-3-7-flash-v8",
                                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "qwen-secret")));
 
@@ -146,19 +146,19 @@ class ConfiguredModelCatalogTest {
     @Test
     void rejectsInvalidEnabledEntriesAndUnknownDefaultsFailClosed() {
         assertInvalid("INVALID_REF", model(
-                "Qwen", 10, "qwen-3-7-flash-v7",
+                "Qwen", 10, "qwen-3-7-flash-v8",
                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "model ref");
         assertInvalid("qwen", model(
-                "Qwen", 10, "qwen-3-7-flash-v7", "http://example.test/chat",
+                "Qwen", 10, "qwen-3-7-flash-v8", "http://example.test/chat",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "HTTPS");
         assertInvalid("qwen", model(
-                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "Qwen", 10, "qwen-3-7-flash-v8", "https://example.test/chat",
                 "qwen3.7-flash", "UNKNOWN_PROFILE", "secret"), "execution profile");
 
         ModelRuntimeProperties properties = runtime(true, "missing",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                        "Qwen", 10, "qwen-3-7-flash-v8", "https://example.test/chat",
                         "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
         assertThatThrownBy(() -> StructuredModelTestFixtures.catalog(properties))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -169,11 +169,11 @@ class ConfiguredModelCatalogTest {
     void secretRotationDoesNotChangePublicOrDescriptorVersions() {
         ModelRuntimeProperties first = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "Qwen", 10, "qwen-3-7-flash-v8", "https://example.test/chat",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "first-secret")));
         ModelRuntimeProperties rotated = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "Qwen", 10, "qwen-3-7-flash-v8", "https://example.test/chat",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "rotated-secret")));
 
         ModelCatalogSnapshot firstSnapshot = StructuredModelTestFixtures.catalog(first).snapshot();
@@ -193,14 +193,14 @@ class ConfiguredModelCatalogTest {
         ModelProviderDescriptor prior = descriptor(
                 StructuredModelTestFixtures.v4NativeBindings());
         ModelProviderDescriptor promoted = descriptor(
-                StructuredModelTestFixtures.qwenV7ToolBindings());
+                StructuredModelTestFixtures.qwenV8ToolBindings());
         assertThat(promoted.publicEntry()).isEqualTo(prior.publicEntry());
         assertThat(promoted.getDescriptorFingerprint())
                 .isNotEqualTo(prior.getDescriptorFingerprint());
 
         ModelRuntimeProperties properties = runtime(
                 true, "qwen-3-7-flash", Map.of("qwen-3-7-flash", model(
-                        "Qwen", 10, "qwen-3-7-flash-v7",
+                        "Qwen", 10, "qwen-3-7-flash-v8",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
         ConfiguredModelCatalog catalog =
@@ -225,7 +225,7 @@ class ConfiguredModelCatalogTest {
     void everyPublicCatalogSelectionRoundTripsIntoTheTurnContract() {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 10, "qwen-3-7-flash-v7",
+                        "Qwen", 10, "qwen-3-7-flash-v8",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
@@ -244,7 +244,7 @@ class ConfiguredModelCatalogTest {
     @Test
     void configuredSelectionIdentityUsesExactlyTheClosedTurnShape() {
         assertInvalid("double--dash", model(
-                "Qwen", 10, "qwen-3-7-flash-v7", "https://example.test/chat",
+                "Qwen", 10, "qwen-3-7-flash-v8", "https://example.test/chat",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "secret"), "model ref");
         assertInvalid("qwen", model(
                 "Qwen", 10, ".leading", "https://example.test/chat",
@@ -257,7 +257,7 @@ class ConfiguredModelCatalogTest {
     @Test
     void rejectsEndpointQueryCredentialsWithoutReflectingThem() {
         ModelRuntimeProperties properties = runtime(true, "qwen", Map.of("qwen", model(
-                "Qwen", 10, "qwen-3-7-flash-v7",
+                "Qwen", 10, "qwen-3-7-flash-v8",
                 "https://example.test/chat?api_key=query-secret",
                 "qwen3.7-flash", "DASHSCOPE_CHAT_COMPLETIONS", "header-secret")));
 
@@ -272,7 +272,7 @@ class ConfiguredModelCatalogTest {
     void disabledGeneralOperationShrinksThePublicCapabilitySet() {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 20, "qwen-3-7-flash-v7",
+                        "Qwen", 20, "qwen-3-7-flash-v8",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
@@ -292,7 +292,7 @@ class ConfiguredModelCatalogTest {
     void selectableModelWithoutTurnInterpretationBindingFailsAtStartup() {
         ModelRuntimeProperties properties = runtime(true, "qwen-3-7-flash",
                 Map.of("qwen-3-7-flash", model(
-                        "Qwen", 20, "qwen-3-7-flash-v7",
+                        "Qwen", 20, "qwen-3-7-flash-v8",
                         "https://example.test/chat", "qwen3.7-flash",
                         "DASHSCOPE_CHAT_COMPLETIONS", "secret")));
 
@@ -336,7 +336,7 @@ class ConfiguredModelCatalogTest {
         settings.setApiKey(apiKey);
         settings.setDataPolicyApproved(true);
         settings.setExecutionProfile(switch (profile) {
-            case "DASHSCOPE_CHAT_COMPLETIONS" -> "QWEN_3_7_FLASH_STRUCTURED_V7";
+            case "DASHSCOPE_CHAT_COMPLETIONS" -> "QWEN_3_7_FLASH_STRUCTURED_V8";
             case "ZHIPU_CHAT_COMPLETIONS" -> "GLM_4_7_FLASH_STRUCTURED_V4";
             default -> "UNKNOWN_EXECUTION_PROFILE";
         });

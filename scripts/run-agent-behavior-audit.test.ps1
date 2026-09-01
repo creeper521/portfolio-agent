@@ -25,6 +25,16 @@ foreach ($turnInterpretationSetting in @(
         throw "Behavior runner must configure current setting $turnInterpretationSetting."
     }
 }
+foreach ($generalSchemaContract in @(
+        '$generalSchemaVersion = if ($LiveModelRef -eq ''qwen-3-7-flash'')',
+        '''general.draft.v3''',
+        '''general.draft.v2''',
+        '$env:PORTFOLIO_MODEL_OP_GENERAL_SCHEMA_VERSION = $generalSchemaVersion'
+)) {
+    if ($runnerSource -notmatch [regex]::Escape($generalSchemaContract)) {
+        throw "Behavior runner must select the General schema by model: $generalSchemaContract."
+    }
+}
 foreach ($liveSamplingContract in @(
         '[int]$ProviderSamplingRounds = 2',
         '[int]$ProviderInterRoundDelayMilliseconds = 10000',

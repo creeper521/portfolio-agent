@@ -122,7 +122,7 @@ function Write-CaptureFixture(
         operatorIdentitySha256 = ('a' * 64)
         provider = 'QWEN'
         model = 'qwen3.7-flash'
-        selectionVersion = 'qwen-3-7-flash-v7'
+        selectionVersion = 'qwen-3-7-flash-v8'
         providerContract = 'general.provider-draft.v4'
         compilerProfile = 'general-provider-draft-compiler.v4'
         captureSource = 'TEST_LOOPBACK'
